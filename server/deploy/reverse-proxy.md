@@ -62,9 +62,12 @@ and make sure port 5280 is NOT opened in the host firewall to the internet.
 
 ## Check
 
+Send invite codes in the `X-Lodge-Code` header, never in the URL: query strings end up in access logs.
+The hub always uses the header.
+
 ```bash
 curl https://yoursite/lodge/health                    # {"ok":true}
-curl "https://yoursite/lodge/health?code=<a code>"    # {"ok":true,"version":...,"online":0}
+curl -H "X-Lodge-Code: <a code>" https://yoursite/lodge/health   # {"ok":true,"version":...,"online":0}
 curl -i -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" \
      -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" "https://yoursite/lodge/ws?code=WRONG"   # expect 401
 ```

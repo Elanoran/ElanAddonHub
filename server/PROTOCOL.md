@@ -10,9 +10,12 @@ Base URL: `https://<site>/lodge` (or a subdomain root). All access needs an invi
 |---|---|---|
 | `GET /health` | none / optional code | `{"ok":true}`; with a valid code also `version`, `online` |
 | `POST /files` raw body, headers `X-File-Name` (URL-encoded), `X-Lodge-Name` | header `X-Lodge-Code` | `{"id","name","size","mime","at","by"}`; 413 if too big |
-| `GET /files/{id}` | header `X-Lodge-Code` or `?code=` | the file (range requests supported) |
+| `GET /files/{id}` | header `X-Lodge-Code` | the file (range requests supported) |
 
-## WebSocket `GET /ws?code=<invite>&name=<display name>&client=<hub/1.1.0>`
+## WebSocket `GET /ws?name=<display name>&client=<hub/1.1.0>` + header `X-Lodge-Code`
+
+Always send the code in the `X-Lodge-Code` header (all endpoints accept it). A `?code=` query parameter
+still works for old clients, but query strings end up in proxy access logs.
 
 401 for a wrong code. Text frames are JSON with a `t` field.
 
