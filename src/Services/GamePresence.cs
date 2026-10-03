@@ -52,6 +52,8 @@ namespace ElansAddonHub.Services
             if (changed) Changed?.Invoke();
         }
 
+        public static bool WowRunningNow() => WowRunning();
+
         static bool WowRunning()
         {
             try

@@ -10,7 +10,7 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>2.1.0</Version>
+    <Version>2.1.1</Version>
     <Product>Elan's Addon Hub</Product>
     <Company>Elan</Company>
     <Description>Installs and updates Elan's WoW addons</Description>

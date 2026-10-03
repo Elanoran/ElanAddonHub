@@ -283,9 +283,13 @@ namespace ElansAddonHub
                 await Installer.Install(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p), replaceDev);
                 card.SetBusy(false);
                 card.Update(card.Info, settings.WowRoot);
-                card.Message = "Done! In game, type /reload (or /rl) to load it.";
+                // WoW only discovers new addon folders when it starts; updates to known addons just need /reload
+                var hint = !wasInstalled && GamePresence.WowRunningNow()
+                    ? "Installed! WoW is running - restart WoW to load a new addon (/reload isn't enough)."
+                    : "Done! In game, type /reload (or /rl) to load it.";
+                card.Message = hint;
                 if (!IsVisible)
-                    tray.ShowBalloonTip(4000, $"{card.Name} {card.Info.Version} installed", "Type /reload in game to load it.", WinForms.ToolTipIcon.None);
+                    tray.ShowBalloonTip(4000, $"{card.Name} {card.Info.Version} installed", hint, WinForms.ToolTipIcon.None);
             }
             catch (Exception e)
             {
