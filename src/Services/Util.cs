@@ -8,8 +8,10 @@ namespace ElansAddonHub.Services
 {
     public static class Util
     {
+        // ELANSHUB_DATA overrides the folder (the self-test uses its own, never the real settings)
         public static readonly string DataDir =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ElansAddonHub");
+            Environment.GetEnvironmentVariable("ELANSHUB_DATA") is string d && d.Length > 0 ? d
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ElansAddonHub");
 
         static Util() { Directory.CreateDirectory(DataDir); }
 

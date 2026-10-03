@@ -24,14 +24,26 @@ namespace ElansAddonHub
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
-            // one hub at a time: a second start just brings the first one to the front
-            single = new Mutex(true, "ElansAddonHub.Single", out var first);
-            showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, "ElansAddonHub.Show");
-            if (!first)
+            var test = Array.IndexOf(e.Args, "--selftest");
+            var testDir = test >= 0 && test + 1 < e.Args.Length ? e.Args[test + 1] : null;
+            if (testDir != null)
             {
-                showSignal.Set();
-                Shutdown();
-                return;
+                // the self-test runs next to a real hub: own data folder, no single-instance check
+                if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_DATA")))
+                    Environment.SetEnvironmentVariable("ELANSHUB_DATA", System.IO.Path.Combine(testDir, "data"));
+                showSignal = new EventWaitHandle(false, EventResetMode.AutoReset);
+            }
+            else
+            {
+                // one hub at a time: a second start just brings the first one to the front
+                single = new Mutex(true, "ElansAddonHub.Single", out var first);
+                showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, "ElansAddonHub.Show");
+                if (!first)
+                {
+                    showSignal.Set();
+                    Shutdown();
+                    return;
+                }
             }
 
             DispatcherUnhandledException += (s, ex) =>
@@ -49,8 +61,7 @@ namespace ElansAddonHub
             }) { IsBackground = true };
             thread.Start();
 
-            var test = Array.IndexOf(e.Args, "--selftest");
-            if (test >= 0 && test + 1 < e.Args.Length) _ = main.SelfTest(e.Args[test + 1]);
+            if (testDir != null) _ = main.SelfTest(testDir);
             else if (e.Args.Contains("--tray")) main.StartHidden();
             else main.Show();
         }
