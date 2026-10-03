@@ -18,6 +18,8 @@ namespace ElansAddonHub
         public string Name => Info.Name;
         public string Subtitle => Info.FlavorName ?? Info.Description ?? "";
         public string Installed { get; private set; }
+        // hover the client name to see exactly where it installs
+        public string InstallPath { get; private set; }
         public string Latest => Info.Version;
         public string PillText { get; private set; }
         public Brush PillBg { get; private set; }
@@ -43,6 +45,8 @@ namespace ElansAddonHub
             Info = info;
             var installed = wowRoot == null ? null : Installer.InstalledVersion(wowRoot, info);
             Installed = installed ?? "Not installed";
+            InstallPath = wowRoot == null || info.Folders == null || info.Folders.Count == 0 ? null
+                : "Installs to " + System.IO.Path.Combine(WowLocator.AddOnsDir(wowRoot, info.Flavor), info.Folders[0]);
 
             if (wowRoot == null) State = CardState.NoFolder;
             else if (!WowLocator.HasFlavor(wowRoot, info.Flavor)) State = CardState.NoClient;

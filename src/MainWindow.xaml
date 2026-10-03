@@ -78,7 +78,8 @@
                     </Border>
                     <StackPanel Margin="12,1,8,0" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{StaticResource TextDim}" Margin="0,2,0,0" />
+                      <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{StaticResource TextDim}" Margin="0,2,0,0"
+                                 ToolTip="{Binding InstallPath}" ToolTipService.InitialShowDelay="300" />
                     </StackPanel>
                   </DockPanel>
 
