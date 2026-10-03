@@ -38,12 +38,18 @@ fi
 chown root:lodge "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
-# personal invite codes + the command to manage them
+# personal invite codes live in the data folder (the hub's Guild Master panel edits them);
+# 1.x kept them in /etc/lodge/codes - move them once
 install -m 755 "$REPO_DIR/server/deploy/lodge-admin" /usr/local/bin/lodge-admin
-touch /etc/lodge/codes
-chown root:lodge /etc/lodge/codes
-chmod 640 /etc/lodge/codes
-if ! grep -q '[^[:space:]]' /etc/lodge/codes && ! grep -qE '^LODGE_CODE=.{6,}' "$ENV_FILE"; then
+CODES="$DATA_DIR/codes"
+if [ -f /etc/lodge/codes ] && [ ! -f "$CODES" ]; then
+  mv /etc/lodge/codes "$CODES"
+  echo "== Moved invite codes to $CODES"
+fi
+touch "$CODES"
+chown lodge:lodge "$CODES"
+chmod 640 "$CODES"
+if ! grep -q '[^[:space:]]' "$CODES" && ! grep -qE '^LODGE_CODE=.{6,}' "$ENV_FILE"; then
   echo "== No invite codes yet. Make one per friend:  sudo lodge-admin add <name>"
 fi
 

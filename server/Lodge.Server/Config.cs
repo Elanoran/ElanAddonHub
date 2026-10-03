@@ -3,7 +3,7 @@ namespace Lodge;
 public class LodgeConfig
 {
     public string Code { get; init; }          // optional shared invite code
-    public string CodesFile { get; init; }     // personal codes, "Name:code" per line
+    public string CodesFile { get; set; }      // personal codes, "Name:code:role" per line
     public string Urls { get; init; }
     public string DataDir { get; init; }
     public string PathBase { get; init; }
@@ -25,7 +25,7 @@ public class LodgeConfig
         var c = new LodgeConfig
         {
             Code = code.Length >= 6 ? code : "",
-            CodesFile = Env("LODGE_CODES_FILE", "/etc/lodge/codes"),
+            CodesFile = Env("LODGE_CODES_FILE", ""),
             Urls = Env("LODGE_URLS", "http://127.0.0.1:5280"),
             DataDir = Path.GetFullPath(Env("LODGE_DATA", "data")),
             PathBase = Env("LODGE_PATHBASE", "/lodge").TrimEnd('/'),
@@ -35,6 +35,13 @@ public class LodgeConfig
             TrustedProxies = Env("LODGE_TRUSTED_PROXIES", "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
         };
         Directory.CreateDirectory(c.DataDir);
+        if (string.IsNullOrEmpty(c.CodesFile))
+        {
+            // codes live in the data folder so the hub's Guild Master panel can edit them;
+            // 1.x installs had them in /etc/lodge (install.sh moves them)
+            var inData = Path.Combine(c.DataDir, "codes");
+            c.CodesFile = File.Exists(inData) || !File.Exists("/etc/lodge/codes") ? inData : "/etc/lodge/codes";
+        }
         return c;
     }
 }

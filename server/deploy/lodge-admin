@@ -8,11 +8,14 @@
 # The server re-reads the file by itself; no restart needed.
 set -euo pipefail
 
-FILE="${LODGE_CODES_FILE:-/etc/lodge/codes}"
+# codes live in the data folder since 2.0 (older installs: /etc/lodge/codes until install.sh moves them)
+if [ -n "${LODGE_CODES_FILE:-}" ]; then FILE="$LODGE_CODES_FILE"
+elif [ -f /var/lib/lodge/codes ] || [ ! -f /etc/lodge/codes ]; then FILE=/var/lib/lodge/codes
+else FILE=/etc/lodge/codes; fi
 if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo"; exit 1; fi
 mkdir -p "$(dirname "$FILE")"
 touch "$FILE"
-chown root:lodge "$FILE" 2>/dev/null || true
+chown lodge:lodge "$FILE" 2>/dev/null || true
 chmod 640 "$FILE"
 
 cmd="${1:-list}"

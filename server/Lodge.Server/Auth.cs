@@ -65,6 +65,57 @@ public class Auth
 
     public IEnumerable<string> PersonalNames { get { ReloadIfChanged(); return personal.Select(p => p.Name); } }
 
+    public List<(string Name, string Role)> ListPersonal() { ReloadIfChanged(); return personal.Select(p => (p.Name, p.Role)).ToList(); }
+
+    // ---- editing the codes file (the hub's Guild Master panel; lodge-admin does the same from a shell)
+
+    static readonly System.Text.RegularExpressions.Regex NameRule = new(@"^[A-Za-z0-9][A-Za-z0-9 _-]{0,23}$");
+
+    public string Add(string name, string role)
+    {
+        if (!NameRule.IsMatch(name ?? "")) throw new InvalidOperationException("Names are 1-24 letters, digits, space, _ or -");
+        lock (gate)
+        {
+            if (ListPersonal().Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException($"{name} already has a code");
+            var code = Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant();
+            File.AppendAllText(cfg.CodesFile, $"{name}:{code}:{Roles.Normalize(role)}\n");
+            fileStamp = DateTime.MinValue; // re-read now
+            return code;
+        }
+    }
+
+    public void SetRole(string name, string role) => Rewrite(name, line =>
+    {
+        var parts = line.Split(':');
+        return $"{parts[0]}:{parts[1]}:{Roles.Normalize(role)}";
+    });
+
+    public void Remove(string name) => Rewrite(name, _ => null);
+
+    void Rewrite(string name, Func<string, string> change)
+    {
+        lock (gate)
+        {
+            bool found = false;
+            var lines = new List<string>();
+            foreach (var line in File.ReadAllLines(cfg.CodesFile))
+            {
+                var n = line.Split(':')[0].Trim();
+                if (!line.TrimStart().StartsWith('#') && string.Equals(n, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    found = true;
+                    var replaced = change(line);
+                    if (replaced != null) lines.Add(replaced);
+                }
+                else lines.Add(line);
+            }
+            if (!found) throw new InvalidOperationException($"No code for {name}");
+            File.WriteAllLines(cfg.CodesFile, lines); // same file: keeps owner and permissions
+            fileStamp = DateTime.MinValue;
+        }
+    }
+
     // null = not a valid code. Compares against every code in constant time.
     public Identity Check(string code)
     {

@@ -2,8 +2,8 @@
 // One small process behind your existing web server (reverse proxy). Protocol: ../PROTOCOL.md
 //
 // Configuration (environment variables):
-//   LODGE_CODES_FILE       personal invite codes, "Name:code" per line (default /etc/lodge/codes,
-//                          manage with `sudo lodge-admin`)
+//   LODGE_CODES_FILE       personal invite codes, "Name:code:role" per line (default <data>/codes,
+//                          manage from the hub's Guild Master panel or with `sudo lodge-admin`)
 //   LODGE_CODE             optional shared invite code without a fixed name
 //   LODGE_URLS             where to listen              (default http://127.0.0.1:5280 - keep it local)
 //   LODGE_DATA             data folder (history, files) (default ./data)
@@ -41,6 +41,20 @@ app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSecond
 var auth = new Auth(cfg, app.Logger);
 var files = new FileStore(cfg);
 var lodge = new LodgeHub(cfg, auth, files, app.Logger);
+
+// opening an invite link in a browser lands here (the code after # never reaches the server)
+app.MapGet("/", () => Results.Content("""
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>You're invited to the lodge</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1113;color:#e8eaed;font:15px/1.6 'Segoe UI',system-ui,sans-serif}
+main{max-width:430px;padding:32px;background:#16191c;border:1px solid #262b30;border-radius:14px}h1{margin:0 0 6px;font-size:21px}
+p{color:#8a9199;margin:0 0 18px}ol{padding-left:20px;margin:0 0 20px}li{margin:6px 0}a.btn{display:inline-block;background:#abd473;color:#111315;
+text-decoration:none;font-weight:600;padding:10px 18px;border-radius:9px}</style></head><body><main>
+<h1>You're invited to the lodge</h1><p>Chat, voice and files with your friends, inside Elan's Addon Hub.</p>
+<ol><li>Download <b>Elan's Addon Hub</b> and start it.</li><li>Open the <b>Lodge</b> tab.</li>
+<li>Paste the <b>whole invite link</b> you were sent and press Join.</li></ol>
+<a class="btn" href="https://github.com/Elanoran/ElanAddonHub/releases/latest">Download the hub</a></main></body></html>
+""", "text/html"));
 
 // null = allowed (identity set); otherwise the error to return
 IResult Gate(HttpContext ctx, string code, out Identity who)

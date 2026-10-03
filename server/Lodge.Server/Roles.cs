@@ -24,9 +24,11 @@ public static class Roles
         Perm.Chat => true,
         Perm.Voice => true,
         Perm.ShareFiles => AtLeast(role, "member"),
-        Perm.Moderate => AtLeast(role, "officer"),   // reserved for kick / server-mute / delete (later)
+        Perm.Moderate => AtLeast(role, "officer"),        // kick, server-mute, delete others' messages
+        Perm.ManageMembers => AtLeast(role, "owner"),     // invites, ranks, removing people
+        Perm.ManageChannels => AtLeast(role, "owner"),
         _ => false,
     };
 }
 
-public enum Perm { Chat, Voice, ShareFiles, Moderate }
+public enum Perm { Chat, Voice, ShareFiles, Moderate, ManageMembers, ManageChannels }
