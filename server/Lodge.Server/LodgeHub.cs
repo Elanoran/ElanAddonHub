@@ -11,6 +11,8 @@ class Member
     public int Id;
     public string Name;
     public string ClientInfo;
+    public string Code;     // re-checked every 15 s: removing a friend's code disconnects them
+    public bool Personal;   // name comes from a personal invite code
     public WebSocket Ws;
     public bool Voice, Muted, Deaf;
     public readonly SemaphoreSlim SendLock = new(1, 1);
@@ -18,18 +20,19 @@ class Member
 
     public JsonObject ToJson() => new()
     {
-        ["id"] = Id, ["name"] = Name, ["voice"] = Voice, ["muted"] = Muted, ["deaf"] = Deaf,
+        ["id"] = Id, ["name"] = Name, ["guest"] = !Personal, ["voice"] = Voice, ["muted"] = Muted, ["deaf"] = Deaf,
     };
 }
 
 // Everyone online, the chat history and the voice relay.
 public class LodgeHub
 {
-    public const string Version = "1.0.0";
+    public const string Version = "1.1.0";
     const int HistoryKeep = 200;
     const int MaxVoicePacket = 4000;
 
     readonly LodgeConfig cfg;
+    readonly Auth auth;
     readonly FileStore files;
     readonly ILogger log;
     readonly ConcurrentDictionary<int, Member> members = new();
@@ -39,9 +42,10 @@ public class LodgeHub
 
     public int Online => members.Count;
 
-    public LodgeHub(LodgeConfig cfg, FileStore files, ILogger log)
+    public LodgeHub(LodgeConfig cfg, Auth auth, FileStore files, ILogger log)
     {
         this.cfg = cfg;
+        this.auth = auth;
         this.files = files;
         this.log = log;
         historyFile = Path.Combine(cfg.DataDir, "history.jsonl");
@@ -57,14 +61,18 @@ public class LodgeHub
         File.WriteAllLines(historyFile, lines); // compact
     }
 
-    public async Task Run(WebSocket ws, string name, string clientInfo, CancellationToken ct)
+    public async Task Run(WebSocket ws, Identity who, string code, string name, string clientInfo, CancellationToken ct)
     {
         if (members.Count >= cfg.MaxUsers)
         {
             await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "The lodge is full", ct);
             return;
         }
-        var me = new Member { Id = Interlocked.Increment(ref nextId), Name = UniqueName(name), ClientInfo = clientInfo, Ws = ws };
+        var me = new Member
+        {
+            Id = Interlocked.Increment(ref nextId), Name = UniqueName(who.Personal ? who.Name : GuestName(name)),
+            ClientInfo = clientInfo, Ws = ws, Code = code, Personal = who.Personal,
+        };
         members[me.Id] = me;
         log.LogInformation("{Name} joined ({Client})", me.Name, clientInfo);
         try
@@ -214,6 +222,36 @@ public class LodgeHub
     {
         var data = Encoding.UTF8.GetBytes(obj.ToJsonString());
         return Task.WhenAll(members.Values.Where(m => m.Id != except).Select(m => SendRaw(m, data, WebSocketMessageType.Text)));
+    }
+
+    // a shared-code guest can't take a name that belongs to a personal code
+    string GuestName(string name)
+    {
+        name = (name ?? "").Trim();
+        if (auth.PersonalNames.Any(p => string.Equals(p, name, StringComparison.OrdinalIgnoreCase))) name += " (guest)";
+        return name;
+    }
+
+    public void StartRevalidation(CancellationToken stop)
+    {
+        _ = Task.Run(async () =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                try { await Task.Delay(TimeSpan.FromSeconds(15), stop); } catch { return; }
+                foreach (var m in members.Values.Where(m => auth.Check(m.Code) == null).ToList())
+                {
+                    log.LogInformation("{Name}'s invite code was removed - disconnecting", m.Name);
+                    try
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                        await m.Ws.CloseOutputAsync(WebSocketCloseStatus.PolicyViolation, "Your invite code was removed", cts.Token);
+                    }
+                    catch { }
+                    m.Ws.Abort();
+                }
+            }
+        });
     }
 
     string UniqueName(string name)

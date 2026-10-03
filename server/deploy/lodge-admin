@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Personal invite codes for the Lodge - one per friend, tied to their name.
+#   sudo lodge-admin add Bob      new code for Bob (prints it - send it to Bob)
+#   sudo lodge-admin remove Bob   Bob's code stops working, he's disconnected within 15 seconds
+#   sudo lodge-admin show Bob     print Bob's code again
+#   sudo lodge-admin list         who has a code
+# The server re-reads the file by itself; no restart needed.
+set -euo pipefail
+
+FILE="${LODGE_CODES_FILE:-/etc/lodge/codes}"
+if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo"; exit 1; fi
+mkdir -p "$(dirname "$FILE")"
+touch "$FILE"
+chown root:lodge "$FILE" 2>/dev/null || true
+chmod 640 "$FILE"
+
+cmd="${1:-list}"
+shift || true
+name="$*"
+
+need_name() {
+  if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9\ _-]{0,23}$ ]]; then
+    echo "Name must be 1-24 characters: letters, digits, space, _ or -"
+    exit 1
+  fi
+}
+has_code() { grep -qi "^${name}:" "$FILE"; }
+
+case "$cmd" in
+  add)
+    need_name
+    if has_code; then echo "$name already has a code (sudo lodge-admin show $name)"; exit 1; fi
+    code="$(openssl rand -hex 6)"
+    echo "${name}:${code}" >> "$FILE"
+    echo "Invite code for $name: $code"
+    ;;
+  remove)
+    need_name
+    if ! has_code; then echo "No code for $name"; exit 1; fi
+    grep -vi "^${name}:" "$FILE" > "$FILE.tmp" || true
+    cat "$FILE.tmp" > "$FILE"   # keeps owner and permissions
+    rm -f "$FILE.tmp"
+    echo "Removed $name - disconnected within 15 seconds"
+    ;;
+  show)
+    need_name
+    if ! has_code; then echo "No code for $name"; exit 1; fi
+    grep -i "^${name}:" "$FILE" | head -n 1 | cut -d: -f2-
+    ;;
+  list)
+    names="$(grep -v '^#' "$FILE" | grep -v '^[[:space:]]*$' | cut -d: -f1 || true)"
+    if [ -z "$names" ]; then echo "(no personal codes yet - sudo lodge-admin add <name>)"; else echo "$names"; fi
+    ;;
+  *)
+    echo "Usage: sudo lodge-admin add NAME | remove NAME | show NAME | list"
+    exit 1
+    ;;
+esac

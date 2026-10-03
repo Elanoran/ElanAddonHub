@@ -57,12 +57,14 @@ subdomain (`location / { ... }`) to `127.0.0.1:5280` with the same settings.
 
 A container can't reach `127.0.0.1` on the host. Set `LODGE_URLS=http://172.17.0.1:5280` (the docker0 bridge IP,
 check with `ip addr show docker0`), restart lodge, point the proxy at `172.17.0.1:5280`, enable WebSocket support
-for that route, and make sure port 5280 is NOT opened in the host firewall to the internet.
+for that route, add `LODGE_TRUSTED_PROXIES=172.16.0.0/12` (so the wrong-code lockout sees real visitor IPs),
+and make sure port 5280 is NOT opened in the host firewall to the internet.
 
 ## Check
 
 ```bash
-curl https://yoursite/lodge/health                    # {"ok":true,...}
+curl https://yoursite/lodge/health                    # {"ok":true}
+curl "https://yoursite/lodge/health?code=<a code>"    # {"ok":true,"version":...,"online":0}
 curl -i -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" \
      -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" "https://yoursite/lodge/ws?code=WRONG"   # expect 401
 ```

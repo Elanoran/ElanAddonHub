@@ -33,12 +33,19 @@ mv "$APP_DIR.new" "$APP_DIR"
 chmod 755 "$APP_DIR/lodge"
 
 if [ ! -f "$ENV_FILE" ]; then
-  CODE="$(openssl rand -hex 6)"
-  sed "s/^LODGE_CODE=.*/LODGE_CODE=$CODE/" "$REPO_DIR/server/deploy/lodge.env.example" > "$ENV_FILE"
-  echo "== New invite code: $CODE   (stored in $ENV_FILE)"
+  cp "$REPO_DIR/server/deploy/lodge.env.example" "$ENV_FILE"
 fi
 chown root:lodge "$ENV_FILE"
 chmod 640 "$ENV_FILE"
+
+# personal invite codes + the command to manage them
+install -m 755 "$REPO_DIR/server/deploy/lodge-admin" /usr/local/bin/lodge-admin
+touch /etc/lodge/codes
+chown root:lodge /etc/lodge/codes
+chmod 640 /etc/lodge/codes
+if ! grep -q '[^[:space:]]' /etc/lodge/codes && ! grep -qE '^LODGE_CODE=.{6,}' "$ENV_FILE"; then
+  echo "== No invite codes yet. Make one per friend:  sudo lodge-admin add <name>"
+fi
 
 install -m 644 "$REPO_DIR/server/deploy/lodge.service" /etc/systemd/system/lodge.service
 systemctl daemon-reload

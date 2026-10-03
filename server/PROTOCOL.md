@@ -1,12 +1,14 @@
 # Lodge protocol (v1)
 
-Base URL: `https://<site>/lodge` (or a subdomain root). All access needs the invite code.
+Base URL: `https://<site>/lodge` (or a subdomain root). All access needs an invite code: a personal one
+(tied to a name, from `lodge-admin`) or the optional shared `LODGE_CODE`. Wrong codes answer 401
+`{"error"}`; 10 wrong codes from one IP within 15 minutes block it for 15 minutes (429 `{"error"}`).
 
 ## HTTP
 
 | Request | Auth | Result |
 |---|---|---|
-| `GET /health` | none | `{"ok":true,"version":"1.0.0","online":3}` |
+| `GET /health` | none / optional code | `{"ok":true}`; with a valid code also `version`, `online` |
 | `POST /files` raw body, headers `X-File-Name` (URL-encoded), `X-Lodge-Name` | header `X-Lodge-Code` | `{"id","name","size","mime","at","by"}`; 413 if too big |
 | `GET /files/{id}` | header `X-Lodge-Code` or `?code=` | the file (range requests supported) |
 
@@ -16,12 +18,14 @@ Base URL: `https://<site>/lodge` (or a subdomain root). All access needs the inv
 
 Server → client
 
-- `welcome` `{you, name, server, maxFileMb, users:[user], history:[msg]}` (`name` may get " 2" if taken)
+- `welcome` `{you, name, server, maxFileMb, users:[user], history:[msg]}` - with a personal code `name` is the
+  code's name (the requested name is ignored); shared-code guests get " (guest)" if they pick a friend's name,
+  and " 2" if a name is taken. A removed code closes the socket (policy violation) within 15 s.
 - `join` `{user}` · `leave` `{id}` · `user` `{user}` (voice/mute/deafen changed)
 - `msg` `{id, at (unix ms), from, fromId, text, file?:{id,name,size,mime}}` - also echoed to the sender
 - `typing` `{id}` · `error` `{text}` · `pong`
 
-`user` = `{id, name, voice, muted, deaf}`
+`user` = `{id, name, guest, voice, muted, deaf}`
 
 Client → server
 
