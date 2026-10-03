@@ -21,6 +21,7 @@ namespace ElansAddonHub
         DateTime? lastCheck;
         string lastError;
         bool checking, quitting, trayHintShown;
+        string statusText = "";   // "Checked 3 min ago" - shown in Settings > Addons
         WinForms.NotifyIcon tray;
         public LodgeSession Session { get; private set; }
 
@@ -37,7 +38,6 @@ namespace ElansAddonHub
                 settings.WowRoot = WowLocator.Find();
                 SettingsStore.Save(settings);
             }
-            UpdateFolderText();
 
             checkTimer.Interval = TimeSpan.FromMinutes(settings.CheckMinutes);
             checkTimer.Tick += async (s, e) => await CheckNow();
@@ -76,7 +76,6 @@ namespace ElansAddonHub
             LodgePage.Visibility = lodge ? Visibility.Visible : Visibility.Collapsed;
             SettingsPage.Visibility = set ? Visibility.Visible : Visibility.Collapsed;
             AddonsPage.Visibility = !lodge && !set ? Visibility.Visible : Visibility.Collapsed;
-            Footer.Visibility = AddonsPage.Visibility;
             if (lodge) Session.MarkRead();
         }
 
@@ -86,7 +85,7 @@ namespace ElansAddonHub
         }
 
         // ---- for the Settings page
-        public string CheckStatus => StatusText.Text;
+        public string CheckStatus => statusText;
         public Task CheckForUpdates() => CheckNow();
         public void AutoUpdateTurnedOn() => _ = AfterCheck();
 
@@ -108,7 +107,7 @@ namespace ElansAddonHub
             SettingsPage.Show("general");
             await Task.Delay(300);
             Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
-            var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + StatusText.Text;
+            var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText;
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
             var lodgeTest = Environment.GetEnvironmentVariable("ELANSHUB_TEST_LODGE");
@@ -200,7 +199,7 @@ namespace ElansAddonHub
         {
             if (checking) return;
             checking = true;
-            StatusText.Text = "Checking for updates...";
+            statusText = "Checking for updates...";
             try
             {
                 manifest = Util.FromJson<Manifest>(await Net.GetText(settings.ManifestUrl));
@@ -262,16 +261,10 @@ namespace ElansAddonHub
         void UpdateStatusText()
         {
             if (checking) return;
-            if (lastError != null) { StatusText.Text = lastError; return; }
-            if (lastCheck == null) { StatusText.Text = ""; return; }
+            if (lastError != null) { statusText = lastError; return; }
+            if (lastCheck == null) { statusText = ""; return; }
             var mins = (int)(DateTime.Now - lastCheck.Value).TotalMinutes;
-            StatusText.Text = mins < 1 ? "Checked just now" : $"Checked {mins} min ago";
-        }
-
-        void UpdateFolderText()
-        {
-            FolderText.Text = settings.WowRoot ?? "WoW folder not found - press Change";
-            FolderText.ToolTip = settings.WowRoot;
+            statusText = mins < 1 ? "Checked just now" : $"Checked {mins} min ago";
         }
 
         // ------------------------------------------------------------------ installing
@@ -333,8 +326,6 @@ namespace ElansAddonHub
 
         // ------------------------------------------------------------------ footer & settings
 
-        void ChangeFolder_Click(object sender, RoutedEventArgs e) => PickWowFolder();
-
         public void PickWowFolder()
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
@@ -347,19 +338,17 @@ namespace ElansAddonHub
             var root = WowLocator.RootFrom(dlg.FileName);
             if (root == null)
             {
-                StatusText.Text = "That doesn't look like a World of Warcraft folder";
+                MessageBox.Show(this, "That doesn't look like a World of Warcraft folder. Pick any Wow .exe inside the folder that has _retail_, _classic_beta_ and so on.",
+                    "WoW folder", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             settings.WowRoot = root;
             SettingsStore.Save(settings);
-            UpdateFolderText();
             foreach (var c in cards) c.Update(c.Info, root);
             _ = AfterCheck();
         }
 
-        async void CheckNow_Click(object sender, RoutedEventArgs e) => await CheckNow();
 
-        void Settings_Click(object sender, RoutedEventArgs e) { ShowTab("settings"); SettingsPage.Show("addons"); }
 
         // ------------------------------------------------------------------ window & tray
 

@@ -25,7 +25,6 @@
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
-        <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
       <!-- header art, fading into the background -->
@@ -59,16 +58,20 @@
       </Grid>
 
       <!-- tabs -->
-      <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="20,0,0,8">
-        <RadioButton x:Name="TabAddons" Style="{StaticResource Tab}" Content="Addons" GroupName="tabs" IsChecked="True" Checked="Tab_Checked" />
-        <RadioButton x:Name="TabLodge" Style="{StaticResource Tab}" GroupName="tabs" Checked="Tab_Checked">
+      <DockPanel Grid.Row="1" Margin="20,0,16,8" LastChildFill="False">
+        <RadioButton x:Name="TabAddons" DockPanel.Dock="Left" Style="{StaticResource Tab}" Content="Addons" GroupName="tabs" IsChecked="True" Checked="Tab_Checked" />
+        <RadioButton x:Name="TabLodge" DockPanel.Dock="Left" Style="{StaticResource Tab}" GroupName="tabs" Checked="Tab_Checked">
           <StackPanel Orientation="Horizontal">
             <TextBlock Text="Lodge" />
             <Ellipse x:Name="UnreadDot" Width="7" Height="7" Fill="{StaticResource Accent}" Margin="6,1,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
           </StackPanel>
         </RadioButton>
-        <RadioButton x:Name="TabSettings" Style="{StaticResource Tab}" Content="Settings" GroupName="tabs" Checked="Tab_Checked" />
-      </StackPanel>
+        <!-- settings: a gear at the right end of the tab row -->
+        <RadioButton x:Name="TabSettings" DockPanel.Dock="Right" Style="{StaticResource Tab}" GroupName="tabs" Checked="Tab_Checked"
+                     Margin="0" ToolTip="Settings">
+          <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="15" Margin="2,1,2,0" />
+        </RadioButton>
+      </DockPanel>
 
       <!-- hub self-update banner -->
       <Border x:Name="HubBanner" Grid.Row="2" Visibility="Collapsed" Margin="16,0,16,10" Padding="14,10"
@@ -150,25 +153,6 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- footer -->
-      <Border x:Name="Footer" Grid.Row="4" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,8,10,10">
-        <StackPanel>
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" FontFamily="{StaticResource Icons}" FontSize="14"
-                    Content="&#xE713;" Click="Settings_Click" ToolTip="Settings" />
-            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Change" Click="ChangeFolder_Click" />
-            <TextBlock FontFamily="{StaticResource Icons}" Text="&#xE8B7;" Foreground="{StaticResource TextDim}" FontSize="13"
-                       VerticalAlignment="Center" Margin="4,0,8,0" />
-            <TextBlock x:Name="FolderText" FontSize="12" Foreground="{StaticResource TextDim}" VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" />
-          </DockPanel>
-          <DockPanel Margin="0,2,0,0">
-            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Check now" Click="CheckNow_Click" />
-            <TextBlock x:Name="StatusText" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center"
-                       Margin="4,0,0,0" TextTrimming="CharacterEllipsis" />
-          </DockPanel>
-        </StackPanel>
-      </Border>
     </Grid>
   </Border>
 </Window>

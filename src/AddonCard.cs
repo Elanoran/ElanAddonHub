@@ -64,7 +64,7 @@ namespace ElansAddonHub
                 case CardState.UpToDate: Pill("Up to date", "Accent"); ButtonText = "Up to date"; ButtonEnabled = false; break;
                 case CardState.DevCopy: Pill("Dev copy", "TextDim"); ButtonText = "Managed by git"; ButtonEnabled = false; break;
                 case CardState.NoClient: Pill("No client", "Danger"); ButtonText = $"{info.FlavorName ?? info.Flavor} not found"; ButtonEnabled = false; break;
-                default: Pill("No WoW folder", "Danger"); ButtonText = "Choose your WoW folder below"; ButtonEnabled = false; break;
+                default: Pill("No WoW folder", "Danger"); ButtonText = "Choose your WoW folder in Settings"; ButtonEnabled = false; break;
             }
 
             // newer than what you have, otherwise the latest few

@@ -80,6 +80,14 @@
           <!-- ========== General ========== -->
           <StackPanel x:Name="SecGeneral">
             <TextBlock Text="General" Style="{StaticResource SectionTitle}" />
+            <TextBlock Text="WORLD OF WARCRAFT FOLDER" Style="{StaticResource Caption}" Margin="0,0,0,6" />
+            <DockPanel Margin="0,0,0,6">
+              <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Change" Margin="8,0,0,0" Click="ChangeFolder_Click" />
+              <Border Background="{StaticResource SurfaceHi}" CornerRadius="8" Padding="10,8" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <TextBlock x:Name="FolderText" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+              </Border>
+            </DockPanel>
+            <TextBlock Text="The main folder (with _retail_, _classic_beta_ ...). Each addon knows which client it belongs to." Style="{StaticResource RowHint}" Margin="0,0,0,18" />
             <DockPanel Style="{StaticResource Row}">
               <CheckBox x:Name="BackgroundBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click" />
               <StackPanel><TextBlock Text="Run in background" Style="{StaticResource RowTitle}" />
@@ -90,24 +98,16 @@
               <StackPanel><TextBlock Text="Start with Windows" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="Starts quietly in the tray when you log in." Style="{StaticResource RowHint}" /></StackPanel>
             </DockPanel>
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="AutoUpdateBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click" />
-              <StackPanel><TextBlock Text="Update addons automatically" Style="{StaticResource RowTitle}" />
-                <TextBlock Text="Install new addon versions as soon as they're out (the hub itself always asks)." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
           </StackPanel>
 
           <!-- ========== Addons ========== -->
           <StackPanel x:Name="SecAddons" Visibility="Collapsed">
             <TextBlock Text="Addons" Style="{StaticResource SectionTitle}" />
-            <TextBlock Text="WORLD OF WARCRAFT FOLDER" Style="{StaticResource Caption}" Margin="0,0,0,6" />
-            <DockPanel Margin="0,0,0,6">
-              <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Change" Margin="8,0,0,0" Click="ChangeFolder_Click" />
-              <Border Background="{StaticResource SurfaceHi}" CornerRadius="8" Padding="10,8" BorderBrush="{StaticResource Line}" BorderThickness="1">
-                <TextBlock x:Name="FolderText" FontSize="12.5" TextTrimming="CharacterEllipsis" />
-              </Border>
+            <DockPanel Style="{StaticResource Row}">
+              <CheckBox x:Name="AutoUpdateBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click" />
+              <StackPanel><TextBlock Text="Update addons automatically" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Install new addon versions as soon as they're out (the hub itself always asks)." Style="{StaticResource RowHint}" /></StackPanel>
             </DockPanel>
-            <TextBlock Text="The main folder (with _retail_, _classic_beta_ ...). Each addon knows which client it belongs to." Style="{StaticResource RowHint}" Margin="0,0,0,18" />
             <StackPanel Orientation="Horizontal">
               <Button Style="{StaticResource SecondaryButton}" Content="Check for updates now" Click="CheckNow_Click" />
               <Button Style="{StaticResource SecondaryButton}" Content="Open backups folder" Margin="8,0,0,0" Click="Backups_Click" />
