@@ -26,6 +26,7 @@
     <Reference Include="System.Runtime.Serialization" />
     <Resource Include="Assets\hub.ico" />
     <Resource Include="Assets\hub.png" />
+    <Resource Include="Assets\hero.jpg" />
   </ItemGroup>
 
 </Project>

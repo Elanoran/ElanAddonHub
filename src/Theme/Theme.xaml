@@ -16,6 +16,8 @@
 
   <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}" />
   <SolidColorBrush x:Key="Surface" Color="{StaticResource SurfaceColor}" />
+  <!-- cards float over the header art: almost opaque -->
+  <SolidColorBrush x:Key="Card" Color="#E616191C" />
   <SolidColorBrush x:Key="SurfaceHi" Color="{StaticResource SurfaceHiColor}" />
   <SolidColorBrush x:Key="Line" Color="{StaticResource BorderColor}" />
   <SolidColorBrush x:Key="Text" Color="{StaticResource TextColor}" />

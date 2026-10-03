@@ -21,6 +21,23 @@
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
+      <!-- header art, fading into the background -->
+      <Border Grid.RowSpan="3" VerticalAlignment="Top" Height="290" CornerRadius="13,13,0,0" IsHitTestVisible="False">
+        <Border.Background>
+          <ImageBrush ImageSource="Assets/hero.jpg" Stretch="UniformToFill" AlignmentY="Top" />
+        </Border.Background>
+      </Border>
+      <Border Grid.RowSpan="3" VerticalAlignment="Top" Height="292" CornerRadius="13,13,0,0" IsHitTestVisible="False">
+        <Border.Background>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#B30F1113" Offset="0" />
+            <GradientStop Color="#1A0F1113" Offset="0.22" />
+            <GradientStop Color="#400F1113" Offset="0.5" />
+            <GradientStop Color="#FF0F1113" Offset="1" />
+          </LinearGradientBrush>
+        </Border.Background>
+      </Border>
+
       <!-- title bar -->
       <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
@@ -46,10 +63,10 @@
 
       <!-- addon cards -->
       <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
-        <ItemsControl x:Name="Cards">
+        <ItemsControl x:Name="Cards" Margin="0,92,0,0">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Margin="16,0,12,12" Padding="18" Background="{StaticResource Surface}" CornerRadius="12"
+              <Border Margin="16,0,12,12" Padding="18" Background="{StaticResource Card}" CornerRadius="12"
                       BorderBrush="{StaticResource Line}" BorderThickness="1">
                 <StackPanel>
                   <DockPanel>
