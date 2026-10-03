@@ -37,6 +37,8 @@ namespace ElansAddonHub
         string message;
         public string Message { get => message; set { message = value; Notify(); Notify(nameof(MessageVisibility)); } }
         public Visibility MessageVisibility => string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
+        // a git checkout is never replaced by the big button - only via this small link + a warning
+        public Visibility ReplaceDevVisibility => State == CardState.DevCopy ? Visibility.Visible : Visibility.Collapsed;
 
         public AddonCard(AddonInfo info) { Info = info; }
 
@@ -60,7 +62,7 @@ namespace ElansAddonHub
                 case CardState.UpdateAvailable: Pill("Update available", "Gold"); ButtonText = $"Update to {info.Version}"; ButtonEnabled = true; break;
                 case CardState.NotInstalled: Pill("Not installed", "TextDim"); ButtonText = "Install"; ButtonEnabled = true; break;
                 case CardState.UpToDate: Pill("Up to date", "Accent"); ButtonText = "Up to date"; ButtonEnabled = false; break;
-                case CardState.DevCopy: Pill("Dev copy", "TextDim"); ButtonText = $"Replace dev copy with {info.Version}"; ButtonEnabled = true; break;
+                case CardState.DevCopy: Pill("Dev copy", "TextDim"); ButtonText = "Managed by git"; ButtonEnabled = false; break;
                 case CardState.NoClient: Pill("No client", "Danger"); ButtonText = $"{info.FlavorName ?? info.Flavor} not found"; ButtonEnabled = false; break;
                 default: Pill("No WoW folder", "Danger"); ButtonText = "Choose your WoW folder below"; ButtonEnabled = false; break;
             }

@@ -119,6 +119,8 @@
 
                   <Button Style="{StaticResource PrimaryButton}" Margin="0,18,0,0" Content="{Binding ButtonText}"
                           IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="Action_Click" />
+                  <Button Style="{StaticResource GhostButton}" Content="This is a git copy - replace it with the release..." FontSize="11.5"
+                          HorizontalAlignment="Left" Margin="-6,6,0,0" Visibility="{Binding ReplaceDevVisibility}" Tag="{Binding}" Click="ReplaceDev_Click" />
                   <ProgressBar Style="{StaticResource ThinProgress}" Margin="2,8,2,0" Maximum="1"
                                Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
                   <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" FontSize="12"

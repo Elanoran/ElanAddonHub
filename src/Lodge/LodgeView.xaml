@@ -9,16 +9,18 @@
       <Border Margin="16,40,12,12" Padding="20" Background="{StaticResource Card}" CornerRadius="12"
               BorderBrush="{StaticResource Line}" BorderThickness="1" VerticalAlignment="Top">
         <StackPanel>
-          <TextBlock Text="Join a lodge" FontSize="17" FontWeight="SemiBold" />
+          <TextBlock x:Name="JoinTitle" Text="Join a lodge" FontSize="17" FontWeight="SemiBold" />
           <TextBlock Text="Chat, voice and files with your friends. Ask the lodge owner for the address and your personal invite code."
                      FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,4,0,16" />
           <TextBlock Text="ADDRESS" Style="{StaticResource Caption}" Margin="0,0,0,5" />
           <TextBox x:Name="UrlBox" Style="{StaticResource Input}" Tag="https://example.com/lodge" />
-          <TextBlock Text="INVITE CODE" Style="{StaticResource Caption}" Margin="0,12,0,5" />
+          <TextBlock x:Name="CodeCaption" Text="INVITE CODE" Style="{StaticResource Caption}" Margin="0,12,0,5" />
           <PasswordBox x:Name="CodeBox" Style="{StaticResource SecretInput}" KeyDown="CodeBox_KeyDown" />
           <TextBlock Text="NAME  (only used with a shared guest code)" Style="{StaticResource Caption}" Margin="0,12,0,5" />
           <TextBox x:Name="NameBox" Style="{StaticResource Input}" Tag="Your name" />
           <Button x:Name="JoinButton" Style="{StaticResource PrimaryButton}" Content="Join" Margin="0,18,0,0" Click="Join_Click" />
+          <Button x:Name="CancelEditButton" Style="{StaticResource GhostButton}" Content="Cancel" HorizontalAlignment="Center" Margin="0,8,0,0"
+                  Visibility="Collapsed" Click="CancelEdit_Click" />
           <TextBlock x:Name="JoinStatus" FontSize="12" Foreground="{StaticResource Danger}" TextWrapping="Wrap" Margin="2,10,0,0" />
         </StackPanel>
       </Border>
@@ -139,8 +141,11 @@
               <TextBlock Text="Friends see you online while the hub runs" FontSize="11" Foreground="{StaticResource TextDim}" />
             </StackPanel>
           </DockPanel>
-          <Button Style="{StaticResource GhostButton}" Content="Leave this lodge (forget address and code)" Foreground="{StaticResource Danger}"
-                  HorizontalAlignment="Left" Margin="-8,10,0,0" Click="SignOut_Click" />
+          <StackPanel Orientation="Horizontal" Margin="-8,10,0,0">
+            <Button Style="{StaticResource GhostButton}" Content="Edit connection" Click="EditConnection_Click" />
+            <Button Style="{StaticResource GhostButton}" Content="Leave this lodge" Foreground="{StaticResource Danger}" Margin="6,0,0,0"
+                    Click="SignOut_Click" ToolTip="Disconnect and forget the address and code" />
+          </StackPanel>
         </StackPanel>
       </Border>
 

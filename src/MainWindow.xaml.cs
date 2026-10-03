@@ -262,16 +262,20 @@ namespace ElansAddonHub
 
         async void Action_Click(object sender, RoutedEventArgs e)
         {
-            if (!((sender as FrameworkElement)?.Tag is AddonCard card)) return;
-            if (card.State == CardState.DevCopy)
-            {
-                var ok = MessageBox.Show(this,
-                    $"{card.Name} in your AddOns folder is a git checkout (a .git folder is inside), usually a developer's working copy " +
-                    "or an old zip of one.\n\nReplace it with the release version? The current folder is backed up first.",
-                    "Replace dev copy?", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (ok != MessageBoxResult.Yes) return;
-            }
-            await Install(card);
+            if ((sender as FrameworkElement)?.Tag is AddonCard card && card.State != CardState.DevCopy) await Install(card);
+        }
+
+        // only for friends who got the addon as a zip of a git checkout
+        async void ReplaceDev_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is AddonCard card) || card.State != CardState.DevCopy) return;
+            var ok = MessageBox.Show(this,
+                $"{card.Name} in your AddOns folder contains a .git folder: it's a developer's working copy, or an old zip of one.\n\n" +
+                "If you DEVELOP this addon, click No - replacing it removes your git history and unpublished work from this folder " +
+                "(a backup is kept in %LOCALAPPDATA%\\ElansAddonHub\\backups).\n\n" +
+                "If a friend sent you this folder, click Yes to switch to the normal release version that the hub keeps updated.",
+                "Replace a git copy?", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            if (ok == MessageBoxResult.Yes) await Install(card);
         }
 
         async void HubUpdate_Click(object sender, RoutedEventArgs e)

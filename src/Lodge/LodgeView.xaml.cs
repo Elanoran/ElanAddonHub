@@ -50,6 +50,8 @@ namespace ElansAddonHub.Lodge
         {
             settings = s;
             loading = true;
+            var fixedUrl = NormalizeUrl(s.LodgeUrl);
+            if (fixedUrl != s.LodgeUrl) { s.LodgeUrl = fixedUrl; SettingsStore.Save(s); } // e.g. "https://https://..."
             UrlBox.Text = s.LodgeUrl ?? "";
             NameBox.Text = s.LodgeName ?? Environment.UserName;
             ModeVa.IsChecked = !s.VoicePushToTalk;
@@ -76,10 +78,59 @@ namespace ElansAddonHub.Lodge
         void Join_Click(object sender, RoutedEventArgs e) => TryJoin();
         void CodeBox_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) TryJoin(); }
 
+        // Forgiving address input: "nasferatu.dk/lodge", "https://https://...", ".../lodge/", ".../lodge/health"
+        public static string NormalizeUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return url;
+            url = url.Trim();
+            var scheme = url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? "http" : "https";
+            int i;
+            while ((i = url.IndexOf("://", StringComparison.Ordinal)) >= 0) url = url.Substring(i + 3);
+            url = url.TrimEnd('/');
+            foreach (var tail in new[] { "/health", "/ws" })
+                if (url.EndsWith(tail, StringComparison.OrdinalIgnoreCase)) url = url.Substring(0, url.Length - tail.Length);
+            return scheme + "://" + url.TrimEnd('/');
+        }
+
+        bool editing;
+
+        void EditConnection_Click(object sender, RoutedEventArgs e)
+        {
+            editing = true;
+            UrlBox.Text = settings.LodgeUrl ?? "";
+            NameBox.Text = settings.LodgeName ?? "";
+            CodeBox.Password = "";
+            JoinTitle.Text = "Edit connection";
+            CodeCaption.Text = "INVITE CODE  (leave empty to keep your current one)";
+            JoinButton.Content = "Save and reconnect";
+            CancelEditButton.Visibility = Visibility.Visible;
+            JoinStatus.Text = "";
+            SettingsCard.Visibility = Visibility.Collapsed;
+            ChatPanel.Visibility = Visibility.Collapsed;
+            JoinPanel.Visibility = Visibility.Visible;
+        }
+
+        void CancelEdit_Click(object sender, RoutedEventArgs e)
+        {
+            EndEdit();
+            if (client != null) { JoinPanel.Visibility = Visibility.Collapsed; ChatPanel.Visibility = Visibility.Visible; }
+        }
+
+        void EndEdit()
+        {
+            editing = false;
+            JoinTitle.Text = "Join a lodge";
+            CodeCaption.Text = "INVITE CODE";
+            JoinButton.Content = "Join";
+            CancelEditButton.Visibility = Visibility.Collapsed;
+        }
+
         void TryJoin()
         {
-            var url = UrlBox.Text.Trim().TrimEnd('/');
+            var url = NormalizeUrl(UrlBox.Text);
+            UrlBox.Text = url ?? "";
             var code = CodeBox.Password.Trim();
+            if (code.Length == 0 && editing) code = SettingsStore.Unprotect(settings.LodgeCodeProtected) ?? ""; // keep the saved code
             if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http"))
             {
                 JoinStatus.Text = "The address should look like https://example.com/lodge";
@@ -91,6 +142,7 @@ namespace ElansAddonHub.Lodge
             settings.LodgeName = NameBox.Text.Trim();
             SettingsStore.Save(settings);
             CodeBox.Password = "";
+            EndEdit();
             Connect(url, code);
         }
 
@@ -125,9 +177,10 @@ namespace ElansAddonHub.Lodge
             StatusDot.Fill = (Brush)FindResource(online ? "Accent" : "TextDim");
             if (!online && client != null && !client.IsRunning)
             {
-                // wrong code / removed: back to the join screen
+                // wrong code / removed: back to the join screen, with the address kept for a quick fix
                 var why = text;
                 Disconnect();
+                UrlBox.Text = settings.LodgeUrl ?? "";
                 ChatPanel.Visibility = Visibility.Collapsed;
                 JoinPanel.Visibility = Visibility.Visible;
                 JoinStatus.Text = why;
