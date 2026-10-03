@@ -64,3 +64,24 @@ SlashCmdList.ELANSHUB = function()
   print(string.format("|cffabd473Elan's Hub|r: %s, level %s %s in %s. Your friends see this in the Lodge after /reload or logout.",
     c.name or "?", tostring(c.level or "?"), c.class or "?", c.zone or "?"))
 end
+
+-- /rl = /reload shortcut. Registered at login, and only if nothing else (another addon or the
+-- game itself) already owns /rl.
+local rl = CreateFrame("Frame")
+rl:RegisterEvent("PLAYER_LOGIN")
+rl:SetScript("OnEvent", function()
+  local taken = hash_SlashCmdList and hash_SlashCmdList["/RL"]
+  if not taken then
+    for key in pairs(SlashCmdList) do
+      for i = 1, 9 do
+        local s = _G["SLASH_" .. key .. i]
+        if not s then break end
+        if s:lower() == "/rl" then taken = true end
+      end
+      if taken then break end
+    end
+  end
+  if taken then return end
+  SLASH_ELANSHUBRELOAD1 = "/rl"
+  SlashCmdList.ELANSHUBRELOAD = function() ReloadUI() end
+end)

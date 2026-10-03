@@ -28,18 +28,19 @@
       </Grid.RowDefinitions>
 
       <!-- header art, fading into the background -->
-      <Border Grid.RowSpan="4" VerticalAlignment="Top" Height="290" CornerRadius="13,13,0,0" IsHitTestVisible="False">
+      <Border Grid.RowSpan="4" CornerRadius="13" ClipToBounds="True" IsHitTestVisible="False">
         <Border.Background>
           <ImageBrush ImageSource="Assets/hero.jpg" Stretch="UniformToFill" AlignmentY="Top" />
         </Border.Background>
       </Border>
-      <Border Grid.RowSpan="4" VerticalAlignment="Top" Height="292" CornerRadius="13,13,0,0" IsHitTestVisible="False">
+      <Border Grid.RowSpan="4" CornerRadius="13" IsHitTestVisible="False">
         <Border.Background>
           <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
             <GradientStop Color="#B30F1113" Offset="0" />
-            <GradientStop Color="#1A0F1113" Offset="0.22" />
-            <GradientStop Color="#400F1113" Offset="0.5" />
-            <GradientStop Color="#FF0F1113" Offset="1" />
+            <GradientStop Color="#330F1113" Offset="0.12" />
+            <GradientStop Color="#590F1113" Offset="0.4" />
+            <GradientStop Color="#B50F1113" Offset="0.7" />
+            <GradientStop Color="#FF0F1113" Offset="0.97" />
           </LinearGradientBrush>
         </Border.Background>
       </Border>
@@ -87,65 +88,78 @@
       <lodge:LodgeView x:Name="LodgePage" Grid.Row="3" Visibility="Collapsed" />
       <local:SettingsPage x:Name="SettingsPage" Grid.Row="3" Visibility="Collapsed" />
       <ScrollViewer x:Name="AddonsPage" Grid.Row="3" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
-        <ItemsControl x:Name="Cards" Margin="0,44,0,0" MaxWidth="660">
+        <ItemsControl x:Name="Cards" Margin="0,16,0,0" MaxWidth="660">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Margin="16,0,12,12" Padding="18" Background="{StaticResource Card}" CornerRadius="12"
+              <Border Margin="16,0,12,10" Background="{StaticResource Card}" CornerRadius="12"
                       BorderBrush="{StaticResource Line}" BorderThickness="1">
                 <StackPanel>
-                  <DockPanel>
-                    <Border DockPanel.Dock="Right" VerticalAlignment="Top" CornerRadius="10" Padding="9,3" Background="{Binding PillBg}">
-                      <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
-                    </Border>
-                    <Border Width="42" Height="42" CornerRadius="10" ClipToBounds="True" VerticalAlignment="Top">
-                      <Image Source="Assets/hub.png" RenderOptions.BitmapScalingMode="HighQuality" />
-                    </Border>
-                    <StackPanel Margin="12,1,8,0" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{StaticResource TextDim}" Margin="0,2,0,0"
-                                 ToolTip="{Binding InstallPath}" ToolTipService.InitialShowDelay="300" />
-                    </StackPanel>
-                  </DockPanel>
+                  <!-- header: click anywhere on it to expand / collapse -->
+                  <Border x:Name="Header" Background="Transparent" Padding="14,12,12,4" Cursor="Hand" CornerRadius="12,12,0,0"
+                          Tag="{Binding}" MouseLeftButtonUp="Card_Toggle" ToolTip="Show / hide details">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Chevron}" FontFamily="{StaticResource Icons}" FontSize="12"
+                                 Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,2,0" />
+                      <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="9,3" Background="{Binding PillBg}">
+                        <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
+                      </Border>
+                      <Border Width="36" Height="36" CornerRadius="9" ClipToBounds="True" VerticalAlignment="Center">
+                        <Image Source="Assets/hub.png" RenderOptions.BitmapScalingMode="HighQuality" />
+                      </Border>
+                      <StackPanel Margin="12,0,8,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,1,0,0"
+                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding InstallPath}" ToolTipService.InitialShowDelay="300" />
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
 
-                  <Grid Margin="0,18,0,0">
+                  <!-- versions + stats on the left, compact action on the right -->
+                  <Grid Margin="14,2,14,12">
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition />
-                      <ColumnDefinition />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel>
-                      <TextBlock Text="INSTALLED" Style="{StaticResource Caption}" />
-                      <TextBlock Text="{Binding Installed}" FontSize="15" Margin="0,3,0,0" />
+                    <StackPanel VerticalAlignment="Center" Margin="48,0,10,0">
+                      <TextBlock Text="{Binding VersionLine}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding StatsText}" Visibility="{Binding StatsVisibility}" FontSize="11"
+                                 Foreground="{StaticResource TextDim}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
-                    <StackPanel Grid.Column="1">
-                      <TextBlock Text="LATEST" Style="{StaticResource Caption}" />
-                      <TextBlock Text="{Binding Latest}" FontSize="15" Margin="0,3,0,0" />
-                    </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Height="32" MinWidth="130" Padding="14,0" FontSize="12.5"
+                            Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="Action_Click" />
                   </Grid>
 
-                  <Button Style="{StaticResource PrimaryButton}" Margin="0,18,0,0" Content="{Binding ButtonText}"
-                          IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="Action_Click" />
-                  <Button Style="{StaticResource GhostButton}" Content="This is a git copy - replace it with the release..." FontSize="11.5"
-                          HorizontalAlignment="Left" Margin="-6,6,0,0" Visibility="{Binding ReplaceDevVisibility}" Tag="{Binding}" Click="ReplaceDev_Click" />
-                  <ProgressBar Style="{StaticResource ThinProgress}" Margin="2,8,2,0" Maximum="1"
+                  <ProgressBar Style="{StaticResource ThinProgress}" Margin="14,0,14,10" Maximum="1"
                                Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
                   <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" FontSize="12"
-                             Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="2,10,0,0" />
+                             Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="62,-2,14,12" />
 
-                  <TextBlock Text="{Binding ChangesTitle}" Style="{StaticResource Caption}" Margin="0,20,0,8" />
-                  <ItemsControl ItemsSource="{Binding Changes}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate>
-                        <Grid Margin="0,0,0,7">
-                          <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="54" />
-                            <ColumnDefinition />
-                          </Grid.ColumnDefinitions>
-                          <TextBlock Text="{Binding Version}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
-                          <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource Text}" />
-                        </Grid>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
+                  <!-- details -->
+                  <StackPanel Visibility="{Binding ExpandedVisibility}" Margin="14,0,14,14">
+                    <Border Height="1" Background="{StaticResource Line}" Margin="0,0,0,12" />
+                    <StackPanel Visibility="{Binding DevNoteVisibility}" Margin="0,0,0,12">
+                      <TextBlock Text="{Binding DevNote}" FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" />
+                      <Button Style="{StaticResource GhostButton}" Content="Replace the git copy with the release..." FontSize="11.5"
+                              HorizontalAlignment="Left" Margin="-8,4,0,0" Visibility="{Binding ReplaceDevVisibility}" Tag="{Binding}" Click="ReplaceDev_Click" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding ChangesTitle}" Style="{StaticResource Caption}" Margin="0,0,0,8" />
+                    <ItemsControl ItemsSource="{Binding Changes}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Grid Margin="0,0,0,7">
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="54" />
+                              <ColumnDefinition />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Version}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
+                            <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource Text}" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Style="{StaticResource GhostButton}" Content="All releases on GitHub" FontSize="11.5" HorizontalAlignment="Left"
+                            Margin="-8,6,0,0" Tag="{Binding ReleasesUrl}" Click="OpenLink_Click" />
+                  </StackPanel>
                 </StackPanel>
               </Border>
             </DataTemplate>

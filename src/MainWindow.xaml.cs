@@ -206,6 +206,7 @@ namespace ElansAddonHub
                 lastError = null;
                 lastCheck = DateTime.Now;
                 RebuildCards();
+                _ = LoadStats(); // GitHub stats arrive later, never block the check
                 ShowHubBanner();
                 await AfterCheck();
             }
@@ -219,6 +220,23 @@ namespace ElansAddonHub
                 checking = false;
                 UpdateStatusText();
             }
+        }
+
+        async Task LoadStats()
+        {
+            var stats = await GitHubStats.Load(cards.Select(c => c.Info.Id).ToList());
+            foreach (var c in cards) c.SetStats(stats.TryGetValue(c.Info.Id, out var st) ? st : null);
+        }
+
+        void Card_Toggle(object sender, MouseButtonEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is AddonCard card) card.Expanded = !card.Expanded;
+        }
+
+        void OpenLink_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is string url && url.StartsWith("https://"))
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
         }
 
         void RebuildCards()
@@ -286,7 +304,8 @@ namespace ElansAddonHub
                 // WoW only discovers new addon folders when it starts; updates to known addons just need /reload
                 var hint = !wasInstalled && GamePresence.WowRunningNow()
                     ? "Installed! WoW is running - restart WoW to load a new addon (/reload isn't enough)."
-                    : "Done! In game, type /reload (or /rl) to load it.";
+                    : HasHubAddon() ? "Done! In game, type /reload (or /rl) to load it."
+                    : "Done! In game, type /reload to load it.";
                 card.Message = hint;
                 if (!IsVisible)
                     tray.ShowBalloonTip(4000, $"{card.Name} {card.Info.Version} installed", hint, WinForms.ToolTipIcon.None);
@@ -299,6 +318,10 @@ namespace ElansAddonHub
                 card.Message = "Something went wrong: " + e.Message;
             }
         }
+
+        // /rl comes from the Elan's Hub companion addon, so only mention it when that's installed
+        bool HasHubAddon() => cards.Any(c => c.Info.Id == "ElansHub" && c.State != CardState.NotInstalled
+            && c.State != CardState.NoClient && c.State != CardState.NoFolder);
 
         async void Action_Click(object sender, RoutedEventArgs e)
         {
