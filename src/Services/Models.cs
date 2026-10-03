@@ -67,6 +67,9 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "voiceInput")] public int? VoiceInput { get; set; }
         [DataMember(Name = "voiceOutput")] public int? VoiceOutput { get; set; }
         [DataMember(Name = "voiceVolume")] public double? VoiceVolume { get; set; }
+        [DataMember(Name = "lodgeStatus")] public string LodgeStatus { get; set; }      // online | away | busy | dungeon | lfg
+        [DataMember(Name = "lodgeNote")] public string LodgeNote { get; set; }
+        [DataMember(Name = "autoAwayOff")] public bool AutoAwayOff { get; set; }        // false = AFK after 10 min idle
         [DataMember(Name = "overlayOff")] public bool OverlayOff { get; set; }          // false = overlay on
         [DataMember(Name = "overlayRight")] public bool OverlayRight { get; set; }
         [DataMember(Name = "overlayTop")] public double? OverlayTop { get; set; }       // 0..1 of the screen height

@@ -17,8 +17,14 @@
               <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="12" FontWeight="Bold"
                          HorizontalAlignment="Center" VerticalAlignment="Center" />
               <Ellipse x:Name="ring" Stroke="{Binding Ring}" StrokeThickness="2.5" Margin="-3" />
+              <Border Width="15" Height="15" CornerRadius="7.5" Background="{Binding StatusBrush}" BorderBrush="#101214" BorderThickness="1.5"
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-5,-5" Visibility="{Binding StatusVisibility}">
+                        <TextBlock Text="{Binding StatusGlyph}" FontFamily="Segoe MDL2 Assets" FontSize="8" Foreground="#111315" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
             </Grid>
-            <TextBlock Text="{Binding Name}" Foreground="White" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,1" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Name}" Foreground="White" FontSize="13" FontWeight="SemiBold" Margin="10,0,0,1" VerticalAlignment="Center"
+                       Opacity="{Binding NameOpacity}">
               <TextBlock.Effect>
                 <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.9" Color="Black" />
               </TextBlock.Effect>

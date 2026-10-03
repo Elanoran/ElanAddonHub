@@ -70,15 +70,21 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Margin="0,4,6,0" Padding="3,3,10,3" CornerRadius="15" Background="{StaticResource SurfaceHi}" ToolTip="{Binding Label}">
+                <Border Margin="0,4,6,0" Padding="3,3,10,3" CornerRadius="15" Background="{StaticResource SurfaceHi}" ToolTip="{Binding Tip}"
+                        Tag="{Binding}" MouseLeftButtonUp="Chip_Click">
                   <StackPanel Orientation="Horizontal">
                     <Grid Width="24" Height="24">
                       <Ellipse Fill="{Binding Color}" />
                       <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="11.5" FontWeight="Bold"
                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
                       <Ellipse Stroke="{Binding Ring}" StrokeThickness="2" Margin="-3" />
+                      <Border Width="16" Height="16" CornerRadius="8" Background="{Binding StatusBrush}" BorderBrush="{StaticResource SurfaceHi}" BorderThickness="1.5"
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-5,-5" Visibility="{Binding StatusVisibility}">
+                        <TextBlock Text="{Binding StatusGlyph}" FontFamily="Segoe MDL2 Assets" FontSize="8.5" Foreground="#111315" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
                     </Grid>
-                    <TextBlock Text="{Binding Name}" FontSize="12" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Opacity="{Binding NameOpacity}" />
                     <TextBlock Text="{Binding StateGlyph}" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{Binding StateBrush}"
                                Margin="6,1,0,0" VerticalAlignment="Center" Visibility="{Binding StateVisibility}" />
                   </StackPanel>
@@ -134,6 +140,15 @@
             <TextBlock Text="Volume" FontSize="12.5" />
           </DockPanel>
           <Slider x:Name="VolumeSlider" Minimum="0" Maximum="2" Margin="0,6,0,0" ValueChanged="Volume_Changed" />
+
+          <DockPanel Margin="0,14,0,0">
+            <CheckBox x:Name="AutoAwayBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="AutoAway_Click" />
+            <StackPanel>
+              <TextBlock Text="AFK automatically" FontSize="12.5" />
+              <TextBlock Text="After 10 minutes without mouse or keyboard - back to Online when you return" FontSize="11"
+                         Foreground="{StaticResource TextDim}" TextWrapping="Wrap" />
+            </StackPanel>
+          </DockPanel>
 
           <TextBlock Text="IN-GAME OVERLAY" Style="{StaticResource Caption}" Margin="0,16,0,6" />
           <DockPanel>
@@ -250,5 +265,47 @@
         </DockPanel>
       </Border>
     </Grid>
+
+    <!-- status picker: click your own name -->
+    <Popup x:Name="StatusPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="6">
+      <Border Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="6" Width="250">
+        <StackPanel>
+          <TextBlock Text="SET YOUR STATUS" Style="{StaticResource Caption}" Margin="8,4,0,4" />
+          <Button Style="{StaticResource MenuRow}" Tag="online" Click="StatusOption_Click">
+            <StackPanel Orientation="Horizontal">
+              <Ellipse Width="12" Height="12" Fill="#ABD473" Margin="1,0,11,0" VerticalAlignment="Center" />
+              <TextBlock Text="Online" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource MenuRow}" Tag="away" Click="StatusOption_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE708;" FontFamily="{StaticResource Icons}" Foreground="#E6B85C" FontSize="13" Width="24" />
+              <TextBlock Text="AFK" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource MenuRow}" Tag="busy" Click="StatusOption_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE738;" FontFamily="{StaticResource Icons}" Foreground="#E06C6C" FontSize="13" FontWeight="Bold" Width="24" />
+              <TextBlock Text="Busy" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource MenuRow}" Tag="dungeon" Click="StatusOption_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xEA18;" FontFamily="{StaticResource Icons}" Foreground="#B48CE0" FontSize="13" Width="24" />
+              <TextBlock Text="In a dungeon" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource MenuRow}" Tag="lfg" Click="StatusOption_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE716;" FontFamily="{StaticResource Icons}" Foreground="#6CB4E0" FontSize="13" Width="24" />
+              <TextBlock Text="Looking for group" />
+            </StackPanel>
+          </Button>
+          <TextBox x:Name="NoteBox" Style="{StaticResource Input}" Tag="What are you up to? (optional)" Margin="2,8,2,2"
+                   MaxLength="40" KeyDown="NoteBox_KeyDown" />
+          <TextBlock Text="Enter saves the note" FontSize="10.5" Foreground="{StaticResource TextDim}" Margin="6,3,0,2" />
+        </StackPanel>
+      </Border>
+    </Popup>
   </Grid>
 </UserControl>

@@ -46,6 +46,36 @@ namespace ElansAddonHub.Lodge
         public string Initial => Avatar.Initial(Name);
         public string Label => IsMe ? Name + " (you)" : Name;
 
+        // ---- presence
+        string status = "online", note;
+        public string Status
+        {
+            get => status;
+            set
+            {
+                if (!Set(ref status, string.IsNullOrEmpty(value) ? "online" : value)) return;
+                Raise(nameof(StatusGlyph)); Raise(nameof(StatusBrush)); Raise(nameof(StatusVisibility));
+                Raise(nameof(NameOpacity)); Raise(nameof(Tip));
+            }
+        }
+        public string Note { get => note; set { if (Set(ref note, value)) Raise(nameof(Tip)); } }
+
+        public static string StatusLabel(string s) =>
+            s == "away" ? "AFK" : s == "busy" ? "Busy" : s == "dungeon" ? "In a dungeon" : s == "lfg" ? "Looking for group" : "Online";
+        public static string GlyphFor(string s) =>
+            s == "away" ? "\uE708" : s == "busy" ? "\uE738" : s == "dungeon" ? "\uEA18" : s == "lfg" ? "\uE716" : "";
+        static readonly Brush Away = Frozen("#E6B85C"), Busy = Frozen("#E06C6C"), Dungeon = Frozen("#B48CE0"), Lfg = Frozen("#6CB4E0"), On = Frozen("#ABD473");
+        static Brush Frozen(string hex) { var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); b.Freeze(); return b; }
+        public static Brush BrushFor(string s) => s == "away" ? Away : s == "busy" ? Busy : s == "dungeon" ? Dungeon : s == "lfg" ? Lfg : On;
+
+        public string StatusGlyph => GlyphFor(status);
+        public Brush StatusBrush => BrushFor(status);
+        public Visibility StatusVisibility => status == "online" ? Visibility.Collapsed : Visibility.Visible;
+        public double NameOpacity => status == "away" ? 0.55 : 1;
+        public string Tip => (IsMe ? Name + " (you) - click to set your status" : Name)
+            + (status != "online" ? " - " + StatusLabel(status) : "")
+            + (string.IsNullOrEmpty(note) ? "" : ": " + note);
+
         bool voice, muted, deaf, speaking;
         public bool Voice { get => voice; set { if (Set(ref voice, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateVisibility)); Raise(nameof(MutedVisibility)); } } }
         public bool Muted { get => muted; set { if (Set(ref muted, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); Raise(nameof(MutedVisibility)); } } }

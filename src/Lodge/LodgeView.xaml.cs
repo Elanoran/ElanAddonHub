@@ -60,6 +60,8 @@ namespace ElansAddonHub.Lodge
             VolumeSlider.Value = s.VoiceVolume ?? 1;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
             OverlayBox.IsChecked = !s.OverlayOff;
+            AutoAwayBox.IsChecked = !s.AutoAwayOff;
+            myStatus = string.IsNullOrEmpty(s.LodgeStatus) ? "online" : s.LodgeStatus;
             OverlayLeft.IsChecked = !s.OverlayRight;
             OverlayRightBox.IsChecked = s.OverlayRight;
             OverlayTopSlider.Value = s.OverlayTop ?? 0.3;
@@ -208,6 +210,7 @@ namespace ElansAddonHub.Lodge
                     foreach (var h in m.List("history").OfType<Dictionary<string, object>>()) AddMessage(h, false);
                     ScrollToEnd();
                     StatusText.Text = $"{members.Count} online";
+                    if (MyStatus != "online" || !string.IsNullOrEmpty(settings.LodgeNote)) SendStatus(); // after a reconnect too
                     break;
                 case "join":
                     var j = ToMember(m.Child("user"));
@@ -223,7 +226,11 @@ namespace ElansAddonHub.Lodge
                 case "user":
                     var u2 = m.Child("user");
                     var mem = members.FirstOrDefault(x => x.Id == u2.Int("id"));
-                    if (mem != null) { mem.Voice = u2.Bool("voice"); mem.Muted = u2.Bool("muted"); mem.Deaf = u2.Bool("deaf"); }
+                    if (mem != null)
+                    {
+                        mem.Voice = u2.Bool("voice"); mem.Muted = u2.Bool("muted"); mem.Deaf = u2.Bool("deaf");
+                        mem.Status = u2.Str("status"); mem.Note = u2.Str("note");
+                    }
                     if (mem != null && !mem.Voice) voice?.RemovePeer(mem.Id);
                     break;
                 case "msg":
@@ -250,6 +257,7 @@ namespace ElansAddonHub.Lodge
         {
             Id = u.Int("id"), Name = u.Str("name"), Guest = u.Bool("guest"), IsMe = u.Int("id") == myId,
             Voice = u.Bool("voice"), Muted = u.Bool("muted"), Deaf = u.Bool("deaf"),
+            Status = u.Str("status"), Note = u.Str("note"),
         };
 
         MessageVM AddMessage(Dictionary<string, object> m, bool live)
@@ -505,6 +513,75 @@ namespace ElansAddonHub.Lodge
 
             if (capturingKey > 0) CaptureKey();
             if (++overlayTick % 3 == 0) UpdateOverlay();
+            if (overlayTick % 50 == 0) CheckIdle();
+        }
+
+        // ================================================================ status
+
+        string myStatus = "online";
+        bool autoAway;
+        string MyStatus => autoAway ? "away" : myStatus;
+
+        void Chip_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is MemberVM m) || !m.IsMe) return;
+            NoteBox.Text = settings.LodgeNote ?? "";
+            StatusPopup.PlacementTarget = (UIElement)sender;
+            StatusPopup.IsOpen = true;
+        }
+
+        void StatusOption_Click(object sender, RoutedEventArgs e)
+        {
+            SetMyStatus((sender as FrameworkElement)?.Tag as string ?? "online", NoteBox.Text);
+            StatusPopup.IsOpen = false;
+        }
+
+        void NoteBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter) return;
+            SetMyStatus(myStatus, NoteBox.Text);
+            StatusPopup.IsOpen = false;
+        }
+
+        public void SetMyStatus(string status, string note)
+        {
+            myStatus = status;
+            autoAway = false;
+            settings.LodgeStatus = status;
+            settings.LodgeNote = (note ?? "").Trim();
+            SettingsStore.Save(settings);
+            SendStatus();
+        }
+
+        void SendStatus()
+        {
+            if (client == null || !client.Online) return;
+            _ = client.Send(new Dictionary<string, object> { ["t"] = "status", ["status"] = MyStatus, ["note"] = settings.LodgeNote ?? "" });
+        }
+
+        [StructLayout(LayoutKind.Sequential)] struct LastInput { public uint cbSize, dwTime; }
+        [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LastInput li);
+
+        static double IdleSeconds()
+        {
+            var li = new LastInput { cbSize = (uint)Marshal.SizeOf(typeof(LastInput)) };
+            return GetLastInputInfo(ref li) ? unchecked((uint)Environment.TickCount - li.dwTime) / 1000.0 : 0;
+        }
+
+        // AFK after 10 minutes without input (only from Online - Busy/Dungeon stay as chosen); back on the first input
+        void CheckIdle()
+        {
+            if (client == null || !client.Online || settings.AutoAwayOff) return;
+            var idle = IdleSeconds();
+            if (!autoAway && myStatus == "online" && idle > 600) { autoAway = true; SendStatus(); }
+            else if (autoAway && idle < 5) { autoAway = false; SendStatus(); }
+        }
+
+        void AutoAway_Click(object sender, RoutedEventArgs e)
+        {
+            settings.AutoAwayOff = AutoAwayBox.IsChecked != true;
+            SettingsStore.Save(settings);
+            if (settings.AutoAwayOff && autoAway) { autoAway = false; SendStatus(); }
         }
 
         // ================================================================ in-game overlay

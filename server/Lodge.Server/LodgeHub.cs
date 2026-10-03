@@ -15,19 +15,22 @@ class Member
     public bool Personal;   // name comes from a personal invite code
     public WebSocket Ws;
     public bool Voice, Muted, Deaf;
+    public string Status = "online"; // online | away | busy | dungeon | lfg
+    public string Note = "";         // short "what I'm up to"
     public readonly SemaphoreSlim SendLock = new(1, 1);
     public readonly Queue<DateTime> Recent = new(); // message rate limit
 
     public JsonObject ToJson() => new()
     {
         ["id"] = Id, ["name"] = Name, ["guest"] = !Personal, ["voice"] = Voice, ["muted"] = Muted, ["deaf"] = Deaf,
+        ["status"] = Status, ["note"] = Note,
     };
 }
 
 // Everyone online, the chat history and the voice relay.
 public class LodgeHub
 {
-    public const string Version = "1.2.0";
+    public const string Version = "1.3.0";
     const int HistoryKeep = 200;
     const int MaxVoicePacket = 4000;
 
@@ -161,6 +164,13 @@ public class LodgeHub
             case "state":
                 me.Muted = m["muted"]?.GetValue<bool>() == true;
                 me.Deaf = m["deaf"]?.GetValue<bool>() == true;
+                await Broadcast(new JsonObject { ["t"] = "user", ["user"] = me.ToJson() });
+                break;
+            case "status":
+                var st = (string)m["status"];
+                me.Status = st is "online" or "away" or "busy" or "dungeon" or "lfg" ? st : "online";
+                var note = new string(((string)m["note"] ?? "").Where(c => !char.IsControl(c)).ToArray()).Trim();
+                me.Note = note.Length > 40 ? note[..40] : note;
                 await Broadcast(new JsonObject { ["t"] = "user", ["user"] = me.ToJson() });
                 break;
             case "ping":

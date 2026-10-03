@@ -29,12 +29,13 @@ Server → client
 - `msg` `{id, at (unix ms), from, fromId, text, file?:{id,name,size,mime}}` - also echoed to the sender
 - `typing` `{id}` · `error` `{text}` · `pong`
 
-`user` = `{id, name, guest, voice, muted, deaf}`
+`user` = `{id, name, guest, voice, muted, deaf, status, note}` - status is online | away | busy | dungeon | lfg
 
 Client → server
 
 - `msg` `{text, file?:{id}}` - upload first, then send the returned id. Max 2000 chars, 8 per 10 s.
 - `typing` · `voice` `{on}` (join/leave voice) · `state` `{muted, deaf}` · `ping`
+- `status` `{status, note}` - presence (unknown status -> online), note max 40 chars
 
 ## Voice (binary frames)
 

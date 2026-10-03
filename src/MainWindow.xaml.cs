@@ -111,6 +111,7 @@ namespace ElansAddonHub
                 using (var s = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/hub.png")).Stream)
                 using (var f = System.IO.File.Create(img)) s.CopyTo(f);
                 await LodgePage.Share(img);
+                LodgePage.SetMyStatus("dungeon", "Wailing Caverns");
                 VoiceEngine.TestTone = true;
                 LodgePage.JoinVoice();
                 await Task.Delay(2500);
