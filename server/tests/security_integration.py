@@ -1,0 +1,233 @@
+"""Lodge security integration test - runs two local server processes on synthetic codes in temp folders.
+
+    dotnet build -c Release server/Lodge.Server
+    python server/tests/security_integration.py
+
+Never uses real codes, never talks to a real lodge. Client IPs are simulated with X-Forwarded-For (localhost is a
+trusted proxy). Prints PASS/FAIL per check, exits non-zero on any failure.
+"""
+import asyncio, json, os, re, shutil, subprocess, sys, tempfile, time
+import aiohttp
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+EXE = os.path.join(HERE, "..", "Lodge.Server", "bin", "Release", "net8.0", "lodge.exe" if os.name == "nt" else "lodge")
+ELAN, BOB, GUEST = "synthetic0elan0code0000000000001", "synthetic0bob00code0000000000002", "synthetic0guest0code00000000003"
+results = []
+
+
+def check(name, ok, extra=""):
+    results.append(bool(ok))
+    print(("PASS " if ok else "FAIL ") + name + (f"  -> {extra}" if extra != "" else ""))
+
+
+def start(port, **env):
+    data = tempfile.mkdtemp(prefix="lodge-it-")
+    with open(os.path.join(data, "codes"), "w") as f:
+        f.write(f"Elan:{ELAN}:owner\nBob:{BOB}:officer\n")
+    e = dict(os.environ, LODGE_DATA=data, LODGE_URLS=f"http://127.0.0.1:{port}", LODGE_CODE=GUEST, LODGE_CODES_FILE="")
+    e.update({k: str(v) for k, v in env.items()})
+    log = open(os.path.join(data, "server.log"), "w")
+    p = subprocess.Popen([EXE], env=e, stdout=log, stderr=subprocess.STDOUT)
+    return p, data, log
+
+
+def wait_up(base):
+    for _ in range(100):
+        try:
+            import urllib.request
+            urllib.request.urlopen(base + "/health", timeout=1)
+            return
+        except Exception:
+            time.sleep(0.1)
+    raise SystemExit("server didn't start")
+
+
+def H(code=None, ip="203.0.113.1"):
+    h = {"X-Forwarded-For": ip}
+    if code is not None: h["X-Lodge-Code"] = code
+    return h
+
+
+async def ws_open(s, base, code, ip, name="x", query=False):
+    url = base.replace("http", "ws") + f"/ws?name={name}" + (f"&code={code}" if query else "")
+    return await s.ws_connect(url, headers=H(None if query else code, ip))
+
+
+async def recv(ws, t, timeout=3, pred=lambda d: True):
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            m = await ws.receive(timeout=max(0.05, end - time.time()))
+        except asyncio.TimeoutError:
+            return None
+        if m.type == aiohttp.WSMsgType.TEXT:
+            d = json.loads(m.data)
+            if d["t"] == t and pred(d): return d
+        elif m.type == aiohttp.WSMsgType.BINARY:
+            if t == "_bin": return m.data
+        else:
+            return {"t": "_closed", "reason": m.extra, "code": ws.close_code} if t == "_closed" else None
+    return None
+
+
+async def suite_a(base):
+    async with aiohttp.ClientSession() as s:
+        # ---- 1. health: anonymous is free, with a code it is metered like everything else
+        for _ in range(30):
+            await s.get(base + "/health", headers=H(ip="198.51.100.7"))
+        r = await s.get(base + "/health", headers=H("wrong-1", "198.51.100.7"))
+        check("health: wrong code -> 401", r.status == 401)
+        r = await s.get(base + "/health", headers=H(ELAN, "198.51.100.7"))
+        j = await r.json()
+        check("health: valid code -> version + online, anonymous requests left no strikes", r.status == 200 and "version" in j)
+        ip = "198.51.100.20"
+        for i in range(4): await s.get(base + "/health", headers=H(f"wrong-h{i}", ip))
+        for i in range(4):
+            try:
+                w = await ws_open(s, base, f"wrong-w{i}", ip); await w.close()
+            except aiohttp.WSServerHandshakeError:
+                pass
+        for i in range(2): await s.get(base + "/files/" + "0" * 32, headers=H(f"wrong-f{i}", ip))
+        r = await s.get(base + "/health", headers=H(ELAN, ip))
+        check("health/ws/files share one strike counter: 11th request blocked even with a valid code", r.status == 429, r.status)
+        r = await s.get(base + "/health", headers=H(ELAN, "198.51.100.21"))
+        check("independent IP unaffected", r.status == 200)
+        r = await s.get(base + "/health", headers=H(ip="198.51.100.20"))
+        check("anonymous health still public for a blocked IP (no oracle: it says only ok)", r.status == 200 and await r.json() == {"ok": True})
+        ip = "198.51.100.30"
+        for i in range(9): await s.get(base + "/health", headers=H(f"w{i}", ip))
+        await s.get(base + "/health", headers=H(ELAN, ip))
+        for i in range(9): await s.get(base + "/health", headers=H(f"v{i}", ip))
+        r = await s.get(base + "/health", headers=H(ELAN, ip))
+        check("success before the block resets the count", r.status == 200)
+
+        # ---- 7. credentials: header wins over query; query allowed by default (1.x clients)
+        r = await s.get(base + f"/health?code={ELAN}", headers=H("wrong-header", "198.51.100.40"))
+        check("header takes precedence over ?code=", r.status == 401)
+        r = await s.get(base + f"/health?code={ELAN}", headers=H(ip="198.51.100.41"))
+        check("legacy ?code= still works by default", r.status == 200 and "version" in await r.json())
+
+        # ---- 4. budgets
+        a = await ws_open(s, base, ELAN, "192.0.2.1"); await recv(a, "welcome")
+        b = await ws_open(s, base, BOB, "192.0.2.2"); await recv(b, "welcome")
+        for i in range(8): await a.send_str(json.dumps({"t": "msg", "channel": "general", "text": f"hi {i}"}))
+        got = 0
+        while await recv(b, "msg", 1): got += 1
+        check("8 chat messages go through", got == 8, got)
+        await a.close()
+        a = await ws_open(s, base, ELAN, "192.0.2.1"); await recv(a, "welcome")
+        await a.send_str(json.dumps({"t": "msg", "channel": "general", "text": "after reconnect"}))
+        e = await recv(a, "error")
+        check("reconnecting doesn't reset the chat budget", e is not None and "Slow" in e["text"])
+        g1 = await ws_open(s, base, GUEST, "192.0.2.10", "Tom"); await recv(g1, "welcome")
+        g2 = await ws_open(s, base, GUEST, "192.0.2.11", "Ann"); await recv(g2, "welcome")
+        for g in (g1, g2):
+            for i in range(8): await g.send_str(json.dumps({"t": "msg", "channel": "general", "text": f"guest {i}"}))
+        await asyncio.sleep(0.5)
+        errs = 0
+        for g in (g1, g2):
+            while (x := await recv(g, "error", 0.3)) is not None: errs += 1
+        check("two guests on the shared code have separate budgets", errs == 0, errs)
+
+        # voice: a normal 50 packets/s stream arrives complete
+        for w, room in ((a, "hangout"), (b, "hangout")): await w.send_str(json.dumps({"t": "voice", "room": room}))
+        await asyncio.sleep(0.3)
+        async def count_bin():
+            n = 0
+            while True:
+                try: m = await b.receive(timeout=1.5)
+                except asyncio.TimeoutError: return n
+                if m.type == aiohttp.WSMsgType.BINARY: n += 1
+        counter = asyncio.create_task(count_bin())
+        for i in range(100):
+            await a.send_bytes(b"\x00" * 80)
+            await asyncio.sleep(0.02)
+        n = await counter
+        check("2 s of 20 ms Opus frames all relayed", n >= 98, n)
+
+        # control flood: the flooder is cut off, others keep working
+        f = await ws_open(s, base, GUEST, "192.0.2.50", "Flood"); await recv(f, "welcome")
+        for i in range(2000):
+            try: await f.send_str(json.dumps({"t": "typing", "channel": "general"}))
+            except Exception: break
+        c = await recv(f, "_closed", 5)
+        check("control flood closes that connection", c is not None, c)
+        await b.send_str(json.dumps({"t": "msg", "channel": "general", "text": "still here"}))
+        check("others unaffected by the flood", await recv(a, "msg", 2, lambda d: d["text"] == "still here") is not None)
+        for w in (a, b, g1, g2): await w.close()
+
+        # ---- 6. guest impersonation
+        g = await ws_open(s, base, GUEST, "192.0.2.60", "E%01lan")
+        w = await recv(g, "welcome")
+        check("guest 'E\\x01lan' can't become 'Elan'", w and w["name"].lower() != "elan" and "(guest)" in w["name"], w and w["name"])
+        await g.close()
+
+
+async def suite_b(base):
+    async with aiohttp.ClientSession() as s:
+        r = await s.get(base + f"/health?code={ELAN}", headers=H(ip="198.51.100.80"))
+        check("LODGE_ALLOW_QUERY_CODE=false: ?code= rejected", r.status == 401)
+        try:
+            w = await ws_open(s, base, ELAN, "198.51.100.81", query=True); await w.close(); ok = False
+        except aiohttp.WSServerHandshakeError as e:
+            ok = e.status == 401
+        check("... also for WebSockets", ok)
+        r = await s.get(base + "/health", headers=H(ELAN, "198.51.100.82"))
+        check("header still works on health", r.status == 200)
+        w = await ws_open(s, base, ELAN, "198.51.100.82")
+        check("header still works on WebSockets", (await recv(w, "welcome")) is not None)
+        await w.close()
+        up = await s.post(base + "/files", data=b"x" * 700_000, headers={**H(ELAN, "198.51.100.82"), "X-File-Name": "a.bin"})
+        meta = await up.json()
+        check("header works for uploads", up.status == 200, up.status)
+        dl = await s.get(base + "/files/" + meta.get("id", ""), headers=H(ELAN, "198.51.100.82"))
+        check("header works for downloads", dl.status == 200 and len(await dl.read()) == 700_000)
+        up2 = await s.post(base + "/files", data=b"x" * 700_000, headers={**H(BOB, "198.51.100.83"), "X-File-Name": "b.bin"})
+        check("total storage limit refuses the next upload (507)", up2.status == 507, up2.status)
+
+        # concurrent joins never pass LODGE_MAX_USERS=5
+        async def join(i):
+            try:
+                w = await ws_open(s, base, GUEST, f"192.0.2.{100 + i}", f"G{i}")
+                got = await recv(w, "welcome", 3)
+                return w, got is not None
+            except aiohttp.WSServerHandshakeError:
+                return None, False
+        res = await asyncio.gather(*[join(i) for i in range(12)])
+        admitted = sum(1 for _, ok in res if ok)
+        check("12 simultaneous joins, cap 5: exactly 5 admitted", admitted == 5, admitted)
+        w = await ws_open(s, base, ELAN, "192.0.2.200")
+        check("... while full, others are told the lodge is full", (await recv(w, "welcome", 2)) is None)
+        for x, _ in res:
+            if x is not None: await x.close()
+
+
+def scan_logs(*datas):
+    text = ""
+    for d in datas:
+        with open(os.path.join(d, "server.log"), encoding="utf-8", errors="replace") as f:
+            text += f.read()
+    leaked = [c for c in (ELAN, BOB, GUEST) if c in text] + re.findall(r"wrong-[a-z]?\d", text)
+    check("no code (valid or wrong) appears in the server logs", not leaked, leaked[:3])
+
+
+def main():
+    if not os.path.exists(EXE): raise SystemExit(f"build first: {EXE}")
+    pa, da, la = start(5291)
+    pb, db, lb = start(5292, LODGE_ALLOW_QUERY_CODE="false", LODGE_MAX_STORAGE_MB=1, LODGE_MAX_FILE_MB=1, LODGE_MAX_USERS=5)
+    try:
+        wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge")
+        asyncio.run(suite_a("http://127.0.0.1:5291/lodge"))
+        asyncio.run(suite_b("http://127.0.0.1:5292/lodge"))
+    finally:
+        for p in (pa, pb): p.terminate()
+        for p in (pa, pb): p.wait(10)
+        for l in (la, lb): l.close()
+    scan_logs(da, db)
+    for d in (da, db): shutil.rmtree(d, ignore_errors=True)
+    print(f"\n{sum(results)}/{len(results)} passed")
+    sys.exit(0 if all(results) else 1)
+
+
+if __name__ == "__main__":
+    main()
