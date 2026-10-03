@@ -30,9 +30,10 @@ namespace ElansAddonHub.Services
             root != null && a.Folders != null &&
             a.Folders.Any(f => Directory.Exists(Path.Combine(WowLocator.AddOnsDir(root, a.Flavor), f, ".git")));
 
-        public static async Task Install(string root, AddonInfo a, IProgress<double> progress)
+        // replaceDevCopy: only after the user confirmed (a git checkout is usually someone's work in progress)
+        public static async Task Install(string root, AddonInfo a, IProgress<double> progress, bool replaceDevCopy = false)
         {
-            if (IsDevCopy(root, a)) throw new InvalidOperationException("This is a development copy (git) - not touching it.");
+            if (!replaceDevCopy && IsDevCopy(root, a)) throw new InvalidOperationException("This is a development copy (git) - not touching it.");
             var addOns = WowLocator.AddOnsDir(root, a.Flavor);
             if (!WowLocator.HasFlavor(root, a.Flavor))
                 throw new InvalidOperationException($"No {a.FlavorName ?? a.Flavor} client found in this WoW folder.");

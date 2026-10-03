@@ -238,12 +238,13 @@ namespace ElansAddonHub
 
         async Task Install(AddonCard card)
         {
+            var replaceDev = card.State == CardState.DevCopy;
             var wasInstalled = card.State != CardState.NotInstalled;
             card.Message = null;
             card.SetBusy(true, wasInstalled ? "Updating..." : "Installing...");
             try
             {
-                await Installer.Install(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p));
+                await Installer.Install(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p), replaceDev);
                 card.SetBusy(false);
                 card.Update(card.Info, settings.WowRoot);
                 card.Message = "Done! In game, type /reload (or /rl) to load it.";
@@ -261,7 +262,16 @@ namespace ElansAddonHub
 
         async void Action_Click(object sender, RoutedEventArgs e)
         {
-            if ((sender as FrameworkElement)?.Tag is AddonCard card) await Install(card);
+            if (!((sender as FrameworkElement)?.Tag is AddonCard card)) return;
+            if (card.State == CardState.DevCopy)
+            {
+                var ok = MessageBox.Show(this,
+                    $"{card.Name} in your AddOns folder is a git checkout (a .git folder is inside), usually a developer's working copy " +
+                    "or an old zip of one.\n\nReplace it with the release version? The current folder is backed up first.",
+                    "Replace dev copy?", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (ok != MessageBoxResult.Yes) return;
+            }
+            await Install(card);
         }
 
         async void HubUpdate_Click(object sender, RoutedEventArgs e)

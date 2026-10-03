@@ -60,7 +60,7 @@ namespace ElansAddonHub
                 case CardState.UpdateAvailable: Pill("Update available", "Gold"); ButtonText = $"Update to {info.Version}"; ButtonEnabled = true; break;
                 case CardState.NotInstalled: Pill("Not installed", "TextDim"); ButtonText = "Install"; ButtonEnabled = true; break;
                 case CardState.UpToDate: Pill("Up to date", "Accent"); ButtonText = "Up to date"; ButtonEnabled = false; break;
-                case CardState.DevCopy: Pill("Dev copy", "TextDim"); ButtonText = "Managed by git"; ButtonEnabled = false; break;
+                case CardState.DevCopy: Pill("Dev copy", "TextDim"); ButtonText = $"Replace dev copy with {info.Version}"; ButtonEnabled = true; break;
                 case CardState.NoClient: Pill("No client", "Danger"); ButtonText = $"{info.FlavorName ?? info.Flavor} not found"; ButtonEnabled = false; break;
                 default: Pill("No WoW folder", "Danger"); ButtonText = "Choose your WoW folder below"; ButtonEnabled = false; break;
             }
