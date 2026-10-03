@@ -1,30 +1,34 @@
 #!/usr/bin/env bash
-# Personal invite codes for the Lodge - one per friend, tied to their name.
-#   sudo lodge-admin add Bob [role]   new code for Bob (prints it - send it to Bob); role defaults to member
-#   sudo lodge-admin role Bob officer change Bob's rank (applies live): owner | officer | veteran | member
-#   sudo lodge-admin remove Bob   Bob's code stops working, he's disconnected within 15 seconds
-#   sudo lodge-admin show Bob     print Bob's code again
-#   sudo lodge-admin list         who has a code, with their rank
-# The server re-reads the file by itself; no restart needed.
+# Personal invite codes for the Lodge - one per friend, tied to their name and rank.
+#   sudo lodge-admin add Bob [role]    new code for Bob (prints it - send it to Bob); role defaults to member
+#   sudo lodge-admin role Bob officer  change Bob's rank (applies within 15 s): owner | officer | veteran | member
+#   sudo lodge-admin remove Bob        Bob's code stops working, he's disconnected within 15 seconds
+#   sudo lodge-admin show Bob          print Bob's code again
+#   sudo lodge-admin list              who has a code, with their rank
+# The server re-reads the file by itself; no restart needed. The hub's Guild Master panel edits the same file.
+#
+# Safety: umask 077; every change holds an flock on <codes>.lock (the server takes the same lock); the new list is
+# written to a private mktemp file in the same folder, given its owner and 0640, then renamed over the old file
+# (atomic: nobody ever reads a partial list). Codes are never logged.
 set -euo pipefail
+umask 077
 
-# codes live in the data folder since 2.0 (older installs: /etc/lodge/codes until install.sh moves them)
 if [ -n "${LODGE_CODES_FILE:-}" ]; then FILE="$LODGE_CODES_FILE"
 elif [ -f /var/lib/lodge/codes ] || [ ! -f /etc/lodge/codes ]; then FILE=/var/lib/lodge/codes
 else FILE=/etc/lodge/codes; fi
+OWNER="${LODGE_OWNER:-lodge:lodge}"   # the service edits the file too (Guild Master panel)
+LOCK="$FILE.lock"
+DIR="$(dirname "$FILE")"
+
 if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo"; exit 1; fi
-mkdir -p "$(dirname "$FILE")"
-touch "$FILE"
-chown lodge:lodge "$FILE" 2>/dev/null || true
-chmod 640 "$FILE"
+mkdir -p "$DIR"
 
 cmd="${1:-list}"
 shift || true
 role=""
 # "add NAME ROLE" / "role NAME ROLE": the last word is the rank when it is one
-last="${*: -1}"
-if [[ "$cmd" == "add" || "$cmd" == "role" ]] && [[ "$last" =~ ^(owner|officer|veteran|member)$ ]] && [ "$#" -ge 2 ]; then
-  role="$last"
+if [ "$#" -ge 2 ] && [[ "$cmd" == "add" || "$cmd" == "role" ]] && [[ "${*: -1}" =~ ^(owner|officer|veteran|member)$ ]]; then
+  role="${*: -1}"
   set -- "${@:1:$(($#-1))}"
 fi
 name="$*"
@@ -35,48 +39,75 @@ need_name() {
     exit 1
   fi
 }
-has_code() { grep -qi "^${name}:" "$FILE"; }
+
+# ---- lock + atomic replace
+tmp=""
+cleanup() { if [ -n "$tmp" ]; then rm -f -- "$tmp"; fi; }
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT TERM HUP
+
+lock() {
+  if [ ! -e "$LOCK" ]; then : > "$LOCK"; fi
+  chown "$OWNER" "$LOCK" 2>/dev/null || true
+  chmod 0660 "$LOCK"
+  exec 9<"$LOCK"
+  if ! flock -w 10 9; then echo "Another change to the codes is running - try again"; exit 1; fi
+  if [ ! -f "$FILE" ]; then
+    tmp="$(mktemp "$DIR/.codes.XXXXXXXXXX")"
+    chown "$OWNER" "$tmp" 2>/dev/null || true
+    chmod 0640 "$tmp"
+    mv -f -- "$tmp" "$FILE"
+    tmp=""
+  fi
+}
+
+# stdin -> the new codes file
+replace() {
+  tmp="$(mktemp "$DIR/.codes.XXXXXXXXXX")"   # 0600 thanks to umask 077
+  cat > "$tmp"
+  chown "$OWNER" "$tmp" 2>/dev/null || true
+  chmod 0640 "$tmp"
+  mv -f -- "$tmp" "$FILE"
+  tmp=""
+}
+
+has_code() {
+  awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n {f=1} END{exit f?0:1}' "$FILE"
+}
 
 case "$cmd" in
   add)
     need_name
+    lock
     if has_code; then echo "$name already has a code (sudo lodge-admin show $name)"; exit 1; fi
-    code="$(openssl rand -hex 6)"
-    echo "${name}:${code}:${role:-member}" >> "$FILE"
+    code="$(openssl rand -hex 16)"
+    { awk 1 "$FILE"; printf '%s:%s:%s\n' "$name" "$code" "${role:-member}"; } | replace
     echo "Invite code for $name (${role:-member}): $code"
     ;;
   role)
     need_name
-    if ! has_code; then echo "No code for $name"; exit 1; fi
     if [ -z "$role" ]; then echo "Usage: sudo lodge-admin role NAME owner|officer|veteran|member"; exit 1; fi
-    tmp="$(mktemp)"
-    while IFS= read -r line; do
-      if [[ "${line,,}" == "${name,,}:"* ]]; then
-        IFS=: read -r n c _ <<< "$line"
-        echo "${n}:${c}:${role}"
-      else
-        echo "$line"
-      fi
-    done < "$FILE" > "$tmp"
-    cat "$tmp" > "$FILE"   # keeps owner and permissions
-    rm -f "$tmp"
+    lock
+    if ! has_code; then echo "No code for $name"; exit 1; fi
+    awk -F: -v OFS=: -v n="$name" -v r="$role" 'BEGIN{n=tolower(n)}
+      !/^[[:space:]]*#/ && tolower($1)==n { print $1, $2, r; next } { print }' "$FILE" | replace
     echo "$name is now $role (applies within 15 seconds)"
     ;;
   remove)
     need_name
+    lock
     if ! has_code; then echo "No code for $name"; exit 1; fi
-    grep -vi "^${name}:" "$FILE" > "$FILE.tmp" || true
-    cat "$FILE.tmp" > "$FILE"   # keeps owner and permissions
-    rm -f "$FILE.tmp"
+    awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { next } { print }' "$FILE" | replace
     echo "Removed $name - disconnected within 15 seconds"
     ;;
   show)
     need_name
-    if ! has_code; then echo "No code for $name"; exit 1; fi
-    grep -i "^${name}:" "$FILE" | head -n 1 | cut -d: -f2
+    if [ ! -f "$FILE" ] || ! has_code; then echo "No code for $name"; exit 1; fi
+    awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { print $2; exit }' "$FILE"
     ;;
   list)
-    names="$(grep -v '^#' "$FILE" | grep -v '^[[:space:]]*$' | awk -F: '{ r = ($3 == "" ? "member" : $3); printf "%-24s %s\n", $1, r }' || true)"
+    if [ ! -f "$FILE" ]; then echo "(no personal codes yet - sudo lodge-admin add <name>)"; exit 0; fi
+    names="$(awk -F: '!/^[[:space:]]*#/ && NF >= 2 && $1 != "" { r = ($3 == "" ? "member" : $3); printf "%-24s %s\n", $1, r }' "$FILE")"
     if [ -z "$names" ]; then echo "(no personal codes yet - sudo lodge-admin add <name>)"; else echo "$names"; fi
     ;;
   *)
