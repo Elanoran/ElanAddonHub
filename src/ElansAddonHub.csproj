@@ -10,7 +10,7 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>1.0.1</Version>
+    <Version>1.1.0</Version>
     <Product>Elan's Addon Hub</Product>
     <Company>Elan</Company>
     <Description>Installs and updates Elan's WoW addons</Description>
@@ -24,9 +24,17 @@
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Security" />
     <Resource Include="Assets\hub.ico" />
     <Resource Include="Assets\hub.png" />
     <Resource Include="Assets\hero.jpg" />
+  </ItemGroup>
+
+  <!-- voice: NAudio (mic/speakers) + Concentus (Opus codec, pure C#); Costura packs them into the exe -->
+  <ItemGroup>
+    <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
+    <PackageReference Include="Concentus" Version="2.2.2" />
+    <PackageReference Include="Costura.Fody" Version="5.7.0" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

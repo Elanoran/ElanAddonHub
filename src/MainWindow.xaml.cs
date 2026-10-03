@@ -46,6 +46,34 @@ namespace ElansAddonHub
             statusTimer.Tick += (s, e) => UpdateStatusText();
             statusTimer.Start();
             Loaded += async (s, e) => { if (manifest == null) await CheckNow(); };
+
+            if (settings.WindowWidth is double w && w >= MinWidth) Width = w;
+            if (settings.WindowHeight is double h && h >= MinHeight) Height = h;
+            SizeChanged += (s, e) => { settings.WindowWidth = ActualWidth; settings.WindowHeight = ActualHeight; };
+            Activated += (s, e) => { if (TabLodge.IsChecked == true) LodgePage.MarkRead(); };
+
+            LodgePage.IsShownToUser = () => IsVisible && IsActive && WindowState != WindowState.Minimized && TabLodge.IsChecked == true;
+            LodgePage.UnreadChanged += unread => UnreadDot.Visibility = unread ? Visibility.Visible : Visibility.Collapsed;
+            LodgePage.Notify += (from, text) =>
+            {
+                // only a tray note while the window is hidden, at most one every 8 s
+                if (IsVisible || (DateTime.Now - lastChatNote).TotalSeconds < 8) return;
+                lastChatNote = DateTime.Now;
+                tray.ShowBalloonTip(4000, from, text.Length > 120 ? text.Substring(0, 120) + "..." : text, WinForms.ToolTipIcon.None);
+            };
+            LodgePage.Init(settings);
+        }
+
+        DateTime lastChatNote;
+
+        void Tab_Checked(object sender, RoutedEventArgs e)
+        {
+            if (LodgePage == null) return;
+            var lodge = TabLodge.IsChecked == true;
+            LodgePage.Visibility = lodge ? Visibility.Visible : Visibility.Collapsed;
+            AddonsPage.Visibility = lodge ? Visibility.Collapsed : Visibility.Visible;
+            Footer.Visibility = lodge ? Visibility.Collapsed : Visibility.Visible;
+            if (lodge) { SettingsPanel.Visibility = Visibility.Collapsed; LodgePage.MarkRead(); }
         }
 
         // --selftest <dir>: render the window to PNGs before/after installing the first addon, then quit
@@ -65,8 +93,36 @@ namespace ElansAddonHub
             SettingsPanel.Visibility = Visibility.Visible;
             await Task.Delay(300);
             Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
-            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"),
-                string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + StatusText.Text);
+            var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + StatusText.Text;
+
+            // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
+            var lodgeTest = Environment.GetEnvironmentVariable("ELANSHUB_TEST_LODGE");
+            if (!string.IsNullOrEmpty(lodgeTest))
+            {
+                var p = lodgeTest.Split('|');
+                TabLodge.IsChecked = true;
+                await Task.Delay(300);
+                Snapshot(System.IO.Path.Combine(dir, "4-join.png"));
+                LodgePage.FillJoinForTest(p[0], p[1], p.Length > 2 ? p[2] : "Tester");
+                for (int i = 0; i < 50 && !LodgePage.IsOnline; i++) await Task.Delay(200);
+                await Task.Delay(500);
+                await LodgePage.SendTextForTest("Hello from the hub! Voice and files next.");
+                var img = System.IO.Path.Combine(dir, "wolf.png");
+                using (var s = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/hub.png")).Stream)
+                using (var f = System.IO.File.Create(img)) s.CopyTo(f);
+                await LodgePage.Share(img);
+                VoiceEngine.TestTone = true;
+                LodgePage.JoinVoice();
+                await Task.Delay(2500);
+                Snapshot(System.IO.Path.Combine(dir, "5-lodge.png"));
+                LodgePage.ShowSettingsForTest();
+                await Task.Delay(400);
+                Snapshot(System.IO.Path.Combine(dir, "6-voice-settings.png"));
+                result += $"\r\njoin error='{LodgePage.JoinError}'";
+                result += $"\r\nlodge online={LodgePage.IsOnline} members={LodgePage.MemberCount} messages={LodgePage.MessageCount} {LodgePage.VoiceStats}"
+                        + $"\r\n{VoiceEngine.CodecSelfTest()}";
+            }
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
             Quit();
         }
 
@@ -310,6 +366,8 @@ namespace ElansAddonHub
         void Quit()
         {
             quitting = true;
+            SettingsStore.Save(settings); // window size
+            LodgePage.Disconnect();
             tray.Visible = false;
             tray.Dispose();
             Application.Current.Shutdown();

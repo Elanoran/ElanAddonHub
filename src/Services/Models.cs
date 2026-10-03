@@ -55,5 +55,19 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "checkMinutes")] public int CheckMinutes { get; set; } = 30;
         // versions we already showed a tray notification for
         [DataMember(Name = "notified")] public List<string> Notified { get; set; }
+
+        // ---- Lodge (chat/voice). The invite code is stored encrypted for this Windows user (DPAPI).
+        [DataMember(Name = "lodgeUrl")] public string LodgeUrl { get; set; }
+        [DataMember(Name = "lodgeCode")] public string LodgeCodeProtected { get; set; }
+        [DataMember(Name = "lodgeName")] public string LodgeName { get; set; }
+        [DataMember(Name = "lodgeManualConnect")] public bool LodgeManualConnect { get; set; } // false = connect when the hub starts
+        [DataMember(Name = "voicePtt")] public bool VoicePushToTalk { get; set; }
+        [DataMember(Name = "voicePttKey")] public int VoicePttKey { get; set; }
+        [DataMember(Name = "voiceThreshold")] public double? VoiceThreshold { get; set; }
+        [DataMember(Name = "voiceInput")] public int? VoiceInput { get; set; }
+        [DataMember(Name = "voiceOutput")] public int? VoiceOutput { get; set; }
+        [DataMember(Name = "voiceVolume")] public double? VoiceVolume { get; set; }
+        [DataMember(Name = "windowWidth")] public double? WindowWidth { get; set; }
+        [DataMember(Name = "windowHeight")] public double? WindowHeight { get; set; }
     }
 }

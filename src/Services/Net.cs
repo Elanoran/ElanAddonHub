@@ -9,7 +9,7 @@ namespace ElansAddonHub.Services
 {
     public static class Net
     {
-        static readonly HttpClient Http;
+        internal static readonly HttpClient Http;
 
         static Net()
         {

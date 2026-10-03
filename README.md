@@ -28,6 +28,19 @@ No installer, no runtime to download - it's one small file (~150 KB) that runs o
 - **Updates itself** when a new hub version is released.
 - Never touches a development copy (a folder with `.git`).
 
+## The Lodge: chat, voice and files
+
+The **Lodge** tab is a small private Discord for you and your friends:
+
+- **Text chat** with history, who's online and "is typing".
+- **Voice**: join with one click, mute/deafen, voice activation with a sensitivity meter or push-to-talk
+  (any key or mouse button, works while WoW has focus), a green ring shows who's talking. Opus codec, ~30 kbit/s.
+- **Files**: drop a file into the chat (up to 25 MB); pictures show inline, everything else downloads with one click.
+
+A lodge runs on someone's own server (see [`server/`](server/), one small .NET service behind your existing
+web server). Ask the lodge owner for the address and your personal invite code. The code is stored encrypted
+for your Windows user and is only ever sent in a request header, never in a URL.
+
 ## Elan's Hunter Helper
 
 The hunter toolkit for WoW Forever: pet abilities and where to tame them, Beast Finder with spawn

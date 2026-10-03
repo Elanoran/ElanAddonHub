@@ -30,6 +30,26 @@ namespace ElansAddonHub.Services
             catch (Exception e) { Util.Log("settings save failed: " + e.Message); }
         }
 
+        public static string Protect(string secret)
+        {
+            if (string.IsNullOrEmpty(secret)) return null;
+            var bytes = System.Security.Cryptography.ProtectedData.Protect(
+                System.Text.Encoding.UTF8.GetBytes(secret), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(bytes);
+        }
+
+        public static string Unprotect(string stored)
+        {
+            if (string.IsNullOrEmpty(stored)) return null;
+            try
+            {
+                var bytes = System.Security.Cryptography.ProtectedData.Unprotect(
+                    Convert.FromBase64String(stored), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                return System.Text.Encoding.UTF8.GetString(bytes);
+            }
+            catch { return null; }
+        }
+
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         const string RunName = "ElansAddonHub";
 
