@@ -142,6 +142,15 @@ namespace ElansAddonHub
             using (var fs = System.IO.File.Create(file)) enc.Save(fs);
         }
 
+        // --test-selfupdate: check, then update to the manifest's hub version like the banner button (for testing)
+        public async Task TestSelfUpdate()
+        {
+            await CheckNow();
+            for (int i = 0; i < 100 && (checking || manifest == null); i++) await Task.Delay(200);
+            if (SelfUpdater.IsNewer(manifest?.Hub)) HubUpdate_Click(this, null);
+            else Quit();
+        }
+
         // started with --tray (Windows startup): no window, just the tray icon and checks
         public void StartHidden()
         {
@@ -285,7 +294,7 @@ namespace ElansAddonHub
         {
             HubUpdateButton.IsEnabled = false;
             HubBannerText.Text = "Downloading the new hub...";
-            try { await SelfUpdater.UpdateAndRestart(manifest.Hub, null); quitting = true; }
+            try { await SelfUpdater.UpdateAndRestart(manifest.Hub, null); Quit(); }
             catch (Exception ex)
             {
                 Util.Log("hub update failed: " + ex);

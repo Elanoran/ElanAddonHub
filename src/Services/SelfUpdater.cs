@@ -34,8 +34,8 @@ namespace ElansAddonHub.Services
             File.Move(exe, old);
             File.Move(fresh, exe);
             Util.Log($"hub updated {App.Version} -> {hub.Version}");
+            // the new hub waits for this one to finish quitting (the caller quits right after)
             Process.Start(new ProcessStartInfo(exe, "--updated") { UseShellExecute = false });
-            System.Windows.Application.Current.Shutdown();
         }
     }
 }
