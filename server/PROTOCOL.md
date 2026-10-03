@@ -4,17 +4,22 @@ Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in 
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
 `Name:code:role` in `<data>/codes`, managed from the hub's Guild Master panel or `lodge-admin`) or the optional
 shared `LODGE_CODE` (rank: guest). Send codes in the `X-Lodge-Code` header, never in a URL (query strings end
-up in proxy logs). Wrong codes answer 401 `{"error"}`; 10 wrong codes from one IP within 15 minutes block it
-for 15 minutes (429). Invite links look like `https://<site>/lodge#invite=<code>` - the part after `#` never
-reaches a server.
+up in proxy logs); the header wins when both are present. `?code=` is accepted for 1.x hubs until
+`LODGE_ALLOW_QUERY_CODE=false` - then any request carrying `?code=` gets 401 "use the header" (not a strike).
+Every credential check - `/health` with a code, `/ws`, `/files` - shares one wrong-code counter per client IP:
+the 10th wrong code within 15 minutes is still 401, then the IP gets 429 for 15 minutes even with a valid code.
+At most `LODGE_MAX_TRACKED_IPS` addresses are tracked; beyond that unknown addresses share one counter.
+All HTTP requests are also limited to `LODGE_HTTP_PER_MINUTE` per IP (429). New codes are 128-bit (32 hex);
+older shorter codes keep working. Invite links look like `https://<site>/lodge#invite=<code>` - the part after
+`#` never reaches a server.
 
 ## HTTP
 
 | Request | Auth | Result |
 |---|---|---|
 | `GET /` | none | invite landing page |
-| `GET /health` | none / optional code | `{"ok":true}`; with a valid code also `version`, `online` |
-| `POST /files` raw body, header `X-File-Name` (URL-encoded) | `X-Lodge-Code`, member+ | `{"id","name","size","mime","at","by"}`; 403 for guests, 413 too big |
+| `GET /health` | none, or a code | no code: `{"ok":true}` (no strike). With a code: 401 wrong / 429 blocked / `{ok, version, online}` |
+| `POST /files` raw body, header `X-File-Name` (URL-encoded) | `X-Lodge-Code`, member+ | `{"id","name","size","mime","at","by"}`; 403 guests, 413 too big, 507 storage full (`LODGE_MAX_STORAGE_MB` / `LODGE_MAX_FILES`), 429 too many at once or > `LODGE_UPLOADS_PER_10MIN` per person |
 | `GET /files/{id}` | `X-Lodge-Code` | the file (range requests supported) |
 
 ## WebSocket `GET /ws?name=<display name>&client=<hub/2.0.0>` + header `X-Lodge-Code`
@@ -45,6 +50,16 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 - officer+: `mod.kick` `{id}` · `mod.mute` `{id, on}` - lower ranks only
 - guild master: `admin.members` · `admin.invite` `{name, role}` · `admin.role` `{name, role}` · `admin.remove` `{name}`
   · `admin.channel.add` `{name, type, minRole, max}` · `admin.channel.remove` `{id}`
+
+### Limits per person (personal code) or per IP (guests), kept across reconnects
+
+chat 8 per 10 s ("Slow down" error) · other text messages burst 30 then 5/s (dropped) · voice 60 packets/s burst
+150 and 24 KB/s (dropped quietly; a 20 ms Opus stream uses 50 packets and ~4 KB/s) · "typing" is passed on at most
+every 2 s per channel · more than 200 refused messages in a minute closes the connection ("Too many messages").
+Joins are admitted atomically up to `LODGE_MAX_USERS`; a personal code signing in again replaces its old
+connection first, so it can reconnect when the lodge is full. Display names are normalized (NFKC, control and
+format characters removed, whitespace collapsed, 24 characters) before any comparison; a guest whose name matches
+a personal name becomes "Name (guest)".
 
 1.x clients still work: a `msg` without `channel` goes to the default text channel, `voice {on:true}` joins the
 first voice room.

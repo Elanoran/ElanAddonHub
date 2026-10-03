@@ -46,13 +46,17 @@ if [ -f /etc/lodge/codes ] && [ ! -f "$CODES" ]; then
   mv /etc/lodge/codes "$CODES"
   echo "== Moved invite codes to $CODES"
 fi
-touch "$CODES"
-chown lodge:lodge "$CODES"
-chmod 640 "$CODES"
+umask 077
+touch "$CODES" "$CODES.lock"
+chown lodge:lodge "$CODES" "$CODES.lock"   # the service edits the codes (Guild Master panel); lodge-admin and the
+chmod 640 "$CODES"                         # service share codes.lock for every change
+chmod 660 "$CODES.lock"
+umask 022
 if ! grep -q '[^[:space:]]' "$CODES" && ! grep -qE '^LODGE_CODE=.{6,}' "$ENV_FILE"; then
   echo "== No invite codes yet. Make one per friend:  sudo lodge-admin add <name>"
 fi
 
+# only the main unit file is replaced: drop-ins in /etc/systemd/system/lodge.service.d/ are left alone
 install -m 644 "$REPO_DIR/server/deploy/lodge.service" /etc/systemd/system/lodge.service
 systemctl daemon-reload
 systemctl enable lodge >/dev/null
