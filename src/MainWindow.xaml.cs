@@ -54,6 +54,8 @@ namespace ElansAddonHub
             System.IO.Directory.CreateDirectory(dir);
             Show();
             await CheckNow();
+            // the window's own startup check may still be running (slow network): wait for it
+            for (int i = 0; i < 100 && (checking || manifest == null); i++) await Task.Delay(200);
             await Task.Delay(400);
             Snapshot(System.IO.Path.Combine(dir, "1-before.png"));
             var card = cards.FirstOrDefault(c => c.ButtonEnabled);
