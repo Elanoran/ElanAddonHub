@@ -26,8 +26,12 @@
           <TextBlock DockPanel.Dock="Right" Text="{Binding StateGlyph}" FontFamily="{StaticResource Icons}" FontSize="11"
                      Foreground="{Binding StateBrush}" VerticalAlignment="Center" Visibility="{Binding StateVisibility}" />
           <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Center" />
+          <TextBlock DockPanel.Dock="Right" Text="&#xE7FC;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Accent}"
+                     VerticalAlignment="Center" Margin="0,0,6,0" Visibility="{Binding PlayingVisibility}" ToolTip="In game" />
+          <TextBlock DockPanel.Dock="Right" Text="{Binding GameLine}" FontSize="10.5" FontWeight="SemiBold" Foreground="{Binding ClassBrush}"
+                     VerticalAlignment="Center" Margin="0,0,6,0" Visibility="{Binding GameVisibility}" />
           <TextBlock Text="{Binding Name}" FontSize="12.5" Margin="10,0,6,0" VerticalAlignment="Center" Opacity="{Binding NameOpacity}"
-                     TextTrimming="CharacterEllipsis" />
+                     Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis" />
         </DockPanel>
       </Border>
     </DataTemplate>
@@ -346,6 +350,7 @@
           <TextBlock x:Name="PopName" FontSize="14" FontWeight="SemiBold" />
           <TextBlock x:Name="PopRole" FontSize="11.5" Margin="0,1,0,0" />
           <TextBlock x:Name="PopStatus" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,2,0,0" />
+          <TextBlock x:Name="PopGame" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
           <StackPanel x:Name="PopVolumeArea" Margin="0,12,0,0">
             <DockPanel>
               <TextBlock DockPanel.Dock="Right" x:Name="PopVolumeText" FontSize="11" Foreground="{StaticResource TextDim}" />

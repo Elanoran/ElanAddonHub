@@ -235,6 +235,9 @@ namespace ElansAddonHub
 
         async Task AfterCheck()
         {
+            if (settings.AutoUpdate)
+                foreach (var card in cards.Where(c => c.State == CardState.NotInstalled && c.Info.Required).ToList())
+                    await Install(card);
             foreach (var card in cards.Where(c => c.State == CardState.UpdateAvailable).ToList())
             {
                 if (settings.AutoUpdate) await Install(card);

@@ -132,6 +132,41 @@ namespace ElansAddonHub.Lodge
         public Visibility GlowVisibility => role == "officer" || role == "owner" ? Visibility.Visible : Visibility.Collapsed;
         public Visibility ShimmerVisibility => role == "owner" ? Visibility.Visible : Visibility.Collapsed;
 
+        // ---- what they play (Elan's Hub companion addon + "WoW is running")
+        bool playing;
+        string gameName, gameClass, gameClassFile, gameZone, gameGuild;
+        int gameLevel;
+        public void SetGame(bool playing, string name, string cls, string classFile, int level, string zone, string guild)
+        {
+            this.playing = playing; gameName = name; gameClass = cls; gameClassFile = classFile; gameLevel = level; gameZone = zone; gameGuild = guild;
+            Raise(nameof(GameLine)); Raise(nameof(ClassBrush)); Raise(nameof(ClassBrushOrText)); Raise(nameof(GameVisibility)); Raise(nameof(PlayingVisibility));
+            Raise(nameof(Tip)); Raise(nameof(GameDetail));
+        }
+        public bool Playing => playing;
+        static readonly System.Collections.Generic.Dictionary<string, string> ClassColors = new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["HUNTER"] = "#ABD473", ["WARRIOR"] = "#C79C6E", ["MAGE"] = "#69CCF0", ["ROGUE"] = "#FFF569", ["DRUID"] = "#FF7D0A",
+            ["PALADIN"] = "#F58CBA", ["PRIEST"] = "#FFFFFF", ["SHAMAN"] = "#0070DE", ["WARLOCK"] = "#9482C9",
+        };
+        // names take their class colour once we know it (like in WoW)
+        public Brush ClassBrushOrText => gameClassFile != null && ClassColors.ContainsKey(gameClassFile) ? ClassBrush : Avatar.Res("Text");
+        public Brush ClassBrush => gameClassFile != null && ClassColors.TryGetValue(gameClassFile, out var hex) ? Avatar.Frozen(hex) : Avatar.Res("TextDim");
+        // "42 Hunter" next to the name
+        public string GameLine => gameLevel > 0 ? $"{gameLevel}" : "";
+        public Visibility GameVisibility => gameLevel > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility PlayingVisibility => playing ? Visibility.Visible : Visibility.Collapsed;
+        public string GameDetail
+        {
+            get
+            {
+                if (gameName == null && !playing) return null;
+                var who = gameName == null ? "" : $"{gameName}, level {gameLevel} {gameClass}";
+                var where = gameZone == null ? "" : $" - {gameZone}";
+                var guild = gameGuild == null ? "" : $" <{gameGuild}>";
+                return (playing ? "Playing " : "Last played ") + (who.Length > 0 ? who + guild + where : "WoW");
+            }
+        }
+
         // ---- presence
         string status = "online", note;
         public string Status
@@ -162,7 +197,8 @@ namespace ElansAddonHub.Lodge
         public string Tip => (IsMe ? Name + " (you)" : Name) + " · " + RoleName(role)
             + (status != "online" ? " - " + StatusLabel(status) : "")
             + (string.IsNullOrEmpty(note) ? "" : ": " + note)
-            + (serverMuted ? " (muted by an officer)" : "");
+            + (serverMuted ? " (muted by an officer)" : "")
+            + (GameDetail != null ? "\n" + GameDetail : "");
     }
 
     // ================================================================ messages

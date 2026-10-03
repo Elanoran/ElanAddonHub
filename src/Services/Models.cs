@@ -35,6 +35,8 @@ namespace ElansAddonHub.Services
         // top-level folders inside the zip that go into Interface\AddOns
         [DataMember(Name = "folders")] public List<string> Folders { get; set; }
         [DataMember(Name = "changelog")] public List<ChangeEntry> Changelog { get; set; }
+        // installed for everyone (e.g. the small Elan's Hub companion), not only for one class
+        [DataMember(Name = "required")] public bool Required { get; set; }
     }
 
     [DataContract]
@@ -70,6 +72,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "lodgeStatus")] public string LodgeStatus { get; set; }      // online | away | busy | dungeon | lfg
         [DataMember(Name = "lodgeNote")] public string LodgeNote { get; set; }
         [DataMember(Name = "autoAwayOff")] public bool AutoAwayOff { get; set; }        // false = AFK after 10 min idle
+        [DataMember(Name = "shareGameOff")] public bool ShareGameOff { get; set; }      // false = show friends what I play
         [DataMember(Name = "notify")] public string NotifyMode { get; set; }          // mentions (default) | all | none
         [DataMember(Name = "soundsOff")] public bool SoundsOff { get; set; }
         [DataMember(Name = "peerVolumes")] public Dictionary<string, double> PeerVolumes { get; set; } // by name, 0..2

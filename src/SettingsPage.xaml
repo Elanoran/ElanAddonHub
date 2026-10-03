@@ -135,6 +135,11 @@
                 <TextBlock Text="Friends see you online while the hub runs." Style="{StaticResource RowHint}" /></StackPanel>
             </DockPanel>
             <DockPanel Style="{StaticResource Row}">
+              <CheckBox x:Name="ShareGameBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click" />
+              <StackPanel><TextBlock Text="Show what I'm playing" Style="{StaticResource RowTitle}" />
+                <TextBlock x:Name="ShareGameHint" Style="{StaticResource RowHint}" /></StackPanel>
+            </DockPanel>
+            <DockPanel Style="{StaticResource Row}">
               <CheckBox x:Name="AutoAwayBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click" />
               <StackPanel><TextBlock Text="AFK automatically" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="After 10 minutes without mouse or keyboard (also in WoW), back to Online when you return." Style="{StaticResource RowHint}" /></StackPanel>

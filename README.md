@@ -44,6 +44,8 @@ The **Lodge** tab is a small private Discord for you and your friends:
 - **Ranks** - Guild Master, Officer, Veteran, Member and Initiate (guest), shown as WoW item-quality frames.
   Officers can mute or kick lower ranks and delete messages; Initiates can't share files.
 - **Guild Master panel** (Settings) - create invite links, change ranks, remove people, add and remove channels.
+- **What you're playing** - names in WoW class colours with level, and a game icon while you're in WoW. Comes
+  from the small **Elan's Hub** companion addon (installed by the hub for everyone; WoW saves it on /reload and logout).
 - **In-game overlay** - the people in your voice room on top of WoW, whoever talks lights up. A click-through
   window (Windowed/Fullscreen mode) - nothing is injected into the game.
 

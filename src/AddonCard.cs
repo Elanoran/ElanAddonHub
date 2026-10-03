@@ -16,7 +16,7 @@ namespace ElansAddonHub
         public AddonInfo Info { get; private set; }
         public CardState State { get; private set; }
         public string Name => Info.Name;
-        public string Subtitle => Info.FlavorName ?? Info.Description ?? "";
+        public string Subtitle => Info.Required && Info.Description != null ? Info.Description : Info.FlavorName ?? Info.Description ?? "";
         public string Installed { get; private set; }
         // hover the client name to see exactly where it installs
         public string InstallPath { get; private set; }
@@ -60,7 +60,7 @@ namespace ElansAddonHub
             switch (State)
             {
                 case CardState.UpdateAvailable: Pill("Update available", "Gold"); ButtonText = $"Update to {info.Version}"; ButtonEnabled = true; break;
-                case CardState.NotInstalled: Pill("Not installed", "TextDim"); ButtonText = "Install"; ButtonEnabled = true; break;
+                case CardState.NotInstalled: Pill(info.Required ? "Recommended" : "Not installed", info.Required ? "Gold" : "TextDim"); ButtonText = "Install"; ButtonEnabled = true; break;
                 case CardState.UpToDate: Pill("Up to date", "Accent"); ButtonText = "Up to date"; ButtonEnabled = false; break;
                 case CardState.DevCopy: Pill("Dev copy", "TextDim"); ButtonText = "Managed by git"; ButtonEnabled = false; break;
                 case CardState.NoClient: Pill("No client", "Danger"); ButtonText = $"{info.FlavorName ?? info.Flavor} not found"; ButtonEnabled = false; break;

@@ -80,6 +80,7 @@ namespace ElansAddonHub
             AutoUpdateBox.IsChecked = s.AutoUpdate;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
             AutoAwayBox.IsChecked = !s.AutoAwayOff;
+            ShareGameBox.IsChecked = !s.ShareGameOff;
 
             ModeVa.IsChecked = !s.VoicePushToTalk;
             ModePtt.IsChecked = s.VoicePushToTalk;
@@ -154,6 +155,10 @@ namespace ElansAddonHub
             LodgeWho.Text = session.Me == null ? (session.Connected ? session.StatusText : "Join one from the Lodge tab")
                 : $"You're {session.Me.Name}, {MemberVM.RoleName(session.MyRole)} - {session.StatusText}";
             if (NavGm.IsChecked == true) { GmStatus.Text = ""; session.RequestAdmin(); }
+            var c = session.Presence.Current;
+            ShareGameHint.Text = (session.Presence.Playing ? "WoW is running. " : "")
+                + (c != null ? $"Friends see {c.Name}, level {c.Level} {c.Class}{(c.Zone != null ? " in " + c.Zone : "")} (updates on /reload and logout)."
+                             : "Friends see when you're in WoW. Install Elan's Hub (Addons tab) to also show your character, class and level.");
         }
 
         void OnTick()
@@ -215,7 +220,10 @@ namespace ElansAddonHub
             if (loading) return;
             settings.LodgeManualConnect = AutoConnectBox.IsChecked != true;
             settings.AutoAwayOff = AutoAwayBox.IsChecked != true;
+            var share = settings.ShareGameOff;
+            settings.ShareGameOff = ShareGameBox.IsChecked != true;
             SettingsStore.Save(settings);
+            if (share != settings.ShareGameOff) session.SendGame();
         }
 
         // ================================================================ voice

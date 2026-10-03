@@ -19,6 +19,7 @@ public class Member
     public bool ServerMuted;         // set by an officer
     public string Status = "online"; // online | away | busy | dungeon | lfg
     public string Note = "";
+    public JsonObject Game;          // what they're playing (from the hub), null = not shared
     public readonly SemaphoreSlim SendLock = new(1, 1);
     public readonly Queue<DateTime> Recent = new(); // message rate limit
 
@@ -26,7 +27,7 @@ public class Member
     {
         ["id"] = Id, ["name"] = Name, ["guest"] = !Personal, ["role"] = Role,
         ["room"] = Room, ["voice"] = Room != null, ["muted"] = Muted, ["deaf"] = Deaf, ["serverMuted"] = ServerMuted,
-        ["status"] = Status, ["note"] = Note,
+        ["status"] = Status, ["note"] = Note, ["game"] = Game?.DeepClone(),
     };
 }
 
@@ -39,7 +40,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.0.0";
+    public const string Version = "2.1.0";
 
     public readonly LodgeConfig Cfg;
     public readonly Auth Auth;

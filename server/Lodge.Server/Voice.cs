@@ -60,6 +60,7 @@ public class PresenceModule : IModule
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
+        if (type == "game") { await Game(me, m); return true; }
         if (type != "status") return false;
         var st = (string)m["status"];
         me.Status = st is "online" or "away" or "busy" or "dungeon" or "lfg" ? st : "online";
@@ -67,5 +68,29 @@ public class PresenceModule : IModule
         me.Note = note.Length > 40 ? note[..40] : note;
         await hub.BroadcastUser(me);
         return true;
+    }
+
+    static string Clip(JsonObject m, string key, int max = 40)
+    {
+        var s = new string(((string)m[key] ?? "").Where(c => !char.IsControl(c)).ToArray()).Trim();
+        return s.Length == 0 ? null : s.Length > max ? s[..max] : s;
+    }
+
+    // what they're playing: WoW running (live) + character from the companion addon. "share": false clears it.
+    async Task Game(Member me, JsonObject m)
+    {
+        if (m["share"]?.GetValue<bool>() == false) me.Game = null;
+        else
+        {
+            int level = 0;
+            try { level = Math.Clamp(m["level"]?.GetValue<int>() ?? 0, 0, 100); } catch { }
+            me.Game = new JsonObject
+            {
+                ["playing"] = m["playing"]?.GetValue<bool>() == true,
+                ["name"] = Clip(m, "name", 24), ["realm"] = Clip(m, "realm", 32), ["class"] = Clip(m, "class", 20),
+                ["classFile"] = Clip(m, "classFile", 20), ["level"] = level, ["zone"] = Clip(m, "zone"), ["guild"] = Clip(m, "guild"),
+            };
+        }
+        await hub.BroadcastUser(me);
     }
 }

@@ -54,9 +54,14 @@ namespace ElansAddonHub.Lodge
         public event Action<string, string, string> AdminInvited; // name, role, code
         public Func<bool> IsShownToUser;                   // the Lodge tab is visible and the window active
 
+        public readonly GamePresence Presence;
+
         public LodgeSession(Settings settings)
         {
             Settings = settings;
+            Presence = new GamePresence(() => settings.WowRoot);
+            Presence.Changed += SendGame;
+            Presence.Start();
             tick.Tick += (s, e) => OnTick();
             Sounds.Off = settings.SoundsOff;
         }
@@ -173,6 +178,7 @@ namespace ElansAddonHub.Lodge
                     var oldRoom = mem.Room;
                     mem.Room = u.Room; mem.Muted = u.Muted; mem.Deaf = u.Deaf; mem.ServerMuted = u.ServerMuted;
                     mem.Status = u.Status; mem.Note = u.Note; mem.Role = u.Role;
+                    ApplyGame(mem, m.Child("user").Child("game"));
                     if (!mem.Voice) voice?.RemovePeer(mem.Id);
                     if (!mem.IsMe && MyRoom != null && oldRoom != mem.Room)
                     {
@@ -271,6 +277,7 @@ namespace ElansAddonHub.Lodge
             SyncRooms();
             StatusText = OnlineText;
             if (MyStatus != "online" || !string.IsNullOrEmpty(Settings.LodgeNote)) SendStatus();
+            SendGame();
             Changed?.Invoke();
         }
 
@@ -278,12 +285,32 @@ namespace ElansAddonHub.Lodge
         {
             var room = u.Str("room");
             if (room == null && u.Bool("voice")) room = "voice"; // 1.x server: one voice channel
-            return new MemberVM
+            var m = new MemberVM
             {
                 Id = u.Int("id"), Name = u.Str("name"), Guest = u.Bool("guest"), IsMe = Me != null && u.Int("id") == Me.Id,
                 Room = room, Muted = u.Bool("muted"), Deaf = u.Bool("deaf"), ServerMuted = u.Bool("serverMuted"),
                 Status = u.Str("status"), Note = u.Str("note"), Role = u.Str("role"),
             };
+            ApplyGame(m, u.Child("game"));
+            return m;
+        }
+
+        static void ApplyGame(MemberVM m, Dictionary<string, object> g) =>
+            m.SetGame(g != null && g.Bool("playing"), g?.Str("name"), g?.Str("class"), g?.Str("classFile"), g?.Int("level") ?? 0, g?.Str("zone"), g?.Str("guild"));
+
+        // rich presence: WoW running + the character from the Elan's Hub addon (unless sharing is off)
+        public void SendGame()
+        {
+            if (!Online) return;
+            if (Settings.ShareGameOff) { _ = Send(new Dictionary<string, object> { ["t"] = "game", ["share"] = false }); return; }
+            var c = Presence.Current;
+            var obj = new Dictionary<string, object> { ["t"] = "game", ["playing"] = Presence.Playing };
+            if (c != null)
+            {
+                obj["name"] = c.Name; obj["realm"] = c.Realm; obj["class"] = c.Class; obj["classFile"] = c.ClassFile;
+                obj["level"] = c.Level; obj["zone"] = c.Zone; obj["guild"] = c.Guild;
+            }
+            _ = Send(obj);
         }
 
         // keep each voice room's member list (and my overlay) in step with everyone's Room

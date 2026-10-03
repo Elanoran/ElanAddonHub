@@ -284,6 +284,9 @@ namespace ElansAddonHub.Lodge
             PopRole.Text = m.RoleLabel;
             PopRole.Foreground = m.FrameBrush;
             PopStatus.Text = m.StatusLine + (m.ServerMuted ? " - muted by an officer" : "");
+            PopGame.Text = m.GameDetail ?? "";
+            PopGame.Foreground = m.ClassBrush;
+            PopGame.Visibility = m.GameDetail != null ? Visibility.Visible : Visibility.Collapsed;
             PopVolume.Value = Session.PeerVolumeFor(m.Name);
             PopVolumeText.Text = $"{PopVolume.Value * 100:0}%";
             popLoading = false;
