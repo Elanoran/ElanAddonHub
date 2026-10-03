@@ -1,0 +1,161 @@
+<Window x:Class="ElansAddonHub.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Elan's Addon Hub" Icon="Assets/hub.ico"
+        Width="452" Height="640" MinHeight="420"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Foreground="{StaticResource Text}" TextOptions.TextFormattingMode="Display">
+
+  <Border Margin="14" Background="{StaticResource Bg}" CornerRadius="14" BorderBrush="{StaticResource Line}" BorderThickness="1">
+    <Border.Effect>
+      <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.55" Color="Black" />
+    </Border.Effect>
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="52" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <!-- title bar -->
+      <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
+          <Image Source="Assets/hub.png" Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality" />
+          <TextBlock Text="Elan's Addon Hub" FontSize="13.5" FontWeight="SemiBold" Margin="10,0,0,1" VerticalAlignment="Center" />
+          <TextBlock x:Name="VersionText" FontSize="11" Foreground="{StaticResource TextDim}" Margin="8,1,0,0" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
+          <Button Style="{StaticResource ChromeButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Minimize" />
+          <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Close" />
+        </StackPanel>
+      </Grid>
+
+      <!-- hub self-update banner -->
+      <Border x:Name="HubBanner" Grid.Row="1" Visibility="Collapsed" Margin="16,0,16,10" Padding="14,10"
+              Background="{StaticResource Surface}" CornerRadius="10" BorderBrush="{StaticResource Line}" BorderThickness="1">
+        <DockPanel>
+          <Button x:Name="HubUpdateButton" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Foreground="{StaticResource Accent}"
+                  FontWeight="SemiBold" Content="Restart &amp; update" Click="HubUpdate_Click" />
+          <TextBlock x:Name="HubBannerText" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap" />
+        </DockPanel>
+      </Border>
+
+      <!-- addon cards -->
+      <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+        <ItemsControl x:Name="Cards">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Margin="16,0,12,12" Padding="18" Background="{StaticResource Surface}" CornerRadius="12"
+                      BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <StackPanel>
+                  <DockPanel>
+                    <Border DockPanel.Dock="Right" VerticalAlignment="Top" CornerRadius="10" Padding="9,3" Background="{Binding PillBg}">
+                      <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
+                    </Border>
+                    <Border Width="42" Height="42" CornerRadius="10" ClipToBounds="True" VerticalAlignment="Top">
+                      <Image Source="Assets/hub.png" RenderOptions.BitmapScalingMode="HighQuality" />
+                    </Border>
+                    <StackPanel Margin="12,1,8,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{StaticResource TextDim}" Margin="0,2,0,0" />
+                    </StackPanel>
+                  </DockPanel>
+
+                  <Grid Margin="0,18,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition />
+                      <ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                      <TextBlock Text="INSTALLED" Style="{StaticResource Caption}" />
+                      <TextBlock Text="{Binding Installed}" FontSize="15" Margin="0,3,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Text="LATEST" Style="{StaticResource Caption}" />
+                      <TextBlock Text="{Binding Latest}" FontSize="15" Margin="0,3,0,0" />
+                    </StackPanel>
+                  </Grid>
+
+                  <Button Style="{StaticResource PrimaryButton}" Margin="0,18,0,0" Content="{Binding ButtonText}"
+                          IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="Action_Click" />
+                  <ProgressBar Style="{StaticResource ThinProgress}" Margin="2,8,2,0" Maximum="1"
+                               Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
+                  <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" FontSize="12"
+                             Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="2,10,0,0" />
+
+                  <TextBlock Text="{Binding ChangesTitle}" Style="{StaticResource Caption}" Margin="0,20,0,8" />
+                  <ItemsControl ItemsSource="{Binding Changes}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid Margin="0,0,0,7">
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="54" />
+                            <ColumnDefinition />
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Text="{Binding Version}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
+                          <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource Text}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- settings (toggled by the gear) -->
+      <Border x:Name="SettingsPanel" Grid.Row="3" Visibility="Collapsed" Margin="16,0,16,10" Padding="16,6"
+              Background="{StaticResource Surface}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
+        <StackPanel>
+          <DockPanel Margin="0,8">
+            <CheckBox x:Name="AutoUpdateBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Setting_Click" />
+            <StackPanel>
+              <TextBlock Text="Update automatically" FontSize="13" />
+              <TextBlock Text="Install new versions as soon as they're out" FontSize="11.5" Foreground="{StaticResource TextDim}" />
+            </StackPanel>
+          </DockPanel>
+          <DockPanel Margin="0,8">
+            <CheckBox x:Name="BackgroundBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Setting_Click" />
+            <StackPanel>
+              <TextBlock Text="Run in background" FontSize="13" />
+              <TextBlock Text="Closing keeps the hub in the tray, checking for updates" FontSize="11.5" Foreground="{StaticResource TextDim}" />
+            </StackPanel>
+          </DockPanel>
+          <DockPanel Margin="0,8">
+            <CheckBox x:Name="StartupBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Setting_Click" />
+            <StackPanel>
+              <TextBlock Text="Start with Windows" FontSize="13" />
+              <TextBlock Text="Starts quietly in the tray" FontSize="11.5" Foreground="{StaticResource TextDim}" />
+            </StackPanel>
+          </DockPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- footer -->
+      <Border Grid.Row="4" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,8,10,10">
+        <StackPanel>
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" FontFamily="{StaticResource Icons}" FontSize="14"
+                    Content="&#xE713;" Click="Settings_Click" ToolTip="Settings" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Change" Click="ChangeFolder_Click" />
+            <TextBlock FontFamily="{StaticResource Icons}" Text="&#xE8B7;" Foreground="{StaticResource TextDim}" FontSize="13"
+                       VerticalAlignment="Center" Margin="4,0,8,0" />
+            <TextBlock x:Name="FolderText" FontSize="12" Foreground="{StaticResource TextDim}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+          <DockPanel Margin="0,2,0,0">
+            <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Check now" Click="CheckNow_Click" />
+            <TextBlock x:Name="StatusText" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center"
+                       Margin="4,0,0,0" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Border>
+</Window>

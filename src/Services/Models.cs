@@ -1,0 +1,59 @@
+using System.Collections.Generic;
+using System.Runtime.Serialization;
+
+namespace ElansAddonHub.Services
+{
+    // manifest.json - published next to every release. One file describes everything the
+    // hub can install, plus the hub's own latest version (for self-update).
+    [DataContract]
+    public class Manifest
+    {
+        [DataMember(Name = "hub")] public HubInfo Hub { get; set; }
+        [DataMember(Name = "addons")] public List<AddonInfo> Addons { get; set; }
+    }
+
+    [DataContract]
+    public class HubInfo
+    {
+        [DataMember(Name = "version")] public string Version { get; set; }
+        [DataMember(Name = "url")] public string Url { get; set; }
+        [DataMember(Name = "sha256")] public string Sha256 { get; set; }
+    }
+
+    [DataContract]
+    public class AddonInfo
+    {
+        [DataMember(Name = "id")] public string Id { get; set; }
+        [DataMember(Name = "name")] public string Name { get; set; }
+        [DataMember(Name = "description")] public string Description { get; set; }
+        [DataMember(Name = "version")] public string Version { get; set; }
+        [DataMember(Name = "url")] public string Url { get; set; }
+        [DataMember(Name = "sha256")] public string Sha256 { get; set; }
+        // WoW client folder, e.g. "_classic_beta_"
+        [DataMember(Name = "flavor")] public string Flavor { get; set; }
+        [DataMember(Name = "flavorName")] public string FlavorName { get; set; }
+        // top-level folders inside the zip that go into Interface\AddOns
+        [DataMember(Name = "folders")] public List<string> Folders { get; set; }
+        [DataMember(Name = "changelog")] public List<ChangeEntry> Changelog { get; set; }
+    }
+
+    [DataContract]
+    public class ChangeEntry
+    {
+        [DataMember(Name = "version")] public string Version { get; set; }
+        [DataMember(Name = "text")] public string Text { get; set; }
+    }
+
+    [DataContract]
+    public class Settings
+    {
+        [DataMember(Name = "wowRoot")] public string WowRoot { get; set; }
+        [DataMember(Name = "manifestUrl")] public string ManifestUrl { get; set; }
+        [DataMember(Name = "runInBackground")] public bool RunInBackground { get; set; } = true;
+        [DataMember(Name = "startWithWindows")] public bool StartWithWindows { get; set; }
+        [DataMember(Name = "autoUpdate")] public bool AutoUpdate { get; set; }
+        [DataMember(Name = "checkMinutes")] public int CheckMinutes { get; set; } = 30;
+        // versions we already showed a tray notification for
+        [DataMember(Name = "notified")] public List<string> Notified { get; set; }
+    }
+}

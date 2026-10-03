@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- .NET Framework 4.8 ships with every Windows 10/11 PC: the exe stays tiny and needs no runtime install. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ElansAddonHub</AssemblyName>
+    <RootNamespace>ElansAddonHub</RootNamespace>
+    <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <Product>Elan's Addon Hub</Product>
+    <Company>Elan</Company>
+    <Description>Installs and updates Elan's WoW addons</Description>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Resource Include="Assets\hub.ico" />
+    <Resource Include="Assets\hub.png" />
+  </ItemGroup>
+
+</Project>
