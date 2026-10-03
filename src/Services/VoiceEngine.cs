@@ -45,6 +45,7 @@ namespace ElansAddonHub.Services
             public IOpusDecoder Decoder;
             public BufferedWaveProvider Buffer;
             public ISampleProvider Input;
+            public VolumeSampleProvider Volume;
             public DateTime Last;
         }
 
@@ -148,8 +149,9 @@ namespace ElansAddonHub.Services
             var rms = Math.Sqrt(sum / Frame) / 32768.0;
             LevelDb = rms > 0 ? 20 * Math.Log10(rms) : -90;
 
+            var send = Send; // Dispose may clear it from another thread
             bool open;
-            if (Muted || Send == null) open = false;
+            if (Muted || send == null) open = false;
             else if (PushToTalk) open = KeyDown(PttKey);
             else
             {
@@ -161,7 +163,7 @@ namespace ElansAddonHub.Services
             try
             {
                 int len = encoder.Encode(frame, Frame, packet, packet.Length);
-                if (len > 0) { Send(packet, len); FramesSent++; }
+                if (len > 0) { send(packet, len); FramesSent++; }
             }
             catch (Exception e) { Util.Log("encode: " + e.Message); }
         }
@@ -177,7 +179,8 @@ namespace ElansAddonHub.Services
                     Decoder = OpusCodecFactory.CreateDecoder(Rate, 1),
                     Buffer = new BufferedWaveProvider(Pcm) { BufferDuration = TimeSpan.FromSeconds(1), DiscardOnBufferOverflow = true },
                 };
-                peer.Input = peer.Buffer.ToSampleProvider();
+                peer.Volume = new VolumeSampleProvider(peer.Buffer.ToSampleProvider()) { Volume = PeerVolume?.Invoke(sender) ?? 1f };
+                peer.Input = peer.Volume;
                 mixer.AddMixerInput(peer.Input);
                 return peer;
             });
@@ -193,6 +196,13 @@ namespace ElansAddonHub.Services
                 p.Last = DateTime.UtcNow;
             }
             catch (Exception e) { Util.Log("decode: " + e.Message); }
+        }
+
+        public Func<int, float> PeerVolume; // per-person volume, asked when someone starts talking
+
+        public void SetPeerVolume(int sender, float v)
+        {
+            if (peers.TryGetValue(sender, out var p)) p.Volume.Volume = v;
         }
 
         public bool IsSpeaking(int sender) =>

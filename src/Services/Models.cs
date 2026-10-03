@@ -70,6 +70,10 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "lodgeStatus")] public string LodgeStatus { get; set; }      // online | away | busy | dungeon | lfg
         [DataMember(Name = "lodgeNote")] public string LodgeNote { get; set; }
         [DataMember(Name = "autoAwayOff")] public bool AutoAwayOff { get; set; }        // false = AFK after 10 min idle
+        [DataMember(Name = "notify")] public string NotifyMode { get; set; }          // mentions (default) | all | none
+        [DataMember(Name = "soundsOff")] public bool SoundsOff { get; set; }
+        [DataMember(Name = "peerVolumes")] public Dictionary<string, double> PeerVolumes { get; set; } // by name, 0..2
+        [DataMember(Name = "lastChannel")] public string LastChannel { get; set; }
         [DataMember(Name = "overlayOff")] public bool OverlayOff { get; set; }          // false = overlay on
         [DataMember(Name = "overlayRight")] public bool OverlayRight { get; set; }
         [DataMember(Name = "overlayTop")] public double? OverlayTop { get; set; }       // 0..1 of the screen height

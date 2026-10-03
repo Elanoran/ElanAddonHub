@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -28,13 +29,54 @@ namespace ElansAddonHub.Lodge
         {
             int h = 0;
             foreach (var c in (name ?? "").ToLowerInvariant()) h = h * 31 + c;
-            var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(Palette[Math.Abs(h % Palette.Length)]));
+            return Frozen(Palette[Math.Abs(h % Palette.Length)]);
+        }
+
+        public static Brush Frozen(string hex)
+        {
+            var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
             b.Freeze();
             return b;
         }
 
         public static string Initial(string name) => string.IsNullOrEmpty(name) ? "?" : name.Substring(0, 1).ToUpperInvariant();
+        public static Brush Res(string key) => (Brush)Application.Current.Resources[key];
     }
+
+    // ================================================================ channels
+
+    public class ChannelVM : Bindable
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Type { get; set; }   // text | voice
+        public string MinRole { get; set; }
+        public int Max { get; set; }
+        public bool IsVoice => Type == "voice";
+        public string Glyph => IsVoice ? "" : "#";
+        public string LockText => MinRole == "veteran" || MinRole == "officer" || MinRole == "owner" ? MemberVM.RoleName(MinRole) + "+" : "";
+        public Visibility LockVisibility => LockText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        // people in this voice room (kept in sync by the session)
+        public ObservableCollection<MemberVM> Members { get; } = new ObservableCollection<MemberVM>();
+        public string CountText => IsVoice && Max > 0 ? $"{Members.Count}/{Max}" : "";
+
+        bool selected, unread, here;
+        int mentions;
+        public bool Selected { get => selected; set { if (Set(ref selected, value)) { Raise(nameof(RowBrush)); Raise(nameof(NameBrush)); } } }
+        public bool Unread { get => unread; set { if (Set(ref unread, value)) { Raise(nameof(NameBrush)); Raise(nameof(NameWeight)); Raise(nameof(UnreadVisibility)); } } }
+        public int Mentions { get => mentions; set { if (Set(ref mentions, value)) { Raise(nameof(MentionVisibility)); Raise(nameof(UnreadVisibility)); } } }
+        public bool IAmHere { get => here; set { if (Set(ref here, value)) Raise(nameof(NameBrush)); } } // the voice room I'm in
+
+        public Brush RowBrush => selected ? Avatar.Res("SurfaceHi") : Brushes.Transparent;
+        public Brush NameBrush => selected || unread || here ? Avatar.Res("Text") : Avatar.Res("TextDim");
+        public FontWeight NameWeight => unread ? FontWeights.SemiBold : FontWeights.Normal;
+        public Visibility MentionVisibility => mentions > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility UnreadVisibility => unread && mentions == 0 ? Visibility.Visible : Visibility.Collapsed;
+        public void RefreshCount() => Raise(nameof(CountText));
+    }
+
+    // ================================================================ people
 
     public class MemberVM : Bindable
     {
@@ -44,9 +86,28 @@ namespace ElansAddonHub.Lodge
         public bool IsMe { get; set; }
         public Brush Color => Avatar.ColorFor(Name);
         public string Initial => Avatar.Initial(Name);
-        public string Label => IsMe ? Name + " (you)" : Name;
 
-        // ---- rank (from the server): WoW item-quality frames
+        // ---- voice
+        string room;
+        bool muted, deaf, serverMuted, speaking, inMyRoom;
+        public string Room { get => room; set { if (Set(ref room, value)) { Raise(nameof(Voice)); Raise(nameof(StateVisibility)); RaiseVoice(); } } }
+        public bool Voice => room != null;
+        public bool Muted { get => muted; set { if (Set(ref muted, value)) RaiseVoice(); } }
+        public bool Deaf { get => deaf; set { if (Set(ref deaf, value)) RaiseVoice(); } }
+        public bool ServerMuted { get => serverMuted; set { if (Set(ref serverMuted, value)) { RaiseVoice(); Raise(nameof(Tip)); } } }
+        public bool Speaking { get => speaking; set { if (Set(ref speaking, value)) Raise(nameof(Ring)); } }
+        // the overlay only lists people in my room
+        public bool InMyRoom { get => inMyRoom; set { if (Set(ref inMyRoom, value)) Raise(nameof(OverlayVisibility)); } }
+        void RaiseVoice() { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); Raise(nameof(MutedVisibility)); }
+
+        public Brush Ring => speaking ? Avatar.Res("Accent") : Brushes.Transparent;
+        public string StateGlyph => deaf ? "" : (muted || serverMuted) ? "" : "";
+        public Brush StateBrush => deaf || muted || serverMuted ? Avatar.Res("Danger") : Avatar.Res("TextDim");
+        public Visibility StateVisibility => Voice ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility MutedVisibility => Voice && (muted || deaf || serverMuted) ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility OverlayVisibility => inMyRoom ? Visibility.Visible : Visibility.Collapsed;
+
+        // ---- rank: WoW item-quality frames
         string role = "member";
         public string Role
         {
@@ -58,6 +119,8 @@ namespace ElansAddonHub.Lodge
                 Raise(nameof(ShimmerVisibility)); Raise(nameof(RoleLabel)); Raise(nameof(Tip));
             }
         }
+        public static readonly string[] RoleOrder = { "guest", "member", "veteran", "officer", "owner" };
+        public static int RoleLevel(string r) => Math.Max(0, Array.IndexOf(RoleOrder, r ?? "member"));
         public static string RoleName(string r) =>
             r == "owner" ? "Guild Master" : r == "officer" ? "Officer" : r == "veteran" ? "Veteran" : r == "guest" ? "Initiate" : "Member";
         // legendary, epic, rare, uncommon, poor - a touch brighter than in-game so they read on dark
@@ -78,41 +141,31 @@ namespace ElansAddonHub.Lodge
             {
                 if (!Set(ref status, string.IsNullOrEmpty(value) ? "online" : value)) return;
                 Raise(nameof(StatusGlyph)); Raise(nameof(StatusBrush)); Raise(nameof(StatusVisibility));
-                Raise(nameof(NameOpacity)); Raise(nameof(Tip));
+                Raise(nameof(NameOpacity)); Raise(nameof(Tip)); Raise(nameof(StatusLine));
             }
         }
-        public string Note { get => note; set { if (Set(ref note, value)) Raise(nameof(Tip)); } }
+        public string Note { get => note; set { if (Set(ref note, value)) { Raise(nameof(Tip)); Raise(nameof(StatusLine)); } } }
 
         public static string StatusLabel(string s) =>
             s == "away" ? "AFK" : s == "busy" ? "Busy" : s == "dungeon" ? "In a dungeon" : s == "lfg" ? "Looking for group" : "Online";
         public static string GlyphFor(string s) =>
-            s == "away" ? "\uE708" : s == "busy" ? "\uE738" : s == "dungeon" ? "\uEA18" : s == "lfg" ? "\uE716" : "";
-        static readonly Brush Away = Frozen("#E6B85C"), Busy = Frozen("#E06C6C"), Dungeon = Frozen("#B48CE0"), Lfg = Frozen("#6CB4E0"), On = Frozen("#ABD473");
-        static Brush Frozen(string hex) { var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); b.Freeze(); return b; }
+            s == "away" ? "" : s == "busy" ? "" : s == "dungeon" ? "" : s == "lfg" ? "" : "";
+        static readonly Brush Away = Avatar.Frozen("#E6B85C"), Busy = Avatar.Frozen("#E06C6C"), Dungeon = Avatar.Frozen("#B48CE0"),
+                              Lfg = Avatar.Frozen("#6CB4E0"), On = Avatar.Frozen("#ABD473");
         public static Brush BrushFor(string s) => s == "away" ? Away : s == "busy" ? Busy : s == "dungeon" ? Dungeon : s == "lfg" ? Lfg : On;
 
         public string StatusGlyph => GlyphFor(status);
         public Brush StatusBrush => BrushFor(status);
         public Visibility StatusVisibility => status == "online" ? Visibility.Collapsed : Visibility.Visible;
         public double NameOpacity => status == "away" ? 0.55 : 1;
-        public string Tip => (IsMe ? Name + " (you) - click to set your status" : Name)
-            + " \u00b7 " + RoleName(role)
+        public string StatusLine => string.IsNullOrEmpty(note) ? StatusLabel(status) : note;
+        public string Tip => (IsMe ? Name + " (you)" : Name) + " · " + RoleName(role)
             + (status != "online" ? " - " + StatusLabel(status) : "")
-            + (string.IsNullOrEmpty(note) ? "" : ": " + note);
-
-        bool voice, muted, deaf, speaking;
-        public bool Voice { get => voice; set { if (Set(ref voice, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateVisibility)); Raise(nameof(MutedVisibility)); } } }
-        public bool Muted { get => muted; set { if (Set(ref muted, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); Raise(nameof(MutedVisibility)); } } }
-        public bool Deaf { get => deaf; set { if (Set(ref deaf, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); Raise(nameof(MutedVisibility)); } } }
-        public bool Speaking { get => speaking; set { if (Set(ref speaking, value)) Raise(nameof(Ring)); } }
-
-        public Brush Ring => speaking ? (Brush)Application.Current.Resources["Accent"] : Brushes.Transparent;
-        // headphones = in voice, crossed speaker = deafened, mic-off = muted
-        public string StateGlyph => deaf ? "" : muted ? "" : "";
-        public Brush StateBrush => deaf || muted ? (Brush)Application.Current.Resources["Danger"] : (Brush)Application.Current.Resources["TextDim"];
-        public Visibility StateVisibility => voice ? Visibility.Visible : Visibility.Collapsed;
-        public Visibility MutedVisibility => voice && (muted || deaf) ? Visibility.Visible : Visibility.Collapsed;
+            + (string.IsNullOrEmpty(note) ? "" : ": " + note)
+            + (serverMuted ? " (muted by an officer)" : "");
     }
+
+    // ================================================================ messages
 
     public class FileVM : Bindable
     {
@@ -136,12 +189,22 @@ namespace ElansAddonHub.Lodge
     public class MessageVM : Bindable
     {
         public string Id { get; set; }
+        public string Channel { get; set; }
         public int FromId { get; set; }
         public string From { get; set; }
         public DateTime At { get; set; }
-        public string Text { get; set; }
         public FileVM File { get; set; }
         public bool Continuation { get; set; } // same person, shortly after: no avatar/name
+        public bool Mine { get; set; }
+        public bool CanDelete { get; set; }
+        public string ReplyFrom { get; set; }
+        public string ReplyText { get; set; }
+
+        string text;
+        bool edited, mentioned;
+        public string Text { get => text; set { if (Set(ref text, value)) Raise(nameof(TextVisibility)); } }
+        public bool Edited { get => edited; set { if (Set(ref edited, value)) Raise(nameof(EditedVisibility)); } }
+        public bool Mentioned { get => mentioned; set { if (Set(ref mentioned, value)) { Raise(nameof(RowBackground)); Raise(nameof(MentionBar)); } } }
 
         public Brush Color => Avatar.ColorFor(From);
         public string Initial => Avatar.Initial(From);
@@ -155,10 +218,17 @@ namespace ElansAddonHub.Lodge
                 return local.ToString("d MMM HH:mm");
             }
         }
-        public Visibility HeaderVisibility => Continuation ? Visibility.Collapsed : Visibility.Visible;
-        public Visibility AvatarVisibility => Continuation ? Visibility.Hidden : Visibility.Visible;
-        public Thickness RowMargin => Continuation ? new Thickness(0, 1, 0, 0) : new Thickness(0, 12, 0, 0);
-        public Visibility TextVisibility => string.IsNullOrEmpty(Text) ? Visibility.Collapsed : Visibility.Visible;
+        bool Compact => Continuation && ReplyFrom == null;
+        public Visibility HeaderVisibility => Compact ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility AvatarVisibility => Compact ? Visibility.Hidden : Visibility.Visible;
+        public Thickness RowMargin => Compact ? new Thickness(0) : new Thickness(0, 10, 0, 0);
+        public Visibility TextVisibility => string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
         public Visibility FileVisibility => File == null ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility ReplyVisibility => ReplyFrom == null ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility EditedVisibility => edited ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility EditVisibility => Mine ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility DeleteVisibility => Mine || CanDelete ? Visibility.Visible : Visibility.Collapsed;
+        public Brush RowBackground => mentioned ? Avatar.Frozen("#1FE6B85C") : Brushes.Transparent;
+        public Brush MentionBar => mentioned ? Avatar.Frozen("#E6B85C") : Brushes.Transparent;
     }
 }

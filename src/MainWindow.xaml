@@ -2,8 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:lodge="clr-namespace:ElansAddonHub.Lodge"
+        xmlns:local="clr-namespace:ElansAddonHub"
         Title="Elan's Addon Hub" Icon="Assets/hub.ico"
-        Width="452" Height="640" MinWidth="420" MinHeight="540"
+        Width="920" Height="690" MinWidth="740" MinHeight="560"
         WindowStyle="None" AllowsTransparency="True" Background="#01000000"
         ResizeMode="CanResize" WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI" UseLayoutRounding="True" SnapsToDevicePixels="True"
@@ -24,7 +25,6 @@
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
-        <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
@@ -67,6 +67,7 @@
             <Ellipse x:Name="UnreadDot" Width="7" Height="7" Fill="{StaticResource Accent}" Margin="6,1,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
           </StackPanel>
         </RadioButton>
+        <RadioButton x:Name="TabSettings" Style="{StaticResource Tab}" Content="Settings" GroupName="tabs" Checked="Tab_Checked" />
       </StackPanel>
 
       <!-- hub self-update banner -->
@@ -81,8 +82,9 @@
 
       <!-- addon cards -->
       <lodge:LodgeView x:Name="LodgePage" Grid.Row="3" Visibility="Collapsed" />
+      <local:SettingsPage x:Name="SettingsPage" Grid.Row="3" Visibility="Collapsed" />
       <ScrollViewer x:Name="AddonsPage" Grid.Row="3" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
-        <ItemsControl x:Name="Cards" Margin="0,44,0,0">
+        <ItemsControl x:Name="Cards" Margin="0,44,0,0" MaxWidth="660">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <Border Margin="16,0,12,12" Padding="18" Background="{StaticResource Card}" CornerRadius="12"
@@ -148,36 +150,8 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- settings (toggled by the gear) -->
-      <Border x:Name="SettingsPanel" Grid.Row="4" Visibility="Collapsed" Margin="16,0,16,10" Padding="16,6"
-              Background="{StaticResource Surface}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
-        <StackPanel>
-          <DockPanel Margin="0,8">
-            <CheckBox x:Name="AutoUpdateBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Setting_Click" />
-            <StackPanel>
-              <TextBlock Text="Update automatically" FontSize="13" />
-              <TextBlock Text="Install new versions as soon as they're out" FontSize="11.5" Foreground="{StaticResource TextDim}" />
-            </StackPanel>
-          </DockPanel>
-          <DockPanel Margin="0,8">
-            <CheckBox x:Name="BackgroundBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Setting_Click" />
-            <StackPanel>
-              <TextBlock Text="Run in background" FontSize="13" />
-              <TextBlock Text="Closing keeps the hub in the tray, checking for updates" FontSize="11.5" Foreground="{StaticResource TextDim}" />
-            </StackPanel>
-          </DockPanel>
-          <DockPanel Margin="0,8">
-            <CheckBox x:Name="StartupBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Setting_Click" />
-            <StackPanel>
-              <TextBlock Text="Start with Windows" FontSize="13" />
-              <TextBlock Text="Starts quietly in the tray" FontSize="11.5" Foreground="{StaticResource TextDim}" />
-            </StackPanel>
-          </DockPanel>
-        </StackPanel>
-      </Border>
-
       <!-- footer -->
-      <Border x:Name="Footer" Grid.Row="5" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,8,10,10">
+      <Border x:Name="Footer" Grid.Row="4" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,8,10,10">
         <StackPanel>
           <DockPanel>
             <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" FontFamily="{StaticResource Icons}" FontSize="14"

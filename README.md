@@ -32,21 +32,24 @@ No installer, no runtime to download - it's one small file (~150 KB) that runs o
 
 The **Lodge** tab is a small private Discord for you and your friends:
 
-- **Text chat** with history, who's online and "is typing".
-- **Voice**: join with one click, mute/deafen, voice activation with a sensitivity meter or push-to-talk
-  (any key or mouse button, works while WoW has focus), a green ring shows who's talking. Opus codec, ~30 kbit/s.
-- **Status**: Online, AFK, Busy, In a dungeon or Looking for group, plus a short note - click your own name. AFK is set
-  automatically after 10 minutes idle. Shown as a small badge in the hub and in the in-game overlay.
-- **Ranks**: Guild Master, Officer, Veteran, Member and Initiate (guest), shown as WoW item-quality frames
-  (legendary shimmer, epic glow, rare, uncommon, poor). Set by the lodge owner with `sudo lodge-admin role NAME RANK`;
-  the server enforces them (Initiates can't share files) and they are the base for future rank-based options.
-- **Files**: drop a file into the chat (up to 25 MB); pictures show inline, everything else downloads with one click.
-- **In-game overlay**: a small see-through list of who's in voice on the left (or right) of the screen; whoever is
-  talking lights up. It's a click-through window on top of WoW (Windowed/Fullscreen mode) - nothing is injected into the game.
+- **Channels and voice rooms** - text channels and voice rooms in a sidebar, with unread dots and @mention
+  badges; rooms show who's inside. Ranks decide who sees which channel (e.g. an Officers channel).
+- **Chat** - history per channel, replies, edit (or press Up) and delete your own messages, @mentions
+  (highlighted, with a notification while you're in WoW), "is typing", paste screenshots with Ctrl+V.
+- **Voice** - click a room to join; mute/deafen, voice activation with a level meter or push-to-talk (any key or
+  mouse button, works while WoW has focus), per-person volume, join/leave chimes. Opus codec, ~30 kbit/s.
+- **Files** - drop a file into the chat (up to 25 MB); pictures show inline, everything else downloads in one click.
+- **Status** - Online, AFK, Busy, In a dungeon or Looking for group, plus a short note; AFK automatically after
+  10 minutes idle.
+- **Ranks** - Guild Master, Officer, Veteran, Member and Initiate (guest), shown as WoW item-quality frames.
+  Officers can mute or kick lower ranks and delete messages; Initiates can't share files.
+- **Guild Master panel** (Settings) - create invite links, change ranks, remove people, add and remove channels.
+- **In-game overlay** - the people in your voice room on top of WoW, whoever talks lights up. A click-through
+  window (Windowed/Fullscreen mode) - nothing is injected into the game.
 
-A lodge runs on someone's own server (see [`server/`](server/), one small .NET service behind your existing
-web server). Ask the lodge owner for the address and your personal invite code. The code is stored encrypted
-for your Windows user and is only ever sent in a request header, never in a URL.
+Join with the **invite link** you were sent (`https://<site>/lodge#invite=...`). A lodge runs on someone's own
+server - see [`server/`](server/): one small .NET service behind an existing web server. Your code is stored
+encrypted for your Windows user and only ever sent in a request header, never in a URL.
 
 ## Elan's Hunter Helper
 

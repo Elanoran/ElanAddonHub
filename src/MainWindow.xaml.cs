@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
 using WinForms = System.Windows.Forms;
 
@@ -21,15 +22,13 @@ namespace ElansAddonHub
         string lastError;
         bool checking, quitting, trayHintShown;
         WinForms.NotifyIcon tray;
+        public LodgeSession Session { get; private set; }
 
         public MainWindow()
         {
             InitializeComponent();
             Cards.ItemsSource = cards;
             VersionText.Text = "v" + App.Version;
-            AutoUpdateBox.IsChecked = settings.AutoUpdate;
-            BackgroundBox.IsChecked = settings.RunInBackground;
-            StartupBox.IsChecked = settings.StartWithWindows;
             SelfUpdater.CleanupOld();
             SetupTray();
 
@@ -50,31 +49,46 @@ namespace ElansAddonHub
             if (settings.WindowWidth is double w && w >= MinWidth) Width = w;
             if (settings.WindowHeight is double h && h >= MinHeight) Height = h;
             SizeChanged += (s, e) => { settings.WindowWidth = ActualWidth; settings.WindowHeight = ActualHeight; };
-            Activated += (s, e) => { if (TabLodge.IsChecked == true) LodgePage.MarkRead(); };
+            Activated += (s, e) => { if (TabLodge.IsChecked == true) Session.MarkRead(); };
 
-            LodgePage.IsShownToUser = () => IsVisible && IsActive && WindowState != WindowState.Minimized && TabLodge.IsChecked == true;
-            LodgePage.UnreadChanged += unread => UnreadDot.Visibility = unread ? Visibility.Visible : Visibility.Collapsed;
-            LodgePage.Notify += (from, text) =>
+            Session = new LodgeSession(settings);
+            Session.IsShownToUser = () => IsVisible && IsActive && WindowState != WindowState.Minimized && TabLodge.IsChecked == true;
+            Session.UnreadChanged += unread => UnreadDot.Visibility = unread ? Visibility.Visible : Visibility.Collapsed;
+            Session.Notify += (from, text) =>
             {
-                // only a tray note while the window is hidden, at most one every 8 s
-                if (IsVisible || (DateTime.Now - lastChatNote).TotalSeconds < 8) return;
+                // a tray note while you're elsewhere (e.g. in WoW), at most one every 8 s
+                if ((IsVisible && IsActive) || (DateTime.Now - lastChatNote).TotalSeconds < 8) return;
                 lastChatNote = DateTime.Now;
                 tray.ShowBalloonTip(4000, from, text.Length > 120 ? text.Substring(0, 120) + "..." : text, WinForms.ToolTipIcon.None);
             };
-            LodgePage.Init(settings);
+            LodgePage.OpenSettings += () => { ShowTab("settings"); SettingsPage.Show("voice"); };
+            LodgePage.Init(Session);
+            SettingsPage.Init(this, settings, LodgePage);
         }
 
         DateTime lastChatNote;
 
         void Tab_Checked(object sender, RoutedEventArgs e)
         {
-            if (LodgePage == null) return;
+            if (LodgePage == null || SettingsPage == null) return;
             var lodge = TabLodge.IsChecked == true;
+            var set = TabSettings.IsChecked == true;
             LodgePage.Visibility = lodge ? Visibility.Visible : Visibility.Collapsed;
-            AddonsPage.Visibility = lodge ? Visibility.Collapsed : Visibility.Visible;
-            Footer.Visibility = lodge ? Visibility.Collapsed : Visibility.Visible;
-            if (lodge) { SettingsPanel.Visibility = Visibility.Collapsed; LodgePage.MarkRead(); }
+            SettingsPage.Visibility = set ? Visibility.Visible : Visibility.Collapsed;
+            AddonsPage.Visibility = !lodge && !set ? Visibility.Visible : Visibility.Collapsed;
+            Footer.Visibility = AddonsPage.Visibility;
+            if (lodge) Session.MarkRead();
         }
+
+        public void ShowTab(string tab)
+        {
+            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : TabAddons).IsChecked = true;
+        }
+
+        // ---- for the Settings page
+        public string CheckStatus => StatusText.Text;
+        public Task CheckForUpdates() => CheckNow();
+        public void AutoUpdateTurnedOn() => _ = AfterCheck();
 
         // --selftest <dir>: render the window to PNGs before/after installing the first addon, then quit
         public async Task SelfTest(string dir)
@@ -90,7 +104,8 @@ namespace ElansAddonHub
             if (card != null) await Install(card);
             await Task.Delay(400);
             Snapshot(System.IO.Path.Combine(dir, "2-after.png"));
-            SettingsPanel.Visibility = Visibility.Visible;
+            ShowTab("settings");
+            SettingsPage.Show("general");
             await Task.Delay(300);
             Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
             var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + StatusText.Text;
@@ -104,26 +119,38 @@ namespace ElansAddonHub
                 await Task.Delay(300);
                 Snapshot(System.IO.Path.Combine(dir, "4-join.png"));
                 LodgePage.FillJoinForTest(p[0], p[1], p.Length > 2 ? p[2] : "Tester");
-                for (int i = 0; i < 50 && !LodgePage.IsOnline; i++) await Task.Delay(200);
-                await Task.Delay(500);
-                await LodgePage.SendTextForTest("Hello from the hub! Voice and files next.");
+                for (int i = 0; i < 50 && !Session.Online; i++) await Task.Delay(200);
+                await Task.Delay(700);
+                await Session.SendForTest("Hello from the hub! @Bob are we doing Wailing Caverns tonight?");
                 var img = System.IO.Path.Combine(dir, "wolf.png");
                 using (var s = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/hub.png")).Stream)
                 using (var f = System.IO.File.Create(img)) s.CopyTo(f);
                 await LodgePage.Share(img);
-                LodgePage.SetMyStatus("dungeon", "Wailing Caverns");
+                Session.SetMyStatus("dungeon", "Wailing Caverns");
                 VoiceEngine.TestTone = true;
-                LodgePage.JoinVoice();
+                Session.JoinRoom(Session.VoiceRooms.FirstOrDefault()?.Id);
                 await Task.Delay(2500);
                 Snapshot(System.IO.Path.Combine(dir, "5-lodge.png"));
-                LodgePage.ShowSettingsForTest();
+                ShowTab("settings");
+                SettingsPage.Show("voice");
                 await Task.Delay(400);
                 Snapshot(System.IO.Path.Combine(dir, "6-voice-settings.png"));
+                if (Session.CanManage)
+                {
+                    SettingsPage.Show("gm");
+                    await Task.Delay(600);
+                    SettingsPage.InviteForTest("Testfriend", "member");
+                    await Task.Delay(800);
+                    Snapshot(System.IO.Path.Combine(dir, "8-guild-master.png"));
+                }
+                ShowTab("lodge");
                 LodgePage.ForceOverlayForTest = true;
                 await Task.Delay(800);
                 LodgePage.SnapshotOverlay(System.IO.Path.Combine(dir, "7-overlay.png"));
+                var all = Session.TextChannels.Sum(c => Session.MessagesOf(c.Id).Count);
                 result += $"\r\njoin error='{LodgePage.JoinError}'";
-                result += $"\r\nlodge online={LodgePage.IsOnline} members={LodgePage.MemberCount} messages={LodgePage.MessageCount} {LodgePage.VoiceStats}"
+                result += $"\r\nlodge online={Session.Online} role={Session.MyRole} channels={Session.TextChannels.Count}+{Session.VoiceRooms.Count} " +
+                          $"members={Session.Members.Count} messages={all} room={Session.MyRoom} frames sent={Session.Voice?.FramesSent}"
                         + $"\r\n{VoiceEngine.CodecSelfTest()}";
             }
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
@@ -306,7 +333,9 @@ namespace ElansAddonHub
 
         // ------------------------------------------------------------------ footer & settings
 
-        void ChangeFolder_Click(object sender, RoutedEventArgs e)
+        void ChangeFolder_Click(object sender, RoutedEventArgs e) => PickWowFolder();
+
+        public void PickWowFolder()
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
@@ -330,21 +359,7 @@ namespace ElansAddonHub
 
         async void CheckNow_Click(object sender, RoutedEventArgs e) => await CheckNow();
 
-        void Settings_Click(object sender, RoutedEventArgs e) =>
-            SettingsPanel.Visibility = SettingsPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-
-        void Setting_Click(object sender, RoutedEventArgs e)
-        {
-            settings.AutoUpdate = AutoUpdateBox.IsChecked == true;
-            settings.RunInBackground = BackgroundBox.IsChecked == true;
-            if (settings.StartWithWindows != (StartupBox.IsChecked == true))
-            {
-                settings.StartWithWindows = StartupBox.IsChecked == true;
-                SettingsStore.ApplyStartWithWindows(settings.StartWithWindows, SelfUpdater.ExePath);
-            }
-            SettingsStore.Save(settings);
-            if (sender == AutoUpdateBox && settings.AutoUpdate) _ = AfterCheck();
-        }
+        void Settings_Click(object sender, RoutedEventArgs e) { ShowTab("settings"); SettingsPage.Show("addons"); }
 
         // ------------------------------------------------------------------ window & tray
 
@@ -394,7 +409,7 @@ namespace ElansAddonHub
         {
             quitting = true;
             SettingsStore.Save(settings); // window size
-            LodgePage.Disconnect();
+            Session.Disconnect();
             tray.Visible = false;
             tray.Dispose();
             Application.Current.Shutdown();

@@ -1,6 +1,5 @@
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -8,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -16,278 +16,364 @@ using ElansAddonHub.Services;
 
 namespace ElansAddonHub.Lodge
 {
-    // The Lodge tab: join screen, people + voice, chat with files.
+    // The Lodge tab: join screen, channel sidebar, chat. All state lives in LodgeSession.
     public partial class LodgeView : UserControl
     {
-        readonly ObservableCollection<MemberVM> members = new ObservableCollection<MemberVM>();
-        readonly ObservableCollection<MessageVM> messages = new ObservableCollection<MessageVM>();
-        readonly DispatcherTimer tick = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
-        readonly Dictionary<int, DateTime> typing = new Dictionary<int, DateTime>();
-        Settings settings;
-        LodgeClient client;
-        VoiceEngine voice;
-        int myId;
-        string myName;
-        int maxFileMb = 25;
-        bool inVoice, loading;
-        DateTime lastTypingSent;
-        int capturingKey; // >0 while waiting for a push-to-talk key
+        public LodgeSession Session { get; private set; }
+        readonly DispatcherTimer tick = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        OverlayWindow overlay;
+        bool editingConnection;
+        MessageVM replyTo, editing;
+        MemberVM popMember;
+        bool popLoading;
+        DateTime noteUntil;
+        ChannelVM shownChannel;
 
-        public event Action<string, string> Notify;   // title, text - shown when the window is hidden
-        public event Action<bool> UnreadChanged;
-        public Func<bool> IsShownToUser;              // window visible and this tab selected
-        public string Status { get; private set; } = "";
+        public event Action OpenSettings;
+        public bool ForceOverlayForTest;
+        public bool OverlayPreview; // the Settings page shows it while you place it
 
         public LodgeView()
         {
             InitializeComponent();
-            People.ItemsSource = members;
-            Messages.ItemsSource = messages;
             tick.Tick += (s, e) => OnTick();
         }
 
-        public void Init(Settings s)
+        public void Init(LodgeSession session)
         {
-            settings = s;
-            loading = true;
-            var fixedUrl = NormalizeUrl(s.LodgeUrl);
-            if (fixedUrl != s.LodgeUrl) { s.LodgeUrl = fixedUrl; SettingsStore.Save(s); } // e.g. "https://https://..."
-            UrlBox.Text = s.LodgeUrl ?? "";
-            NameBox.Text = s.LodgeName ?? Environment.UserName;
-            ModeVa.IsChecked = !s.VoicePushToTalk;
-            ModePtt.IsChecked = s.VoicePushToTalk;
-            ThresholdSlider.Value = s.VoiceThreshold ?? -45;
-            VolumeSlider.Value = s.VoiceVolume ?? 1;
-            AutoConnectBox.IsChecked = !s.LodgeManualConnect;
-            OverlayBox.IsChecked = !s.OverlayOff;
-            AutoAwayBox.IsChecked = !s.AutoAwayOff;
-            myStatus = string.IsNullOrEmpty(s.LodgeStatus) ? "online" : s.LodgeStatus;
-            OverlayLeft.IsChecked = !s.OverlayRight;
-            OverlayRightBox.IsChecked = s.OverlayRight;
-            OverlayTopSlider.Value = s.OverlayTop ?? 0.3;
-            OverlayAlwaysBox.IsChecked = s.OverlayAlways;
-            PttKeyButton.Content = VoiceEngine.KeyName(PttKey);
-            InputBox.ItemsSource = VoiceEngine.InputDevices();
-            OutputBox.ItemsSource = VoiceEngine.OutputDevices();
-            InputBox.SelectedItem = ((List<Device>)InputBox.ItemsSource).FirstOrDefault(d => d.Id == (s.VoiceInput ?? -1));
-            OutputBox.SelectedItem = ((List<Device>)OutputBox.ItemsSource).FirstOrDefault(d => d.Id == (s.VoiceOutput ?? -1));
-            loading = false;
-            UpdateLabels();
+            Session = session;
+            TextList.ItemsSource = session.TextChannels;
+            RoomList.ItemsSource = session.VoiceRooms;
+            // online list: people not in a voice room (those show under their room)
+            var online = new CollectionViewSource { Source = session.Members }.View;
+            online.Filter = o => ((MemberVM)o).Room == null;
+            if (online is ICollectionViewLiveShaping live && live.CanChangeLiveFiltering)
+            {
+                live.LiveFilteringProperties.Add(nameof(MemberVM.Room));
+                live.IsLiveFiltering = true;
+            }
+            OnlineList.ItemsSource = online;
 
-            var code = SettingsStore.Unprotect(s.LodgeCodeProtected);
-            if (!string.IsNullOrEmpty(s.LodgeUrl) && !string.IsNullOrEmpty(code) && !s.LodgeManualConnect) Connect(s.LodgeUrl, code);
+            session.Changed += Refresh;
+            session.MessageAdded += vm =>
+            {
+                if (vm.Channel != session.Selected?.Id) return;
+                EmptyText.Visibility = Visibility.Collapsed;
+                if (vm.Mine || MessageScroll.VerticalOffset >= MessageScroll.ScrollableHeight - 60) ScrollToEnd();
+            };
+            session.Stopped += why => ShowJoin(why);
+            session.Error += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(6); };
+            tick.Start();
+
+            UrlBox.Text = session.Settings.LodgeUrl ?? "";
+            NameBox.Text = session.Settings.LodgeName ?? Environment.UserName;
+            var code = SettingsStore.Unprotect(session.Settings.LodgeCodeProtected);
+            if (!string.IsNullOrEmpty(session.Settings.LodgeUrl) && !string.IsNullOrEmpty(code) && !session.Settings.LodgeManualConnect)
+            {
+                ShowChat();
+                session.Connect(session.Settings.LodgeUrl, code);
+            }
+            Refresh();
         }
 
-        int PttKey => settings.VoicePttKey > 0 ? settings.VoicePttKey : 0x05;
+        void Refresh()
+        {
+            var s = Session;
+            if (s == null) return;
+            StatusDot.Fill = (Brush)FindResource(s.Online ? "Accent" : "TextDim");
+            StatusText.Text = s.StatusText;
+            try { LodgeTitle.Text = s.BaseUrl != null ? new Uri(s.BaseUrl).Host : "Lodge"; } catch { }
+            OnlineCaption.Text = $"ONLINE - {s.Members.Count(m => m.Room == null)}";
 
-        // ================================================================ connection
+            // the channel on screen
+            if (s.Selected != shownChannel)
+            {
+                shownChannel = s.Selected;
+                CancelMode();
+                Messages.ItemsSource = s.MessagesOf(s.Selected?.Id);
+                ChannelTitle.Text = s.Selected?.Name ?? "";
+                EmptyText.Text = $"No messages in #{s.Selected?.Name} yet - say hi!";
+                ComposerHint.Text = $"Message #{s.Selected?.Name}";
+                ScrollToEnd();
+            }
+            if (s.Selected != null)
+                EmptyText.Visibility = s.MessagesOf(s.Selected.Id).Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // me
+            if (s.Me != null)
+            {
+                MeAvatar.Content = s.Me;
+                MeName.Text = s.Me.Name;
+                MeStatus.Text = MemberVM.RoleName(s.MyRole) + " · " +
+                    (string.IsNullOrEmpty(s.Settings.LodgeNote) ? MemberVM.StatusLabel(s.MyStatus) : s.Settings.LodgeNote);
+            }
+            AttachButton.Visibility = s.CanShareFiles ? Visibility.Visible : Visibility.Collapsed;
+
+            // voice bar
+            var inVoice = s.MyRoom != null;
+            VoiceBar.Visibility = inVoice ? Visibility.Visible : Visibility.Collapsed;
+            if (inVoice)
+            {
+                VoiceRoomText.Text = s.VoiceRooms.FirstOrDefault(r => r.Id == s.MyRoom)?.Name ?? "";
+                if (s.Voice?.MicError != null) VoiceRoomText.Text += " - " + s.Voice.MicError;
+                else if (s.Settings.VoicePushToTalk) VoiceRoomText.Text += $" - hold {VoiceEngine.KeyName(s.PttKey)}";
+                DeafToggle.IsChecked = s.Voice?.Deafened == true;
+                MuteToggle.IsChecked = s.Voice?.Muted == true && s.Voice?.Deafened != true;
+                MuteToggle.Content = MuteToggle.IsChecked == true ? "" : "";
+            }
+        }
+
+        void OnTick()
+        {
+            if (Session == null) return;
+            TypingText.Text = Session.TypingText(Session.Selected?.Id);
+            var online = Session.Members.Count(m => m.Room == null);
+            OnlineCaption.Text = $"ONLINE - {online}";
+            OnlineCaption.Visibility = online > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (ChatNote.Text.Length > 0 && DateTime.UtcNow > noteUntil) ChatNote.Text = "";
+            UpdateOverlay();
+        }
+
+        void ScrollToEnd() => Dispatcher.BeginInvoke(new Action(() => MessageScroll.ScrollToEnd()), DispatcherPriority.Background);
+
+        // ================================================================ join / connection
+
+        void ShowJoin(string why)
+        {
+            ChatPanel.Visibility = Visibility.Collapsed;
+            JoinPanel.Visibility = Visibility.Visible;
+            JoinStatus.Text = why ?? "";
+            UrlBox.Text = Session.Settings.LodgeUrl ?? "";
+        }
+
+        void ShowChat()
+        {
+            JoinPanel.Visibility = Visibility.Collapsed;
+            ChatPanel.Visibility = Visibility.Visible;
+        }
+
+        void UrlBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            LodgeSession.ParseInvite(UrlBox.Text, out var code);
+            CodeFromLink.Visibility = code != null ? Visibility.Visible : Visibility.Collapsed;
+            CodeArea.Visibility = code != null ? Visibility.Collapsed : Visibility.Visible;
+        }
 
         void Join_Click(object sender, RoutedEventArgs e) => TryJoin();
         void CodeBox_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) TryJoin(); }
 
-        // Forgiving address input: "nasferatu.dk/lodge", "https://https://...", ".../lodge/", ".../lodge/health"
-        public static string NormalizeUrl(string url)
+        void TryJoin()
         {
-            if (string.IsNullOrWhiteSpace(url)) return url;
-            url = url.Trim();
-            var scheme = url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? "http" : "https";
-            int i;
-            while ((i = url.IndexOf("://", StringComparison.Ordinal)) >= 0) url = url.Substring(i + 3);
-            url = url.TrimEnd('/');
-            foreach (var tail in new[] { "/health", "/ws" })
-                if (url.EndsWith(tail, StringComparison.OrdinalIgnoreCase)) url = url.Substring(0, url.Length - tail.Length);
-            return scheme + "://" + url.TrimEnd('/');
+            var url = LodgeSession.ParseInvite(UrlBox.Text, out var linkCode);
+            var code = linkCode ?? CodeBox.Password.Trim();
+            if (code.Length == 0 && editingConnection) code = SettingsStore.Unprotect(Session.Settings.LodgeCodeProtected) ?? ""; // keep the saved one
+            if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http"))
+            {
+                JoinStatus.Text = "Paste the invite link you were sent (https://...#invite=...)";
+                return;
+            }
+            if (code.Length < 6) { JoinStatus.Text = "Enter your invite code"; return; }
+            var s = Session.Settings;
+            s.LodgeUrl = url;
+            s.LodgeCodeProtected = SettingsStore.Protect(code);
+            s.LodgeName = NameBox.Text.Trim();
+            SettingsStore.Save(s);
+            UrlBox.Text = url; // the code stays out of the visible box
+            CodeBox.Password = "";
+            EndEditConnection();
+            JoinStatus.Text = "";
+            ShowChat();
+            Session.Connect(url, code);
         }
 
-        bool editing;
-
-        void EditConnection_Click(object sender, RoutedEventArgs e)
+        public void EditConnection()
         {
-            editing = true;
-            UrlBox.Text = settings.LodgeUrl ?? "";
-            NameBox.Text = settings.LodgeName ?? "";
+            editingConnection = true;
+            UrlBox.Text = Session.Settings.LodgeUrl ?? "";
+            NameBox.Text = Session.Settings.LodgeName ?? "";
             CodeBox.Password = "";
             JoinTitle.Text = "Edit connection";
             CodeCaption.Text = "INVITE CODE  (leave empty to keep your current one)";
             JoinButton.Content = "Save and reconnect";
             CancelEditButton.Visibility = Visibility.Visible;
             JoinStatus.Text = "";
-            ShowSettings(false);
             ChatPanel.Visibility = Visibility.Collapsed;
             JoinPanel.Visibility = Visibility.Visible;
         }
 
         void CancelEdit_Click(object sender, RoutedEventArgs e)
         {
-            EndEdit();
-            if (client != null) { JoinPanel.Visibility = Visibility.Collapsed; ChatPanel.Visibility = Visibility.Visible; }
+            EndEditConnection();
+            if (Session.Connected) ShowChat();
         }
 
-        void EndEdit()
+        void EndEditConnection()
         {
-            editing = false;
+            editingConnection = false;
             JoinTitle.Text = "Join a lodge";
             CodeCaption.Text = "INVITE CODE";
             JoinButton.Content = "Join";
             CancelEditButton.Visibility = Visibility.Collapsed;
         }
 
-        void TryJoin()
+        public void SignOut()
         {
-            var url = NormalizeUrl(UrlBox.Text);
-            UrlBox.Text = url ?? "";
-            var code = CodeBox.Password.Trim();
-            if (code.Length == 0 && editing) code = SettingsStore.Unprotect(settings.LodgeCodeProtected) ?? ""; // keep the saved code
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http"))
-            {
-                JoinStatus.Text = "The address should look like https://example.com/lodge";
-                return;
-            }
-            if (code.Length < 6) { JoinStatus.Text = "Enter your invite code"; return; }
-            settings.LodgeUrl = url;
-            settings.LodgeCodeProtected = SettingsStore.Protect(code);
-            settings.LodgeName = NameBox.Text.Trim();
-            SettingsStore.Save(settings);
-            CodeBox.Password = "";
-            EndEdit();
-            Connect(url, code);
+            Session.Disconnect();
+            Session.Settings.LodgeCodeProtected = null;
+            SettingsStore.Save(Session.Settings);
+            ShowJoin("");
         }
 
-        public void Connect(string url, string code)
+        // ================================================================ sidebar
+
+        void Channel_Click(object sender, MouseButtonEventArgs e)
         {
-            Disconnect();
-            JoinStatus.Text = "";
-            LodgeTitle.Text = "Lodge";
-            client = new LodgeClient(url, code, settings.LodgeName ?? Environment.UserName);
-            client.Status += OnStatus;
-            client.Received += OnReceived;
-            client.Voice += (id, data, off, count) => voice?.Incoming(id, data, off, count);
-            JoinPanel.Visibility = Visibility.Collapsed;
-            ChatPanel.Visibility = Visibility.Visible;
-            tick.Start();
-            client.Start();
+            if ((sender as FrameworkElement)?.Tag is ChannelVM ch) Session.Select(ch);
         }
 
-        public void Disconnect()
+        void Room_Click(object sender, MouseButtonEventArgs e)
         {
-            LeaveVoice(false);
-            client?.Stop();
-            client = null;
-            members.Clear();
-            tick.Stop();
+            if (!((sender as FrameworkElement)?.Tag is ChannelVM room) || room.Id == Session.MyRoom) return;
+            Session.JoinRoom(room.Id);
         }
 
-        void OnStatus(string text, bool online)
+        void LeaveVoice_Click(object sender, RoutedEventArgs e) => Session.LeaveVoice();
+
+        void MuteDeaf_Click(object sender, RoutedEventArgs e)
         {
-            Status = text;
-            StatusText.Text = online ? $"{members.Count} online" : text;
-            StatusDot.Fill = (Brush)FindResource(online ? "Accent" : "TextDim");
-            if (!online && client != null && !client.IsRunning)
-            {
-                // wrong code / removed: back to the join screen, with the address kept for a quick fix
-                var why = text;
-                Disconnect();
-                UrlBox.Text = settings.LodgeUrl ?? "";
-                ChatPanel.Visibility = Visibility.Collapsed;
-                JoinPanel.Visibility = Visibility.Visible;
-                JoinStatus.Text = why;
-            }
-            if (!online && inVoice) LeaveVoice(false);
+            var deaf = DeafToggle.IsChecked == true;
+            var muted = MuteToggle.IsChecked == true || deaf;
+            if (sender == DeafToggle && !deaf) muted = false; // undeafen also unmutes, like Discord
+            Session.SetMuteDeaf(muted, deaf);
         }
 
-        void OnReceived(Dictionary<string, object> m)
+        void Settings_Click(object sender, RoutedEventArgs e) => OpenSettings?.Invoke();
+
+        // ---- status
+        void Me_Click(object sender, MouseButtonEventArgs e)
         {
-            switch (m.Str("t"))
-            {
-                case "welcome":
-                    myId = m.Int("you");
-                    myName = m.Str("name");
-                    maxFileMb = m.Int("maxFileMb") > 0 ? m.Int("maxFileMb") : 25;
-                    try { LodgeTitle.Text = new Uri(client.BaseUrl).Host; } catch { }
-                    members.Clear();
-                    foreach (var u in m.List("users").OfType<Dictionary<string, object>>()) members.Add(ToMember(u));
-                    messages.Clear();
-                    foreach (var h in m.List("history").OfType<Dictionary<string, object>>()) AddMessage(h, false);
-                    ScrollToEnd();
-                    StatusText.Text = $"{members.Count} online";
-                    if (MyStatus != "online" || !string.IsNullOrEmpty(settings.LodgeNote)) SendStatus(); // after a reconnect too
-                    break;
-                case "join":
-                    var j = ToMember(m.Child("user"));
-                    if (members.All(x => x.Id != j.Id)) members.Add(j);
-                    StatusText.Text = $"{members.Count} online";
-                    break;
-                case "leave":
-                    var gone = members.FirstOrDefault(x => x.Id == m.Int("id"));
-                    if (gone != null) members.Remove(gone);
-                    voice?.RemovePeer(m.Int("id"));
-                    StatusText.Text = $"{members.Count} online";
-                    break;
-                case "user":
-                    var u2 = m.Child("user");
-                    var mem = members.FirstOrDefault(x => x.Id == u2.Int("id"));
-                    if (mem != null)
-                    {
-                        mem.Voice = u2.Bool("voice"); mem.Muted = u2.Bool("muted"); mem.Deaf = u2.Bool("deaf");
-                        mem.Status = u2.Str("status"); mem.Note = u2.Str("note"); mem.Role = u2.Str("role");
-                    }
-                    if (mem != null && !mem.Voice) voice?.RemovePeer(mem.Id);
-                    break;
-                case "msg":
-                    var atEnd = MessageScroll.VerticalOffset >= MessageScroll.ScrollableHeight - 40;
-                    var vm = AddMessage(m, true);
-                    typing.Remove(vm.FromId);
-                    if (atEnd || vm.FromId == myId) ScrollToEnd();
-                    if (vm.FromId != myId && !(IsShownToUser?.Invoke() ?? true))
-                    {
-                        UnreadChanged?.Invoke(true);
-                        Notify?.Invoke(vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : vm.Text);
-                    }
-                    break;
-                case "typing":
-                    typing[m.Int("id")] = DateTime.UtcNow.AddSeconds(4);
-                    break;
-                case "error":
-                    StatusText.Text = m.Str("text");
-                    break;
-            }
+            NoteBox.Text = Session.Settings.LodgeNote ?? "";
+            StatusPopup.PlacementTarget = MeRow;
+            StatusPopup.IsOpen = true;
+            e.Handled = true;
         }
 
-        MemberVM ToMember(Dictionary<string, object> u) => new MemberVM
+        void StatusOption_Click(object sender, RoutedEventArgs e)
         {
-            Id = u.Int("id"), Name = u.Str("name"), Guest = u.Bool("guest"), IsMe = u.Int("id") == myId,
-            Voice = u.Bool("voice"), Muted = u.Bool("muted"), Deaf = u.Bool("deaf"),
-            Status = u.Str("status"), Note = u.Str("note"), Role = u.Str("role"),
-        };
-
-        MessageVM AddMessage(Dictionary<string, object> m, bool live)
-        {
-            var at = DateTimeOffset.FromUnixTimeMilliseconds(m.Long("at")).UtcDateTime;
-            var prev = messages.LastOrDefault();
-            var vm = new MessageVM
-            {
-                Id = m.Str("id"), FromId = m.Int("fromId"), From = m.Str("from"), At = at, Text = m.Str("text"),
-                Continuation = prev != null && prev.From == m.Str("from") && (at - prev.At).TotalMinutes < 5,
-            };
-            var f = m.Child("file");
-            if (f != null)
-            {
-                vm.File = new FileVM { Id = f.Str("id"), Name = f.Str("name"), Size = f.Long("size"), Mime = f.Str("mime") };
-                if (vm.File.IsImage) _ = LoadImage(vm.File);
-            }
-            messages.Add(vm);
-            EmptyText.Visibility = Visibility.Collapsed;
-            return vm;
+            Session.SetMyStatus((sender as FrameworkElement)?.Tag as string ?? "online", NoteBox.Text);
+            StatusPopup.IsOpen = false;
+            Refresh();
         }
 
-        void ScrollToEnd() => Dispatcher.BeginInvoke(new Action(() => MessageScroll.ScrollToEnd()), DispatcherPriority.Background);
+        void NoteBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter) return;
+            Session.SetMyStatus(Session.Settings.LodgeStatus ?? "online", NoteBox.Text);
+            StatusPopup.IsOpen = false;
+            Refresh();
+        }
 
-        public void MarkRead() => UnreadChanged?.Invoke(false);
+        // ---- a person: volume, officer tools
+        void Member_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is MemberVM m)) return;
+            if (m.IsMe) { Me_Click(sender, e); return; }
+            popMember = m;
+            popLoading = true;
+            PopName.Text = m.Name;
+            PopRole.Text = m.RoleLabel;
+            PopRole.Foreground = m.FrameBrush;
+            PopStatus.Text = m.StatusLine + (m.ServerMuted ? " - muted by an officer" : "");
+            PopVolume.Value = Session.PeerVolumeFor(m.Name);
+            PopVolumeText.Text = $"{PopVolume.Value * 100:0}%";
+            popLoading = false;
+            PopModArea.Visibility = Session.CanModerateMember(m) ? Visibility.Visible : Visibility.Collapsed;
+            PopMute.Content = m.ServerMuted ? "Unmute for everyone" : "Mute for everyone";
+            MemberPopup.PlacementTarget = (UIElement)sender;
+            MemberPopup.IsOpen = true;
+            e.Handled = true;
+        }
 
-        // ================================================================ sending
+        void PopVolume_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (popLoading || popMember == null) return;
+            PopVolumeText.Text = $"{e.NewValue * 100:0}%";
+            Session.SetPeerVolume(popMember, e.NewValue);
+        }
+
+        void PopMute_Click(object sender, RoutedEventArgs e)
+        {
+            if (popMember != null) Session.ServerMute(popMember, !popMember.ServerMuted);
+            MemberPopup.IsOpen = false;
+        }
+
+        void PopKick_Click(object sender, RoutedEventArgs e)
+        {
+            MemberPopup.IsOpen = false;
+            if (popMember == null) return;
+            if (MessageBox.Show(Window.GetWindow(this), $"Kick {popMember.Name} from the lodge? They can join again with their code.",
+                    "Kick", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)
+                Session.Kick(popMember);
+        }
+
+        // ================================================================ messages
+
+        void Reply_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is MessageVM m)) return;
+            editing = null;
+            replyTo = m;
+            ModeText.Text = $"Replying to {m.From}";
+            ModeBar.Visibility = Visibility.Visible;
+            Composer.Focus();
+        }
+
+        void Edit_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is MessageVM m) StartEdit(m);
+        }
+
+        void StartEdit(MessageVM m)
+        {
+            replyTo = null;
+            editing = m;
+            ModeText.Text = "Editing your message - Enter saves, Esc cancels";
+            ModeBar.Visibility = Visibility.Visible;
+            Composer.Text = m.Text ?? "";
+            Composer.CaretIndex = Composer.Text.Length;
+            Composer.Focus();
+        }
+
+        void Delete_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is MessageVM m)) return;
+            var whose = m.Mine ? "your message" : $"{m.From}'s message";
+            if (MessageBox.Show(Window.GetWindow(this), $"Delete {whose}?", "Delete", MessageBoxButton.YesNo,
+                    MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)
+                _ = Session.Delete(m.Id);
+        }
+
+        void CancelMode_Click(object sender, RoutedEventArgs e) => CancelMode();
+
+        void CancelMode()
+        {
+            if (editing != null) Composer.Text = "";
+            replyTo = null;
+            editing = null;
+            ModeBar.Visibility = Visibility.Collapsed;
+        }
 
         void Composer_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (e.Key == Key.Escape) { CancelMode(); e.Handled = true; return; }
+            if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && PasteFiles()) { e.Handled = true; return; }
+            if (e.Key == Key.Up && Composer.Text.Length == 0)
+            {
+                // edit your last message, like Discord
+                var last = Session.MessagesOf(Session.Selected?.Id).LastOrDefault(m => m.Mine && !string.IsNullOrEmpty(m.Text));
+                if (last != null) { StartEdit(last); e.Handled = true; }
+                return;
+            }
             if (e.Key != Key.Enter) return;
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
             {
@@ -302,11 +388,7 @@ namespace ElansAddonHub.Lodge
         void Composer_TextChanged(object sender, TextChangedEventArgs e)
         {
             ComposerHint.Visibility = Composer.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-            if (Composer.Text.Length > 0 && client != null && client.Online && (DateTime.UtcNow - lastTypingSent).TotalSeconds > 3)
-            {
-                lastTypingSent = DateTime.UtcNow;
-                _ = client.Send(new Dictionary<string, object> { ["t"] = "typing" });
-            }
+            if (Composer.Text.Length > 0 && editing == null) Session.Typing();
         }
 
         void Send_Click(object sender, RoutedEventArgs e) => SendText();
@@ -314,15 +396,46 @@ namespace ElansAddonHub.Lodge
         void SendText()
         {
             var text = Composer.Text.Trim();
-            if (text.Length == 0 || client == null || !client.Online) return;
-            _ = client.Send(new Dictionary<string, object> { ["t"] = "msg", ["text"] = text });
+            if (!Session.Online) return;
+            if (editing != null)
+            {
+                if (text.Length > 0 && text != editing.Text) _ = Session.Edit(editing.Id, text);
+                Composer.Text = "";
+                CancelMode();
+                return;
+            }
+            if (text.Length == 0) return;
+            _ = Session.SendMessage(text, replyTo?.Id);
             Composer.Text = "";
+            CancelMode();
         }
 
-        public Task SendTextForTest(string text) =>
-            client?.Send(new Dictionary<string, object> { ["t"] = "msg", ["text"] = text }) ?? Task.CompletedTask;
-
         // ================================================================ files
+
+        // Ctrl+V: a screenshot or copied files go up as attachments; plain text pastes as usual
+        bool PasteFiles()
+        {
+            try
+            {
+                if (Clipboard.ContainsFileDropList())
+                {
+                    foreach (string f in Clipboard.GetFileDropList()) if (File.Exists(f)) _ = Share(f);
+                    return true;
+                }
+                if (Clipboard.ContainsImage())
+                {
+                    var img = Clipboard.GetImage();
+                    var path = Path.Combine(Path.GetTempPath(), $"screenshot-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+                    var enc = new PngBitmapEncoder();
+                    enc.Frames.Add(BitmapFrame.Create(img));
+                    using (var fs = File.Create(path)) enc.Save(fs);
+                    _ = Share(path);
+                    return true;
+                }
+            }
+            catch (Exception ex) { Util.Log("paste: " + ex.Message); }
+            return false;
+        }
 
         void Attach_Click(object sender, RoutedEventArgs e)
         {
@@ -332,64 +445,33 @@ namespace ElansAddonHub.Lodge
 
         void OnDragOver(object sender, DragEventArgs e)
         {
-            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) && client != null ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) && Session.Online && Session.CanShareFiles ? DragDropEffects.Copy : DragDropEffects.None;
             e.Handled = true;
         }
 
         void OnDrop(object sender, DragEventArgs e)
         {
-            if (!(e.Data.GetData(DataFormats.FileDrop) is string[] files) || client == null) return;
+            if (!(e.Data.GetData(DataFormats.FileDrop) is string[] files)) return;
             foreach (var f in files.Where(File.Exists)) _ = Share(f);
         }
 
         public async Task Share(string path)
         {
-            if (client == null || !client.Online) return;
-            var size = new FileInfo(path).Length;
-            if (size > maxFileMb * 1024L * 1024L)
-            {
-                StatusText.Text = $"{Path.GetFileName(path)} is larger than {maxFileMb} MB";
-                return;
-            }
-            StatusText.Text = $"Uploading {Path.GetFileName(path)}...";
+            ChatNote.Text = $"Uploading {Path.GetFileName(path)}...";
+            noteUntil = DateTime.UtcNow.AddMinutes(5);
             try
             {
-                var meta = await client.Upload(path);
                 var text = Composer.Text.Trim();
-                Composer.Text = "";
-                await client.Send(new Dictionary<string, object>
-                {
-                    ["t"] = "msg", ["text"] = text, ["file"] = new Dictionary<string, object> { ["id"] = meta.Str("id") },
-                });
-                StatusText.Text = $"{members.Count} online";
+                await Session.Share(path, text, replyTo?.Id);
+                if (editing == null) { Composer.Text = ""; CancelMode(); }
+                ChatNote.Text = "";
             }
             catch (Exception ex)
             {
                 Util.Log("upload: " + ex);
-                StatusText.Text = "Upload failed: " + ex.Message;
+                ChatNote.Text = "Upload failed: " + ex.Message;
+                noteUntil = DateTime.UtcNow.AddSeconds(8);
             }
-        }
-
-        static string CacheDir => Directory.CreateDirectory(Path.Combine(Util.DataDir, "cache")).FullName;
-
-        async Task LoadImage(FileVM f)
-        {
-            if (client == null) return;
-            var path = Path.Combine(CacheDir, f.Id + Path.GetExtension(f.Name));
-            try
-            {
-                if (!File.Exists(path)) await client.Download(f.Id, path);
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.CacheOption = BitmapCacheOption.OnLoad; // don't keep the file locked
-                bmp.DecodePixelWidth = 640;
-                bmp.UriSource = new Uri(path);
-                bmp.EndInit();
-                bmp.Freeze();
-                f.LocalPath = path;
-                f.Image = bmp;
-            }
-            catch (Exception e) { Util.Log("image: " + e.Message); }
         }
 
         void Image_Click(object sender, MouseButtonEventArgs e)
@@ -400,7 +482,7 @@ namespace ElansAddonHub.Lodge
 
         async void Download_Click(object sender, RoutedEventArgs e)
         {
-            if (!((sender as FrameworkElement)?.Tag is FileVM f) || client == null) return;
+            if (!((sender as FrameworkElement)?.Tag is FileVM f)) return;
             var dir = DownloadsFolder();
             var target = Path.Combine(dir, f.Name);
             for (int i = 2; File.Exists(target); i++)
@@ -408,7 +490,7 @@ namespace ElansAddonHub.Lodge
             f.Status = "downloading...";
             try
             {
-                await client.Download(f.Id, target);
+                await Session.Download(f, target);
                 f.Status = "saved";
                 Process.Start("explorer.exe", $"/select,\"{target}\"");
             }
@@ -420,211 +502,28 @@ namespace ElansAddonHub.Lodge
 
         static string DownloadsFolder()
         {
-            try
-            {
-                if (SHGetKnownFolderPath(new Guid("374DE290-123F-4565-9164-39C4925E467B"), 0, IntPtr.Zero, out var p) == 0) return p;
-            }
+            try { if (SHGetKnownFolderPath(new Guid("374DE290-123F-4565-9164-39C4925E467B"), 0, IntPtr.Zero, out var p) == 0) return p; }
             catch { }
             return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
         }
 
-        // ================================================================ voice
-
-        void JoinVoice_Click(object sender, RoutedEventArgs e) => JoinVoice();
-
-        public void JoinVoice()
-        {
-            if (client == null || !client.Online || inVoice) return;
-            voice = new VoiceEngine
-            {
-                PushToTalk = settings.VoicePushToTalk,
-                PttKey = PttKey,
-                ThresholdDb = settings.VoiceThreshold ?? -45,
-            };
-            var c = client;
-            voice.Send = (p, n) => _ = c.SendVoice(p, n);
-            voice.Start(settings.VoiceInput ?? -1, settings.VoiceOutput ?? -1, (float)(settings.VoiceVolume ?? 1));
-            inVoice = true;
-            MuteToggle.IsChecked = false;
-            DeafToggle.IsChecked = false;
-            _ = client.Send(new Dictionary<string, object> { ["t"] = "voice", ["on"] = true });
-            _ = client.Send(new Dictionary<string, object> { ["t"] = "state", ["muted"] = false, ["deaf"] = false });
-            JoinVoiceButton.Visibility = Visibility.Collapsed;
-            VoiceControls.Visibility = Visibility.Visible;
-            VoiceNote.Text = voice.MicError != null ? voice.MicError + " - you can still listen." :
-                settings.VoicePushToTalk ? $"Hold {VoiceEngine.KeyName(PttKey)} to talk." : "";
-            VoiceNote.Visibility = VoiceNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        void LeaveVoice_Click(object sender, RoutedEventArgs e) => LeaveVoice(true);
-
-        void LeaveVoice(bool tellServer)
-        {
-            if (!inVoice) return;
-            inVoice = false;
-            voice?.Dispose();
-            voice = null;
-            if (tellServer && client != null) _ = client.Send(new Dictionary<string, object> { ["t"] = "voice", ["on"] = false });
-            JoinVoiceButton.Visibility = Visibility.Visible;
-            VoiceControls.Visibility = Visibility.Collapsed;
-            VoiceNote.Visibility = Visibility.Collapsed;
-            foreach (var m in members) m.Speaking = false;
-            overlay?.Hide();
-        }
-
-        void Mute_Click(object sender, RoutedEventArgs e) => SendVoiceState();
-
-        void Deaf_Click(object sender, RoutedEventArgs e)
-        {
-            if (DeafToggle.IsChecked == true) MuteToggle.IsChecked = true; // deafened people can't talk either (like Discord)
-            SendVoiceState();
-        }
-
-        void SendVoiceState()
-        {
-            if (voice == null || client == null) return;
-            voice.Muted = MuteToggle.IsChecked == true;
-            voice.Deafened = DeafToggle.IsChecked == true;
-            voice.Volume = voice.Deafened ? 0 : (float)(settings.VoiceVolume ?? 1);
-            MuteToggle.Content = voice.Muted ? "" : "";
-            _ = client.Send(new Dictionary<string, object> { ["t"] = "state", ["muted"] = voice.Muted, ["deaf"] = voice.Deafened });
-        }
-
-        public string VoiceStats => voice == null ? "not in voice" : $"in voice, frames sent {voice.FramesSent}, mic {(voice.MicError ?? "ok")}";
-
-        void OnTick()
-        {
-            foreach (var m in members)
-                m.Speaking = inVoice && m.Voice && (m.IsMe ? voice != null && voice.Transmitting : voice != null && voice.IsSpeaking(m.Id));
-
-            // typing line
-            var now = DateTime.UtcNow;
-            var who = typing.Where(t => t.Value > now && t.Key != myId)
-                            .Select(t => members.FirstOrDefault(x => x.Id == t.Key)?.Name).Where(n => n != null).ToList();
-            TypingText.Text = who.Count == 0 ? "" : who.Count == 1 ? $"{who[0]} is typing..." : $"{string.Join(", ", who)} are typing...";
-
-            // mic level under the sensitivity slider
-            if (SettingsScroll.Visibility == Visibility.Visible && voice != null)
-            {
-                var frac = Math.Max(0, Math.Min(1, (voice.LevelDb - ThresholdSlider.Minimum) / (ThresholdSlider.Maximum - ThresholdSlider.Minimum)));
-                LevelBar.Width = frac * Math.Max(0, ThresholdSlider.ActualWidth);
-            }
-            else LevelBar.Width = 0;
-
-            if (capturingKey > 0) CaptureKey();
-            if (++overlayTick % 3 == 0) UpdateOverlay();
-            if (overlayTick % 50 == 0) CheckIdle();
-        }
-
-        // ================================================================ status
-
-        string myStatus = "online";
-        bool autoAway;
-        string MyStatus => autoAway ? "away" : myStatus;
-
-        void Chip_Click(object sender, MouseButtonEventArgs e)
-        {
-            if (!((sender as FrameworkElement)?.Tag is MemberVM m) || !m.IsMe) return;
-            NoteBox.Text = settings.LodgeNote ?? "";
-            StatusPopup.PlacementTarget = (UIElement)sender;
-            StatusPopup.IsOpen = true;
-        }
-
-        void StatusOption_Click(object sender, RoutedEventArgs e)
-        {
-            SetMyStatus((sender as FrameworkElement)?.Tag as string ?? "online", NoteBox.Text);
-            StatusPopup.IsOpen = false;
-        }
-
-        void NoteBox_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key != Key.Enter) return;
-            SetMyStatus(myStatus, NoteBox.Text);
-            StatusPopup.IsOpen = false;
-        }
-
-        public void SetMyStatus(string status, string note)
-        {
-            myStatus = status;
-            autoAway = false;
-            settings.LodgeStatus = status;
-            settings.LodgeNote = (note ?? "").Trim();
-            SettingsStore.Save(settings);
-            SendStatus();
-        }
-
-        void SendStatus()
-        {
-            if (client == null || !client.Online) return;
-            _ = client.Send(new Dictionary<string, object> { ["t"] = "status", ["status"] = MyStatus, ["note"] = settings.LodgeNote ?? "" });
-        }
-
-        [StructLayout(LayoutKind.Sequential)] struct LastInput { public uint cbSize, dwTime; }
-        [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LastInput li);
-
-        static double IdleSeconds()
-        {
-            var li = new LastInput { cbSize = (uint)Marshal.SizeOf(typeof(LastInput)) };
-            return GetLastInputInfo(ref li) ? unchecked((uint)Environment.TickCount - li.dwTime) / 1000.0 : 0;
-        }
-
-        // AFK after 10 minutes without input (only from Online - Busy/Dungeon stay as chosen); back on the first input
-        void CheckIdle()
-        {
-            if (client == null || !client.Online || settings.AutoAwayOff) return;
-            var idle = IdleSeconds();
-            if (!autoAway && myStatus == "online" && idle > 600) { autoAway = true; SendStatus(); }
-            else if (autoAway && idle < 5) { autoAway = false; SendStatus(); }
-        }
-
-        void AutoAway_Click(object sender, RoutedEventArgs e)
-        {
-            settings.AutoAwayOff = AutoAwayBox.IsChecked != true;
-            SettingsStore.Save(settings);
-            if (settings.AutoAwayOff && autoAway) { autoAway = false; SendStatus(); }
-        }
-
         // ================================================================ in-game overlay
-
-        OverlayWindow overlay;
-        int overlayTick;
-        public bool ForceOverlayForTest;
 
         void UpdateOverlay()
         {
-            if (settings == null) return;
+            var s = Session.Settings;
             var wow = OverlayWindow.WowInFront();
-            // while the settings are open, show it as a preview so you can place it
-            bool preview = SettingsScroll.Visibility == Visibility.Visible && IsVisible;
-            bool show = inVoice && !settings.OverlayOff && (wow != IntPtr.Zero || settings.OverlayAlways || preview || ForceOverlayForTest);
+            bool show = Session.MyRoom != null && !s.OverlayOff && (wow != IntPtr.Zero || s.OverlayAlways || ForceOverlayForTest || OverlayPreview);
             if (!show)
             {
                 if (overlay != null && overlay.IsVisible) overlay.Hide();
                 return;
             }
-            if (overlay == null) overlay = new OverlayWindow(members);
+            if (overlay == null) overlay = new OverlayWindow(Session.Members);
             if (!overlay.IsVisible) overlay.Show();
             var main = Window.GetWindow(this);
             var near = wow != IntPtr.Zero ? wow : main != null ? new System.Windows.Interop.WindowInteropHelper(main).Handle : IntPtr.Zero;
-            overlay.Place(near, settings.OverlayRight, settings.OverlayTop ?? 0.3);
-        }
-
-        void Overlay_Click(object sender, RoutedEventArgs e)
-        {
-            if (settings == null || loading) return;
-            settings.OverlayOff = OverlayBox.IsChecked != true;
-            settings.OverlayRight = OverlayRightBox.IsChecked == true;
-            settings.OverlayAlways = OverlayAlwaysBox.IsChecked == true;
-            SettingsStore.Save(settings);
-            UpdateOverlay();
-        }
-
-        void OverlayTop_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (settings == null || loading) return;
-            settings.OverlayTop = Math.Round(e.NewValue, 3);
-            SettingsStore.Save(settings);
-            UpdateOverlay();
+            overlay.Place(near, s.OverlayRight, s.OverlayTop ?? 0.3);
         }
 
         public void SnapshotOverlay(string file)
@@ -632,7 +531,6 @@ namespace ElansAddonHub.Lodge
             if (overlay == null || !overlay.IsVisible) return;
             overlay.UpdateLayout();
             var bmp = new RenderTargetBitmap((int)overlay.ActualWidth * 2, (int)overlay.ActualHeight * 2, 192, 192, PixelFormats.Pbgra32);
-            // drawn on a dark, game-like background so it can be judged
             var dv = new DrawingVisual();
             using (var dc = dv.RenderOpen())
             {
@@ -645,115 +543,8 @@ namespace ElansAddonHub.Lodge
             using (var fs = File.Create(file)) enc.Save(fs);
         }
 
-        // ================================================================ settings card
-
-        void VoiceSettings_Click(object sender, RoutedEventArgs e) => ShowSettings(SettingsScroll.Visibility != Visibility.Visible);
-
-        // the settings take the chat's place while open
-        void ShowSettings(bool on)
-        {
-            SettingsScroll.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-            MessageScroll.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
-            if (!on) ScrollToEnd();
-        }
-
-        public void ShowSettingsForTest() => ShowSettings(true);
-
-        void Mode_Changed(object sender, RoutedEventArgs e)
-        {
-            if (settings == null) return;
-            settings.VoicePushToTalk = ModePtt.IsChecked == true;
-            if (voice != null) voice.PushToTalk = settings.VoicePushToTalk;
-            if (!loading) SettingsStore.Save(settings);
-            UpdateLabels();
-        }
-
-        void Threshold_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (settings == null) return;
-            settings.VoiceThreshold = Math.Round(e.NewValue);
-            if (voice != null) voice.ThresholdDb = e.NewValue;
-            if (!loading) SettingsStore.Save(settings);
-            UpdateLabels();
-        }
-
-        void Volume_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (settings == null) return;
-            settings.VoiceVolume = Math.Round(e.NewValue, 2);
-            if (voice != null && !voice.Deafened) voice.Volume = (float)e.NewValue;
-            if (!loading) SettingsStore.Save(settings);
-            UpdateLabels();
-        }
-
-        void Device_Changed(object sender, SelectionChangedEventArgs e)
-        {
-            if (settings == null || loading) return;
-            settings.VoiceInput = InputBox.SelectedItem is Device i ? i.Id : -1;
-            settings.VoiceOutput = OutputBox.SelectedItem is Device o ? o.Id : -1;
-            SettingsStore.Save(settings);
-            if (inVoice) { LeaveVoice(true); JoinVoice(); } // restart audio on the new devices
-        }
-
-        void AutoConnect_Click(object sender, RoutedEventArgs e)
-        {
-            settings.LodgeManualConnect = AutoConnectBox.IsChecked != true;
-            SettingsStore.Save(settings);
-        }
-
-        void PttKey_Click(object sender, RoutedEventArgs e)
-        {
-            capturingKey = 1;
-            PttKeyButton.Content = "Press a key...";
-        }
-
-        void CaptureKey()
-        {
-            if (capturingKey++ < 4) return; // let the click that started this end first
-            if (VoiceEngine.KeyDown(0x1B) || capturingKey > 100) // Esc or ~10 s
-            {
-                capturingKey = 0;
-                PttKeyButton.Content = VoiceEngine.KeyName(PttKey);
-                return;
-            }
-            for (int vk = 0x02; vk < 0xFF; vk++)
-            {
-                if (vk == 0x1B || !VoiceEngine.KeyDown(vk)) continue;
-                capturingKey = 0;
-                settings.VoicePttKey = vk;
-                SettingsStore.Save(settings);
-                if (voice != null) voice.PttKey = vk;
-                PttKeyButton.Content = VoiceEngine.KeyName(vk);
-                UpdateLabels();
-                return;
-            }
-        }
-
-        void UpdateLabels()
-        {
-            if (settings == null) return;
-            VaPanel.Visibility = settings.VoicePushToTalk ? Visibility.Collapsed : Visibility.Visible;
-            PttPanel.Visibility = settings.VoicePushToTalk ? Visibility.Visible : Visibility.Collapsed;
-            ThresholdText.Text = $"{ThresholdSlider.Value:0} dB";
-            VolumeText.Text = $"{VolumeSlider.Value * 100:0}%";
-        }
-
-        void SignOut_Click(object sender, RoutedEventArgs e)
-        {
-            Disconnect();
-            settings.LodgeCodeProtected = null;
-            SettingsStore.Save(settings);
-            ShowSettings(false);
-            ChatPanel.Visibility = Visibility.Collapsed;
-            JoinPanel.Visibility = Visibility.Visible;
-            JoinStatus.Text = "";
-        }
-
         // test hooks
         public void FillJoinForTest(string url, string code, string name) { UrlBox.Text = url; CodeBox.Password = code; NameBox.Text = name; TryJoin(); }
-        public bool IsOnline => client != null && client.Online;
         public string JoinError => JoinStatus.Text;
-        public int MessageCount => messages.Count;
-        public int MemberCount => members.Count;
     }
 }

@@ -9,7 +9,7 @@
   <ItemsControl x:Name="People" Margin="6">
     <ItemsControl.ItemTemplate>
       <DataTemplate>
-        <Grid x:Name="row" Visibility="{Binding StateVisibility}" Margin="0,0,0,6" HorizontalAlignment="Left" Opacity="0.6">
+        <Grid x:Name="row" Visibility="{Binding OverlayVisibility}" Margin="0,0,0,6" HorizontalAlignment="Left" Opacity="0.6">
         <Border x:Name="pill" Padding="3,3,11,3" CornerRadius="16" Background="#B3101214" BorderThickness="1.5" BorderBrush="{Binding FrameBrush}">
           <StackPanel Orientation="Horizontal">
             <Grid Width="26" Height="26">

@@ -2,20 +2,54 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
-  <Grid>
+  <UserControl.Resources>
+    <!-- small round avatar with role ring, speaking ring and status badge -->
+    <DataTemplate x:Key="AvatarSmall">
+      <Grid Width="22" Height="22">
+        <Ellipse Fill="{Binding Color}" />
+        <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Ellipse Stroke="{Binding FrameBrush}" StrokeThickness="1.5" Margin="-2" />
+        <Ellipse Stroke="{Binding Ring}" StrokeThickness="2" Margin="-4.5" />
+        <Border Width="13" Height="13" CornerRadius="6.5" Background="{Binding StatusBrush}" BorderBrush="{StaticResource Surface}" BorderThickness="1.5"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-5,-5" Visibility="{Binding StatusVisibility}">
+          <TextBlock Text="{Binding StatusGlyph}" FontFamily="{StaticResource Icons}" FontSize="7" Foreground="#111315" FontWeight="Bold"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </Grid>
+    </DataTemplate>
 
+    <!-- a person row in the sidebar (voice rooms and online list) -->
+    <DataTemplate x:Key="PersonRow">
+      <Border Background="Transparent" Padding="6,4" CornerRadius="6" Cursor="Hand" ToolTip="{Binding Tip}" Tag="{Binding}"
+              MouseLeftButtonUp="Member_Click" MouseRightButtonUp="Member_Click">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Right" Text="{Binding StateGlyph}" FontFamily="{StaticResource Icons}" FontSize="11"
+                     Foreground="{Binding StateBrush}" VerticalAlignment="Center" Visibility="{Binding StateVisibility}" />
+          <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding Name}" FontSize="12.5" Margin="10,0,6,0" VerticalAlignment="Center" Opacity="{Binding NameOpacity}"
+                     TextTrimming="CharacterEllipsis" />
+        </DockPanel>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid>
     <!-- ===================== join ===================== -->
     <ScrollViewer x:Name="JoinPanel" VerticalScrollBarVisibility="Auto">
-      <Border Margin="16,40,12,12" Padding="20" Background="{StaticResource Card}" CornerRadius="12"
+      <Border Margin="16,30,12,12" Padding="22" Background="{StaticResource Card}" CornerRadius="12" MaxWidth="460"
               BorderBrush="{StaticResource Line}" BorderThickness="1" VerticalAlignment="Top">
         <StackPanel>
           <TextBlock x:Name="JoinTitle" Text="Join a lodge" FontSize="17" FontWeight="SemiBold" />
-          <TextBlock Text="Chat, voice and files with your friends. Ask the lodge owner for the address and your personal invite code."
-                     FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,4,0,16" />
-          <TextBlock Text="ADDRESS" Style="{StaticResource Caption}" Margin="0,0,0,5" />
-          <TextBox x:Name="UrlBox" Style="{StaticResource Input}" Tag="https://example.com/lodge" />
-          <TextBlock x:Name="CodeCaption" Text="INVITE CODE" Style="{StaticResource Caption}" Margin="0,12,0,5" />
-          <PasswordBox x:Name="CodeBox" Style="{StaticResource SecretInput}" KeyDown="CodeBox_KeyDown" />
+          <TextBlock Text="Chat, voice and files with your friends. Paste the invite link you were sent." FontSize="12"
+                     Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,4,0,16" />
+          <TextBlock Text="INVITE LINK OR ADDRESS" Style="{StaticResource Caption}" Margin="0,0,0,5" />
+          <TextBox x:Name="UrlBox" Style="{StaticResource Input}" Tag="https://example.com/lodge#invite=..." TextChanged="UrlBox_TextChanged" />
+          <StackPanel x:Name="CodeArea">
+            <TextBlock x:Name="CodeCaption" Text="INVITE CODE" Style="{StaticResource Caption}" Margin="0,12,0,5" />
+            <PasswordBox x:Name="CodeBox" Style="{StaticResource SecretInput}" KeyDown="CodeBox_KeyDown" />
+          </StackPanel>
+          <TextBlock x:Name="CodeFromLink" Text="Invite code found in the link" FontSize="11.5" Foreground="{StaticResource Accent}"
+                     Margin="2,6,0,0" Visibility="Collapsed" />
           <TextBlock Text="NAME  (only used with a shared guest code)" Style="{StaticResource Caption}" Margin="0,12,0,5" />
           <TextBox x:Name="NameBox" Style="{StaticResource Input}" Tag="Your name" />
           <Button x:Name="JoinButton" Style="{StaticResource PrimaryButton}" Content="Join" Margin="0,18,0,0" Click="Join_Click" />
@@ -27,315 +61,304 @@
     </ScrollViewer>
 
     <!-- ===================== lodge ===================== -->
-    <Grid x:Name="ChatPanel" Visibility="Collapsed" Margin="16,8,12,10">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="*" />
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" />
-      </Grid.RowDefinitions>
+    <Grid x:Name="ChatPanel" Visibility="Collapsed" Margin="14,2,12,10">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="228" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
 
-      <!-- header: name, who's here, voice controls -->
-      <Border Grid.Row="0" Padding="14,12" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
-        <StackPanel>
-          <DockPanel>
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-              <Button x:Name="JoinVoiceButton" Style="{StaticResource SecondaryButton}" Click="JoinVoice_Click" ToolTip="Join the voice channel">
-                <StackPanel Orientation="Horizontal">
-                  <TextBlock Text="&#xE7F6;" FontFamily="{StaticResource Icons}" FontSize="13" VerticalAlignment="Center" Margin="0,0,7,0" />
-                  <TextBlock Text="Join voice" />
-                </StackPanel>
-              </Button>
-              <StackPanel x:Name="VoiceControls" Orientation="Horizontal" Visibility="Collapsed">
-                <ToggleButton x:Name="MuteToggle" Style="{StaticResource IconToggle}" Content="&#xE720;" Click="Mute_Click" ToolTip="Mute your microphone" />
-                <ToggleButton x:Name="DeafToggle" Style="{StaticResource IconToggle}" Content="&#xE7F6;" Margin="6,0,0,0" Click="Deaf_Click" ToolTip="Deafen (hear nobody, and mute)" />
-                <Button Style="{StaticResource IconButton}" Content="&#xE778;" Foreground="{StaticResource Danger}" Margin="4,0,0,0"
-                        Click="LeaveVoice_Click" ToolTip="Leave voice" />
-              </StackPanel>
-              <Button Style="{StaticResource IconButton}" Content="&#xE713;" FontSize="14" Margin="4,0,0,0" Click="VoiceSettings_Click" ToolTip="Voice &amp; lodge settings" />
-            </StackPanel>
-            <StackPanel VerticalAlignment="Center">
-              <StackPanel Orientation="Horizontal">
-                <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,7,0" />
-                <TextBlock x:Name="LodgeTitle" Text="Lodge" FontSize="15" FontWeight="SemiBold" />
-              </StackPanel>
-              <TextBlock x:Name="StatusText" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="15,1,0,0" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-          </DockPanel>
+      <!-- ===== sidebar ===== -->
+      <Border Grid.Column="0" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,8,0">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
 
-          <ItemsControl x:Name="People" Margin="0,10,0,0">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Grid Margin="0,5,7,1" ToolTip="{Binding Tip}" Tag="{Binding}" MouseLeftButtonUp="Chip_Click">
-                <Border Padding="3,3,10,3" CornerRadius="15" Background="{StaticResource SurfaceHi}"
-                        BorderThickness="1.5" BorderBrush="{Binding FrameBrush}">
-                  <StackPanel Orientation="Horizontal">
-                    <Grid Width="24" Height="24">
-                      <Ellipse Fill="{Binding Color}" />
-                      <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="11.5" FontWeight="Bold"
-                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
-                      <Ellipse Stroke="{Binding Ring}" StrokeThickness="2" Margin="-3" />
-                      <Border Width="16" Height="16" CornerRadius="8" Background="{Binding StatusBrush}" BorderBrush="{StaticResource SurfaceHi}" BorderThickness="1.5"
-                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-5,-5" Visibility="{Binding StatusVisibility}">
-                        <TextBlock Text="{Binding StatusGlyph}" FontFamily="Segoe MDL2 Assets" FontSize="8.5" Foreground="#111315" FontWeight="Bold"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                      </Border>
-                    </Grid>
-                    <TextBlock Text="{Binding Name}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" Opacity="{Binding NameOpacity}" />
-                    <TextBlock Text="{Binding StateGlyph}" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{Binding StateBrush}"
-                               Margin="6,1,0,0" VerticalAlignment="Center" Visibility="{Binding StateVisibility}" />
-                  </StackPanel>
-                </Border>
-                  <!-- rank frame: a glow for officers and up, an animated shimmer for the guild master -->
-                  <Border CornerRadius="15" BorderThickness="1.5" BorderBrush="{Binding FrameBrush}" IsHitTestVisible="False"
-                          Visibility="{Binding GlowVisibility}">
-                    <Border.Effect>
-                      <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.9" Color="{Binding FrameColor}" />
-                    </Border.Effect>
-                  </Border>
-                  <Border CornerRadius="15" BorderThickness="2" IsHitTestVisible="False" Visibility="{Binding ShimmerVisibility}">
-                    <Border.BorderBrush>
-                      <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                        <LinearGradientBrush.RelativeTransform>
-                          <RotateTransform CenterX="0.5" CenterY="0.5" Angle="0" />
-                        </LinearGradientBrush.RelativeTransform>
-                        <GradientStop Color="#FF8000" Offset="0" />
-                        <GradientStop Color="#FFD27A" Offset="0.45" />
-                        <GradientStop Color="#FF8000" Offset="0.55" />
-                        <GradientStop Color="#B85800" Offset="1" />
-                      </LinearGradientBrush>
-                    </Border.BorderBrush>
-                    <Border.Triggers>
-                      <EventTrigger RoutedEvent="Loaded">
-                        <BeginStoryboard>
-                          <Storyboard RepeatBehavior="Forever">
-                            <DoubleAnimation Storyboard.TargetProperty="(Border.BorderBrush).(Brush.RelativeTransform).(RotateTransform.Angle)"
-                                             From="0" To="360" Duration="0:0:3" />
-                          </Storyboard>
-                        </BeginStoryboard>
-                      </EventTrigger>
-                    </Border.Triggers>
-                  </Border>
-                </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <TextBlock x:Name="VoiceNote" FontSize="11.5" Foreground="{StaticResource Gold}" Margin="2,8,0,0" Visibility="Collapsed" TextWrapping="Wrap" />
-        </StackPanel>
-      </Border>
-
-      <!-- voice & lodge settings -->
-      <ScrollViewer x:Name="SettingsScroll" Grid.Row="2" Visibility="Collapsed" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
-      <Border x:Name="SettingsCard" Padding="14,12" Background="{StaticResource Card}"
-              CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
-        <StackPanel>
-          <Border Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="3" HorizontalAlignment="Left">
+          <StackPanel Grid.Row="0" Margin="14,12,10,6">
             <StackPanel Orientation="Horizontal">
-              <RadioButton x:Name="ModeVa" Style="{StaticResource Segment}" Content="Voice activation" GroupName="mode" Checked="Mode_Changed" />
-              <RadioButton x:Name="ModePtt" Style="{StaticResource Segment}" Content="Push to talk" GroupName="mode" Checked="Mode_Changed" />
+              <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,7,0" />
+              <TextBlock x:Name="LodgeTitle" Text="Lodge" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-          </Border>
-
-          <StackPanel x:Name="VaPanel" Margin="0,12,0,0">
-            <DockPanel>
-              <TextBlock DockPanel.Dock="Right" x:Name="ThresholdText" FontSize="11.5" Foreground="{StaticResource TextDim}" />
-              <TextBlock Text="Sensitivity" FontSize="12.5" />
-            </DockPanel>
-            <Grid Margin="0,6,0,0">
-              <Border Height="4" CornerRadius="2" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center" />
-              <Border x:Name="LevelBar" Height="4" CornerRadius="2" Background="{StaticResource Gold}" Opacity="0.6"
-                      HorizontalAlignment="Left" VerticalAlignment="Center" Width="0" />
-              <Slider x:Name="ThresholdSlider" Minimum="-70" Maximum="-10" ValueChanged="Threshold_Changed" />
-            </Grid>
-            <TextBlock Text="Talk normally: the gold bar should pass the dot when you speak, not when you're quiet." FontSize="11"
-                       Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,4,0,0" />
+            <TextBlock x:Name="StatusText" FontSize="11" Foreground="{StaticResource TextDim}" Margin="15,1,0,0" TextTrimming="CharacterEllipsis" />
           </StackPanel>
 
-          <DockPanel x:Name="PttPanel" Margin="0,12,0,0" Visibility="Collapsed">
-            <Button x:Name="PttKeyButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Click="PttKey_Click" />
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Text="Push-to-talk key" FontSize="12.5" />
-              <TextBlock Text="Works while WoW has focus" FontSize="11" Foreground="{StaticResource TextDim}" />
-            </StackPanel>
-          </DockPanel>
-
-          <TextBlock Text="MICROPHONE" Style="{StaticResource Caption}" Margin="0,14,0,5" />
-          <ComboBox x:Name="InputBox" Style="{StaticResource Dropdown}" SelectionChanged="Device_Changed" />
-          <TextBlock Text="SPEAKERS" Style="{StaticResource Caption}" Margin="0,10,0,5" />
-          <ComboBox x:Name="OutputBox" Style="{StaticResource Dropdown}" SelectionChanged="Device_Changed" />
-          <DockPanel Margin="0,12,0,0">
-            <TextBlock DockPanel.Dock="Right" x:Name="VolumeText" FontSize="11.5" Foreground="{StaticResource TextDim}" />
-            <TextBlock Text="Volume" FontSize="12.5" />
-          </DockPanel>
-          <Slider x:Name="VolumeSlider" Minimum="0" Maximum="2" Margin="0,6,0,0" ValueChanged="Volume_Changed" />
-
-          <DockPanel Margin="0,14,0,0">
-            <CheckBox x:Name="AutoAwayBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="AutoAway_Click" />
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="6,0,4,6">
             <StackPanel>
-              <TextBlock Text="AFK automatically" FontSize="12.5" />
-              <TextBlock Text="After 10 minutes without mouse or keyboard - back to Online when you return" FontSize="11"
-                         Foreground="{StaticResource TextDim}" TextWrapping="Wrap" />
-            </StackPanel>
-          </DockPanel>
+              <TextBlock Text="TEXT CHANNELS" Style="{StaticResource Caption}" Margin="8,6,0,4" />
+              <ItemsControl x:Name="TextList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Background="{Binding RowBrush}" CornerRadius="6" Padding="8,5" Margin="0,1" Cursor="Hand" Tag="{Binding}"
+                            MouseLeftButtonUp="Channel_Click" x:Name="row">
+                      <DockPanel>
+                        <Border DockPanel.Dock="Right" Background="{StaticResource Danger}" CornerRadius="8" Padding="5,0" MinWidth="16"
+                                Visibility="{Binding MentionVisibility}" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Mentions}" FontSize="10.5" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" />
+                        </Border>
+                        <Ellipse DockPanel.Dock="Right" Width="7" Height="7" Fill="{StaticResource Text}" VerticalAlignment="Center"
+                                 Visibility="{Binding UnreadVisibility}" />
+                        <TextBlock Text="#" FontSize="14" Foreground="{StaticResource TextDim}" Margin="0,-2,7,0" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding LockText}" DockPanel.Dock="Right" FontSize="9.5" Foreground="{StaticResource TextDim}"
+                                   VerticalAlignment="Center" Margin="4,0,4,0" Visibility="{Binding LockVisibility}" />
+                        <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" FontWeight="{Binding NameWeight}" FontSize="13"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      </DockPanel>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <Trigger SourceName="row" Property="IsMouseOver" Value="True">
+                        <Setter TargetName="row" Property="Background" Value="{StaticResource SurfaceHi}" />
+                      </Trigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
 
-          <TextBlock Text="IN-GAME OVERLAY" Style="{StaticResource Caption}" Margin="0,16,0,6" />
-          <DockPanel>
-            <CheckBox x:Name="OverlayBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click" />
-            <StackPanel>
-              <TextBlock Text="Show who's talking over WoW" FontSize="12.5" />
-              <TextBlock Text="Lights up when someone speaks. Needs WoW in Windowed (Fullscreen) mode." FontSize="11"
-                         Foreground="{StaticResource TextDim}" TextWrapping="Wrap" />
-            </StackPanel>
-          </DockPanel>
-          <DockPanel Margin="0,10,0,0">
-            <Border DockPanel.Dock="Left" Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="3" VerticalAlignment="Center">
-              <StackPanel Orientation="Horizontal">
-                <RadioButton x:Name="OverlayLeft" Style="{StaticResource Segment}" Content="Left" GroupName="side" Checked="Overlay_Click" />
-                <RadioButton x:Name="OverlayRightBox" Style="{StaticResource Segment}" Content="Right" GroupName="side" Checked="Overlay_Click" />
-              </StackPanel>
-            </Border>
-            <Slider x:Name="OverlayTopSlider" Minimum="0" Maximum="1" Margin="14,0,0,0" VerticalAlignment="Center"
-                    ValueChanged="OverlayTop_Changed" ToolTip="Height on the screen" />
-          </DockPanel>
-          <DockPanel Margin="0,10,0,0">
-            <CheckBox x:Name="OverlayAlwaysBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click" />
-            <TextBlock Text="Also when WoW isn't in front" FontSize="12.5" VerticalAlignment="Center" />
-          </DockPanel>
-
-          <DockPanel Margin="0,16,0,0">
-            <CheckBox x:Name="AutoConnectBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="AutoConnect_Click" />
-            <StackPanel>
-              <TextBlock Text="Connect when the hub starts" FontSize="12.5" />
-              <TextBlock Text="Friends see you online while the hub runs" FontSize="11" Foreground="{StaticResource TextDim}" />
-            </StackPanel>
-          </DockPanel>
-          <StackPanel Orientation="Horizontal" Margin="-8,10,0,0">
-            <Button Style="{StaticResource GhostButton}" Content="Edit connection" Click="EditConnection_Click" />
-            <Button Style="{StaticResource GhostButton}" Content="Leave this lodge" Foreground="{StaticResource Danger}" Margin="6,0,0,0"
-                    Click="SignOut_Click" ToolTip="Disconnect and forget the address and code" />
-          </StackPanel>
-        </StackPanel>
-      </Border>
-      </ScrollViewer>
-
-      <!-- messages -->
-      <ScrollViewer x:Name="MessageScroll" Grid.Row="2" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto">
-        <StackPanel>
-          <TextBlock x:Name="EmptyText" Text="No messages yet - say hi!" Foreground="{StaticResource TextDim}" FontSize="12"
-                     HorizontalAlignment="Center" Margin="0,30,0,0" />
-          <ItemsControl x:Name="Messages" Margin="2,0,6,6">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Grid Margin="{Binding RowMargin}">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="40" />
-                    <ColumnDefinition />
-                  </Grid.ColumnDefinitions>
-                  <Grid Width="32" Height="32" VerticalAlignment="Top" HorizontalAlignment="Left" Visibility="{Binding AvatarVisibility}">
-                    <Ellipse Fill="{Binding Color}" />
-                    <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="14" FontWeight="Bold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                  </Grid>
-                  <StackPanel Grid.Column="1">
-                    <StackPanel Orientation="Horizontal" Visibility="{Binding HeaderVisibility}">
-                      <TextBlock Text="{Binding From}" FontWeight="SemiBold" FontSize="13" Foreground="{Binding Color}" />
-                      <TextBlock Text="{Binding Time}" FontSize="11" Foreground="{StaticResource TextDim}" Margin="8,2,0,0" />
-                    </StackPanel>
-                    <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0"
-                             Foreground="{StaticResource Text}" FontSize="13" Padding="0" Margin="0,1,0,0" SelectionBrush="{StaticResource Accent}"
-                             Visibility="{Binding TextVisibility}" />
-                    <!-- attachment -->
-                    <StackPanel Visibility="{Binding FileVisibility}" Margin="0,5,0,2">
-                      <Border Visibility="{Binding File.ImageVisibility}" CornerRadius="8" HorizontalAlignment="Left" Cursor="Hand"
-                              MouseLeftButtonUp="Image_Click" Tag="{Binding File}" ClipToBounds="True">
-                        <Image Source="{Binding File.Image}" MaxHeight="220" MaxWidth="320" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
-                      </Border>
-                      <Border Visibility="{Binding File.CardVisibility}" Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="10,8"
-                              HorizontalAlignment="Left" MinWidth="220" MaxWidth="340" BorderBrush="{StaticResource Line}" BorderThickness="1">
+              <TextBlock Text="VOICE ROOMS" Style="{StaticResource Caption}" Margin="8,14,0,4" />
+              <ItemsControl x:Name="RoomList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel>
+                      <Border CornerRadius="6" Padding="8,5" Margin="0,1" Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="Room_Click"
+                              x:Name="row" Background="Transparent" ToolTip="Click to join">
                         <DockPanel>
-                          <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE896;" Click="Download_Click"
-                                  Tag="{Binding File}" ToolTip="Save to Downloads" />
-                          <TextBlock DockPanel.Dock="Left" Text="&#xE7C3;" FontFamily="{StaticResource Icons}" FontSize="20"
-                                     Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                          <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{Binding File.Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
-                            <StackPanel Orientation="Horizontal">
-                              <TextBlock Text="{Binding File.SizeText}" FontSize="11" Foreground="{StaticResource TextDim}" />
-                              <TextBlock Text="{Binding File.Status}" FontSize="11" Foreground="{StaticResource Accent}" Margin="8,0,0,0" />
-                            </StackPanel>
-                          </StackPanel>
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" FontSize="10.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding LockText}" FontSize="9.5" Foreground="{StaticResource TextDim}"
+                                     VerticalAlignment="Center" Margin="4,0,6,0" Visibility="{Binding LockVisibility}" />
+                          <TextBlock Text="&#xE767;" FontFamily="{StaticResource Icons}" FontSize="12" Foreground="{StaticResource TextDim}"
+                                     Margin="0,0,8,0" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         </DockPanel>
                       </Border>
+                      <ItemsControl ItemsSource="{Binding Members}" ItemTemplate="{StaticResource PersonRow}" Margin="18,0,0,2" />
                     </StackPanel>
+                    <DataTemplate.Triggers>
+                      <Trigger SourceName="row" Property="IsMouseOver" Value="True">
+                        <Setter TargetName="row" Property="Background" Value="{StaticResource SurfaceHi}" />
+                      </Trigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock x:Name="OnlineCaption" Text="ONLINE" Style="{StaticResource Caption}" Margin="8,14,0,4" />
+              <ItemsControl x:Name="OnlineList" ItemTemplate="{StaticResource PersonRow}" />
+            </StackPanel>
+          </ScrollViewer>
+
+          <!-- in voice -->
+          <Border x:Name="VoiceBar" Grid.Row="2" Visibility="Collapsed" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="12,8,8,8">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <ToggleButton x:Name="MuteToggle" Style="{StaticResource IconToggle}" Width="30" Height="30" Content="&#xE720;" Click="MuteDeaf_Click" ToolTip="Mute" />
+                <ToggleButton x:Name="DeafToggle" Style="{StaticResource IconToggle}" Width="30" Height="30" Content="&#xE7F6;" Margin="4,0,0,0" Click="MuteDeaf_Click" ToolTip="Deafen" />
+                <Button Style="{StaticResource IconButton}" Width="30" Height="30" Content="&#xE778;" Foreground="{StaticResource Danger}" Margin="2,0,0,0"
+                        Click="LeaveVoice_Click" ToolTip="Leave voice" />
+              </StackPanel>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Voice connected" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
+                <TextBlock x:Name="VoiceRoomText" FontSize="11" Foreground="{StaticResource TextDim}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </DockPanel>
+          </Border>
+
+          <!-- me -->
+          <Border Grid.Row="3" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="10,8,6,8">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="30" Height="30" Content="&#xE713;" FontSize="13"
+                      Click="Settings_Click" ToolTip="Settings" />
+              <Border x:Name="MeRow" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Me_Click" ToolTip="Set your status" CornerRadius="6" Padding="2">
+                <DockPanel>
+                  <ContentPresenter x:Name="MeAvatar" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Center" />
+                  <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="MeName" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="MeStatus" FontSize="10.5" Foreground="{StaticResource TextDim}" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
-                </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
-      </ScrollViewer>
+                </DockPanel>
+              </Border>
+            </DockPanel>
+          </Border>
+        </Grid>
+      </Border>
 
-      <TextBlock x:Name="TypingText" Grid.Row="3" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="4,2,0,3" Height="16" />
+      <!-- ===== chat ===== -->
+      <Border Grid.Column="1" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
 
-      <!-- composer -->
-      <Border Grid.Row="4" Background="{StaticResource SurfaceHi}" CornerRadius="10" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="2">
-        <DockPanel>
-          <Button DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="&#xE723;" Click="Attach_Click" ToolTip="Share a file (or drop it here)" />
-          <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE724;" Foreground="{StaticResource Accent}" Click="Send_Click" ToolTip="Send (Enter)" />
-          <Grid>
-            <TextBlock x:Name="ComposerHint" Text="Message the lodge" Foreground="{StaticResource TextDim}" FontSize="13"
-                       VerticalAlignment="Center" Margin="4,0,0,0" IsHitTestVisible="False" />
-            <TextBox x:Name="Composer" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Text}" CaretBrush="{StaticResource Text}"
-                     FontSize="13" TextWrapping="Wrap" AcceptsReturn="False" MaxHeight="110" VerticalScrollBarVisibility="Auto"
-                     VerticalContentAlignment="Center" Padding="2,7" SelectionBrush="{StaticResource Accent}"
-                     PreviewKeyDown="Composer_PreviewKeyDown" TextChanged="Composer_TextChanged" />
-          </Grid>
-        </DockPanel>
+          <Border Grid.Row="0" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="16,11">
+            <DockPanel>
+              <TextBlock x:Name="ChatNote" DockPanel.Dock="Right" FontSize="11.5" Foreground="{StaticResource Gold}" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" MaxWidth="260" />
+              <TextBlock Text="#" FontSize="17" Foreground="{StaticResource TextDim}" Margin="0,-2,8,0" VerticalAlignment="Center" />
+              <TextBlock x:Name="ChannelTitle" FontSize="14.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
+
+          <ScrollViewer x:Name="MessageScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+            <StackPanel Margin="0,4,0,8">
+              <TextBlock x:Name="EmptyText" Foreground="{StaticResource TextDim}" FontSize="12" HorizontalAlignment="Center" Margin="0,30,0,0" />
+              <ItemsControl x:Name="Messages">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border x:Name="row" Background="{Binding RowBackground}" BorderBrush="{Binding MentionBar}" BorderThickness="2,0,0,0"
+                            Padding="12,2,12,3" Margin="{Binding RowMargin}">
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="42" />
+                          <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="34" Height="34" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0" Visibility="{Binding AvatarVisibility}">
+                          <Ellipse Fill="{Binding Color}" />
+                          <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="14.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <StackPanel Grid.Column="1">
+                          <TextBlock Visibility="{Binding ReplyVisibility}" FontSize="11.5" Foreground="{StaticResource TextDim}" TextTrimming="CharacterEllipsis" Margin="0,0,0,1">
+                            <Run Text="&#xE97A;" FontFamily="{StaticResource Icons}" FontSize="10" />
+                            <Run Text="{Binding ReplyFrom, Mode=OneWay}" FontWeight="SemiBold" />
+                            <Run Text="{Binding ReplyText, Mode=OneWay}" />
+                          </TextBlock>
+                          <StackPanel Orientation="Horizontal" Visibility="{Binding HeaderVisibility}">
+                            <TextBlock Text="{Binding From}" FontWeight="SemiBold" FontSize="13" Foreground="{Binding Color}" />
+                            <TextBlock Text="{Binding Time}" FontSize="11" Foreground="{StaticResource TextDim}" Margin="8,2,0,0" />
+                          </StackPanel>
+                          <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0"
+                                   Foreground="{StaticResource Text}" FontSize="13" Padding="0" Margin="0,1,0,0" SelectionBrush="{StaticResource Accent}"
+                                   Visibility="{Binding TextVisibility}" />
+                          <TextBlock Text="(edited)" FontSize="10.5" Foreground="{StaticResource TextDim}" Visibility="{Binding EditedVisibility}" />
+                          <StackPanel Visibility="{Binding FileVisibility}" Margin="0,5,0,2">
+                            <Border Visibility="{Binding File.ImageVisibility}" CornerRadius="8" HorizontalAlignment="Left" Cursor="Hand"
+                                    MouseLeftButtonUp="Image_Click" Tag="{Binding File}" ClipToBounds="True">
+                              <Image Source="{Binding File.Image}" MaxHeight="240" MaxWidth="360" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                            </Border>
+                            <Border Visibility="{Binding File.CardVisibility}" Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="10,8"
+                                    HorizontalAlignment="Left" MinWidth="230" MaxWidth="360" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                              <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE896;" Click="Download_Click"
+                                        Tag="{Binding File}" ToolTip="Save to Downloads" />
+                                <TextBlock DockPanel.Dock="Left" Text="&#xE7C3;" FontFamily="{StaticResource Icons}" FontSize="20"
+                                           Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <StackPanel VerticalAlignment="Center">
+                                  <TextBlock Text="{Binding File.Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                                  <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding File.SizeText}" FontSize="11" Foreground="{StaticResource TextDim}" />
+                                    <TextBlock Text="{Binding File.Status}" FontSize="11" Foreground="{StaticResource Accent}" Margin="8,0,0,0" />
+                                  </StackPanel>
+                                </StackPanel>
+                              </DockPanel>
+                            </Border>
+                          </StackPanel>
+                        </StackPanel>
+                        <!-- hover tools -->
+                        <Border x:Name="tools" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0" Visibility="Collapsed"
+                                Background="{StaticResource SurfaceHi}" CornerRadius="7" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="2">
+                          <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource IconButton}" Width="26" Height="26" FontSize="12" Content="&#xE97A;" ToolTip="Reply"
+                                    Tag="{Binding}" Click="Reply_Click" />
+                            <Button Style="{StaticResource IconButton}" Width="26" Height="26" FontSize="12" Content="&#xE70F;" ToolTip="Edit"
+                                    Tag="{Binding}" Click="Edit_Click" Visibility="{Binding EditVisibility}" />
+                            <Button Style="{StaticResource IconButton}" Width="26" Height="26" FontSize="12" Content="&#xE74D;" ToolTip="Delete"
+                                    Foreground="{StaticResource Danger}" Tag="{Binding}" Click="Delete_Click" Visibility="{Binding DeleteVisibility}" />
+                          </StackPanel>
+                        </Border>
+                      </Grid>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <Trigger SourceName="row" Property="IsMouseOver" Value="True">
+                        <Setter TargetName="tools" Property="Visibility" Value="Visible" />
+                        <Setter TargetName="row" Property="Background" Value="#0DFFFFFF" />
+                      </Trigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </ScrollViewer>
+
+          <TextBlock x:Name="TypingText" Grid.Row="2" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="16,2,0,2" Height="16" />
+
+          <!-- replying / editing -->
+          <Border x:Name="ModeBar" Grid.Row="3" Visibility="Collapsed" Margin="12,0,12,0" Padding="12,6,6,6" Background="{StaticResource SurfaceHi}"
+                  CornerRadius="9,9,0,0" BorderBrush="{StaticResource Line}" BorderThickness="1,1,1,0">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="10" Content="&#xE711;"
+                      Click="CancelMode_Click" ToolTip="Cancel (Esc)" />
+              <TextBlock x:Name="ModeText" FontSize="12" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+          </Border>
+
+          <Border Grid.Row="4" Margin="12,0,12,12" Background="{StaticResource SurfaceHi}" CornerRadius="10" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="2">
+            <DockPanel>
+              <Button x:Name="AttachButton" DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="&#xE723;" Click="Attach_Click"
+                      ToolTip="Share a file (or drop it here, or paste with Ctrl+V)" />
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE724;" Foreground="{StaticResource Accent}" Click="Send_Click" ToolTip="Send (Enter)" />
+              <Grid>
+                <TextBlock x:Name="ComposerHint" Foreground="{StaticResource TextDim}" FontSize="13" VerticalAlignment="Center" Margin="4,0,0,0" IsHitTestVisible="False" />
+                <TextBox x:Name="Composer" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Text}" CaretBrush="{StaticResource Text}"
+                         FontSize="13" TextWrapping="Wrap" AcceptsReturn="False" MaxHeight="120" VerticalScrollBarVisibility="Auto"
+                         VerticalContentAlignment="Center" Padding="2,7" SelectionBrush="{StaticResource Accent}"
+                         PreviewKeyDown="Composer_PreviewKeyDown" TextChanged="Composer_TextChanged" />
+              </Grid>
+            </DockPanel>
+          </Border>
+        </Grid>
       </Border>
     </Grid>
 
-    <!-- status picker: click your own name -->
-    <Popup x:Name="StatusPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="6">
+    <!-- status picker -->
+    <Popup x:Name="StatusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="-6">
       <Border Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="6" Width="250">
         <StackPanel>
           <TextBlock Text="SET YOUR STATUS" Style="{StaticResource Caption}" Margin="8,4,0,4" />
           <Button Style="{StaticResource MenuRow}" Tag="online" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal">
-              <Ellipse Width="12" Height="12" Fill="#ABD473" Margin="1,0,11,0" VerticalAlignment="Center" />
-              <TextBlock Text="Online" />
-            </StackPanel>
+            <StackPanel Orientation="Horizontal"><Ellipse Width="12" Height="12" Fill="#ABD473" Margin="1,0,11,0" VerticalAlignment="Center" /><TextBlock Text="Online" /></StackPanel>
           </Button>
           <Button Style="{StaticResource MenuRow}" Tag="away" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="&#xE708;" FontFamily="{StaticResource Icons}" Foreground="#E6B85C" FontSize="13" Width="24" />
-              <TextBlock Text="AFK" />
-            </StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE708;" FontFamily="{StaticResource Icons}" Foreground="#E6B85C" FontSize="13" Width="24" /><TextBlock Text="AFK" /></StackPanel>
           </Button>
           <Button Style="{StaticResource MenuRow}" Tag="busy" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="&#xE738;" FontFamily="{StaticResource Icons}" Foreground="#E06C6C" FontSize="13" FontWeight="Bold" Width="24" />
-              <TextBlock Text="Busy" />
-            </StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE738;" FontFamily="{StaticResource Icons}" Foreground="#E06C6C" FontSize="13" FontWeight="Bold" Width="24" /><TextBlock Text="Busy" /></StackPanel>
           </Button>
           <Button Style="{StaticResource MenuRow}" Tag="dungeon" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="&#xEA18;" FontFamily="{StaticResource Icons}" Foreground="#B48CE0" FontSize="13" Width="24" />
-              <TextBlock Text="In a dungeon" />
-            </StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xEA18;" FontFamily="{StaticResource Icons}" Foreground="#B48CE0" FontSize="13" Width="24" /><TextBlock Text="In a dungeon" /></StackPanel>
           </Button>
           <Button Style="{StaticResource MenuRow}" Tag="lfg" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="&#xE716;" FontFamily="{StaticResource Icons}" Foreground="#6CB4E0" FontSize="13" Width="24" />
-              <TextBlock Text="Looking for group" />
-            </StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE716;" FontFamily="{StaticResource Icons}" Foreground="#6CB4E0" FontSize="13" Width="24" /><TextBlock Text="Looking for group" /></StackPanel>
           </Button>
-          <TextBox x:Name="NoteBox" Style="{StaticResource Input}" Tag="What are you up to? (optional)" Margin="2,8,2,2"
-                   MaxLength="40" KeyDown="NoteBox_KeyDown" />
+          <TextBox x:Name="NoteBox" Style="{StaticResource Input}" Tag="What are you up to? (optional)" Margin="2,8,2,2" MaxLength="40" KeyDown="NoteBox_KeyDown" />
           <TextBlock Text="Enter saves the note" FontSize="10.5" Foreground="{StaticResource TextDim}" Margin="6,3,0,2" />
+        </StackPanel>
+      </Border>
+    </Popup>
+
+    <!-- person: volume, officer tools -->
+    <Popup x:Name="MemberPopup" StaysOpen="False" Placement="Right" AllowsTransparency="True" PopupAnimation="Fade" HorizontalOffset="6">
+      <Border Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="12" Width="230">
+        <StackPanel>
+          <TextBlock x:Name="PopName" FontSize="14" FontWeight="SemiBold" />
+          <TextBlock x:Name="PopRole" FontSize="11.5" Margin="0,1,0,0" />
+          <TextBlock x:Name="PopStatus" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,2,0,0" />
+          <StackPanel x:Name="PopVolumeArea" Margin="0,12,0,0">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" x:Name="PopVolumeText" FontSize="11" Foreground="{StaticResource TextDim}" />
+              <TextBlock Text="Volume" FontSize="12" />
+            </DockPanel>
+            <Slider x:Name="PopVolume" Minimum="0" Maximum="2" Margin="0,6,0,0" ValueChanged="PopVolume_Changed" />
+          </StackPanel>
+          <StackPanel x:Name="PopModArea" Margin="-8,10,0,0">
+            <Button x:Name="PopMute" Style="{StaticResource MenuRow}" Click="PopMute_Click" />
+            <Button Style="{StaticResource MenuRow}" Click="PopKick_Click">
+              <TextBlock Text="Kick from the lodge" Foreground="{StaticResource Danger}" />
+            </Button>
+          </StackPanel>
         </StackPanel>
       </Border>
     </Popup>
