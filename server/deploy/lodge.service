@@ -1,0 +1,21 @@
+[Unit]
+Description=Lodge server (chat, voice and files for Elan's Addon Hub)
+After=network.target
+
+[Service]
+User=lodge
+Group=lodge
+EnvironmentFile=/etc/lodge/lodge.env
+WorkingDirectory=/var/lib/lodge
+ExecStart=/opt/lodge/lodge
+Restart=always
+RestartSec=3
+# hardening: the server only needs its data folder
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/lodge
+
+[Install]
+WantedBy=multi-user.target
