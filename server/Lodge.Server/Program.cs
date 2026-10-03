@@ -1,19 +1,9 @@
 // Lodge server: text chat, voice relay and file sharing for Elan's Addon Hub.
 // One small process behind your existing web server (reverse proxy). Protocol: ../PROTOCOL.md
-//
-// Configuration (environment variables):
-//   LODGE_CODES_FILE       personal invite codes, "Name:code:role" per line (default <data>/codes,
-//                          manage from the hub's Guild Master panel or with `sudo lodge-admin`)
-//   LODGE_CODE             optional shared invite code without a fixed name
-//   LODGE_URLS             where to listen              (default http://127.0.0.1:5280 - keep it local)
-//   LODGE_DATA             data folder (history, files) (default ./data)
-//   LODGE_PATHBASE         URL prefix behind the proxy  (default /lodge; "" for a subdomain)
-//   LODGE_MAX_FILE_MB      upload limit                 (default 25)
-//   LODGE_FILE_DAYS        delete uploads after N days  (default 30)
-//   LODGE_MAX_USERS        max people online            (default 25)
-//   LODGE_TRUSTED_PROXIES  extra proxy networks, e.g. 172.16.0.0/12 for a proxy in Docker (localhost is always trusted)
+// Configuration: environment variables, see ../deploy/lodge.env.example (LodgeConfig.FromEnv).
 
 using System.Net;
+using System.Threading.RateLimiting;
 using Lodge;
 using Microsoft.AspNetCore.HttpOverrides;
 
@@ -21,6 +11,8 @@ var cfg = LodgeConfig.FromEnv();
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(cfg.Urls);
 builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = cfg.MaxFileBytes + (1 << 20));
+// ASP.NET's per-request logs contain full URLs (a 1.x client puts its code in ?code=): keep them out of the journal
+builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 // the real visitor IP comes from the reverse proxy (needed for the wrong-code lockout)
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
@@ -32,10 +24,19 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
             o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(ip, parts.Length > 1 ? int.Parse(parts[1]) : 32));
     }
 });
+// a general per-IP request limit, separate from the wrong-code lockout, so floods can't overwhelm the code checks
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = 429;
+    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "?",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = cfg.HttpPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 var app = builder.Build();
 
 app.UseForwardedHeaders();
 if (!string.IsNullOrEmpty(cfg.PathBase)) app.UsePathBase(cfg.PathBase);
+app.UseRateLimiter();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 
 var auth = new Auth(cfg, app.Logger);
@@ -56,11 +57,13 @@ text-decoration:none;font-weight:600;padding:10px 18px;border-radius:9px}</style
 <a class="btn" href="https://github.com/Elanoran/ElanAddonHub/releases/latest">Download the hub</a></main></body></html>
 """, "text/html"));
 
-// null = allowed (identity set); otherwise the error to return
+string IpOf(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "?";
+
+// null = allowed (identity set); otherwise the error to return. Every credential check goes through here.
 IResult Gate(HttpContext ctx, string code, out Identity who)
 {
     who = null;
-    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "?";
+    var ip = IpOf(ctx);
     if (auth.Blocked(ip))
         return Results.Json(new { error = "Too many wrong invite codes - try again in 15 minutes" }, statusCode: 429);
     who = auth.Check(code);
@@ -69,19 +72,35 @@ IResult Gate(HttpContext ctx, string code, out Identity who)
     return null;
 }
 
-static string CodeFrom(HttpContext ctx)
+// the X-Lodge-Code header wins; ?code= only for 1.x clients and only while LODGE_ALLOW_QUERY_CODE isn't false
+string CodeFrom(HttpContext ctx)
 {
     var code = ctx.Request.Headers["X-Lodge-Code"].ToString();
-    return string.IsNullOrEmpty(code) ? ctx.Request.Query["code"].ToString() : code;
+    if (!string.IsNullOrEmpty(code)) return code;
+    return cfg.AllowQueryCode ? ctx.Request.Query["code"].ToString() : "";
 }
 
-// public: just "ok"; with a valid code also the version and who's online
+// LODGE_ALLOW_QUERY_CODE=false: a ?code= is refused outright with a clear message (and never checked, so it is no
+// oracle and costs no strike) - instead of being silently ignored
+app.Use(async (ctx, next) =>
+{
+    if (!cfg.AllowQueryCode && ctx.Request.Query.ContainsKey("code") && string.IsNullOrEmpty(ctx.Request.Headers["X-Lodge-Code"]))
+    {
+        await Results.Json(new { error = "Send the invite code in the X-Lodge-Code header - please update Elan's Addon Hub" },
+            statusCode: 401).ExecuteAsync(ctx);
+        return;
+    }
+    await next();
+});
+
+// public: just "ok". With a code it is an authenticated request like any other: 401 wrong, 429 blocked,
+// otherwise the version and who's online. (No unmetered way to test a code.)
 app.MapGet("/health", (HttpContext ctx) =>
 {
     var code = CodeFrom(ctx);
-    if (!string.IsNullOrEmpty(code) && auth.Check(code) != null)
-        return Results.Json(new { ok = true, version = LodgeHub.Version, online = lodge.Online });
-    return Results.Json(new { ok = true });
+    if (string.IsNullOrEmpty(code)) return Results.Json(new { ok = true });
+    var deny = Gate(ctx, code, out _);
+    return deny ?? Results.Json(new { ok = true, version = LodgeHub.Version, online = lodge.Online });
 });
 
 app.Map("/ws", async (HttpContext ctx) =>
@@ -91,7 +110,7 @@ app.Map("/ws", async (HttpContext ctx) =>
     var deny = Gate(ctx, code, out var who);
     if (deny != null) { await deny.ExecuteAsync(ctx); return; }
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
-    await lodge.Run(ws, who, code, ctx.Request.Query["name"], ctx.Request.Query["client"], ctx.RequestAborted);
+    await lodge.Run(ws, who, code, ctx.Request.Query["name"], ctx.Request.Query["client"], IpOf(ctx), ctx.RequestAborted);
 });
 
 // upload: raw body, headers X-Lodge-Code + X-File-Name (URL-encoded)
@@ -101,13 +120,22 @@ app.MapPost("/files", async (HttpContext ctx) =>
     if (deny != null) return deny;
     if (!Roles.Can(who.Role, Perm.ShareFiles))
         return Results.Json(new { error = "Initiates can't share files - ask the lodge owner for a personal invite" }, statusCode: 403);
-    var name = Uri.UnescapeDataString(ctx.Request.Headers["X-File-Name"].ToString());
-    var by = who.Name ?? Uri.UnescapeDataString(ctx.Request.Headers["X-Lodge-Name"].ToString());
-    try { return Results.Json(await files.Save(ctx.Request.Body, name, by, ctx.RequestAborted)); }
+    string name;
+    try { name = Uri.UnescapeDataString(ctx.Request.Headers["X-File-Name"].ToString()); } catch { name = "file"; }
+    var by = who.Name ?? Names.ForLog(ctx.Request.Headers["X-Lodge-Name"].ToString(), 24);
+    var rateKey = who.Personal ? "p:" + who.Name.ToLowerInvariant() : "g:" + IpOf(ctx);
+    try { return Results.Json(await files.Save(ctx.Request.Body, ctx.Request.ContentLength, name, by, rateKey, ctx.RequestAborted)); }
     catch (FileTooBigException) { return Results.Json(new { error = $"File is larger than {cfg.MaxFileMb} MB" }, statusCode: 413); }
+    catch (UploadRefusedException e) { return Results.Json(new { error = e.Message }, statusCode: e.Status); }
+    catch (OperationCanceledException) { return Results.StatusCode(499); }
+    catch (IOException e)
+    {
+        app.Logger.LogWarning("Upload failed: {Error}", e.GetType().Name);
+        return Results.Json(new { error = "The server couldn't store the file" }, statusCode: 500);
+    }
 });
 
-// download: code in X-Lodge-Code header or ?code=
+// download: code in X-Lodge-Code (or legacy ?code=)
 app.MapGet("/files/{id}", (HttpContext ctx, string id) =>
 {
     var deny = Gate(ctx, CodeFrom(ctx), out _);
@@ -119,6 +147,6 @@ app.MapGet("/files/{id}", (HttpContext ctx, string id) =>
 
 files.StartCleanup(app.Lifetime.ApplicationStopping);
 lodge.StartRevalidation(app.Lifetime.ApplicationStopping);
-app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, codes {Codes}",
-    LodgeHub.Version, cfg.Urls, cfg.PathBase, cfg.DataDir, cfg.CodesFile);
+app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}",
+    LodgeHub.Version, cfg.Urls, cfg.PathBase, cfg.DataDir, cfg.AllowQueryCode ? "allowed" : "off");
 app.Run();
