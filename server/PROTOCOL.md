@@ -24,6 +24,7 @@ Server → client
 - `welcome` `{you, name, server, maxFileMb, users:[user], history:[msg]}` - with a personal code `name` is the
   code's name (the requested name is ignored); shared-code guests get " (guest)" if they pick a friend's name,
   and " 2" if a name is taken. A removed code closes the socket (policy violation) within 15 s.
+  Signing in again with a personal code closes the older connection ("Signed in somewhere else with this code").
 - `join` `{user}` · `leave` `{id}` · `user` `{user}` (voice/mute/deafen changed)
 - `msg` `{id, at (unix ms), from, fromId, text, file?:{id,name,size,mime}}` - also echoed to the sender
 - `typing` `{id}` · `error` `{text}` · `pong`

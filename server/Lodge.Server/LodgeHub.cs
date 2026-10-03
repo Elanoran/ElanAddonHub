@@ -27,7 +27,7 @@ class Member
 // Everyone online, the chat history and the voice relay.
 public class LodgeHub
 {
-    public const string Version = "1.1.0";
+    public const string Version = "1.2.0";
     const int HistoryKeep = 200;
     const int MaxVoicePacket = 4000;
 
@@ -68,6 +68,26 @@ public class LodgeHub
             await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "The lodge is full", ct);
             return;
         }
+        // a personal code is one person: a new sign-in replaces the old connection (a shared code,
+        // or a ghost after a network drop) instead of showing up as "Elan 2"
+        if (who.Personal)
+        {
+            foreach (var old in members.Values.Where(m => m.Personal && string.Equals(m.Name, who.Name, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                log.LogInformation("{Name} signed in again - closing the older connection", old.Name);
+                members.TryRemove(old.Id, out _);
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    await old.Ws.CloseOutputAsync(WebSocketCloseStatus.PolicyViolation, "Signed in somewhere else with this code", cts.Token);
+                }
+                catch { }
+                // let the client read the reason (a clean close stops it reconnecting); cut it off only if it doesn't answer
+                var ws0 = old.Ws;
+                _ = Task.Delay(5000).ContinueWith(_ => { if (ws0.State != WebSocketState.Closed) ws0.Abort(); });
+                await Broadcast(new JsonObject { ["t"] = "leave", ["id"] = old.Id });
+            }
+        }
         var me = new Member
         {
             Id = Interlocked.Increment(ref nextId), Name = UniqueName(who.Personal ? who.Name : GuestName(name)),
@@ -92,9 +112,11 @@ public class LodgeHub
         catch (Exception e) when (e is WebSocketException or OperationCanceledException) { }
         finally
         {
-            members.TryRemove(me.Id, out _);
-            log.LogInformation("{Name} left", me.Name);
-            await Broadcast(new JsonObject { ["t"] = "leave", ["id"] = me.Id });
+            if (members.TryRemove(me.Id, out _)) // not already removed by a newer sign-in
+            {
+                log.LogInformation("{Name} left", me.Name);
+                await Broadcast(new JsonObject { ["t"] = "leave", ["id"] = me.Id });
+            }
         }
     }
 
