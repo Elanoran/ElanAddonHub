@@ -60,6 +60,9 @@ The addon stands on the work of others - thank you!
 - **talentsforever.com** (CC BY 4.0) - hunter talent trees used for the builds.
 - **classic-hunter Forever wiki** - Forever-specific hunter mechanics behind several tips.
 - **[HereBeDragons](https://github.com/Nevcairiel/HereBeDragons)** - the map-to-world math the minimap pins follow.
+- **[NAudio](https://github.com/naudio/NAudio)** (MIT) - microphone and speaker audio for the Lodge voice chat.
+- **[Concentus](https://github.com/lostromb/concentus)** (BSD) - the Opus voice codec in pure C#.
+- **[Costura](https://github.com/Fody/Costura)** (MIT) - packs everything into the one exe.
 - World of Warcraft, its icons and names belong to Blizzard Entertainment. This is a fan project, not affiliated
   with Blizzard.
 
