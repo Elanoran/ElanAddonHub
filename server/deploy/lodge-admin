@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Personal invite codes for the Lodge - one per friend, tied to their name.
-#   sudo lodge-admin add Bob      new code for Bob (prints it - send it to Bob)
+#   sudo lodge-admin add Bob [role]   new code for Bob (prints it - send it to Bob); role defaults to member
+#   sudo lodge-admin role Bob officer change Bob's rank (applies live): owner | officer | veteran | member
 #   sudo lodge-admin remove Bob   Bob's code stops working, he's disconnected within 15 seconds
 #   sudo lodge-admin show Bob     print Bob's code again
-#   sudo lodge-admin list         who has a code
+#   sudo lodge-admin list         who has a code, with their rank
 # The server re-reads the file by itself; no restart needed.
 set -euo pipefail
 
@@ -16,6 +17,13 @@ chmod 640 "$FILE"
 
 cmd="${1:-list}"
 shift || true
+role=""
+# "add NAME ROLE" / "role NAME ROLE": the last word is the rank when it is one
+last="${*: -1}"
+if [[ "$cmd" == "add" || "$cmd" == "role" ]] && [[ "$last" =~ ^(owner|officer|veteran|member)$ ]] && [ "$#" -ge 2 ]; then
+  role="$last"
+  set -- "${@:1:$(($#-1))}"
+fi
 name="$*"
 
 need_name() {
@@ -31,8 +39,25 @@ case "$cmd" in
     need_name
     if has_code; then echo "$name already has a code (sudo lodge-admin show $name)"; exit 1; fi
     code="$(openssl rand -hex 6)"
-    echo "${name}:${code}" >> "$FILE"
-    echo "Invite code for $name: $code"
+    echo "${name}:${code}:${role:-member}" >> "$FILE"
+    echo "Invite code for $name (${role:-member}): $code"
+    ;;
+  role)
+    need_name
+    if ! has_code; then echo "No code for $name"; exit 1; fi
+    if [ -z "$role" ]; then echo "Usage: sudo lodge-admin role NAME owner|officer|veteran|member"; exit 1; fi
+    tmp="$(mktemp)"
+    while IFS= read -r line; do
+      if [[ "${line,,}" == "${name,,}:"* ]]; then
+        IFS=: read -r n c _ <<< "$line"
+        echo "${n}:${c}:${role}"
+      else
+        echo "$line"
+      fi
+    done < "$FILE" > "$tmp"
+    cat "$tmp" > "$FILE"   # keeps owner and permissions
+    rm -f "$tmp"
+    echo "$name is now $role (applies within 15 seconds)"
     ;;
   remove)
     need_name
@@ -45,14 +70,14 @@ case "$cmd" in
   show)
     need_name
     if ! has_code; then echo "No code for $name"; exit 1; fi
-    grep -i "^${name}:" "$FILE" | head -n 1 | cut -d: -f2-
+    grep -i "^${name}:" "$FILE" | head -n 1 | cut -d: -f2
     ;;
   list)
-    names="$(grep -v '^#' "$FILE" | grep -v '^[[:space:]]*$' | cut -d: -f1 || true)"
+    names="$(grep -v '^#' "$FILE" | grep -v '^[[:space:]]*$' | awk -F: '{ r = ($3 == "" ? "member" : $3); printf "%-24s %s\n", $1, r }' || true)"
     if [ -z "$names" ]; then echo "(no personal codes yet - sudo lodge-admin add <name>)"; else echo "$names"; fi
     ;;
   *)
-    echo "Usage: sudo lodge-admin add NAME | remove NAME | show NAME | list"
+    echo "Usage: sudo lodge-admin add NAME [role] | role NAME ROLE | remove NAME | show NAME | list"
     exit 1
     ;;
 esac

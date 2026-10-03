@@ -5,7 +5,7 @@ using System.Text;
 namespace Lodge;
 
 // Who a code belongs to. Personal codes carry the friend's name; the shared LODGE_CODE has none.
-public record Identity(string Name, bool Personal);
+public record Identity(string Name, bool Personal, string Role);
 
 // Invite codes + lockout of IPs that keep guessing.
 //   /etc/lodge/codes   one "Name:code" per line (managed with `sudo lodge-admin`), re-read when it changes
@@ -19,7 +19,7 @@ public class Auth
     readonly LodgeConfig cfg;
     readonly ILogger log;
     readonly object gate = new();
-    List<(string Name, byte[] Hash)> personal = new();
+    List<(string Name, byte[] Hash, string Role)> personal = new();
     DateTime fileStamp = DateTime.MinValue;
     readonly byte[] sharedHash;
 
@@ -44,16 +44,17 @@ public class Auth
         if (stamp == fileStamp) return;
         lock (gate)
         {
-            var list = new List<(string, byte[])>();
+            var list = new List<(string, byte[], string)>();
             if (File.Exists(cfg.CodesFile))
             {
+                // "Name:code" or "Name:code:role" (names can't contain ':', lodge-admin checks)
                 foreach (var raw in File.ReadAllLines(cfg.CodesFile))
                 {
                     var line = raw.Trim();
                     if (line.Length == 0 || line.StartsWith('#')) continue;
-                    var i = line.LastIndexOf(':');
-                    if (i <= 0 || i == line.Length - 1) continue;
-                    list.Add((line[..i].Trim(), Hash(line[(i + 1)..])));
+                    var parts = line.Split(':');
+                    if (parts.Length < 2 || parts[0].Trim().Length == 0 || parts[1].Trim().Length == 0) continue;
+                    list.Add((parts[0].Trim(), Hash(parts[1]), Roles.Normalize(parts.Length > 2 ? parts[2] : "member")));
                 }
             }
             personal = list;
@@ -72,8 +73,8 @@ public class Auth
         var h = Hash(code);
         Identity hit = null;
         foreach (var p in personal)
-            if (CryptographicOperations.FixedTimeEquals(h, p.Hash)) hit ??= new Identity(p.Name, true);
-        if (sharedHash != null && CryptographicOperations.FixedTimeEquals(h, sharedHash)) hit ??= new Identity(null, false);
+            if (CryptographicOperations.FixedTimeEquals(h, p.Hash)) hit ??= new Identity(p.Name, true, p.Role);
+        if (sharedHash != null && CryptographicOperations.FixedTimeEquals(h, sharedHash)) hit ??= new Identity(null, false, "guest");
         return hit;
     }
 

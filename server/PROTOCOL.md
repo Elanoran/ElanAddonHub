@@ -29,13 +29,19 @@ Server → client
 - `msg` `{id, at (unix ms), from, fromId, text, file?:{id,name,size,mime}}` - also echoed to the sender
 - `typing` `{id}` · `error` `{text}` · `pong`
 
-`user` = `{id, name, guest, voice, muted, deaf, status, note}` - status is online | away | busy | dungeon | lfg
+`user` = `{id, name, guest, voice, muted, deaf, status, note, role}` - status is online | away | busy | dungeon | lfg
 
 Client → server
 
 - `msg` `{text, file?:{id}}` - upload first, then send the returned id. Max 2000 chars, 8 per 10 s.
 - `typing` · `voice` `{on}` (join/leave voice) · `state` `{muted, deaf}` · `ping`
 - `status` `{status, note}` - presence (unknown status -> online), note max 40 chars
+
+## Roles
+
+`role` is one of guest < member < veteran < officer < owner (codes file `Name:code:role`, shared code = guest).
+Changes apply live (a `user` update). Permissions live in `Roles.Can`: files need member+ (403 otherwise);
+officer+ is reserved for moderation.
 
 ## Voice (binary frames)
 

@@ -229,7 +229,7 @@ namespace ElansAddonHub.Lodge
                     if (mem != null)
                     {
                         mem.Voice = u2.Bool("voice"); mem.Muted = u2.Bool("muted"); mem.Deaf = u2.Bool("deaf");
-                        mem.Status = u2.Str("status"); mem.Note = u2.Str("note");
+                        mem.Status = u2.Str("status"); mem.Note = u2.Str("note"); mem.Role = u2.Str("role");
                     }
                     if (mem != null && !mem.Voice) voice?.RemovePeer(mem.Id);
                     break;
@@ -257,7 +257,7 @@ namespace ElansAddonHub.Lodge
         {
             Id = u.Int("id"), Name = u.Str("name"), Guest = u.Bool("guest"), IsMe = u.Int("id") == myId,
             Voice = u.Bool("voice"), Muted = u.Bool("muted"), Deaf = u.Bool("deaf"),
-            Status = u.Str("status"), Note = u.Str("note"),
+            Status = u.Str("status"), Note = u.Str("note"), Role = u.Str("role"),
         };
 
         MessageVM AddMessage(Dictionary<string, object> m, bool live)

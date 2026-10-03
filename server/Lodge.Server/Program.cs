@@ -85,6 +85,8 @@ app.MapPost("/files", async (HttpContext ctx) =>
 {
     var deny = Gate(ctx, CodeFrom(ctx), out var who);
     if (deny != null) return deny;
+    if (!Roles.Can(who.Role, Perm.ShareFiles))
+        return Results.Json(new { error = "Initiates can't share files - ask the lodge owner for a personal invite" }, statusCode: 403);
     var name = Uri.UnescapeDataString(ctx.Request.Headers["X-File-Name"].ToString());
     var by = who.Name ?? Uri.UnescapeDataString(ctx.Request.Headers["X-Lodge-Name"].ToString());
     try { return Results.Json(await files.Save(ctx.Request.Body, name, by, ctx.RequestAborted)); }

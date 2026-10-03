@@ -46,6 +46,29 @@ namespace ElansAddonHub.Lodge
         public string Initial => Avatar.Initial(Name);
         public string Label => IsMe ? Name + " (you)" : Name;
 
+        // ---- rank (from the server): WoW item-quality frames
+        string role = "member";
+        public string Role
+        {
+            get => role;
+            set
+            {
+                if (!Set(ref role, string.IsNullOrEmpty(value) ? "member" : value)) return;
+                Raise(nameof(FrameBrush)); Raise(nameof(FrameColor)); Raise(nameof(GlowVisibility));
+                Raise(nameof(ShimmerVisibility)); Raise(nameof(RoleLabel)); Raise(nameof(Tip));
+            }
+        }
+        public static string RoleName(string r) =>
+            r == "owner" ? "Guild Master" : r == "officer" ? "Officer" : r == "veteran" ? "Veteran" : r == "guest" ? "Initiate" : "Member";
+        // legendary, epic, rare, uncommon, poor - a touch brighter than in-game so they read on dark
+        public static Color RoleColor(string r) => (Color)ColorConverter.ConvertFromString(
+            r == "owner" ? "#FF8000" : r == "officer" ? "#B048F8" : r == "veteran" ? "#2F8FFF" : r == "guest" ? "#9D9D9D" : "#3EE03E");
+        public string RoleLabel => RoleName(role);
+        public Color FrameColor => RoleColor(role);
+        public Brush FrameBrush { get { var b = new SolidColorBrush(FrameColor); b.Freeze(); return b; } }
+        public Visibility GlowVisibility => role == "officer" || role == "owner" ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility ShimmerVisibility => role == "owner" ? Visibility.Visible : Visibility.Collapsed;
+
         // ---- presence
         string status = "online", note;
         public string Status
@@ -73,6 +96,7 @@ namespace ElansAddonHub.Lodge
         public Visibility StatusVisibility => status == "online" ? Visibility.Collapsed : Visibility.Visible;
         public double NameOpacity => status == "away" ? 0.55 : 1;
         public string Tip => (IsMe ? Name + " (you) - click to set your status" : Name)
+            + " \u00b7 " + RoleName(role)
             + (status != "online" ? " - " + StatusLabel(status) : "")
             + (string.IsNullOrEmpty(note) ? "" : ": " + note);
 

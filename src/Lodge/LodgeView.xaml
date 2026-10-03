@@ -70,8 +70,9 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Margin="0,4,6,0" Padding="3,3,10,3" CornerRadius="15" Background="{StaticResource SurfaceHi}" ToolTip="{Binding Tip}"
-                        Tag="{Binding}" MouseLeftButtonUp="Chip_Click">
+                <Grid Margin="0,5,7,1" ToolTip="{Binding Tip}" Tag="{Binding}" MouseLeftButtonUp="Chip_Click">
+                <Border Padding="3,3,10,3" CornerRadius="15" Background="{StaticResource SurfaceHi}"
+                        BorderThickness="1.5" BorderBrush="{Binding FrameBrush}">
                   <StackPanel Orientation="Horizontal">
                     <Grid Width="24" Height="24">
                       <Ellipse Fill="{Binding Color}" />
@@ -89,6 +90,37 @@
                                Margin="6,1,0,0" VerticalAlignment="Center" Visibility="{Binding StateVisibility}" />
                   </StackPanel>
                 </Border>
+                  <!-- rank frame: a glow for officers and up, an animated shimmer for the guild master -->
+                  <Border CornerRadius="15" BorderThickness="1.5" BorderBrush="{Binding FrameBrush}" IsHitTestVisible="False"
+                          Visibility="{Binding GlowVisibility}">
+                    <Border.Effect>
+                      <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.9" Color="{Binding FrameColor}" />
+                    </Border.Effect>
+                  </Border>
+                  <Border CornerRadius="15" BorderThickness="2" IsHitTestVisible="False" Visibility="{Binding ShimmerVisibility}">
+                    <Border.BorderBrush>
+                      <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <LinearGradientBrush.RelativeTransform>
+                          <RotateTransform CenterX="0.5" CenterY="0.5" Angle="0" />
+                        </LinearGradientBrush.RelativeTransform>
+                        <GradientStop Color="#FF8000" Offset="0" />
+                        <GradientStop Color="#FFD27A" Offset="0.45" />
+                        <GradientStop Color="#FF8000" Offset="0.55" />
+                        <GradientStop Color="#B85800" Offset="1" />
+                      </LinearGradientBrush>
+                    </Border.BorderBrush>
+                    <Border.Triggers>
+                      <EventTrigger RoutedEvent="Loaded">
+                        <BeginStoryboard>
+                          <Storyboard RepeatBehavior="Forever">
+                            <DoubleAnimation Storyboard.TargetProperty="(Border.BorderBrush).(Brush.RelativeTransform).(RotateTransform.Angle)"
+                                             From="0" To="360" Duration="0:0:3" />
+                          </Storyboard>
+                        </BeginStoryboard>
+                      </EventTrigger>
+                    </Border.Triggers>
+                  </Border>
+                </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>

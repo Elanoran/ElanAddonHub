@@ -13,6 +13,7 @@ class Member
     public string ClientInfo;
     public string Code;     // re-checked every 15 s: removing a friend's code disconnects them
     public bool Personal;   // name comes from a personal invite code
+    public string Role = "member";
     public WebSocket Ws;
     public bool Voice, Muted, Deaf;
     public string Status = "online"; // online | away | busy | dungeon | lfg
@@ -23,14 +24,14 @@ class Member
     public JsonObject ToJson() => new()
     {
         ["id"] = Id, ["name"] = Name, ["guest"] = !Personal, ["voice"] = Voice, ["muted"] = Muted, ["deaf"] = Deaf,
-        ["status"] = Status, ["note"] = Note,
+        ["status"] = Status, ["note"] = Note, ["role"] = Role,
     };
 }
 
 // Everyone online, the chat history and the voice relay.
 public class LodgeHub
 {
-    public const string Version = "1.3.0";
+    public const string Version = "1.4.0";
     const int HistoryKeep = 200;
     const int MaxVoicePacket = 4000;
 
@@ -94,7 +95,7 @@ public class LodgeHub
         var me = new Member
         {
             Id = Interlocked.Increment(ref nextId), Name = UniqueName(who.Personal ? who.Name : GuestName(name)),
-            ClientInfo = clientInfo, Ws = ws, Code = code, Personal = who.Personal,
+            ClientInfo = clientInfo, Ws = ws, Code = code, Personal = who.Personal, Role = who.Role,
         };
         members[me.Id] = me;
         log.LogInformation("{Name} joined ({Client})", me.Name, clientInfo);
@@ -271,6 +272,15 @@ public class LodgeHub
             while (!stop.IsCancellationRequested)
             {
                 try { await Task.Delay(TimeSpan.FromSeconds(15), stop); } catch { return; }
+                // promotions / demotions in the codes file apply live
+                foreach (var m in members.Values.ToList())
+                {
+                    var now = auth.Check(m.Code);
+                    if (now == null || now.Role == m.Role) continue;
+                    log.LogInformation("{Name} is now {Role}", m.Name, now.Role);
+                    m.Role = now.Role;
+                    await Broadcast(new JsonObject { ["t"] = "user", ["user"] = m.ToJson() });
+                }
                 foreach (var m in members.Values.Where(m => auth.Check(m.Code) == null).ToList())
                 {
                     log.LogInformation("{Name}'s invite code was removed - disconnecting", m.Name);

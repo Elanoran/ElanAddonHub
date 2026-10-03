@@ -9,8 +9,8 @@
   <ItemsControl x:Name="People" Margin="6">
     <ItemsControl.ItemTemplate>
       <DataTemplate>
-        <Border x:Name="row" Visibility="{Binding StateVisibility}" Margin="0,0,0,5" Padding="3,3,11,3" CornerRadius="16"
-                Background="#B3101214" BorderThickness="1" BorderBrush="#33FFFFFF" HorizontalAlignment="Left" Opacity="0.6">
+        <Grid x:Name="row" Visibility="{Binding StateVisibility}" Margin="0,0,0,6" HorizontalAlignment="Left" Opacity="0.6">
+        <Border x:Name="pill" Padding="3,3,11,3" CornerRadius="16" Background="#B3101214" BorderThickness="1.5" BorderBrush="{Binding FrameBrush}">
           <StackPanel Orientation="Horizontal">
             <Grid Width="26" Height="26">
               <Ellipse Fill="{Binding Color}" />
@@ -33,11 +33,41 @@
                        Margin="7,1,0,0" VerticalAlignment="Center" Visibility="{Binding MutedVisibility}" />
           </StackPanel>
         </Border>
+                  <!-- rank frame: a glow for officers and up, an animated shimmer for the guild master -->
+                  <Border CornerRadius="16" BorderThickness="1.5" BorderBrush="{Binding FrameBrush}" IsHitTestVisible="False"
+                          Visibility="{Binding GlowVisibility}">
+                    <Border.Effect>
+                      <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.9" Color="{Binding FrameColor}" />
+                    </Border.Effect>
+                  </Border>
+                  <Border CornerRadius="16" BorderThickness="2" IsHitTestVisible="False" Visibility="{Binding ShimmerVisibility}">
+                    <Border.BorderBrush>
+                      <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <LinearGradientBrush.RelativeTransform>
+                          <RotateTransform CenterX="0.5" CenterY="0.5" Angle="0" />
+                        </LinearGradientBrush.RelativeTransform>
+                        <GradientStop Color="#FF8000" Offset="0" />
+                        <GradientStop Color="#FFD27A" Offset="0.45" />
+                        <GradientStop Color="#FF8000" Offset="0.55" />
+                        <GradientStop Color="#B85800" Offset="1" />
+                      </LinearGradientBrush>
+                    </Border.BorderBrush>
+                    <Border.Triggers>
+                      <EventTrigger RoutedEvent="Loaded">
+                        <BeginStoryboard>
+                          <Storyboard RepeatBehavior="Forever">
+                            <DoubleAnimation Storyboard.TargetProperty="(Border.BorderBrush).(Brush.RelativeTransform).(RotateTransform.Angle)"
+                                             From="0" To="360" Duration="0:0:3" />
+                          </Storyboard>
+                        </BeginStoryboard>
+                      </EventTrigger>
+                    </Border.Triggers>
+                  </Border>
+        </Grid>
         <DataTemplate.Triggers>
           <DataTrigger Binding="{Binding Speaking}" Value="True">
             <Setter TargetName="row" Property="Opacity" Value="1" />
-            <Setter TargetName="row" Property="BorderBrush" Value="{StaticResource Accent}" />
-            <Setter TargetName="row" Property="Background" Value="#D9101214" />
+            <Setter TargetName="pill" Property="Background" Value="#E6101214" />
           </DataTrigger>
         </DataTemplate.Triggers>
       </DataTemplate>
