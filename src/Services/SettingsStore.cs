@@ -8,7 +8,7 @@ namespace ElansAddonHub.Services
     public static class SettingsStore
     {
         // Where releases are published. "latest/download" always points at the newest release.
-        public const string DefaultManifestUrl = "https://github.com/Elanoran/ElansAddonHub/releases/latest/download/manifest.json";
+        public const string DefaultManifestUrl = "https://github.com/Elanoran/ElanAddonHub/releases/latest/download/manifest.json";
 
         static readonly string FilePath = Path.Combine(Util.DataDir, "settings.json");
 

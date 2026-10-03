@@ -1,27 +1,75 @@
-# Elan's Addon Hub
+<p align="center"><img src="src/Assets/hub.png" width="96" alt="Elan's Addon Hub"></p>
 
-Tiny Windows app (.NET Framework 4.8, ~150 KB, no install) that installs and updates
-Elan's WoW addons for friends.
+<h1 align="center">Elan's Addon Hub</h1>
 
-- Finds the World of Warcraft folder (registry + common paths, or "Change").
-- Reads `manifest.json` from the latest GitHub release, compares with the installed `.toc` version.
-- One-click install/update: download, SHA-256 check, backup of the old version
-  (`%LOCALAPPDATA%\ElansAddonHub\backups`, last 3), then replace. Never touches a git checkout.
-- Tray icon, checks every 30 min, optional auto-update and start with Windows.
-- Updates itself (the manifest also carries the hub's own version).
+<p align="center">Installs and updates <b>Elan's Hunter Helper</b> for WoW Forever, with one click.</p>
 
-## Build
+---
+
+## Get started
+
+1. Download **`ElansAddonHub.exe`** from the [latest release](https://github.com/Elanoran/ElanAddonHub/releases/latest).
+2. Run it. Windows may say *"Windows protected your PC"* because the app isn't code-signed:
+   click **More info → Run anyway** (only the first time).
+3. The hub finds your World of Warcraft folder by itself (or press **Change** and pick any `Wow*.exe`).
+4. Press **Install**. In game, type `/reload`.
+
+From then on the hub sits in the tray, checks for updates every 30 minutes and tells you when
+there's a new version. Turn on **Update automatically** (gear icon) and you never have to think about it.
+
+No installer, no runtime to download - it's one small file (~150 KB) that runs on any Windows 10/11 PC.
+
+## What it does
+
+- **Install / update in one click**, with a short "what's new" list before you update.
+- **Safe updates**: every download is checksum-verified, the previous version is backed up
+  (last 3 kept in `%LOCALAPPDATA%\ElansAddonHub\backups`) and restored if anything goes wrong.
+- **Tray & notifications**, optional **start with Windows** and **automatic updates**.
+- **Updates itself** when a new hub version is released.
+- Never touches a development copy (a folder with `.git`).
+
+## Elan's Hunter Helper
+
+The hunter toolkit for WoW Forever: pet abilities and where to tame them, Beast Finder with spawn
+points, pet training builds, stable, Auto Shot timer, range and dead zone, rare radar, feeding with
+food sources, ammo vendors, hunter skills by level, talent builds, threat bar, pet spell bar, macros,
+tips, and a quiet Lua error catcher (Bug Trap).
+
+## Credits
+
+The addon stands on the work of others - thank you!
+
+- **[Petopia Forever](https://www.wow-petopia.com/forever/)** - pet families, abilities and ranks, which beasts teach
+  them, and beast spawn locations. The Beast Finder, family pages and teacher tooltips are built from Petopia's data.
+- **[Questie](https://github.com/Questie/Questie) / QuestieDB** (GPL-3.0) - NPC and item data: food and ammo vendors,
+  food drops, hunter and pet trainers, Stable Masters and their coordinates.
+- **[WoW Forever Tools](https://wowforevertools.com)** - hunter trainer spells, ranks, levels and costs.
+- **talentsforever.com** (CC BY 4.0) - hunter talent trees used for the builds.
+- **classic-hunter Forever wiki** - Forever-specific hunter mechanics behind several tips.
+- **[HereBeDragons](https://github.com/Nevcairiel/HereBeDragons)** - the map-to-world math the minimap pins follow.
+- World of Warcraft, its icons and names belong to Blizzard Entertainment. This is a fan project, not affiliated
+  with Blizzard.
+
+If you're one of these authors and want something credited differently or removed, please
+[open an issue](https://github.com/Elanoran/ElanAddonHub/issues) and it will be fixed.
+
+---
+
+## For developers
+
+Built with WPF on .NET Framework 4.8 (ships with Windows, so the exe stays tiny).
 
     cd src
-    dotnet build -c Release        -> src/bin/Release/ElansAddonHub.exe
+    dotnet build -c Release            -> src/bin/Release/ElansAddonHub.exe
 
-## Release (from the addon repo)
+Releases are made from the addon repo with `Tools/release.py`:
 
-    python Tools/release.py            build zip + exe + manifest into Tools/dist/release
+    python Tools/release.py            build addon zip + hub exe + manifest.json (nothing uploaded)
     python Tools/release.py --local    manifest with local paths, for testing the hub
-    python Tools/release.py --publish  upload as a GitHub release to Elanoran/ElansAddonHub
+    python Tools/release.py --publish  upload as a GitHub release here
 
-Testing without clicking: `ElansAddonHub.exe --selftest <dir>` renders the window to PNGs,
-installs the first addon that needs it, writes result.txt and quits.
+The hub reads `releases/latest/download/manifest.json`, which lists the newest addon and hub versions
+with download links, SHA-256 checksums and the changelog.
 
-Log: `%LOCALAPPDATA%\ElansAddonHub\hub.log`
+Testing without clicking: `ElansAddonHub.exe --selftest <dir>` renders the window to PNGs, installs the
+first addon that needs it, writes `result.txt` and quits. Log: `%LOCALAPPDATA%\ElansAddonHub\hub.log`.
