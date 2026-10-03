@@ -54,9 +54,10 @@ systemctl restart lodge
 
 PORT="$(grep -E '^LODGE_URLS=' "$ENV_FILE" | sed -E 's/.*:([0-9]+).*/\1/')"
 BASE="$(grep -E '^LODGE_PATHBASE=' "$ENV_FILE" | cut -d= -f2-)"
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -fsS "http://127.0.0.1:${PORT:-5280}${BASE}/health"; then echo; echo "== Lodge is running"; exit 0; fi
+# the service needs a moment to start: try quietly for up to 15 s
+for i in $(seq 1 15); do
   sleep 1
+  if curl -fs "http://127.0.0.1:${PORT:-5280}${BASE}/health" >/dev/null 2>&1; then echo "== Lodge is running"; exit 0; fi
 done
 echo "== Lodge did not answer - check: journalctl -u lodge -n 50"
 exit 1
