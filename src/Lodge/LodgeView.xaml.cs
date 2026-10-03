@@ -59,6 +59,11 @@ namespace ElansAddonHub.Lodge
             ThresholdSlider.Value = s.VoiceThreshold ?? -45;
             VolumeSlider.Value = s.VoiceVolume ?? 1;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
+            OverlayBox.IsChecked = !s.OverlayOff;
+            OverlayLeft.IsChecked = !s.OverlayRight;
+            OverlayRightBox.IsChecked = s.OverlayRight;
+            OverlayTopSlider.Value = s.OverlayTop ?? 0.3;
+            OverlayAlwaysBox.IsChecked = s.OverlayAlways;
             PttKeyButton.Content = VoiceEngine.KeyName(PttKey);
             InputBox.ItemsSource = VoiceEngine.InputDevices();
             OutputBox.ItemsSource = VoiceEngine.OutputDevices();
@@ -105,7 +110,7 @@ namespace ElansAddonHub.Lodge
             JoinButton.Content = "Save and reconnect";
             CancelEditButton.Visibility = Visibility.Visible;
             JoinStatus.Text = "";
-            SettingsCard.Visibility = Visibility.Collapsed;
+            ShowSettings(false);
             ChatPanel.Visibility = Visibility.Collapsed;
             JoinPanel.Visibility = Visibility.Visible;
         }
@@ -456,6 +461,7 @@ namespace ElansAddonHub.Lodge
             VoiceControls.Visibility = Visibility.Collapsed;
             VoiceNote.Visibility = Visibility.Collapsed;
             foreach (var m in members) m.Speaking = false;
+            overlay?.Hide();
         }
 
         void Mute_Click(object sender, RoutedEventArgs e) => SendVoiceState();
@@ -490,7 +496,7 @@ namespace ElansAddonHub.Lodge
             TypingText.Text = who.Count == 0 ? "" : who.Count == 1 ? $"{who[0]} is typing..." : $"{string.Join(", ", who)} are typing...";
 
             // mic level under the sensitivity slider
-            if (SettingsCard.Visibility == Visibility.Visible && voice != null)
+            if (SettingsScroll.Visibility == Visibility.Visible && voice != null)
             {
                 var frac = Math.Max(0, Math.Min(1, (voice.LevelDb - ThresholdSlider.Minimum) / (ThresholdSlider.Maximum - ThresholdSlider.Minimum)));
                 LevelBar.Width = frac * Math.Max(0, ThresholdSlider.ActualWidth);
@@ -498,14 +504,83 @@ namespace ElansAddonHub.Lodge
             else LevelBar.Width = 0;
 
             if (capturingKey > 0) CaptureKey();
+            if (++overlayTick % 3 == 0) UpdateOverlay();
+        }
+
+        // ================================================================ in-game overlay
+
+        OverlayWindow overlay;
+        int overlayTick;
+        public bool ForceOverlayForTest;
+
+        void UpdateOverlay()
+        {
+            if (settings == null) return;
+            var wow = OverlayWindow.WowInFront();
+            // while the settings are open, show it as a preview so you can place it
+            bool preview = SettingsScroll.Visibility == Visibility.Visible && IsVisible;
+            bool show = inVoice && !settings.OverlayOff && (wow != IntPtr.Zero || settings.OverlayAlways || preview || ForceOverlayForTest);
+            if (!show)
+            {
+                if (overlay != null && overlay.IsVisible) overlay.Hide();
+                return;
+            }
+            if (overlay == null) overlay = new OverlayWindow(members);
+            if (!overlay.IsVisible) overlay.Show();
+            var main = Window.GetWindow(this);
+            var near = wow != IntPtr.Zero ? wow : main != null ? new System.Windows.Interop.WindowInteropHelper(main).Handle : IntPtr.Zero;
+            overlay.Place(near, settings.OverlayRight, settings.OverlayTop ?? 0.3);
+        }
+
+        void Overlay_Click(object sender, RoutedEventArgs e)
+        {
+            if (settings == null || loading) return;
+            settings.OverlayOff = OverlayBox.IsChecked != true;
+            settings.OverlayRight = OverlayRightBox.IsChecked == true;
+            settings.OverlayAlways = OverlayAlwaysBox.IsChecked == true;
+            SettingsStore.Save(settings);
+            UpdateOverlay();
+        }
+
+        void OverlayTop_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (settings == null || loading) return;
+            settings.OverlayTop = Math.Round(e.NewValue, 3);
+            SettingsStore.Save(settings);
+            UpdateOverlay();
+        }
+
+        public void SnapshotOverlay(string file)
+        {
+            if (overlay == null || !overlay.IsVisible) return;
+            overlay.UpdateLayout();
+            var bmp = new RenderTargetBitmap((int)overlay.ActualWidth * 2, (int)overlay.ActualHeight * 2, 192, 192, PixelFormats.Pbgra32);
+            // drawn on a dark, game-like background so it can be judged
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x3A, 0x4A, 0x3A)), null, new Rect(0, 0, overlay.ActualWidth, overlay.ActualHeight));
+                dc.DrawRectangle(new VisualBrush((Visual)overlay.Content), null, new Rect(0, 0, overlay.ActualWidth, overlay.ActualHeight));
+            }
+            bmp.Render(dv);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(bmp));
+            using (var fs = File.Create(file)) enc.Save(fs);
         }
 
         // ================================================================ settings card
 
-        void VoiceSettings_Click(object sender, RoutedEventArgs e) =>
-            SettingsCard.Visibility = SettingsCard.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        void VoiceSettings_Click(object sender, RoutedEventArgs e) => ShowSettings(SettingsScroll.Visibility != Visibility.Visible);
 
-        public void ShowSettingsForTest() => SettingsCard.Visibility = Visibility.Visible;
+        // the settings take the chat's place while open
+        void ShowSettings(bool on)
+        {
+            SettingsScroll.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            MessageScroll.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            if (!on) ScrollToEnd();
+        }
+
+        public void ShowSettingsForTest() => ShowSettings(true);
 
         void Mode_Changed(object sender, RoutedEventArgs e)
         {
@@ -591,7 +666,7 @@ namespace ElansAddonHub.Lodge
             Disconnect();
             settings.LodgeCodeProtected = null;
             SettingsStore.Save(settings);
-            SettingsCard.Visibility = Visibility.Collapsed;
+            ShowSettings(false);
             ChatPanel.Visibility = Visibility.Collapsed;
             JoinPanel.Visibility = Visibility.Visible;
             JoinStatus.Text = "";

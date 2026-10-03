@@ -118,6 +118,9 @@ namespace ElansAddonHub
                 LodgePage.ShowSettingsForTest();
                 await Task.Delay(400);
                 Snapshot(System.IO.Path.Combine(dir, "6-voice-settings.png"));
+                LodgePage.ForceOverlayForTest = true;
+                await Task.Delay(800);
+                LodgePage.SnapshotOverlay(System.IO.Path.Combine(dir, "7-overlay.png"));
                 result += $"\r\njoin error='{LodgePage.JoinError}'";
                 result += $"\r\nlodge online={LodgePage.IsOnline} members={LodgePage.MemberCount} messages={LodgePage.MessageCount} {LodgePage.VoiceStats}"
                         + $"\r\n{VoiceEngine.CodecSelfTest()}";

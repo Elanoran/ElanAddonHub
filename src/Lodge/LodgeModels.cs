@@ -47,9 +47,9 @@ namespace ElansAddonHub.Lodge
         public string Label => IsMe ? Name + " (you)" : Name;
 
         bool voice, muted, deaf, speaking;
-        public bool Voice { get => voice; set { if (Set(ref voice, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateVisibility)); } } }
-        public bool Muted { get => muted; set { if (Set(ref muted, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); } } }
-        public bool Deaf { get => deaf; set { if (Set(ref deaf, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); } } }
+        public bool Voice { get => voice; set { if (Set(ref voice, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateVisibility)); Raise(nameof(MutedVisibility)); } } }
+        public bool Muted { get => muted; set { if (Set(ref muted, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); Raise(nameof(MutedVisibility)); } } }
+        public bool Deaf { get => deaf; set { if (Set(ref deaf, value)) { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); Raise(nameof(MutedVisibility)); } } }
         public bool Speaking { get => speaking; set { if (Set(ref speaking, value)) Raise(nameof(Ring)); } }
 
         public Brush Ring => speaking ? (Brush)Application.Current.Resources["Accent"] : Brushes.Transparent;
@@ -57,6 +57,7 @@ namespace ElansAddonHub.Lodge
         public string StateGlyph => deaf ? "" : muted ? "" : "";
         public Brush StateBrush => deaf || muted ? (Brush)Application.Current.Resources["Danger"] : (Brush)Application.Current.Resources["TextDim"];
         public Visibility StateVisibility => voice ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility MutedVisibility => voice && (muted || deaf) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public class FileVM : Bindable

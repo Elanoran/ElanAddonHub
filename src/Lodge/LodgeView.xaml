@@ -91,7 +91,8 @@
       </Border>
 
       <!-- voice & lodge settings -->
-      <Border x:Name="SettingsCard" Grid.Row="1" Visibility="Collapsed" Margin="0,8,0,0" Padding="14,12" Background="{StaticResource Card}"
+      <ScrollViewer x:Name="SettingsScroll" Grid.Row="2" Visibility="Collapsed" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+      <Border x:Name="SettingsCard" Padding="14,12" Background="{StaticResource Card}"
               CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
         <StackPanel>
           <Border Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="3" HorizontalAlignment="Left">
@@ -134,7 +135,31 @@
           </DockPanel>
           <Slider x:Name="VolumeSlider" Minimum="0" Maximum="2" Margin="0,6,0,0" ValueChanged="Volume_Changed" />
 
-          <DockPanel Margin="0,14,0,0">
+          <TextBlock Text="IN-GAME OVERLAY" Style="{StaticResource Caption}" Margin="0,16,0,6" />
+          <DockPanel>
+            <CheckBox x:Name="OverlayBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click" />
+            <StackPanel>
+              <TextBlock Text="Show who's talking over WoW" FontSize="12.5" />
+              <TextBlock Text="Lights up when someone speaks. Needs WoW in Windowed (Fullscreen) mode." FontSize="11"
+                         Foreground="{StaticResource TextDim}" TextWrapping="Wrap" />
+            </StackPanel>
+          </DockPanel>
+          <DockPanel Margin="0,10,0,0">
+            <Border DockPanel.Dock="Left" Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="3" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="OverlayLeft" Style="{StaticResource Segment}" Content="Left" GroupName="side" Checked="Overlay_Click" />
+                <RadioButton x:Name="OverlayRightBox" Style="{StaticResource Segment}" Content="Right" GroupName="side" Checked="Overlay_Click" />
+              </StackPanel>
+            </Border>
+            <Slider x:Name="OverlayTopSlider" Minimum="0" Maximum="1" Margin="14,0,0,0" VerticalAlignment="Center"
+                    ValueChanged="OverlayTop_Changed" ToolTip="Height on the screen" />
+          </DockPanel>
+          <DockPanel Margin="0,10,0,0">
+            <CheckBox x:Name="OverlayAlwaysBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click" />
+            <TextBlock Text="Also when WoW isn't in front" FontSize="12.5" VerticalAlignment="Center" />
+          </DockPanel>
+
+          <DockPanel Margin="0,16,0,0">
             <CheckBox x:Name="AutoConnectBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="AutoConnect_Click" />
             <StackPanel>
               <TextBlock Text="Connect when the hub starts" FontSize="12.5" />
@@ -148,6 +173,7 @@
           </StackPanel>
         </StackPanel>
       </Border>
+      </ScrollViewer>
 
       <!-- messages -->
       <ScrollViewer x:Name="MessageScroll" Grid.Row="2" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto">

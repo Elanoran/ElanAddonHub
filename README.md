@@ -36,6 +36,8 @@ The **Lodge** tab is a small private Discord for you and your friends:
 - **Voice**: join with one click, mute/deafen, voice activation with a sensitivity meter or push-to-talk
   (any key or mouse button, works while WoW has focus), a green ring shows who's talking. Opus codec, ~30 kbit/s.
 - **Files**: drop a file into the chat (up to 25 MB); pictures show inline, everything else downloads with one click.
+- **In-game overlay**: a small see-through list of who's in voice on the left (or right) of the screen; whoever is
+  talking lights up. It's a click-through window on top of WoW (Windowed/Fullscreen mode) - nothing is injected into the game.
 
 A lodge runs on someone's own server (see [`server/`](server/), one small .NET service behind your existing
 web server). Ask the lodge owner for the address and your personal invite code. The code is stored encrypted

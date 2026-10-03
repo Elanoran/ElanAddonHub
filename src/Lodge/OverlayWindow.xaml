@@ -1,0 +1,40 @@
+<Window x:Class="ElansAddonHub.Lodge.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Lodge overlay" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False" ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight" FontFamily="Segoe UI" TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True">
+  <!-- who's in voice, over the game; the speaking person lights up. Click-through (see code). -->
+  <ItemsControl x:Name="People" Margin="6">
+    <ItemsControl.ItemTemplate>
+      <DataTemplate>
+        <Border x:Name="row" Visibility="{Binding StateVisibility}" Margin="0,0,0,5" Padding="3,3,11,3" CornerRadius="16"
+                Background="#B3101214" BorderThickness="1" BorderBrush="#33FFFFFF" HorizontalAlignment="Left" Opacity="0.6">
+          <StackPanel Orientation="Horizontal">
+            <Grid Width="26" Height="26">
+              <Ellipse Fill="{Binding Color}" />
+              <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="12" FontWeight="Bold"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <Ellipse x:Name="ring" Stroke="{Binding Ring}" StrokeThickness="2.5" Margin="-3" />
+            </Grid>
+            <TextBlock Text="{Binding Name}" Foreground="White" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,1" VerticalAlignment="Center">
+              <TextBlock.Effect>
+                <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.9" Color="Black" />
+              </TextBlock.Effect>
+            </TextBlock>
+            <TextBlock Text="{Binding StateGlyph}" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="#E06C6C"
+                       Margin="7,1,0,0" VerticalAlignment="Center" Visibility="{Binding MutedVisibility}" />
+          </StackPanel>
+        </Border>
+        <DataTemplate.Triggers>
+          <DataTrigger Binding="{Binding Speaking}" Value="True">
+            <Setter TargetName="row" Property="Opacity" Value="1" />
+            <Setter TargetName="row" Property="BorderBrush" Value="{StaticResource Accent}" />
+            <Setter TargetName="row" Property="Background" Value="#D9101214" />
+          </DataTrigger>
+        </DataTemplate.Triggers>
+      </DataTemplate>
+    </ItemsControl.ItemTemplate>
+  </ItemsControl>
+</Window>
