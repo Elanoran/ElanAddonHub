@@ -10,6 +10,35 @@ namespace ElansAddonHub
 {
     public enum CardState { NotInstalled, UpdateAvailable, UpToDate, DevCopy, NoClient, NoFolder, Busy }
 
+    // small icon + value shown in a card (tooltip explains it)
+    public class StatChip
+    {
+        public string Glyph { get; }
+        public string Text { get; }
+        public string Tip { get; }
+        public StatChip(string glyph, string text, string tip) { Glyph = glyph; Text = text; Tip = tip; }
+        public static bool IsTransient(string m) => m != null && (m.StartsWith("Done!") || m.StartsWith("Installed!") || m.StartsWith("Rolled back"));
+    }
+
+    // Version strings that are really build ids ("Details.20260929.15300.172", "#Details.2026...") -> short readable form.
+    public static class VersionText
+    {
+        public static string Pretty(string v, out string full)
+        {
+            full = v;
+            if (string.IsNullOrWhiteSpace(v)) return "";
+            var s = v.Trim().TrimStart('#').Trim();
+            if (s.Length <= 14) return s;
+            var m = System.Text.RegularExpressions.Regex.Match(s, @"(20\d{2})(\d{2})(\d{2})");
+            var parts = s.Split('.');
+            if (m.Success && parts.Length >= 3)
+            {
+                return m.Groups[1].Value + "-" + m.Groups[2].Value + "-" + m.Groups[3].Value;
+            }
+            return s.Substring(0, 12) + "…";
+        }
+    }
+
     // One addon card in the window.
     public class AddonCard : INotifyPropertyChanged
     {
@@ -34,21 +63,25 @@ namespace ElansAddonHub
         public string ReleasesUrl => GitHubStats.ReleasesUrl;
 
         // GitHub stats (filled in later, silently absent when GitHub can't be reached)
-        string statsText;
-        public string StatsText => statsText;
-        public Visibility StatsVisibility => string.IsNullOrEmpty(statsText) ? Visibility.Collapsed : Visibility.Visible;
+        public List<StatChip> Stats { get; private set; } = new List<StatChip>();
+        public Visibility StatsVisibility => Stats.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         public void SetStats(AddonStats st)
         {
-            var parts = new List<string>();
+            var l = new List<StatChip>();
             if (st != null)
             {
-                if (st.Released != null) parts.Add("released " + GitHubStats.Ago(st.Released.Value));
-                if (st.Downloads > 0) parts.Add(st.Downloads + (st.Downloads == 1 ? " download" : " downloads"));
-                if (st.Releases > 0) parts.Add(st.Releases + (st.Releases == 1 ? " release" : " releases"));
+                // Segoe MDL2 Assets: E121 clock, E896 download, E1CB tag
+                if (st.Released != null) l.Add(new StatChip("\uE121", GitHubStats.ShortAgo(st.Released.Value),
+                    "Released " + GitHubStats.Ago(st.Released.Value) + ", " + st.Released.Value.ToLocalTime().ToString("d MMM yyyy")));
+                if (st.Downloads > 0) l.Add(new StatChip("\uE896", st.Downloads.ToString(), st.Downloads + (st.Downloads == 1 ? " download" : " downloads")));
+                if (st.Releases > 0) l.Add(new StatChip("\uE1CB", st.Releases.ToString(), st.Releases + (st.Releases == 1 ? " release" : " releases")));
             }
-            statsText = string.Join("  \u00B7  ", parts);
-            Notify(nameof(StatsText)); Notify(nameof(StatsVisibility));
+            Stats = l;
+            Notify(nameof(Stats)); Notify(nameof(StatsVisibility));
         }
+
+        // the big button is only shown when there is something to do
+        public Visibility ButtonVisibility => State == CardState.UpToDate || State == CardState.DevCopy ? Visibility.Collapsed : Visibility.Visible;
 
         // expanded = details (version history, dev-copy notes, links)
         bool expanded;
@@ -63,7 +96,23 @@ namespace ElansAddonHub
         public bool Busy { get => busy; private set { busy = value; Notify(); Notify(nameof(BusyVisibility)); } }
         public Visibility BusyVisibility => busy ? Visibility.Visible : Visibility.Collapsed;
         string message;
-        public string Message { get => message; set { message = value; Notify(); Notify(nameof(MessageVisibility)); } }
+        System.Windows.Threading.DispatcherTimer fade;
+        public string Message
+        {
+            get => message;
+            set
+            {
+                message = value; Notify(); Notify(nameof(MessageVisibility));
+                if (fade != null) fade.Stop();
+                if (StatChip.IsTransient(value))   // success hints fade after ~8 s, errors stay
+                {
+                    fade = new System.Windows.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(8) };
+                    var mine = value;
+                    fade.Tick += (s, e) => { fade.Stop(); if (message == mine) { message = null; Notify(nameof(Message)); Notify(nameof(MessageVisibility)); } };
+                    fade.Start();
+                }
+            }
+        }
         public Visibility MessageVisibility => string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
         // a git checkout is never replaced by the big button - only via this small link + a warning
         public Visibility ReplaceDevVisibility => State == CardState.DevCopy ? Visibility.Visible : Visibility.Collapsed;

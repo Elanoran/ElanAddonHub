@@ -9,7 +9,9 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Automation;
 using System.Windows.Input;
+using System.Windows.Media;
 using ElansAddonHub.Services;
 
 namespace ElansAddonHub
@@ -168,19 +170,35 @@ namespace ElansAddonHub
             LinkExactButton.Visibility = others.Any(x => x.ShowSuggestion && x.Suggested.Exact && x.Suggested.FlavorFits) ? Visibility.Visible : Visibility.Collapsed;
             OtherPanel.Visibility = others.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             var updates = others.Count(c => c.State == TpState.UpdateAvailable);
-            OtherTitle.Text = $"OTHER ADDONS  ·  {others.Count}" + (updates > 0 ? $"  ·  {updates} update{(updates == 1 ? "" : "s")}" : "");
+            OtherTitle.Text = $"Other addons  ·  {others.Count}" + (updates > 0 ? $"  ·  {updates} update{(updates == 1 ? "" : "s")}" : "");
             UpdateAllButton.Visibility = updates > 0 ? Visibility.Visible : Visibility.Collapsed;
             SearchBox.Visibility = others.Count > 8 ? Visibility.Visible : Visibility.Collapsed;
             var linked = others.Count(c => c.State != TpState.Local && c.State != TpState.DevCopy);
-            OtherHint.Text = $"Found in {addOnsDir}. Updates come from GitHub releases and WoWInterface (no accounts or keys). "
-                + (linked == 0 ? "Open an addon and paste a GitHub or WoWInterface link to keep it updated." : "");
-            CfBar.Visibility = cfInst != null ? Visibility.Visible : Visibility.Collapsed;
-            if (cfInst != null)
+            var info = $"Found in {addOnsDir}.\nUpdates come from GitHub releases and WoWInterface (no accounts or keys)."
+                + (linked == 0 ? "\nOpen an addon and paste a GitHub or WoWInterface link to keep it updated." : "");
+            OtherInfo.ToolTip = Tip(info);
+            AutomationProperties.SetName(OtherInfo, "About the other addons list");
+            var cfOn = cfInst != null;
+            var vis = cfOn ? Visibility.Visible : Visibility.Collapsed;
+            CfChip.Visibility = vis; CfCheckButton.Visibility = vis; CfOpenButton.Visibility = vis;
+            if (cfOn)
             {
                 var n = others.Count(c => c.Entry.Cf != null);
-                CfText.Text = (cfStatus != null ? cfStatus + "  " : "") + $"CurseForge manages {n} addon{(n == 1 ? "" : "s")} here; last checked {CurseForgeLocal.Ago(cfInst.LastRefresh)}. The hub only asks CurseForge to install or check - it never touches those folders.";
+                var stale = CurseForgeLocal.IsStale(cfInst.LastRefresh);
+                CfChipText.Text = GitHubStats.ShortAgo(cfInst.LastRefresh);
+                CfChipText.Foreground = (Brush)Application.Current.Resources[stale ? "Gold" : "TextDim"];
+                CfChipGlyph.Foreground = CfChipText.Foreground;
+                try { CfChipIcon.Source = SourceIcons.CurseForge(); } catch { }
+                CfChipIcon.Visibility = CfChipIcon.Source != null ? Visibility.Visible : Visibility.Collapsed;
+                var full = (cfStatus != null ? cfStatus + "\n" : "") + $"CurseForge manages {n} addon{(n == 1 ? "" : "s")} here; last checked {CurseForgeLocal.Ago(cfInst.LastRefresh)}"
+                    + (stale ? " (old - press the refresh button to check now)" : "") + ".\nThe hub only asks CurseForge to install or check - it never touches those folders.";
+                CfChip.ToolTip = Tip(full);
+                AutomationProperties.SetName(CfChip, "CurseForge status");
+                CfChipText.ToolTip = null;
             }
         }
+
+        static ToolTip Tip(string text) => new ToolTip { Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 360 } };
 
         void Search_Changed(object sender, TextChangedEventArgs e) => othersView?.Refresh();
 
@@ -415,7 +433,7 @@ namespace ElansAddonHub
                 Ck("up to date when ids equal", u != null && u.State == TpState.UpToDate && u.VersionLine.StartsWith("Up to date (checked"), u?.VersionLine);
                 Ck("not offered GitHub/WoWI link or suggestion", m != null && m.LinkVisibility == Visibility.Collapsed && !m.ShowSuggestion && m.Remote == null);
                 Ck("unmanaged addon unaffected", others.Any(c => c.Entry.Key == "Plain" && c.Entry.Cf == null));
-                Ck("CurseForge bar shown", CfBar.Visibility == Visibility.Visible, CfText.Text);
+                Ck("CurseForge chip shown", CfChip.Visibility == Visibility.Visible && CfCheckButton.Visibility == Visibility.Visible, CfChipText.Text);
             }
             sb.AppendLine($"addons dir={addOnsDir} interface={clientInterface} cards={others.Count}");
             foreach (var c in others)

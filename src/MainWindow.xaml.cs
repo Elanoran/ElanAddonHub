@@ -77,6 +77,7 @@ namespace ElansAddonHub
             LodgePage.Visibility = lodge ? Visibility.Visible : Visibility.Collapsed;
             SettingsPage.Visibility = set ? Visibility.Visible : Visibility.Collapsed;
             AddonsPage.Visibility = !lodge && !set ? Visibility.Visible : Visibility.Collapsed;
+            RefreshBar.Visibility = !lodge && !set ? Visibility.Visible : Visibility.Collapsed;
             if (lodge) Session.MarkRead();
         }
 
@@ -87,7 +88,7 @@ namespace ElansAddonHub
 
         // ---- for the Settings page
         public string CheckStatus => statusText;
-        public Task CheckForUpdates() => CheckNow();
+        public Task CheckForUpdates() => CheckAll();
         public void AutoUpdateTurnedOn() => _ = AfterCheck();
 
         // --selftest <dir>: render the window to PNGs before/after installing the first addon, then quit
@@ -102,6 +103,8 @@ namespace ElansAddonHub
             Snapshot(System.IO.Path.Combine(dir, "1-before.png"));
             var card = cards.FirstOrDefault(c => c.ButtonEnabled);
             if (card != null) await Install(card);
+            await CheckAll();
+            var checkAllLine = $"check-all button: {(CheckAllButton.IsEnabled && CheckResult.Text != "" && CheckChipText.Text != "" ? "ok" : "FAIL")} (result='{CheckResult.Text}', chip='{CheckChipText.Text}', tip={CheckAllButton.ToolTip})";
             await Task.Delay(400);
             Snapshot(System.IO.Path.Combine(dir, "2-after.png"));
             ShowTab("settings");
@@ -109,7 +112,7 @@ namespace ElansAddonHub
             await Task.Delay(300);
             Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
             var tp = await ThirdPartyTest(dir);
-            var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + tp + "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live();
+            var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + checkAllLine + "\r\n" + tp + "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live();
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
             var lodgeTest = Environment.GetEnvironmentVariable("ELANSHUB_TEST_LODGE");
@@ -196,6 +199,51 @@ namespace ElansAddonHub
         }
 
         // ------------------------------------------------------------------ checking
+
+        // One click checks everything: the hub itself + our addons (manifest), linked third-party addons (forced past the
+        // disk cache, within GitHub's rate-limit guard) and CurseForge's local file (CurseForge itself is only asked when
+        // the user's "let CurseForge check" setting allows it; otherwise the file is just re-read).
+        async void CheckAll_Click(object sender, RoutedEventArgs e) => await CheckAll();
+
+        bool checkAllRunning;
+        System.Windows.Threading.DispatcherTimer resultFade;
+        public async Task CheckAll()
+        {
+            if (checkAllRunning) return;
+            checkAllRunning = true;
+            CheckAllButton.IsEnabled = false;
+            CheckResult.Text = "";
+            var spin = new System.Windows.Media.Animation.DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever };
+            SpinRot.BeginAnimation(System.Windows.Media.RotateTransform.AngleProperty, spin);
+            AddonSources.Force = true;
+            try
+            {
+                await CheckNow();
+                for (int i = 0; i < 150 && (checking || scanning || checkingOthers); i++) await Task.Delay(200);
+                if (manifest != null) { await RefreshOthers(); await CheckOthers(); }
+                if (settings.CfAutoCheck && cfInst != null && !CurseForgeLocal.IsRunning()) await RunCfCheck(); else await RefreshOthers();
+            }
+            catch (Exception e) { Util.Log("check all failed: " + e.Message); }
+            finally
+            {
+                AddonSources.Force = false;
+                SpinRot.BeginAnimation(System.Windows.Media.RotateTransform.AngleProperty, null);
+                CheckAllButton.IsEnabled = true;
+                checkAllRunning = false;
+                var n = cards.Count(c => c.State == CardState.UpdateAvailable) + others.Count(c => c.State == TpState.UpdateAvailable)
+                    + (SelfUpdater.IsNewer(manifest?.Hub) ? 1 : 0);
+                CheckResult.Text = lastError != null ? lastError : n == 0 ? "All up to date" : n + (n == 1 ? " update" : " updates");
+                CheckResult.Foreground = (System.Windows.Media.Brush)Application.Current.Resources[lastError != null ? "Danger" : n == 0 ? "Accent" : "Gold"];
+                UpdateStatusText();
+                if (resultFade != null) resultFade.Stop();
+                if (lastError == null)
+                {
+                    resultFade = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+                    resultFade.Tick += (s, ev) => { resultFade.Stop(); CheckResult.Text = ""; };
+                    resultFade.Start();
+                }
+            }
+        }
 
         async Task CheckNow()
         {
@@ -292,6 +340,9 @@ namespace ElansAddonHub
             if (lastCheck == null) { statusText = ""; return; }
             var mins = (int)(DateTime.Now - lastCheck.Value).TotalMinutes;
             statusText = mins < 1 ? "Checked just now" : $"Checked {mins} min ago";
+            CheckChipText.Text = mins < 1 ? "now" : mins < 60 ? mins + "m" : mins < 1440 ? mins / 60 + "h" : mins / 1440 + "d";
+            CheckAllButton.ToolTip = "Check for updates\n" + statusText;
+            CheckChip.ToolTip = statusText;
         }
 
         // ------------------------------------------------------------------ installing

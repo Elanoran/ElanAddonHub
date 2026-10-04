@@ -81,6 +81,7 @@ namespace ElansAddonHub.Services
         }
 
         // cached for an hour on disk; null on any failure (offline, rate limited) unless a stale copy exists
+        public static bool Force;   // "Check for updates" button: only trust cache younger than 2 minutes
         static async Task<string> CachedGet(string url, bool github)
         {
             var cf = CacheFile(url);
@@ -90,7 +91,7 @@ namespace ElansAddonHub.Services
                 if (File.Exists(cf))
                 {
                     stale = File.ReadAllText(cf);
-                    if (DateTime.UtcNow - File.GetLastWriteTimeUtc(cf) < Ttl) return stale;
+                    if (DateTime.UtcNow - File.GetLastWriteTimeUtc(cf) < (Force ? TimeSpan.FromMinutes(2) : Ttl)) return stale;
                 }
             }
             catch { }

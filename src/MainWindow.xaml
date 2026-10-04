@@ -72,6 +72,20 @@
                      Margin="0" ToolTip="Settings">
           <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="15" Margin="2,1,2,0" />
         </RadioButton>
+        <!-- one-click "check everything" (Addons tab only) -->
+        <StackPanel x:Name="RefreshBar" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+          <TextBlock x:Name="CheckResult" FontSize="11.5" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+          <StackPanel x:Name="CheckChip" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0" Background="Transparent">
+            <TextBlock Text="&#xE121;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,3,0" />
+            <TextBlock x:Name="CheckChipText" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+          </StackPanel>
+          <Button x:Name="CheckAllButton" Style="{StaticResource SecondaryButton}" Height="28" Width="30" Padding="0" Click="CheckAll_Click"
+                  AutomationProperties.Name="Check for updates" ToolTip="Check for updates">
+            <TextBlock x:Name="CheckSpin" Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="13" RenderTransformOrigin="0.5,0.5">
+              <TextBlock.RenderTransform><RotateTransform x:Name="SpinRot" /></TextBlock.RenderTransform>
+            </TextBlock>
+          </Button>
+        </StackPanel>
       </DockPanel>
 
       <!-- hub self-update banner -->
@@ -127,11 +141,20 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel VerticalAlignment="Center" Margin="48,0,10,0">
                       <TextBlock Text="{Binding VersionLine}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Text="{Binding StatsText}" Visibility="{Binding StatsVisibility}" FontSize="11"
-                                 Foreground="{StaticResource TextDim}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                      <ItemsControl ItemsSource="{Binding Stats}" Visibility="{Binding StatsVisibility}" Margin="0,3,0,0" Focusable="False">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,14,0" Background="Transparent" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}">
+                              <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,4,0" />
+                              <TextBlock Text="{Binding Text}" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
                     </StackPanel>
                     <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Height="32" MinWidth="130" Padding="14,0" FontSize="12.5"
-                            Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="Action_Click" />
+                            Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="Action_Click" Visibility="{Binding ButtonVisibility}" />
                   </Grid>
 
                   <ProgressBar Style="{StaticResource ThinProgress}" Margin="14,0,14,10" Maximum="1"
@@ -172,30 +195,41 @@
         </ItemsControl>
 
         <!-- everything else in Interface\AddOns -->
-        <StackPanel x:Name="OtherPanel" MaxWidth="660" Margin="16,10,12,0" Visibility="Collapsed">
-          <DockPanel Margin="0,4,0,10">
-            <Button x:Name="LinkExactButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="30" Padding="14,0" FontSize="12"
-                    Content="Link all exact matches" Visibility="Collapsed" Click="LinkExact_Click" Margin="10,0,0,0" ToolTip="Link every addon whose folders match a WoWInterface file exactly" />
-            <Button x:Name="UpdateAllButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Height="30" Padding="14,0" FontSize="12"
-                    Content="Update all" Visibility="Collapsed" Click="UpdateAll_Click" Margin="10,0,0,0" />
-            <TextBox x:Name="SearchBox" DockPanel.Dock="Right" Style="{StaticResource Input}" Width="190" Tag="Search addons" TextChanged="Search_Changed" />
-            <TextBlock x:Name="OtherTitle" Text="OTHER ADDONS" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+        <StackPanel x:Name="OtherPanel" MaxWidth="660" Margin="0,10,0,0" Visibility="Collapsed">
+          <DockPanel Margin="18,4,12,10" LastChildFill="False">
+            <TextBox x:Name="SearchBox" DockPanel.Dock="Right" Style="{StaticResource Input}" Width="170" Tag="Search addons" TextChanged="Search_Changed" Margin="8,0,0,0" />
+            <Button x:Name="UpdateAllButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Height="28" Padding="12,0" FontSize="12"
+                    Content="Update all" Visibility="Collapsed" Click="UpdateAll_Click" Margin="8,0,0,0" AutomationProperties.Name="Update all addons" />
+            <Button x:Name="LinkExactButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="28" Padding="12,0" FontSize="12"
+                    Content="Link exact" Visibility="Collapsed" Click="LinkExact_Click" Margin="8,0,0,0" ToolTip="Link every addon whose folders match a WoWInterface file exactly" />
+            <Button x:Name="CfOpenButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="28" Width="30" Padding="0" Margin="6,0,0,0"
+                    Visibility="Collapsed" Click="OpenCf_Click" ToolTip="Open CurseForge" AutomationProperties.Name="Open CurseForge">
+              <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource Icons}" FontSize="13" />
+            </Button>
+            <Button x:Name="CfCheckButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="28" Width="30" Padding="0" Margin="6,0,0,0"
+                    Visibility="Collapsed" Click="CheckCf_Click" AutomationProperties.Name="Check CurseForge now"
+                    ToolTip="Check CurseForge now: lets the CurseForge app refresh its update info (started minimized if it isn't running, closed again afterwards)">
+              <TextBlock Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="13" />
+            </Button>
+            <Border x:Name="CfChip" DockPanel.Dock="Right" Visibility="Collapsed" Background="#1AFFFFFF" CornerRadius="10" Padding="7,3" VerticalAlignment="Center" Margin="8,0,0,0"
+                    ToolTipService.ShowDuration="30000">
+              <StackPanel Orientation="Horizontal">
+                <Image x:Name="CfChipIcon" Width="14" Height="14" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,5,0" />
+                <TextBlock x:Name="CfChipGlyph" Text="&#xE121;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,3,0" />
+                <TextBlock x:Name="CfChipText" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+            <TextBlock x:Name="OtherTitle" Text="Other addons" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Border x:Name="OtherInfo" Width="18" Height="18" CornerRadius="9" Margin="7,0,0,0" VerticalAlignment="Center" Background="Transparent" ToolTipService.ShowDuration="30000">
+              <TextBlock Text="&#xE946;" FontFamily="{StaticResource Icons}" FontSize="13" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
           </DockPanel>
-          <TextBlock x:Name="OtherHint" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,-4,0,10" />
-          <StackPanel x:Name="CfBar" Visibility="Collapsed" Margin="0,-2,0,10">
-            <StackPanel Orientation="Horizontal">
-              <Button x:Name="CfCheckButton" Style="{StaticResource SecondaryButton}" Height="28" Padding="12,0" FontSize="12" Content="Check CurseForge now" Click="CheckCf_Click"
-                      ToolTip="Lets the CurseForge app refresh its update info (started minimized if it isn't running, closed again afterwards)" />
-              <Button Style="{StaticResource SecondaryButton}" Height="28" Padding="12,0" FontSize="12" Content="Open CurseForge" Margin="8,0,0,0" Click="OpenCf_Click" />
-            </StackPanel>
-            <TextBlock x:Name="CfText" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,6,0,0" />
-          </StackPanel>
           <ItemsControl x:Name="OtherCards" Margin="0,0,0,16">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Margin="0,0,0,8" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <Border Margin="16,0,12,10" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
                   <StackPanel>
-                    <Border Background="Transparent" Padding="12,10,12,4" Cursor="Hand" CornerRadius="12,12,0,0"
+                    <Border Background="Transparent" Padding="14,10,12,4" Cursor="Hand" CornerRadius="12,12,0,0"
                             Tag="{Binding}" MouseLeftButtonUp="OtherCard_Toggle" ToolTip="Show / hide details">
                       <DockPanel>
                         <TextBlock DockPanel.Dock="Right" Text="{Binding Chevron}" FontFamily="{StaticResource Icons}" FontSize="12"
@@ -218,16 +252,16 @@
                         </Border>
                         <StackPanel Margin="10,0,8,0" VerticalAlignment="Center">
                           <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding SubtitleTip}" />
                         </StackPanel>
                       </DockPanel>
                     </Border>
-                    <Grid Margin="12,0,12,10" Visibility="{Binding ButtonVisibility}">
+                    <Grid Margin="14,0,14,10" Visibility="{Binding ButtonVisibility}">
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                       </Grid.ColumnDefinitions>
-                      <TextBlock Text="{Binding VersionLine}" FontSize="12" Margin="40,0,10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding VersionLine}" FontSize="12" Margin="40,0,10,0" VerticalAlignment="Center" ToolTip="{Binding VersionLine}" TextTrimming="CharacterEllipsis" />
                       <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Height="28" MinWidth="100" Padding="12,0" FontSize="12"
                               Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="OtherAction_Click" />
                     </Grid>

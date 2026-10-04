@@ -94,6 +94,19 @@ namespace ElansAddonHub.Services
             catch { return null; }
         }
 
+        // compact form for icon chips: 5m, 1h, 3d, 4mo, 2y
+        public static string ShortAgo(DateTime utc)
+        {
+            if (utc <= DateTime.MinValue.AddDays(2)) return "never";
+            var s = DateTime.UtcNow - utc;
+            if (s.TotalMinutes < 2) return "now";
+            if (s.TotalMinutes < 60) return (int)s.TotalMinutes + "m";
+            if (s.TotalHours < 24) return (int)s.TotalHours + "h";
+            if (s.TotalDays < 60) return (int)s.TotalDays + "d";
+            if (s.TotalDays < 365) return (int)(s.TotalDays / 30) + "mo";
+            return (int)(s.TotalDays / 365) + "y";
+        }
+
         public static string Ago(DateTime utc)
         {
             var span = DateTime.UtcNow - utc;

@@ -21,8 +21,12 @@ namespace ElansAddonHub
 
         public string Name => Entry.Title;
         public string Letter => string.IsNullOrEmpty(Entry.Title) ? "?" : Entry.Title.Substring(0, 1).ToUpperInvariant();
-        public string Author => string.IsNullOrEmpty(Entry.Author) ? "unknown author" : Entry.Author;
-        public string Subtitle => $"{(string.IsNullOrEmpty(Entry.Version) ? "no version" : Entry.Version)}  ·  {Author}";
+        static bool KnownAuthor(string a) => !string.IsNullOrWhiteSpace(a) && !a.Trim().Equals("unknown", StringComparison.OrdinalIgnoreCase);
+        public string Author => KnownAuthor(Entry.Author) ? Entry.Author : null;
+        string PrettyLocal => VersionText.Pretty(Entry.Version, out _);
+        public string Subtitle => string.Join("  ·  ", new[] { PrettyLocal, Author }.Where(x => !string.IsNullOrEmpty(x)));
+        // full raw version on hover (only when it was shortened)
+        public string SubtitleTip => string.IsNullOrEmpty(Entry.Version) || PrettyLocal == Entry.Version ? null : "Version: " + Entry.Version;
         public string Notes => Entry.Notes;
         public Visibility NotesVisibility => string.IsNullOrEmpty(Entry.Notes) ? Visibility.Collapsed : Visibility.Visible;
         public string FolderList => (Entry.Folders.Count == 1 ? "Folder: " : $"{Entry.Folders.Count} folders: ") + string.Join(", ", Entry.Folders);
@@ -75,7 +79,23 @@ namespace ElansAddonHub
         double progress;
         public double Progress { get => progress; set { progress = value; Notify(); } }
         string message;
-        public string Message { get => message; set { message = value; Notify(); Notify(nameof(MessageVisibility)); } }
+        System.Windows.Threading.DispatcherTimer fade;
+        public string Message
+        {
+            get => message;
+            set
+            {
+                message = value; Notify(); Notify(nameof(MessageVisibility));
+                if (fade != null) fade.Stop();
+                if (StatChip.IsTransient(value))
+                {
+                    fade = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
+                    var mine = value;
+                    fade.Tick += (s, e) => { fade.Stop(); if (message == mine) { message = null; Notify(nameof(Message)); Notify(nameof(MessageVisibility)); } };
+                    fade.Start();
+                }
+            }
+        }
         public Visibility MessageVisibility => string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
         public Visibility BusyVisibility => State == TpState.Busy ? Visibility.Visible : Visibility.Collapsed;
 
@@ -125,7 +145,7 @@ namespace ElansAddonHub
             CurseUrl = Entry.Cf != null || string.IsNullOrEmpty(Entry.CurseId) ? null : "https://www.curseforge.com/projects/" + Entry.CurseId;
             WagoUrl = string.IsNullOrEmpty(Entry.WagoId) ? null : "https://addons.wago.io/addons/" + Entry.WagoId;
 
-            var local = string.IsNullOrEmpty(Entry.Version) ? "" : Entry.Version;
+            var local = PrettyLocal;
             if (Entry.Cf != null && !Entry.IsDev)
             {
                 var cf = Entry.Cf;
@@ -145,7 +165,7 @@ namespace ElansAddonHub
                 case TpState.DevCopy: Pill("Dev copy", "TextDim"); VersionLine = "Managed by git"; ButtonText = ""; ButtonEnabled = false; break;
                 case TpState.UpdateAvailable:
                     Pill("Update available", "Gold");
-                    VersionLine = $"{(Link.InstalledRemote ?? local)}  →  {r.Version}";
+                    VersionLine = $"{VersionText.Pretty(Link.InstalledRemote ?? local, out _)}  →  {VersionText.Pretty(r.Version, out _)}";
                     ButtonText = "Update"; ButtonEnabled = true; break;
                 case TpState.ChooseFile: Pill("Choose file", "Gold"); VersionLine = $"Latest {r.Version} - no WoW Forever build found, pick a download"; ButtonText = "Update"; ButtonEnabled = Link.Asset != null; break;
                 case TpState.UpToDate: Pill("Up to date", "Accent"); VersionLine = "Installed " + (local == "" ? (Link.InstalledRemote ?? "?") : local); ButtonText = ""; ButtonEnabled = false; break;
