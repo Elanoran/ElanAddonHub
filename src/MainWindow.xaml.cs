@@ -126,6 +126,7 @@ namespace ElansAddonHub
             }
             SettingsPage.Show("general");
             var tp = await ThirdPartyTest(dir);
+            tp += "\r\n" + await ViewerTest(dir);
             var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + checkAllLine + "\r\n" + tp + "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live();
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
@@ -173,6 +174,55 @@ namespace ElansAddonHub
             }
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
             Quit();
+        }
+
+        // in-app picture viewer on synthetic local PNGs (no lodge connection)
+        async Task<string> ViewerTest(string dir)
+        {
+            try
+            {
+                var msgs = new System.Collections.Generic.List<MessageVM>();
+                for (int i = 0; i < 3; i++)
+                {
+                    var path = System.IO.Path.Combine(dir, $"viewer-test{i}.png");
+                    var dv = new System.Windows.Media.DrawingVisual();
+                    using (var dc = dv.RenderOpen())
+                    {
+                        dc.DrawRectangle(new System.Windows.Media.LinearGradientBrush(
+                            System.Windows.Media.Color.FromRgb((byte)(40 + i * 80), 120, 220), System.Windows.Media.Color.FromRgb(240, (byte)(60 + i * 70), 90), 35), null, new Rect(0, 0, 1600, 900));
+                        dc.DrawEllipse(System.Windows.Media.Brushes.White, null, new Point(800, 450), 220, 220);
+                        dc.DrawText(new System.Windows.Media.FormattedText("Test picture " + (i + 1), System.Globalization.CultureInfo.InvariantCulture,
+                            FlowDirection.LeftToRight, new System.Windows.Media.Typeface("Segoe UI"), 90, System.Windows.Media.Brushes.Black, 1.0), new Point(560, 400));
+                    }
+                    var rt = new System.Windows.Media.Imaging.RenderTargetBitmap(1600, 900, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                    rt.Render(dv);
+                    var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                    enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rt));
+                    using (var fs = System.IO.File.Create(path)) enc.Save(fs);
+                    msgs.Add(new MessageVM
+                    {
+                        Id = "t" + i, From = "Bob", At = DateTime.UtcNow,
+                        File = new FileVM { Id = "t" + i, Name = $"viewer-test{i}.png", Size = new System.IO.FileInfo(path).Length, Mime = "image/png", LocalPath = path }
+                    });
+                }
+                TabLodge.IsChecked = true;
+                await Task.Delay(300);
+                var v = LodgePage.ViewerForTest;
+                v.Open(msgs, msgs[0]);
+                await Task.Delay(700);
+                bool ok = v.IsOpen && v.ErrorForTest == null;
+                Snapshot(System.IO.Path.Combine(dir, "9-viewer.png"));
+                v.Step(1); await Task.Delay(400);
+                ok &= v.IndexForTest == 1;
+                v.ZoomForTest = 4; await Task.Delay(200);
+                ok &= Math.Abs(v.ZoomForTest - 4) < 0.01;
+                Snapshot(System.IO.Path.Combine(dir, "9-viewer-zoom.png"));
+                var cap = v.CaptionForTest;
+                v.Close();
+                ok &= !v.IsOpen;
+                return $"viewer selftest: {(ok ? "PASSED" : "FAILED")} (caption='{cap}')";
+            }
+            catch (Exception e) { return "viewer selftest crashed: " + e; }
         }
 
         void Snapshot(string file)

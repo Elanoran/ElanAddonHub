@@ -479,9 +479,14 @@ namespace ElansAddonHub.Lodge
 
         void Image_Click(object sender, MouseButtonEventArgs e)
         {
-            if ((sender as FrameworkElement)?.Tag is FileVM f && f.LocalPath != null)
-                try { Process.Start(new ProcessStartInfo(f.LocalPath) { UseShellExecute = true }); } catch { }
+            if (!((sender as FrameworkElement)?.Tag is FileVM f) || f.LocalPath == null) return;
+            var list = Session?.MessagesOf(Session.Selected?.Id);
+            var msg = list?.FirstOrDefault(m => m.File == f);
+            if (msg != null) Viewer.Open(list, msg);
+            else try { Process.Start(new ProcessStartInfo(f.LocalPath) { UseShellExecute = true }); } catch { }
         }
+
+        public ImageViewer ViewerForTest => Viewer;
 
         async void Download_Click(object sender, RoutedEventArgs e)
         {

@@ -1,6 +1,7 @@
 <UserControl x:Class="ElansAddonHub.Lodge.LodgeView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ElansAddonHub.Lodge"
              AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
   <UserControl.Resources>
     <!-- small round avatar with role ring, speaking ring and status badge -->
@@ -368,5 +369,8 @@
         </StackPanel>
       </Border>
     </Popup>
+
+    <!-- in-app picture viewer (covers the whole Lodge) -->
+    <local:ImageViewer x:Name="Viewer" Grid.RowSpan="9" Grid.ColumnSpan="9" />
   </Grid>
 </UserControl>
