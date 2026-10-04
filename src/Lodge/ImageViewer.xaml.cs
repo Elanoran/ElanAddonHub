@@ -30,6 +30,8 @@ namespace ElansAddonHub.Lodge
         public string CaptionForTest => CapName.Text + " | " + CapInfo.Text;
         public string ErrorForTest => ErrorText.Visibility == Visibility.Visible ? ErrorText.Text : null;
 
+        public bool OverPictureForTest(Point p) => OverPicture(p);
+        public Point HitCenterForTest => new Point(Hit.ActualWidth / 2, Hit.ActualHeight / 2);
         public double ZoomForTest { get => zoom; set => ZoomAt(value, new Point(Hit.ActualWidth / 2, Hit.ActualHeight / 2)); }
         public int IndexForTest => index;
 
@@ -133,7 +135,8 @@ namespace ElansAddonHub.Lodge
         bool OverPicture(Point p)
         {
             if (Img.Visibility != Visibility.Visible || Img.ActualWidth <= 0) return false;
-            var r = Img.TransformToAncestor(Hit).TransformBounds(new Rect(0, 0, Img.ActualWidth, Img.ActualHeight));
+            // Img and Hit are siblings (same parent grid), so TransformToAncestor throws; TransformToVisual works for any pair
+            var r = Img.TransformToVisual(Hit).TransformBounds(new Rect(0, 0, Img.ActualWidth, Img.ActualHeight));
             return r.Contains(p);
         }
 

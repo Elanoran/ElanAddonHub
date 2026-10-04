@@ -212,6 +212,9 @@ namespace ElansAddonHub
                 await Task.Delay(700);
                 bool ok = v.IsOpen && v.ErrorForTest == null;
                 Snapshot(System.IO.Path.Combine(dir, "9-viewer.png"));
+                // a click on the picture (this threw "not an ancestor" in 2.13.0) and on the backdrop
+                ok &= v.OverPictureForTest(new Point(v.HitCenterForTest.X, v.HitCenterForTest.Y));
+                ok &= !v.OverPictureForTest(new Point(2, 2));
                 v.Step(1); await Task.Delay(400);
                 ok &= v.IndexForTest == 1;
                 v.ZoomForTest = 4; await Task.Delay(200);
