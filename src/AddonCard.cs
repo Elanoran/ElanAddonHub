@@ -53,10 +53,29 @@ namespace ElansAddonHub
                 var folder = Info.Folders != null && Info.Folders.Count > 0 ? Info.Folders[0] : "";
                 if (string.Equals(folder, "ElansHunterHelper", System.StringComparison.OrdinalIgnoreCase)) return "pack://application:,,,/Assets/logo-ehh.png";
                 if (string.Equals(folder, "ElansHub", System.StringComparison.OrdinalIgnoreCase)) return "pack://application:,,,/Assets/logo-hubaddon.png";
+                if (string.Equals(folder, "ElansPaladinHelper", System.StringComparison.OrdinalIgnoreCase) && PaladinLogoExists()) return "pack://application:,,,/Assets/logo-paladin.png";
                 return "pack://application:,,,/Assets/hub.png";
             }
         }
-        public string Subtitle => Info.Required && Info.Description != null ? Info.Description : Info.FlavorName ?? Info.Description ?? "";
+        // no paladin artwork yet: the card falls back to the hub icon until Assets\logo-paladin.png exists
+        static bool? paladinLogo;
+        static bool PaladinLogoExists()
+        {
+            if (paladinLogo == null)
+            {
+                try { paladinLogo = Application.GetResourceStream(new System.Uri("pack://application:,,,/Assets/logo-paladin.png")) != null; }
+                catch { paladinLogo = false; }
+            }
+            return paladinLogo.Value;
+        }
+
+        // class of the character you play (from GamePresence), set by the main window; used for "Recommended for your Paladin"
+        public static string ClassHint;
+        public bool RecommendedForYou => Info.Classes != null && ClassHint != null
+            && Info.Classes.Any(c => string.Equals(c, ClassHint, System.StringComparison.OrdinalIgnoreCase));
+        string ClassName => ClassHint == null ? "" : char.ToUpperInvariant(ClassHint[0]) + ClassHint.Substring(1).ToLowerInvariant();
+        public string Subtitle => State == CardState.NotInstalled && RecommendedForYou ? "Recommended for your " + ClassName
+            : Info.Required && Info.Description != null ? Info.Description : Info.FlavorName ?? Info.Description ?? "";
         public string Installed { get; private set; }
         // hover the client name to see exactly where it installs
         public string InstallPath { get; private set; }
@@ -154,7 +173,7 @@ namespace ElansAddonHub
             switch (State)
             {
                 case CardState.UpdateAvailable: Pill("Update available", "Gold"); ButtonText = $"Update to {info.Version}"; ButtonEnabled = true; break;
-                case CardState.NotInstalled: Pill(info.Required ? "Recommended" : "Not installed", info.Required ? "Gold" : "TextDim"); ButtonText = "Install"; ButtonEnabled = true; break;
+                case CardState.NotInstalled: Pill(info.Required || RecommendedForYou ? "Recommended" : "Not installed", info.Required || RecommendedForYou ? "Gold" : "TextDim"); ButtonText = "Install"; ButtonEnabled = true; break;
                 case CardState.UpToDate: Pill("Up to date", "Accent"); ButtonText = "Up to date"; ButtonEnabled = false; break;
                 case CardState.DevCopy: Pill("Dev copy", "TextDim"); ButtonText = "Managed by git"; ButtonEnabled = false; break;
                 case CardState.NoClient: Pill("No client", "Danger"); ButtonText = $"{info.FlavorName ?? info.Flavor} not found"; ButtonEnabled = false; break;

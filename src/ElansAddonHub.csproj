@@ -10,7 +10,7 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>2.10.3</Version>
+    <Version>2.11.0</Version>
     <Product>Elan's Addon Hub</Product>
     <Company>Elan</Company>
     <Description>Installs and updates Elan's WoW addons</Description>
@@ -29,6 +29,7 @@
     <Resource Include="Assets\hub.png" />
     <Resource Include="Assets\logo-ehh.png" />
     <Resource Include="Assets\logo-hubaddon.png" />
+    <Resource Include="Assets\logo-paladin.png" Condition="Exists('Assets\logo-paladin.png')" />
     <Resource Include="Assets\hero.jpg" />
   </ItemGroup>
 

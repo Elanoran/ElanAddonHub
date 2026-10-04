@@ -62,6 +62,13 @@ namespace ElansAddonHub
                 lastChatNote = DateTime.Now;
                 tray.ShowBalloonTip(4000, from, text.Length > 120 ? text.Substring(0, 120) + "..." : text, WinForms.ToolTipIcon.None);
             };
+            // "Recommended for your Paladin": follow the class you play (hint only, never installs anything)
+            Session.Presence.Changed += () => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (AddonCard.ClassHint == Session.Presence.LastClassFile) return;
+                AddonCard.ClassHint = Session.Presence.LastClassFile;
+                foreach (var c in cards) if (!c.Busy) c.Update(c.Info, settings.WowRoot);
+            }));
             LodgePage.OpenSettings += () => { ShowTab("settings"); SettingsPage.Show("voice"); };
             LodgePage.Init(Session);
             SettingsPage.Init(this, settings, LodgePage);
@@ -295,6 +302,7 @@ namespace ElansAddonHub
 
         void RebuildCards()
         {
+            AddonCard.ClassHint = Session?.Presence?.LastClassFile ?? AddonCard.ClassHint;
             foreach (var a in manifest.Addons ?? Enumerable.Empty<AddonInfo>())
             {
                 var card = cards.FirstOrDefault(c => c.Info.Id == a.Id);

@@ -35,6 +35,8 @@ namespace ElansAddonHub.Services
 
         public bool Playing { get; private set; }
         public Character Current { get; private set; }
+        // class of the character you play now, or else the one the addon wrote last (null = unknown)
+        public string LastClassFile => (Current ?? last)?.ClassFile;
         public event Action Changed;
 
         public GamePresence(Func<string> wowRoot, Func<bool> pixelOn = null)

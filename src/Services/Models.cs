@@ -37,6 +37,8 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "changelog")] public List<ChangeEntry> Changelog { get; set; }
         // installed for everyone (e.g. the small Elan's Hub companion), not only for one class
         [DataMember(Name = "required")] public bool Required { get; set; }
+        // optional: classes (WoW class files, e.g. "PALADIN") this addon is meant for. Only a hint - never installed automatically.
+        [DataMember(Name = "classes")] public List<string> Classes { get; set; }
     }
 
     [DataContract]
