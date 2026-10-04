@@ -8,3 +8,5 @@
 
 
 1.4.0 Adds a minimap button, a settings window (/ehub) and a quick emote wheel: hover or click the small icon for 8 emotes (Thank, Cheer, Wave, Hello, Bow, Laugh, Applaud, Dance by default, configurable). /ehub diag records emote API facts.
+
+1.5.0 Richer presence for the Hub: the status strip gets a second row with your zone, XP %, rested state, group size, instance and a few flags (in combat, dead, AFK, resting). It never reads health, power, buffs or cooldowns. Older Hubs ignore the extra row. Updates on zone, combat, group and XP events, throttled to twice a second.

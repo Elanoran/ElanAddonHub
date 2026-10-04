@@ -44,7 +44,8 @@ function fn.IsMouseOver(s) return s.__over and true or false end
 function fn.SetTexture(s, t) s.__tex = t end
 function fn.SetVertexColor(s, r, g, b, a) s.__vc = { r, g, b, a } end
 function fn.SetValue(s, v) s.__v = v local h = scripts[s] and scripts[s].OnValueChanged if h then h(s, v) end end
-function fn.CreateTexture(s) return new("Texture", nil, s) end
+function fn.CreateTexture(s) local x = new("Texture", nil, s) s.__textures = s.__textures or {} s.__textures[#s.__textures + 1] = x return x end
+function fn.SetColorTexture(s, r, g, b) s.__rgb = { r, g, b } end
 function fn.CreateFontString(s) return new("FontString", nil, s) end
 function fn.CreateLine(s) return new("Line", nil, s) end
 function fn.StartMoving(s) s.__moving = true end
@@ -86,17 +87,37 @@ function UnitFactionGroup() return "Horde" end
 function GetRealmName() return "Realm" end
 function GetRealZoneText() return "Zone" end
 function GetSubZoneText() return "" end
-function IsInInstance() return false end
+ST = { combat = false, dead = false, afk = false, rest = false, inst = false, itype = "none", iid = 0, map = 1413, group = 0, raid = false,
+       xp = 1500, xpmax = 4500, exh = 0, secretCombat = false, secretXp = false }
+SECRET = {}
+FORBIDDEN = 0
+local function forbid() FORBIDDEN = FORBIDDEN + 1 return 1 end
+UnitHealth, UnitHealthMax, UnitPower, UnitPowerMax, UnitBuff, UnitDebuff, UnitAura, GetSpellCooldown, UnitPosition = forbid, forbid, forbid, forbid, forbid, forbid, forbid, forbid, forbid
+C_UnitAuras = { GetAuraDataByIndex = forbid, GetPlayerAuraBySpellID = forbid }
+C_Spell = { GetSpellCooldown = forbid }
+C_Map = { GetBestMapForUnit = function(u) return ST.map end, GetPlayerMapPosition = forbid }
+function UnitAffectingCombat() if ST.secretCombat then return SECRET end return ST.combat end
+function UnitIsDeadOrGhost() return ST.dead end
+function UnitIsAFK() return ST.afk end
+function IsResting() return ST.rest end
+function IsInInstance() return ST.inst, ST.itype end
+function GetInstanceInfo() return "Name", ST.itype, 1, "Normal", 5, 0, false, ST.iid end
+function IsInGroup() return ST.group > 0 end
+function IsInRaid() return ST.raid end
+function GetNumGroupMembers() return ST.group end
+function UnitXP() if ST.secretXp then return SECRET end return ST.xp end
+function UnitXPMax() return ST.xpmax end
+function GetXPExhaustion() if ST.exh > 0 then return ST.exh end return nil end
 function GetGuildInfo() return nil end
 function GetPhysicalScreenSize() return 1920, 1080 end
 function GetCursorPosition() return 0, 0 end
 function ReloadUI() end
 function hooksecurefunc() end
-function issecretvalue(v) return false end
+function issecretvalue(v) return v == SECRET end
 UNKNOWNOBJECT = "Unknown"
 function DoEmote(tok, unit) EMOTES[#EMOTES + 1] = { tok, unit } if DOEMOTE_FAIL then error("blocked") end end
 function IsProtectedFunction() return false end
-C_AddOns = { GetAddOnMetadata = function() return "1.4.0" end }
+C_AddOns = { GetAddOnMetadata = function() return "1.5.0" end }
 ElansHubDB = nil
 '''
 L.execute(MOCK)
@@ -108,6 +129,9 @@ files = [l.strip() for l in toc.splitlines() if l.strip() and not l.startswith("
 for f in files:
     loader(open(os.path.join(ADDON, f), encoding="utf-8").read(), f)
 print("loaded", files)
+import re as _re
+SRC = "".join(open(os.path.join(ADDON, f), encoding="utf-8").read() for f in files)
+
 
 fails = []
 def check(name, cond):
@@ -129,7 +153,7 @@ ok("minimap button exists", _G.ElansHubMinimapButton and _G.ElansHubMinimapButto
 local mb = _G.ElansHubMinimapButton
 Fire(mb, "OnEnter")
 local tip = table.concat(GameTooltip.lines, "\n")
-ok("tooltip title+version", tip:find("Elan's Hub") and tip:find("v1.4.0"))
+ok("tooltip title+version", tip:find("Elan's Hub") and tip:find("v1.5.0"))
 ok("tooltip strip+wheel+hints", tip:find("Pixel strip") and tip:find("Emote wheel") and tip:find("Left%-click") and tip:find("Right%-click"))
 Fire(mb, "OnDragStart") Fire(mb, "OnUpdate") Fire(mb, "OnDragStop")
 ok("minimap angle saved", type(db.minimap.angle) == "number")
@@ -223,6 +247,124 @@ ok("diag: no combat log", db.diag.runs[1].combatLogRegistered == false)
 SlashCmdList.ELANSHUB("status") ok("/ehub status prints", (CHAT[#CHAT] or ""):find("level 60"))
 -- settings widgets refresh
 E.RefreshSettings() ok("settings refresh", true)
+-- ================= strip v2 (rich presence)
+local strip = _G.ElansHubPixelStrip
+local function level(v) return math.floor(v * 3 + 0.5) end
+local function bitsOf(texts, first, count)
+  local bits = {}
+  for c = 0, count - 1 do
+    local rgb = texts[first + c].__rgb or { 0, 0, 0 }
+    for ch = 1, 3 do local l = level(rgb[ch]) bits[#bits + 1] = math.floor(l / 2) bits[#bits + 1] = l % 2 end
+  end
+  return bits
+end
+local function bytesOf(bits, n)
+  local out = {}
+  for i = 1, n do local v = 0 for k = 0, 7 do v = v * 2 + bits[(i - 1) * 8 + k + 1] end out[i] = v end
+  return out
+end
+local function fletcher(b, n) local s1, s2 = 1, 0 for i = 1, n do s1 = (s1 + b[i]) % 251 s2 = (s2 + s1) % 251 end return s1, s2 end
+local function decode()
+  local tx = strip.__textures
+  local row0 = bytesOf(bitsOf(tx, 5 + 1, 27), 20) -- textures are 1-based: cell c is tx[c + 1]; data cells start at cell 5
+  local r = { v1 = false, v2 = false }
+  local a, b = fletcher(row0, 18)
+  r.v1 = row0[1] == 0xA7 and a == row0[19] and b == row0[20]
+  r.flags = row0[2] r.class = row0[3] r.race = row0[4] r.level = row0[5]
+  local nl = row0[6] local nm = {} for i = 1, nl do nm[i] = string.char(row0[6 + i]) end r.name = table.concat(nm)
+  local row1 = bytesOf(bitsOf(tx, 32 + 1, 32), 24)
+  local c, d = fletcher(row1, 22)
+  r.v2 = row1[1] == 0xB2 and c == row1[23] and d == row1[24]
+  r.ver = row1[2] r.map = row1[3] * 256 + row1[4] r.inst = row1[5] * 256 + row1[6]
+  r.f1 = row1[7] r.f2 = row1[8] r.xp = row1[9] r.group = row1[10]
+  return r
+end
+local function band(a, n) return math.floor(a / n) % 2 * n end
+local function evt(e, ...) for _, fr in ipairs(frames) do Fire(fr, "OnEvent", e, ...) end end
+local function tick() NOW = NOW + 1 RunTimers() end
+tick()
+evt("PLAYER_ENTERING_WORLD")
+local d = decode()
+ok("v1 row still valid (name/class/race/level)", d.v1 and d.name == "Elan" and d.class == 3 and d.race == 2 and d.level == 60)
+ok("v1 flags: sex bits kept, v2-present bit (8) set", d.flags == 1 + 2 * 2 + 8)
+ok("v2 row valid: version 2, uiMapID 1413", d.v2 and d.ver == 2 and d.map == 1413)
+ok("v2 xp 33%, not in combat, combat flag valid", d.xp == 33 and d.f1 == 0 and band(d.f2, 1) == 1 and band(d.f2, 2) == 2)
+ok("old hub view: marker+calibration cells intact", strip.__textures[1].__rgb[1] == 1 and strip.__textures[1].__rgb[3] == 1 and strip.__textures[1].__rgb[2] == 0)
+
+-- state changes arrive through events
+tick()
+ST.combat = true ST.afk = true ST.rest = true ST.dead = false
+ST.group = 5 ST.raid = false ST.inst = true ST.itype = "party" ST.iid = 43 ST.map = 0
+ST.exh = 800 ST.xp = 4400
+evt("PLAYER_REGEN_DISABLED")
+d = decode()
+ok("combat+AFK+resting+instance(party)+group flags", d.f1 == 1 + 4 + 8 + 16 + 64 + 128)
+ok("instanceID 43 sent, group size 5, xp 97%", d.inst == 43 and d.group == 5 and d.xp == 97)
+ok("rested flag", band(d.f2, 4) == 4 and band(d.f2, 8) == 0)
+tick()
+ST.raid = true ST.itype = "raid" evt("GROUP_ROSTER_UPDATE")
+d = decode()
+ok("raid instance bit + raid group flag", band(d.f1, 32) == 32 and band(d.f1, 64) == 0 and band(d.f2, 8) == 8)
+tick()
+ST.dead = true ST.combat = false evt("PLAYER_DEAD")
+d = decode()
+ok("dead flag, combat cleared", band(d.f1, 2) == 2 and band(d.f1, 1) == 0)
+
+-- secret values are never encoded: the unit query is secret -> the event-derived state is used; secret XP -> flag cleared
+tick()
+ST.combat = false ST.secretCombat = true ST.secretXp = true
+evt("PLAYER_REGEN_DISABLED")
+d = decode()
+ok("secret combat query: falls back to the event (in combat)", band(d.f1, 1) == 1 and band(d.f2, 1) == 1)
+ok("secret XP: flag cleared and no value sent", band(d.f2, 2) == 0 and d.xp == 0)
+tick()
+evt("PLAYER_REGEN_ENABLED")
+d = decode()
+ok("combat ends by event even when the query stays secret", band(d.f1, 1) == 0)
+ST.secretCombat = false ST.secretXp = false ST.dead = false ST.inst = false ST.itype = "none" ST.iid = 0 ST.group = 0 ST.raid = false ST.afk = false ST.rest = false ST.exh = 0
+tick() evt("PLAYER_REGEN_ENABLED")
+d = decode()
+ok("back to a quiet state", d.f1 == 0 and d.group == 0 and d.inst == 0 and d.xp == 97)
+
+-- throttling: a burst of events draws at most once now and once later
+tick()
+local draws0 = NS.draws
+for i = 1, 40 do ST.xp = 1500 + i evt("PLAYER_XP_UPDATE") evt("GROUP_ROSTER_UPDATE") evt("PLAYER_REGEN_ENABLED") end
+local burst = NS.draws - draws0
+ok("burst of 120 events: at most 1 immediate redraw", burst <= 1)
+tick()
+ok("... and one coalesced redraw afterwards", NS.draws - draws0 <= 2)
+local d1 = NS.draws
+tick() evt("PLAYER_XP_UPDATE") tick()
+ok("an event that changes nothing doesn't repaint", NS.draws == d1)
+-- PLAYER_FLAGS_CHANGED for another unit is ignored
+local dd = NS.draws
+ST.afk = true NOW = NOW + 5
+evt("PLAYER_FLAGS_CHANGED", "target") RunTimers()
+ok("PLAYER_FLAGS_CHANGED for another unit ignored", NS.draws == dd)
+evt("PLAYER_FLAGS_CHANGED", "player") RunTimers()
+ok("PLAYER_FLAGS_CHANGED for player redraws (AFK)", NS.draws == dd + 1 and band(decode().f1, 4) == 4)
+ST.afk = false
+
+-- nothing secret or combat-sensitive was ever read: health/power/auras/cooldowns/positions are never called
+ok("no health/power/aura/cooldown/position API was called (FORBIDDEN == 0)", FORBIDDEN == 0)
+-- (static check in python below also scans the source)
+
+-- zone change also redraws without writing SavedVariables
+tick() ST.map = 1426 evt("ZONE_CHANGED_NEW_AREA")
+ok("zone change -> new uiMapID on the strip", decode().map == 1426)
+-- pixel off hides both rows
+SlashCmdList.ELANSHUB("pixel off") ok("pixel off hides the strip (both rows)", not strip.__shown)
+SlashCmdList.ELANSHUB("pixel on") ok("pixel on shows it again with v2", strip.__shown and decode().v2)
+-- state for the hub's cross-check (STRIP_DUMP): in combat, AFK, level 60 Orc hunter "Elan", zone 1426, party instance 43, group 5
+ST.combat = true ST.afk = true ST.inst = true ST.itype = "party" ST.iid = 43 ST.group = 5 ST.exh = 10 ST.xp = 2250
+tick() evt("PLAYER_REGEN_DISABLED")
+STRIPDUMP = {}
+for i = 1, 64 do
+  local c = strip.__textures[i].__rgb or { 0, 0, 0 }
+  STRIPDUMP[#STRIPDUMP + 1] = string.format("%d %d %d", math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5))
+end
+
 -- no combat log, no secure frames, no blocked
 local cl = false
 for _, e in ipairs(EVENTS) do if e:find("COMBAT_LOG") then cl = true end end
@@ -234,5 +376,10 @@ return R
 for row in res.values() if hasattr(res, "values") else res:
     name, cond = row[1], row[2]
     check(name, cond)
+_dump = os.environ.get("STRIP_DUMP")
+if _dump:
+    open(_dump, "w").write("\n".join(L.globals().STRIPDUMP.values()) + "\n")
+for api in ("UnitHealth", "UnitPower", "UnitBuff", "UnitDebuff", "UnitAura", "GetSpellCooldown", "UnitPosition", "GetPlayerMapPosition", "C_UnitAuras", "CombatLog"):
+    check("source never mentions " + api, api not in SRC)
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)
