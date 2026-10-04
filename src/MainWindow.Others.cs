@@ -185,7 +185,7 @@ namespace ElansAddonHub
             {
                 var n = others.Count(c => c.Entry.Cf != null);
                 var stale = CurseForgeLocal.IsStale(cfInst.LastRefresh);
-                CfChipText.Text = GitHubStats.ShortAgo(cfInst.LastRefresh);
+                CfChipText.Text = cfChecking ? "Checking CurseForge..." : cfFlash != null ? cfFlash : GitHubStats.ShortAgo(cfInst.LastRefresh);
                 CfChipText.Foreground = (Brush)Application.Current.Resources[stale ? "Gold" : "TextDim"];
                 CfChipGlyph.Foreground = CfChipText.Foreground;
                 try { CfChipIcon.Source = SourceIcons.CurseForge(); } catch { }
@@ -336,15 +336,29 @@ namespace ElansAddonHub
             UpdateOthersHeader();
         }
 
+        bool cfChecking;
+        string cfFlash;                       // "Checked just now" shown on the chip for a few seconds after a check
+        System.Windows.Threading.DispatcherTimer cfFlashFade;
+
         async Task RunCfCheck()
         {
             if (addOnsDir == null || CurseForgeLocal.Busy) return;
             CfCheckButton.IsEnabled = false;
-            cfStatus = "Asking CurseForge to check... (started minimized if it wasn't running)";
+            cfChecking = true; cfFlash = null;
+            var spin = new System.Windows.Media.Animation.DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever };
+            CfSpinRot.BeginAnimation(System.Windows.Media.RotateTransform.AngleProperty, spin);
+            cfStatus = "Checking CurseForge... (started minimized if it wasn't running)";
             UpdateOthersHeader();
             try { cfStatus = await CurseForgeLocal.CheckNow(addOnsDir); }
             catch (Exception e) { Util.Log("curseforge check failed: " + e.Message); cfStatus = "Couldn't check with CurseForge."; }
+            cfChecking = false;
+            CfSpinRot.BeginAnimation(System.Windows.Media.RotateTransform.AngleProperty, null);
             CfCheckButton.IsEnabled = true;
+            cfFlash = cfStatus != null && cfStatus.Contains("checked just now") ? "Checked just now" : cfStatus;
+            if (cfFlashFade != null) cfFlashFade.Stop();
+            cfFlashFade = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+            cfFlashFade.Tick += (s, ev) => { cfFlashFade.Stop(); cfFlash = null; UpdateOthersHeader(); };
+            cfFlashFade.Start();
             await RefreshOthers();
         }
 

@@ -238,20 +238,96 @@ namespace ElansAddonHub.Services
             finally { Busy = false; }
         }
 
-        // polite close (WM_CLOSE) of the instance the hub started; never kills it. CurseForge may keep running in its tray.
+        // Close the instance the hub started, politely, never killing it. Evidence (CurseForge app.asar + its logs): the app has no
+        // quit switch or deep link, and its window 'close' handler cancels the close and asks the renderer, which quits when the user's
+        // "closeCurseForgeAction" setting is Exit (storage.json) or hides to the tray when it is Hide. A minimized start leaves the main
+        // window hidden and Process.CloseMainWindow() ignores hidden windows - that is why nothing happened. So: WM_CLOSE (posted,
+        // like the X button) to every top-level window of the main process, hidden ones included. With the Hide setting the app
+        // stays in the tray (we only read the setting and log it - the hub never changes CurseForge's settings).
         static async Task CloseStarted(Process p)
         {
             try
             {
-                if (p == null) return;
+                if (p == null || p.HasExited) return;
+                // never interrupt work: wait (up to 90 s) until its log has been quiet about installs/downloads for 15 s
+                for (int i = 0; i < 90 && RecentInstallActivity(); i++) await Task.Delay(1000);
+                if (RecentInstallActivity()) { Util.Log("curseforge busy; left running"); return; }
                 for (int i = 0; i < 3 && !p.HasExited; i++)
                 {
-                    try { p.Refresh(); p.CloseMainWindow(); } catch { }
-                    for (int k = 0; k < 8 && !p.HasExited; k++) await Task.Delay(1000);
+                    int n = PostCloseToWindows(p.Id);
+                    Util.Log("curseforge close: WM_CLOSE to " + n + " window(s)");
+                    for (int k = 0; k < 10 && !p.HasExited; k++) await Task.Delay(1000);
                 }
-                if (!p.HasExited) Util.Log("curseforge started by the hub is still running (tray); left alone");
+                if (p.HasExited)
+                {
+                    for (int k = 0; k < 15 && Process.GetProcessesByName("Curse.Agent.Host").Length > 0; k++) await Task.Delay(1000);
+                    if (Process.GetProcessesByName("Curse.Agent.Host").Length > 0) Util.Log("curseforge agent host still running after the app quit; left alone");
+                }
+                else Util.Log("curseforge started by the hub is still running (its close action is " + CloseActionSetting() + "); left alone");
             }
             catch (Exception e) { Util.Log("curseforge close: " + e.Message); }
+        }
+
+        // storage.json: "closeCurseForgeAction":0 = hide to tray, 1 = exit (read only)
+        static string CloseActionSetting()
+        {
+            try
+            {
+                var f = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "curseforge", "storage.json");
+                if (!File.Exists(f)) return "unknown";
+                string t; using (var fs = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) using (var sr = new StreamReader(fs)) t = sr.ReadToEnd();
+                var m = System.Text.RegularExpressions.Regex.Match(t, @"closeCurseForgeAction[\\]*""?\s*:\s*(\d)");
+                return m.Success ? (m.Groups[1].Value == "1" ? "exit" : m.Groups[1].Value == "0" ? "hide to tray" : "other") : "unknown";
+            }
+            catch { return "unknown"; }
+        }
+
+        // CurseForge's main log (%APPDATA%\curseforge\logs\<session>\main-*.log): any install/download line in the last 15 s?
+        static bool RecentInstallActivity()
+        {
+            try
+            {
+                var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "curseforge", "logs");
+                if (Environment.GetEnvironmentVariable("ELANSHUB_CF_MAINLOGS") is string o && o.Length > 0) root = o;
+                if (!Directory.Exists(root)) return false;
+                var f = new DirectoryInfo(root).GetFiles("main-*.log", SearchOption.AllDirectories).OrderByDescending(x => x.LastWriteTimeUtc).FirstOrDefault();
+                if (f == null || (DateTime.UtcNow - f.LastWriteTimeUtc).TotalSeconds > 15) return false;
+                string text; using (var fs = new FileStream(f.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) using (var sr = new StreamReader(fs)) text = sr.ReadToEnd();
+                var lines = text.Split((char)10);
+                var now = DateTime.Now;
+                for (int i = lines.Length - 1; i >= 0 && i >= lines.Length - 60; i--)
+                {
+                    var l = lines[i];
+                    if (l.Length < 25 || l[0] != '[') continue;
+                    if (!DateTime.TryParse(l.Substring(1, 23), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var ts)) continue;
+                    if ((now - ts).TotalSeconds > 15) break;
+                    if (l.IndexOf("install", StringComparison.OrdinalIgnoreCase) >= 0 || l.IndexOf("download", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        delegate bool EnumProc(IntPtr h, IntPtr l);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder sb, int n);
+
+        // WM_CLOSE (posted: same as the window's X button) to the top-level windows of one process, hidden ones too
+        static int PostCloseToWindows(int pid)
+        {
+            int n = 0;
+            EnumWindows((h, l) =>
+            {
+                GetWindowThreadProcessId(h, out uint wp);
+                if (wp != (uint)pid) return true;
+                var sb = new StringBuilder(64); GetClassName(h, sb, 64);
+                if (!sb.ToString().StartsWith("Chrome_WidgetWin")) return true;      // only Electron's real windows
+                if (PostMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero)) n++;
+                return true;
+            }, IntPtr.Zero);
+            return n;
         }
 
         public static string Ago(DateTime utc)
