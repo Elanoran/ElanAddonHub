@@ -46,7 +46,7 @@ public class AdminModule : IModule
         ["members"] = new JsonArray(hub.Auth.ListPersonal().Select(p => (JsonNode)new JsonObject
         {
             ["name"] = p.Name, ["role"] = p.Role,
-            ["online"] = hub.Members.Any(x => x.Personal && LodgeHub.Same(x.Name, p.Name)),
+            ["online"] = hub.Members.Any(x => x.Personal && LodgeHub.Same(x.Name, p.Name) && hub.CanSee(me, x)),
         }).ToArray()),
         ["channels"] = new JsonArray(hub.Channels.All.Select(c => (JsonNode)c.ToJson()).ToArray()),
     });
@@ -108,6 +108,7 @@ public class AdminModule : IModule
     Member Target(Member me, JsonObject m)
     {
         var t = hub.Find(m["id"]?.GetValue<int>() ?? 0) ?? throw new InvalidOperationException("They're not online");
+        if (!hub.CanSee(me, t)) throw new InvalidOperationException("They're not online"); // an officer can't act on someone invisible
         if (Roles.Level(t.Role) >= Roles.Level(me.Role)) throw new InvalidOperationException("You can only do that to lower ranks");
         return t;
     }

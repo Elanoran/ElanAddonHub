@@ -28,8 +28,9 @@ public static class Roles
         Perm.PinMessages => AtLeast(role, "officer"),     // pin / unpin messages
         Perm.ManageMembers => AtLeast(role, "owner"),     // invites, ranks, removing people
         Perm.ManageChannels => AtLeast(role, "owner"),
+        Perm.SeeInvisible => AtLeast(role, "owner"),      // members who chose "Appear offline" (needed to moderate them)
         _ => false,
     };
 }
 
-public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels }
+public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels, SeeInvisible }

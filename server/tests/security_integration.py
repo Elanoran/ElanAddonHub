@@ -230,6 +230,33 @@ async def suite_b(base):
             if x is not None: await x.close()
 
 
+async def suite_c(base):
+    """2.5: "Appear offline" - an invisible guest stays connected but others never see it."""
+    async with aiohttp.ClientSession() as s:
+        b = await ws_open(s, base, BOB, "192.0.2.51"); await recv(b, "welcome")
+        e = await ws_open(s, base, ELAN, "192.0.2.52"); await recv(e, "welcome")
+        r = await s.get(base + "/health", headers=H(ELAN, "198.51.100.90")); before = (await r.json())["online"]
+        url = base.replace("http", "ws") + "/ws?name=Ghosty&vis=invisible"
+        g = await s.ws_connect(url, headers=H(GUEST, "192.0.2.53"))
+        gw = await recv(g, "welcome")
+        check("invisible guest: connected, sees itself flagged", gw is not None and any(u.get("invisible") for u in gw["users"]))
+        check("... others get no join", (await recv(b, "join", 1, lambda d: "Ghosty" in d["user"]["name"])) is None)
+        j = await recv(e, "join", 1, lambda d: "Ghosty" in d["user"]["name"])
+        check("... the owner gets the join with the invisible marker", j is not None and j["user"].get("invisible") is True)
+        r = await s.get(base + "/health", headers=H(ELAN, "198.51.100.90"))
+        check("... public online count unchanged", (await r.json())["online"] == before)
+        await g.send_str(json.dumps({"t": "typing", "channel": "general"}))
+        await g.send_str(json.dumps({"t": "game", "playing": True, "name": "Ghosty", "zone": "Nowhere", "level": 5}))
+        check("... typing and presence are not forwarded", (await recv(b, "typing", 1)) is None and (await recv(b, "user", 0.5)) is None)
+        await g.send_str(json.dumps({"t": "msg", "channel": "general", "text": "boo"}))
+        m = await recv(b, "msg", 2, lambda d: d["text"] == "boo")
+        check("... but its messages are delivered with the author", m is not None and "Ghosty" in m["from"])
+        await g.send_str(json.dumps({"t": "status", "status": "online", "note": "", "visibility": "visible"}))
+        j = await recv(b, "join", 2, lambda d: "Ghosty" in d["user"]["name"])
+        check("... switching to visible broadcasts a normal join with presence", j is not None and (j["user"].get("game") or {}).get("zone") == "Nowhere")
+        for w in (g, b, e): await w.close()
+
+
 def scan_logs(*datas):
     text = ""
     for d in datas:
@@ -246,6 +273,7 @@ def main():
     try:
         wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge")
         asyncio.run(suite_a("http://127.0.0.1:5291/lodge"))
+        asyncio.run(suite_c("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_b("http://127.0.0.1:5292/lodge"))
     finally:
         for p in (pa, pb): p.terminate()

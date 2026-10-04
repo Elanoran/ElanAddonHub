@@ -115,7 +115,7 @@ public class ChatModule : IModule
             case "unpin": await Pin(me, m, false); return true;
             case "typing":
                 var ch = hub.Channels.Get((string)m["channel"]) ?? hub.Channels.DefaultText;
-                if (!ch.VisibleTo(me.Role)) return true;
+                if (!ch.VisibleTo(me.Role) || me.Invisible) return true; // invisible members never show as typing
                 // coalesced: at most one "typing" per person and channel every 2 s
                 var now = hub.Clock.UtcNow;
                 if (me.LastTyping.TryGetValue(ch.Id, out var last) && now - last < TypingEvery) return true;

@@ -27,6 +27,20 @@
   everything else is ignored. Same properties as 2.3: one per person per reaction, 30 per reaction, Control budget, rank-visible channels only.
 - Stored reactions are migrated on history load with the same bounds (names deduplicated case-insensitively, max 30, unknown keys dropped).
 
+## 2.5.0 (rich presence, Appear offline)
+
+- Rich presence fields are untrusted client input: strings go through `Names.Snippet` (NFKC, control/format characters removed,
+  length-bounded), numbers are clamped, `flags` is masked to a whitelist, inconsistent combinations are dropped, non-string/number
+  JSON in a field is ignored (no exception can reach the receive loop). They spend the existing Control budget; a message that
+  changes nothing is not re-broadcast. A malformed `status`/`game` value no longer throws.
+- Invisible members: visibility is decided in one place (`LodgeHub.CanSee`, `UserFor`, `Mutate`, `BroadcastPresence`); every roster,
+  join, leave, user, typing, presence and health-count path goes through it, and `Perm.SeeInvisible` (owner only) is the only way to
+  see them in full. Officers can't act on someone they can't see. The test-suite asserts rosters, broadcasts, typing, status/game,
+  health count, voice masking and re-appearance. Honest limits: messages, reactions and pins carry the author's name; the voice
+  list shows them while they are in a room; a guest-name collision suffix (" 2") can reveal that a name is taken; and an owner using an
+  old hub sees an invisible member as an ordinary one (it doesn't know the `invisible` marker).
+- Toggling visibility broadcasts at most as much as a status change and uses the same per-identity Control budget.
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.
@@ -43,9 +57,9 @@
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 72 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 82 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
-python server/tests/security_integration.py                     # 32 checks against two local servers
+python server/tests/security_integration.py                     # 39 checks against two local servers
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 15 checks
 ```
 

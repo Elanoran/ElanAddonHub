@@ -1,4 +1,4 @@
-# Lodge protocol (v2.4)
+# Lodge protocol (v2.5)
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
@@ -22,7 +22,7 @@ older shorter codes keep working. Invite links look like `https://<site>/lodge#i
 | `POST /files` raw body, header `X-File-Name` (URL-encoded) | `X-Lodge-Code`, member+ | `{"id","name","size","mime","at","by"}`; 403 guests, 413 too big, 507 storage full (`LODGE_MAX_STORAGE_MB` / `LODGE_MAX_FILES`), 429 too many at once or > `LODGE_UPLOADS_PER_10MIN` per person |
 | `GET /files/{id}` | `X-Lodge-Code` | the file (range requests supported) |
 
-## WebSocket `GET /ws?name=<display name>&client=<hub/2.0.0>` + header `X-Lodge-Code`
+## WebSocket `GET /ws?name=<display name>&client=<hub/2.0.0>[&vis=invisible]` + header `X-Lodge-Code`
 
 Text frames are JSON with a `t` field. A closed socket with status 1008 (policy) carries the reason the client
 shows: kicked, code removed, signed in elsewhere, lodge full - clients don't reconnect after those.
@@ -41,7 +41,7 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 
 `channel` = `{id, name, type: text|voice, minRole, max}` (only the ones your rank may see)
 `user` = `{id, name, guest, role, room, voice, muted, deaf, serverMuted, status, note, game?}`
-`game` = `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex?}` - what they play (null = not shared)
+`game` = `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex?, flags?, xpPct?, rested?, groupSize?, inInstance?, instanceName?}` - what they play (null = not shared). `user.invisible: true` appears only in the entry of yourself and for ranks with `SeeInvisible` (see 2.5).
 
 ### Client → server
 
@@ -49,8 +49,8 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 - `react` `{id, emoji}` - toggles your reaction; `emoji` is one of the welcome's `reactions` ids (`ready, notready, lol, love, fight, loot, wipe, epic`); legacy emoji from 2.14 hubs are mapped (✅ and 👍 -> ready, ❌ -> notready, 😂 -> lol, ❤ -> love, ⚔ -> fight; U+FE0F optional); anything else is ignored. One per person and reaction, at most 30 people per reaction. Control budget.
 - officer+ (`Perm.PinMessages`): `pin` `{id}` · `unpin` `{id, channel?}` - at most 25 pins per channel, kept in `<data>/pins.json` (atomic writes) with their own copy of text/author/time, so they outlive the history window; deleting the message unpins it. Others get an error.
 - `edit` `{id, text}` (own) · `delete` `{id}` (own; officer+: anyone's) · `typing` `{channel}`
-- `voice` `{room}` (`room: null` leaves) · `state` `{muted, deaf}` · `status` `{status, note}` · `ping`
-- `game` `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex? (2 male, 3 female)}` or `{share: false}` - rich presence
+- `voice` `{room}` (`room: null` leaves) · `state` `{muted, deaf}` · `status` `{status, note, visibility?}` · `ping`
+- `game` `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex? (2 male, 3 female), flags?, xpPct?, rested?, groupSize?, inInstance?, instanceName?, visibility?}` or `{share: false}` - rich presence (2.5 fields below)
 - officer+: `mod.kick` `{id}` · `mod.mute` `{id, on}` - lower ranks only
 - guild master: `admin.members` · `admin.invite` `{name, role}` · `admin.role` `{name, role}` · `admin.remove` `{name}`
   · `admin.channel.add` `{name, type, minRole, max}` · `admin.channel.remove` `{id}`
@@ -85,6 +85,39 @@ first voice room.
   non-whitelisted ones dropped; idempotent), then persisted by the next compaction.
 - `react` broadcasts carry `reaction` (id) and `emoji` (fallback: ✅ ❌ 😂 ❤️ ⚔️ 💰 💀 💎). A 2.14 hub shows the fallback emoji for live
   reactions but sees ids in `welcome.reactions`/history, so it should be updated.
+
+## 2.5 additions and compatibility
+
+**Rich presence.** The `game` message (and the `game` object of every `user`) gains optional fields, all validated and
+bounded by the server (`PresenceModule.BuildGame`); a client that doesn't send them gets neutral values, an older hub
+ignores them.
+
+| field | meaning | server rule |
+|---|---|---|
+| `zone` | zone text | normalized (NFKC, no control/format characters), max 40 |
+| `flags` | bit set: 1 in combat, 2 dead/ghost, 4 AFK, 8 resting, 16 in an instance, 32 raid instance, 64 party instance, 128 in a group | masked to those 8 bits; 16/32/64 cleared without an instance, 128 follows `groupSize` |
+| `xpPct` | 0-100, or absent when the client could not read it | clamped; absent -> `null` |
+| `rested` | rested XP | bool |
+| `groupSize` | people in my group (0 = solo) | clamped 0-40 |
+| `inInstance`, `instanceName` | inside a dungeon/raid/battleground, and its name | name dropped when not in an instance, max 40 |
+
+Same budget as before (Control: burst 30, then 5 per s). A `game` message that sanitizes to exactly what is already stored is
+not broadcast again. Nothing here is secret in the game: it is what the Hub reads from the companion's status strip.
+
+**Appear offline.** `status` and `game` messages may carry `visibility: "visible" | "invisible"` (anything else, or absent,
+leaves it unchanged - so old hubs never change it), and a hub can connect invisible with `&vis=invisible` so no join is ever
+announced. No new message types: an invisible member is simply never mentioned to old or new hubs that may not see them.
+
+- They stay connected and receive everything (messages, history, voice they join).
+- Left out for everyone without `SeeInvisible`: the `welcome` `users` list, `join`/`leave`/`user` broadcasts about them, `typing`,
+  status/note/game updates (stored, so they are current when the member re-appears), and the public `/health` `online` count.
+- Going invisible sends a normal `leave` to those who could see them; going visible a normal `join` with current presence.
+- Their messages and reactions still show their name (that is expected and the hub says so the first time).
+- Voice: while in a room they appear in that room's member list to people who may see the room - a masked entry (id, name, rank,
+  room, mute/deaf only; status `online`, empty note, `game: null`). They disappear again when they leave the room.
+- `SeeInvisible` (owner by default, `Roles.Can`): the owner receives the full entry plus `"invisible": true`, and the Guild Master
+  panel's online flag counts them; officers can't see or moderate them (`mod.*` answers "They're not online" unless they are in
+  a voice room the officer can see). The invisible member's own entry carries `invisible: true` too.
 
 ## Ranks
 

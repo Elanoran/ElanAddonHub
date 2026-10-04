@@ -100,7 +100,7 @@ app.MapGet("/health", (HttpContext ctx) =>
     var code = CodeFrom(ctx);
     if (string.IsNullOrEmpty(code)) return Results.Json(new { ok = true });
     var deny = Gate(ctx, code, out _);
-    return deny ?? Results.Json(new { ok = true, version = LodgeHub.Version, online = lodge.Online });
+    return deny ?? Results.Json(new { ok = true, version = LodgeHub.Version, online = lodge.VisibleOnline });
 });
 
 app.Map("/ws", async (HttpContext ctx) =>
@@ -110,7 +110,8 @@ app.Map("/ws", async (HttpContext ctx) =>
     var deny = Gate(ctx, code, out var who);
     if (deny != null) { await deny.ExecuteAsync(ctx); return; }
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
-    await lodge.Run(ws, who, code, ctx.Request.Query["name"], ctx.Request.Query["client"], IpOf(ctx), ctx.RequestAborted);
+    await lodge.Run(ws, who, code, ctx.Request.Query["name"], ctx.Request.Query["client"], IpOf(ctx), ctx.RequestAborted,
+        invisible: ctx.Request.Query["vis"] == "invisible"); // hub 2.17+: "Appear offline" from the very first moment (no join is announced)
 });
 
 // upload: raw body, headers X-Lodge-Code + X-File-Name (URL-encoded)

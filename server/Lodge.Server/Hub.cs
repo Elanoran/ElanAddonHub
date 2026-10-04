@@ -41,6 +41,7 @@ public class Member
     public string Status = "online"; // online | away | busy | dungeon | lfg
     public string Note = "";
     public JsonObject Game;          // what they're playing (from the hub), null = not shared
+    public bool Invisible;           // "Appear offline": connected, but hidden from everyone without Perm.SeeInvisible
     public Budget Budget;
     public readonly ConcurrentDictionary<string, DateTime> LastTyping = new();
     public readonly SemaphoreSlim SendLock = new(1, 1);
@@ -61,11 +62,13 @@ public class Member
         return drops.Count;
     }
 
-    public JsonObject ToJson() => new()
+    // masked = only what a voice room needs (an invisible member who joined a room is shown there, nothing else:
+    // no status, note or game)
+    public JsonObject ToJson(bool masked = false) => new()
     {
         ["id"] = Id, ["name"] = Name, ["guest"] = !Personal, ["role"] = Role,
         ["room"] = Room, ["voice"] = Room != null, ["muted"] = Muted, ["deaf"] = Deaf, ["serverMuted"] = ServerMuted,
-        ["status"] = Status, ["note"] = Note, ["game"] = Game?.DeepClone(),
+        ["status"] = masked ? "online" : Status, ["note"] = masked ? "" : Note, ["game"] = masked ? null : Game?.DeepClone(),
     };
 }
 
@@ -78,7 +81,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.4.0";
+    public const string Version = "2.5.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -97,6 +100,8 @@ public class LodgeHub
     int nextId;
 
     public int Online => members.Count;
+    // what the public /health reports: invisible members are not counted
+    public int VisibleOnline => members.Values.Count(m => !m.Invisible);
     public IEnumerable<Member> Members => members.Values;
     public Member Find(int id) => members.TryGetValue(id, out var m) ? m : null;
 
@@ -132,7 +137,7 @@ public class LodgeHub
 
     public int NextId() => Interlocked.Increment(ref nextId);
 
-    public async Task Run(WebSocket ws, Identity who, string code, string name, string clientInfo, string ip, CancellationToken ct)
+    public async Task Run(WebSocket ws, Identity who, string code, string name, string clientInfo, string ip, CancellationToken ct, bool invisible = false)
     {
         // a personal code is one person: a new sign-in replaces the old connection first, so reconnecting at
         // capacity works and doesn't need an extra slot
@@ -146,7 +151,7 @@ public class LodgeHub
         var me = new Member
         {
             Id = NextId(), Ws = ws, Code = code, Personal = who.Personal, Role = who.Role, Ip = ip,
-            ClientInfo = Names.ForLog(clientInfo, 32), Budget = BudgetFor(who, ip),
+            ClientInfo = Names.ForLog(clientInfo, 32), Budget = BudgetFor(who, ip), Invisible = invisible,
         };
         lock (admission) me.Name = who.Personal ? UniqueName(Names.Normalize(who.Name)) : UniqueName(GuestName(name), Auth.PersonalNames);
         if (!TryAdmit(me))
@@ -158,7 +163,7 @@ public class LodgeHub
         try
         {
             await Send(me, Welcome(me));
-            await Broadcast(new JsonObject { ["t"] = "join", ["user"] = me.ToJson() }, m => m.Id != me.Id);
+            await BroadcastJoin(me);
             await ReceiveLoop(me, ct);
         }
         catch (Exception e) when (e is WebSocketException or OperationCanceledException or IOException) { }
@@ -168,7 +173,7 @@ public class LodgeHub
             {
                 me.Budget.LastUsed = Clock.UtcNow;
                 Log.LogInformation("{Name} left", me.Name);
-                await Broadcast(new JsonObject { ["t"] = "leave", ["id"] = me.Id });
+                await BroadcastLeave(me);
             }
         }
     }
@@ -192,7 +197,7 @@ public class LodgeHub
             ["reactions"] = new JsonArray(ChatModule.ReactionSet.Select(e => (JsonNode)JsonValue.Create(e)).ToArray()), // canonical ids (2.4)
             ["pins"] = pins,
             ["channels"] = new JsonArray(visible.Select(c => (JsonNode)c.ToJson()).ToArray()),
-            ["users"] = new JsonArray(members.Values.Select(m => (JsonNode)m.ToJson()).ToArray()),
+            ["users"] = new JsonArray(members.Values.Where(m => CanSee(me, m)).Select(m => (JsonNode)UserFor(m, me)).ToArray()),
             ["history"] = history,
         };
     }
@@ -262,7 +267,62 @@ public class LodgeHub
         return Task.WhenAll(members.Values.Where(m => where == null || where(m)).Select(m => SendRaw(m, data, WebSocketMessageType.Text)));
     }
 
-    public Task BroadcastUser(Member m) => Broadcast(new JsonObject { ["t"] = "user", ["user"] = m.ToJson() });
+    // ---- visibility ("Appear offline"). An invisible member stays connected and receives everything; everyone else
+    // is told about them only where the rules below allow: themselves, anyone with Perm.SeeInvisible (full entry plus
+    // "invisible": true), and - only while they sit in a voice room - people who may see that room (masked entry:
+    // no status, note or game). Every roster/join/leave/user message goes through these helpers.
+    public bool CanSee(Member viewer, Member subject)
+    {
+        if (!subject.Invisible || viewer.Id == subject.Id) return true;
+        if (Roles.Can(viewer.Role, Perm.SeeInvisible)) return true;
+        return subject.Room != null && Channels.Get(subject.Room)?.VisibleTo(viewer.Role) == true;
+    }
+
+    public JsonObject UserFor(Member subject, Member viewer)
+    {
+        if (!subject.Invisible) return subject.ToJson();
+        bool full = viewer.Id == subject.Id || Roles.Can(viewer.Role, Perm.SeeInvisible);
+        var j = subject.ToJson(masked: !full);
+        if (full) j["invisible"] = true;
+        return j;
+    }
+
+    public Task BroadcastJoin(Member me) =>
+        Task.WhenAll(members.Values.Where(v => v.Id != me.Id && CanSee(v, me))
+            .Select(v => Send(v, new JsonObject { ["t"] = "join", ["user"] = UserFor(me, v) })));
+
+    // `gone` is already out of the member table
+    public Task BroadcastLeave(Member gone) =>
+        Task.WhenAll(members.Values.Where(v => CanSee(v, gone))
+            .Select(v => Send(v, new JsonObject { ["t"] = "leave", ["id"] = gone.Id })));
+
+    // apply a change that may alter who can see `me` (visibility, voice room): viewers who gain sight get a join,
+    // who lose it a leave, who keep it an update
+    public async Task Mutate(Member me, Action change)
+    {
+        var before = members.Values.Where(v => v.Id != me.Id && CanSee(v, me)).Select(v => v.Id).ToHashSet();
+        change();
+        var sends = new List<Task>();
+        foreach (var v in members.Values)
+        {
+            if (v.Id == me.Id) { sends.Add(Send(v, new JsonObject { ["t"] = "user", ["user"] = UserFor(me, v) })); continue; }
+            bool was = before.Contains(v.Id), now = CanSee(v, me);
+            if (now) sends.Add(Send(v, new JsonObject { ["t"] = was ? "user" : "join", ["user"] = UserFor(me, v) }));
+            else if (was) sends.Add(Send(v, new JsonObject { ["t"] = "leave", ["id"] = me.Id }));
+        }
+        await Task.WhenAll(sends);
+    }
+
+    public Task BroadcastUser(Member m) => Mutate(m, () => { });
+
+    // status / game updates: an invisible member's go to themselves and to Perm.SeeInvisible only (never to the
+    // voice-room viewers, who only get the masked entry)
+    public Task BroadcastPresence(Member m)
+    {
+        if (!m.Invisible) return BroadcastUser(m);
+        return Task.WhenAll(members.Values.Where(v => v.Id == m.Id || Roles.Can(v.Role, Perm.SeeInvisible))
+            .Select(v => Send(v, new JsonObject { ["t"] = "user", ["user"] = UserFor(m, v) })));
+    }
 
     // channels changed (or someone's rank did): everyone gets their own up-to-date view
     public Task Resync(Func<Member, bool> where = null) =>
@@ -280,7 +340,7 @@ public class LodgeHub
         catch { }
         var ws = m.Ws;
         _ = Task.Delay(5000).ContinueWith(_ => { if (ws.State != WebSocketState.Closed) ws.Abort(); });
-        await Broadcast(new JsonObject { ["t"] = "leave", ["id"] = m.Id });
+        await BroadcastLeave(m);
     }
 
     // ---------------------------------------------------------------- housekeeping
