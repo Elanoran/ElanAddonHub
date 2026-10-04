@@ -112,15 +112,16 @@ public class ChatFeatureTests
         await r.Do(bob, new { t = "react", id, emoji = "<b>x</b>" });
         Assert.Empty(r.Sock("Elan").Of("react"));
 
-        await r.Do(bob, new { t = "react", id, emoji = "\U0001F44D" });
-        await r.Do(elan, new { t = "react", id, emoji = "\U0001F44D" });
-        await r.Do(bob, new { t = "react", id, emoji = "❤" });      // heart without U+FE0F -> canonical heart
+        await r.Do(bob, new { t = "react", id, emoji = "ready" });
+        await r.Do(elan, new { t = "react", id, emoji = "ready" });
+        await r.Do(bob, new { t = "react", id, emoji = "love" });      // legacy-free canonical id
         var reacts = r.Sock("Elan").Of("react");
         Assert.Equal(3, reacts.Count);
         Assert.Equal(new[] { "Bob", "Elan" }, reacts[1]["users"]!.AsArray().Select(x => (string)x!).ToArray());
-        Assert.Equal("❤️", (string)reacts[2]["emoji"]!);
+        Assert.Equal("love", (string)reacts[2]["reaction"]!);
+        Assert.Equal("❤️", (string)reacts[2]["emoji"]!);   // fallback for 2.14 hubs
 
-        await r.Do(bob, new { t = "react", id, emoji = "\U0001F44D" });  // toggles off
+        await r.Do(bob, new { t = "react", id, emoji = "ready" });  // toggles off
         var off = r.Sock("Elan").Of("react").Last();
         Assert.False((bool)off["on"]!);
         Assert.Equal(new[] { "Elan" }, off["users"]!.AsArray().Select(x => (string)x!).ToArray());
@@ -130,15 +131,67 @@ public class ChatFeatureTests
         var rec = again.Messages.Single(x => (string)x["id"] == id);
         var stored = rec["reactions"]!.AsObject();
         Assert.Equal(2, stored.Count);
-        Assert.Equal(new[] { "Elan" }, stored["\U0001F44D"]!.AsArray().Select(x => (string)x!).ToArray());
+        Assert.Equal(new[] { "Elan" }, stored["ready"]!.AsArray().Select(x => (string)x!).ToArray());
         var hub2 = r.Make();
         Assert.NotNull(hub2.Chat.HistoryFor("general").Single(x => (string)x!["id"] == id)!["reactions"]);
 
         // removing the last reaction removes the field again
-        await r.Do(elan, new { t = "react", id, emoji = "\U0001F44D" });
-        await r.Do(bob, new { t = "react", id, emoji = "❤️" });
+        await r.Do(elan, new { t = "react", id, emoji = "ready" });
+        await r.Do(bob, new { t = "react", id, emoji = "love" });
         var cleared = new HistoryStore(System.IO.Path.Combine(r.Dir.Path, "history"), "general", 1 << 20, T.Log);
         Assert.Null(cleared.Messages.Single(x => (string)x["id"] == id)["reactions"]);
+    }
+
+    [Theory]
+    [InlineData("✅", "ready")] [InlineData("\U0001F44D", "ready")] [InlineData("❌", "notready")]
+    [InlineData("\U0001F602", "lol")] [InlineData("❤️", "love")] [InlineData("❤", "love")]
+    [InlineData("⚔️", "fight")] [InlineData("⚔", "fight")]
+    [InlineData("ready", "ready")] [InlineData("notready", "notready")] [InlineData("lol", "lol")] [InlineData("love", "love")]
+    [InlineData("fight", "fight")] [InlineData("loot", "loot")] [InlineData("wipe", "wipe")] [InlineData("epic", "epic")]
+    public void Reaction_ids_and_legacy_emoji_map_to_canonical_ids(string input, string expected)
+        => Assert.Equal(expected, ChatModule.CanonReaction(input));
+
+    [Theory]
+    [InlineData("\U0001F921")] [InlineData("READY")] [InlineData("<b>x</b>")] [InlineData("")] [InlineData("0123456789abcdef")]
+    public void Anything_else_is_not_a_reaction(string input) => Assert.Null(ChatModule.CanonReaction(input));
+
+    [Fact]
+    public async Task Legacy_emoji_from_2_14_hubs_are_accepted_and_broadcast_with_id_and_emoji_fallback()
+    {
+        using var r = new Rig();
+        var elan = r.Join("Elan", "owner"); var bob = r.Join("Bob", "officer");
+        var id = await r.Say(elan, "hello");
+        await r.Do(bob, new { t = "react", id, emoji = "⚔️" });
+        await r.Do(bob, new { t = "react", id, emoji = "loot" });
+        var reacts = r.Sock("Elan").Of("react");
+        Assert.Equal("fight", (string)reacts[0]["reaction"]!);
+        Assert.Equal("⚔️", (string)reacts[0]["emoji"]!);
+        Assert.Equal("loot", (string)reacts[1]["reaction"]!);
+        Assert.Equal("\U0001F4B0", (string)reacts[1]["emoji"]!);
+        Assert.Equal(new[] { "ready", "notready", "lol", "love", "fight", "loot", "wipe", "epic" }, ChatModule.ReactionSet);
+        Assert.Equal(ChatModule.ReactionSet.Length, ChatModule.ReactionEmoji.Length);
+    }
+
+    [Fact]
+    public void Stored_emoji_reactions_are_migrated_to_ids_on_load_and_idempotently()
+    {
+        using var d = new TempDir();
+        var hist = System.IO.Path.Combine(d.Path, "history");
+        System.IO.Directory.CreateDirectory(hist);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(hist, "general.jsonl"),
+            "{\"id\":\"a\",\"at\":1,\"from\":\"Elan\",\"text\":\"x\",\"reactions\":{\"\U0001F44D\":[\"Bob\"],\"✅\":[\"bob\",\"Cy\"],\"❤️\":[\"Elan\"],\"\U0001F921\":[\"Zed\"]}}\n" +
+            "{\"id\":\"b\",\"at\":2,\"from\":\"Elan\",\"text\":\"y\",\"reactions\":{\"wipe\":[\"Bob\"]}}\n" +
+            "{\"id\":\"c\",\"at\":3,\"from\":\"Elan\",\"text\":\"z\"}\n");
+        var s = new HistoryStore(hist, "general", 1 << 20, T.Log);
+        var a = s.Messages.Single(x => (string)x["id"] == "a")["reactions"]!.AsObject();
+        Assert.Equal(new[] { "ready", "love" }, a.Select(kv => kv.Key).ToArray());   // clown dropped, thumbs up + check merged
+        Assert.Equal(new[] { "Bob", "Cy" }, a["ready"]!.AsArray().Select(x => (string)x!).ToArray()); // "bob" deduped case-insensitively
+        Assert.Equal("wipe", s.Messages.Single(x => (string)x["id"] == "b")["reactions"]!.AsObject().Single().Key);
+        Assert.Null(s.Messages.Single(x => (string)x["id"] == "c")["reactions"]);
+        foreach (var m in s.Messages) Assert.False(ChatModule.MigrateReactions(m)); // idempotent
+        Assert.True(s.Compact());
+        var again = new HistoryStore(hist, "general", 1 << 20, T.Log);
+        Assert.Equal(new[] { "ready", "love" }, again.Messages[0]["reactions"]!.AsObject().Select(kv => kv.Key).ToArray());
     }
 
     [Fact]
@@ -147,14 +200,14 @@ public class ChatFeatureTests
         using var r = new Rig();
         var elan = r.Join("Elan", "owner"); var guest = r.Join("Gus", "guest");
         var secret = await r.Say(elan, "officers only", "officers");
-        await r.Do(guest, new { t = "react", id = secret, emoji = "\U0001F44D" });
+        await r.Do(guest, new { t = "react", id = secret, emoji = "ready" });
         Assert.Empty(r.Sock("Elan").Of("react"));
 
         var id = await r.Say(elan, "popular");
         for (int i = 0; i < ChatModule.MaxReactors + 5; i++)
         {
             var p = r.Join("Fan" + i, "member", admit: false);
-            await r.Do(p, new { t = "react", id, emoji = "✅" });
+            await r.Do(p, new { t = "react", id, emoji = "ready" });
         }
         Assert.Equal(ChatModule.MaxReactors, r.Sock("Elan").Of("react").Last()["users"]!.AsArray().Count);
     }

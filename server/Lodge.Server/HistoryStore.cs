@@ -66,7 +66,9 @@ public sealed class HistoryStore
                 if (lines[i].Length == 0) continue;
                 try { var m = JsonNode.Parse(lines[i])?.AsObject(); if (m != null) { m["channel"] = channel; parsed.Add(m); } } catch { }
             }
-            recordsOnDisk = parsed.Count + (start > 0 ? Keep * 2 : 0); // a cut file: compact on the next write
+            bool migrated = false;
+            foreach (var m in parsed) migrated |= ChatModule.MigrateReactions(m); // 2.4: stored emoji reactions become ids
+            recordsOnDisk = parsed.Count + (start > 0 || migrated ? Keep * 2 : 0); // a cut or migrated file: compact on the next write
             Messages.AddRange(parsed.Count > Keep ? parsed.GetRange(parsed.Count - Keep, Keep) : parsed);
         }
         catch (Exception e) { log?.LogWarning("History {Channel}: load failed: {Error}", channel, e.GetType().Name); }

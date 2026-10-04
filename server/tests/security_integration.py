@@ -158,7 +158,7 @@ async def suite_a(base):
 
         # ---- 2.3 features: reactions are budgeted, pinning is officer-only
         b = await ws_open(s, base, BOB, "192.0.2.70"); w = await recv(b, "welcome")
-        check("welcome advertises features and canPin for an officer", w and {"reply", "react", "pin"} <= set(w.get("features", [])) and w.get("canPin") is True, w and w.get("features"))
+        check("welcome advertises features and canPin for an officer", w and {"reply", "react", "react2", "pin"} <= set(w.get("features", [])) and w.get("canPin") is True, w and w.get("features"))
         g = await ws_open(s, base, GUEST, "192.0.2.71", "Gus"); gw = await recv(g, "welcome")
         check("guest welcome: canPin false", gw and gw.get("canPin") is False)
         await b.send_str(json.dumps({"t": "msg", "channel": "general", "text": "pin test"}))
@@ -171,7 +171,14 @@ async def suite_a(base):
         p = await recv(g, "pin", 3)
         check("only whitelisted emoji pass; the officer's pin is broadcast",
               p is not None and p["pin"]["id"] == mid and await recv(g, "react", 0.5) is None, p)
-        for i in range(400): await b.send_str(json.dumps({"t": "react", "id": mid, "emoji": "\U0001F44D"}))
+        await b.send_str(json.dumps({"t": "react", "id": mid, "emoji": "nonsense"}))     # non-whitelisted id: ignored
+        check("non-whitelisted reaction id ignored", await recv(g, "react", 0.5) is None)
+        await b.send_str(json.dumps({"t": "react", "id": mid, "emoji": "\u2694\ufe0f"}))   # legacy emoji from a 2.14 hub: accepted
+        lg = await recv(g, "react", 3)
+        check("legacy emoji accepted and mapped to its id (with emoji fallback)", lg is not None and lg.get("reaction") == "fight" and lg.get("emoji") == "\u2694\ufe0f", lg)
+        await b.send_str(json.dumps({"t": "react", "id": mid, "emoji": "fight"}))        # toggle off again
+        await recv(g, "react", 3)
+        for i in range(400): await b.send_str(json.dumps({"t": "react", "id": mid, "emoji": "ready"}))
         passed = 0
         while await recv(g, "react", 1.0) is not None: passed += 1
         check("react flood is dropped by the control budget (<= burst + refill)", 0 < passed < 70, passed)

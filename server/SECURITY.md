@@ -21,6 +21,12 @@
   logged without text. A channel the rank can't see never leaks messages, reactions or pins. Pin text is clipped to 300 chars.
 - Replies: the quoted id must exist in the same channel; the snippet is normalized and bounded.
 
+## 2.4.0 (reaction ids)
+
+- Reactions are a fixed whitelist of 8 ids; legacy emoji are mapped through the same function (`ChatModule.CanonReaction`, length-bounded),
+  everything else is ignored. Same properties as 2.3: one per person per reaction, 30 per reaction, Control budget, rank-visible channels only.
+- Stored reactions are migrated on history load with the same bounds (names deduplicated case-insensitively, max 30, unknown keys dropped).
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.
@@ -37,9 +43,9 @@
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 49 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 72 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
-python server/tests/security_integration.py                     # 30 checks against two local servers
+python server/tests/security_integration.py                     # 32 checks against two local servers
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 15 checks
 ```
 

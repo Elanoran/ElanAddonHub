@@ -14,17 +14,56 @@ public class ChatModule : IModule
     readonly ConcurrentDictionary<string, HistoryStore> stores = new();
     public readonly PinStore Pins;
 
-    // the fixed reaction set (the only emoji the server accepts); canonical forms carry U+FE0F where the emoji has one
-    public static readonly string[] ReactionSet = { "\U0001F44D", "\U0001F602", "❤️", "✅", "❌", "⚔️" };
-    public const int MaxReactors = 30;      // distinct people per emoji on one message
+    // the fixed reaction set (canonical ids; anything else is ignored). 2.4: ids instead of emoji.
+    public static readonly string[] ReactionSet = { "ready", "notready", "lol", "love", "fight", "loot", "wipe", "epic" };
+    // a representative emoji per id: sent as "emoji" next to the id so 2.14 hubs still show something
+    public static readonly string[] ReactionEmoji = { "✅", "❌", "😂", "❤️", "⚔️", "💰", "💀", "💎" };
+    public const int MaxReactors = 30;      // distinct people per reaction on one message
     public const int SnippetMax = 80;
 
-    // null when it isn't one of the whitelisted emoji (a missing U+FE0F is accepted)
+    public static string EmojiOf(string id) => ReactionEmoji[Array.IndexOf(ReactionSet, id)];
+
+    // canonical id, or null when it isn't whitelisted. Legacy emoji from 2.14 hubs and old stored history map to ids
+    // (a missing U+FE0F is accepted); the thumbs up of 2.3 becomes "ready".
     public static string CanonReaction(string e)
     {
-        if (string.IsNullOrEmpty(e) || e.Length > 8) return null;
-        var bare = e.Replace("️", "");
-        return ReactionSet.FirstOrDefault(r => r.Replace("️", "") == bare);
+        if (string.IsNullOrEmpty(e) || e.Length > 12) return null;
+        if (Array.IndexOf(ReactionSet, e) >= 0) return e;
+        switch (e.Replace("️", ""))
+        {
+            case "✅": case "👍": return "ready";
+            case "❌": return "notready";
+            case "😂": return "lol";
+            case "❤": return "love";
+            case "⚔": return "fight";
+        }
+        return null;
+    }
+
+    // rewrites legacy emoji keys of one record's "reactions" to ids (merged, deduped, capped); true when anything changed. Idempotent.
+    public static bool MigrateReactions(JsonObject msg)
+    {
+        if (msg["reactions"] is not JsonObject old) return false;
+        var merged = new List<KeyValuePair<string, List<string>>>();
+        bool changed = false;
+        foreach (var kv in old)
+        {
+            var id = CanonReaction(kv.Key);
+            if (id == null) { changed = true; continue; }          // not in the set: dropped
+            if (id != kv.Key) changed = true;
+            var names = (kv.Value as JsonArray)?.Select(x => (string)x).Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();
+            var slot = merged.FirstOrDefault(x => x.Key == id);
+            if (slot.Value == null) { slot = new(id, new List<string>()); merged.Add(slot); }
+            else changed = true;
+            foreach (var n in names)
+                if (!slot.Value.Any(x => Names.Same(x, n)) && slot.Value.Count < MaxReactors) slot.Value.Add(n);
+        }
+        if (!changed) return false;
+        msg.Remove("reactions");
+        var o = new JsonObject();
+        foreach (var kv in merged) if (kv.Value.Count > 0) o[kv.Key] = new JsonArray(kv.Value.Select(x => (JsonNode)JsonValue.Create(x)).ToArray());
+        if (o.Count > 0) msg["reactions"] = o;
+        return true;
     }
 
     public ChatModule(LodgeHub hub)
@@ -173,7 +212,7 @@ public class ChatModule : IModule
         if (!saved) await hub.Error(me, "The server couldn't save the delete");
     }
 
-    // toggles the sender's reaction; the whole list for that emoji is broadcast (idempotent for clients)
+    // toggles the sender's reaction; the whole list for that reaction is broadcast (idempotent for clients)
     async Task React(Member me, JsonObject m)
     {
         var emoji = CanonReaction((string)m["emoji"]);
@@ -200,7 +239,7 @@ public class ChatModule : IModule
             users = new JsonArray(list.Select(x => (JsonNode)JsonValue.Create((string)x)).ToArray());
         }
         if (full) { await hub.Error(me, "That reaction is full"); return; }
-        await hub.Broadcast(new JsonObject { ["t"] = "react", ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["emoji"] = emoji, ["users"] = users, ["by"] = me.Name, ["on"] = on }, Viewers(ch));
+        await hub.Broadcast(new JsonObject { ["t"] = "react", ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["reaction"] = emoji, ["emoji"] = EmojiOf(emoji), ["users"] = users, ["by"] = me.Name, ["on"] = on }, Viewers(ch));
         if (!saved) await hub.Error(me, "The server couldn't save that reaction");
     }
 
