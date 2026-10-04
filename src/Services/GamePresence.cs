@@ -23,6 +23,9 @@ namespace ElansAddonHub.Services
         }
 
         readonly Func<string> wowRoot;
+        readonly Func<bool> pixelOn;
+        public readonly PixelStrip Strip;
+        Character held; // last character seen on the strip (kept for a while if the strip disappears)
         readonly DispatcherTimer timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         readonly DispatcherTimer debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         readonly List<FileSystemWatcher> watchers = new List<FileSystemWatcher>();
@@ -34,14 +37,17 @@ namespace ElansAddonHub.Services
         public Character Current { get; private set; }
         public event Action Changed;
 
-        public GamePresence(Func<string> wowRoot)
+        public GamePresence(Func<string> wowRoot, Func<bool> pixelOn = null)
         {
             this.wowRoot = wowRoot;
+            this.pixelOn = pixelOn ?? (() => true);
+            Strip = new PixelStrip(this.pixelOn);
+            Strip.Changed += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(Poll));
             timer.Tick += (s, e) => Poll();
             debounce.Tick += (s, e) => { debounce.Stop(); Poll(); };
         }
 
-        public void Start() { Poll(); timer.Start(); }
+        public void Start() { Poll(); timer.Start(); Strip.Start(); }
 
         public void Poll()
         {
@@ -59,10 +65,42 @@ namespace ElansAddonHub.Services
 
             Character shown = last;
             if (playing && last != null && !(last.Online && FromThisSession(last, started))) shown = null;
+            if (playing && pixelOn()) shown = FromStrip(shown, started);
+            else held = null;
 
             bool changed = playing != Playing || !Same(shown, Current);
             Playing = playing; Current = shown;
             if (changed) Changed?.Invoke();
+        }
+
+        // Live data from the addon's pixel strip beats SavedVariables (which only change on /reload and logout).
+        // If the strip vanishes (character select, UI hidden, WoW minimised) we hold the character for 45 s, then
+        // trust SavedVariables only if the addon wrote them after the strip was last seen.
+        Character FromStrip(Character saved, DateTime started)
+        {
+            var info = Strip.Latest;
+            var seen = Strip.LastSeen;
+            if (info != null && seen >= started.ToUniversalTime().AddSeconds(-5))
+            {
+                var age = DateTime.UtcNow - seen;
+                if (age < TimeSpan.FromSeconds(12))
+                {
+                    var match = last != null && string.Equals(last.Name, info.Name, StringComparison.OrdinalIgnoreCase) ? last : null;
+                    held = new Character
+                    {
+                        Name = info.Name, Class = info.ClassName, ClassFile = info.ClassFile, Race = info.RaceName, RaceFile = info.RaceFile,
+                        Sex = info.Sex, Level = info.Level, Online = true, Realm = match?.Realm, Guild = match?.Guild,
+                        Zone = match != null && FromThisSession(match, started) ? match.Zone : null,
+                        Updated = new DateTimeOffset(seen).ToUnixTimeSeconds(),
+                    };
+                    return held;
+                }
+                if (age < TimeSpan.FromSeconds(45) && held != null) return held;
+                held = null;
+                if (last != null && last.Online && last.Updated > new DateTimeOffset(seen).ToUnixTimeSeconds()) return last;
+                return null; // strip gone for good: probably at character select
+            }
+            return saved;
         }
 
         static bool FromThisSession(Character c, DateTime started)
@@ -72,7 +110,8 @@ namespace ElansAddonHub.Services
         }
 
         static bool Same(Character a, Character b) =>
-            ReferenceEquals(a, b) || (a != null && b != null && a.Name == b.Name && a.Realm == b.Realm && a.Updated == b.Updated && a.Online == b.Online);
+            ReferenceEquals(a, b) || (a != null && b != null && a.Name == b.Name && a.Realm == b.Realm && a.Online == b.Online && a.Level == b.Level
+                && a.ClassFile == b.ClassFile && a.RaceFile == b.RaceFile && a.Sex == b.Sex && a.Zone == b.Zone && a.Guild == b.Guild);
 
         static DateTime SafeStamp(string f) { try { return File.GetLastWriteTimeUtc(f); } catch { return DateTime.MinValue; } }
 

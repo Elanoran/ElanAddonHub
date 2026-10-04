@@ -140,6 +140,11 @@
                 <TextBlock x:Name="ShareGameHint" Style="{StaticResource RowHint}" /></StackPanel>
             </DockPanel>
             <DockPanel Style="{StaticResource Row}">
+              <CheckBox x:Name="PixelBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click" />
+              <StackPanel><TextBlock Text="Detect my character live" Style="{StaticResource RowTitle}" />
+                <TextBlock Style="{StaticResource RowHint}" Text="Reads the tiny status strip the Elan's Hub addon draws in the top-left corner of the game (only that corner of the screen, nothing is sent to or read from WoW). Off = the Hub learns your character only on /reload or logout." /></StackPanel>
+            </DockPanel>
+            <DockPanel Style="{StaticResource Row}">
               <CheckBox x:Name="AutoAwayBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click" />
               <StackPanel><TextBlock Text="AFK automatically" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="After 10 minutes without mouse or keyboard (also in WoW), back to Online when you return." Style="{StaticResource RowHint}" /></StackPanel>

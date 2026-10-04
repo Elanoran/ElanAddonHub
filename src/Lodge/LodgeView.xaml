@@ -7,7 +7,8 @@
     <DataTemplate x:Key="AvatarSmall">
       <Grid Width="22" Height="22">
         <Ellipse Fill="{Binding Color}" />
-        <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Ellipse Fill="{Binding IconBrush}" />
+        <TextBlock Text="{Binding Initial}" Visibility="{Binding InitialVisibility}" Foreground="#111315" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
         <Ellipse Stroke="{Binding FrameBrush}" StrokeThickness="1.5" Margin="-2" />
         <Ellipse Stroke="{Binding Ring}" StrokeThickness="2" Margin="-4.5" />
         <Border Width="13" Height="13" CornerRadius="6.5" Background="{Binding StatusBrush}" BorderBrush="{StaticResource Surface}" BorderThickness="1.5"

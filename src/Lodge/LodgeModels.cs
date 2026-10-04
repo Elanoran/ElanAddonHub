@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
+using ElansAddonHub.Services;
 
 namespace ElansAddonHub.Lodge
 {
@@ -86,6 +87,9 @@ namespace ElansAddonHub.Lodge
         public bool IsMe { get; set; }
         // the avatar is the class colour + race code once we know the character (e.g. NE on orange); otherwise name colour + initial
         public Brush Color => gameClassFile != null && ClassColors.TryGetValue(gameClassFile, out var hex) ? Avatar.Frozen(hex) : Avatar.ColorFor(Name);
+        // with a class icon found on this PC (see AvatarArt) the avatar shows it instead of the race code
+        public Brush IconBrush => gameClassFile != null ? AvatarArt.ClassBrush(gameClassFile) : null;
+        public Visibility InitialVisibility => IconBrush != null ? Visibility.Collapsed : Visibility.Visible;
         public string Initial => gameRaceFile != null ? RaceCode(gameRaceFile) : Avatar.Initial(Name);
         static readonly System.Collections.Generic.Dictionary<string, string> RaceCodes = new System.Collections.Generic.Dictionary<string, string>
         {
@@ -149,7 +153,7 @@ namespace ElansAddonHub.Lodge
             gameRace = race; gameRaceFile = raceFile; gameSex = sex;
             this.playing = playing; gameName = name; gameClass = cls; gameClassFile = classFile; gameLevel = level; gameZone = zone; gameGuild = guild;
             Raise(nameof(GameLine)); Raise(nameof(ClassBrush)); Raise(nameof(ClassBrushOrText)); Raise(nameof(GameVisibility)); Raise(nameof(PlayingVisibility));
-            Raise(nameof(Tip)); Raise(nameof(GameDetail)); Raise(nameof(Color)); Raise(nameof(Initial));
+            Raise(nameof(Tip)); Raise(nameof(GameDetail)); Raise(nameof(Color)); Raise(nameof(Initial)); Raise(nameof(IconBrush)); Raise(nameof(InitialVisibility));
         }
         public bool Playing => playing;
         static readonly System.Collections.Generic.Dictionary<string, string> ClassColors = new System.Collections.Generic.Dictionary<string, string>

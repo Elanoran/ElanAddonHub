@@ -59,7 +59,8 @@ namespace ElansAddonHub.Lodge
         public LodgeSession(Settings settings)
         {
             Settings = settings;
-            Presence = new GamePresence(() => settings.WowRoot);
+            Presence = new GamePresence(() => settings.WowRoot, () => !settings.PixelOff);
+            AvatarArt.Root = () => settings.WowRoot;
             Presence.Changed += SendGame;
             Presence.Start();
             tick.Tick += (s, e) => OnTick();

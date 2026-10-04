@@ -14,7 +14,8 @@
           <StackPanel Orientation="Horizontal">
             <Grid Width="26" Height="26">
               <Ellipse Fill="{Binding Color}" />
-              <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="12" FontWeight="Bold"
+              <Ellipse Fill="{Binding IconBrush}" />
+              <TextBlock Text="{Binding Initial}" Visibility="{Binding InitialVisibility}" Foreground="#111315" FontSize="12" FontWeight="Bold"
                          HorizontalAlignment="Center" VerticalAlignment="Center" />
               <Ellipse x:Name="ring" Stroke="{Binding Ring}" StrokeThickness="2.5" Margin="-3" />
               <Border Width="15" Height="15" CornerRadius="7.5" Background="{Binding StatusBrush}" BorderBrush="#101214" BorderThickness="1.5"

@@ -85,6 +85,17 @@ The addon stands on the work of others - thank you!
 If you're one of these authors and want something credited differently or removed, please
 [open an issue](https://github.com/Elanoran/ElanAddonHub/issues) and it will be fixed.
 
+## Live character and avatars
+
+- **Status strip.** The Elan's Hub addon draws a tiny strip (32 coloured 4x4-pixel squares) in the top-left corner of the
+  game. It encodes your class, race, sex, level and name, and the Hub reads that corner of the screen about every 2 seconds,
+  so friends see your character without a /reload. Nothing is sent to WoW and no game memory is read - it only looks at
+  pixels. Turn it off with `/ehub pixel off` in game, or the "Detect my character live" switch in the Hub settings.
+  Without it, the Hub falls back to the addon's SavedVariables (updated on /reload and logout).
+- **Avatars.** No Blizzard art is included in this repository. Class portraits are loaded at run time from your own
+  WoW folder when an installed addon ships them (currently HealBot's class icons under `Interface\AddOns\HealBot\Images\class`);
+  otherwise the avatar is the class colour with a race code.
+
 ---
 
 ## For developers

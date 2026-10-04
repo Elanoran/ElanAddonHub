@@ -72,6 +72,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "lodgeStatus")] public string LodgeStatus { get; set; }      // online | away | busy | dungeon | lfg
         [DataMember(Name = "lodgeNote")] public string LodgeNote { get; set; }
         [DataMember(Name = "autoAwayOff")] public bool AutoAwayOff { get; set; }        // false = AFK after 10 min idle
+        [DataMember(Name = "pixelOff")] public bool PixelOff { get; set; }              // true = don't read the addon's status strip from the screen
         [DataMember(Name = "shareGameOff")] public bool ShareGameOff { get; set; }      // false = show friends what I play
         [DataMember(Name = "notify")] public string NotifyMode { get; set; }          // mentions (default) | all | none
         [DataMember(Name = "soundsOff")] public bool SoundsOff { get; set; }
