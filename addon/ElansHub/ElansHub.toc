@@ -2,7 +2,7 @@
 ## Title: |cffabd473Elan's|r Hub
 ## Notes: Companion for Elan's Addon Hub: lets your friends in the Lodge see which character you play (class, level, zone).
 ## Author: Elan
-## Version: 1.1.0
+## Version: 1.2.0
 ## IconTexture: Interface\Icons\Ability_Hunter_BeastTaming
 ## SavedVariables: ElansHubDB
 

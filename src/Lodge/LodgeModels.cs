@@ -84,8 +84,15 @@ namespace ElansAddonHub.Lodge
         public string Name { get; set; }
         public bool Guest { get; set; }
         public bool IsMe { get; set; }
-        public Brush Color => Avatar.ColorFor(Name);
-        public string Initial => Avatar.Initial(Name);
+        // the avatar is the class colour + race code once we know the character (e.g. NE on orange); otherwise name colour + initial
+        public Brush Color => gameClassFile != null && ClassColors.TryGetValue(gameClassFile, out var hex) ? Avatar.Frozen(hex) : Avatar.ColorFor(Name);
+        public string Initial => gameRaceFile != null ? RaceCode(gameRaceFile) : Avatar.Initial(Name);
+        static readonly System.Collections.Generic.Dictionary<string, string> RaceCodes = new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["Human"] = "Hu", ["Dwarf"] = "Dw", ["NightElf"] = "NE", ["Gnome"] = "Gn", ["Orc"] = "Or", ["Scourge"] = "Ud", ["Undead"] = "Ud",
+            ["Tauren"] = "Ta", ["Troll"] = "Tr", ["BloodElf"] = "BE", ["Draenei"] = "Dr", ["Goblin"] = "Go", ["Worgen"] = "Wo",
+        };
+        static string RaceCode(string raceFile) => RaceCodes.TryGetValue(raceFile, out var c) ? c : raceFile.Substring(0, Math.Min(2, raceFile.Length));
 
         // ---- voice
         string room;
@@ -134,13 +141,15 @@ namespace ElansAddonHub.Lodge
 
         // ---- what they play (Elan's Hub companion addon + "WoW is running")
         bool playing;
-        string gameName, gameClass, gameClassFile, gameZone, gameGuild;
+        string gameName, gameClass, gameClassFile, gameZone, gameGuild, gameRace, gameRaceFile;
+        int gameSex;
         int gameLevel;
-        public void SetGame(bool playing, string name, string cls, string classFile, int level, string zone, string guild)
+        public void SetGame(bool playing, string name, string cls, string classFile, int level, string zone, string guild, string race = null, string raceFile = null, int sex = 0)
         {
+            gameRace = race; gameRaceFile = raceFile; gameSex = sex;
             this.playing = playing; gameName = name; gameClass = cls; gameClassFile = classFile; gameLevel = level; gameZone = zone; gameGuild = guild;
             Raise(nameof(GameLine)); Raise(nameof(ClassBrush)); Raise(nameof(ClassBrushOrText)); Raise(nameof(GameVisibility)); Raise(nameof(PlayingVisibility));
-            Raise(nameof(Tip)); Raise(nameof(GameDetail));
+            Raise(nameof(Tip)); Raise(nameof(GameDetail)); Raise(nameof(Color)); Raise(nameof(Initial));
         }
         public bool Playing => playing;
         static readonly System.Collections.Generic.Dictionary<string, string> ClassColors = new System.Collections.Generic.Dictionary<string, string>
@@ -160,7 +169,7 @@ namespace ElansAddonHub.Lodge
             get
             {
                 if (gameName == null && !playing) return null;
-                var who = gameName == null ? "" : $"{gameName}, level {gameLevel} {gameClass}";
+                var who = gameName == null ? "" : $"{gameName}, level {gameLevel} {(gameRace != null ? (gameSex == 3 ? "female " : gameSex == 2 ? "male " : "") + gameRace + " " : "")}{gameClass}";
                 var where = gameZone == null ? "" : $" - {gameZone}";
                 var guild = gameGuild == null ? "" : $" <{gameGuild}>";
                 return (playing ? "Playing " : "Last played ") + (who.Length > 0 ? who + guild + where : "WoW");

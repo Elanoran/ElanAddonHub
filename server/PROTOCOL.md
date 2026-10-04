@@ -39,14 +39,14 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 
 `channel` = `{id, name, type: text|voice, minRole, max}` (only the ones your rank may see)
 `user` = `{id, name, guest, role, room, voice, muted, deaf, serverMuted, status, note, game?}`
-`game` = `{playing, name, realm, class, classFile, level, zone, guild}` - what they play (null = not shared)
+`game` = `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex?}` - what they play (null = not shared)
 
 ### Client → server
 
 - `msg` `{channel, text, file?:{id}, replyTo?:id}` - upload first, then send the id. Max 2000 chars, 8 per 10 s.
 - `edit` `{id, text}` (own) · `delete` `{id}` (own; officer+: anyone's) · `typing` `{channel}`
 - `voice` `{room}` (`room: null` leaves) · `state` `{muted, deaf}` · `status` `{status, note}` · `ping`
-- `game` `{playing, name, realm, class, classFile, level, zone, guild}` or `{share: false}` - rich presence
+- `game` `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex? (2 male, 3 female)}` or `{share: false}` - rich presence
 - officer+: `mod.kick` `{id}` · `mod.mute` `{id, on}` - lower ranks only
 - guild master: `admin.members` · `admin.invite` `{name, role}` · `admin.role` `{name, role}` · `admin.remove` `{name}`
   · `admin.channel.add` `{name, type, minRole, max}` · `admin.channel.remove` `{id}`

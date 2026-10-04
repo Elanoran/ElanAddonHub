@@ -1,3 +1,5 @@
 1.0.0 First version: shares your character, class, level and zone with the Lodge
 
 1.1.0 Adds the /rl shortcut for /reload (moved here from Elan's Hunter Helper)
+
+1.2.0 Also shares race and gender (for avatars) and whether you are still logged in, so the hub stops showing the wrong character after you log out or switch

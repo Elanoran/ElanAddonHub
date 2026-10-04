@@ -296,7 +296,7 @@ namespace ElansAddonHub.Lodge
         }
 
         static void ApplyGame(MemberVM m, Dictionary<string, object> g) =>
-            m.SetGame(g != null && g.Bool("playing"), g?.Str("name"), g?.Str("class"), g?.Str("classFile"), g?.Int("level") ?? 0, g?.Str("zone"), g?.Str("guild"));
+            m.SetGame(g != null && g.Bool("playing"), g?.Str("name"), g?.Str("class"), g?.Str("classFile"), g?.Int("level") ?? 0, g?.Str("zone"), g?.Str("guild"), g?.Str("race"), g?.Str("raceFile"), g?.Int("sex") ?? 0);
 
         // rich presence: WoW running + the character from the Elan's Hub addon (unless sharing is off)
         public void SendGame()
@@ -309,6 +309,7 @@ namespace ElansAddonHub.Lodge
             {
                 obj["name"] = c.Name; obj["realm"] = c.Realm; obj["class"] = c.Class; obj["classFile"] = c.ClassFile;
                 obj["level"] = c.Level; obj["zone"] = c.Zone; obj["guild"] = c.Guild;
+                obj["race"] = c.Race; obj["raceFile"] = c.RaceFile; obj["sex"] = c.Sex;
             }
             _ = Send(obj);
         }

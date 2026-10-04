@@ -177,4 +177,17 @@ public class HubTests
         clock.Advance(TimeSpan.FromMinutes(11));
         Assert.Equal(2, hub.SweepBudgets());
     }
+
+    [Fact]
+    public void Game_presence_passes_race_and_sex_through_sanitized()
+    {
+        var g = PresenceModule.BuildGame(System.Text.Json.Nodes.JsonNode.Parse(
+            "{\"playing\":true,\"name\":\"Elan\",\"level\":60,\"raceFile\":\"NightElf\",\"race\":\"Night Elf\",\"sex\":3}")!.AsObject());
+        Assert.Equal("NightElf", (string?)g["raceFile"]);
+        Assert.Equal(3, (int)g["sex"]!);
+        var bad = PresenceModule.BuildGame(System.Text.Json.Nodes.JsonNode.Parse("{\"sex\":99}")!.AsObject());
+        Assert.Equal(3, (int)bad["sex"]!);
+        var old = PresenceModule.BuildGame(System.Text.Json.Nodes.JsonNode.Parse("{\"playing\":false}")!.AsObject());
+        Assert.Equal(0, (int)old["sex"]!); // older clients: no fields
+    }
 }

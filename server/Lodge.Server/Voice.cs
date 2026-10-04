@@ -77,19 +77,27 @@ public class PresenceModule : IModule
     }
 
     // what they're playing: WoW running (live) + character from the companion addon. "share": false clears it.
+    // sanitized copy of a client's game message (raceFile/sex are optional pass-through fields for avatars)
+    public static JsonObject BuildGame(JsonObject m)
+    {
+        int level = 0, sex = 0;
+        try { level = Math.Clamp(m["level"]?.GetValue<int>() ?? 0, 0, 100); } catch { }
+        try { sex = Math.Clamp(m["sex"]?.GetValue<int>() ?? 0, 0, 3); } catch { }
+        return new JsonObject
+        {
+            ["playing"] = m["playing"]?.GetValue<bool>() == true,
+            ["name"] = Clip(m, "name", 24), ["realm"] = Clip(m, "realm", 32), ["class"] = Clip(m, "class", 20),
+            ["classFile"] = Clip(m, "classFile", 20), ["level"] = level, ["zone"] = Clip(m, "zone"), ["guild"] = Clip(m, "guild"),
+            ["race"] = Clip(m, "race", 24), ["raceFile"] = Clip(m, "raceFile", 20), ["sex"] = sex,
+        };
+    }
+
     async Task Game(Member me, JsonObject m)
     {
         if (m["share"]?.GetValue<bool>() == false) me.Game = null;
         else
         {
-            int level = 0;
-            try { level = Math.Clamp(m["level"]?.GetValue<int>() ?? 0, 0, 100); } catch { }
-            me.Game = new JsonObject
-            {
-                ["playing"] = m["playing"]?.GetValue<bool>() == true,
-                ["name"] = Clip(m, "name", 24), ["realm"] = Clip(m, "realm", 32), ["class"] = Clip(m, "class", 20),
-                ["classFile"] = Clip(m, "classFile", 20), ["level"] = level, ["zone"] = Clip(m, "zone"), ["guild"] = Clip(m, "guild"),
-            };
+            me.Game = BuildGame(m);
         }
         await hub.BroadcastUser(me);
     }

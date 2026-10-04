@@ -17,6 +17,11 @@ local function version()
   return ok and v or nil
 end
 
+local loggingOut = false -- set on PLAYER_LOGOUT unless a /reload is under way
+local reloading = false
+local session = tostring(time()) .. "-" .. tostring(math.random(100000, 999999))
+if hooksecurefunc then pcall(hooksecurefunc, "ReloadUI", function() reloading = true end) end
+
 local function snapshot()
   local db = ElansHubDB
   db.chars = db.chars or {}
@@ -30,7 +35,10 @@ local function snapshot()
   c.class = clean(className)
   c.classFile = clean(classFile)
   c.level = clean(UnitLevel("player"))
-  c.race = clean((UnitRace("player")))
+  local raceName, raceFile = UnitRace("player")
+  c.race = clean(raceName)
+  c.raceFile = clean(raceFile)
+  c.sex = clean(UnitSex("player")) -- 2 male, 3 female
   c.faction = clean((UnitFactionGroup("player")))
   c.zone = clean(GetRealZoneText())
   c.subzone = clean(GetSubZoneText())
@@ -40,6 +48,10 @@ local function snapshot()
   c.updated = time()
   db.chars[key] = c
   db.current = key
+  -- WoW only writes this file at /reload and logout. "online" is what the hub trusts: true while
+  -- playing / across a reload, false once you really log out (the next write is then the next logout).
+  db.online = not loggingOut
+  db.session = session
   db.version = version()
 end
 
@@ -51,6 +63,9 @@ end
 f:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_LEVEL_UP" then
     C_Timer.After(1, snapshot) -- the new level arrives a moment later
+  elseif event == "PLAYER_LOGOUT" then
+    loggingOut = not reloading
+    pcall(snapshot)
   else
     pcall(snapshot)
   end
@@ -61,7 +76,7 @@ SlashCmdList.ELANSHUB = function()
   pcall(snapshot)
   local c = ElansHubDB.chars and ElansHubDB.chars[ElansHubDB.current or ""]
   if not c then return end
-  print(string.format("|cffabd473Elan's Hub|r: %s, level %s %s in %s. Your friends see this in the Lodge after /reload or logout.",
+  print(string.format("|cffabd473Elan's Hub|r: %s, level %s %s in %s. WoW only saves this on /reload or logout, so the hub learns of it then.",
     c.name or "?", tostring(c.level or "?"), c.class or "?", c.zone or "?"))
 end
 
