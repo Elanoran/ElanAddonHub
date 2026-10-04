@@ -72,6 +72,9 @@ namespace ElansAddonHub.Services
                     bool pathMatch = !string.IsNullOrEmpty(path) && Norm(path) == want;
                     if (!pathMatch && !list.OfType<Dictionary<string, object>>().Any(a => Norm(a.Str("modFolderPath")) == wantAdd)) continue;
                     var res = new CfInstance { Path = path, LastRefresh = ParseUtc(inst.Str("lastRefreshAttempt")) };
+                    // CurseForge only rewrites this file when something changed; its log records every update check
+                    var logged = LastLoggedCheck(inst.Str("name"));
+                    if (logged > res.LastRefresh) res.LastRefresh = logged;
                     foreach (var ao in list)
                     {
                         var a = ao as Dictionary<string, object>;
@@ -134,6 +137,36 @@ namespace ElansAddonHub.Services
             return result.OrderBy(a => a.Title, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
+        // CurseForge's agent log (agent\logs\CurseClient\*.json) has a line "Completed checking for updates in instance <name>"
+        // after every update check, even when nothing changed. UTC time of the newest one, or MinValue.
+        public static string LogDir =>
+            Environment.GetEnvironmentVariable("ELANSHUB_CF_LOGS") is string f && f.Length > 0 ? f
+            : Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(DataFile)) ?? "", "logs", "CurseClient");
+
+        public static DateTime LastLoggedCheck(string instanceName)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(instanceName) || !Directory.Exists(LogDir)) return DateTime.MinValue;
+                var marker = "Completed checking for updates in instance " + instanceName + ".";
+                foreach (var file in new DirectoryInfo(LogDir).GetFiles("*.json").OrderByDescending(x => x.LastWriteTimeUtc).Take(2))
+                {
+                    string text;
+                    using (var fs = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    using (var sr = new StreamReader(fs, Encoding.UTF8)) text = sr.ReadToEnd();
+                    var i = text.LastIndexOf(marker, StringComparison.Ordinal);
+                    if (i < 0) continue;
+                    var t = text.LastIndexOf("\"timestamp\"", i, StringComparison.Ordinal);
+                    if (t < 0) continue;
+                    var q1 = text.IndexOf('"', text.IndexOf(':', t) + 1);
+                    var q2 = q1 < 0 ? -1 : text.IndexOf('"', q1 + 1);
+                    if (q2 > q1) return ParseUtc(text.Substring(q1 + 1, q2 - q1 - 1));
+                }
+            }
+            catch (Exception e) { Util.Log("curseforge log unreadable: " + e.GetType().Name); }
+            return DateTime.MinValue;
+        }
+
         static string Regex_StripZip(string s) => string.IsNullOrEmpty(s) ? null : (s.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? s.Substring(0, s.Length - 4) : s);
 
         public static string DeepLink(CfAddon a, long fileId) => $"curseforge://install?addonId={a.Id}&fileId={fileId}";
@@ -174,7 +207,7 @@ namespace ElansAddonHub.Services
         public static bool Busy;
 
         // Let CurseForge refresh its update info. Already running: just read what it has. Not running: start it
-        // minimized (it checks on startup), wait for lastRefreshAttempt to change, then close only that instance politely.
+        // minimized (it checks on startup), wait for a newer update check (file or its log), then close only that instance politely.
         // Returns a short status text.
         public static async Task<string> CheckNow(string addOnsDir, int timeoutSeconds = 120)
         {
