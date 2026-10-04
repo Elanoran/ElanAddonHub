@@ -29,6 +29,7 @@ namespace ElansAddonHub
         {
             InitializeComponent();
             Cards.ItemsSource = cards;
+            InitOthers();
             VersionText.Text = "v" + App.Version;
             SelfUpdater.CleanupOld();
             SetupTray();
@@ -107,7 +108,8 @@ namespace ElansAddonHub
             SettingsPage.Show("general");
             await Task.Delay(300);
             Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
-            var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText;
+            var tp = await ThirdPartyTest(dir);
+            var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + tp;
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
             var lodgeTest = Environment.GetEnvironmentVariable("ELANSHUB_TEST_LODGE");
@@ -206,6 +208,7 @@ namespace ElansAddonHub
                 lastError = null;
                 lastCheck = DateTime.Now;
                 RebuildCards();
+                _ = RefreshOthersAndCheck();
                 _ = LoadStats(); // GitHub stats arrive later, never block the check
                 ShowHubBanner();
                 await AfterCheck();
@@ -218,9 +221,12 @@ namespace ElansAddonHub
             finally
             {
                 checking = false;
+                if (manifest == null) _ = RefreshOthersAndCheck();
                 UpdateStatusText();
             }
         }
+
+        async Task RefreshOthersAndCheck() { await RefreshOthers(); await CheckOthers(); }
 
         async Task LoadStats()
         {
@@ -376,6 +382,7 @@ namespace ElansAddonHub
             SettingsStore.Save(settings);
             foreach (var c in cards) c.Update(c.Info, root);
             _ = AfterCheck();
+            _ = RefreshOthersAndCheck();
         }
 
 

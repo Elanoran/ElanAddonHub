@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -51,6 +52,19 @@ namespace ElansAddonHub.Services
                 foreach (var b in sha.ComputeHash(fs)) sb.Append(b.ToString("x2"));
                 return sb.ToString();
             }
+        }
+
+        public static string Md5(string file)
+        {
+            using (var md5 = MD5.Create())
+            using (var fs = File.OpenRead(file))
+                return string.Concat(md5.ComputeHash(fs).Select(b => b.ToString("x2")));
+        }
+
+        public static string Sha256Text(string text)
+        {
+            using (var sha = SHA256.Create())
+                return string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(text)).Select(b => b.ToString("x2")));
         }
 
         // "1.17.0" > "1.9.2"; missing parts count as 0; anything unparsable compares as text

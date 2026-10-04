@@ -88,6 +88,7 @@
       <lodge:LodgeView x:Name="LodgePage" Grid.Row="3" Visibility="Collapsed" />
       <local:SettingsPage x:Name="SettingsPage" Grid.Row="3" Visibility="Collapsed" />
       <ScrollViewer x:Name="AddonsPage" Grid.Row="3" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+       <StackPanel>
         <ItemsControl x:Name="Cards" Margin="0,16,0,0" MaxWidth="660">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
@@ -165,6 +166,85 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
+
+        <!-- everything else in Interface\AddOns -->
+        <StackPanel x:Name="OtherPanel" MaxWidth="660" Margin="16,10,12,0" Visibility="Collapsed">
+          <DockPanel Margin="0,4,0,10">
+            <Button x:Name="UpdateAllButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Height="30" Padding="14,0" FontSize="12"
+                    Content="Update all" Visibility="Collapsed" Click="UpdateAll_Click" Margin="10,0,0,0" />
+            <TextBox x:Name="SearchBox" DockPanel.Dock="Right" Style="{StaticResource Input}" Width="190" Tag="Search addons" TextChanged="Search_Changed" />
+            <TextBlock x:Name="OtherTitle" Text="OTHER ADDONS" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock x:Name="OtherHint" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,-4,0,10" />
+          <ItemsControl x:Name="OtherCards" Margin="0,0,0,16">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,0,0,8" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                  <StackPanel>
+                    <Border Background="Transparent" Padding="12,10,12,4" Cursor="Hand" CornerRadius="12,12,0,0"
+                            Tag="{Binding}" MouseLeftButtonUp="OtherCard_Toggle" ToolTip="Show / hide details">
+                      <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Chevron}" FontFamily="{StaticResource Icons}" FontSize="12"
+                                   Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,2,0" />
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="8,2" Background="{Binding PillBg}" Visibility="{Binding PillVisibility}" Margin="6,0,0,0">
+                          <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
+                        </Border>
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="8,2" Background="{Binding SourceBg}">
+                          <TextBlock Text="{Binding Source}" Foreground="{Binding SourceFg}" FontSize="11" FontWeight="SemiBold" />
+                        </Border>
+                        <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Letter}" FontWeight="Bold" FontSize="14" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Margin="10,0,8,0" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                      </DockPanel>
+                    </Border>
+                    <Grid Margin="12,0,12,10" Visibility="{Binding ButtonVisibility}">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock Text="{Binding VersionLine}" FontSize="12" Margin="40,0,10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Height="28" MinWidth="100" Padding="12,0" FontSize="12"
+                              Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="OtherAction_Click" />
+                    </Grid>
+                    <ProgressBar Style="{StaticResource ThinProgress}" Margin="12,0,12,8" Maximum="1" Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
+                    <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="52,-2,12,10" />
+
+                    <StackPanel Visibility="{Binding ExpandedVisibility}" Margin="12,0,12,12">
+                      <Border Height="1" Background="{StaticResource Line}" Margin="0,2,0,10" />
+                      <TextBlock Text="{Binding VersionLine}" FontSize="12" Margin="0,0,0,6" />
+                      <TextBlock Text="{Binding Notes}" Visibility="{Binding NotesVisibility}" FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                      <TextBlock Text="{Binding FolderList}" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                      <TextBlock Text="{Binding DevNote}" Visibility="{Binding DevVisibility}" FontSize="12" Foreground="{StaticResource Gold}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                      <TextBlock Text="{Binding LinkedTo}" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                      <StackPanel Visibility="{Binding ChoiceVisibility}" Margin="0,2,0,8">
+                        <TextBlock Text="Which download is for your game?" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,0,0,4" />
+                        <ComboBox Style="{StaticResource Dropdown}" ItemsSource="{Binding Choices}" Tag="{Binding}" SelectionChanged="Choice_Changed" />
+                      </StackPanel>
+                      <WrapPanel Margin="-8,0,0,0">
+                        <Button Style="{StaticResource GhostButton}" Content="Open folder" FontSize="11.5" Tag="{Binding}" Click="OpenAddonFolder_Click" />
+                        <Button Style="{StaticResource GhostButton}" Content="{Binding WebsiteText}" FontSize="11.5" Visibility="{Binding WebsiteVisibility}" Tag="{Binding WebsiteUrl}" Click="OpenLink_Click" />
+                        <Button Style="{StaticResource GhostButton}" Content="Open on CurseForge" FontSize="11.5" Visibility="{Binding CurseVisibility}" Tag="{Binding CurseUrl}" Click="OpenLink_Click" />
+                        <Button Style="{StaticResource GhostButton}" Content="Open on Wago" FontSize="11.5" Visibility="{Binding WagoVisibility}" Tag="{Binding WagoUrl}" Click="OpenLink_Click" />
+                        <Button Style="{StaticResource GhostButton}" Content="Roll back" FontSize="11.5" Visibility="{Binding RollbackVisibility}" Tag="{Binding}" Click="Rollback_Click" ToolTip="Put the previous version back (the hub keeps the last 2)" />
+                        <Button Style="{StaticResource GhostButton}" Content="Unlink source" FontSize="11.5" Visibility="{Binding UnlinkVisibility}" Tag="{Binding}" Click="Unlink_Click" />
+                      </WrapPanel>
+                      <DockPanel Visibility="{Binding LinkVisibility}" Margin="0,6,0,0">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Link" Height="30" Padding="14,0" FontSize="12" Margin="8,0,0,0" Tag="{Binding}" Click="LinkSource_Click" />
+                        <TextBox Style="{StaticResource Input}" Tag="Paste a GitHub or WoWInterface link" FontSize="12"
+                                 Text="{Binding LinkInput, UpdateSourceTrigger=PropertyChanged}" />
+                      </DockPanel>
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+       </StackPanel>
       </ScrollViewer>
 
     </Grid>

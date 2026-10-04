@@ -24,6 +24,10 @@ No installer, no runtime to download - it's one small file (~150 KB) that runs o
 - **Install / update in one click**, with a short "what's new" list before you update.
 - **Safe updates**: every download is checksum-verified, the previous version is backed up
   (last 3 kept in `%LOCALAPPDATA%\ElansAddonHub\backups`) and restored if anything goes wrong.
+- **Manages your other addons too**: lists everything in `Interface\AddOns` (multi-folder addons grouped, flavor-specific
+  `.toc` files handled) and updates them without any account or API key: GitHub releases (BigWigs `release.json` aware)
+  and WoWInterface. Paste a link on the addon's card to connect it. CurseForge/Wago-only addons just get a link.
+  Each update backs up the old folders (last 2 kept, one-click **Roll back**) and never touches `WTF`/SavedVariables.
 - **Tray & notifications**, optional **start with Windows** and **automatic updates**.
 - **Updates itself** when a new hub version is released.
 - Never touches a development copy (a folder with `.git`).
