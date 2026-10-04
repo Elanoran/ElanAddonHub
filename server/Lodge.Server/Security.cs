@@ -19,7 +19,20 @@ public static class Names
 {
     public const int Max = 24;
 
+    // message snippets (reply quotes): the same cleaning as names, bounded to `max` characters with an ellipsis
+    public static string Snippet(string text, int max)
+    {
+        var s = Clean(text);
+        return s.Length > max ? s[..max].TrimEnd() + "…" : s;
+    }
+
     public static string Normalize(string name)
+    {
+        var r = Clean(name);
+        return r.Length > Max ? r[..Max].TrimEnd() : r;
+    }
+
+    static string Clean(string name)
     {
         if (string.IsNullOrEmpty(name)) return "";
         string s;
@@ -35,8 +48,7 @@ public static class Names
             if (space) { sb.Append(' '); space = false; }
             sb.Append(c);
         }
-        var r = sb.ToString();
-        return r.Length > Max ? r[..Max].TrimEnd() : r;
+        return sb.ToString();
     }
 
     public static bool Same(string a, string b) =>

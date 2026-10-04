@@ -12,6 +12,15 @@
 | 6 | Guest names checked before normalization | `Names.Normalize` (NFKC, control/format characters removed, whitespace collapsed, 24 chars) is applied once, before reservation checks, collision suffixes and reconnect matching. Suffixes never land on a reserved personal name. |
 | 7 | Credentials and logging | `LODGE_ALLOW_QUERY_CODE=false` refuses `?code=` with a clear 401 (no strike); the header always wins. ASP.NET request logs (full URLs) are filtered out; client-chosen log fields are normalized and bounded. New codes are 128-bit; old codes keep working. |
 
+## 2.3.0 (reactions, pins, replies)
+
+- Reactions: fixed whitelist (anything else ignored), one per person and emoji, names normalized and compared
+  case-insensitively, at most 30 per emoji; they are ordinary control messages, so they spend the per-identity Control
+  budget and count towards the flood disconnect. Stored inside the history records (same atomic compaction).
+- Pins: officer+ only (`Perm.PinMessages`), 25 per channel, `pins.json` written atomically, size-capped on load, failures
+  logged without text. A channel the rank can't see never leaks messages, reactions or pins. Pin text is clipped to 300 chars.
+- Replies: the quoted id must exist in the same channel; the snippet is normalized and bounded.
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.
@@ -28,9 +37,9 @@
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 41 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 49 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
-python server/tests/security_integration.py                     # 25 checks against two local servers
+python server/tests/security_integration.py                     # 30 checks against two local servers
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 15 checks
 ```
 

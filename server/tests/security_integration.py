@@ -156,6 +156,27 @@ async def suite_a(base):
         check("others unaffected by the flood", await recv(a, "msg", 2, lambda d: d["text"] == "still here") is not None)
         for w in (a, b, g1, g2): await w.close()
 
+        # ---- 2.3 features: reactions are budgeted, pinning is officer-only
+        b = await ws_open(s, base, BOB, "192.0.2.70"); w = await recv(b, "welcome")
+        check("welcome advertises features and canPin for an officer", w and {"reply", "react", "pin"} <= set(w.get("features", [])) and w.get("canPin") is True, w and w.get("features"))
+        g = await ws_open(s, base, GUEST, "192.0.2.71", "Gus"); gw = await recv(g, "welcome")
+        check("guest welcome: canPin false", gw and gw.get("canPin") is False)
+        await b.send_str(json.dumps({"t": "msg", "channel": "general", "text": "pin test"}))
+        mid = (await recv(g, "msg", 3, lambda d: d["text"] == "pin test") or {}).get("id")
+        await g.send_str(json.dumps({"t": "pin", "id": mid}))
+        e = await recv(g, "error")
+        check("pin as guest refused", e is not None and "officers" in e["text"], e)
+        await b.send_str(json.dumps({"t": "react", "id": mid, "emoji": "\U0001F921"}))   # not in the whitelist
+        await b.send_str(json.dumps({"t": "pin", "id": mid}))
+        p = await recv(g, "pin", 3)
+        check("only whitelisted emoji pass; the officer's pin is broadcast",
+              p is not None and p["pin"]["id"] == mid and await recv(g, "react", 0.5) is None, p)
+        for i in range(400): await b.send_str(json.dumps({"t": "react", "id": mid, "emoji": "\U0001F44D"}))
+        passed = 0
+        while await recv(g, "react", 1.0) is not None: passed += 1
+        check("react flood is dropped by the control budget (<= burst + refill)", 0 < passed < 70, passed)
+        for w_ in (b, g): await w_.close()
+
         # ---- 6. guest impersonation
         g = await ws_open(s, base, GUEST, "192.0.2.60", "E%01lan")
         w = await recv(g, "welcome")

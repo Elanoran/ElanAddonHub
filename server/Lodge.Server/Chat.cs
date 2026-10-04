@@ -12,10 +12,25 @@ public class ChatModule : IModule
     readonly LodgeHub hub;
     readonly string dir;
     readonly ConcurrentDictionary<string, HistoryStore> stores = new();
+    public readonly PinStore Pins;
+
+    // the fixed reaction set (the only emoji the server accepts); canonical forms carry U+FE0F where the emoji has one
+    public static readonly string[] ReactionSet = { "\U0001F44D", "\U0001F602", "❤️", "✅", "❌", "⚔️" };
+    public const int MaxReactors = 30;      // distinct people per emoji on one message
+    public const int SnippetMax = 80;
+
+    // null when it isn't one of the whitelisted emoji (a missing U+FE0F is accepted)
+    public static string CanonReaction(string e)
+    {
+        if (string.IsNullOrEmpty(e) || e.Length > 8) return null;
+        var bare = e.Replace("️", "");
+        return ReactionSet.FirstOrDefault(r => r.Replace("️", "") == bare);
+    }
 
     public ChatModule(LodgeHub hub)
     {
         this.hub = hub;
+        Pins = new PinStore(hub.Cfg.DataDir, hub.Log);
         dir = Path.Combine(hub.Cfg.DataDir, "history");
         Directory.CreateDirectory(dir);
         // 1.x kept one history: it becomes the default channel's
@@ -56,6 +71,9 @@ public class ChatModule : IModule
             case "msg": await Message(me, m); return true;
             case "edit": await Edit(me, m); return true;
             case "delete": await Delete(me, m); return true;
+            case "react": await React(me, m); return true;
+            case "pin": await Pin(me, m, true); return true;
+            case "unpin": await Pin(me, m, false); return true;
             case "typing":
                 var ch = hub.Channels.Get((string)m["channel"]) ?? hub.Channels.DefaultText;
                 if (!ch.VisibleTo(me.Role)) return true;
@@ -97,15 +115,20 @@ public class ChatModule : IModule
             ["from"] = me.Name, ["fromId"] = me.Id, ["text"] = text,
         };
         if (file != null) msg["file"] = file;
-        var replyId = (string)m["replyTo"];
-        if (replyId != null)
+        var replyId = m["replyTo"] is JsonValue rv && rv.TryGetValue<string>(out var rs) ? rs : null;
+        if (!string.IsNullOrEmpty(replyId))
         {
-            var (_, _, orig) = FindMessage(replyId);
+            // the quoted message must exist in THIS channel's history, otherwise the reply is sent without a quote
+            var rstore = Store(ch.Id);
+            JsonObject orig;
+            lock (rstore) orig = rstore.Messages.FirstOrDefault(x => (string)x["id"] == replyId);
             if (orig != null)
             {
-                var snippet = (string)orig["text"] ?? "";
-                if (snippet.Length == 0 && orig["file"] != null) snippet = "[" + (string)orig["file"]!["name"] + "]";
-                msg["replyTo"] = new JsonObject { ["id"] = replyId, ["from"] = (string)orig["from"], ["text"] = snippet.Length > 90 ? snippet[..90] + "..." : snippet };
+                var snippet = Names.Snippet((string)orig["text"], SnippetMax);
+                if (snippet.Length == 0 && orig["file"] != null) snippet = Names.Snippet("[" + (string)orig["file"]!["name"] + "]", SnippetMax);
+                var by = (string)orig["from"];
+                // from/text: the 2.x fields; by/snippet: the 2.3 names for the same values
+                msg["replyTo"] = new JsonObject { ["id"] = replyId, ["from"] = by, ["text"] = snippet, ["by"] = by, ["snippet"] = snippet };
             }
         }
 
@@ -127,6 +150,8 @@ public class ChatModule : IModule
         bool saved;
         lock (s) { msg["text"] = text; msg["edited"] = true; saved = s.Compact(); }
         await hub.Broadcast(new JsonObject { ["t"] = "edited", ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["text"] = text }, Viewers(ch));
+        var pinned = Pins.UpdateText(ch.Id, (string)msg["id"], text);
+        if (pinned != null) await hub.Broadcast(new JsonObject { ["t"] = "pin", ["channel"] = ch.Id, ["pin"] = pinned }, Viewers(ch));
         if (!saved) await hub.Error(me, "The server couldn't save the edit");
     }
 
@@ -143,12 +168,84 @@ public class ChatModule : IModule
         lock (s) { s.Messages.Remove(msg); saved = s.Compact(); }
         hub.Log.LogInformation("{Name} deleted a message from {From} in {Channel}", me.Name, Names.ForLog((string)msg["from"]), ch.Id);
         await hub.Broadcast(new JsonObject { ["t"] = "deleted", ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
+        if (Pins.Unpin(ch.Id, (string)msg["id"], out _))
+            await hub.Broadcast(new JsonObject { ["t"] = "unpin", ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
         if (!saved) await hub.Error(me, "The server couldn't save the delete");
+    }
+
+    // toggles the sender's reaction; the whole list for that emoji is broadcast (idempotent for clients)
+    async Task React(Member me, JsonObject m)
+    {
+        var emoji = CanonReaction((string)m["emoji"]);
+        if (emoji == null) return; // not in the fixed set: ignored (already paid for by the control budget)
+        var (ch, s, msg) = FindMessage((string)m["id"]);
+        if (msg == null || !ch.VisibleTo(me.Role)) return;
+        bool on, full = false, saved = true;
+        JsonArray users;
+        lock (s)
+        {
+            var all = msg["reactions"] as JsonObject ?? new JsonObject();
+            var list = all[emoji] as JsonArray ?? new JsonArray();
+            var mine = list.FirstOrDefault(x => Names.Same((string)x, me.Name));
+            if (mine != null) { list.Remove(mine); on = false; }
+            else if (list.Count >= MaxReactors) { on = false; full = true; }
+            else { list.Add(me.Name); on = true; }
+            if (!full)
+            {
+                all.Remove(emoji);
+                if (list.Count > 0) all[emoji] = list;
+                if (all.Count > 0) msg["reactions"] = all; else msg.Remove("reactions");
+                saved = s.Compact();
+            }
+            users = new JsonArray(list.Select(x => (JsonNode)JsonValue.Create((string)x)).ToArray());
+        }
+        if (full) { await hub.Error(me, "That reaction is full"); return; }
+        await hub.Broadcast(new JsonObject { ["t"] = "react", ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["emoji"] = emoji, ["users"] = users, ["by"] = me.Name, ["on"] = on }, Viewers(ch));
+        if (!saved) await hub.Error(me, "The server couldn't save that reaction");
+    }
+
+    async Task Pin(Member me, JsonObject m, bool pin)
+    {
+        if (!Roles.Can(me.Role, Perm.PinMessages)) { await hub.Error(me, "Only officers can pin messages"); return; }
+        var id = (string)m["id"];
+        if (string.IsNullOrEmpty(id)) return;
+        var now = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds();
+        if (pin)
+        {
+            var (ch, _, msg) = FindMessage(id);
+            if (msg == null || !ch.VisibleTo(me.Role)) return;
+            var rec = new JsonObject
+            {
+                ["id"] = id, ["text"] = PinStore.Clip((string)msg["text"]), ["by"] = (string)msg["from"],
+                ["at"] = (long?)msg["at"] ?? now, ["pinnedBy"] = me.Name, ["pinnedAt"] = now,
+            };
+            if (msg["file"] != null) rec["file"] = msg["file"]!.DeepClone();
+            switch (Pins.Pin(ch.Id, rec))
+            {
+                case PinStore.Result.Full: await hub.Error(me, $"This channel already has {PinStore.MaxPerChannel} pinned messages - unpin one first"); return;
+                case PinStore.Result.Already: return;
+                case PinStore.Result.SaveFailed: await hub.Error(me, "The server couldn't save the pin - it may be gone after a restart"); break;
+            }
+            await hub.Broadcast(new JsonObject { ["t"] = "pin", ["channel"] = ch.Id, ["pin"] = rec }, Viewers(ch));
+        }
+        else
+        {
+            // the pin may outlive its message, so look it up by pin id in the channels this person can see
+            var want = (string)m["channel"];
+            var ch = hub.Channels.All.FirstOrDefault(c => c.Type == "text" && c.VisibleTo(me.Role) && Pins.Has(c.Id, id) && (want == null || c.Id == want));
+            if (ch == null) return;
+            if (Pins.Unpin(ch.Id, id, out var saved))
+            {
+                await hub.Broadcast(new JsonObject { ["t"] = "unpin", ["channel"] = ch.Id, ["id"] = id }, Viewers(ch));
+                if (!saved) await hub.Error(me, "The server couldn't save the change");
+            }
+        }
     }
 
     public void DropChannel(string id)
     {
         stores.TryRemove(id, out _);
+        Pins.DropChannel(id);
         // keep the file (renamed) in case it was removed by mistake
         var f = HistoryStore.FileOf(dir, id);
         if (File.Exists(f)) File.Move(f, f + $".removed-{DateTime.UtcNow:yyyyMMddHHmmss}");

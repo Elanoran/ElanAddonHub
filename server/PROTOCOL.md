@@ -1,4 +1,4 @@
-# Lodge protocol (v2)
+# Lodge protocol (v2.3)
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
@@ -29,11 +29,13 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 
 ### Server → client
 
-- `welcome` `{you, name, role, server, maxFileMb, canShareFiles, canModerate, canManage, channels:[channel], users:[user], history:{channelId:[msg]}}`
+- `welcome` `{you, name, role, server, maxFileMb, canShareFiles, canModerate, canManage, canPin, features:["reply","react","pin"], reactions:[emoji], pins:{channelId:[pin]}, channels:[channel], users:[user], history:{channelId:[msg]}}`
   - sent on connect and again whenever the channels or your rank change (treat as a full refresh)
 - `join` `{user}` · `leave` `{id}` · `user` `{user}`
-- `msg` `{channel, id, at (unix ms), from, fromId, text, file?:{id,name,size,mime}, replyTo?:{id,from,text}, edited?}`
+- `msg` `{channel, id, at (unix ms), from, fromId, text, file?:{id,name,size,mime}, replyTo?:{id,from,text,by,snippet}, reactions?:{emoji:[name]}, edited?}`
 - `edited` `{channel, id, text}` · `deleted` `{channel, id}`
+- `react` `{channel, id, emoji, users:[name], by, on}` - the complete reactor list for that emoji on that message (idempotent); `users: []` = none left
+- `pin` `{channel, pin:{id, text, by, at, pinnedBy, pinnedAt, file?}}` (also re-sent when a pinned message is edited) · `unpin` `{channel, id}`
 - `typing` `{id, channel}` · `error` `{text}` · `pong`
 - `admin.members` `{members:[{name, role, online}], channels:[channel]}` · `admin.invited` `{name, role, code}`
 
@@ -44,6 +46,8 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 ### Client → server
 
 - `msg` `{channel, text, file?:{id}, replyTo?:id}` - upload first, then send the id. Max 2000 chars, 8 per 10 s.
+- `react` `{id, emoji}` - toggles your reaction; `emoji` must be one of the welcome's `reactions` (a fixed set: thumbs up, laughing, heart, check, cross, crossed swords; heart/swords with or without U+FE0F), anything else is ignored. One per person and emoji, at most 30 people per emoji. Control budget.
+- officer+ (`Perm.PinMessages`): `pin` `{id}` · `unpin` `{id, channel?}` - at most 25 pins per channel, kept in `<data>/pins.json` (atomic writes) with their own copy of text/author/time, so they outlive the history window; deleting the message unpins it. Others get an error.
 - `edit` `{id, text}` (own) · `delete` `{id}` (own; officer+: anyone's) · `typing` `{channel}`
 - `voice` `{room}` (`room: null` leaves) · `state` `{muted, deaf}` · `status` `{status, note}` · `ping`
 - `game` `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex? (2 male, 3 female)}` or `{share: false}` - rich presence
@@ -64,9 +68,19 @@ a personal name becomes "Name (guest)".
 1.x clients still work: a `msg` without `channel` goes to the default text channel, `voice {on:true}` joins the
 first voice room.
 
+## 2.3 additions and compatibility
+
+- `msg.replyTo` is only added when the quoted id exists in the same channel's history; `snippet`/`text` are normalized
+  (control characters removed, whitespace collapsed) and cut at 80 characters. `from`/`text` stay for 2.0-2.2 hubs,
+  `by`/`snippet` carry the same values.
+- `msg` records in history can carry `reactions` (`{emoji:[names]}`); they are rewritten with the same atomic compaction as edits.
+- Older hubs ignore the unknown types (`react`, `pin`, `unpin`) and fields; new hubs hide reaction/pin UI when the
+  welcome has no `features`. Unread counters and mentions are purely client-side.
+- Uploads (paste, drag and drop) use the existing `POST /files` path with the same limits.
+
 ## Ranks
 
-`guest < member < veteran < officer < owner`. Permissions live in `Roles.Can`: files need member+, moderation
+`guest < member < veteran < officer < owner`. Permissions live in `Roles.Can`: files need member+, moderation and pinning
 officer+, members and channels owner. Status is one of online | away | busy | dungeon | lfg (note max 40 chars).
 
 ## Voice (binary frames)

@@ -78,7 +78,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.2.0";
+    public const string Version = "2.3.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -178,7 +178,8 @@ public class LodgeHub
     {
         var visible = Channels.VisibleTo(me.Role).ToList();
         var history = new JsonObject();
-        foreach (var ch in visible.Where(c => c.Type == "text")) history[ch.Id] = Chat.HistoryFor(ch.Id);
+        var pins = new JsonObject();
+        foreach (var ch in visible.Where(c => c.Type == "text")) { history[ch.Id] = Chat.HistoryFor(ch.Id); pins[ch.Id] = Chat.Pins.For(ch.Id); }
         return new JsonObject
         {
             ["t"] = "welcome", ["you"] = me.Id, ["name"] = me.Name, ["role"] = me.Role, ["server"] = Version,
@@ -186,6 +187,10 @@ public class LodgeHub
             ["canShareFiles"] = Roles.Can(me.Role, Perm.ShareFiles),
             ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
             ["canManage"] = Roles.Can(me.Role, Perm.ManageMembers),
+            ["canPin"] = Roles.Can(me.Role, Perm.PinMessages),
+            ["features"] = new JsonArray("reply", "react", "pin"),
+            ["reactions"] = new JsonArray(ChatModule.ReactionSet.Select(e => (JsonNode)JsonValue.Create(e)).ToArray()),
+            ["pins"] = pins,
             ["channels"] = new JsonArray(visible.Select(c => (JsonNode)c.ToJson()).ToArray()),
             ["users"] = new JsonArray(members.Values.Select(m => (JsonNode)m.ToJson()).ToArray()),
             ["history"] = history,
