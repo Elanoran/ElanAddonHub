@@ -45,6 +45,17 @@ namespace ElansAddonHub
         public AddonInfo Info { get; private set; }
         public CardState State { get; private set; }
         public string Name => Info.Name;
+        // per-addon artwork on the card (the paw stays as the source chip on the right)
+        public string Logo
+        {
+            get
+            {
+                var folder = Info.Folders != null && Info.Folders.Count > 0 ? Info.Folders[0] : "";
+                if (string.Equals(folder, "ElansHunterHelper", System.StringComparison.OrdinalIgnoreCase)) return "pack://application:,,,/Assets/logo-ehh.png";
+                if (string.Equals(folder, "ElansHub", System.StringComparison.OrdinalIgnoreCase)) return "pack://application:,,,/Assets/logo-hubaddon.png";
+                return "pack://application:,,,/Assets/hub.png";
+            }
+        }
         public string Subtitle => Info.Required && Info.Description != null ? Info.Description : Info.FlavorName ?? Info.Description ?? "";
         public string Installed { get; private set; }
         // hover the client name to see exactly where it installs

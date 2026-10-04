@@ -10,7 +10,7 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>2.9.1</Version>
+    <Version>2.10.0</Version>
     <Product>Elan's Addon Hub</Product>
     <Company>Elan</Company>
     <Description>Installs and updates Elan's WoW addons</Description>
@@ -27,6 +27,8 @@
     <Reference Include="System.Security" />
     <Resource Include="Assets\hub.ico" />
     <Resource Include="Assets\hub.png" />
+    <Resource Include="Assets\logo-ehh.png" />
+    <Resource Include="Assets\logo-hubaddon.png" />
     <Resource Include="Assets\hero.jpg" />
   </ItemGroup>
 
