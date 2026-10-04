@@ -302,7 +302,8 @@
                                   <Border Background="{Binding Fill}" BorderBrush="{Binding Line}" BorderThickness="1" CornerRadius="10" Padding="7,1,8,1"
                                           Margin="0,0,5,3" Cursor="Hand" Tag="{Binding}" ToolTip="{Binding Tip}" MouseLeftButtonUp="Reaction_Click">
                                     <StackPanel Orientation="Horizontal">
-                                      <TextBlock Text="{Binding Emoji}" FontFamily="Segoe UI Emoji" FontSize="12.5" VerticalAlignment="Center" />
+                                      <Image Source="{Binding Icon}" Width="17" Height="17" VerticalAlignment="Center" Visibility="{Binding IconVisibility}" RenderOptions.BitmapScalingMode="HighQuality" />
+                                      <TextBlock Text="{Binding Emoji}" FontFamily="Segoe UI Emoji" FontSize="12.5" VerticalAlignment="Center" Visibility="{Binding TextVisibility}" />
                                       <TextBlock Text="{Binding Count}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource Text}" Margin="5,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
                                   </Border>
@@ -439,18 +440,22 @@
       </Border>
     </Popup>
 
-    <!-- reaction picker: the six the server allows -->
+    <!-- reaction picker: the eight (2.4) or six (2.3) the server allows, 4 per row -->
     <Popup x:Name="ReactPopup" StaysOpen="False" Placement="Left" AllowsTransparency="True" PopupAnimation="Fade" HorizontalOffset="-4">
       <Border x:Name="ReactPickerBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="16" Padding="4" Margin="0,0,10,10">
         <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.45" /></Border.Effect>
         <ItemsControl x:Name="ReactItems">
           <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            <ItemsPanelTemplate><UniformGrid Columns="4" /></ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Button Style="{StaticResource IconButton}" Width="32" Height="32" FontFamily="Segoe UI Emoji" FontSize="17" Foreground="{StaticResource Text}"
-                      Content="{Binding}" Tag="{Binding}" Click="ReactPick_Click" />
+              <Button Style="{StaticResource IconButton}" Width="40" Height="40" Margin="1" Tag="{Binding Id}" ToolTip="{Binding Name}" Click="ReactPick_Click">
+                <Grid>
+                  <Image Source="{Binding Icon}" Width="28" Height="28" Visibility="{Binding IconVisibility}" RenderOptions.BitmapScalingMode="HighQuality" />
+                  <TextBlock Text="{Binding Id}" FontFamily="Segoe UI Emoji" FontSize="17" Foreground="{StaticResource Text}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding TextVisibility}" />
+                </Grid>
+              </Button>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

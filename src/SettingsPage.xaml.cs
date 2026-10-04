@@ -217,8 +217,7 @@ namespace ElansAddonHub
 
         void SignOut_Click(object sender, RoutedEventArgs e)
         {
-            if (MessageBox.Show(Window.GetWindow(this), "Leave this lodge? The hub forgets the address and your code.", "Leave lodge",
-                    MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+            if (!Dialog.Confirm(Window.GetWindow(this), "Leave this lodge?", "The hub forgets the address and your code. You need an invite code to join again.", "Leave", danger: true)) return;
             lodge.SignOut();
             RefreshSection();
         }
@@ -375,8 +374,7 @@ namespace ElansAddonHub
         void RemoveMember_Click(object sender, RoutedEventArgs e)
         {
             if (!((sender as FrameworkElement)?.Tag is string name)) return;
-            if (MessageBox.Show(Window.GetWindow(this), $"Remove {name}? Their invite code stops working right away.", "Remove member",
-                    MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)
+            if (Dialog.Confirm(Window.GetWindow(this), $"Remove {name}?", "Their invite code stops working right away.", "Remove", danger: true))
                 session.RemoveMember(name);
         }
 
@@ -393,8 +391,7 @@ namespace ElansAddonHub
         void RemoveChannel_Click(object sender, RoutedEventArgs e)
         {
             if (!((sender as FrameworkElement)?.Tag is string id)) return;
-            if (MessageBox.Show(Window.GetWindow(this), "Remove this channel? Its history is kept on the server, but nobody sees it anymore.",
-                    "Remove channel", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)
+            if (Dialog.Confirm(Window.GetWindow(this), "Remove channel?", "Its history is kept on the server, but nobody sees it anymore.", "Remove", danger: true))
                 session.RemoveChannel(id);
         }
 

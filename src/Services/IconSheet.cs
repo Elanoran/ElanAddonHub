@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using ElansAddonHub.Lodge;
 
 namespace ElansAddonHub
 {
@@ -24,7 +25,21 @@ namespace ElansAddonHub
                     Grid.SetRow(img, r); Grid.SetColumn(img, c);
                     grid.Children.Add(img);
                 }
-            root.Child = grid;
+            var stack = new StackPanel();
+            stack.Children.Add(grid);
+            // the 8 reaction badges at pill (17), picker (28) and large (48) size
+            foreach (var px in new[] { 17, 28, 48 })
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 6, 0, 0) };
+                foreach (var id in new[] { "ready", "notready", "lol", "love", "fight", "loot", "wipe", "epic" })
+                {
+                    var img = new Image { Source = ReactionArt.Icon(id), Width = px, Height = px, Margin = new Thickness(4) };
+                    RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+                    row.Children.Add(img);
+                }
+                stack.Children.Add(row);
+            }
+            root.Child = stack;
             root.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             root.Arrange(new Rect(root.DesiredSize));
             root.UpdateLayout();

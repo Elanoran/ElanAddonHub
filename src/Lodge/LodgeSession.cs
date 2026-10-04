@@ -216,7 +216,7 @@ namespace ElansAddonHub.Lodge
                     break;
                 case "react":
                     var rm = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
-                    if (rm != null) ApplyReaction(rm, m.Str("emoji"), m.List("users").OfType<string>().ToArray());
+                    if (rm != null) ApplyReaction(rm, m.Str("reaction") ?? m.Str("emoji"), m.List("users").OfType<string>().ToArray());
                     break;
                 case "pin":
                     var pc = m.Str("channel");

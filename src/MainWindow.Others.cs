@@ -268,9 +268,7 @@ namespace ElansAddonHub
         async void Rollback_Click(object sender, RoutedEventArgs e)
         {
             if (!((sender as FrameworkElement)?.Tag is ThirdPartyCard c) || addOnsDir == null) return;
-            var ok = MessageBox.Show(this, $"Put the previous version of {c.Name} back?\n\nYour settings (WTF folder) are not touched.",
-                "Roll back", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes);
-            if (ok != MessageBoxResult.Yes) return;
+            if (!Dialog.Confirm(this, "Roll back?", $"Put the previous version of {c.Name} back?\n\nYour settings (WTF folder) are not touched.", "Roll back")) return;
             try
             {
                 await Task.Run(() => AddonSources.Rollback(addOnsDir, c.Entry, c.Link));

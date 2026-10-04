@@ -7,6 +7,7 @@
       <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="Theme/Theme.xaml" />
         <ResourceDictionary Source="Theme/AddonIcons.xaml" />
+        <ResourceDictionary Source="Theme/ReactionIcons.xaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

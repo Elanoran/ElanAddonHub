@@ -69,7 +69,7 @@ namespace ElansAddonHub
             }
         }
         // the small source chip next to the status pill
-        public object ChipArt => (!Painted ? Res("Icon.Hub") : null) ?? "pack://application:,,,/Assets/hub.png";
+        public object ChipArt => "pack://application:,,,/Assets/hub.png";   // the 16px chip stays the hub paw (brand)
         public void RefreshArt() { Notify(nameof(Logo)); Notify(nameof(ChipArt)); }
         // no paladin artwork yet: the card falls back to the hub icon until Assets\logo-paladin.png exists
         static bool? paladinLogo;

@@ -304,13 +304,42 @@ namespace ElansAddonHub.Lodge
         public Brush MentionBar => mentioned ? Gold : Brushes.Transparent;
     }
 
-    // one reaction pill under a message: the emoji, who reacted
+    // reaction art: canonical ids (server 2.4) draw as colour vector badges; anything else (2.3 servers: plain emoji) stays text
+    public static class ReactionArt
+    {
+        static readonly System.Collections.Generic.Dictionary<string, string> names = new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["ready"] = "Ready", ["notready"] = "Not ready", ["lol"] = "LOL", ["love"] = "Love",
+            ["fight"] = "Let's fight", ["loot"] = "Loot!", ["wipe"] = "Wipe", ["epic"] = "Epic",
+        };
+        public static ImageSource Icon(string id)
+        {
+            if (string.IsNullOrEmpty(id) || !names.ContainsKey(id)) return null;
+            return Application.Current?.TryFindResource("Reaction." + id) as ImageSource;
+        }
+        public static string Name(string id) => id != null && names.TryGetValue(id, out var n) ? n : id;
+    }
+
+    // one entry of the reaction picker
+    public class ReactionChoice
+    {
+        public string Id { get; set; }
+        public ImageSource Icon => ReactionArt.Icon(Id);
+        public string Name => ReactionArt.Name(Id);
+        public Visibility IconVisibility => Icon != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility TextVisibility => Icon != null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // one reaction pill under a message: the reaction (id or legacy emoji), who reacted
     public class ReactionVM : Bindable
     {
         static readonly Brush MineFill = Avatar.Frozen("#26ABD473"), PlainFill = Avatar.Frozen("#14FFFFFF"),
                               MineLine = Avatar.Frozen("#99ABD473"), PlainLine = Avatar.Frozen("#00000000");
         public MessageVM Msg { get; set; }
-        public string Emoji { get; set; }
+        public string Emoji { get; set; }   // the reaction key: a canonical id, or an emoji from an older server
+        public ImageSource Icon => ReactionArt.Icon(Emoji);
+        public Visibility IconVisibility => Icon != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility TextVisibility => Icon != null ? Visibility.Collapsed : Visibility.Visible;
         string[] users = new string[0];
         bool mine;
         public string[] Users => users;
@@ -324,7 +353,7 @@ namespace ElansAddonHub.Lodge
         public bool Mine => mine;
         public Brush Fill => mine ? MineFill : PlainFill;
         public Brush Line => mine ? MineLine : PlainLine;
-        public string Tip => users.Length == 0 ? "" : string.Join(", ", users) + (users.Length == 1 ? " reacted" : " reacted");
+        public string Tip => users.Length == 0 ? "" : ReactionArt.Name(Emoji) + ": " + string.Join(", ", users);
     }
 
     // a pinned message: the server keeps its own copy of the text, so it outlives the history window

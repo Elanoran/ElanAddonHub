@@ -70,6 +70,31 @@
     </Setter>
   </Style>
 
+  <!-- red confirm button for destructive dialogs (Delete, Kick, Remove) -->
+  <Style x:Key="DangerButton" TargetType="Button">
+    <Setter Property="Foreground" Value="#1A0B0B" />
+    <Setter Property="Background" Value="{StaticResource Danger}" />
+    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Height" Value="38" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="2" CornerRadius="9">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#EE8585" /></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Background" Value="#C45656" /></Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="bd" Property="BorderBrush" Value="#FFFFFF" /></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- small text button (links, "Change", "Check now") -->
   <Style x:Key="GhostButton" TargetType="Button">
     <Setter Property="Foreground" Value="{StaticResource TextDim}" />
@@ -340,6 +365,9 @@
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentDark}" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Accent}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Foreground" Value="{StaticResource TextDim}" />

@@ -20,6 +20,22 @@ namespace ElansAddonHub
 
         Mutex single;
         EventWaitHandle showSignal;
+        static bool reporting;
+
+        // an unhandled error: the themed dialog while the UI is alive, the plain Windows box otherwise (or if the dialog itself fails)
+        static void ReportCrash(Exception ex)
+        {
+            if (reporting) return;
+            reporting = true;
+            try
+            {
+                var w = Current?.MainWindow;
+                if (w != null && w.IsLoaded) Dialog.Error(w.IsVisible ? w : null, "Something went wrong", ex.Message + "\n\nIt was written to the hub's log; the hub keeps running.");
+                else MessageBox.Show(ex.Message, "Elan's Addon Hub", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            catch { try { MessageBox.Show(ex.Message, "Elan's Addon Hub", MessageBoxButton.OK, MessageBoxImage.Warning); } catch { } }
+            finally { reporting = false; }
+        }
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -59,7 +75,7 @@ namespace ElansAddonHub
             DispatcherUnhandledException += (s, ex) =>
             {
                 Util.Log("crash: " + ex.Exception);
-                MessageBox.Show(ex.Exception.Message, "Elan's Addon Hub", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ReportCrash(ex.Exception);
                 ex.Handled = true;
             };
 

@@ -428,8 +428,7 @@ namespace ElansAddonHub.Lodge
         {
             MemberPopup.IsOpen = false;
             if (popMember == null) return;
-            if (MessageBox.Show(Window.GetWindow(this), $"Kick {popMember.Name} from the lodge? They can join again with their code.",
-                    "Kick", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)
+            if (Dialog.Confirm(Window.GetWindow(this), $"Kick {popMember.Name}?", "They are removed from the lodge right now, but can join again with their code.", "Kick", danger: true))
                 Session.Kick(popMember);
         }
 
@@ -471,8 +470,7 @@ namespace ElansAddonHub.Lodge
         void DeleteMessage(MessageVM m)
         {
             var whose = m.Mine ? "your message" : $"{m.From}'s message";
-            if (MessageBox.Show(Window.GetWindow(this), $"Delete {whose}?", "Delete", MessageBoxButton.YesNo,
-                    MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)
+            if (Dialog.Confirm(Window.GetWindow(this), "Delete message?", $"Delete {whose}? This can't be undone.", "Delete", danger: true))
                 _ = Session.Delete(m.Id);
         }
 
@@ -488,7 +486,7 @@ namespace ElansAddonHub.Lodge
         void OpenReactPicker(MessageVM m, FrameworkElement target)
         {
             reactTarget = m;
-            ReactItems.ItemsSource = Session.ReactionSet;
+            ReactItems.ItemsSource = Session.ReactionSet.Select(id => new ReactionChoice { Id = id }).ToList();
             ReactPopup.Placement = target != null ? PlacementMode.Left : PlacementMode.MousePoint;
             ReactPopup.PlacementTarget = target;
             ReactPopup.IsOpen = true;
