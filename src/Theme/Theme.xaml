@@ -208,11 +208,11 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Thumb">
-          <Border x:Name="th" Background="#3A4148" CornerRadius="3" Opacity="0.75" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <!-- stretch: with Center alignment and no content the border collapsed to 0 px and the bar was invisible -->
+          <Border x:Name="th" Background="#FFFFFF" CornerRadius="3" Opacity="0.28" />
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="th" Property="Background" Value="#5A646D" />
-              <Setter TargetName="th" Property="Opacity" Value="1" />
+              <Setter TargetName="th" Property="Opacity" Value="0.55" />
             </Trigger>
             <Trigger Property="IsDragging" Value="True">
               <Setter TargetName="th" Property="Background" Value="{StaticResource AccentDark}" />
@@ -234,18 +234,20 @@
           <Grid Background="Transparent">
             <Track x:Name="PART_Track" IsDirectionReversed="True">
               <Track.Thumb>
-                <Thumb x:Name="thumb" Width="6" Style="{StaticResource ScrollThumb}" />
+                <Thumb x:Name="thumb" Width="5" MinHeight="24" Style="{StaticResource ScrollThumb}" />
               </Track.Thumb>
             </Track>
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="thumb" Property="Width" Value="8" />
+              <Setter TargetName="thumb" Property="Width" Value="7" />
             </Trigger>
             <Trigger Property="Orientation" Value="Horizontal">
               <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
               <Setter TargetName="thumb" Property="Width" Value="Auto" />
-              <Setter TargetName="thumb" Property="Height" Value="6" />
+              <Setter TargetName="thumb" Property="MinHeight" Value="0" />
+              <Setter TargetName="thumb" Property="MinWidth" Value="24" />
+              <Setter TargetName="thumb" Property="Height" Value="5" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
