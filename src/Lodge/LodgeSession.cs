@@ -38,6 +38,22 @@ namespace ElansAddonHub.Lodge
         public bool CanManage { get; private set; }
         public string ServerVersion { get; private set; }
         public int MaxFileMb { get; private set; } = 25;
+        // a server older than 2.3 sends no "features": reactions and pins are hidden then
+        public bool SupportsReact { get; private set; }
+        public bool SupportsPin { get; private set; }
+        public bool CanPin { get; private set; }
+        public string[] ReactionSet { get; private set; } = DefaultReactions;
+        public static readonly string[] DefaultReactions = { "\U0001F44D", "\U0001F602", "❤️", "✅", "❌", "⚔️" };
+        readonly Dictionary<string, ObservableCollection<PinVM>> pins = new Dictionary<string, ObservableCollection<PinVM>>();
+        public event Action PinsChanged;
+        public Func<bool> IsAtBottom;                      // the message list is scrolled to the end (set by the view)
+
+        public ObservableCollection<PinVM> PinsOf(string channel)
+        {
+            if (channel == null) return new ObservableCollection<PinVM>();
+            if (!pins.TryGetValue(channel, out var l)) { pins[channel] = l = new ObservableCollection<PinVM>(); l.CollectionChanged += (s, e) => PinsChanged?.Invoke(); }
+            return l;
+        }
         public ChannelVM Selected { get; private set; }
         public string MyRoom { get; private set; }
         public string StatusText { get; private set; } = "";
@@ -198,6 +214,29 @@ namespace ElansAddonHub.Lodge
                     TypingMap(vm.Channel).Remove(vm.FromId);
                     OnNewMessage(vm);
                     break;
+                case "react":
+                    var rm = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
+                    if (rm != null) ApplyReaction(rm, m.Str("emoji"), m.List("users").OfType<string>().ToArray());
+                    break;
+                case "pin":
+                    var pc = m.Str("channel");
+                    var pv = ParsePin(m.Child("pin"));
+                    if (pc == null || pv == null) break;
+                    var plist = PinsOf(pc);
+                    var old = plist.FirstOrDefault(x => x.Id == pv.Id);
+                    if (old != null) plist.Remove(old);
+                    plist.Add(pv);
+                    var pm = MessagesOf(pc).FirstOrDefault(x => x.Id == pv.Id);
+                    if (pm != null) pm.Pinned = true;
+                    break;
+                case "unpin":
+                    var uc = m.Str("channel");
+                    var ul = PinsOf(uc);
+                    var uo = ul.FirstOrDefault(x => x.Id == m.Str("id"));
+                    if (uo != null) ul.Remove(uo);
+                    var um = MessagesOf(uc).FirstOrDefault(x => x.Id == m.Str("id"));
+                    if (um != null) um.Pinned = false;
+                    break;
                 case "edited":
                     var e = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
                     if (e != null) { e.Text = m.Str("text"); e.Edited = true; e.Mentioned = MentionsMe(e.Text) && !e.Mine; }
@@ -232,6 +271,12 @@ namespace ElansAddonHub.Lodge
             CanShareFiles = !m.ContainsKey("canShareFiles") || m.Bool("canShareFiles");
             CanModerate = m.Bool("canModerate");
             CanManage = m.Bool("canManage");
+            var features = m.List("features").OfType<string>().ToList();
+            SupportsReact = features.Contains("react");
+            SupportsPin = features.Contains("pin");
+            CanPin = SupportsPin && m.Bool("canPin");
+            var rs = m.List("reactions").OfType<string>().ToArray();
+            ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
             Members.Clear();
             foreach (var u in m.List("users").OfType<Dictionary<string, object>>())
@@ -271,6 +316,23 @@ namespace ElansAddonHub.Lodge
                     }
             }
             else foreach (var x in m.List("history").OfType<Dictionary<string, object>>()) AddMessage(x);
+
+            // pins (the server keeps its own copy of each), then flag the ones still in the loaded history
+            foreach (var l in pins.Values) l.Clear();
+            if (m.Child("pins") != null)
+                foreach (var kv in m.Child("pins"))
+                {
+                    var list = PinsOf(kv.Key);
+                    foreach (var p in (kv.Value as List<object> ?? new List<object>()).OfType<Dictionary<string, object>>())
+                    {
+                        var pv = ParsePin(p);
+                        if (pv == null) continue;
+                        list.Add(pv);
+                        var pm = MessagesOf(kv.Key).FirstOrDefault(x => x.Id == pv.Id);
+                        if (pm != null) pm.Pinned = true;
+                    }
+                }
+            foreach (var ch in TextChannels) RecomputeUnread(ch);
 
             Select(TextChannels.FirstOrDefault(c => c.Id == keepSelected) ?? TextChannels.FirstOrDefault());
             if (MyRoom != null && VoiceRooms.All(r => r.Id != MyRoom)) LeaveVoice(false);
@@ -345,9 +407,14 @@ namespace ElansAddonHub.Lodge
                 Text = m.Str("text"), Edited = m.Bool("edited"),
                 Mine = Me != null && string.Equals(from, Me.Name, StringComparison.OrdinalIgnoreCase),
                 CanDelete = CanModerate,
-                ReplyFrom = reply?.Str("from"), ReplyText = reply?.Str("text"),
+                ReplyFrom = reply?.Str("by") ?? reply?.Str("from"), ReplyText = reply?.Str("snippet") ?? reply?.Str("text"), ReplyId = reply?.Str("id"),
+                ReactEnabled = SupportsReact, PinEnabled = CanPin,
                 Continuation = prev != null && prev.From == from && (at - prev.At).TotalMinutes < 5,
             };
+            var reacts = m.Child("reactions");
+            if (reacts != null)
+                foreach (var kv in reacts.OrderBy(k => Array.IndexOf(ReactionSet, k.Key)))
+                    ApplyReaction(vm, kv.Key, (kv.Value as List<object> ?? new List<object>()).OfType<string>().ToArray());
             vm.Mentioned = !vm.Mine && MentionsMe(vm.Text);
             var f = m.Child("file");
             if (f != null)
@@ -370,13 +437,20 @@ namespace ElansAddonHub.Lodge
             MessageAdded?.Invoke(vm);
             if (vm.Mine) return;
             var ch = TextChannels.FirstOrDefault(c => c.Id == vm.Channel);
-            bool looking = ch == Selected && (IsShownToUser?.Invoke() ?? true);
-            if (!looking && ch != null)
+            bool shown = ch == Selected && (IsShownToUser?.Invoke() ?? true);
+            // reading = the channel is on screen AND the list is at the bottom; otherwise it counts as unread
+            bool looking = shown && (IsAtBottom?.Invoke() ?? true);
+            if (looking) SetReadMark(ch, vm);
+            else if (ch != null)
             {
                 ch.Unread = true;
+                ch.UnreadCount++;
                 if (vm.Mentioned) ch.Mentions++;
+                if (ch.FirstUnreadId == null) ch.FirstUnreadId = vm.Id;
+                if (ch == Selected && ch.Divider == null) { ch.Divider = vm; vm.ShowDivider = true; }
                 UnreadChanged?.Invoke(true);
             }
+            if (shown) looking = true; // (notifications: the window is looking at this channel)
             var mode = Settings.NotifyMode ?? "mentions";
             if (vm.Mentioned && mode != "none") Sounds.Mention();
             if (!looking && (mode == "all" || (mode == "mentions" && vm.Mentioned)))
@@ -386,20 +460,148 @@ namespace ElansAddonHub.Lodge
         public void Select(ChannelVM ch)
         {
             if (ch == null || ch.IsVoice) return;
+            // leaving a channel: its "New messages" line goes away (what I saw is read as soon as I scrolled to the end)
+            if (Selected != null && Selected != ch && Selected.Divider != null) { Selected.Divider.ShowDivider = false; Selected.Divider = null; }
             foreach (var c in TextChannels) c.Selected = c == ch;
             Selected = ch;
-            ch.Unread = false;
-            ch.Mentions = 0;
             Settings.LastChannel = ch.Id;
+            // the line sits above the first unread message; the channel stays unread until the view reaches the bottom
+            if (ch.Divider == null && ch.FirstUnreadId != null)
+            {
+                var first = MessagesOf(ch.Id).FirstOrDefault(x => x.Id == ch.FirstUnreadId);
+                if (first != null) { ch.Divider = first; first.ShowDivider = true; }
+            }
             UnreadChanged?.Invoke(TextChannels.Any(c => c.Unread));
             Changed?.Invoke();
         }
 
+        // called by the view / window when the chat is on screen: reading happens only at the bottom of the list
         public void MarkRead()
         {
-            if (Selected != null) { Selected.Unread = false; Selected.Mentions = 0; }
+            var ch = Selected;
+            if (ch == null || !ch.Unread) return;
+            if (!(IsAtBottom?.Invoke() ?? true)) return;
+            SetReadMark(ch, MessagesOf(ch.Id).LastOrDefault());
+        }
+
+        // ---- read state: per lodge + channel, in the hub's data folder (never sent anywhere)
+        sealed class ReadMark { public string Id; public long At; }
+        Dictionary<string, ReadMark> readMarks;
+        static string ReadFile => Path.Combine(Util.DataDir, "lodge-read.json");
+
+        string ReadKey(ChannelVM ch)
+        {
+            string host = "";
+            try { host = new Uri(BaseUrl ?? "http://local").Host; } catch { }
+            return host + "|" + ch.Id;
+        }
+
+        void LoadMarks()
+        {
+            if (readMarks != null) return;
+            readMarks = new Dictionary<string, ReadMark>();
+            try
+            {
+                if (!File.Exists(ReadFile)) return;
+                var o = Json.Obj(File.ReadAllText(ReadFile));
+                if (o != null)
+                    foreach (var kv in o)
+                        if (kv.Value is Dictionary<string, object> d) readMarks[kv.Key] = new ReadMark { Id = d.Str("id"), At = d.Long("at") };
+            }
+            catch (Exception e) { Util.Log("read state: " + e.Message); }
+        }
+
+        void SaveMarks()
+        {
+            try
+            {
+                var o = new Dictionary<string, object>();
+                foreach (var kv in readMarks) o[kv.Key] = new Dictionary<string, object> { ["id"] = kv.Value.Id, ["at"] = (double)kv.Value.At };
+                var tmp = ReadFile + ".tmp";
+                File.WriteAllText(tmp, Json.Write(o));
+                if (File.Exists(ReadFile)) File.Delete(ReadFile);
+                File.Move(tmp, ReadFile);
+            }
+            catch (Exception e) { Util.Log("read state: " + e.Message); }
+        }
+
+        static long Ms(DateTime utc) => new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+
+        // everything up to and including `upTo` is read; clears the counters (the divider stays until I leave)
+        void SetReadMark(ChannelVM ch, MessageVM upTo)
+        {
+            if (ch == null) return;
+            LoadMarks();
+            if (upTo != null) { readMarks[ReadKey(ch)] = new ReadMark { Id = upTo.Id, At = Ms(upTo.At) }; SaveMarks(); }
+            bool changed = ch.Unread || ch.Mentions > 0 || ch.UnreadCount > 0;
+            ch.Unread = false; ch.Mentions = 0; ch.UnreadCount = 0; ch.FirstUnreadId = null;
+            if (changed) UnreadChanged?.Invoke(TextChannels.Any(c => c.Unread));
+        }
+
+        // after a (re)connect: count what arrived since the saved mark. A channel I've never opened starts as read.
+        void RecomputeUnread(ChannelVM ch)
+        {
+            LoadMarks();
+            var list = MessagesOf(ch.Id);
+            if (ch.Divider != null) { ch.Divider.ShowDivider = false; ch.Divider = null; }
+            if (!readMarks.TryGetValue(ReadKey(ch), out var mark))
+            {
+                var last = list.LastOrDefault();
+                if (last != null) { readMarks[ReadKey(ch)] = new ReadMark { Id = last.Id, At = Ms(last.At) }; SaveMarks(); }
+                mark = null;
+            }
+            int start = list.Count;
+            if (mark != null)
+            {
+                int idx = -1;
+                for (int i = 0; i < list.Count; i++) if (list[i].Id == mark.Id) { idx = i; break; }
+                if (idx >= 0) start = idx + 1;
+                else { start = 0; while (start < list.Count && Ms(list[start].At) <= mark.At) start++; } // the marked message is gone: go by time
+            }
+            var unread = list.Skip(start).Where(x => !x.Mine).ToList();
+            ch.UnreadCount = unread.Count;
+            ch.Mentions = unread.Count(x => x.Mentioned);
+            ch.Unread = unread.Count > 0;
+            ch.FirstUnreadId = unread.FirstOrDefault()?.Id;
             UnreadChanged?.Invoke(TextChannels.Any(c => c.Unread));
         }
+
+        // ---- reactions, pins
+        void ApplyReaction(MessageVM msg, string emoji, string[] users)
+        {
+            if (string.IsNullOrEmpty(emoji)) return;
+            var r = msg.Reactions.FirstOrDefault(x => x.Emoji == emoji);
+            if (users.Length == 0) { if (r != null) msg.Reactions.Remove(r); }
+            else
+            {
+                if (r == null)
+                {
+                    r = new ReactionVM { Msg = msg, Emoji = emoji };
+                    int at = 0; // keep the fixed order of the set
+                    while (at < msg.Reactions.Count && Array.IndexOf(ReactionSet, msg.Reactions[at].Emoji) < Array.IndexOf(ReactionSet, emoji)) at++;
+                    msg.Reactions.Insert(at, r);
+                }
+                r.Update(users, Me?.Name);
+            }
+            msg.RaiseReactions();
+        }
+
+        PinVM ParsePin(Dictionary<string, object> p)
+        {
+            if (p == null || p.Str("id") == null) return null;
+            var f = p.Child("file");
+            return new PinVM
+            {
+                Id = p.Str("id"), Text = p.Str("text"), By = p.Str("by"), PinnedBy = p.Str("pinnedBy"),
+                At = DateTimeOffset.FromUnixTimeMilliseconds(p.Long("at")).UtcDateTime, FileName = f?.Str("name"), CanUnpin = CanPin,
+            };
+        }
+
+        public Task React(MessageVM msg, string emoji) =>
+            Send(new Dictionary<string, object> { ["t"] = "react", ["id"] = msg.Id, ["emoji"] = emoji });
+        public Task PinMessage(string id) => Send(new Dictionary<string, object> { ["t"] = "pin", ["id"] = id });
+        public Task UnpinMessage(string id, string channel) =>
+            Send(new Dictionary<string, object> { ["t"] = "unpin", ["id"] = id, ["channel"] = channel });
 
         Dictionary<int, DateTime> TypingMap(string channel)
         {
@@ -616,5 +818,12 @@ namespace ElansAddonHub.Lodge
 
         // test hooks
         public Task SendForTest(string text) => SendMessage(text);
+        // offline rendering test: feed protocol frames without a server
+        public void FeedForTest(string json) => OnReceived(Json.Obj(json));
+        public void SetReadMarkForTest(string channel, string id, long at)
+        {
+            LoadMarks();
+            readMarks["local|" + channel] = new ReadMark { Id = id, At = at };
+        }
     }
 }

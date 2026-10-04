@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -63,17 +64,22 @@ namespace ElansAddonHub.Lodge
         public string CountText => IsVoice && Max > 0 ? $"{Members.Count}/{Max}" : "";
 
         bool selected, unread, here;
-        int mentions;
+        int mentions, unreadCount;
+        public string FirstUnreadId { get; set; }   // the first message I haven't read (the "New messages" line goes above it)
+        public MessageVM Divider { get; set; }      // the message currently carrying the line (cleared when I leave the channel)
         public bool Selected { get => selected; set { if (Set(ref selected, value)) { Raise(nameof(RowBrush)); Raise(nameof(NameBrush)); } } }
         public bool Unread { get => unread; set { if (Set(ref unread, value)) { Raise(nameof(NameBrush)); Raise(nameof(NameWeight)); Raise(nameof(UnreadVisibility)); } } }
-        public int Mentions { get => mentions; set { if (Set(ref mentions, value)) { Raise(nameof(MentionVisibility)); Raise(nameof(UnreadVisibility)); } } }
+        public int Mentions { get => mentions; set { if (Set(ref mentions, value)) { Raise(nameof(MentionVisibility)); Raise(nameof(MentionText)); Raise(nameof(UnreadVisibility)); } } }
+        public int UnreadCount { get => unreadCount; set { if (Set(ref unreadCount, value)) { Raise(nameof(UnreadText)); Raise(nameof(UnreadVisibility)); } } }
+        public string MentionText => "@" + (mentions > 99 ? "99+" : mentions.ToString());
+        public string UnreadText => unreadCount > 99 ? "99+" : unreadCount.ToString();
         public bool IAmHere { get => here; set { if (Set(ref here, value)) Raise(nameof(NameBrush)); } } // the voice room I'm in
 
         public Brush RowBrush => selected ? Avatar.Res("SurfaceHi") : Brushes.Transparent;
         public Brush NameBrush => selected || unread || here ? Avatar.Res("Text") : Avatar.Res("TextDim");
         public FontWeight NameWeight => unread ? FontWeights.SemiBold : FontWeights.Normal;
         public Visibility MentionVisibility => mentions > 0 ? Visibility.Visible : Visibility.Collapsed;
-        public Visibility UnreadVisibility => unread && mentions == 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility UnreadVisibility => unreadCount > 0 && mentions == 0 ? Visibility.Visible : Visibility.Collapsed;
         public void RefreshCount() => Raise(nameof(CountText));
     }
 
@@ -248,9 +254,25 @@ namespace ElansAddonHub.Lodge
         public bool CanDelete { get; set; }
         public string ReplyFrom { get; set; }
         public string ReplyText { get; set; }
+        public string ReplyId { get; set; }
+        public bool ReactEnabled { get; set; }   // the server supports reactions / pins (welcome "features")
+        public bool PinEnabled { get; set; }     // ... and I may pin
+        bool forceTools;
+        public bool ForceTools { get => forceTools; set => Set(ref forceTools, value); } // screenshots only
+        public ObservableCollection<ReactionVM> Reactions { get; } = new ObservableCollection<ReactionVM>();
+        public Brush ReplyColor => Avatar.ColorFor(ReplyFrom);
 
         string text;
-        bool edited, mentioned;
+        bool edited, mentioned, divider, flash, pinned;
+        public bool ShowDivider { get => divider; set { if (Set(ref divider, value)) Raise(nameof(DividerVisibility)); } }
+        public bool Flash { get => flash; set { if (Set(ref flash, value)) { Raise(nameof(RowBackground)); } } }
+        public bool Pinned { get => pinned; set { if (Set(ref pinned, value)) Raise(nameof(PinnedVisibility)); } }
+        public Visibility DividerVisibility => divider ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility PinnedVisibility => pinned ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility ReactToolVisibility => ReactEnabled ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility PinToolVisibility => PinEnabled ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility ReactionsVisibility => Reactions.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public void RaiseReactions() => Raise(nameof(ReactionsVisibility));
         public string Text { get => text; set { if (Set(ref text, value)) Raise(nameof(TextVisibility)); } }
         public bool Edited { get => edited; set { if (Set(ref edited, value)) Raise(nameof(EditedVisibility)); } }
         public bool Mentioned { get => mentioned; set { if (Set(ref mentioned, value)) { Raise(nameof(RowBackground)); Raise(nameof(MentionBar)); } } }
@@ -277,7 +299,47 @@ namespace ElansAddonHub.Lodge
         public Visibility EditedVisibility => edited ? Visibility.Visible : Visibility.Collapsed;
         public Visibility EditVisibility => Mine ? Visibility.Visible : Visibility.Collapsed;
         public Visibility DeleteVisibility => Mine || CanDelete ? Visibility.Visible : Visibility.Collapsed;
-        public Brush RowBackground => mentioned ? Avatar.Frozen("#1FE6B85C") : Brushes.Transparent;
-        public Brush MentionBar => mentioned ? Avatar.Frozen("#E6B85C") : Brushes.Transparent;
+        static readonly Brush MentionTint = Avatar.Frozen("#1FE6B85C"), FlashTint = Avatar.Frozen("#33ABD473"), Gold = Avatar.Frozen("#E6B85C");
+        public Brush RowBackground => flash ? FlashTint : mentioned ? MentionTint : Brushes.Transparent;
+        public Brush MentionBar => mentioned ? Gold : Brushes.Transparent;
+    }
+
+    // one reaction pill under a message: the emoji, who reacted
+    public class ReactionVM : Bindable
+    {
+        static readonly Brush MineFill = Avatar.Frozen("#26ABD473"), PlainFill = Avatar.Frozen("#14FFFFFF"),
+                              MineLine = Avatar.Frozen("#99ABD473"), PlainLine = Avatar.Frozen("#00000000");
+        public MessageVM Msg { get; set; }
+        public string Emoji { get; set; }
+        string[] users = new string[0];
+        bool mine;
+        public string[] Users => users;
+        public void Update(string[] who, string me)
+        {
+            users = who ?? new string[0];
+            mine = me != null && users.Any(u => string.Equals(u, me, StringComparison.OrdinalIgnoreCase));
+            Raise(nameof(Count)); Raise(nameof(Mine)); Raise(nameof(Fill)); Raise(nameof(Line)); Raise(nameof(Tip));
+        }
+        public int Count => users.Length;
+        public bool Mine => mine;
+        public Brush Fill => mine ? MineFill : PlainFill;
+        public Brush Line => mine ? MineLine : PlainLine;
+        public string Tip => users.Length == 0 ? "" : string.Join(", ", users) + (users.Length == 1 ? " reacted" : " reacted");
+    }
+
+    // a pinned message: the server keeps its own copy of the text, so it outlives the history window
+    public class PinVM
+    {
+        public string Id { get; set; }
+        public string Text { get; set; }
+        public string By { get; set; }
+        public string PinnedBy { get; set; }
+        public DateTime At { get; set; }
+        public string FileName { get; set; }
+        public string Shown => !string.IsNullOrEmpty(Text) ? Text : FileName != null ? "[" + FileName + "]" : "";
+        public Brush Color => Avatar.ColorFor(By);
+        public string Time => At.ToLocalTime().ToString("d MMM HH:mm");
+        public bool CanUnpin { get; set; }
+        public Visibility UnpinVisibility => CanUnpin ? Visibility.Visible : Visibility.Collapsed;
     }
 }

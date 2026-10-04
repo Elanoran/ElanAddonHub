@@ -172,8 +172,132 @@ namespace ElansAddonHub
                           $"members={Session.Members.Count} messages={all} room={Session.MyRoom} frames sent={Session.Voice?.FramesSent}"
                         + $"\r\n{VoiceEngine.CodecSelfTest()}";
             }
+            result += "\r\n" + await LodgeFeaturesTest(dir);
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
             Quit();
+        }
+
+        static string Q(string s) => "\"" + (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+        // Lodge 2.3 features (replies, reactions, unread line + badges, pins, old-server fallback) rendered from synthetic protocol
+        // frames - no server needed
+        async Task<string> LodgeFeaturesTest(string dir)
+        {
+            var notes = new System.Collections.Generic.List<string>();
+            bool ok = true;
+            void Check(string what, bool cond) { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
+            try
+            {
+                Session.Disconnect(); // BaseUrl null: the read marks key on "local|channel"
+                var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                string Msg(string ch, string id, string from, string text, int minsAgo, string extra = "") =>
+                    "{\"t\":\"msg\",\"channel\":" + Q(ch) + ",\"id\":" + Q(id) + ",\"at\":" + (now - minsAgo * 60000L) + ",\"from\":" + Q(from) +
+                    ",\"fromId\":" + (from == "Elan" ? 1 : from == "Bob" ? 2 : 3) + ",\"text\":" + Q(text) + extra + "}";
+                const string thumbs = "\U0001F44D", swords = "⚔️", heart = "❤️";
+                string general = string.Join(",",
+                    Msg("general", "m1", "Bob", "Anyone up for Wailing Caverns tonight?", 190),
+                    Msg("general", "m2", "Elan", "I am! Meet at the entrance at 20:00", 188),
+                    Msg("general", "m3", "Bob", "Great, I'll bring flasks.", 187),
+                    Msg("general", "m4", "Bob", "The new tank is level 18 by the way", 12),
+                    Msg("general", "m5", "Tess", "@Elan can you craft some bandages for us?", 9),
+                    Msg("general", "m6", "Bob", "Sounds good, see you there", 7,
+                        ",\"replyTo\":{\"id\":\"m2\",\"from\":\"Elan\",\"text\":\"I am! Meet at the entrance at 20:00\",\"by\":\"Elan\",\"snippet\":\"I am! Meet at the entrance at 20:00\"}"),
+                    Msg("general", "m7", "Tess", "Pulling the first boss at 20:15, be ready", 3,
+                        ",\"reactions\":{" + Q(thumbs) + ":[\"Elan\",\"Bob\"]," + Q(heart) + ":[\"Tess\"]," + Q(swords) + ":[\"Bob\",\"Tess\",\"Elan\"]}"));
+                string loot = string.Join(",",
+                    Msg("loot", "l1", "Tess", "Selling a Linen Bag, 3s", 60),
+                    Msg("loot", "l2", "Bob", "LF Healing Potion x5", 20),
+                    Msg("loot", "l3", "Tess", "@elan do you still need Copper Bars?", 15),
+                    Msg("loot", "l4", "Bob", "Thanks all!", 5));
+                string pin(string id, string text, string by) => "{\"id\":" + Q(id) + ",\"text\":" + Q(text) + ",\"by\":" + Q(by) + ",\"at\":" + (now - 190 * 60000L) + ",\"pinnedBy\":\"Bob\",\"pinnedAt\":" + now + "}";
+                string welcome(bool features) =>
+                    "{\"t\":\"welcome\",\"you\":1,\"name\":\"Elan\",\"role\":\"owner\",\"server\":" + Q(features ? "2.3.0" : "2.2.0") + ",\"maxFileMb\":25,\"canShareFiles\":true,\"canModerate\":true,\"canManage\":true,"
+                    + (features ? "\"canPin\":true,\"features\":[\"reply\",\"react\",\"pin\"]," : "")
+                    + "\"channels\":[{\"id\":\"general\",\"name\":\"General\",\"type\":\"text\",\"minRole\":\"guest\"},{\"id\":\"loot\",\"name\":\"Loot & trades\",\"type\":\"text\",\"minRole\":\"guest\"},{\"id\":\"hangout\",\"name\":\"Hangout\",\"type\":\"voice\",\"minRole\":\"guest\"}],"
+                    + "\"users\":[{\"id\":1,\"name\":\"Elan\",\"role\":\"owner\"},{\"id\":2,\"name\":\"Bob\",\"role\":\"officer\"},{\"id\":3,\"name\":\"Tess\",\"role\":\"member\"}],"
+                    + "\"history\":{\"general\":[" + general + "],\"loot\":[" + loot + "]},"
+                    + (features ? "\"pins\":{\"general\":[" + pin("m2", "I am! Meet at the entrance at 20:00", "Elan") + "," + pin("gone1", "Rules: be kind, no spoilers, loot rolls are need before greed", "Bob") + "]}" : "\"pins\":{}") + "}";
+
+                Session.SetReadMarkForTest("general", "m3", now - 187 * 60000L);
+                Session.SetReadMarkForTest("loot", "l1", now - 60 * 60000L);
+                TabLodge.IsChecked = true;
+                LodgePage.ShowChatForTest();
+                Session.FeedForTest(welcome(true));
+                var g = Session.TextChannels.First(c => c.Id == "general");
+                var l = Session.TextChannels.First(c => c.Id == "loot");
+                Check("loot channel: 3 unread, 1 mention", l.UnreadCount == 3 && l.Mentions == 1);
+                Check("general: the line sits above the first unread message (m4)", g.Divider?.Id == "m4");
+                var gm = Session.MessagesOf("general");
+                Check("reply links to m2 and quotes Elan", gm.First(m => m.Id == "m6").ReplyId == "m2" && gm.First(m => m.Id == "m6").ReplyFrom == "Elan");
+                var m7 = gm.First(m => m.Id == "m7");
+                Check("reactions: 3 pills in set order, my thumbs-up highlighted", m7.Reactions.Count == 3 && m7.Reactions[0].Emoji == thumbs && m7.Reactions[0].Mine && !m7.Reactions[1].Mine);
+                Check("pins: 2 in the channel, m2 flagged, the other outlives the history", Session.PinsOf("general").Count == 2 && gm.First(m => m.Id == "m2").Pinned && !gm.Any(m => m.Id == "gone1"));
+                Check("pin button visible (server supports pins)", LodgePage.PinButtonVisibleForTest);
+                await Task.Delay(900);
+                Check("read when the list is at the bottom (nothing left unread in general)", !g.Unread && g.UnreadCount == 0);
+                m7.ForceTools = true;
+                gm.First(m => m.Id == "m5").Flash = false;
+                await Task.Delay(300);
+                Snapshot(System.IO.Path.Combine(dir, "10-lodge-features.png"));
+                m7.ForceTools = false;
+                LodgePage.OpenPinsForTest();
+                await Task.Delay(500);
+                SnapshotElement(LodgePage.PinBoxForTest, System.IO.Path.Combine(dir, "10-pins.png"));
+                LodgePage.ClosePopupsForTest();
+                LodgePage.OpenReactForTest(m7);
+                await Task.Delay(400);
+                SnapshotElement(LodgePage.PickerForTest, System.IO.Path.Combine(dir, "10-picker.png"));
+                LodgePage.ClosePopupsForTest();
+                LodgePage.OpenMenuForTest(gm.First(m => m.Id == "m6"));
+                await Task.Delay(400);
+                SnapshotElement(LodgePage.MenuForTest, System.IO.Path.Combine(dir, "10-menu.png"));
+                LodgePage.ClosePopupsForTest();
+                LodgePage.ShowDropForTest(true);
+                await Task.Delay(300);
+                Snapshot(System.IO.Path.Combine(dir, "10-drop.png"));
+                LodgePage.HideDropForTest();
+
+                // live updates
+                Session.FeedForTest("{\"t\":\"react\",\"channel\":\"general\",\"id\":\"m7\",\"emoji\":" + Q(thumbs) + ",\"users\":[\"Bob\"]}");
+                Check("react frame: my thumbs-up removed, count 1", !m7.Reactions[0].Mine && m7.Reactions[0].Count == 1);
+                Session.FeedForTest("{\"t\":\"react\",\"channel\":\"general\",\"id\":\"m7\",\"emoji\":" + Q(heart) + ",\"users\":[]}");
+                Check("react frame: an empty list removes the pill", m7.Reactions.Count == 2);
+                Session.FeedForTest("{\"t\":\"unpin\",\"channel\":\"general\",\"id\":\"m2\"}");
+                Check("unpin frame", Session.PinsOf("general").Count == 1 && !gm.First(m => m.Id == "m2").Pinned);
+                Session.FeedForTest(Msg("loot", "l5", "Bob", "@Elan one more thing", 0).Replace("\"t\":\"msg\"", "\"t\":\"msg\""));
+                Check("a live mention in a channel I'm not in adds to its @ badge", l.Mentions == 2 && l.UnreadCount == 4);
+                // a message arriving while scrolled up counts as unread even in the open channel
+                Session.Select(l);
+                await Task.Delay(700);
+                Check("opening loot starts at its line; reading at the bottom clears the badges", l.Divider?.Id == "l2" && !l.Unread);
+                var shot = System.IO.Path.Combine(dir, "10-loot.png");
+                Snapshot(shot);
+
+                // an old server (no "features"): no reaction/pin UI, replies still quote
+                Session.FeedForTest(welcome(false));
+                await Task.Delay(400);
+                Check("old server: pin button hidden, reaction tools hidden", !LodgePage.PinButtonVisibleForTest
+                    && Session.MessagesOf("general").All(m => m.ReactToolVisibility == Visibility.Collapsed && m.PinToolVisibility == Visibility.Collapsed));
+                Snapshot(System.IO.Path.Combine(dir, "10-oldserver.png"));
+                Check("upload errors are friendly (413/429/507)", Services.LodgeClient.UploadError(413, null).Contains("too big")
+                    && Services.LodgeClient.UploadError(429, null).Contains("Too many") && Services.LodgeClient.UploadError(507, null).Contains("storage is full"));
+            }
+            catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
+            return "lodge features selftest: " + (ok ? "PASSED" : "FAILED") + "\r\n  " + string.Join("\r\n  ", notes);
+        }
+
+        // a popup's content (popups are separate windows, so the window snapshot can't see them)
+        void SnapshotElement(FrameworkElement el, string file)
+        {
+            el.UpdateLayout();
+            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(el);
+            var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                Math.Max(1, (int)(el.ActualWidth * dpi.DpiScaleX)), Math.Max(1, (int)(el.ActualHeight * dpi.DpiScaleY)),
+                dpi.PixelsPerInchX, dpi.PixelsPerInchY, System.Windows.Media.PixelFormats.Pbgra32);
+            bmp.Render(el);
+            var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+            using (var fs = System.IO.File.Create(file)) enc.Save(fs);
         }
 
         // in-app picture viewer on synthetic local PNGs (no lodge connection)

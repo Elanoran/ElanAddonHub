@@ -100,12 +100,16 @@
                     <Border Background="{Binding RowBrush}" CornerRadius="6" Padding="8,5" Margin="0,1" Cursor="Hand" Tag="{Binding}"
                             MouseLeftButtonUp="Channel_Click" x:Name="row">
                       <DockPanel>
-                        <Border DockPanel.Dock="Right" Background="{StaticResource Danger}" CornerRadius="8" Padding="5,0" MinWidth="16"
-                                Visibility="{Binding MentionVisibility}" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Mentions}" FontSize="10.5" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" />
+                        <!-- @ badge: someone mentioned me here -->
+                        <Border DockPanel.Dock="Right" Background="{StaticResource Danger}" CornerRadius="8" Padding="6,0" MinWidth="18"
+                                Visibility="{Binding MentionVisibility}" VerticalAlignment="Center" ToolTip="You were mentioned">
+                          <TextBlock Text="{Binding MentionText}" FontSize="10.5" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" />
                         </Border>
-                        <Ellipse DockPanel.Dock="Right" Width="7" Height="7" Fill="{StaticResource Text}" VerticalAlignment="Center"
-                                 Visibility="{Binding UnreadVisibility}" />
+                        <!-- unread count -->
+                        <Border DockPanel.Dock="Right" Background="#33FFFFFF" CornerRadius="8" Padding="6,0" MinWidth="18"
+                                Visibility="{Binding UnreadVisibility}" VerticalAlignment="Center" ToolTip="Unread messages">
+                          <TextBlock Text="{Binding UnreadText}" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource Text}" HorizontalAlignment="Center" />
+                        </Border>
                         <TextBlock Text="#" FontSize="14" Foreground="{StaticResource TextDim}" Margin="0,-2,7,0" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding LockText}" DockPanel.Dock="Right" FontSize="9.5" Foreground="{StaticResource TextDim}"
                                    VerticalAlignment="Center" Margin="4,0,4,0" Visibility="{Binding LockVisibility}" />
@@ -202,6 +206,14 @@
 
           <Border Grid.Row="0" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="16,11">
             <DockPanel>
+              <!-- pinned messages (only when the server supports pins) -->
+              <Button x:Name="PinButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="Auto" MinWidth="30" Height="26" Padding="9,0"
+                      Margin="8,-3,-4,-3" Click="PinButton_Click" ToolTip="Pinned messages" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="&#xE718;" FontFamily="{StaticResource Icons}" FontSize="13" VerticalAlignment="Center" />
+                  <TextBlock x:Name="PinCount" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
               <TextBlock x:Name="ChatNote" DockPanel.Dock="Right" FontSize="11.5" Foreground="{StaticResource Gold}" VerticalAlignment="Center"
                          TextTrimming="CharacterEllipsis" MaxWidth="260" />
               <TextBlock Text="#" FontSize="17" Foreground="{StaticResource TextDim}" Margin="0,-2,8,0" VerticalAlignment="Center" />
@@ -209,85 +221,166 @@
             </DockPanel>
           </Border>
 
-          <ScrollViewer x:Name="MessageScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+          <Grid Grid.Row="1">
+          <ScrollViewer x:Name="MessageScroll" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0" ScrollChanged="MessageScroll_Changed">
             <StackPanel Margin="0,4,0,8">
               <TextBlock x:Name="EmptyText" Foreground="{StaticResource TextDim}" FontSize="12" HorizontalAlignment="Center" Margin="0,30,0,0" />
               <ItemsControl x:Name="Messages">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <Border x:Name="row" Background="{Binding RowBackground}" BorderBrush="{Binding MentionBar}" BorderThickness="2,0,0,0"
-                            Padding="12,2,12,3" Margin="{Binding RowMargin}">
-                      <Grid>
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="42" />
-                          <ColumnDefinition />
-                        </Grid.ColumnDefinitions>
-                        <Grid Width="34" Height="34" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0" Visibility="{Binding AvatarVisibility}">
-                          <Ellipse Fill="{Binding Color}" />
-                          <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="14.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Grid>
-                        <StackPanel Grid.Column="1">
-                          <TextBlock Visibility="{Binding ReplyVisibility}" FontSize="11.5" Foreground="{StaticResource TextDim}" TextTrimming="CharacterEllipsis" Margin="0,0,0,1">
-                            <Run Text="&#xE97A;" FontFamily="{StaticResource Icons}" FontSize="10" />
-                            <Run Text="{Binding ReplyFrom, Mode=OneWay}" FontWeight="SemiBold" />
-                            <Run Text="{Binding ReplyText, Mode=OneWay}" />
-                          </TextBlock>
-                          <StackPanel Orientation="Horizontal" Visibility="{Binding HeaderVisibility}">
-                            <TextBlock Text="{Binding From}" FontWeight="SemiBold" FontSize="13" Foreground="{Binding Color}" />
-                            <TextBlock Text="{Binding Time}" FontSize="11" Foreground="{StaticResource TextDim}" Margin="8,2,0,0" />
-                          </StackPanel>
-                          <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0"
-                                   Foreground="{StaticResource Text}" FontSize="13" Padding="0" Margin="0,1,0,0" SelectionBrush="{StaticResource Accent}"
-                                   Visibility="{Binding TextVisibility}" />
-                          <TextBlock Text="(edited)" FontSize="10.5" Foreground="{StaticResource TextDim}" Visibility="{Binding EditedVisibility}" />
-                          <StackPanel Visibility="{Binding FileVisibility}" Margin="0,5,0,2">
-                            <Border Visibility="{Binding File.ImageVisibility}" CornerRadius="8" HorizontalAlignment="Left" Cursor="Hand"
-                                    MouseLeftButtonUp="Image_Click" Tag="{Binding File}" ClipToBounds="True">
-                              <Image Source="{Binding File.Image}" MaxHeight="240" MaxWidth="360" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
-                            </Border>
-                            <Border Visibility="{Binding File.CardVisibility}" Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="10,8"
-                                    HorizontalAlignment="Left" MinWidth="230" MaxWidth="360" BorderBrush="{StaticResource Line}" BorderThickness="1">
-                              <DockPanel>
-                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE896;" Click="Download_Click"
-                                        Tag="{Binding File}" ToolTip="Save to Downloads" />
-                                <TextBlock DockPanel.Dock="Left" Text="&#xE7C3;" FontFamily="{StaticResource Icons}" FontSize="20"
-                                           Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                <StackPanel VerticalAlignment="Center">
-                                  <TextBlock Text="{Binding File.Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
-                                  <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding File.SizeText}" FontSize="11" Foreground="{StaticResource TextDim}" />
-                                    <TextBlock Text="{Binding File.Status}" FontSize="11" Foreground="{StaticResource Accent}" Margin="8,0,0,0" />
-                                  </StackPanel>
-                                </StackPanel>
-                              </DockPanel>
-                            </Border>
-                          </StackPanel>
-                        </StackPanel>
-                        <!-- hover tools -->
-                        <Border x:Name="tools" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0" Visibility="Collapsed"
-                                Background="{StaticResource SurfaceHi}" CornerRadius="7" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="2">
-                          <StackPanel Orientation="Horizontal">
-                            <Button Style="{StaticResource IconButton}" Width="26" Height="26" FontSize="12" Content="&#xE97A;" ToolTip="Reply"
-                                    Tag="{Binding}" Click="Reply_Click" />
-                            <Button Style="{StaticResource IconButton}" Width="26" Height="26" FontSize="12" Content="&#xE70F;" ToolTip="Edit"
-                                    Tag="{Binding}" Click="Edit_Click" Visibility="{Binding EditVisibility}" />
-                            <Button Style="{StaticResource IconButton}" Width="26" Height="26" FontSize="12" Content="&#xE74D;" ToolTip="Delete"
-                                    Foreground="{StaticResource Danger}" Tag="{Binding}" Click="Delete_Click" Visibility="{Binding DeleteVisibility}" />
-                          </StackPanel>
+                    <StackPanel>
+                      <!-- "New messages" line, above the first message I haven't read -->
+                      <Grid Visibility="{Binding DividerVisibility}" Margin="12,12,12,2">
+                        <Border Height="1" Background="{StaticResource Danger}" Opacity="0.55" VerticalAlignment="Center" />
+                        <Border HorizontalAlignment="Right" Background="{StaticResource Danger}" CornerRadius="8" Padding="7,1" Margin="0,0,0,0">
+                          <TextBlock Text="NEW" FontSize="9.5" FontWeight="Bold" Foreground="White" />
                         </Border>
                       </Grid>
-                    </Border>
+                      <Border x:Name="row" Background="{Binding RowBackground}" BorderBrush="{Binding MentionBar}" BorderThickness="2,0,0,0"
+                              Padding="12,2,12,3" Margin="{Binding RowMargin}" PreviewMouseRightButtonUp="Message_RightClick">
+                        <Grid>
+                          <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                          </Grid.RowDefinitions>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="42" />
+                            <ColumnDefinition />
+                          </Grid.ColumnDefinitions>
+
+                          <!-- the quoted message: a curved connector into the avatar and one dim line -->
+                          <Border Grid.Row="0" Grid.Column="0" Visibility="{Binding ReplyVisibility}" Margin="16,9,3,-3"
+                                  BorderBrush="{StaticResource TextDim}" Opacity="0.55" BorderThickness="2,2,0,0" CornerRadius="7,0,0,0" />
+                          <TextBlock Grid.Row="0" Grid.Column="1" Visibility="{Binding ReplyVisibility}" FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                     Foreground="{StaticResource TextDim}" Margin="0,2,60,2" Cursor="Hand" Tag="{Binding}"
+                                     MouseLeftButtonUp="ReplyQuote_Click" ToolTip="Jump to the original message">
+                            <Run Text="{Binding ReplyFrom, Mode=OneWay}" FontWeight="SemiBold" Foreground="{Binding ReplyColor, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding ReplyText, Mode=OneWay}" />
+                          </TextBlock>
+
+                          <Grid Grid.Row="1" Width="34" Height="34" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0" Visibility="{Binding AvatarVisibility}">
+                            <Ellipse Fill="{Binding Color}" />
+                            <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="14.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                          </Grid>
+                          <StackPanel Grid.Row="1" Grid.Column="1">
+                            <StackPanel Orientation="Horizontal" Visibility="{Binding HeaderVisibility}">
+                              <TextBlock Text="{Binding From}" FontWeight="SemiBold" FontSize="13" Foreground="{Binding Color}" />
+                              <TextBlock Text="{Binding Time}" FontSize="11" Foreground="{StaticResource TextDim}" Margin="8,2,0,0" />
+                            </StackPanel>
+                            <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0"
+                                     Foreground="{StaticResource Text}" FontSize="13" Padding="0" Margin="0,1,0,0" SelectionBrush="{StaticResource Accent}"
+                                     Visibility="{Binding TextVisibility}" ContextMenu="{x:Null}" />
+                            <TextBlock Text="(edited)" FontSize="10.5" Foreground="{StaticResource TextDim}" Visibility="{Binding EditedVisibility}" />
+                            <StackPanel Visibility="{Binding FileVisibility}" Margin="0,5,0,2">
+                              <Border Visibility="{Binding File.ImageVisibility}" CornerRadius="8" HorizontalAlignment="Left" Cursor="Hand"
+                                      MouseLeftButtonUp="Image_Click" Tag="{Binding File}" ClipToBounds="True">
+                                <Image Source="{Binding File.Image}" MaxHeight="240" MaxWidth="360" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                              </Border>
+                              <Border Visibility="{Binding File.CardVisibility}" Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="10,8"
+                                      HorizontalAlignment="Left" MinWidth="230" MaxWidth="360" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                                <DockPanel>
+                                  <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE896;" Click="Download_Click"
+                                          Tag="{Binding File}" ToolTip="Save to Downloads" />
+                                  <TextBlock DockPanel.Dock="Left" Text="&#xE7C3;" FontFamily="{StaticResource Icons}" FontSize="20"
+                                             Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                  <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding File.Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                                    <StackPanel Orientation="Horizontal">
+                                      <TextBlock Text="{Binding File.SizeText}" FontSize="11" Foreground="{StaticResource TextDim}" />
+                                      <TextBlock Text="{Binding File.Status}" FontSize="11" Foreground="{StaticResource Accent}" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                  </StackPanel>
+                                </DockPanel>
+                              </Border>
+                            </StackPanel>
+                            <!-- reactions: pills with counts, mine highlighted, click toggles -->
+                            <ItemsControl ItemsSource="{Binding Reactions}" Visibility="{Binding ReactionsVisibility}" Margin="0,4,0,1">
+                              <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                              </ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                  <Border Background="{Binding Fill}" BorderBrush="{Binding Line}" BorderThickness="1" CornerRadius="10" Padding="7,1,8,1"
+                                          Margin="0,0,5,3" Cursor="Hand" Tag="{Binding}" ToolTip="{Binding Tip}" MouseLeftButtonUp="Reaction_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                      <TextBlock Text="{Binding Emoji}" FontFamily="Segoe UI Emoji" FontSize="12.5" VerticalAlignment="Center" />
+                                      <TextBlock Text="{Binding Count}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource Text}" Margin="5,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                  </Border>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                          </StackPanel>
+
+                          <TextBlock Grid.Row="1" Grid.Column="1" Text="&#xE718;" FontFamily="{StaticResource Icons}" FontSize="10.5" Foreground="{StaticResource Gold}"
+                                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,3,2,0" Visibility="{Binding PinnedVisibility}" ToolTip="Pinned" />
+
+                          <!-- hover tools: Reply, React, Pin, More -->
+                          <Border x:Name="tools" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-8,0,0"
+                                  Visibility="Collapsed" Background="{StaticResource SurfaceHi}" CornerRadius="9" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="2">
+                            <Border.Effect><DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.35" /></Border.Effect>
+                            <StackPanel Orientation="Horizontal">
+                              <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE97A;" ToolTip="Reply"
+                                      Tag="{Binding}" Click="Reply_Click" />
+                              <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE899;" ToolTip="Add reaction"
+                                      Tag="{Binding}" Click="React_Click" Visibility="{Binding ReactToolVisibility}" />
+                              <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE718;" ToolTip="Pin / unpin"
+                                      Tag="{Binding}" Click="PinTool_Click" Visibility="{Binding PinToolVisibility}" />
+                              <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE712;" ToolTip="More"
+                                      Tag="{Binding}" Click="More_Click" />
+                            </StackPanel>
+                          </Border>
+                        </Grid>
+                      </Border>
+                    </StackPanel>
                     <DataTemplate.Triggers>
                       <Trigger SourceName="row" Property="IsMouseOver" Value="True">
                         <Setter TargetName="tools" Property="Visibility" Value="Visible" />
                         <Setter TargetName="row" Property="Background" Value="#0DFFFFFF" />
                       </Trigger>
+                      <DataTrigger Binding="{Binding ForceTools}" Value="True">
+                        <Setter TargetName="tools" Property="Visibility" Value="Visible" />
+                      </DataTrigger>
                     </DataTemplate.Triggers>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
             </StackPanel>
           </ScrollViewer>
+
+          <!-- floating: Jump to first unread / Jump to present -->
+          <Button x:Name="JumpButton" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,10" Visibility="Collapsed" Click="Jump_Click" Cursor="Hand"
+                  FocusVisualStyle="{x:Null}">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border x:Name="bd" Background="#F01E2226" BorderBrush="{StaticResource AccentDark}" BorderThickness="1" CornerRadius="14" Padding="13,5">
+                  <Border.Effect><DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.5" /></Border.Effect>
+                  <ContentPresenter />
+                </Border>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="bd" Property="Background" Value="#F02A3036" />
+                  </Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate>
+            </Button.Template>
+            <StackPanel Orientation="Horizontal">
+              <TextBlock x:Name="JumpGlyph" Text="&#xE74B;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,7,0" />
+              <TextBlock x:Name="JumpText" Text="Jump to present" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Text}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+
+          <!-- while dragging files over the chat -->
+          <Border x:Name="DropOverlay" Visibility="Collapsed" IsHitTestVisible="False" Background="#D90F1113" CornerRadius="0,0,0,0" Margin="6">
+            <Grid>
+              <Rectangle Stroke="{StaticResource Accent}" StrokeThickness="2" StrokeDashArray="5 4" RadiusX="12" RadiusY="12" Opacity="0.8" />
+              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock x:Name="DropGlyph" Text="&#xE896;" FontFamily="{StaticResource Icons}" FontSize="30" Foreground="{StaticResource Accent}" HorizontalAlignment="Center" />
+                <TextBlock x:Name="DropText" Text="Drop to share" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" HorizontalAlignment="Center" />
+                <TextBlock x:Name="DropSub" Text="Pictures and files go to this channel" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,3,0,0" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Grid>
+          </Border>
+          </Grid>
 
           <TextBlock x:Name="TypingText" Grid.Row="2" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="16,2,0,2" Height="16" />
 
@@ -318,6 +411,89 @@
         </Grid>
       </Border>
     </Grid>
+
+    <!-- message menu (More button / right click) -->
+    <Popup x:Name="MsgMenu" StaysOpen="False" Placement="MousePoint" AllowsTransparency="True" PopupAnimation="Fade">
+      <Border x:Name="MsgMenuBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="5" Width="196" Margin="0,0,12,12">
+        <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.45" /></Border.Effect>
+        <StackPanel>
+          <Button x:Name="MenuReply" Style="{StaticResource MenuRow}" Click="MenuReply_Click">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE97A;" FontFamily="{StaticResource Icons}" FontSize="12.5" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Reply" /></StackPanel>
+          </Button>
+          <Button x:Name="MenuReact" Style="{StaticResource MenuRow}" Click="MenuReact_Click">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE899;" FontFamily="{StaticResource Icons}" FontSize="12.5" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Add reaction" /></StackPanel>
+          </Button>
+          <Button x:Name="MenuPin" Style="{StaticResource MenuRow}" Click="MenuPin_Click">
+            <StackPanel Orientation="Horizontal"><TextBlock x:Name="MenuPinGlyph" Text="&#xE718;" FontFamily="{StaticResource Icons}" FontSize="12.5" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock x:Name="MenuPinText" Text="Pin message" /></StackPanel>
+          </Button>
+          <Button x:Name="MenuCopy" Style="{StaticResource MenuRow}" Click="MenuCopy_Click">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8C8;" FontFamily="{StaticResource Icons}" FontSize="12.5" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Copy text" /></StackPanel>
+          </Button>
+          <Button x:Name="MenuEdit" Style="{StaticResource MenuRow}" Click="MenuEdit_Click">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE70F;" FontFamily="{StaticResource Icons}" FontSize="12.5" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Edit" /></StackPanel>
+          </Button>
+          <Button x:Name="MenuDelete" Style="{StaticResource MenuRow}" Click="MenuDelete_Click">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74D;" FontFamily="{StaticResource Icons}" FontSize="12.5" Width="24" Foreground="{StaticResource Danger}" /><TextBlock Text="Delete" Foreground="{StaticResource Danger}" /></StackPanel>
+          </Button>
+        </StackPanel>
+      </Border>
+    </Popup>
+
+    <!-- reaction picker: the six the server allows -->
+    <Popup x:Name="ReactPopup" StaysOpen="False" Placement="Left" AllowsTransparency="True" PopupAnimation="Fade" HorizontalOffset="-4">
+      <Border x:Name="ReactPickerBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="16" Padding="4" Margin="0,0,10,10">
+        <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.45" /></Border.Effect>
+        <ItemsControl x:Name="ReactItems">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Style="{StaticResource IconButton}" Width="32" Height="32" FontFamily="Segoe UI Emoji" FontSize="17" Foreground="{StaticResource Text}"
+                      Content="{Binding}" Tag="{Binding}" Click="ReactPick_Click" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Border>
+    </Popup>
+
+    <!-- pinned messages of this channel -->
+    <Popup x:Name="PinPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="6">
+      <Border x:Name="PinBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="6" Width="340" Margin="0,0,14,14">
+        <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" /></Border.Effect>
+        <StackPanel>
+          <TextBlock x:Name="PinTitle" Text="PINNED MESSAGES" Style="{StaticResource Caption}" Margin="8,5,0,5" />
+          <TextBlock x:Name="PinEmpty" Text="Nothing pinned yet. Officers can pin from a message's menu." FontSize="12" Foreground="{StaticResource TextDim}"
+                     TextWrapping="Wrap" Margin="8,2,8,8" />
+          <ScrollViewer MaxHeight="330" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="PinList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border x:Name="pr" Background="Transparent" CornerRadius="8" Padding="8,6,6,6" Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="PinRow_Click">
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="10" Content="&#xE77A;" ToolTip="Unpin"
+                              VerticalAlignment="Top" Tag="{Binding}" Click="PinRemove_Click" Visibility="{Binding UnpinVisibility}" />
+                      <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                          <TextBlock Text="{Binding By}" FontWeight="SemiBold" FontSize="12" Foreground="{Binding Color}" />
+                          <TextBlock Text="{Binding Time}" FontSize="10.5" Foreground="{StaticResource TextDim}" Margin="8,1,0,0" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding Shown}" FontSize="12.5" TextWrapping="Wrap" MaxHeight="54" TextTrimming="CharacterEllipsis" Margin="0,2,6,0" />
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
+                  <DataTemplate.Triggers>
+                    <Trigger SourceName="pr" Property="IsMouseOver" Value="True">
+                      <Setter TargetName="pr" Property="Background" Value="{StaticResource Line}" />
+                    </Trigger>
+                  </DataTemplate.Triggers>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </StackPanel>
+      </Border>
+    </Popup>
 
     <!-- status picker -->
     <Popup x:Name="StatusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="-6">

@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -28,6 +29,9 @@ namespace ElansAddonHub.Lodge
         bool popLoading;
         DateTime noteUntil;
         ChannelVM shownChannel;
+        MessageVM menuMsg, reactTarget;
+        readonly DispatcherTimer dropTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
+        string jumpMode; // "unread" | "present" | null
 
         public event Action OpenSettings;
         public bool ForceOverlayForTest;
@@ -37,6 +41,7 @@ namespace ElansAddonHub.Lodge
         {
             InitializeComponent();
             tick.Tick += (s, e) => OnTick();
+            dropTimer.Tick += (s, e) => { dropTimer.Stop(); DropOverlay.Visibility = Visibility.Collapsed; };
         }
 
         public void Init(LodgeSession session)
@@ -55,11 +60,13 @@ namespace ElansAddonHub.Lodge
             OnlineList.ItemsSource = online;
 
             session.Changed += Refresh;
+            session.IsAtBottom = () => AtBottom;
+            session.PinsChanged += UpdatePins;
             session.MessageAdded += vm =>
             {
                 if (vm.Channel != session.Selected?.Id) return;
                 EmptyText.Visibility = Visibility.Collapsed;
-                if (vm.Mine || MessageScroll.VerticalOffset >= MessageScroll.ScrollableHeight - 60) ScrollToEnd();
+                if (vm.Mine || AtBottom) ScrollToEnd();
             };
             session.Stopped += why => ShowJoin(why);
             session.Error += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(6); };
@@ -94,8 +101,13 @@ namespace ElansAddonHub.Lodge
                 ChannelTitle.Text = s.Selected?.Name ?? "";
                 EmptyText.Text = $"No messages in #{s.Selected?.Name} yet - say hi!";
                 ComposerHint.Text = $"Message #{s.Selected?.Name}";
-                ScrollToEnd();
+                PinList.ItemsSource = s.PinsOf(s.Selected?.Id);
+                // open at the "New messages" line when there is one, otherwise at the newest message
+                if (s.Selected?.Divider != null) ScrollToMessage(s.Selected.Divider, false);
+                else ScrollToEnd();
             }
+            PinButton.Visibility = s.SupportsPin ? Visibility.Visible : Visibility.Collapsed;
+            UpdatePins();
             if (s.Selected != null)
                 EmptyText.Visibility = s.MessagesOf(s.Selected.Id).Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -131,7 +143,109 @@ namespace ElansAddonHub.Lodge
             OnlineCaption.Text = $"ONLINE - {online}";
             OnlineCaption.Visibility = online > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (ChatNote.Text.Length > 0 && DateTime.UtcNow > noteUntil) ChatNote.Text = "";
+            if (ChatPanel.Visibility == Visibility.Visible && (Session.IsShownToUser?.Invoke() ?? true)) Session.MarkRead(); // only acts at the bottom
+            UpdateJump();
             UpdateOverlay();
+        }
+
+        bool AtBottom => MessageScroll.VerticalOffset >= MessageScroll.ScrollableHeight - 60;
+
+        // ---- scrolling, the "jump" button, highlight
+        FrameworkElement ContainerOf(MessageVM vm) => Messages.ItemContainerGenerator.ContainerFromItem(vm) as FrameworkElement;
+
+        double OffsetInView(FrameworkElement c)
+        {
+            try { return c.TransformToAncestor(MessageScroll).Transform(new Point(0, 0)).Y; } catch { return double.NaN; }
+        }
+
+        void ScrollToMessage(MessageVM vm, bool flash)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                MessageScroll.UpdateLayout();
+                var c = ContainerOf(vm);
+                if (c == null) return;
+                var y = OffsetInView(c);
+                if (!double.IsNaN(y)) MessageScroll.ScrollToVerticalOffset(Math.Max(0, MessageScroll.VerticalOffset + y - 36));
+                if (flash) Flash(vm);
+            }), DispatcherPriority.Background);
+        }
+
+        void Flash(MessageVM vm)
+        {
+            vm.Flash = true;
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1600) };
+            t.Tick += (s, e) => { t.Stop(); vm.Flash = false; };
+            t.Start();
+        }
+
+        void MessageScroll_Changed(object sender, ScrollChangedEventArgs e) => UpdateJump();
+
+        void UpdateJump()
+        {
+            var ch = Session?.Selected;
+            if (ch == null) { JumpButton.Visibility = Visibility.Collapsed; return; }
+            string mode = null;
+            if (ch.Unread && ch.Divider != null)
+            {
+                var c = ContainerOf(ch.Divider);
+                var y = c == null ? double.NaN : OffsetInView(c);
+                if (!double.IsNaN(y) && y < -4) mode = "unread";
+            }
+            if (mode == null && !AtBottom) mode = "present";
+            if (mode == jumpMode) return;
+            jumpMode = mode;
+            JumpButton.Visibility = mode == null ? Visibility.Collapsed : Visibility.Visible;
+            JumpText.Text = mode == "unread" ? "Jump to first unread" : "Jump to present";
+            JumpGlyph.Text = mode == "unread" ? "\uE74A" : "\uE74B";
+        }
+
+        void Jump_Click(object sender, RoutedEventArgs e)
+        {
+            var ch = Session?.Selected;
+            if (jumpMode == "unread" && ch?.Divider != null) ScrollToMessage(ch.Divider, false);
+            else ScrollToEnd();
+        }
+
+        // ---- pins
+        void UpdatePins()
+        {
+            var ch = Session?.Selected;
+            var n = ch == null ? 0 : Session.PinsOf(ch.Id).Count;
+            PinCount.Text = n > 0 ? n.ToString() : "";
+            PinButton.ToolTip = n == 0 ? "Pinned messages" : $"{n} pinned message{(n == 1 ? "" : "s")}";
+            PinEmpty.Visibility = n == 0 ? Visibility.Visible : Visibility.Collapsed;
+            PinTitle.Text = n == 0 ? "PINNED MESSAGES" : $"PINNED MESSAGES - {n}";
+        }
+
+        void PinButton_Click(object sender, RoutedEventArgs e)
+        {
+            UpdatePins();
+            PinPopup.PlacementTarget = PinButton;
+            PinPopup.HorizontalOffset = PinButton.ActualWidth - PinBox.Width - 8;
+            PinPopup.IsOpen = true;
+        }
+
+        void PinRow_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is PinVM p)) return;
+            PinPopup.IsOpen = false;
+            JumpTo(p.Id);
+        }
+
+        void PinRemove_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if ((sender as FrameworkElement)?.Tag is PinVM p && Session.Selected != null) _ = Session.UnpinMessage(p.Id, Session.Selected.Id);
+        }
+
+        // scroll to a message in this channel and flash it; if it has left the loaded history say so
+        void JumpTo(string id)
+        {
+            var target = id == null ? null : Session.MessagesOf(Session.Selected?.Id).FirstOrDefault(m => m.Id == id);
+            if (target != null) { ScrollToMessage(target, true); return; }
+            ChatNote.Text = "That message is older than what is loaded here";
+            noteUntil = DateTime.UtcNow.AddSeconds(4);
         }
 
         void ScrollToEnd() => Dispatcher.BeginInvoke(new Action(() => MessageScroll.ScrollToEnd()), DispatcherPriority.Background);
@@ -323,17 +437,24 @@ namespace ElansAddonHub.Lodge
 
         void Reply_Click(object sender, RoutedEventArgs e)
         {
-            if (!((sender as FrameworkElement)?.Tag is MessageVM m)) return;
+            if ((sender as FrameworkElement)?.Tag is MessageVM m) StartReply(m);
+        }
+
+        void StartReply(MessageVM m)
+        {
             editing = null;
             replyTo = m;
-            ModeText.Text = $"Replying to {m.From}";
+            var snip = (m.Text ?? m.File?.Name ?? "").Replace("\n", " ");
+            if (snip.Length > 60) snip = snip.Substring(0, 60) + "...";
+            ModeText.Text = $"Replying to {m.From}  -  {snip}";
             ModeBar.Visibility = Visibility.Visible;
             Composer.Focus();
         }
 
-        void Edit_Click(object sender, RoutedEventArgs e)
+        void ReplyQuote_Click(object sender, MouseButtonEventArgs e)
         {
-            if ((sender as FrameworkElement)?.Tag is MessageVM m) StartEdit(m);
+            if ((sender as FrameworkElement)?.Tag is MessageVM m) JumpTo(m.ReplyId);
+            e.Handled = true;
         }
 
         void StartEdit(MessageVM m)
@@ -347,13 +468,90 @@ namespace ElansAddonHub.Lodge
             Composer.Focus();
         }
 
-        void Delete_Click(object sender, RoutedEventArgs e)
+        void DeleteMessage(MessageVM m)
         {
-            if (!((sender as FrameworkElement)?.Tag is MessageVM m)) return;
             var whose = m.Mine ? "your message" : $"{m.From}'s message";
             if (MessageBox.Show(Window.GetWindow(this), $"Delete {whose}?", "Delete", MessageBoxButton.YesNo,
                     MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes)
                 _ = Session.Delete(m.Id);
+        }
+
+        // ---- reactions
+        void React_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is MessageVM m)) return;
+            // the picker opens to the left of the hover toolbar
+            var toolbar = (sender as FrameworkElement)?.Parent is FrameworkElement p ? p.Parent as FrameworkElement : null;
+            OpenReactPicker(m, toolbar);
+        }
+
+        void OpenReactPicker(MessageVM m, FrameworkElement target)
+        {
+            reactTarget = m;
+            ReactItems.ItemsSource = Session.ReactionSet;
+            ReactPopup.Placement = target != null ? PlacementMode.Left : PlacementMode.MousePoint;
+            ReactPopup.PlacementTarget = target;
+            ReactPopup.IsOpen = true;
+        }
+
+        void ReactPick_Click(object sender, RoutedEventArgs e)
+        {
+            ReactPopup.IsOpen = false;
+            if (reactTarget != null && (sender as FrameworkElement)?.Tag is string emoji) _ = Session.React(reactTarget, emoji);
+        }
+
+        void Reaction_Click(object sender, MouseButtonEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is ReactionVM r) _ = Session.React(r.Msg, r.Emoji);
+            e.Handled = true;
+        }
+
+        // ---- pin / unpin
+        void PinTool_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is MessageVM m) TogglePin(m);
+        }
+
+        void TogglePin(MessageVM m)
+        {
+            if (m.Pinned) _ = Session.UnpinMessage(m.Id, m.Channel);
+            else _ = Session.PinMessage(m.Id);
+        }
+
+        // ---- the message menu (More button and right click)
+        void More_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is MessageVM m) OpenMenu(m);
+        }
+
+        void Message_RightClick(object sender, MouseButtonEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.DataContext is MessageVM m) { OpenMenu(m); e.Handled = true; }
+        }
+
+        void OpenMenu(MessageVM m)
+        {
+            menuMsg = m;
+            MenuReact.Visibility = m.ReactEnabled ? Visibility.Visible : Visibility.Collapsed;
+            MenuPin.Visibility = m.PinEnabled ? Visibility.Visible : Visibility.Collapsed;
+            MenuPinText.Text = m.Pinned ? "Unpin message" : "Pin message";
+            MenuPinGlyph.Text = m.Pinned ? "\uE77A" : "\uE718";
+            MenuCopy.Visibility = string.IsNullOrEmpty(m.Text) ? Visibility.Collapsed : Visibility.Visible;
+            MenuEdit.Visibility = m.Mine && !string.IsNullOrEmpty(m.Text) ? Visibility.Visible : Visibility.Collapsed;
+            MenuDelete.Visibility = m.Mine || m.CanDelete ? Visibility.Visible : Visibility.Collapsed;
+            MsgMenu.PlacementTarget = null;
+            MsgMenu.IsOpen = true;
+        }
+
+        void MenuReply_Click(object sender, RoutedEventArgs e) { MsgMenu.IsOpen = false; if (menuMsg != null) StartReply(menuMsg); }
+        void MenuReact_Click(object sender, RoutedEventArgs e) { MsgMenu.IsOpen = false; if (menuMsg != null) OpenReactPicker(menuMsg, null); }
+        void MenuPin_Click(object sender, RoutedEventArgs e) { MsgMenu.IsOpen = false; if (menuMsg != null) TogglePin(menuMsg); }
+        void MenuEdit_Click(object sender, RoutedEventArgs e) { MsgMenu.IsOpen = false; if (menuMsg != null) StartEdit(menuMsg); }
+        void MenuDelete_Click(object sender, RoutedEventArgs e) { MsgMenu.IsOpen = false; if (menuMsg != null) DeleteMessage(menuMsg); }
+        void MenuCopy_Click(object sender, RoutedEventArgs e)
+        {
+            MsgMenu.IsOpen = false;
+            try { if (!string.IsNullOrEmpty(menuMsg?.Text)) Clipboard.SetText(menuMsg.Text); } catch { }
         }
 
         void CancelMode_Click(object sender, RoutedEventArgs e) => CancelMode();
@@ -425,14 +623,16 @@ namespace ElansAddonHub.Lodge
                     foreach (string f in Clipboard.GetFileDropList()) if (File.Exists(f)) _ = Share(f);
                     return true;
                 }
-                if (Clipboard.ContainsImage())
+                // a picture on the clipboard (not text that merely came with one): upload it as pasted-<time>.png
+                if (Clipboard.ContainsImage() && !Clipboard.ContainsText())
                 {
                     var img = Clipboard.GetImage();
-                    var path = Path.Combine(Path.GetTempPath(), $"screenshot-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+                    var dir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "elanshub-paste-" + Guid.NewGuid().ToString("N").Substring(0, 8))).FullName;
+                    var path = Path.Combine(dir, $"pasted-{DateTime.Now:yyyyMMdd-HHmmss}.png");
                     var enc = new PngBitmapEncoder();
                     enc.Frames.Add(BitmapFrame.Create(img));
                     using (var fs = File.Create(path)) enc.Save(fs);
-                    _ = Share(path);
+                    _ = Share(path, true);
                     return true;
                 }
             }
@@ -446,19 +646,32 @@ namespace ElansAddonHub.Lodge
             if (dlg.ShowDialog(Window.GetWindow(this)) == true) foreach (var f in dlg.FileNames) _ = Share(f);
         }
 
+        // while files hover over the chat: "Drop to share" (initiates get the reason instead; the drop still lands so the usual message shows)
         void OnDragOver(object sender, DragEventArgs e)
         {
-            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) && Session.Online && Session.CanShareFiles ? DragDropEffects.Copy : DragDropEffects.None;
+            var files = e.Data.GetDataPresent(DataFormats.FileDrop) && Session != null && Session.Online;
+            e.Effects = files ? DragDropEffects.Copy : DragDropEffects.None;
+            if (files && ChatPanel.Visibility == Visibility.Visible)
+            {
+                var ok = Session.CanShareFiles;
+                DropText.Text = ok ? "Drop to share" : "Initiates can't share files";
+                DropSub.Text = ok ? $"Pictures and files go to #{Session.Selected?.Name}" : "Ask the Guild Master for a rank";
+                DropGlyph.Text = ok ? "\uE896" : "\uE72E";
+                DropOverlay.Visibility = Visibility.Visible;
+                dropTimer.Stop(); dropTimer.Start(); // hides itself when the drag leaves
+            }
             e.Handled = true;
         }
 
         void OnDrop(object sender, DragEventArgs e)
         {
+            dropTimer.Stop();
+            DropOverlay.Visibility = Visibility.Collapsed;
             if (!(e.Data.GetData(DataFormats.FileDrop) is string[] files)) return;
             foreach (var f in files.Where(File.Exists)) _ = Share(f);
         }
 
-        public async Task Share(string path)
+        public async Task Share(string path, bool deleteAfter = false)
         {
             ChatNote.Text = $"Uploading {Path.GetFileName(path)}...";
             noteUntil = DateTime.UtcNow.AddMinutes(5);
@@ -471,9 +684,13 @@ namespace ElansAddonHub.Lodge
             }
             catch (Exception ex)
             {
-                Util.Log("upload: " + ex);
-                ChatNote.Text = "Upload failed: " + ex.Message;
+                Util.Log("upload: " + ex.Message);
+                ChatNote.Text = ex is InvalidOperationException ? ex.Message : "Upload failed: " + ex.Message;
                 noteUntil = DateTime.UtcNow.AddSeconds(8);
+            }
+            finally
+            {
+                if (deleteAfter) try { File.Delete(path); Directory.Delete(Path.GetDirectoryName(path)); } catch { }
             }
         }
 
@@ -552,6 +769,23 @@ namespace ElansAddonHub.Lodge
         }
 
         // test hooks
+        public void ShowChatForTest() => ShowChat();
+        public void OpenPinsForTest() => PinButton_Click(null, null);
+        public void OpenReactForTest(MessageVM m) => OpenReactPicker(m, null);
+        public void OpenMenuForTest(MessageVM m) => OpenMenu(m);
+        public void ClosePopupsForTest() { PinPopup.IsOpen = false; ReactPopup.IsOpen = false; MsgMenu.IsOpen = false; }
+        public FrameworkElement PinBoxForTest => PinBox;
+        public FrameworkElement PickerForTest => ReactPickerBox;
+        public FrameworkElement MenuForTest => MsgMenuBox;
+        public bool PinButtonVisibleForTest => PinButton.Visibility == Visibility.Visible;
+        public string JumpModeForTest => jumpMode;
+        public void ScrollToTopForTest() => MessageScroll.ScrollToTop();
+        public void ShowDropForTest(bool canShare)
+        {
+            DropText.Text = canShare ? "Drop to share" : "Initiates can't share files";
+            DropOverlay.Visibility = Visibility.Visible;
+        }
+        public void HideDropForTest() => DropOverlay.Visibility = Visibility.Collapsed;
         public void FillJoinForTest(string url, string code, string name) { UrlBox.Text = url; CodeBox.Password = code; NameBox.Text = name; TryJoin(); }
         public string JoinError => JoinStatus.Text;
     }

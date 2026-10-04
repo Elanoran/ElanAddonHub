@@ -175,10 +175,26 @@ namespace ElansAddonHub.Services
                 req.Content = new StreamContent(fs);
                 using (var resp = await Net.Http.SendAsync(req))
                 {
-                    var body = Json.Obj(await resp.Content.ReadAsStringAsync());
-                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(body.Str("error") ?? $"Upload failed ({(int)resp.StatusCode})");
-                    return body;
+                    var text = await resp.Content.ReadAsStringAsync();
+                    Dictionary<string, object> body = null;
+                    try { body = Json.Obj(text); } catch { } // a proxy's 413 page isn't JSON
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(UploadError((int)resp.StatusCode, body.Str("error")));
+                    return body ?? new Dictionary<string, object>();
                 }
+            }
+        }
+
+        // friendly texts for the server's upload limits (413 too big, 429 too many, 507 storage full)
+        public static string UploadError(int status, string serverText)
+        {
+            switch (status)
+            {
+                case 413: return "That file is too big for this lodge";
+                case 429: return "Too many uploads right now - try again in a few minutes";
+                case 507: return "The lodge's file storage is full - ask the Guild Master to free some space";
+                case 403: return "Initiates can't share files";
+                case 401: return "Your invite code isn't valid any more";
+                default: return string.IsNullOrEmpty(serverText) ? $"Upload failed ({status})" : serverText;
             }
         }
 
