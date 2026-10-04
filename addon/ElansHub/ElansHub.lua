@@ -3,7 +3,10 @@
 -- WoW writes this to disk on /reload and logout; the hub reads it from SavedVariables\ElansHub.lua.
 -- No chat output, no frames - it just takes notes.
 
-local ADDON = ...
+local ADDON, EHUB = ...
+EHUB = EHUB or {}
+EHUB.name = ADDON or "ElansHub"
+EHUB.inits = {} -- modules (UI.lua, Wheel.lua, ...) add their setup functions here; run at PLAYER_LOGIN
 ElansHubDB = ElansHubDB or {}
 
 local function clean(v)
@@ -16,6 +19,7 @@ local function version()
   local ok, v = pcall(get, ADDON, "Version")
   return ok and v or nil
 end
+EHUB.Version = version
 
 local loggingOut = false -- set on PLAYER_LOGOUT unless a /reload is under way
 local reloading = false
@@ -162,12 +166,21 @@ local function drawStrip()
   strip:Show()
 end
 
+EHUB.PixelsOn = pixelsOn
+function EHUB.SetPixels(on)
+  if on then ElansHubDB.pixel = nil else ElansHubDB.pixel = false end
+  pcall(drawStrip)
+end
+
 local f = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA", "PLAYER_LEVEL_UP",
                      "PLAYER_GUILD_UPDATE", "PLAYER_LOGOUT", "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED" }) do
   pcall(f.RegisterEvent, f, e)
 end
 f:SetScript("OnEvent", function(_, event)
+  if event == "PLAYER_LOGIN" then
+    for _, fn in ipairs(EHUB.inits) do pcall(fn) end
+  end
   if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
     pcall(applyScale)
     return
@@ -196,6 +209,18 @@ SlashCmdList.ELANSHUB = function(msg)
       .. " (/ehub pixel on|off). It lets the Hub see your character without a /reload.")
     return
   end
+  if a == "" or a == "settings" or a == "config" or a == "options" then
+    if EHUB.OpenSettings then EHUB.OpenSettings() end
+    return
+  end
+  if a == "diag" then
+    if EHUB.Diag then EHUB.Diag() end
+    return
+  end
+  if a == "wheel" and EHUB.WheelCommand then
+    EHUB.WheelCommand(b)
+    return
+  end
   pcall(snapshot)
   local c = ElansHubDB.chars and ElansHubDB.chars[ElansHubDB.current or ""]
   if not c then return end
@@ -208,6 +233,7 @@ end
 local rl = CreateFrame("Frame")
 rl:RegisterEvent("PLAYER_LOGIN")
 rl:SetScript("OnEvent", function()
+  if ElansHubDB.rl == false then return end -- switched off in the settings (applies after /reload)
   local taken = hash_SlashCmdList and hash_SlashCmdList["/RL"]
   if not taken then
     for key in pairs(SlashCmdList) do
