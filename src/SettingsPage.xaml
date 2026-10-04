@@ -12,15 +12,25 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="RadioButton">
-            <Border x:Name="bd" Background="Transparent" CornerRadius="7" Padding="10,7" Margin="0,1">
-              <ContentPresenter />
+            <Border x:Name="bd" Background="Transparent" CornerRadius="7" Padding="10,8" Margin="0,1">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="26" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <TextBlock x:Name="ic" Text="{TemplateBinding Tag}" FontFamily="{StaticResource Icons}" FontSize="14" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+                <ContentPresenter Grid.Column="1" VerticalAlignment="Center" />
+                <Ellipse x:Name="dot" Grid.Column="2" Width="8" Height="8" Fill="#FF8000" VerticalAlignment="Center" Visibility="Collapsed" />
+              </Grid>
             </Border>
             <ControlTemplate.Triggers>
+              <Trigger Property="Tag" Value="&#xEA18;">
+                <Setter TargetName="dot" Property="Visibility" Value="Visible" />
+              </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="bd" Property="Background" Value="{StaticResource SurfaceHi}" />
                 <Setter Property="Foreground" Value="{StaticResource Text}" />
+                <Setter TargetName="ic" Property="Foreground" Value="{StaticResource Text}" />
               </Trigger>
               <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="ic" Property="Foreground" Value="{StaticResource Accent}" />
                 <Setter TargetName="bd" Property="Background" Value="{StaticResource SurfaceHi}" />
                 <Setter Property="Foreground" Value="{StaticResource Text}" />
               </Trigger>
@@ -42,8 +52,13 @@
       <Setter Property="Foreground" Value="{StaticResource TextDim}" />
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
-    <Style x:Key="Row" TargetType="DockPanel">
-      <Setter Property="Margin" Value="0,0,0,16" />
+    <Style x:Key="RowBox" TargetType="Border">
+      <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Padding" Value="0,13" />
+    </Style>
+    <Style x:Key="Group" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+      <Setter Property="Margin" Value="0,18,0,6" />
     </Style>
   </UserControl.Resources>
 
@@ -57,25 +72,20 @@
     <Border Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,8,0" Padding="8">
       <StackPanel>
         <TextBlock Text="SETTINGS" Style="{StaticResource Caption}" Margin="10,6,0,6" />
-        <RadioButton x:Name="NavGeneral" Style="{StaticResource Nav}" Content="General" Checked="Nav_Checked" IsChecked="True" />
-        <RadioButton x:Name="NavAddons" Style="{StaticResource Nav}" Content="Addons" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavLodge" Style="{StaticResource Nav}" Content="Lodge" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavVoice" Style="{StaticResource Nav}" Content="Voice" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavOverlay" Style="{StaticResource Nav}" Content="In-game overlay" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavNotify" Style="{StaticResource Nav}" Content="Notifications" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavGm" Style="{StaticResource Nav}" Checked="Nav_Checked" Visibility="Collapsed">
-          <StackPanel Orientation="Horizontal">
-            <Ellipse Width="8" Height="8" Fill="#FF8000" Margin="0,1,8,0" VerticalAlignment="Center" />
-            <TextBlock Text="Guild Master" />
-          </StackPanel>
-        </RadioButton>
-        <RadioButton x:Name="NavAbout" Style="{StaticResource Nav}" Content="About" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavGeneral" Style="{StaticResource Nav}" Tag="&#xE713;" Content="General" Checked="Nav_Checked" IsChecked="True" />
+        <RadioButton x:Name="NavAddons" Style="{StaticResource Nav}" Tag="&#xEA86;" Content="Addons" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavLodge" Style="{StaticResource Nav}" Tag="&#xE716;" Content="Lodge" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavVoice" Style="{StaticResource Nav}" Tag="&#xE720;" Content="Voice" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavOverlay" Style="{StaticResource Nav}" Tag="&#xE81E;" Content="In-game overlay" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavNotify" Style="{StaticResource Nav}" Tag="&#xEA8F;" Content="Notifications" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavGm" Style="{StaticResource Nav}" Tag="&#xEA18;" Content="Guild Master" Checked="Nav_Checked" Visibility="Collapsed" />
+        <RadioButton x:Name="NavAbout" Style="{StaticResource Nav}" Tag="&#xE946;" Content="About" Checked="Nav_Checked" />
       </StackPanel>
     </Border>
 
     <Border Grid.Column="1" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
       <ScrollViewer x:Name="Scroll" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
-        <Grid Margin="24,20,20,20" MaxWidth="620" HorizontalAlignment="Left">
+        <Grid Margin="24,20,24,20" MaxWidth="720" HorizontalAlignment="Stretch">
 
           <!-- ========== General ========== -->
           <StackPanel x:Name="SecGeneral">
@@ -87,33 +97,37 @@
                 <TextBlock x:Name="FolderText" FontSize="12.5" TextTrimming="CharacterEllipsis" />
               </Border>
             </DockPanel>
-            <TextBlock Text="The main folder (with _retail_, _classic_beta_ ...). Each addon knows which client it belongs to." Style="{StaticResource RowHint}" Margin="0,0,0,18" />
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="BackgroundBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click" />
-              <StackPanel><TextBlock Text="Run in background" Style="{StaticResource RowTitle}" />
+            <TextBlock Text="The main folder (with _retail_, _classic_beta_ ...). Each addon knows which client it belongs to." Style="{StaticResource RowHint}" Margin="0,0,0,10" />
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Run in background" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="Closing the window keeps the hub in the tray: updates are checked and you stay online in the lodge." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="StartupBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click" />
-              <StackPanel><TextBlock Text="Start with Windows" Style="{StaticResource RowTitle}" />
+              <CheckBox Grid.Column="1" x:Name="BackgroundBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Start with Windows" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="Starts quietly in the tray when you log in." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
+              <CheckBox Grid.Column="1" x:Name="StartupBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click"  />
+            </Grid></Border>
           </StackPanel>
 
           <!-- ========== Addons ========== -->
           <StackPanel x:Name="SecAddons" Visibility="Collapsed">
             <TextBlock Text="Addons" Style="{StaticResource SectionTitle}" />
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="AutoUpdateBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click" />
-              <StackPanel><TextBlock Text="Update addons automatically" Style="{StaticResource RowTitle}" />
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Update addons automatically" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="Install new addon versions as soon as they're out (the hub itself always asks)." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="CfAutoBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click" />
-              <StackPanel><TextBlock Text="Check CurseForge for updates automatically" Style="{StaticResource RowTitle}" />
+              <CheckBox Grid.Column="1" x:Name="AutoUpdateBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Check CurseForge for updates automatically" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="For addons the CurseForge app manages: about once a day and when WoW starts, the hub lets CurseForge refresh (it is started minimized and closed again; skipped if it is already running)." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
-            <StackPanel Orientation="Horizontal">
+              <CheckBox Grid.Column="1" x:Name="CfAutoBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click"  />
+            </Grid></Border>
+            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
               <Button Style="{StaticResource SecondaryButton}" Content="Check for updates now" Click="CheckNow_Click" />
               <Button Style="{StaticResource SecondaryButton}" Content="Open backups folder" Margin="8,0,0,0" Click="Backups_Click" />
             </StackPanel>
@@ -134,26 +148,30 @@
                 </StackPanel>
               </StackPanel>
             </Border>
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="AutoConnectBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click" />
-              <StackPanel><TextBlock Text="Connect when the hub starts" Style="{StaticResource RowTitle}" />
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Connect when the hub starts" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="Friends see you online while the hub runs." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="ShareGameBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click" />
-              <StackPanel><TextBlock Text="Show what I'm playing" Style="{StaticResource RowTitle}" />
+              <CheckBox Grid.Column="1" x:Name="AutoConnectBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Show what I'm playing" Style="{StaticResource RowTitle}" />
                 <TextBlock x:Name="ShareGameHint" Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="PixelBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click" />
-              <StackPanel><TextBlock Text="Detect my character live" Style="{StaticResource RowTitle}" />
+              <CheckBox Grid.Column="1" x:Name="ShareGameBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Detect my character live" Style="{StaticResource RowTitle}" />
                 <TextBlock Style="{StaticResource RowHint}" Text="Reads the tiny status strip the Elan's Hub addon draws in the top-left corner of the game (only that corner of the screen, nothing is sent to or read from WoW). Off = the Hub learns your character only on /reload or logout." /></StackPanel>
-            </DockPanel>
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="AutoAwayBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click" />
-              <StackPanel><TextBlock Text="AFK automatically" Style="{StaticResource RowTitle}" />
+              <CheckBox Grid.Column="1" x:Name="PixelBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="AFK automatically" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="After 10 minutes without mouse or keyboard (also in WoW), back to Online when you return." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
+              <CheckBox Grid.Column="1" x:Name="AutoAwayBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
+            </Grid></Border>
           </StackPanel>
 
           <!-- ========== Voice ========== -->
@@ -165,7 +183,7 @@
                 <RadioButton x:Name="ModePtt" Style="{StaticResource Segment}" Content="Push to talk" GroupName="mode" Checked="Voice_Changed" />
               </StackPanel>
             </Border>
-            <StackPanel x:Name="VaPanel" Margin="0,0,0,16">
+            <StackPanel x:Name="VaPanel" Margin="0,0,0,4">
               <DockPanel>
                 <TextBlock DockPanel.Dock="Right" x:Name="ThresholdText" FontSize="11.5" Foreground="{StaticResource TextDim}" />
                 <TextBlock Text="Sensitivity" Style="{StaticResource RowTitle}" />
@@ -177,38 +195,42 @@
               </Grid>
               <TextBlock x:Name="LevelHint" Text="Join a voice room to see your mic level: the gold bar should pass the dot when you speak." Style="{StaticResource RowHint}" Margin="0,4,0,0" />
             </StackPanel>
-            <DockPanel x:Name="PttPanel" Style="{StaticResource Row}" Visibility="Collapsed">
-              <Button x:Name="PttKeyButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Click="PttKey_Click" />
-              <StackPanel VerticalAlignment="Center"><TextBlock Text="Push-to-talk key" Style="{StaticResource RowTitle}" />
+            <Border x:Name="PttPanel" Style="{StaticResource RowBox}" Visibility="Collapsed"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0"><TextBlock Text="Push-to-talk key" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="Any key or mouse button - works while WoW has focus." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
-            <TextBlock Text="MICROPHONE" Style="{StaticResource Caption}" Margin="0,0,0,5" />
+              <Button x:Name="PttKeyButton" Grid.Column="1" Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" Click="PttKey_Click" />
+            </Grid></Border>
+            <TextBlock Text="DEVICES" Style="{StaticResource Group}" />
+            <TextBlock Text="MICROPHONE" Style="{StaticResource RowHint}" Margin="0,0,0,4" />
             <ComboBox x:Name="InputBox" Style="{StaticResource Dropdown}" SelectionChanged="Device_Changed" Margin="0,0,0,12" />
-            <TextBlock Text="SPEAKERS" Style="{StaticResource Caption}" Margin="0,0,0,5" />
+            <TextBlock Text="SPEAKERS" Style="{StaticResource RowHint}" Margin="0,0,0,4" />
             <ComboBox x:Name="OutputBox" Style="{StaticResource Dropdown}" SelectionChanged="Device_Changed" Margin="0,0,0,14" />
             <DockPanel>
               <TextBlock DockPanel.Dock="Right" x:Name="VolumeText" FontSize="11.5" Foreground="{StaticResource TextDim}" />
               <TextBlock Text="Volume" Style="{StaticResource RowTitle}" />
             </DockPanel>
-            <Slider x:Name="VolumeSlider" Minimum="0" Maximum="2" Margin="0,6,0,16" ValueChanged="Volume_Changed" />
-            <TextBlock Text="Per-person volume: click someone in a voice room." Style="{StaticResource RowHint}" Margin="0,0,0,16" />
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="SoundsBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Voice_Changed" />
-              <StackPanel><TextBlock Text="Sounds" Style="{StaticResource RowTitle}" />
+            <Slider x:Name="VolumeSlider" Minimum="0" Maximum="2" Margin="0,6,0,8" ValueChanged="Volume_Changed" />
+            <TextBlock Text="Per-person volume: click someone in a voice room." Style="{StaticResource RowHint}" Margin="0,0,0,4" />
+            <Border Style="{StaticResource RowBox}" Margin="0,8,0,0"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Sounds" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="A soft chime when people join or leave your room, and when you're mentioned." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
+              <CheckBox Grid.Column="1" x:Name="SoundsBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Voice_Changed"  />
+            </Grid></Border>
           </StackPanel>
 
           <!-- ========== Overlay ========== -->
           <StackPanel x:Name="SecOverlay" Visibility="Collapsed">
             <TextBlock Text="In-game overlay" Style="{StaticResource SectionTitle}" />
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="OverlayBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click" />
-              <StackPanel><TextBlock Text="Show who's talking over WoW" Style="{StaticResource RowTitle}" />
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Show who's talking over WoW" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="The people in your voice room, on top of the game. Whoever speaks lights up. Needs WoW in Windowed (Fullscreen) mode - nothing is injected into the game." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
-            <TextBlock Text="POSITION" Style="{StaticResource Caption}" Margin="0,0,0,6" />
-            <DockPanel Margin="0,0,0,16">
+              <CheckBox Grid.Column="1" x:Name="OverlayBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click"  />
+            </Grid></Border>
+            <TextBlock Text="POSITION" Style="{StaticResource Group}" Margin="0,16,0,6" />
+            <DockPanel Margin="0,0,0,8">
               <Border DockPanel.Dock="Left" Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="3" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
                   <RadioButton x:Name="OverlayLeft" Style="{StaticResource Segment}" Content="Left" GroupName="side" Checked="Overlay_Click" />
@@ -217,11 +239,12 @@
               </Border>
               <Slider x:Name="OverlayTopSlider" Minimum="0" Maximum="1" Margin="14,0,0,0" VerticalAlignment="Center" ValueChanged="OverlayTop_Changed" ToolTip="Height on the screen" />
             </DockPanel>
-            <DockPanel Style="{StaticResource Row}">
-              <CheckBox x:Name="OverlayAlwaysBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click" />
-              <StackPanel><TextBlock Text="Also when WoW isn't in front" Style="{StaticResource RowTitle}" />
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Also when WoW isn't in front" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="Keep it on screen on the desktop too." Style="{StaticResource RowHint}" /></StackPanel>
-            </DockPanel>
+              <CheckBox Grid.Column="1" x:Name="OverlayAlwaysBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click"  />
+            </Grid></Border>
             <TextBlock Text="While you're in a voice room, the overlay shows here as a preview so you can place it." Style="{StaticResource RowHint}" />
           </StackPanel>
 

@@ -118,6 +118,13 @@ namespace ElansAddonHub
             SettingsPage.Show("general");
             await Task.Delay(300);
             Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
+            foreach (var sec in new[] { "addons", "lodge", "voice", "overlay" })
+            {
+                SettingsPage.Show(sec);
+                await Task.Delay(300);
+                Snapshot(System.IO.Path.Combine(dir, "3-settings-" + sec + ".png"));
+            }
+            SettingsPage.Show("general");
             var tp = await ThirdPartyTest(dir);
             var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + checkAllLine + "\r\n" + tp + "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live();
 
