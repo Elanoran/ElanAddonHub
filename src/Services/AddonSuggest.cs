@@ -95,6 +95,19 @@ namespace ElansAddonHub.Services
             return ix;
         }
 
+        // memory or disk cache only (any age), never the network: used by the scanner to group folders that one WoWInterface file ships together
+        public static Index CachedIndex()
+        {
+            try
+            {
+                if (index != null) return index;
+                if (!File.Exists(CachePath)) return null;
+                var c = Util.FromJson<WowiCache>(File.ReadAllText(CachePath));
+                return c?.Files == null ? null : BuildIndex(c.Files);
+            }
+            catch { return null; }
+        }
+
         // The index, loaded once: memory, then disk (24 h), then one download. Null when offline and nothing cached.
         public static async Task<Index> LoadIndex()
         {
@@ -175,6 +188,13 @@ namespace ElansAddonHub.Services
         public static bool? FlavorFit(WowiFile f, int iface)
         {
             if (f.Compat == null || f.Compat.Count == 0 || iface <= 0) return null;
+            if (AddonScanner.IsForever(iface))
+            {
+                // WoW Forever is 1.16+ / 1.60: WoWInterface only lists numeric versions, so only a 1.16.x or 1.60+ label (or "Forever") fits
+                foreach (var v in f.Compat)
+                    if (Regex.IsMatch(v ?? "", @"^(1\.(16|[2-9]\d)(\.|$)|forever|camelot)", RegexOptions.IgnoreCase)) return true;
+                return false;
+            }
             int major = AddonScanner.Major(iface);
             foreach (var v in f.Compat)
             {
@@ -225,15 +245,17 @@ namespace ElansAddonHub.Services
                 if (a1.Length > 1 && a2.Length > 1 && (a1.Contains(a2) || a2.Contains(a1))) s += 10;
                 // game version
                 var fit = FlavorFit(c, iface);
-                if (fit == true) s += 25; else if (fit == false) s -= 40;
+                bool forever = AddonScanner.IsForever(iface);
+                if (fit == true) s += 25; else if (forever && fit == false && c.Compat.Any(v => (v ?? "").StartsWith("1."))) s += 25;   // classic-era label: closest family, ranked as before but flagged
+                else if (fit == false) s -= 40;   // WoWInterface never labels Forever: a Classic-era label is only flagged, other expansions are penalised
                 // tie-breakers: recent and popular
                 if (c.Date > 0 && DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(c.Date) < TimeSpan.FromDays(730)) s += 3;
                 s += Math.Min(3, Math.Log10(Math.Max(1, c.Downloads)) * 0.5);
                 if (nameOnly) s += 0;                              // sim (30) + flavor is all it has
                 var hint = exact ? "exact folder match" : main ? "main folder match" : "similar name";
-                if (fit == false) hint += ", not marked for your game version";
+                if (forever ? fit != true : fit == false) hint += forever ? ", not marked for WoW Forever" : ", not marked for your game version";
                 if (s < 45) continue;
-                if (best == null || s > best.Score) best = new Suggestion { File = c, Score = s, Exact = exact, FlavorFits = fit != false, Hint = hint };
+                if (best == null || s > best.Score) best = new Suggestion { File = c, Score = s, Exact = exact, FlavorFits = forever ? fit == true : fit != false, Hint = hint };
             }
             return best;
         }
@@ -254,6 +276,7 @@ namespace ElansAddonHub.Services
                 F("4", "Wrongflavor", "Ann", "5.0", retail, "\"WrongFlavor\""),                                       // wrong flavour only
                 F("5", "Twin", "Alice", "1.0", classic, "\"Twin\"", 500),                                             // author tie-break
                 F("6", "Twin", "Bob", "1.0", classic, "\"Twin\"", 500),
+                F("8", "Forever Ready", "Zoe", "1.0", "{\"version\":\"1.16.0\",\"name\":\"Forever\"}", "\"ForeverReady\""),    // labelled for Forever
                 F("7", "Twin Retail", "Bob", "9.0", retail, "\"Twin\"", 90000),                                      // same folder, retail
             }) + "]";
             var ix = BuildIndex(ParseFilelist(json));
@@ -265,9 +288,9 @@ namespace ElansAddonHub.Services
             var s1 = Suggest(E("CT_Core", "CT_Core", "DahkCeles", "CT_BarMod", "CT_Library"), ix, 16001);
             Check("exact folder set", s1?.File.Id == "1" && s1.Exact, s1);
             var s2 = Suggest(E("SuiteCore", "Suite Core", "Zed"), ix, 16001);
-            Check("main folder only", s2?.File.Id == "2" && !s2.Exact && s2.Hint == "main folder match", s2);
+            Check("main folder only", s2?.File.Id == "2" && !s2.Exact && s2.Hint.StartsWith("main folder match"), s2);
             var s3 = Suggest(E("FancyBars", "|cff00ff00Fancy|r Bars Lite", "Quux"), ix, 16001);
-            Check("name only (colour codes stripped)", s3?.File.Id == "3" && s3.Hint == "similar name", s3);
+            Check("name only (colour codes stripped)", s3?.File.Id == "3" && s3.Hint.StartsWith("similar name"), s3);
             var s3b = Suggest(E("FancyBars", "Fancy Bars", "Quux"), ix, 16001);
             Check("name only, too different -> no suggestion", s3b == null, s3b);
             var s4 = Suggest(E("WrongFlavor", "Wrongflavor", "Ann"), ix, 16001);
@@ -278,6 +301,9 @@ namespace ElansAddonHub.Services
             Check("author tie-break (Alice)", s6?.File.Id == "5", s6);
             var s7 = Suggest(E("Twin", "Twin", "Bob"), ix, 16001, id => id == "6");
             Check("rejected not re-offered (next best)", s7 != null && s7.File.Id != "6", s7);
+            Check("classic-only label is flagged for WoW Forever", s1 != null && !s1.FlavorFits && s1.Hint.Contains("not marked for WoW Forever"), s1);
+            var s8 = Suggest(E("ForeverReady", "Forever Ready", "Zoe"), ix, 16001);
+            Check("1.16 label fits WoW Forever", s8?.File.Id == "8" && s8.FlavorFits && !s8.Hint.Contains("not marked"), s8);
             // rejection persistence
             Reject("TestKey", "42");
             bool persisted = IsRejected("TestKey", "42") && !IsRejected("TestKey", "43");

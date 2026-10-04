@@ -194,7 +194,7 @@ namespace ElansAddonHub.Services
                     int s = 0;
                     if (iface > 0 && mi == iface) s = 3;
                     else if (wantFlavors.Contains(fl)) s = 2;
-                    else if (iface > 0 && mi > 0 && AddonScanner.Major(mi) == AddonScanner.Major(iface) && fl != "forever") s = 1;
+                    else if (iface > 0 && mi > 0 && !AddonScanner.IsForever(iface) && AddonScanner.Major(mi) == AddonScanner.Major(iface) && fl != "forever" && fl != "camelot") s = 1;   // Classic/Era never counts for WoW Forever
                     score = Math.Max(score, s);
                 }
                 var lib = !rel.Bool("nolib");
@@ -206,7 +206,7 @@ namespace ElansAddonHub.Services
         static HashSet<string> TargetFlavors(int iface)
         {
             var h = new HashSet<string>();
-            if (iface / 1000 == 16) h.Add("forever");
+            if (AddonScanner.IsForever(iface)) { h.Add("forever"); h.Add("camelot"); return h; }   // only Forever builds, never classic
             switch (AddonScanner.Major(iface))
             {
                 case 1: h.Add("classic"); break;
@@ -227,12 +227,17 @@ namespace ElansAddonHub.Services
             if (Regex.IsMatch(n, @"bcc|tbc|burning")) return "tbc";
             if (Regex.IsMatch(n, @"mists|[-_.]mop")) return "mists";
             if (Regex.IsMatch(n, @"mainline|retail")) return "mainline";
-            if (Regex.IsMatch(n, @"classic|vanilla|[-_.]era[-_.]|forever")) return "vanilla";
+            if (Regex.IsMatch(n, @"forever|camelot")) return "forever";
+            if (Regex.IsMatch(n, @"classic|vanilla|[-_.]era[-_.]")) return "vanilla";
             return null;
         }
 
+        // a download made for Classic / Era / another expansion: offered only by hand, with a warning, for WoW Forever
+        public static bool IsClassicAsset(string name) { var f = FlavorOfName(name ?? ""); return f != null && f != "forever"; }
+
         static string TargetFlavorName(int iface)
         {
+            if (AddonScanner.IsForever(iface)) return "forever";
             switch (AddonScanner.Major(iface))
             {
                 case 1: return "vanilla";
@@ -259,6 +264,7 @@ namespace ElansAddonHub.Services
                 if (match.Count > 1) return null;
             }
             var plain = nonSrc.Where(z => flavored[z] == null).ToList();
+            if (target == "forever") return plain.Count == 1 && nonSrc.All(z => flavored[z] == null) ? plain[0] : null;   // Classic/Era builds are only offered via "Choose file"
             bool otherFlavors = nonSrc.Any(z => flavored[z] != null);
             if (plain.Count == 1 && (!otherFlavors || target == "mainline")) return plain[0];
             if (nonSrc.Count == 1 && flavored[nonSrc[0]] == null) return nonSrc[0];

@@ -30,6 +30,11 @@ No installer, no runtime to download - it's one small file (~150 KB) that runs o
   Addons without a source get a **suggested WoWInterface match** (by folder names, title, author and game version,
   from WoWInterface's public file list cached for 24 h): one click on **Use this** links it, **Not this** hides it for good;
   nothing is ever linked or installed on its own.
+  Multi-folder addons (Details + plugins, Questie + QuestieDB, HealBot + HealBot_*, DBM-*, `X-Part-Of`, folders that one
+  WoWInterface file ships together) are grouped on one card; shared libraries (LibStub, Ace3, !BugGrabber) stay separate.
+  **WoW Forever is its own flavor, not Classic** (Interface 16001, `_Camelot` / `_Forever` tocs, release.json flavor
+  `forever`): Classic/Era downloads are never picked automatically, only by hand with a warning, and WoWInterface matches
+  not marked for Forever are flagged and left out of **Link all exact matches**.
   Each update backs up the old folders (last 2 kept, one-click **Roll back**) and never touches `WTF`/SavedVariables.
 - **Tray & notifications**, optional **start with Windows** and **automatic updates**.
 - **Updates itself** when a new hub version is released.

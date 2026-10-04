@@ -62,7 +62,7 @@ namespace ElansAddonHub
                 var entries = await Task.Run(() =>
                 {
                     var firstGuess = AddonScanner.ClientInterface(dir, own, new List<TocInfo>());
-                    return AddonScanner.Scan(dir, firstGuess, own, out iface);
+                    return AddonScanner.Scan(dir, firstGuess, own, out iface, AddonSuggest.CachedIndex());
                 });
                 clientInterface = iface;
                 var keys = entries.Select(e => e.Key).ToList();
@@ -198,6 +198,7 @@ namespace ElansAddonHub
             AddonSources.SaveLinks();
             var r = await AddonSources.Lookup(c.Entry, c.Link, clientInterface);
             c.SetRemote(r, clientInterface);
+            if (AddonScanner.IsForever(clientInterface) && AddonSources.IsClassicAsset(name)) c.Message = "Made for Classic, may not work on WoW Forever.";
             UpdateOthersHeader();
         }
 
@@ -289,6 +290,7 @@ namespace ElansAddonHub
             await RefreshOthers();
             await CheckOthers();
             sb.AppendLine(AddonSuggest.SelfTest());
+            sb.AppendLine(AddonScanner.SelfTest());
             await SuggestOthers();
             var realIx = await AddonSuggest.LoadIndex();
             if (realIx == null) sb.AppendLine("real filelist: unavailable");

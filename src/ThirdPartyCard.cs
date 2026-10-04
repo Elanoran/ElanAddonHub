@@ -123,7 +123,7 @@ namespace ElansAddonHub
                     Pill("Update available", "Gold");
                     VersionLine = $"{(Link.InstalledRemote ?? local)}  →  {r.Version}";
                     ButtonText = "Update"; ButtonEnabled = true; break;
-                case TpState.ChooseFile: Pill("Choose file", "Gold"); VersionLine = $"Latest {r.Version} - pick the right download"; ButtonText = "Update"; ButtonEnabled = Link.Asset != null; break;
+                case TpState.ChooseFile: Pill("Choose file", "Gold"); VersionLine = $"Latest {r.Version} - no WoW Forever build found, pick a download"; ButtonText = "Update"; ButtonEnabled = Link.Asset != null; break;
                 case TpState.UpToDate: Pill("Up to date", "Accent"); VersionLine = "Installed " + (local == "" ? (Link.InstalledRemote ?? "?") : local); ButtonText = ""; ButtonEnabled = false; break;
                 case TpState.Unknown: Pill(null, "TextDim"); VersionLine = "Installed " + (local == "" ? "?" : local) + "  ·  checking..."; ButtonText = ""; ButtonEnabled = false; break;
                 default: Pill(null, "TextDim"); VersionLine = "Installed " + (local == "" ? "?" : local); ButtonText = ""; ButtonEnabled = false; break;

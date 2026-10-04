@@ -231,7 +231,7 @@
                       <TextBlock Text="{Binding DevNote}" Visibility="{Binding DevVisibility}" FontSize="12" Foreground="{StaticResource Gold}" TextWrapping="Wrap" Margin="0,0,0,6" />
                       <TextBlock Text="{Binding LinkedTo}" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,0,0,6" />
                       <StackPanel Visibility="{Binding ChoiceVisibility}" Margin="0,2,0,8">
-                        <TextBlock Text="Which download is for your game?" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,0,0,4" />
+                        <TextBlock Text="No download is marked for WoW Forever. Pick one by hand - Classic / Era builds were made for another client and may not work." FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,0,0,4" />
                         <ComboBox Style="{StaticResource Dropdown}" ItemsSource="{Binding Choices}" Tag="{Binding}" SelectionChanged="Choice_Changed" />
                       </StackPanel>
                       <WrapPanel Margin="-8,0,0,0">
