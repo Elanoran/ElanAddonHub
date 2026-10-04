@@ -120,7 +120,7 @@ namespace ElansAddonHub
             else if (!string.IsNullOrEmpty(wid)) { Source = "WoWInterface"; SetBadge("Accent"); WebsiteUrl = $"https://www.wowinterface.com/downloads/info{wid}"; WebsiteText = "Open WoWInterface"; LinkedTo = "Updates from WoWInterface #" + wid; }
             else if (!string.IsNullOrEmpty(Entry.CurseId)) { Source = "CurseForge"; SetBadge("TextDim"); WebsiteUrl = null; LinkedTo = "No automatic updates (CurseForge) - paste a GitHub or WoWInterface link to enable them"; }
             else if (!string.IsNullOrEmpty(Entry.WagoId)) { Source = "Wago"; SetBadge("TextDim"); WebsiteUrl = null; LinkedTo = "No automatic updates (Wago) - paste a GitHub or WoWInterface link to enable them"; }
-            else { Source = "Local"; SetBadge("TextDim"); WebsiteUrl = Entry.Website != null && Entry.Website.StartsWith("https://") ? Entry.Website : null; WebsiteText = "Open website"; LinkedTo = "No source linked - paste a GitHub or WoWInterface link below"; }
+            else { Source = "Local"; SetBadge("Gold"); WebsiteUrl = Entry.Website != null && Entry.Website.StartsWith("https://") ? Entry.Website : null; WebsiteText = "Open website"; LinkedTo = "No source linked - paste a GitHub or WoWInterface link below"; }
             if (WebsiteUrl == null && Entry.Website != null && Entry.Website.StartsWith("https://") && Source != "Local") { WebsiteUrl = Entry.Website; WebsiteText = "Open website"; }
             CurseUrl = Entry.Cf != null || string.IsNullOrEmpty(Entry.CurseId) ? null : "https://www.curseforge.com/projects/" + Entry.CurseId;
             WagoUrl = string.IsNullOrEmpty(Entry.WagoId) ? null : "https://addons.wago.io/addons/" + Entry.WagoId;
@@ -155,15 +155,15 @@ namespace ElansAddonHub
             Notify(string.Empty);
         }
 
-        // Source icon: CurseForge = icon of the user's installed app, GitHub = Octicons mark, Local = folder; WoWInterface/Wago = letter chips.
+        // Source icon: CurseForge = icon of the user's installed app, GitHub = Octicons mark, Local = hand-installed glyph (gold); WoWInterface/Wago = letter chips.
         public ImageSource SourceImage => Source == "CurseForge" ? SourceIcons.CurseForge() : null;
-        public Geometry SourceGeometry => Source == "GitHub" ? SourceIcons.GitHub : Source == "Local" ? SourceIcons.Folder : null;
+        public Geometry SourceGeometry => Source == "GitHub" ? SourceIcons.GitHub : Source == "Local" ? SourceIcons.Manual : null;
         public string SourceChip => Source == "WoWInterface" ? "WoWI" : Source == "Wago" ? "Wago" : (SourceImage == null && SourceGeometry == null ? Source : null);
         public Visibility SourceImageVis => SourceImage != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility SourceGeoVis => SourceGeometry != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility SourceChipVis => SourceChip != null ? Visibility.Visible : Visibility.Collapsed;
-        public Brush SourceGlyphBrush => (Brush)Application.Current.Resources["Text"];
-        public string SourceTip => "Source: " + Source;
+        public Brush SourceGlyphBrush => (Brush)Application.Current.Resources[Source == "Local" ? "Gold" : "Text"];
+        public string SourceTip => Source == "Local" ? "Installed manually - link a GitHub or WoWInterface page to get updates" : "Source: " + Source;
 
         void SetBadge(string color)
         {

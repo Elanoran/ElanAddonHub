@@ -31,6 +31,7 @@ namespace ElansAddonHub
                 // the self-test runs next to a real hub: own data folder, no single-instance check
                 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_DATA")))
                     Environment.SetEnvironmentVariable("ELANSHUB_DATA", System.IO.Path.Combine(testDir, "data"));
+                ElansAddonHub.Services.SelfTestFixture.Prepare(testDir);
                 showSignal = new EventWaitHandle(false, EventResetMode.AutoReset);
             }
             else

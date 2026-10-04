@@ -104,6 +104,10 @@
                       <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="9,3" Background="{Binding PillBg}">
                         <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
                       </Border>
+                      <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="6,3" Margin="0,0,6,0" Background="#26FFFFFF"
+                              ToolTip="Source: Elan's Addon Hub (GitHub releases)" AutomationProperties.Name="Source: Elan's Addon Hub (GitHub releases)">
+                        <Image Source="Assets/hub.png" Width="16" Height="16" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
+                      </Border>
                       <Border Width="36" Height="36" CornerRadius="9" ClipToBounds="True" VerticalAlignment="Center">
                         <Image Source="Assets/hub.png" RenderOptions.BitmapScalingMode="HighQuality" />
                       </Border>
