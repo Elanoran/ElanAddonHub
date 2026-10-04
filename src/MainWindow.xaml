@@ -111,58 +111,67 @@
               <Border Margin="16,0,12,10" Background="{StaticResource Card}" CornerRadius="12"
                       BorderBrush="{StaticResource Line}" BorderThickness="1">
                 <StackPanel>
-                  <!-- header: click anywhere on it to expand / collapse -->
-                  <Border x:Name="Header" Background="Transparent" Padding="14,12,12,4" Cursor="Hand" CornerRadius="12,12,0,0"
-                          Tag="{Binding}" MouseLeftButtonUp="Card_Toggle" ToolTip="Show / hide details">
-                    <DockPanel>
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding Chevron}" FontFamily="{StaticResource Icons}" FontSize="12"
-                                 Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,2,0" />
-                      <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="9,3" Background="{Binding PillBg}">
-                        <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
-                      </Border>
-                      <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="6,3" Margin="0,0,6,0" Background="#26FFFFFF"
-                              ToolTip="Source: Elan's Addon Hub (GitHub releases)" AutomationProperties.Name="Source: Elan's Addon Hub (GitHub releases)">
-                        <Image Source="Assets/hub.png" Width="16" Height="16" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
-                      </Border>
-                      <Border Width="48" Height="48" CornerRadius="9" ClipToBounds="True" VerticalAlignment="Center">
-                        <Image Source="{Binding Logo}" RenderOptions.BitmapScalingMode="HighQuality" />
-                      </Border>
-                      <StackPanel Margin="12,0,8,0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,1,0,0"
-                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding InstallPath}" ToolTipService.InitialShowDelay="300" />
-                      </StackPanel>
-                    </DockPanel>
-                  </Border>
-
-                  <!-- versions + stats on the left, compact action on the right -->
-                  <Grid Margin="14,2,14,12">
+                  <!-- big artwork on the left, spanning the title and the stats -->
+                  <Grid Margin="12,12,14,10">
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel VerticalAlignment="Center" Margin="48,0,10,0">
-                      <TextBlock Text="{Binding VersionLine}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
-                      <ItemsControl ItemsSource="{Binding Stats}" Visibility="{Binding StatsVisibility}" Margin="0,3,0,0" Focusable="False">
-                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,14,0" Background="Transparent" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}">
-                              <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,4,0" />
-                              <TextBlock Text="{Binding Text}" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
-                            </StackPanel>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
+                    <Border Width="84" Height="84" CornerRadius="10" VerticalAlignment="Top" Margin="0,0,14,0" Cursor="Hand"
+                            Background="Transparent" Tag="{Binding}" MouseLeftButtonUp="Card_Toggle">
+                      <Image Source="{Binding Logo}" RenderOptions.BitmapScalingMode="HighQuality" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <!-- header: click anywhere on it to expand / collapse -->
+                      <Border x:Name="Header" Background="Transparent" Padding="0,0,0,4" Cursor="Hand"
+                              Tag="{Binding}" MouseLeftButtonUp="Card_Toggle" ToolTip="Show / hide details">
+                        <DockPanel>
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding Chevron}" FontFamily="{StaticResource Icons}" FontSize="12"
+                                     Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,2,0" />
+                          <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="9,3" Background="{Binding PillBg}">
+                            <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
+                          </Border>
+                          <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="6,3" Margin="0,0,6,0" Background="#26FFFFFF"
+                                  ToolTip="Source: Elan's Addon Hub (GitHub releases)" AutomationProperties.Name="Source: Elan's Addon Hub (GitHub releases)">
+                            <Image Source="Assets/hub.png" Width="16" Height="16" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
+                          </Border>
+                          <StackPanel Margin="0,0,8,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,1,0,0"
+                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding InstallPath}" ToolTipService.InitialShowDelay="300" />
+                          </StackPanel>
+                        </DockPanel>
+                      </Border>
+                      <!-- versions + stats on the left, compact action on the right -->
+                      <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,10,0">
+                          <TextBlock Text="{Binding VersionLine}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                          <ItemsControl ItemsSource="{Binding Stats}" Visibility="{Binding StatsVisibility}" Margin="0,3,0,0" Focusable="False">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,14,0" Background="Transparent" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}">
+                                  <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,4,0" />
+                                  <TextBlock Text="{Binding Text}" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+                                </StackPanel>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                        <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Height="32" MinWidth="130" Padding="14,0" FontSize="12.5"
+                                Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="Action_Click" Visibility="{Binding ButtonVisibility}" />
+                      </Grid>
                     </StackPanel>
-                    <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Height="32" MinWidth="130" Padding="14,0" FontSize="12.5"
-                            Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="Action_Click" Visibility="{Binding ButtonVisibility}" />
                   </Grid>
 
                   <ProgressBar Style="{StaticResource ThinProgress}" Margin="14,0,14,10" Maximum="1"
                                Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
                   <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" FontSize="12"
-                             Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="62,-2,14,12" />
+                             Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="110,-2,14,12" />
 
                   <!-- details -->
                   <StackPanel Visibility="{Binding ExpandedVisibility}" Margin="14,0,14,14">
