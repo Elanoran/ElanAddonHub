@@ -102,8 +102,62 @@ namespace ElansAddonHub
             finally { checkingOthers = false; UpdateOthersHeader(); }
         }
 
+        // background: match unlinked addons against the WoWInterface filelist (offline / failure = no suggestions)
+        bool suggesting;
+        async Task SuggestOthers()
+        {
+            if (suggesting) return;
+            suggesting = true;
+            try
+            {
+                var open = others.Where(c => c.State == TpState.Local && !c.Entry.IsDev && string.IsNullOrEmpty(c.Link.Github) && string.IsNullOrEmpty(c.Link.Wowi)).ToList();
+                if (open.Count == 0) return;
+                var ix = await AddonSuggest.LoadIndex();
+                if (ix == null) return;
+                int iface = clientInterface;
+                var results = await Task.Run(() => open.Select(c => AddonSuggest.Suggest(c.Entry, ix, iface, id => AddonSuggest.IsRejected(c.Entry.Key, id))).ToList());
+                for (int i = 0; i < open.Count; i++) { open[i].Suggested = results[i]; open[i].Refresh(); }
+            }
+            catch (Exception e) { Util.Log("suggest failed: " + e.Message); }
+            finally { suggesting = false; UpdateOthersHeader(); }
+        }
+
+        async Task AcceptSuggestion(ThirdPartyCard c)
+        {
+            var s = c.Suggested;
+            if (s == null) return;
+            c.Link.Wowi = s.File.Id; c.Link.Github = null; c.Link.Asset = null; c.Link.InstalledRemote = null;
+            c.Suggested = null;
+            AddonSources.SaveLinks();
+            c.Message = "Checking...";
+            var r = await AddonSources.Lookup(c.Entry, c.Link, clientInterface);
+            c.SetRemote(r, clientInterface);
+            c.Message = r == null ? "Linked, but couldn't reach WoWInterface right now." : null;
+            UpdateOthersHeader();
+        }
+
+        async void UseSuggestion_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is ThirdPartyCard c) await AcceptSuggestion(c);
+        }
+
+        void RejectSuggestion_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is ThirdPartyCard c) || c.Suggested == null) return;
+            AddonSuggest.Reject(c.Entry.Key, c.Suggested.File.Id);
+            c.Suggested = null;
+            c.Refresh();
+            _ = SuggestOthers();   // maybe the next best candidate
+        }
+
+        async void LinkExact_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (var c in others.Where(x => x.ShowSuggestion && x.Suggested.Exact && x.Suggested.FlavorFits).ToList()) await AcceptSuggestion(c);
+        }
+
         void UpdateOthersHeader()
         {
+            LinkExactButton.Visibility = others.Any(x => x.ShowSuggestion && x.Suggested.Exact && x.Suggested.FlavorFits) ? Visibility.Visible : Visibility.Collapsed;
             OtherPanel.Visibility = others.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             var updates = others.Count(c => c.State == TpState.UpdateAvailable);
             OtherTitle.Text = $"OTHER ADDONS  ·  {others.Count}" + (updates > 0 ? $"  ·  {updates} update{(updates == 1 ? "" : "s")}" : "");
@@ -234,6 +288,21 @@ namespace ElansAddonHub
             var sb = new StringBuilder();
             await RefreshOthers();
             await CheckOthers();
+            sb.AppendLine(AddonSuggest.SelfTest());
+            await SuggestOthers();
+            var realIx = await AddonSuggest.LoadIndex();
+            if (realIx == null) sb.AppendLine("real filelist: unavailable");
+            else
+            {
+                sb.AppendLine("real filelist: " + realIx.ByDir.Count + " folders indexed");
+                foreach (var probe in new[] { "Details", "Bartender4", "Questie", "WeakAuras", "Atlas", "ElvUI", "pfUI", "Plater" })
+                {
+                    var ent = new AddonEntry { Key = probe, Title = probe, Folders = new List<string> { probe } };
+                    var sg = AddonSuggest.Suggest(ent, realIx, 16001);
+                    sb.AppendLine($"  probe {probe}: " + (sg == null ? "none" : $"{sg.Text} id={sg.File.Id} score={sg.Score:0} [{sg.Hint}]"));
+                }
+            }
+            foreach (var c in others) if (c.Suggested != null) sb.AppendLine($"  card {c.Entry.Key}: {c.SuggestText} [{c.Suggested.Hint}]");
             sb.AppendLine($"addons dir={addOnsDir} interface={clientInterface} cards={others.Count}");
             foreach (var c in others)
                 sb.AppendLine($"  [{c.Entry.Key}] title='{c.Entry.Title}' ver={c.Entry.Version} author={c.Entry.Author} folders={string.Join("+", c.Entry.Folders)} dev={c.Entry.IsDev} src={c.Source} state={c.State} remote={c.Remote?.Version} asset={c.Remote?.Asset} choices={c.Remote?.Choices.Count}");
@@ -302,6 +371,9 @@ namespace ElansAddonHub
             Snapshot(Path.Combine(dir, "9-addons.png"));
             AddonsPage.ScrollToVerticalOffset(AddonsPage.VerticalOffset - 300);
             await Task.Delay(300);
+            AddonsPage.ScrollToVerticalOffset(AddonsPage.VerticalOffset - 470);
+            await Task.Delay(400);
+            Snapshot(Path.Combine(dir, "10-suggest.png"));
             return sb.ToString();
         }
     }

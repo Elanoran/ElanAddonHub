@@ -27,6 +27,9 @@ No installer, no runtime to download - it's one small file (~150 KB) that runs o
 - **Manages your other addons too**: lists everything in `Interface\AddOns` (multi-folder addons grouped, flavor-specific
   `.toc` files handled) and updates them without any account or API key: GitHub releases (BigWigs `release.json` aware)
   and WoWInterface. Paste a link on the addon's card to connect it. CurseForge/Wago-only addons just get a link.
+  Addons without a source get a **suggested WoWInterface match** (by folder names, title, author and game version,
+  from WoWInterface's public file list cached for 24 h): one click on **Use this** links it, **Not this** hides it for good;
+  nothing is ever linked or installed on its own.
   Each update backs up the old folders (last 2 kept, one-click **Roll back**) and never touches `WTF`/SavedVariables.
 - **Tray & notifications**, optional **start with Windows** and **automatic updates**.
 - **Updates itself** when a new hub version is released.

@@ -226,7 +226,7 @@ namespace ElansAddonHub
             }
         }
 
-        async Task RefreshOthersAndCheck() { await RefreshOthers(); await CheckOthers(); }
+        async Task RefreshOthersAndCheck() { await RefreshOthers(); await CheckOthers(); _ = SuggestOthers(); }
 
         async Task LoadStats()
         {

@@ -53,6 +53,14 @@ namespace ElansAddonHub
         public Visibility ChoiceVisibility => State == TpState.ChooseFile ? Visibility.Visible : Visibility.Collapsed;
         public string SearchText => (Entry.Title + " " + string.Join(" ", Entry.Folders) + " " + Entry.Author).ToLowerInvariant();
 
+        // automatic match for an unlinked addon (confirmed by the user with one click)
+        public Suggestion Suggested { get; set; }
+        public bool ShowSuggestion => Suggested != null && !Entry.IsDev && State == TpState.Local
+            && string.IsNullOrEmpty(Link.Github) && string.IsNullOrEmpty(Link.Wowi);
+        public Visibility SuggestVisibility => ShowSuggestion ? Visibility.Visible : Visibility.Collapsed;
+        public string SuggestText => Suggested == null ? "" : "Suggested: " + Suggested.Text;
+        public string SuggestHint => Suggested == null ? "" : "Confidence: " + Suggested.Hint + ". Nothing is installed until you click Use this.";
+
         // text typed into "Link source"
         public string LinkInput { get; set; }
 

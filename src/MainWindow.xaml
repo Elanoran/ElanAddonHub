@@ -170,6 +170,8 @@
         <!-- everything else in Interface\AddOns -->
         <StackPanel x:Name="OtherPanel" MaxWidth="660" Margin="16,10,12,0" Visibility="Collapsed">
           <DockPanel Margin="0,4,0,10">
+            <Button x:Name="LinkExactButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="30" Padding="14,0" FontSize="12"
+                    Content="Link all exact matches" Visibility="Collapsed" Click="LinkExact_Click" Margin="10,0,0,0" ToolTip="Link every addon whose folders match a WoWInterface file exactly" />
             <Button x:Name="UpdateAllButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Height="30" Padding="14,0" FontSize="12"
                     Content="Update all" Visibility="Collapsed" Click="UpdateAll_Click" Margin="10,0,0,0" />
             <TextBox x:Name="SearchBox" DockPanel.Dock="Right" Style="{StaticResource Input}" Width="190" Tag="Search addons" TextChanged="Search_Changed" />
@@ -211,6 +213,14 @@
                               Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="OtherAction_Click" />
                     </Grid>
                     <ProgressBar Style="{StaticResource ThinProgress}" Margin="12,0,12,8" Maximum="1" Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
+                    <StackPanel Visibility="{Binding SuggestVisibility}" Margin="52,-2,12,10">
+                      <TextBlock Text="{Binding SuggestText}" FontSize="12" Foreground="{StaticResource Accent}" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding SuggestHint}" FontSize="11" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,1,0,4" />
+                      <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource SecondaryButton}" Content="Use this" Height="26" Padding="12,0" FontSize="11.5" Tag="{Binding}" Click="UseSuggestion_Click" />
+                        <Button Style="{StaticResource GhostButton}" Content="Not this" FontSize="11.5" Tag="{Binding}" Click="RejectSuggestion_Click" />
+                      </StackPanel>
+                    </StackPanel>
                     <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="52,-2,12,10" />
 
                     <StackPanel Visibility="{Binding ExpandedVisibility}" Margin="12,0,12,12">
