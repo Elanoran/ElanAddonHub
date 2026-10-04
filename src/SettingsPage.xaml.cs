@@ -79,6 +79,7 @@ namespace ElansAddonHub
             StartupBox.IsChecked = s.StartWithWindows;
             AutoUpdateBox.IsChecked = s.AutoUpdate;
             CfAutoBox.IsChecked = s.CfAutoCheck;
+            PaintedBox.IsChecked = s.PaintedArt;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
             AutoAwayBox.IsChecked = !s.AutoAwayOff;
             ShareGameBox.IsChecked = !s.ShareGameOff;
@@ -185,12 +186,16 @@ namespace ElansAddonHub
             settings.RunInBackground = BackgroundBox.IsChecked == true;
             settings.AutoUpdate = AutoUpdateBox.IsChecked == true;
             settings.CfAutoCheck = CfAutoBox.IsChecked == true;
+            bool art = PaintedBox.IsChecked == true;
+            bool artChanged = settings.PaintedArt != art;
+            settings.PaintedArt = art;
             if (settings.StartWithWindows != (StartupBox.IsChecked == true))
             {
                 settings.StartWithWindows = StartupBox.IsChecked == true;
                 SettingsStore.ApplyStartWithWindows(settings.StartWithWindows, SelfUpdater.ExePath);
             }
             SettingsStore.Save(settings);
+            if (artChanged) host.CardArtChanged();
             if (sender == AutoUpdateBox && settings.AutoUpdate) host.AutoUpdateTurnedOn();
         }
 

@@ -133,7 +133,7 @@
                           </Border>
                           <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="6,3" Margin="0,0,6,0" Background="#26FFFFFF"
                                   ToolTip="Source: Elan's Addon Hub (GitHub releases)" AutomationProperties.Name="Source: Elan's Addon Hub (GitHub releases)">
-                            <Image Source="Assets/hub.png" Width="16" Height="16" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
+                            <Image Source="{Binding ChipArt}" Width="16" Height="16" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
                           </Border>
                           <StackPanel Margin="0,0,8,0" VerticalAlignment="Center">
                             <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />

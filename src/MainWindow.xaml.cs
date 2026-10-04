@@ -96,6 +96,7 @@ namespace ElansAddonHub
         // ---- for the Settings page
         public string CheckStatus => statusText;
         public Task CheckForUpdates() => CheckAll();
+        public void CardArtChanged() { AddonCard.Painted = settings.PaintedArt; foreach (var c in cards) c.RefreshArt(); }
         public void AutoUpdateTurnedOn() => _ = AfterCheck();
 
         // --selftest <dir>: render the window to PNGs before/after installing the first addon, then quit
@@ -103,6 +104,7 @@ namespace ElansAddonHub
         {
             System.IO.Directory.CreateDirectory(dir);
             Show();
+            AddonCard.Painted = settings.PaintedArt;
             await CheckNow();
             // the window's own startup check may still be running (slow network): wait for it
             for (int i = 0; i < 100 && (checking || manifest == null); i++) await Task.Delay(200);

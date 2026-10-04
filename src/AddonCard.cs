@@ -46,17 +46,31 @@ namespace ElansAddonHub
         public CardState State { get; private set; }
         public string Name => Info.Name;
         // per-addon artwork on the card (the paw stays as the source chip on the right)
-        public string Logo
+        // card artwork: vector icons (default, Theme/AddonIcons.xaml) or the painted PNGs (setting "Card artwork")
+        public static bool Painted;
+        static object Res(string key) { try { return Application.Current.TryFindResource(key); } catch { return null; } }
+        public object Logo
         {
             get
             {
                 var folder = Info.Folders != null && Info.Folders.Count > 0 ? Info.Folders[0] : "";
-                if (string.Equals(folder, "ElansHunterHelper", System.StringComparison.OrdinalIgnoreCase)) return "pack://application:,,,/Assets/logo-ehh.png";
-                if (string.Equals(folder, "ElansHub", System.StringComparison.OrdinalIgnoreCase)) return "pack://application:,,,/Assets/logo-hubaddon.png";
-                if (string.Equals(folder, "ElansPaladinHelper", System.StringComparison.OrdinalIgnoreCase) && PaladinLogoExists()) return "pack://application:,,,/Assets/logo-paladin.png";
+                bool ehh = string.Equals(folder, "ElansHunterHelper", System.StringComparison.OrdinalIgnoreCase);
+                bool hub = string.Equals(folder, "ElansHub", System.StringComparison.OrdinalIgnoreCase);
+                bool pal = string.Equals(folder, "ElansPaladinHelper", System.StringComparison.OrdinalIgnoreCase);
+                if (!Painted)
+                {
+                    var icon = Res(ehh ? "Icon.Hunter" : hub ? "Icon.Hub" : pal ? "Icon.Paladin" : "Icon.Hub");
+                    if (icon != null) return icon;
+                }
+                if (ehh) return "pack://application:,,,/Assets/logo-ehh.png";
+                if (hub) return "pack://application:,,,/Assets/logo-hubaddon.png";
+                if (pal && PaladinLogoExists()) return "pack://application:,,,/Assets/logo-paladin.png";
                 return "pack://application:,,,/Assets/hub.png";
             }
         }
+        // the small source chip next to the status pill
+        public object ChipArt => (!Painted ? Res("Icon.Hub") : null) ?? "pack://application:,,,/Assets/hub.png";
+        public void RefreshArt() { Notify(nameof(Logo)); Notify(nameof(ChipArt)); }
         // no paladin artwork yet: the card falls back to the hub icon until Assets\logo-paladin.png exists
         static bool? paladinLogo;
         static bool PaladinLogoExists()

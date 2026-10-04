@@ -25,6 +25,8 @@ namespace ElansAddonHub
         {
             base.OnStartup(e);
             var test = Array.IndexOf(e.Args, "--selftest");
+            var sheet = Array.IndexOf(e.Args, "--iconsheet");
+            if (sheet >= 0 && sheet + 1 < e.Args.Length) { IconSheet.Render(e.Args[sheet + 1]); Shutdown(); return; }
             var testDir = test >= 0 && test + 1 < e.Args.Length ? e.Args[test + 1] : null;
             if (testDir != null)
             {

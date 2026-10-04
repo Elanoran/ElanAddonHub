@@ -127,6 +127,12 @@
                 <TextBlock Text="For addons the CurseForge app manages: about once a day and when WoW starts, the hub lets CurseForge refresh (it is started minimized and closed again; skipped if it is already running)." Style="{StaticResource RowHint}" /></StackPanel>
               <CheckBox Grid.Column="1" x:Name="CfAutoBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click"  />
             </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Card artwork: painted pictures" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Off = the clean vector icons (default). On = the original painted pictures on the addon cards." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PaintedBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click"  />
+            </Grid></Border>
             <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
               <Button Style="{StaticResource SecondaryButton}" Content="Check for updates now" Click="CheckNow_Click" />
               <Button Style="{StaticResource SecondaryButton}" Content="Open backups folder" Margin="8,0,0,0" Click="Backups_Click" />
