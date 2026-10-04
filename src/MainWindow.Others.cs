@@ -59,24 +59,32 @@ namespace ElansAddonHub
                 addOnsDir = WowLocator.AddOnsDir(settings.WowRoot, flavor);
                 var dir = addOnsDir; var own = OwnFolders().ToList();
                 int iface = 0;
+                CfInstance cf = null;
                 var entries = await Task.Run(() =>
                 {
                     var firstGuess = AddonScanner.ClientInterface(dir, own, new List<TocInfo>());
-                    return AddonScanner.Scan(dir, firstGuess, own, out iface, AddonSuggest.CachedIndex());
+                    var list = AddonScanner.Scan(dir, firstGuess, own, out iface, AddonSuggest.CachedIndex());
+                    cf = CurseForgeLocal.Load(dir);                 // CurseForge-managed addons are regrouped by CurseForge's own folder lists
+                    return CurseForgeLocal.Apply(list, cf);
                 });
                 clientInterface = iface;
+                cfInst = cf;
+                WatchCfFile();
                 var keys = entries.Select(e => e.Key).ToList();
                 foreach (var gone in others.Where(c => !keys.Contains(c.Entry.Key)).ToList()) others.Remove(gone);
                 foreach (var e in entries)
                 {
                     var card = others.FirstOrDefault(c => c.Entry.Key == e.Key);
+                    var checkedAt = cf?.LastRefresh ?? DateTime.MinValue;
                     if (card == null)
                     {
                         // keep alphabetical order
                         var at = others.TakeWhile(c => string.Compare(c.Entry.Title, e.Title, StringComparison.OrdinalIgnoreCase) < 0).Count();
-                        others.Insert(at, new ThirdPartyCard(e));
+                        var nc = new ThirdPartyCard(e) { CfChecked = checkedAt };
+                        nc.Refresh();
+                        others.Insert(at, nc);
                     }
-                    else if (!card.IsBusy) card.SetEntry(e);
+                    else if (!card.IsBusy) { card.CfChecked = checkedAt; card.SetEntry(e); }
                 }
             }
             catch (Exception e) { Util.Log("addon scan failed: " + e); }
@@ -92,7 +100,7 @@ namespace ElansAddonHub
             {
                 foreach (var c in others.ToList())
                 {
-                    if (c.Entry.IsDev || c.IsBusy) continue;
+                    if (c.Entry.IsDev || c.IsBusy || c.Entry.Cf != null) continue;   // CurseForge-managed: never GitHub / WoWInterface
                     var r = await AddonSources.Lookup(c.Entry, c.Link, clientInterface);
                     if (!c.IsBusy) c.SetRemote(r, clientInterface);
                     UpdateOthersHeader();
@@ -166,6 +174,12 @@ namespace ElansAddonHub
             var linked = others.Count(c => c.State != TpState.Local && c.State != TpState.DevCopy);
             OtherHint.Text = $"Found in {addOnsDir}. Updates come from GitHub releases and WoWInterface (no accounts or keys). "
                 + (linked == 0 ? "Open an addon and paste a GitHub or WoWInterface link to keep it updated." : "");
+            CfBar.Visibility = cfInst != null ? Visibility.Visible : Visibility.Collapsed;
+            if (cfInst != null)
+            {
+                var n = others.Count(c => c.Entry.Cf != null);
+                CfText.Text = (cfStatus != null ? cfStatus + "  " : "") + $"CurseForge manages {n} addon{(n == 1 ? "" : "s")} here; last checked {CurseForgeLocal.Ago(cfInst.LastRefresh)}. The hub only asks CurseForge to install or check - it never touches those folders.";
+            }
         }
 
         void Search_Changed(object sender, TextChangedEventArgs e) => othersView?.Refresh();
@@ -251,8 +265,94 @@ namespace ElansAddonHub
             _ = CheckOthers();
         }
 
+        // ---- CurseForge: read its local state, ask it (never the hub) to install, let it refresh its update info
+        CfInstance cfInst;
+        string cfStatus;
+        FileSystemWatcher cfWatcher;
+        string cfWatched;
+        readonly System.Windows.Threading.DispatcherTimer cfDebounce = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
+        bool? wowWas;
+        DateTime cfLastAuto = DateTime.MinValue;
+
+        void WatchCfFile()
+        {
+            try
+            {
+                var file = CurseForgeLocal.DataFile;
+                if (file == cfWatched || !Directory.Exists(Path.GetDirectoryName(file))) return;
+                cfWatched = file;
+                cfWatcher?.Dispose();
+                cfWatcher = new FileSystemWatcher(Path.GetDirectoryName(file), Path.GetFileName(file)) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName, EnableRaisingEvents = true };
+                FileSystemEventHandler h = (s, e) => Dispatcher.BeginInvoke(new Action(() => { cfDebounce.Stop(); cfDebounce.Start(); }));
+                cfWatcher.Changed += h; cfWatcher.Created += h; cfWatcher.Renamed += (s, e) => h(s, null);
+                cfDebounce.Tick -= CfDebounce_Tick; cfDebounce.Tick += CfDebounce_Tick;
+            }
+            catch (Exception e) { Util.Log("curseforge watcher failed: " + e.Message); }
+        }
+
+        async void CfDebounce_Tick(object sender, EventArgs e)
+        {
+            cfDebounce.Stop();
+            await RefreshOthers();
+        }
+
+        async Task InstallCf(ThirdPartyCard c)
+        {
+            var cf = c.Entry.Cf;
+            if (cf == null || addOnsDir == null || c.IsBusy) return;
+            var key = c.Entry.Key; var dir = addOnsDir;
+            c.Message = null;
+            c.SetBusy(true, "CurseForge...");
+            string msg;
+            try
+            {
+                var ok = await CurseForgeLocal.RequestInstall(cf, cf.LatestId, dir);
+                msg = ok ? "CurseForge installed " + cf.LatestFileName + ". In game, type /reload." + (GamePresence.WowRunningNow() ? " (WoW is running; if the addon looks unchanged, restart it.)" : "")
+                    : "CurseForge hasn't reported the install yet. Look at the CurseForge window; this card updates by itself when it finishes.";
+            }
+            catch (Exception ex) { Util.Log($"curseforge update {key} failed: {ex}"); msg = "Something went wrong: " + ex.Message; }
+            c.SetBusy(false);
+            await RefreshOthers();
+            var card = others.FirstOrDefault(x => x.Entry.Key == key);
+            if (card != null) card.Message = msg;
+            UpdateOthersHeader();
+        }
+
+        async Task RunCfCheck()
+        {
+            if (addOnsDir == null || CurseForgeLocal.Busy) return;
+            CfCheckButton.IsEnabled = false;
+            cfStatus = "Asking CurseForge to check... (started minimized if it wasn't running)";
+            UpdateOthersHeader();
+            try { cfStatus = await CurseForgeLocal.CheckNow(addOnsDir); }
+            catch (Exception e) { Util.Log("curseforge check failed: " + e.Message); cfStatus = "Couldn't check with CurseForge."; }
+            CfCheckButton.IsEnabled = true;
+            await RefreshOthers();
+        }
+
+        async void CheckCf_Click(object sender, RoutedEventArgs e) => await RunCfCheck();
+
+        void OpenCf_Click(object sender, RoutedEventArgs e)
+        {
+            if (!CurseForgeLocal.OpenApp()) cfStatus = "Couldn't open CurseForge.";
+            UpdateOthersHeader();
+        }
+
+        // optional (off by default): once a day, or when WoW starts, let CurseForge refresh - only when it isn't running
+        void MaybeCfAuto()
+        {
+            if (!settings.CfAutoCheck || cfInst == null) { wowWas = null; return; }
+            var wow = GamePresence.WowRunningNow();
+            var started = wowWas == false && wow;
+            wowWas = wow;
+            if (CurseForgeLocal.Busy || scanning || (DateTime.UtcNow - cfLastAuto).TotalHours < 2 || CurseForgeLocal.IsRunning()) return;
+            var age = DateTime.UtcNow - cfInst.LastRefresh;
+            if (age.TotalHours > 24 || (started && age.TotalHours > 1)) { cfLastAuto = DateTime.UtcNow; _ = RunCfCheck(); }
+        }
+
         async Task InstallOther(ThirdPartyCard c)
         {
+            if (c.Entry.Cf != null) { await InstallCf(c); return; }
             if (addOnsDir == null || c.Remote == null || c.IsBusy) return;
             var key = c.Entry.Key;
             var running = GamePresence.WowRunningNow();
@@ -305,6 +405,18 @@ namespace ElansAddonHub
                 }
             }
             foreach (var c in others) if (c.Suggested != null) sb.AppendLine($"  card {c.Entry.Key}: {c.SuggestText} [{c.Suggested.Hint}]");
+            sb.AppendLine(CurseForgeLocal.SelfTest(addOnsDir));
+            {
+                var m = others.FirstOrDefault(c => c.Entry.Cf != null && c.Entry.Cf.Name == "CfMulti");
+                var u = others.FirstOrDefault(c => c.Entry.Cf != null && c.Entry.Cf.Name == "CfUpToDate");
+                void Ck(string w, bool ok, string info = null) => sb.AppendLine($"curseforge card {w}: {(ok ? "ok" : "FAIL")}{(info == null ? "" : " (" + info + ")")}");
+                Ck("grouped by CurseForge's folder list", m != null && string.Join("+", m.Entry.Folders) == "CfMulti+CfMulti_Opts", m == null ? "missing" : string.Join("+", m.Entry.Folders));
+                Ck("update available when ids differ", m != null && m.State == TpState.UpdateAvailable && m.Source == "CurseForge" && m.VersionLine.StartsWith("Update available: CfMulti-2.0.zip"), m?.VersionLine);
+                Ck("up to date when ids equal", u != null && u.State == TpState.UpToDate && u.VersionLine.StartsWith("Up to date (checked"), u?.VersionLine);
+                Ck("not offered GitHub/WoWI link or suggestion", m != null && m.LinkVisibility == Visibility.Collapsed && !m.ShowSuggestion && m.Remote == null);
+                Ck("unmanaged addon unaffected", others.Any(c => c.Entry.Key == "Plain" && c.Entry.Cf == null));
+                Ck("CurseForge bar shown", CfBar.Visibility == Visibility.Visible, CfText.Text);
+            }
             sb.AppendLine($"addons dir={addOnsDir} interface={clientInterface} cards={others.Count}");
             foreach (var c in others)
                 sb.AppendLine($"  [{c.Entry.Key}] title='{c.Entry.Title}' ver={c.Entry.Version} author={c.Entry.Author} folders={string.Join("+", c.Entry.Folders)} dev={c.Entry.IsDev} src={c.Source} state={c.State} remote={c.Remote?.Version} asset={c.Remote?.Asset} choices={c.Remote?.Choices.Count}");

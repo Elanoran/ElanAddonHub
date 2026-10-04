@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -45,10 +46,12 @@ namespace ElansAddonHub
         public Visibility WagoVisibility => WagoUrl == null ? Visibility.Collapsed : Visibility.Visible;
         public string DevNote => "This folder is a git checkout (a development copy), so the hub never updates it.";
         public Visibility DevVisibility => Entry.IsDev ? Visibility.Visible : Visibility.Collapsed;
-        public Visibility LinkVisibility => Entry.IsDev ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility LinkVisibility => Entry.IsDev || Entry.Cf != null ? Visibility.Collapsed : Visibility.Visible;
         public string LinkedTo { get; private set; }
-        public Visibility UnlinkVisibility => Link.Github != null || Link.Wowi != null ? Visibility.Visible : Visibility.Collapsed;
-        public Visibility RollbackVisibility => !Entry.IsDev && AddonSources.Backups(Entry.Key).Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility UnlinkVisibility => Entry.Cf == null && (Link.Github != null || Link.Wowi != null) ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility RollbackVisibility => !Entry.IsDev && Entry.Cf == null && AddonSources.Backups(Entry.Key).Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility CfVisibility => Entry.Cf != null ? Visibility.Visible : Visibility.Collapsed;
+        public DateTime CfChecked { get; set; } = DateTime.MinValue;   // when CurseForge last refreshed its update info (UTC)
         public List<string> Choices => Remote?.Choices ?? new List<string>();
         public Visibility ChoiceVisibility => State == TpState.ChooseFile ? Visibility.Visible : Visibility.Collapsed;
         public string SearchText => (Entry.Title + " " + string.Join(" ", Entry.Folders) + " " + Entry.Author).ToLowerInvariant();
@@ -99,6 +102,7 @@ namespace ElansAddonHub
             var r = Remote;
             var hasLink = !string.IsNullOrEmpty(Link.Github ?? Entry.GithubRepo) || !string.IsNullOrEmpty(Link.Wowi ?? Entry.WowiId);
             if (Entry.IsDev) State = TpState.DevCopy;
+            else if (Entry.Cf != null) State = Entry.Cf.UpdateAvailable ? TpState.UpdateAvailable : TpState.UpToDate;
             else if (r == null) State = hasLink ? TpState.Unknown : TpState.Local;
             else if (r.NeedsChoice) State = TpState.ChooseFile;
             else if (AddonSources.IsNewer(Entry, Link, r)) State = TpState.UpdateAvailable;
@@ -106,16 +110,36 @@ namespace ElansAddonHub
 
             var gh = Link.Github ?? Entry.GithubRepo;
             var wid = Link.Wowi ?? Entry.WowiId;
-            if (!string.IsNullOrEmpty(gh)) { Source = "GitHub"; SetBadge("Accent"); WebsiteUrl = "https://github.com/" + gh; WebsiteText = "Open GitHub"; LinkedTo = "Updates from github.com/" + gh; }
+            if (Entry.Cf != null)
+            {
+                Source = "CurseForge"; SetBadge("Accent"); WebsiteText = "CurseForge page";
+                WebsiteUrl = Entry.Cf.Url != null && Entry.Cf.Url.StartsWith("https://") ? Entry.Cf.Url : null;
+                LinkedTo = "Managed by the CurseForge app: updates are installed by CurseForge, the hub never changes these folders.";
+            }
+            else if (!string.IsNullOrEmpty(gh)) { Source = "GitHub"; SetBadge("Accent"); WebsiteUrl = "https://github.com/" + gh; WebsiteText = "Open GitHub"; LinkedTo = "Updates from github.com/" + gh; }
             else if (!string.IsNullOrEmpty(wid)) { Source = "WoWInterface"; SetBadge("Accent"); WebsiteUrl = $"https://www.wowinterface.com/downloads/info{wid}"; WebsiteText = "Open WoWInterface"; LinkedTo = "Updates from WoWInterface #" + wid; }
             else if (!string.IsNullOrEmpty(Entry.CurseId)) { Source = "CurseForge"; SetBadge("TextDim"); WebsiteUrl = null; LinkedTo = "No automatic updates (CurseForge) - paste a GitHub or WoWInterface link to enable them"; }
             else if (!string.IsNullOrEmpty(Entry.WagoId)) { Source = "Wago"; SetBadge("TextDim"); WebsiteUrl = null; LinkedTo = "No automatic updates (Wago) - paste a GitHub or WoWInterface link to enable them"; }
             else { Source = "Local"; SetBadge("TextDim"); WebsiteUrl = Entry.Website != null && Entry.Website.StartsWith("https://") ? Entry.Website : null; WebsiteText = "Open website"; LinkedTo = "No source linked - paste a GitHub or WoWInterface link below"; }
             if (WebsiteUrl == null && Entry.Website != null && Entry.Website.StartsWith("https://") && Source != "Local") { WebsiteUrl = Entry.Website; WebsiteText = "Open website"; }
-            CurseUrl = string.IsNullOrEmpty(Entry.CurseId) ? null : "https://www.curseforge.com/projects/" + Entry.CurseId;
+            CurseUrl = Entry.Cf != null || string.IsNullOrEmpty(Entry.CurseId) ? null : "https://www.curseforge.com/projects/" + Entry.CurseId;
             WagoUrl = string.IsNullOrEmpty(Entry.WagoId) ? null : "https://addons.wago.io/addons/" + Entry.WagoId;
 
             var local = string.IsNullOrEmpty(Entry.Version) ? "" : Entry.Version;
+            if (Entry.Cf != null && !Entry.IsDev)
+            {
+                var cf = Entry.Cf;
+                var seen = $"checked {CurseForgeLocal.Ago(CfChecked)}" + (CurseForgeLocal.IsStale(CfChecked) ? " - old, press Check CurseForge now" : "");
+                if (State == TpState.UpdateAvailable)
+                {
+                    Pill("Update available", "Gold");
+                    VersionLine = $"Update available: {cf.LatestFileName}" + (cf.LatestDate > DateTime.MinValue.AddDays(2) ? ", " + cf.LatestDate.ToLocalTime().ToString("d MMM yyyy") : "") + $" ({seen})";
+                    ButtonText = "Update via CurseForge"; ButtonEnabled = true;
+                }
+                else { Pill("Up to date", "Accent"); VersionLine = $"Up to date ({seen})"; ButtonText = ""; ButtonEnabled = false; }
+                Notify(string.Empty);
+                return;
+            }
             switch (State)
             {
                 case TpState.DevCopy: Pill("Dev copy", "TextDim"); VersionLine = "Managed by git"; ButtonText = ""; ButtonEnabled = false; break;

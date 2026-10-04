@@ -108,6 +108,11 @@
               <StackPanel><TextBlock Text="Update addons automatically" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="Install new addon versions as soon as they're out (the hub itself always asks)." Style="{StaticResource RowHint}" /></StackPanel>
             </DockPanel>
+            <DockPanel Style="{StaticResource Row}">
+              <CheckBox x:Name="CfAutoBox" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click" />
+              <StackPanel><TextBlock Text="Check CurseForge for updates automatically" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="For addons the CurseForge app manages: about once a day and when WoW starts, the hub lets CurseForge refresh (it is started minimized and closed again; skipped if it is already running)." Style="{StaticResource RowHint}" /></StackPanel>
+            </DockPanel>
             <StackPanel Orientation="Horizontal">
               <Button Style="{StaticResource SecondaryButton}" Content="Check for updates now" Click="CheckNow_Click" />
               <Button Style="{StaticResource SecondaryButton}" Content="Open backups folder" Margin="8,0,0,0" Click="Backups_Click" />

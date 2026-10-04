@@ -78,6 +78,7 @@ namespace ElansAddonHub
             BackgroundBox.IsChecked = s.RunInBackground;
             StartupBox.IsChecked = s.StartWithWindows;
             AutoUpdateBox.IsChecked = s.AutoUpdate;
+            CfAutoBox.IsChecked = s.CfAutoCheck;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
             AutoAwayBox.IsChecked = !s.AutoAwayOff;
             ShareGameBox.IsChecked = !s.ShareGameOff;
@@ -183,6 +184,7 @@ namespace ElansAddonHub
             if (loading) return;
             settings.RunInBackground = BackgroundBox.IsChecked == true;
             settings.AutoUpdate = AutoUpdateBox.IsChecked == true;
+            settings.CfAutoCheck = CfAutoBox.IsChecked == true;
             if (settings.StartWithWindows != (StartupBox.IsChecked == true))
             {
                 settings.StartWithWindows = StartupBox.IsChecked == true;

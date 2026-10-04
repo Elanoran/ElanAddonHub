@@ -17,6 +17,7 @@ namespace ElansAddonHub.Services
         public bool IsDev;                       // a folder holds .git: a development copy, never updated
         public DateTime Modified;                // newest toc write time of the primary folder (UTC)
         public string TocName;                   // which toc file was read
+        public CfAddon Cf;                       // set when the CurseForge app manages this addon (the hub then never touches it)
     }
 
     public class TocInfo

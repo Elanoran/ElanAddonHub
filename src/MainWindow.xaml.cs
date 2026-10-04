@@ -43,7 +43,7 @@ namespace ElansAddonHub
             checkTimer.Interval = TimeSpan.FromMinutes(settings.CheckMinutes);
             checkTimer.Tick += async (s, e) => await CheckNow();
             checkTimer.Start();
-            statusTimer.Tick += (s, e) => UpdateStatusText();
+            statusTimer.Tick += (s, e) => { UpdateStatusText(); MaybeCfAuto(); };
             statusTimer.Start();
             Loaded += async (s, e) => { if (manifest == null) await CheckNow(); };
 

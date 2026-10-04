@@ -178,6 +178,14 @@
             <TextBlock x:Name="OtherTitle" Text="OTHER ADDONS" Style="{StaticResource Caption}" VerticalAlignment="Center" />
           </DockPanel>
           <TextBlock x:Name="OtherHint" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,-4,0,10" />
+          <StackPanel x:Name="CfBar" Visibility="Collapsed" Margin="0,-2,0,10">
+            <StackPanel Orientation="Horizontal">
+              <Button x:Name="CfCheckButton" Style="{StaticResource SecondaryButton}" Height="28" Padding="12,0" FontSize="12" Content="Check CurseForge now" Click="CheckCf_Click"
+                      ToolTip="Lets the CurseForge app refresh its update info (started minimized if it isn't running, closed again afterwards)" />
+              <Button Style="{StaticResource SecondaryButton}" Height="28" Padding="12,0" FontSize="12" Content="Open CurseForge" Margin="8,0,0,0" Click="OpenCf_Click" />
+            </StackPanel>
+            <TextBlock x:Name="CfText" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,6,0,0" />
+          </StackPanel>
           <ItemsControl x:Name="OtherCards" Margin="0,0,0,16">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
@@ -238,6 +246,7 @@
                         <Button Style="{StaticResource GhostButton}" Content="Open folder" FontSize="11.5" Tag="{Binding}" Click="OpenAddonFolder_Click" />
                         <Button Style="{StaticResource GhostButton}" Content="{Binding WebsiteText}" FontSize="11.5" Visibility="{Binding WebsiteVisibility}" Tag="{Binding WebsiteUrl}" Click="OpenLink_Click" />
                         <Button Style="{StaticResource GhostButton}" Content="Open on CurseForge" FontSize="11.5" Visibility="{Binding CurseVisibility}" Tag="{Binding CurseUrl}" Click="OpenLink_Click" />
+                        <Button Style="{StaticResource GhostButton}" Content="Open in CurseForge" FontSize="11.5" Visibility="{Binding CfVisibility}" Click="OpenCf_Click" />
                         <Button Style="{StaticResource GhostButton}" Content="Open on Wago" FontSize="11.5" Visibility="{Binding WagoVisibility}" Tag="{Binding WagoUrl}" Click="OpenLink_Click" />
                         <Button Style="{StaticResource GhostButton}" Content="Roll back" FontSize="11.5" Visibility="{Binding RollbackVisibility}" Tag="{Binding}" Click="Rollback_Click" ToolTip="Put the previous version back (the hub keeps the last 2)" />
                         <Button Style="{StaticResource GhostButton}" Content="Unlink source" FontSize="11.5" Visibility="{Binding UnlinkVisibility}" Tag="{Binding}" Click="Unlink_Click" />

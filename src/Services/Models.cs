@@ -82,6 +82,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "overlayRight")] public bool OverlayRight { get; set; }
         [DataMember(Name = "overlayTop")] public double? OverlayTop { get; set; }       // 0..1 of the screen height
         [DataMember(Name = "overlayAlways")] public bool OverlayAlways { get; set; }    // also when WoW isn't in front
+        [DataMember(Name = "cfAutoCheck")] public bool CfAutoCheck { get; set; }        // off by default: let the CurseForge app refresh its update info (daily / when WoW starts)
         [DataMember(Name = "windowWidth")] public double? WindowWidth { get; set; }
         [DataMember(Name = "windowHeight")] public double? WindowHeight { get; set; }
     }

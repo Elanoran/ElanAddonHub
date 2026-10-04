@@ -26,7 +26,12 @@ No installer, no runtime to download - it's one small file (~150 KB) that runs o
   (last 3 kept in `%LOCALAPPDATA%\ElansAddonHub\backups`) and restored if anything goes wrong.
 - **Manages your other addons too**: lists everything in `Interface\AddOns` (multi-folder addons grouped, flavor-specific
   `.toc` files handled) and updates them without any account or API key: GitHub releases (BigWigs `release.json` aware)
-  and WoWInterface. Paste a link on the addon's card to connect it. CurseForge/Wago-only addons just get a link.
+  and WoWInterface. Paste a link on the addon's card to connect it. Wago-only addons just get a link.
+  **CurseForge-managed addons** (the CurseForge desktop app on this PC) get a *CurseForge* badge, are grouped by CurseForge's own
+  folder lists and show "Update available: <file>" / "Up to date" with when CurseForge last checked. **Update** asks the CurseForge
+  app to install that file (its `curseforge://install` link) - the hub never touches those folders, calls CurseForge's web API or
+  downloads from it. **Check CurseForge now** (or the optional automatic daily / on-WoW-start check) starts CurseForge minimized,
+  waits for its refresh and closes it again; if it is already running the hub just reads its data.
   Addons without a source get a **suggested WoWInterface match** (by folder names, title, author and game version,
   from WoWInterface's public file list cached for 24 h): one click on **Use this** links it, **Not this** hides it for good;
   nothing is ever linked or installed on its own.
