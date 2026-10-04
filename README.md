@@ -92,6 +92,10 @@ The addon stands on the work of others - thank you!
 - **[NAudio](https://github.com/naudio/NAudio)** (MIT) - microphone and speaker audio for the Lodge voice chat.
 - **[Concentus](https://github.com/lostromb/concentus)** (BSD) - the Opus voice codec in pure C#.
 - **[Costura](https://github.com/Fody/Costura)** (MIT) - packs everything into the one exe.
+- **[Octicons](https://github.com/primer/octicons)** (MIT) - the GitHub mark on third-party addon cards. The GitHub and
+  CurseForge marks (the latter read at runtime from the user's own installed CurseForge app, never bundled) are
+  trademarks of their owners and only show where an addon comes from. WoWInterface and Wago show text chips; the
+  Local folder glyph is our own drawing.
 - World of Warcraft, its icons and names belong to Blizzard Entertainment. This is a fan project, not affiliated
   with Blizzard.
 

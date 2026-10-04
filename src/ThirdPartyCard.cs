@@ -155,6 +155,16 @@ namespace ElansAddonHub
             Notify(string.Empty);
         }
 
+        // Source icon: CurseForge = icon of the user's installed app, GitHub = Octicons mark, Local = folder; WoWInterface/Wago = letter chips.
+        public ImageSource SourceImage => Source == "CurseForge" ? SourceIcons.CurseForge() : null;
+        public Geometry SourceGeometry => Source == "GitHub" ? SourceIcons.GitHub : Source == "Local" ? SourceIcons.Folder : null;
+        public string SourceChip => Source == "WoWInterface" ? "WoWI" : Source == "Wago" ? "Wago" : (SourceImage == null && SourceGeometry == null ? Source : null);
+        public Visibility SourceImageVis => SourceImage != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility SourceGeoVis => SourceGeometry != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility SourceChipVis => SourceChip != null ? Visibility.Visible : Visibility.Collapsed;
+        public Brush SourceGlyphBrush => (Brush)Application.Current.Resources["Text"];
+        public string SourceTip => "Source: " + Source;
+
         void SetBadge(string color)
         {
             var c = ((SolidColorBrush)Application.Current.Resources[color]).Color;

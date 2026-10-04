@@ -199,8 +199,15 @@
                         <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="8,2" Background="{Binding PillBg}" Visibility="{Binding PillVisibility}" Margin="6,0,0,0">
                           <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
                         </Border>
-                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="8,2" Background="{Binding SourceBg}">
-                          <TextBlock Text="{Binding Source}" Foreground="{Binding SourceFg}" FontSize="11" FontWeight="SemiBold" />
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="6,3" Background="{Binding SourceBg}"
+                                ToolTip="{Binding SourceTip}" AutomationProperties.Name="{Binding SourceTip}">
+                          <Grid>
+                            <Image Source="{Binding SourceImage}" Width="16" Height="16" Visibility="{Binding SourceImageVis}"
+                                   RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
+                            <Path Data="{Binding SourceGeometry}" Fill="{Binding SourceGlyphBrush}" Width="15" Height="15" Stretch="Uniform"
+                                  Visibility="{Binding SourceGeoVis}" SnapsToDevicePixels="False" />
+                            <TextBlock Text="{Binding SourceChip}" Foreground="{Binding SourceFg}" FontSize="11" FontWeight="SemiBold" Margin="2,0" Visibility="{Binding SourceChipVis}" />
+                          </Grid>
                         </Border>
                         <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center">
                           <TextBlock Text="{Binding Letter}" FontWeight="Bold" FontSize="14" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center" VerticalAlignment="Center" />
