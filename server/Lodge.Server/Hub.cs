@@ -14,6 +14,7 @@ public sealed class Budget
     public readonly TokenBucket VoicePackets;  // burst 150, 60 per s (50 per s is normal)
     public readonly TokenBucket VoiceBytes;    // burst 128 KB, 24 KB per s (~6x a 32 kbit/s stream)
     public readonly TokenBucket ProfileSet;    // profile:set: 1 per 2 s (a burst of 1)
+    public readonly TokenBucket DisplayName;   // changing the display name: 1 per 60 s (a burst of 1)
     public DateTime LastUsed;
 
     public Budget(IClock clock)
@@ -21,6 +22,7 @@ public sealed class Budget
         Chat = new TokenBucket(8, 0.8, clock);
         Control = new TokenBucket(30, 5, clock);
         ProfileSet = new TokenBucket(1, 0.5, clock);
+        DisplayName = new TokenBucket(1, 1.0 / 60, clock);
         VoicePackets = new TokenBucket(150, 60, clock);
         VoiceBytes = new TokenBucket(128 * 1024, 24 * 1024, clock);
         LastUsed = clock.UtcNow;
@@ -71,7 +73,7 @@ public class Member
     {
         ["id"] = Id, ["name"] = Name, ["guest"] = !Personal, ["role"] = Role,
         ["room"] = Room, ["voice"] = Room != null, ["muted"] = Muted, ["deaf"] = Deaf, ["serverMuted"] = ServerMuted,
-        ["avatarId"] = Profile?.AvatarId, ["accent"] = Profile?.Accent,
+        ["avatarId"] = Profile?.AvatarId, ["accent"] = Profile?.Accent, ["displayName"] = Profile?.DisplayName ?? "",
         ["status"] = masked ? "online" : Status, ["note"] = masked ? "" : Note, ["game"] = masked ? null : Game?.DeepClone(),
     };
 }
@@ -85,7 +87,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.6.0";
+    public const string Version = "2.7.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -202,7 +204,7 @@ public class LodgeHub
             ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
             ["canManage"] = Roles.Can(me.Role, Perm.ManageMembers),
             ["canPin"] = Roles.Can(me.Role, Perm.PinMessages),
-            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile"),
+            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname"),
             ["reactions"] = new JsonArray(ChatModule.ReactionSet.Select(e => (JsonNode)JsonValue.Create(e)).ToArray()), // canonical ids (2.4)
             ["pins"] = pins,
             ["channels"] = new JsonArray(visible.Select(c => (JsonNode)c.ToJson()).ToArray()),
@@ -337,7 +339,7 @@ public class LodgeHub
     // avatar/accent changed: everyone who can see the member (and the member) gets a small "profile" update
     public Task BroadcastProfile(Member m)
     {
-        var msg = new JsonObject { ["t"] = "profile", ["id"] = m.Id, ["name"] = m.Name, ["avatarId"] = m.Profile?.AvatarId, ["accent"] = m.Profile?.Accent };
+        var msg = new JsonObject { ["t"] = "profile", ["id"] = m.Id, ["name"] = m.Name, ["avatarId"] = m.Profile?.AvatarId, ["accent"] = m.Profile?.Accent, ["displayName"] = m.Profile?.DisplayName ?? "" };
         return Broadcast(msg, v => CanSee(v, m));
     }
 

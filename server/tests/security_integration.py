@@ -292,6 +292,38 @@ async def suite_d(base):
         for w in (g, b, e): await w.close()
 
 
+async def suite_e(base):
+    """2.7: display names over a real socket."""
+    async with aiohttp.ClientSession() as s:
+        b = await ws_open(s, base, BOB, "192.0.2.71"); await recv(b, "welcome")
+        e = await ws_open(s, base, ELAN, "192.0.2.72"); await recv(e, "welcome")
+        g = await ws_open(s, base, GUEST, "192.0.2.73", name="Pilgrim2"); await recv(g, "welcome")
+        await asyncio.sleep(2.2)
+        await b.send_str(json.dumps({"t": "profile:set", "displayName": "Bobby  B"}))
+        d = await recv(b, "profile:data", 2)
+        check("displayName: set, normalized, answered", d is not None and d["profile"]["displayName"] == "Bobby B", d)
+        up = await recv(e, "profile", 2, lambda x: x["name"] == "Bob" and x.get("displayName") == "Bobby B")
+        check("... broadcast with the login name kept as identity", up is not None, up)
+        await asyncio.sleep(2.2)
+        await e.send_str(json.dumps({"t": "profile:set", "displayName": "b0bby b"}))
+        err = await recv(e, "error", 2)
+        check("displayName: look-alike of another display name refused", err is not None and "taken" in err["text"], err)
+        await asyncio.sleep(2.2)
+        await e.send_str(json.dumps({"t": "profile:set", "displayName": "B0b"}))
+        err = await recv(e, "error", 2)
+        check("displayName: look-alike of another login name refused", err is not None and "taken" in err["text"], err)
+        await g.send_str(json.dumps({"t": "profile:set", "displayName": "Nice Guest"}))
+        err = await recv(g, "error", 2)
+        check("displayName: guests refused", err is not None and "Guests" in err["text"], err)
+        await e.send_str(json.dumps({"t": "profile:get", "name": "bob"}))
+        d = await recv(e, "profile:data", 2)
+        check("displayName: profile:get carries it", d is not None and d["profile"]["displayName"] == "Bobby B", d)
+        await e.send_str(json.dumps({"t": "profile:reset", "name": "Bob"}))
+        up = await recv(b, "profile", 2, lambda x: x["name"] == "Bob" and x.get("displayName") == "")
+        check("displayName: owner reset clears it and tells the lodge", up is not None, up)
+        for w in (g, b, e): await w.close()
+
+
 def scan_logs(*datas):
     text = ""
     for d in datas:
@@ -310,6 +342,7 @@ def main():
         asyncio.run(suite_a("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_c("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_d("http://127.0.0.1:5291/lodge"))
+        asyncio.run(suite_e("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_b("http://127.0.0.1:5292/lodge"))
     finally:
         for p in (pa, pb): p.terminate()

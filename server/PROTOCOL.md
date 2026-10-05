@@ -1,4 +1,4 @@
-# Lodge protocol (v2.6)
+# Lodge protocol (v2.7)
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
@@ -154,6 +154,30 @@ most recent kept), and stored with the profile.
 
 **Storage.** Personal codes: `<data>/profiles.json` (atomic tmp+rename, size-capped load, every value re-validated, at most 2000 profiles). Guests:
 a session-only profile on the connection, never written to disk (gone when they leave).
+
+## 2.7 additions and compatibility (display names)
+
+Old hubs ignore the new field and keep showing login names; a new hub talking to an old server (no `displayname` feature in
+`welcome.features`) hides the field.
+
+The **login name** (from the invite code) stays the identity: messages, history, pins, reactions, mentions on the wire and
+`profile:get` all use it. A profile may add a **display name** that hubs show instead of it. `user` entries (welcome, join, user) carry
+`displayName` (string, `""` = none), the `profile` broadcast is `{id, name, avatarId, accent, displayName}` and `profile:data.profile`
+has `displayName` too (public, also while `visibleTo: officers`). The server has no mention logic; hubs treat `@LoginName` and
+`@DisplayName` (normalized, case-insensitive) as mentioning that person.
+
+`profile:set {displayName}` (absent = unchanged, `""`/`null` clears):
+- normalized like names (NFKC, control/format characters out, whitespace collapsed); 2-24 characters after that (too long is an error,
+  not a cut); only letters of any script, digits, space and `- _ ' . !`; at least one letter or digit.
+- unique: refused with `That display name is taken` when its *fold* equals the fold of another person's login name (every personal
+  code, plus names of connected guests) or of another member's display name (stored profiles, online or not). The fold is
+  lower case, `0->o 1/i/|/!->l 3->e 5->s`, and separators (space `- _ . '`) dropped, so `E1an` and `El an` collide with `Elan`. Your own
+  login name is allowed.
+- guests are refused (`Guests can't set a display name`); they keep their `(guest)` naming.
+- changing it is limited to 1 per 60 s per identity (kept across reconnects); saving the same name again, and refused attempts, cost
+  nothing. Any refusal rejects the whole `profile:set`.
+- owner `profile:reset` also clears it. A change is broadcast like avatar/accent (only to viewers who may see the member).
+- Server 2.7.0 adds `"displayname"` to `welcome.features`.
 
 ## Ranks
 

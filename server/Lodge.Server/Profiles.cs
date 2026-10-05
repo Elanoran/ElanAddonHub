@@ -18,6 +18,7 @@ public sealed class Profile
 {
     public string AvatarId, Accent, Main;
     public string About = "", PlayTimes = "";
+    public string DisplayName = "";         // shown instead of the login name in the UI; "" = none (2.7)
     public string ShowChars = "all";        // all | main | none
     public string VisibleTo = "everyone";   // everyone | officers
     public List<string> Hidden = new();     // characters the member never shows
@@ -45,6 +46,45 @@ public static class ProfileRules
 
     public static string Key(string name) => Names.Normalize(name).ToLowerInvariant();
     public static bool SameChar(string a, string b) => string.Equals(Names.Normalize(a), Names.Normalize(b), StringComparison.OrdinalIgnoreCase);
+
+    public const int MinDisplay = 2, MaxDisplay = 24;
+
+    // letters (any script), digits, space and - _ ' . !
+    static bool DisplayChar(char c) => char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_' || c == '\'' || c == '.' || c == '!';
+
+    // format check: the normalized name ("" = none), or null with the reason in `error`
+    public static string CheckDisplayFormat(string raw, out string error)
+    {
+        error = null;
+        var n = Names.Full(raw);
+        if (n.Length == 0) return "";
+        if (n.Length < MinDisplay) { error = "Display name: at least 2 characters"; return null; }
+        if (n.Length > MaxDisplay) { error = "Display name: at most 24 characters"; return null; }
+        foreach (var c in n)
+            if (!DisplayChar(c)) { error = "Display name: only letters, digits, spaces and - _ ' . ! are allowed"; return null; }
+        if (!n.Any(char.IsLetterOrDigit)) { error = "Display name: needs at least one letter or digit"; return null; }
+        return n;
+    }
+
+    // the comparison key for uniqueness: lower case, look-alike characters folded together (0->o, 1/i/|/!->l, 3->e, 5->s),
+    // separators dropped - so "E1an", "El an" and "Elan" are the same name. Never shown, only compared.
+    public static string Fold(string name)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var ch in Names.Normalize(name).ToLowerInvariant())
+        {
+            switch (ch)
+            {
+                case '0': sb.Append('o'); break;
+                case '1': case 'i': case '|': case '!': sb.Append('l'); break;
+                case '3': sb.Append('e'); break;
+                case '5': sb.Append('s'); break;
+                case ' ': case '-': case '_': case '.': case '\'': break;
+                default: sb.Append(ch); break;
+            }
+        }
+        return sb.ToString();
+    }
 
     public static CharInfo CleanChar(string name, string cls, string classFile, string race, string raceFile, int level, long seen)
     {
@@ -103,6 +143,8 @@ public sealed class ProfileStore
 
     static string Str(JsonObject o, string k) => o[k] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 
+    static string ReadDisplay(string raw) { var d = ProfileRules.CheckDisplayFormat(raw, out var e); return e == null ? d : ""; }
+
     static Profile Read(JsonObject o)
     {
         var p = new Profile
@@ -111,6 +153,7 @@ public sealed class ProfileStore
             Accent = ProfileRules.ValidAccent(Str(o, "accent")) ? Str(o, "accent") : null,
             About = Names.Text(Str(o, "about"), ProfileRules.MaxAbout),
             PlayTimes = Names.Text(Str(o, "playTimes"), ProfileRules.MaxPlayTimes),
+            DisplayName = ReadDisplay(Str(o, "displayName")),
             Main = Str(o, "main") is { Length: > 0 } m ? Names.Text(m, ProfileRules.MaxCharName) : null,
             ShowChars = Array.IndexOf(ProfileRules.ShowModes, Str(o, "showChars")) >= 0 ? Str(o, "showChars") : "all",
             VisibleTo = Array.IndexOf(ProfileRules.VisibleModes, Str(o, "visibleTo")) >= 0 ? Str(o, "visibleTo") : "everyone",
@@ -139,7 +182,7 @@ public sealed class ProfileStore
 
     static JsonObject Write(Profile p) => new()
     {
-        ["avatarId"] = p.AvatarId, ["accent"] = p.Accent, ["about"] = p.About, ["playTimes"] = p.PlayTimes, ["main"] = p.Main,
+        ["avatarId"] = p.AvatarId, ["accent"] = p.Accent, ["about"] = p.About, ["playTimes"] = p.PlayTimes, ["main"] = p.Main, ["displayName"] = p.DisplayName,
         ["showChars"] = p.ShowChars, ["visibleTo"] = p.VisibleTo,
         ["hidden"] = new JsonArray(p.Hidden.Select(h => (JsonNode)JsonValue.Create(h)).ToArray()),
         ["chars"] = new JsonArray(p.Chars.Select(c => (JsonNode)CharJson(c)).ToArray()),
@@ -165,6 +208,10 @@ public sealed class ProfileStore
     public Profile Peek(string name) { lock (gate) return profiles.TryGetValue(ProfileRules.Key(name), out var p) ? p : null; }
 
     public int Count { get { lock (gate) return profiles.Count; } }
+
+    // every stored (identity key, display name) pair that has a display name; callers hold Gate
+    public List<(string Key, string Display)> DisplayNames() =>
+        profiles.Where(kv => kv.Value.DisplayName.Length > 0).Select(kv => (kv.Key, kv.Value.DisplayName)).ToList();
 
     // callers hold Gate while changing a Profile, then call Save (stored profiles only)
     public bool Save(Profile p)
@@ -263,12 +310,13 @@ public class ProfileModule : IModule
             return;
         }
         var avatar = Read(m, "avatarId"); var accent = Read(m, "accent"); var about = Read(m, "about"); var play = Read(m, "playTimes");
-        var main = Read(m, "main"); var show = Read(m, "showChars"); var vis = Read(m, "visibleTo");
+        var display = Read(m, "displayName"); var main = Read(m, "main"); var show = Read(m, "showChars"); var vis = Read(m, "visibleTo");
         string err = null;
         if (avatar.Bad || (avatar.Value is { Length: > 0 } && !ProfileRules.ValidAvatar(avatar.Value))) err = "Unknown avatar";
         else if (accent.Bad || (accent.Value is { Length: > 0 } && !ProfileRules.ValidAccent(accent.Value))) err = "Unknown accent colour";
         else if (about.Bad) err = "Invalid about text";
         else if (play.Bad) err = "Invalid play times";
+        else if (display.Bad) err = "Invalid display name";
         else if (main.Bad) err = "Invalid main character";
         else if (show.Bad || (show.Present && Array.IndexOf(ProfileRules.ShowModes, show.Value) < 0)) err = "Invalid character visibility";
         else if (vis.Bad || (vis.Present && Array.IndexOf(ProfileRules.VisibleModes, vis.Value) < 0)) err = "Invalid profile visibility";
@@ -286,18 +334,31 @@ public class ProfileModule : IModule
             }
             else err = "Invalid hidden characters";
         }
+        string newDisplay = null;
+        if (err == null && display.Present)
+        {
+            newDisplay = ProfileRules.CheckDisplayFormat(display.Value, out var fe);
+            if (fe != null) err = fe;
+            else if (newDisplay.Length > 0 && !me.Personal) err = "Guests can't set a display name";
+        }
         if (err != null) { await hub.Error(me, err); return; }
 
         var p = me.Profile;
         bool saved = true, publicChanged = false;
         lock (hub.Profiles.Gate)
         {
+            bool dnChange = newDisplay != null && newDisplay != p.DisplayName;
+            string dnErr = dnChange && newDisplay.Length > 0 ? DisplayTaken(me, newDisplay) : null;
+            if (dnErr == null && dnChange && !me.Budget.DisplayName.TryTake())
+                dnErr = "Slow down - the display name can be changed once a minute";
             var mn = main.Present ? Names.Text(main.Value, ProfileRules.MaxCharName) : null;
             var known = string.IsNullOrEmpty(mn) ? null : p.Chars.FirstOrDefault(c => ProfileRules.SameChar(c.Name, mn));
-            if (!string.IsNullOrEmpty(mn) && known == null) err = "That isn't one of your characters yet - log in with it once";
+            if (dnErr != null) err = dnErr;
+            else if (!string.IsNullOrEmpty(mn) && known == null) err = "That isn't one of your characters yet - log in with it once";
             else
             {
                 if (main.Present) p.Main = known?.Name;
+                if (dnChange) { p.DisplayName = newDisplay; publicChanged = true; }
                 if (avatar.Present) { var v = string.IsNullOrEmpty(avatar.Value) ? null : avatar.Value; publicChanged |= v != p.AvatarId; p.AvatarId = v; }
                 if (accent.Present) { var v = string.IsNullOrEmpty(accent.Value) ? null : accent.Value; publicChanged |= v != p.Accent; p.Accent = v; }
                 if (about.Present) p.About = Names.Text(about.Value, ProfileRules.MaxAbout);
@@ -315,6 +376,21 @@ public class ProfileModule : IModule
         if (publicChanged) await hub.BroadcastProfile(me);
     }
 
+    // null when `name` is free for `me`, else the reason. Called under Profiles.Gate. A display name may not equal (after
+    // normalizing and the look-alike fold) anyone else's login name or display name; one's own login name is fine.
+    string DisplayTaken(Member me, string name)
+    {
+        var f = ProfileRules.Fold(name);
+        if (f.Length == 0) return "Display name: needs at least one letter or digit";
+        bool Mine(string login) => me.Personal && LodgeHub.Same(login, me.Name);
+        foreach (var login in hub.Auth.PersonalNames.Concat(hub.Members.Select(x => x.Name)))
+            if (!Mine(login) && ProfileRules.Fold(login) == f) return "That display name is taken";
+        var myKey = ProfileRules.Key(me.Name);
+        foreach (var (key, shown) in hub.Profiles.DisplayNames())
+            if (key != myKey && ProfileRules.Fold(shown) == f) return "That display name is taken";
+        return null;
+    }
+
     async Task Get(Member me, JsonObject m)
     {
         var name = m["name"] is JsonValue v && v.TryGetValue<string>(out var s) ? Names.Normalize(s) : "";
@@ -322,7 +398,7 @@ public class ProfileModule : IModule
         await hub.Send(me, new JsonObject { ["t"] = "profile:data", ["profile"] = view });
     }
 
-    // owner only: back to the default avatar and accent (and optionally clear the texts)
+    // owner only: back to the default avatar and accent, no display name (and optionally clear the texts)
     async Task Reset(Member me, JsonObject m)
     {
         if (!Roles.Can(me.Role, Perm.ResetProfiles)) { await hub.Error(me, "Your rank can't do that"); return; }
@@ -334,7 +410,7 @@ public class ProfileModule : IModule
         if (name.Length == 0 || p == null) { await hub.Error(me, "No such member"); return; }
         lock (hub.Profiles.Gate)
         {
-            p.AvatarId = null; p.Accent = null;
+            p.AvatarId = null; p.Accent = null; p.DisplayName = "";
             if (clearText) { p.About = ""; p.PlayTimes = ""; }
             if (personal) hub.Profiles.Save(p);
         }
@@ -379,7 +455,7 @@ public class ProfileModule : IModule
         };
         lock (hub.Profiles.Gate)
         {
-            j["avatarId"] = p.AvatarId; j["accent"] = p.Accent;
+            j["avatarId"] = p.AvatarId; j["accent"] = p.Accent; j["displayName"] = p.DisplayName;
             if (self) { j["showChars"] = p.ShowChars; j["visibleTo"] = p.VisibleTo; }
             if (!allowed) return j;
             j["about"] = p.About; j["playTimes"] = p.PlayTimes;

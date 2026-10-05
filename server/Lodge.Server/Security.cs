@@ -39,6 +39,9 @@ public static class Names
         return r.Length > Max ? r[..Max].TrimEnd() : r;
     }
 
+    // the cleaned form without the length cut (display names are checked against 2-24 instead of being truncated)
+    public static string Full(string text) => Clean(text);
+
     static string Clean(string name)
     {
         if (string.IsNullOrEmpty(name)) return "";

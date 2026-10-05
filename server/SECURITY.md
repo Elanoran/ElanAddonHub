@@ -60,6 +60,21 @@
   (`game.name`) whatever `showChars` says, and `profile:get` of a personal name tells a lodge member whether that name is an invited member
   (offline members answer with `found: true`).
 
+## 2.7.0 (display names)
+
+- A display name is cosmetic; the login name stays the only identity (messages, history, pins, reactions, rate limits, budgets, moderation
+  all key on it). The hub shows `Display · @Login` in the hover card and profile card so the real name is never hidden.
+- Anti-impersonation: a display name must not equal - after NFKC/whitespace normalization and a look-alike fold (0->o, 1/i/|/!->l, 3->e,
+  5->s, separators dropped, case-insensitive) - any other personal login name (offline members included, read from the codes file at
+  the time of the change), the name of a connected guest, or another member's stored display name. Format: 2-24 characters, letters/digits/
+  space and `- _ ' . !` only, so no markup, `@`, `#` or zero-width tricks (those are removed by `Names`). Honest limit: the check runs at
+  change time; a code created later for a name that someone already took as display name is not retroactively rejected, and homoglyphs
+  from other scripts (Cyrillic `a`) are not folded - an owner can `profile:reset` the offender.
+- Guests can't set one (no stored identity to keep it unique). Changes are limited to 1 per 60 s per identity on top of the profile
+  bucket; refused attempts don't spend the minute but do spend the 1-per-2-s token and the Control budget, so uniqueness can't be probed cheaply.
+- Stored in `profiles.json` and re-validated on load (format only); owner reset clears it. Invisible members: unchanged - the broadcast
+  goes only to viewers who may see them and lookups answer like offline.
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.
@@ -76,7 +91,7 @@
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 98 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 110 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
 python server/tests/security_integration.py                     # 48 checks against two local servers
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 15 checks

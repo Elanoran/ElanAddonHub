@@ -8,7 +8,7 @@ namespace Lodge.Tests;
 // 2.6.0: avatars and profiles - validation, whitelists, privacy, persistence, budget, invisible members, owner reset.
 public class ProfileTests
 {
-    sealed class ScriptSocket : WebSocket
+    internal sealed class ScriptSocket : WebSocket
     {
         readonly System.Threading.Channels.Channel<byte[]> incoming = System.Threading.Channels.Channel.CreateUnbounded<byte[]>();
         WebSocketState state = WebSocketState.Open;
@@ -42,10 +42,10 @@ public class ProfileTests
         public JsonObject Profile() => (JsonObject)Of("profile:data").Last()["profile"]!;
     }
 
-    const string MiaCode = "synthetic0mia00code0000000000003";
-    const string ZedCode = "synthetic0zed00code0000000000004";
+    internal const string MiaCode = "synthetic0mia00code0000000000003";
+    internal const string ZedCode = "synthetic0zed00code0000000000004";
 
-    sealed class Lodge3 : IDisposable
+    internal sealed class Lodge3 : IDisposable
     {
         public LodgeHub Hub = null!; public Auth Auth = null!; public TempDir Dir = new(); public LodgeConfig Cfg = null!;
         public FakeClock Clock = new();
