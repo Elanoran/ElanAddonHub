@@ -20,6 +20,16 @@ namespace ElansAddonHub.Services
             public int Level, Sex;
             public long Updated;
             public bool Online = true; // false = the addon saw a real logout
+            // ---- live presence from the strip's second row (companion 1.5+); HasLive = it was there
+            public bool HasLive, CombatKnown;
+            public int Flags, XpPercent = -1, GroupSize;   // Flags: 1 combat 2 dead 4 AFK 8 resting 16 instance 32 raid inst 64 party inst 128 group
+            public bool Rested, InInstance;
+            public string InstanceName;
+            public Character Copy() => (Character)MemberwiseClone();
+            public bool InCombat => (Flags & 1) != 0;
+            public bool Dead => (Flags & 2) != 0;
+            public bool Afk => (Flags & 4) != 0;
+            public bool Resting => (Flags & 8) != 0;
         }
 
         readonly Func<string> wowRoot;
@@ -50,6 +60,9 @@ namespace ElansAddonHub.Services
         }
 
         public void Start() { Poll(); timer.Start(); Strip.Start(); }
+
+        // tests: pretend this is what the strip says
+        public void SetForTest(Character c, bool playing) { Current = c; Playing = playing; Changed?.Invoke(); }
 
         public void Poll()
         {
@@ -95,14 +108,37 @@ namespace ElansAddonHub.Services
                         Zone = match != null && FromThisSession(match, started) ? match.Zone : null,
                         Updated = new DateTimeOffset(seen).ToUnixTimeSeconds(),
                     };
+                    ApplyLive(held, info);
                     return held;
                 }
-                if (age < TimeSpan.FromSeconds(45) && held != null) return held;
+                if (age < TimeSpan.FromSeconds(45) && held != null)
+                {
+                    // the strip is gone for the moment (loading screen, UI hidden): keep the character, but never a stale "in combat"
+                    if (held.InCombat) { held = held.Copy(); held.Flags &= ~1; }
+                    return held;
+                }
                 held = null;
                 if (last != null && last.Online && last.Updated > new DateTimeOffset(seen).ToUnixTimeSeconds()) return last;
                 return null; // strip gone for good: probably at character select
             }
             return saved;
+        }
+
+        // the strip's second row: live zone (a map name, or the instance's name inside dungeons), flags, XP, group
+        public static void ApplyLive(Character c, StripCodec.Info info)
+        {
+            if (!info.HasV2) return;
+            c.HasLive = true;
+            c.Flags = info.Flags1; c.CombatKnown = info.CombatKnown; c.GroupSize = info.GroupSize;
+            c.XpPercent = info.XpKnown ? info.XpPercent : -1;
+            c.Rested = info.Rested;
+            c.InInstance = info.InInstance;
+            var inst = info.InInstance ? ZoneNames.Instance(info.InstanceId) : null;
+            c.InstanceName = inst;
+            var map = ZoneNames.Map(info.MapId);
+            if (map != null) c.Zone = map;          // a known open-world map beats the (stale) SavedVariables zone
+            else if (inst != null) c.Zone = inst;
+            else if (info.MapId != 0 || info.InstanceId != 0 || info.InInstance) c.Zone = null; // somewhere we have no name for: show nothing, not a wrong zone
         }
 
         static bool FromThisSession(Character c, DateTime started)
@@ -113,7 +149,9 @@ namespace ElansAddonHub.Services
 
         static bool Same(Character a, Character b) =>
             ReferenceEquals(a, b) || (a != null && b != null && a.Name == b.Name && a.Realm == b.Realm && a.Online == b.Online && a.Level == b.Level
-                && a.ClassFile == b.ClassFile && a.RaceFile == b.RaceFile && a.Sex == b.Sex && a.Zone == b.Zone && a.Guild == b.Guild);
+                && a.ClassFile == b.ClassFile && a.RaceFile == b.RaceFile && a.Sex == b.Sex && a.Zone == b.Zone && a.Guild == b.Guild
+                && a.HasLive == b.HasLive && a.Flags == b.Flags && a.XpPercent == b.XpPercent && a.Rested == b.Rested && a.GroupSize == b.GroupSize
+                && a.InInstance == b.InInstance && a.InstanceName == b.InstanceName && a.CombatKnown == b.CombatKnown);
 
         static DateTime SafeStamp(string f) { try { return File.GetLastWriteTimeUtc(f); } catch { return DateTime.MinValue; } }
 

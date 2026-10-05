@@ -76,6 +76,20 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "autoAwayOff")] public bool AutoAwayOff { get; set; }        // false = AFK after 10 min idle
         [DataMember(Name = "pixelOff")] public bool PixelOff { get; set; }              // true = don't read the addon's status strip from the screen
         [DataMember(Name = "shareGameOff")] public bool ShareGameOff { get; set; }      // false = show friends what I play
+        // ---- in-game toasts (Settings > In-game overlay)
+        [DataMember(Name = "toastsOff")] public bool ToastsOff { get; set; }
+        [DataMember(Name = "toastMentionsOff")] public bool ToastMentionsOff { get; set; }
+        [DataMember(Name = "toastRepliesOff")] public bool ToastRepliesOff { get; set; }
+        [DataMember(Name = "toastReactions")] public bool ToastReactions { get; set; }  // default off
+        [DataMember(Name = "toastPins")] public bool ToastPins { get; set; }            // default off
+        [DataMember(Name = "toastUpdateOff")] public bool ToastUpdateOff { get; set; }
+        [DataMember(Name = "toastCorner")] public string ToastCorner { get; set; }      // tl | tr (default) | bl | br
+        [DataMember(Name = "shareZoneOff")] public bool ShareZoneOff { get; set; }      // false = friends see my zone / instance
+        [DataMember(Name = "shareXpOff")] public bool ShareXpOff { get; set; }          // false = friends see my XP % and rested state
+        [DataMember(Name = "autoStatusOff")] public bool AutoStatusOff { get; set; }    // false = "In combat" / AFK are set as my Lodge status automatically
+        [DataMember(Name = "lodgeInvisible")] public bool LodgeInvisible { get; set; }  // "Appear offline"
+        [DataMember(Name = "invisibleForget")] public bool InvisibleForget { get; set; } // true = Appear offline resets to visible at every start
+        [DataMember(Name = "invisibleHintShown")] public bool InvisibleHintShown { get; set; } // the one-time "others can see your messages" note
         [DataMember(Name = "notify")] public string NotifyMode { get; set; }          // mentions (default) | all | none
         [DataMember(Name = "soundsOff")] public bool SoundsOff { get; set; }
         [DataMember(Name = "peerVolumes")] public Dictionary<string, double> PeerVolumes { get; set; } // by name, 0..2

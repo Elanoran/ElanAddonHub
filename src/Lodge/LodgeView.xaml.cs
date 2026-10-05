@@ -117,7 +117,7 @@ namespace ElansAddonHub.Lodge
                 MeAvatar.Content = s.Me;
                 MeName.Text = s.Me.Name;
                 MeStatus.Text = MemberVM.RoleName(s.MyRole) + " · " +
-                    (string.IsNullOrEmpty(s.Settings.LodgeNote) ? MemberVM.StatusLabel(s.MyStatus) : s.Settings.LodgeNote);
+                    (s.Invisible ? "Invisible" : string.IsNullOrEmpty(s.MyNote) ? MemberVM.StatusLabel(s.MyStatus) : s.MyNote);
             }
             AttachButton.Visibility = s.CanShareFiles ? Visibility.Visible : Visibility.Collapsed;
 
@@ -367,6 +367,7 @@ namespace ElansAddonHub.Lodge
         void Me_Click(object sender, MouseButtonEventArgs e)
         {
             NoteBox.Text = Session.Settings.LodgeNote ?? "";
+            InvisibleCheck.Visibility = Session.Invisible ? Visibility.Visible : Visibility.Collapsed;
             StatusPopup.PlacementTarget = MeRow;
             StatusPopup.IsOpen = true;
             e.Handled = true;
@@ -374,7 +375,9 @@ namespace ElansAddonHub.Lodge
 
         void StatusOption_Click(object sender, RoutedEventArgs e)
         {
-            Session.SetMyStatus((sender as FrameworkElement)?.Tag as string ?? "online", NoteBox.Text);
+            var tag = (sender as FrameworkElement)?.Tag as string ?? "online";
+            if (tag == "invisible") Session.SetInvisible(!Session.Invisible);   // a switch, independent of the status above it
+            else Session.SetMyStatus(tag, NoteBox.Text);
             StatusPopup.IsOpen = false;
             Refresh();
         }
@@ -387,6 +390,12 @@ namespace ElansAddonHub.Lodge
             Refresh();
         }
 
+        // the hover card of a name in the chat: only for people who are still in the lodge
+        void NameTip_Opening(object sender, ToolTipEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.DataContext is MessageVM m) || m.Author == null) e.Handled = true;
+        }
+
         // ---- a person: volume, officer tools
         void Member_Click(object sender, MouseButtonEventArgs e)
         {
@@ -397,7 +406,7 @@ namespace ElansAddonHub.Lodge
             PopName.Text = m.Name;
             PopRole.Text = m.RoleLabel;
             PopRole.Foreground = m.FrameBrush;
-            PopStatus.Text = m.StatusLine + (m.ServerMuted ? " - muted by an officer" : "");
+            PopStatus.Text = m.StatusLine + (m.ServerMuted ? " - muted by an officer" : "") + (m.Invisible ? " - invisible" : "");
             PopGame.Text = m.GameDetail ?? "";
             PopGame.Foreground = m.ClassBrush;
             PopGame.Visibility = m.GameDetail != null ? Visibility.Visible : Visibility.Collapsed;
@@ -732,8 +741,48 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ in-game overlay
 
+        ToastWindow toastWin;
+        public bool ForceToastsForTest;
+        public ToastWindow ToastWindowForTest => toastWin;
+
+        // the toast stack: shown over WoW (or anywhere with "Also when WoW isn't in front"), hidden when empty
+        void UpdateToasts()
+        {
+            var t = Session.Toasts;
+            if (t == null) return;
+            var s = Session.Settings;
+            var wow = OverlayWindow.WowInFront();
+            bool show = t.Visible.Count > 0 && !s.ToastsOff && (wow != IntPtr.Zero || s.OverlayAlways || ForceToastsForTest);
+            if (!show) { if (toastWin != null && toastWin.IsVisible) toastWin.Hide(); return; }
+            if (toastWin == null) toastWin = new ToastWindow(t.Visible);
+            if (!toastWin.IsVisible) toastWin.Show();
+            var main = Window.GetWindow(this);
+            var near = wow != IntPtr.Zero ? wow : main != null ? new System.Windows.Interop.WindowInteropHelper(main).Handle : IntPtr.Zero;
+            toastWin.UpdateLayout();
+            toastWin.Place(near, s.ToastCorner ?? "tr");
+        }
+
+        public void SnapshotToasts(string file)
+        {
+            if (toastWin == null || !toastWin.IsVisible) return;
+            toastWin.UpdateLayout();
+            var w = (int)toastWin.ActualWidth; var h = (int)toastWin.ActualHeight;
+            var bmp = new RenderTargetBitmap(w * 2, h * 2, 192, 192, PixelFormats.Pbgra32);
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x3A, 0x4A, 0x3A)), null, new Rect(0, 0, w, h));
+                dc.DrawRectangle(new VisualBrush((Visual)toastWin.Content), null, new Rect(0, 0, w, h));
+            }
+            bmp.Render(dv);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(bmp));
+            using (var fs = File.Create(file)) enc.Save(fs);
+        }
+
         void UpdateOverlay()
         {
+            UpdateToasts();
             var s = Session.Settings;
             var wow = OverlayWindow.WowInFront();
             bool show = Session.MyRoom != null && !s.OverlayOff && (wow != IntPtr.Zero || s.OverlayAlways || ForceOverlayForTest || OverlayPreview);
@@ -769,6 +818,22 @@ namespace ElansAddonHub.Lodge
         // test hooks
         public void ShowChatForTest() => ShowChat();
         public void OpenPinsForTest() => PinButton_Click(null, null);
+        public void OpenStatusForTest() { Me_Click(MeRow, new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent }); }
+        public void CloseStatusForTest() => StatusPopup.IsOpen = false;
+        public void UpdateMeForTest() => Refresh();
+        // the hover card of a person, opened next to `target` (the real tooltip style and template)
+        public ToolTip ShowCardForTest(MemberVM m, FrameworkElement target)
+        {
+            var tip = new ToolTip
+            {
+                Style = (Style)FindResource("CardTip"), ContentTemplate = (DataTemplate)Resources["MemberCard"], Content = m,
+                PlacementTarget = target, Placement = PlacementMode.Right, IsOpen = true,
+            };
+            return tip;
+        }
+        public FrameworkElement StatusBoxForTest => StatusBox;
+        public FrameworkElement SidebarForTest => SidebarBox;
+        public FrameworkElement ChatListForTest => MessageScroll;
         public void OpenReactForTest(MessageVM m) => OpenReactPicker(m, null);
         public void OpenMenuForTest(MessageVM m) => OpenMenu(m);
         public void ClosePopupsForTest() { PinPopup.IsOpen = false; ReactPopup.IsOpen = false; MsgMenu.IsOpen = false; }

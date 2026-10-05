@@ -23,6 +23,7 @@ namespace ElansAddonHub.Services
         readonly SemaphoreSlim sendLock = new SemaphoreSlim(1, 1);
         volatile bool stopped;
 
+        public Func<bool> Invisible;                                 // asked at every (re)connect: appear offline from the first moment
         public bool Online { get; private set; }
         public bool IsRunning => !stopped;
         public event Action<Dictionary<string, object>> Received;   // UI thread
@@ -41,7 +42,7 @@ namespace ElansAddonHub.Services
         {
             var b = BaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? "wss://" + BaseUrl.Substring(8)
                   : BaseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? "ws://" + BaseUrl.Substring(7) : BaseUrl;
-            return $"{b}/ws?name={Uri.EscapeDataString(name)}&client={Uri.EscapeDataString("hub/" + App.Version)}";
+            return $"{b}/ws?name={Uri.EscapeDataString(name)}&client={Uri.EscapeDataString("hub/" + App.Version)}" + (Invisible?.Invoke() == true ? "&vis=invisible" : "");
         }
 
         void Post(Action a) => ui.Post(_ => a(), null);

@@ -84,6 +84,10 @@ namespace ElansAddonHub
             AutoAwayBox.IsChecked = !s.AutoAwayOff;
             ShareGameBox.IsChecked = !s.ShareGameOff;
             PixelBox.IsChecked = !s.PixelOff;
+            ShareZoneBox.IsChecked = !s.ShareZoneOff;
+            ShareXpBox.IsChecked = !s.ShareXpOff;
+            AutoStatusBox.IsChecked = !s.AutoStatusOff;
+            RememberInvisibleBox.IsChecked = !s.InvisibleForget;
 
             ModeVa.IsChecked = !s.VoicePushToTalk;
             ModePtt.IsChecked = s.VoicePushToTalk;
@@ -101,6 +105,10 @@ namespace ElansAddonHub
             OverlayRightBox.IsChecked = s.OverlayRight;
             OverlayTopSlider.Value = s.OverlayTop ?? 0.3;
             OverlayAlwaysBox.IsChecked = s.OverlayAlways;
+            ToastsBox.IsChecked = !s.ToastsOff; ToastMentionBox.IsChecked = !s.ToastMentionsOff; ToastReplyBox.IsChecked = !s.ToastRepliesOff;
+            ToastReactBox.IsChecked = s.ToastReactions; ToastPinBox.IsChecked = s.ToastPins; ToastUpdateBox.IsChecked = !s.ToastUpdateOff;
+            var tc = s.ToastCorner ?? "tr";
+            ToastTL.IsChecked = tc == "tl"; ToastTR.IsChecked = tc == "tr"; ToastBL.IsChecked = tc == "bl"; ToastBR.IsChecked = tc == "br";
 
             var mode = s.NotifyMode ?? "mentions";
             NotifyAll.IsChecked = mode == "all";
@@ -231,8 +239,13 @@ namespace ElansAddonHub
             settings.ShareGameOff = ShareGameBox.IsChecked != true;
             var px = settings.PixelOff;
             settings.PixelOff = PixelBox.IsChecked != true;
+            var zone = settings.ShareZoneOff; var xp = settings.ShareXpOff;
+            settings.ShareZoneOff = ShareZoneBox.IsChecked != true;
+            settings.ShareXpOff = ShareXpBox.IsChecked != true;
+            settings.AutoStatusOff = AutoStatusBox.IsChecked != true;
+            settings.InvisibleForget = RememberInvisibleBox.IsChecked != true;
             SettingsStore.Save(settings);
-            if (share != settings.ShareGameOff) session.SendGame();
+            if (share != settings.ShareGameOff || zone != settings.ShareZoneOff || xp != settings.ShareXpOff) session.SendGame();
             if (px != settings.PixelOff) session.Presence.Poll();
         }
 
@@ -319,6 +332,10 @@ namespace ElansAddonHub
             settings.OverlayOff = OverlayBox.IsChecked != true;
             settings.OverlayRight = OverlayRightBox.IsChecked == true;
             settings.OverlayAlways = OverlayAlwaysBox.IsChecked == true;
+            settings.ToastsOff = ToastsBox.IsChecked != true; settings.ToastMentionsOff = ToastMentionBox.IsChecked != true;
+            settings.ToastRepliesOff = ToastReplyBox.IsChecked != true; settings.ToastReactions = ToastReactBox.IsChecked == true;
+            settings.ToastPins = ToastPinBox.IsChecked == true; settings.ToastUpdateOff = ToastUpdateBox.IsChecked != true;
+            settings.ToastCorner = ToastTL.IsChecked == true ? "tl" : ToastBL.IsChecked == true ? "bl" : ToastBR.IsChecked == true ? "br" : "tr";
             SettingsStore.Save(settings);
         }
 

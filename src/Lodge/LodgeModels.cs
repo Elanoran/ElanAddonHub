@@ -73,7 +73,11 @@ namespace ElansAddonHub.Lodge
         public int UnreadCount { get => unreadCount; set { if (Set(ref unreadCount, value)) { Raise(nameof(UnreadText)); Raise(nameof(UnreadVisibility)); } } }
         public string MentionText => "@" + (mentions > 99 ? "99+" : mentions.ToString());
         public string UnreadText => unreadCount > 99 ? "99+" : unreadCount.ToString();
-        public bool IAmHere { get => here; set { if (Set(ref here, value)) Raise(nameof(NameBrush)); } } // the voice room I'm in
+        public bool IAmHere { get => here; set { if (Set(ref here, value)) { Raise(nameof(NameBrush)); Raise(nameof(InvisibleHintVisibility)); } } } // the voice room I'm in
+        bool invisibleHint;
+        // while I appear offline, joining a voice room shows me in it: say so on the room
+        public bool InvisibleHint { get => invisibleHint; set { if (Set(ref invisibleHint, value)) Raise(nameof(InvisibleHintVisibility)); } }
+        public Visibility InvisibleHintVisibility => invisibleHint && IsVoice && !here ? Visibility.Visible : Visibility.Collapsed;
 
         public Brush RowBrush => selected ? Avatar.Res("SurfaceHi") : Brushes.Transparent;
         public Brush NameBrush => selected || unread || here ? Avatar.Res("Text") : Avatar.Res("TextDim");
@@ -115,8 +119,10 @@ namespace ElansAddonHub.Lodge
         public bool Speaking { get => speaking; set { if (Set(ref speaking, value)) Raise(nameof(Ring)); } }
         // the overlay only lists people in my room
         public bool InMyRoom { get => inMyRoom; set { if (Set(ref inMyRoom, value)) Raise(nameof(OverlayVisibility)); } }
-        void RaiseVoice() { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); Raise(nameof(MutedVisibility)); }
+        void RaiseVoice() { Raise(nameof(StateGlyph)); Raise(nameof(StateBrush)); Raise(nameof(MutedVisibility)); Raise(nameof(CardVoiceLine)); Raise(nameof(CardVoiceVisibility)); Raise(nameof(Tip)); }
 
+        string roomName;
+        public string RoomName { get => roomName; set { if (Set(ref roomName, value)) { Raise(nameof(CardVoiceLine)); Raise(nameof(CardVoiceVisibility)); } } }
         public Brush Ring => speaking ? Avatar.Res("Accent") : Brushes.Transparent;
         public string StateGlyph => deaf ? "" : (muted || serverMuted) ? "" : "";
         public Brush StateBrush => deaf || muted || serverMuted ? Avatar.Res("Danger") : Avatar.Res("TextDim");
@@ -160,7 +166,106 @@ namespace ElansAddonHub.Lodge
             this.playing = playing; gameName = name; gameClass = cls; gameClassFile = classFile; gameLevel = level; gameZone = zone; gameGuild = guild;
             Raise(nameof(GameLine)); Raise(nameof(ClassBrush)); Raise(nameof(ClassBrushOrText)); Raise(nameof(GameVisibility)); Raise(nameof(PlayingVisibility));
             Raise(nameof(Tip)); Raise(nameof(GameDetail)); Raise(nameof(Color)); Raise(nameof(Initial)); Raise(nameof(IconBrush)); Raise(nameof(InitialVisibility));
+            RaiseCard();
         }
+
+        // ---- live presence (Lodge server 2.5 / companion 1.5): flags 1 combat 2 dead 4 AFK 8 resting 16 instance 32 raid 64 party 128 group
+        int flags, xpPct = -1, groupSize;
+        bool rested, inInstance;
+        string instanceName;
+        public void SetPresence(int flags, int xpPct, bool rested, int groupSize, bool inInstance, string instanceName)
+        {
+            this.flags = flags; this.xpPct = xpPct; this.rested = rested; this.groupSize = groupSize; this.inInstance = inInstance; this.instanceName = instanceName;
+            RaiseCard();
+        }
+        public bool InCombat => (flags & 1) != 0;
+        public bool IsDead => (flags & 2) != 0;
+        public bool GameAfk => (flags & 4) != 0;
+        public int GroupSize => groupSize;
+        public int XpPercent => xpPct;
+        public bool Rested => rested;
+        public bool InInstance => inInstance;
+
+        // the second line of a row and the card's place line: "The Barrens · 62% · Rested", "Wailing Caverns · group 5"
+        public string Place => inInstance && !string.IsNullOrEmpty(instanceName) ? instanceName : gameZone;
+        public string PlaceLine
+        {
+            get
+            {
+                if (!playing) return "";
+                var parts = new System.Collections.Generic.List<string>();
+                if (!string.IsNullOrEmpty(Place)) parts.Add(Place);
+                if (!inInstance && xpPct >= 0) parts.Add(xpPct + "%");
+                if (!inInstance && rested) parts.Add("Rested");
+                if (groupSize > 1) parts.Add("group " + groupSize);
+                return string.Join(" · ", parts);
+            }
+        }
+        // sidebar second line: the place line, else the status note when there is one
+        public string SecondLine => invisible && !IsMe ? "invisible" : PlaceLine.Length > 0 ? PlaceLine : (string.IsNullOrEmpty(note) ? "" : note);
+        public Visibility SecondVisibility => SecondLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        // small state glyphs (vector art from the app's reaction icons, the moon from the icon font)
+        public ImageSource StateIcon => IsDead ? ReactionArt.Icon("wipe") : InCombat ? ReactionArt.Icon("fight") : null;
+        public Visibility StateIconVisibility => playing && StateIcon != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility AfkVisibility => playing && GameAfk && !IsDead && !InCombat ? Visibility.Visible : Visibility.Collapsed;
+        public string StateText => !playing ? "" : IsDead ? "Dead" : InCombat ? "In combat" : GameAfk ? "AFK" : "";
+
+        // ---- appear offline: self and (for the owner) other invisible members
+        bool invisible;
+        public bool Invisible
+        {
+            get => invisible;
+            set
+            {
+                if (!Set(ref invisible, value)) return;
+                Raise(nameof(InvisibleVisibility)); Raise(nameof(StatusVisibility)); Raise(nameof(NameOpacity)); Raise(nameof(SecondLine));
+                Raise(nameof(SecondVisibility)); Raise(nameof(Tip)); RaiseCard();
+            }
+        }
+        public Visibility InvisibleVisibility => invisible ? Visibility.Visible : Visibility.Collapsed;
+
+        // ---- the hover card
+        void RaiseCard()
+        {
+            Raise(nameof(SecondLine)); Raise(nameof(SecondVisibility)); Raise(nameof(PlaceLine)); Raise(nameof(StateIcon)); Raise(nameof(StateIconVisibility));
+            Raise(nameof(AfkVisibility)); Raise(nameof(StateText)); Raise(nameof(CardClassLine)); Raise(nameof(CardClassVisibility));
+            Raise(nameof(CardPlaceLine)); Raise(nameof(CardPlaceVisibility)); Raise(nameof(CardStatusLine)); Raise(nameof(CardStatusVisibility));
+            Raise(nameof(CardVoiceLine)); Raise(nameof(CardVoiceVisibility)); Raise(nameof(CardStateVisibility)); Raise(nameof(Tip));
+        }
+        public string CardNameText => IsMe ? Name + " (you)" : Name;
+        // "Level 25 Human Paladin · Measley" (the character's name only when it differs from the Lodge name)
+        public string CardClassLine
+        {
+            get
+            {
+                if (gameLevel <= 0 && gameClass == null) return "";
+                var s = (gameLevel > 0 ? "Level " + gameLevel + " " : "") + (gameRace != null ? gameRace + " " : "") + gameClass;
+                s = s.Trim();
+                if (!string.IsNullOrEmpty(gameName) && !string.Equals(gameName, Name, StringComparison.OrdinalIgnoreCase)) s += " · " + gameName;
+                return s;
+            }
+        }
+        public Visibility CardClassVisibility => CardClassLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string CardPlaceLine => playing ? PlaceLine : (gameName != null ? "Not in game" : "");
+        public Visibility CardPlaceVisibility => CardPlaceLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility CardStateVisibility => StateText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // dim line: the chosen status and note (never "Online" alone), the officer's mute, and the invisible marker
+        public string CardStatusLine
+        {
+            get
+            {
+                var parts = new System.Collections.Generic.List<string>();
+                if (status != "online") parts.Add(StatusLabel(status));
+                if (!string.IsNullOrEmpty(note)) parts.Add(note);
+                if (serverMuted) parts.Add("muted by an officer");
+                if (invisible) parts.Add(IsMe ? "Invisible" : "invisible");
+                return string.Join(" · ", parts);
+            }
+        }
+        public Visibility CardStatusVisibility => CardStatusLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string CardVoiceLine => Voice ? (string.IsNullOrEmpty(roomName) ? "In voice" : roomName) + (deaf ? " · deafened" : muted || serverMuted ? " · muted" : "") : "";
+        public Visibility CardVoiceVisibility => Voice ? Visibility.Visible : Visibility.Collapsed;
         public bool Playing => playing;
         static readonly System.Collections.Generic.Dictionary<string, string> ClassColors = new System.Collections.Generic.Dictionary<string, string>
         {
@@ -195,10 +300,10 @@ namespace ElansAddonHub.Lodge
             {
                 if (!Set(ref status, string.IsNullOrEmpty(value) ? "online" : value)) return;
                 Raise(nameof(StatusGlyph)); Raise(nameof(StatusBrush)); Raise(nameof(StatusVisibility));
-                Raise(nameof(NameOpacity)); Raise(nameof(Tip)); Raise(nameof(StatusLine));
+                Raise(nameof(NameOpacity)); Raise(nameof(Tip)); Raise(nameof(StatusLine)); RaiseCard();
             }
         }
-        public string Note { get => note; set { if (Set(ref note, value)) { Raise(nameof(Tip)); Raise(nameof(StatusLine)); } } }
+        public string Note { get => note; set { if (Set(ref note, value)) { Raise(nameof(Tip)); Raise(nameof(StatusLine)); RaiseCard(); } } }
 
         public static string StatusLabel(string s) =>
             s == "away" ? "AFK" : s == "busy" ? "Busy" : s == "dungeon" ? "In a dungeon" : s == "lfg" ? "Looking for group" : "Online";
@@ -210,8 +315,8 @@ namespace ElansAddonHub.Lodge
 
         public string StatusGlyph => GlyphFor(status);
         public Brush StatusBrush => BrushFor(status);
-        public Visibility StatusVisibility => status == "online" ? Visibility.Collapsed : Visibility.Visible;
-        public double NameOpacity => status == "away" ? 0.55 : 1;
+        public Visibility StatusVisibility => status == "online" || invisible ? Visibility.Collapsed : Visibility.Visible;
+        public double NameOpacity => status == "away" || invisible ? 0.55 : 1;
         public string StatusLine => string.IsNullOrEmpty(note) ? StatusLabel(status) : note;
         public string Tip => (IsMe ? Name + " (you)" : Name) + " · " + RoleName(role)
             + (status != "online" ? " - " + StatusLabel(status) : "")
@@ -279,6 +384,9 @@ namespace ElansAddonHub.Lodge
 
         public Brush Color => Avatar.ColorFor(From);
         public string Initial => Avatar.Initial(From);
+        // the member behind the name (the hover card); null once they have left
+        public static Func<string, MemberVM> AuthorLookup;
+        public MemberVM Author => From == null ? null : AuthorLookup?.Invoke(From);
         public string Time
         {
             get

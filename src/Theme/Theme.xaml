@@ -296,6 +296,21 @@
     <Setter Property="BorderBrush" Value="{StaticResource Line}" />
   </Style>
 
+  <!-- a compact card instead of a text tooltip (people in the Lodge) -->
+  <Style x:Key="CardTip" TargetType="ToolTip">
+    <Setter Property="Foreground" Value="{StaticResource Text}" />
+    <Setter Property="HasDropShadow" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToolTip">
+          <Border Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="12,10">
+            <ContentPresenter />
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- ===================== Lodge controls ===================== -->
 
   <!-- text input with placeholder (Tag) -->

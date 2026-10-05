@@ -175,6 +175,8 @@ namespace ElansAddonHub
                         + $"\r\n{VoiceEngine.CodecSelfTest()}";
             }
             result += "\r\n" + await LodgeFeaturesTest(dir);
+            result += "\r\n" + await PresenceTest(dir);
+            result += "\r\n" + await ToastTest(dir);
             result += "\r\n" + await DialogTest(dir);
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
             Quit();
@@ -570,11 +572,17 @@ namespace ElansAddonHub
             if (!IsVisible) tray.ShowBalloonTip(5000, $"{card.Name} {card.Info.Version}", "An update is ready - click to open the hub.", WinForms.ToolTipIcon.None);
         }
 
+        string toastedUpdate;
         void ShowHubBanner()
         {
             var newer = SelfUpdater.IsNewer(manifest.Hub);
             HubBanner.Visibility = newer ? Visibility.Visible : Visibility.Collapsed;
             if (newer) HubBannerText.Text = $"Hub {manifest.Hub.Version} is ready.";
+            if (newer && toastedUpdate != manifest.Hub.Version)
+            {
+                toastedUpdate = manifest.Hub.Version;
+                Session.Toasts.Push(new ToastItem { Kind = ToastKind.Update, Sender = "Hub " + manifest.Hub.Version + " is ready", Text = "Open the Hub to update." });
+            }
         }
 
         void UpdateStatusText()

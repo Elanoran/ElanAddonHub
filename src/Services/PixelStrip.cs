@@ -11,12 +11,34 @@ namespace ElansAddonHub.Services
     // Cell 0 is a magenta marker (its width tells us the cell size in pixels), cells 1-4 are grey calibration
     // levels (0/85/170/255) so colour management or HDR tinting can't hurt, then 27 data cells of 6 bits
     // (2 bits per channel). Payload: magic A7, flags, classId, raceId, level, nameLen, name[12], 2 checksum bytes.
+    //
+    // Version 2 (companion 1.5+) adds a second row of 32 data cells directly below the first (same cell size, decoded with
+    // row 0's calibration): 24 bytes = magic B2, version 2, uiMapID (2), instanceID (2), flags1, flags2, xp %, group size,
+    // 12 reserved, 2 checksum bytes. Row 0 is unchanged except that flags bit 8 says "row 1 is present". An older hub reads
+    // row 0 only and never looks below it, so v1 and v2 hubs/companions mix in every combination: a v2 decoder without row 1
+    // (old companion, or a failed checksum there) simply returns the v1 fields.
+    //   flags1: 1 combat, 2 dead/ghost, 4 AFK, 8 resting, 16 in instance, 32 raid instance, 64 party instance, 128 in group
+    //   flags2: 1 combat flag valid, 2 xp valid, 4 rested, 8 group is a raid
     public static class StripCodec
     {
         public class Info
         {
             public int ClassId, RaceId, Level, Sex;
             public string Name;
+            // ---- v2 (HasV2 = row 1 decoded and checksummed)
+            public bool HasV2;
+            public int MapId, InstanceId, Flags1, Flags2, XpPercent, GroupSize;
+            public bool InCombat => HasV2 && (Flags2 & 1) != 0 && (Flags1 & 1) != 0;
+            public bool CombatKnown => HasV2 && (Flags2 & 1) != 0;
+            public bool Dead => HasV2 && (Flags1 & 2) != 0;
+            public bool Afk => HasV2 && (Flags1 & 4) != 0;
+            public bool Resting => HasV2 && (Flags1 & 8) != 0;
+            public bool InInstance => HasV2 && (Flags1 & 16) != 0;
+            public bool InGroup => HasV2 && (Flags1 & 128) != 0;
+            public bool XpKnown => HasV2 && (Flags2 & 2) != 0;
+            public bool Rested => HasV2 && (Flags2 & 4) != 0;
+            public bool V2Equals(Info o) => o != null && HasV2 == o.HasV2 && MapId == o.MapId && InstanceId == o.InstanceId && Flags1 == o.Flags1
+                && Flags2 == o.Flags2 && XpPercent == o.XpPercent && GroupSize == o.GroupSize;
             public string ClassFile => ClassFiles.TryGetValue(ClassId, out var c) ? c : null;
             public string ClassName => ClassNames.TryGetValue(ClassId, out var c) ? c : null;
             public string RaceFile => RaceFiles.TryGetValue(RaceId, out var c) ? c : null;
@@ -47,23 +69,49 @@ namespace ElansAddonHub.Services
         };
 
         // ---- encoder (the addon does this in Lua; the self-test uses it for synthetic strips)
-        public static byte[] BuildPayload(int classId, int raceId, int sex, int level, string name)
+        public static byte[] BuildPayload(int classId, int raceId, int sex, int level, string name, bool v2 = false)
         {
             var nb = Encoding.UTF8.GetBytes(name ?? "");
             int len = Math.Min(nb.Length, 12);
             while (len > 0 && len < nb.Length && (nb[len] & 0xC0) == 0x80) len--;
             var p = new byte[PayloadBytes];
-            p[0] = 0xA7; p[1] = (byte)(1 + (sex % 4) * 2); p[2] = (byte)classId; p[3] = (byte)raceId; p[4] = (byte)level; p[5] = (byte)len;
+            p[0] = 0xA7; p[1] = (byte)(1 + (sex % 4) * 2 + (v2 ? 8 : 0)); p[2] = (byte)classId; p[3] = (byte)raceId; p[4] = (byte)level; p[5] = (byte)len;
             Array.Copy(nb, 0, p, 6, len);
             Checksum(p, out p[18], out p[19]);
             return p;
         }
 
-        static void Checksum(byte[] p, out byte c1, out byte c2)
+        static void Checksum(byte[] p, out byte c1, out byte c2, int n = 18)
         {
             int s1 = 1, s2 = 0;
-            for (int i = 0; i < 18; i++) { s1 = (s1 + p[i]) % 251; s2 = (s2 + s1) % 251; }
+            for (int i = 0; i < n; i++) { s1 = (s1 + p[i]) % 251; s2 = (s2 + s1) % 251; }
             c1 = (byte)s1; c2 = (byte)s2;
+        }
+
+        public const int V2Bytes = 24;
+
+        public static byte[] BuildPayloadV2(int mapId, int instanceId, int flags1, int flags2, int xpPercent, int groupSize)
+        {
+            var q = new byte[V2Bytes];
+            q[0] = 0xB2; q[1] = 2; q[2] = (byte)(mapId >> 8); q[3] = (byte)mapId; q[4] = (byte)(instanceId >> 8); q[5] = (byte)instanceId;
+            q[6] = (byte)flags1; q[7] = (byte)flags2; q[8] = (byte)xpPercent; q[9] = (byte)groupSize;
+            Checksum(q, out q[22], out q[23], 22);
+            return q;
+        }
+
+        // the 32 colours of row 1 (data only; the calibration is row 0's)
+        public static byte[][] CellV2(byte[] payload2)
+        {
+            byte[] lv = { 0, 85, 170, 255 };
+            var cells = new byte[Cells][];
+            var bits = new int[Cells * 6];
+            for (int i = 0; i < payload2.Length; i++) for (int k = 0; k < 8; k++) bits[i * 8 + k] = (payload2[i] >> (7 - k)) & 1;
+            for (int c = 0; c < Cells; c++)
+            {
+                int o = c * 6;
+                cells[c] = new[] { lv[bits[o] * 2 + bits[o + 1]], lv[bits[o + 2] * 2 + bits[o + 3]], lv[bits[o + 4] * 2 + bits[o + 5]] };
+            }
+            return cells;
         }
 
         // the 32 cell colours (r,g,b per cell, 0..255)
@@ -101,11 +149,11 @@ namespace ElansAddonHub.Services
             int ym = y0 + w / 2;
             if (ym >= height || x0 + Cells * w > width) { why = "region too small"; return null; }
 
-            int[] Sample(int cell)
+            int[] Sample(int cell, int row = 0)
             {
-                int cx = x0 + cell * w + w / 2, rad = w >= 4 ? 1 : 0;
+                int cx = x0 + cell * w + w / 2, rad = w >= 4 ? 1 : 0, cy = ym + row * w;
                 int[] sum = new int[3]; int n = 0;
-                for (int yy = Math.Max(0, ym - rad); yy <= Math.Min(height - 1, ym + rad); yy++)
+                for (int yy = Math.Max(0, cy - rad); yy <= Math.Min(height - 1, cy + rad); yy++)
                     for (int xx = cx - rad; xx <= cx + rad; xx++)
                     { for (int c = 0; c < 3; c++) sum[c] += R(xx, yy, c); n++; }
                 return new[] { sum[0] / n, sum[1] / n, sum[2] / n };
@@ -135,11 +183,37 @@ namespace ElansAddonHub.Services
             Checksum(p, out var c1, out var c2);
             if (c1 != p[18] || c2 != p[19]) { why = "bad checksum"; return null; }
             if (p[5] > 12) { why = "bad name length"; return null; }
-            return new Info
+            var info = new Info
             {
                 Sex = (p[1] >> 1) & 3, ClassId = p[2], RaceId = p[3], Level = p[4],
                 Name = Encoding.UTF8.GetString(p, 6, p[5]),
             };
+
+            // v2: row 1, only when row 0 says it is there, the region is tall enough, and its own checksum holds
+            if ((p[1] & 8) != 0 && y0 + 2 * w <= height)
+            {
+                var bits2 = new int[Cells * 6];
+                for (int d = 0; d < Cells; d++)
+                {
+                    var s = Sample(d, 1);
+                    for (int c = 0; c < 3; c++)
+                    {
+                        int best = 0, bd = int.MaxValue;
+                        for (int k = 0; k < 4; k++) { int dd = Math.Abs(s[c] - refs[c][k]); if (dd < bd) { bd = dd; best = k; } }
+                        bits2[d * 6 + c * 2] = best >> 1; bits2[d * 6 + c * 2 + 1] = best & 1;
+                    }
+                }
+                var q = new byte[V2Bytes];
+                for (int i = 0; i < V2Bytes; i++) { int v = 0; for (int k = 0; k < 8; k++) v = v * 2 + bits2[i * 8 + k]; q[i] = (byte)v; }
+                Checksum(q, out var d1, out var d2, 22);
+                if (q[0] == 0xB2 && q[1] >= 2 && d1 == q[22] && d2 == q[23])
+                {
+                    info.HasV2 = true;
+                    info.MapId = q[2] * 256 + q[3]; info.InstanceId = q[4] * 256 + q[5];
+                    info.Flags1 = q[6]; info.Flags2 = q[7]; info.XpPercent = Math.Min(100, (int)q[8]); info.GroupSize = q[9];
+                }
+            }
+            return info;
         }
     }
 
@@ -162,7 +236,7 @@ namespace ElansAddonHub.Services
 
         public PixelStrip(Func<bool> enabled) { this.enabled = enabled; }
 
-        public void Start() { timer = new Timer(_ => Tick(), null, 1500, 2000); }
+        public void Start() { timer = new Timer(_ => Tick(), null, 1500, 1000); } // 1 s: combat and zone changes show up quickly
         public void Dispose() { timer?.Dispose(); timer = null; }
 
         int busy;
@@ -178,7 +252,8 @@ namespace ElansAddonHub.Services
                 if (info != null)
                 {
                     Latest = info; LastSeen = DateTime.UtcNow;
-                    if (old == null || old.Name != info.Name || old.Level != info.Level || old.ClassId != info.ClassId || old.RaceId != info.RaceId || old.Sex != info.Sex)
+                    if (old == null || old.Name != info.Name || old.Level != info.Level || old.ClassId != info.ClassId || old.RaceId != info.RaceId || old.Sex != info.Sex
+                        || !old.V2Equals(info))
                         Changed?.Invoke();
                 }
             }
@@ -235,7 +310,7 @@ namespace ElansAddonHub.Services
                 if (!GetClientRect(hwnd, out var rc)) { why = "no client rect"; return null; }
                 int cw = rc.Right - rc.Left, ch = rc.Bottom - rc.Top;
                 if (cw < 64 || ch < 16) { why = "tiny window"; return null; }
-                int w = Math.Min(cw, 300), h = Math.Min(ch, 12);
+                int w = Math.Min(cw, 300), h = Math.Min(ch, 40); // two rows of cells (up to ~16 px each)
                 var pt = new POINT { X = 0, Y = 0 };
                 ClientToScreen(hwnd, ref pt);
 

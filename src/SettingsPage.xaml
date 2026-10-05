@@ -178,6 +178,30 @@
                 <TextBlock Text="After 10 minutes without mouse or keyboard (also in WoW), back to Online when you return." Style="{StaticResource RowHint}" /></StackPanel>
               <CheckBox Grid.Column="1" x:Name="AutoAwayBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
             </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Share my zone" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Friends see where you are (zone or dungeon). Off = no zone or instance name is sent." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="ShareZoneBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Share my XP" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Friends see your XP percentage and whether you're rested. Off = neither is sent." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="ShareXpBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Set my Lodge status automatically" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="In combat shows as Busy (In combat) and goes back a few seconds after the fight; the game's AFK flag shows as AFK. A status you chose yourself is never changed." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="AutoStatusBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Remember Appear offline" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Keep &quot;Appear offline&quot; (pick it by clicking your name in the Lodge) after the hub restarts. Off = you're visible again at every start." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="RememberInvisibleBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
+            </Grid></Border>
           </StackPanel>
 
           <!-- ========== Voice ========== -->
@@ -252,6 +276,54 @@
               <CheckBox Grid.Column="1" x:Name="OverlayAlwaysBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click"  />
             </Grid></Border>
             <TextBlock Text="While you're in a voice room, the overlay shows here as a preview so you can place it." Style="{StaticResource RowHint}" />
+            <TextBlock Text="TOASTS" Style="{StaticResource Group}" Margin="0,18,0,6" />
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Show toasts over WoW" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Small cards for mentions and replies. None while you're in combat - they wait and arrive as one summary after the fight, and none for the channel you're looking at in the Hub." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="ToastsBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="When I'm @mentioned" Style="{StaticResource RowTitle}" />
+                </StackPanel>
+              <CheckBox Grid.Column="1" x:Name="ToastMentionBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="When someone replies to me" Style="{StaticResource RowTitle}" />
+                </StackPanel>
+              <CheckBox Grid.Column="1" x:Name="ToastReplyBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Reactions to my messages" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Off by default." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="ToastReactBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="New pinned messages" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="In channels you can see. Off by default." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="ToastPinBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Hub update ready" Style="{StaticResource RowTitle}" />
+                </StackPanel>
+              <CheckBox Grid.Column="1" x:Name="ToastUpdateBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Overlay_Click"  />
+            </Grid></Border>
+            <DockPanel Margin="0,8,0,8">
+              <TextBlock DockPanel.Dock="Left" Text="Corner" Style="{StaticResource RowTitle}" VerticalAlignment="Center" Margin="0,0,14,0" />
+              <Border Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="3" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton x:Name="ToastTL" Style="{StaticResource Segment}" Content="Top left" GroupName="tcorner" Checked="Overlay_Click" />
+                  <RadioButton x:Name="ToastTR" Style="{StaticResource Segment}" Content="Top right" GroupName="tcorner" Checked="Overlay_Click" />
+                  <RadioButton x:Name="ToastBL" Style="{StaticResource Segment}" Content="Bottom left" GroupName="tcorner" Checked="Overlay_Click" />
+                  <RadioButton x:Name="ToastBR" Style="{StaticResource Segment}" Content="Bottom right" GroupName="tcorner" Checked="Overlay_Click" />
+                </StackPanel>
+              </Border>
+            </DockPanel>
           </StackPanel>
 
           <!-- ========== Notifications ========== -->

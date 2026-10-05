@@ -71,17 +71,50 @@ namespace ElansAddonHub.Lodge
         public Func<bool> IsShownToUser;                   // the Lodge tab is visible and the window active
 
         public readonly GamePresence Presence;
+        public readonly AutoStatus Auto = new AutoStatus();
+        public Func<DateTime> Clock = () => DateTime.UtcNow;   // tests drive time
+        readonly DispatcherTimer gameTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+        string lastGameJson;
 
         public LodgeSession(Settings settings)
         {
             Settings = settings;
             Presence = new GamePresence(() => settings.WowRoot, () => !settings.PixelOff);
             AvatarArt.Root = () => settings.WowRoot;
-            Presence.Changed += SendGame;
+            if (settings.InvisibleForget) settings.LodgeInvisible = false; // "Appear offline" is not remembered across restarts
+            MessageVM.AuthorLookup = name => Members.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+            // presence changes (zone, combat, XP...) are sent at most every ~1 s, and only when the message really differs
+            gameTimer.Tick += (s, e) => { gameTimer.Stop(); SendGame(); };
+            Presence.Changed += () => { PresenceChanged?.Invoke(); if (!gameTimer.IsEnabled) gameTimer.Start(); };
             Presence.Start();
             tick.Tick += (s, e) => OnTick();
             Sounds.Off = settings.SoundsOff;
+            InitToasts();
         }
+
+        public event Action PresenceChanged;                 // my own character / flags changed (the toasts use it)
+        public ToastCenter Toasts { get; private set; }
+
+        void InitToasts()
+        {
+            Toasts = new ToastCenter(Settings)
+            {
+                InCombat = () => Presence.Current != null && Presence.Current.InCombat,
+                ChannelOnScreen = ch => Selected != null && Selected.Id == ch && (IsShownToUser?.Invoke() ?? false) && (IsAtBottom?.Invoke() ?? true),
+            };
+        }
+
+        void ToastFor(ToastKind kind, MessageVM vm, string who, string text)
+        {
+            var ch = TextChannels.FirstOrDefault(c => c.Id == vm.Channel);
+            Toasts.Push(new ToastItem
+            {
+                Kind = kind, Sender = who, Channel = ch?.Name, ChannelId = vm.Channel, Text = text,
+                Who = Members.FirstOrDefault(m => string.Equals(m.Name, who, StringComparison.OrdinalIgnoreCase)),
+            });
+        }
+
+        static string OneLine(string t) { t = (t ?? "").Replace("\r", " ").Replace("\n", " "); return t.Length > 90 ? t.Substring(0, 90) + "..." : t; }
 
         public ObservableCollection<MessageVM> MessagesOf(string channel)
         {
@@ -129,7 +162,7 @@ namespace ElansAddonHub.Lodge
         public void Connect(string url, string code)
         {
             Disconnect();
-            client = new LodgeClient(url, code, Settings.LodgeName ?? Environment.UserName);
+            client = new LodgeClient(url, code, Settings.LodgeName ?? Environment.UserName) { Invisible = () => Invisible };
             client.Status += (text, online) =>
             {
                 StatusText = online ? OnlineText : text;
@@ -195,6 +228,7 @@ namespace ElansAddonHub.Lodge
                     var oldRoom = mem.Room;
                     mem.Room = u.Room; mem.Muted = u.Muted; mem.Deaf = u.Deaf; mem.ServerMuted = u.ServerMuted;
                     mem.Status = u.Status; mem.Note = u.Note; mem.Role = u.Role;
+                    mem.Invisible = mem.IsMe ? Invisible : u.Invisible;
                     ApplyGame(mem, m.Child("user").Child("game"));
                     if (!mem.Voice) voice?.RemovePeer(mem.Id);
                     if (!mem.IsMe && MyRoom != null && oldRoom != mem.Room)
@@ -216,7 +250,13 @@ namespace ElansAddonHub.Lodge
                     break;
                 case "react":
                     var rm = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
-                    if (rm != null) ApplyReaction(rm, m.Str("reaction") ?? m.Str("emoji"), m.List("users").OfType<string>().ToArray());
+                    if (rm != null)
+                    {
+                        ApplyReaction(rm, m.Str("reaction") ?? m.Str("emoji"), m.List("users").OfType<string>().ToArray());
+                        var by = m.Str("by");
+                        if (rm.Mine && m.Bool("on") && by != null && !string.Equals(by, Me?.Name, StringComparison.OrdinalIgnoreCase))
+                            ToastFor(ToastKind.Reaction, rm, by, "reacted \"" + ReactionArt.Name(m.Str("reaction") ?? m.Str("emoji")) + "\" to: " + OneLine(rm.Text));
+                    }
                     break;
                 case "pin":
                     var pc = m.Str("channel");
@@ -224,6 +264,9 @@ namespace ElansAddonHub.Lodge
                     if (pc == null || pv == null) break;
                     var plist = PinsOf(pc);
                     var old = plist.FirstOrDefault(x => x.Id == pv.Id);
+                    if (old == null && TextChannels.Any(c => c.Id == pc) && !string.Equals(pv.PinnedBy, Me?.Name, StringComparison.OrdinalIgnoreCase))
+                        Toasts.Push(new ToastItem { Kind = ToastKind.Pin, Sender = pv.PinnedBy ?? "Someone", Channel = TextChannels.First(c => c.Id == pc).Name, ChannelId = pc,
+                            Text = "pinned: " + OneLine(pv.Shown), Who = Members.FirstOrDefault(x => string.Equals(x.Name, pv.PinnedBy, StringComparison.OrdinalIgnoreCase)) });
                     if (old != null) plist.Remove(old);
                     plist.Add(pv);
                     var pm = MessagesOf(pc).FirstOrDefault(x => x.Id == pv.Id);
@@ -286,6 +329,7 @@ namespace ElansAddonHub.Lodge
                 Members.Add(mem);
             }
             Me = Members.FirstOrDefault(x => x.IsMe);
+            if (Me != null) Me.Invisible = Invisible;
 
             // channels: a 1.x server has none - pretend it has one text channel and one room
             var chans = m.List("channels").OfType<Dictionary<string, object>>().ToList();
@@ -339,8 +383,12 @@ namespace ElansAddonHub.Lodge
             else if (MyRoom != null) SendVoice(MyRoom); // reconnected while in voice
             SyncRooms();
             StatusText = OnlineText;
-            if (MyStatus != "online" || !string.IsNullOrEmpty(Settings.LodgeNote)) SendStatus();
+            Auto.MarkSent(Clock(), "online", "");                // a fresh connection starts as Online on the server
+            EvaluateAuto();
+            if (Auto.Status != "online" || Auto.Note.Length > 0 || Invisible) SendStatus();
+            lastGameJson = null;
             SendGame();
+            foreach (var r in VoiceRooms) r.InvisibleHint = Invisible;
             Changed?.Invoke();
         }
 
@@ -352,28 +400,52 @@ namespace ElansAddonHub.Lodge
             {
                 Id = u.Int("id"), Name = u.Str("name"), Guest = u.Bool("guest"), IsMe = Me != null && u.Int("id") == Me.Id,
                 Room = room, Muted = u.Bool("muted"), Deaf = u.Bool("deaf"), ServerMuted = u.Bool("serverMuted"),
-                Status = u.Str("status"), Note = u.Str("note"), Role = u.Str("role"),
+                Status = u.Str("status"), Note = u.Str("note"), Role = u.Str("role"), Invisible = u.Bool("invisible"),
             };
             ApplyGame(m, u.Child("game"));
             return m;
         }
 
-        static void ApplyGame(MemberVM m, Dictionary<string, object> g) =>
-            m.SetGame(g != null && g.Bool("playing"), g?.Str("name"), g?.Str("class"), g?.Str("classFile"), g?.Int("level") ?? 0, g?.Str("zone"), g?.Str("guild"), g?.Str("race"), g?.Str("raceFile"), g?.Int("sex") ?? 0);
-
-        // rich presence: WoW running + the character from the Elan's Hub addon (unless sharing is off)
-        public void SendGame()
+        static void ApplyGame(MemberVM m, Dictionary<string, object> g)
         {
-            if (!Online) return;
-            if (Settings.ShareGameOff) { _ = Send(new Dictionary<string, object> { ["t"] = "game", ["share"] = false }); return; }
+            m.SetGame(g != null && g.Bool("playing"), g?.Str("name"), g?.Str("class"), g?.Str("classFile"), g?.Int("level") ?? 0, g?.Str("zone"), g?.Str("guild"), g?.Str("race"), g?.Str("raceFile"), g?.Int("sex") ?? 0);
+            bool xp = g != null && g.TryGetValue("xpPct", out var xv) && xv is double;
+            m.SetPresence(g?.Int("flags") ?? 0, xp ? g.Int("xpPct") : -1, g?.Bool("rested") ?? false, g?.Int("groupSize") ?? 0, g?.Bool("inInstance") ?? false, g?.Str("instanceName"));
+        }
+
+        // the "game" message: what I play and what I'm doing (older servers ignore the extra fields). Zone/instance and XP/rested are
+        // left out when their sharing is off; the flags (combat, dead, AFK, group) always go.
+        public Dictionary<string, object> BuildGameMessage()
+        {
+            var vis = Invisible ? "invisible" : "visible";
+            if (Settings.ShareGameOff) return new Dictionary<string, object> { ["t"] = "game", ["share"] = false, ["visibility"] = vis };
             var c = Presence.Current;
-            var obj = new Dictionary<string, object> { ["t"] = "game", ["playing"] = Presence.Playing };
+            var obj = new Dictionary<string, object> { ["t"] = "game", ["playing"] = Presence.Playing, ["visibility"] = vis };
             if (c != null)
             {
                 obj["name"] = c.Name; obj["realm"] = c.Realm; obj["class"] = c.Class; obj["classFile"] = c.ClassFile;
-                obj["level"] = c.Level; obj["zone"] = c.Zone; obj["guild"] = c.Guild;
+                obj["level"] = c.Level; obj["guild"] = c.Guild;
                 obj["race"] = c.Race; obj["raceFile"] = c.RaceFile; obj["sex"] = c.Sex;
+                if (!Settings.ShareZoneOff) obj["zone"] = c.Zone;
+                if (c.HasLive)
+                {
+                    int flags = c.CombatKnown ? c.Flags : c.Flags & ~1;
+                    obj["flags"] = flags; obj["groupSize"] = c.GroupSize; obj["inInstance"] = c.InInstance;
+                    if (!Settings.ShareZoneOff && c.InstanceName != null) obj["instanceName"] = c.InstanceName;
+                    if (!Settings.ShareXpOff) { if (c.XpPercent >= 0) obj["xpPct"] = c.XpPercent; obj["rested"] = c.Rested; }
+                }
             }
+            return obj;
+        }
+
+        // sent right away when something I chose changes, and by the 0.8 s timer for live changes; identical messages are skipped
+        public void SendGame()
+        {
+            if (!Online) return;
+            var obj = BuildGameMessage();
+            var json = Json.Write(obj);
+            if (json == lastGameJson) return;
+            lastGameJson = json;
             _ = Send(obj);
         }
 
@@ -388,7 +460,7 @@ namespace ElansAddonHub.Lodge
                 r.IAmHere = r.Id == MyRoom;
                 r.RefreshCount();
             }
-            foreach (var x in Members) x.InMyRoom = MyRoom != null && x.Room == MyRoom;
+            foreach (var x in Members) { x.InMyRoom = MyRoom != null && x.Room == MyRoom; x.RoomName = x.Room == null ? null : VoiceRooms.FirstOrDefault(r => r.Id == x.Room)?.Name; }
         }
 
         // ================================================================ messages
@@ -451,6 +523,9 @@ namespace ElansAddonHub.Lodge
                 UnreadChanged?.Invoke(true);
             }
             if (shown) looking = true; // (notifications: the window is looking at this channel)
+            if (vm.Mentioned) ToastFor(ToastKind.Mention, vm, vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : OneLine(vm.Text));
+            else if (Me != null && vm.ReplyFrom != null && string.Equals(vm.ReplyFrom, Me.Name, StringComparison.OrdinalIgnoreCase))
+                ToastFor(ToastKind.Reply, vm, vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : OneLine(vm.Text));
             var mode = Settings.NotifyMode ?? "mentions";
             if (vm.Mentioned && mode != "none") Sounds.Mention();
             if (!looking && (mode == "all" || (mode == "mentions" && vm.Mentioned)))
@@ -621,6 +696,13 @@ namespace ElansAddonHub.Lodge
 
         public Task SendMessage(string text, string replyTo = null, string fileId = null)
         {
+            // appearing offline: messages still carry my name - say so once
+            if (Invisible && !Settings.InvisibleHintShown)
+            {
+                Settings.InvisibleHintShown = true;
+                SettingsStore.Save(Settings);
+                Error?.Invoke("Others can see messages you send, even while you appear offline");
+            }
             var obj = new Dictionary<string, object> { ["t"] = "msg", ["channel"] = Selected?.Id, ["text"] = text ?? "" };
             if (replyTo != null) obj["replyTo"] = replyTo;
             if (fileId != null) obj["file"] = new Dictionary<string, object> { ["id"] = fileId };
@@ -764,12 +846,22 @@ namespace ElansAddonHub.Lodge
             foreach (var m in Members)
                 m.Speaking = MyRoom != null && m.Room == MyRoom && voice != null && (m.IsMe ? voice.Transmitting : voice.IsSpeaking(m.Id));
             if (tickCount % 50 == 0) CheckIdle();
+            AutoStatusTick();
+            Toasts.Tick();
         }
+
+        // test hooks for the automatic status
+        public void TickForTest() => AutoStatusTick();
+        public void SetIdleAwayForTest(bool on) => autoAway = on;
 
         // ================================================================ status
 
-        bool autoAway;
-        public string MyStatus => autoAway ? "away" : string.IsNullOrEmpty(Settings.LodgeStatus) ? "online" : Settings.LodgeStatus;
+        bool autoAway;   // no mouse/keyboard for 10 minutes
+        public bool Invisible => Settings.LodgeInvisible;
+        // what I show right now: my own choice, or the automatic one (In combat / AFK) when I haven't chosen
+        public string MyStatus { get { EvaluateAuto(); return Auto.Status; } }
+        public string MyNote { get { EvaluateAuto(); return Auto.Note; } }
+        public bool MyStatusIsAuto { get { EvaluateAuto(); return Auto.IsAuto; } }
 
         public void SetMyStatus(string status, string note)
         {
@@ -780,8 +872,43 @@ namespace ElansAddonHub.Lodge
             SendStatus();
         }
 
-        void SendStatus() =>
-            _ = Send(new Dictionary<string, object> { ["t"] = "status", ["status"] = MyStatus, ["note"] = Settings.LodgeNote ?? "" });
+        // "Appear offline" on/off: kept in the settings; the server hides me from everyone who isn't allowed to see invisible members
+        public void SetInvisible(bool on)
+        {
+            if (Settings.LodgeInvisible == on) return;
+            Settings.LodgeInvisible = on;
+            SettingsStore.Save(Settings);
+            if (Me != null) Me.Invisible = on;
+            foreach (var r in VoiceRooms) r.InvisibleHint = on;
+            SendStatus();
+            lastGameJson = null; SendGame();
+            Changed?.Invoke();
+        }
+
+        void EvaluateAuto()
+        {
+            var c = Presence.Current;
+            Auto.Evaluate(Clock(), !Settings.AutoStatusOff, c != null && c.InCombat, c != null && c.Afk, autoAway, Settings.LodgeStatus, Settings.LodgeNote);
+        }
+
+        void SendStatus()
+        {
+            EvaluateAuto();
+            Auto.MarkSent(Clock(), Auto.Status, Auto.Note);
+            _ = Send(new Dictionary<string, object> { ["t"] = "status", ["status"] = Auto.Status, ["note"] = Auto.Note, ["visibility"] = Invisible ? "invisible" : "visible" });
+        }
+
+        // every 100 ms: send an automatic status change when it really changed (debounced to 2 s)
+        void AutoStatusTick()
+        {
+            if (!Online) return;
+            EvaluateAuto();
+            if (Auto.TrySend(Clock(), out var st, out var note))
+            {
+                _ = Send(new Dictionary<string, object> { ["t"] = "status", ["status"] = st, ["note"] = note, ["visibility"] = Invisible ? "invisible" : "visible" });
+                Changed?.Invoke();
+            }
+        }
 
         [StructLayout(LayoutKind.Sequential)] struct LastInput { public uint cbSize, dwTime; }
         [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LastInput li);
@@ -798,8 +925,8 @@ namespace ElansAddonHub.Lodge
             if (!Online) return;
             var idle = IdleSeconds();
             var chosen = string.IsNullOrEmpty(Settings.LodgeStatus) ? "online" : Settings.LodgeStatus;
-            if (!Settings.AutoAwayOff && !autoAway && chosen == "online" && idle > 600) { autoAway = true; SendStatus(); }
-            else if (autoAway && (idle < 5 || Settings.AutoAwayOff)) { autoAway = false; SendStatus(); }
+            if (!Settings.AutoAwayOff && !autoAway && chosen == "online" && idle > 600) autoAway = true;      // AutoStatusTick sends it
+            else if (autoAway && (idle < 5 || Settings.AutoAwayOff)) autoAway = false;
         }
 
         // ================================================================ officers and the guild master
