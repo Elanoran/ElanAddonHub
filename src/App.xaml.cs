@@ -43,6 +43,8 @@ namespace ElansAddonHub
             var test = Array.IndexOf(e.Args, "--selftest");
             var sheet = Array.IndexOf(e.Args, "--iconsheet");
             if (sheet >= 0 && sheet + 1 < e.Args.Length) { IconSheet.Render(e.Args[sheet + 1]); Shutdown(); return; }
+            var frames = Array.IndexOf(e.Args, "--splashframes");
+            if (frames >= 0 && frames + 1 < e.Args.Length) { Splash.RenderFrames(e.Args[frames + 1]); Shutdown(); return; }
             var testDir = test >= 0 && test + 1 < e.Args.Length ? e.Args[test + 1] : null;
             if (testDir != null)
             {
@@ -79,7 +81,24 @@ namespace ElansAddonHub
                 ex.Handled = true;
             };
 
-            var main = new MainWindow();
+            // the splash (own UI thread) goes up first so it is already animating while the main window is built.
+            // Never for the quiet tray start, the self-test or the self-update test; after a self-update it says so.
+            var quiet = e.Args.Contains("--tray") || e.Args.Contains("--test-selfupdate") || testDir != null;
+            var splash = false;
+            if (!quiet)
+            {
+                try
+                {
+                    if (!SettingsStore.Load().NoSplash)
+                    {
+                        splash = true;
+                        Splash.Start(() => { try { main?.FadeIn(); } catch { } });
+                        if (e.Args.Contains("--updated")) Splash.Step("Updated to v" + Version);
+                    }
+                }
+                catch (Exception ex) { Util.Log("splash start failed: " + ex.Message); splash = false; }
+            }
+            main = new MainWindow();
             MainWindow = main;
             var thread = new Thread(() =>
             {
@@ -90,7 +109,10 @@ namespace ElansAddonHub
             if (testDir != null) _ = main.SelfTest(testDir);
             else if (e.Args.Contains("--test-selfupdate")) { main.Show(); _ = main.TestSelfUpdate(); }
             else if (e.Args.Contains("--tray")) main.StartHidden();
+            else if (splash) { main.StartWithSplash(); }
             else main.Show();
         }
+
+        MainWindow main;
     }
 }

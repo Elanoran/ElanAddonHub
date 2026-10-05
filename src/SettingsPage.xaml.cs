@@ -80,6 +80,7 @@ namespace ElansAddonHub
             AutoUpdateBox.IsChecked = s.AutoUpdate;
             CfAutoBox.IsChecked = s.CfAutoCheck;
             PaintedBox.IsChecked = s.PaintedArt;
+            SplashBox.IsChecked = !s.NoSplash;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
             AutoAwayBox.IsChecked = !s.AutoAwayOff;
             ShareGameBox.IsChecked = !s.ShareGameOff;
@@ -198,6 +199,7 @@ namespace ElansAddonHub
             settings.RunInBackground = BackgroundBox.IsChecked == true;
             settings.AutoUpdate = AutoUpdateBox.IsChecked == true;
             settings.CfAutoCheck = CfAutoBox.IsChecked == true;
+            settings.NoSplash = SplashBox.IsChecked != true;
             bool art = PaintedBox.IsChecked == true;
             bool artChanged = settings.PaintedArt != art;
             settings.PaintedArt = art;

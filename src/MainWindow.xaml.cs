@@ -480,6 +480,44 @@ namespace ElansAddonHub
             _ = CheckNow();
         }
 
+        // started with the splash screen: the window is built and shown fully transparent, the splash hands over (FadeIn) when it
+        // fades out. The steps it shows are the real ones; nothing here waits for the splash, and a timer guarantees the window appears.
+        bool faded;
+        public void StartWithSplash()
+        {
+            Opacity = 0;
+            Show();
+            var guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4.5) };
+            guard.Tick += (s, e) => { guard.Stop(); FadeIn(); };
+            guard.Start();
+            _ = SplashFlow();
+        }
+
+        public void FadeIn()
+        {
+            if (faded) return;
+            faded = true;
+            BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(Opacity, 1, TimeSpan.FromSeconds(0.3))
+                { FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop });
+            Opacity = 1;
+        }
+
+        async Task SplashFlow()
+        {
+            try
+            {
+                Splash.Step("Checking for updates...");
+                for (int i = 0; i < 30 && (checking || (manifest == null && lastError == null)); i++) await Task.Delay(100);
+                if (!string.IsNullOrEmpty(settings.LodgeUrl) && !settings.LodgeManualConnect)
+                {
+                    Splash.Step("Connecting to the Lodge...");
+                    for (int i = 0; i < 8 && !Session.Online; i++) await Task.Delay(100);
+                }
+            }
+            catch (Exception e) { Util.Log("splash flow: " + e.Message); }
+            finally { Splash.Ready(); }
+        }
+
         public void ShowFromTray()
         {
             Show();

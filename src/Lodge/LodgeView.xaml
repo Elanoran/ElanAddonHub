@@ -67,6 +67,13 @@
         </DockPanel>
       </Border>
     </DataTemplate>
+    <!-- sidebar section headers (TEXT CHANNELS / VOICE ROOMS / ONLINE): gold-tinted (green clashed with the selected row and class colours) so the sections stand apart -->
+    <Style x:Key="SectionHeader" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+      <Setter Property="Foreground" Value="{StaticResource Gold}" />
+      <Setter Property="Opacity" Value="0.8" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
   </UserControl.Resources>
 
   <Grid>
@@ -123,7 +130,7 @@
 
           <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="6,0,4,6">
             <StackPanel>
-              <TextBlock Text="TEXT CHANNELS" Style="{StaticResource Caption}" Margin="8,6,0,4" />
+              <TextBlock Text="TEXT CHANNELS" Style="{StaticResource SectionHeader}" Margin="8,6,0,4" />
               <ItemsControl x:Name="TextList">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
@@ -156,7 +163,7 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
 
-              <TextBlock Text="VOICE ROOMS" Style="{StaticResource Caption}" Margin="8,14,0,4" />
+              <TextBlock Text="VOICE ROOMS" Style="{StaticResource SectionHeader}" Margin="8,14,0,4" />
               <ItemsControl x:Name="RoomList">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
@@ -185,7 +192,7 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
 
-              <TextBlock x:Name="OnlineCaption" Text="ONLINE" Style="{StaticResource Caption}" Margin="8,14,0,4" />
+              <TextBlock x:Name="OnlineCaption" Text="ONLINE" Style="{StaticResource SectionHeader}" Margin="8,14,0,4" />
               <ItemsControl x:Name="OnlineList" ItemTemplate="{StaticResource PersonRow}" />
             </StackPanel>
           </ScrollViewer>

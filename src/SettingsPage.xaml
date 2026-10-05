@@ -144,6 +144,12 @@
             </Grid></Border>
             <Border Style="{StaticResource RowBox}"><Grid>
               <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Show splash screen" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="A short campfire animation while the Outpost starts. Never shown when it starts quietly in the tray." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="SplashBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click"  />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
               <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Card artwork: painted pictures" Style="{StaticResource RowTitle}" />
                 <TextBlock Text="Off = the clean vector icons (default). On = the original painted pictures on the addon cards." Style="{StaticResource RowHint}" /></StackPanel>
               <CheckBox Grid.Column="1" x:Name="PaintedBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click"  />
