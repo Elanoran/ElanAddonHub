@@ -134,7 +134,8 @@ namespace ElansAddonHub.Lodge
             Raise(nameof(DefaultVisibility)); Raise(nameof(BadgeVisibility)); Raise(nameof(BadgeRing)); Raise(nameof(BadgeText)); Raise(nameof(BadgeTextVisibility));
         }
         // what a message row needs to know about its author's badge: changes when they log in/out of the game or switch class
-        public string BadgeKey => (HasAvatar ? avatarId + "/" + accent : "") + "|" + (BadgeVisibility == Visibility.Visible ? gameClassFile : "");
+        // (also covers the default look: class icon / race code / class colour, so chat rows match the member list)
+        public string BadgeKey => (HasAvatar ? avatarId + "/" + accent : "") + "|" + (playing ? gameClassFile + "/" + gameRaceFile : "");
 
         static string RaceCode(string raceFile) => RaceCodes.TryGetValue(raceFile, out var c) ? c : raceFile.Substring(0, Math.Min(2, raceFile.Length));
 
@@ -424,8 +425,9 @@ namespace ElansAddonHub.Lodge
         public bool Edited { get => edited; set { if (Set(ref edited, value)) Raise(nameof(EditedVisibility)); } }
         public bool Mentioned { get => mentioned; set { if (Set(ref mentioned, value)) { Raise(nameof(RowBackground)); Raise(nameof(MentionBar)); } } }
 
-        public Brush Color => Avatar.ColorFor(From);
-        public string Initial => Avatar.Initial(From);
+        // the default look follows the author while they are here (class colour, class icon / race code), like the member list
+        public Brush Color => Author?.Color ?? Avatar.ColorFor(From);
+        public string Initial => Author?.Initial ?? Avatar.Initial(From);
         // the member behind the name (the hover card); null once they have left
         public static Func<string, MemberVM> AuthorLookup;
         public MemberVM Author => From == null ? null : AuthorLookup?.Invoke(From);
@@ -436,8 +438,8 @@ namespace ElansAddonHub.Lodge
         public ImageSource AvatarImage => AvatarCatalog.Image(AvId, Author != null ? Author.Accent : KnownAvatar?[1]);
         public Visibility PersonalVisibility => AvatarImage != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility DefaultVisibility => AvatarImage != null ? Visibility.Collapsed : Visibility.Visible;
-        public Brush IconBrush => null;
-        public Visibility InitialVisibility => Visibility.Visible;
+        public Brush IconBrush => Author?.IconBrush;
+        public Visibility InitialVisibility => IconBrush != null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility BadgeVisibility => Author?.BadgeVisibility ?? Visibility.Collapsed;
         public Brush BadgeRing => Author?.BadgeRing;
         public string BadgeText => Author?.BadgeText;
@@ -452,6 +454,7 @@ namespace ElansAddonHub.Lodge
         {
             Raise(nameof(AvatarImage)); Raise(nameof(PersonalVisibility)); Raise(nameof(DefaultVisibility)); Raise(nameof(BadgeVisibility));
             Raise(nameof(BadgeRing)); Raise(nameof(BadgeText)); Raise(nameof(BadgeTextVisibility)); Raise(nameof(Author));
+            Raise(nameof(Color)); Raise(nameof(Initial)); Raise(nameof(IconBrush)); Raise(nameof(InitialVisibility));
         }
         public string Time
         {
