@@ -563,18 +563,41 @@
           <!-- ========== About ========== -->
           <StackPanel x:Name="SecAbout" Visibility="Collapsed">
             <TextBlock Text="About" Style="{StaticResource SectionTitle}" />
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-              <Image Source="Assets/hub.png" Width="44" Height="44" RenderOptions.BitmapScalingMode="HighQuality" />
-              <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="{x:Static app:Brand.Name}" FontSize="15" FontWeight="SemiBold" />
-                <TextBlock x:Name="AboutVersion" Style="{StaticResource RowHint}" />
-              </StackPanel>
+            <StackPanel HorizontalAlignment="Left" Margin="0,0,0,14">
+              <Viewbox Width="480" Height="300" Stretch="Uniform" HorizontalAlignment="Left"><Border x:Name="AboutHost" Width="480" Height="300" /></Viewbox>
+              <TextBlock Margin="4,6,0,0"><Hyperlink x:Name="ReplayLink" Click="Replay_Click" Foreground="{StaticResource TextDim}">Replay</Hyperlink></TextBlock>
+              <TextBlock x:Name="AboutVersion" Visibility="Collapsed" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
               <Button Style="{StaticResource SecondaryButton}" Content="Open log folder" Click="LogFolder_Click" />
               <Button Style="{StaticResource SecondaryButton}" Content="GitHub page" Margin="8,0,0,0" Click="GitHub_Click" />
             </StackPanel>
-            <TextBlock Style="{StaticResource RowHint}" Text="Pet data: Petopia Forever. NPC data: Questie. Hunter spells: WoW Forever Tools. Voice: NAudio and Concentus (Opus). World of Warcraft belongs to Blizzard Entertainment - this is a fan project." />
+            <TextBlock Text="CREDITS" Style="{StaticResource RowHint}" FontWeight="Bold" Margin="0,6,0,8" />
+            <ItemsControl Margin="0,0,0,10"><ItemsControl.Items>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Pet data" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://www.wow-petopia.com/forever/" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">Petopia Forever</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="NPC data" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://github.com/Questie/Questie" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">Questie / QuestieDB</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Hunter and paladin spells" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://wowforevertools.com" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">WoW Forever Tools</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Talent builds" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://talentsforever.com" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">talentsforever.com (CC BY 4.0)</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Minimap math" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://github.com/Nevcairiel/HereBeDragons" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">HereBeDragons</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Addon suggestions" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://www.wowinterface.com" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">WoWInterface (public file list)</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Voice" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://github.com/naudio/NAudio" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">NAudio</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://github.com/lostromb/concentus" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">Concentus (Opus)</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Single exe" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://github.com/Fody/Costura" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">Costura</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Icons" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}"><Hyperlink NavigateUri="https://github.com/primer/octicons" RequestNavigate="Link_Navigate" Foreground="{StaticResource Text}">Octicons (GitHub mark)</Hyperlink></TextBlock></Grid>
+              <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="Splash and artwork" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}">Original, made for this project</TextBlock></Grid>
+            </ItemsControl.Items></ItemsControl>
+            <TextBlock Style="{StaticResource RowHint}" FontSize="11" Opacity="0.75" TextWrapping="Wrap" MaxWidth="480" Text="World of Warcraft is a trademark of Blizzard Entertainment. Elan's Outpost is a fan project and not affiliated with Blizzard." />
           </StackPanel>
         </Grid>
       </ScrollViewer>

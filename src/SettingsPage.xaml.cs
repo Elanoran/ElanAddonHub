@@ -121,6 +121,7 @@ namespace ElansAddonHub
             NewMinRole.ItemsSource = ChannelRanks;
             NewMinRole.SelectedItem = ChannelRanks.First();
             AboutVersion.Text = $"Version {App.Version}";
+            InitAbout();
             loading = false;
             UpdateLabels();
 
@@ -143,9 +144,50 @@ namespace ElansAddonHub
         public void Show(string section)
         {
             var nav = section == "folder" ? NavGeneral : section == "addons" ? NavAddons : section == "lodge" ? NavLodge : section == "profile" ? NavProfile : section == "voice" ? NavVoice
-                    : section == "overlay" ? NavOverlay : section == "gm" ? NavGm : NavGeneral;
+                    : section == "overlay" ? NavOverlay : section == "gm" ? NavGm : section == "about" ? NavAbout : NavGeneral;
             nav.IsChecked = true;
             RefreshSection();
+        }
+
+        // ---- About: the campfire scene, live, only while the page is on screen
+        SplashScene aboutScene;
+        System.Windows.Threading.DispatcherTimer aboutTimer;
+        readonly System.Diagnostics.Stopwatch aboutClock = new System.Diagnostics.Stopwatch();
+        bool AboutStill => !SystemParameters.ClientAreaAnimation;
+
+        void InitAbout()
+        {
+            aboutScene = new SplashScene(Brand.Name);
+            AboutHost.Child = aboutScene;
+            aboutTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
+            aboutTimer.Tick += (s, e) => aboutScene.Update(aboutClock.Elapsed.TotalSeconds);
+            SecAbout.IsVisibleChanged += (s, e) => AboutRun();
+            Loaded += (s, e) => { var w = Window.GetWindow(this); if (w != null) w.StateChanged += (s2, e2) => AboutRun(); };
+            UpdateAbout();
+        }
+
+        void AboutRun()
+        {
+            var w = Window.GetWindow(this);
+            var on = SecAbout.IsVisible && IsVisible && (w == null || w.WindowState != WindowState.Minimized) && !AboutStill;
+            if (on && !aboutTimer.IsEnabled) { aboutClock.Restart(); UpdateAbout(); aboutTimer.Start(); }
+            else if (!on && aboutTimer.IsEnabled) { aboutTimer.Stop(); aboutClock.Stop(); }
+            if (AboutStill && SecAbout.IsVisible) { UpdateAbout(); aboutScene.Update(3.0); }
+        }
+
+        void UpdateAbout()
+        {
+            if (aboutScene == null) return;
+            var st = host.HubUpdateStatus;
+            aboutScene.SetStatus($"Version {App.Version}  ·  {st}", AboutStill ? -10 : aboutClock.Elapsed.TotalSeconds, 1);
+            if (AboutStill) aboutScene.Update(3.0);
+        }
+
+        void Replay_Click(object sender, RoutedEventArgs e)
+        {
+            if (AboutStill) return;
+            aboutClock.Restart(); UpdateAbout();
+            if (!aboutTimer.IsEnabled) aboutTimer.Start();
         }
 
         void Nav_Checked(object sender, RoutedEventArgs e) => RefreshSection();
@@ -169,7 +211,7 @@ namespace ElansAddonHub
                 : $"You're {session.Me.Name}, {MemberVM.RoleName(session.MyRole)} - {session.StatusText}";
             if (NavProfile.IsChecked == true) ProfileEnter();
             UpdateProfileBar();
-            AboutVersion.Text = $"Version {App.Version}" + (string.IsNullOrEmpty(host.CheckStatus) ? "" : "  ·  " + host.CheckStatus);
+            UpdateAbout();
             if (NavGm.IsChecked == true) { GmStatus.Text = ""; session.RequestAdmin(); }
             var c = session.Presence.Current;
             ShareGameHint.Text = (session.Presence.Playing ? "WoW is running. " : "")
@@ -421,6 +463,12 @@ namespace ElansAddonHub
         // ================================================================ about
 
         void LogFolder_Click(object sender, RoutedEventArgs e) => OpenFolder(Util.DataDir);
+        void Link_Navigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { }
+            e.Handled = true;
+        }
+
         void GitHub_Click(object sender, RoutedEventArgs e) =>
             Process.Start(new ProcessStartInfo("https://github.com/Elanoran/ElanAddonHub") { UseShellExecute = true });
 

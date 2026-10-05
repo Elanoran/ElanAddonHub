@@ -92,6 +92,8 @@ The addon stands on the work of others - thank you!
 - **[HereBeDragons](https://github.com/Nevcairiel/HereBeDragons)** - the map-to-world math the minimap pins follow.
 - **[NAudio](https://github.com/naudio/NAudio)** (MIT) - microphone and speaker audio for the Lodge voice chat.
 - **[Concentus](https://github.com/lostromb/concentus)** (BSD) - the Opus voice codec in pure C#.
+- **[WoWInterface](https://www.wowinterface.com)** - its public file list feeds the suggested addon matches.
+- **Splash and artwork** - original, drawn for this project (shown on the About page too).
 - **[Costura](https://github.com/Fody/Costura)** (MIT) - packs everything into the one exe.
 - **[Octicons](https://github.com/primer/octicons)** (MIT) - the GitHub mark on third-party addon cards. The GitHub and
   CurseForge marks (the latter read at runtime from the user's own installed CurseForge app, never bundled) are

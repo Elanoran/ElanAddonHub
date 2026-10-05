@@ -64,12 +64,14 @@
             <Image x:Name="RailLogo" Source="Assets/hub.png" Width="26" Height="26" RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" ToolTipService.Placement="Right"
                    MouseLeftButtonDown="Logo_Down" MouseLeftButtonUp="Logo_Click" />
           </Grid>
-          <Grid DockPanel.Dock="Bottom" Margin="0,0,0,12">
+          <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,6">
             <RadioButton x:Name="TabSettings" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                          ToolTip="Settings  (Ctrl+,)" ToolTipService.Placement="Right" AutomationProperties.Name="Settings">
               <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="19" />
             </RadioButton>
-          </Grid>
+            <TextBlock x:Name="RailVersion" HorizontalAlignment="Center" Margin="0,3,0,0" FontSize="9.5" Foreground="{StaticResource TextDim}" Opacity="0.6"
+                       Cursor="Hand" Background="Transparent" ToolTipService.Placement="Right" MouseLeftButtonUp="RailVersion_Click" />
+          </StackPanel>
           <StackPanel DockPanel.Dock="Top" Margin="0,2,0,0">
             <Grid Margin="0,0,0,6">
               <RadioButton x:Name="TabAddons" Style="{StaticResource RailButton}" GroupName="tabs" IsChecked="True" Checked="Tab_Checked"

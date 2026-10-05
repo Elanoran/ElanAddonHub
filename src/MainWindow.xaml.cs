@@ -33,6 +33,7 @@ namespace ElansAddonHub
             RailLogo.ToolTip = Brand.Name + " v" + App.Version + "\nClick for About";
             SelfUpdater.CleanupOld();
             SetupTray();
+            RefreshRailBadges();
 
             if (!WowLocator.IsWowRoot(settings.WowRoot))
             {
@@ -101,8 +102,20 @@ namespace ElansAddonHub
             var n = cards.Count(c => c.State == CardState.UpdateAvailable) + (others?.Count(c => c.State == TpState.UpdateAvailable) ?? 0)
                 + (manifest != null && SelfUpdater.IsNewer(manifest.Hub) ? 1 : 0);
             UpdateBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+            var hubNew = manifest != null && SelfUpdater.IsNewer(manifest.Hub);
+            RailVersion.Inlines.Clear();
+            if (hubNew) RailVersion.Inlines.Add(new System.Windows.Documents.Run("● ") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Gold"] });
+            RailVersion.Inlines.Add("v" + App.Version);
+            RailVersion.Opacity = hubNew ? 1 : 0.6;
+            RailVersion.ToolTip = hubNew ? $"Update available: v{manifest.Hub.Version} - click to update" : "Version " + App.Version;
             UpdateBadgeText.Text = n > 9 ? "9+" : n.ToString();
             TabAddons.ToolTip = n > 0 ? $"Addons  (Ctrl+1)\n{n} update{(n == 1 ? "" : "s")} available" : "Addons  (Ctrl+1)";
+        }
+
+        void RailVersion_Click(object sender, MouseButtonEventArgs e)
+        {
+            ShowTab("settings"); SettingsPage.Show("about");
+            if (manifest != null && SelfUpdater.IsNewer(manifest.Hub)) HubBanner.Visibility = Visibility.Visible;
         }
 
         public void ShowTab(string tab)
@@ -112,6 +125,8 @@ namespace ElansAddonHub
 
         // ---- for the Settings page
         public string CheckStatus => statusText;
+        public string HubUpdateStatus => checking ? "Checking..." : manifest == null ? (lastError ?? "Not checked yet")
+            : SelfUpdater.IsNewer(manifest.Hub) ? "Update available: v" + manifest.Hub.Version : "Up to date";
         public Task CheckForUpdates() => CheckAll();
         public void CardArtChanged() { AddonCard.Painted = settings.PaintedArt; foreach (var c in cards) c.RefreshArt(); }
         public void AutoUpdateTurnedOn() => _ = AfterCheck();
@@ -152,10 +167,10 @@ namespace ElansAddonHub
             SettingsPage.Show("general");
             await Task.Delay(300);
             Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
-            foreach (var sec in new[] { "addons", "lodge", "voice", "overlay" })
+            foreach (var sec in new[] { "addons", "lodge", "voice", "overlay", "about" })
             {
                 SettingsPage.Show(sec);
-                await Task.Delay(300);
+                await Task.Delay(sec == "about" ? 2200 : 300);
                 Snapshot(System.IO.Path.Combine(dir, "3-settings-" + sec + ".png"));
             }
             SettingsPage.Show("general");
