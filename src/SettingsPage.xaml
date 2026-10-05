@@ -597,7 +597,7 @@
               <Grid Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                 <TextBlock Text="Splash and artwork" Style="{StaticResource RowHint}" /><TextBlock Grid.Column="1" FontSize="12.5" Foreground="{StaticResource Text}">Original, made for this project</TextBlock></Grid>
             </ItemsControl.Items></ItemsControl>
-            <TextBlock Style="{StaticResource RowHint}" FontSize="11" Opacity="0.75" TextWrapping="Wrap" MaxWidth="480" Text="World of Warcraft is a trademark of Blizzard Entertainment. Elan's Outpost is a fan project and not affiliated with Blizzard." />
+            <TextBlock Style="{StaticResource RowHint}" FontSize="11" Opacity="0.75" TextWrapping="Wrap" MaxWidth="480" HorizontalAlignment="Left" TextAlignment="Left" Margin="0,14,0,0" Text="World of Warcraft is a trademark of Blizzard Entertainment. Elan's Outpost is a fan project and not affiliated with Blizzard." />
           </StackPanel>
         </Grid>
       </ScrollViewer>
