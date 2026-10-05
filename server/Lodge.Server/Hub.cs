@@ -13,12 +13,14 @@ public sealed class Budget
     public readonly TokenBucket Control;       // typing/state/status/voice/game/admin: burst 30, 5 per s
     public readonly TokenBucket VoicePackets;  // burst 150, 60 per s (50 per s is normal)
     public readonly TokenBucket VoiceBytes;    // burst 128 KB, 24 KB per s (~6x a 32 kbit/s stream)
+    public readonly TokenBucket ProfileSet;    // profile:set: 1 per 2 s (a burst of 1)
     public DateTime LastUsed;
 
     public Budget(IClock clock)
     {
         Chat = new TokenBucket(8, 0.8, clock);
         Control = new TokenBucket(30, 5, clock);
+        ProfileSet = new TokenBucket(1, 0.5, clock);
         VoicePackets = new TokenBucket(150, 60, clock);
         VoiceBytes = new TokenBucket(128 * 1024, 24 * 1024, clock);
         LastUsed = clock.UtcNow;
@@ -42,6 +44,7 @@ public class Member
     public string Note = "";
     public JsonObject Game;          // what they're playing (from the hub), null = not shared
     public bool Invisible;           // "Appear offline": connected, but hidden from everyone without Perm.SeeInvisible
+    public Profile Profile = new();  // personal: the stored one (shared by reconnects); guests: session-only
     public Budget Budget;
     public readonly ConcurrentDictionary<string, DateTime> LastTyping = new();
     public readonly SemaphoreSlim SendLock = new(1, 1);
@@ -68,6 +71,7 @@ public class Member
     {
         ["id"] = Id, ["name"] = Name, ["guest"] = !Personal, ["role"] = Role,
         ["room"] = Room, ["voice"] = Room != null, ["muted"] = Muted, ["deaf"] = Deaf, ["serverMuted"] = ServerMuted,
+        ["avatarId"] = Profile?.AvatarId, ["accent"] = Profile?.Accent,
         ["status"] = masked ? "online" : Status, ["note"] = masked ? "" : Note, ["game"] = masked ? null : Game?.DeepClone(),
     };
 }
@@ -81,7 +85,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.5.0";
+    public const string Version = "2.6.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -91,6 +95,8 @@ public class LodgeHub
     public readonly Channels Channels;
     public readonly ILogger Log;
     public readonly IClock Clock;
+    public readonly ProfileStore Profiles;
+    public readonly ProfileModule ProfileMod;
     public readonly ChatModule Chat;
     public readonly VoiceModule Voice;
     readonly IModule[] modules;
@@ -109,9 +115,11 @@ public class LodgeHub
     {
         Cfg = cfg; Auth = auth; Files = files; Log = log; Clock = clock ?? SystemClock.Instance;
         Channels = new Channels(cfg.DataDir);
+        Profiles = new ProfileStore(cfg.DataDir, log, Clock);
+        ProfileMod = new ProfileModule(this);
         Chat = new ChatModule(this);
         Voice = new VoiceModule(this);
-        modules = new IModule[] { Chat, Voice, new PresenceModule(this), new AdminModule(this) };
+        modules = new IModule[] { Chat, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
     // personal codes: one budget per person; guests (shared code): one per IP, so several friends on one guest
@@ -154,6 +162,7 @@ public class LodgeHub
             ClientInfo = Names.ForLog(clientInfo, 32), Budget = BudgetFor(who, ip), Invisible = invisible,
         };
         lock (admission) me.Name = who.Personal ? UniqueName(Names.Normalize(who.Name)) : UniqueName(GuestName(name), Auth.PersonalNames);
+        me.Profile = who.Personal ? Profiles.For(me.Name) : new Profile(); // guests: a session-only profile, never stored
         if (!TryAdmit(me))
         {
             try { await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "The lodge is full", ct); } catch { }
@@ -198,6 +207,7 @@ public class LodgeHub
             ["pins"] = pins,
             ["channels"] = new JsonArray(visible.Select(c => (JsonNode)c.ToJson()).ToArray()),
             ["users"] = new JsonArray(members.Values.Where(m => CanSee(me, m)).Select(m => (JsonNode)UserFor(m, me)).ToArray()),
+            ["profile"] = ProfileMod.OwnView(me),
             ["history"] = history,
         };
     }
@@ -322,6 +332,13 @@ public class LodgeHub
         if (!m.Invisible) return BroadcastUser(m);
         return Task.WhenAll(members.Values.Where(v => v.Id == m.Id || Roles.Can(v.Role, Perm.SeeInvisible))
             .Select(v => Send(v, new JsonObject { ["t"] = "user", ["user"] = UserFor(m, v) })));
+    }
+
+    // avatar/accent changed: everyone who can see the member (and the member) gets a small "profile" update
+    public Task BroadcastProfile(Member m)
+    {
+        var msg = new JsonObject { ["t"] = "profile", ["id"] = m.Id, ["name"] = m.Name, ["avatarId"] = m.Profile?.AvatarId, ["accent"] = m.Profile?.Accent };
+        return Broadcast(msg, v => CanSee(v, m));
     }
 
     // channels changed (or someone's rank did): everyone gets their own up-to-date view

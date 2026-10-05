@@ -257,6 +257,41 @@ async def suite_c(base):
         for w in (g, b, e): await w.close()
 
 
+async def suite_d(base):
+    """2.6: avatars and profiles over a real socket."""
+    async with aiohttp.ClientSession() as s:
+        b = await ws_open(s, base, BOB, "192.0.2.61"); bw = await recv(b, "welcome")
+        e = await ws_open(s, base, ELAN, "192.0.2.62"); await recv(e, "welcome")
+        g = await ws_open(s, base, GUEST, "192.0.2.63", name="Pilgrim"); await recv(g, "welcome")
+        await b.send_str(json.dumps({"t": "profile:set", "avatarId": "av.nope"}))
+        err = await recv(b, "error", 2)
+        check("profile: unknown avatar id refused", err is not None and "avatar" in err["text"].lower(), err)
+        await asyncio.sleep(2.2)  # even a refused set spends the 1-per-2-s token
+        await b.send_str(json.dumps({"t": "profile:set", "avatarId": "av.wolf", "accent": "azure", "about": "hi there"}))
+        d = await recv(b, "profile:data", 2)
+        check("profile: valid set answered with the own profile (controls stripped)", d is not None and d["profile"]["avatarId"] == "av.wolf" and d["profile"]["about"] == "hi there", d)
+        up = await recv(e, "profile", 2, lambda x: x["name"] == "Bob")
+        check("profile: avatar/accent broadcast to the lodge", up is not None and up["avatarId"] == "av.wolf" and up["accent"] == "azure", up)
+        await b.send_str(json.dumps({"t": "profile:set", "about": "again"}))
+        err = await recv(b, "error", 2)
+        check("profile: second change inside 2 s is rate-limited", err is not None and "Slow" in err["text"], err)
+        await e.send_str(json.dumps({"t": "profile:get", "name": "bob"}))
+        d = await recv(e, "profile:data", 2)
+        check("profile:get returns the public profile", d is not None and d["profile"]["found"] and d["profile"]["avatarId"] == "av.wolf" and "visibleTo" not in d["profile"], d)
+        await e.send_str(json.dumps({"t": "profile:get", "name": "Nobody At All"}))
+        d = await recv(e, "profile:data", 2)
+        check("profile:get unknown name -> not found", d is not None and d["profile"]["found"] is False, d)
+        await g.send_str(json.dumps({"t": "profile:reset", "name": "Bob"}))
+        err = await recv(g, "error", 2)
+        check("profile:reset refused for a guest", err is not None, err)
+        await e.send_str(json.dumps({"t": "profile:reset", "name": "Bob"}))
+        up = await recv(b, "profile", 2, lambda x: x["name"] == "Bob" and x["avatarId"] is None)
+        check("owner can reset an avatar; the lodge is told", up is not None, up)
+        r = await s.get(base + "/health", headers=H(ELAN, "198.51.100.91"))
+        check("... server stays healthy", r.status == 200)
+        for w in (g, b, e): await w.close()
+
+
 def scan_logs(*datas):
     text = ""
     for d in datas:
@@ -274,6 +309,7 @@ def main():
         wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge")
         asyncio.run(suite_a("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_c("http://127.0.0.1:5291/lodge"))
+        asyncio.run(suite_d("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_b("http://127.0.0.1:5292/lodge"))
     finally:
         for p in (pa, pb): p.terminate()

@@ -26,6 +26,13 @@ public static class Names
         return s.Length > max ? s[..max].TrimEnd() + "…" : s;
     }
 
+    // free text (profile about / play times / character names): the same cleaning as names, hard-cut at `max` characters
+    public static string Text(string text, int max)
+    {
+        var r = Clean(text);
+        return r.Length > max ? r[..max].TrimEnd() : r;
+    }
+
     public static string Normalize(string name)
     {
         var r = Clean(name);

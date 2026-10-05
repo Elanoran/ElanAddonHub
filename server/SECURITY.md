@@ -41,6 +41,25 @@
   old hub sees an invisible member as an ordinary one (it doesn't know the `invisible` marker).
 - Toggling visibility broadcasts at most as much as a status change and uses the same per-identity Control budget.
 
+## 2.6.0 (avatars and profiles)
+
+- No uploads: an avatar is one of 24 whitelisted ids (the art ships with the hub), the accent one of 8 ids. Unknown values refuse the whole
+  `profile:set` and change nothing; a non-string JSON value can't throw into the receive loop. `about`/`playTimes`/character names go through
+  `Names.Text` (NFKC, control and format characters removed, whitespace collapsed, hard length cut). The hub draws these as plain text.
+- `profile:set` is budgeted twice: the per-identity Control budget (all non-chat messages) and a 1-per-2-s bucket; a refused set counts towards
+  the flood disconnect and, being validated after the token is spent, can't be used to probe cheaply.
+- Storage: `profiles.json` per personal identity, atomic write (tmp, flush, rename), tmp recovery only when the main file is missing, 8 MB
+  size cap on load, at most 2000 profiles, every loaded value re-run through the same whitelists/bounds, keys must be in normal form. Guests'
+  profiles live only in memory on their connection. Characters: at most 12 per member, bounded strings; a "seen again" refresh is written at most
+  every 10 minutes, a new character or level change at once (bounded by the Control budget of the `game` message that causes it).
+- Privacy is decided in `ProfileModule.Build`/`Lookup` only: `showChars`, hidden characters (never revealed to others, not even as a flag), and
+  `visibleTo: officers`. An invisible member answers `profile:get` exactly like an offline one (no `online`, no `game`) unless the viewer has
+  `SeeInvisible`; their avatar/accent changes are broadcast only to viewers who may see them. An invisible guest is "not found".
+- `profile:reset` is owner-only (`Perm.ResetProfiles`), checked on the server. Logged by name only, never with profile text.
+- Honest limits: avatar and accent are public (they appear in the roster and chat); the character *currently played* is in the public presence
+  (`game.name`) whatever `showChars` says, and `profile:get` of a personal name tells a lodge member whether that name is an invited member
+  (offline members answer with `found: true`).
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.
@@ -57,9 +76,9 @@
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 82 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 98 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
-python server/tests/security_integration.py                     # 39 checks against two local servers
+python server/tests/security_integration.py                     # 48 checks against two local servers
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 15 checks
 ```
 

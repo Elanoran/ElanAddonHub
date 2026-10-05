@@ -135,11 +135,22 @@ public class PresenceModule : IModule
         return g;
     }
 
+    // the character that is being played is remembered in the member's profile (bounded, newest 12)
+    void NoteCharacter(Member me)
+    {
+        var g = me.Game;
+        if (g == null || g["playing"]?.GetValue<bool>() != true || (string)g["name"] is not { Length: > 0 } name) return;
+        var ci = ProfileRules.CleanChar(name, (string)g["class"], (string)g["classFile"], (string)g["race"], (string)g["raceFile"],
+            g["level"]?.GetValue<int>() ?? 0, new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeSeconds());
+        if (ci != null) hub.Profiles.NoteCharacter(me.Profile, me.Personal, ci);
+    }
+
     async Task Game(Member me, JsonObject m)
     {
         var before = me.Game;
         if (m["share"] is JsonValue sv && sv.TryGetValue<bool>(out var share) && !share) me.Game = null;
         else me.Game = BuildGame(m);
+        NoteCharacter(me);
         bool vis = await ApplyVisibility(me, m);
         // identical to what everyone already has: nothing to tell them (keeps a chatty addon from costing broadcasts)
         if (!vis && (before == null ? me.Game == null : me.Game != null && JsonNode.DeepEquals(before, me.Game))) return;

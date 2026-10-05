@@ -1,4 +1,4 @@
-# Lodge protocol (v2.5)
+# Lodge protocol (v2.6)
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
@@ -40,7 +40,7 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 - `admin.members` `{members:[{name, role, online}], channels:[channel]}` · `admin.invited` `{name, role, code}`
 
 `channel` = `{id, name, type: text|voice, minRole, max}` (only the ones your rank may see)
-`user` = `{id, name, guest, role, room, voice, muted, deaf, serverMuted, status, note, game?}`
+`user` = `{id, name, guest, role, avatarId?, accent?, room, voice, muted, deaf, serverMuted, status, note, game?}`
 `game` = `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex?, flags?, xpPct?, rested?, groupSize?, inInstance?, instanceName?}` - what they play (null = not shared). `user.invisible: true` appears only in the entry of yourself and for ranks with `SeeInvisible` (see 2.5).
 
 ### Client → server
@@ -118,6 +118,42 @@ announced. No new message types: an invisible member is simply never mentioned t
 - `SeeInvisible` (owner by default, `Roles.Can`): the owner receives the full entry plus `"invisible": true`, and the Guild Master
   panel's online flag counts them; officers can't see or moderate them (`mod.*` answers "They're not online" unless they are in
   a voice room the officer can see). The invisible member's own entry carries `invisible: true` too.
+
+## 2.6 additions and compatibility (avatars and profiles)
+
+Old hubs ignore every new field and message; a hub that gets no `avatarId` draws its initials/class-colour default.
+
+**Avatars.** `user` entries (welcome, join, user) carry `avatarId` (one of 24 ids `av.wolf, av.bear, av.raptor, av.owl, av.boar, av.lion,
+av.serpent, av.spider, av.sword, av.shield, av.bow, av.staff, av.hammer, av.axe, av.skull, av.gem, av.potion, av.campfire, av.banner,
+av.moon, av.sun, av.flame, av.fish, av.chicken`, or null) and `accent` (`gold, crimson, emerald, teal, azure, violet, rose, slate`, or null).
+Avatars are drawn by the hub (vector art shipped with it); the server only stores the id - there are no uploads.
+`welcome.profile` is the member's own full profile (below). A change of avatar/accent is broadcast as
+`profile` `{id, name, avatarId, accent}` to everyone who can see that member.
+
+**Profile** (`profile:data.profile`):
+`{name, found, guest, role, online, restricted, avatarId, accent, about, playTimes, main, game?, chars:[{name, class, classFile, race, raceFile, level, seen, main, hidden? (self only)}], showChars? (self), visibleTo? (self)}`.
+`found: false` = nobody of that name (only name and `found` are returned).
+
+Client -> server:
+- `profile:set` `{avatarId?, accent?, about?, playTimes?, main?, hidden?, showChars?, visibleTo?}` - own profile. Every field is optional (absent =
+  unchanged); `null`/`""` clears avatarId, accent, main. `avatarId`/`accent` must be whitelisted ids, `showChars` is `all|main|none`, `visibleTo`
+  is `everyone|officers`, `about` max 140 and `playTimes` max 40 characters (normalized like names: NFKC, control/format characters out,
+  whitespace collapsed, hard cut), `main` must be one of your seen characters (case-insensitive), `hidden` a list of your seen characters
+  (unknown names dropped; the main character is never hidden). Any invalid field refuses the whole message with an `error` and changes nothing.
+  Rate limit: 1 per 2 s per identity (refusals count towards the flood limit), plus the Control budget. The answer is `profile:data` with your own view.
+- `profile:get` `{name}` -> `profile:data` `{profile}` - another member by name (online or not; personal members only when offline).
+  Respects privacy: `showChars` (all = every character except hidden ones, main = only the main character, none = no characters and no main),
+  `visibleTo: officers` (anyone below officer gets only `name/role/avatarId/accent`, `restricted: true`), and invisible members: for everyone
+  without `SeeInvisible` an invisible member answers exactly like an offline one (`online: false`, no `game`); an invisible guest is `found: false`.
+  `game` (what they play now) is included only for visible online members - the same data their `user` entry already carries.
+- owner only (`Perm.ResetProfiles`): `profile:reset` `{name, clearText?}` - avatar and accent back to the default (optionally the texts too).
+  The member gets a `profile:data`, the lodge a `profile` broadcast.
+
+**Characters** are collected server-side from `game` messages (name, class, classFile, race, raceFile, level, last seen), at most 12 per member (the
+most recent kept), and stored with the profile.
+
+**Storage.** Personal codes: `<data>/profiles.json` (atomic tmp+rename, size-capped load, every value re-validated, at most 2000 profiles). Guests:
+a session-only profile on the connection, never written to disk (gone when they leave).
 
 ## Ranks
 
