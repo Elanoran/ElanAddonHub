@@ -73,6 +73,8 @@ namespace ElansAddonHub.Lodge
         // ---- profiles (server 2.6): my own profile, avatars we have seen (so history keeps its pictures), answers to profile:get
         public ProfileData MyProfile { get; private set; }
         public bool SupportsProfile { get; private set; }
+        public bool SupportsDisplayName { get; private set; }   // server 2.7
+        public string MyDisplayName => Me?.DisplayName ?? "";
         public event Action MyProfileChanged;
         public event Action<ProfileData> ProfileReceived;   // an answer to profile:get (and my own after a save)
         readonly Dictionary<string, string[]> knownAvatars = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -117,7 +119,7 @@ namespace ElansAddonHub.Lodge
             var ch = TextChannels.FirstOrDefault(c => c.Id == vm.Channel);
             Toasts.Push(new ToastItem
             {
-                Kind = kind, Sender = who, Channel = ch?.Name, ChannelId = vm.Channel, Text = text,
+                Kind = kind, Sender = DisplayNames.Shown(who), Channel = ch?.Name, ChannelId = vm.Channel, Text = text,
                 Who = Members.FirstOrDefault(m => string.Equals(m.Name, who, StringComparison.OrdinalIgnoreCase)),
             });
         }
@@ -195,6 +197,7 @@ namespace ElansAddonHub.Lodge
             LeaveVoice(false);
             client?.Stop();
             client = null;
+            TestFed = false;
             Members.Clear();
             foreach (var r in VoiceRooms) r.Members.Clear();
             tick.Stop();
@@ -214,6 +217,7 @@ namespace ElansAddonHub.Lodge
                     var j = ParseMember(m.Child("user"));
                     if (Members.All(x => x.Id != j.Id)) Members.Add(j);
                     RefreshAuthorAvatars(j.Name);
+                    RefreshAuthorNames();
                     SyncRooms(joined: j);
                     StatusText = OnlineText;
                     Changed?.Invoke();
@@ -238,6 +242,7 @@ namespace ElansAddonHub.Lodge
                     var oldRoom = mem.Room;
                     var oldBadge = mem.BadgeKey;
                     mem.SetAvatar(m.Child("user").Str("avatarId"), m.Child("user").Str("accent"));
+                    if (m.Child("user").ContainsKey("displayName")) ApplyDisplayName(mem, m.Child("user").Str("displayName"));
                     mem.Room = u.Room; mem.Muted = u.Muted; mem.Deaf = u.Deaf; mem.ServerMuted = u.ServerMuted;
                     mem.Status = u.Status; mem.Note = u.Note; mem.Role = u.Role;
                     mem.Invisible = mem.IsMe ? Invisible : u.Invisible;
@@ -279,7 +284,7 @@ namespace ElansAddonHub.Lodge
                     var plist = PinsOf(pc);
                     var old = plist.FirstOrDefault(x => x.Id == pv.Id);
                     if (old == null && TextChannels.Any(c => c.Id == pc) && !string.Equals(pv.PinnedBy, Me?.Name, StringComparison.OrdinalIgnoreCase))
-                        Toasts.Push(new ToastItem { Kind = ToastKind.Pin, Sender = pv.PinnedBy ?? "Someone", Channel = TextChannels.First(c => c.Id == pc).Name, ChannelId = pc,
+                        Toasts.Push(new ToastItem { Kind = ToastKind.Pin, Sender = pv.PinnedBy != null ? DisplayNames.Shown(pv.PinnedBy) : "Someone", Channel = TextChannels.First(c => c.Id == pc).Name, ChannelId = pc,
                             Text = "pinned: " + OneLine(pv.Shown), Who = Members.FirstOrDefault(x => string.Equals(x.Name, pv.PinnedBy, StringComparison.OrdinalIgnoreCase)) });
                     if (old != null) plist.Remove(old);
                     plist.Add(pv);
@@ -312,14 +317,21 @@ namespace ElansAddonHub.Lodge
                     if (pu != null)
                     {
                         pu.SetAvatar(m.Str("avatarId"), m.Str("accent"));
+                        if (m.ContainsKey("displayName")) ApplyDisplayName(pu, m.Str("displayName"));
                         Remember(pu);
                         RefreshAuthorAvatars(pu.Name);
-                        if (pu.IsMe && MyProfile != null) { MyProfile.AvatarId = pu.AvatarId; MyProfile.Accent = pu.Accent; MyProfileChanged?.Invoke(); }
+                        if (pu.IsMe && MyProfile != null) { MyProfile.AvatarId = pu.AvatarId; MyProfile.Accent = pu.Accent; MyProfile.DisplayName = pu.DisplayName; MyProfileChanged?.Invoke(); }
                     }
                     break;
                 case "profile:data":
                     var pd = ProfileData.Parse(m.Child("profile"));
                     if (pd == null) break;
+                    if (pd.Found && !string.IsNullOrEmpty(pd.Name) && m.Child("profile").ContainsKey("displayName"))
+                    {
+                        var who = Members.FirstOrDefault(x => string.Equals(x.Name, pd.Name, StringComparison.OrdinalIgnoreCase));
+                        if (who != null) ApplyDisplayName(who, pd.DisplayName);
+                        else if (DisplayNames.Remember(pd.Name, pd.DisplayName)) RefreshAuthorNames();
+                    }
                     if (Me != null && string.Equals(pd.Name, Me.Name, StringComparison.OrdinalIgnoreCase) && pd.Found) { MyProfile = pd; MyProfileChanged?.Invoke(); }
                     ProfileReceived?.Invoke(pd);
                     break;
@@ -350,6 +362,7 @@ namespace ElansAddonHub.Lodge
             SupportsPin = features.Contains("pin");
             CanPin = SupportsPin && m.Bool("canPin");
             SupportsProfile = features.Contains("profile");
+            SupportsDisplayName = features.Contains("displayname");
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
@@ -436,6 +449,7 @@ namespace ElansAddonHub.Lodge
                 Status = u.Str("status"), Note = u.Str("note"), Role = u.Str("role"), Invisible = u.Bool("invisible"),
             };
             m.SetAvatar(u.Str("avatarId"), u.Str("accent"));
+            if (u.ContainsKey("displayName")) { m.SetDisplayName(u.Str("displayName")); DisplayNames.Remember(m.Name, m.DisplayName); }
             ApplyGame(m, u.Child("game"));
             Remember(m);
             return m;
@@ -446,6 +460,20 @@ namespace ElansAddonHub.Lodge
         void Remember(MemberVM m)
         {
             if (m.Name != null) knownAvatars[m.Name] = new[] { m.AvatarId, m.Accent };
+        }
+
+        // a person's display name changed: the member, and every place that shows it (chat rows, reply quotes, reaction tips)
+        void ApplyDisplayName(MemberVM m, string display)
+        {
+            display = display ?? "";
+            m.SetDisplayName(display);
+            if (DisplayNames.Remember(m.Name, display)) RefreshAuthorNames();
+        }
+
+        void RefreshAuthorNames()
+        {
+            foreach (var list in messages.Values)
+                foreach (var vm in list) vm.RefreshNames();
         }
 
         // chat rows show their author's picture and class badge: refresh them when it changes (messages are bounded, this is cheap)
@@ -552,7 +580,7 @@ namespace ElansAddonHub.Lodge
         bool MentionsMe(string text)
         {
             if (string.IsNullOrEmpty(text) || Me == null) return false;
-            return Regex.IsMatch(text, @"@(" + Regex.Escape(Me.Name) + @"|everyone|here)(?![\w])", RegexOptions.IgnoreCase);
+            return Regex.IsMatch(text, @"@(" + DisplayNames.MentionPattern(Me.Name, Me.DisplayName) + @"|everyone|here)(?![\w])", RegexOptions.IgnoreCase);
         }
 
         void OnNewMessage(MessageVM vm)
@@ -580,7 +608,7 @@ namespace ElansAddonHub.Lodge
             var mode = Settings.NotifyMode ?? "mentions";
             if (vm.Mentioned && mode != "none") Sounds.Mention();
             if (!looking && (mode == "all" || (mode == "mentions" && vm.Mentioned)))
-                Notify?.Invoke($"{vm.From} in #{ch?.Name}", string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : vm.Text);
+                Notify?.Invoke($"{vm.FromShown} in #{ch?.Name}", string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : vm.Text);
         }
 
         public void Select(ChannelVM ch)
@@ -739,7 +767,7 @@ namespace ElansAddonHub.Lodge
         {
             var now = DateTime.UtcNow;
             var who = TypingMap(channel).Where(t => t.Value > now && (Me == null || t.Key != Me.Id))
-                .Select(t => Members.FirstOrDefault(x => x.Id == t.Key)?.Name).Where(n => n != null).ToList();
+                .Select(t => Members.FirstOrDefault(x => x.Id == t.Key)?.Display).Where(n => n != null).ToList();
             return who.Count == 0 ? "" : who.Count == 1 ? $"{who[0]} is typing..." : $"{string.Join(", ", who)} are typing...";
         }
 
@@ -1015,7 +1043,8 @@ namespace ElansAddonHub.Lodge
         // test hooks
         public Task SendForTest(string text) => SendMessage(text);
         // offline rendering test: feed protocol frames without a server
-        public void FeedForTest(string json) => OnReceived(Json.Obj(json));
+        public bool TestFed { get; private set; }
+        public void FeedForTest(string json) { TestFed = true; OnReceived(Json.Obj(json)); }
         public void SetReadMarkForTest(string channel, string id, long at)
         {
             LoadMarks();

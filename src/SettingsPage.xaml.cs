@@ -12,7 +12,7 @@ using ElansAddonHub.Services;
 
 namespace ElansAddonHub
 {
-    // The one place for settings: General, Addons, Lodge, Voice, Overlay, Notifications, Guild Master, About.
+    // The one place for settings: General, Addons, Lodge, Profile, Voice, Overlay, Notifications, Guild Master, About.
     public partial class SettingsPage : UserControl
     {
         public class RoleOption
@@ -134,13 +134,14 @@ namespace ElansAddonHub
                 GmStatus.Text = "";
             };
             session.Error += text => { if (SecGm.Visibility == Visibility.Visible) GmStatus.Text = text; };
+            InitProfile();
         }
 
         // ================================================================ navigation
 
         public void Show(string section)
         {
-            var nav = section == "folder" ? NavGeneral : section == "addons" ? NavAddons : section == "lodge" ? NavLodge : section == "voice" ? NavVoice
+            var nav = section == "folder" ? NavGeneral : section == "addons" ? NavAddons : section == "lodge" ? NavLodge : section == "profile" ? NavProfile : section == "voice" ? NavVoice
                     : section == "overlay" ? NavOverlay : section == "gm" ? NavGm : NavGeneral;
             nav.IsChecked = true;
             RefreshSection();
@@ -153,7 +154,7 @@ namespace ElansAddonHub
             if (settings == null) return;
             var map = new (RadioButton nav, FrameworkElement sec)[]
             {
-                (NavGeneral, SecGeneral), (NavAddons, SecAddons), (NavLodge, SecLodge), (NavVoice, SecVoice),
+                (NavGeneral, SecGeneral), (NavAddons, SecAddons), (NavLodge, SecLodge), (NavProfile, SecProfile), (NavVoice, SecVoice),
                 (NavOverlay, SecOverlay), (NavNotify, SecNotify), (NavGm, SecGm), (NavAbout, SecAbout),
             };
             foreach (var (nav, sec) in map) sec.Visibility = nav.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
@@ -165,8 +166,7 @@ namespace ElansAddonHub
             LodgeAddress.Text = string.IsNullOrEmpty(settings.LodgeUrl) ? "Not connected to a lodge" : settings.LodgeUrl;
             LodgeWho.Text = session.Me == null ? (session.Connected ? session.StatusText : "Join one from the Lodge tab")
                 : $"You're {session.Me.Name}, {MemberVM.RoleName(session.MyRole)} - {session.StatusText}";
-            ProfileAvatar.DataContext = session.Me;
-            EditProfileButton.IsEnabled = session.Me != null;
+            if (NavProfile.IsChecked == true) ProfileEnter();
             if (NavGm.IsChecked == true) { GmStatus.Text = ""; session.RequestAdmin(); }
             var c = session.Presence.Current;
             ShareGameHint.Text = (session.Presence.Playing ? "WoW is running. " : "")
@@ -222,13 +222,6 @@ namespace ElansAddonHub
             OpenFolder(Directory.CreateDirectory(Path.Combine(Util.DataDir, "backups")).FullName);
 
         // ================================================================ lodge
-
-        void EditProfile_Click(object sender, RoutedEventArgs e)
-        {
-            if (session.Me == null) { ProfileHint.Text = "Join a lodge first (Lodge tab)."; return; }
-            host.ShowTab("lodge");
-            lodge.OpenProfileEditor();
-        }
 
         void EditConnection_Click(object sender, RoutedEventArgs e) { host.ShowTab("lodge"); lodge.EditConnection(); }
 

@@ -76,6 +76,7 @@
         <RadioButton x:Name="NavGeneral" Style="{StaticResource Nav}" Tag="&#xE713;" Content="General" Checked="Nav_Checked" IsChecked="True" />
         <RadioButton x:Name="NavAddons" Style="{StaticResource Nav}" Tag="&#xEA86;" Content="Addons" Checked="Nav_Checked" />
         <RadioButton x:Name="NavLodge" Style="{StaticResource Nav}" Tag="&#xE716;" Content="Lodge" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavProfile" Style="{StaticResource Nav}" Tag="&#xE77B;" Content="Profile" Checked="Nav_Checked" />
         <RadioButton x:Name="NavVoice" Style="{StaticResource Nav}" Tag="&#xE720;" Content="Voice" Checked="Nav_Checked" />
         <RadioButton x:Name="NavOverlay" Style="{StaticResource Nav}" Tag="&#xE81E;" Content="In-game overlay" Checked="Nav_Checked" />
         <RadioButton x:Name="NavNotify" Style="{StaticResource Nav}" Tag="&#xEA8F;" Content="Notifications" Checked="Nav_Checked" />
@@ -155,14 +156,6 @@
                 </StackPanel>
               </StackPanel>
             </Border>
-            <!-- profile: avatar, about text, characters, privacy -->
-            <Border Style="{StaticResource RowBox}"><Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-              <local:AvatarView x:Name="ProfileAvatar" Width="44" Height="44" Margin="0,0,14,0" VerticalAlignment="Center" />
-              <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0"><TextBlock Text="Profile" Style="{StaticResource RowTitle}" />
-                <TextBlock x:Name="ProfileHint" Text="Pick an avatar, add a few words about you, choose which characters you show." Style="{StaticResource RowHint}" /></StackPanel>
-              <Button Grid.Column="2" x:Name="EditProfileButton" Style="{StaticResource SecondaryButton}" Content="Edit profile" VerticalAlignment="Center" Click="EditProfile_Click" />
-            </Grid></Border>
             <Border Style="{StaticResource RowBox}"><Grid>
               <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
               <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Connect when the hub starts" Style="{StaticResource RowTitle}" />
@@ -211,6 +204,138 @@
                 <TextBlock Text="Keep &quot;Appear offline&quot; (pick it by clicking your name in the Lodge) after the hub restarts. Off = you're visible again at every start." Style="{StaticResource RowHint}" /></StackPanel>
               <CheckBox Grid.Column="1" x:Name="RememberInvisibleBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Lodge_Click"  />
             </Grid></Border>
+          </StackPanel>
+
+          <!-- ========== Profile ========== -->
+          <StackPanel x:Name="SecProfile" Visibility="Collapsed">
+            <TextBlock Text="Profile" Style="{StaticResource SectionTitle}" />
+
+            <!-- not connected / old server -->
+            <Border x:Name="ProfileEmpty" Background="{StaticResource SurfaceHi}" CornerRadius="10" Padding="18,16" BorderBrush="{StaticResource Line}" BorderThickness="1" Visibility="Collapsed">
+              <StackPanel>
+                <TextBlock x:Name="ProfileEmptyTitle" FontSize="13.5" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock x:Name="ProfileEmptyText" Style="{StaticResource RowHint}" Margin="0,4,0,0" />
+                <Button x:Name="ProfileEmptyButton" Style="{StaticResource SecondaryButton}" Content="Go to the Lodge tab" HorizontalAlignment="Left" Margin="0,12,0,0" Click="ProfileGoLodge_Click" />
+              </StackPanel>
+            </Border>
+
+            <!-- the form (DataContext = ProfileEditVM) -->
+            <StackPanel x:Name="ProfileForm">
+              <DockPanel Margin="0,-6,0,10">
+                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Save profile" Padding="20,0" Height="34" VerticalAlignment="Center" IsEnabled="{Binding CanSave}" Click="ProfileSave_Click" />
+                <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" />
+              </DockPanel>
+              <TextBlock Text="Your display name, avatar, a few words about you and your characters. Only what you choose here is shared." Style="{StaticResource RowHint}" Margin="0,0,0,10" />
+              <TextBlock Text="You joined as a guest: your profile is kept only until you leave the lodge." Visibility="{Binding GuestVisibility}" FontSize="12" Foreground="{StaticResource Gold}" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+              <!-- live preview -->
+              <Border HorizontalAlignment="Center" Background="{StaticResource SurfaceHi}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <ContentControl Content="{Binding Card}" ContentTemplate="{StaticResource ProfileCard}" />
+              </Border>
+              <TextBlock Text="{Binding Hint}" FontSize="11" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0" />
+
+              <StackPanel Visibility="{Binding DisplayVisibility}">
+                <TextBlock Text="DISPLAY NAME" Style="{StaticResource Group}" />
+                <TextBox x:Name="DisplayBox" Style="{StaticResource Input}" Text="{Binding DisplayName, UpdateSourceTrigger=PropertyChanged}" MaxLength="40" IsEnabled="{Binding DisplayEnabled}"
+                         Tag="Shown instead of your login name" />
+                <TextBlock Text="{Binding DisplayHint}" Foreground="{Binding DisplayHintBrush}" FontSize="11.5" TextWrapping="Wrap" Margin="2,6,0,0" />
+              </StackPanel>
+
+              <TextBlock Text="AVATAR" Style="{StaticResource Group}" />
+              <ItemsControl ItemsSource="{Binding Avatars}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border x:Name="ring" Width="64" Height="64" CornerRadius="32" BorderThickness="3" BorderBrush="{Binding RingBrush}" Margin="3" Cursor="Hand"
+                            Background="Transparent" Tag="{Binding}" ToolTip="{Binding Name}" MouseLeftButtonUp="Avatar_Click">
+                      <Grid Margin="2">
+                        <Image Source="{Binding Image}" Visibility="{Binding ImageVisibility}" RenderOptions.BitmapScalingMode="HighQuality" />
+                        <local:AvatarView DataContext="{Binding DefaultLook}" Visibility="{Binding DataContext.DefaultVisibility, RelativeSource={RelativeSource AncestorType=Grid}}" />
+                      </Grid>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <Trigger SourceName="ring" Property="IsMouseOver" Value="True">
+                        <Setter TargetName="ring" Property="Background" Value="#18FFFFFF" />
+                      </Trigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Text="ACCENT COLOUR" Style="{StaticResource Group}" />
+              <ItemsControl ItemsSource="{Binding Swatches}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Width="34" Height="34" CornerRadius="17" BorderThickness="2.5" BorderBrush="{Binding RingBrush}" Margin="0,0,8,0" Cursor="Hand" Background="Transparent"
+                            Tag="{Binding}" ToolTip="{Binding Name}" MouseLeftButtonUp="Swatch_Click">
+                      <Grid>
+                        <Ellipse Margin="3" Fill="{Binding Fill}" />
+                        <Ellipse Margin="3" Stroke="#8A9199" StrokeThickness="1.5" StrokeDashArray="2 2" Visibility="{Binding NoneVisibility}" />
+                        <TextBlock Text="&#xE711;" FontFamily="{StaticResource Icons}" FontSize="9" Foreground="#8A9199" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding NoneVisibility}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <DockPanel Margin="0,18,0,6">
+                <TextBlock DockPanel.Dock="Right" Text="{Binding AboutCounter}" Foreground="{Binding AboutCounterBrush}" FontSize="11" VerticalAlignment="Bottom" />
+                <TextBlock Text="ABOUT YOU" Style="{StaticResource Caption}" />
+              </DockPanel>
+              <TextBox x:Name="AboutBox" Style="{StaticResource Input}" Text="{Binding About, UpdateSourceTrigger=PropertyChanged}" MaxLength="140" TextWrapping="Wrap"
+                       AcceptsReturn="False" Height="62" VerticalContentAlignment="Top" Tag="A few words - what you like to do, who you play with" />
+
+              <TextBlock Text="WHEN YOU PLAY" Style="{StaticResource Group}" />
+              <TextBox Style="{StaticResource Input}" Text="{Binding PlayTimes, UpdateSourceTrigger=PropertyChanged}" MaxLength="40" Tag="e.g. evenings CET, weekends" />
+
+              <TextBlock Text="CHARACTERS" Style="{StaticResource Group}" />
+              <TextBlock Text="Characters appear here after you have played them with the hub running - it reads your character from WoW." Visibility="{Binding NoCharsVisibility}"
+                         Style="{StaticResource RowHint}" />
+              <StackPanel Visibility="{Binding CharsVisibility}">
+                <DockPanel Margin="0,0,0,8">
+                  <TextBlock Text="Main character" FontSize="12.5" VerticalAlignment="Center" Width="110" />
+                  <ComboBox x:Name="MainBox" Style="{StaticResource Dropdown}" ItemsSource="{Binding MainChoices}" SelectedItem="{Binding MainChoice, Mode=TwoWay}" Height="32" />
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding Chars}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <DockPanel Margin="0,3" Opacity="{Binding HiddenOpacity}">
+                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding Hidden, Mode=TwoWay}" Tag="{Binding}" Click="Hide_Click" ToolTip="Hide this character from others" VerticalAlignment="Center" />
+                        <TextBlock DockPanel.Dock="Right" Text="Hide" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="&#x2605;" Width="15" FontSize="12" Foreground="{StaticResource Gold}" Visibility="{Binding StarVisibility}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" Foreground="{Binding ClassBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Line}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                      </DockPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <TextBlock Text="PRIVACY" Style="{StaticResource Group}" />
+              <TextBlock Text="Show my characters" FontSize="12.5" Margin="0,0,0,5" />
+              <Border Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="3" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton Style="{StaticResource Segment}" Content="All" GroupName="pe-show" IsChecked="{Binding ShowAll, Mode=TwoWay}" />
+                  <RadioButton Style="{StaticResource Segment}" Content="Main only" GroupName="pe-show" IsChecked="{Binding ShowMain, Mode=TwoWay}" />
+                  <RadioButton Style="{StaticResource Segment}" Content="None" GroupName="pe-show" IsChecked="{Binding ShowNone, Mode=TwoWay}" />
+                </StackPanel>
+              </Border>
+              <TextBlock Text="Who can see my profile" FontSize="12.5" Margin="0,12,0,5" />
+              <Border Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="3" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton Style="{StaticResource Segment}" Content="Everyone" GroupName="pe-vis" IsChecked="{Binding VisEveryone, Mode=TwoWay}" />
+                  <RadioButton Style="{StaticResource Segment}" Content="Officers only" GroupName="pe-vis" IsChecked="{Binding VisOfficers, Mode=TwoWay}" />
+                </StackPanel>
+              </Border>
+              <TextBlock Text="Your avatar and name are always visible. While you appear offline, your profile details are hidden from people who can not see you." Style="{StaticResource RowHint}" Margin="0,6,0,0" />
+
+              <DockPanel Margin="0,22,0,0">
+                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Content="Save profile" Padding="20,0" Height="34" VerticalAlignment="Center" IsEnabled="{Binding CanSave}" Click="ProfileSave_Click" />
+                <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" />
+              </DockPanel>
+            </StackPanel>
           </StackPanel>
 
           <!-- ========== Voice ========== -->

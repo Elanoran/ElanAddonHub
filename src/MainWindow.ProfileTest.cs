@@ -106,15 +106,15 @@ namespace ElansAddonHub
                 };
                 var own = new Dictionary<string, object>
                 {
-                    ["name"] = "Elan", ["found"] = true, ["guest"] = false, ["role"] = "owner", ["online"] = true, ["restricted"] = false, ["avatarId"] = "av.wolf", ["accent"] = "gold",
+                    ["name"] = "Elan", ["displayName"] = "", ["found"] = true, ["guest"] = false, ["role"] = "owner", ["online"] = true, ["restricted"] = false, ["avatarId"] = "av.wolf", ["accent"] = "gold",
                     ["about"] = "Hunter main since 2005. Pet wrangler, bad at fishing, good at snacks.", ["playTimes"] = "evenings CET, weekends", ["main"] = "Elan",
                     ["showChars"] = "all", ["visibleTo"] = "everyone",
                     ["chars"] = new List<object> { Char("Elan", "Hunter", "HUNTER", "Orc", 60, true, false, true), Char("Elanmage", "Mage", "MAGE", "Gnome", 33, false, false, true), Char("Elanpriest", "Priest", "PRIEST", "Dwarf", 12, false, true, true) },
                 };
                 var welcome = new Dictionary<string, object>
                 {
-                    ["t"] = "welcome", ["you"] = 1, ["name"] = "Elan", ["role"] = "owner", ["server"] = "2.6.0", ["maxFileMb"] = 25, ["canShareFiles"] = true, ["canModerate"] = true, ["canManage"] = true, ["canPin"] = true,
-                    ["features"] = new List<object> { "reply", "react", "react2", "pin", "profile" },
+                    ["t"] = "welcome", ["you"] = 1, ["name"] = "Elan", ["role"] = "owner", ["server"] = "2.7.0", ["maxFileMb"] = 25, ["canShareFiles"] = true, ["canModerate"] = true, ["canManage"] = true, ["canPin"] = true,
+                    ["features"] = new List<object> { "reply", "react", "react2", "pin", "profile", "displayname" },
                     ["reactions"] = new List<object> { "ready", "notready", "lol", "love", "fight", "loot", "wipe", "epic" },
                     ["channels"] = new List<object>
                     {
@@ -217,11 +217,16 @@ namespace ElansAddonHub
                 SnapshotElement(LodgePage.PopupCardForTest, P("14-card-restricted.png"));
                 LodgePage.CloseProfileForTest();
 
-                // ---- Edit profile
+                // ---- Settings > Profile (the edit page; every "Edit profile" entry point opens it)
+                bool wentToProfile = false;
+                LodgePage.EditProfileRequested += () => wentToProfile = true;
                 LodgePage.OpenProfileEditor();
-                await Task.Delay(400);
-                var ed = LodgePage.EditorForTest;
-                var vm = ed.Model;
+                Check("every Edit profile entry point asks for Settings > Profile (no separate window any more)", wentToProfile);
+                ShowTab("settings");
+                SettingsPage.Show("profile");
+                await Task.Delay(500);
+                var vm = SettingsPage.ProfileModel;
+                Check("Settings has a Profile entry; the page is the edit form", vm != null && SettingsPage.ProfileSectionForTest.Visibility == Visibility.Visible);
                 Check("editor: 24 pictures + the default tile, 8 swatches + none, current choices selected", vm.Avatars.Count == 25 && vm.Swatches.Count == 9 && vm.Avatars.Single(t => t.Selected).Id == "av.wolf" && vm.Swatches.Single(t => t.Selected).Id == "gold");
                 Check("editor: preview card shows what others see (hidden character left out)", vm.Card.Chars.Count == 2 && vm.Card.About.StartsWith("Hunter main"));
                 Snapshot(P("14-edit-profile.png"));
@@ -241,17 +246,92 @@ namespace ElansAddonHub
                 vm.MainChoice = "Elanpriest";
                 Check("editor: hiding the main character is not possible (choosing it as main unhides it)", !elanPriest.Hidden && elanPriest.IsMain);
                 vm.MainChoice = "Elan"; vm.Refresh();
-                ed.ScrollForTest(2000);
+
+                // display name: live validation, live preview, the server's "taken" answer
+                Check("display name box is there (server 2.7), empty to start with", vm.SupportsDisplayName && vm.DisplayName == "" && vm.DisplayHint.Contains("@Elan"));
+                vm.DisplayName = "H";
+                Check("... too short: hint says so, Save is off", vm.DisplayHint.Contains("At least 2") && !vm.CanSave);
+                vm.DisplayName = "Hunter <Elan>";
+                Check("... odd characters: hint says so, Save is off", vm.DisplayHint.Contains("Only letters") && !vm.CanSave);
+                vm.DisplayName = "Hunter  Elan";
+                Check("... valid: preview card shows the display name with the login name next to it, Save is on", vm.Card.Name == "Hunter Elan" && vm.Card.LoginText == "  ·  @Elan" && vm.CanSave
+                    && (string)vm.ToMessage()["displayName"] == "Hunter Elan");
+                vm.BeginSave();
+                vm.ServerError("That display name is taken");
+                Check("... the server says taken: shown under the box, nothing saved", vm.DisplayHint == "That display name is taken" && vm.StatusText == "Not saved." && vm.CanSave);
+                SettingsPage.ScrollForTest(430);
+                await Task.Delay(300);
+                Snapshot(P("15-settings-profile-taken.png"));
+                vm.DisplayName = "Hunter Elan 2"; vm.DisplayName = "Hunter Elan";
+                SettingsPage.ScrollForTest(2000);
                 await Task.Delay(300);
                 Snapshot(P("14-edit-profile-bottom.png"));
-                ed.Close();
+                SettingsPage.ScrollForTest(0);
+                vm.DisplayName = "Hunter Elan";
+                await Task.Delay(300);
+                Snapshot(P("15-settings-profile-form.png"));
+                // a "profile" answer from the server with the saved name
+                vm.BeginSave();
+                Session.FeedForTest("{\"t\":\"profile:data\",\"profile\":{\"name\":\"Elan\",\"found\":true,\"guest\":false,\"role\":\"owner\",\"online\":true,\"restricted\":false,\"avatarId\":\"av.wolf\",\"accent\":\"gold\",\"displayName\":\"Hunter Elan\",\"about\":\"x\",\"playTimes\":\"\",\"showChars\":\"all\",\"visibleTo\":\"everyone\",\"chars\":[]}}");
+                Session.FeedForTest("{\"t\":\"profile\",\"id\":1,\"name\":\"Elan\",\"avatarId\":\"av.wolf\",\"accent\":\"gold\",\"displayName\":\"Hunter Elan\"}");
+                await Task.Delay(200);
+                Check("saved: my own name is shown as the display name everywhere (member, status line), page says Saved", by["Elan"].Display == "Hunter Elan" && Session.MyDisplayName == "Hunter Elan" && vm.StatusText.StartsWith("Saved") && SettingsPage.ProfileModel == vm);
 
-                // ---- Settings > Lodge > Profile
-                ShowTab("settings");
+                // the Lodge sub-entry in Settings is gone
                 SettingsPage.Show("lodge");
-                await Task.Delay(400);
+                await Task.Delay(300);
                 Snapshot(P("14-settings-profile.png"));
                 ShowTab("lodge");
+
+                // ---- display names across the lodge (server 2.7): member list, chat incl. old messages, replies, reactions, typing, mentions, hover card
+                Session.FeedForTest("{\"t\":\"profile\",\"id\":2,\"name\":\"Bob\",\"avatarId\":\"av.shield\",\"accent\":\"azure\",\"displayName\":\"Measley the Bold\"}");
+                Session.FeedForTest("{\"t\":\"profile\",\"id\":3,\"name\":\"Tess\",\"avatarId\":\"av.staff\",\"accent\":\"violet\",\"displayName\":\"Tessa Frostweaver\"}");
+                var m7 = new Dictionary<string, object> { ["t"] = "msg", ["channel"] = "general", ["id"] = "m7", ["at"] = (double)(now - 120000), ["from"] = "Dax", ["fromId"] = 4, ["text"] = "Agreed!",
+                    ["replyTo"] = new Dictionary<string, object> { ["id"] = "m1", ["by"] = "Bob", ["snippet"] = "Wailing Caverns in ten minutes, who is in?" } };
+                Session.FeedForTest(Json.Write(m7));
+                var m8 = new Dictionary<string, object> { ["t"] = "msg", ["channel"] = "general", ["id"] = "m8", ["at"] = (double)(now - 60000), ["from"] = "Bob", ["fromId"] = 2, ["text"] = "@Hunter Elan we need a hunter for the Caverns" };
+                Session.FeedForTest(Json.Write(m8));
+                var m9 = new Dictionary<string, object> { ["t"] = "msg", ["channel"] = "general", ["id"] = "m9", ["at"] = (double)(now - 30000), ["from"] = "Tess", ["fromId"] = 3, ["text"] = "@elan or just @Elan works too" };
+                Session.FeedForTest(Json.Write(m9));
+                Session.FeedForTest("{\"t\":\"react\",\"channel\":\"general\",\"id\":\"m1\",\"reaction\":\"ready\",\"users\":[\"Tess\",\"Dax\"],\"by\":\"Tess\",\"on\":true}");
+                Session.FeedForTest("{\"t\":\"typing\",\"channel\":\"general\",\"id\":3}");
+                await Task.Delay(300);
+                Check("member list shows display names; the login name is still the identity", by["Bob"].Display == "Measley the Bold" && by["Bob"].Name == "Bob" && by["Tess"].Display == "Tessa Frostweaver" && by["Dax"].Display == "Dax");
+                Check("a message from before the rename shows the new name (history, reply quote)", msgs.First(m => m.Id == "m1").FromShown == "Measley the Bold" && msgs.First(m => m.Id == "m1").From == "Bob"
+                    && msgs.First(m => m.Id == "m2").FromShown == "Tessa Frostweaver" && msgs.First(m => m.Id == "m7").ReplyShown == "Measley the Bold" && msgs.First(m => m.Id == "m7").ReplyFrom == "Bob");
+                Check("reaction tooltip names the people by display name", msgs.First(m => m.Id == "m1").Reactions.Any(r => r.Tip.Contains("Tessa Frostweaver") && r.Tip.Contains("Dax")));
+                Check("typing indicator uses the display name", Session.TypingText("general") == "Tessa Frostweaver is typing...");
+                Check("mentions: @DisplayName and @LoginName (any case) both mention me", msgs.First(m => m.Id == "m8").Mentioned && msgs.First(m => m.Id == "m9").Mentioned && !msgs.First(m => m.Id == "m7").Mentioned);
+                Check("hover card text: Display Name, then the dim login name", by["Bob"].CardNameText == "Measley the Bold" && by["Bob"].LoginText == "  ·  @Bob" && by["Dax"].LoginText == "" && by["Elan"].CardNameText == "Hunter Elan (you)");
+                Check("someone who left keeps their display name in old messages", msgs.First(m => m.Id == "m5").FromShown == "Ghost");
+                Session.FeedForTest("{\"t\":\"profile\",\"id\":3,\"name\":\"Tess\",\"avatarId\":\"av.staff\",\"accent\":\"violet\",\"displayName\":\"Tessa Frostweaver\"}");
+                Session.FeedForTest("{\"t\":\"leave\",\"id\":3}");
+                Check("... and so does a display name after the person left (known-names cache)", msgs.First(m => m.Id == "m2").FromShown == "Tessa Frostweaver");
+                Session.FeedForTest(Json.Write(new Dictionary<string, object> { ["t"] = "join", ["user"] = User(3, "Tess", "member", "av.staff", "violet", Game("Tess", "Mage", "MAGE", "Gnome", "Gnome", 33, "Elwynn Forest", 1 + 128, 20, 3)) }));
+                by = Session.Members.ToDictionary(m => m.Name);
+                Check("... a join entry without displayName keeps it gone (server said none), a 2.6 server entry shows the login name", by["Tess"].Display == "Tess");
+                Session.FeedForTest("{\"t\":\"profile\",\"id\":3,\"name\":\"Tess\",\"avatarId\":\"av.staff\",\"accent\":\"violet\",\"displayName\":\"Tessa Frostweaver\"}");
+                await Task.Delay(300);
+                Snapshot(P("15-lodge-displaynames.png"));
+                SnapshotElement(LodgePage.SidebarForTest, P("15-sidebar-displaynames.png"));
+                foreach (var who in new[] { "Bob", "Dax" })
+                {
+                    var tip = LodgePage.ShowCardForTest(by[who], LodgePage.SidebarForTest);
+                    await Task.Delay(250);
+                    SnapshotElement(tip, P("15-hovercard-" + who.ToLowerInvariant() + ".png"));
+                    tip.IsOpen = false;
+                }
+                LodgePage.ShowProfileCard(by["Bob"], LodgePage.SidebarForTest);
+                await Task.Delay(300);
+                Session.FeedForTest("{\"t\":\"profile:data\",\"profile\":{\"name\":\"Bob\",\"found\":true,\"guest\":false,\"role\":\"officer\",\"online\":true,\"restricted\":false,\"avatarId\":\"av.shield\",\"accent\":\"azure\",\"displayName\":\"Measley the Bold\",\"about\":\"Paladin tank.\",\"playTimes\":\"evenings\",\"chars\":[]}}");
+                await Task.Delay(300);
+                Check("profile card: Display Name with the dim @LoginName", LodgePage.PopCardForTest.Name == "Measley the Bold" && LodgePage.PopCardForTest.LoginText == "  ·  @Bob" && LodgePage.PopCardForTest.LoginVisibility == Visibility.Visible);
+                SnapshotElement(LodgePage.PopupCardForTest, P("15-card-bob.png"));
+                LodgePage.CloseProfileForTest();
+                // an owner reset clears it
+                Session.FeedForTest("{\"t\":\"profile\",\"id\":2,\"name\":\"Bob\",\"avatarId\":null,\"accent\":null,\"displayName\":\"\"}");
+                Check("owner reset (displayName empty): everything shows the login name again, old messages too", by["Bob"].Display == "Bob" && msgs.First(m => m.Id == "m1").FromShown == "Bob");
+                Session.FeedForTest("{\"t\":\"profile\",\"id\":2,\"name\":\"Bob\",\"avatarId\":\"av.shield\",\"accent\":\"azure\",\"displayName\":\"Measley the Bold\"}");
 
                 // ---- toasts and overlay with avatars
                 var s = settings;
@@ -260,7 +340,7 @@ namespace ElansAddonHub
                 Session.Presence.SetForTest(null, true);
                 var T = Session.Toasts;
                 T.Visible.Clear(); T.Clock = () => DateTime.UtcNow;
-                T.Push(new ToastItem { Kind = ToastKind.Mention, Sender = "Bob", Channel = "General", ChannelId = "g", Text = "@Elan the Wailing Caverns group needs a hunter, are you in?", Who = by["Bob"] });
+                T.Push(new ToastItem { Kind = ToastKind.Mention, Sender = DisplayNames.Shown("Bob"), Channel = "General", ChannelId = "g", Text = "@Elan the Wailing Caverns group needs a hunter, are you in?", Who = by["Bob"] });
                 T.Push(new ToastItem { Kind = ToastKind.Reply, Sender = "Dax", Channel = "General", ChannelId = "g2", Text = "Count me in for later", Who = by["Dax"] });
                 T.Push(new ToastItem { Kind = ToastKind.Mention, Sender = "Mira", Channel = "General", ChannelId = "g3", Text = "@Elan default look, class colour circle", Who = by["Mira"] });
                 LodgePage.ForceToastsForTest = true;
@@ -270,7 +350,6 @@ namespace ElansAddonHub
                 T.Visible.Clear();
                 s.ToastsOff = o1; s.ToastMentionsOff = o2;
                 Session.Presence.SetForTest(null, false);
-
                 foreach (var m in Session.Members.Where(m => m.Room != null || m.Name == "Elan" || m.Name == "Mira" || m.Name == "Kor")) { m.InMyRoom = true; if (m.Name == "Kor") m.Speaking = true; }
                 var ow = new OverlayWindow(Session.Members);
                 ow.Show();
@@ -278,8 +357,18 @@ namespace ElansAddonHub
                 SnapshotOn((FrameworkElement)ow.Content, P("14-overlay.png"), Color.FromRgb(0x3A, 0x4A, 0x3A));
                 ow.Close();
                 foreach (var m in Session.Members) { m.InMyRoom = false; m.Speaking = false; }
+
+                // ---- Settings > Profile when not connected: a short explanation instead of the form
+                Session.Disconnect();
+                ShowTab("settings");
+                SettingsPage.Show("profile");
+                await Task.Delay(500);
+                Check("not connected: the Profile page shows an explanation, no form", SettingsPage.ProfileModel == null && SettingsPage.ProfileSectionForTest.Visibility == Visibility.Visible);
+                Snapshot(P("15-settings-profile-empty.png"));
+                ShowTab("lodge");
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
+            DisplayNames.Forget();
             return "profile selftest: " + (ok ? "PASSED" : "FAILED") + "\r\n  " + string.Join("\r\n  ", notes);
         }
     }

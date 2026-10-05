@@ -26,7 +26,7 @@
           <Border DockPanel.Dock="Right" CornerRadius="4" Padding="6,1" Margin="10,0,0,0" Background="{Binding FrameBrush}" VerticalAlignment="Center">
             <TextBlock Text="{Binding RoleLabel}" FontSize="10" FontWeight="Bold" Foreground="#111315" />
           </Border>
-          <TextBlock Text="{Binding Name}" FontSize="17" FontWeight="SemiBold" Foreground="{Binding NameBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <TextBlock FontSize="17" FontWeight="SemiBold" Foreground="{Binding NameBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"><Run Text="{Binding Name, Mode=OneWay}" /><Run Text="{Binding LoginText, Mode=OneWay}" FontWeight="Normal" FontSize="12.5" Foreground="{StaticResource TextDim}" /></TextBlock>
         </DockPanel>
         <TextBlock Text="{Binding Member.CardClassLine}" Visibility="{Binding Member.CardClassVisibility}" FontSize="12" Foreground="{StaticResource TextDim}"
                    Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />

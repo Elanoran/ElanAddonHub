@@ -95,12 +95,27 @@ namespace ElansAddonHub.Lodge
         public string Name { get; set; }
         public bool Guest { get; set; }
         public bool IsMe { get; set; }
+        // ---- display name (Lodge server 2.7): shown instead of the login name; the login name stays the identity
+        string displayName = "";
+        public string DisplayName => displayName;
+        public bool HasDisplayName => displayName.Length > 0;
+        public string Display => displayName.Length > 0 ? displayName : Name;
+        // hover card / profile card: "Display Name" then a dim "· @Login"
+        public string LoginText => HasDisplayName ? "  ·  @" + Name : "";
+        public bool SetDisplayName(string d)
+        {
+            d = d ?? "";
+            if (d == displayName) return false;
+            displayName = d;
+            foreach (var n in new[] { nameof(DisplayName), nameof(HasDisplayName), nameof(Display), nameof(LoginText), nameof(CardNameText), nameof(Tip), nameof(Initial) }) Raise(n);
+            return true;
+        }
         // the avatar is the class colour + race code once we know the character (e.g. NE on orange); otherwise name colour + initial
         public Brush Color => gameClassFile != null && ClassColors.TryGetValue(gameClassFile, out var hex) ? Avatar.Frozen(hex) : Avatar.ColorFor(Name);
         // with a class icon found on this PC (see AvatarArt) the avatar shows it instead of the race code
         public Brush IconBrush => gameClassFile != null ? AvatarArt.ClassBrush(gameClassFile) : null;
         public Visibility InitialVisibility => IconBrush != null ? Visibility.Collapsed : Visibility.Visible;
-        public string Initial => gameRaceFile != null ? RaceCode(gameRaceFile) : Avatar.Initial(Name);
+        public string Initial => gameRaceFile != null ? RaceCode(gameRaceFile) : Avatar.Initial(Display);
         static readonly System.Collections.Generic.Dictionary<string, string> RaceCodes = new System.Collections.Generic.Dictionary<string, string>
         {
             ["Human"] = "Hu", ["Dwarf"] = "Dw", ["NightElf"] = "NE", ["Gnome"] = "Gn", ["Orc"] = "Or", ["Scourge"] = "Ud", ["Undead"] = "Ud",
@@ -272,7 +287,7 @@ namespace ElansAddonHub.Lodge
             Raise(nameof(CardPlaceLine)); Raise(nameof(CardPlaceVisibility)); Raise(nameof(CardStatusLine)); Raise(nameof(CardStatusVisibility));
             Raise(nameof(CardVoiceLine)); Raise(nameof(CardVoiceVisibility)); Raise(nameof(CardStateVisibility)); Raise(nameof(Tip));
         }
-        public string CardNameText => IsMe ? Name + " (you)" : Name;
+        public string CardNameText => IsMe ? Display + " (you)" : Display;
         // "Level 25 Human Paladin · Measley" (the character's name only when it differs from the Lodge name)
         public string CardClassLine
         {
@@ -361,7 +376,7 @@ namespace ElansAddonHub.Lodge
         public Visibility StatusVisibility => status == "online" || invisible ? Visibility.Collapsed : Visibility.Visible;
         public double NameOpacity => status == "away" || invisible ? 0.55 : 1;
         public string StatusLine => string.IsNullOrEmpty(note) ? StatusLabel(status) : note;
-        public string Tip => (IsMe ? Name + " (you)" : Name) + " · " + RoleName(role)
+        public string Tip => (IsMe ? Display + " (you)" : Display) + (HasDisplayName ? " (@" + Name + ")" : "") + " · " + RoleName(role)
             + (status != "online" ? " - " + StatusLabel(status) : "")
             + (string.IsNullOrEmpty(note) ? "" : ": " + note)
             + (serverMuted ? " (muted by an officer)" : "")
@@ -409,6 +424,14 @@ namespace ElansAddonHub.Lodge
         public bool ForceTools { get => forceTools; set => Set(ref forceTools, value); } // screenshots only
         public ObservableCollection<ReactionVM> Reactions { get; } = new ObservableCollection<ReactionVM>();
         public Brush ReplyColor => Avatar.ColorFor(ReplyFrom);
+        // what the UI shows: the display name when the person has one (resolved live, so a rename also changes old messages)
+        public string FromShown => DisplayNames.Shown(From);
+        public string ReplyShown => DisplayNames.Shown(ReplyFrom);
+        public void RefreshNames()
+        {
+            Raise(nameof(FromShown)); Raise(nameof(ReplyShown));
+            foreach (var r in Reactions) r.RefreshTip();
+        }
 
         string text;
         bool edited, mentioned, divider, flash, pinned;
@@ -530,7 +553,8 @@ namespace ElansAddonHub.Lodge
         public bool Mine => mine;
         public Brush Fill => mine ? MineFill : PlainFill;
         public Brush Line => mine ? MineLine : PlainLine;
-        public string Tip => users.Length == 0 ? "" : ReactionArt.Name(Emoji) + ": " + string.Join(", ", users);
+        public string Tip => users.Length == 0 ? "" : ReactionArt.Name(Emoji) + ": " + string.Join(", ", users.Select(DisplayNames.Shown));
+        public void RefreshTip() => Raise(nameof(Tip));
     }
 
     // a pinned message: the server keeps its own copy of the text, so it outlives the history window
@@ -542,6 +566,7 @@ namespace ElansAddonHub.Lodge
         public string PinnedBy { get; set; }
         public DateTime At { get; set; }
         public string FileName { get; set; }
+        public string ByShown => DisplayNames.Shown(By);
         public string Shown => !string.IsNullOrEmpty(Text) ? Text : FileName != null ? "[" + FileName + "]" : "";
         public Brush Color => Avatar.ColorFor(By);
         public string Time => At.ToLocalTime().ToString("d MMM HH:mm");

@@ -14,7 +14,7 @@
         <Border x:Name="pill" Padding="3,3,11,3" CornerRadius="16" Background="#B3101214" BorderThickness="1.5" BorderBrush="{Binding FrameBrush}">
           <StackPanel Orientation="Horizontal">
             <local:AvatarView Width="26" Height="26" Decor="True" RankRing="False" />
-            <TextBlock Text="{Binding Name}" Foreground="White" FontSize="13" FontWeight="SemiBold" Margin="10,0,0,1" VerticalAlignment="Center"
+            <TextBlock Text="{Binding Display}" Foreground="White" FontSize="13" FontWeight="SemiBold" Margin="10,0,0,1" VerticalAlignment="Center"
                        Opacity="{Binding NameOpacity}">
               <TextBlock.Effect>
                 <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.9" Color="Black" />

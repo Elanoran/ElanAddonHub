@@ -70,6 +70,7 @@ namespace ElansAddonHub
                 foreach (var c in cards) if (!c.Busy) c.Update(c.Info, settings.WowRoot);
             }));
             LodgePage.OpenSettings += () => { ShowTab("settings"); SettingsPage.Show("voice"); };
+            LodgePage.EditProfileRequested += () => { ShowTab("settings"); SettingsPage.Show("profile"); };
             LodgePage.Init(Session);
             SettingsPage.Init(this, settings, LodgePage);
         }

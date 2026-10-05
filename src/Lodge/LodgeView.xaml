@@ -20,8 +20,8 @@
             <TextBlock Text="{Binding RoleLabel}" FontSize="9.5" FontWeight="Bold" Foreground="#111315" />
           </Border>
           <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarCard}" VerticalAlignment="Center" Margin="2,0,10,0" />
-          <TextBlock Text="{Binding CardNameText}" FontSize="13.5" FontWeight="SemiBold" Foreground="{Binding ClassBrushOrText}"
-                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <TextBlock FontSize="13.5" FontWeight="SemiBold" Foreground="{Binding ClassBrushOrText}"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis"><Run Text="{Binding CardNameText, Mode=OneWay}" /><Run Text="{Binding LoginText, Mode=OneWay}" FontWeight="Normal" FontSize="11.5" Foreground="{StaticResource TextDim}" /></TextBlock>
         </DockPanel>
         <TextBlock Text="{Binding CardClassLine}" Visibility="{Binding CardClassVisibility}" FontSize="12" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
         <StackPanel Orientation="Horizontal" Visibility="{Binding CardStateVisibility}" Margin="0,3,0,0">
@@ -60,7 +60,7 @@
           <TextBlock DockPanel.Dock="Right" Text="&#xE708;" FontFamily="{StaticResource Icons}" FontSize="10.5" Foreground="#E6B85C" Margin="0,0,5,0"
                      VerticalAlignment="Center" Visibility="{Binding AfkVisibility}" />
           <StackPanel Margin="10,0,6,0" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Name}" FontSize="12.5" Opacity="{Binding NameOpacity}" Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding Display}" FontSize="12.5" Opacity="{Binding NameOpacity}" Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis" />
             <TextBlock Text="{Binding SecondLine}" Visibility="{Binding SecondVisibility}" FontSize="10.5" Foreground="{StaticResource TextDim}"
                        Opacity="{Binding NameOpacity}" TextTrimming="CharacterEllipsis" Margin="0,-1,0,0" />
           </StackPanel>
@@ -287,14 +287,14 @@
                           <TextBlock Grid.Row="0" Grid.Column="1" Visibility="{Binding ReplyVisibility}" FontSize="11.5" TextTrimming="CharacterEllipsis"
                                      Foreground="{StaticResource TextDim}" Margin="0,2,60,2" Cursor="Hand" Tag="{Binding}"
                                      MouseLeftButtonUp="ReplyQuote_Click" ToolTip="Jump to the original message">
-                            <Run Text="{Binding ReplyFrom, Mode=OneWay}" FontWeight="SemiBold" Foreground="{Binding ReplyColor, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding ReplyText, Mode=OneWay}" />
+                            <Run Text="{Binding ReplyShown, Mode=OneWay}" FontWeight="SemiBold" Foreground="{Binding ReplyColor, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding ReplyText, Mode=OneWay}" />
                           </TextBlock>
 
                           <local:AvatarView Grid.Row="1" Width="34" Height="34" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0" Visibility="{Binding AvatarVisibility}"
                                             Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="MessageAuthor_Click" />
                           <StackPanel Grid.Row="1" Grid.Column="1">
                             <StackPanel Orientation="Horizontal" Visibility="{Binding HeaderVisibility}">
-                              <TextBlock Text="{Binding From}" FontWeight="SemiBold" FontSize="13" Foreground="{Binding Color}" ToolTipOpening="NameTip_Opening"
+                              <TextBlock Text="{Binding FromShown}" FontWeight="SemiBold" FontSize="13" Foreground="{Binding Color}" ToolTipOpening="NameTip_Opening"
                                          Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="MessageAuthor_Click">
                                 <TextBlock.ToolTip>
                                   <ToolTip Style="{StaticResource CardTip}" ContentTemplate="{StaticResource MemberCard}" Content="{Binding Author}" />
@@ -516,7 +516,7 @@
                               VerticalAlignment="Top" Tag="{Binding}" Click="PinRemove_Click" Visibility="{Binding UnpinVisibility}" />
                       <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                          <TextBlock Text="{Binding By}" FontWeight="SemiBold" FontSize="12" Foreground="{Binding Color}" />
+                          <TextBlock Text="{Binding ByShown}" FontWeight="SemiBold" FontSize="12" Foreground="{Binding Color}" />
                           <TextBlock Text="{Binding Time}" FontSize="10.5" Foreground="{StaticResource TextDim}" Margin="8,1,0,0" />
                         </StackPanel>
                         <TextBlock Text="{Binding Shown}" FontSize="12.5" TextWrapping="Wrap" MaxHeight="54" TextTrimming="CharacterEllipsis" Margin="0,2,6,0" />
@@ -540,7 +540,7 @@
     <Popup x:Name="StatusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="-6">
       <Border x:Name="StatusBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="6" Width="250">
         <StackPanel>
-          <Button Style="{StaticResource MenuRow}" Click="EditProfile_Click" ToolTip="Avatar, about text, characters, privacy">
+          <Button Style="{StaticResource MenuRow}" Click="EditProfile_Click" ToolTip="Display name, avatar, about text, characters, privacy">
             <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE77B;" FontFamily="{StaticResource Icons}" Foreground="{StaticResource Accent}" FontSize="13" Width="24" /><TextBlock Text="Edit profile..." /></StackPanel>
           </Button>
           <Border Height="1" Background="{StaticResource Line}" Margin="8,3,8,3" />
@@ -599,15 +599,14 @@
                 <TextBlock Text="Kick from the lodge" Foreground="{StaticResource Danger}" />
               </Button>
             </StackPanel>
-            <Button x:Name="PopReset" Style="{StaticResource MenuRow}" Margin="-8,0,0,0" Click="PopReset_Click" ToolTip="Guild Master: put their avatar back to the default">
-              <TextBlock Text="Reset avatar to default" Foreground="{StaticResource Danger}" />
+            <Button x:Name="PopReset" Style="{StaticResource MenuRow}" Margin="-8,0,0,0" Click="PopReset_Click" ToolTip="Guild Master: put their avatar, accent and display name back to the default">
+              <TextBlock Text="Reset profile look to default" Foreground="{StaticResource Danger}" />
             </Button>
           </StackPanel>
         </StackPanel>
       </Border>
     </Popup>
 
-    <local:ProfileEditor x:Name="Editor" Grid.RowSpan="9" Grid.ColumnSpan="9" />
 
     <!-- in-app picture viewer (covers the whole Lodge) -->
     <local:ImageViewer x:Name="Viewer" Grid.RowSpan="9" Grid.ColumnSpan="9" />

@@ -70,7 +70,6 @@ namespace ElansAddonHub.Lodge
             };
             session.Stopped += why => ShowJoin(why);
             session.ProfileReceived += OnProfileReceived;
-            Editor.Saved += vm => { if (Session.SupportsProfile) _ = Session.SaveProfile(vm.ToMessage()); };
             session.Error += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(6); };
             tick.Start();
 
@@ -117,7 +116,7 @@ namespace ElansAddonHub.Lodge
             if (s.Me != null)
             {
                 MeAvatar.Content = s.Me;
-                MeName.Text = s.Me.Name;
+                MeName.Text = s.Me.Display;
                 MeStatus.Text = MemberVM.RoleName(s.MyRole) + " · " +
                     (s.Invisible ? "Invisible" : string.IsNullOrEmpty(s.MyNote) ? MemberVM.StatusLabel(s.MyStatus) : s.MyNote);
             }
@@ -423,6 +422,7 @@ namespace ElansAddonHub.Lodge
         void ShowProfileCardByName(string name, UIElement target)
         {
             var standIn = new MemberVM { Id = 0, Name = name, Offline = true };
+            standIn.SetDisplayName(DisplayNames.Shown(name) == name ? "" : DisplayNames.Shown(name));
             var known = Session.KnownAvatarOf(name);
             if (known != null) standIn.SetAvatar(known[0], known[1]);
             ShowProfileCard(standIn, target);
@@ -446,7 +446,7 @@ namespace ElansAddonHub.Lodge
             bool joinable = !m.Offline && m.Room != null && m.Room != Session.MyRoom && Session.Me != null;
             PopJoin.Visibility = joinable ? Visibility.Visible : Visibility.Collapsed;
             PopJoin.Content = "Join " + (string.IsNullOrEmpty(m.RoomName) ? "their voice room" : m.RoomName);
-            PopReset.Visibility = Session.CanManage && !m.IsMe && m.HasAvatar ? Visibility.Visible : Visibility.Collapsed;
+            PopReset.Visibility = Session.CanManage && !m.IsMe && (m.HasAvatar || m.HasDisplayName) ? Visibility.Visible : Visibility.Collapsed;
             MemberPopup.PlacementTarget = target;
             MemberPopup.IsOpen = true;
             Session.RequestProfile(m.Name);
@@ -456,15 +456,15 @@ namespace ElansAddonHub.Lodge
         {
             if (popCard == null || !MemberPopup.IsOpen || !string.Equals(pd.Name, popCard.Member.Name, StringComparison.OrdinalIgnoreCase)) return;
             popCard.Loading = false;
-            if (popCard.Member.Offline && pd.Found) { popCard.Member.Role = pd.Role; popCard.Member.SetAvatar(pd.AvatarId, pd.Accent); popCard.Member.Offline = !pd.Online; }
+            if (popCard.Member.Offline && pd.Found) { popCard.Member.Role = pd.Role; popCard.Member.SetAvatar(pd.AvatarId, pd.Accent); popCard.Member.SetDisplayName(pd.DisplayName); popCard.Member.Offline = !pd.Online; }
             popCard.Data = pd;
-            PopReset.Visibility = Session.CanManage && !popCard.Member.IsMe && popCard.Member.HasAvatar ? Visibility.Visible : Visibility.Collapsed;
+            PopReset.Visibility = Session.CanManage && !popCard.Member.IsMe && (popCard.Member.HasAvatar || popCard.Member.HasDisplayName) ? Visibility.Visible : Visibility.Collapsed;
         }
 
         void PopMention_Click(object sender, RoutedEventArgs e)
         {
             MemberPopup.IsOpen = false;
-            if (popMember != null) InsertMention(popMember.Name);
+            if (popMember != null) InsertMention(popMember.Display);
         }
 
         public void InsertMention(string name)
@@ -486,7 +486,7 @@ namespace ElansAddonHub.Lodge
         {
             MemberPopup.IsOpen = false;
             if (popMember == null) return;
-            if (Dialog.Confirm(Window.GetWindow(this), $"Reset {popMember.Name}'s avatar?", "Their avatar and accent go back to the default look. They can pick a new one afterwards.", "Reset", danger: true))
+            if (Dialog.Confirm(Window.GetWindow(this), $"Reset {popMember.Display}'s profile?", "Their avatar, accent and display name go back to the default. They can pick new ones afterwards.", "Reset", danger: true))
                 Session.ResetProfile(popMember.Name);
         }
 
@@ -494,17 +494,14 @@ namespace ElansAddonHub.Lodge
         void MeAvatar_Click(object sender, MouseButtonEventArgs e) { OpenProfileEditor(); e.Handled = true; }
         void EditProfile_Click(object sender, RoutedEventArgs e) { StatusPopup.IsOpen = false; OpenProfileEditor(); }
 
-        public void OpenProfileEditor()
-        {
-            if (Session?.Me == null) return;
-            Editor.Open(new ProfileEditVM(Session));
-        }
+        // every "Edit profile" entry point goes to Settings > Profile
+        public event Action EditProfileRequested;
+        public void OpenProfileEditor() => EditProfileRequested?.Invoke();
 
-        public ProfileEditor EditorForTest => Editor;
         public void ShowProfileCardByNameForTest(string name, UIElement target) => ShowProfileCardByName(name, target);
         public ProfileCardVM PopCardForTest => popCard;
         public FrameworkElement PopupCardForTest => (FrameworkElement)MemberPopup.Child;
-        public void CloseProfileForTest() { MemberPopup.IsOpen = false; Editor.Close(); }
+        public void CloseProfileForTest() { MemberPopup.IsOpen = false; }
 
         void PopVolume_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
@@ -523,7 +520,7 @@ namespace ElansAddonHub.Lodge
         {
             MemberPopup.IsOpen = false;
             if (popMember == null) return;
-            if (Dialog.Confirm(Window.GetWindow(this), $"Kick {popMember.Name}?", "They are removed from the lodge right now, but can join again with their code.", "Kick", danger: true))
+            if (Dialog.Confirm(Window.GetWindow(this), $"Kick {popMember.Display}?", "They are removed from the lodge right now, but can join again with their code.", "Kick", danger: true))
                 Session.Kick(popMember);
         }
 
@@ -540,7 +537,7 @@ namespace ElansAddonHub.Lodge
             replyTo = m;
             var snip = (m.Text ?? m.File?.Name ?? "").Replace("\n", " ");
             if (snip.Length > 60) snip = snip.Substring(0, 60) + "...";
-            ModeText.Text = $"Replying to {m.From}  -  {snip}";
+            ModeText.Text = $"Replying to {m.FromShown}  -  {snip}";
             ModeBar.Visibility = Visibility.Visible;
             Composer.Focus();
         }
@@ -564,7 +561,7 @@ namespace ElansAddonHub.Lodge
 
         void DeleteMessage(MessageVM m)
         {
-            var whose = m.Mine ? "your message" : $"{m.From}'s message";
+            var whose = m.Mine ? "your message" : $"{m.FromShown}'s message";
             if (Dialog.Confirm(Window.GetWindow(this), "Delete message?", $"Delete {whose}? This can't be undone.", "Delete", danger: true))
                 _ = Session.Delete(m.Id);
         }

@@ -34,7 +34,7 @@ namespace ElansAddonHub.Lodge
         public Brush RingBrush => selected ? Avatar.Res("Text") : Brushes.Transparent;
     }
 
-    // the "Edit profile" page: everything the member can choose, with a live preview card that shows what others will see.
+    // the Settings > Profile page: everything the member can choose, with a live preview card that shows what others will see.
     public class ProfileEditVM : Bindable
     {
         readonly LodgeSession session;
@@ -47,7 +47,13 @@ namespace ElansAddonHub.Lodge
         public ProfileCardVM Card { get; }
         public bool IsGuest { get; }
         public bool Supported { get; }
+        public bool SupportsDisplayName { get; }
+        public bool Dirty { get; private set; }     // the member changed something that is not saved yet
+        public bool Saving { get; private set; }
+        readonly bool init;
+        readonly string login;
 
+        string displayName = "", displayServerError, statusText = "";
         string avatarId, accent, about = "", playTimes = "", main, showChars = "all", visibleTo = "everyone";
 
         public ProfileEditVM(LodgeSession session)
@@ -56,7 +62,10 @@ namespace ElansAddonHub.Lodge
             var me = session.Me;
             var p = session.MyProfile ?? new ProfileData { Name = me?.Name };
             Supported = session.SupportsProfile;
+            SupportsDisplayName = session.SupportsDisplayName;
             IsGuest = me != null && me.Guest;
+            login = me?.Name ?? "";
+            displayName = p.DisplayName ?? me?.DisplayName ?? "";
             avatarId = AvatarCatalog.IsAvatar(p.AvatarId) ? p.AvatarId : null;
             accent = AvatarCatalog.IsAccent(p.Accent) ? p.Accent : null;
             about = p.About ?? ""; playTimes = p.PlayTimes ?? ""; main = p.Main;
@@ -78,6 +87,8 @@ namespace ElansAddonHub.Lodge
             Card = new ProfileCardVM(Preview);
             RefreshChoices();
             Update();
+            init = true;
+            Dirty = false;
         }
 
         void RefreshChoices()
@@ -91,6 +102,8 @@ namespace ElansAddonHub.Lodge
 
         void Update()
         {
+            if (init) Dirty = true;
+            Preview.SetDisplayName(DisplayProblem == null ? DisplayNames.Clean(displayName) : "");
             foreach (var t in Avatars) { t.Selected = t.Id == avatarId; t.SetImage(t.Id == null ? null : AvatarCatalog.Image(t.Id, accent)); }
             foreach (var s in Swatches) s.Selected = s.Id == accent;
             Preview.SetAvatar(avatarId, accent);
@@ -98,12 +111,13 @@ namespace ElansAddonHub.Lodge
             Raise(nameof(AboutCounter)); Raise(nameof(AboutCounterBrush)); Raise(nameof(Hint)); Raise(nameof(HintVisibility)); Raise(nameof(MainChoice));
             Raise(nameof(ShowAll)); Raise(nameof(ShowMain)); Raise(nameof(ShowNone)); Raise(nameof(VisEveryone)); Raise(nameof(VisOfficers));
             Raise(nameof(CharsVisibility)); Raise(nameof(NoCharsVisibility));
+            Raise(nameof(DisplayHint)); Raise(nameof(DisplayHintBrush)); Raise(nameof(CanSave)); Raise(nameof(StatusText)); Raise(nameof(StatusBrush));
         }
 
         // what other people will see (the server applies the same rules)
         ProfileData BuildPreview()
         {
-            var d = new ProfileData { Name = Preview.Name, Found = true, Role = session.MyRole, Online = true, AvatarId = avatarId, Accent = accent, About = about, PlayTimes = playTimes, Main = main };
+            var d = new ProfileData { Name = Preview.Name, DisplayName = Preview.DisplayName, Found = true, Role = session.MyRole, Online = true, AvatarId = avatarId, Accent = accent, About = about, PlayTimes = playTimes, Main = main };
             foreach (var c in Chars.OrderByDescending(x => x.Seen))
             {
                 bool isMain = main != null && string.Equals(c.Name, main, StringComparison.OrdinalIgnoreCase);
@@ -111,6 +125,43 @@ namespace ElansAddonHub.Lodge
                 if (shown) d.Chars.Add(new CharVM { Name = c.Name, Class = c.Class, ClassFile = c.ClassFile, Race = c.Race, Level = c.Level, IsMain = isMain });
             }
             return d;
+        }
+
+        // ---- display name (server 2.7)
+        public string DisplayName { get => displayName; set { value = value ?? ""; if (value == displayName) return; displayName = value; displayServerError = null; Update(); Raise(nameof(DisplayName)); } }
+        public string DisplayProblem => SupportsDisplayName && !IsGuest ? DisplayNames.Problem(displayName) : null;
+        public bool DisplayEnabled => !IsGuest;
+        public Visibility DisplayVisibility => SupportsDisplayName ? Visibility.Visible : Visibility.Collapsed;
+        public string Login => login;
+        public string DisplayHint
+        {
+            get
+            {
+                if (IsGuest) return "Guests keep their guest name - a display name needs a personal invite code.";
+                if (displayServerError != null) return displayServerError;
+                var p = DisplayProblem;
+                if (p != null) return p;
+                var clean = DisplayNames.Clean(displayName);
+                if (clean.Length == 0) return "Shown instead of your login name (@" + login + ") in the member list, chat and notifications. Leave it empty to use @" + login + ".";
+                return "Others see \"" + clean + "\", with @" + login + " next to it on your card. You can change it once a minute.";
+            }
+        }
+        public Brush DisplayHintBrush => !IsGuest && (displayServerError != null || DisplayProblem != null) ? Avatar.Res("Danger") : Avatar.Res("TextDim");
+        public bool CanSave => Supported && !Saving && DisplayProblem == null;
+        public string StatusText => statusText;
+        public Brush StatusBrush => statusText.StartsWith("Saved") || statusText.StartsWith("Saving") ? Avatar.Res("TextDim") : Avatar.Res("Danger");
+
+        public void BeginSave() { Saving = true; displayServerError = null; statusText = "Saving..."; Raise(nameof(CanSave)); Raise(nameof(StatusText)); Raise(nameof(StatusBrush)); Raise(nameof(DisplayHint)); Raise(nameof(DisplayHintBrush)); }
+        public DateTime SavedAt = DateTime.MinValue;
+        public void Saved() { SavedAt = DateTime.UtcNow; Saving = false; Dirty = false; displayServerError = null; statusText = "Saved - everyone sees it now."; Update(); Dirty = false; }
+        // the server refused the save (taken name, rate limit, ...): nothing was saved
+        public void ServerError(string text)
+        {
+            Saving = false;
+            if ((text ?? "").IndexOf("display name", StringComparison.OrdinalIgnoreCase) >= 0) { displayServerError = text; statusText = "Not saved."; }
+            else statusText = text ?? "Not saved.";
+            Update();
+            Dirty = true;
         }
 
         public string AvatarId => avatarId;
@@ -164,6 +215,7 @@ namespace ElansAddonHub.Lodge
                 ["avatarId"] = avatarId, ["accent"] = accent, ["about"] = about.Trim(), ["playTimes"] = playTimes.Trim(),
                 ["showChars"] = showChars, ["visibleTo"] = visibleTo,
             };
+            if (SupportsDisplayName && !IsGuest) o["displayName"] = DisplayNames.Clean(displayName);
             if (Chars.Count > 0)
             {
                 o["main"] = main;
