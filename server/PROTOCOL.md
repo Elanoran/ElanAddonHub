@@ -29,7 +29,7 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 
 ### Server → client
 
-- `welcome` `{you, name, role, server, maxFileMb, canShareFiles, canModerate, canManage, canPin, features:["reply","react","react2","pin"], reactions:[id], pins:{channelId:[pin]}, channels:[channel], users:[user], history:{channelId:[msg]}}`
+- `welcome` `{you, name, role, server, maxFileMb, canShareFiles, canModerate, canManage, canPin, features:["reply","react","react2","pin","profile"], reactions:[id], pins:{channelId:[pin]}, channels:[channel], users:[user], history:{channelId:[msg]}}`
   - sent on connect and again whenever the channels or your rank change (treat as a full refresh)
 - `join` `{user}` · `leave` `{id}` · `user` `{user}`
 - `msg` `{channel, id, at (unix ms), from, fromId, text, file?:{id,name,size,mime}, replyTo?:{id,from,text,by,snippet}, reactions?:{reactionId:[name]}, edited?}`
