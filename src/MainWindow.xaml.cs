@@ -147,6 +147,19 @@ namespace ElansAddonHub
                 using (var s = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/hub.png")).Stream)
                 using (var f = System.IO.File.Create(img)) s.CopyTo(f);
                 await LodgePage.Share(img);
+                // profile against the real server: set avatar/about, expect the echo, the broadcast and a profile:get answer
+                if (Session.SupportsProfile)
+                {
+                    await Session.SaveProfile(new System.Collections.Generic.Dictionary<string, object> { ["avatarId"] = "av.bow", ["accent"] = "teal", ["about"] = "selftest about", ["playTimes"] = "evenings" });
+                    for (int i = 0; i < 25 && Session.Me?.AvatarId != "av.bow"; i++) await Task.Delay(200);
+                    ProfileData got = null;
+                    Action<ProfileData> h = pd => got = pd;
+                    Session.ProfileReceived += h;
+                    Session.RequestProfile(Session.Me.Name);
+                    for (int i = 0; i < 25 && got == null; i++) await Task.Delay(200);
+                    Session.ProfileReceived -= h;
+                    result += $"\r\nlive profile: avatar={Session.Me?.AvatarId} accent={Session.Me?.Accent} about='{Session.MyProfile?.About}' get={(got != null && got.About == "selftest about" && got.AvatarId == "av.bow")}";
+                }
                 Session.SetMyStatus("dungeon", "Wailing Caverns");
                 VoiceEngine.TestTone = true;
                 Session.JoinRoom(Session.VoiceRooms.FirstOrDefault()?.Id);
@@ -176,6 +189,7 @@ namespace ElansAddonHub
             }
             result += "\r\n" + await LodgeFeaturesTest(dir);
             result += "\r\n" + await PresenceTest(dir);
+            result += "\r\n" + await ProfileTest(dir);
             result += "\r\n" + await ToastTest(dir);
             result += "\r\n" + await DialogTest(dir);
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);

@@ -106,6 +106,36 @@ namespace ElansAddonHub.Lodge
             ["Human"] = "Hu", ["Dwarf"] = "Dw", ["NightElf"] = "NE", ["Gnome"] = "Gn", ["Orc"] = "Or", ["Scourge"] = "Ud", ["Undead"] = "Ud",
             ["Tauren"] = "Ta", ["Troll"] = "Tr", ["BloodElf"] = "BE", ["Draenei"] = "Dr", ["Goblin"] = "Go", ["Worgen"] = "Wo",
         };
+        // ---- personal avatar (Lodge server 2.6): a preset picture + accent colour. None chosen = the class-colour default above.
+        string avatarId, accent;
+        public string AvatarId => avatarId;
+        public string Accent => accent;
+        public bool HasAvatar => avatarId != null;
+        public ImageSource AvatarImage => AvatarCatalog.Image(avatarId, accent);
+        public Visibility PersonalVisibility => HasAvatar ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility DefaultVisibility => HasAvatar ? Visibility.Collapsed : Visibility.Visible;
+        // the class badge (bottom-right, 40% of the avatar): only with a personal avatar and only while they are in game
+        public Visibility BadgeVisibility => HasAvatar && playing && gameClassFile != null ? Visibility.Visible : Visibility.Collapsed;
+        public Brush BadgeRing => ClassBrush;
+        public string BadgeText => string.IsNullOrEmpty(gameClass) ? "?" : gameClass.Substring(0, 1).ToUpperInvariant();
+        public Visibility BadgeTextVisibility => IconBrush == null ? Visibility.Visible : Visibility.Collapsed;
+        public bool SetAvatar(string id, string accent)
+        {
+            id = AvatarCatalog.IsAvatar(id) ? id : null;
+            accent = AvatarCatalog.IsAccent(accent) ? accent : null;
+            if (id == avatarId && accent == this.accent) return false;
+            avatarId = id; this.accent = accent;
+            RaiseAvatar();
+            return true;
+        }
+        void RaiseAvatar()
+        {
+            Raise(nameof(AvatarId)); Raise(nameof(Accent)); Raise(nameof(HasAvatar)); Raise(nameof(AvatarImage)); Raise(nameof(PersonalVisibility));
+            Raise(nameof(DefaultVisibility)); Raise(nameof(BadgeVisibility)); Raise(nameof(BadgeRing)); Raise(nameof(BadgeText)); Raise(nameof(BadgeTextVisibility));
+        }
+        // what a message row needs to know about its author's badge: changes when they log in/out of the game or switch class
+        public string BadgeKey => (HasAvatar ? avatarId + "/" + accent : "") + "|" + (BadgeVisibility == Visibility.Visible ? gameClassFile : "");
+
         static string RaceCode(string raceFile) => RaceCodes.TryGetValue(raceFile, out var c) ? c : raceFile.Substring(0, Math.Min(2, raceFile.Length));
 
         // ---- voice
@@ -166,7 +196,15 @@ namespace ElansAddonHub.Lodge
             this.playing = playing; gameName = name; gameClass = cls; gameClassFile = classFile; gameLevel = level; gameZone = zone; gameGuild = guild;
             Raise(nameof(GameLine)); Raise(nameof(ClassBrush)); Raise(nameof(ClassBrushOrText)); Raise(nameof(GameVisibility)); Raise(nameof(PlayingVisibility));
             Raise(nameof(Tip)); Raise(nameof(GameDetail)); Raise(nameof(Color)); Raise(nameof(Initial)); Raise(nameof(IconBrush)); Raise(nameof(InitialVisibility));
+            Raise(nameof(BadgeVisibility)); Raise(nameof(BadgeRing)); Raise(nameof(BadgeText)); Raise(nameof(BadgeTextVisibility));
             RaiseCard();
+        }
+
+        // a copy of what someone plays now (the profile editor's preview card)
+        public void CopyGameFrom(MemberVM o)
+        {
+            SetGame(o.playing, o.gameName, o.gameClass, o.gameClassFile, o.gameLevel, o.gameZone, o.gameGuild, o.gameRace, o.gameRaceFile, o.gameSex);
+            SetPresence(o.flags, o.xpPct, o.rested, o.groupSize, o.inInstance, o.instanceName);
         }
 
         // ---- live presence (Lodge server 2.5 / companion 1.5): flags 1 combat 2 dead 4 AFK 8 resting 16 instance 32 raid 64 party 128 group
@@ -275,6 +313,10 @@ namespace ElansAddonHub.Lodge
         // names take their class colour once we know it (like in WoW)
         public Brush ClassBrushOrText => gameClassFile != null && ClassColors.ContainsKey(gameClassFile) ? ClassBrush : Avatar.Res("Text");
         public Brush ClassBrush => gameClassFile != null && ClassColors.TryGetValue(gameClassFile, out var hex) ? Avatar.Frozen(hex) : Avatar.Res("TextDim");
+        public static Brush ClassBrushFor(string classFile) => classFile != null && ClassColors.TryGetValue(classFile.ToUpperInvariant(), out var hex) ? Avatar.Frozen(hex) : Avatar.Res("TextDim");
+        // a stand-in for someone who isn't online (profile card from the server's data): never in the lists
+        public bool Offline { get; set; }
+        public string StatusLabelText => StatusLabel(status);
         // "42 Hunter" next to the name
         public string GameLine => gameLevel > 0 ? $"{gameLevel}" : "";
         public Visibility GameVisibility => gameLevel > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -387,6 +429,30 @@ namespace ElansAddonHub.Lodge
         // the member behind the name (the hover card); null once they have left
         public static Func<string, MemberVM> AuthorLookup;
         public MemberVM Author => From == null ? null : AuthorLookup?.Invoke(From);
+        // personal avatar of the author: the live member when still here, else what we last knew (so history keeps its pictures)
+        public static Func<string, string[]> AvatarLookup;   // name -> { avatarId, accent } or null
+        string[] KnownAvatar => From == null ? null : AvatarLookup?.Invoke(From);
+        string AvId => Author?.AvatarId ?? KnownAvatar?[0];
+        public ImageSource AvatarImage => AvatarCatalog.Image(AvId, Author != null ? Author.Accent : KnownAvatar?[1]);
+        public Visibility PersonalVisibility => AvatarImage != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility DefaultVisibility => AvatarImage != null ? Visibility.Collapsed : Visibility.Visible;
+        public Brush IconBrush => null;
+        public Visibility InitialVisibility => Visibility.Visible;
+        public Visibility BadgeVisibility => Author?.BadgeVisibility ?? Visibility.Collapsed;
+        public Brush BadgeRing => Author?.BadgeRing;
+        public string BadgeText => Author?.BadgeText;
+        public Visibility BadgeTextVisibility => Author?.IconBrush == null ? Visibility.Visible : Visibility.Collapsed;
+        public Brush FrameBrush => null;
+        public Brush Ring => Brushes.Transparent;
+        public Brush StatusBrush => null;
+        public string StatusGlyph => "";
+        public Visibility StatusVisibility => Visibility.Collapsed;
+        public Visibility InvisibleVisibility => Visibility.Collapsed;
+        public void RefreshAvatar()
+        {
+            Raise(nameof(AvatarImage)); Raise(nameof(PersonalVisibility)); Raise(nameof(DefaultVisibility)); Raise(nameof(BadgeVisibility));
+            Raise(nameof(BadgeRing)); Raise(nameof(BadgeText)); Raise(nameof(BadgeTextVisibility)); Raise(nameof(Author));
+        }
         public string Time
         {
             get

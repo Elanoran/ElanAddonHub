@@ -1,0 +1,67 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="clr-namespace:ElansAddonHub.Lodge">
+  <!-- The profile card (a ProfileCardVM): banner in the accent colour, big avatar with class badge, name + rank, about, play times,
+       now playing, characters (main starred). Used by the popout and by the live preview of the profile editor. -->
+  <DataTemplate x:Key="ProfileCard">
+    <StackPanel Width="300">
+      <Grid Height="88">
+        <Border Height="56" VerticalAlignment="Top" Background="{Binding Banner}" CornerRadius="11,11,0,0" />
+        <Border Height="56" VerticalAlignment="Top" CornerRadius="11,11,0,0">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00000000" Offset="0.5" /><GradientStop Color="#40000000" Offset="1" /></LinearGradientBrush>
+          </Border.Background>
+        </Border>
+        <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="14,0,0,0" Width="76" Height="76" CornerRadius="38" Background="{StaticResource SurfaceHi}" Padding="3">
+          <local:AvatarView DataContext="{Binding Member}" />
+        </Border>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,6">
+          <Ellipse Width="8" Height="8" Fill="{Binding OnlineBrush}" VerticalAlignment="Center" Margin="0,1,6,0" />
+          <TextBlock Text="{Binding OnlineText}" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+        </StackPanel>
+      </Grid>
+
+      <StackPanel Margin="16,6,16,14">
+        <DockPanel>
+          <Border DockPanel.Dock="Right" CornerRadius="4" Padding="6,1" Margin="10,0,0,0" Background="{Binding FrameBrush}" VerticalAlignment="Center">
+            <TextBlock Text="{Binding RoleLabel}" FontSize="10" FontWeight="Bold" Foreground="#111315" />
+          </Border>
+          <TextBlock Text="{Binding Name}" FontSize="17" FontWeight="SemiBold" Foreground="{Binding NameBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBlock Text="{Binding Member.CardClassLine}" Visibility="{Binding Member.CardClassVisibility}" FontSize="12" Foreground="{StaticResource TextDim}"
+                   Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+
+        <TextBlock Text="{Binding NoteText}" Visibility="{Binding NoteVisibility}" FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,10,0,0" />
+
+        <TextBlock Text="{Binding About}" Visibility="{Binding AboutVisibility}" FontSize="12.5" TextWrapping="Wrap" Margin="0,10,0,0" />
+        <StackPanel Orientation="Horizontal" Visibility="{Binding PlayTimesVisibility}" Margin="0,8,0,0">
+          <TextBlock Text="&#xE823;" FontFamily="{StaticResource Icons}" FontSize="11.5" Foreground="{StaticResource Gold}" VerticalAlignment="Center" Margin="0,1,7,0" />
+          <TextBlock Text="{Binding PlayTimes}" FontSize="12" Foreground="{StaticResource Text}" TextWrapping="Wrap" MaxWidth="250" />
+        </StackPanel>
+
+        <!-- now playing (from presence, only when they share it) -->
+        <StackPanel Visibility="{Binding NowVisibility}" Margin="0,12,0,0">
+          <TextBlock Text="NOW PLAYING" Style="{StaticResource Caption}" Margin="0,0,0,3" />
+          <TextBlock Text="{Binding NowClassLine}" FontSize="12.5" FontWeight="SemiBold" Foreground="{Binding Member.ClassBrush}" TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding NowLine}" FontSize="12" Foreground="{StaticResource TextDim}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+        </StackPanel>
+
+        <!-- characters -->
+        <StackPanel Visibility="{Binding CharsVisibility}" Margin="0,12,0,0">
+          <TextBlock Text="CHARACTERS" Style="{StaticResource Caption}" Margin="0,0,0,3" />
+          <ItemsControl ItemsSource="{Binding Chars}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <DockPanel Margin="0,1" Opacity="{Binding HiddenOpacity}">
+                  <TextBlock DockPanel.Dock="Right" Text="{Binding Line}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="150" />
+                  <TextBlock Text="&#x2605;" Width="15" FontSize="11.5" Foreground="{StaticResource Gold}" Visibility="{Binding StarVisibility}" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold" Foreground="{Binding ClassBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </DockPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </StackPanel>
+    </StackPanel>
+  </DataTemplate>
+</ResourceDictionary>

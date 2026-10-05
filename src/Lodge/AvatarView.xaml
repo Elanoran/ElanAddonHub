@@ -1,0 +1,46 @@
+<UserControl x:Class="ElansAddonHub.Lodge.AvatarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             SnapsToDevicePixels="False" UseLayoutRounding="False" IsHitTestVisible="True">
+  <!-- The round avatar of a person (a MemberVM, or anything with the same properties) on a 100-unit grid that scales with Width/Height.
+       Rules: a personal avatar (preset art) is the big circle; with no avatar chosen the class-colour circle (class icon / race code / initial)
+       stays. A small class badge (40% of the avatar, class-colour ring) sits bottom-right while the person is in game. Decor (rank ring,
+       speaking ring, status dot bottom-left) is for the member lists. -->
+  <Viewbox Stretch="Uniform">
+    <Grid Width="100" Height="100">
+      <!-- default look -->
+      <Grid Visibility="{Binding DefaultVisibility}">
+        <Ellipse Fill="{Binding Color}" />
+        <Ellipse Fill="{Binding IconBrush}" />
+        <TextBlock Text="{Binding Initial}" Visibility="{Binding InitialVisibility}" Foreground="#111315" FontSize="44" FontWeight="Bold"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+      </Grid>
+      <!-- personal avatar: finished art, frame included -->
+      <Image Source="{Binding AvatarImage}" Visibility="{Binding PersonalVisibility}" Margin="-2" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+
+      <!-- rank ring, speaking ring -->
+      <Grid x:Name="DecorLayer" Visibility="Collapsed">
+        <Ellipse x:Name="RankLayer" Stroke="{Binding FrameBrush}" StrokeThickness="6" Margin="-7" />
+        <Ellipse Stroke="{Binding Ring}" StrokeThickness="8" Margin="-14" />
+        <Border Width="50" Height="50" CornerRadius="25" Background="{Binding StatusBrush}" BorderBrush="{StaticResource Surface}" BorderThickness="7"
+                HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-22,0,0,-22" Visibility="{Binding StatusVisibility}">
+          <TextBlock Text="{Binding StatusGlyph}" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="#111315" FontWeight="Bold"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+        <!-- appear offline: a grey hollow dot -->
+        <Border Width="50" Height="50" CornerRadius="25" Background="{StaticResource Surface}" BorderBrush="#8A9199" BorderThickness="11"
+                HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-22,0,0,-22" Visibility="{Binding InvisibleVisibility}" />
+      </Grid>
+
+      <!-- class badge: in game only -->
+      <Grid Width="46" Height="46" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-8,-8" Visibility="{Binding BadgeVisibility}">
+        <Ellipse Fill="#101214" />
+        <Ellipse Fill="#262B30" Margin="4" />
+        <Ellipse Fill="{Binding IconBrush}" Margin="4" />
+        <TextBlock Text="{Binding BadgeText}" Visibility="{Binding BadgeTextVisibility}" Foreground="{Binding BadgeRing}" FontSize="24" FontWeight="Bold"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />
+        <Ellipse Stroke="{Binding BadgeRing}" StrokeThickness="5.5" Margin="3" />
+      </Grid>
+    </Grid>
+  </Viewbox>
+</UserControl>

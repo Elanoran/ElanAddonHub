@@ -69,6 +69,8 @@ namespace ElansAddonHub.Lodge
                 if (vm.Mine || AtBottom) ScrollToEnd();
             };
             session.Stopped += why => ShowJoin(why);
+            session.ProfileReceived += OnProfileReceived;
+            Editor.Saved += vm => { if (Session.SupportsProfile) _ = Session.SaveProfile(vm.ToMessage()); };
             session.Error += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(6); };
             tick.Start();
 
@@ -396,29 +398,113 @@ namespace ElansAddonHub.Lodge
             if (!((sender as FrameworkElement)?.DataContext is MessageVM m) || m.Author == null) e.Handled = true;
         }
 
-        // ---- a person: volume, officer tools
+        // ---- a person: the profile card, then mention / join their room / volume / officer tools
+        ProfileCardVM popCard;
+
         void Member_Click(object sender, MouseButtonEventArgs e)
         {
             if (!((sender as FrameworkElement)?.Tag is MemberVM m)) return;
             if (m.IsMe) { Me_Click(sender, e); return; }
+            ShowProfileCard(m, (UIElement)sender);
+            e.Handled = true;
+        }
+
+        // a name or picture in the chat: the card of that person (online, or offline from what the server knows)
+        void MessageAuthor_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is MessageVM msg) || string.IsNullOrEmpty(msg.From)) return;
+            var live = msg.Author;
+            if (live != null && live.IsMe) OpenProfileEditor();
+            else if (live != null) ShowProfileCard(live, (UIElement)sender);
+            else ShowProfileCardByName(msg.From, (UIElement)sender);
+            e.Handled = true;
+        }
+
+        void ShowProfileCardByName(string name, UIElement target)
+        {
+            var standIn = new MemberVM { Id = 0, Name = name, Offline = true };
+            var known = Session.KnownAvatarOf(name);
+            if (known != null) standIn.SetAvatar(known[0], known[1]);
+            ShowProfileCard(standIn, target);
+        }
+
+        public void ShowProfileCard(MemberVM m, UIElement target)
+        {
             popMember = m;
             popLoading = true;
-            PopName.Text = m.Name;
-            PopRole.Text = m.RoleLabel;
-            PopRole.Foreground = m.FrameBrush;
-            PopStatus.Text = m.StatusLine + (m.ServerMuted ? " - muted by an officer" : "") + (m.Invisible ? " - invisible" : "");
-            PopGame.Text = m.GameDetail ?? "";
-            PopGame.Foreground = m.ClassBrush;
-            PopGame.Visibility = m.GameDetail != null ? Visibility.Visible : Visibility.Collapsed;
+            popCard = new ProfileCardVM(m) { Loading = Session.SupportsProfile };
+            if (!Session.SupportsProfile) popCard.Data = new ProfileData { Name = m.Name, Found = true };
+            popCard.RaiseAll();
+            PopCard.Content = popCard;
             PopVolume.Value = Session.PeerVolumeFor(m.Name);
             PopVolumeText.Text = $"{PopVolume.Value * 100:0}%";
             popLoading = false;
-            PopModArea.Visibility = Session.CanModerateMember(m) ? Visibility.Visible : Visibility.Collapsed;
+            PopVolumeArea.Visibility = m.Offline || m.IsMe ? Visibility.Collapsed : Visibility.Visible;
+            PopModArea.Visibility = !m.Offline && Session.CanModerateMember(m) ? Visibility.Visible : Visibility.Collapsed;
             PopMute.Content = m.ServerMuted ? "Unmute for everyone" : "Mute for everyone";
-            MemberPopup.PlacementTarget = (UIElement)sender;
+            PopMention.Visibility = m.IsMe ? Visibility.Collapsed : Visibility.Visible;
+            bool joinable = !m.Offline && m.Room != null && m.Room != Session.MyRoom && Session.Me != null;
+            PopJoin.Visibility = joinable ? Visibility.Visible : Visibility.Collapsed;
+            PopJoin.Content = "Join " + (string.IsNullOrEmpty(m.RoomName) ? "their voice room" : m.RoomName);
+            PopReset.Visibility = Session.CanManage && !m.IsMe && m.HasAvatar ? Visibility.Visible : Visibility.Collapsed;
+            MemberPopup.PlacementTarget = target;
             MemberPopup.IsOpen = true;
-            e.Handled = true;
+            Session.RequestProfile(m.Name);
         }
+
+        void OnProfileReceived(ProfileData pd)
+        {
+            if (popCard == null || !MemberPopup.IsOpen || !string.Equals(pd.Name, popCard.Member.Name, StringComparison.OrdinalIgnoreCase)) return;
+            popCard.Loading = false;
+            if (popCard.Member.Offline && pd.Found) { popCard.Member.Role = pd.Role; popCard.Member.SetAvatar(pd.AvatarId, pd.Accent); popCard.Member.Offline = !pd.Online; }
+            popCard.Data = pd;
+            PopReset.Visibility = Session.CanManage && !popCard.Member.IsMe && popCard.Member.HasAvatar ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        void PopMention_Click(object sender, RoutedEventArgs e)
+        {
+            MemberPopup.IsOpen = false;
+            if (popMember != null) InsertMention(popMember.Name);
+        }
+
+        public void InsertMention(string name)
+        {
+            var at = Math.Min(Composer.CaretIndex, Composer.Text.Length);
+            var text = "@" + name + " ";
+            Composer.Text = Composer.Text.Insert(at, text);
+            Composer.CaretIndex = at + text.Length;
+            Composer.Focus();
+        }
+
+        void PopJoin_Click(object sender, RoutedEventArgs e)
+        {
+            MemberPopup.IsOpen = false;
+            if (popMember?.Room != null) Session.JoinRoom(popMember.Room);
+        }
+
+        void PopReset_Click(object sender, RoutedEventArgs e)
+        {
+            MemberPopup.IsOpen = false;
+            if (popMember == null) return;
+            if (Dialog.Confirm(Window.GetWindow(this), $"Reset {popMember.Name}'s avatar?", "Their avatar and accent go back to the default look. They can pick a new one afterwards.", "Reset", danger: true))
+                Session.ResetProfile(popMember.Name);
+        }
+
+        // ---- my profile
+        void MeAvatar_Click(object sender, MouseButtonEventArgs e) { OpenProfileEditor(); e.Handled = true; }
+        void EditProfile_Click(object sender, RoutedEventArgs e) { StatusPopup.IsOpen = false; OpenProfileEditor(); }
+
+        public void OpenProfileEditor()
+        {
+            if (Session?.Me == null) return;
+            Editor.Open(new ProfileEditVM(Session));
+        }
+
+        public ProfileEditor EditorForTest => Editor;
+        public void ShowProfileCardByNameForTest(string name, UIElement target) => ShowProfileCardByName(name, target);
+        public ProfileCardVM PopCardForTest => popCard;
+        public FrameworkElement PopupCardForTest => (FrameworkElement)MemberPopup.Child;
+        public void CloseProfileForTest() { MemberPopup.IsOpen = false; Editor.Close(); }
 
         void PopVolume_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
         {

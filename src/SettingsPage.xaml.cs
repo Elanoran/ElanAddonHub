@@ -165,6 +165,8 @@ namespace ElansAddonHub
             LodgeAddress.Text = string.IsNullOrEmpty(settings.LodgeUrl) ? "Not connected to a lodge" : settings.LodgeUrl;
             LodgeWho.Text = session.Me == null ? (session.Connected ? session.StatusText : "Join one from the Lodge tab")
                 : $"You're {session.Me.Name}, {MemberVM.RoleName(session.MyRole)} - {session.StatusText}";
+            ProfileAvatar.DataContext = session.Me;
+            EditProfileButton.IsEnabled = session.Me != null;
             if (NavGm.IsChecked == true) { GmStatus.Text = ""; session.RequestAdmin(); }
             var c = session.Presence.Current;
             ShareGameHint.Text = (session.Presence.Playing ? "WoW is running. " : "")
@@ -220,6 +222,13 @@ namespace ElansAddonHub
             OpenFolder(Directory.CreateDirectory(Path.Combine(Util.DataDir, "backups")).FullName);
 
         // ================================================================ lodge
+
+        void EditProfile_Click(object sender, RoutedEventArgs e)
+        {
+            if (session.Me == null) { ProfileHint.Text = "Join a lodge first (Lodge tab)."; return; }
+            host.ShowTab("lodge");
+            lodge.OpenProfileEditor();
+        }
 
         void EditConnection_Click(object sender, RoutedEventArgs e) { host.ShowTab("lodge"); lodge.EditConnection(); }
 

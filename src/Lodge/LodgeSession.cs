@@ -70,6 +70,13 @@ namespace ElansAddonHub.Lodge
         public event Action<string, string, string> AdminInvited; // name, role, code
         public Func<bool> IsShownToUser;                   // the Lodge tab is visible and the window active
 
+        // ---- profiles (server 2.6): my own profile, avatars we have seen (so history keeps its pictures), answers to profile:get
+        public ProfileData MyProfile { get; private set; }
+        public bool SupportsProfile { get; private set; }
+        public event Action MyProfileChanged;
+        public event Action<ProfileData> ProfileReceived;   // an answer to profile:get (and my own after a save)
+        readonly Dictionary<string, string[]> knownAvatars = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+
         public readonly GamePresence Presence;
         public readonly AutoStatus Auto = new AutoStatus();
         public Func<DateTime> Clock = () => DateTime.UtcNow;   // tests drive time
@@ -83,6 +90,7 @@ namespace ElansAddonHub.Lodge
             AvatarArt.Root = () => settings.WowRoot;
             if (settings.InvisibleForget) settings.LodgeInvisible = false; // "Appear offline" is not remembered across restarts
             MessageVM.AuthorLookup = name => Members.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+            MessageVM.AvatarLookup = name => name != null && knownAvatars.TryGetValue(name, out var a) ? a : null;
             // presence changes (zone, combat, XP...) are sent at most every ~1 s, and only when the message really differs
             gameTimer.Tick += (s, e) => { gameTimer.Stop(); SendGame(); };
             Presence.Changed += () => { PresenceChanged?.Invoke(); if (!gameTimer.IsEnabled) gameTimer.Start(); };
@@ -205,6 +213,7 @@ namespace ElansAddonHub.Lodge
                 case "join":
                     var j = ParseMember(m.Child("user"));
                     if (Members.All(x => x.Id != j.Id)) Members.Add(j);
+                    RefreshAuthorAvatars(j.Name);
                     SyncRooms(joined: j);
                     StatusText = OnlineText;
                     Changed?.Invoke();
@@ -215,6 +224,7 @@ namespace ElansAddonHub.Lodge
                     {
                         if (gone.Room != null && gone.Room == MyRoom) Sounds.Leave();
                         Members.Remove(gone);
+                        RefreshAuthorAvatars(gone.Name);
                     }
                     voice?.RemovePeer(m.Int("id"));
                     SyncRooms();
@@ -226,10 +236,14 @@ namespace ElansAddonHub.Lodge
                     var mem = Members.FirstOrDefault(x => x.Id == u.Id);
                     if (mem == null) break;
                     var oldRoom = mem.Room;
+                    var oldBadge = mem.BadgeKey;
+                    mem.SetAvatar(m.Child("user").Str("avatarId"), m.Child("user").Str("accent"));
                     mem.Room = u.Room; mem.Muted = u.Muted; mem.Deaf = u.Deaf; mem.ServerMuted = u.ServerMuted;
                     mem.Status = u.Status; mem.Note = u.Note; mem.Role = u.Role;
                     mem.Invisible = mem.IsMe ? Invisible : u.Invisible;
                     ApplyGame(mem, m.Child("user").Child("game"));
+                    Remember(mem);
+                    if (mem.BadgeKey != oldBadge) RefreshAuthorAvatars(mem.Name);
                     if (!mem.Voice) voice?.RemovePeer(mem.Id);
                     if (!mem.IsMe && MyRoom != null && oldRoom != mem.Room)
                     {
@@ -292,6 +306,23 @@ namespace ElansAddonHub.Lodge
                 case "typing":
                     TypingMap(m.Str("channel") ?? TextChannels.FirstOrDefault()?.Id)[m.Int("id")] = DateTime.UtcNow.AddSeconds(4);
                     break;
+                case "profile":
+                    // someone's avatar / accent changed (small broadcast)
+                    var pu = Members.FirstOrDefault(x => x.Id == m.Int("id"));
+                    if (pu != null)
+                    {
+                        pu.SetAvatar(m.Str("avatarId"), m.Str("accent"));
+                        Remember(pu);
+                        RefreshAuthorAvatars(pu.Name);
+                        if (pu.IsMe && MyProfile != null) { MyProfile.AvatarId = pu.AvatarId; MyProfile.Accent = pu.Accent; MyProfileChanged?.Invoke(); }
+                    }
+                    break;
+                case "profile:data":
+                    var pd = ProfileData.Parse(m.Child("profile"));
+                    if (pd == null) break;
+                    if (Me != null && string.Equals(pd.Name, Me.Name, StringComparison.OrdinalIgnoreCase) && pd.Found) { MyProfile = pd; MyProfileChanged?.Invoke(); }
+                    ProfileReceived?.Invoke(pd);
+                    break;
                 case "error":
                     Error?.Invoke(m.Str("text"));
                     break;
@@ -318,6 +349,7 @@ namespace ElansAddonHub.Lodge
             SupportsReact = features.Contains("react");
             SupportsPin = features.Contains("pin");
             CanPin = SupportsPin && m.Bool("canPin");
+            SupportsProfile = features.Contains("profile");
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
@@ -330,6 +362,7 @@ namespace ElansAddonHub.Lodge
             }
             Me = Members.FirstOrDefault(x => x.IsMe);
             if (Me != null) Me.Invisible = Invisible;
+            if (m.Child("profile") != null) { MyProfile = ProfileData.Parse(m.Child("profile")); MyProfileChanged?.Invoke(); }
 
             // channels: a 1.x server has none - pretend it has one text channel and one room
             var chans = m.List("channels").OfType<Dictionary<string, object>>().ToList();
@@ -402,8 +435,26 @@ namespace ElansAddonHub.Lodge
                 Room = room, Muted = u.Bool("muted"), Deaf = u.Bool("deaf"), ServerMuted = u.Bool("serverMuted"),
                 Status = u.Str("status"), Note = u.Str("note"), Role = u.Str("role"), Invisible = u.Bool("invisible"),
             };
+            m.SetAvatar(u.Str("avatarId"), u.Str("accent"));
             ApplyGame(m, u.Child("game"));
+            Remember(m);
             return m;
+        }
+
+        public string[] KnownAvatarOf(string name) => name != null && knownAvatars.TryGetValue(name, out var a) ? a : null;
+
+        void Remember(MemberVM m)
+        {
+            if (m.Name != null) knownAvatars[m.Name] = new[] { m.AvatarId, m.Accent };
+        }
+
+        // chat rows show their author's picture and class badge: refresh them when it changes (messages are bounded, this is cheap)
+        void RefreshAuthorAvatars(string name)
+        {
+            if (name == null) return;
+            foreach (var list in messages.Values)
+                foreach (var vm in list)
+                    if (string.Equals(vm.From, name, StringComparison.OrdinalIgnoreCase)) vm.RefreshAvatar();
         }
 
         static void ApplyGame(MemberVM m, Dictionary<string, object> g)
@@ -928,6 +979,24 @@ namespace ElansAddonHub.Lodge
             if (!Settings.AutoAwayOff && !autoAway && chosen == "online" && idle > 600) autoAway = true;      // AutoStatusTick sends it
             else if (autoAway && (idle < 5 || Settings.AutoAwayOff)) autoAway = false;
         }
+
+        // ================================================================ profile
+
+        public void RequestProfile(string name)
+        {
+            if (SupportsProfile && !string.IsNullOrEmpty(name)) _ = Send(new Dictionary<string, object> { ["t"] = "profile:get", ["name"] = name });
+        }
+
+        // own profile: only the fields given are changed (the server validates everything and answers with profile:data)
+        public Task SaveProfile(Dictionary<string, object> fields)
+        {
+            fields["t"] = "profile:set";
+            return Send(fields);
+        }
+
+        // owner only: back to the default avatar and accent
+        public void ResetProfile(string name, bool clearText = false) =>
+            _ = Send(new Dictionary<string, object> { ["t"] = "profile:reset", ["name"] = name, ["clearText"] = clearText });
 
         // ================================================================ officers and the guild master
 

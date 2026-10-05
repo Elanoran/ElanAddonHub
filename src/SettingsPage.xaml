@@ -1,6 +1,7 @@
 <UserControl x:Class="ElansAddonHub.SettingsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ElansAddonHub.Lodge">
   <UserControl.Resources>
     <!-- section list on the left -->
     <Style x:Key="Nav" TargetType="RadioButton">
@@ -154,6 +155,14 @@
                 </StackPanel>
               </StackPanel>
             </Border>
+            <!-- profile: avatar, about text, characters, privacy -->
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <local:AvatarView x:Name="ProfileAvatar" Width="44" Height="44" Margin="0,0,14,0" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0"><TextBlock Text="Profile" Style="{StaticResource RowTitle}" />
+                <TextBlock x:Name="ProfileHint" Text="Pick an avatar, add a few words about you, choose which characters you show." Style="{StaticResource RowHint}" /></StackPanel>
+              <Button Grid.Column="2" x:Name="EditProfileButton" Style="{StaticResource SecondaryButton}" Content="Edit profile" VerticalAlignment="Center" Click="EditProfile_Click" />
+            </Grid></Border>
             <Border Style="{StaticResource RowBox}"><Grid>
               <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
               <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Connect when the hub starts" Style="{StaticResource RowTitle}" />

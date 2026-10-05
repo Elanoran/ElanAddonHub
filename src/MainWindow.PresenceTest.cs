@@ -23,6 +23,7 @@ namespace ElansAddonHub
             try
             {
                 Session.Disconnect();
+                s.LodgeStatus = "online"; s.LodgeNote = "";   // (a live test run before this one leaves a chosen status behind)
                 s.LodgeInvisible = false; s.InvisibleHintShown = false; s.ShareZoneOff = false; s.ShareXpOff = false; s.AutoStatusOff = false;
                 TabLodge.IsChecked = true;
                 LodgePage.ShowChatForTest();

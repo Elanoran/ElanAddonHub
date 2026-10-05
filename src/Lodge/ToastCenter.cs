@@ -44,6 +44,20 @@ namespace ElansAddonHub.Lodge
         public Visibility InitialVisibility => IconBrush != null ? Visibility.Collapsed : Visibility.Visible;
         public string Initial => Who != null ? Who.Initial : Kind == ToastKind.Summary ? "!" : Avatar.Initial(Sender ?? "H");
         public Brush NameBrush => Who != null ? Who.ClassBrushOrText : Avatar.Res("Text");
+        // the personal avatar and class badge come from the member (the hub's own toasts have none)
+        public System.Windows.Media.ImageSource AvatarImage => Who?.AvatarImage;
+        public Visibility PersonalVisibility => Who?.PersonalVisibility ?? Visibility.Collapsed;
+        public Visibility DefaultVisibility => Who?.DefaultVisibility ?? Visibility.Visible;
+        public Visibility BadgeVisibility => Who?.BadgeVisibility ?? Visibility.Collapsed;
+        public Brush BadgeRing => Who?.BadgeRing;
+        public string BadgeText => Who?.BadgeText;
+        public Visibility BadgeTextVisibility => Who?.BadgeTextVisibility ?? Visibility.Collapsed;
+        public Brush FrameBrush => null;
+        public Brush Ring => Brushes.Transparent;
+        public Brush StatusBrush => null;
+        public string StatusGlyph => "";
+        public Visibility StatusVisibility => Visibility.Collapsed;
+        public Visibility InvisibleVisibility => Visibility.Collapsed;
     }
 
     // The in-game toasts: small cards over WoW (click-through, never taking focus - see ToastWindow).

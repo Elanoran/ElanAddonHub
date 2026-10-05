@@ -8,6 +8,8 @@
         <ResourceDictionary Source="Theme/Theme.xaml" />
         <ResourceDictionary Source="Theme/AddonIcons.xaml" />
         <ResourceDictionary Source="Theme/ReactionIcons.xaml" />
+        <ResourceDictionary Source="Theme/Avatars.xaml" />
+        <ResourceDictionary Source="Theme/ProfileCard.xaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

@@ -1,6 +1,7 @@
 <Window x:Class="ElansAddonHub.Lodge.OverlayWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ElansAddonHub.Lodge"
         Title="Lodge overlay" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False" ResizeMode="NoResize"
         SizeToContent="WidthAndHeight" FontFamily="Segoe UI" TextOptions.TextFormattingMode="Display"
@@ -12,18 +13,7 @@
         <Grid x:Name="row" Visibility="{Binding OverlayVisibility}" Margin="0,0,0,6" HorizontalAlignment="Left" Opacity="0.6">
         <Border x:Name="pill" Padding="3,3,11,3" CornerRadius="16" Background="#B3101214" BorderThickness="1.5" BorderBrush="{Binding FrameBrush}">
           <StackPanel Orientation="Horizontal">
-            <Grid Width="26" Height="26">
-              <Ellipse Fill="{Binding Color}" />
-              <Ellipse Fill="{Binding IconBrush}" />
-              <TextBlock Text="{Binding Initial}" Visibility="{Binding InitialVisibility}" Foreground="#111315" FontSize="12" FontWeight="Bold"
-                         HorizontalAlignment="Center" VerticalAlignment="Center" />
-              <Ellipse x:Name="ring" Stroke="{Binding Ring}" StrokeThickness="2.5" Margin="-3" />
-              <Border Width="15" Height="15" CornerRadius="7.5" Background="{Binding StatusBrush}" BorderBrush="#101214" BorderThickness="1.5"
-                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-5,-5" Visibility="{Binding StatusVisibility}">
-                        <TextBlock Text="{Binding StatusGlyph}" FontFamily="Segoe MDL2 Assets" FontSize="8" Foreground="#111315" FontWeight="Bold"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                      </Border>
-            </Grid>
+            <local:AvatarView Width="26" Height="26" Decor="True" RankRing="False" />
             <TextBlock Text="{Binding Name}" Foreground="White" FontSize="13" FontWeight="SemiBold" Margin="10,0,0,1" VerticalAlignment="Center"
                        Opacity="{Binding NameOpacity}">
               <TextBlock.Effect>

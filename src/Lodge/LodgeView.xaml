@@ -4,23 +4,12 @@
              xmlns:local="clr-namespace:ElansAddonHub.Lodge"
              AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
   <UserControl.Resources>
-    <!-- small round avatar with role ring, speaking ring and status badge -->
+    <!-- small round avatar (personal picture or class colour, class badge in game) with role ring, speaking ring and status dot -->
     <DataTemplate x:Key="AvatarSmall">
-      <Grid Width="22" Height="22">
-        <Ellipse Fill="{Binding Color}" />
-        <Ellipse Fill="{Binding IconBrush}" />
-        <TextBlock Text="{Binding Initial}" Visibility="{Binding InitialVisibility}" Foreground="#111315" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-        <Ellipse Stroke="{Binding FrameBrush}" StrokeThickness="1.5" Margin="-2" />
-        <Ellipse Stroke="{Binding Ring}" StrokeThickness="2" Margin="-4.5" />
-        <Border Width="13" Height="13" CornerRadius="6.5" Background="{Binding StatusBrush}" BorderBrush="{StaticResource Surface}" BorderThickness="1.5"
-                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-5,-5" Visibility="{Binding StatusVisibility}">
-          <TextBlock Text="{Binding StatusGlyph}" FontFamily="{StaticResource Icons}" FontSize="7" Foreground="#111315" FontWeight="Bold"
-                     HorizontalAlignment="Center" VerticalAlignment="Center" />
-        </Border>
-        <!-- appear offline: a grey hollow dot -->
-        <Border Width="13" Height="13" CornerRadius="6.5" Background="{StaticResource Surface}" BorderBrush="#8A9199" BorderThickness="2.5"
-                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-5,-5" Visibility="{Binding InvisibleVisibility}" />
-      </Grid>
+      <local:AvatarView Width="22" Height="22" Decor="True" />
+    </DataTemplate>
+    <DataTemplate x:Key="AvatarCard">
+      <local:AvatarView Width="36" Height="36" />
     </DataTemplate>
 
     <!-- the hover card of a person: avatar, name, rank / level, place, state, status, voice - a few short lines -->
@@ -30,7 +19,7 @@
           <Border DockPanel.Dock="Right" CornerRadius="4" Padding="5,1" Margin="12,0,0,0" Background="{Binding FrameBrush}" VerticalAlignment="Center">
             <TextBlock Text="{Binding RoleLabel}" FontSize="9.5" FontWeight="Bold" Foreground="#111315" />
           </Border>
-          <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Center" Margin="2,0,10,0" />
+          <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarCard}" VerticalAlignment="Center" Margin="2,0,10,0" />
           <TextBlock Text="{Binding CardNameText}" FontSize="13.5" FontWeight="SemiBold" Foreground="{Binding ClassBrushOrText}"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </DockPanel>
@@ -224,7 +213,8 @@
                       Click="Settings_Click" ToolTip="Settings" />
               <Border x:Name="MeRow" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Me_Click" ToolTip="Set your status" CornerRadius="6" Padding="2">
                 <DockPanel>
-                  <ContentPresenter x:Name="MeAvatar" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Center" />
+                  <ContentPresenter x:Name="MeAvatar" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Center" Cursor="Hand" ToolTip="Edit your profile"
+                                    PreviewMouseLeftButtonUp="MeAvatar_Click" />
                   <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                     <TextBlock x:Name="MeName" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="MeStatus" FontSize="10.5" Foreground="{StaticResource TextDim}" TextTrimming="CharacterEllipsis" />
@@ -300,13 +290,12 @@
                             <Run Text="{Binding ReplyFrom, Mode=OneWay}" FontWeight="SemiBold" Foreground="{Binding ReplyColor, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding ReplyText, Mode=OneWay}" />
                           </TextBlock>
 
-                          <Grid Grid.Row="1" Width="34" Height="34" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0" Visibility="{Binding AvatarVisibility}">
-                            <Ellipse Fill="{Binding Color}" />
-                            <TextBlock Text="{Binding Initial}" Foreground="#111315" FontSize="14.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                          </Grid>
+                          <local:AvatarView Grid.Row="1" Width="34" Height="34" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0" Visibility="{Binding AvatarVisibility}"
+                                            Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="MessageAuthor_Click" />
                           <StackPanel Grid.Row="1" Grid.Column="1">
                             <StackPanel Orientation="Horizontal" Visibility="{Binding HeaderVisibility}">
-                              <TextBlock Text="{Binding From}" FontWeight="SemiBold" FontSize="13" Foreground="{Binding Color}" ToolTipOpening="NameTip_Opening">
+                              <TextBlock Text="{Binding From}" FontWeight="SemiBold" FontSize="13" Foreground="{Binding Color}" ToolTipOpening="NameTip_Opening"
+                                         Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="MessageAuthor_Click">
                                 <TextBlock.ToolTip>
                                   <ToolTip Style="{StaticResource CardTip}" ContentTemplate="{StaticResource MemberCard}" Content="{Binding Author}" />
                                 </TextBlock.ToolTip>
@@ -551,6 +540,10 @@
     <Popup x:Name="StatusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="-6">
       <Border x:Name="StatusBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="6" Width="250">
         <StackPanel>
+          <Button Style="{StaticResource MenuRow}" Click="EditProfile_Click" ToolTip="Avatar, about text, characters, privacy">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE77B;" FontFamily="{StaticResource Icons}" Foreground="{StaticResource Accent}" FontSize="13" Width="24" /><TextBlock Text="Edit profile..." /></StackPanel>
+          </Button>
+          <Border Height="1" Background="{StaticResource Line}" Margin="8,3,8,3" />
           <TextBlock Text="SET YOUR STATUS" Style="{StaticResource Caption}" Margin="8,4,0,4" />
           <Button Style="{StaticResource MenuRow}" Tag="online" Click="StatusOption_Click">
             <StackPanel Orientation="Horizontal"><Ellipse Width="12" Height="12" Fill="#ABD473" Margin="1,0,11,0" VerticalAlignment="Center" /><TextBlock Text="Online" /></StackPanel>
@@ -582,30 +575,39 @@
       </Border>
     </Popup>
 
-    <!-- person: volume, officer tools -->
+    <!-- person: the profile card, then what you can do with them (mention, join their room, volume, officer tools) -->
     <Popup x:Name="MemberPopup" StaysOpen="False" Placement="Right" AllowsTransparency="True" PopupAnimation="Fade" HorizontalOffset="6">
-      <Border Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="12" Width="230">
-        <StackPanel>
-          <TextBlock x:Name="PopName" FontSize="14" FontWeight="SemiBold" />
-          <TextBlock x:Name="PopRole" FontSize="11.5" Margin="0,1,0,0" />
-          <TextBlock x:Name="PopStatus" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,2,0,0" />
-          <TextBlock x:Name="PopGame" FontSize="11.5" TextWrapping="Wrap" Margin="0,4,0,0" />
-          <StackPanel x:Name="PopVolumeArea" Margin="0,12,0,0">
-            <DockPanel>
-              <TextBlock DockPanel.Dock="Right" x:Name="PopVolumeText" FontSize="11" Foreground="{StaticResource TextDim}" />
-              <TextBlock Text="Volume" FontSize="12" />
-            </DockPanel>
-            <Slider x:Name="PopVolume" Minimum="0" Maximum="2" Margin="0,6,0,0" ValueChanged="PopVolume_Changed" />
-          </StackPanel>
-          <StackPanel x:Name="PopModArea" Margin="-8,10,0,0">
-            <Button x:Name="PopMute" Style="{StaticResource MenuRow}" Click="PopMute_Click" />
-            <Button Style="{StaticResource MenuRow}" Click="PopKick_Click">
-              <TextBlock Text="Kick from the lodge" Foreground="{StaticResource Danger}" />
+      <Border Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Margin="0,0,16,16">
+        <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" /></Border.Effect>
+        <StackPanel Width="300">
+          <ContentControl x:Name="PopCard" ContentTemplate="{StaticResource ProfileCard}" />
+          <StackPanel Margin="16,0,16,14">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+              <Button x:Name="PopMention" Style="{StaticResource SecondaryButton}" Content="Mention" Click="PopMention_Click" ToolTip="Put @name in your message" />
+              <Button x:Name="PopJoin" Style="{StaticResource SecondaryButton}" Content="Join their voice room" Margin="8,0,0,0" Click="PopJoin_Click" />
+            </StackPanel>
+            <StackPanel x:Name="PopVolumeArea" Margin="0,12,0,0">
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Right" x:Name="PopVolumeText" FontSize="11" Foreground="{StaticResource TextDim}" />
+                <TextBlock Text="Volume" FontSize="12" />
+              </DockPanel>
+              <Slider x:Name="PopVolume" Minimum="0" Maximum="2" Margin="0,6,0,0" ValueChanged="PopVolume_Changed" />
+            </StackPanel>
+            <StackPanel x:Name="PopModArea" Margin="-8,8,0,0">
+              <Button x:Name="PopMute" Style="{StaticResource MenuRow}" Click="PopMute_Click" />
+              <Button Style="{StaticResource MenuRow}" Click="PopKick_Click">
+                <TextBlock Text="Kick from the lodge" Foreground="{StaticResource Danger}" />
+              </Button>
+            </StackPanel>
+            <Button x:Name="PopReset" Style="{StaticResource MenuRow}" Margin="-8,0,0,0" Click="PopReset_Click" ToolTip="Guild Master: put their avatar back to the default">
+              <TextBlock Text="Reset avatar to default" Foreground="{StaticResource Danger}" />
             </Button>
           </StackPanel>
         </StackPanel>
       </Border>
     </Popup>
+
+    <local:ProfileEditor x:Name="Editor" Grid.RowSpan="9" Grid.ColumnSpan="9" />
 
     <!-- in-app picture viewer (covers the whole Lodge) -->
     <local:ImageViewer x:Name="Viewer" Grid.RowSpan="9" Grid.ColumnSpan="9" />
