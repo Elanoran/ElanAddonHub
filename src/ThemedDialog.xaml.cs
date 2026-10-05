@@ -112,7 +112,7 @@ namespace ElansAddonHub
             {
                 // the UI isn't usable (very early or during shutdown): the plain Windows box is better than nothing
                 Services.Util.Log("ThemedDialog fallback: " + ex.Message);
-                var r = MessageBox.Show(text ?? title, title ?? "Elan's Addon Hub", cancelText != null ? MessageBoxButton.OKCancel : MessageBoxButton.OK,
+                var r = MessageBox.Show(text ?? title, title ?? Brand.Name, cancelText != null ? MessageBoxButton.OKCancel : MessageBoxButton.OK,
                     kind == DialogKind.Error ? MessageBoxImage.Error : kind == DialogKind.Info ? MessageBoxImage.Information : MessageBoxImage.Warning);
                 return r == MessageBoxResult.OK;
             }

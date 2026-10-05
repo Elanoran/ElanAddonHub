@@ -30,7 +30,7 @@ namespace ElansAddonHub
             InitializeComponent();
             Cards.ItemsSource = cards;
             InitOthers();
-            VersionText.Text = "v" + App.Version;
+            RailLogo.ToolTip = Brand.Name + " v" + App.Version + "\nClick for About";
             SelfUpdater.CleanupOld();
             SetupTray();
 
@@ -43,7 +43,7 @@ namespace ElansAddonHub
             checkTimer.Interval = TimeSpan.FromMinutes(settings.CheckMinutes);
             checkTimer.Tick += async (s, e) => await CheckNow();
             checkTimer.Start();
-            statusTimer.Tick += (s, e) => { UpdateStatusText(); MaybeCfAuto(); };
+            statusTimer.Tick += (s, e) => { UpdateStatusText(); MaybeCfAuto(); RefreshRailBadges(); };
             statusTimer.Start();
             Loaded += async (s, e) => { if (manifest == null) await CheckNow(); };
 
@@ -55,6 +55,12 @@ namespace ElansAddonHub
             Session = new LodgeSession(settings);
             Session.IsShownToUser = () => IsVisible && IsActive && WindowState != WindowState.Minimized && TabLodge.IsChecked == true;
             Session.UnreadChanged += unread => UnreadDot.Visibility = unread ? Visibility.Visible : Visibility.Collapsed;
+            PreviewKeyDown += (s, e) =>
+            {
+                if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control || (Keyboard.Modifiers & (ModifierKeys.Alt | ModifierKeys.Shift)) != 0) return;
+                var t = e.Key == Key.D1 || e.Key == Key.NumPad1 ? "addons" : e.Key == Key.D2 || e.Key == Key.NumPad2 ? "lodge" : e.Key == Key.OemComma ? "settings" : null;
+                if (t != null) { ShowTab(t); e.Handled = true; }
+            };
             Session.Notify += (from, text) =>
             {
                 // a tray note while you're elsewhere (e.g. in WoW), at most one every 8 s
@@ -89,6 +95,16 @@ namespace ElansAddonHub
             if (lodge) Session.MarkRead();
         }
 
+        // Addons item of the rail: how many updates are waiting (ours + other addons + the hub itself)
+        public void RefreshRailBadges()
+        {
+            var n = cards.Count(c => c.State == CardState.UpdateAvailable) + (others?.Count(c => c.State == TpState.UpdateAvailable) ?? 0)
+                + (manifest != null && SelfUpdater.IsNewer(manifest.Hub) ? 1 : 0);
+            UpdateBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateBadgeText.Text = n > 9 ? "9+" : n.ToString();
+            TabAddons.ToolTip = n > 0 ? $"Addons  (Ctrl+1)\n{n} update{(n == 1 ? "" : "s")} available" : "Addons  (Ctrl+1)";
+        }
+
         public void ShowTab(string tab)
         {
             (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : TabAddons).IsChecked = true;
@@ -117,6 +133,21 @@ namespace ElansAddonHub
             var checkAllLine = $"check-all button: {(CheckAllButton.IsEnabled && CheckResult.Text != "" && CheckChipText.Text != "" ? "ok" : "FAIL")} (result='{CheckResult.Text}', chip='{CheckChipText.Text}', tip={CheckAllButton.ToolTip})";
             await Task.Delay(400);
             Snapshot(System.IO.Path.Combine(dir, "2-after.png"));
+            if (cards.Count >= 3 && others.Count >= 4)
+            {
+                cards[0].SetPillForTest("Update to 1.23.0", PillKind.Action, "x", true);
+                cards[1].SetPillForTest("Install", PillKind.Action, "x", true);
+                cards[2].SetPillForTest("Updating...", PillKind.Busy, "x", false);
+                others[0].SetPillForTest("Update", PillKind.Action, "x", true);
+                others[1].SetPillForTest("Update", PillKind.Action, "x", true); others[1].Message = "Something went wrong: test";
+                others[2].SetPillForTest("Choose file", PillKind.Action, "x", true);
+                others[3].SetPillForTest("Dev copy", PillKind.Quiet, "x", false);
+                RefreshRailBadges();
+                UpdateBadge.Visibility = Visibility.Visible; UpdateBadgeText.Text = "4";
+                await Task.Delay(400);
+                Snapshot(System.IO.Path.Combine(dir, "16-pills.png"));
+                ShowTab("addons");
+            }
             ShowTab("settings");
             SettingsPage.Show("general");
             await Task.Delay(300);
@@ -337,7 +368,7 @@ namespace ElansAddonHub
                 Check("destructive confirm: keyboard focus on Cancel", System.Windows.Input.Keyboard.FocusedElement is System.Windows.Controls.Button fb && (string)fb.Content == "Cancel");
                 SnapshotElement(del.RootForTest, System.IO.Path.Combine(dir, "11-dialog-confirm.png"));
                 del.Close();
-                var err = ThemedDialog.Create(DialogKind.Error, "Something went wrong", "Couldn't reach the lodge: the connection was closed.\n\nIt was written to the hub's log; the hub keeps running.", "OK", null);
+                var err = ThemedDialog.Create(DialogKind.Error, "Something went wrong", "Couldn't reach the lodge: the connection was closed.\n\nIt was written to the Outpost's log; the hub keeps running.", "OK", null);
                 err.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                 err.Show();
                 await Task.Delay(500);
@@ -564,6 +595,7 @@ namespace ElansAddonHub
             }
             foreach (var gone in cards.Where(c => manifest.Addons == null || manifest.Addons.All(a => a.Id != c.Info.Id)).ToList())
                 cards.Remove(gone);
+            RefreshRailBadges();
         }
 
         async Task AfterCheck()
@@ -584,7 +616,7 @@ namespace ElansAddonHub
             if (settings.Notified.Contains(key)) return;
             settings.Notified.Add(key);
             SettingsStore.Save(settings);
-            if (!IsVisible) tray.ShowBalloonTip(5000, $"{card.Name} {card.Info.Version}", "An update is ready - click to open the hub.", WinForms.ToolTipIcon.None);
+            if (!IsVisible) tray.ShowBalloonTip(5000, $"{card.Name} {card.Info.Version}", "An update is ready - click to open the Outpost.", WinForms.ToolTipIcon.None);
         }
 
         string toastedUpdate;
@@ -592,11 +624,11 @@ namespace ElansAddonHub
         {
             var newer = SelfUpdater.IsNewer(manifest.Hub);
             HubBanner.Visibility = newer ? Visibility.Visible : Visibility.Collapsed;
-            if (newer) HubBannerText.Text = $"Hub {manifest.Hub.Version} is ready.";
+            if (newer) HubBannerText.Text = $"{Brand.Name} {manifest.Hub.Version} is ready.";
             if (newer && toastedUpdate != manifest.Hub.Version)
             {
                 toastedUpdate = manifest.Hub.Version;
-                Session.Toasts.Push(new ToastItem { Kind = ToastKind.Update, Sender = "Hub " + manifest.Hub.Version + " is ready", Text = "Open the Hub to update." });
+                Session.Toasts.Push(new ToastItem { Kind = ToastKind.Update, Sender = Brand.Name + " " + manifest.Hub.Version + " is ready", Text = "Open the Outpost to update." });
             }
         }
 
@@ -625,6 +657,7 @@ namespace ElansAddonHub
                 await Installer.Install(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p), replaceDev);
                 card.SetBusy(false);
                 card.Update(card.Info, settings.WowRoot);
+                RefreshRailBadges();
                 // WoW only discovers new addon folders when it starts; updates to known addons just need /reload
                 var hint = !wasInstalled && GamePresence.WowRunningNow()
                     ? "Installed! WoW is running - restart WoW to load a new addon (/reload isn't enough)."
@@ -649,7 +682,9 @@ namespace ElansAddonHub
 
         async void Action_Click(object sender, RoutedEventArgs e)
         {
-            if ((sender as FrameworkElement)?.Tag is AddonCard card && card.State != CardState.DevCopy) await Install(card);
+            if (!((sender as FrameworkElement)?.DataContext is AddonCard card)) return;
+            if (card.PillClickable && card.State != CardState.DevCopy && !card.Busy) await Install(card);
+            else card.Expanded = !card.Expanded;   // a quiet pill (Up to date, Dev copy...) just opens the details
         }
 
         // only for friends who got the addon as a zip of a git checkout
@@ -660,7 +695,7 @@ namespace ElansAddonHub
                 $"{card.Name} in your AddOns folder contains a .git folder: it's a developer's working copy, or an old zip of one.\n\n" +
                 "If you DEVELOP this addon, keep your copy - replacing it removes your git history and unpublished work from this folder " +
                 "(a backup is kept in %LOCALAPPDATA%\\ElansAddonHub\\backups).\n\n" +
-                "If a friend sent you this folder, replace it to switch to the normal release version that the hub keeps updated.",
+                "If a friend sent you this folder, replace it to switch to the normal release version that the Outpost keeps updated.",
                 "Replace it", danger: true, cancelText: "Keep my copy");
             if (ok) await Install(card);
         }
@@ -668,12 +703,12 @@ namespace ElansAddonHub
         async void HubUpdate_Click(object sender, RoutedEventArgs e)
         {
             HubUpdateButton.IsEnabled = false;
-            HubBannerText.Text = "Downloading the new hub...";
+            HubBannerText.Text = "Downloading the new version...";
             try { await SelfUpdater.UpdateAndRestart(manifest.Hub, null); Quit(); }
             catch (Exception ex)
             {
                 Util.Log("hub update failed: " + ex);
-                HubBannerText.Text = "Hub update failed: " + ex.Message;
+                HubBannerText.Text = "Update failed: " + ex.Message;
                 HubUpdateButton.IsEnabled = true;
             }
         }
@@ -711,6 +746,9 @@ namespace ElansAddonHub
             if (e.ChangedButton == MouseButton.Left) DragMove();
         }
 
+        void Logo_Down(object sender, MouseButtonEventArgs e) => e.Handled = true;   // not a drag handle
+        void Logo_Click(object sender, MouseButtonEventArgs e) { ShowTab("settings"); SettingsPage.Show("about"); }
+
         void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
         void Close_Click(object sender, RoutedEventArgs e)
@@ -721,7 +759,7 @@ namespace ElansAddonHub
                 if (!trayHintShown)
                 {
                     trayHintShown = true;
-                    tray.ShowBalloonTip(3000, "Still here", "The hub keeps checking for updates from the tray.", WinForms.ToolTipIcon.None);
+                    tray.ShowBalloonTip(3000, "Still here", "The Outpost keeps checking for updates from the tray.", WinForms.ToolTipIcon.None);
                 }
             }
             else Quit();
@@ -743,7 +781,7 @@ namespace ElansAddonHub
             menu.Items.Add("Check for updates", null, async (s, e) => await CheckNow());
             menu.Items.Add(new WinForms.ToolStripSeparator());
             menu.Items.Add("Quit", null, (s, e) => Quit());
-            tray = new WinForms.NotifyIcon { Icon = icon, Text = "Elan's Addon Hub", Visible = true, ContextMenuStrip = menu };
+            tray = new WinForms.NotifyIcon { Icon = icon, Text = Brand.Name + " v" + App.Version, Visible = true, ContextMenuStrip = menu };
             tray.MouseClick += (s, e) => { if (e.Button == WinForms.MouseButtons.Left) ShowFromTray(); };
             tray.BalloonTipClicked += (s, e) => ShowFromTray();
         }

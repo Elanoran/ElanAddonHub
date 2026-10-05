@@ -44,12 +44,13 @@
     <Setter Property="FontSize" Value="13.5" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Height" Value="40" />
+    <Setter Property="Padding" Value="18,0" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="9">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="9" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
@@ -70,6 +71,66 @@
     </Setter>
   </Style>
 
+  <!-- the status pill on a card: it is also the card's one action button (DataContext = a PillBase card) -->
+  <Style x:Key="StatusPill" TargetType="Button">
+    <Setter Property="Background" Value="{Binding PillBg}" />
+    <Setter Property="Foreground" Value="{Binding PillFg}" />
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Cursor" Value="{Binding PillCursor}" />
+    <Setter Property="Focusable" Value="{Binding PillClickable}" />
+    <Setter Property="ToolTip" Value="{Binding PillTip}" />
+    <Setter Property="ToolTipService.InitialShowDelay" Value="300" />
+    <Setter Property="AutomationProperties.Name" Value="{Binding PillText}" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="12" BorderThickness="1.5" BorderBrush="Transparent" Padding="12,4" MinHeight="26">
+            <Border.Triggers>
+              <EventTrigger RoutedEvent="Border.Loaded">
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="spinRot" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:0.9" RepeatBehavior="Forever" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </EventTrigger>
+            </Border.Triggers>
+            <Grid>
+              <Border x:Name="hv" Background="White" Opacity="0" CornerRadius="10" Margin="-12,-4" />
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="11" Margin="0,1,6,0" VerticalAlignment="Center"
+                           Visibility="{Binding PillSpinVisibility}" RenderTransformOrigin="0.5,0.5">
+                  <TextBlock.RenderTransform><RotateTransform x:Name="spinRot" /></TextBlock.RenderTransform>
+                </TextBlock>
+                <TextBlock Text="{Binding PillText}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsMouseOver" Value="True" />
+                <Condition Property="Focusable" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="hv" Property="Opacity" Value="0.22" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsPressed" Value="True" />
+                <Condition Property="Focusable" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="hv" Property="Opacity" Value="0.38" />
+            </MultiTrigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Text}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- red confirm button for destructive dialogs (Delete, Kick, Remove) -->
   <Style x:Key="DangerButton" TargetType="Button">
     <Setter Property="Foreground" Value="#1A0B0B" />
@@ -77,12 +138,13 @@
     <Setter Property="FontSize" Value="13.5" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Height" Value="38" />
+    <Setter Property="Padding" Value="18,0" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="2" CornerRadius="9">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="2" CornerRadius="9" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
@@ -468,6 +530,48 @@
               <Setter TargetName="bd" Property="Background" Value="{StaticResource Danger}" />
               <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Danger}" />
               <Setter Property="Foreground" Value="White" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Discord-style navigation rail: a rounded-square icon that turns rounder-to-squarer on hover, with a pill on the window edge -->
+  <Style x:Key="RailButton" TargetType="RadioButton">
+    <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Width" Value="64" />
+    <Setter Property="Height" Value="50" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Grid Background="Transparent">
+            <Border x:Name="pill" Width="4" Height="8" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="0,4,4,0"
+                    Background="{StaticResource Text}" Opacity="0" />
+            <Border x:Name="box" Width="44" Height="44" CornerRadius="22" Background="{StaticResource SurfaceHi}" BorderThickness="2" BorderBrush="Transparent"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="box" Property="CornerRadius" Value="15" />
+              <Setter TargetName="box" Property="Background" Value="{StaticResource AccentDark}" />
+              <Setter Property="Foreground" Value="#111315" />
+              <Setter TargetName="pill" Property="Opacity" Value="1" />
+              <Setter TargetName="pill" Property="Height" Value="20" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource Text}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="box" Property="CornerRadius" Value="15" />
+              <Setter TargetName="box" Property="Background" Value="{StaticResource Accent}" />
+              <Setter Property="Foreground" Value="#111315" />
+              <Setter TargetName="pill" Property="Opacity" Value="1" />
+              <Setter TargetName="pill" Property="Height" Value="34" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>

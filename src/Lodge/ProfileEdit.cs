@@ -103,6 +103,7 @@ namespace ElansAddonHub.Lodge
         void Update()
         {
             if (init) Dirty = true;
+            if (init && !keepErr && !Saving && IsError) statusText = "";   // editing again clears an old error
             Preview.SetDisplayName(DisplayProblem == null ? DisplayNames.Clean(displayName) : "");
             foreach (var t in Avatars) { t.Selected = t.Id == avatarId; t.SetImage(t.Id == null ? null : AvatarCatalog.Image(t.Id, accent)); }
             foreach (var s in Swatches) s.Selected = s.Id == accent;
@@ -111,7 +112,7 @@ namespace ElansAddonHub.Lodge
             Raise(nameof(AboutCounter)); Raise(nameof(AboutCounterBrush)); Raise(nameof(Hint)); Raise(nameof(HintVisibility)); Raise(nameof(MainChoice));
             Raise(nameof(ShowAll)); Raise(nameof(ShowMain)); Raise(nameof(ShowNone)); Raise(nameof(VisEveryone)); Raise(nameof(VisOfficers));
             Raise(nameof(CharsVisibility)); Raise(nameof(NoCharsVisibility));
-            Raise(nameof(DisplayHint)); Raise(nameof(DisplayHintBrush)); Raise(nameof(CanSave)); Raise(nameof(StatusText)); Raise(nameof(StatusBrush));
+            Raise(nameof(DisplayHint)); Raise(nameof(DisplayHintBrush)); RaiseStatus();
         }
 
         // what other people will see (the server applies the same rules)
@@ -147,23 +148,38 @@ namespace ElansAddonHub.Lodge
             }
         }
         public Brush DisplayHintBrush => !IsGuest && (displayServerError != null || DisplayProblem != null) ? Avatar.Res("Danger") : Avatar.Res("TextDim");
-        public bool CanSave => Supported && !Saving && DisplayProblem == null;
-        public string StatusText => statusText;
-        public Brush StatusBrush => statusText.StartsWith("Saved") || statusText.StartsWith("Saving") ? Avatar.Res("TextDim") : Avatar.Res("Danger");
+        public bool CanSave => Supported && !Saving && DisplayProblem == null && (Dirty || statusText == "Not saved." || IsError);
+        public bool CanDiscard => Dirty && !Saving;
+        public Visibility DiscardVisibility => Dirty && !Saving ? Visibility.Visible : Visibility.Collapsed;
+        bool IsError => statusText != "" && !statusText.StartsWith("Saved") && !statusText.StartsWith("Saving");
+        // inline status next to the buttons: errors, "Saving...", "Unsaved changes", or "Saved" which fades after a few seconds
+        public string StatusText => Saving ? "Saving..." : IsError ? statusText : Dirty ? "Unsaved changes" : statusText;
+        public Brush StatusBrush => Saving ? Avatar.Res("TextDim") : IsError ? Avatar.Res("Danger") : Dirty ? Avatar.Res("Gold") : statusText.StartsWith("Saved") ? Avatar.Res("Accent") : Avatar.Res("TextDim");
 
-        public void BeginSave() { Saving = true; displayServerError = null; statusText = "Saving..."; Raise(nameof(CanSave)); Raise(nameof(StatusText)); Raise(nameof(StatusBrush)); Raise(nameof(DisplayHint)); Raise(nameof(DisplayHintBrush)); }
+        void RaiseStatus() { Raise(nameof(CanSave)); Raise(nameof(CanDiscard)); Raise(nameof(DiscardVisibility)); Raise(nameof(StatusText)); Raise(nameof(StatusBrush)); }
+        public void BeginSave() { Saving = true; displayServerError = null; statusText = "Saving..."; RaiseStatus(); Raise(nameof(DisplayHint)); Raise(nameof(DisplayHintBrush)); }
         public DateTime SavedAt = DateTime.MinValue;
-        public void Saved() { SavedAt = DateTime.UtcNow; Saving = false; Dirty = false; displayServerError = null; statusText = "Saved - everyone sees it now."; Update(); Dirty = false; }
+        System.Windows.Threading.DispatcherTimer savedFade;
+        public void Saved()
+        {
+            SavedAt = DateTime.UtcNow; Saving = false; displayServerError = null; statusText = "Saved ✓ everyone sees it now."; Update(); Dirty = false; RaiseStatus();
+            savedFade?.Stop();
+            savedFade = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+            savedFade.Tick += (s, e) => { savedFade.Stop(); if (!Dirty && statusText.StartsWith("Saved")) { statusText = ""; RaiseStatus(); } };
+            savedFade.Start();
+        }
         // the server refused the save (taken name, rate limit, ...): nothing was saved
         public void ServerError(string text)
         {
             Saving = false;
             if ((text ?? "").IndexOf("display name", StringComparison.OrdinalIgnoreCase) >= 0) { displayServerError = text; statusText = "Not saved."; }
             else statusText = text ?? "Not saved.";
-            Update();
+            keepErr = true; Update(); keepErr = false;
             Dirty = true;
+            RaiseStatus();
         }
 
+        bool keepErr;
         public string AvatarId => avatarId;
         public string Accent => accent;
         public void SelectAvatar(string id) { avatarId = id; Update(); }

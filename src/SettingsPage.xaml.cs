@@ -167,6 +167,8 @@ namespace ElansAddonHub
             LodgeWho.Text = session.Me == null ? (session.Connected ? session.StatusText : "Join one from the Lodge tab")
                 : $"You're {session.Me.Name}, {MemberVM.RoleName(session.MyRole)} - {session.StatusText}";
             if (NavProfile.IsChecked == true) ProfileEnter();
+            UpdateProfileBar();
+            AboutVersion.Text = $"Version {App.Version}" + (string.IsNullOrEmpty(host.CheckStatus) ? "" : "  ·  " + host.CheckStatus);
             if (NavGm.IsChecked == true) { GmStatus.Text = ""; session.RequestAdmin(); }
             var c = session.Presence.Current;
             ShareGameHint.Text = (session.Presence.Playing ? "WoW is running. " : "")
@@ -227,7 +229,7 @@ namespace ElansAddonHub
 
         void SignOut_Click(object sender, RoutedEventArgs e)
         {
-            if (!Dialog.Confirm(Window.GetWindow(this), "Leave this lodge?", "The hub forgets the address and your code. You need an invite code to join again.", "Leave", danger: true)) return;
+            if (!Dialog.Confirm(Window.GetWindow(this), "Leave this lodge?", "The Outpost forgets the address and your code. You need an invite code to join again.", "Leave", danger: true)) return;
             lodge.SignOut();
             RefreshSection();
         }

@@ -277,6 +277,9 @@ namespace ElansAddonHub
                 await Task.Delay(200);
                 Check("saved: my own name is shown as the display name everywhere (member, status line), page says Saved", by["Elan"].Display == "Hunter Elan" && Session.MyDisplayName == "Hunter Elan" && vm.StatusText.StartsWith("Saved") && SettingsPage.ProfileModel == vm);
 
+                Snapshot(P("16-profile-saved.png"));
+                vm.About = "edited again"; await Task.Delay(200);
+                Snapshot(P("16-profile-dirty.png"));
                 // the Lodge sub-entry in Settings is gone
                 SettingsPage.Show("lodge");
                 await Task.Delay(300);

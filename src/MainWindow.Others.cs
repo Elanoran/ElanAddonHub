@@ -171,6 +171,7 @@ namespace ElansAddonHub
             OtherPanel.Visibility = others.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             var updates = others.Count(c => c.State == TpState.UpdateAvailable);
             OtherTitle.Text = $"Other addons  ·  {others.Count}" + (updates > 0 ? $"  ·  {updates} update{(updates == 1 ? "" : "s")}" : "");
+            RefreshRailBadges();
             UpdateAllButton.Visibility = updates > 0 ? Visibility.Visible : Visibility.Collapsed;
             SearchBox.Visibility = others.Count > 8 ? Visibility.Visible : Visibility.Collapsed;
             var linked = others.Count(c => c.State != TpState.Local && c.State != TpState.DevCopy);
@@ -191,7 +192,7 @@ namespace ElansAddonHub
                 try { CfChipIcon.Source = SourceIcons.CurseForge(); } catch { }
                 CfChipIcon.Visibility = CfChipIcon.Source != null ? Visibility.Visible : Visibility.Collapsed;
                 var full = (cfStatus != null ? cfStatus + "\n" : "") + $"CurseForge manages {n} addon{(n == 1 ? "" : "s")} here; last checked {CurseForgeLocal.Ago(cfInst.LastRefresh)}"
-                    + (stale ? " (old - press the refresh button to check now)" : "") + ".\nThe hub only asks CurseForge to install or check - it never touches those folders.";
+                    + (stale ? " (old - press the refresh button to check now)" : "") + ".\nThe Outpost only asks CurseForge to install or check - it never touches those folders.";
                 CfChip.ToolTip = Tip(full);
                 AutomationProperties.SetName(CfChip, "CurseForge status");
                 CfChipText.ToolTip = null;
@@ -215,7 +216,10 @@ namespace ElansAddonHub
 
         async void OtherAction_Click(object sender, RoutedEventArgs e)
         {
-            if ((sender as FrameworkElement)?.Tag is ThirdPartyCard c) await InstallOther(c);
+            if (!((sender as FrameworkElement)?.DataContext is ThirdPartyCard c)) return;
+            if (!c.PillClickable || c.IsBusy) c.Expanded = !c.Expanded;                       // a quiet pill just opens the details
+            else if (c.State == TpState.ChooseFile && c.Link.Asset == null) c.Expanded = true; // "Choose file": the picker is in the details
+            else await InstallOther(c);
         }
 
         async void UpdateAll_Click(object sender, RoutedEventArgs e)

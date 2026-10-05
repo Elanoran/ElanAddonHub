@@ -42,8 +42,10 @@ namespace ElansAddonHub
             bool ready = ProfileReady;
             pvm = ready ? new ProfileEditVM(session) : null;
             ProfileForm.DataContext = pvm;
+            ProfileBar.DataContext = pvm;
             ProfileForm.Visibility = ready ? Visibility.Visible : Visibility.Collapsed;
             ProfileEmpty.Visibility = ready ? Visibility.Collapsed : Visibility.Visible;
+            UpdateProfileBar();
             if (ready) return;
             bool connected = session.Me != null && (session.Connected || session.TestFed);
             ProfileEmptyTitle.Text = connected ? "This lodge server doesn't have profiles yet" : "You're not connected to a lodge";
@@ -52,6 +54,11 @@ namespace ElansAddonHub
                 : "Join a lodge from the Lodge tab and your display name, avatar, about text and characters show up here.";
             ProfileEmptyButton.Visibility = connected ? Visibility.Collapsed : Visibility.Visible;
         }
+
+        // the sticky Save / Discard bar belongs to the Profile page only, and only while the form is shown
+        void UpdateProfileBar() => ProfileBar.Visibility = NavProfile.IsChecked == true && ProfileForm.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+
+        void ProfileDiscard_Click(object sender, RoutedEventArgs e) => BuildProfile();
 
         void ProfileGoLodge_Click(object sender, RoutedEventArgs e) => host.ShowTab("lodge");
 

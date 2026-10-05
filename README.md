@@ -1,6 +1,7 @@
-<p align="center"><img src="src/Assets/hub.png" width="96" alt="Elan's Addon Hub"></p>
+<p align="center"><img src="src/Assets/hub.png" width="96" alt="Elan's Outpost"></p>
 
-<h1 align="center">Elan's Addon Hub</h1>
+<h1 align="center">Elan's Outpost</h1>
+<p align="center"><em>formerly Elan's Addon Hub</em></p>
 
 <p align="center">Installs and updates <b>Elan's Hunter Helper</b> for WoW Forever, with one click.</p>
 

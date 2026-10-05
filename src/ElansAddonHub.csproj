@@ -10,8 +10,8 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>2.19.0</Version>
-    <Product>Elan's Addon Hub</Product>
+    <Version>2.20.0</Version>
+    <Product>Elan's Outpost</Product>
     <Company>Elan</Company>
     <Description>Installs and updates Elan's WoW addons</Description>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

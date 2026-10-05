@@ -31,9 +31,9 @@ namespace ElansAddonHub
             {
                 var w = Current?.MainWindow;
                 if (w != null && w.IsLoaded) Dialog.Error(w.IsVisible ? w : null, "Something went wrong", ex.Message + "\n\nIt was written to the hub's log; the hub keeps running.");
-                else MessageBox.Show(ex.Message, "Elan's Addon Hub", MessageBoxButton.OK, MessageBoxImage.Warning);
+                else MessageBox.Show(ex.Message, Brand.Name, MessageBoxButton.OK, MessageBoxImage.Warning);
             }
-            catch { try { MessageBox.Show(ex.Message, "Elan's Addon Hub", MessageBoxButton.OK, MessageBoxImage.Warning); } catch { } }
+            catch { try { MessageBox.Show(ex.Message, Brand.Name, MessageBoxButton.OK, MessageBoxImage.Warning); } catch { } }
             finally { reporting = false; }
         }
 

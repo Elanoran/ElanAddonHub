@@ -27,7 +27,7 @@ namespace ElansAddonHub.Services
             if (!string.IsNullOrEmpty(hub.Sha256) && !string.Equals(Util.Sha256(fresh), hub.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 File.Delete(fresh);
-                throw new InvalidDataException("Hub download is damaged (checksum mismatch).");
+                throw new InvalidDataException("The download is damaged (checksum mismatch).");
             }
             var old = exe + ".old";
             if (File.Exists(old)) File.Delete(old);

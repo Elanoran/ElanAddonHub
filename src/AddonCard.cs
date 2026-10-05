@@ -40,7 +40,7 @@ namespace ElansAddonHub
     }
 
     // One addon card in the window.
-    public class AddonCard : INotifyPropertyChanged
+    public class AddonCard : PillBase
     {
         public AddonInfo Info { get; private set; }
         public CardState State { get; private set; }
@@ -94,9 +94,6 @@ namespace ElansAddonHub
         // hover the client name to see exactly where it installs
         public string InstallPath { get; private set; }
         public string Latest => Info.Version;
-        public string PillText { get; private set; }
-        public Brush PillBg { get; private set; }
-        public Brush PillFg { get; private set; }
         public string ButtonText { get; private set; }
         public bool ButtonEnabled { get; private set; }
         public string ChangesTitle { get; private set; }
@@ -124,9 +121,6 @@ namespace ElansAddonHub
             Notify(nameof(Stats)); Notify(nameof(StatsVisibility));
         }
 
-        // the big button is only shown when there is something to do
-        public Visibility ButtonVisibility => State == CardState.UpToDate || State == CardState.DevCopy ? Visibility.Collapsed : Visibility.Visible;
-
         // expanded = details (version history, dev-copy notes, links)
         bool expanded;
         public bool Expanded { get => expanded; set { expanded = value; Notify(); Notify(nameof(ExpandedVisibility)); Notify(nameof(Chevron)); } }
@@ -147,6 +141,7 @@ namespace ElansAddonHub
             set
             {
                 message = value; Notify(); Notify(nameof(MessageVisibility));
+                Failed = value != null && value.StartsWith("Something went wrong");
                 if (fade != null) fade.Stop();
                 if (StatChip.IsTransient(value))   // success hints fade after ~8 s, errors stay
                 {
@@ -186,12 +181,18 @@ namespace ElansAddonHub
 
             switch (State)
             {
-                case CardState.UpdateAvailable: Pill("Update available", "Gold"); ButtonText = $"Update to {info.Version}"; ButtonEnabled = true; break;
-                case CardState.NotInstalled: Pill(info.Required || RecommendedForYou ? "Recommended" : "Not installed", info.Required || RecommendedForYou ? "Gold" : "TextDim"); ButtonText = "Install"; ButtonEnabled = true; break;
-                case CardState.UpToDate: Pill("Up to date", "Accent"); ButtonText = "Up to date"; ButtonEnabled = false; break;
-                case CardState.DevCopy: Pill("Dev copy", "TextDim"); ButtonText = "Managed by git"; ButtonEnabled = false; break;
-                case CardState.NoClient: Pill("No client", "Danger"); ButtonText = $"{info.FlavorName ?? info.Flavor} not found"; ButtonEnabled = false; break;
-                default: Pill("No WoW folder", "Danger"); ButtonText = "Choose your WoW folder in Settings"; ButtonEnabled = false; break;
+                case CardState.UpdateAvailable: ButtonText = $"Update to {info.Version}"; ButtonEnabled = true;
+                    SetPill(ButtonText, PillKind.Action, $"Install {Name} {info.Version} (you have {installed}). Your settings are kept.", true); break;
+                case CardState.NotInstalled: ButtonText = "Install"; ButtonEnabled = true;
+                    SetPill("Install", PillKind.Action, $"Download and install {Name} {info.Version}", true); break;
+                case CardState.UpToDate: ButtonText = "Up to date"; ButtonEnabled = false;
+                    SetPill("Up to date", PillKind.Quiet, "You have the latest version", false); break;
+                case CardState.DevCopy: ButtonText = "Managed by git"; ButtonEnabled = false;
+                    SetPill("Dev copy", PillKind.Quiet, "A git checkout: the hub never overwrites it. Update it with git, or replace it from the details below.", false); break;
+                case CardState.NoClient: ButtonText = $"{info.FlavorName ?? info.Flavor} not found"; ButtonEnabled = false;
+                    SetPill("No client", PillKind.Danger, $"{info.FlavorName ?? info.Flavor} wasn't found in your WoW folder", false); break;
+                default: ButtonText = "Choose your WoW folder in Settings"; ButtonEnabled = false;
+                    SetPill("No WoW folder", PillKind.Danger, "Choose your WoW folder in Settings > General", false); break;
             }
 
             // expanded view: the whole version history (the newer-than-yours ones first anyway)
@@ -210,21 +211,10 @@ namespace ElansAddonHub
                 State = CardState.Busy;
                 ButtonText = text ?? "Working...";
                 ButtonEnabled = false;
+                SetPill(ButtonText, PillKind.Busy, "Working on it...", false);
                 Progress = 0;
-                Notify(nameof(ButtonText));
-                Notify(nameof(ButtonEnabled));
+                Notify(string.Empty);
             }
         }
-
-        void Pill(string text, string color)
-        {
-            PillText = text;
-            var c = ((SolidColorBrush)Application.Current.Resources[color]).Color;
-            PillFg = new SolidColorBrush(c);
-            PillBg = new SolidColorBrush(Color.FromArgb(0x26, c.R, c.G, c.B));
-        }
-
-        public event PropertyChangedEventHandler PropertyChanged;
-        void Notify([CallerMemberName] string name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }

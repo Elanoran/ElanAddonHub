@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:lodge="clr-namespace:ElansAddonHub.Lodge"
         xmlns:local="clr-namespace:ElansAddonHub"
-        Title="Elan's Addon Hub" Icon="Assets/hub.ico"
+        Title="{x:Static local:Brand.Name}" Icon="Assets/hub.ico"
         Width="920" Height="690" MinWidth="740" MinHeight="560"
         WindowStyle="None" AllowsTransparency="True" Background="#01000000"
         ResizeMode="CanResize" WindowStartupLocation="CenterScreen"
@@ -20,6 +20,10 @@
       <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.55" Color="Black" />
     </Border.Effect>
     <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="64" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
       <Grid.RowDefinitions>
         <RowDefinition Height="52" />
         <RowDefinition Height="Auto" />
@@ -28,12 +32,12 @@
       </Grid.RowDefinitions>
 
       <!-- header art, fading into the background -->
-      <Border Grid.RowSpan="4" CornerRadius="13" ClipToBounds="True" IsHitTestVisible="False">
+      <Border Grid.RowSpan="4" Grid.ColumnSpan="2" CornerRadius="13" ClipToBounds="True" IsHitTestVisible="False">
         <Border.Background>
           <ImageBrush ImageSource="Assets/hero.jpg" Stretch="UniformToFill" AlignmentY="Top" />
         </Border.Background>
       </Border>
-      <Border Grid.RowSpan="4" CornerRadius="13" IsHitTestVisible="False">
+      <Border Grid.RowSpan="4" Grid.ColumnSpan="2" CornerRadius="13" IsHitTestVisible="False">
         <Border.Background>
           <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
             <GradientStop Color="#B30F1113" Offset="0" />
@@ -46,36 +50,52 @@
       </Border>
 
       <!-- title bar -->
-      <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
-          <Image Source="Assets/hub.png" Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality" />
-          <TextBlock Text="Elan's Addon Hub" FontSize="13.5" FontWeight="SemiBold" Margin="10,0,0,1" VerticalAlignment="Center" />
-          <TextBlock x:Name="VersionText" FontSize="11" Foreground="{StaticResource TextDim}" Margin="8,1,0,0" VerticalAlignment="Center" />
-        </StackPanel>
+      <Grid Grid.Row="0" Grid.Column="1" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
           <Button Style="{StaticResource ChromeButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Minimize" />
           <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Close" />
         </StackPanel>
       </Grid>
 
-      <!-- tabs -->
-      <DockPanel Grid.Row="1" Margin="20,0,16,8" LastChildFill="False">
-        <RadioButton x:Name="TabAddons" DockPanel.Dock="Left" Style="{StaticResource Tab}" Content="Addons" GroupName="tabs" IsChecked="True" Checked="Tab_Checked" />
-        <RadioButton x:Name="TabLodge" DockPanel.Dock="Left" Style="{StaticResource Tab}" GroupName="tabs" Checked="Tab_Checked">
-          <StackPanel Orientation="Horizontal">
-            <TextBlock Text="Lodge" />
-            <Ellipse x:Name="UnreadDot" Width="7" Height="7" Fill="{StaticResource Accent}" Margin="6,1,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
+      <!-- navigation rail (Discord style): icon buttons with a pill on the edge, Settings pinned at the bottom -->
+      <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0" Background="#B30C0E10" CornerRadius="13,0,0,13" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+        <DockPanel LastChildFill="False">
+          <Grid DockPanel.Dock="Top" Height="52" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
+            <Image x:Name="RailLogo" Source="Assets/hub.png" Width="26" Height="26" RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" ToolTipService.Placement="Right"
+                   MouseLeftButtonDown="Logo_Down" MouseLeftButtonUp="Logo_Click" />
+          </Grid>
+          <Grid DockPanel.Dock="Bottom" Margin="0,0,0,12">
+            <RadioButton x:Name="TabSettings" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
+                         ToolTip="Settings  (Ctrl+,)" ToolTipService.Placement="Right" AutomationProperties.Name="Settings">
+              <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="19" />
+            </RadioButton>
+          </Grid>
+          <StackPanel DockPanel.Dock="Top" Margin="0,2,0,0">
+            <Grid Margin="0,0,0,6">
+              <RadioButton x:Name="TabAddons" Style="{StaticResource RailButton}" GroupName="tabs" IsChecked="True" Checked="Tab_Checked"
+                           ToolTip="Addons  (Ctrl+1)" ToolTipService.Placement="Right" AutomationProperties.Name="Addons">
+                <TextBlock Text="&#xEA86;" FontFamily="{StaticResource Icons}" FontSize="19" />
+              </RadioButton>
+              <Border x:Name="UpdateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,7,0" MinWidth="18" Height="18" CornerRadius="9" Padding="4,0"
+                      Background="{StaticResource Gold}" BorderBrush="{StaticResource Bg}" BorderThickness="2" IsHitTestVisible="False" Visibility="Collapsed">
+                <TextBlock x:Name="UpdateBadgeText" FontSize="10" FontWeight="Bold" Foreground="#111315" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />
+              </Border>
+            </Grid>
+            <Border Width="28" Height="2" CornerRadius="1" Background="{StaticResource Line}" Margin="0,0,0,6" />
+            <Grid>
+              <RadioButton x:Name="TabLodge" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
+                           ToolTip="Lodge  (Ctrl+2)" ToolTipService.Placement="Right" AutomationProperties.Name="Lodge">
+                <TextBlock Text="&#xE8BD;" FontFamily="{StaticResource Icons}" FontSize="19" />
+              </RadioButton>
+              <Border x:Name="UnreadDot" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,3,9,0" Width="16" Height="16" CornerRadius="8"
+                      Background="{StaticResource Danger}" BorderBrush="{StaticResource Bg}" BorderThickness="3" IsHitTestVisible="False" Visibility="Collapsed" />
+            </Grid>
           </StackPanel>
-        </RadioButton>
-        <!-- settings: a gear at the right end of the tab row -->
-        <RadioButton x:Name="TabSettings" DockPanel.Dock="Right" Style="{StaticResource Tab}" GroupName="tabs" Checked="Tab_Checked"
-                     Margin="0" ToolTip="Settings">
-          <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="15" Margin="2,1,2,0" />
-        </RadioButton>
-      </DockPanel>
+        </DockPanel>
+      </Border>
 
       <!-- hub self-update banner -->
-      <Border x:Name="HubBanner" Grid.Row="2" Visibility="Collapsed" Margin="16,0,16,10" Padding="14,10"
+      <Border x:Name="HubBanner" Grid.Row="2" Grid.Column="1" Visibility="Collapsed" Margin="16,0,16,10" Padding="14,10"
               Background="{StaticResource Surface}" CornerRadius="10" BorderBrush="{StaticResource Line}" BorderThickness="1">
         <DockPanel>
           <Button x:Name="HubUpdateButton" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Foreground="{StaticResource Accent}"
@@ -85,9 +105,9 @@
       </Border>
 
       <!-- addon cards -->
-      <lodge:LodgeView x:Name="LodgePage" Grid.Row="3" Visibility="Collapsed" />
-      <local:SettingsPage x:Name="SettingsPage" Grid.Row="3" Visibility="Collapsed" />
-      <ScrollViewer x:Name="AddonsPage" Grid.Row="3" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
+      <lodge:LodgeView x:Name="LodgePage" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
+      <local:SettingsPage x:Name="SettingsPage" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
+      <ScrollViewer x:Name="AddonsPage" Grid.Row="3" Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
        <StackPanel>
         <!-- one-click "check everything", right above the cards (same column as the cards) -->
         <Grid MaxWidth="660" Margin="0,6,0,6">
@@ -128,12 +148,10 @@
                         <DockPanel>
                           <TextBlock DockPanel.Dock="Right" Text="{Binding Chevron}" FontFamily="{StaticResource Icons}" FontSize="12"
                                      Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,2,0" />
-                          <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="9,3" Background="{Binding PillBg}">
-                            <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
-                          </Border>
-                          <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="6,3" Margin="0,0,6,0" Background="#26FFFFFF"
-                                  ToolTip="Source: Elan's Addon Hub (GitHub releases)" AutomationProperties.Name="Source: Elan's Addon Hub (GitHub releases)">
-                            <Image Source="{Binding ChipArt}" Width="16" Height="16" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
+                          <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Click="Action_Click" />
+                          <Border DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,10,0" Background="Transparent"
+                                  ToolTip="{x:Static local:Brand.SourceTip}" AutomationProperties.Name="{x:Static local:Brand.SourceTip}">
+                            <Image Source="{Binding ChipArt}" Width="19" Height="19" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
                           </Border>
                           <StackPanel Margin="0,0,8,0" VerticalAlignment="Center">
                             <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
@@ -162,8 +180,6 @@
                             </ItemsControl.ItemTemplate>
                           </ItemsControl>
                         </StackPanel>
-                        <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Height="32" MinWidth="130" Padding="14,0" FontSize="12.5"
-                                Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="Action_Click" Visibility="{Binding ButtonVisibility}" />
                       </Grid>
                     </StackPanel>
                   </Grid>
@@ -224,7 +240,7 @@
                 <TextBlock.RenderTransform><RotateTransform x:Name="CfSpinRot" /></TextBlock.RenderTransform>
               </TextBlock>
             </Button>
-            <Border x:Name="CfChip" DockPanel.Dock="Right" Visibility="Collapsed" Background="#1AFFFFFF" CornerRadius="10" Padding="7,3" VerticalAlignment="Center" Margin="8,0,0,0"
+            <Border x:Name="CfChip" DockPanel.Dock="Right" Visibility="Collapsed" Background="Transparent" Padding="4,3" VerticalAlignment="Center" Margin="8,0,0,0"
                     ToolTipService.ShowDuration="30000">
               <StackPanel Orientation="Horizontal">
                 <Image x:Name="CfChipIcon" Width="14" Height="14" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,5,0" />
@@ -247,17 +263,15 @@
                       <DockPanel>
                         <TextBlock DockPanel.Dock="Right" Text="{Binding Chevron}" FontFamily="{StaticResource Icons}" FontSize="12"
                                    Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,2,0" />
-                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="8,2" Background="{Binding PillBg}" Visibility="{Binding PillVisibility}" Margin="6,0,0,0">
-                          <TextBlock Text="{Binding PillText}" Foreground="{Binding PillFg}" FontSize="11" FontWeight="SemiBold" />
-                        </Border>
-                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="10" Padding="6,3" Background="{Binding SourceBg}"
+                        <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Visibility="{Binding PillVisibility}" Click="OtherAction_Click" Margin="6,0,0,0" />
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" Padding="2,3" Margin="0,0,6,0" Background="Transparent"
                                 ToolTip="{Binding SourceTip}" AutomationProperties.Name="{Binding SourceTip}">
                           <Grid>
-                            <Image Source="{Binding SourceImage}" Width="16" Height="16" Visibility="{Binding SourceImageVis}"
+                            <Image Source="{Binding SourceImage}" Width="19" Height="19" Visibility="{Binding SourceImageVis}"
                                    RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
-                            <Path Data="{Binding SourceGeometry}" Fill="{Binding SourceGlyphBrush}" Width="15" Height="15" Stretch="Uniform"
+                            <Path Data="{Binding SourceGeometry}" Fill="{Binding SourceGlyphBrush}" Width="18" Height="18" Stretch="Uniform"
                                   Visibility="{Binding SourceGeoVis}" SnapsToDevicePixels="False" />
-                            <TextBlock Text="{Binding SourceChip}" Foreground="{Binding SourceFg}" FontSize="11" FontWeight="SemiBold" Margin="2,0" Visibility="{Binding SourceChipVis}" />
+                            <TextBlock Text="{Binding SourceChip}" Foreground="{Binding SourceFg}" FontSize="11.5" FontWeight="SemiBold" Margin="2,0" Visibility="{Binding SourceChipVis}" />
                           </Grid>
                         </Border>
                         <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center">
@@ -269,15 +283,7 @@
                         </StackPanel>
                       </DockPanel>
                     </Border>
-                    <Grid Margin="14,0,14,10" Visibility="{Binding ButtonVisibility}">
-                      <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                      </Grid.ColumnDefinitions>
-                      <TextBlock Text="{Binding VersionLine}" FontSize="12" Margin="40,0,10,0" VerticalAlignment="Center" ToolTip="{Binding VersionLine}" TextTrimming="CharacterEllipsis" />
-                      <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Height="28" MinWidth="100" Padding="12,0" FontSize="12"
-                              Content="{Binding ButtonText}" IsEnabled="{Binding ButtonEnabled}" Tag="{Binding}" Click="OtherAction_Click" />
-                    </Grid>
+                    <TextBlock Text="{Binding VersionLine}" Visibility="{Binding VersionVisibility}" FontSize="12" Margin="54,0,14,10" ToolTip="{Binding VersionLine}" TextTrimming="CharacterEllipsis" />
                     <ProgressBar Style="{StaticResource ThinProgress}" Margin="12,0,12,8" Maximum="1" Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
                     <StackPanel Visibility="{Binding SuggestVisibility}" Margin="52,-2,12,10">
                       <TextBlock Text="{Binding SuggestText}" FontSize="12" Foreground="{StaticResource Accent}" TextWrapping="Wrap" />
