@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.29.0
+- New design system (DESIGN.md): consistent spacing, corner rounding, text styles, colour roles and soft depth instead of outlines.
+- Addons page refreshed: raised cards with a gentle hover lift, smooth expand/collapse, calmer colours (green only for actions), clearer text hierarchy.
+- Buttons, inputs, tooltips and the left rail use the new look everywhere, with keyboard focus rings; animations stay off when Windows animations are off.
+
 ## 2.28.3
 - Lodge: when the server restarts (an update) it now says goodbye properly ("Server restarting") and the Outpost reconnects within ~2 s and puts you back in your voice room, without logging an error. Needs Lodge server 2.7.1.
 
