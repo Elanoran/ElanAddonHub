@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.31.0
+- Notifications redesigned: soft rounded cards with a gentle shadow, messages wrap to two lines, and they slide in and fade out smoothly (instant when Windows animations are off).
+- Welcome guide redesigned: lifted card with progress dots, grouped tips on the last step, and green only for the main button.
+
 ## 2.30.0
 - Settings redesigned: grouped cards with section headings, new switches, dropdowns, sliders and segmented controls.
 - Settings and Inventory now sit on a subtle dark page panel so text reads cleanly over the background art.
