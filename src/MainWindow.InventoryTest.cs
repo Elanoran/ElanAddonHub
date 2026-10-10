@@ -12,7 +12,7 @@ namespace ElansAddonHub
     {
         // WoW writes SavedVariables like this (tabs, ["key"] = value, "-- [n]" comments). Elan has the 0.2.0 layout + icons + a guild bank,
         // Measley was saved by 0.1.x (summed lists only), Hidden is hidden.
-        static string BagsLua(int measleyCloth)
+        static string BagsLua(int measleyCloth, bool special = false)
         {
             string Item(int i, int id, int c, int q, string name, string color, int ic = 0) =>
                 "\t\t\t\t{\n\t\t\t\t\t[\"i\"] = " + id + ",\n\t\t\t\t\t[\"c\"] = " + c + ",\n\t\t\t\t\t[\"q\"] = " + q + ",\n" + (ic > 0 ? "\t\t\t\t\t[\"ic\"] = " + ic + ",\n" : "") + "\t\t\t\t\t[\"l\"] = \"|cff" + color + "|Hitem:" + id + "::::::::|h[" + name + "]|h|r\",\n\t\t\t\t}, -- [" + i + "]\n";
@@ -32,14 +32,20 @@ namespace ElansAddonHub
             var elanExtra = "\t\t\t[\"guild\"] = \"Test Guild\",\n"
                 + "\t\t\t[\"bagsCont\"] = {\n"
                 + Cont("0", 16, Slot(1, 101, 5, 1, IcPotion) + Slot(2, 100, 20, 1, IcCloth) + Slot(3, 102, 1, 3, IcSword) + Slot(16, 107, 2, 2, IcGem))
-                + Cont("1", 6, Slot(1, 106, 800, 1, IcArrow) + Slot(4, 106, 20, 1, 0), 3000, IcSword, "|cff1eff00|Hitem:3000::::::::|h[Linen Bag]|h|r", 2)
+                + Cont("1", 6, Slot(1, 106, 800, 1, IcArrow) + Slot(4, 106, 20, 1, 0), 3000, IcSword, "|cff1eff00|Hitem:3000::::::::|h[Linen Bag]|h|r", 1)
+                // 0.3.0: the reagent bag (container 5) has family 0 and is known by ElansBagsDB.client.reagentBag
+                + (special ? Cont("5", 8, Slot(1, 100, 15, 1, IcCloth) + Slot(3, 107, 3, 2, IcGem), 3002, IcCloth, "|cff0070dd|Hitem:3002::::::::|h[Light Leather Reagent Bag]|h|r") : "")
                 + "\t\t\t},\n"
                 + "\t\t\t[\"bankCont\"] = {\n"
                 + Cont("-1", 28, Slot(1, 100, 10, 1, IcCloth) + Slot(7, 107, 2, 2, IcGem))
-                + Cont("5", 8, Slot(2, 109, 1, 1, IcCloak), 3001, IcCloth, "|cff0070dd|Hitem:3001::::::::|h[Rare Satchel]|h|r")
+                + (special
+                    // 0.3.0 numbering: bank bags start at 6 (after the reagent bag); the second one is a herb pouch
+                    ? Cont("6", 8, Slot(2, 109, 1, 1, IcCloak), 3001, IcCloth, "|cff0070dd|Hitem:3001::::::::|h[Rare Satchel]|h|r")
+                      + Cont("7", 10, Slot(1, 107, 6, 2, IcGem), 3003, IcGem, "|cff1eff00|Hitem:3003::::::::|h[Herb Pouch]|h|r", 32)
+                    : Cont("5", 8, Slot(2, 109, 1, 1, IcCloak), 3001, IcCloth, "|cff0070dd|Hitem:3001::::::::|h[Rare Satchel]|h|r"))
                 + "\t\t\t},\n";
             var sb = new StringBuilder("ElansBagsDB = {\n\t[\"replaceBags\"] = true,\n\t[\"view\"] = \"all\",\n"
-                + "\t[\"client\"] = {\n\t\t[\"build\"] = \"1.60.1\",\n\t\t[\"guildBank\"] = {\n\t\t\t[\"GetGuildBankItemInfo\"] = true,\n\t\t\t[\"C_GuildBank\"] = false,\n\t\t},\n\t},\n"
+                + "\t[\"client\"] = {\n\t\t[\"build\"] = \"1.60.1\",\n" + (special ? "\t\t[\"reagentBag\"] = 5,\n" : "") + "\t\t[\"guildBank\"] = {\n\t\t\t[\"GetGuildBankItemInfo\"] = true,\n\t\t\t[\"C_GuildBank\"] = false,\n\t\t},\n\t},\n"
                 + "\t[\"guilds\"] = {\n\t\t[\"Forever-Test Guild\"] = {\n\t\t\t[\"name\"] = \"Test Guild\",\n\t\t\t[\"realm\"] = \"Forever\",\n\t\t\t[\"money\"] = 1234567,\n\t\t\t[\"updated\"] = " + (now - 600) + ",\n\t\t\t[\"numTabs\"] = 3,\n\t\t\t[\"tabs\"] = {\n"
                 + "\t\t\t\t[\"1\"] = {\n\t\t\t\t\t[\"name\"] = \"Consumables\",\n\t\t\t\t\t[\"icon\"] = " + IcPotion + ",\n\t\t\t\t\t[\"at\"] = " + (now - 600) + ",\n\t\t\t\t\t[\"n\"] = 98,\n\t\t\t\t\t[\"s\"] = {\n"
                 + "\t\t\t\t\t\t[1] = { [\"i\"] = 101, [\"c\"] = 40, [\"q\"] = 1, [\"ic\"] = " + IcPotion + ", [\"l\"] = \"|cffffffff|Hitem:101::::::::|h[Minor Healing Potion]|h|r\" },\n"
@@ -116,7 +122,8 @@ namespace ElansAddonHub
                 var panels = InventoryView.PanelsForTest();
                 Check("bags tab: backpack 4 of 16 used + Linen Bag 2 of 6", panels.SequenceEqual(new[] { "Backpack|4|16", "Linen Bag|2|6" }));
                 Check("every slot is drawn (22), 6 hold items", InventoryView.SlotsDrawnForTest == 22 && InventoryView.SlotsFilledForTest == 6);
-                Check("free-slot info is shown", InventoryView.ViewInfoForTest.StartsWith("16 free of 22 slots"));
+                Check("free-slot info is shown", InventoryView.ViewInfoForTest.StartsWith("12 free of 16 slots · Quiver 4 free"), InventoryView.ViewInfoForTest);
+                Check("the bag with family 1 is a quiver: chip 'Arrows only', free space counted apart", InventoryView.ChipsForTest().SequenceEqual(new[] { "Linen Bag|Arrows only" }) && InventoryView.ViewInfoForTest.Contains("Quiver 4 free"), string.Join(",", InventoryView.ChipsForTest()));
                 // the fake WoW folder has no game data: icons cannot be read, the page says so and shows coloured tiles
                 for (int i = 0; i < 40 && InventoryView.IconNoteForTest == null; i++) await Task.Delay(100);
                 Check("no icons available: placeholders for every item + a note", InventoryView.SlotsWithImageForTest == 0 && InventoryView.SlotsPlaceholderForTest == 6 && (InventoryView.IconNoteForTest ?? "").Contains("not available"));
@@ -228,6 +235,36 @@ namespace ElansAddonHub
                 Check("parser: names and qualities come from the stored links", parsed.First(c => c.Name == "Measley").Bags.Any(i => i.Name == "Epic Hammer of Testing" && i.Quality == 4));
                 Check("parser: bad file does not throw", InventoryReader.ParseText("this is { not lua").Count == 0);
                 Check("time wording", InventoryReader.Ago(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 3 * 86400) == "3 days ago" && InventoryReader.Ago(0) == "never");
+
+                // ---- Elan's Bags 0.3.0: special bags - reagent bag (container 5, family 0, known from client.reagentBag), quiver, herb pouch in the bank
+                File.WriteAllText(file, BagsLua(3, true), new UTF8Encoding(false));
+                InventoryView.SetSearchForTest("");
+                InventoryView.Reload();
+                InventoryView.FilterForTest("Forever-Elan");
+                InventoryView.SelectTabForTest("bags");
+                IconStore.ForgetMemory();
+                InventoryView.RefreshIconsForTest();
+                panels = InventoryView.PanelsForTest();
+                Check("special data: backpack, quiver and the reagent bag", panels.SequenceEqual(new[] { "Backpack|4|16", "Linen Bag|2|6", "Light Leather Reagent Bag|2|8" }), string.Join(",", panels));
+                Check("reagent bag gets the 'Reagents only' chip, the quiver 'Arrows only'", InventoryView.ChipsForTest().SequenceEqual(new[] { "Linen Bag|Arrows only", "Light Leather Reagent Bag|Reagents only" }), string.Join(",", InventoryView.ChipsForTest()));
+                Check("empty special slots are tinted + have a tooltip (4 quiver + 6 reagent)", InventoryView.SpecialEmptySlotsForTest == 10, InventoryView.SpecialEmptySlotsForTest.ToString());
+                Check("footer info: general space apart, specials after", InventoryView.ViewInfoForTest.StartsWith("12 free of 16 slots · Quiver 4 free · Reagents 6 free"), InventoryView.ViewInfoForTest);
+                await Task.Delay(300);
+                Snapshot(P("19-inventory-special-bags.png"));
+                InventoryView.SelectTabForTest("bank");
+                panels = InventoryView.PanelsForTest();
+                Check("bank (0.3.0 numbering 6-12): main bank, satchel, herb pouch", panels.SequenceEqual(new[] { "Bank|2|28", "Rare Satchel|1|8", "Herb Pouch|1|10" }), string.Join(",", panels));
+                Check("bank: only the herb pouch is special ('Herbs only'); no reagent bag in the bank", InventoryView.ChipsForTest().SequenceEqual(new[] { "Herb Pouch|Herbs only" }), string.Join(",", InventoryView.ChipsForTest()));
+                await Task.Delay(300);
+                Snapshot(P("19-inventory-special-bank.png"));
+                var parsedSp = InventoryReader.ParseText(BagsLua(3, true)).First(c => c.Name == "Elan");
+                Check("parser: family 32 -> herb bag kind, reagent bag by index 5, plain bags none", parsedSp.BankCont.First(b => b.BagId == 7).Special?.Key == "herbs" && parsedSp.BagsCont.First(b => b.BagId == 5).Special?.Key == "reagent" && parsedSp.BagsCont.First(b => b.BagId == 0).Special == null);
+                // an older Elan's Bags (no reagentBag saved): the bag in slot 5 whose item is a Reagent Bag still counts
+                var oldClient = BagsLua(3, true).Replace("[\"reagentBag\"] = 5,", "[\"reagentBagX\"] = 5,");
+                var parsedOld = InventoryReader.ParseText(oldClient).First(c => c.Name == "Elan");
+                Check("parser: no client.reagentBag saved -> bag 5 named 'Reagent Bag' is still the reagent bag", parsedOld.BagsCont.First(b => b.BagId == 5).Special?.Key == "reagent");
+                InventoryView.SelectTabForTest("bags");
+                InventoryView.FilterForTest(null);
 
                 // the Elan's Bags card (optional addon, no class restriction) next to the others
                 manifest = new Manifest

@@ -24,11 +24,65 @@ namespace ElansAddonHub.Services
         public string Name;
     }
 
+    // a bag that only takes certain items (reagent bag, quiver, soul pouch, profession bags)
+    public class InvSpecial
+    {
+        public string Key, Name, Short, Only, What, Hex;
+        public string Explain => Name + ": only " + What + " fit here.";
+    }
+
+    public static class BagKinds
+    {
+        // bag family flags (the same table Elan's Bags uses); colours: reagent teal, ammo brown, soul purple, professions green
+        const string Teal = "#33C7B8", Brown = "#C28547", Purple = "#AD6BEB", Green = "#66D15C", Grey = "#A6ADB3";
+        static readonly InvSpecial[] Families =
+        {
+            Mk(1, "arrows", "Quiver", "Quiver", "Arrows only", "arrows", Brown),
+            Mk(2, "bullets", "Ammo pouch", "Ammo", "Bullets only", "bullets", Brown),
+            Mk(4, "shards", "Soul pouch", "Soul", "Soul shards only", "soul shards", Purple),
+            Mk(8, "leather", "Leatherworking bag", "Leather", "Leather only", "leatherworking items", Green),
+            Mk(16, "inscr", "Inscription bag", "Inscription", "Inscription only", "inscription items", Green),
+            Mk(32, "herbs", "Herb bag", "Herbs", "Herbs only", "herbs", Green),
+            Mk(64, "enchant", "Enchanting bag", "Enchanting", "Enchanting only", "enchanting items", Green),
+            Mk(128, "engineer", "Engineering bag", "Engineering", "Engineering only", "engineering items", Green),
+            Mk(256, "keys", "Key ring", "Keys", "Keys only", "keys", Green),
+            Mk(512, "gems", "Gem bag", "Gems", "Gems only", "gems", Green),
+            Mk(1024, "mining", "Mining bag", "Mining", "Ore only", "ore and bars", Green),
+        };
+        static readonly int[] Bits = { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 };
+        static InvSpecial Mk(int bit, string key, string name, string sh, string only, string what, string hex) =>
+            new InvSpecial { Key = key, Name = name, Short = sh, Only = only, What = what, Hex = hex };
+        public static readonly InvSpecial Reagent = Mk(0, "reagent", "Reagent bag", "Reagents", "Reagents only", "reagents", Teal);
+        static readonly InvSpecial Other = Mk(0, "special", "Special bag", "Special", "Special items only", "special items", Grey);
+
+        public static InvSpecial FromFamily(int family)
+        {
+            if (family <= 0) return null;
+            for (int i = 0; i < Bits.Length; i++) if ((family & Bits[i]) != 0) return Families[i];
+            return Other;
+        }
+
+        // reagentBag: the client's reagent bag container index (ElansBagsDB.client.reagentBag), 0 = not saved (older Elan's Bags):
+        // then a bag in slot 5 whose item is a "Reagent Bag" counts. The bank has no reagent bag.
+        public static void Classify(List<InvContainer> conts, int reagentBag, bool bank)
+        {
+            if (conts == null) return;
+            foreach (var c in conts)
+            {
+                c.Special = null;
+                if (!bank && c.BagId > 0 && (c.BagId == reagentBag || (reagentBag <= 0 && c.BagId == 5 && (c.BagName ?? "").IndexOf("Reagent Bag", StringComparison.OrdinalIgnoreCase) >= 0)))
+                    c.Special = Reagent;
+                else if (c.Family > 0) c.Special = FromFamily(c.Family);
+            }
+        }
+    }
+
     // one bag / bank container: its size, the bag item itself and the filled slots
     public class InvContainer
     {
         public int BagId;                  // 0 backpack, 1-4 bags, 5 reagent bag, -1 main bank, 6-12 bank bags
         public int Size, Family;
+        public InvSpecial Special;         // null: takes anything
         public int BagItemId, BagIcon, BagQuality;
         public string BagName;
         public Dictionary<int, InvSlot> Slots = new Dictionary<int, InvSlot>();
@@ -61,6 +115,7 @@ namespace ElansAddonHub.Services
         public bool Known;
         public bool GuildBankApi;      // GetGuildBankItemInfo exists
         public bool GuildBankUi;       // Blizzard_GuildBankUI is part of the client
+        public int ReagentBag;         // container index of the reagent bag slot (Elan's Bags 0.3.0 and later), 0 = not saved
     }
 
     public class InvData
@@ -206,6 +261,7 @@ namespace ElansAddonHub.Services
             {
                 data.Client.Known = true;
                 data.Client.Build = Str(cl, "build");
+                data.Client.ReagentBag = (int)Num(cl, "reagentBag");
                 if (cl.TryGetValue("guildBank", out var gbObj) && gbObj is Dictionary<string, object> gbApi)
                 {
                     bool Has(string k) => gbApi.TryGetValue(k, out var v) && v is bool b && b;
@@ -247,6 +303,8 @@ namespace ElansAddonHub.Services
                 // one of your bags is never also a bank bag
                 if (c.BagsCont != null && c.BankCont != null)
                     c.BankCont.RemoveAll(b => b.BagId > 0 && c.BagsCont.Any(x => x.BagId == b.BagId));
+                BagKinds.Classify(c.BagsCont, data.Client.ReagentBag, false);
+                BagKinds.Classify(c.BankCont, 0, true);
                 list.Add(c);
             }
             return data;

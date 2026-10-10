@@ -27,6 +27,8 @@ namespace ElansAddonHub
         bool lastNoLayout, lastNoIcons;
         // for the self-test
         readonly List<string> panelInfo = new List<string>();
+        readonly List<string> panelChips = new List<string>();
+        int slotsSpecialEmpty;
         int slotsDrawn, slotsFilled, slotsWithImage, slotsPlaceholder;
         string lastMessage;
 
@@ -35,6 +37,13 @@ namespace ElansAddonHub
         static readonly string[] EdgeHex = { "#FF6E6E6E", "#FF8F939B", "#FF1EFF00", "#FF0070DD", "#FFA335EE", "#FFFF8000", "#FFE6CC80", "#FF00CCFF" };
 
         static Brush EdgeFor(int q) => Frozen(EdgeHex[Math.Max(0, Math.Min(EdgeHex.Length - 1, q))]);
+
+        // ---- special bags (reagent bag, quiver...): colour helpers
+        static Color Hex(string hex) => (Color)ColorConverter.ConvertFromString(hex);
+        static Color Mix(Color a, Color b, double t) => Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
+        static Brush Solid(Color c, byte alpha = 255) { var b = new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B)); b.Freeze(); return b; }
+        static Color CardColor() => (Application.Current.Resources["Card"] as SolidColorBrush)?.Color ?? Color.FromRgb(0x16, 0x18, 0x1C);
+        static readonly Color SlotColor = Color.FromRgb(0x0A, 0x0B, 0x0D), EmptyEdgeColor = Color.FromRgb(0x23, 0x26, 0x2B);
 
         void Tab_Checked(object sender, RoutedEventArgs e)
         {
@@ -63,6 +72,8 @@ namespace ElansAddonHub
             BagsHost.Children.Clear();
             iconTargets.Clear();
             panelInfo.Clear();
+            panelChips.Clear();
+            slotsSpecialEmpty = 0;
             slotsDrawn = slotsFilled = slotsWithImage = slotsPlaceholder = 0;
             lastNoLayout = lastNoIcons = false;
             BagsMessage.Visibility = Visibility.Collapsed;
@@ -104,11 +115,14 @@ namespace ElansAddonHub
                     foreach (var ct in conts)
                     {
                         BagsHost.Children.Add(BuildPanel(ct, where, c, ct.BagId == 99));
-                        total += ct.Size; used += ct.Used;
+                        // special bags (reagent bag, quiver...) are not general space
+                        if (ct.Special == null) { total += ct.Size; used += ct.Used; }
                     }
+                    var specialInfo = string.Concat(conts.Where(x => x.Special != null).GroupBy(x => x.Special.Key)
+                        .Select(g => " · " + g.First().Special.Short + " " + g.Sum(x => x.Free) + " free"));
                     var at = bank ? c.BankAt : (c.BagsAt > 0 ? c.BagsAt : c.Updated);
                     ViewInfo.Text = lastNoLayout ? (items.Sum(i => i.Count) + " items · saved " + InventoryReader.Ago(at))
-                        : (total - used) + " free of " + total + " slots · " + (bank ? "seen " : "saved ") + InventoryReader.Ago(at);
+                        : (total - used) + " free of " + total + " slots" + specialInfo + " · " + (bank ? "seen " : "saved ") + InventoryReader.Ago(at);
                     if (conts.Count > 0 && conts.SelectMany(x => x.Slots.Values).Any() && conts.SelectMany(x => x.Slots.Values).All(s => s.Icon <= 0)) lastNoIcons = true;
                 }
             }
@@ -165,7 +179,9 @@ namespace ElansAddonHub
             if (pile) cols = 8;
             double gridW = cols * (SlotSize + 3);
             var title = pile ? "Items" : guild ? c.BagName : c.Title;
-            var panel = new Border { Background = Res("Card"), BorderBrush = Res("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 9, 10, 8), Margin = new Thickness(0, 0, 10, 10), VerticalAlignment = VerticalAlignment.Top };
+            var sp = pile || guild ? null : c.Special;
+            Color spc = sp != null ? Hex(sp.Hex) : default(Color);
+            var panel = new Border { Background = sp != null ? Solid(Mix(CardColor(), spc, 0.09)) : Res("Card"), BorderBrush = sp != null ? Solid(spc, 0x99) : Res("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 9, 10, 8), Margin = new Thickness(0, 0, 10, 10), VerticalAlignment = VerticalAlignment.Top };
             var stack = new StackPanel { Width = gridW };
 
             // header: bag icon, name, free/total
@@ -194,18 +210,36 @@ namespace ElansAddonHub
             var freeText = new TextBlock { Text = free, FontSize = 11.5, Foreground = freeBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), ToolTip = pile ? null : "free slots / size" };
             DockPanel.SetDock(freeText, Dock.Right);
             head.Children.Add(freeText);
-            head.Children.Add(new TextBlock
+            var titleText = new TextBlock
             {
                 Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
                 Foreground = c.BagItemId > 0 ? Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, c.BagQuality))]) : Res("Text"),
-            });
+            };
+            if (sp == null) head.Children.Add(titleText);
+            else
+            {
+                // name with a small coloured chip ("Reagents only") under it; the tooltip explains
+                var chip = new Border
+                {
+                    CornerRadius = new CornerRadius(8), Padding = new Thickness(6, 0.5, 6, 1), Margin = new Thickness(0, 2, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,
+                    Background = Solid(spc, 0x33), BorderBrush = Solid(spc, 0x99), BorderThickness = new Thickness(1),
+                    ToolTip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = new TextBlock { Text = sp.Explain + " Its empty slots are not counted as free space.", TextWrapping = TextWrapping.Wrap, MaxWidth = 240, FontSize = 12 } },
+                    Child = new TextBlock { Text = sp.Only, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Solid(spc) },
+                };
+                ToolTipService.SetInitialShowDelay(chip, 150);
+                var st = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                st.Children.Add(titleText);
+                st.Children.Add(chip);
+                head.Children.Add(st);
+                panelChips.Add(title + "|" + sp.Only);
+            }
             stack.Children.Add(head);
 
             var grid = new UniformGrid { Columns = cols, Rows = (c.Size + cols - 1) / cols, Width = gridW };
             for (int i = 1; i <= c.Size; i++)
             {
                 c.Slots.TryGetValue(i, out var s);
-                grid.Children.Add(MakeSlot(s, where, title, i, owner, guild));
+                grid.Children.Add(MakeSlot(s, where, title, i, owner, guild, sp));
             }
             stack.Children.Add(grid);
             panel.Child = stack;
@@ -213,7 +247,7 @@ namespace ElansAddonHub
             return panel;
         }
 
-        FrameworkElement MakeSlot(InvSlot s, string where, string bagTitle, int slotNo, InvChar owner, bool guild)
+        FrameworkElement MakeSlot(InvSlot s, string where, string bagTitle, int slotNo, InvChar owner, bool guild, InvSpecial sp = null)
         {
             slotsDrawn++;
             var bd = new Border
@@ -221,7 +255,23 @@ namespace ElansAddonHub
                 Width = SlotSize, Height = SlotSize, Margin = new Thickness(1.5), CornerRadius = new CornerRadius(4), Background = SlotBg,
                 BorderThickness = new Thickness(s == null ? 1 : 1.5), BorderBrush = s == null ? EmptyEdge : EdgeFor(s.Quality), SnapsToDevicePixels = true,
             };
-            if (s == null) return bd;
+            if (sp != null)
+            {
+                // tinted slots of a special bag
+                var spc = Hex(sp.Hex);
+                bd.Background = Solid(Mix(SlotColor, spc, 0.17));
+                if (s == null) bd.BorderBrush = Solid(Mix(EmptyEdgeColor, spc, 0.4));
+            }
+            if (s == null)
+            {
+                if (sp != null)
+                {
+                    slotsSpecialEmpty++;
+                    bd.ToolTip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = new TextBlock { Text = sp.Name + " - only " + sp.What + " fit here", FontSize = 12 } };
+                    ToolTipService.SetInitialShowDelay(bd, 150);
+                }
+                return bd;
+            }
             slotsFilled++;
             var g = new Grid();
             var img = new Image { Stretch = Stretch.Uniform, Margin = new Thickness(1.5), SnapsToDevicePixels = true };
@@ -321,6 +371,8 @@ namespace ElansAddonHub
         public void ResultsForTest(string key) { filterKey = key; userAll = key == null; Render(wowRoot()); RenderResults(); }
         public void SelectTabForTest(string which) { SetTabChecked(which); var only = filterKey == null ? null : Visible.FirstOrDefault(c => c.Key == filterKey); if (only != null) RenderBags(only); }
         public List<string> PanelsForTest() => panelInfo.ToList();
+        public List<string> ChipsForTest() => panelChips.ToList();
+        public int SpecialEmptySlotsForTest => slotsSpecialEmpty;
         public int SlotsDrawnForTest => slotsDrawn;
         public int SlotsFilledForTest => slotsFilled;
         public int SlotsWithImageForTest => slotsWithImage;
