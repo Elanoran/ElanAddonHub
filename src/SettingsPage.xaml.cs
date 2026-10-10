@@ -78,6 +78,8 @@ namespace ElansAddonHub
             BackgroundBox.IsChecked = s.RunInBackground;
             StartupBox.IsChecked = s.StartWithWindows;
             AutoUpdateBox.IsChecked = s.AutoUpdate;
+            ChannelTest.IsChecked = UpdateChannel.IsTest(s);
+            ChannelStable.IsChecked = !UpdateChannel.IsTest(s);
             CfAutoBox.IsChecked = s.CfAutoCheck;
             PaintedBox.IsChecked = s.PaintedArt;
             SplashBox.IsChecked = !s.NoSplash;
@@ -121,6 +123,7 @@ namespace ElansAddonHub
             NewMinRole.ItemsSource = ChannelRanks;
             NewMinRole.SelectedItem = ChannelRanks.First();
             AboutVersion.Text = $"Version {App.Version}";
+            ChannelHint.Text = ChannelText();
             InitAbout();
             loading = false;
             UpdateLabels();
@@ -179,7 +182,7 @@ namespace ElansAddonHub
         {
             if (aboutScene == null) return;
             var st = host.HubUpdateStatus;
-            aboutScene.SetStatus($"Version {App.Version}  ·  {st}", AboutStill ? -10 : aboutClock.Elapsed.TotalSeconds, 1);
+            aboutScene.SetStatus($"Version {App.Version}{(host.IsTestBuild ? " (test build)" : "")}  ·  {st}", AboutStill ? -10 : aboutClock.Elapsed.TotalSeconds, 1);
             if (AboutStill) aboutScene.Update(3.0);
         }
 
@@ -253,6 +256,21 @@ namespace ElansAddonHub
             SettingsStore.Save(settings);
             if (artChanged) host.CardArtChanged();
             if (sender == AutoUpdateBox && settings.AutoUpdate) host.AutoUpdateTurnedOn();
+        }
+
+        string ChannelText() => UpdateChannel.IsTest(settings)
+            ? "Test: you get new Outpost and addon builds before they are released to everyone. They can still have rough edges. Switching back to Stable never downgrades anything."
+            : "Stable: only releases that were tested and promoted." + (host.ChannelNote != null ? "\n" + host.ChannelNote : "");
+
+        async void Channel_Changed(object sender, RoutedEventArgs e)
+        {
+            if (loading) return;
+            settings.Channel = ChannelTest.IsChecked == true ? "test" : null;
+            SettingsStore.Save(settings);
+            UpdateChannel.Invalidate();
+            ChannelHint.Text = ChannelText();
+            await host.CheckForUpdates();
+            ChannelHint.Text = ChannelText();
         }
 
         void ChangeFolder_Click(object sender, RoutedEventArgs e) { host.PickWowFolder(); RefreshSection(); }

@@ -222,8 +222,13 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Button Style="{StaticResource GhostButton}" Content="All releases on GitHub" FontSize="11.5" HorizontalAlignment="Left"
-                            Margin="-8,6,0,0" Tag="{Binding ReleasesUrl}" Click="OpenLink_Click" />
+                    <StackPanel Orientation="Horizontal" Margin="-8,6,0,0">
+                      <Button Style="{StaticResource GhostButton}" Content="All releases on GitHub" FontSize="11.5" HorizontalAlignment="Left"
+                              Tag="{Binding ReleasesUrl}" Click="OpenLink_Click" />
+                      <Button Style="{StaticResource GhostButton}" Content="{Binding RollbackText}" FontSize="11.5" Margin="6,0,0,0"
+                              Visibility="{Binding RollbackVisibility}" Tag="{Binding}" Click="OurRollback_Click"
+                              ToolTip="Put the version you had before back (the Outpost keeps the last 2). Your settings are not touched." />
+                    </StackPanel>
                   </StackPanel>
                 </StackPanel>
               </Border>

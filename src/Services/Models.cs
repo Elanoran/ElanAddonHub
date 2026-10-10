@@ -57,6 +57,12 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "startWithWindows")] public bool StartWithWindows { get; set; }
         [DataMember(Name = "autoUpdate")] public bool AutoUpdate { get; set; }
         [DataMember(Name = "checkMinutes")] public int CheckMinutes { get; set; } = 30;
+        // update channel: null/"stable" = promoted releases only, "test" = the newest build incl. pre-releases
+        [DataMember(Name = "channel")] public string Channel { get; set; }
+        // hub version known to be a pre-release (so the "Test build" chip can show while running it)
+        [DataMember(Name = "testBuild")] public string TestBuild { get; set; }
+        // addon id -> manifest version the user rolled back from (not auto-installed again)
+        [DataMember(Name = "skipVersions")] public Dictionary<string, string> SkipVersions { get; set; }
         // versions we already showed a tray notification for
         [DataMember(Name = "notified")] public List<string> Notified { get; set; }
 

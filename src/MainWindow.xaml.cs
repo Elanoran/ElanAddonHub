@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -111,8 +112,15 @@ namespace ElansAddonHub
             RailVersion.Inlines.Clear();
             if (hubNew) RailVersion.Inlines.Add(new System.Windows.Documents.Run("● ") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Gold"] });
             RailVersion.Inlines.Add("v" + App.Version);
-            RailVersion.Opacity = hubNew ? 1 : 0.6;
-            RailVersion.ToolTip = hubNew ? $"Update available: v{manifest.Hub.Version} - click to update" : "Version " + App.Version;
+            bool testBuild = IsTestBuild;
+            if (testBuild)
+            {
+                RailVersion.Inlines.Add(new System.Windows.Documents.LineBreak());
+                RailVersion.Inlines.Add(new System.Windows.Documents.Run("TEST BUILD") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Gold"], FontSize = 8, FontWeight = FontWeights.SemiBold });
+            }
+            RailVersion.Opacity = hubNew || testBuild ? 1 : 0.6;
+            var testTip = UpdateChannel.RunningTestBuild(settings) ? "\nThis is a test build (pre-release)." : manifestPre && hubNew ? "\nThe offered version is a test build (pre-release)." : "";
+            RailVersion.ToolTip = (hubNew ? $"Update available: v{manifest.Hub.Version} - click to update" : "Version " + App.Version) + testTip;
             UpdateBadgeText.Text = n > 9 ? "9+" : n.ToString();
             TabAddons.ToolTip = n > 0 ? $"Addons  (Ctrl+1)\n{n} update{(n == 1 ? "" : "s")} available" : "Addons  (Ctrl+1)";
         }
@@ -131,7 +139,8 @@ namespace ElansAddonHub
         // ---- for the Settings page
         public string CheckStatus => statusText;
         public string HubUpdateStatus => checking ? "Checking..." : manifest == null ? (lastError ?? "Not checked yet")
-            : SelfUpdater.IsNewer(manifest.Hub) ? "Update available: v" + manifest.Hub.Version : "Up to date";
+            : SelfUpdater.IsNewer(manifest.Hub) ? "Update available: v" + manifest.Hub.Version + (manifestPre ? " (test build)" : "")
+            : IsTestBuild ? "Test build" : "Up to date";
         public Task CheckForUpdates() => CheckAll();
         public void CardArtChanged() { AddonCard.Painted = settings.PaintedArt; foreach (var c in cards) c.RefreshArt(); }
         public void AutoUpdateTurnedOn() => _ = AfterCheck();
@@ -181,6 +190,7 @@ namespace ElansAddonHub
             SettingsPage.Show("general");
             var tp = await ThirdPartyTest(dir);
             tp += "\r\n" + await ViewerTest(dir);
+            tp += Environment.NewLine + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir);
             var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + checkAllLine + "\r\n" + tp + "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live();
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
@@ -595,6 +605,12 @@ namespace ElansAddonHub
             }
         }
 
+        bool manifestPre;   // the manifest in use comes from a pre-release (test channel)
+
+        // "Test build" = this hub is a pre-release, or the one offered is
+        public bool IsTestBuild => UpdateChannel.RunningTestBuild(settings) || (manifestPre && SelfUpdater.IsNewer(manifest?.Hub));
+        public string ChannelNote => UpdateChannel.StableOlderNote(settings, manifest?.Hub?.Version, App.Version);
+
         async Task CheckNow()
         {
             if (checking) return;
@@ -602,7 +618,19 @@ namespace ElansAddonHub
             statusText = "Checking for updates...";
             try
             {
-                manifest = Util.FromJson<Manifest>(await Net.GetText(settings.ManifestUrl));
+                var ch = await UpdateChannel.Resolve(settings);
+                Manifest m;
+                try { m = Util.FromJson<Manifest>(await Net.GetText(ch.Url)); }
+                catch when (ch.Pre)
+                {
+                    // the pre-release's manifest can't be read: stay on stable rather than failing the check
+                    Util.Log("test manifest failed, using stable");
+                    ch = UpdateChannel.Stable(settings);
+                    m = Util.FromJson<Manifest>(await Net.GetText(ch.Url));
+                }
+                manifest = m;
+                manifestPre = ch.Pre;
+                if (UpdateChannel.Track(settings, manifest.Hub?.Version, ch.Pre)) SettingsStore.Save(settings);
                 lastError = null;
                 lastCheck = DateTime.Now;
                 RebuildCards();
@@ -664,6 +692,8 @@ namespace ElansAddonHub
                     await Install(card);
             foreach (var card in cards.Where(c => c.State == CardState.UpdateAvailable).ToList())
             {
+                // a version the user just rolled back from is not pushed again (the Update button still works)
+                if (settings.SkipVersions != null && settings.SkipVersions.TryGetValue(card.Info.Id, out var skipped) && skipped == card.Info.Version) continue;
                 if (settings.AutoUpdate) await Install(card);
                 else NotifyOnce(card);
             }
@@ -714,6 +744,7 @@ namespace ElansAddonHub
             try
             {
                 await Installer.Install(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p), replaceDev);
+                if (settings.SkipVersions != null && settings.SkipVersions.Remove(card.Info.Id)) SettingsStore.Save(settings);
                 card.SetBusy(false);
                 card.Update(card.Info, settings.WowRoot);
                 RefreshRailBadges();
@@ -733,6 +764,24 @@ namespace ElansAddonHub
                 card.Update(card.Info, settings.WowRoot);
                 card.Message = "Something went wrong: " + e.Message;
             }
+        }
+
+        async void OurRollback_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is AddonCard card) || card.RollbackBackup == null || card.Busy) return;
+            var b = card.RollbackBackup;
+            if (!Dialog.Confirm(this, "Roll back?", $"Put {card.Name} v{b.Version} back?\n\nYour settings (WTF folder) are not touched. The Outpost won't install v{card.Info.Version} again by itself.", "Roll back")) return;
+            try
+            {
+                await Task.Run(() => Installer.Rollback(settings.WowRoot, card.Info, b));
+                settings.SkipVersions = settings.SkipVersions ?? new Dictionary<string, string>();
+                settings.SkipVersions[card.Info.Id] = card.Info.Version;
+                SettingsStore.Save(settings);
+                card.Update(card.Info, settings.WowRoot);
+                RefreshRailBadges();
+                card.Message = $"Rolled back to v{b.Version}. In game, type /reload.";
+            }
+            catch (Exception ex) { card.Message = "Something went wrong: " + ex.Message; }
         }
 
         // /rl comes from the Elan's Hub companion addon, so only mention it when that's installed

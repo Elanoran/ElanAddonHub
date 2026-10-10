@@ -130,6 +130,14 @@
           <!-- ========== Addons ========== -->
           <StackPanel x:Name="SecAddons" Visibility="Collapsed">
             <TextBlock Text="Addons" Style="{StaticResource SectionTitle}" />
+            <TextBlock Text="UPDATE CHANNEL" Style="{StaticResource Caption}" Margin="0,0,0,6" />
+            <Border Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="3" HorizontalAlignment="Left" Margin="0,0,0,8">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="ChannelStable" Style="{StaticResource Segment}" Content="Stable" GroupName="channel" Checked="Channel_Changed" />
+                <RadioButton x:Name="ChannelTest" Style="{StaticResource Segment}" Content="Test (get new builds first)" GroupName="channel" Checked="Channel_Changed" />
+              </StackPanel>
+            </Border>
+            <TextBlock x:Name="ChannelHint" Style="{StaticResource RowHint}" Margin="0,0,0,14" TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left" />
             <Border Style="{StaticResource RowBox}"><Grid>
               <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
               <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Update addons automatically" Style="{StaticResource RowTitle}" />

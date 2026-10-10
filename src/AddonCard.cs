@@ -102,6 +102,10 @@ namespace ElansAddonHub
         // compact one-liner: "1.17.0  >  1.18.0" / "Installed 1.18.0" / "Latest 1.18.0"
         public string VersionLine { get; private set; }
         public string DevNote { get; private set; }
+        // previous installed version kept by the hub (last 2): "Roll back to v1.2.3" in the details
+        public Installer.BackupInfo RollbackBackup { get; private set; }
+        public string RollbackText => RollbackBackup == null ? "" : "Roll back to v" + RollbackBackup.Version;
+        public Visibility RollbackVisibility => RollbackBackup != null && !Busy ? Visibility.Visible : Visibility.Collapsed;
         public string ReleasesUrl => GitHubStats.ReleasesUrl;
 
         // GitHub stats (filled in later, silently absent when GitHub can't be reached)
@@ -195,6 +199,9 @@ namespace ElansAddonHub
                 default: ButtonText = "Choose your WoW folder in Settings"; ButtonEnabled = false;
                     SetPill("No WoW folder", PillKind.Danger, "Choose your WoW folder in Settings > General", false); break;
             }
+
+            RollbackBackup = State == CardState.NoClient || State == CardState.NoFolder || State == CardState.DevCopy
+                ? null : Installer.Backups(info.Id).FirstOrDefault();
 
             // expanded view: the whole version history (the newer-than-yours ones first anyway)
             var log = info.Changelog ?? new List<ChangeEntry>();

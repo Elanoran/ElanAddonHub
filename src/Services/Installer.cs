@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -77,7 +78,7 @@ namespace ElansAddonHub.Services
                             throw;
                         }
                     }
-                    PruneBackups(a.Id, 3);
+                    PruneBackups(a.Id, 2);
                 });
                 progress?.Report(1);
                 Util.Log($"installed {a.Id} {a.Version} (was {installed})");
@@ -92,8 +93,103 @@ namespace ElansAddonHub.Services
         {
             var dir = Path.Combine(BackupDir, id);
             if (!Directory.Exists(dir)) return;
-            foreach (var old in new DirectoryInfo(dir).GetDirectories().OrderByDescending(d => d.CreationTimeUtc).Skip(keep))
-                try { Util.DeleteDir(old.FullName); } catch { }
+            var keepPaths = new HashSet<string>(Backups(id).Take(keep).Select(b => b.Path));
+            foreach (var d in new DirectoryInfo(dir).GetDirectories())
+                if (!keepPaths.Contains(d.FullName)) try { Util.DeleteDir(d.FullName); } catch { }
+        }
+
+        public class BackupInfo { public string Path; public string Version; public DateTime Stamp; }
+
+        // backup folders are named "<version>-<yyyyMMdd-HHmmss>"; newest first, the "none" ones (nothing was installed) are skipped
+        public static List<BackupInfo> Backups(string id)
+        {
+            var dir = Path.Combine(BackupDir, id);
+            var list = new List<BackupInfo>();
+            if (!Directory.Exists(dir)) return list;
+            foreach (var d in new DirectoryInfo(dir).GetDirectories())
+            {
+                var m = Regex.Match(d.Name, @"^(.*)-(\d{8}-\d{6})$");
+                if (!m.Success || m.Groups[1].Value == "none") continue;
+                DateTime.TryParseExact(m.Groups[2].Value, "yyyyMMdd-HHmmss", null, System.Globalization.DateTimeStyles.None, out var t);
+                list.Add(new BackupInfo { Path = d.FullName, Version = m.Groups[1].Value, Stamp = t });
+            }
+            return list.OrderByDescending(b => b.Stamp).ToList();
+        }
+
+        // Put a backed-up version back (folders swapped, WTF untouched); the used backup is dropped so the next click goes one further back.
+        public static void Rollback(string root, AddonInfo a, BackupInfo b)
+        {
+            if (IsDevCopy(root, a)) throw new InvalidOperationException("This is a development copy (git) - not touching it.");
+            var addOns = WowLocator.AddOnsDir(root, a.Flavor);
+            var oldRoot = Path.Combine(addOns, ".elanshub-old-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            var moved = new List<string>();
+            try
+            {
+                Directory.CreateDirectory(oldRoot);
+                foreach (var dir in Directory.GetDirectories(b.Path))
+                {
+                    var f = Path.GetFileName(dir);
+                    var dest = Path.Combine(addOns, f);
+                    if (Directory.Exists(dest)) { Directory.Move(dest, Path.Combine(oldRoot, f)); moved.Add(f); }
+                    Util.CopyDir(dir, dest);
+                }
+            }
+            catch (Exception ex)
+            {
+                foreach (var f in moved)
+                    try { var dest = Path.Combine(addOns, f); if (Directory.Exists(dest)) Util.DeleteDir(dest); Directory.Move(Path.Combine(oldRoot, f), dest); } catch { }
+                throw new IOException("Couldn't roll back (is WoW running? close it and try again). " + ex.Message);
+            }
+            finally { try { Util.DeleteDir(oldRoot); } catch { } }
+            Util.DeleteDir(b.Path);
+            Util.Log($"rolled back {a.Id} to {b.Version}");
+        }
+
+        // fake WoW root + local zips: install v1, v2, v3 (keeps 2 backups), roll back twice, WTF untouched
+        public static async Task<string> SelfTest(string dir)
+        {
+            var sb = new System.Text.StringBuilder();
+            void Ck(string what, bool ok, string info = null) => sb.AppendLine($"rollback {what}: {(ok ? "ok" : "FAIL")}{(info == null ? "" : " (" + info + ")")}");
+            try
+            {
+                var root = Path.Combine(dir, "rbroot");
+                if (Directory.Exists(root)) Util.DeleteDir(root);
+                var addOns = WowLocator.AddOnsDir(root, "_classic_beta_");
+                Directory.CreateDirectory(addOns);
+                var wtf = Path.Combine(root, "WTF", "keep.txt");
+                Directory.CreateDirectory(Path.GetDirectoryName(wtf)); File.WriteAllText(wtf, "keep");
+                var id = "RbTest" + Guid.NewGuid().ToString("N").Substring(0, 6);
+                AddonInfo Make(string v)
+                {
+                    var zip = Path.Combine(dir, id + "-" + v + ".zip");
+                    if (File.Exists(zip)) File.Delete(zip);
+                    using (var z = ZipFile.Open(zip, ZipArchiveMode.Create))
+                    {
+                        var en = z.CreateEntry(id + "/" + id + ".toc"); using (var w = new StreamWriter(en.Open())) w.Write("## Interface: 16001\n## Version: " + v + "\n");
+                    }
+                    return new AddonInfo { Id = id, Name = id, Version = v, Url = zip, Sha256 = Util.Sha256(zip), Flavor = "_classic_beta_", Folders = new System.Collections.Generic.List<string> { id } };
+                }
+                AddonInfo a1 = Make("1.0.0"), a2 = Make("2.0.0"), a3 = Make("3.0.0");
+                await Install(root, a1, null);
+                await Task.Delay(1100);   // backup stamps have 1 s resolution
+                await Install(root, a2, null);
+                await Task.Delay(1100);
+                await Install(root, a3, null);
+                var bs = Backups(id);
+                Ck("keeps the last 2 versions", InstalledVersion(root, a3) == "3.0.0" && bs.Count == 2 && bs[0].Version == "2.0.0" && bs[1].Version == "1.0.0",
+                    string.Join(",", bs.Select(b => b.Version)));
+                Rollback(root, a3, bs[0]);
+                Ck("roll back to previous", InstalledVersion(root, a3) == "2.0.0" && Backups(id).Count == 1 && Backups(id)[0].Version == "1.0.0");
+                Rollback(root, a3, Backups(id)[0]);
+                Ck("second roll back goes further", InstalledVersion(root, a3) == "1.0.0" && Backups(id).Count == 0);
+                Ck("WTF untouched, no leftovers", File.ReadAllText(wtf) == "keep" && Directory.GetDirectories(addOns, ".elanshub-*").Length == 0);
+                Directory.CreateDirectory(Path.Combine(addOns, id, ".git"));
+                string err = null; try { Rollback(root, a3, new BackupInfo { Path = dir }); } catch (Exception ex) { err = ex.Message; }
+                Ck("dev copy refused", err != null && err.Contains("development copy"));
+                try { Util.DeleteDir(Path.Combine(BackupDir, id)); } catch { }
+            }
+            catch (Exception e) { sb.AppendLine("rollback test: FAIL " + e); }
+            return sb.ToString().TrimEnd();
         }
     }
 }
