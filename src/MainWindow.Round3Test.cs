@@ -30,7 +30,7 @@ namespace ElansAddonHub
             var detector0 = WowWatch.Shared.Detector;
             try
             {
-                Check("version is 2.27.0", App.Version == "2.27.0", App.Version);
+                Check("version is 2.28.0", App.Version == "2.28.0", App.Version);
                 Check("the self-test never starts the first-run guide by itself", !SettingsStore.Fresh && guide == null);
 
                 // ------------------------------------------------ 1. Lodge server notice

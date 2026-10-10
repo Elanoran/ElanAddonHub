@@ -50,7 +50,14 @@ namespace ElansAddonHub
                 + "\t\t\t\t[\"1\"] = {\n\t\t\t\t\t[\"name\"] = \"Consumables\",\n\t\t\t\t\t[\"icon\"] = " + IcPotion + ",\n\t\t\t\t\t[\"at\"] = " + (now - 600) + ",\n\t\t\t\t\t[\"n\"] = 98,\n\t\t\t\t\t[\"s\"] = {\n"
                 + "\t\t\t\t\t\t[1] = { [\"i\"] = 101, [\"c\"] = 40, [\"q\"] = 1, [\"ic\"] = " + IcPotion + ", [\"l\"] = \"|cffffffff|Hitem:101::::::::|h[Minor Healing Potion]|h|r\" },\n"
                 + "\t\t\t\t\t\t[15] = { [\"i\"] = 102, [\"c\"] = 1, [\"q\"] = 3, [\"ic\"] = " + IcSword + ", [\"l\"] = \"|cff0070dd|Hitem:102::::::::|h[Iron Sword]|h|r\" },\n"
-                + "\t\t\t\t\t},\n\t\t\t\t},\n\t\t\t},\n\t\t},\n\t},\n\t[\"chars\"] = {\n");
+                + "\t\t\t\t\t},\n\t\t\t\t},\n"
+                // 0.4.0: a second seen tab with an item nobody carries, and names/icons of all 3 tabs (the third was never looked at)
+                + "\t\t\t\t[\"2\"] = {\n\t\t\t\t\t[\"name\"] = \"Mats\",\n\t\t\t\t\t[\"icon\"] = " + IcCloth + ",\n\t\t\t\t\t[\"at\"] = " + (now - 4 * 3600) + ",\n\t\t\t\t\t[\"n\"] = 98,\n\t\t\t\t\t[\"s\"] = {\n"
+                + "\t\t\t\t\t\t[3] = { [\"i\"] = 3010, [\"c\"] = 1, [\"q\"] = 3, [\"ic\"] = " + IcCloak + ", [\"l\"] = \"|cff0070dd|Hitem:3010::::::::|h[Guild Banner]|h|r\" },\n"
+                + "\t\t\t\t\t\t[4] = { [\"i\"] = 109, [\"c\"] = 2, [\"q\"] = 1, [\"ic\"] = " + IcCloak + ", [\"l\"] = \"|cffffffff|Hitem:109::::::::|h[White Cloak]|h|r\" },\n"
+                + "\t\t\t\t\t},\n\t\t\t\t},\n\t\t\t},\n"
+                + "\t\t\t[\"meta\"] = {\n\t\t\t\t[\"1\"] = { [\"name\"] = \"Consumables\", [\"icon\"] = " + IcPotion + ", [\"view\"] = true },\n\t\t\t\t[\"2\"] = { [\"name\"] = \"Mats\", [\"icon\"] = " + IcCloth + ", [\"view\"] = true },\n\t\t\t\t[\"3\"] = { [\"name\"] = \"Officers\", [\"icon\"] = " + IcSword + ", [\"view\"] = true },\n\t\t\t},\n"
+                + "\t\t},\n\t},\n\t[\"chars\"] = {\n");
             sb.Append(Char("Forever-Elan", "Elan", "HUNTER", 25, "Horde", 123456, now - 120, now - 3 * 86400,
                 Item(1, 100, 20, 1, "Linen Cloth", "ffffff", IcCloth) + Item(2, 101, 5, 1, "Minor Healing Potion", "ffffff", IcPotion) + Item(3, 102, 1, 3, "Iron Sword", "0070dd", IcSword) + Item(4, 106, 820, 1, "Rough Arrow", "ffffff", IcArrow) + Item(5, 107, 2, 2, "Bright Gem", "1eff00", IcGem),
                 Item(1, 100, 10, 1, "Linen Cloth", "ffffff", IcCloth) + Item(2, 107, 2, 2, "Bright Gem", "1eff00", IcGem) + Item(3, 109, 1, 1, "White Cloak", "ffffff", IcCloak),
@@ -148,6 +155,20 @@ namespace ElansAddonHub
                 Check("guild tab: Consumables, 2 of 98", panels.SequenceEqual(new[] { "Consumables|2|98" }));
                 await Task.Delay(200);
                 Snapshot(P("17-inventory-guild.png"));
+                var gtabs = InventoryView.GuildTabsForTest();
+                Check("guild tab strip: 3 tabs with names (2 seen, the third only known by name and icon)", gtabs.Count == 3 && gtabs[0].StartsWith("1|Consumables|seen|") && gtabs[1].StartsWith("2|Mats|seen|") && gtabs[2].StartsWith("3|Officers|unseen|"), string.Join(" ; ", gtabs));
+                Check("per-tab 'seen X ago' (10 minutes / 4 hours / not seen yet)", gtabs.Count == 3 && gtabs[0].Contains("seen 10 minutes ago") && gtabs[1].Contains("seen 4 hours ago") && gtabs[2].Contains("not seen yet"), string.Join(" ; ", gtabs));
+                Check("guild footer: tabs seen, money, tab seen ago", InventoryView.ViewInfoForTest.Contains("Test Guild") && InventoryView.ViewInfoForTest.Contains("2 of 3 tabs seen") && InventoryView.ViewInfoForTest.Contains("123g") && InventoryView.ViewInfoForTest.Contains("Consumables seen 10 minutes ago"), InventoryView.ViewInfoForTest);
+                InventoryView.SelectGuildTabForTest(2);
+                panels = InventoryView.PanelsForTest();
+                Check("guild tab 2 'Mats': 2 of 98, 14 columns like the game (7 rows)", panels.SequenceEqual(new[] { "Mats|2|98" }) && InventoryView.SlotsDrawnForTest == 98);
+                await Task.Delay(200);
+                Snapshot(P("17-inventory-g-guild-tab2.png"));
+                InventoryView.SelectGuildTabForTest(3);
+                Check("a tab never looked at says so", (InventoryView.BagsMessageForTest ?? "").Contains("not looked at") || (InventoryView.BagsMessageForTest ?? "").Contains("have not looked at"), InventoryView.BagsMessageForTest);
+                await Task.Delay(200);
+                Snapshot(P("17-inventory-g-guild-unseen.png"));
+                InventoryView.SelectGuildTabForTest(1);
                 // a character saved by the older addon: one pile, bank never seen, no guild tab
                 InventoryView.FilterForTest("Forever-Measley");
                 Check("old data: guild tab hidden, falls back to the Bags tab", !InventoryView.GuildTabVisibleForTest);
@@ -188,7 +209,7 @@ namespace ElansAddonHub
                 }
 
                 InventoryView.SetSearchForTest("");
-                Check("no search: every item is listed", InventoryView.ResultCountForTest == 7);
+                Check("no search: every item is listed (guild bank items too)", InventoryView.ResultCountForTest == 8, InventoryView.ResultCountForTest.ToString());
                 InventoryView.SetSearchForTest("linen");
                 var r = InventoryView.ResultTextsForTest();
                 Check("search 'linen': one result", r.Count == 1);
@@ -203,6 +224,14 @@ namespace ElansAddonHub
                 InventoryView.SetSearchForTest("gem");
                 r = InventoryView.ResultTextsForTest();
                 Check("bank-only item shows its location", r.Count == 1 && r[0].Contains("Elan bags 2 · bank 2"));
+                InventoryView.SetSearchForTest("banner");
+                r = InventoryView.ResultTextsForTest();
+                Check("search finds guild bank items, labelled with guild and tab", r.Count == 1 && r[0].Contains("Guild Banner") && r[0].Contains("Guild: Test Guild - Tab 2") && r[0].Contains("guild bank 1"), string.Join(" | ", r));
+                await Task.Delay(300);
+                Snapshot(P("17-inventory-g-search-guild.png"));
+                InventoryView.SetSearchForTest("cloak");
+                r = InventoryView.ResultTextsForTest();
+                Check("an item in a character AND the guild bank lists both", r.Count == 1 && r[0].Contains("Elan bank 1 · worn") && r[0].Contains("Guild: Test Guild - Tab 2 guild bank 2"), string.Join(" | ", r));
                 InventoryView.SetSearchForTest("nothing like this");
                 Check("no match is handled", InventoryView.ResultCountForTest == 0);
                 InventoryView.SetSearchForTest("");

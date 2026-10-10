@@ -100,12 +100,21 @@ namespace ElansAddonHub.Services
         public Dictionary<int, InvSlot> Slots = new Dictionary<int, InvSlot>();
     }
 
+    // name + icon of a guild bank tab, known for every tab (Elan's Bags 0.4.0) even when its contents were never seen
+    public class InvGuildTabMeta
+    {
+        public int Index, Icon;
+        public string Name;
+        public bool CanView = true;
+    }
+
     public class InvGuild
     {
         public string Key, Name, Realm;
         public long Money, Updated;
         public int NumTabs;
-        public List<InvGuildTab> Tabs = new List<InvGuildTab>();
+        public List<InvGuildTab> Tabs = new List<InvGuildTab>();       // tabs whose contents were seen
+        public List<InvGuildTabMeta> Meta = new List<InvGuildTabMeta>();
     }
 
     // what Elan's Bags recorded about the client (build, which guild bank API exists)
@@ -144,9 +153,11 @@ namespace ElansAddonHub.Services
     // one item with everything the characters hold of it
     public class InvHolding
     {
-        public InvChar Char;
-        public int Bags, Bank, Equipped;
-        public int Total => Bags + Bank + Equipped;
+        public InvChar Char;               // null for a guild bank tab
+        public string GuildLabel;          // "Guild: <guild> - Tab <n>" for a guild bank tab
+        public int Bags, Bank, Equipped, GuildBank;
+        public long GuildSeen;
+        public int Total => Bags + Bank + Equipped + GuildBank;
     }
 
     public class InvResult
@@ -364,6 +375,13 @@ namespace ElansAddonHub.Services
                     g.Tabs.Add(tab);
                 }
             g.Tabs = g.Tabs.OrderBy(x => x.Index).ToList();
+            if (t.TryGetValue("meta", out var mo) && mo is Dictionary<string, object> metas)
+                foreach (var kv in metas)
+                {
+                    if (!(kv.Value is Dictionary<string, object> mt) || !int.TryParse(kv.Key, out var idx)) continue;
+                    g.Meta.Add(new InvGuildTabMeta { Index = idx, Name = Str(mt, "name"), Icon = (int)Num(mt, "icon"), CanView = !(mt.TryGetValue("view", out var vv) && vv is bool vb && !vb) });
+                }
+            g.Meta = g.Meta.OrderBy(x => x.Index).ToList();
             return g;
         }
 
@@ -408,7 +426,8 @@ namespace ElansAddonHub.Services
 
         // Search across bags, bank and equipped of every (non hidden) character, grouped per item.
         // Every word must occur in the item name or quality word (or be the item id). `only` limits it to one character.
-        public static List<InvResult> Search(IEnumerable<InvChar> chars, string query, InvChar only = null)
+        // `guilds`: guild banks to search too (labelled "Guild: <guild> - Tab <n>"); the caller decides which ones belong to the scope.
+        public static List<InvResult> Search(IEnumerable<InvChar> chars, string query, InvChar only = null, IEnumerable<InvGuild> guilds = null)
         {
             var terms = (query ?? "").ToLowerInvariant().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
             var groups = new Dictionary<int, InvResult>();
@@ -429,6 +448,20 @@ namespace ElansAddonHub.Services
                 }
                 Add(c.Bags, 0); Add(c.Bank, 1); Add(c.Equipped, 2);
             }
+            if (guilds != null)
+                foreach (var g in guilds)
+                    foreach (var tab in g.Tabs)
+                    {
+                        var label = "Guild: " + g.Name + " - Tab " + tab.Index;
+                        foreach (var sl in tab.Slots.Values)
+                        {
+                            if (!groups.TryGetValue(sl.Id, out var r)) { r = new InvResult { Id = sl.Id, Name = sl.Name, Quality = sl.Quality }; groups[sl.Id] = r; }
+                            var h = r.Holdings.FirstOrDefault(x => x.GuildLabel == label);
+                            if (h == null) { h = new InvHolding { GuildLabel = label, GuildSeen = tab.At }; r.Holdings.Add(h); }
+                            h.GuildBank += sl.Count;
+                            r.Total += sl.Count;
+                        }
+                    }
             IEnumerable<InvResult> res = groups.Values;
             if (terms.Length > 0)
                 res = res.Where(r =>

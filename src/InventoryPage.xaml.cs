@@ -220,7 +220,7 @@ namespace ElansAddonHub
             var vis = Visible;
             var only = filterKey == null ? null : vis.FirstOrDefault(c => c.Key == filterKey);
             var query = SearchBox.Text ?? "";
-            var all = InventoryReader.Search(vis, query, only);
+            var all = InventoryReader.Search(vis, query, only, GuildsOf(only != null ? new List<InvChar> { only } : vis));
             var shown = all.Take(MaxRows).Select(r => new ResultRow
             {
                 Name = r.Name,
@@ -229,11 +229,12 @@ namespace ElansAddonHub
                 TileFill = TileFillFor(r.Quality),
                 Initial = Initial(r.Name),
                 TotalText = "× " + r.Total.ToString("N0"),
-                Holdings = r.Holdings.OrderByDescending(h => h.Total).ThenBy(h => h.Char.Name).Select(h => new HoldingRow
+                Holdings = r.Holdings.OrderByDescending(h => h.Total).ThenBy(h => h.Char?.Name ?? h.GuildLabel).Select(h => new HoldingRow
                 {
-                    Name = h.Char.Name,
-                    ClassBrush = ClassBrushOf(h.Char.Class),
-                    Where = string.Join(" · ", new[] { h.Bags > 0 ? "bags " + h.Bags : null, h.Bank > 0 ? "bank " + h.Bank : null, h.Equipped > 0 ? "worn" : null }.Where(s => s != null)),
+                    Name = h.Char != null ? h.Char.Name : h.GuildLabel,
+                    ClassBrush = h.Char != null ? ClassBrushOf(h.Char.Class) : Res("Gold"),
+                    Where = string.Join(" · ", new[] { h.Bags > 0 ? "bags " + h.Bags : null, h.Bank > 0 ? "bank " + h.Bank : null, h.Equipped > 0 ? "worn" : null,
+                        h.GuildBank > 0 ? "guild bank " + h.GuildBank + (h.GuildSeen > 0 ? " (seen " + InventoryReader.Ago(h.GuildSeen) + ")" : "") : null }.Where(s => s != null)),
                 }).ToList(),
             }).ToList();
             Results.ItemsSource = shown;
@@ -245,6 +246,18 @@ namespace ElansAddonHub
             NoMatch.Visibility = all.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             NoMatch.Text = query.Trim().Length == 0 ? "No items saved yet." : "Nothing matches \"" + query.Trim() + "\".";
             ResultScroll.ScrollToTop();
+        }
+
+        // the guild banks of these characters (each guild once)
+        List<InvGuild> GuildsOf(IEnumerable<InvChar> who)
+        {
+            var res = new List<InvGuild>();
+            foreach (var c in who)
+            {
+                var g = GuildFor(c);
+                if (g != null && !res.Contains(g)) res.Add(g);
+            }
+            return res;
         }
 
         static Brush TileFillFor(int q)

@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.28.0
+- Inventory > Guild bank: a tab strip with the icon and name of every guild bank tab and how long ago you looked at it ("Mats · 4 hours ago", "Officers · not seen"); the grid is 14 x 7 like in the game. Tabs you never opened in the game say so instead of showing an empty bank. The footer shows how many tabs were seen, the guild bank money and when the shown tab was seen.
+- Search now also looks in the guild bank: results are labelled "Guild: <guild> - Tab <n>" next to the characters that carry the item.
+- Bank tab: shows the bank exactly like the bags, special bank bags included (needs Elan's Bags 0.4.0 for the new bank window; the data format is unchanged).
+- Needs Elan's Bags 0.4.0 for the guild bank names/icons of unseen tabs; older saves still show the tabs they have.
+
 ## 2.27.0
 - First-run guide: on a fresh install a short 4-step tour (WoW folder, addons to install with the Hub companion pre-ticked as required, join a Lodge with an invite link, tips). Skippable; open it again from Settings > About > Show welcome guide.
 - Settings > Privacy: a plain-language list of what is shared with your Lodge (character, zone, XP, automatic status, Appear offline, typing, profile) and what stays on your PC (inventory, addon health reports, CurseForge, update checks), with the switches that exist - the same settings as on the other pages.

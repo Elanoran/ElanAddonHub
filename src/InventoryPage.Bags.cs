@@ -137,11 +137,30 @@ namespace ElansAddonHub
             BagsMessage.Visibility = Visibility.Visible;
         }
 
+        // all tabs of the guild bank: the ones whose contents were seen, plus the names/icons of the others (Elan's Bags 0.4.0)
+        class GTab { public int Index, Icon; public string Name; public InvGuildTab Seen; public bool CanView = true; public string Label => string.IsNullOrEmpty(Name) ? "Tab " + Index : Name; }
+
+        static List<GTab> GuildTabs(InvGuild g)
+        {
+            var map = new SortedDictionary<int, GTab>();
+            foreach (var m in g.Meta) map[m.Index] = new GTab { Index = m.Index, Name = m.Name, Icon = m.Icon, CanView = m.CanView };
+            foreach (var t in g.Tabs.Where(x => x.Slots.Count > 0 || x.At > 0))
+            {
+                if (!map.TryGetValue(t.Index, out var gt)) map[t.Index] = gt = new GTab { Index = t.Index };
+                gt.Seen = t;
+                if (!string.IsNullOrEmpty(t.Name)) gt.Name = t.Name;
+                if (t.Icon > 0) gt.Icon = t.Icon;
+            }
+            for (int i = 1; i <= g.NumTabs; i++) if (!map.ContainsKey(i)) map[i] = new GTab { Index = i };
+            return map.Values.ToList();
+        }
+
         void RenderGuild(InvChar c, InvGuild g)
         {
-            var tabs = g.Tabs.Where(t => t.Slots.Count > 0 || t.At > 0).ToList();
-            if (tabs.Count == 0) { ShowMessage("No guild bank tab saved yet."); return; }
-            if (!tabs.Any(t => t.Index == guildTab)) guildTab = tabs[0].Index;
+            var tabs = GuildTabs(g);
+            guildTabInfo.Clear();
+            if (tabs.Count == 0 || tabs.All(t => t.Seen == null)) { ShowMessage("No guild bank tab saved yet."); return; }
+            if (!tabs.Any(t => t.Index == guildTab)) guildTab = (tabs.FirstOrDefault(t => t.Seen != null) ?? tabs[0]).Index;
             var cur = tabs.First(t => t.Index == guildTab);
             guildCols = GuildCols();
             var wrap = new StackPanel { Margin = new Thickness(0, 0, 10, 10) };
@@ -149,16 +168,39 @@ namespace ElansAddonHub
             foreach (var t in tabs)
             {
                 var tt = t;
-                var rb = new RadioButton { Style = (Style)FindResource("Segment"), Content = string.IsNullOrEmpty(t.Name) ? "Tab " + t.Index : t.Name, GroupName = "inv-gtab", IsChecked = t.Index == guildTab, Margin = new Thickness(0, 0, 6, 4) };
+                var seen = t.Seen != null ? "seen " + InventoryReader.Ago(t.Seen.At) : (t.CanView ? "not seen yet" : "no access");
+                var content = new StackPanel { Orientation = Orientation.Horizontal };
+                if (t.Icon > 0)
+                {
+                    var img = new Image { Width = 18, Height = 18, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = t.Seen != null ? 1 : 0.45 };
+                    RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+                    BindIcon(t.Icon, img, null);
+                    content.Children.Add(img);
+                }
+                content.Children.Add(new TextBlock { Text = t.Label, VerticalAlignment = VerticalAlignment.Center, Opacity = t.Seen != null ? 1 : 0.55 });
+                content.Children.Add(new TextBlock { Text = " · " + (t.Seen != null ? InventoryReader.Ago(t.Seen.At) : "not seen"), FontSize = 10.5, Foreground = Res("TextDim"), VerticalAlignment = VerticalAlignment.Center });
+                var rb = new RadioButton { Style = (Style)FindResource("Segment"), Content = content, GroupName = "inv-gtab", IsChecked = t.Index == guildTab, Margin = new Thickness(0, 0, 6, 4), ToolTip = t.Label + " (tab " + t.Index + ") · " + seen };
                 rb.Checked += (s, e) => { if (guildTab != tt.Index) { guildTab = tt.Index; RenderBags(c); } };
                 strip.Children.Add(rb);
+                guildTabInfo.Add(t.Index + "|" + t.Label + "|" + (t.Seen != null ? "seen" : "unseen") + "|" + seen + "|" + t.Icon);
             }
             wrap.Children.Add(strip);
-            var pseudo = new InvContainer { BagId = 100 + cur.Index, Size = cur.Size, BagName = (string.IsNullOrEmpty(cur.Name) ? "Tab " + cur.Index : cur.Name), Slots = cur.Slots, BagIcon = cur.Icon, BagQuality = 1 };
+            var seenCount = tabs.Count(t => t.Seen != null);
+            var money = InventoryReader.Money(g.Money);
+            if (cur.Seen == null)
+            {
+                BagsHost.Children.Add(wrap);
+                ShowMessage(cur.CanView ? "You have not looked at " + cur.Label + " (tab " + cur.Index + ") yet. Open the guild bank in the game and click that tab once: it is saved then (/reload or log out writes the file)."
+                                        : "You have no access to " + cur.Label + " (tab " + cur.Index + ").");
+                ViewInfo.Text = g.Name + " · " + seenCount + " of " + tabs.Count + " tabs seen · " + money;
+                return;
+            }
+            var pseudo = new InvContainer { BagId = 100 + cur.Index, Size = cur.Seen.Size, BagName = cur.Label, Slots = cur.Seen.Slots, BagIcon = cur.Icon, BagQuality = 1 };
             wrap.Children.Add(BuildPanel(pseudo, "Guild bank", c, false, GuildCols(), true));
             BagsHost.Children.Add(wrap);
-            ViewInfo.Text = g.Name + " · " + tabs.Count + (g.NumTabs > tabs.Count ? " of " + g.NumTabs : "") + " tabs saved · " + InventoryReader.Money(g.Money) + " · " + InventoryReader.Ago(cur.At > 0 ? cur.At : g.Updated);
+            ViewInfo.Text = g.Name + " · " + seenCount + (tabs.Count > seenCount ? " of " + tabs.Count : "") + " tabs seen · " + money + " · " + cur.Label + " seen " + InventoryReader.Ago(cur.Seen.At > 0 ? cur.Seen.At : g.Updated);
         }
+        readonly List<string> guildTabInfo = new List<string>();
 
         // 14 like the game when there is room, fewer in a narrow window
         int GuildCols() => BagsScroll.ActualWidth < 50 ? 14 : Math.Max(7, Math.Min(14, (int)((BagsScroll.ActualWidth - 50) / (SlotSize + 3))));
@@ -372,6 +414,8 @@ namespace ElansAddonHub
         public void SelectTabForTest(string which) { SetTabChecked(which); var only = filterKey == null ? null : Visible.FirstOrDefault(c => c.Key == filterKey); if (only != null) RenderBags(only); }
         public List<string> PanelsForTest() => panelInfo.ToList();
         public List<string> ChipsForTest() => panelChips.ToList();
+        public List<string> GuildTabsForTest() => guildTabInfo.ToList();
+        public void SelectGuildTabForTest(int index) { guildTab = index; var only = filterKey == null ? null : Visible.FirstOrDefault(c => c.Key == filterKey); if (only != null) RenderBags(only); }
         public int SpecialEmptySlotsForTest => slotsSpecialEmpty;
         public int SlotsDrawnForTest => slotsDrawn;
         public int SlotsFilledForTest => slotsFilled;
