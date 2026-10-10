@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.32.1
+- Murloc voice retuned to sound more like the real thing: higher, with a fast gargle and wild pitch glides.
+
 ## 2.32.0
 - Voice changer: sound like an orc, tauren, gnome, goblin, undead or murloc in voice rooms (Settings > Voice). Includes a "Hear myself" preview.
 
