@@ -43,6 +43,8 @@ namespace ElansAddonHub
             var test = Array.IndexOf(e.Args, "--selftest");
             var sheet = Array.IndexOf(e.Args, "--iconsheet");
             if (sheet >= 0 && sheet + 1 < e.Args.Length) { IconSheet.Render(e.Args[sheet + 1]); Shutdown(); return; }
+            var probe = Array.IndexOf(e.Args, "--iconprobe");
+            if (probe >= 0 && probe + 1 < e.Args.Length) { Shutdown(IconStore.Probe(e.Args[probe + 1])); return; }
             var frames = Array.IndexOf(e.Args, "--splashframes");
             if (frames >= 0 && frames + 1 < e.Args.Length) { Splash.RenderFrames(e.Args[frames + 1]); Shutdown(); return; }
             var testDir = test >= 0 && test + 1 < e.Args.Length ? e.Args[test + 1] : null;

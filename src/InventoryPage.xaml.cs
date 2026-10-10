@@ -75,7 +75,9 @@ namespace ElansAddonHub
         readonly List<FileSystemWatcher> watchers = new List<FileSystemWatcher>();
         readonly DispatcherTimer debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
         List<InvChar> chars = new List<InvChar>();
+        InvData data = new InvData();
         string filterKey;
+        bool userAll;          // the player picked "All characters" (otherwise the newest character is shown first)
         string watchedRoot;
         public event Action GoToAddons;
         public event Action GoToSettings;
@@ -84,8 +86,8 @@ namespace ElansAddonHub
         {
             InitializeComponent();
             debounce.Tick += (s, e) => { debounce.Stop(); Reload(); };
-            Loaded += (s, e) => { EnsureWatchers(); Reload(); };
-            Unloaded += (s, e) => DisposeWatchers();
+            Loaded += (s, e) => { IconStore.ProblemChanged -= OnIconProblemChanged; IconStore.ProblemChanged += OnIconProblemChanged; EnsureWatchers(); Reload(); };
+            Unloaded += (s, e) => { IconStore.ProblemChanged -= OnIconProblemChanged; DisposeWatchers(); };
             IsVisibleChanged += (s, e) => { if (IsVisible) { EnsureWatchers(); Reload(); } };
             EmptyIcon.Source = Application.Current.TryFindResource("Icon.Bags") as System.Windows.Media.ImageSource;
         }
@@ -93,6 +95,7 @@ namespace ElansAddonHub
         public void Init(Func<string> root)
         {
             wowRoot = root;
+            IconStore.WowRoot = root;
             EnsureWatchers();
             Reload();
         }
@@ -130,11 +133,18 @@ namespace ElansAddonHub
         public void Reload()
         {
             var root = wowRoot();
-            List<InvChar> read;
-            try { read = InventoryReader.Read(root); }
-            catch (Exception e) { Util.Log("inventory: " + e.Message); read = new List<InvChar>(); }
-            chars = read;
+            InvData read;
+            try { read = InventoryReader.ReadData(root); }
+            catch (Exception e) { Util.Log("inventory: " + e.Message); read = new InvData(); }
+            data = read;
+            chars = read.Chars;
             if (filterKey != null && !chars.Any(c => c.Key == filterKey && !c.Hidden)) filterKey = null;
+            // first look: the character that was saved last (usually the one you just played)
+            if (filterKey == null && !userAll)
+            {
+                var newest = chars.Where(c => !c.Hidden).OrderByDescending(c => c.Updated).FirstOrDefault();
+                filterKey = newest?.Key;
+            }
             Render(root);
         }
 
@@ -164,8 +174,29 @@ namespace ElansAddonHub
             Summary.Text = vis.Count + (vis.Count == 1 ? " character" : " characters") + " · " + TotalMoneyText(vis) + " in total · latest save " + InventoryReader.Ago(newest);
             var rows = vis.Select(c => new CharRow { Char = c, Selected = c.Key == filterKey }).ToList();
             CharList.ItemsSource = rows;
-            ClearFilter.Visibility = filterKey != null ? Visibility.Visible : Visibility.Collapsed;
-            RenderResults();
+            AllLine.Text = vis.Count + (vis.Count == 1 ? " character" : " characters") + " · search everything";
+            AllCard.Background = filterKey == null ? Res("SurfaceHi") : Res("Card");
+            AllCard.BorderBrush = filterKey == null ? Res("AccentDark") : Res("Line");
+            RenderView();
+        }
+
+        // search results (all characters, or a search) or the bag view of the picked character
+        void RenderView()
+        {
+            var vis = Visible;
+            var only = filterKey == null ? null : vis.FirstOrDefault(c => c.Key == filterKey);
+            bool search = !string.IsNullOrWhiteSpace(SearchBox.Text);
+            bool results = only == null || search;
+            TitleText.Text = only != null ? only.Name : "All characters";
+            TitleText.Foreground = only != null ? ClassBrushOf(only.Class) : Res("Text");
+            ClearFilter.Visibility = results && only != null ? Visibility.Visible : Visibility.Collapsed;
+            ResultCaption.Visibility = results ? Visibility.Visible : Visibility.Collapsed;
+            ResultScroll.Visibility = results ? Visibility.Visible : Visibility.Collapsed;
+            TabStrip.Visibility = results ? Visibility.Collapsed : Visibility.Visible;
+            BagsScroll.Visibility = results ? Visibility.Collapsed : Visibility.Visible;
+            ViewInfo.Visibility = results ? Visibility.Collapsed : Visibility.Visible;
+            if (results) { IconNote.Visibility = Visibility.Collapsed; ViewInfo.Text = ""; RenderResults(); }
+            else RenderBags(only);
         }
 
         static string TotalMoneyText(List<InvChar> vis) => InventoryReader.Money(vis.Sum(c => c.Money));
@@ -206,6 +237,7 @@ namespace ElansAddonHub
                 }).ToList(),
             }).ToList();
             Results.ItemsSource = shown;
+            ResultCaption.Visibility = Visibility.Visible;
             var scope = only != null ? "on " + only.Name : "across all characters";
             ResultCaption.Text = query.Trim().Length == 0 ? "EVERYTHING " + scope.ToUpperInvariant() : all.Count + (all.Count == 1 ? " MATCH " : " MATCHES ") + scope.ToUpperInvariant();
             MoreText.Visibility = all.Count > MaxRows ? Visibility.Visible : Visibility.Collapsed;
@@ -229,16 +261,19 @@ namespace ElansAddonHub
             return "?";
         }
 
-        void Search_Changed(object sender, TextChangedEventArgs e) { if (IsInitialized && Body != null) RenderResults(); }
+        void Search_Changed(object sender, TextChangedEventArgs e) { if (IsInitialized && Body != null && Body.Visibility == Visibility.Visible) RenderView(); }
 
         void Char_Click(object sender, MouseButtonEventArgs e)
         {
             var key = (sender as FrameworkElement)?.Tag as string;
-            filterKey = filterKey == key ? null : key;
+            filterKey = key;
+            userAll = false;
             Render(wowRoot());
         }
 
-        void ClearFilter_Click(object sender, RoutedEventArgs e) { filterKey = null; Render(wowRoot()); }
+        void All_Click(object sender, MouseButtonEventArgs e) { filterKey = null; userAll = true; Render(wowRoot()); }
+
+        void ClearFilter_Click(object sender, RoutedEventArgs e) { filterKey = null; userAll = true; Render(wowRoot()); }
 
         void GoAddons_Click(object sender, RoutedEventArgs e)
         {
@@ -246,8 +281,8 @@ namespace ElansAddonHub
         }
 
         // ---- self-test hooks
-        public void SetSearchForTest(string text) { SearchBox.Text = text; if (Body.Visibility == Visibility.Visible) RenderResults(); }
-        public void FilterForTest(string key) { filterKey = key; Render(wowRoot()); }
+        public void SetSearchForTest(string text) { SearchBox.Text = text; if (Body.Visibility == Visibility.Visible) RenderView(); }
+        public void FilterForTest(string key) { filterKey = key; userAll = key == null; Render(wowRoot()); }
         public int ResultCountForTest => (Results.ItemsSource as List<ResultRow>)?.Count ?? 0;
         public List<string> ResultTextsForTest() => ((Results.ItemsSource as List<ResultRow>) ?? new List<ResultRow>())
             .Select(r => r.Name + " " + r.TotalText + " [" + string.Join("; ", r.Holdings.Select(h => h.Name + " " + h.Where)) + "]").ToList();

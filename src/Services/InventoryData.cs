@@ -13,7 +13,61 @@ namespace ElansAddonHub.Services
         public int Id;
         public int Count;
         public int Quality;
+        public int Icon;       // FileDataID of the icon (Elan's Bags 0.2.0 and later), 0 when unknown
         public string Name;
+    }
+
+    // one bag slot as the game showed it (Elan's Bags 0.2.0 and later)
+    public class InvSlot
+    {
+        public int Slot, Id, Count, Quality, Icon;
+        public string Name;
+    }
+
+    // one bag / bank container: its size, the bag item itself and the filled slots
+    public class InvContainer
+    {
+        public int BagId;                  // 0 backpack, 1-4 bags, -1 main bank, 5-11 bank bags
+        public int Size, Family;
+        public int BagItemId, BagIcon, BagQuality;
+        public string BagName;
+        public Dictionary<int, InvSlot> Slots = new Dictionary<int, InvSlot>();
+        public int Used => Slots.Count;
+        public int Free => Math.Max(0, Size - Slots.Count);
+        public string Title => BagId == 0 ? "Backpack" : BagId == -1 ? "Bank" : BagName ?? ("Bag " + BagId);
+    }
+
+    public class InvGuildTab
+    {
+        public int Index, Size;
+        public string Name;
+        public int Icon;
+        public long At;
+        public Dictionary<int, InvSlot> Slots = new Dictionary<int, InvSlot>();
+    }
+
+    public class InvGuild
+    {
+        public string Key, Name, Realm;
+        public long Money, Updated;
+        public int NumTabs;
+        public List<InvGuildTab> Tabs = new List<InvGuildTab>();
+    }
+
+    // what Elan's Bags recorded about the client (build, which guild bank API exists)
+    public class InvClient
+    {
+        public string Build;
+        public bool Known;
+        public bool GuildBankApi;      // GetGuildBankItemInfo exists
+        public bool GuildBankUi;       // Blizzard_GuildBankUI is part of the client
+    }
+
+    public class InvData
+    {
+        public List<InvChar> Chars = new List<InvChar>();
+        public List<InvGuild> Guilds = new List<InvGuild>();
+        public InvClient Client = new InvClient();
     }
 
     public class InvChar
@@ -23,6 +77,9 @@ namespace ElansAddonHub.Services
         public long Money;
         public long Updated, BagsAt, BankAt;
         public bool Hidden;
+        public string Guild;
+        public List<InvContainer> BagsCont;      // null: saved by an older Elan's Bags (no layout)
+        public List<InvContainer> BankCont;
         public List<InvItem> Bags = new List<InvItem>();
         public List<InvItem> Bank;               // null: the bank was never opened
         public List<InvItem> Equipped = new List<InvItem>();
@@ -100,27 +157,66 @@ namespace ElansAddonHub.Services
         }
 
         // all characters of all files; the same character in two files (two clients) keeps the newer record
-        public static List<InvChar> Read(string root)
+        public static List<InvChar> Read(string root) => ReadData(root).Chars;
+
+        // "...\_classic_beta_\WTF\Account\X\SavedVariables\ElansBags.lua" -> "_classic_beta_"
+        public static string FlavorOf(string file)
+        {
+            try
+            {
+                var m = Regex.Match(file ?? "", @"[\\/](_[a-z_]+_)[\\/]WTF[\\/]", RegexOptions.IgnoreCase);
+                return m.Success ? m.Groups[1].Value : null;
+            }
+            catch { return null; }
+        }
+
+        public static List<InvChar> ParseText(string text, string file = null) => ParseAll(text, file).Chars;
+
+        // characters, guild banks and the client facts of all files (the newer record wins per character / guild)
+        public static InvData ReadData(string root)
         {
             var best = new Dictionary<string, InvChar>(StringComparer.OrdinalIgnoreCase);
+            var guilds = new Dictionary<string, InvGuild>(StringComparer.OrdinalIgnoreCase);
+            var data = new InvData();
             foreach (var f in Files(root))
             {
                 try
                 {
-                    foreach (var c in ParseText(ReadShared(f), f))
+                    var one = ParseAll(ReadShared(f), f);
+                    foreach (var c in one.Chars)
                         if (!best.TryGetValue(c.Key, out var old) || c.Updated >= old.Updated) best[c.Key] = c;
+                    foreach (var g in one.Guilds)
+                        if (!guilds.TryGetValue(g.Key, out var og) || g.Updated >= og.Updated) guilds[g.Key] = g;
+                    if (one.Client.Known && (!data.Client.Known || one.Client.GuildBankApi)) data.Client = one.Client;
                 }
                 catch (Exception e) { Util.Log("inventory read failed: " + f + ": " + e.Message); }
             }
-            return best.Values.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            data.Chars = best.Values.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            data.Guilds = guilds.Values.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            return data;
         }
 
-        public static List<InvChar> ParseText(string text, string file = null)
+        public static InvData ParseAll(string text, string file = null)
         {
-            var list = new List<InvChar>();
+            var data = new InvData();
+            var list = data.Chars;
             var globals = LuaData.ReadGlobals(text);
-            if (!globals.TryGetValue("ElansBagsDB", out var dbObj) || !(dbObj is Dictionary<string, object> db)) return list;
-            if (!db.TryGetValue("chars", out var charsObj) || !(charsObj is Dictionary<string, object> chars)) return list;
+            if (!globals.TryGetValue("ElansBagsDB", out var dbObj) || !(dbObj is Dictionary<string, object> db)) return data;
+            if (db.TryGetValue("client", out var clObj) && clObj is Dictionary<string, object> cl && cl.Count > 0)
+            {
+                data.Client.Known = true;
+                data.Client.Build = Str(cl, "build");
+                if (cl.TryGetValue("guildBank", out var gbObj) && gbObj is Dictionary<string, object> gbApi)
+                {
+                    bool Has(string k) => gbApi.TryGetValue(k, out var v) && v is bool b && b;
+                    data.Client.GuildBankApi = Has("GetGuildBankItemInfo") || Has("C_GuildBank");
+                    data.Client.GuildBankUi = Has("GuildBankUIAddon") || Has("GuildBankFrame");
+                }
+            }
+            if (db.TryGetValue("guilds", out var gObj) && gObj is Dictionary<string, object> guilds)
+                foreach (var kv in guilds)
+                    if (kv.Value is Dictionary<string, object> gt) data.Guilds.Add(ParseGuild(kv.Key, gt));
+            if (!db.TryGetValue("chars", out var charsObj) || !(charsObj is Dictionary<string, object> chars)) return data;
             foreach (var kv in chars)
             {
                 if (!(kv.Value is Dictionary<string, object> t)) continue;
@@ -139,12 +235,74 @@ namespace ElansAddonHub.Services
                     Hidden = t.TryGetValue("hidden", out var h) && h is bool hb && hb,
                     File = file,
                 };
+                c.Guild = Str(t, "guild");
                 c.Bags = Items(t, "bags") ?? new List<InvItem>();
                 c.Bank = Items(t, "bank");
                 c.Equipped = Items(t, "equipped") ?? new List<InvItem>();
+                var names = new Dictionary<int, InvItem>();
+                foreach (var it in c.Bags.Concat(c.Bank ?? new List<InvItem>()).Concat(c.Equipped)) if (!names.ContainsKey(it.Id)) names[it.Id] = it;
+                c.BagsCont = Containers(t, "bagsCont", names);
+                c.BankCont = Containers(t, "bankCont", names);
                 list.Add(c);
             }
-            return list;
+            return data;
+        }
+
+        // {"0": {n=, k=, id=, ic=, l=, q=, s={[slot]={i,c,q,ic}}}, ...} in bag order; null when the character has no layout saved
+        static List<InvContainer> Containers(Dictionary<string, object> t, string key, Dictionary<int, InvItem> names)
+        {
+            if (!t.TryGetValue(key, out var o) || !(o is Dictionary<string, object> conts)) return null;
+            var res = new List<InvContainer>();
+            foreach (var kv in conts)
+            {
+                if (!(kv.Value is Dictionary<string, object> ct) || !int.TryParse(kv.Key, out var bag)) continue;
+                var c = new InvContainer { BagId = bag, Size = (int)Num(ct, "n"), Family = (int)Num(ct, "k"), BagItemId = (int)Num(ct, "id"), BagIcon = (int)Num(ct, "ic"), BagQuality = ct.ContainsKey("q") ? (int)Num(ct, "q") : 1 };
+                var link = Str(ct, "l");
+                if (link != null) { var m = NameInLink.Match(link); if (m.Success) c.BagName = m.Groups[1].Value; }
+                if (ct.TryGetValue("s", out var so) && so is Dictionary<string, object> slots) ReadSlots(slots, c.Slots, names);
+                if (c.Size <= 0) c.Size = c.Slots.Count == 0 ? 0 : c.Slots.Keys.Max();
+                if (c.Size > 0) res.Add(c);
+            }
+            // backpack, bags 1-4 (bank: main bank, then bank bags 5-11)
+            return res.OrderBy(c => c.BagId).ToList();
+        }
+
+        static void ReadSlots(Dictionary<string, object> slots, Dictionary<int, InvSlot> into, Dictionary<int, InvItem> names)
+        {
+            foreach (var sv in slots)
+            {
+                if (!(sv.Value is Dictionary<string, object> st) || !int.TryParse(sv.Key, out var slot)) continue;
+                var id = (int)Num(st, "i");
+                if (id <= 0) continue;
+                string name = null;
+                var link = Str(st, "l");
+                if (link != null) { var m = NameInLink.Match(link); if (m.Success) name = m.Groups[1].Value; }
+                int q = st.ContainsKey("q") ? (int)Num(st, "q") : -1;
+                int icon = (int)Num(st, "ic");
+                if (names != null && names.TryGetValue(id, out var known))
+                {
+                    name = name ?? known.Name;
+                    if (q < 0) q = known.Quality;
+                    if (icon <= 0) icon = known.Icon;
+                }
+                into[slot] = new InvSlot { Slot = slot, Id = id, Count = Math.Max(1, (int)Num(st, "c")), Quality = q < 0 ? 1 : q, Icon = icon, Name = name ?? ("Item #" + id) };
+            }
+        }
+
+        static InvGuild ParseGuild(string key, Dictionary<string, object> t)
+        {
+            var g = new InvGuild { Key = key, Name = Str(t, "name") ?? key, Realm = Str(t, "realm"), Money = (long)Num(t, "money"), Updated = (long)Num(t, "updated"), NumTabs = (int)Num(t, "numTabs") };
+            if (t.TryGetValue("tabs", out var to) && to is Dictionary<string, object> tabs)
+                foreach (var kv in tabs)
+                {
+                    if (!(kv.Value is Dictionary<string, object> tt) || !int.TryParse(kv.Key, out var idx)) continue;
+                    var tab = new InvGuildTab { Index = idx, Name = Str(tt, "name"), Icon = (int)Num(tt, "icon"), At = (long)Num(tt, "at"), Size = (int)Num(tt, "n") };
+                    if (tt.TryGetValue("s", out var so) && so is Dictionary<string, object> slots) ReadSlots(slots, tab.Slots, null);
+                    if (tab.Size <= 0) tab.Size = 98;
+                    g.Tabs.Add(tab);
+                }
+            g.Tabs = g.Tabs.OrderBy(x => x.Index).ToList();
+            return g;
         }
 
         static string Str(Dictionary<string, object> t, string k) => t.TryGetValue(k, out var v) && v != null ? Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture) : null;
@@ -179,7 +337,7 @@ namespace ElansAddonHub.Services
                         if (cm.Success && ColorQuality.TryGetValue(cm.Groups[1].Value, out var cq)) q = cq;
                     }
                 }
-                res.Add(new InvItem { Id = id, Count = Math.Max(1, (int)Num(it, "c")), Quality = q < 0 ? 1 : q, Name = name ?? ("Item #" + id) });
+                res.Add(new InvItem { Id = id, Count = Math.Max(1, (int)Num(it, "c")), Quality = q < 0 ? 1 : q, Icon = (int)Num(it, "ic"), Name = name ?? ("Item #" + id) });
             }
             return res;
         }

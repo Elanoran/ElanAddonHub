@@ -14,7 +14,7 @@
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
       <StackPanel VerticalAlignment="Center">
-        <TextBlock Text="All characters" FontSize="17" FontWeight="SemiBold" />
+        <TextBlock x:Name="TitleText" Text="Inventory" FontSize="17" FontWeight="SemiBold" />
         <TextBlock x:Name="Summary" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
       </StackPanel>
       <TextBox x:Name="SearchBox" Grid.Column="1" Style="{StaticResource Input}" Width="250" Tag="Search every bag, bank and worn item" TextChanged="Search_Changed"
@@ -41,6 +41,13 @@
       <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
         <StackPanel>
           <TextBlock Text="CHARACTERS" Style="{StaticResource Caption}" Margin="2,2,0,8" />
+          <Border x:Name="AllCard" Margin="0,0,0,6" Padding="11,9" CornerRadius="10" Cursor="Hand" BorderThickness="1" MouseLeftButtonUp="All_Click"
+                  ToolTip="Search every character at once" AutomationProperties.Name="All characters">
+            <StackPanel>
+              <TextBlock Text="All characters" FontSize="14" FontWeight="SemiBold" />
+              <TextBlock x:Name="AllLine" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+          </Border>
           <ItemsControl x:Name="CharList">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
@@ -67,13 +74,27 @@
       <Grid Grid.Column="1" Margin="8,0,0,0">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <DockPanel Margin="2,2,0,8">
+        <DockPanel Grid.Row="0" Margin="2,2,0,6">
           <Button x:Name="ClearFilter" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Show all characters" FontSize="11.5" Click="ClearFilter_Click" Visibility="Collapsed" />
-          <TextBlock x:Name="ResultCaption" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+          <TextBlock x:Name="ViewInfo" DockPanel.Dock="Right" FontSize="12" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="12,0,6,4" />
+          <TextBlock x:Name="ResultCaption" Style="{StaticResource Caption}" VerticalAlignment="Center" Visibility="Collapsed" />
+          <StackPanel x:Name="TabStrip" Orientation="Horizontal">
+            <RadioButton x:Name="TabBags" Style="{StaticResource Tab}" Content="Bags" GroupName="inv-view" IsChecked="True" Tag="bags" Checked="Tab_Checked" AutomationProperties.Name="Bags" />
+            <RadioButton x:Name="TabBank" Style="{StaticResource Tab}" Content="Bank" GroupName="inv-view" Tag="bank" Checked="Tab_Checked" AutomationProperties.Name="Bank" />
+            <RadioButton x:Name="TabGuild" Style="{StaticResource Tab}" Content="Guild bank" GroupName="inv-view" Tag="guild" Checked="Tab_Checked" Visibility="Collapsed" AutomationProperties.Name="Guild bank" />
+          </StackPanel>
         </DockPanel>
-        <ScrollViewer x:Name="ResultScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
+        <TextBlock x:Name="IconNote" Grid.Row="1" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="2,0,0,8" Visibility="Collapsed" />
+        <ScrollViewer x:Name="BagsScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0" SizeChanged="BagsScroll_SizeChanged">
+          <StackPanel>
+            <WrapPanel x:Name="BagsHost" />
+            <TextBlock x:Name="BagsMessage" FontSize="12.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="4,8,0,0" Visibility="Collapsed" />
+          </StackPanel>
+        </ScrollViewer>
+        <ScrollViewer x:Name="ResultScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
           <StackPanel>
             <ItemsControl x:Name="Results">
               <ItemsControl.ItemTemplate>
