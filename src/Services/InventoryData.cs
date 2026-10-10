@@ -1,0 +1,241 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace ElansAddonHub.Services
+{
+    // What Elan's Bags saved about one item stack group (summed per item and location)
+    public class InvItem
+    {
+        public int Id;
+        public int Count;
+        public int Quality;
+        public string Name;
+    }
+
+    public class InvChar
+    {
+        public string Key, Name, Realm, Class, Faction;
+        public int Level;
+        public long Money;
+        public long Updated, BagsAt, BankAt;
+        public bool Hidden;
+        public List<InvItem> Bags = new List<InvItem>();
+        public List<InvItem> Bank;               // null: the bank was never opened
+        public List<InvItem> Equipped = new List<InvItem>();
+        public string File;
+    }
+
+    // one item with everything the characters hold of it
+    public class InvHolding
+    {
+        public InvChar Char;
+        public int Bags, Bank, Equipped;
+        public int Total => Bags + Bank + Equipped;
+    }
+
+    public class InvResult
+    {
+        public int Id, Quality, Total;
+        public string Name;
+        public List<InvHolding> Holdings = new List<InvHolding>();
+    }
+
+    // Reads WTF\Account\*\SavedVariables\ElansBags.lua of every client folder (read-only, FileShare.ReadWrite, never writes).
+    public static class InventoryReader
+    {
+        public const string FileName = "ElansBags.lua";
+
+        public static List<string> Files(string root)
+        {
+            var files = new List<string>();
+            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return files;
+            try
+            {
+                foreach (var flavor in Directory.GetDirectories(root, "_*_"))
+                {
+                    var accounts = Path.Combine(flavor, "WTF", "Account");
+                    if (!Directory.Exists(accounts)) continue;
+                    foreach (var acc in Directory.GetDirectories(accounts))
+                    {
+                        var f = Path.Combine(acc, "SavedVariables", FileName);
+                        if (File.Exists(f)) files.Add(f);
+                    }
+                }
+            }
+            catch { }
+            return files;
+        }
+
+        // the SavedVariables folders to watch (they may not contain the file yet)
+        public static List<string> Dirs(string root)
+        {
+            var dirs = new List<string>();
+            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return dirs;
+            try
+            {
+                foreach (var flavor in Directory.GetDirectories(root, "_*_"))
+                {
+                    var accounts = Path.Combine(flavor, "WTF", "Account");
+                    if (!Directory.Exists(accounts)) continue;
+                    foreach (var acc in Directory.GetDirectories(accounts))
+                    {
+                        var d = Path.Combine(acc, "SavedVariables");
+                        if (Directory.Exists(d)) dirs.Add(d);
+                    }
+                }
+            }
+            catch { }
+            return dirs;
+        }
+
+        static string ReadShared(string path)
+        {
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var sr = new StreamReader(fs, new UTF8Encoding(false), true))
+                return sr.ReadToEnd();
+        }
+
+        // all characters of all files; the same character in two files (two clients) keeps the newer record
+        public static List<InvChar> Read(string root)
+        {
+            var best = new Dictionary<string, InvChar>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in Files(root))
+            {
+                try
+                {
+                    foreach (var c in ParseText(ReadShared(f), f))
+                        if (!best.TryGetValue(c.Key, out var old) || c.Updated >= old.Updated) best[c.Key] = c;
+                }
+                catch (Exception e) { Util.Log("inventory read failed: " + f + ": " + e.Message); }
+            }
+            return best.Values.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+
+        public static List<InvChar> ParseText(string text, string file = null)
+        {
+            var list = new List<InvChar>();
+            var globals = LuaData.ReadGlobals(text);
+            if (!globals.TryGetValue("ElansBagsDB", out var dbObj) || !(dbObj is Dictionary<string, object> db)) return list;
+            if (!db.TryGetValue("chars", out var charsObj) || !(charsObj is Dictionary<string, object> chars)) return list;
+            foreach (var kv in chars)
+            {
+                if (!(kv.Value is Dictionary<string, object> t)) continue;
+                var c = new InvChar
+                {
+                    Key = kv.Key,
+                    Name = Str(t, "name") ?? kv.Key,
+                    Realm = Str(t, "realm"),
+                    Class = Str(t, "class"),
+                    Faction = Str(t, "faction"),
+                    Level = (int)Num(t, "level"),
+                    Money = (long)Num(t, "money"),
+                    Updated = (long)Num(t, "updated"),
+                    BagsAt = (long)Num(t, "bagsAt"),
+                    BankAt = (long)Num(t, "bankAt"),
+                    Hidden = t.TryGetValue("hidden", out var h) && h is bool hb && hb,
+                    File = file,
+                };
+                c.Bags = Items(t, "bags") ?? new List<InvItem>();
+                c.Bank = Items(t, "bank");
+                c.Equipped = Items(t, "equipped") ?? new List<InvItem>();
+                list.Add(c);
+            }
+            return list;
+        }
+
+        static string Str(Dictionary<string, object> t, string k) => t.TryGetValue(k, out var v) && v != null ? Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture) : null;
+        static double Num(Dictionary<string, object> t, string k) => t.TryGetValue(k, out var v) && v is double d ? d : 0;
+
+        static readonly Regex NameInLink = new Regex(@"\[(.+?)\]", RegexOptions.Compiled);
+        static readonly Regex ColorInLink = new Regex(@"\|c[0-9a-fA-F]{2}([0-9a-fA-F]{6})", RegexOptions.Compiled);
+        static readonly Dictionary<string, int> ColorQuality = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["9d9d9d"] = 0, ["ffffff"] = 1, ["1eff00"] = 2, ["0070dd"] = 3, ["a335ee"] = 4, ["ff8000"] = 5, ["e6cc80"] = 6, ["00ccff"] = 7,
+        };
+
+        static List<InvItem> Items(Dictionary<string, object> t, string key)
+        {
+            if (!t.TryGetValue(key, out var o) || !(o is Dictionary<string, object> list)) return null;
+            var res = new List<InvItem>();
+            foreach (var e in list.Values)
+            {
+                if (!(e is Dictionary<string, object> it)) continue;
+                var id = (int)Num(it, "i");
+                if (id <= 0) continue;
+                var link = Str(it, "l");
+                string name = null;
+                int q = it.ContainsKey("q") ? (int)Num(it, "q") : -1;
+                if (link != null)
+                {
+                    var m = NameInLink.Match(link);
+                    if (m.Success) name = m.Groups[1].Value;
+                    if (q < 0)
+                    {
+                        var cm = ColorInLink.Match(link);
+                        if (cm.Success && ColorQuality.TryGetValue(cm.Groups[1].Value, out var cq)) q = cq;
+                    }
+                }
+                res.Add(new InvItem { Id = id, Count = Math.Max(1, (int)Num(it, "c")), Quality = q < 0 ? 1 : q, Name = name ?? ("Item #" + id) });
+            }
+            return res;
+        }
+
+        static readonly string[] QualityWords = { "poor", "common", "uncommon", "rare", "epic", "legendary", "artifact", "heirloom" };
+
+        // Search across bags, bank and equipped of every (non hidden) character, grouped per item.
+        // Every word must occur in the item name or quality word (or be the item id). `only` limits it to one character.
+        public static List<InvResult> Search(IEnumerable<InvChar> chars, string query, InvChar only = null)
+        {
+            var terms = (query ?? "").ToLowerInvariant().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            var groups = new Dictionary<int, InvResult>();
+            foreach (var c in chars)
+            {
+                if (c.Hidden || (only != null && !ReferenceEquals(only, c) && only.Key != c.Key)) continue;
+                void Add(List<InvItem> items, int where)
+                {
+                    if (items == null) return;
+                    foreach (var it in items)
+                    {
+                        if (!groups.TryGetValue(it.Id, out var r)) { r = new InvResult { Id = it.Id, Name = it.Name, Quality = it.Quality }; groups[it.Id] = r; }
+                        var h = r.Holdings.FirstOrDefault(x => x.Char == c);
+                        if (h == null) { h = new InvHolding { Char = c }; r.Holdings.Add(h); }
+                        if (where == 0) h.Bags += it.Count; else if (where == 1) h.Bank += it.Count; else h.Equipped += it.Count;
+                        r.Total += it.Count;
+                    }
+                }
+                Add(c.Bags, 0); Add(c.Bank, 1); Add(c.Equipped, 2);
+            }
+            IEnumerable<InvResult> res = groups.Values;
+            if (terms.Length > 0)
+                res = res.Where(r =>
+                {
+                    var hay = (r.Name + " " + (r.Quality >= 0 && r.Quality < QualityWords.Length ? QualityWords[r.Quality] : "") + " " + r.Id).ToLowerInvariant();
+                    return terms.All(t => hay.Contains(t));
+                });
+            return res.OrderByDescending(r => r.Quality).ThenBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+
+        public static string Ago(long unix, DateTime? now = null)
+        {
+            if (unix <= 0) return "never";
+            var span = (now ?? DateTime.UtcNow) - DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime;
+            if (span.TotalSeconds < 0) span = TimeSpan.Zero;
+            if (span.TotalMinutes < 1) return "just now";
+            if (span.TotalMinutes < 60) return Plural((int)span.TotalMinutes, "minute") + " ago";
+            if (span.TotalHours < 24) return Plural((int)span.TotalHours, "hour") + " ago";
+            if (span.TotalDays < 60) return Plural((int)span.TotalDays, "day") + " ago";
+            return Plural((int)(span.TotalDays / 30), "month") + " ago";
+        }
+        static string Plural(int n, string unit) => n + " " + unit + (n == 1 ? "" : "s");
+
+        public static string Money(long copper)
+        {
+            long g = copper / 10000, s = copper / 100 % 100, c = copper % 100;
+            return g > 0 ? $"{g:N0}g {s}s {c}c" : s > 0 ? $"{s}s {c}c" : $"{c}c";
+        }
+    }
+}

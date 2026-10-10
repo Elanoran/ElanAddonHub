@@ -92,6 +92,13 @@
               <Border x:Name="UnreadDot" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,3,9,0" Width="16" Height="16" CornerRadius="8"
                       Background="{StaticResource Danger}" BorderBrush="{StaticResource Bg}" BorderThickness="3" IsHitTestVisible="False" Visibility="Collapsed" />
             </Grid>
+            <RadioButton x:Name="TabInventory" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
+                         ToolTip="Inventory - all your characters  (Ctrl+3)" ToolTipService.Placement="Right" AutomationProperties.Name="Inventory">
+              <!-- backpack glyph (own vector art, takes the rail button's colour) -->
+              <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                    Data="M9.2,3.2 C9.2,1.9 14.8,1.9 14.8,3.2 L14.8,5 L13.5,5 L13.5,3.6 C13.5,3.3 10.5,3.3 10.5,3.6 L10.5,5 L9.2,5 Z M7.6,5.6 L16.4,5.6 C17.8,5.6 18.8,6.7 18.8,8 L18.8,19 C18.8,20.4 17.8,21.4 16.4,21.4 L7.6,21.4 C6.2,21.4 5.2,20.4 5.2,19 L5.2,8 C5.2,6.7 6.2,5.6 7.6,5.6 Z M7.2,8.4 L16.8,8.4 L16.8,10.6 L7.2,10.6 Z M7.2,14 L16.8,14 L16.8,19.2 L7.2,19.2 Z M4.4,12.6 L3.4,12.6 C2.9,12.6 2.6,13 2.6,13.4 L2.6,17.2 C2.6,17.6 2.9,18 3.4,18 L4.4,18 Z M19.6,12.6 L20.6,12.6 C21.1,12.6 21.4,13 21.4,13.4 L21.4,17.2 C21.4,17.6 21.1,18 20.6,18 L19.6,18 Z"
+                    />
+            </RadioButton>
           </StackPanel>
         </DockPanel>
       </Border>
@@ -109,6 +116,7 @@
       <!-- addon cards -->
       <lodge:LodgeView x:Name="LodgePage" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <local:SettingsPage x:Name="SettingsPage" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
+      <local:InventoryPage x:Name="InventoryView" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <ScrollViewer x:Name="AddonsPage" Grid.Row="3" Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
        <StackPanel>
         <!-- one-click "check everything", right above the cards (same column as the cards) -->

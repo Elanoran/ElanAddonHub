@@ -175,6 +175,69 @@
     </DrawingImage.Drawing>
   </DrawingImage>
 
+  <!-- ===================== Elan's Bags: leather backpack with a buckle, a gold coin in front ===================== -->
+  <DrawingImage x:Key="Icon.Bags">
+    <DrawingImage.Drawing>
+      <DrawingGroup>
+        <StaticResource ResourceKey="Draw.Frame" />
+        <DrawingGroup ClipGeometry="{StaticResource Geo.ArtClip}">
+          <!-- warm workshop wall -->
+          <GeometryDrawing><GeometryDrawing.Geometry><RectangleGeometry Rect="7,7,114,114" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Brush><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.35" RadiusX="0.85" RadiusY="0.85"><GradientStop Color="#F2CF8C" Offset="0" /><GradientStop Color="#C98A3E" Offset="0.4" /><GradientStop Color="#7A4A1E" Offset="0.78" /><GradientStop Color="#2E1A0A" Offset="1" /></RadialGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+          <!-- shelf / floor -->
+          <GeometryDrawing Brush="#4A2C12" Geometry="M7,106 L121,106 L121,121 L7,121 Z" />
+          <GeometryDrawing Brush="#8A5A2A" Geometry="M7,104 L121,104 L121,107 L7,107 Z" />
+          <!-- soft shadow under the pack -->
+          <GeometryDrawing><GeometryDrawing.Geometry><EllipseGeometry Center="62,108" RadiusX="42" RadiusY="7" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Brush><RadialGradientBrush><GradientStop Color="#99000000" Offset="0" /><GradientStop Color="#00000000" Offset="1" /></RadialGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+          <!-- carry handle -->
+          <GeometryDrawing Geometry="M50,42 C50,16 78,16 78,42"><GeometryDrawing.Pen><Pen Brush="#2E1808" Thickness="9" StartLineCap="Round" EndLineCap="Round" /></GeometryDrawing.Pen></GeometryDrawing>
+          <GeometryDrawing Geometry="M50,42 C50,16 78,16 78,42"><GeometryDrawing.Pen><Pen Brush="#B8793A" Thickness="5" StartLineCap="Round" EndLineCap="Round" /></GeometryDrawing.Pen></GeometryDrawing>
+          <!-- body -->
+          <GeometryDrawing Geometry="M33,58 C33,44 44,36 64,36 C84,36 95,44 95,58 L99,98 C99,108 91,113 81,113 L47,113 C37,113 29,108 29,98 Z">
+            <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#C98846" Offset="0" /><GradientStop Color="#9A5F2A" Offset="0.5" /><GradientStop Color="#5E3414" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush>
+            <GeometryDrawing.Pen><Pen Brush="#26130A" Thickness="2.4" LineJoin="Round" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+          <!-- side pockets -->
+          <GeometryDrawing Brush="#7A4720" Geometry="M29,80 C24,80 22,84 22,88 L22,100 C22,104 25,106 29,106 Z M99,80 C104,80 106,84 106,88 L106,100 C106,104 103,106 99,106 Z"><GeometryDrawing.Pen><Pen Brush="#26130A" Thickness="1.8" LineJoin="Round" /></GeometryDrawing.Pen></GeometryDrawing>
+          <!-- front pocket -->
+          <GeometryDrawing Geometry="M36,88 L92,88 L94,102 C94,107 90,109 85,109 L43,109 C38,109 34,107 34,102 Z">
+            <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#A8692F" Offset="0" /><GradientStop Color="#7A4720" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush>
+            <GeometryDrawing.Pen><Pen Brush="#26130A" Thickness="1.8" LineJoin="Round" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+          <GeometryDrawing Geometry="M39,93 L89,93"><GeometryDrawing.Pen><Pen Brush="#F0D090" Thickness="1.3"><Pen.DashStyle><DashStyle Dashes="2,2" /></Pen.DashStyle></Pen></GeometryDrawing.Pen></GeometryDrawing>
+          <!-- top flap -->
+          <GeometryDrawing Geometry="M31,60 C31,48 44,42 64,42 C84,42 97,48 97,60 L97,68 C82,80 46,80 31,68 Z">
+            <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#E0A25A" Offset="0" /><GradientStop Color="#B87A38" Offset="0.6" /><GradientStop Color="#8A5426" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush>
+            <GeometryDrawing.Pen><Pen Brush="#26130A" Thickness="2.2" LineJoin="Round" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+          <GeometryDrawing Geometry="M36,66 C50,75 78,75 92,66"><GeometryDrawing.Pen><Pen Brush="#F7DDA0" Thickness="1.4"><Pen.DashStyle><DashStyle Dashes="2,2" /></Pen.DashStyle></Pen></GeometryDrawing.Pen></GeometryDrawing>
+          <!-- strap + gold buckle -->
+          <GeometryDrawing Brush="#5A3010" Geometry="M58,66 L70,66 L70,84 L58,84 Z"><GeometryDrawing.Pen><Pen Brush="#26130A" Thickness="1.6" LineJoin="Round" /></GeometryDrawing.Pen></GeometryDrawing>
+          <GeometryDrawing Geometry="M54,76 L74,76 L74,92 L54,92 Z M59,81 L69,81 L69,87 L59,87 Z">
+            <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FFF0A8" Offset="0" /><GradientStop Color="#E0A92E" Offset="0.5" /><GradientStop Color="#8A5A10" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush>
+            <GeometryDrawing.Pen><Pen Brush="#3A2208" Thickness="1.6" LineJoin="Round" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+          <!-- leather sheen -->
+          <GeometryDrawing Brush="#33FFE6B0" Geometry="M38,52 C42,46 50,43 58,42 C48,46 42,52 40,60 Z" />
+          <!-- gold coin in front -->
+          <GeometryDrawing>
+            <GeometryDrawing.Geometry><EllipseGeometry Center="99,98" RadiusX="17" RadiusY="17" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Brush><RadialGradientBrush GradientOrigin="0.32,0.28"><GradientStop Color="#FFF6B8" Offset="0" /><GradientStop Color="#F0C03A" Offset="0.55" /><GradientStop Color="#A8700E" Offset="1" /></RadialGradientBrush></GeometryDrawing.Brush>
+            <GeometryDrawing.Pen><Pen Brush="#3A2208" Thickness="2" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+          <GeometryDrawing>
+            <GeometryDrawing.Geometry><EllipseGeometry Center="99,98" RadiusX="11.5" RadiusY="11.5" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Pen><Pen Brush="#B7801C" Thickness="1.6" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+          <GeometryDrawing Brush="#B7801C" Geometry="M99,89 L102,96 L109,98 L102,100 L99,107 L96,100 L89,98 L96,96 Z" />
+          <GeometryDrawing Brush="#FFFBE0" Geometry="M90,88 C93,84 98,82 103,83 C97,84 93,87 91,91 Z" />
+          <StaticResource ResourceKey="Draw.Finish" />
+        </DrawingGroup>
+      </DrawingGroup>
+    </DrawingImage.Drawing>
+  </DrawingImage>
+
   <!-- ===================== Elan's Hub: lodge tent + campfire under the stars ===================== -->
   <DrawingImage x:Key="Icon.Hub">
     <DrawingImage.Drawing>

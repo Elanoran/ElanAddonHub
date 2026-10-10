@@ -59,7 +59,7 @@ namespace ElansAddonHub
             PreviewKeyDown += (s, e) =>
             {
                 if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control || (Keyboard.Modifiers & (ModifierKeys.Alt | ModifierKeys.Shift)) != 0) return;
-                var t = e.Key == Key.D1 || e.Key == Key.NumPad1 ? "addons" : e.Key == Key.D2 || e.Key == Key.NumPad2 ? "lodge" : e.Key == Key.OemComma ? "settings" : null;
+                var t = e.Key == Key.D1 || e.Key == Key.NumPad1 ? "addons" : e.Key == Key.D2 || e.Key == Key.NumPad2 ? "lodge" : e.Key == Key.D3 || e.Key == Key.NumPad3 ? "inventory" : e.Key == Key.OemComma ? "settings" : null;
                 if (t != null) { ShowTab(t); e.Handled = true; }
             };
             Session.Notify += (from, text) =>
@@ -80,19 +80,24 @@ namespace ElansAddonHub
             LodgePage.EditProfileRequested += () => { ShowTab("settings"); SettingsPage.Show("profile"); };
             LodgePage.Init(Session);
             SettingsPage.Init(this, settings, LodgePage);
+            InventoryView.Init(() => settings.WowRoot);
+            InventoryView.GoToAddons += () => ShowTab("addons");
+            InventoryView.GoToSettings += () => { ShowTab("settings"); SettingsPage.Show("general"); };
         }
 
         DateTime lastChatNote;
 
         void Tab_Checked(object sender, RoutedEventArgs e)
         {
-            if (LodgePage == null || SettingsPage == null) return;
+            if (LodgePage == null || SettingsPage == null || InventoryView == null) return;
             var lodge = TabLodge.IsChecked == true;
             var set = TabSettings.IsChecked == true;
+            var inv = TabInventory.IsChecked == true;
             LodgePage.Visibility = lodge ? Visibility.Visible : Visibility.Collapsed;
             SettingsPage.Visibility = set ? Visibility.Visible : Visibility.Collapsed;
-            AddonsPage.Visibility = !lodge && !set ? Visibility.Visible : Visibility.Collapsed;
-            RefreshBar.Visibility = !lodge && !set ? Visibility.Visible : Visibility.Collapsed;
+            InventoryView.Visibility = inv ? Visibility.Visible : Visibility.Collapsed;
+            AddonsPage.Visibility = !lodge && !set && !inv ? Visibility.Visible : Visibility.Collapsed;
+            RefreshBar.Visibility = !lodge && !set && !inv ? Visibility.Visible : Visibility.Collapsed;
             if (lodge) Session.MarkRead();
         }
 
@@ -120,7 +125,7 @@ namespace ElansAddonHub
 
         public void ShowTab(string tab)
         {
-            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : TabAddons).IsChecked = true;
+            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : tab == "inventory" ? TabInventory : TabAddons).IsChecked = true;
         }
 
         // ---- for the Settings page
@@ -239,6 +244,7 @@ namespace ElansAddonHub
             result += "\r\n" + await ProfileTest(dir);
             result += "\r\n" + await ToastTest(dir);
             result += "\r\n" + await DialogTest(dir);
+            result += "\r\n" + await InventoryTest(dir);
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
             Quit();
         }

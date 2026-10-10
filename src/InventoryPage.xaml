@@ -1,0 +1,121 @@
+<UserControl x:Class="ElansAddonHub.InventoryPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Margin="16,4,12,12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <!-- title + search -->
+    <Grid Grid.Row="0" Margin="0,0,0,10">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <StackPanel VerticalAlignment="Center">
+        <TextBlock Text="All characters" FontSize="17" FontWeight="SemiBold" />
+        <TextBlock x:Name="Summary" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+      <TextBox x:Name="SearchBox" Grid.Column="1" Style="{StaticResource Input}" Width="250" Tag="Search every bag, bank and worn item" TextChanged="Search_Changed"
+               VerticalAlignment="Center" AutomationProperties.Name="Search all characters" />
+    </Grid>
+
+    <!-- empty state -->
+    <Border x:Name="EmptyBox" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1"
+            Padding="28,34" VerticalAlignment="Top" Margin="0,6,4,0">
+      <StackPanel HorizontalAlignment="Center" MaxWidth="460">
+        <Image x:Name="EmptyIcon" Width="84" Height="84" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,12" />
+        <TextBlock x:Name="EmptyTitle" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+        <TextBlock x:Name="EmptyText" FontSize="12.5" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <Button x:Name="EmptyButton" Style="{StaticResource PrimaryButton}" Content="Go to Addons" HorizontalAlignment="Center" Margin="0,16,0,0" Padding="16,0" Height="32" Click="GoAddons_Click" />
+      </StackPanel>
+    </Border>
+
+    <!-- characters on the left, items on the right -->
+    <Grid x:Name="Body" Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="232" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
+        <StackPanel>
+          <TextBlock Text="CHARACTERS" Style="{StaticResource Caption}" Margin="2,2,0,8" />
+          <ItemsControl x:Name="CharList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,0,0,6" Padding="11,9" CornerRadius="10" Cursor="Hand" Background="{Binding Fill}" BorderBrush="{Binding Edge}" BorderThickness="1"
+                        Tag="{Binding Key}" MouseLeftButtonUp="Char_Click" ToolTip="{Binding Tip}">
+                  <StackPanel>
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding LevelText}" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Name}" Foreground="{Binding ClassBrush}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding Line2}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Money}" FontSize="12" Foreground="{StaticResource Gold}" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding BagsLine}" FontSize="11" Foreground="{StaticResource TextDim}" Margin="0,3,0,0" />
+                    <TextBlock Text="{Binding BankLine}" FontSize="11" Foreground="{Binding BankBrush}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock x:Name="SaveHint" Text="WoW saves this when you /reload or log out." FontSize="11" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="2,6,0,0" Opacity="0.8" />
+        </StackPanel>
+      </ScrollViewer>
+
+      <Grid Grid.Column="1" Margin="8,0,0,0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <DockPanel Margin="2,2,0,8">
+          <Button x:Name="ClearFilter" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Show all characters" FontSize="11.5" Click="ClearFilter_Click" Visibility="Collapsed" />
+          <TextBlock x:Name="ResultCaption" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+        </DockPanel>
+        <ScrollViewer x:Name="ResultScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
+          <StackPanel>
+            <ItemsControl x:Name="Results">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Margin="0,0,0,6" Padding="10,9" CornerRadius="10" Background="{StaticResource Card}" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                      </Grid.ColumnDefinitions>
+                      <Border Width="38" Height="38" CornerRadius="7" Background="{Binding TileFill}" BorderBrush="{Binding QualityBrush}" BorderThickness="2" VerticalAlignment="Top" Margin="0,0,11,0">
+                        <TextBlock Text="{Binding Initial}" Foreground="{Binding QualityBrush}" FontSize="17" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel Grid.Column="1">
+                        <DockPanel>
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding TotalText}" FontSize="13" FontWeight="SemiBold" Margin="10,0,2,0" ToolTip="Total across all characters" />
+                          <TextBlock Text="{Binding Name}" Foreground="{Binding QualityBrush}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                        <ItemsControl ItemsSource="{Binding Holdings}" Margin="0,3,0,0" Focusable="False">
+                          <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <Border Margin="0,3,6,0" Padding="8,3" CornerRadius="6" Background="{StaticResource SurfaceHi}">
+                                <StackPanel Orientation="Horizontal">
+                                  <TextBlock Text="{Binding Name}" Foreground="{Binding ClassBrush}" FontSize="11.5" FontWeight="SemiBold" />
+                                  <TextBlock Text="{Binding Where}" Foreground="{StaticResource TextDim}" FontSize="11.5" Margin="6,0,0,0" />
+                                </StackPanel>
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock x:Name="MoreText" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="4,2,0,6" Visibility="Collapsed" TextWrapping="Wrap" />
+            <TextBlock x:Name="NoMatch" Text="Nothing matches." FontSize="12.5" Foreground="{StaticResource TextDim}" Margin="4,10,0,0" Visibility="Collapsed" />
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+    </Grid>
+  </Grid>
+</UserControl>
