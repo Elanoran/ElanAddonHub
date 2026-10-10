@@ -46,6 +46,7 @@ namespace ElansAddonHub.Services
         static object Value(string s, ref int i)
         {
             Skip(s, ref i);
+            if (i >= s.Length) throw new FormatException("unexpected end");
             char c = s[i];
             if (c == '{') return Table(s, ref i);
             if (c == '"' || c == '\'') return Str(s, ref i);
@@ -58,6 +59,7 @@ namespace ElansAddonHub.Services
             i = start;
             while (i < s.Length && "+-0123456789.eExX".IndexOf(s[i]) >= 0) i++;
             var num = s.Substring(start, i - start);
+            if (num.Length == 0) throw new FormatException("unexpected '" + s[start] + "' at " + start);   // never loop on garbage (a half-written or damaged file)
             return double.TryParse(num, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : (object)num;
         }
 

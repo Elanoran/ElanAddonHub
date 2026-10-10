@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.26.0
+- Addon health: a "Health ok" or "Health (!) 2" chip next to the update check opens a panel with, per Elan addon, the installed version vs the last diag version, when the diag ran (in or out of combat), the errors the Bug Trap caught (count, version, first stack line, expandable) and a few diag facts (secret values, probe errors, missing APIs). Read from the SavedVariables, read-only, refreshed when WoW saves them (/reload or logout).
+- "Copy report" puts a plain-text report on the clipboard (errors, stacks, diag results) with character and guild names replaced by char1, char2 ...; "Open SavedVariables folder"; "Mark as seen".
+- A red count on the Addons item of the rail while there are unseen errors, and an in-game toast "Elan's Bags: 2 new errors" (Settings > In-game overlay > New addon errors; held during combat).
+- Needs the new addon versions (Hunter Helper 1.23.1, Paladin Helper 0.6.3, Bags 0.3.1, Hub companion 1.8.0): after an update they run one quiet diag about 10 s after the first login and ask for a single /reload.
+
 ## 2.25.0
 - Test and stable update channels: Settings > Addons > Update channel. Test gets new builds first (pre-releases); Stable only gets promoted releases.
 - "Test build" chip under the version on the rail and in About when you run or are offered a pre-release.

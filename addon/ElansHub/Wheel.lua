@@ -353,13 +353,16 @@ local function pc(fn, ...)
   return a, b
 end
 
-function EHUB.Diag()
+function EHUB.Diag(silent, auto)
   local d = EHUB.DB()
   local set, n = clientTokens()
   local missing = {}
   if n > 0 then for _, e in ipairs(EMOTES) do if not set[e[1]] then missing[#missing + 1] = e[1] end end end
   local run = {
     time = time(),
+    at = time(),
+    auto = auto and true or nil,
+    inCombat = (InCombatLockdown and InCombatLockdown()) and true or false,
     version = EHUB.Version and EHUB.Version() or "?",
     doEmote = type(DoEmote),
     isProtectedFunction = type(IsProtectedFunction) == "function" and tostring(pc(IsProtectedFunction, "DoEmote")) or "n/a",
@@ -388,6 +391,6 @@ function EHUB.Diag()
   d.diag = d.diag or { runs = {} }
   table.insert(d.diag.runs, 1, run)
   while #d.diag.runs > 6 do table.remove(d.diag.runs) end
-  chat(string.format("diag saved: DoEmote=%s, protected=%s, emote tokens known=%d, curated missing=[%s], icons=%s. /reload writes it to SavedVariables\\ElansHub.lua. No emote was played.",
-    run.doEmote, run.isProtectedFunction, n, run.curatedMissing, tostring(run.iconsResolved or "n/a")))
+  if not silent then chat(string.format("diag saved: DoEmote=%s, protected=%s, emote tokens known=%d, curated missing=[%s], icons=%s. /reload writes it to SavedVariables\\ElansHub.lua. No emote was played.",
+    run.doEmote, run.isProtectedFunction, n, run.curatedMissing, tostring(run.iconsResolved or "n/a"))) end
 end

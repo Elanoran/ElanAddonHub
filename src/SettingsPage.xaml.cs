@@ -109,7 +109,7 @@ namespace ElansAddonHub
             OverlayTopSlider.Value = s.OverlayTop ?? 0.3;
             OverlayAlwaysBox.IsChecked = s.OverlayAlways;
             ToastsBox.IsChecked = !s.ToastsOff; ToastMentionBox.IsChecked = !s.ToastMentionsOff; ToastReplyBox.IsChecked = !s.ToastRepliesOff;
-            ToastReactBox.IsChecked = s.ToastReactions; ToastPinBox.IsChecked = s.ToastPins; ToastUpdateBox.IsChecked = !s.ToastUpdateOff;
+            ToastReactBox.IsChecked = s.ToastReactions; ToastPinBox.IsChecked = s.ToastPins; ToastUpdateBox.IsChecked = !s.ToastUpdateOff; ToastHealthBox.IsChecked = !s.ToastHealthOff;
             var tc = s.ToastCorner ?? "tr";
             ToastTL.IsChecked = tc == "tl"; ToastTR.IsChecked = tc == "tr"; ToastBL.IsChecked = tc == "bl"; ToastBR.IsChecked = tc == "br";
 
@@ -400,7 +400,7 @@ namespace ElansAddonHub
             settings.OverlayAlways = OverlayAlwaysBox.IsChecked == true;
             settings.ToastsOff = ToastsBox.IsChecked != true; settings.ToastMentionsOff = ToastMentionBox.IsChecked != true;
             settings.ToastRepliesOff = ToastReplyBox.IsChecked != true; settings.ToastReactions = ToastReactBox.IsChecked == true;
-            settings.ToastPins = ToastPinBox.IsChecked == true; settings.ToastUpdateOff = ToastUpdateBox.IsChecked != true;
+            settings.ToastPins = ToastPinBox.IsChecked == true; settings.ToastUpdateOff = ToastUpdateBox.IsChecked != true; settings.ToastHealthOff = ToastHealthBox.IsChecked != true;
             settings.ToastCorner = ToastTL.IsChecked == true ? "tl" : ToastBL.IsChecked == true ? "bl" : ToastBR.IsChecked == true ? "br" : "tr";
             SettingsStore.Save(settings);
         }

@@ -10,7 +10,7 @@ namespace ElansAddonHub.Lodge
 {
     // What a toast is about. Reminders (events with a time) come later: add a kind here, give it a setting in
     // ToastCenter.Enabled and call Push - nothing else needs to change.
-    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary }
+    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary, Health }
 
     public class ToastItem
     {
@@ -35,14 +35,14 @@ namespace ElansAddonHub.Lodge
         public int Count { get => count; set => Set(ref count, value); }
         public double Opacity { get => opacity; set => Set(ref opacity, value); }
         public string Kicker => Kind == ToastKind.Mention ? "Mention" : Kind == ToastKind.Reply ? "Reply" : Kind == ToastKind.Reaction ? "Reaction"
-            : Kind == ToastKind.Pin ? "Pinned" : Kind == ToastKind.Update ? "Update" : "Summary";
+            : Kind == ToastKind.Pin ? "Pinned" : Kind == ToastKind.Update ? "Update" : Kind == ToastKind.Health ? "Health" : "Summary";
         public string Glyph => Kind == ToastKind.Mention ? "@" : Kind == ToastKind.Reply ? "" : Kind == ToastKind.Reaction ? ""
             : Kind == ToastKind.Pin ? "" : Kind == ToastKind.Update ? "" : "";
         public bool GlyphIsText => Kind == ToastKind.Mention;
         public Brush Color => Who != null ? Who.Color : Avatar.Frozen("#ABD473");
         public Brush IconBrush => Who?.IconBrush;
         public Visibility InitialVisibility => IconBrush != null ? Visibility.Collapsed : Visibility.Visible;
-        public string Initial => Who != null ? Who.Initial : Kind == ToastKind.Summary ? "!" : Avatar.Initial(Sender ?? "H");
+        public string Initial => Who != null ? Who.Initial : Kind == ToastKind.Summary || Kind == ToastKind.Health ? "!" : Avatar.Initial(Sender ?? "H");
         public Brush NameBrush => Who != null ? Who.ClassBrushOrText : Avatar.Res("Text");
         // the personal avatar and class badge come from the member (the hub's own toasts have none)
         public System.Windows.Media.ImageSource AvatarImage => Who?.AvatarImage;
@@ -91,6 +91,7 @@ namespace ElansAddonHub.Lodge
                 case ToastKind.Reaction: return settings.ToastReactions;   // default off
                 case ToastKind.Pin: return settings.ToastPins;             // default off
                 case ToastKind.Update: return !settings.ToastUpdateOff;
+                case ToastKind.Health: return !settings.ToastHealthOff;
                 default: return true;
             }
         }
@@ -107,7 +108,7 @@ namespace ElansAddonHub.Lodge
         {
             var now = Clock();
             // coalesce a burst: same kind + channel still on screen
-            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary);
+            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health);
             if (same != null)
             {
                 same.Count++;
@@ -119,7 +120,7 @@ namespace ElansAddonHub.Lodge
             var vm = new ToastVM
             {
                 Kind = it.Kind, Sender = it.Sender, Channel = it.Channel, ChannelId = it.ChannelId, Who = it.Who, Born = now, Expires = now + Stay,
-                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
+                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
                 Text = it.Text, Opacity = 0,
             };
             Visible.Add(vm);
@@ -146,7 +147,7 @@ namespace ElansAddonHub.Lodge
                 else
                 {
                     var parts = items.GroupBy(i => i.Kind).Select(g => g.Count() + " " + (g.Key == ToastKind.Mention ? "mention" : g.Key == ToastKind.Reply ? "repl" + (g.Count() == 1 ? "y" : "ies")
-                        : g.Key == ToastKind.Reaction ? "reaction" : g.Key == ToastKind.Pin ? "pin" : "update") + (g.Count() > 1 && g.Key != ToastKind.Reply ? "s" : ""));
+                        : g.Key == ToastKind.Reaction ? "reaction" : g.Key == ToastKind.Pin ? "pin" : g.Key == ToastKind.Health ? "addon error" : "update") + (g.Count() > 1 && g.Key != ToastKind.Reply ? "s" : ""));
                     var chans = items.Where(i => i.Channel != null).Select(i => "#" + i.Channel).Distinct().ToList();
                     Show(new ToastItem { Kind = ToastKind.Summary, Sender = items.Count + " missed in combat", Text = string.Join(", ", parts) + (chans.Count > 0 ? " · " + string.Join(", ", chans.Take(3)) : "") });
                 }

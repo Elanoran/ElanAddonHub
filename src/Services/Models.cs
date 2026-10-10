@@ -89,6 +89,10 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "toastReactions")] public bool ToastReactions { get; set; }  // default off
         [DataMember(Name = "toastPins")] public bool ToastPins { get; set; }            // default off
         [DataMember(Name = "toastUpdateOff")] public bool ToastUpdateOff { get; set; }
+        [DataMember(Name = "toastHealthOff")] public bool ToastHealthOff { get; set; }      // default on: "Elan's Bags: 2 new errors"
+        // Addon health: errors the user already looked at ("seen") and already got a toast for, per "addon|message" -> count
+        [DataMember(Name = "healthSeen")] public Dictionary<string, int> HealthSeen { get; set; }
+        [DataMember(Name = "healthToasted")] public Dictionary<string, int> HealthToasted { get; set; }
         [DataMember(Name = "toastCorner")] public string ToastCorner { get; set; }      // tl | tr (default) | bl | br
         [DataMember(Name = "shareZoneOff")] public bool ShareZoneOff { get; set; }      // false = friends see my zone / instance
         [DataMember(Name = "shareXpOff")] public bool ShareXpOff { get; set; }          // false = friends see my XP % and rested state

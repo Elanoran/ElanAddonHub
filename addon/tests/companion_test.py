@@ -75,9 +75,15 @@ function print(...) local t = {} for i = 1, select("#", ...) do t[#t + 1] = tost
 C_Timer = { After = function(d, f) TIMERS[#TIMERS + 1] = f end }
 function RunTimers() local t = TIMERS TIMERS = {} for _, f in ipairs(t) do f() end end
 function InCombatLockdown() return MOCK_COMBAT end
+ERRSEEN = {}
+local errHandler = function(m) ERRSEEN[#ERRSEEN + 1] = m end
+function geterrorhandler() return errHandler end
+function seterrorhandler(f) errHandler = f end
+function debugstack() return "Interface/AddOns/ElansHub/Mock.lua:1: in function <mock>" end
 NOW = 1000
 function GetTime() return NOW end
 time = os.time
+date = os.date
 function UnitName(u) if u == "target" then return TARGET end return "Elan" end
 function UnitExists(u) return u == "player" or (u == "target" and TARGET ~= nil) end
 function UnitClass() return "Hunter", "HUNTER", 3 end
@@ -339,6 +345,29 @@ SlashCmdList.ELANSHUB("diag")
 ok("diag saved", db.diag and db.diag.runs[1] and db.diag.runs[1].doEmote == "function")
 ok("diag did not emote", #EMOTES == n)
 ok("diag: no combat log", db.diag.runs[1].combatLogRegistered == false)
+-- addon health: automatic probe once per version, quiet, not in combat; one-time hint; bug entry shape
+db.diag, db.lastVersion, db.hintVersion = nil, "0.0.1", nil
+local chatN = #CHAT
+E.AutoCheck()
+ok("health: probe not run at once (queued ~10 s)", db.diag == nil)
+RunTimers()
+ok("health: auto run stored, quiet", db.diag and #db.diag.runs == 1 and db.diag.runs[1].auto == true and db.diag.runs[1].inCombat == false and type(db.diag.runs[1].at) == "number" and db.diag.autoVersion == E.Version())
+ok("health: update hint shown once", (CHAT[#CHAT] or ""):find("updated to v") and (CHAT[#CHAT] or ""):find("/reload once later so Elan's Outpost can check it", 1, true) and #CHAT == chatN + 1)
+E.AutoCheck() RunTimers()
+ok("health: same version -> nothing more", #db.diag.runs == 1 and #CHAT == chatN + 1)
+db.lastVersion, db.hintVersion, db.diag.autoVersion = "0.0.2", nil, nil
+MOCK_COMBAT = true
+E.AutoCheck() RunTimers()
+ok("health: in combat nothing is written", #db.diag.runs == 1 and #CHAT == chatN + 1)
+MOCK_COMBAT = false
+RunTimers()
+ok("health: written after the fight", #db.diag.runs == 2 and #CHAT == chatN + 2)
+local eh = geterrorhandler()
+eh("Interface/AddOns/ElansHub/Chat.lua:3: boom") eh("Interface/AddOns/ElansHub/Chat.lua:3: boom") eh("Interface/AddOns/Other/x.lua:1: not ours")
+local b = db.bugs and db.bugs[1]
+ok("health: own error kept in bugs with the shared shape", b and #db.bugs == 1 and b.count == 2 and type(b.stack) == "string" and type(b.time) == "string" and type(b.at) == "number" and b.version == E.Version())
+ok("health: other errors still reach the previous handler", ERRSEEN[#ERRSEEN] == "Interface/AddOns/Other/x.lua:1: not ours")
+db.bugs = nil
 -- status command still works
 SlashCmdList.ELANSHUB("status") ok("/ehub status prints", (CHAT[#CHAT] or ""):find("level 60"))
 -- settings widgets refresh

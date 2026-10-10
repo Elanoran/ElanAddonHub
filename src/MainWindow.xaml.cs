@@ -45,7 +45,7 @@ namespace ElansAddonHub
             checkTimer.Interval = TimeSpan.FromMinutes(settings.CheckMinutes);
             checkTimer.Tick += async (s, e) => await CheckNow();
             checkTimer.Start();
-            statusTimer.Tick += (s, e) => { UpdateStatusText(); MaybeCfAuto(); RefreshRailBadges(); };
+            statusTimer.Tick += (s, e) => { UpdateStatusText(); MaybeCfAuto(); RefreshRailBadges(); health?.EnsureWatchers(); };
             statusTimer.Start();
             Loaded += async (s, e) => { if (manifest == null) await CheckNow(); };
 
@@ -84,6 +84,7 @@ namespace ElansAddonHub
             InventoryView.Init(() => settings.WowRoot);
             InventoryView.GoToAddons += () => ShowTab("addons");
             InventoryView.GoToSettings += () => { ShowTab("settings"); SettingsPage.Show("general"); };
+            InitHealth();
         }
 
         DateTime lastChatNote;
@@ -123,6 +124,7 @@ namespace ElansAddonHub
             RailVersion.ToolTip = (hubNew ? $"Update available: v{manifest.Hub.Version} - click to update" : "Version " + App.Version) + testTip;
             UpdateBadgeText.Text = n > 9 ? "9+" : n.ToString();
             TabAddons.ToolTip = n > 0 ? $"Addons  (Ctrl+1)\n{n} update{(n == 1 ? "" : "s")} available" : "Addons  (Ctrl+1)";
+            RefreshHealthUi();
         }
 
         void RailVersion_Click(object sender, MouseButtonEventArgs e)
@@ -255,6 +257,7 @@ namespace ElansAddonHub
             result += "\r\n" + await ToastTest(dir);
             result += "\r\n" + await DialogTest(dir);
             result += "\r\n" + await InventoryTest(dir);
+            result += "\r\n" + await HealthTest(dir);
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
             Quit();
         }
