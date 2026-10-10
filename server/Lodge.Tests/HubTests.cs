@@ -11,12 +11,13 @@ public class HubTests
         WebSocketState state = WebSocketState.Open;
         readonly TaskCompletionSource closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string? CloseReason;
-        public override WebSocketCloseStatus? CloseStatus => state == WebSocketState.Open ? null : WebSocketCloseStatus.PolicyViolation;
+        public WebSocketCloseStatus? SentStatus;
+        public override WebSocketCloseStatus? CloseStatus => state == WebSocketState.Open ? null : (SentStatus ?? WebSocketCloseStatus.PolicyViolation);
         public override string? CloseStatusDescription => CloseReason;
         public override WebSocketState State => state;
         public override string? SubProtocol => null;
         public override void Abort() { state = WebSocketState.Aborted; closed.TrySetResult(); }
-        public override Task CloseAsync(WebSocketCloseStatus s, string? d, CancellationToken ct) { CloseReason = d; state = WebSocketState.Closed; closed.TrySetResult(); return Task.CompletedTask; }
+        public override Task CloseAsync(WebSocketCloseStatus s, string? d, CancellationToken ct) { CloseReason = d; SentStatus = s; state = WebSocketState.Closed; closed.TrySetResult(); return Task.CompletedTask; }
         public override Task CloseOutputAsync(WebSocketCloseStatus s, string? d, CancellationToken ct) => CloseAsync(s, d, ct);
         public override void Dispose() { }
         public override async Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer, CancellationToken ct)
@@ -94,6 +95,28 @@ public class HubTests
         });
         Assert.Equal(25, admitted);
         Assert.Equal(25, hub.Online);
+    }
+
+    [Fact]
+    public async Task Shutdown_closes_every_socket_cleanly_as_a_restart()
+    {
+        var (hub, auth, d) = Hub();
+        using var _ = d;
+        using var cts = new CancellationTokenSource();
+        var a = new FakeSocket();
+        var b = new FakeSocket();
+        var run1 = hub.Run(a, auth.Check(T.ElanCode)!, T.ElanCode, null, "hub/test", "1.1.1.1", cts.Token);
+        var run2 = hub.Run(b, auth.Check(T.BobCode)!, T.BobCode, null, "hub/test", "2.2.2.2", cts.Token);
+        await Task.Delay(50);
+        Assert.Equal(2, hub.Online);
+        await hub.CloseAllForShutdown(TimeSpan.FromSeconds(2));
+        // "going away" (1001) - not PolicyViolation, which would make clients stop reconnecting
+        Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, a.SentStatus);
+        Assert.Equal(WebSocketCloseStatus.EndpointUnavailable, b.SentStatus);
+        Assert.Equal("Server restarting", a.CloseReason);
+        Assert.Equal(0, hub.Online);
+        cts.Cancel();
+        await Task.WhenAll(run1, run2).ContinueWith(_ => { });
     }
 
     [Fact]

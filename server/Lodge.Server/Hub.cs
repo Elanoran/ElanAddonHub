@@ -87,7 +87,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.7.0";
+    public const string Version = "2.7.1";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -346,6 +346,25 @@ public class LodgeHub
     // channels changed (or someone's rank did): everyone gets their own up-to-date view
     public Task Resync(Func<Member, bool> where = null) =>
         Task.WhenAll(members.Values.Where(m => where == null || where(m)).Select(m => Send(m, Welcome(m))));
+
+    // server shutting down (systemd stop/restart, lodge-update): close every socket CLEANLY with "going away" so clients
+    // know it's a restart and reconnect at once - instead of the host's hard abort after its shutdown timeout, which
+    // clients saw as "closed without completing the close handshake". No leave broadcasts: everyone goes at once.
+    public async Task CloseAllForShutdown(TimeSpan timeout)
+    {
+        var all = members.Values.ToList();
+        members.Clear();
+        using var cts = new CancellationTokenSource(timeout);
+        await Task.WhenAll(all.Select(async m =>
+        {
+            try
+            {
+                if (m.Ws.State == WebSocketState.Open)
+                    await m.Ws.CloseOutputAsync(WebSocketCloseStatus.EndpointUnavailable, "Server restarting", cts.Token);
+            }
+            catch { }
+        }));
+    }
 
     // close with a reason the client shows (a clean close stops it reconnecting); frees the slot right away
     public async Task Disconnect(Member m, string reason)

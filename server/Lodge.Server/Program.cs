@@ -11,6 +11,8 @@ var cfg = LodgeConfig.FromEnv();
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(cfg.Urls);
 builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = cfg.MaxFileBytes + (1 << 20));
+// sockets are closed cleanly on stop (below), so a restart needn't wait the default 30 s
+builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(8));
 // ASP.NET's per-request logs contain full URLs (a 1.x client puts its code in ?code=): keep them out of the journal
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 // the real visitor IP comes from the reverse proxy (needed for the wrong-code lockout)
@@ -148,6 +150,11 @@ app.MapGet("/files/{id}", (HttpContext ctx, string id) =>
 
 files.StartCleanup(app.Lifetime.ApplicationStopping);
 lodge.StartRevalidation(app.Lifetime.ApplicationStopping);
+// restart/stop: say goodbye properly (clients reconnect at once, see LodgeHub.CloseAllForShutdown)
+app.Lifetime.ApplicationStopping.Register(() =>
+{
+    try { lodge.CloseAllForShutdown(TimeSpan.FromSeconds(3)).Wait(TimeSpan.FromSeconds(4)); } catch { }
+});
 app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}",
     LodgeHub.Version, cfg.Urls, cfg.PathBase, cfg.DataDir, cfg.AllowQueryCode ? "allowed" : "off");
 app.Run();
