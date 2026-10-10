@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.31.1
+- Behind the scenes: the built-in self-test now always uses its own data folder and refuses to run against yours.
+
 ## 2.31.0
 - Notifications redesigned: soft rounded cards with a gentle shadow, messages wrap to two lines, and they slide in and fade out smoothly (instant when Windows animations are off).
 - Welcome guide redesigned: lifted card with progress dots, grouped tips on the last step, and green only for the main button.
