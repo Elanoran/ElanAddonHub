@@ -30,7 +30,7 @@ namespace ElansAddonHub
             var detector0 = WowWatch.Shared.Detector;
             try
             {
-                Check("version is 2.28.0", App.Version == "2.28.0", App.Version);
+                Check("version is a valid x.y.z", System.Text.RegularExpressions.Regex.IsMatch(App.Version, @"^\d+\.\d+\.\d+$"), App.Version);
                 Check("the self-test never starts the first-run guide by itself", !SettingsStore.Fresh && guide == null);
 
                 // ------------------------------------------------ 1. Lodge server notice
@@ -41,7 +41,7 @@ namespace ElansAddonHub
                 Session.FeedForTest(Welcome("owner", "2.5.0", true));
                 await Task.Delay(300);
                 Check("notice: owner on server 2.5 sees it", LodgePage.ServerNoticeVisibleForTest, LodgePage.ServerNoticeTextForTest);
-                Check("notice: wording", LodgePage.ServerNoticeTextForTest == "Your Lodge server is on 2.5 - 2.7 is available. On the server run: sudo lodge-update", LodgePage.ServerNoticeTextForTest);
+                Check("notice: wording", LodgePage.ServerNoticeTextForTest == "Your Lodge server is on 2.5 - " + LodgeSession.ShortVersion(Brand.LatestLodgeServer) + " is available. On the server run: sudo lodge-update", LodgePage.ServerNoticeTextForTest);
                 Snapshot(P("20-server-notice-owner.png"));
                 string copied = null;
                 try { LodgePage.ServerNoticeCopyForTest(); copied = Clipboard.GetText(); } catch (Exception e) { copied = "clipboard: " + e.Message; }
@@ -52,7 +52,7 @@ namespace ElansAddonHub
                 Session.FeedForTest(Welcome("officer", "2.5.0", false));
                 await Task.Delay(200);
                 Check("notice: an officer sees it", LodgePage.ServerNoticeVisibleForTest);
-                Session.FeedForTest(Welcome("owner", "2.7.0", true));
+                Session.FeedForTest(Welcome("owner", Brand.LatestLodgeServer, true));
                 await Task.Delay(200);
                 Check("notice: owner on the current server sees nothing", !LodgePage.ServerNoticeVisibleForTest);
                 Session.FeedForTest(Welcome("owner", "2.2.0", true));

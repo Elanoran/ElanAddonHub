@@ -422,7 +422,7 @@ namespace ElansAddonHub
             {
                 var del = ThemedDialog.Create(DialogKind.Danger, "Delete message?", "Delete Verification A's message? This can't be undone.", "Delete", "Cancel");
                 del.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                del.Show();
+                del.Show(); del.Activate();
                 await Task.Delay(500);
                 Check("destructive confirm: keyboard focus on Cancel", System.Windows.Input.Keyboard.FocusedElement is System.Windows.Controls.Button fb && (string)fb.Content == "Cancel");
                 SnapshotElement(del.RootForTest, System.IO.Path.Combine(dir, "11-dialog-confirm.png"));
