@@ -27,7 +27,7 @@ namespace ElansAddonHub.Services
     // one bag / bank container: its size, the bag item itself and the filled slots
     public class InvContainer
     {
-        public int BagId;                  // 0 backpack, 1-4 bags, -1 main bank, 5-11 bank bags
+        public int BagId;                  // 0 backpack, 1-4 bags, 5 reagent bag, -1 main bank, 6-12 bank bags
         public int Size, Family;
         public int BagItemId, BagIcon, BagQuality;
         public string BagName;
@@ -243,6 +243,10 @@ namespace ElansAddonHub.Services
                 foreach (var it in c.Bags.Concat(c.Bank ?? new List<InvItem>()).Concat(c.Equipped)) if (!names.ContainsKey(it.Id)) names[it.Id] = it;
                 c.BagsCont = Containers(t, "bagsCont", names);
                 c.BankCont = Containers(t, "bankCont", names);
+                // Elan's Bags before 0.2.3 saved the reagent bag (container 5) as a bank bag; a container that is
+                // one of your bags is never also a bank bag
+                if (c.BagsCont != null && c.BankCont != null)
+                    c.BankCont.RemoveAll(b => b.BagId > 0 && c.BagsCont.Any(x => x.BagId == b.BagId));
                 list.Add(c);
             }
             return data;
