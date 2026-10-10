@@ -110,6 +110,7 @@ namespace ElansAddonHub
         void Tab_Checked(object sender, RoutedEventArgs e)
         {
             if (LodgePage == null || SettingsPage == null || InventoryView == null) return;
+            var wasAddons = AddonsPage.Visibility == Visibility.Visible;
             var lodge = TabLodge.IsChecked == true;
             var set = TabSettings.IsChecked == true;
             var inv = TabInventory.IsChecked == true;
@@ -118,6 +119,7 @@ namespace ElansAddonHub
             InventoryView.Visibility = inv ? Visibility.Visible : Visibility.Collapsed;
             AddonsPage.Visibility = !lodge && !set && !inv ? Visibility.Visible : Visibility.Collapsed;
             RefreshBar.Visibility = !lodge && !set && !inv ? Visibility.Visible : Visibility.Collapsed;
+            if (AddonsPage.Visibility == Visibility.Visible && !wasAddons) Motion.PageIn(AddonsPage);
             if (lodge) Session.MarkRead();
         }
 
@@ -175,6 +177,8 @@ namespace ElansAddonHub
             // the window's own startup check may still be running (slow network): wait for it
             for (int i = 0; i < 100 && (checking || manifest == null); i++) await Task.Delay(200);
             await Task.Delay(400);
+            var designShots = Environment.GetEnvironmentVariable("ELANSHUB_DESIGN_SHOTS");
+            if (!string.IsNullOrEmpty(designShots)) { await DesignShots(dir, designShots); return; }
             Snapshot(System.IO.Path.Combine(dir, "1-before.png"));
             var card = cards.FirstOrDefault(c => c.ButtonEnabled);
             if (card != null) await Install(card);
@@ -615,7 +619,7 @@ namespace ElansAddonHub
                 var n = cards.Count(c => c.State == CardState.UpdateAvailable) + others.Count(c => c.State == TpState.UpdateAvailable)
                     + (SelfUpdater.IsNewer(manifest?.Hub) ? 1 : 0);
                 CheckResult.Text = lastError != null ? lastError : n == 0 ? "All up to date" : n + (n == 1 ? " update" : " updates");
-                CheckResult.Foreground = (System.Windows.Media.Brush)Application.Current.Resources[lastError != null ? "Danger" : n == 0 ? "Accent" : "Gold"];
+                CheckResult.Foreground = (System.Windows.Media.Brush)Application.Current.Resources[lastError != null ? "Brush.Danger" : n == 0 ? "Brush.Text.Secondary" : "Brush.Warn"];
                 UpdateStatusText();
                 if (resultFade != null) resultFade.Stop();
                 if (lastError == null)

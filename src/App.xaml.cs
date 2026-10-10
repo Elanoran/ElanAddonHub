@@ -40,6 +40,9 @@ namespace ElansAddonHub
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            // Windows animations off: every Motion.* duration becomes instant (DESIGN.md, Motion)
+            if (!SystemParameters.ClientAreaAnimation)
+                foreach (var k in new[] { "Motion.Fast", "Motion.Standard", "Motion.Emphasized" }) Resources[k] = new System.Windows.Duration(TimeSpan.Zero);
             var test = Array.IndexOf(e.Args, "--selftest");
             var sheet = Array.IndexOf(e.Args, "--iconsheet");
             if (sheet >= 0 && sheet + 1 < e.Args.Length) { IconSheet.Render(e.Args[sheet + 1]); Shutdown(); return; }

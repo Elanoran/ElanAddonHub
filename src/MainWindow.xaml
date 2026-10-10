@@ -15,7 +15,7 @@
     <WindowChrome CaptionHeight="0" ResizeBorderThickness="12" GlassFrameThickness="0" CornerRadius="0" />
   </WindowChrome.WindowChrome>
 
-  <Border Margin="14" Background="{StaticResource Bg}" CornerRadius="14" BorderBrush="{StaticResource Line}" BorderThickness="1">
+  <Border Margin="14" Background="{StaticResource Brush.Bg}" CornerRadius="{StaticResource Radius.Window}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1">
     <Border.Effect>
       <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.55" Color="Black" />
     </Border.Effect>
@@ -58,7 +58,7 @@
       </Grid>
 
       <!-- navigation rail (Discord style): icon buttons with a pill on the edge, Settings pinned at the bottom -->
-      <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0" Background="#B30C0E10" CornerRadius="13,0,0,13" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+      <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0" Background="#B30C0E10" CornerRadius="13,0,0,13" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,1,0">
         <DockPanel LastChildFill="False">
           <Grid DockPanel.Dock="Top" Height="52" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
             <Image x:Name="RailLogo" Source="Assets/hub.png" Width="26" Height="26" RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" ToolTipService.Placement="Right"
@@ -67,16 +67,16 @@
           <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,6">
             <RadioButton x:Name="TabSettings" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                          ToolTip="Settings  (Ctrl+,)" ToolTipService.Placement="Right" AutomationProperties.Name="Settings">
-              <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="19" />
+              <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="20" />
             </RadioButton>
-            <TextBlock x:Name="RailVersion" HorizontalAlignment="Center" Margin="0,3,0,0" FontSize="9.5" Foreground="{StaticResource TextDim}" Opacity="0.6"
+            <TextBlock x:Name="RailVersion" HorizontalAlignment="Center" Margin="0,3,0,0" FontSize="10" Foreground="{StaticResource Brush.Text.Tertiary}"
                        Cursor="Hand" Background="Transparent" ToolTipService.Placement="Right" MouseLeftButtonUp="RailVersion_Click" />
           </StackPanel>
           <StackPanel DockPanel.Dock="Top" Margin="0,2,0,0">
             <Grid Margin="0,0,0,6">
               <RadioButton x:Name="TabAddons" Style="{StaticResource RailButton}" GroupName="tabs" IsChecked="True" Checked="Tab_Checked"
                            ToolTip="Addons  (Ctrl+1)" ToolTipService.Placement="Right" AutomationProperties.Name="Addons">
-                <TextBlock Text="&#xEA86;" FontFamily="{StaticResource Icons}" FontSize="19" />
+                <TextBlock Text="&#xEA86;" FontFamily="{StaticResource Icons}" FontSize="20" />
               </RadioButton>
               <Border x:Name="UpdateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,7,0" MinWidth="18" Height="18" CornerRadius="9" Padding="4,0"
                       Background="{StaticResource Gold}" BorderBrush="{StaticResource Bg}" BorderThickness="2" IsHitTestVisible="False" Visibility="Collapsed">
@@ -92,7 +92,7 @@
             <Grid>
               <RadioButton x:Name="TabLodge" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                            ToolTip="Lodge  (Ctrl+2)" ToolTipService.Placement="Right" AutomationProperties.Name="Lodge">
-                <TextBlock Text="&#xE8BD;" FontFamily="{StaticResource Icons}" FontSize="19" />
+                <TextBlock Text="&#xE8BD;" FontFamily="{StaticResource Icons}" FontSize="20" />
               </RadioButton>
               <Border x:Name="UnreadDot" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,3,9,0" Width="16" Height="16" CornerRadius="8"
                       Background="{StaticResource Danger}" BorderBrush="{StaticResource Bg}" BorderThickness="3" IsHitTestVisible="False" Visibility="Collapsed" />
@@ -122,231 +122,224 @@
       <lodge:LodgeView x:Name="LodgePage" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <local:SettingsPage x:Name="SettingsPage" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <local:InventoryPage x:Name="InventoryView" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
-      <ScrollViewer x:Name="AddonsPage" Grid.Row="3" Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">
-       <StackPanel>
+      <ScrollViewer x:Name="AddonsPage" Grid.Row="3" Grid.Column="1" VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True">
+       <StackPanel MaxWidth="680" Margin="{StaticResource Pad.Page}">
         <!-- one-click "check everything", right above the cards (same column as the cards) -->
-        <Grid MaxWidth="660" Margin="0,6,0,6">
-          <StackPanel x:Name="RefreshBar" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0">
-            <Border x:Name="HealthChip" CornerRadius="10" Padding="9,2,9,3" Margin="0,0,10,0" Cursor="Hand" VerticalAlignment="Center" Background="Transparent"
-                    BorderThickness="1" BorderBrush="{StaticResource Line}" MouseLeftButtonUp="HealthChip_Click" ToolTipService.InitialShowDelay="300" AutomationProperties.Name="Addon health">
-              <TextBlock x:Name="HealthChipText" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextDim}" />
+        <Grid Margin="0,0,0,12" Height="32">
+          <StackPanel x:Name="RefreshBar" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <Border x:Name="HealthChip" Style="{StaticResource Chip}" Margin="0,0,12,0" Cursor="Hand" VerticalAlignment="Center"
+                    MouseLeftButtonUp="HealthChip_Click" ToolTipService.InitialShowDelay="300" AutomationProperties.Name="Addon health">
+              <TextBlock x:Name="HealthChipText" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}" />
             </Border>
-            <TextBlock x:Name="CheckResult" FontSize="11.5" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+            <TextBlock x:Name="CheckResult" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}" VerticalAlignment="Center" Margin="0,0,12,0" />
             <StackPanel x:Name="CheckChip" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0" Background="Transparent">
-              <TextBlock Text="&#xE121;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,3,0" />
-              <TextBlock x:Name="CheckChipText" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+              <TextBlock Text="&#xE121;" FontFamily="{StaticResource Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,1,4,0" />
+              <TextBlock x:Name="CheckChipText" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
             </StackPanel>
-            <Button x:Name="CheckAllButton" Style="{StaticResource SecondaryButton}" Height="28" Width="30" Padding="0" Click="CheckAll_Click"
+            <Button x:Name="CheckAllButton" Style="{StaticResource SecondaryButton}" Height="32" Width="32" Padding="0" Click="CheckAll_Click"
                     AutomationProperties.Name="Check for updates" ToolTip="Check for updates">
-              <TextBlock x:Name="CheckSpin" Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="13" RenderTransformOrigin="0.5,0.5">
+              <TextBlock x:Name="CheckSpin" Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="14" RenderTransformOrigin="0.5,0.5">
                 <TextBlock.RenderTransform><RotateTransform x:Name="SpinRot" /></TextBlock.RenderTransform>
               </TextBlock>
             </Button>
           </StackPanel>
         </Grid>
-        <ItemsControl x:Name="Cards" Margin="0,0,0,0" MaxWidth="660">
+        <ItemsControl x:Name="Cards" Focusable="False">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Margin="16,0,12,10" Background="{StaticResource Card}" CornerRadius="12"
-                      BorderBrush="{StaticResource Line}" BorderThickness="1">
+              <ContentControl Style="{StaticResource Card.Raised}">
                 <StackPanel>
                   <!-- big artwork on the left, spanning the title and the stats -->
-                  <Grid Margin="12,12,14,10">
+                  <Grid Margin="16">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="84" Height="84" CornerRadius="10" VerticalAlignment="Top" Margin="0,0,14,0" Cursor="Hand"
+                    <Border Width="80" Height="80" CornerRadius="{StaticResource Radius.ControlLg}" VerticalAlignment="Top" Margin="0,0,16,0" Cursor="Hand"
                             Background="Transparent" Tag="{Binding}" MouseLeftButtonUp="Card_Toggle">
                       <Image Source="{Binding Logo}" RenderOptions.BitmapScalingMode="HighQuality" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                       <!-- header: click anywhere on it to expand / collapse -->
-                      <Border x:Name="Header" Background="Transparent" Padding="0,0,0,4" Cursor="Hand"
+                      <Border x:Name="Header" Background="Transparent" Cursor="Hand"
                               Tag="{Binding}" MouseLeftButtonUp="Card_Toggle" ToolTip="Show / hide details">
                         <DockPanel>
-                          <TextBlock DockPanel.Dock="Right" Text="{Binding Chevron}" FontFamily="{StaticResource Icons}" FontSize="12"
-                                     Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,2,0" />
+                          <TextBlock DockPanel.Dock="Right" Style="{StaticResource Text.Chevron}" local:Motion.Turn="{Binding Expanded}" Margin="12,0,0,0" />
                           <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Click="Action_Click" />
-                          <Border DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,10,0" Background="Transparent"
+                          <Border DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,12,0" Background="Transparent"
                                   ToolTip="{x:Static local:Brand.SourceTip}" AutomationProperties.Name="{x:Static local:Brand.SourceTip}">
-                            <Image Source="{Binding ChipArt}" Width="19" Height="19" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
+                            <Image Source="{Binding ChipArt}" Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
                           </Border>
                           <StackPanel Margin="0,0,8,0" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,1,0,0"
+                            <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0"
                                        TextTrimming="CharacterEllipsis" ToolTip="{Binding InstallPath}" ToolTipService.InitialShowDelay="300" />
                           </StackPanel>
                         </DockPanel>
                       </Border>
-                      <!-- versions + stats on the left, compact action on the right -->
-                      <Grid Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="*" />
-                          <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center" Margin="0,0,10,0">
-                          <TextBlock Text="{Binding VersionLine}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
-                          <ItemsControl ItemsSource="{Binding Stats}" Visibility="{Binding StatsVisibility}" Margin="0,3,0,0" Focusable="False">
-                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                              <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,14,0" Background="Transparent" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}">
-                                  <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,4,0" />
-                                  <TextBlock Text="{Binding Text}" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
-                                </StackPanel>
-                              </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                          </ItemsControl>
-                        </StackPanel>
-                      </Grid>
+                      <!-- versions + stats -->
+                      <StackPanel Margin="0,10,0,0">
+                        <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" />
+                        <ItemsControl ItemsSource="{Binding Stats}" Visibility="{Binding StatsVisibility}" Margin="0,4,0,0" Focusable="False">
+                          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <StackPanel Orientation="Horizontal" Margin="0,0,16,0" Background="Transparent" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}">
+                                <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,1,4,0" />
+                                <TextBlock Text="{Binding Text}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                              </StackPanel>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
                     </StackPanel>
                   </Grid>
 
-                  <ProgressBar Style="{StaticResource ThinProgress}" Margin="14,0,14,10" Maximum="1"
+                  <ProgressBar Style="{StaticResource ThinProgress}" Margin="16,0,16,16" Maximum="1"
                                Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
-                  <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" FontSize="12"
-                             Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="110,-2,14,12" />
+                  <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" Style="{StaticResource Text.Secondary}"
+                             TextWrapping="Wrap" Margin="112,-4,16,16" />
 
-                  <!-- details -->
-                  <StackPanel Visibility="{Binding ExpandedVisibility}" Margin="14,0,14,14">
-                    <Border Height="1" Background="{StaticResource Line}" Margin="0,0,0,12" />
-                    <StackPanel Visibility="{Binding DevNoteVisibility}" Margin="0,0,0,12">
-                      <TextBlock Text="{Binding DevNote}" FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" />
-                      <Button Style="{StaticResource GhostButton}" Content="Replace the git copy with the release..." FontSize="11.5"
-                              HorizontalAlignment="Left" Margin="-8,4,0,0" Visibility="{Binding ReplaceDevVisibility}" Tag="{Binding}" Click="ReplaceDev_Click" />
+                  <!-- details: grow / shrink with Motion.Expand -->
+                  <Border Visibility="Collapsed" local:Motion.Expand="{Binding Expanded}" Padding="16,0,16,16">
+                    <StackPanel>
+                      <Border Height="1" Background="{StaticResource Brush.Divider}" Margin="0,0,0,16" />
+                      <StackPanel Visibility="{Binding DevNoteVisibility}" Margin="0,0,0,16">
+                        <TextBlock Text="{Binding DevNote}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" />
+                        <Button Style="{StaticResource GhostButton}" Content="Replace the git copy with the release..." FontSize="12"
+                                HorizontalAlignment="Left" Margin="-8,4,0,0" Visibility="{Binding ReplaceDevVisibility}" Tag="{Binding}" Click="ReplaceDev_Click" />
+                      </StackPanel>
+                      <TextBlock Text="{Binding ChangesTitle}" Style="{StaticResource Text.Caption}" Margin="0,0,0,8" />
+                      <ItemsControl ItemsSource="{Binding Changes}" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Grid Margin="0,0,0,8">
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="56" />
+                                <ColumnDefinition />
+                              </Grid.ColumnDefinitions>
+                              <TextBlock Text="{Binding Version}" Style="{StaticResource Text.Secondary}" />
+                              <TextBlock Grid.Column="1" Text="{Binding Text}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Foreground="{StaticResource Brush.Text.Primary}" />
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <StackPanel Orientation="Horizontal" Margin="-8,4,0,0">
+                        <Button Style="{StaticResource GhostButton}" Content="All releases on GitHub" HorizontalAlignment="Left"
+                                Tag="{Binding ReleasesUrl}" Click="OpenLink_Click" />
+                        <Button Style="{StaticResource GhostButton}" Content="{Binding RollbackText}" Margin="4,0,0,0"
+                                Visibility="{Binding RollbackVisibility}" Tag="{Binding}" Click="OurRollback_Click"
+                                ToolTip="Put the version you had before back (the Outpost keeps the last 2). Your settings are not touched." />
+                      </StackPanel>
                     </StackPanel>
-                    <TextBlock Text="{Binding ChangesTitle}" Style="{StaticResource Caption}" Margin="0,0,0,8" />
-                    <ItemsControl ItemsSource="{Binding Changes}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                          <Grid Margin="0,0,0,7">
-                            <Grid.ColumnDefinitions>
-                              <ColumnDefinition Width="54" />
-                              <ColumnDefinition />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="{Binding Version}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
-                            <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource Text}" />
-                          </Grid>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <StackPanel Orientation="Horizontal" Margin="-8,6,0,0">
-                      <Button Style="{StaticResource GhostButton}" Content="All releases on GitHub" FontSize="11.5" HorizontalAlignment="Left"
-                              Tag="{Binding ReleasesUrl}" Click="OpenLink_Click" />
-                      <Button Style="{StaticResource GhostButton}" Content="{Binding RollbackText}" FontSize="11.5" Margin="6,0,0,0"
-                              Visibility="{Binding RollbackVisibility}" Tag="{Binding}" Click="OurRollback_Click"
-                              ToolTip="Put the version you had before back (the Outpost keeps the last 2). Your settings are not touched." />
-                    </StackPanel>
-                  </StackPanel>
+                  </Border>
                 </StackPanel>
-              </Border>
+              </ContentControl>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
 
         <!-- everything else in Interface\AddOns -->
-        <StackPanel x:Name="OtherPanel" MaxWidth="660" Margin="0,10,0,0" Visibility="Collapsed">
-          <DockPanel Margin="18,4,12,10" LastChildFill="False">
-            <TextBox x:Name="SearchBox" DockPanel.Dock="Right" Style="{StaticResource Input}" Width="170" Tag="Search addons" TextChanged="Search_Changed" Margin="8,0,0,0" />
-            <Button x:Name="UpdateAllButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Height="28" Padding="12,0" FontSize="12"
-                    Content="Update all" Visibility="Collapsed" Click="UpdateAll_Click" Margin="8,0,0,0" AutomationProperties.Name="Update all addons" />
-            <Button x:Name="LinkExactButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="28" Padding="12,0" FontSize="12"
-                    Content="Link exact" Visibility="Collapsed" Click="LinkExact_Click" Margin="8,0,0,0" ToolTip="Link every addon whose folders match a WoWInterface file exactly" />
-            <Button x:Name="CfOpenButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="28" Width="30" Padding="0" Margin="6,0,0,0"
+        <StackPanel x:Name="OtherPanel" Margin="0,12,0,0" Visibility="Collapsed">
+          <DockPanel Margin="4,0,0,12" LastChildFill="False" Height="32">
+            <TextBox x:Name="SearchBox" DockPanel.Dock="Right" Style="{StaticResource Input}" Width="176" Height="32" Tag="Search addons" TextChanged="Search_Changed" Margin="8,0,0,0" />
+            <Button x:Name="UpdateAllButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.M}" Content="Update all" Visibility="Collapsed" Click="UpdateAll_Click" Margin="8,0,0,0" AutomationProperties.Name="Update all addons" />
+            <Button x:Name="LinkExactButton" DockPanel.Dock="Right" Style="{StaticResource Button.M}" Content="Link exact" Visibility="Collapsed" Click="LinkExact_Click" Margin="8,0,0,0" ToolTip="Link every addon whose folders match a WoWInterface file exactly" />
+            <Button x:Name="CfOpenButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="32" Width="32" Padding="0" Margin="8,0,0,0"
                     Visibility="Collapsed" Click="OpenCf_Click" ToolTip="Open CurseForge" AutomationProperties.Name="Open CurseForge">
-              <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource Icons}" FontSize="13" />
+              <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource Icons}" FontSize="14" />
             </Button>
-            <Button x:Name="CfCheckButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="28" Width="30" Padding="0" Margin="6,0,0,0"
+            <Button x:Name="CfCheckButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="32" Width="32" Padding="0" Margin="8,0,0,0"
                     Visibility="Collapsed" Click="CheckCf_Click" AutomationProperties.Name="Check CurseForge now"
                     ToolTip="Check CurseForge now: lets the CurseForge app refresh its update info (started minimized if it isn't running, closed again afterwards)">
-              <TextBlock x:Name="CfSpin" Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="13" RenderTransformOrigin="0.5,0.5">
+              <TextBlock x:Name="CfSpin" Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="14" RenderTransformOrigin="0.5,0.5">
                 <TextBlock.RenderTransform><RotateTransform x:Name="CfSpinRot" /></TextBlock.RenderTransform>
               </TextBlock>
             </Button>
             <Border x:Name="CfChip" DockPanel.Dock="Right" Visibility="Collapsed" Background="Transparent" Padding="4,3" VerticalAlignment="Center" Margin="8,0,0,0"
                     ToolTipService.ShowDuration="30000">
               <StackPanel Orientation="Horizontal">
-                <Image x:Name="CfChipIcon" Width="14" Height="14" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,5,0" />
-                <TextBlock x:Name="CfChipGlyph" Text="&#xE121;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,3,0" />
-                <TextBlock x:Name="CfChipText" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+                <Image x:Name="CfChipIcon" Width="14" Height="14" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,4,0" />
+                <TextBlock x:Name="CfChipGlyph" Text="&#xE121;" FontFamily="{StaticResource Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,1,4,0" />
+                <TextBlock x:Name="CfChipText" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
               </StackPanel>
             </Border>
-            <TextBlock x:Name="OtherTitle" Text="Other addons" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Border x:Name="OtherInfo" Width="18" Height="18" CornerRadius="9" Margin="7,0,0,0" VerticalAlignment="Center" Background="Transparent" ToolTipService.ShowDuration="30000">
-              <TextBlock Text="&#xE946;" FontFamily="{StaticResource Icons}" FontSize="13" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <TextBlock x:Name="OtherTitle" Text="Other addons" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+            <Border x:Name="OtherInfo" Width="20" Height="20" CornerRadius="10" Margin="8,0,0,0" VerticalAlignment="Center" Background="Transparent" ToolTipService.ShowDuration="30000">
+              <TextBlock Text="&#xE946;" FontFamily="{StaticResource Icons}" FontSize="14" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
           </DockPanel>
-          <ItemsControl x:Name="OtherCards" Margin="0,0,0,16">
+          <ItemsControl x:Name="OtherCards" Focusable="False">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Margin="16,0,12,10" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <ContentControl Style="{StaticResource Card.Raised}">
                   <StackPanel>
-                    <Border Background="Transparent" Padding="14,10,12,4" Cursor="Hand" CornerRadius="12,12,0,0"
+                    <Border Background="Transparent" Padding="16,12" Cursor="Hand" CornerRadius="12,12,0,0"
                             Tag="{Binding}" MouseLeftButtonUp="OtherCard_Toggle" ToolTip="Show / hide details">
                       <DockPanel>
-                        <TextBlock DockPanel.Dock="Right" Text="{Binding Chevron}" FontFamily="{StaticResource Icons}" FontSize="12"
-                                   Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="10,0,2,0" />
-                        <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Visibility="{Binding PillVisibility}" Click="OtherAction_Click" Margin="6,0,0,0" />
-                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" Padding="2,3" Margin="0,0,6,0" Background="Transparent"
+                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Text.Chevron}" local:Motion.Turn="{Binding Expanded}" Margin="12,0,0,0" />
+                        <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Visibility="{Binding PillVisibility}" Click="OtherAction_Click" />
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" Padding="2,3" Margin="0,0,8,0" Background="Transparent"
                                 ToolTip="{Binding SourceTip}" AutomationProperties.Name="{Binding SourceTip}">
                           <Grid>
-                            <Image Source="{Binding SourceImage}" Width="19" Height="19" Visibility="{Binding SourceImageVis}"
+                            <Image Source="{Binding SourceImage}" Width="20" Height="20" Visibility="{Binding SourceImageVis}"
                                    RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
                             <Path Data="{Binding SourceGeometry}" Fill="{Binding SourceGlyphBrush}" Width="18" Height="18" Stretch="Uniform"
                                   Visibility="{Binding SourceGeoVis}" SnapsToDevicePixels="False" />
-                            <TextBlock Text="{Binding SourceChip}" Foreground="{Binding SourceFg}" FontSize="11.5" FontWeight="SemiBold" Margin="2,0" Visibility="{Binding SourceChipVis}" />
+                            <TextBlock Text="{Binding SourceChip}" Foreground="{Binding SourceFg}" FontSize="12" Margin="2,0" Visibility="{Binding SourceChipVis}" />
                           </Grid>
                         </Border>
-                        <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Letter}" FontWeight="Bold" FontSize="14" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Border Width="36" Height="36" CornerRadius="{StaticResource Radius.ControlLg}" Background="{StaticResource Brush.Overlay.Chip}" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Letter}" FontSize="15" Foreground="{StaticResource Brush.Text.Secondary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
-                        <StackPanel Margin="10,0,8,0" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding SubtitleTip}" />
+                        <StackPanel Margin="12,0,8,0" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Secondary}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding SubtitleTip}" />
                         </StackPanel>
                       </DockPanel>
                     </Border>
-                    <TextBlock Text="{Binding VersionLine}" Visibility="{Binding VersionVisibility}" FontSize="12" Margin="54,0,14,10" ToolTip="{Binding VersionLine}" TextTrimming="CharacterEllipsis" />
-                    <ProgressBar Style="{StaticResource ThinProgress}" Margin="12,0,12,8" Maximum="1" Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
-                    <StackPanel Visibility="{Binding SuggestVisibility}" Margin="52,-2,12,10">
-                      <TextBlock Text="{Binding SuggestText}" FontSize="12" Foreground="{StaticResource Accent}" TextWrapping="Wrap" />
-                      <TextBlock Text="{Binding SuggestHint}" FontSize="11" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,1,0,4" />
+                    <TextBlock Text="{Binding VersionLine}" Visibility="{Binding VersionVisibility}" Style="{StaticResource Text.Body}" Margin="64,-4,16,12" ToolTip="{Binding VersionLine}" TextTrimming="CharacterEllipsis" />
+                    <ProgressBar Style="{StaticResource ThinProgress}" Margin="16,0,16,12" Maximum="1" Value="{Binding Progress}" Visibility="{Binding BusyVisibility}" />
+                    <StackPanel Visibility="{Binding SuggestVisibility}" Margin="64,-4,16,12">
+                      <TextBlock Text="{Binding SuggestText}" Style="{StaticResource Text.Body}" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding SuggestHint}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,2,0,8" />
                       <StackPanel Orientation="Horizontal">
-                        <Button Style="{StaticResource SecondaryButton}" Content="Use this" Height="26" Padding="12,0" FontSize="11.5" Tag="{Binding}" Click="UseSuggestion_Click" />
-                        <Button Style="{StaticResource GhostButton}" Content="Not this" FontSize="11.5" Tag="{Binding}" Click="RejectSuggestion_Click" />
+                        <Button Style="{StaticResource Button.S}" Content="Use this" Tag="{Binding}" Click="UseSuggestion_Click" />
+                        <Button Style="{StaticResource GhostButton}" Content="Not this" Margin="4,0,0,0" Tag="{Binding}" Click="RejectSuggestion_Click" />
                       </StackPanel>
                     </StackPanel>
-                    <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="52,-2,12,10" />
+                    <TextBlock Text="{Binding Message}" Visibility="{Binding MessageVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="64,-4,16,12" />
 
-                    <StackPanel Visibility="{Binding ExpandedVisibility}" Margin="12,0,12,12">
-                      <Border Height="1" Background="{StaticResource Line}" Margin="0,2,0,10" />
-                      <TextBlock Text="{Binding VersionLine}" FontSize="12" Margin="0,0,0,6" />
-                      <TextBlock Text="{Binding Notes}" Visibility="{Binding NotesVisibility}" FontSize="12" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                      <TextBlock Text="{Binding FolderList}" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                      <TextBlock Text="{Binding DevNote}" Visibility="{Binding DevVisibility}" FontSize="12" Foreground="{StaticResource Gold}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                      <TextBlock Text="{Binding LinkedTo}" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                      <StackPanel Visibility="{Binding ChoiceVisibility}" Margin="0,2,0,8">
-                        <TextBlock Text="No download is marked for WoW Forever. Pick one by hand - Classic / Era builds were made for another client and may not work." FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,0,0,4" />
-                        <ComboBox Style="{StaticResource Dropdown}" ItemsSource="{Binding Choices}" Tag="{Binding}" SelectionChanged="Choice_Changed" />
+                    <Border Visibility="Collapsed" local:Motion.Expand="{Binding Expanded}" Padding="16,0,16,16">
+                      <StackPanel>
+                        <Border Height="1" Background="{StaticResource Brush.Divider}" Margin="0,0,0,12" />
+                        <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding Notes}" Visibility="{Binding NotesVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding FolderList}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding DevNote}" Visibility="{Binding DevVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Warn}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding LinkedTo}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <StackPanel Visibility="{Binding ChoiceVisibility}" Margin="0,0,0,8">
+                          <TextBlock Text="No download is marked for WoW Forever. Pick one by hand - Classic / Era builds were made for another client and may not work." Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                          <ComboBox Style="{StaticResource Dropdown}" ItemsSource="{Binding Choices}" Tag="{Binding}" SelectionChanged="Choice_Changed" />
+                        </StackPanel>
+                        <WrapPanel Margin="-8,0,0,0">
+                          <Button Style="{StaticResource GhostButton}" Content="Open folder" Tag="{Binding}" Click="OpenAddonFolder_Click" />
+                          <Button Style="{StaticResource GhostButton}" Content="{Binding WebsiteText}" Visibility="{Binding WebsiteVisibility}" Tag="{Binding WebsiteUrl}" Click="OpenLink_Click" />
+                          <Button Style="{StaticResource GhostButton}" Content="Open on CurseForge" Visibility="{Binding CurseVisibility}" Tag="{Binding CurseUrl}" Click="OpenLink_Click" />
+                          <Button Style="{StaticResource GhostButton}" Content="Open in CurseForge" Visibility="{Binding CfVisibility}" Click="OpenCf_Click" />
+                          <Button Style="{StaticResource GhostButton}" Content="Open on Wago" Visibility="{Binding WagoVisibility}" Tag="{Binding WagoUrl}" Click="OpenLink_Click" />
+                          <Button Style="{StaticResource GhostButton}" Content="Roll back" Visibility="{Binding RollbackVisibility}" Tag="{Binding}" Click="Rollback_Click" ToolTip="Put the previous version back (the hub keeps the last 2)" />
+                          <Button Style="{StaticResource GhostButton}" Content="Unlink source" Visibility="{Binding UnlinkVisibility}" Tag="{Binding}" Click="Unlink_Click" />
+                        </WrapPanel>
+                        <DockPanel Visibility="{Binding LinkVisibility}" Margin="0,8,0,0">
+                          <Button DockPanel.Dock="Right" Style="{StaticResource Button.M}" Content="Link" Margin="8,0,0,0" Tag="{Binding}" Click="LinkSource_Click" />
+                          <TextBox Style="{StaticResource Input}" Height="32" Tag="Paste a GitHub or WoWInterface link" FontSize="12"
+                                   Text="{Binding LinkInput, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
                       </StackPanel>
-                      <WrapPanel Margin="-8,0,0,0">
-                        <Button Style="{StaticResource GhostButton}" Content="Open folder" FontSize="11.5" Tag="{Binding}" Click="OpenAddonFolder_Click" />
-                        <Button Style="{StaticResource GhostButton}" Content="{Binding WebsiteText}" FontSize="11.5" Visibility="{Binding WebsiteVisibility}" Tag="{Binding WebsiteUrl}" Click="OpenLink_Click" />
-                        <Button Style="{StaticResource GhostButton}" Content="Open on CurseForge" FontSize="11.5" Visibility="{Binding CurseVisibility}" Tag="{Binding CurseUrl}" Click="OpenLink_Click" />
-                        <Button Style="{StaticResource GhostButton}" Content="Open in CurseForge" FontSize="11.5" Visibility="{Binding CfVisibility}" Click="OpenCf_Click" />
-                        <Button Style="{StaticResource GhostButton}" Content="Open on Wago" FontSize="11.5" Visibility="{Binding WagoVisibility}" Tag="{Binding WagoUrl}" Click="OpenLink_Click" />
-                        <Button Style="{StaticResource GhostButton}" Content="Roll back" FontSize="11.5" Visibility="{Binding RollbackVisibility}" Tag="{Binding}" Click="Rollback_Click" ToolTip="Put the previous version back (the hub keeps the last 2)" />
-                        <Button Style="{StaticResource GhostButton}" Content="Unlink source" FontSize="11.5" Visibility="{Binding UnlinkVisibility}" Tag="{Binding}" Click="Unlink_Click" />
-                      </WrapPanel>
-                      <DockPanel Visibility="{Binding LinkVisibility}" Margin="0,6,0,0">
-                        <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Link" Height="30" Padding="14,0" FontSize="12" Margin="8,0,0,0" Tag="{Binding}" Click="LinkSource_Click" />
-                        <TextBox Style="{StaticResource Input}" Tag="Paste a GitHub or WoWInterface link" FontSize="12"
-                                 Text="{Binding LinkInput, UpdateSourceTrigger=PropertyChanged}" />
-                      </DockPanel>
-                    </StackPanel>
+                    </Border>
                   </StackPanel>
-                </Border>
+                </ContentControl>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>

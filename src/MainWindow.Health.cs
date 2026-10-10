@@ -42,13 +42,13 @@ namespace ElansAddonHub
             int n = rep.NewTotal;
             var res = Application.Current.Resources;
             Brush B(string k) => (Brush)res[k];
-            string text; Brush fore, edge;
-            if (!rep.AnyData) { text = "Health –"; fore = B("TextDim"); edge = B("Line"); }
-            else if (n > 0) { text = "Health ⚠ " + n; fore = B("Danger"); edge = B("Danger"); }
-            else { text = "Health ✓"; fore = B("Accent"); edge = B("Line"); }
+            string text; Brush fore, fill;
+            if (!rep.AnyData) { text = "Health –"; fore = B("Brush.Text.Secondary"); fill = B("Brush.Overlay.Chip"); }
+            else if (n > 0) { text = "Health ⚠ " + n; fore = B("Brush.Danger"); fill = B("Brush.Danger.Tint"); }
+            else { text = "Health ✓"; fore = B("Brush.Success"); fill = B("Brush.Success.Tint"); }
             HealthChipText.Text = text;
             HealthChipText.Foreground = fore;
-            HealthChip.BorderBrush = edge;
+            HealthChip.Background = fill;
             var tip = new System.Text.StringBuilder("Addon health - click for details");
             if (!rep.AnyData) tip.Append("\nNo saved variables yet: log in with an Elan addon, then /reload once.");
             foreach (var h in rep.Addons)
