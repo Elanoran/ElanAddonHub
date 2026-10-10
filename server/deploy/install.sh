@@ -2,7 +2,8 @@
 # Install or update the Lodge server on Ubuntu (systemd). Safe to run again for updates.
 #   git clone https://github.com/Elanoran/ElanAddonHub /opt/lodge-src
 #   sudo /opt/lodge-src/server/deploy/install.sh
-# Updates later:  cd /opt/lodge-src && sudo git pull && sudo server/deploy/install.sh
+# Updates later:  sudo lodge-update   (backup, fast-forward, install, health check, automatic rollback)
+#   (this script installs lodge-update, lodge-backup and the daily backup timer; run it by hand the first time)
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -41,6 +42,8 @@ chmod 640 "$ENV_FILE"
 # personal invite codes live in the data folder (the hub's Guild Master panel edits them);
 # 1.x kept them in /etc/lodge/codes - move them once
 install -m 755 "$REPO_DIR/server/deploy/lodge-admin" /usr/local/bin/lodge-admin
+install -m 755 "$REPO_DIR/server/deploy/lodge-backup" /usr/local/bin/lodge-backup
+install -m 755 "$REPO_DIR/server/deploy/lodge-update" /usr/local/bin/lodge-update
 CODES="$DATA_DIR/codes"
 if [ -f /etc/lodge/codes ] && [ ! -f "$CODES" ]; then
   mv /etc/lodge/codes "$CODES"
@@ -58,7 +61,13 @@ fi
 
 # only the main unit file is replaced: drop-ins in /etc/systemd/system/lodge.service.d/ are left alone
 install -m 644 "$REPO_DIR/server/deploy/lodge.service" /etc/systemd/system/lodge.service
+# daily backup (04:15 + random delay). The archives hold the invite codes: root-only folder and files.
+install -d -m 700 -o root -g root /var/backups/lodge
+chmod 700 /var/backups/lodge
+install -m 644 "$REPO_DIR/server/deploy/lodge-backup.service" /etc/systemd/system/lodge-backup.service
+install -m 644 "$REPO_DIR/server/deploy/lodge-backup.timer" /etc/systemd/system/lodge-backup.timer
 systemctl daemon-reload
+systemctl enable --now lodge-backup.timer >/dev/null
 systemctl enable lodge >/dev/null
 systemctl restart lodge
 

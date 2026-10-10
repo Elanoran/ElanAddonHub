@@ -1,0 +1,15 @@
+[Unit]
+Description=Lodge data backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/lodge-backup
+Nice=10
+IOSchedulingClass=idle
+# runs as root (the archives hold the invite codes and are root:root 0600); it only writes to the backup folder
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/lodge /var/lib/lodge
+NoNewPrivileges=true

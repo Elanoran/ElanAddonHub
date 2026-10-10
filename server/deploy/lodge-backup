@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# Backups of the Lodge data folder (invite codes, profiles, pins, chat history, uploaded files).
+#   sudo lodge-backup                  one archive in /var/backups/lodge/lodge-YYYYmmdd-HHMM.tar.gz (the timer runs this daily)
+#   sudo lodge-backup list             archives, newest last
+#   sudo lodge-backup restore <archive> [--yes]
+#                                      stop the service, move the current data aside, restore, fix owner/modes, start, check /health
+# Settings (environment or /etc/lodge/lodge.env):
+#   LODGE_BACKUP_FILES=1|0   include the uploaded files/ folder (default 1)
+#   LODGE_BACKUP_KEEP=14     how many archives to keep (the oldest are deleted after a successful backup)
+#   LODGE_BACKUP_DIR=/var/backups/lodge
+#
+# Safety: the archives CONTAIN THE INVITE CODES, so the folder is root:root 0700 and every archive root:root 0600.
+# The codes file is archived while holding the same flock on codes.lock that lodge-admin and the service take, so a
+# change in progress can never be captured half-written. The archive is written as .part and renamed when complete and
+# verified; rotation only runs after a good backup. Exit status is non-zero on any failure (the systemd unit shows it).
+set -euo pipefail
+umask 077
+
+ENV_FILE="${LODGE_ENV_FILE:-/etc/lodge/lodge.env}"
+envval() { [ -f "$ENV_FILE" ] && grep -E "^$1=" "$ENV_FILE" | tail -n1 | cut -d= -f2- | sed -E 's/^"(.*)"$/\1/' || true; }
+setting() { local v="${!1:-}"; [ -n "$v" ] || v="$(envval "$1")"; echo "${v:-$2}"; }
+
+DATA_DIR="$(setting LODGE_DATA /var/lib/lodge)"
+DATA_DIR="${DATA_DIR%/}"
+BACKUP_DIR="$(setting LODGE_BACKUP_DIR /var/backups/lodge)"
+KEEP="$(setting LODGE_BACKUP_KEEP 14)"
+WITH_FILES="$(setting LODGE_BACKUP_FILES 1)"
+OWNER="${LODGE_OWNER:-lodge:lodge}"
+SERVICE="${LODGE_SERVICE:-lodge}"
+SYSTEMCTL="${LODGE_SYSTEMCTL:-systemctl}"
+CURL="${LODGE_CURL:-curl}"
+CODES="${LODGE_CODES_NAME:-codes}"
+
+log() { echo "lodge-backup: $*"; }
+die() { echo "lodge-backup: ERROR: $*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "run with sudo"
+[[ "$KEEP" =~ ^[0-9]+$ ]] && [ "$KEEP" -ge 1 ] || die "LODGE_BACKUP_KEEP must be a number >= 1 (got '$KEEP')"
+[ -d "$DATA_DIR" ] || die "data folder $DATA_DIR not found"
+
+ensure_dir() {
+  mkdir -p "$BACKUP_DIR"
+  chown root:root "$BACKUP_DIR"
+  chmod 700 "$BACKUP_DIR"
+}
+
+archives() { ls -1 "$BACKUP_DIR"/lodge-*.tar.gz 2>/dev/null | LC_ALL=C sort || true; }
+
+do_backup() {
+  ensure_dir
+  local base parent stamp out part rc=0
+  base="$(basename "$DATA_DIR")"; parent="$(dirname "$DATA_DIR")"
+  stamp="${LODGE_BACKUP_STAMP:-$(date +%Y%m%d-%H%M)}"
+  out="$BACKUP_DIR/lodge-$stamp.tar.gz"
+  if [ -e "$out" ]; then   # second backup in the same minute: add seconds, then a letter (still sorts by time)
+    stamp="$stamp$(date +%S)"; out="$BACKUP_DIR/lodge-$stamp.tar.gz"
+    local c; for c in a b c d e f g h i j k l m n o p q r s t u v w x y z; do
+      [ -e "$out" ] || break
+      out="$BACKUP_DIR/lodge-$stamp$c.tar.gz"
+    done
+  fi
+  [ ! -e "$out" ] || die "$out already exists"
+  part="$out.part"
+  trap 'rm -f "$part"' EXIT
+
+  local ex=(--exclude='*.part' --exclude='*.tmp' --exclude='.*.tmp*')
+  if [ "$WITH_FILES" = "0" ]; then ex+=(--exclude="$base/files"); fi
+
+  # take the codes lock for the whole archive: no code change can be captured half-way
+  touch "$DATA_DIR/$CODES.lock" 2>/dev/null || true
+  exec 9<"$DATA_DIR/$CODES.lock" || die "cannot open $DATA_DIR/$CODES.lock"
+  flock -w 30 9 || die "could not get the codes lock within 30 s"
+  tar -C "$parent" "${ex[@]}" -czf "$part" "$base" || rc=$?
+  exec 9<&-
+  # tar exit 1 = a file changed while being read (chat history is appended live): the archive is still usable
+  if [ "$rc" -gt 1 ]; then die "tar failed (exit $rc)"; fi
+  [ "$rc" -eq 0 ] || log "warning: some files changed while being archived (normal for live chat history)"
+
+  tar -tzf "$part" >/dev/null || die "the new archive does not verify"
+  chown root:root "$part"; chmod 600 "$part"
+  mv "$part" "$out"
+  trap - EXIT
+  log "created $out ($(du -h "$out" | cut -f1)$( [ "$WITH_FILES" = "0" ] && echo ', without files/'))"
+
+  # rotation: names sort by date; keep the newest $KEEP
+  local n; n="$(archives | wc -l)"
+  if [ "$n" -gt "$KEEP" ]; then
+    archives | head -n "$((n-KEEP))" | while read -r old; do rm -f -- "$old"; log "removed old backup $old"; done
+  fi
+}
+
+health_url() {
+  local urls port base
+  urls="$(setting LODGE_URLS http://127.0.0.1:5280)"
+  port="$(echo "$urls" | sed -E 's/.*:([0-9]+).*/\1/')"
+  base="$(setting LODGE_PATHBASE "$(envval LODGE_PATH_BASE)")"
+  echo "http://127.0.0.1:${port:-5280}${base}/health"
+}
+
+do_restore() {
+  local arc="${1:-}"; shift || true
+  local yes=0; [ "${1:-}" = "--yes" ] && yes=1
+  [ -n "$arc" ] || die "usage: lodge-backup restore <archive> [--yes]"
+  [ -f "$arc" ] || { [ -f "$BACKUP_DIR/$arc" ] && arc="$BACKUP_DIR/$arc"; } || true
+  [ -f "$arc" ] || die "archive not found: $arc"
+
+  local base parent stamp aside tmp
+  base="$(basename "$DATA_DIR")"; parent="$(dirname "$DATA_DIR")"
+  # only a plain archive of the data folder: no absolute paths, no "..", everything under <base>/
+  tar -tzf "$arc" >/dev/null || die "$arc is not a readable archive"
+  if tar -tzf "$arc" | grep -qvE "^$base(/.*)?\$" || tar -tzf "$arc" | grep -qE '(^|/)\.\.(/|$)'; then
+    die "$arc does not look like a Lodge backup (unexpected paths) - refusing"
+  fi
+
+  echo "This will STOP the Lodge, move $DATA_DIR aside and restore it from"
+  echo "  $arc"
+  if [ "$yes" -ne 1 ]; then
+    read -r -p "Type 'yes' to continue: " ans || ans=""
+    [ "$ans" = "yes" ] || die "cancelled"
+  fi
+
+  tmp="$(mktemp -d "$parent/.lodge-restore.XXXXXX")"
+  trap 'rm -rf "$tmp"' EXIT
+  tar -C "$tmp" --no-same-owner --no-same-permissions -xzf "$arc" || die "extracting failed - nothing was changed"
+  [ -d "$tmp/$base" ] || die "archive has no $base/ folder - nothing was changed"
+
+  log "stopping $SERVICE"
+  "$SYSTEMCTL" stop "$SERVICE" || die "could not stop $SERVICE - nothing was changed"
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  aside="$DATA_DIR.before-restore-$stamp"
+  mv "$DATA_DIR" "$aside"
+  mv "$tmp/$base" "$DATA_DIR"
+  rmdir "$tmp" 2>/dev/null || true; trap - EXIT
+
+  # the same owner/modes install.sh and lodge-admin use
+  chown -R "$OWNER" "$DATA_DIR"
+  find "$DATA_DIR" -type d -exec chmod 750 {} +
+  find "$DATA_DIR" -type f -exec chmod 640 {} +
+  [ -f "$DATA_DIR/$CODES.lock" ] || { touch "$DATA_DIR/$CODES.lock"; chown "$OWNER" "$DATA_DIR/$CODES.lock"; }
+  chmod 660 "$DATA_DIR/$CODES.lock"
+  [ -f "$DATA_DIR/$CODES" ] || { : > "$DATA_DIR/$CODES"; chown "$OWNER" "$DATA_DIR/$CODES"; chmod 640 "$DATA_DIR/$CODES"; }
+  log "restored; the previous data is kept in $aside (delete it when you are happy - it contains invite codes)"
+
+  log "starting $SERVICE"
+  "$SYSTEMCTL" start "$SERVICE" || die "could not start $SERVICE - check: journalctl -u $SERVICE -n 50"
+  local url i; url="$(health_url)"
+  for i in $(seq 1 "${LODGE_HEALTH_TRIES:-20}"); do
+    if "$CURL" -fs "$url" 2>/dev/null | grep -q '"ok"'; then log "health check OK ($url)"; return 0; fi
+    sleep "${LODGE_HEALTH_SLEEP:-1}"
+  done
+  die "restored, but $url did not answer - check: journalctl -u $SERVICE -n 50 (old data: $aside)"
+}
+
+case "${1:-backup}" in
+  backup|run) do_backup ;;
+  list)       archives ;;
+  restore)    shift; do_restore "$@" ;;
+  -h|--help|help) sed -n '2,14p' "$0" ;;
+  *) die "unknown command '$1' (backup | list | restore <archive>)" ;;
+esac

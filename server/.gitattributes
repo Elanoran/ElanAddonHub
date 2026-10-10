@@ -1,0 +1,4 @@
+deploy/lodge-backup text eol=lf
+deploy/lodge-update text eol=lf
+deploy/*.timer text eol=lf
+deploy/*.service text eol=lf

@@ -88,6 +88,20 @@
 - `?code=` still works by default for 1.x hubs. Turn it off with `LODGE_ALLOW_QUERY_CODE=false` once everyone
   runs hub 2.x.
 
+## Backups and updates (`lodge-backup`, `lodge-update`)
+
+- Backup archives contain the invite codes, so `/var/backups/lodge` is `root:root 0700` and each archive `root:root 0600`
+  (created under `umask 077`, written as `.part` and renamed only after `tar -t` verifies it). The `lodge` user cannot
+  read them. Treat any copy of an archive like the codes file itself; off-box copies belong somewhere equally private.
+- The codes file is archived under the same `codes.lock` flock as `lodge-admin` and the service, so it is never captured
+  half-written. `*.part` / `*.tmp` leftovers are excluded.
+- `lodge-backup restore` refuses archives whose paths are not under the data folder (or contain `..`), extracts with
+  `--no-same-owner`, then sets `lodge:lodge`, dirs 0750, files 0640, `codes.lock` 0660 - the same rules as `install.sh`.
+  The replaced data is kept aside (it still holds codes) until the operator deletes it.
+- `lodge-update` is fast-forward only; rewritten upstream history needs an explicit `--reset` plus confirmation. It never
+  sends an invite code anywhere (the version is read from the source, not from an authenticated `/health`), and the
+  health probe only talks to `127.0.0.1`. Systemd drop-ins and `lodge.env` ownership are left alone.
+
 ## Tests
 
 ```bash
@@ -95,6 +109,7 @@ dotnet test server/Lodge.Tests                                   # 110 unit test
 dotnet build -c Release server/Lodge.Server
 python server/tests/security_integration.py                     # 48 checks against two local servers
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 15 checks
+sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, 41 checks
 ```
 
 All use synthetic codes and temp folders; none talks to a real lodge.
