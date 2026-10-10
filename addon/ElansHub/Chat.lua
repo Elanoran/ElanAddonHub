@@ -22,7 +22,8 @@ local function chatDB()
   return db.chat
 end
 
-function EHUB.ChatEnabled() return chatDB().emotes ~= false end
+-- off unless the user explicitly switched it on (stored value true); nil = never chosen = off
+function EHUB.ChatEnabled() return chatDB().emotes == true end
 
 local function charKey()
   local n, r = clean(UnitName("player")), clean(GetRealmName())
@@ -156,7 +157,13 @@ function EHUB.ChatSync(announce)
     end
   elseif had then
     restore(st, key)
-    if announce then say("emotes are back in General.") end
+    -- 1.7.0 migration: the tab used to be on by default. Anyone who never chose gets General back, told once.
+    if st.emotes == nil and not st.restoreNoted then
+      st.restoreNoted = true
+      say("Emotes are back in General - turn the Emotes tab on under /ehub > Chat if you liked it")
+    elseif announce then
+      say("emotes are back in General.")
+    end
   end
   return true
 end

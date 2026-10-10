@@ -346,7 +346,7 @@ SlashCmdList.ELANSHUB = function(msg)
     return
   end
   if a == "" or a == "settings" or a == "config" or a == "options" then
-    if EHUB.OpenSettings then EHUB.OpenSettings() end
+    if EHUB.OpenSettings then EHUB.OpenSettings("general") end
     return
   end
   if a == "emotes" then
@@ -361,6 +361,10 @@ SlashCmdList.ELANSHUB = function(msg)
   end
   if a == "diag" then
     if EHUB.Diag then EHUB.Diag() end
+    return
+  end
+  if a == "wheel" and b == "" and EHUB.OpenSettings then
+    EHUB.OpenSettings("wheel")
     return
   end
   if a == "wheel" and EHUB.WheelCommand then

@@ -118,7 +118,7 @@ function issecretvalue(v) return v == SECRET end
 UNKNOWNOBJECT = "Unknown"
 function DoEmote(tok, unit) EMOTES[#EMOTES + 1] = { tok, unit } if DOEMOTE_FAIL then error("blocked") end end
 function IsProtectedFunction() return false end
-C_AddOns = { GetAddOnMetadata = function() return "1.6.0" end }
+C_AddOns = { GetAddOnMetadata = function() return "1.7.0" end }
 ElansHubDB = nil
 -- chat windows: 4 slots, 1 General (docked), 2 Combat Log (docked), 3/4 unused
 NUM_CHAT_WINDOWS = 4
@@ -190,7 +190,7 @@ ok("minimap button exists", _G.ElansHubMinimapButton and _G.ElansHubMinimapButto
 local mb = _G.ElansHubMinimapButton
 Fire(mb, "OnEnter")
 local tip = table.concat(GameTooltip.lines, "\n")
-ok("tooltip title+version", tip:find("Elan's Hub") and tip:find("v1.6.0"))
+ok("tooltip title+version", tip:find("Elan's Hub") and tip:find("v1.7.0"))
 ok("tooltip strip+wheel+hints", tip:find("Pixel strip") and tip:find("Emote wheel") and tip:find("Left%-click") and tip:find("Right%-click"))
 Fire(mb, "OnDragStart") Fire(mb, "OnUpdate") Fire(mb, "OnDragStop")
 ok("minimap angle saved", type(db.minimap.angle) == "number")
@@ -204,6 +204,65 @@ ok("settings built and shown", win and win.__shown)
 ok("settings in UISpecialFrames", (function() for _, n in ipairs(UISpecialFrames) do if n == "ElansHubSettings" then return true end end end)())
 press(mb, "LeftButton") ok("left click toggles settings closed", not win.__shown)
 SlashCmdList.ELANSHUB("") ok("/ehub opens settings", win.__shown)
+-- ---- tabbed settings window
+local function nTabs() local n = 0 for _ in pairs(win.tabButtons) do n = n + 1 end return n end
+ok("window builds with 4 tabs (General, Emote wheel, Chat, About)", nTabs() == 4 and win.tabButtons.general and win.tabButtons.wheel and win.tabButtons.chat and win.tabButtons.about)
+ok("tab labels", win.tabButtons.general.text.__text == "General" and win.tabButtons.wheel.text.__text == "Emote wheel" and win.tabButtons.chat.text.__text == "Chat" and win.tabButtons.about.text.__text == "About")
+ok("/ehub opens on General", win.current == "general" and win.pages.general.__shown and not win.pages.wheel)
+ok("selected tab highlighted, others not", win.tabButtons.general.bar.__shown and not win.tabButtons.wheel.bar.__shown)
+local function findBtn(label)
+  for _, f in ipairs(ALLF) do if f.__kind == "Button" and ((f.text and f.text.__text == label) or (f.label and f.label.__text == label)) then return f end end
+end
+local function click(label) local b = findBtn(label) assert(b, label) press(b) return b end
+-- General page keys
+click("Show minimap button") ok("minimap check toggles db.minimap.hide", db.minimap.hide == true and not mb.__shown)
+click("Show minimap button") ok("... and back", not db.minimap.hide and mb.__shown)
+click("Detect my character live (pixel strip)") ok("pixel check -> db.pixel false", db.pixel == false)
+click("Detect my character live (pixel strip)") ok("pixel check back on (nil)", db.pixel == nil)
+click("/rl shortcut for /reload (after /reload)") ok("rl check -> db.rl false", db.rl == false)
+click("/rl shortcut for /reload (after /reload)") ok("rl check back on", db.rl == true)
+db.rl = nil
+-- switching tabs
+press(win.tabButtons.wheel)
+ok("click Emote wheel tab: page built+shown, General hidden", win.current == "wheel" and win.pages.wheel.__shown and not win.pages.general.__shown)
+ok("last tab remembered in db.settingsTab", db.settingsTab == "wheel")
+click("Enable emote wheel") ok("wheel enable check -> db.wheel.enabled false", db.wheel.enabled == false)
+click("Enable emote wheel") ok("... true", db.wheel.enabled == true)
+click("Lock position (unlock to drag)") ok("lock check -> unlocked", db.wheel.locked == false)
+click("Lock position (unlock to drag)") ok("... locked", db.wheel.locked == true)
+local slots = {}
+for _, f in ipairs(ALLF) do if f.slot and f.__parent == win.pages.wheel then slots[#slots + 1] = f end end
+ok("8 emote dropdowns in a 2-column grid", #slots == 8)
+local ptsOk = true
+for i, d in ipairs(slots) do local pt = d.__pts[1] if pt[4] ~= ((i - 1) % 2) * 212 then ptsOk = false end end
+ok("grid columns alternate", ptsOk)
+local pv = win.pages.wheel.preview
+ok("preview shows 8 slot icons", pv and #pv.icons == 8 and pv.icons[1].tex.__tex == E.SlotIcon(1))
+E.SetSlot(1, "FLEX") pv:Refresh() ok("preview follows slot", pv.icons[1].tex.__tex == E.SlotIcon(1) and db.wheel.emotes[1] == "FLEX")
+E.SetSlot(1, "THANK")
+do
+  local sl
+  for _, f in ipairs(ALLF) do if f.slider and f.__parent == win.pages.wheel then sl = f end end
+  sl.slider:SetValue(1.2)
+  ok("size slider -> db.wheel.scale", math.abs(db.wheel.scale - 1.2) < 0.001 and _G.ElansHubWheel.__scale == db.wheel.scale)
+  sl.slider:SetValue(1)
+end
+db.wheel.pos = { point = "CENTER", x = 9, y = 9 }
+click("Reset wheel position") ok("reset wheel position button", db.wheel.pos == nil)
+press(win.tabButtons.about)
+ok("About page built", win.current == "about" and win.pages.about.__shown and not win.pages.wheel.__shown)
+-- close, reopen: minimap click shows the last tab; /ehub shows General; /ehub wheel shows the wheel page
+win:Hide() press(mb, "LeftButton")
+ok("reopen via minimap remembers last tab (About)", win.__shown and win.current == "about")
+SlashCmdList.ELANSHUB("")
+ok("/ehub while open on another tab goes to General (no close)", win.__shown and win.current == "general")
+SlashCmdList.ELANSHUB("") ok("/ehub on General again closes", not win.__shown)
+SlashCmdList.ELANSHUB("")
+ok("/ehub reopens on General", win.__shown and win.current == "general")
+SlashCmdList.ELANSHUB("wheel") ok("/ehub wheel opens Emote wheel tab", win.__shown and win.current == "wheel")
+SlashCmdList.ELANSHUB("wheel lock") ok("/ehub wheel lock still a command", db.wheel.locked == true and win.current == "wheel")
+Fire(win, "OnDragStart") ok("window draggable", win.__moving) Fire(win, "OnDragStop")
+win:Hide()
 -- right click toggles lock
 ok("wheel locked by default", db.wheel.locked == true)
 press(mb, "RightButton") ok("right click unlocks", db.wheel.locked == false)
@@ -406,14 +465,39 @@ end
 local function has(f, g) for _, v in ipairs(f.messageTypeList) do if v == g then return true end end return false end
 local function emTab() for i = 1, 4 do if CHATWIN[i].name == "Emotes" then return _G["ChatFrame" .. i], i end end end
 ok("tooltip shows Emotes tab line", (function() Fire(mb, "OnEnter") return table.concat(GameTooltip.lines, "\n"):find("Emotes tab") end)())
+ok("emotes default OFF (stored value nil)", db.chat.emotes == nil and not E.ChatEnabled())
+ok("login sync with default off: no Emotes window, General untouched",
+  emTab() == nil and has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE") and db.chat.chars["Realm-Elan"] == nil)
+ok("... and no restore message for a fresh user", db.chat.restoreNoted == nil)
+SlashCmdList.ELANSHUB("emotes") ok("/ehub emotes prints status (off)", (CHAT[#CHAT] or ""):find("Emotes chat tab is off"))
+-- Chat page toggle
+SlashCmdList.ELANSHUB("") press(win.tabButtons.chat)
+ok("Chat page built", win.current == "chat" and win.pages.chat.__shown)
+click("Separate Emotes chat tab")
 local et, ei = emTab()
-ok("login sync created an Emotes window (default ON)", et ~= nil and ei == 3)
+ok("chat check on: db.chat.emotes == true, Emotes window created", db.chat.emotes == true and et ~= nil and ei == 3)
 ok("Emotes tab has exactly EMOTE + TEXT_EMOTE", et and #et.messageTypeList == 2 and has(et, "EMOTE") and has(et, "TEXT_EMOTE"))
 ok("General lost EMOTE + TEXT_EMOTE but kept SAY/YELL/MONSTER_EMOTE",
   not has(ChatFrame1, "EMOTE") and not has(ChatFrame1, "TEXT_EMOTE") and has(ChatFrame1, "SAY") and has(ChatFrame1, "YELL") and has(ChatFrame1, "MONSTER_EMOTE"))
 ok("record kept per character", db.chat.chars["Realm-Elan"] and db.chat.chars["Realm-Elan"].created == true and db.chat.chars["Realm-Elan"].removed[1] ~= nil)
 ok("one-time hint printed", db.chat.hinted == true)
--- idempotent
+win:Hide()
+-- explicit true stays on across syncs
+E.ChatSync()
+ok("explicit true kept on (sync does not restore)", emTab() ~= nil and not has(ChatFrame1, "EMOTE") and db.chat.restoreNoted == nil)
+-- migration: a 1.6.0 user who never chose (nil) had the tab applied by the old default
+local before = #CHAT
+db.chat.emotes = nil
+E.ChatSync()
+ok("migration nil -> default off: groups back in General", has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE"))
+ok("migration: our Emotes window closed, record cleared", emTab() == nil and db.chat.chars["Realm-Elan"] == nil)
+local said = 0
+for k = before + 1, #CHAT do if CHAT[k]:find("Emotes are back in General - turn the Emotes tab on under /ehub > Chat if you liked it", 1, true) then said = said + 1 end end
+ok("migration: one-time chat line printed", said == 1 and db.chat.restoreNoted == true)
+local n3 = #CHAT E.ChatSync() E.ChatSync()
+ok("migration happens once (no repeat message, nothing changes)", #CHAT == n3 and emTab() == nil)
+-- idempotent when on
+SlashCmdList.ELANSHUB("emotes on")
 local n = #CHATLOG
 E.ChatSync()
 SlashCmdList.ELANSHUB("emotes on")
@@ -445,7 +529,7 @@ ok("record says not created by us", db.chat.chars["Realm-Elan"].created == false
 SlashCmdList.ELANSHUB("emotes off")
 ok("disable: reused window left open, General restored", CHATWIN[3].name == "Emotes" and has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE"))
 -- per-character: another character has its own record
-db.chat.emotes = nil
+db.chat.emotes = true
 local oldName = UnitName
 function UnitName(u) if u == "player" then return "Otto" end return oldName(u) end
 CHATWIN[3].name = "" ChatFrame3.messageTypeList = {} ChatFrame3.isDocked = nil

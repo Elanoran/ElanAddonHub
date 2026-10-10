@@ -343,6 +343,7 @@ function EHUB.SetSlot(i, token)
   EHUB.RefreshWheel()
 end
 function EHUB.GetSlot(i) return slotToken(i) end
+function EHUB.SlotIcon(i) local e = BY_TOKEN[slotToken(i)] return e and e[3] end
 
 -- ------------------------------------------------------------ /ehub diag (never plays an emote)
 local function pc(fn, ...)

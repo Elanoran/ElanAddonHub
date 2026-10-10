@@ -12,7 +12,7 @@ UI.C = {
   border = { 1, 1, 1, 0.08 }, borderHi = { 0.67, 0.83, 0.45, 0.55 }, accent = { 0.67, 0.83, 0.45, 1 },
   gold = { 1, 0.82, 0.3, 1 }, text = { 0.92, 0.92, 0.90, 1 }, textDim = { 0.60, 0.63, 0.62, 1 },
   textFaint = { 0.42, 0.45, 0.45, 1 }, good = { 0.35, 0.95, 0.40, 1 }, bad = { 1, 0.38, 0.32, 1 },
-  warn = { 1, 0.62, 0.2, 1 },
+  warn = { 1, 0.62, 0.2, 1 }, accentDim = { 0.67, 0.83, 0.45, 0.16 },
 }
 local C = UI.C
 
@@ -257,4 +257,33 @@ function UI.Header(parent, text)
   line:SetPoint("TOPLEFT", fs, "BOTTOMLEFT", 0, -3)
   line:SetPoint("RIGHT", parent, "RIGHT", -16, 0)
   return fs
+end
+
+-- vertical/horizontal colour gradient (both the modern and the old API, never errors)
+function UI.Gradient(tex, orientation, c1, c2)
+  if tex.SetGradient and CreateColor then
+    local ok = pcall(tex.SetGradient, tex, orientation, CreateColor(c1[1], c1[2], c1[3], c1[4] or 1), CreateColor(c2[1], c2[2], c2[3], c2[4] or 1))
+    if ok then return end
+  end
+  if tex.SetGradientAlpha then
+    pcall(tex.SetGradientAlpha, tex, orientation, c1[1], c1[2], c1[3], c1[4] or 1, c2[1], c2[2], c2[3], c2[4] or 1)
+  end
+end
+
+-- framed icon (size x size). texture = full path or a bare name from the Icons folder
+function UI.Icon(parent, size, texture)
+  local holder = CreateFrame("Frame", nil, parent)
+  holder:SetSize(size, size)
+  UI.Skin(holder, { 0, 0, 0, 0.6 }, { 0, 0, 0, 1 })
+  local t = holder:CreateTexture(nil, "ARTWORK")
+  t:SetPoint("TOPLEFT", 1, -1)
+  t:SetPoint("BOTTOMRIGHT", -1, 1)
+  t:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  holder.tex = t
+  function holder:SetIcon(name)
+    if type(name) == "string" and not name:find("\\", 1, true) then name = "Interface\\Icons\\" .. name end
+    t:SetTexture(name or "Interface\\Icons\\INV_Misc_QuestionMark")
+  end
+  holder:SetIcon(texture)
+  return holder
 end
