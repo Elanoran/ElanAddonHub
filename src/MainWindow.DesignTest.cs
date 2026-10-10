@@ -111,9 +111,12 @@ namespace ElansAddonHub
             others[1].Expanded = false;
             await Task.Delay(300);
             ShowTab("settings");
-            SettingsPage.Show("general");
-            await Task.Delay(500);
-            SnapshotScaled(System.IO.Path.Combine(dir, $"d5-settings-{tag}.png"), scale);
+            foreach (var sec in new[] { "general", "addons", "lodge", "privacy", "voice", "overlay", "notify", "about" })
+            {
+                SettingsPage.Show(sec);
+                await Task.Delay(sec == "about" ? 1200 : 450);
+                SnapshotScaled(System.IO.Path.Combine(dir, $"s-{sec}-{tag}.png"), scale);
+            }
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), "design shots done " + tag);
             Quit();
         }

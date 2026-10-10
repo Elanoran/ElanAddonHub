@@ -148,7 +148,7 @@ namespace ElansAddonHub
         public void Show(string section)
         {
             var nav = section == "folder" ? NavGeneral : section == "addons" ? NavAddons : section == "lodge" ? NavLodge : section == "profile" ? NavProfile : section == "voice" ? NavVoice : section == "privacy" ? NavPrivacy
-                    : section == "overlay" ? NavOverlay : section == "gm" ? NavGm : section == "about" ? NavAbout : NavGeneral;
+                    : section == "overlay" ? NavOverlay : section == "notify" ? NavNotify : section == "gm" ? NavGm : section == "about" ? NavAbout : NavGeneral;
             nav.IsChecked = true;
             RefreshSection();
         }
