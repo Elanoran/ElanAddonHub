@@ -33,6 +33,10 @@ namespace ElansAddonHub.Lodge
             };
         }
 
+        // the transparent margin around the cards that holds Elevation.2's shadow (see ToastWindow.xaml)
+        const double ShadowSide = 40, ShadowTop = 32, ShadowBottom = 52;
+        static int Px(double dip, double scale) => (int)Math.Round(dip * scale);
+
         // corner: tl | tr | bl | br
         public void Place(IntPtr near, string corner)
         {
@@ -42,8 +46,9 @@ namespace ElansAddonHub.Lodge
             var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
             int w = (int)(ActualWidth * dpi.DpiScaleX), h = (int)(ActualHeight * dpi.DpiScaleY);
             bool right = corner == "tr" || corner == "br", bottom = corner == "bl" || corner == "br";
-            int x = right ? area.Right - w - 14 : area.Left + 14;
-            int y = bottom ? area.Bottom - h - 48 : area.Top + 40;
+            // the card sits 16 px from the screen edge (40 from the top, 48 above the bottom): minus the shadow margin around the card
+            int x = right ? area.Right - w - Px(16 - ShadowSide, dpi.DpiScaleX) : area.Left + Px(16 - ShadowSide, dpi.DpiScaleX);
+            int y = bottom ? area.Bottom - h - Px(48 - ShadowBottom, dpi.DpiScaleY) : area.Top + Px(40 - ShadowTop, dpi.DpiScaleY);
             SetWindowPos(hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
         }
     }

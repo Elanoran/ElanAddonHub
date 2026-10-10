@@ -40,6 +40,8 @@ namespace ElansAddonHub
             guide = new WelcomeGuide(host);
             GuideHost.Child = guide;
             GuideHost.Visibility = Visibility.Visible;
+            // the page dims in with a fade (Standard); the card itself opens with Motion.DialogIn (see WelcomeGuide)
+            if (Motion.Enabled) GuideHost.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, Motion.Standard) { EasingFunction = Motion.EaseOut });
         }
 
         void CloseGuide(bool finished)
@@ -47,6 +49,7 @@ namespace ElansAddonHub
             settings.WelcomeDone = true;
             SettingsStore.Save(settings);
             SettingsStore.Fresh = false;
+            GuideHost.BeginAnimation(OpacityProperty, null);
             GuideHost.Visibility = Visibility.Collapsed;
             GuideHost.Child = null;
             guide = null;

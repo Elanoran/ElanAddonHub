@@ -30,7 +30,12 @@ namespace ElansAddonHub.Lodge
         string text, title;
         int count = 1;
         double opacity;
-        public string Text { get => text; set => Set(ref text, value); }
+        double slide;
+        public string Text { get => text; set { if (Set(ref text, value)) Raise(nameof(Preview)); } }
+        // the body is at most 2 lines: cut long messages at a word boundary
+        public string Preview => Text != null && Text.Length > PreviewMax ? Text.Substring(0, PreviewMax).TrimEnd() + "…" : Text;
+        const int PreviewMax = 96;
+        public double Slide { get => slide; set => Set(ref slide, value); }   // px: enter 8 -> 0 (up), exit 0 -> 4 (down)
         public string Title { get => title; set => Set(ref title, value); }
         public int Count { get => count; set => Set(ref count, value); }
         public double Opacity { get => opacity; set => Set(ref opacity, value); }
@@ -68,7 +73,9 @@ namespace ElansAddonHub.Lodge
     {
         public static readonly TimeSpan Stay = TimeSpan.FromSeconds(6);
         public const int Max = 3;
-        const double FadeIn = 0.25, FadeOut = 0.45;
+        // seconds, from the Motion durations (instant when Windows animations are off): in = Standard, out = twice Emphasized (calm exit)
+        static double FadeIn => Motion.Enabled ? Motion.StandardMs / 1000.0 : 0.001;
+        static double FadeOut => Motion.Enabled ? Motion.EmphasizedMs * 2 / 1000.0 : 0.001;
 
         readonly Settings settings;
         public Func<DateTime> Clock = () => DateTime.UtcNow;
@@ -157,7 +164,10 @@ namespace ElansAddonHub.Lodge
             {
                 if (now >= v.Expires) { Visible.Remove(v); continue; }
                 double age = (now - v.Born).TotalSeconds, left = (v.Expires - now).TotalSeconds;
-                v.Opacity = Math.Max(0, Math.Min(1, Math.Min(age / FadeIn, left / FadeOut)));
+                double tin = Math.Max(0, Math.Min(1, age / FadeIn)), tout = Math.Max(0, Math.Min(1, left / FadeOut));
+                double enter = 1 - Math.Pow(1 - tin, 3), leave = Math.Pow(1 - tout, 3);   // ease-out in, ease-in out (cubic, as Motion.EaseOut / EaseIn)
+                v.Opacity = Math.Min(enter, tout);
+                v.Slide = Motion.Enabled ? (1 - enter) * 8 + leave * 4 : 0;
             }
         }
     }

@@ -5,21 +5,26 @@
         Title="Lodge toasts" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False" ResizeMode="NoResize"
         SizeToContent="WidthAndHeight" FontFamily="Segoe UI" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
-  <!-- small dark cards over the game. Click-through and never active (see code). -->
-  <ItemsControl x:Name="Cards" Margin="8" MinWidth="300" MaxWidth="340">
+  <!-- DESIGN 8: a toast is an overlay (elevation 2): Surface3, hairline edge, radius 12, 16,12 padding, avatar + title / body.
+       Click-through and never active (see code). The outer margin (ToastWindow.ShadowL/T/R/B) holds the shadow; Place() compensates for it.
+       Enter = fade + 8 px slide up, exit = fade + 4 px down: ToastCenter.Tick drives Opacity / Slide through Motion durations. -->
+  <ItemsControl x:Name="Cards" Margin="40,32,40,52" MinWidth="320" MaxWidth="360">
     <ItemsControl.ItemTemplate>
       <DataTemplate>
-        <Border Opacity="{Binding Opacity}" Background="#F0141719" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="10" Padding="10,8" Margin="0,0,0,6">
-          <DockPanel>
-            <local:AvatarView DockPanel.Dock="Left" Width="32" Height="32" VerticalAlignment="Top" Margin="0,1,12,0" />
-            <StackPanel>
+        <Border Opacity="{Binding Opacity}" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Edge}" BorderThickness="1"
+                CornerRadius="{StaticResource Radius.Card}" Padding="{StaticResource Pad.Row}" Margin="0,0,0,12" Effect="{StaticResource Elevation.2}">
+          <Border.RenderTransform><TranslateTransform Y="{Binding Slide}" /></Border.RenderTransform>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <local:AvatarView Width="32" Height="32" VerticalAlignment="Top" Margin="0,0,12,0" />
+            <StackPanel Grid.Column="1">
               <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding Kicker}" FontSize="9.5" Foreground="#8A9199" VerticalAlignment="Center" Margin="8,0,0,0" />
-                <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" Foreground="{Binding NameBrush}" TextTrimming="CharacterEllipsis" />
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Kicker}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                <TextBlock Text="{Binding Title}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding NameBrush}" TextTrimming="CharacterEllipsis" />
               </DockPanel>
-              <TextBlock Text="{Binding Text}" FontSize="12" Foreground="#D8DCE0" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+              <TextBlock Text="{Binding Preview}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" MaxHeight="32" Margin="0,2,0,0" />
             </StackPanel>
-          </DockPanel>
+          </Grid>
         </Border>
       </DataTemplate>
     </ItemsControl.ItemTemplate>
