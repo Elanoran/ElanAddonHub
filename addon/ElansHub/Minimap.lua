@@ -63,6 +63,9 @@ local function initMinimap()
     local px = EHUB.PixelsOn and EHUB.PixelsOn()
     Tip.Pair("Pixel strip", px and "on" or "off", px and "good" or "textDim")
     Tip.Pair("Emote wheel", w.enabled and (w.locked and "on, locked" or "on, unlocked") or "off", w.enabled and "good" or "textDim")
+    local cs, con = "off", false
+    if EHUB.ChatStatus then cs, con = EHUB.ChatStatus() end
+    Tip.Pair("Emotes tab", cs, con and "good" or "textDim")
     Tip.Action("Left-click", "settings")
     Tip.Action("Right-click", "lock / move emote wheel")
     Tip.Show()

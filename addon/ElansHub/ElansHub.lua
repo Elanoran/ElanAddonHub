@@ -349,6 +349,16 @@ SlashCmdList.ELANSHUB = function(msg)
     if EHUB.OpenSettings then EHUB.OpenSettings() end
     return
   end
+  if a == "emotes" then
+    if (b == "on" or b == "off") and EHUB.ChatSetEnabled then
+      EHUB.ChatSetEnabled(b == "on")
+      if EHUB.RefreshSettings then EHUB.RefreshSettings() end
+    else
+      print("|cffabd473Elan's Hub|r: separate Emotes chat tab is " .. (EHUB.ChatStatus and (EHUB.ChatStatus()) or "?")
+        .. " (/ehub emotes on|off).")
+    end
+    return
+  end
   if a == "diag" then
     if EHUB.Diag then EHUB.Diag() end
     return

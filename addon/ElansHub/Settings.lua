@@ -8,7 +8,7 @@ local widgets = {}
 local function build()
   win = CreateFrame("Frame", "ElansHubSettings", UIParent)
   EHUB.settings = win
-  win:SetSize(380, 600)
+  win:SetSize(380, 630)
   win:SetPoint("CENTER", 0, 40)
   win:SetFrameStrata("DIALOG")
   win:SetMovable(true)
@@ -56,6 +56,10 @@ local function build()
   place(UI.Check(win, "/rl shortcut for /reload (after /reload)",
     function() return EHUB.DB().rl ~= false end,
     function(v) EHUB.DB().rl = v and true or false end))
+  place(UI.Check(win, "Separate Emotes chat tab",
+    function() return EHUB.ChatEnabled() end,
+    function(v) EHUB.ChatSetEnabled(v) end,
+    "Emotes (/e, /dance, the emote wheel) get their own chat tab instead of filling General. Changes only out of combat."))
   y = y - 8
 
   header("Emote wheel")
@@ -103,7 +107,7 @@ local function build()
   about:SetPoint("TOPLEFT", win, "TOPLEFT", 16, y)
   about:SetWidth(348)
   about:SetJustifyH("LEFT")
-  about:SetText("Companion for Elan's Addon Hub (Lodge presence, pixel strip, /rl, emote wheel).\nGet the Hub: github.com/Elanoran/ElanAddonHub\nCommands: /ehub, /ehub wheel on|off|lock|unlock|reset, /ehub pixel on|off, /ehub diag")
+  about:SetText("Companion for Elan's Addon Hub (Lodge presence, pixel strip, /rl, emote wheel).\nGet the Hub: github.com/Elanoran/ElanAddonHub\nCommands: /ehub, /ehub wheel on|off|lock|unlock|reset, /ehub pixel on|off, /ehub emotes on|off, /ehub diag")
 end
 
 function EHUB.RefreshSettings()

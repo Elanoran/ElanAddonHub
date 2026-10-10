@@ -30,6 +30,7 @@ function fn.SetPoint(s, ...) s.__pts[#s.__pts + 1] = { ... } end
 function fn.ClearAllPoints(s) s.__pts = {} end
 function fn.GetPoint(s) return "CENTER", nil, "CENTER", s.__x or 5, s.__y or 7 end
 function fn.SetText(s, t) s.__text = t end
+function fn.GetName(s) return s.__name end
 function fn.GetText(s) return s.__text end
 function fn.GetWidth(s) return s.__w or 140 end
 function fn.SetSize(s, w, h) s.__w = w s.__h = h end
@@ -117,8 +118,44 @@ function issecretvalue(v) return v == SECRET end
 UNKNOWNOBJECT = "Unknown"
 function DoEmote(tok, unit) EMOTES[#EMOTES + 1] = { tok, unit } if DOEMOTE_FAIL then error("blocked") end end
 function IsProtectedFunction() return false end
-C_AddOns = { GetAddOnMetadata = function() return "1.5.0" end }
+C_AddOns = { GetAddOnMetadata = function() return "1.6.0" end }
 ElansHubDB = nil
+-- chat windows: 4 slots, 1 General (docked), 2 Combat Log (docked), 3/4 unused
+NUM_CHAT_WINDOWS = 4
+CHATWIN = { { name = "General", shown = true }, { name = "Combat Log", shown = true }, { name = "" }, { name = "" } }
+CHATLOG = {}
+for i = 1, 4 do
+  local cf = CreateFrame("ScrollingMessageFrame", "ChatFrame" .. i, UIParent)
+  cf.messageTypeList = {}
+  cf.isDocked = CHATWIN[i].shown and true or nil
+end
+for _, g in ipairs({ "SAY", "EMOTE", "TEXT_EMOTE", "MONSTER_EMOTE", "YELL" }) do table.insert(ChatFrame1.messageTypeList, g) end
+function GetChatWindowInfo(i) return CHATWIN[i].name end
+GENERAL_CHAT_DOCK = { DOCKED_CHAT_FRAMES = { ChatFrame1, ChatFrame2 } }
+function ChatFrame_AddMessageGroup(f, g)
+  if INCOMBAT_CHAT_CALL and InCombatLockdown() then error("protected in combat") end
+  for _, v in ipairs(f.messageTypeList) do if v == g then return end end
+  table.insert(f.messageTypeList, g) CHATLOG[#CHATLOG + 1] = "add " .. f:GetName() .. " " .. g
+end
+function ChatFrame_RemoveMessageGroup(f, g)
+  for i, v in ipairs(f.messageTypeList) do if v == g then table.remove(f.messageTypeList, i) CHATLOG[#CHATLOG + 1] = "rm " .. f:GetName() .. " " .. g return end end
+end
+function ChatFrame_RemoveAllMessageGroups(f) f.messageTypeList = {} end
+function FCF_OpenNewWindow(name)
+  for i = 1, 4 do
+    if CHATWIN[i].name == "" then
+      CHATWIN[i].name = name
+      local f = _G["ChatFrame" .. i]
+      f.messageTypeList = { "SAY", "YELL", "GUILD" } -- WoW gives a new window default groups
+      f.isDocked = true
+      CHATLOG[#CHATLOG + 1] = "open " .. name
+      return f
+    end
+  end
+end
+function FCF_Close(f)
+  for i = 1, 4 do if _G["ChatFrame" .. i] == f then CHATWIN[i].name = "" f.isDocked = nil f.messageTypeList = {} CHATLOG[#CHATLOG + 1] = "close " .. i end end
+end
 '''
 L.execute(MOCK)
 NS = L.eval("{}")
@@ -153,7 +190,7 @@ ok("minimap button exists", _G.ElansHubMinimapButton and _G.ElansHubMinimapButto
 local mb = _G.ElansHubMinimapButton
 Fire(mb, "OnEnter")
 local tip = table.concat(GameTooltip.lines, "\n")
-ok("tooltip title+version", tip:find("Elan's Hub") and tip:find("v1.5.0"))
+ok("tooltip title+version", tip:find("Elan's Hub") and tip:find("v1.6.0"))
 ok("tooltip strip+wheel+hints", tip:find("Pixel strip") and tip:find("Emote wheel") and tip:find("Left%-click") and tip:find("Right%-click"))
 Fire(mb, "OnDragStart") Fire(mb, "OnUpdate") Fire(mb, "OnDragStop")
 ok("minimap angle saved", type(db.minimap.angle) == "number")
@@ -364,6 +401,63 @@ for i = 1, 64 do
   local c = strip.__textures[i].__rgb or { 0, 0, 0 }
   STRIPDUMP[#STRIPDUMP + 1] = string.format("%d %d %d", math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5))
 end
+
+-- ================= Emotes chat tab
+local function has(f, g) for _, v in ipairs(f.messageTypeList) do if v == g then return true end end return false end
+local function emTab() for i = 1, 4 do if CHATWIN[i].name == "Emotes" then return _G["ChatFrame" .. i], i end end end
+ok("tooltip shows Emotes tab line", (function() Fire(mb, "OnEnter") return table.concat(GameTooltip.lines, "\n"):find("Emotes tab") end)())
+local et, ei = emTab()
+ok("login sync created an Emotes window (default ON)", et ~= nil and ei == 3)
+ok("Emotes tab has exactly EMOTE + TEXT_EMOTE", et and #et.messageTypeList == 2 and has(et, "EMOTE") and has(et, "TEXT_EMOTE"))
+ok("General lost EMOTE + TEXT_EMOTE but kept SAY/YELL/MONSTER_EMOTE",
+  not has(ChatFrame1, "EMOTE") and not has(ChatFrame1, "TEXT_EMOTE") and has(ChatFrame1, "SAY") and has(ChatFrame1, "YELL") and has(ChatFrame1, "MONSTER_EMOTE"))
+ok("record kept per character", db.chat.chars["Realm-Elan"] and db.chat.chars["Realm-Elan"].created == true and db.chat.chars["Realm-Elan"].removed[1] ~= nil)
+ok("one-time hint printed", db.chat.hinted == true)
+-- idempotent
+local n = #CHATLOG
+E.ChatSync()
+SlashCmdList.ELANSHUB("emotes on")
+ok("re-enable is idempotent (no window changes)", #CHATLOG == n and (function() local c = 0 for i = 1, 4 do if CHATWIN[i].name == "Emotes" then c = c + 1 end end return c == 1 end)())
+SlashCmdList.ELANSHUB("emotes") ok("/ehub emotes prints status", (CHAT[#CHAT] or ""):find("Emotes chat tab is on"))
+-- disable restores exactly
+SlashCmdList.ELANSHUB("emotes off")
+ok("disable: groups back in General", has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE"))
+ok("disable: our Emotes window closed", emTab() == nil)
+ok("disable: record cleared, setting off", db.chat.chars["Realm-Elan"] == nil and db.chat.emotes == false and not E.ChatEnabled())
+ok("disable twice is harmless", pcall(E.ChatSync) and has(ChatFrame1, "EMOTE"))
+-- combat queues
+MOCK_COMBAT = true INCOMBAT_CHAT_CALL = true
+local n2 = #CHATLOG
+SlashCmdList.ELANSHUB("emotes on")
+ok("combat: nothing touched, queued", #CHATLOG == n2 and emTab() == nil and has(ChatFrame1, "EMOTE"))
+MOCK_COMBAT = false
+evt("PLAYER_REGEN_ENABLED")
+ok("after combat: applied", emTab() ~= nil and not has(ChatFrame1, "EMOTE"))
+INCOMBAT_CHAT_CALL = false
+-- an existing "Emotes" window is reused and never closed by us
+SlashCmdList.ELANSHUB("emotes off")
+CHATWIN[3].name = "Emotes" ChatFrame3.messageTypeList = { "SAY", "GUILD" } ChatFrame3.isDocked = true
+local opened = 0 for _, l in ipairs(CHATLOG) do if l == "open Emotes" then opened = opened + 1 end end
+SlashCmdList.ELANSHUB("emotes on")
+local opened2 = 0 for _, l in ipairs(CHATLOG) do if l == "open Emotes" then opened2 = opened2 + 1 end end
+ok("existing Emotes window reused (not created again)", opened2 == opened and #ChatFrame3.messageTypeList == 2 and has(ChatFrame3, "EMOTE"))
+ok("record says not created by us", db.chat.chars["Realm-Elan"].created == false)
+SlashCmdList.ELANSHUB("emotes off")
+ok("disable: reused window left open, General restored", CHATWIN[3].name == "Emotes" and has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE"))
+-- per-character: another character has its own record
+db.chat.emotes = nil
+local oldName = UnitName
+function UnitName(u) if u == "player" then return "Otto" end return oldName(u) end
+CHATWIN[3].name = "" ChatFrame3.messageTypeList = {} ChatFrame3.isDocked = nil
+E.ChatSync()
+ok("second character gets its own record and tab", db.chat.chars["Realm-Otto"] and db.chat.chars["Realm-Otto"].created == true and emTab() ~= nil)
+-- closed tab gets recreated, and what was removed stays recorded
+CHATWIN[3].name = "" ChatFrame3.messageTypeList = {} ChatFrame3.isDocked = nil
+E.ChatSync()
+ok("closed Emotes tab recreated, restore info kept", emTab() ~= nil and db.chat.chars["Realm-Otto"].removed[1] ~= nil)
+E.ChatSetEnabled(false)
+ok("disable after recreate still restores General", has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE") and emTab() == nil)
+UnitName = oldName
 
 -- no combat log, no secure frames, no blocked
 local cl = false
