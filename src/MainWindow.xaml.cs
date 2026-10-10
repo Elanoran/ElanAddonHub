@@ -214,6 +214,8 @@ namespace ElansAddonHub
             SettingsPage.Show("general");
             var tp = await ThirdPartyTest(dir);
             tp += "\r\n" + await ViewerTest(dir);
+            var dataInside = System.IO.Path.GetFullPath(Util.DataDir).StartsWith(System.IO.Path.GetFullPath(dir).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+            tp += "\r\n" + (dataInside ? "ok   " : "FAIL ") + "isolation: data folder is inside the test dir (" + Util.DataDir + ")";
             tp += Environment.NewLine + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir);
             var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + checkAllLine + "\r\n" + tp + "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live();
 

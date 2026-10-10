@@ -18,6 +18,16 @@ namespace ElansAddonHub
             }
         }
 
+        // Self-test isolation: the data folder must be set before ANY static that reads Util.DataDir can run
+        // (Util.DataDir is static readonly; touching Util/SettingsStore/IconStore first locks in the real folder).
+        static App()
+        {
+            var a = Environment.GetCommandLineArgs();
+            var i = Array.IndexOf(a, "--selftest");
+            if (i >= 0 && i + 1 < a.Length && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_DATA")))
+                Environment.SetEnvironmentVariable("ELANSHUB_DATA", System.IO.Path.Combine(System.IO.Path.GetFullPath(a[i + 1]), "data"));
+        }
+
         Mutex single;
         EventWaitHandle showSignal;
         static bool reporting;
@@ -39,6 +49,16 @@ namespace ElansAddonHub
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            // hard guard: a self-test must never run against the real data folder
+            if (Array.IndexOf(e.Args, "--selftest") >= 0)
+            {
+                var real = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ElansAddonHub");
+                if (string.Equals(System.IO.Path.GetFullPath(Util.DataDir).TrimEnd('\\'), System.IO.Path.GetFullPath(real).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("Self-test refused: it would use the real data folder (" + real + ").", Brand.Name, MessageBoxButton.OK, MessageBoxImage.Error);
+                    Shutdown(2); return;
+                }
+            }
             base.OnStartup(e);
             // Windows animations off: every Motion.* duration becomes instant (DESIGN.md, Motion)
             if (!SystemParameters.ClientAreaAnimation)
