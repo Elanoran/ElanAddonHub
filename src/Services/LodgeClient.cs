@@ -86,6 +86,15 @@ namespace ElansAddonHub.Services
                         SetStatus(ws.CloseStatusDescription ?? "The lodge closed the connection", false);
                         return;
                     }
+                    if (ws.CloseStatus == WebSocketCloseStatus.EndpointUnavailable)
+                    {
+                        // the server is restarting (update): not an error - come back quickly (voice is rejoined by the session)
+                        if (stopped) return;
+                        SetStatus("Lodge restarting - reconnecting...", false);
+                        try { await Task.Delay(TimeSpan.FromSeconds(2)); } catch { }
+                        attempt = 0;
+                        continue;
+                    }
                 }
                 catch (Exception e)
                 {

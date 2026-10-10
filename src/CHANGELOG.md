@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.28.3
+- Lodge: when the server restarts (an update) it now says goodbye properly ("Server restarting") and the Outpost reconnects within ~2 s and puts you back in your voice room, without logging an error. Needs Lodge server 2.7.1.
+
 ## 2.28.2
 - Lodge voice: when the connection drops (network blip, server restart) you are put back into the same voice room after the reconnect, with the same mute/deafen state and no join sound. Before, you ended up in "Online".
 
