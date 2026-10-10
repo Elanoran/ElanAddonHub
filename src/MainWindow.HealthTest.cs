@@ -129,9 +129,10 @@ namespace ElansAddonHub
                 ShowTab("addons");
                 health.ReloadNow();
                 await Task.Delay(300);
-                Check("monitor: 3 errors are new at first", health.NewCount == 3 && health.ErrorCount == 3);
-                Check("chip says 'Health ⚠ 3'", HealthChipText.Text == "Health ⚠ 3", HealthChipText.Text);
-                Check("rail: red count on the Addons item", HealthBadge.Visibility == Visibility.Visible && HealthBadgeText.Text == "3" && ((string)TabAddons.ToolTip).Contains("3 new addon errors"));
+                // 3 errors, but 2 come from an older version than the installed one (fixed by the update): only 1 is new
+                Check("monitor: 3 errors listed, only the current-version one is new", health.NewCount == 1 && health.ErrorCount == 3, "new " + health.NewCount + " total " + health.ErrorCount);
+                Check("chip says 'Health ⚠ 1'", HealthChipText.Text == "Health ⚠ 1", HealthChipText.Text);
+                Check("rail: red count on the Addons item", HealthBadge.Visibility == Visibility.Visible && HealthBadgeText.Text == "1" && ((string)TabAddons.ToolTip).Contains("1 new addon error"));
                 Check("the old errors at first start give no toast (baseline)", Session.Toasts.Visible.Count == 0 && Session.Toasts.HeldCount == 0);
                 Snapshot(P("19-health-chip.png"));
 

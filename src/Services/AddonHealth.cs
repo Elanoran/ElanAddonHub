@@ -314,7 +314,9 @@ namespace ElansAddonHub.Services
         {
             foreach (var h in rep.Addons)
                 foreach (var b in h.Bugs)
-                    b.IsNew = seen == null || !seen.TryGetValue(b.Key, out var n) || b.Count > n;
+                    // an error from an older version than the installed one was most likely fixed by the update:
+                    // it stays listed (dimmed "older") but never counts as new (no badge, no toast)
+                    b.IsNew = !b.Older && (seen == null || !seen.TryGetValue(b.Key, out var n) || b.Count > n);
         }
 
         public static Dictionary<string, int> CountsOf(HealthReport rep)

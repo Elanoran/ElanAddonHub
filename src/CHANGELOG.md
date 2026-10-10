@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.28.1
+- Addon health: errors from an older version than the one installed (most likely fixed by the update) stay listed as "older" but no longer count as new - no red badge, no toast.
+
 ## 2.28.0
 - Inventory > Guild bank: a tab strip with the icon and name of every guild bank tab and how long ago you looked at it ("Mats · 4 hours ago", "Officers · not seen"); the grid is 14 x 7 like in the game. Tabs you never opened in the game say so instead of showing an empty bank. The footer shows how many tabs were seen, the guild bank money and when the shown tab was seen.
 - Search now also looks in the guild bank: results are labelled "Guild: <guild> - Tab <n>" next to the characters that carry the item.
