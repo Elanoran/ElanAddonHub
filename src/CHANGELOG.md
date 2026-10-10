@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.32.0
+- Voice changer: sound like an orc, tauren, gnome, goblin, undead or murloc in voice rooms (Settings > Voice). Includes a "Hear myself" preview.
+
 ## 2.31.1
 - Behind the scenes: the built-in self-test now always uses its own data folder and refuses to run against yours.
 
