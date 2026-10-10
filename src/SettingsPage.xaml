@@ -49,18 +49,15 @@
     </Style>
 
     <!-- section header + optional note, helper text under a control -->
-    <!-- these sit straight on the background art, so they carry a soft shadow for legibility -->
-    <DropShadowEffect x:Key="OnArt" x:Shared="False" BlurRadius="8" ShadowDepth="0" Opacity="0.9" Color="Black" />
-    <Style x:Key="Head" TargetType="TextBlock" BasedOn="{StaticResource Text.Section}"><Setter Property="Margin" Value="4,0,0,8" /><Setter Property="Effect" Value="{StaticResource OnArt}" /></Style>
-    <Style x:Key="HeadTight" TargetType="TextBlock" BasedOn="{StaticResource Text.Section}"><Setter Property="Margin" Value="4,0,0,2" /><Setter Property="Effect" Value="{StaticResource OnArt}" /></Style>
+    <Style x:Key="Head" TargetType="TextBlock" BasedOn="{StaticResource Text.Section}"><Setter Property="Margin" Value="4,0,0,8" /></Style>
+    <Style x:Key="HeadTight" TargetType="TextBlock" BasedOn="{StaticResource Text.Section}"><Setter Property="Margin" Value="4,0,0,2" /></Style>
     <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource Text.Secondary}">
       <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="MaxWidth" Value="560" />
       <Setter Property="HorizontalAlignment" Value="Left" />
       <Setter Property="Margin" Value="4,0,0,8" />
-      <Setter Property="Effect" Value="{StaticResource OnArt}" />
-    </Style>
-    <Style x:Key="PageTitle" TargetType="TextBlock" BasedOn="{StaticResource Text.Title}"><Setter Property="Margin" Value="4,0,0,16" /><Setter Property="Effect" Value="{StaticResource OnArt}" /></Style>
+      </Style>
+    <Style x:Key="PageTitle" TargetType="TextBlock" BasedOn="{StaticResource Text.Title}"><Setter Property="Margin" Value="4,0,0,16" /></Style>
 
     <!-- a card with rows: hairlines between rows, none above the first (it is clipped) -->
     <Style x:Key="Card.Rows" TargetType="ContentControl">
@@ -70,7 +67,7 @@
         <Setter.Value>
           <ControlTemplate TargetType="ContentControl">
             <Grid>
-              <Border Background="{StaticResource Brush.Card}" BorderBrush="{StaticResource Brush.Edge}" BorderThickness="1" CornerRadius="{StaticResource Radius.Card}" Effect="{StaticResource Elevation.1}" />
+              <Border Background="{StaticResource Brush.Surface1}" BorderBrush="{StaticResource Brush.Edge}" BorderThickness="1" CornerRadius="{StaticResource Radius.Card}" Effect="{StaticResource Elevation.1}" />
               <Border Padding="16,0" ClipToBounds="True"><ContentPresenter Margin="0,-1,0,0" /></Border>
             </Grid>
           </ControlTemplate>
@@ -93,7 +90,7 @@
     </Grid.ColumnDefinitions>
 
     <!-- sections -->
-    <ContentControl Style="{StaticResource Card.Group}" Margin="0" VerticalAlignment="Top">
+    <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}">
       <StackPanel Margin="8">
         <TextBlock Text="Settings" Style="{StaticResource Text.Caption}" Margin="12,8,0,8" />
         <RadioButton x:Name="NavGeneral" Style="{StaticResource Nav}" Tag="&#xE713;" Content="General" Checked="Nav_Checked" IsChecked="True" />
@@ -107,9 +104,11 @@
         <RadioButton x:Name="NavGm" Style="{StaticResource Nav}" Tag="&#xEA18;" Content="Guild Master" Checked="Nav_Checked" Visibility="Collapsed" />
         <RadioButton x:Name="NavAbout" Style="{StaticResource Nav}" Tag="&#xE946;" Content="About" Checked="Nav_Checked" />
       </StackPanel>
-    </ContentControl>
+    </Border>
 
-    <Grid Grid.Column="2">
+    <!-- the page panel: pages sit on a scrim, never directly on the hero art -->
+    <Border Grid.Column="2" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Padding="24,24,8,16">
+    <Grid>
       <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
       <!-- Profile: sticky footer with the buttons and the inline status (DataContext = ProfileEditVM). An overlay: Surface3 + hairline + elevation 2. -->
       <Border x:Name="ProfileBar" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1"
@@ -123,7 +122,7 @@
         </DockPanel>
       </Border>
       <ScrollViewer x:Name="Scroll" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
-        <Grid Margin="0,0,16,24" MaxWidth="680" HorizontalAlignment="Stretch">
+        <Grid Margin="0,0,16,8" MaxWidth="680" HorizontalAlignment="Stretch">
 
           <!-- ========== General ========== -->
           <StackPanel x:Name="SecGeneral">
@@ -188,7 +187,7 @@
               <Button Style="{StaticResource Button.M}" Content="Check for updates now" Click="CheckNow_Click" />
               <Button Style="{StaticResource Button.M}" Content="Open backups folder" Margin="8,0,0,0" Click="Backups_Click" />
             </StackPanel>
-            <TextBlock x:Name="CheckText" Effect="{StaticResource OnArt}" Style="{StaticResource Text.Secondary}" Margin="4,8,0,0" TextWrapping="Wrap" />
+            <TextBlock x:Name="CheckText" Style="{StaticResource Text.Secondary}" Margin="4,8,0,0" TextWrapping="Wrap" />
           </StackPanel>
 
           <!-- ========== Lodge ========== -->
@@ -251,14 +250,14 @@
             <!-- the form (DataContext = ProfileEditVM) -->
             <StackPanel x:Name="ProfileForm">
               <TextBlock Text="Your display name, avatar, a few words about you and your characters. Only what you choose here is shared." Style="{StaticResource Note}" Margin="4,0,0,16" />
-              <TextBlock Text="You joined as a guest: your profile is kept only until you leave the lodge." Effect="{StaticResource OnArt}" Visibility="{Binding GuestVisibility}" Style="{StaticResource Text.Secondary}"
+              <TextBlock Text="You joined as a guest: your profile is kept only until you leave the lodge." Visibility="{Binding GuestVisibility}" Style="{StaticResource Text.Secondary}"
                          Foreground="{StaticResource Brush.Warn}" TextWrapping="Wrap" Margin="4,0,0,16" />
 
               <!-- live preview -->
               <ContentControl Style="{StaticResource Card.Group}" HorizontalAlignment="Center" Margin="0,0,0,8">
                 <ContentControl Content="{Binding Card}" ContentTemplate="{StaticResource ProfileCard}" />
               </ContentControl>
-              <TextBlock Text="{Binding Hint}" Style="{StaticResource Text.Caption}" Effect="{StaticResource OnArt}" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,24" />
+              <TextBlock Text="{Binding Hint}" Style="{StaticResource Text.Caption}" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,24" />
 
               <StackPanel Visibility="{Binding DisplayVisibility}">
                 <TextBlock Text="Display name" Style="{StaticResource Head}" />
@@ -383,7 +382,7 @@
           <StackPanel x:Name="SecPrivacy" Visibility="Collapsed">
             <TextBlock Text="Privacy" Style="{StaticResource PageTitle}" />
             <TextBlock Text="What the Outpost shares, with whom, and where you can switch it off. These are the same switches as on the other pages - change one here or there." Style="{StaticResource Note}" Margin="4,0,0,4" />
-            <TextBlock x:Name="PrivacyLodgeLine" Effect="{StaticResource OnArt}" Style="{StaticResource Text.Secondary}" Margin="4,0,0,16" TextWrapping="Wrap" />
+            <TextBlock x:Name="PrivacyLodgeLine" Style="{StaticResource Text.Secondary}" Margin="4,0,0,16" TextWrapping="Wrap" />
             <TextBlock Text="Shared with your lodge" Style="{StaticResource HeadTight}" />
             <TextBlock Text="Only the people on the Lodge server you joined see this, and only while you are connected." Style="{StaticResource Note}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
@@ -585,7 +584,7 @@
                            Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0" />
               </StackPanel>
             </ContentControl>
-            <TextBlock x:Name="GmStatus" Effect="{StaticResource OnArt}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="4,0,0,12" />
+            <TextBlock x:Name="GmStatus" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="4,0,0,12" />
 
             <TextBlock Text="Members" Style="{StaticResource Head}" Margin="4,12,0,8" />
             <ContentControl Style="{StaticResource Card.Rows}">
@@ -682,11 +681,12 @@
                   <TextBlock Text="Splash and artwork" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}">Original, made for this project</TextBlock></Grid>
               </StackPanel>
             </ContentControl>
-            <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap" MaxWidth="480" Effect="{StaticResource OnArt}" HorizontalAlignment="Left" Margin="4,0,0,0"
+            <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap" MaxWidth="480" HorizontalAlignment="Left" Margin="4,0,0,0"
                        Text="World of Warcraft is a trademark of Blizzard Entertainment. Elan's Outpost is a fan project and not affiliated with Blizzard." />
           </StackPanel>
         </Grid>
       </ScrollViewer>
     </Grid>
+    </Border>
   </Grid>
 </UserControl>

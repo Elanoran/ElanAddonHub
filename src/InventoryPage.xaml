@@ -1,7 +1,9 @@
 <UserControl x:Class="ElansAddonHub.InventoryPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Grid Margin="16,4,12,12">
+  <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art -->
+  <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16,12">
+  <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
@@ -139,4 +141,5 @@
       </Grid>
     </Grid>
   </Grid>
+  </Border>
 </UserControl>

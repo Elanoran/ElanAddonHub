@@ -41,6 +41,7 @@ Rules: at most ONE semibold element per row. Hierarchy comes from size and colou
 - Accent `Brush.Accent` #ABD473 (+ `.Hover`, `.Pressed`, `.Tint`, `Brush.OnAccent` for text on it): ONLY for the primary action and for selection. Not for plain text, numbers, dividers or decoration.
 - Status, only for status: `Brush.Success` / `Warn` / `Danger` / `Info`, each with a `.Tint` (15 %) fill for chips.
 - WoW class colours: only to identify a class/character.
+- Page panel: `Brush.Scrim` (Bg at 75 %, radius Card). Pages sit on a page panel, never directly on the hero art (Settings nav + content, Inventory); cards on the panel are Surface1, inputs/segments Surface2, so no text shadows are needed.
 - Overlays (white veils, work on any surface): `Brush.Overlay.Hover` 6 %, `Pressed` 10 %, `Chip` 8 %, `Brush.Divider` 7 % hairline, selected = `Brush.Accent.Tint` 16 %.
 - `Line`/outline borders: avoid. Separate with fill, elevation or a `Brush.Divider` hairline.
 

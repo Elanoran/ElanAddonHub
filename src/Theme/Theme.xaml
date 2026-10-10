@@ -71,6 +71,8 @@
   <SolidColorBrush x:Key="Brush.Surface3" Color="{StaticResource Color.Surface3}" />
   <!-- raised cards float over the header art: almost opaque Surface1 -->
   <SolidColorBrush x:Key="Brush.Card" Color="#F016191C" />
+  <!-- the page panel (Bg at 75 %): pages sit on it, never directly on the hero art; cards on it are Surface1, inputs Surface2 -->
+  <SolidColorBrush x:Key="Brush.Scrim" Color="#BF0F1113" />
 
   <!-- text roles. Primary 14.6:1 / Secondary 5.5:1 on Surface1 (AA for body text). Tertiary is 3.8:1: icons, hints, timestamps only. -->
   <SolidColorBrush x:Key="Brush.Text.Primary" Color="{StaticResource TextColor}" />
@@ -1059,9 +1061,19 @@
 
   <!-- settings group (DESIGN 8): a raised card that does not lift on hover; rows inside are Setting.Row, separated by hairlines. The first row's hairline is
        clipped away by the wrapper pattern:  <ContentControl Style=Card.Group><Border Padding="16,0" ClipToBounds="True"><StackPanel Margin="0,-1,0,0"> rows -->
-  <Style x:Key="Card.Group" TargetType="ContentControl" BasedOn="{StaticResource Card.Raised}">
-    <Setter Property="m:Motion.Track" Value="False" />
+  <Style x:Key="Card.Group" TargetType="ContentControl">
     <Setter Property="Margin" Value="0,0,0,24" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ContentControl">
+          <Grid>
+            <Border Background="{StaticResource Brush.Surface1}" BorderBrush="{StaticResource Brush.Edge}" BorderThickness="1" CornerRadius="{StaticResource Radius.Card}" Effect="{StaticResource Elevation.1}" />
+            <ContentPresenter />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <!-- one settings row (DESIGN 8): Header = label (Body), Tag = helper text (Secondary, optional), Content = the control, right-aligned and centred.
