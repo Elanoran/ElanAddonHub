@@ -3,6 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.27.0
+- First-run guide: on a fresh install a short 4-step tour (WoW folder, addons to install with the Hub companion pre-ticked as required, join a Lodge with an invite link, tips). Skippable; open it again from Settings > About > Show welcome guide.
+- Settings > Privacy: a plain-language list of what is shared with your Lodge (character, zone, XP, automatic status, Appear offline, typing, profile) and what stays on your PC (inventory, addon health reports, CurseForge, update checks), with the switches that exist - the same settings as on the other pages.
+- Lodge server notice: owners and officers of a Lodge server that is older than the one this Outpost knows get a small dismissible note with the update command (`sudo lodge-update`) and a Copy button. Members never see it.
+- Idle hub: while WoW is not running the pixel-strip capture, the presence poll, the overlay/toast placement and the extra CurseForge/health polling are paused and resume within about 2 s when WoW starts (WoW is looked for with a cheap window check instead of a process-list scan).
+- Settings > Addons shows the CurseForge integration status ("OK (found Forever, 6 addons, checked 12 min ago)", "CurseForge not installed" or "Couldn't read CurseForge data - reason") with a Re-check button. Local files only.
+
 ## 2.26.0
 - Addon health: a "Health ok" or "Health (!) 2" chip next to the update check opens a panel with, per Elan addon, the installed version vs the last diag version, when the diag ran (in or out of combat), the errors the Bug Trap caught (count, version, first stack line, expandable) and a few diag facts (secret values, probe errors, missing APIs). Read from the SavedVariables, read-only, refreshed when WoW saves them (/reload or logout).
 - "Copy report" puts a plain-text report on the clipboard (errors, stacks, diag results) with character and guild names replaced by char1, char2 ...; "Open SavedVariables folder"; "Mark as seen".

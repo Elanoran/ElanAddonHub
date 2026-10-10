@@ -78,6 +78,7 @@
         <RadioButton x:Name="NavAddons" Style="{StaticResource Nav}" Tag="&#xEA86;" Content="Addons" Checked="Nav_Checked" />
         <RadioButton x:Name="NavLodge" Style="{StaticResource Nav}" Tag="&#xE716;" Content="Lodge" Checked="Nav_Checked" />
         <RadioButton x:Name="NavProfile" Style="{StaticResource Nav}" Tag="&#xE77B;" Content="Profile" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavPrivacy" Style="{StaticResource Nav}" Tag="&#xE72E;" Content="Privacy" Checked="Nav_Checked" />
         <RadioButton x:Name="NavVoice" Style="{StaticResource Nav}" Tag="&#xE720;" Content="Voice" Checked="Nav_Checked" />
         <RadioButton x:Name="NavOverlay" Style="{StaticResource Nav}" Tag="&#xE81E;" Content="In-game overlay" Checked="Nav_Checked" />
         <RadioButton x:Name="NavNotify" Style="{StaticResource Nav}" Tag="&#xEA8F;" Content="Notifications" Checked="Nav_Checked" />
@@ -162,6 +163,14 @@
                 <TextBlock Text="Off = the clean vector icons (default). On = the original painted pictures on the addon cards." Style="{StaticResource RowHint}" /></StackPanel>
               <CheckBox Grid.Column="1" x:Name="PaintedBox" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="General_Click"  />
             </Grid></Border>
+            <TextBlock Text="CURSEFORGE" Style="{StaticResource Group}" />
+            <Border Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="12,9" BorderBrush="{StaticResource Line}" BorderThickness="1" ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="30000">
+              <DockPanel>
+                <Button x:Name="CfRecheck" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Re-check" Height="28" Padding="14,0" FontSize="12" Margin="10,0,0,0" Click="CfRecheck_Click" />
+                <Ellipse x:Name="CfDot" DockPanel.Dock="Left" Width="9" Height="9" Fill="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,10,0" />
+                <TextBlock x:Name="CfStatusText" FontSize="12.5" TextWrapping="Wrap" VerticalAlignment="Center" />
+              </DockPanel>
+            </Border>
             <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
               <Button Style="{StaticResource SecondaryButton}" Content="Check for updates now" Click="CheckNow_Click" />
               <Button Style="{StaticResource SecondaryButton}" Content="Open backups folder" Margin="8,0,0,0" Click="Backups_Click" />
@@ -355,6 +364,101 @@
               <TextBlock Text="Your avatar and name are always visible. While you appear offline, your profile details are hidden from people who can not see you." Style="{StaticResource RowHint}" Margin="0,6,0,0" />
 
             </StackPanel>
+          </StackPanel>
+
+          <!-- ========== Privacy ========== -->
+          <StackPanel x:Name="SecPrivacy" Visibility="Collapsed">
+            <TextBlock Text="Privacy" Style="{StaticResource SectionTitle}" />
+            <TextBlock Text="What the Outpost shares, with whom, and where you can switch it off. These are the same switches as on the other pages - change one here or there." Style="{StaticResource RowHint}" Margin="0,0,0,4" MaxWidth="560" HorizontalAlignment="Left" />
+            <TextBlock x:Name="PrivacyLodgeLine" Style="{StaticResource RowHint}" Foreground="{StaticResource Accent}" Margin="0,0,0,0" />
+            <TextBlock Text="SHARED WITH YOUR LODGE" Style="{StaticResource Group}" />
+            <TextBlock Text="Only the people on the Lodge server you joined see this, and only while you are connected." Style="{StaticResource RowHint}" Margin="0,0,0,2" />
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="What I'm playing" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Your character's name, race, class and level, and that WoW is running." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PvShareGame" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Privacy_Click" />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="My zone" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="The zone or dungeon you are in. Off = no zone or instance name is sent." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PvShareZone" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Privacy_Click" />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="My XP" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Your XP percentage and whether you are rested." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PvShareXp" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Privacy_Click" />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Automatic status" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="In combat shows as Busy, the game's AFK flag as AFK. A status you chose yourself is never changed." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PvAutoStatus" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Privacy_Click" />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="AFK after 10 idle minutes" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Based on mouse and keyboard, also while you are in WoW." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PvAutoAway" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Privacy_Click" />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Appear offline right now" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Hides you from members who may not see invisible people. Your messages in channels stay visible." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PvInvisible" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Privacy_Click" />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Remember Appear offline" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Off = you are visible again every time the Outpost starts." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PvRememberInvis" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Privacy_Click" />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Typing" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="People in the same channel see &quot;... is typing&quot; while you type there. This is always on." Style="{StaticResource RowHint}" /></StackPanel>
+              <Border Grid.Column="1" CornerRadius="9" Padding="9,2,9,3" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center"><TextBlock Text="Always on" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextDim}" /></Border>
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Profile" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Display name, avatar, about text, characters - only what you fill in, and you choose who may see it (everyone or officers only)." Style="{StaticResource RowHint}" /></StackPanel>
+              <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Edit profile" VerticalAlignment="Center" Click="PrivacyProfile_Click" />
+            </Grid></Border>
+            <TextBlock Text="STAYS ON YOUR PC" Style="{StaticResource Group}" />
+            <TextBlock Text="Read and used here only. Nothing below is uploaded." Style="{StaticResource RowHint}" Margin="0,0,0,2" />
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Detect my character live" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Looks at a tiny strip of pixels in the top-left corner of the WoW window (no memory reading, nothing sent to the game). The pixels never leave your PC; the result only feeds the sharing switches above." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PvPixel" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Privacy_Click" />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Inventory" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Read from Elan's Bags' saved data on your disk. Never uploaded. Item tooltips from it show only in your own game." Style="{StaticResource RowHint}" /></StackPanel>
+              <Border Grid.Column="1" CornerRadius="9" Padding="9,2,9,3" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center"><TextBlock Text="Local only" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextDim}" /></Border>
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Addon health reports" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Read from your saved variables. Nothing is sent. &quot;Copy report&quot; only fills your clipboard (names replaced by char1, char2 ...) - you decide where to paste it." Style="{StaticResource RowHint}" /></StackPanel>
+              <Border Grid.Column="1" CornerRadius="9" Padding="9,2,9,3" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center"><TextBlock Text="Local only" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextDim}" /></Border>
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="CurseForge" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="The Outpost only reads CurseForge's local files to show its addons. Optionally it lets CurseForge refresh its own update info about once a day and when WoW starts." Style="{StaticResource RowHint}" /></StackPanel>
+              <CheckBox Grid.Column="1" x:Name="PvCfAuto" Style="{StaticResource Switch}" VerticalAlignment="Center" Click="Privacy_Click" />
+            </Grid></Border>
+            <Border Style="{StaticResource RowBox}"><Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" MaxWidth="520" HorizontalAlignment="Left"><TextBlock Text="Update checks" Style="{StaticResource RowTitle}" />
+                <TextBlock Text="Asking github.com for the Outpost's own releases, and for addons you linked: api.github.com or WoWInterface's public file list (api.mmoui.com). Plain public requests, no account or login; those sites see your IP address and the name &quot;ElansAddonHub/version&quot;, like any download." Style="{StaticResource RowHint}" /></StackPanel>
+              <Border Grid.Column="1" CornerRadius="9" Padding="9,2,9,3" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center"><TextBlock Text="Public requests" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextDim}" /></Border>
+            </Grid></Border>
           </StackPanel>
 
           <!-- ========== Voice ========== -->
@@ -585,6 +689,7 @@
             <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
               <Button Style="{StaticResource SecondaryButton}" Content="Open log folder" Click="LogFolder_Click" />
               <Button Style="{StaticResource SecondaryButton}" Content="GitHub page" Margin="8,0,0,0" Click="GitHub_Click" />
+              <Button x:Name="WelcomeButton" Style="{StaticResource SecondaryButton}" Content="Show welcome guide" Margin="8,0,0,0" Click="Welcome_Click" ToolTip="The short first-run tour" />
             </StackPanel>
             <TextBlock Text="CREDITS" Style="{StaticResource RowHint}" FontWeight="Bold" Margin="0,6,0,8" />
             <ItemsControl Margin="0,0,0,10"><ItemsControl.Items>

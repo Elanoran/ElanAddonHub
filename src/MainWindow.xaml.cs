@@ -45,7 +45,7 @@ namespace ElansAddonHub
             checkTimer.Interval = TimeSpan.FromMinutes(settings.CheckMinutes);
             checkTimer.Tick += async (s, e) => await CheckNow();
             checkTimer.Start();
-            statusTimer.Tick += (s, e) => { UpdateStatusText(); MaybeCfAuto(); RefreshRailBadges(); health?.EnsureWatchers(); };
+            statusTimer.Tick += (s, e) => StatusTick();
             statusTimer.Start();
             Loaded += async (s, e) => { if (manifest == null) await CheckNow(); };
 
@@ -85,9 +85,27 @@ namespace ElansAddonHub
             InventoryView.GoToAddons += () => ShowTab("addons");
             InventoryView.GoToSettings += () => { ShowTab("settings"); SettingsPage.Show("general"); };
             InitHealth();
+            InitWelcome();
+            WowWatch.Shared.Changed += OnWowChanged;
         }
 
         DateTime lastChatNote;
+
+        // every 30 s. Anything that only matters while the game runs is skipped while WoW is closed (see WowWatch).
+        void StatusTick()
+        {
+            UpdateStatusText(); RefreshRailBadges();
+            MaybeCfAuto();                                  // cheap: compares the cached WoW state and CurseForge's last check time
+            if (health != null && (WowWatch.Shared.Running || health.RootChanged)) health.EnsureWatchers();   // idle + same folder: nothing to look at
+        }
+
+        // WoW started or exited: resume / pause the extras, once, right away
+        void OnWowChanged(bool running)
+        {
+            if (running) { health?.EnsureWatchers(); MaybeCfAuto(); }
+            else if (wowWas != null) wowWas = false;
+            RefreshRailBadges();
+        }
 
         void Tab_Checked(object sender, RoutedEventArgs e)
         {
@@ -258,6 +276,7 @@ namespace ElansAddonHub
             result += "\r\n" + await DialogTest(dir);
             result += "\r\n" + await InventoryTest(dir);
             result += "\r\n" + await HealthTest(dir);
+            result += "\r\n" + await Round3Test(dir);
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
             Quit();
         }

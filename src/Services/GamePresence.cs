@@ -34,6 +34,7 @@ namespace ElansAddonHub.Services
 
         readonly Func<string> wowRoot;
         readonly Func<bool> pixelOn;
+        readonly WowWatch watch;
         public readonly PixelStrip Strip;
         Character held; // last character seen on the strip (kept for a while if the strip disappears)
         readonly DispatcherTimer timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -49,24 +50,35 @@ namespace ElansAddonHub.Services
         public string LastClassFile => (Current ?? last)?.ClassFile;
         public event Action Changed;
 
-        public GamePresence(Func<string> wowRoot, Func<bool> pixelOn = null)
+        public GamePresence(Func<string> wowRoot, Func<bool> pixelOn = null, WowWatch watch = null)
         {
             this.wowRoot = wowRoot;
+            this.watch = watch ?? WowWatch.Shared;
             this.pixelOn = pixelOn ?? (() => true);
             Strip = new PixelStrip(this.pixelOn);
             Strip.Changed += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(Poll));
             timer.Tick += (s, e) => Poll();
             debounce.Tick += (s, e) => { debounce.Stop(); Poll(); };
+            this.watch.Changed += running => { ApplyWow(running); Poll(); };
         }
 
-        public void Start() { Poll(); timer.Start(); Strip.Start(); }
+        public void Start() { ApplyWow(watch.Running); Poll(); }
+
+        // the poll timer and the pixel-strip capture only run while WoW does (idle hub = no capture, no 5 s poll)
+        public bool Active => timer.IsEnabled;
+        void ApplyWow(bool running)
+        {
+            if (running) { if (!timer.IsEnabled) timer.Start(); Strip.Start(); }
+            else { timer.Stop(); Strip.Pause(); }
+        }
 
         // tests: pretend this is what the strip says
         public void SetForTest(Character c, bool playing) { Current = c; Playing = playing; Changed?.Invoke(); }
 
         public void Poll()
         {
-            var playing = WowRunning(out var started);
+            DateTime started = DateTime.MinValue;
+            var playing = watch.Running && WowRunning(out started);
 
             var files = SavedVariablesFiles(wowRoot());
             Watch(files);
@@ -179,6 +191,9 @@ namespace ElansAddonHub.Services
 
         public static bool WowRunningNow() => WowRunning(out _);
 
+        // tests only (needs a test data folder): act as if WoW never runs, so the idle-CPU comparison measures the timers and not WoW itself
+        public static readonly bool IgnoreWow = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_DATA")) && Environment.GetEnvironmentVariable("ELANSHUB_IGNORE_WOW") == "1";
+
         static bool WowRunning(out DateTime started)
         {
             started = DateTime.MinValue;
@@ -190,7 +205,7 @@ namespace ElansAddonHub.Services
                     try
                     {
                         var n = p.ProcessName;
-                        if (n.StartsWith("Wow", StringComparison.OrdinalIgnoreCase)
+                        if (!IgnoreWow && n.StartsWith("Wow", StringComparison.OrdinalIgnoreCase)
                             && n.IndexOf("Voice", StringComparison.OrdinalIgnoreCase) < 0
                             && n.IndexOf("Error", StringComparison.OrdinalIgnoreCase) < 0)
                         {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -146,7 +147,7 @@ namespace ElansAddonHub
 
         public void Show(string section)
         {
-            var nav = section == "folder" ? NavGeneral : section == "addons" ? NavAddons : section == "lodge" ? NavLodge : section == "profile" ? NavProfile : section == "voice" ? NavVoice
+            var nav = section == "folder" ? NavGeneral : section == "addons" ? NavAddons : section == "lodge" ? NavLodge : section == "profile" ? NavProfile : section == "voice" ? NavVoice : section == "privacy" ? NavPrivacy
                     : section == "overlay" ? NavOverlay : section == "gm" ? NavGm : section == "about" ? NavAbout : NavGeneral;
             nav.IsChecked = true;
             RefreshSection();
@@ -200,7 +201,7 @@ namespace ElansAddonHub
             if (settings == null) return;
             var map = new (RadioButton nav, FrameworkElement sec)[]
             {
-                (NavGeneral, SecGeneral), (NavAddons, SecAddons), (NavLodge, SecLodge), (NavProfile, SecProfile), (NavVoice, SecVoice),
+                (NavGeneral, SecGeneral), (NavAddons, SecAddons), (NavLodge, SecLodge), (NavProfile, SecProfile), (NavPrivacy, SecPrivacy), (NavVoice, SecVoice),
                 (NavOverlay, SecOverlay), (NavNotify, SecNotify), (NavGm, SecGm), (NavAbout, SecAbout),
             };
             foreach (var (nav, sec) in map) sec.Visibility = nav.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
@@ -216,6 +217,8 @@ namespace ElansAddonHub
             UpdateProfileBar();
             UpdateAbout();
             if (NavGm.IsChecked == true) { GmStatus.Text = ""; session.RequestAdmin(); }
+            SyncPrivacy();
+            if (NavAddons.IsChecked == true) UpdateCfStatus();
             var c = session.Presence.Current;
             ShareGameHint.Text = (session.Presence.Playing ? "WoW is running. " : "")
                 + (c != null ? $"Friends see {c.Name}, level {c.Level} {c.Class}{(c.Zone != null ? " in " + c.Zone : "")} " + (session.Presence.Strip.Status == "ok" ? "(live)." : "(updates on /reload and logout).") + ""
@@ -314,6 +317,61 @@ namespace ElansAddonHub
             if (share != settings.ShareGameOff || zone != settings.ShareZoneOff || xp != settings.ShareXpOff) session.SendGame();
             if (px != settings.PixelOff) session.Presence.Poll();
         }
+
+        // ================================================================ CurseForge status (Settings > Addons)
+
+        public CurseForgeLocal.CfStatus CfOverrideForTest;
+        public string CfStatusTextForTest => CfStatusText.Text;
+
+        void UpdateCfStatus()
+        {
+            var st = CfOverrideForTest ?? host.CfProbe();
+            CfStatusText.Text = st.Text;
+            var res = Application.Current.Resources;
+            CfDot.Fill = (Brush)res[st.Kind == CurseForgeLocal.CfStatusKind.Ok ? "Accent" : st.Kind == CurseForgeLocal.CfStatusKind.Unreadable ? "Danger" : "TextDim"];
+            CfStatusText.ToolTip = CfRecheck.ToolTip = CurseForgeLocal.StatusTip;
+        }
+
+        async void CfRecheck_Click(object sender, RoutedEventArgs e)
+        {
+            CfStatusText.Text = "Checking...";
+            await host.RecheckCurseForge();
+            UpdateCfStatus();
+        }
+
+        // ================================================================ privacy (the switches are the same settings as on the other pages)
+
+        void SyncPrivacy()
+        {
+            if (settings == null) return;
+            PvShareGame.IsChecked = !settings.ShareGameOff; PvShareZone.IsChecked = !settings.ShareZoneOff; PvShareXp.IsChecked = !settings.ShareXpOff;
+            PvAutoStatus.IsChecked = !settings.AutoStatusOff; PvAutoAway.IsChecked = !settings.AutoAwayOff; PvPixel.IsChecked = !settings.PixelOff;
+            PvRememberInvis.IsChecked = !settings.InvisibleForget; PvCfAuto.IsChecked = settings.CfAutoCheck;
+            PvInvisible.IsChecked = session.Invisible;
+            PvInvisible.IsEnabled = session.Me != null;
+            PrivacyLodgeLine.Text = string.IsNullOrEmpty(settings.LodgeUrl) ? "You are not in a lodge, so nothing from the first group is sent anywhere."
+                : (session.Online ? "Connected to " : "Your lodge: ") + settings.LodgeUrl;
+        }
+
+        void Privacy_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading || !(sender is CheckBox cb)) return;
+            if (cb == PvInvisible) { session.SetInvisible(cb.IsChecked == true); return; }
+            CheckBox target = cb == PvShareGame ? ShareGameBox : cb == PvShareZone ? ShareZoneBox : cb == PvShareXp ? ShareXpBox : cb == PvAutoStatus ? AutoStatusBox
+                : cb == PvAutoAway ? AutoAwayBox : cb == PvPixel ? PixelBox : cb == PvRememberInvis ? RememberInvisibleBox : cb == PvCfAuto ? CfAutoBox : null;
+            if (target == null) return;
+            target.IsChecked = cb.IsChecked;
+            if (cb == PvCfAuto) General_Click(target, e); else Lodge_Click(target, e);
+        }
+
+        void PrivacyProfile_Click(object sender, RoutedEventArgs e) => Show("profile");
+        public void ScrollEndForTest() { Scroll.UpdateLayout(); Scroll.ScrollToEnd(); }
+        public Task CfRecheckForTest() { CfRecheck_Click(null, null); return Task.Delay(1500); }
+        public void WelcomeClickForTest() => Welcome_Click(null, null);
+        public bool PrivacyShowsForTest => SecPrivacy.Visibility == Visibility.Visible;
+        public void ToggleForTest(string name) { var cb = (CheckBox)FindName(name); cb.IsChecked = cb.IsChecked != true; Privacy_Click(cb, null); }
+
+        void Welcome_Click(object sender, RoutedEventArgs e) => host.ShowWelcomeGuide();
 
         // ================================================================ voice
 

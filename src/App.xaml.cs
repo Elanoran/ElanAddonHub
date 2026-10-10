@@ -48,6 +48,7 @@ namespace ElansAddonHub
             var frames = Array.IndexOf(e.Args, "--splashframes");
             if (frames >= 0 && frames + 1 < e.Args.Length) { Splash.RenderFrames(e.Args[frames + 1]); Shutdown(); return; }
             var testDir = test >= 0 && test + 1 < e.Args.Length ? e.Args[test + 1] : null;
+            if (testDir != null || e.Args.Contains("--test-selfupdate")) SettingsStore.SuppressFresh = true;
             if (testDir != null)
             {
                 // the self-test runs next to a real hub: own data folder, no single-instance check

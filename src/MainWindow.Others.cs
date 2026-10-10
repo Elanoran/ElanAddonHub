@@ -347,6 +347,14 @@ namespace ElansAddonHub
             UpdateOthersHeader();
         }
 
+        // Settings > Addons: is the CurseForge integration healthy? Local files only.
+        public CurseForgeLocal.CfStatus CfProbe()
+        {
+            var f = string.IsNullOrEmpty(settings.WowRoot) ? null : ClientFlavor();
+            return CurseForgeLocal.Probe(f == null ? null : WowLocator.AddOnsDir(settings.WowRoot, f));
+        }
+        public async Task RecheckCurseForge() { await RefreshOthers(); }
+
         bool cfChecking;
         string cfFlash;                       // "Checked just now" shown on the chip for a few seconds after a check
         System.Windows.Threading.DispatcherTimer cfFlashFade;
@@ -385,12 +393,12 @@ namespace ElansAddonHub
         void MaybeCfAuto()
         {
             if (!settings.CfAutoCheck || cfInst == null) { wowWas = null; return; }
-            var wow = GamePresence.WowRunningNow();
+            var wow = WowWatch.Shared.Running;           // the shared 2 s watcher: no process list scan here
             var started = wowWas == false && wow;
             wowWas = wow;
-            if (CurseForgeLocal.Busy || scanning || (DateTime.UtcNow - cfLastAuto).TotalHours < 2 || CurseForgeLocal.IsRunning()) return;
+            if (CurseForgeLocal.Busy || scanning || (DateTime.UtcNow - cfLastAuto).TotalHours < 2) return;
             var age = DateTime.UtcNow - cfInst.LastRefresh;
-            if (age.TotalHours > 24 || (started && age.TotalHours > 1)) { cfLastAuto = DateTime.UtcNow; _ = RunCfCheck(); }
+            if ((age.TotalHours > 24 || (started && age.TotalHours > 1)) && !CurseForgeLocal.IsRunning()) { cfLastAuto = DateTime.UtcNow; _ = RunCfCheck(); }
         }
 
         async Task InstallOther(ThirdPartyCard c)

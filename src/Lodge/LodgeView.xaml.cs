@@ -120,6 +120,7 @@ namespace ElansAddonHub.Lodge
                 MeStatus.Text = MemberVM.RoleName(s.MyRole) + " · " +
                     (s.Invisible ? "Invisible" : string.IsNullOrEmpty(s.MyNote) ? MemberVM.StatusLabel(s.MyStatus) : s.MyNote);
             }
+            UpdateServerNotice();
             AttachButton.Visibility = s.CanShareFiles ? Visibility.Visible : Visibility.Collapsed;
 
             // voice bar
@@ -146,8 +147,28 @@ namespace ElansAddonHub.Lodge
             if (ChatNote.Text.Length > 0 && DateTime.UtcNow > noteUntil) ChatNote.Text = "";
             if (ChatPanel.Visibility == Visibility.Visible && (Session.IsShownToUser?.Invoke() ?? true)) Session.MarkRead(); // only acts at the bottom
             UpdateJump();
-            UpdateOverlay();
+            // the overlay and toasts sit on top of WoW: nothing to place while it isn't running (unless they are pinned to the desktop / being previewed)
+            var st = Session.Settings;
+            if (WowWatch.Shared.Running || st.OverlayAlways || OverlayPreview || ForceOverlayForTest || ForceToastsForTest || (overlay != null && overlay.IsVisible) || (toastWin != null && toastWin.IsVisible) || Session.Toasts?.NeedsTick == true)
+                UpdateOverlay();
         }
+
+        // "Your Lodge server is on 2.5 - 2.7 is available ..." for the owner / officers of an outdated server
+        void UpdateServerNotice()
+        {
+            var show = Session != null && Session.ShowServerNotice;
+            ServerNotice.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (show) { ServerNoticeText.Text = Session.ServerNoticeText; ServerNoticeCopy.Content = "Copy command"; }
+        }
+        void ServerNoticeClose_Click(object sender, RoutedEventArgs e) => Session.DismissServerNotice();
+        void ServerNoticeCopy_Click(object sender, RoutedEventArgs e)
+        {
+            try { Clipboard.SetText(Brand.ServerUpdateCommand); ServerNoticeCopy.Content = "Copied"; } catch { }
+        }
+        public bool ServerNoticeVisibleForTest => ServerNotice.Visibility == Visibility.Visible;
+        public string ServerNoticeTextForTest => ServerNoticeText.Text;
+        public void ServerNoticeCopyForTest() => ServerNoticeCopy_Click(null, null);
+        public void ServerNoticeCloseForTest() => ServerNoticeClose_Click(null, null);
 
         bool AtBottom => MessageScroll.VerticalOffset >= MessageScroll.ScrollableHeight - 60;
 
@@ -300,6 +321,9 @@ namespace ElansAddonHub.Lodge
             ShowChat();
             Session.Connect(url, code);
         }
+
+        // the first-run guide: join with a link that was already checked (code inside the link)
+        public void JoinWithLink(string link) { UrlBox.Text = link; NameBox.Text = Session.Settings.LodgeName ?? Environment.UserName; TryJoin(); }
 
         public void EditConnection()
         {

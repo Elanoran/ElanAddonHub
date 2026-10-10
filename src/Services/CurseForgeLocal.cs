@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
 
     public class CfInstance
     {
-        public string Path;
+        public string Path, Name;
         public DateTime LastRefresh;                         // UTC, MinValue = unknown
         public List<CfAddon> Addons = new List<CfAddon>();
     }
@@ -51,16 +51,21 @@ namespace ElansAddonHub.Services
         }
 
         // The instance for this WoW client folder (matched by install path), or null. Any problem with the file = null (feature off).
-        public static CfInstance Load(string addOnsDir)
+        public static string LastLoadError;                 // why the last Load found nothing usable (null = fine / simply no instance)
+
+        public static CfInstance Load(string addOnsDir) => Load(addOnsDir, DataFile);
+
+        public static CfInstance Load(string addOnsDir, string dataFile)
         {
+            LastLoadError = null;
             try
             {
-                if (string.IsNullOrEmpty(addOnsDir) || !File.Exists(DataFile)) return null;
+                if (string.IsNullOrEmpty(addOnsDir) || !File.Exists(dataFile)) return null;
                 string text;
-                using (var fs = new FileStream(DataFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (var fs = new FileStream(dataFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 using (var sr = new StreamReader(fs, Encoding.UTF8)) text = sr.ReadToEnd();
                 var root = Json.Parse(text) as List<object>;
-                if (root == null) return null;
+                if (root == null) { LastLoadError = "the file isn't in the format the Outpost knows"; return null; }
                 var want = Norm(Path.Combine(addOnsDir, "..", ".."));
                 var wantAdd = Norm(addOnsDir);
                 foreach (var o in root)
@@ -71,7 +76,7 @@ namespace ElansAddonHub.Services
                     var list = inst.List("installedAddons");
                     bool pathMatch = !string.IsNullOrEmpty(path) && Norm(path) == want;
                     if (!pathMatch && !list.OfType<Dictionary<string, object>>().Any(a => Norm(a.Str("modFolderPath")) == wantAdd)) continue;
-                    var res = new CfInstance { Path = path, LastRefresh = ParseUtc(inst.Str("lastRefreshAttempt")) };
+                    var res = new CfInstance { Path = path, Name = inst.Str("name"), LastRefresh = ParseUtc(inst.Str("lastRefreshAttempt")) };
                     // CurseForge only rewrites this file when something changed; its log records every update check
                     var logged = LastLoggedCheck(inst.Str("name"));
                     if (logged > res.LastRefresh) res.LastRefresh = logged;
@@ -100,8 +105,53 @@ namespace ElansAddonHub.Services
                     return res;
                 }
             }
-            catch (Exception e) { Util.Log("curseforge file unreadable: " + e.Message); }
+            catch (Exception e) { LastLoadError = e is IOException || e is UnauthorizedAccessException ? e.Message : "the file looks damaged (" + e.Message + ")"; Util.Log("curseforge file unreadable: " + e.Message); }
             return null;
+        }
+
+        // ---- Settings > Addons: "CurseForge integration: OK (found Forever, 6 addons, checked 12m ago)". Local files only, nothing is started.
+        public enum CfStatusKind { Ok, NotInstalled, NoInstance, Unreadable, NoWowFolder }
+        public class CfStatus
+        {
+            public CfStatusKind Kind;
+            public string Text;
+            public int Addons;
+            public override string ToString() => Text;
+        }
+
+        public static string StatusTip =>
+            "What this reads: CurseForge's own local list of the addons it manages (AddonGameInstance.json in %APPDATA%\\CurseForge\\agent\\GameInstances) and its log files "
+            + "(only the time of its last update check). Local files only - nothing is sent anywhere, nothing in CurseForge's folders is ever written, "
+            + "and CurseForge isn't started by this check.";
+
+        public static CfStatus Probe(string addOnsDir, string dataFile = null, bool? installed = null)
+        {
+            dataFile = dataFile ?? DataFile;
+            bool inst = installed ?? Installed;
+            if (string.IsNullOrEmpty(addOnsDir)) return new CfStatus { Kind = CfStatusKind.NoWowFolder, Text = "CurseForge integration: no WoW folder picked yet" };
+            if (!File.Exists(dataFile) && !inst) return new CfStatus { Kind = CfStatusKind.NotInstalled, Text = "CurseForge not installed" };
+            if (!File.Exists(dataFile))
+                return new CfStatus { Kind = CfStatusKind.Unreadable, Text = "Couldn't read CurseForge data - its addon list doesn't exist yet (open CurseForge once)" };
+            var cf = Load(addOnsDir, dataFile);
+            if (cf == null)
+            {
+                var why = LastLoadError;
+                if (why != null) return new CfStatus { Kind = CfStatusKind.Unreadable, Text = "Couldn't read CurseForge data - " + Short(why) };
+                return new CfStatus { Kind = CfStatusKind.NoInstance, Text = "CurseForge is installed but doesn't manage this WoW folder (no game instance for it)" };
+            }
+            var when = cf.LastRefresh == DateTime.MinValue ? "no update check seen yet" : "checked " + Ago(cf.LastRefresh);
+            var name = string.IsNullOrEmpty(cf.Name) ? "your WoW folder" : cf.Name;
+            return new CfStatus
+            {
+                Kind = CfStatusKind.Ok, Addons = cf.Addons.Count,
+                Text = $"CurseForge integration: OK (found {name}, {cf.Addons.Count} addon{(cf.Addons.Count == 1 ? "" : "s")}, {when})",
+            };
+        }
+
+        static string Short(string s)
+        {
+            s = System.Text.RegularExpressions.Regex.Replace(s ?? "", @"\s+", " ").Trim();
+            return s.Length > 90 ? s.Substring(0, 87) + "..." : s;
         }
 
         // Folders CurseForge manages: the cards for these are handled by CurseForge, never by the hub's own updaters.

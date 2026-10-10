@@ -236,7 +236,10 @@ namespace ElansAddonHub.Services
 
         public PixelStrip(Func<bool> enabled) { this.enabled = enabled; }
 
-        public void Start() { timer = new Timer(_ => Tick(), null, 1500, 1000); } // 1 s: combat and zone changes show up quickly
+        public bool Capturing => timer != null;                         // false while paused (WoW is not running)
+        public void Start() { if (timer == null) { timer = new Timer(_ => Tick(), null, 1500, 1000); if (Status == "paused") Status = "idle"; } } // 1 s: combat and zone changes show up quickly
+        // no WoW, no capture: the timer is gone until Start() is called again
+        public void Pause() { timer?.Dispose(); timer = null; hwnd = IntPtr.Zero; Status = "paused"; }
         public void Dispose() { timer?.Dispose(); timer = null; }
 
         int busy;
@@ -272,7 +275,7 @@ namespace ElansAddonHub.Services
                 try
                 {
                     var n = p.ProcessName;
-                    if (!n.StartsWith("Wow", StringComparison.OrdinalIgnoreCase) || n.IndexOf("Voice", StringComparison.OrdinalIgnoreCase) >= 0
+                    if (GamePresence.IgnoreWow || !n.StartsWith("Wow", StringComparison.OrdinalIgnoreCase) || n.IndexOf("Voice", StringComparison.OrdinalIgnoreCase) >= 0
                         || n.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0) continue;
                     var h = p.MainWindowHandle;
                     if (h == IntPtr.Zero) h = FirstWindowOf(p.Id);

@@ -43,6 +43,7 @@ namespace ElansAddonHub.Services
         }
 
         // (re)create the watchers when the WoW folder changed or new account folders appeared
+        public bool RootChanged => watchedRoot != wowRoot();
         public void EnsureWatchers()
         {
             var root = wowRoot();

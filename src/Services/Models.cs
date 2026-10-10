@@ -111,6 +111,8 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "cfAutoCheck")] public bool CfAutoCheck { get; set; }        // off by default: let the CurseForge app refresh its update info (daily / when WoW starts)
         [DataMember(Name = "paintedArt")] public bool PaintedArt { get; set; }          // false = vector card icons
         [DataMember(Name = "noSplash")] public bool NoSplash { get; set; }              // false = show the campfire splash screen on start
+        [DataMember(Name = "lodgeUpdateDismissed")] public string LodgeUpdateDismissed { get; set; } // "server update available" note closed for this server version
+        [DataMember(Name = "welcomeDone")] public bool WelcomeDone { get; set; }        // the first-run guide was finished or skipped
         [DataMember(Name = "windowWidth")] public double? WindowWidth { get; set; }
         [DataMember(Name = "windowHeight")] public double? WindowHeight { get; set; }
     }

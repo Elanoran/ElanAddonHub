@@ -37,6 +37,22 @@ namespace ElansAddonHub.Lodge
         public bool CanModerate { get; private set; }
         public bool CanManage { get; private set; }
         public string ServerVersion { get; private set; }
+
+        // ---- "your Lodge server is outdated": only for the people who can actually update it (owner / officers / Guild Master panel)
+        public bool CanUpdateServer => MyRole == "owner" || MyRole == "officer" || CanManage;
+        public static Version ParseVersion(string v)
+        {
+            if (string.IsNullOrWhiteSpace(v)) return null;
+            var parts = v.Trim().TrimStart('v', 'V').Split('.');
+            var n = new int[3];
+            for (int i = 0; i < 3 && i < parts.Length; i++) if (!int.TryParse(new string(parts[i].TakeWhile(char.IsDigit).ToArray()), out n[i])) return null;
+            return new Version(n[0], n[1], n[2]);
+        }
+        public static string ShortVersion(string v) { var p = ParseVersion(v); return p == null ? v : p.Build == 0 ? p.Major + "." + p.Minor : p.ToString(); }
+        public bool ServerOutdated => (Online || TestFed) && ParseVersion(ServerVersion) is Version have && ParseVersion(Brand.LatestLodgeServer) is Version want && have < want;
+        public bool ShowServerNotice => CanUpdateServer && ServerOutdated && Settings.LodgeUpdateDismissed != Brand.LatestLodgeServer;
+        public string ServerNoticeText => $"Your Lodge server is on {ShortVersion(ServerVersion)} - {ShortVersion(Brand.LatestLodgeServer)} is available. On the server run: {Brand.ServerUpdateCommand}";
+        public void DismissServerNotice() { Settings.LodgeUpdateDismissed = Brand.LatestLodgeServer; SettingsStore.Save(Settings); Changed?.Invoke(); }
         public int MaxFileMb { get; private set; } = 25;
         // a server older than 2.3 sends no "features": reactions and pins are hidden then
         public bool SupportsReact { get; private set; }
@@ -96,6 +112,7 @@ namespace ElansAddonHub.Lodge
             // presence changes (zone, combat, XP...) are sent at most every ~1 s, and only when the message really differs
             gameTimer.Tick += (s, e) => { gameTimer.Stop(); SendGame(); };
             Presence.Changed += () => { PresenceChanged?.Invoke(); if (!gameTimer.IsEnabled) gameTimer.Start(); };
+            WowWatch.Shared.Start();
             Presence.Start();
             tick.Tick += (s, e) => OnTick();
             Sounds.Off = settings.SoundsOff;
@@ -926,7 +943,7 @@ namespace ElansAddonHub.Lodge
                 m.Speaking = MyRoom != null && m.Room == MyRoom && voice != null && (m.IsMe ? voice.Transmitting : voice.IsSpeaking(m.Id));
             if (tickCount % 50 == 0) CheckIdle();
             AutoStatusTick();
-            Toasts.Tick();
+            if (Toasts.NeedsTick) Toasts.Tick();
         }
 
         // test hooks for the automatic status

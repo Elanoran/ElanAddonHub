@@ -354,6 +354,8 @@
        </StackPanel>
       </ScrollViewer>
 
+      <!-- first-run guide (code-built, see WelcomeGuide.cs) -->
+      <Border x:Name="GuideHost" Grid.RowSpan="4" Grid.ColumnSpan="2" Visibility="Collapsed" />
     </Grid>
   </Border>
 </Window>

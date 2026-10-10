@@ -136,6 +136,7 @@ namespace ElansAddonHub.Lodge
         }
 
         // every ~100 ms: fade, expire, and after combat one summary of what was held
+        public bool NeedsTick => held.Count > 0 || Visible.Count > 0;
         public void Tick()
         {
             var now = Clock();

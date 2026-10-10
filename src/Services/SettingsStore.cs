@@ -12,9 +12,14 @@ namespace ElansAddonHub.Services
 
         static readonly string FilePath = Path.Combine(Util.DataDir, "settings.json");
 
+        // true when this start found no settings file at all = a fresh install (the first-run guide). Not for the self-test.
+        public static bool Fresh;
+        public static bool SuppressFresh;
+
         public static Settings Load()
         {
             Settings s = null;
+            if (!SuppressFresh && !File.Exists(FilePath)) Fresh = true;
             try { if (File.Exists(FilePath)) s = Util.FromJson<Settings>(File.ReadAllText(FilePath)); }
             catch (Exception e) { Util.Log("settings load failed: " + e.Message); }
             s = s ?? new Settings { RunInBackground = true, CheckMinutes = 30 };
