@@ -13,4 +13,4 @@
 
 1.6.0 Optional "Emotes" chat tab so /e emotes and text emotes (/dance, /thank, the emote wheel) no longer fill General. On by default, per character, out of combat only. Switch in /ehub settings or with /ehub emotes on|off; turning it off restores General exactly.
 
-1.7.0 New settings window with a tab list on the left (General, Emote wheel, Chat, About) like Elan's Hunter Helper; /ehub wheel opens the Emote wheel page and the window remembers the last page. The separate Emotes chat tab is now OFF by default (it was a misunderstanding): if you never chose, emotes go back to General once, and you can turn the tab on under /ehub > Chat.
+1.7.0 New settings window with a tab list on the left (General, Emote wheel, About) like Elan's Hunter Helper; /ehub wheel opens the Emote wheel page and the window remembers the last page. Removed the Emotes chat tab - emotes are back in General (a one-time cleanup puts them back where 1.6.0 took them from, and closes the tab if the Hub made it).

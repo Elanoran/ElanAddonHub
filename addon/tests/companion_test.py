@@ -206,8 +206,8 @@ press(mb, "LeftButton") ok("left click toggles settings closed", not win.__shown
 SlashCmdList.ELANSHUB("") ok("/ehub opens settings", win.__shown)
 -- ---- tabbed settings window
 local function nTabs() local n = 0 for _ in pairs(win.tabButtons) do n = n + 1 end return n end
-ok("window builds with 4 tabs (General, Emote wheel, Chat, About)", nTabs() == 4 and win.tabButtons.general and win.tabButtons.wheel and win.tabButtons.chat and win.tabButtons.about)
-ok("tab labels", win.tabButtons.general.text.__text == "General" and win.tabButtons.wheel.text.__text == "Emote wheel" and win.tabButtons.chat.text.__text == "Chat" and win.tabButtons.about.text.__text == "About")
+ok("window builds with 3 tabs (General, Emote wheel, About)", nTabs() == 3 and win.tabButtons.general and win.tabButtons.wheel and win.tabButtons.about and not win.tabButtons.chat)
+ok("tab labels", win.tabButtons.general.text.__text == "General" and win.tabButtons.wheel.text.__text == "Emote wheel" and win.tabButtons.about.text.__text == "About")
 ok("/ehub opens on General", win.current == "general" and win.pages.general.__shown and not win.pages.wheel)
 ok("selected tab highlighted, others not", win.tabButtons.general.bar.__shown and not win.tabButtons.wheel.bar.__shown)
 local function findBtn(label)
@@ -461,87 +461,75 @@ for i = 1, 64 do
   STRIPDUMP[#STRIPDUMP + 1] = string.format("%d %d %d", math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5))
 end
 
--- ================= Emotes chat tab
+-- ================= removed Emotes chat tab: one-time cleanup
 local function has(f, g) for _, v in ipairs(f.messageTypeList) do if v == g then return true end end return false end
 local function emTab() for i = 1, 4 do if CHATWIN[i].name == "Emotes" then return _G["ChatFrame" .. i], i end end end
-ok("tooltip shows Emotes tab line", (function() Fire(mb, "OnEnter") return table.concat(GameTooltip.lines, "\n"):find("Emotes tab") end)())
-ok("emotes default OFF (stored value nil)", db.chat.emotes == nil and not E.ChatEnabled())
-ok("login sync with default off: no Emotes window, General untouched",
-  emTab() == nil and has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE") and db.chat.chars["Realm-Elan"] == nil)
-ok("... and no restore message for a fresh user", db.chat.restoreNoted == nil)
-SlashCmdList.ELANSHUB("emotes") ok("/ehub emotes prints status (off)", (CHAT[#CHAT] or ""):find("Emotes chat tab is off"))
--- Chat page toggle
-SlashCmdList.ELANSHUB("") press(win.tabButtons.chat)
-ok("Chat page built", win.current == "chat" and win.pages.chat.__shown)
-click("Separate Emotes chat tab")
-local et, ei = emTab()
-ok("chat check on: db.chat.emotes == true, Emotes window created", db.chat.emotes == true and et ~= nil and ei == 3)
-ok("Emotes tab has exactly EMOTE + TEXT_EMOTE", et and #et.messageTypeList == 2 and has(et, "EMOTE") and has(et, "TEXT_EMOTE"))
-ok("General lost EMOTE + TEXT_EMOTE but kept SAY/YELL/MONSTER_EMOTE",
-  not has(ChatFrame1, "EMOTE") and not has(ChatFrame1, "TEXT_EMOTE") and has(ChatFrame1, "SAY") and has(ChatFrame1, "YELL") and has(ChatFrame1, "MONSTER_EMOTE"))
-ok("record kept per character", db.chat.chars["Realm-Elan"] and db.chat.chars["Realm-Elan"].created == true and db.chat.chars["Realm-Elan"].removed[1] ~= nil)
-ok("one-time hint printed", db.chat.hinted == true)
-win:Hide()
--- explicit true stays on across syncs
-E.ChatSync()
-ok("explicit true kept on (sync does not restore)", emTab() ~= nil and not has(ChatFrame1, "EMOTE") and db.chat.restoreNoted == nil)
--- migration: a 1.6.0 user who never chose (nil) had the tab applied by the old default
-local before = #CHAT
-db.chat.emotes = nil
-E.ChatSync()
-ok("migration nil -> default off: groups back in General", has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE"))
-ok("migration: our Emotes window closed, record cleared", emTab() == nil and db.chat.chars["Realm-Elan"] == nil)
-local said = 0
-for k = before + 1, #CHAT do if CHAT[k]:find("Emotes are back in General - turn the Emotes tab on under /ehub > Chat if you liked it", 1, true) then said = said + 1 end end
-ok("migration: one-time chat line printed", said == 1 and db.chat.restoreNoted == true)
-local n3 = #CHAT E.ChatSync() E.ChatSync()
-ok("migration happens once (no repeat message, nothing changes)", #CHAT == n3 and emTab() == nil)
--- idempotent when on
-SlashCmdList.ELANSHUB("emotes on")
-local n = #CHATLOG
-E.ChatSync()
-SlashCmdList.ELANSHUB("emotes on")
-ok("re-enable is idempotent (no window changes)", #CHATLOG == n and (function() local c = 0 for i = 1, 4 do if CHATWIN[i].name == "Emotes" then c = c + 1 end end return c == 1 end)())
-SlashCmdList.ELANSHUB("emotes") ok("/ehub emotes prints status", (CHAT[#CHAT] or ""):find("Emotes chat tab is on"))
--- disable restores exactly
-SlashCmdList.ELANSHUB("emotes off")
-ok("disable: groups back in General", has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE"))
-ok("disable: our Emotes window closed", emTab() == nil)
-ok("disable: record cleared, setting off", db.chat.chars["Realm-Elan"] == nil and db.chat.emotes == false and not E.ChatEnabled())
-ok("disable twice is harmless", pcall(E.ChatSync) and has(ChatFrame1, "EMOTE"))
--- combat queues
-MOCK_COMBAT = true INCOMBAT_CHAT_CALL = true
-local n2 = #CHATLOG
-SlashCmdList.ELANSHUB("emotes on")
-ok("combat: nothing touched, queued", #CHATLOG == n2 and emTab() == nil and has(ChatFrame1, "EMOTE"))
+ok("tooltip has no Emotes tab line", not table.concat(GameTooltip.lines, "\n"):find("Emotes tab"))
+ok("no Emotes chat API left", E.ChatEnabled == nil and E.ChatSetEnabled == nil and E.ChatStatus == nil and E.ChatSync == nil)
+ok("/ehub emotes is no longer a command (falls through to status)", (function() local n = #CHAT SlashCmdList.ELANSHUB("emotes on") return db.chat == nil and (CHAT[#CHAT] or ""):find("level 60") ~= nil end)())
+ok("fresh user: nothing stored, nothing changed", db.chat == nil and emTab() == nil and has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE"))
+ok("cleanup with no record is a no-op", E.ChatCleanup() == true and emTab() == nil and has(ChatFrame1, "EMOTE"))
+
+-- ---- cleanup of the removed 1.6.0 feature. Legacy state: tab "Emotes" (ours) in slot 3, EMOTE/TEXT_EMOTE taken from General (1)
+local function legacy()
+  for _, g in ipairs({ "EMOTE", "TEXT_EMOTE" }) do ChatFrame_RemoveMessageGroup(ChatFrame1, g) end
+  local tab = FCF_OpenNewWindow("Emotes")
+  tab.messageTypeList = { "EMOTE", "TEXT_EMOTE" }
+  db.chat = { hinted = true, emotes = true, chars = {
+    ["Realm-Elan"] = { created = true, applied = true, tab = "Emotes", removed = { [1] = { "EMOTE", "TEXT_EMOTE" } } },
+    ["Realm-Otto"] = { created = true, applied = true, tab = "Emotes", removed = { [1] = { "EMOTE", "TEXT_EMOTE" } } },
+  } }
+  return tab
+end
+legacy()
+ok("legacy state set up", emTab() ~= nil and not has(ChatFrame1, "EMOTE"))
+MOCK_COMBAT = true
+local nlog = #CHATLOG
+ok("in combat: cleanup waits, nothing touched", E.ChatCleanup() == false and #CHATLOG == nlog and emTab() ~= nil)
 MOCK_COMBAT = false
-evt("PLAYER_REGEN_ENABLED")
-ok("after combat: applied", emTab() ~= nil and not has(ChatFrame1, "EMOTE"))
-INCOMBAT_CHAT_CALL = false
--- an existing "Emotes" window is reused and never closed by us
-SlashCmdList.ELANSHUB("emotes off")
-CHATWIN[3].name = "Emotes" ChatFrame3.messageTypeList = { "SAY", "GUILD" } ChatFrame3.isDocked = true
-local opened = 0 for _, l in ipairs(CHATLOG) do if l == "open Emotes" then opened = opened + 1 end end
-SlashCmdList.ELANSHUB("emotes on")
-local opened2 = 0 for _, l in ipairs(CHATLOG) do if l == "open Emotes" then opened2 = opened2 + 1 end end
-ok("existing Emotes window reused (not created again)", opened2 == opened and #ChatFrame3.messageTypeList == 2 and has(ChatFrame3, "EMOTE"))
-ok("record says not created by us", db.chat.chars["Realm-Elan"].created == false)
-SlashCmdList.ELANSHUB("emotes off")
-ok("disable: reused window left open, General restored", CHATWIN[3].name == "Emotes" and has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE"))
--- per-character: another character has its own record
-db.chat.emotes = true
+local before = #CHAT
+ok("cleanup runs", E.ChatCleanup() == true)
+ok("EMOTE + TEXT_EMOTE back in General (SAY/YELL kept)", has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE") and has(ChatFrame1, "SAY") and has(ChatFrame1, "YELL"))
+ok("our Emotes window closed", emTab() == nil)
+ok("this character's record deleted, other character's kept", db.chat and db.chat.chars["Realm-Elan"] == nil and db.chat.chars["Realm-Otto"] ~= nil)
+local said = 0
+for k = before + 1, #CHAT do if CHAT[k]:find("Emotes are back in General chat.", 1, true) then said = said + 1 end end
+ok("one chat line printed", said == 1)
+local n1, c1 = #CHATLOG, #CHAT
+E.ChatCleanup() E.ChatCleanup()
+ok("runs once: no more chat-frame changes or messages", #CHATLOG == n1 and #CHAT == c1)
+-- the other character logs in later: gets cleaned, then everything is gone
 local oldName = UnitName
 function UnitName(u) if u == "player" then return "Otto" end return oldName(u) end
-CHATWIN[3].name = "" ChatFrame3.messageTypeList = {} ChatFrame3.isDocked = nil
-E.ChatSync()
-ok("second character gets its own record and tab", db.chat.chars["Realm-Otto"] and db.chat.chars["Realm-Otto"].created == true and emTab() ~= nil)
--- closed tab gets recreated, and what was removed stays recorded
-CHATWIN[3].name = "" ChatFrame3.messageTypeList = {} ChatFrame3.isDocked = nil
-E.ChatSync()
-ok("closed Emotes tab recreated, restore info kept", emTab() ~= nil and db.chat.chars["Realm-Otto"].removed[1] ~= nil)
-E.ChatSetEnabled(false)
-ok("disable after recreate still restores General", has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE") and emTab() == nil)
+local tab2 = FCF_OpenNewWindow("Emotes") tab2.messageTypeList = { "EMOTE", "TEXT_EMOTE" }
+for _, g in ipairs({ "EMOTE", "TEXT_EMOTE" }) do ChatFrame_RemoveMessageGroup(ChatFrame1, g) end
+E.ChatCleanup()
+ok("second character cleaned; db.chat removed entirely", db.chat == nil and emTab() == nil and has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE"))
 UnitName = oldName
+-- a pre-existing user-made "Emotes" window (we did not create it) is left open
+legacy()
+db.chat.chars["Realm-Elan"].created = false
+db.chat.chars["Realm-Otto"] = nil
+E.ChatCleanup()
+ok("user-made Emotes tab is left alone, groups still restored", emTab() ~= nil and has(ChatFrame1, "EMOTE") and has(ChatFrame1, "TEXT_EMOTE") and db.chat == nil)
+-- a frame that already has the group is not duplicated
+legacy()
+db.chat.chars["Realm-Otto"] = nil
+table.insert(ChatFrame1.messageTypeList, "EMOTE")
+E.ChatCleanup()
+local cnt = 0 for _, v in ipairs(ChatFrame1.messageTypeList) do if v == "EMOTE" then cnt = cnt + 1 end end
+ok("no duplicate groups", cnt == 1)
+-- init: with stored data a timer is armed, without it nothing is
+local t0 = #TIMERS
+local chatInit = E.inits[2]
+db.chat = nil chatInit()
+ok("init without stored chat data arms nothing", #TIMERS == t0)
+
+legacy()
+chatInit()
+ok("init with stored chat data arms the delayed cleanup", #TIMERS == t0 + 1)
+RunTimers()
+ok("delayed cleanup ran at login", db.chat.chars["Realm-Elan"] == nil and db.chat.chars["Realm-Otto"] ~= nil)
 
 -- no combat log, no secure frames, no blocked
 local cl = false

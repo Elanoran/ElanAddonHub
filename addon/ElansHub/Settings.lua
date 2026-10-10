@@ -1,4 +1,4 @@
--- Settings window (/ehub, minimap button left-click): header + a left tab list (General, Emote wheel, Chat, About),
+-- Settings window (/ehub, minimap button left-click): header + a left tab list (General, Emote wheel, About),
 -- one page per tab. Same look as Elan's Hunter Helper's main window (copied, not shared).
 local _, EHUB = ...
 local UI = EHUB.UI
@@ -8,7 +8,6 @@ local WIN_W, WIN_H, SIDE_W = 600, 440, 140
 local TABS = {
   { key = "general", label = "General", icon = "INV_Misc_Gear_01" },
   { key = "wheel", label = "Emote wheel", icon = "INV_Banner_02" },
-  { key = "chat", label = "Chat", icon = "INV_Letter_15" },
   { key = "about", label = "About", icon = "INV_Misc_Book_09" },
 }
 EHUB.SettingsTabs = TABS
@@ -123,17 +122,6 @@ local function buildWheel(page)
   page.reset = reset
 end
 
-local function buildChat(page)
-  local y = 0
-  local h = UI.Header(page, "Chat") h:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - 32
-  local c = UI.Check(page, "Separate Emotes chat tab",
-    function() return EHUB.ChatEnabled() end,
-    function(v) EHUB.ChatSetEnabled(v) end,
-    "Emotes (/e, /dance, the emote wheel) get their own chat tab instead of filling General. Changes only out of combat.")
-  c:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) track(c) y = y - 32
-  note(page, "Emotes (/e, /dance, the emote wheel) get their own chat tab instead of filling General. Off by default. Changes only out of combat; turning it off puts everything back in General.", y)
-end
-
 local function buildAbout(page)
   local y = 0
   local h = UI.Header(page, "About") h:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - 30
@@ -152,8 +140,8 @@ local function buildAbout(page)
   list:SetWidth(420)
   list:SetJustifyH("LEFT")
   if list.SetWordWrap then list:SetWordWrap(true) end
-  list:SetText("/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on|off|lock|unlock|reset\n/ehub pixel on|off\n/ehub emotes on|off  -  separate Emotes chat tab\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI")
-  y = y - 104
+  list:SetText("/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on|off|lock|unlock|reset\n/ehub pixel on|off\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI")
+  y = y - 90
   local out = UI.Text(page, 12, C.gold)
   out:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
   out:SetText("Get the Hub")
@@ -163,7 +151,7 @@ local function buildAbout(page)
   link:SetText("github.com/Elanoran/ElanAddonHub")
 end
 
-local BUILD = { general = buildGeneral, wheel = buildWheel, chat = buildChat, about = buildAbout }
+local BUILD = { general = buildGeneral, wheel = buildWheel, about = buildAbout }
 
 -- ------------------------------------------------------------ window
 function EHUB.SelectSettingsTab(key)

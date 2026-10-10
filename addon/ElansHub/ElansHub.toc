@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: |cffabd473Elan's|r Hub
-## Notes: Companion for Elan's Addon Hub: lets your friends in the Lodge see which character you play (class, level, zone, XP, combat, group). Also: minimap button, tabbed settings window, a quick emote wheel and an optional separate Emotes chat tab.
+## Notes: Companion for Elan's Addon Hub: lets your friends in the Lodge see which character you play (class, level, zone, XP, combat, group). Also: minimap button, tabbed settings window, a quick emote wheel and more.
 ## Author: Elan
 ## Version: 1.7.0
 ## IconTexture: Interface\Icons\Ability_Hunter_BeastTaming

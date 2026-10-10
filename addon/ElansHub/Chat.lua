@@ -1,11 +1,11 @@
--- Optional "Emotes" chat tab: moves /e emotes and text emotes (/dance, /thank ...) out of General into their own tab.
--- Chat window layout is stored per character by WoW, so this is applied once per character and recorded in
--- ElansHubDB.chat.chars[<realm-name>]. Everything is pcall'd and only runs out of combat (queued until
--- PLAYER_REGEN_ENABLED). Turning it off puts the groups back exactly where we took them from.
+-- One-time cleanup of the removed "Emotes" chat tab feature (1.6.0). The tab is gone; this only undoes what 1.6.0 did.
+-- Chat window layout is stored per character by WoW, so a character that has a record in ElansHubDB.chat.chars gets its
+-- EMOTE / TEXT_EMOTE groups put back into exactly the frames we took them from, our "Emotes" window closed (only if WE
+-- created it), and the record deleted. Characters without a record are never touched. Out of combat only (retried when
+-- combat ends); everything is pcall'd.
 local _, EHUB = ...
 
 local TAB = "Emotes"
-local GROUPS = { "EMOTE", "TEXT_EMOTE" } -- NPC emotes (MONSTER_EMOTE) deliberately stay in General
 local pending = false
 
 local function clean(v)
@@ -14,16 +14,6 @@ local function clean(v)
 end
 
 local function say(msg) print("|cffabd473Elan's Hub|r: " .. msg) end
-
-local function chatDB()
-  local db = ElansHubDB
-  db.chat = db.chat or {}
-  db.chat.chars = db.chat.chars or {}
-  return db.chat
-end
-
--- off unless the user explicitly switched it on (stored value true); nil = never chosen = off
-function EHUB.ChatEnabled() return chatDB().emotes == true end
 
 local function charKey()
   local n, r = clean(UnitName("player")), clean(GetRealmName())
@@ -45,17 +35,12 @@ local function windowName(i)
   if type(name) == "string" then return name end
 end
 
-local function indexOf(frame)
-  for i = 1, numWindows() do if frameAt(i) == frame then return i end end
-end
-
 local function findTab()
   for i = 1, numWindows() do
-    if windowName(i) == TAB and frameAt(i) then return frameAt(i), i end
+    if windowName(i) == TAB and frameAt(i) then return frameAt(i) end
   end
 end
 
--- true / false when the frame's group list can be read, nil when unknown
 local function hasGroup(frame, g)
   local list = frame and frame.messageTypeList
   if type(list) ~= "table" then return nil end
@@ -63,132 +48,48 @@ local function hasGroup(frame, g)
   return false
 end
 
-local function removeGroup(frame, g) return pcall(ChatFrame_RemoveMessageGroup, frame, g) end
-local function addGroup(frame, g) return pcall(ChatFrame_AddMessageGroup, frame, g) end
-
--- Take EMOTE / TEXT_EMOTE out of every other docked chat frame, remembering exactly what was removed.
-local function strip(state, tab)
-  state.removed = state.removed or {}
-  for i = 1, numWindows() do
-    local fr = frameAt(i)
-    if fr and fr ~= tab and (i == 1 or fr.isDocked) then
-      for _, g in ipairs(GROUPS) do
-        if hasGroup(fr, g) == true and removeGroup(fr, g) then
-          local rec = state.removed[i] or {}
-          local dup = false
-          for _, x in ipairs(rec) do if x == g then dup = true end end
-          if not dup then rec[#rec + 1] = g end
-          state.removed[i] = rec
-        end
-      end
-    end
-  end
-end
-
-local function apply(st, key)
-  local tab = findTab()
-  local state = st.chars[key]
-  if not tab then
-    if not (FCF_OpenNewWindow and ChatFrame_AddMessageGroup and ChatFrame_RemoveMessageGroup) then return false end
-    local ok, fr = pcall(FCF_OpenNewWindow, TAB)
-    if not ok then return false end
-    tab = findTab() or (type(fr) == "table" and fr) or nil
-    if not tab then return false end
-    state = { created = true, removed = state and state.removed or nil } -- keep what we took out earlier
-    st.chars[key] = state
-    -- make sure it sits next to General
-    if not tab.isDocked and FCF_DockFrame and GENERAL_CHAT_DOCK and type(GENERAL_CHAT_DOCK.DOCKED_CHAT_FRAMES) == "table" then
-      pcall(FCF_DockFrame, tab, #GENERAL_CHAT_DOCK.DOCKED_CHAT_FRAMES + 1, true)
-    end
-  elseif not state then
-    state = { created = false } -- an "Emotes" window already existed: reuse it, never close it
-    st.chars[key] = state
-  end
-  state.applied = true
-  state.tab = windowName(indexOf(tab) or 0) or TAB
-  local list = tab.messageTypeList
-  local exact = type(list) == "table" and #list == #GROUPS and hasGroup(tab, GROUPS[1]) == true and hasGroup(tab, GROUPS[2]) == true
-  if not exact then
-    if ChatFrame_RemoveAllMessageGroups then pcall(ChatFrame_RemoveAllMessageGroups, tab) end
-    for _, g in ipairs(GROUPS) do
-      if hasGroup(tab, g) ~= true then addGroup(tab, g) end
-    end
-  end
-  strip(state, tab)
-  return true
-end
-
-local function restore(st, key)
-  local state = st.chars[key]
-  if not state then return end
-  for i, groups in pairs(state.removed or {}) do
-    local fr = frameAt(i)
-    if fr then
-      for _, g in ipairs(groups) do
-        if hasGroup(fr, g) ~= true then addGroup(fr, g) end
-      end
-    end
-  end
-  if state.created then
-    local tab = findTab()
-    if tab and FCF_Close then pcall(FCF_Close, tab) end
-  end
-  st.chars[key] = nil
-end
-
--- Brings the chat windows in line with the setting. Idempotent. Returns true when done (or nothing to do).
-function EHUB.ChatSync(announce)
-  local st = chatDB()
+-- Returns true when done (or nothing to do), false when it has to wait for combat to end.
+function EHUB.ChatCleanup()
+  local db = ElansHubDB
+  local st = db.chat
+  if type(st) ~= "table" then return true end
   local key = charKey()
   if not key then return false end
-  if InCombatLockdown() then pending = true return false end
-  pending = false
-  local on = EHUB.ChatEnabled()
-  local had = st.chars[key] and st.chars[key].applied
-  if on then
-    local ok = apply(st, key)
-    if ok and (announce or not st.hinted) then
-      if not st.hinted then
-        st.hinted = true
-        say("emotes now have their own chat tab. Turn it off with /ehub emotes off (or in /ehub settings).")
-      elseif not had then
-        say("emotes moved to their own chat tab.")
+  local chars = type(st.chars) == "table" and st.chars or {}
+  local state = chars[key]
+  if state ~= nil then
+    if InCombatLockdown() then pending = true return false end
+    pending = false
+    if type(state) == "table" then
+      for i, groups in pairs(state.removed or {}) do
+        local fr = frameAt(tonumber(i) or 0)
+        if fr and type(groups) == "table" then
+          for _, g in ipairs(groups) do
+            if hasGroup(fr, g) ~= true and ChatFrame_AddMessageGroup then pcall(ChatFrame_AddMessageGroup, fr, g) end
+          end
+        end
+      end
+      if state.created then
+        local tab = findTab()
+        if tab and FCF_Close then pcall(FCF_Close, tab) end
       end
     end
-  elseif had then
-    restore(st, key)
-    -- 1.7.0 migration: the tab used to be on by default. Anyone who never chose gets General back, told once.
-    if st.emotes == nil and not st.restoreNoted then
-      st.restoreNoted = true
-      say("Emotes are back in General - turn the Emotes tab on under /ehub > Chat if you liked it")
-    elseif announce then
-      say("emotes are back in General.")
-    end
+    chars[key] = nil
+    say("Emotes are back in General chat.")
   end
+  if next(chars) == nil then db.chat = nil end -- last record gone: nothing left of the old feature
   return true
-end
-
-function EHUB.ChatSetEnabled(on)
-  chatDB().emotes = on and true or false
-  EHUB.ChatSync(true)
-  if InCombatLockdown() then say("in combat - the chat tab will change when combat ends.") end
-end
-
-function EHUB.ChatStatus()
-  local st = chatDB()
-  local key = charKey()
-  local applied = key and st.chars[key] and st.chars[key].applied
-  if not EHUB.ChatEnabled() then return "off", false end
-  return applied and "on" or "on (pending)", true
 end
 
 local function initChat()
+  local db = ElansHubDB
+  if type(db.chat) ~= "table" then db.chat = nil return end -- nothing stored: no work, no events
   local f = CreateFrame("Frame")
   f:RegisterEvent("PLAYER_REGEN_ENABLED")
   f:SetScript("OnEvent", function()
-    if pending then pcall(EHUB.ChatSync, true) end
+    if pending then pcall(EHUB.ChatCleanup) end
   end)
   -- the chat windows are restored from the server shortly after login: give them a moment
-  C_Timer.After(3, function() pcall(EHUB.ChatSync) end)
+  C_Timer.After(3, function() pcall(EHUB.ChatCleanup) end)
 end
 EHUB.inits[#EHUB.inits + 1] = initChat
