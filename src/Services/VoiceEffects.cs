@@ -16,6 +16,7 @@ namespace ElansAddonHub.Services
         public float TremoloDepth, TremoloHz;            // amplitude wobble, 0..1
         public float Drive;                              // saturation, 0 = clean
         public float HighPassHz;                         // 0 = off
+        public float LowPassHz;                          // 0 = off
         public float LowDb, MidHz, MidDb, MidQ, HighDb;  // low shelf @ 200 Hz, peak, high shelf @ 4 kHz
         public float EchoMs, EchoMix;                    // 0 = off
         public float ChorusMix;                          // doubled voice, 0 = off
@@ -34,7 +35,8 @@ namespace ElansAddonHub.Services
             new VoicePreset { Id = "gnome", Name = "Gnome", Blurb = "High and frantic", Semitones = 6, LowDb = -6, MidHz = 2500, MidDb = 3, MidQ = 1, HighDb = 4, HighPassHz = 200 },
             new VoicePreset { Id = "goblin", Name = "Goblin", Blurb = "Squeaky and shifty", Semitones = 3.5f, VibratoDepth = 0.35f, VibratoHz = 6, LowDb = -4, MidHz = 1500, MidDb = 6, MidQ = 1.4f, HighDb = 2, HighPassHz = 150 },
             new VoicePreset { Id = "undead", Name = "Undead", Blurb = "Hollow and raspy", Semitones = -1.5f, TremoloDepth = 0.35f, TremoloHz = 4, Drive = 1.4f, HighPassHz = 250, MidHz = 1200, MidDb = 4, MidQ = 2, HighDb = -2, EchoMs = 95, EchoMix = 0.25f },
-            new VoicePreset { Id = "murloc", Name = "Murloc", Blurb = "Mrglglgl", Semitones = 3, Jitter = 1.6f, TremoloDepth = 0.45f, TremoloHz = 17, LowDb = -4, MidHz = 1800, MidDb = 4, MidQ = 1.2f, HighDb = 2, HighPassHz = 150 },
+            new VoicePreset { Id = "murloc", Name = "Murloc", Blurb = "Mrglglgl", // measured from wowhead murloc clips: f0 ~270 Hz, fast deep gargle (>=50 Hz AM), wide glides, nothing above ~4 kHz
+                Semitones = 7, Jitter = 4.5f, TremoloDepth = 0.65f, TremoloHz = 55, Drive = 1.6f, LowDb = -6, MidHz = 1100, MidDb = 5, MidQ = 0.9f, HighDb = -8, HighPassHz = 200, LowPassHz = 3800 },
         };
 
         public static VoicePreset Get(string id)
@@ -50,7 +52,7 @@ namespace ElansAddonHub.Services
         const int Fft = 2048, Osamp = 4; // ~32 ms of delay
 
         readonly float[] buf = new float[VoiceEngine.Frame];
-        readonly BiQuadFilter[] filters = new BiQuadFilter[4];
+        readonly BiQuadFilter[] filters = new BiQuadFilter[5];
         readonly float[] echo = new float[VoiceEngine.Rate / 2];
         readonly float[] chorus = new float[VoiceEngine.Rate / 10];
         int echoPos, chorusPos;
@@ -68,21 +70,24 @@ namespace ElansAddonHub.Services
             filters[0] = p.HighPassHz > 0 ? BiQuadFilter.HighPassFilter(r, p.HighPassHz, 0.7f) : null;
             filters[1] = p.LowDb != 0 ? BiQuadFilter.LowShelf(r, 200, 1f, p.LowDb) : null;
             filters[2] = p.MidDb != 0 ? BiQuadFilter.PeakingEQ(r, p.MidHz, p.MidQ <= 0 ? 1f : p.MidQ, p.MidDb) : null;
+            filters[4] = p.LowPassHz > 0 ? BiQuadFilter.LowPassFilter(r, p.LowPassHz, 0.7f) : null;
             filters[3] = p.HighDb != 0 ? BiQuadFilter.HighShelf(r, 4000, 1f, p.HighDb) : null;
         }
 
         // self-test: a 220 Hz tone through each preset: pitch moved the right way, output sane (no silence, no clipping wall)
-        public static string SelfTest()
+        public static string SelfTest(string dir = null)
         {
             var lines = new List<string>(); bool all = true;
             foreach (var p in VoicePresets.All)
             {
                 var fx = new VoiceEffects(); var f = new short[VoiceEngine.Frame];
+                var wav = new List<short>();
                 double ph = 0; int crossings = 0, tail = 0, clipped = 0; double peak = 0; short prev = 0;
                 for (int k = 0; k < 50; k++)
                 {
                     for (int i = 0; i < f.Length; i++) { f[i] = (short)(Math.Sin(ph) * 8000); ph += 2 * Math.PI * 220 / VoiceEngine.Rate; }
                     fx.Process(f, p);
+                    wav.AddRange(f);
                     if (k >= 25) for (int i = 0; i < f.Length; i++)
                     {
                         if ((f[i] >= 0) != (prev >= 0)) crossings++;
@@ -90,6 +95,7 @@ namespace ElansAddonHub.Services
                         if (Math.Abs((int)f[i]) >= 32767) clipped++;
                     }
                 }
+                if (dir != null) try { WriteVoiceSample(System.IO.Path.Combine(dir, "voice-" + (p.Id == "" ? "normal" : p.Id) + ".wav"), p); } catch { }
                 double hz = crossings / 2.0 / (tail / (double)VoiceEngine.Rate);
                 double want = 220 * Math.Pow(2, p.Semitones / 12.0);
                 // tremolo/jitter/echo smear the count: only the plain presets get the tight pitch check
@@ -102,6 +108,39 @@ namespace ElansAddonHub.Services
             return "voice presets: " + (all ? "all ok" : "FAILURES") + Environment.NewLine + string.Join(Environment.NewLine, lines);
         }
 
+        float jit;
+        float JitterStep(float depth)
+        {
+            if (depth <= 0) return 0;
+            jit = 0.55f * jit + 0.45f * (float)((rng.NextDouble() * 2 - 1) * depth); // smoothed so it glides instead of stuttering
+            return jit * 1.4f;
+        }
+
+        // a voice-like test signal (a 120 Hz buzz shaped into syllables, brightness following a vowel-ish envelope), 3 s, written as a WAV
+        static void WriteVoiceSample(string path, VoicePreset p)
+        {
+            var fx = new VoiceEffects(); var f = new short[VoiceEngine.Frame];
+            using (var w = new NAudio.Wave.WaveFileWriter(path, new NAudio.Wave.WaveFormat(VoiceEngine.Rate, 16, 1)))
+            {
+                double ph = 0; long t = 0;
+                for (int k = 0; k < 150; k++)
+                {
+                    for (int i = 0; i < f.Length; i++, t++)
+                    {
+                        double sec = t / (double)VoiceEngine.Rate;
+                        double syll = Math.Max(0, Math.Sin(2 * Math.PI * 2.5 * sec)); // ~2.5 syllables a second
+                        double f0 = 120 + 15 * Math.Sin(2 * Math.PI * 0.8 * sec);
+                        ph += f0 / VoiceEngine.Rate; ph -= Math.Floor(ph);
+                        double saw = 2 * ph - 1;
+                        f[i] = (short)(saw * syll * 9000);
+                    }
+                    fx.Process(f, p);
+                    var b = new byte[f.Length * 2]; Buffer.BlockCopy(f, 0, b, 0, b.Length);
+                    w.Write(b, 0, b.Length);
+                }
+            }
+        }
+
         // processes a 20 ms frame in place
         public void Process(short[] frame, VoicePreset p)
         {
@@ -112,7 +151,7 @@ namespace ElansAddonHub.Services
 
             // pitch (vibrato and flutter move it a little every frame)
             vibPhase += 2 * Math.PI * p.VibratoHz * n / VoiceEngine.Rate;
-            float semis = p.Semitones + (float)(Math.Sin(vibPhase) * p.VibratoDepth) + (p.Jitter > 0 ? (float)((rng.NextDouble() * 2 - 1) * p.Jitter) : 0f);
+            float semis = p.Semitones + (float)(Math.Sin(vibPhase) * p.VibratoDepth) + JitterStep(p.Jitter);
             if (Math.Abs(semis) > 0.01f)
                 pitch.PitchShift((float)Math.Pow(2, semis / 12.0), n, Fft, Osamp, VoiceEngine.Rate, buf);
 
