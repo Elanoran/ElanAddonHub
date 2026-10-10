@@ -77,6 +77,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "voiceInput")] public int? VoiceInput { get; set; }
         [DataMember(Name = "voiceOutput")] public int? VoiceOutput { get; set; }
         [DataMember(Name = "voiceVolume")] public double? VoiceVolume { get; set; }
+        [DataMember(Name = "voicePreset")] public string VoicePreset { get; set; }           // voice changer id (orc, gnome, ...); empty = normal
         [DataMember(Name = "lodgeStatus")] public string LodgeStatus { get; set; }      // online | away | busy | dungeon | lfg
         [DataMember(Name = "lodgeNote")] public string LodgeNote { get; set; }
         [DataMember(Name = "autoAwayOff")] public bool AutoAwayOff { get; set; }        // false = AFK after 10 min idle

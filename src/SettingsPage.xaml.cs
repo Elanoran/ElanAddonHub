@@ -103,6 +103,8 @@ namespace ElansAddonHub
             OutputBox.ItemsSource = VoiceEngine.OutputDevices();
             InputBox.SelectedItem = ((List<Device>)InputBox.ItemsSource).FirstOrDefault(d => d.Id == (s.VoiceInput ?? -1));
             OutputBox.SelectedItem = ((List<Device>)OutputBox.ItemsSource).FirstOrDefault(d => d.Id == (s.VoiceOutput ?? -1));
+            PresetBox.ItemsSource = VoicePresets.All;
+            PresetBox.SelectedItem = VoicePresets.Get(s.VoicePreset);
 
             OverlayBox.IsChecked = !s.OverlayOff;
             OverlayLeft.IsChecked = !s.OverlayRight;
@@ -406,6 +408,32 @@ namespace ElansAddonHub
             session.ApplyVoiceSettings(false);
             UpdateLabels();
         }
+
+        void Preset_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (loading || settings == null || !(PresetBox.SelectedItem is VoicePreset p)) return;
+            settings.VoicePreset = p.Id;
+            SettingsStore.Save(settings);
+            session.ApplyVoiceSettings(false);
+            if (preview != null) preview.Preset = p;
+        }
+
+        // "Hear myself": a private engine that only plays your own processed mic back (nothing is sent)
+        VoiceEngine preview;
+
+        void Monitor_Click(object sender, RoutedEventArgs e)
+        {
+            StopPreview();
+            if (MonitorBox.IsChecked != true) return;
+            preview = new VoiceEngine { Monitor = true, Muted = true, Preset = VoicePresets.Get(settings?.VoicePreset) };
+            preview.Start(settings?.VoiceInput ?? -1, settings?.VoiceOutput ?? -1, 1f);
+            if (preview.MicError != null) { StopPreview(); MonitorBox.IsChecked = false; }
+            IsVisibleChanged -= StopPreviewOnHide; IsVisibleChanged += StopPreviewOnHide;
+        }
+
+        void StopPreviewOnHide(object s, DependencyPropertyChangedEventArgs e) { if (!IsVisible) { StopPreview(); MonitorBox.IsChecked = false; } }
+
+        void StopPreview() { try { preview?.Dispose(); } catch { } preview = null; }
 
         void Device_Changed(object sender, SelectionChangedEventArgs e)
         {

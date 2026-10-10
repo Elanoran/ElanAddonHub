@@ -60,6 +60,8 @@ namespace ElansAddonHub.Services
         readonly byte[] packet = new byte[1500];
         readonly short[] decoded = new short[5760];
         DateTime holdUntil;
+        readonly VoiceEffects effects = new VoiceEffects();
+        BufferedWaveProvider monitorBuf;
 
         public Action<byte[], int> Send;           // encoded packet out
         public bool Muted { get; set; }
@@ -67,6 +69,8 @@ namespace ElansAddonHub.Services
         public bool PushToTalk { get; set; }
         public int PttKey { get; set; } = 0x05;    // mouse button 4
         public double ThresholdDb { get; set; } = -45;
+        public VoicePreset Preset { get; set; } = VoicePresets.Off; // voice changer (orc, gnome, ...), applied before encoding
+        public bool Monitor { get; set; }                           // hear yourself (with the effect): use headphones
         public bool Transmitting { get; private set; }
         public double LevelDb { get; private set; } = -90;
         public string MicError { get; private set; }
@@ -85,6 +89,8 @@ namespace ElansAddonHub.Services
             encoder.Complexity = 8;
 
             mixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(Rate, 1)) { ReadFully = true };
+            monitorBuf = new BufferedWaveProvider(Pcm) { DiscardOnBufferOverflow = true, BufferDuration = TimeSpan.FromMilliseconds(400) };
+            mixer.AddMixerInput(monitorBuf.ToSampleProvider());
             volume = new VolumeSampleProvider(mixer) { Volume = vol };
             try
             {
@@ -148,6 +154,14 @@ namespace ElansAddonHub.Services
             for (int i = 0; i < Frame; i++) sum += (double)frame[i] * frame[i];
             var rms = Math.Sqrt(sum / Frame) / 32768.0;
             LevelDb = rms > 0 ? 20 * Math.Log10(rms) : -90;
+
+            try { effects.Process(frame, Preset); } catch (Exception e) { Util.Log("voice effect: " + e.Message); }
+            if (Monitor && monitorBuf != null)
+            {
+                var mb = new byte[Frame * 2];
+                Buffer.BlockCopy(frame, 0, mb, 0, mb.Length);
+                monitorBuf.AddSamples(mb, 0, mb.Length);
+            }
 
             var send = Send; // Dispose may clear it from another thread
             bool open;

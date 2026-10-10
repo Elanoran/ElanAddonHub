@@ -893,6 +893,7 @@ namespace ElansAddonHub.Lodge
                     PushToTalk = Settings.VoicePushToTalk,
                     PttKey = PttKey,
                     ThresholdDb = Settings.VoiceThreshold ?? -45,
+                    Preset = VoicePresets.Get(Settings.VoicePreset),
                     PeerVolume = id => PeerVolumeFor(Members.FirstOrDefault(x => x.Id == id)?.Name),
                 };
                 var c = client;
@@ -963,6 +964,7 @@ namespace ElansAddonHub.Lodge
             voice.PushToTalk = Settings.VoicePushToTalk;
             voice.PttKey = PttKey;
             voice.ThresholdDb = Settings.VoiceThreshold ?? -45;
+            voice.Preset = VoicePresets.Get(Settings.VoicePreset);
             if (!voice.Deafened) voice.Volume = (float)(Settings.VoiceVolume ?? 1);
         }
 

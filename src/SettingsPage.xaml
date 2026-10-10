@@ -476,6 +476,12 @@
                   <TextBlock x:Name="VolumeText" Style="{StaticResource Text.Secondary}" Width="44" TextAlignment="Right" VerticalAlignment="Center" />
                 </StackPanel>
               </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Voice changer" Tag="Sound like an orc, a gnome or a murloc: everyone in your voice room hears it.">
+                <ComboBox x:Name="PresetBox" Style="{StaticResource Dropdown}" Width="260" SelectionChanged="Preset_Changed" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Hear myself" Tag="Try the voice changer on yourself. Use headphones, or it will feed back.">
+                <CheckBox x:Name="MonitorBox" Style="{StaticResource Switch}" Click="Monitor_Click" />
+              </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Sounds" Tag="A soft chime when people join or leave your room, and when you're mentioned.">
                 <CheckBox x:Name="SoundsBox" Style="{StaticResource Switch}" Click="Voice_Changed" />
               </HeaderedContentControl>

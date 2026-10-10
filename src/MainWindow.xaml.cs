@@ -214,6 +214,7 @@ namespace ElansAddonHub
             SettingsPage.Show("general");
             var tp = await ThirdPartyTest(dir);
             tp += "\r\n" + await ViewerTest(dir);
+            tp += Environment.NewLine + VoiceEffects.SelfTest();
             var dataInside = System.IO.Path.GetFullPath(Util.DataDir).StartsWith(System.IO.Path.GetFullPath(dir).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
             tp += "\r\n" + (dataInside ? "ok   " : "FAIL ") + "isolation: data folder is inside the test dir (" + Util.DataDir + ")";
             tp += Environment.NewLine + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir);
