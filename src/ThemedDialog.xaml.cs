@@ -17,15 +17,16 @@ namespace ElansAddonHub
 
         ThemedDialog() { InitializeComponent(); }
 
-        static (string glyph, string color) Look(DialogKind k)
+        // glyph + the status role it is drawn in (Brush.<role> / Brush.<role>.Tint): status colours only mark status
+        static (string glyph, string role) Look(DialogKind k)
         {
             switch (k)
             {
-                case DialogKind.Danger: return ("", "#E06C6C");    // bin
-                case DialogKind.Error: return ("", "#E06C6C");     // error badge
-                case DialogKind.Warning: return ("", "#E6B85C");   // warning
-                case DialogKind.Question: return ("", "#ABD473");  // help
-                default: return ("", "#6CB6E0");                   // info
+                case DialogKind.Danger: return ("", "Danger");    // bin
+                case DialogKind.Error: return ("", "Danger");     // error badge
+                case DialogKind.Warning: return ("", "Warn");     // warning
+                case DialogKind.Question: return ("", "Info");    // help
+                default: return ("", "Info");                     // info
             }
         }
 
@@ -33,12 +34,10 @@ namespace ElansAddonHub
         public static ThemedDialog Create(DialogKind kind, string title, string text, string confirmText, string cancelText)
         {
             var d = new ThemedDialog();
-            var (glyph, color) = Look(kind);
-            var c = (Color)ColorConverter.ConvertFromString(color);
+            var (glyph, role) = Look(kind);
             d.Glyph.Text = glyph;
-            d.Glyph.Foreground = new SolidColorBrush(c);
-            d.Badge.Background = new SolidColorBrush(Color.FromArgb(0x2E, c.R, c.G, c.B));
-            d.Edge.Background = new SolidColorBrush(Color.FromArgb(0xCC, c.R, c.G, c.B));
+            d.Glyph.Foreground = (Brush)Application.Current.FindResource("Brush." + role);
+            d.Badge.Background = (Brush)Application.Current.FindResource("Brush." + role + ".Tint");
             d.TitleText.Text = title ?? "";
             d.BodyText.Text = text ?? "";
             d.BodyText.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
@@ -47,15 +46,15 @@ namespace ElansAddonHub
             Button cancel = null;
             if (cancelText != null)
             {
-                cancel = new Button { Content = cancelText, Style = (Style)Application.Current.FindResource("SecondaryButton"), Height = 38, MinWidth = 92, Padding = new Thickness(18, 0, 18, 0), FontSize = 13.5, IsCancel = true };
+                cancel = new Button { Content = cancelText, Style = (Style)Application.Current.FindResource("Button.M"), MinWidth = 80, IsCancel = true };
                 cancel.Click += (s, e) => { d.Result = false; d.Close(); };
             }
             var ok = new Button
             {
                 Content = confirmText ?? "OK",
-                Style = (Style)Application.Current.FindResource(danger ? "DangerButton" : "PrimaryButton"),
-                Height = 38, MinWidth = 92, Padding = new Thickness(18, 0, 18, 0),
-                Margin = new Thickness(cancel != null ? 10 : 0, 0, 0, 0),
+                Style = (Style)Application.Current.FindResource(danger ? "Button.Danger.M" : "Button.Primary.M"),
+                MinWidth = 80,
+                Margin = new Thickness(cancel != null ? 8 : 0, 0, 0, 0),
                 IsDefault = !danger,   // Enter confirms, except on destructive questions where Enter keeps the safe choice
                 IsCancel = cancel == null,
             };
@@ -63,7 +62,7 @@ namespace ElansAddonHub
             if (cancel != null) d.Buttons.Children.Add(cancel);
             d.Buttons.Children.Add(ok);
             var focus = danger && cancel != null ? cancel : ok;
-            d.Loaded += (s, e) => focus.Focus();
+            d.Loaded += (s, e) => { focus.Focus(); Motion.DialogIn(d.Root); };
             d.PreviewKeyDown += (s, e) => { if (e.Key == Key.Escape && cancel == null) { d.Result = false; d.Close(); e.Handled = true; } };
             d.MouseLeftButtonDown += (s, e) => { if (e.ButtonState == MouseButtonState.Pressed) try { d.DragMove(); } catch { } };
             return d;
@@ -85,9 +84,23 @@ namespace ElansAddonHub
                     WindowStartupLocation = WindowStartupLocation.Manual,
                     Left = tl.X * sx, Top = tl.Y * sy, Width = owner.ActualWidth, Height = owner.ActualHeight,
                 };
+                scrim.Opacity = Motion.Enabled ? 0 : 1;
                 scrim.Show();
+                if (Motion.Enabled) scrim.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, Motion.Standard) { EasingFunction = Motion.EaseOut });
             }
             catch { scrim = null; }
+        }
+
+        bool closing;
+        // closing eases out (scale 0.96 + fade) before the window goes away; the dialog's Result is already set
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            base.OnClosing(e);
+            if (closing || e.Cancel || !IsVisible || !Motion.Enabled || Dispatcher.HasShutdownStarted) return;
+            closing = true;
+            e.Cancel = true;
+            try { scrim?.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, Motion.Fast) { EasingFunction = Motion.EaseIn }); } catch { }
+            Motion.DialogOut(Root, () => { try { Close(); } catch { } });
         }
 
         protected override void OnClosed(EventArgs e)

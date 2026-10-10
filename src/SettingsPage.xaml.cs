@@ -35,7 +35,7 @@ namespace ElansAddonHub
             public List<RoleOption> Roles => Ranks;
             public RoleOption RoleItem => Ranks.FirstOrDefault(r => r.Id == Role) ?? Ranks.Last();
             public Brush RoleBrush { get { var b = new SolidColorBrush(MemberVM.RoleColor(Role)); b.Freeze(); return b; } }
-            public Brush DotBrush => Online ? (Brush)Application.Current.Resources["Accent"] : (Brush)Application.Current.Resources["Line"];
+            public Brush DotBrush => Online ? (Brush)Application.Current.Resources["Brush.Success"] : (Brush)Application.Current.Resources["Brush.Text.Tertiary"];
             public string OnlineText => Online ? "Online" : "Offline";
         }
 
@@ -194,6 +194,8 @@ namespace ElansAddonHub
             if (!aboutTimer.IsEnabled) aboutTimer.Start();
         }
 
+        FrameworkElement lastSection;   // the sub-page on screen: it eases in (Motion.PageIn) when another one is picked
+
         void Nav_Checked(object sender, RoutedEventArgs e) => RefreshSection();
 
         void RefreshSection()
@@ -204,7 +206,9 @@ namespace ElansAddonHub
                 (NavGeneral, SecGeneral), (NavAddons, SecAddons), (NavLodge, SecLodge), (NavProfile, SecProfile), (NavPrivacy, SecPrivacy), (NavVoice, SecVoice),
                 (NavOverlay, SecOverlay), (NavNotify, SecNotify), (NavGm, SecGm), (NavAbout, SecAbout),
             };
-            foreach (var (nav, sec) in map) sec.Visibility = nav.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            FrameworkElement shown = null;
+            foreach (var (nav, sec) in map) { bool on = nav.IsChecked == true; sec.Visibility = on ? Visibility.Visible : Visibility.Collapsed; if (on) shown = sec; }
+            if (shown != null && shown != lastSection) { if (lastSection != null && IsLoaded) Motion.PageIn(shown); lastSection = shown; }
             Scroll.ScrollToTop();
             lodge.OverlayPreview = NavOverlay.IsChecked == true && IsVisible;
 
@@ -220,7 +224,7 @@ namespace ElansAddonHub
             SyncPrivacy();
             if (NavAddons.IsChecked == true) UpdateCfStatus();
             var c = session.Presence.Current;
-            ShareGameHint.Text = (session.Presence.Playing ? "WoW is running. " : "")
+            ShareGameRow.Tag = (session.Presence.Playing ? "WoW is running. " : "")
                 + (c != null ? $"Friends see {c.Name}, level {c.Level} {c.Class}{(c.Zone != null ? " in " + c.Zone : "")} " + (session.Presence.Strip.Status == "ok" ? "(live)." : "(updates on /reload and logout).") + ""
                              : "Friends see when you're in WoW. Install Elan's Hub (Addons tab) to also show your character, class and level.");
         }
@@ -328,7 +332,7 @@ namespace ElansAddonHub
             var st = CfOverrideForTest ?? host.CfProbe();
             CfStatusText.Text = st.Text;
             var res = Application.Current.Resources;
-            CfDot.Fill = (Brush)res[st.Kind == CurseForgeLocal.CfStatusKind.Ok ? "Accent" : st.Kind == CurseForgeLocal.CfStatusKind.Unreadable ? "Danger" : "TextDim"];
+            CfDot.Fill = (Brush)res[st.Kind == CurseForgeLocal.CfStatusKind.Ok ? "Brush.Success" : st.Kind == CurseForgeLocal.CfStatusKind.Unreadable ? "Brush.Danger" : "Brush.Text.Tertiary"];
             CfStatusText.ToolTip = CfRecheck.ToolTip = CurseForgeLocal.StatusTip;
         }
 
@@ -492,6 +496,19 @@ namespace ElansAddonHub
                 return new ChannelRow { Id = c.Str("id"), Name = c.Str("name"), Type = type, Info = info };
             }).OrderBy(c => c.Type == "voice").ToList();
             loading = false;
+        }
+
+        // design screenshots: the Guild Master page with sample members and channels (no server needed)
+        public void GmDesignForTest()
+        {
+            NavGm.Visibility = Visibility.Visible;
+            Dictionary<string, object> M(string n, string r, bool on) => new Dictionary<string, object> { ["name"] = n, ["role"] = r, ["online"] = on };
+            Dictionary<string, object> C(string n, string type, string min, int max) => new Dictionary<string, object> { ["id"] = n, ["name"] = n, ["type"] = type, ["minRole"] = min, ["max"] = max };
+            FillAdmin(new List<Dictionary<string, object>> { M("Elan", "owner", true), M("Bob", "officer", true), M("Dax", "member", false) },
+                new List<Dictionary<string, object>> { C("general", "text", "guest", 0), C("officers", "text", "officer", 0), C("Campfire", "voice", "guest", 8) });
+            InviteTitle.Text = "Invite for Cleo (Member)";
+            InviteLink.Text = "https://nasferatu.dk/lodge#invite=XXXX-XXXX";
+            InviteResult.Visibility = Visibility.Visible;
         }
 
         void Invite_Click(object sender, RoutedEventArgs e)

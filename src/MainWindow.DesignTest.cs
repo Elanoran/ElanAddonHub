@@ -117,6 +117,10 @@ namespace ElansAddonHub
                 await Task.Delay(sec == "about" ? 1200 : 450);
                 SnapshotScaled(System.IO.Path.Combine(dir, $"s-{sec}-{tag}.png"), scale);
             }
+            SettingsPage.GmDesignForTest();
+            SettingsPage.Show("gm");
+            await Task.Delay(450);
+            SnapshotScaled(System.IO.Path.Combine(dir, $"s-gm-{tag}.png"), scale);
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), "design shots done " + tag);
             Quit();
         }

@@ -51,7 +51,7 @@ Rules: at most ONE semibold element per row. Hierarchy comes from size and colou
 Fast 120 ms (hover tints, pressed), Standard 180 ms (expand/collapse enter, page, chevron), Emphasized 240 ms (large moves). Enter = cubic ease-out, exit = cubic ease-in (exit may use Fast). No bounce, no overshoot, nothing loops except spinners.
 - Hover: white veil fades in (`Motion.HoverIn/Out`); cards also lift 1 px and deepen the shadow.
 - Expand / collapse: `local:Motion.Expand="{Binding Expanded}"` on a Border (height + fade); chevron: `local:Motion.Turn`.
-- Page switch: `Motion.PageIn(page)` = fade + 8 px slide up. Dialog: scale 0.96 to 1 + fade. Long scroll lists: `local:Motion.EdgeFade="True"`.
+- Page switch: `Motion.PageIn(page)` = fade + 8 px slide up (Settings sub-pages too). Dialog: `Motion.DialogIn/DialogOut`, scale 0.96 to 1 + fade. Long scroll lists: `local:Motion.EdgeFade="True"`.
 - Reduced motion: `Motion.Enabled` / the `Motion.*` durations collapse to 0 when Windows animations are off (`SystemParameters.ClientAreaAnimation`). Never animate without going through these.
 
 ## 7. Icons
@@ -63,10 +63,16 @@ Segoe Fluent Icons (falls back to Segoe MDL2 Assets: `Font.Icons` / `Icons`), 16
 - Pill / status chip (`StatusPill`, `Chip`): 24 high, full-round, tinted fill, regular 12 px text, status colour only for status. A pill that acts (Update, Install) is accent-filled.
 - Card (`Card.Raised`): inner 16, radius 12, title Section, subtitle Secondary, stats Caption. Header toggles details.
 - List row: 16,12 padding, 36 px leading tile, `Text.RowTitle` + `Text.Secondary`, chevron right (Tertiary).
-- Settings row: label Body, helper Secondary, control right-aligned, hairline `Brush.Divider` between rows.
+- Settings row (`Setting.Row`, a `HeaderedContentControl`): `Header` = label (Body), `Tag` = helper (Secondary, optional), content = the control, right-aligned and centred; 12 px above/below, hairline `Brush.Divider` between rows only. Rows live in a `Card.Rows` card (16 side padding, first hairline clipped); form bodies use `Card.Group` + a 16 padded panel (neither lifts on hover). A section = `Text.Section` header (+ `Note` helper) over its card, 24 between sections, page title `Text.Title` once.
+- Switch (`Switch` on a CheckBox, no content): 40 x 24, track Surface3 -> accent fade, 18 px light thumb slides 180 ms, hover veil, focus ring.
+- Segment (`Segment` RadioButtons inside a `SegmentHost` Border): 32 high host (Surface2, radius 10, padding 2), 28 high segments (radius 8); the chosen one is a Surface3 tile (fade 120 ms), text Secondary -> Primary. Neutral, not accent.
+- Dropdown (`Dropdown` ComboBox): input look (32, Surface2, radius 8, no border), chevron Tertiary, hover veil, 1 px accent while open, focus ring; the list is an overlay (Surface3, hairline, radius 10, elevation 2, items radius 6).
+- Slider (implicit `Slider` style): 4 px track Surface3, accent fill, 16 px light thumb with a soft shadow, 24 px hit area, focus ring on the thumb.
+- IconButton (`IconButton`): round glyph button, Secondary -> Primary on hover with the white veil, pressed veil, focus ring; colour the glyph with a status brush only for status (a delete in Danger).
+- Settings nav (`Nav` in SettingsPage): 36 high pill, icon 16 px Tertiary -> Primary on hover, hover veil, selected = `Brush.Accent.Tint` + accent icon.
 - Input: Surface2 fill, no border at rest, 1 px accent on focus, height 32, radius 8, placeholder Secondary.
 - Tooltip: Surface3 + hairline, 12 px, delay 300 ms. Toast: overlay level (elevation 2), status icon, max 2 lines, auto-hides.
-- Dialog: elevation 2, radius 14, title Section, one Primary action right-aligned, Danger instead of Primary for deletes.
+- Dialog (`ThemedDialog`, `HealthDialog`): elevation 2 (Surface3, hairline, shadow in a 40 px margin), radius 14, padding 24, title Section, message Body in Secondary, buttons `Button.M` / `Button.Primary.M` right-aligned 8 apart, `Button.Danger.M` instead of Primary for deletes (focus stays on Cancel). Opens with `Motion.DialogIn` (scale 0.96 to 1 + fade 180 ms), closes with `Motion.DialogOut` (120 ms). Cards inside an overlay are Surface2, rows inside those Surface1 (each step one layer back, no outlines).
 - Empty state: one icon (Tertiary), one Body line, one Secondary hint, optionally one button. No illustrations needed.
 - Loading: ThinProgress for known progress; skeleton shimmer (Surface2 blocks, 1.2 s slow sweep) for lists; spinner only inside a pill/button.
 
@@ -85,4 +91,4 @@ Don't: add outlines to cards or buttons; use accent for text/numbers/decoration;
 8. Add a selftest screenshot and compare before/after (`ELANSHUB_DESIGN_SHOTS`, see `docs/design/`).
 
 ## Status
-Applied: Theme tokens + base controls (buttons, inputs, tooltip, rail) and the Addons page. Other pages still use old values inside their own XAML (they pick up the new button/input/rail/tooltip looks automatically) and are migrated page by page.
+Applied: Theme tokens + base controls (buttons, inputs, tooltip, rail), the Addons page, and (2.30) the whole Settings page (General, Addons, Lodge, Profile with its sticky bar, Privacy, Voice, In-game overlay, Notifications, Guild Master, About) plus ThemedDialog and HealthDialog, with the Switch, Segment, Dropdown, Slider, IconButton and Setting.Row components. Not yet migrated: the Lodge tab, the Inventory page, the welcome guide and the image viewer chrome (they pick up the new button/input/switch/slider/dropdown looks automatically).

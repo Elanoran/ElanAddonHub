@@ -145,6 +145,33 @@ namespace ElansAddonHub
             sv.OpacityMask = br;
         }
 
+        // ---- Dialog: opens with scale 0.96 -> 1 + fade (180 ms ease-out), closes the other way (120 ms ease-in), then runs done()
+        public static void DialogIn(FrameworkElement el)
+        {
+            if (el == null || !Enabled) return;
+            var st = new ScaleTransform(0.96, 0.96);
+            el.RenderTransformOrigin = new Point(0.5, 0.5);
+            el.RenderTransform = st;
+            var grow = new DoubleAnimation(0.96, 1, Standard) { EasingFunction = EaseOut };
+            grow.Completed += (s, a) => { el.BeginAnimation(UIElement.OpacityProperty, null); el.Opacity = 1; if (el.RenderTransform == st) el.RenderTransform = Transform.Identity; };
+            st.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+            st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.96, 1, Standard) { EasingFunction = EaseOut });
+            el.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Standard) { EasingFunction = EaseOut, FillBehavior = FillBehavior.HoldEnd });
+        }
+
+        public static void DialogOut(FrameworkElement el, Action done)
+        {
+            if (el == null || !Enabled) { done(); return; }
+            var st = new ScaleTransform(1, 1);
+            el.RenderTransformOrigin = new Point(0.5, 0.5);
+            el.RenderTransform = st;
+            var shrink = new DoubleAnimation(1, 0.96, Fast) { EasingFunction = EaseIn, FillBehavior = FillBehavior.HoldEnd };
+            shrink.Completed += (s, a) => done();
+            st.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
+            st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, 0.96, Fast) { EasingFunction = EaseIn, FillBehavior = FillBehavior.HoldEnd });
+            el.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, 0, Fast) { EasingFunction = EaseIn, FillBehavior = FillBehavior.HoldEnd });
+        }
+
         // ---- Page enter: fade + 8 px slide up, once, when a page becomes visible
         public static void PageIn(FrameworkElement page)
         {

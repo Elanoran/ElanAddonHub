@@ -453,25 +453,49 @@
     </Setter>
   </Style>
 
-  <!-- toggle switch -->
+  <!-- toggle switch (DESIGN 8): 40 x 24, track Surface3 -> accent, 18 px thumb that slides 180 ms, hover veil, keyboard focus ring. Use on a CheckBox, no content. -->
   <Style x:Key="Switch" TargetType="CheckBox">
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="CheckBox">
-          <Border x:Name="track" Width="36" Height="20" CornerRadius="10" Background="{StaticResource SurfaceHi}"
-                  BorderBrush="{StaticResource Line}" BorderThickness="1">
-            <Ellipse x:Name="thumb" Width="14" Height="14" Fill="{StaticResource TextDim}" HorizontalAlignment="Left" Margin="2,0,0,0" />
-          </Border>
+          <Grid Background="Transparent" Width="40" Height="24" SnapsToDevicePixels="True">
+            <Border x:Name="track" CornerRadius="12" Background="{StaticResource Brush.Surface3}" />
+            <Border x:Name="on" CornerRadius="12" Background="{StaticResource Brush.Accent}" Opacity="0" />
+            <Border x:Name="hv" CornerRadius="12" Background="{StaticResource Brush.Overlay.Hover}" Opacity="0" IsHitTestVisible="False" />
+            <Ellipse x:Name="thumb" Width="18" Height="18" Fill="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Left" Margin="3,0,0,0">
+              <Ellipse.RenderTransform><TranslateTransform x:Name="tx" /></Ellipse.RenderTransform>
+              <Ellipse.Effect><DropShadowEffect BlurRadius="4" ShadowDepth="1" Direction="270" Opacity="0.35" Color="Black" /></Ellipse.Effect>
+            </Ellipse>
+            <Border x:Name="ring" Margin="-3" CornerRadius="15" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+          </Grid>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsChecked" Value="True">
-              <Setter TargetName="track" Property="Background" Value="{StaticResource Accent}" />
-              <Setter TargetName="track" Property="BorderBrush" Value="{StaticResource Accent}" />
-              <Setter TargetName="thumb" Property="Fill" Value="#111315" />
-              <Setter TargetName="thumb" Property="HorizontalAlignment" Value="Right" />
-              <Setter TargetName="thumb" Property="Margin" Value="0,0,2,0" />
+            <Trigger Property="IsMouseOver" Value="True">
+              <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
             </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="tx" Storyboard.TargetProperty="X" To="16" Duration="{StaticResource Motion.Standard}" EasingFunction="{StaticResource Motion.EaseOut}" />
+                    <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Standard}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="tx" Storyboard.TargetProperty="X" To="0" Duration="{StaticResource Motion.Standard}" EasingFunction="{StaticResource Motion.EaseIn}" />
+                    <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Standard}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4" /><Setter Property="Cursor" Value="Arrow" /></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
@@ -618,7 +642,7 @@
         <ControlTemplate TargetType="TextBox">
           <Border x:Name="bd" Background="{StaticResource Brush.Surface2}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="{StaticResource Radius.Control}">
             <Grid>
-              <TextBlock x:Name="ph" Text="{TemplateBinding Tag}" Foreground="{StaticResource TextDim}" Margin="12,0,0,0"
+              <TextBlock x:Name="ph" Text="{TemplateBinding Tag}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="11,0,0,0"
                          VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False" FontSize="{TemplateBinding FontSize}" />
               <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
             </Grid>
@@ -723,11 +747,12 @@
     </Setter>
   </Style>
 
-  <!-- round icon button (send, attach, leave voice) -->
+  <!-- round icon button (DESIGN 8): glyph Secondary -> Primary on hover, white veil fades in (120 ms), pressed veil, keyboard focus ring. Default 34; set Width/Height for 24-32.
+       Set Foreground locally only for a status glyph (e.g. Danger on a delete button). -->
   <Style x:Key="IconButton" TargetType="Button">
-    <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="FontFamily" Value="{StaticResource Icons}" />
+    <Setter Property="FontFamily" Value="{StaticResource Font.Icons}" />
     <Setter Property="FontSize" Value="15" />
     <Setter Property="Width" Value="34" />
     <Setter Property="Height" Value="34" />
@@ -736,14 +761,22 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="17">
+          <Grid>
+            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="17" />
+            <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="17" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="pr" Background="{StaticResource Brush.Overlay.Pressed}" CornerRadius="17" Opacity="0" IsHitTestVisible="False" />
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-          </Border>
+            <Border x:Name="ring" Margin="-3" CornerRadius="20" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+          </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="bd" Property="Background" Value="{StaticResource SurfaceHi}" />
-              <Setter Property="Foreground" Value="{StaticResource Text}" />
+              <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+              <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
             </Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="pr" Property="Opacity" Value="1" /></Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4" /></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
@@ -849,45 +882,68 @@
     </Setter>
   </Style>
 
-  <!-- segmented choice (Voice activation / Push to talk) -->
+  <!-- segmented choice (DESIGN 8): put RadioButtons with Style=Segment inside a Border Style=SegmentHost. 32 high host (Surface2, radius 10, padding 2),
+       28 high segments (radius 8); the chosen one is a Surface3 tile that fades in (120 ms), text Secondary -> Primary. Keyboard focus ring. -->
+  <Style x:Key="SegmentHost" TargetType="Border">
+    <Setter Property="Background" Value="{StaticResource Brush.Surface2}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Radius.ControlLg}" />
+    <Setter Property="Padding" Value="2" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
   <Style x:Key="Segment" TargetType="RadioButton">
-    <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
-          <Border x:Name="bd" Background="Transparent" CornerRadius="7" Padding="12,5">
-            <ContentPresenter HorizontalAlignment="Center" />
-          </Border>
+          <Grid Height="28" Background="Transparent">
+            <Border x:Name="sel" Background="{StaticResource Brush.Surface3}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" />
+            <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12,0" />
+            <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+          </Grid>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsChecked" Value="True">
-              <Setter TargetName="bd" Property="Background" Value="{StaticResource Accent}" />
-              <Setter Property="Foreground" Value="#111315" />
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+              <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
             </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+              <Trigger.EnterActions>
+                <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource Motion.Fast}" /></Storyboard></BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource Motion.Fast}" /></Storyboard></BeginStoryboard>
+              </Trigger.ExitActions>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
   </Style>
 
-  <!-- slim slider -->
+  <!-- slim slider (DESIGN 8): 4 px track Surface3, accent fill, 16 px light thumb with a soft shadow, 24 px hit area, focus ring on the thumb -->
   <Style TargetType="Slider">
-    <Setter Property="Height" Value="18" />
+    <Setter Property="Height" Value="24" />
     <Setter Property="IsMoveToPointEnabled" Value="True" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Slider">
-          <Grid>
-            <Border Height="4" CornerRadius="2" Background="{StaticResource SurfaceHi}" VerticalAlignment="Center" />
+          <Grid Background="Transparent">
+            <Border Height="4" CornerRadius="2" Background="{StaticResource Brush.Surface3}" VerticalAlignment="Center" />
             <Track x:Name="PART_Track">
               <Track.DecreaseRepeatButton>
                 <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
                   <RepeatButton.Template>
                     <ControlTemplate TargetType="RepeatButton">
-                      <Border Height="4" CornerRadius="2" Background="{StaticResource AccentDark}" VerticalAlignment="Center" />
+                      <Border Height="4" CornerRadius="2" Background="{StaticResource Brush.Accent}" VerticalAlignment="Center" />
                     </ControlTemplate>
                   </RepeatButton.Template>
                 </RepeatButton>
@@ -895,17 +951,26 @@
               <Track.IncreaseRepeatButton>
                 <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
                   <RepeatButton.Template>
-                    <ControlTemplate TargetType="RepeatButton">
-                      <Border Background="Transparent" />
-                    </ControlTemplate>
+                    <ControlTemplate TargetType="RepeatButton"><Border Background="Transparent" /></ControlTemplate>
                   </RepeatButton.Template>
                 </RepeatButton>
               </Track.IncreaseRepeatButton>
               <Track.Thumb>
-                <Thumb>
+                <Thumb Width="24" Height="24">
                   <Thumb.Template>
                     <ControlTemplate TargetType="Thumb">
-                      <Ellipse Width="14" Height="14" Fill="{StaticResource Text}" />
+                      <Grid Background="Transparent">
+                        <Ellipse x:Name="knob" Width="16" Height="16" Fill="{StaticResource Brush.Text.Primary}">
+                          <Ellipse.Effect><DropShadowEffect BlurRadius="4" ShadowDepth="1" Direction="270" Opacity="0.4" Color="Black" /></Ellipse.Effect>
+                        </Ellipse>
+                        <Ellipse x:Name="ring" Width="24" Height="24" StrokeThickness="2" Stroke="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+                      </Grid>
+                      <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsKeyboardFocused, RelativeSource={RelativeSource AncestorType=Slider}}" Value="True">
+                          <Setter TargetName="ring" Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <Trigger Property="IsDragging" Value="True"><Setter TargetName="knob" Property="Fill" Value="{StaticResource Brush.Accent.Hover}" /></Trigger>
+                      </ControlTemplate.Triggers>
                     </ControlTemplate>
                   </Thumb.Template>
                 </Thumb>
@@ -917,65 +982,114 @@
     </Setter>
   </Style>
 
-  <!-- dropdown (audio devices) -->
+  <!-- dropdown / ComboBox (DESIGN 8): like an input (32 high, Surface2, radius 8, no border), chevron Tertiary, hover veil, accent 1 px while open,
+       focus ring from the keyboard. The list is an overlay surface (Surface3, hairline, elevation 2, radius 10). -->
   <Style x:Key="Dropdown" TargetType="ComboBox">
-    <Setter Property="Foreground" Value="{StaticResource Text}" />
-    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ComboBox">
           <Grid>
-            <ToggleButton x:Name="tb" Focusable="False" Cursor="Hand"
-                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+            <ToggleButton x:Name="tb" Focusable="False" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
               <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
-                  <Border x:Name="bd" Background="{StaticResource Brush.Surface2}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="{StaticResource Radius.Control}">
-                    <TextBlock Text="&#xE70D;" FontFamily="{StaticResource Icons}" FontSize="10" Foreground="{StaticResource TextDim}"
-                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" />
-                  </Border>
+                  <Grid>
+                    <Border x:Name="bd" Background="{StaticResource Brush.Surface2}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="{StaticResource Radius.Control}" />
+                    <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+                    <TextBlock x:Name="chev" Text="&#xE70D;" FontFamily="{StaticResource Font.Icons}" FontSize="10" Foreground="{StaticResource Brush.Text.Tertiary}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0" />
+                  </Grid>
                   <ControlTemplate.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
-                      <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentDark}" />
+                      <Setter TargetName="chev" Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+                      <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                      <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
                     </Trigger>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Brush.Accent}" /></Trigger>
                   </ControlTemplate.Triggers>
                 </ControlTemplate>
               </ToggleButton.Template>
             </ToggleButton>
             <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                              Margin="10,7,28,7" VerticalAlignment="Center" IsHitTestVisible="False" />
-            <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
-              <Border Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8"
-                      Margin="0,4,0,0" Padding="4" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                              Margin="12,0,32,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="-4" CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" HorizontalOffset="-16" VerticalOffset="-12" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+              <Border Margin="16,16,16,20" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.ControlLg}"
+                      Padding="4" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                <Border.Effect><DropShadowEffect BlurRadius="40" ShadowDepth="12" Direction="270" Opacity="0.5" Color="Black" /></Border.Effect>
                 <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
                   <ItemsPresenter />
                 </ScrollViewer>
               </Border>
             </Popup>
           </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{StaticResource Brush.Text.Disabled}" /></Trigger>
+          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
     <Setter Property="ItemContainerStyle">
       <Setter.Value>
         <Style TargetType="ComboBoxItem">
-          <Setter Property="Foreground" Value="{StaticResource Text}" />
+          <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
           <Setter Property="Cursor" Value="Hand" />
           <Setter Property="Template">
             <Setter.Value>
               <ControlTemplate TargetType="ComboBoxItem">
-                <Border x:Name="bd" Background="Transparent" CornerRadius="6" Padding="8,6">
-                  <ContentPresenter />
+                <Border x:Name="bd" Background="Transparent" CornerRadius="6" Padding="8,6" MinHeight="28">
+                  <ContentPresenter VerticalAlignment="Center" />
                 </Border>
                 <ControlTemplate.Triggers>
-                  <Trigger Property="IsHighlighted" Value="True">
-                    <Setter TargetName="bd" Property="Background" Value="{StaticResource Line}" />
-                  </Trigger>
+                  <Trigger Property="IsSelected" Value="True"><Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Overlay.Chip}" /></Trigger>
+                  <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Overlay.Pressed}" /></Trigger>
                 </ControlTemplate.Triggers>
               </ControlTemplate>
             </Setter.Value>
           </Setter>
         </Style>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- settings group (DESIGN 8): a raised card that does not lift on hover; rows inside are Setting.Row, separated by hairlines. The first row's hairline is
+       clipped away by the wrapper pattern:  <ContentControl Style=Card.Group><Border Padding="16,0" ClipToBounds="True"><StackPanel Margin="0,-1,0,0"> rows -->
+  <Style x:Key="Card.Group" TargetType="ContentControl" BasedOn="{StaticResource Card.Raised}">
+    <Setter Property="m:Motion.Track" Value="False" />
+    <Setter Property="Margin" Value="0,0,0,24" />
+  </Style>
+
+  <!-- one settings row (DESIGN 8): Header = label (Body), Tag = helper text (Secondary, optional), Content = the control, right-aligned and centred.
+       Hairline above it (Divider); 12 px above and below. -->
+  <Style x:Key="Setting.Row" TargetType="HeaderedContentControl">
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="HeaderedContentControl">
+          <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,1,0,0" Padding="0,12">
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center" HorizontalAlignment="Left" Margin="0,0,16,0" MaxWidth="480">
+                <ContentPresenter ContentSource="Header">
+                  <ContentPresenter.Resources>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Body}"><Setter Property="TextWrapping" Value="Wrap" /></Style>
+                  </ContentPresenter.Resources>
+                </ContentPresenter>
+                <TextBlock x:Name="hint" Text="{TemplateBinding Tag}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,2,0,0" />
+              </StackPanel>
+              <ContentPresenter Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" />
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="Tag" Value="{x:Null}"><Setter TargetName="hint" Property="Visibility" Value="Collapsed" /></Trigger>
+            <Trigger Property="Tag" Value=""><Setter TargetName="hint" Property="Visibility" Value="Collapsed" /></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
       </Setter.Value>
     </Setter>
   </Style>

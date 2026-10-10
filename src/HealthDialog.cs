@@ -30,6 +30,19 @@ namespace ElansAddonHub
         public string LastCopied { get; private set; }
 
         static Brush Res(string key) => (Brush)Application.Current.Resources[key];
+        static Style Sty(string key) => (Style)Application.Current.Resources[key];
+        static Style Sty0(string key) => (Style)Application.Current.Resources[key];
+
+        bool closing;
+        // closing eases out (scale 0.96 + fade) before the window goes away
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            base.OnClosing(e);
+            if (closing || e.Cancel || !IsVisible || !Motion.Enabled || Dispatcher.HasShutdownStarted) return;
+            closing = true;
+            e.Cancel = true;
+            Motion.DialogOut(root, () => { try { Close(); } catch { } });
+        }
         static Brush Frozen(string hex) { var b = (SolidColorBrush)new BrushConverter().ConvertFromString(hex); b.Freeze(); return b; }
 
         public HealthDialog(HealthMonitor monitor, string outpostVersion)
@@ -37,29 +50,31 @@ namespace ElansAddonHub
             this.monitor = monitor;
             this.outpostVersion = outpostVersion;
             WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = Brushes.Transparent; ResizeMode = ResizeMode.NoResize;
-            ShowInTaskbar = false; Width = 780; Height = 680; WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            ShowInTaskbar = false; Width = 864; Height = Math.Min(760, SystemParameters.WorkArea.Height - 24); WindowStartupLocation = WindowStartupLocation.CenterOwner;
             UseLayoutRounding = true; FontFamily = new FontFamily("Segoe UI");
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
 
-            root.Margin = new Thickness(22); root.Background = Res("Surface"); root.BorderBrush = Res("Line"); root.BorderThickness = new Thickness(1); root.CornerRadius = new CornerRadius(14);
-            root.Effect = new DropShadowEffect { BlurRadius = 28, ShadowDepth = 6, Direction = 270, Opacity = 0.6 };
+            // an overlay (DESIGN 5/8): Surface3, hairline, radius 14, elevation 2; the 40 px margin holds the shadow
+            root.Margin = new Thickness(40); root.Background = Res("Brush.Surface3"); root.BorderBrush = Res("Brush.Divider"); root.BorderThickness = new Thickness(1); root.CornerRadius = new CornerRadius(14);
+            root.Effect = new DropShadowEffect { BlurRadius = 40, ShadowDepth = 12, Direction = 270, Opacity = 0.5, Color = Colors.Black };
+            Loaded += (s, e) => Motion.DialogIn(root);
             Content = root;
 
-            var grid = new Grid { Margin = new Thickness(22, 18, 22, 18) };
+            var grid = new Grid { Margin = new Thickness(24) };
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.Child = grid;
 
             // header
-            var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12), LastChildFill = true };
-            var close = new Button { Content = "", Style = (Style)Application.Current.FindResource("CloseButton"), VerticalAlignment = VerticalAlignment.Top, ToolTip = "Close" };
+            var head = new DockPanel { Margin = new Thickness(0, 0, 0, 16), LastChildFill = true };
+            var close = new Button { Content = "", Style = (Style)Application.Current.FindResource("CloseButton"), VerticalAlignment = VerticalAlignment.Top, ToolTip = "Close", Margin = new Thickness(0, -8, -8, 0) };
             close.Click += (s, e) => Close();
             DockPanel.SetDock(close, Dock.Right);
             head.Children.Add(close);
             var titles = new StackPanel();
-            titles.Children.Add(new TextBlock { Text = "Addon health", FontSize = 18, FontWeight = FontWeights.SemiBold, Foreground = Res("Text") });
-            sub.FontSize = 12; sub.Foreground = Res("TextDim"); sub.Margin = new Thickness(0, 3, 0, 0); sub.TextWrapping = TextWrapping.Wrap;
+            titles.Children.Add(new TextBlock { Text = "Addon health", Style = Sty("Text.Section") });
+            sub.Style = Sty("Text.Secondary"); sub.Margin = new Thickness(0, 2, 0, 0); sub.TextWrapping = TextWrapping.Wrap;
             titles.Children.Add(sub);
             head.Children.Add(titles);
             Grid.SetRow(head, 0);
@@ -67,26 +82,28 @@ namespace ElansAddonHub
 
             // content
             var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = list, Padding = new Thickness(0, 0, 8, 0) };
+            Motion.SetEdgeFade(scroll, true);
             Grid.SetRow(scroll, 1);
             grid.Children.Add(scroll);
 
             // footer
-            var foot = new DockPanel { Margin = new Thickness(0, 14, 0, 0), LastChildFill = false };
+            var foot = new DockPanel { Margin = new Thickness(0, 16, 0, 0), LastChildFill = false };
             Button Btn(string text, string style, double minW = 0)
             {
-                var b = new Button { Content = text, Style = (Style)Application.Current.FindResource(style), Height = 34, Padding = new Thickness(16, 0, 16, 0), FontSize = 13, Margin = new Thickness(0, 0, 8, 0) };
+                var b = new Button { Content = text, Style = (Style)Application.Current.FindResource(style), Margin = new Thickness(0, 0, 8, 0) };
                 if (minW > 0) b.MinWidth = minW;
                 return b;
             }
-            copyButton = Btn("Copy report", "PrimaryButton", 110);
+            copyButton = Btn("Copy report", "Button.Primary.M", 112);
             copyButton.ToolTip = "Copies a plain-text report (errors, stacks, diag results) with character names replaced by char1, char2 ...";
             copyButton.Click += (s, e) => CopyReport();
-            var open = Btn("Open SavedVariables folder", "SecondaryButton");
+            var open = Btn("Open SavedVariables folder", "Button.M");
             open.Click += (s, e) => OpenFolder();
-            seenButton = Btn("Mark as seen", "SecondaryButton");
+            seenButton = Btn("Mark as seen", "Button.M");
             seenButton.ToolTip = "The errors listed now stop counting as new (the badge and the toast)";
             seenButton.Click += (s, e) => monitor.MarkSeen();
             var closeBtn = Btn("Close", "GhostButton");
+            closeBtn.Height = 32; closeBtn.Padding = new Thickness(12, 0, 12, 0); closeBtn.FontSize = 13;
             closeBtn.Margin = new Thickness(0);
             closeBtn.IsCancel = true;
             closeBtn.Click += (s, e) => Close();
@@ -141,12 +158,12 @@ namespace ElansAddonHub
             sub.Text = !rep.AnyData
                 ? "No saved variables found yet. Log in with an Elan addon, wait a few seconds, then /reload once - WoW writes them only then."
                 : (newN > 0 ? $"{newN} new error{(newN == 1 ? "" : "s")} · " : "") + $"{errN} in total · as of the last /reload or logout · read-only";
-            sub.Foreground = newN > 0 ? Res("Danger") : Res("TextDim");
+            sub.Foreground = newN > 0 ? Res("Brush.Danger") : Res("Brush.Text.Secondary");
             seenButton.IsEnabled = newN > 0;
             copyButton.IsEnabled = rep.Addons.Count > 0;
             if (rep.Addons.Count == 0)
             {
-                list.Children.Add(new TextBlock { Text = "No Elan addons found in the WoW folder.", Foreground = Res("TextDim"), FontSize = 13, Margin = new Thickness(0, 8, 0, 0) });
+                list.Children.Add(new TextBlock { Text = "No Elan addons found in the WoW folder.", Style = Sty("Text.Body"), Foreground = Res("Brush.Text.Secondary"), Margin = new Thickness(0, 8, 0, 0) });
                 return;
             }
             foreach (var h in rep.Addons) list.Children.Add(Card(h));
@@ -155,46 +172,48 @@ namespace ElansAddonHub
         Border Card(AddonHealth h)
         {
             var status = HealthReader.Status(h, out int level);
-            var color = level == 2 ? Res("Danger") : level == 1 ? Res("Gold") : Res("Accent");
-            var card = new Border { Background = Res("Card"), BorderBrush = Res("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 13, 16, 13), Margin = new Thickness(0, 0, 0, 10) };
+            var role = level == 2 ? "Danger" : level == 1 ? "Warn" : "Success";
+            var color = Res("Brush." + role);
+            // a card inside the overlay sits one step back: Surface2, no outline (DESIGN 4/5)
+            var card = new Border { Background = Res("Brush.Surface2"), CornerRadius = new CornerRadius(12), Padding = new Thickness(16), Margin = new Thickness(0, 0, 0, 12) };
             var st = new StackPanel();
             card.Child = st;
 
             var top = new DockPanel();
-            var chip = new Border { Background = Tint(color, 0x26), BorderBrush = Tint(color, 0x80), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 2, 9, 3), VerticalAlignment = VerticalAlignment.Center, MaxWidth = 340 };
-            chip.Child = new TextBlock { Text = (level == 2 ? "⚠ " : level == 0 ? "✓ " : "") + ShortStatus(h, level, status), Foreground = color, FontSize = 11.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+            var chip = new Border { Style = Sty0("Chip"), Background = Res("Brush." + role + ".Tint"), VerticalAlignment = VerticalAlignment.Center, MaxWidth = 340 };
+            chip.Child = new TextBlock { Text = (level == 2 ? "\u26A0 " : level == 0 ? "\u2713 " : "") + ShortStatus(h, level, status), Style = Sty("Text.Secondary"), Foreground = color, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
             chip.ToolTip = status;
             DockPanel.SetDock(chip, Dock.Right);
             top.Children.Add(chip);
-            top.Children.Add(new TextBlock { Text = h.Title, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = Res("Text"), VerticalAlignment = VerticalAlignment.Center });
+            top.Children.Add(new TextBlock { Text = h.Title, Style = Sty("Text.Section"), VerticalAlignment = VerticalAlignment.Center });
             st.Children.Add(top);
 
             // versions + last diag
             var diagText = h.Last == null ? "no diag yet"
-                : $"diag v{h.DiagVersion ?? "?"}{(h.DiagBehind ? " (older)" : "")} · {InventoryReader.Ago(h.Last.At)} · {HealthReader.RunKind(h.Last)}";
-            var line = $"Installed {(h.Installed != null ? "v" + h.Installed : "?")} · {diagText}" + (h.HasFile ? $" · saved {InventoryReader.Ago(new DateTimeOffset(h.FileWritten, TimeSpan.Zero).ToUnixTimeSeconds())}" : "");
-            st.Children.Add(Dim(line, 12, new Thickness(0, 4, 0, 0)));
-            if (level == 1) st.Children.Add(new TextBlock { Text = status, Foreground = Res("Gold"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0) });
+                : $"diag v{h.DiagVersion ?? "?"}{(h.DiagBehind ? " (older)" : "")} \u00B7 {InventoryReader.Ago(h.Last.At)} \u00B7 {HealthReader.RunKind(h.Last)}";
+            var line = $"Installed {(h.Installed != null ? "v" + h.Installed : "?")} \u00B7 {diagText}" + (h.HasFile ? $" \u00B7 saved {InventoryReader.Ago(new DateTimeOffset(h.FileWritten, TimeSpan.Zero).ToUnixTimeSeconds())}" : "");
+            st.Children.Add(Dim(line, "Text.Secondary", new Thickness(0, 4, 0, 0)));
+            if (level == 1) st.Children.Add(new TextBlock { Text = status, Style = Sty("Text.Secondary"), Foreground = Res("Brush.Warn"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
 
             // diag facts
             var facts = HealthReader.Facts(h);
             if (facts.Count > 0)
             {
                 var fp = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-                foreach (var f in facts) fp.Children.Add(Dim("• " + f, 11.5, new Thickness(0, 1, 0, 0), true));
+                foreach (var f in facts) fp.Children.Add(Dim("\u2022 " + f, "Text.Caption", new Thickness(0, 2, 0, 0), true));
                 st.Children.Add(fp);
             }
 
             // errors
-            st.Children.Add(new Border { Height = 1, Background = Res("Line"), Margin = new Thickness(0, 10, 0, 8) });
+            st.Children.Add(new Border { Height = 1, Background = Res("Brush.Divider"), Margin = new Thickness(0, 12, 0, 12) });
             if (h.Bugs.Count == 0)
-                st.Children.Add(Dim(h.HasFile ? "No errors caught." : "No data to read yet.", 12, new Thickness(0)));
+                st.Children.Add(Dim(h.HasFile ? "No errors caught." : "No data to read yet.", "Text.Secondary", new Thickness(0)));
             else
             {
                 st.Children.Add(new TextBlock
                 {
-                    Text = $"Errors ({h.Bugs.Count}{(h.NewCount > 0 ? ", " + h.NewCount + " new" : "")})" + (h.OtherErrors > 0 ? $" · {h.OtherErrors} about other addons not shown" : ""),
-                    FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = h.NewCount > 0 ? Res("Danger") : Res("Text"), Margin = new Thickness(0, 0, 0, 4)
+                    Text = $"Errors ({h.Bugs.Count}{(h.NewCount > 0 ? ", " + h.NewCount + " new" : "")})" + (h.OtherErrors > 0 ? $" \u00B7 {h.OtherErrors} about other addons not shown" : ""),
+                    Style = Sty("Text.RowTitle"), Foreground = h.NewCount > 0 ? Res("Brush.Danger") : Res("Brush.Text.Primary"), Margin = new Thickness(0, 0, 0, 8)
                 });
                 foreach (var b in h.Bugs) st.Children.Add(ErrorRow(b));
             }
@@ -216,47 +235,53 @@ namespace ElansAddonHub
             return b;
         }
 
-        static TextBlock Dim(string text, double size, Thickness margin, bool wrap = false) =>
-            new TextBlock { Text = text, FontSize = size, Foreground = Res("TextDim"), Margin = margin, TextWrapping = wrap ? TextWrapping.Wrap : TextWrapping.NoWrap, TextTrimming = wrap ? TextTrimming.None : TextTrimming.CharacterEllipsis };
+        static TextBlock Dim(string text, string style, Thickness margin, bool wrap = false) =>
+            new TextBlock { Text = text, Style = Sty(style), Margin = margin, TextWrapping = wrap ? TextWrapping.Wrap : TextWrapping.NoWrap, TextTrimming = wrap ? TextTrimming.None : TextTrimming.CharacterEllipsis };
 
         UIElement ErrorRow(HealthBug b)
         {
-            var box = new Border { Background = Res("Surface"), BorderBrush = b.IsNew ? Tint(Res("Danger"), 0x90) : Res("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 0, 6) };
+            // one step further back again: Surface1, no outline; a red dot marks a new error
+            var box = new Border { Background = Res("Brush.Surface1"), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 0, 8) };
             var st = new StackPanel();
             box.Child = st;
 
-            var detail = new StackPanel { Margin = new Thickness(12, 0, 12, 10), Visibility = expandAll ? Visibility.Visible : Visibility.Collapsed };
-            detail.Children.Add(new TextBox { Text = b.Msg, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Res("Text"), FontSize = 12, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 6) });
+            var inner = new StackPanel();
+            inner.Children.Add(new TextBox { Text = b.Msg, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Res("Brush.Text.Primary"), FontSize = 12, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 8) });
             if (!string.IsNullOrWhiteSpace(b.Stack))
-                detail.Children.Add(new TextBox { Text = b.Stack.Replace("\r", ""), IsReadOnly = true, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Res("TextDim"), FontFamily = new FontFamily("Consolas"), FontSize = 11, Padding = new Thickness(0), TextWrapping = TextWrapping.NoWrap });
+                inner.Children.Add(new TextBox { Text = b.Stack.Replace("\r", ""), IsReadOnly = true, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Res("Brush.Text.Secondary"), FontFamily = (FontFamily)Application.Current.Resources["Font.Mono"], FontSize = 11, Padding = new Thickness(0), TextWrapping = TextWrapping.NoWrap });
+            // grows / shrinks (Motion.Expand) instead of popping
+            var detail = new Border { Padding = new Thickness(12, 0, 12, 12), Child = inner };
+            if (!expandAll) detail.Visibility = Visibility.Collapsed;
             details.Add(detail);
 
-            var chevron = new TextBlock { Text = expandAll ? "" : "", FontFamily = (FontFamily)Application.Current.Resources["Icons"], FontSize = 11, Foreground = Res("TextDim"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+            var chevron = new TextBlock { Style = Sty("Text.Chevron"), Margin = new Thickness(8, 0, 0, 0) };
+            if (expandAll) Motion.SetTurn(chevron, true);
             var head = new DockPanel { Background = Brushes.Transparent, Margin = new Thickness(12, 8, 12, 8), Cursor = Cursors.Hand, ToolTip = "Show / hide the details" };
             DockPanel.SetDock(chevron, Dock.Right);
             head.Children.Add(chevron);
-            var meta = new TextBlock { FontSize = 11.5, Foreground = Res("TextDim"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(10, 1, 0, 0) };
+            var meta = new TextBlock { Style = Sty("Text.Caption"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 2, 0, 0) };
             DockPanel.SetDock(meta, Dock.Right);
-            meta.Text = $"x{b.Count} · v{b.Version ?? "?"}{(b.Older ? " (older)" : "")} · {InventoryReader.Ago(b.At)}";
+            meta.Text = $"x{b.Count} \u00B7 v{b.Version ?? "?"}{(b.Older ? " (older)" : "")} \u00B7 {InventoryReader.Ago(b.At)}";
             head.Children.Add(meta);
             if (b.IsNew)
             {
-                var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Res("Danger"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), ToolTip = "New" };
+                var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = Res("Brush.Danger"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), ToolTip = "New" };
                 DockPanel.SetDock(dot, Dock.Left);
                 head.Children.Add(dot);
             }
             var msg = new StackPanel();
-            msg.Children.Add(new TextBlock { Text = FirstLine(b.Msg), FontSize = 12.5, Foreground = Res("Text"), TextTrimming = TextTrimming.CharacterEllipsis });
-            if (b.FirstLine.Length > 0) msg.Children.Add(new TextBlock { Text = b.FirstLine, FontSize = 11, Foreground = Res("TextDim"), FontFamily = new FontFamily("Consolas"), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) });
+            msg.Children.Add(new TextBlock { Text = FirstLine(b.Msg), Style = Sty("Text.Body"), TextTrimming = TextTrimming.CharacterEllipsis });
+            if (b.FirstLine.Length > 0) msg.Children.Add(new TextBlock { Text = b.FirstLine, Style = Sty("Text.Caption"), FontFamily = (FontFamily)Application.Current.Resources["Font.Mono"], TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 2, 0, 0) });
             head.Children.Add(msg);
             head.MouseLeftButtonUp += (s, e) =>
             {
-                bool open = detail.Visibility != Visibility.Visible;
-                detail.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-                chevron.Text = open ? "" : "";
+                bool open = !Motion.GetExpand(detail);
+                Motion.SetExpand(detail, open);
+                Motion.SetTurn(chevron, open);
             };
             st.Children.Add(head);
             st.Children.Add(detail);
+            if (expandAll) Motion.SetExpand(detail, true);
             return box;
         }
 
