@@ -189,19 +189,222 @@ namespace ElansAddonHub.Services
 
         // Ask CurseForge itself to install one specific file of one addon (verified in its app.asar: the curseforge://install handler).
         // Returns once the file shows the new installed id, or after the timeout (CurseForge may still be working).
-        public static async Task<bool> RequestInstall(CfAddon a, long fileId, string addOnsDir, int timeoutSeconds = 120)
+        // Why this is more than "send the link and poll": when CurseForge is not running, Windows starts it with the link as a startup
+        // argument, and if it then finds its own app update it installs it, quits and relaunches WITHOUT the argument - the request is lost
+        // (its log: "Performing app update ... RelaunchAfterUpdate: true", "Shutdown complete", a new session without the link).
+        // Link parameters (read-only check of CurseForge 1.322.0 app.asar, deep-link parser "case install"): only addonId, fileId, gameId,
+        // code, source, medium, campaign are read. There is NO instance parameter, so since 1.322.0 CurseForge itself shows its modal
+        // "Where would you like to install your addon?" and the user must pick the instance and click Install (the hub never clicks for them).
+        // So: (1) start CurseForge ourselves first and wait until it is up and idle, (2) after sending, look for CurseForge's own
+        // "Processing project install command" log line, (3) no confirmation in ConfirmSec or a self-update/restart seen = wait until it
+        // is up again and resend the link ONCE, (4) still nothing = NotStarted (the card shows Retry instead of hanging).
+        public enum CfInstallResult { Installed, Started, NotStarted }
+
+        // timings in seconds (fields, so the selftest can shorten them)
+        static int SettleSec = 5, ConfirmSec = 15, ReadyWaitSec = 90, TotalSec = 180, PollMs = 1500;
+        // seams for the selftest (never start or message the real CurseForge there)
+        static Func<string, bool> SendLink = link =>
         {
-            if (a == null || fileId <= 0) return false;
-            try { Process.Start(new ProcessStartInfo(DeepLink(a, fileId)) { UseShellExecute = true }); }
+            try { Process.Start(new ProcessStartInfo(link) { UseShellExecute = true }); return true; }
             catch (Exception e) { Util.Log("curseforge deep link failed: " + e.Message); return false; }
-            var end = DateTime.UtcNow.AddSeconds(timeoutSeconds);
-            while (DateTime.UtcNow < end)
+        };
+        static Func<bool> StartApp = () => OpenApp();
+        static Func<bool> RunningNow = () => IsRunning();
+        static Func<int> MainPid = () =>
+        {
+            try { var p = Process.GetProcessesByName("CurseForge").OrderBy(x => { try { return x.StartTime; } catch { return DateTime.MaxValue; } }).FirstOrDefault(); return p?.Id ?? 0; }
+            catch { return 0; }
+        };
+
+        public class MainLogScan { public DateTime Confirmed, Update, Shutdown, Startup; }        // local time of the newest such line, MinValue = none
+
+        static string MainLogRoot =>
+            Environment.GetEnvironmentVariable("ELANSHUB_CF_MAINLOGS") is string o && o.Length > 0 ? o
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "curseforge", "logs");
+
+        // Reads the newest main-*.log files of CurseForge (read only) for the lines that tell what the app is doing.
+        public static MainLogScan ScanMainLogs()
+        {
+            var r = new MainLogScan();
+            try
             {
-                await Task.Delay(1500);
-                var now = Load(addOnsDir)?.Addons.FirstOrDefault(x => x.Id == a.Id);
-                if (now != null && now.InstalledId == fileId) return true;
+                var root = MainLogRoot;
+                if (!Directory.Exists(root)) return r;
+                foreach (var f in new DirectoryInfo(root).GetFiles("main-*.log", SearchOption.AllDirectories).OrderByDescending(x => x.LastWriteTimeUtc).Take(3))
+                {
+                    string text;
+                    using (var fs = new FileStream(f.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    using (var sr = new StreamReader(fs, Encoding.UTF8)) text = sr.ReadToEnd();
+                    var lines = text.Split('\n');
+                    for (int i = Math.Max(0, lines.Length - 600); i < lines.Length; i++)
+                    {
+                        var l = lines[i];
+                        if (l.Length < 25 || l[0] != '[') continue;
+                        ref DateTime slot = ref r.Confirmed;
+                        if (l.IndexOf("Processing project install command", StringComparison.Ordinal) >= 0) slot = ref r.Confirmed;
+                        else if (l.IndexOf("Performing app update", StringComparison.Ordinal) >= 0) slot = ref r.Update;
+                        else if (l.IndexOf("Shutdown complete", StringComparison.Ordinal) >= 0 || l.IndexOf("Exiting app", StringComparison.Ordinal) >= 0) slot = ref r.Shutdown;
+                        else if (l.IndexOf("App startup args", StringComparison.Ordinal) >= 0) slot = ref r.Startup;
+                        else continue;
+                        if (DateTime.TryParse(l.Substring(1, 23), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var ts) && ts > slot) slot = ts;
+                    }
+                }
             }
-            return false;
+            catch (Exception e) { Util.Log("curseforge main log unreadable: " + e.GetType().Name); }
+            return r;
+        }
+
+        // running, its newest session started after the last shutdown / self-update, and that was at least SettleSec ago
+        static bool IsReady(MainLogScan s)
+        {
+            if (!RunningNow()) return false;
+            if (s.Startup == DateTime.MinValue) return false;
+            if (s.Shutdown >= s.Startup || s.Update >= s.Startup) return false;
+            return (DateTime.Now - s.Startup).TotalSeconds >= SettleSec;
+        }
+
+        static async Task<bool> WaitReady(DateTime deadlineUtc, Action<string> status, string waitText)
+        {
+            while (DateTime.UtcNow < deadlineUtc)
+            {
+                var s = ScanMainLogs();
+                if (IsReady(s)) return true;
+                if (status != null) status(s.Update != DateTime.MinValue && s.Update >= s.Startup ? "CurseForge is updating itself - retrying..." : waitText);
+                await Task.Delay(Math.Min(PollMs, 1000));
+            }
+            return IsReady(ScanMainLogs());
+        }
+
+        public static async Task<CfInstallResult> RequestInstall(CfAddon a, long fileId, string addOnsDir, Action<string> status = null, int timeoutSeconds = -1)
+        {
+            if (a == null || fileId <= 0) return CfInstallResult.NotStarted;
+            if (timeoutSeconds <= 0) timeoutSeconds = TotalSec;
+            void Say(string t) { try { status?.Invoke(t); } catch { } }
+            var link = DeepLink(a, fileId);
+            var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+
+            // cold start: bring CurseForge up (a normal start, the user sees it) and let it finish starting / updating itself BEFORE the link
+            if (!RunningNow())
+            {
+                Say("Starting CurseForge...");
+                if (!StartApp()) return CfInstallResult.NotStarted;
+            }
+            if (!IsReady(ScanMainLogs()))
+            {
+                Say("Waiting for CurseForge...");
+                if (!await WaitReady(DateTime.UtcNow.AddSeconds(Math.Min(ReadyWaitSec, timeoutSeconds)), Say, "Waiting for CurseForge...")) Util.Log("curseforge not confirmed idle; sending the link anyway");
+            }
+
+            var sentAt = DateTime.Now.AddSeconds(-1);
+            var pid0 = MainPid();
+            if (!SendLink(link)) return CfInstallResult.NotStarted;
+            Say("Waiting for CurseForge...");
+            var t0 = DateTime.UtcNow;
+            bool confirmed = false, resent = false;
+            while (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(PollMs);
+                var now = Load(addOnsDir)?.Addons.FirstOrDefault(x => x.Id == a.Id);
+                if (now != null && now.InstalledId == fileId) return CfInstallResult.Installed;
+                var s = ScanMainLogs();
+                if (!confirmed && s.Confirmed >= sentAt) { confirmed = true; Say("Confirm in CurseForge"); }
+                if (confirmed || resent) continue;
+                int pid = pid0 == 0 ? 0 : MainPid();
+                bool restarted = s.Update >= sentAt || s.Shutdown >= sentAt || (pid0 != 0 && pid != pid0);
+                if (!restarted && (DateTime.UtcNow - t0).TotalSeconds < ConfirmSec) continue;
+                if (restarted) { Say("CurseForge is updating itself - retrying..."); Util.Log("curseforge restarted/self-updated after the link; will resend once"); }
+                else Util.Log("curseforge didn't confirm the link in " + ConfirmSec + " s; will resend once");
+                if (!await WaitReady(deadline, Say, restarted ? "CurseForge is updating itself - retrying..." : "Waiting for CurseForge...")) break;
+                s = ScanMainLogs();
+                if (s.Confirmed >= sentAt) { confirmed = true; Say("Confirm in CurseForge"); continue; }
+                resent = true;
+                sentAt = DateTime.Now.AddSeconds(-1); pid0 = MainPid();
+                if (!SendLink(link)) break;
+                Say("Waiting for CurseForge...");
+                t0 = DateTime.UtcNow;
+            }
+            return confirmed ? CfInstallResult.Started : CfInstallResult.NotStarted;
+        }
+
+        // ---- selftest of the flow above with synthetic main logs and fake start/send seams (nothing real is started or messaged)
+        public static async Task<string> SelfTestInstall()
+        {
+            var sb = new StringBuilder();
+            void Check(string what, bool c, string info = null) => sb.AppendLine($"curseforge install {what}: {(c ? "ok" : "FAIL")}{(info == null ? "" : " (" + info + ")")}");
+            var oldEnv = Environment.GetEnvironmentVariable("ELANSHUB_CF_MAINLOGS");
+            var oldT = new[] { SettleSec, ConfirmSec, ReadyWaitSec, TotalSec, PollMs };
+            var oSend = SendLink; var oStart = StartApp; var oRun = RunningNow; var oPid = MainPid;
+            var root = Path.Combine(Path.GetTempPath(), "elanshub-cflogs-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                SettleSec = 0; ConfirmSec = 2; ReadyWaitSec = 4; TotalSec = 8; PollMs = 150;
+                var fake = new CfAddon { Id = 987654321, Name = "Nope" };
+                string Line(DateTime t, string m) => "[" + t.ToString("yyyy-MM-dd HH:mm:ss.fff") + "] [info]  [BackgroundController] " + m + "\n";
+                int session = 0;
+                void Log(string text) { var d = Path.Combine(root, "s" + (session++).ToString("D3")); Directory.CreateDirectory(d); File.WriteAllText(Path.Combine(d, "main-" + session + ".log"), text); }
+                void Append(string text) { var d = Directory.GetDirectories(root).OrderBy(x => x).Last(); File.AppendAllText(Directory.GetFiles(d, "main-*.log")[0], text); }
+                void Reset() { if (Directory.Exists(root)) Directory.Delete(root, true); Directory.CreateDirectory(root); session = 0; Environment.SetEnvironmentVariable("ELANSHUB_CF_MAINLOGS", root); }
+                var order = new List<string>();
+                bool running = true; int pid = 100;
+                RunningNow = () => running; MainPid = () => running ? pid : 0;
+
+                // 1) running + idle, CurseForge confirms the link
+                Reset(); running = true; order.Clear();
+                Log(Line(DateTime.Now.AddMinutes(-5), "App startup args: CurseForge.exe."));
+                int sends = 0;
+                SendLink = l => { sends++; order.Add("send"); Append(Line(DateTime.Now, "Processing project install command.")); return true; };
+                var texts = new List<string>();
+                var r = await RequestInstall(fake, 1, "", t => texts.Add(t));
+                Check("confirmed link = one send, no retry", r == CfInstallResult.Started && sends == 1, r + ", sends=" + sends);
+                Check("status shows installing", texts.Contains("Confirm in CurseForge"));
+
+                // 2) self-update + relaunch swallows the link: wait for it to come back, resend once
+                Reset(); running = true; sends = 0; texts.Clear();
+                Log(Line(DateTime.Now.AddMinutes(-5), "App startup args: CurseForge.exe."));
+                SendLink = l =>
+                {
+                    sends++;
+                    if (sends == 1)
+                    {
+                        Append(Line(DateTime.Now, "Performing app update. IsSilent: false, RelaunchAfterUpdate: true.") + Line(DateTime.Now, "Shutdown complete. Exiting app...."));
+                        running = false;
+                        Task.Run(async () => { await Task.Delay(1200); Log(Line(DateTime.Now, "App startup args: CurseForge.exe,--updated.")); pid = 200; running = true; });
+                    }
+                    else Append(Line(DateTime.Now, "Processing project install command."));
+                    return true;
+                };
+                r = await RequestInstall(fake, 1, "", t => texts.Add(t));
+                Check("self-update + restart = exactly one resend", r == CfInstallResult.Started && sends == 2, r + ", sends=" + sends);
+                Check("status shows updating itself", texts.Contains("CurseForge is updating itself - retrying..."));
+
+                // 3) nothing ever confirms: one resend, then NotStarted (the card shows Retry)
+                Reset(); running = true; pid = 100; sends = 0; texts.Clear();
+                Log(Line(DateTime.Now.AddMinutes(-5), "App startup args: CurseForge.exe."));
+                SendLink = l => { sends++; return true; };
+                r = await RequestInstall(fake, 1, "", t => texts.Add(t));
+                Check("no confirmation = one resend then NotStarted", r == CfInstallResult.NotStarted && sends == 2, r + ", sends=" + sends);
+
+                // 4) not running: start it first, wait until its first session shows it up, only then send the link
+                Reset(); running = false; sends = 0; order.Clear(); texts.Clear();
+                StartApp = () => { order.Add("start"); Task.Run(async () => { await Task.Delay(800); Log(Line(DateTime.Now, "App startup args: CurseForge.exe.")); running = true; }); return true; };
+                SendLink = l => { sends++; order.Add("send"); Append(Line(DateTime.Now, "Processing project install command.")); return true; };
+                r = await RequestInstall(fake, 1, "", t => texts.Add(t));
+                Check("cold start: started first, link after it was up", r == CfInstallResult.Started && string.Join(",", order) == "start,send" && texts.Contains("Starting CurseForge..."), r + ", " + string.Join(",", order));
+
+                // 5) the log reader itself
+                Reset(); Log(Line(new DateTime(2026, 1, 2, 3, 4, 5, 6), "Performing app update."));
+                var sc = ScanMainLogs();
+                Check("log line timestamp parsed", sc.Update == new DateTime(2026, 1, 2, 3, 4, 5, 6), sc.Update.ToString("o"));
+            }
+            catch (Exception e) { sb.AppendLine("curseforge install selftest crashed: " + e); sb.AppendLine("curseforge install: FAIL"); }
+            finally
+            {
+                SettleSec = oldT[0]; ConfirmSec = oldT[1]; ReadyWaitSec = oldT[2]; TotalSec = oldT[3]; PollMs = oldT[4];
+                SendLink = oSend; StartApp = oStart; RunningNow = oRun; MainPid = oPid;
+                Environment.SetEnvironmentVariable("ELANSHUB_CF_MAINLOGS", oldEnv);
+                try { Directory.Delete(root, true); } catch { }
+            }
+            return sb.ToString();
         }
 
         public static bool Busy;

@@ -323,18 +323,27 @@ namespace ElansAddonHub
             var key = c.Entry.Key; var dir = addOnsDir;
             c.Message = null;
             c.SetBusy(true, "CurseForge...");
-            string msg;
+            string msg; bool pendingRetry = false;
             try
             {
-                var ok = await CurseForgeLocal.RequestInstall(cf, cf.LatestId, dir);
-                msg = ok ? "CurseForge installed " + cf.LatestFileName + ". In game, type /reload." + (GamePresence.WowRunningNow() ? " (WoW is running; if the addon looks unchanged, restart it.)" : "")
-                    : "CurseForge hasn't reported the install yet. Look at the CurseForge window; this card updates by itself when it finishes.";
+                var res = await CurseForgeLocal.RequestInstall(cf, cf.LatestId, dir, t => Dispatcher.BeginInvoke(new Action(() => c.SetBusyText(t))));
+                if (res == CurseForgeLocal.CfInstallResult.Installed)
+                    msg = "CurseForge installed " + cf.LatestFileName + ". In game, type /reload." + (GamePresence.WowRunningNow() ? " (WoW is running; if the addon looks unchanged, restart it.)" : "");
+                else if (res == CurseForgeLocal.CfInstallResult.Started)
+                    msg = "CurseForge is waiting for you: choose Forever as the install location and click Install in its window. This card updates by itself when it finishes.";
+                else
+                    msg = "Something went wrong: CurseForge didn't start the install. Open CurseForge and update it there, or click Retry.";
+                pendingRetry = res == CurseForgeLocal.CfInstallResult.NotStarted;
             }
             catch (Exception ex) { Util.Log($"curseforge update {key} failed: {ex}"); msg = "Something went wrong: " + ex.Message; }
             c.SetBusy(false);
             await RefreshOthers();
             var card = others.FirstOrDefault(x => x.Entry.Key == key);
-            if (card != null) card.Message = msg;
+            if (card != null)
+            {
+                if (pendingRetry) card.RetryTip = "CurseForge didn't start the install - open CurseForge and update it there, or click to try again";
+                card.Message = msg;
+            }
             UpdateOthersHeader();
         }
 
@@ -440,6 +449,7 @@ namespace ElansAddonHub
             }
             foreach (var c in others) if (c.Suggested != null) sb.AppendLine($"  card {c.Entry.Key}: {c.SuggestText} [{c.Suggested.Hint}]");
             sb.AppendLine(CurseForgeLocal.SelfTest(addOnsDir));
+            sb.AppendLine(await CurseForgeLocal.SelfTestInstall());
             {
                 var m = others.FirstOrDefault(c => c.Entry.Cf != null && c.Entry.Cf.Name == "CfMulti");
                 var u = others.FirstOrDefault(c => c.Entry.Cf != null && c.Entry.Cf.Name == "CfUpToDate");

@@ -32,7 +32,8 @@ namespace ElansAddonHub
         PillKind Kind => Retry ? PillKind.Danger : pillKind;
 
         public string PillText => Retry ? "Retry" : pillText;
-        public string PillTip => Retry ? "The last attempt failed. Click to try again." : pillTip;
+        public string RetryTip { get; set; }
+        public string PillTip => Retry ? (RetryTip ?? "The last attempt failed. Click to try again.") : pillTip;
         public bool PillClickable => pillClickable;
         public Cursor PillCursor => pillClickable ? Cursors.Hand : Cursors.Arrow;
         public Visibility PillVisibility => string.IsNullOrEmpty(pillText) ? Visibility.Collapsed : Visibility.Visible;

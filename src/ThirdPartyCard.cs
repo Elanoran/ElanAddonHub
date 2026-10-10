@@ -114,6 +114,15 @@ namespace ElansAddonHub
             else { Refresh(); }
         }
 
+        // progress text on the pill while the CurseForge install flow runs (with a tip when CurseForge needs the user)
+        public void SetBusyText(string text)
+        {
+            if (State != TpState.Busy || string.IsNullOrEmpty(text)) return;
+            ButtonText = text;
+            SetPill(text, PillKind.Busy, text == "Confirm in CurseForge" ? "CurseForge asks where to install - choose Forever and click Install" : "Working on it...", false);
+            Notify(string.Empty);
+        }
+
         public void Refresh()
         {
             var r = Remote;
