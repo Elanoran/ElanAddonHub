@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.30.0
+- Settings redesigned: grouped cards with section headings, new switches, dropdowns, sliders and segmented controls.
+- Settings and Inventory now sit on a subtle dark page panel so text reads cleanly over the background art.
+- The Settings menu runs the full height of the window.
+- Dialogs and popups match the new look.
+
 ## 2.29.0
 - New design system (DESIGN.md): consistent spacing, corner rounding, text styles, colour roles and soft depth instead of outlines.
 - Addons page refreshed: raised cards with a gentle hover lift, smooth expand/collapse, calmer colours (green only for actions), clearer text hierarchy.
