@@ -199,7 +199,18 @@ namespace ElansAddonHub.Lodge
                     Disconnect();
                     Stopped?.Invoke(why);
                 }
-                if (!online) LeaveVoice(false);
+                if (!online)
+                {
+                    // a dropped connection (network blip, server restart) is not the user leaving: remember the room and
+                    // the mute/deafen state, and go back in after the reconnect (see Welcome)
+                    if (MyRoom != null && client != null && client.IsRunning)
+                    {
+                        rejoinRoom = MyRoom;
+                        rejoinMuted = voice?.Muted ?? false;
+                        rejoinDeaf = voice?.Deafened ?? false;
+                    }
+                    LeaveVoice(false);
+                }
                 Changed?.Invoke();
             };
             client.Received += OnReceived;
@@ -209,8 +220,13 @@ namespace ElansAddonHub.Lodge
             Changed?.Invoke();
         }
 
+        // voice room to go back into after a dropped connection (null = the user left, or wasn't in voice)
+        string rejoinRoom;
+        bool rejoinMuted, rejoinDeaf;
+
         public void Disconnect()
         {
+            rejoinRoom = null; // leaving the lodge on purpose
             LeaveVoice(false);
             client?.Stop();
             client = null;
@@ -444,6 +460,17 @@ namespace ElansAddonHub.Lodge
             Select(TextChannels.FirstOrDefault(c => c.Id == keepSelected) ?? TextChannels.FirstOrDefault());
             if (MyRoom != null && VoiceRooms.All(r => r.Id != MyRoom)) LeaveVoice(false);
             else if (MyRoom != null) SendVoice(MyRoom); // reconnected while in voice
+            else if (rejoinRoom != null)
+            {
+                // the connection dropped while we were in voice: go back into the same room, quietly, same mute/deafen
+                var room = rejoinRoom; bool wasMuted = rejoinMuted, wasDeaf = rejoinDeaf;
+                rejoinRoom = null;
+                if (VoiceRooms.Any(r => r.Id == room))
+                {
+                    JoinRoom(room, quiet: true);
+                    if (wasMuted || wasDeaf) SetMuteDeaf(wasMuted, wasDeaf);
+                }
+            }
             SyncRooms();
             StatusText = OnlineText;
             Auto.MarkSent(Clock(), "online", "");                // a fresh connection starts as Online on the server
@@ -853,7 +880,10 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ voice
 
-        public void JoinRoom(string room)
+        public void JoinRoom(string room) => JoinRoom(room, false);
+
+        // quiet: no join sound (rejoining after a dropped connection)
+        public void JoinRoom(string room, bool quiet)
         {
             if (!Online || room == null) return;
             if (voice == null)
@@ -874,7 +904,7 @@ namespace ElansAddonHub.Lodge
             MyRoom = room;
             SendVoice(room);
             _ = Send(new Dictionary<string, object> { ["t"] = "state", ["muted"] = voice.Muted, ["deaf"] = voice.Deafened });
-            Sounds.Join();
+            if (!quiet) Sounds.Join();
             SyncRooms();
             Changed?.Invoke();
         }
