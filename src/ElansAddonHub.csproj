@@ -35,9 +35,17 @@
 
   <!-- voice: NAudio (mic/speakers) + Concentus (Opus codec, pure C#); Costura packs them into the exe -->
   <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
     <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Costura.Fody" Version="5.7.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- WebView2Loader.dll rides inside the exe (single-file): extracted to &lt;data&gt;/webview2/loader/&lt;arch&gt; on first use, see VideoViewer.ExtractLoader -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(NuGetPackageRoot)microsoft.web.webview2/1.0.4258.31/runtimes/win-x64/native/WebView2Loader.dll" LogicalName="WebView2Loader.x64.dll" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)microsoft.web.webview2/1.0.4258.31/runtimes/win-x86/native/WebView2Loader.dll" LogicalName="WebView2Loader.x86.dll" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)microsoft.web.webview2/1.0.4258.31/runtimes/win-arm64/native/WebView2Loader.dll" LogicalName="WebView2Loader.arm64.dll" />
   </ItemGroup>
 
 </Project>

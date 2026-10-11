@@ -414,6 +414,13 @@
                 <Button Style="{StaticResource Button.M}" Content="Edit profile" Click="PrivacyProfile_Click" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
+            <TextBlock Text="Fetched from other sites" Style="{StaticResource HeadTight}" />
+            <TextBlock Text="Only what you switch on. Off = the Outpost never contacts these sites by itself." Style="{StaticResource Note}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Show video previews" Tag="A YouTube link in the Lodge chat shows its thumbnail, title and channel, and plays in a window here. To do that the Outpost asks youtube.com and i.ytimg.com (YouTube sees your IP address). Off = links stay plain text, nothing is fetched, and a click opens the link in your browser.">
+                <CheckBox x:Name="PvVideo" Style="{StaticResource Switch}" Click="Privacy_Click" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
             <TextBlock Text="Stays on your PC" Style="{StaticResource HeadTight}" />
             <TextBlock Text="Read and used here only. Nothing below is uploaded." Style="{StaticResource Note}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>

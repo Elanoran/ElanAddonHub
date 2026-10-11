@@ -352,7 +352,7 @@ namespace ElansAddonHub
             if (settings == null) return;
             PvShareGame.IsChecked = !settings.ShareGameOff; PvShareZone.IsChecked = !settings.ShareZoneOff; PvShareXp.IsChecked = !settings.ShareXpOff;
             PvAutoStatus.IsChecked = !settings.AutoStatusOff; PvAutoAway.IsChecked = !settings.AutoAwayOff; PvPixel.IsChecked = !settings.PixelOff;
-            PvRememberInvis.IsChecked = !settings.InvisibleForget; PvCfAuto.IsChecked = settings.CfAutoCheck;
+            PvRememberInvis.IsChecked = !settings.InvisibleForget; PvCfAuto.IsChecked = settings.CfAutoCheck; PvVideo.IsChecked = !settings.VideoPreviewsOff;
             PvInvisible.IsChecked = session.Invisible;
             PvInvisible.IsEnabled = session.Me != null;
             PrivacyLodgeLine.Text = string.IsNullOrEmpty(settings.LodgeUrl) ? "You are not in a lodge, so nothing from the first group is sent anywhere."
@@ -363,6 +363,13 @@ namespace ElansAddonHub
         {
             if (loading || !(sender is CheckBox cb)) return;
             if (cb == PvInvisible) { session.SetInvisible(cb.IsChecked == true); return; }
+            if (cb == PvVideo)
+            {
+                settings.VideoPreviewsOff = cb.IsChecked != true;
+                SettingsStore.Save(settings);
+                session.RefreshVideos();
+                return;
+            }
             CheckBox target = cb == PvShareGame ? ShareGameBox : cb == PvShareZone ? ShareZoneBox : cb == PvShareXp ? ShareXpBox : cb == PvAutoStatus ? AutoStatusBox
                 : cb == PvAutoAway ? AutoAwayBox : cb == PvPixel ? PixelBox : cb == PvRememberInvis ? RememberInvisibleBox : cb == PvCfAuto ? CfAutoBox : null;
             if (target == null) return;

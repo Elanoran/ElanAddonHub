@@ -177,6 +177,7 @@ namespace ElansAddonHub
             // the window's own startup check may still be running (slow network): wait for it
             for (int i = 0; i < 100 && (checking || manifest == null); i++) await Task.Delay(200);
             await Task.Delay(400);
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_VIDEO_SHOTS"))) { System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), await VideoTest(dir)); Quit(); return; }
             var designShots = Environment.GetEnvironmentVariable("ELANSHUB_DESIGN_SHOTS");
             if (!string.IsNullOrEmpty(designShots)) { await DesignShots(dir, designShots); return; }
             Snapshot(System.IO.Path.Combine(dir, "1-before.png"));
@@ -277,6 +278,7 @@ namespace ElansAddonHub
                         + $"\r\n{VoiceEngine.CodecSelfTest()}";
             }
             result += "\r\n" + await LodgeFeaturesTest(dir);
+            result += "\r\n" + await VideoTest(dir);
             result += "\r\n" + await PresenceTest(dir);
             result += "\r\n" + await ProfileTest(dir);
             result += "\r\n" + await ToastTest(dir);

@@ -444,7 +444,22 @@ namespace ElansAddonHub.Lodge
         public Visibility PinToolVisibility => PinEnabled ? Visibility.Visible : Visibility.Collapsed;
         public Visibility ReactionsVisibility => Reactions.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         public void RaiseReactions() => Raise(nameof(ReactionsVisibility));
-        public string Text { get => text; set { if (Set(ref text, value)) Raise(nameof(TextVisibility)); } }
+        public string Text { get => text; set { if (Set(ref text, value)) { Raise(nameof(TextVisibility)); RefreshVideo(); } } }
+
+        // ---- YouTube preview card (Settings > Privacy > Show video previews)
+        VideoVM video;
+        public VideoVM Video => video;
+        public Visibility VideoVisibility => video?.CardVisibility ?? Visibility.Collapsed;
+        public YouTubeLink VideoLink => YouTube.Find(text);   // the link itself, also when previews are off
+        // (re)builds the card from the text and the current setting; same video = keep it
+        public void RefreshVideo()
+        {
+            var link = YouTube.PreviewsOn ? YouTube.Find(text) : null;
+            if (link == null ? video == null : video != null && video.Link.Id == link.Id && video.Link.StartSeconds == link.StartSeconds) return;
+            video = link == null ? null : new VideoVM(link);
+            if (video != null) { video.PropertyChanged += (s, e) => Raise(nameof(VideoVisibility)); video.Load(); }
+            Raise(nameof(Video)); Raise(nameof(VideoVisibility));
+        }
         public bool Edited { get => edited; set { if (Set(ref edited, value)) Raise(nameof(EditedVisibility)); } }
         public bool Mentioned { get => mentioned; set { if (Set(ref mentioned, value)) { Raise(nameof(RowBackground)); Raise(nameof(MentionBar)); } } }
 

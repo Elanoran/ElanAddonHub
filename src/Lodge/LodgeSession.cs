@@ -116,6 +116,7 @@ namespace ElansAddonHub.Lodge
             Presence.Start();
             tick.Tick += (s, e) => OnTick();
             Sounds.Off = settings.SoundsOff;
+            YouTube.Enabled = () => !settings.VideoPreviewsOff;
             InitToasts();
         }
 
@@ -142,6 +143,9 @@ namespace ElansAddonHub.Lodge
         }
 
         static string OneLine(string t) { t = (t ?? "").Replace("\r", " ").Replace("\n", " "); return t.Length > 90 ? t.Substring(0, 90) + "..." : t; }
+
+        // "Show video previews" changed: rebuild (or drop) every message's YouTube card
+        public void RefreshVideos() { foreach (var l in messages.Values.ToList()) foreach (var m in l.ToList()) m.RefreshVideo(); }
 
         public ObservableCollection<MessageVM> MessagesOf(string channel)
         {

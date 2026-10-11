@@ -817,7 +817,38 @@ namespace ElansAddonHub.Lodge
             else try { Process.Start(new ProcessStartInfo(f.LocalPath) { UseShellExecute = true }); } catch { }
         }
 
+        // ---- YouTube: the preview card plays in the overlay; a click on the URL text itself does the same (or opens the browser when previews are off)
+        void Video_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is VideoVM v)) return;
+            e.Handled = true;
+            VideoPlayer.Open(v.Link, v.Title, v.Channel);
+        }
+
+        YouTubeLink LinkUnder(object sender, MouseEventArgs e)
+        {
+            if (!(sender is TextBox tb)) return null;
+            return YouTube.FindAt(tb.Text, tb.GetCharacterIndexFromPoint(e.GetPosition(tb), false));
+        }
+
+        void MessageText_Move(object sender, MouseEventArgs e)
+        {
+            var tb = (TextBox)sender;
+            if (LinkUnder(sender, e) != null) tb.Cursor = Cursors.Hand; else tb.ClearValue(FrameworkElement.CursorProperty);
+        }
+
+        void MessageText_Up(object sender, MouseButtonEventArgs e)
+        {
+            var tb = (TextBox)sender;
+            var l = LinkUnder(sender, e);
+            if (l == null || tb.SelectionLength > 0) return;
+            if (tb.Tag is MessageVM m && m.Video?.Thumb != null) VideoPlayer.Open(l, m.Video.Title, m.Video.Channel);   // a preview exists: same overlay as the card
+            else VideoViewer.OpenInBrowser(l);                                             // previews off / unavailable video: the browser
+        }
+
         public ImageViewer ViewerForTest => Viewer;
+        public VideoViewer VideoPlayerForTest => VideoPlayer;
+        public Task<bool> VideoCardVisibleForTest(MessageVM m) => Task.FromResult(m.VideoVisibility == Visibility.Visible);
 
         async void Download_Click(object sender, RoutedEventArgs e)
         {

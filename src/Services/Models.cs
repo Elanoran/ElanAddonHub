@@ -82,6 +82,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "lodgeNote")] public string LodgeNote { get; set; }
         [DataMember(Name = "autoAwayOff")] public bool AutoAwayOff { get; set; }        // false = AFK after 10 min idle
         [DataMember(Name = "pixelOff")] public bool PixelOff { get; set; }              // true = don't read the addon's status strip from the screen
+        [DataMember(Name = "videoPreviewsOff")] public bool VideoPreviewsOff { get; set; } // false = YouTube links in chat show a preview card (fetches the thumbnail + title from YouTube)
         [DataMember(Name = "shareGameOff")] public bool ShareGameOff { get; set; }      // false = show friends what I play
         // ---- in-game toasts (Settings > In-game overlay)
         [DataMember(Name = "toastsOff")] public bool ToastsOff { get; set; }
