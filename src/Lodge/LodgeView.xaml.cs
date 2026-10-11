@@ -62,6 +62,8 @@ namespace ElansAddonHub.Lodge
             GroupList.ItemsSource = session.Groups.Groups;
 
             session.Changed += Refresh;
+            CalendarPage.Init(session);
+            session.CalendarChanged += UpdateCalendarChrome;
             session.OlderRequested += OnOlderRequested;
             session.OlderLoaded += OnOlderLoaded;
             session.IsAtBottom = () => AtBottom;
@@ -105,9 +107,12 @@ namespace ElansAddonHub.Lodge
             try { LodgeTitle.Text = s.BaseUrl != null ? new Uri(s.BaseUrl).Host : "Lodge"; } catch { }
             UpdateOffline();
 
+            UpdateCalendarChrome();
+
             // the channel on screen
             if (s.Selected != shownChannel)
             {
+                HideCalendar();
                 // what I was typing stays with the channel it was for
                 if (shownChannel != null && editing == null) drafts[shownChannel.Id] = Composer.Text;
                 shownChannel = s.Selected;
@@ -186,6 +191,7 @@ namespace ElansAddonHub.Lodge
             if (Session == null) return;
             TypingText.Text = Session.TypingText(Session.Selected?.Id);
             UpdateOffline();
+            UpdateNextEvent();
             if (ChatNote.Text.Length > 0 && DateTime.UtcNow > noteUntil) ChatNote.Text = "";
             if (ChatPanel.Visibility == Visibility.Visible && (Session.IsShownToUser?.Invoke() ?? true)) Session.MarkRead(); // only acts at the bottom
             UpdateJump();
@@ -642,7 +648,7 @@ namespace ElansAddonHub.Lodge
 
         void Channel_Click(object sender, MouseButtonEventArgs e)
         {
-            if ((sender as FrameworkElement)?.Tag is ChannelVM ch) Session.Select(ch);
+            if ((sender as FrameworkElement)?.Tag is ChannelVM ch) { HideCalendar(); Session.Select(ch); }
         }
 
         void Room_Click(object sender, MouseButtonEventArgs e)

@@ -16,6 +16,7 @@ namespace ElansAddonHub.Lodge
     {
         public ToastKind Kind;
         public string Sender, Channel, ChannelId, Text;
+        public string Kicker;         // overrides the small label of the kind ("Event" for a calendar reminder)
         public MemberVM Who;          // for the avatar / class icon (null = the hub's own toast)
     }
 
@@ -39,8 +40,9 @@ namespace ElansAddonHub.Lodge
         public string Title { get => title; set => Set(ref title, value); }
         public int Count { get => count; set => Set(ref count, value); }
         public double Opacity { get => opacity; set => Set(ref opacity, value); }
-        public string Kicker => Kind == ToastKind.Mention ? "Mention" : Kind == ToastKind.Reply ? "Reply" : Kind == ToastKind.Reaction ? "Reaction"
-            : Kind == ToastKind.Pin ? "Pinned" : Kind == ToastKind.Update ? "Update" : Kind == ToastKind.Health ? "Health" : Kind == ToastKind.Event ? "Group" : "Summary";
+        public string KickerText { get; set; }
+        public string Kicker => KickerText ?? (Kind == ToastKind.Mention ? "Mention" : Kind == ToastKind.Reply ? "Reply" : Kind == ToastKind.Reaction ? "Reaction"
+            : Kind == ToastKind.Pin ? "Pinned" : Kind == ToastKind.Update ? "Update" : Kind == ToastKind.Health ? "Health" : Kind == ToastKind.Event ? "Group" : "Summary");
         public string Glyph => Kind == ToastKind.Mention ? "@" : Kind == ToastKind.Reply ? "" : Kind == ToastKind.Reaction ? ""
             : Kind == ToastKind.Pin ? "" : Kind == ToastKind.Update ? "" : "";
         public bool GlyphIsText => Kind == ToastKind.Mention;
@@ -130,7 +132,7 @@ namespace ElansAddonHub.Lodge
             }
             var vm = new ToastVM
             {
-                Kind = it.Kind, Sender = it.Sender, Channel = it.Channel, ChannelId = it.ChannelId, Who = it.Who, Born = now, Expires = now + Stay,
+                Kind = it.Kind, KickerText = it.Kicker, Sender = it.Sender, Channel = it.Channel, ChannelId = it.ChannelId, Who = it.Who, Born = now, Expires = now + Stay,
                 Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health || it.Kind == ToastKind.Event ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
                 Text = it.Text, Opacity = 0,
             };

@@ -619,7 +619,7 @@ public class InviteTests
         var (token, dev) = r.Join("Nova", "Nova's PC");
         var (nova, _) = r.Connect(token, true);
         var w = r.Hub.Welcome(nova);
-        Assert.Equal("2.10.0", (string)w["server"]!);
+        Assert.Equal("2.11.0", (string)w["server"]!);
         var features = w["features"]!.AsArray().Select(x => (string)x!).ToList();
         Assert.Contains("tokens", features);
         Assert.Contains("invites", features);

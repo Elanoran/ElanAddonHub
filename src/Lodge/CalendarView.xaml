@@ -1,0 +1,327 @@
+<UserControl x:Class="ElansAddonHub.Lodge.CalendarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ElansAddonHub.Lodge"
+             xmlns:app="clr-namespace:ElansAddonHub">
+  <UserControl.Resources>
+    <!-- Going / Maybe / Can't: the answer I gave is the selection (accent tint); the others are the quiet Button.S -->
+    <Style x:Key="Answer.Going" TargetType="Button" BasedOn="{StaticResource Button.S}">
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding GoingActive}" Value="True">
+          <Setter Property="Background" Value="{StaticResource Brush.Accent.Tint}" />
+          <Setter Property="Foreground" Value="{StaticResource Brush.Accent}" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="Answer.Maybe" TargetType="Button" BasedOn="{StaticResource Button.S}">
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding MaybeActive}" Value="True">
+          <Setter Property="Background" Value="{StaticResource Brush.Accent.Tint}" />
+          <Setter Property="Foreground" Value="{StaticResource Brush.Accent}" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="Answer.No" TargetType="Button" BasedOn="{StaticResource Button.S}">
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding DeclinedActive}" Value="True">
+          <Setter Property="Background" Value="{StaticResource Brush.Accent.Tint}" />
+          <Setter Property="Foreground" Value="{StaticResource Brush.Accent}" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- the answer bar: role (when the event has roles), Going / Maybe / Can't, Leave -->
+    <DataTemplate x:Key="AnswerBar">
+      <WrapPanel Visibility="{Binding ActionsVisibility}">
+        <ComboBox Style="{StaticResource Dropdown}" Width="104" Margin="0,0,8,8" Visibility="{Binding RoleVisibility}" ItemsSource="{Binding RoleChoices}"
+                  SelectedItem="{Binding SelectedRoleLabel, Mode=TwoWay}" ToolTip="The role you would play" AutomationProperties.Name="Role" />
+        <Button Content="Going" Style="{StaticResource Answer.Going}" Tag="{Binding}" Click="Going_Click" IsEnabled="{Binding GoingEnabled}" ToolTip="{Binding GoingTip}" Margin="0,0,8,8" />
+        <Button Content="Maybe" Style="{StaticResource Answer.Maybe}" Tag="{Binding}" Click="Maybe_Click" IsEnabled="{Binding MaybeEnabled}" Margin="0,0,8,8" />
+        <Button Content="Can't" Style="{StaticResource Answer.No}" Tag="{Binding}" Click="Declined_Click" IsEnabled="{Binding DeclinedEnabled}" Margin="0,0,8,8" />
+        <Button Content="Clear" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="Leave_Click" Visibility="{Binding LeaveVisibility}" Margin="0,0,8,8"
+                ToolTip="Take your answer back" />
+      </WrapPanel>
+    </DataTemplate>
+
+    <!-- one event in the agenda: start time on the left, instance + when + role fill + my answer on the right -->
+    <DataTemplate x:Key="EventCard">
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Margin="0,0,0,12" Opacity="{Binding CardOpacity}"
+              Tag="{Binding}" MouseLeftButtonUp="Card_Click" Cursor="Hand">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock Text="{Binding StartHm}" Style="{StaticResource Text.Body}" />
+            <TextBlock Text="{Binding EndHm}" Visibility="{Binding EndVisibility}" Style="{StaticResource Text.Caption}" />
+          </StackPanel>
+          <StackPanel Grid.Column="1">
+            <DockPanel>
+              <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" Visibility="{Binding StatusVisibility}" VerticalAlignment="Center" Margin="12,0,0,0">
+                <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
+              </Border>
+              <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="{Binding SubLine}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding FillText}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding MyLine}" Visibility="{Binding MyLineVisibility}" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource AnswerBar}" Margin="0,12,0,0" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate x:Key="DayGroup">
+      <StackPanel Margin="0,0,0,12">
+        <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Section}" Margin="0,0,0,12" />
+        <ItemsControl ItemsSource="{Binding Events}" ItemTemplate="{StaticResource EventCard}" />
+      </StackPanel>
+    </DataTemplate>
+
+    <!-- a day of the month grid: the number, up to three dots (one per event; Success = I am going, Warn = maybe) -->
+    <DataTemplate x:Key="DayCell">
+      <Grid x:Name="cell" Margin="2" Height="48" Tag="{Binding}" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Day_Click" Opacity="{Binding CellOpacity}">
+        <Border Background="{Binding Fill}" CornerRadius="{StaticResource Radius.Control}" />
+        <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+        <TextBlock Text="{Binding Number}" Style="{StaticResource Text.Body}" Foreground="{Binding NumberBrush}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0" />
+        <ItemsControl ItemsSource="{Binding Dots}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8" IsHitTestVisible="False">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate><DataTemplate><Ellipse Width="6" Height="6" Fill="{Binding}" Margin="2,0" /></DataTemplate></ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Grid>
+      <DataTemplate.Triggers>
+        <Trigger SourceName="cell" Property="IsMouseOver" Value="True"><Setter TargetName="hv" Property="Opacity" Value="1" /></Trigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- a person in the detail card: avatar + name in class colour, "Lv 60 Priest" where the game data has it, their comment -->
+    <DataTemplate x:Key="Person">
+      <StackPanel Margin="0,0,0,8">
+        <StackPanel Orientation="Horizontal">
+          <local:AvatarView Width="24" Height="24" DataContext="{Binding Member}" />
+          <TextBlock Text="{Binding Shown}" Foreground="{Binding NameBrush}" Style="{StaticResource Text.Body}" Margin="8,0,0,0" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding Line}" Visibility="{Binding LineVisibility}" Style="{StaticResource Text.Caption}" Margin="8,0,0,0" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Text="{Binding CommentText}" Visibility="{Binding CommentVisibility}" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="32,0,0,0" />
+      </StackPanel>
+    </DataTemplate>
+
+    <DataTemplate x:Key="PeopleGroup">
+      <StackPanel Margin="0,0,0,12">
+        <DockPanel Margin="0,0,0,8">
+          <TextBlock DockPanel.Dock="Right" Text="{Binding OpenText}" Visibility="{Binding OpenVisibility}" Style="{StaticResource Text.Caption}" />
+          <TextBlock Style="{StaticResource Text.Secondary}"><Run Text="{Binding Title, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding CountText, Mode=OneWay}" Foreground="{StaticResource Brush.Text.Tertiary}" /></TextBlock>
+        </DockPanel>
+        <ItemsControl ItemsSource="{Binding People}" ItemTemplate="{StaticResource Person}" />
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Border Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
+    <Grid>
+      <Grid x:Name="Main">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+
+        <!-- header: title, Agenda | Month, New event -->
+        <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,0,1" Padding="16,8">
+          <DockPanel MinHeight="32">
+            <Button x:Name="NewButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="New event" Click="New_Click" Margin="8,0,0,0" ToolTip="Plan a raid, a dungeon night or a get-together" />
+            <Border DockPanel.Dock="Right" Style="{StaticResource SegmentHost}">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="ModeAgenda" Style="{StaticResource Segment}" Content="Agenda" GroupName="calmode" IsChecked="True" Checked="Mode_Changed" />
+                <RadioButton x:Name="ModeMonth" Style="{StaticResource Segment}" Content="Month" GroupName="calmode" Checked="Mode_Changed" />
+              </StackPanel>
+            </Border>
+            <TextBlock Text="&#xE787;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Text="Calendar" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+          </DockPanel>
+        </Border>
+
+        <!-- agenda -->
+        <ScrollViewer x:Name="AgendaScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
+          <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
+            <ItemsControl x:Name="AgendaList" ItemTemplate="{StaticResource DayGroup}" />
+            <StackPanel x:Name="AgendaEmpty" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
+              <TextBlock Text="&#xE787;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />
+              <TextBlock Text="Nothing planned yet" Style="{StaticResource Text.Body}" HorizontalAlignment="Center" Margin="0,12,0,0" />
+              <TextBlock Text="Events in the next weeks show up here, with who is coming." Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" Margin="0,4,0,12" />
+              <Button x:Name="EmptyNew" Style="{StaticResource Button.M}" Content="New event" Click="New_Click" HorizontalAlignment="Center" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- month -->
+        <ScrollViewer x:Name="MonthScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" app:Motion.EdgeFade="True">
+          <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
+            <DockPanel Margin="0,0,0,12">
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE76C;" Click="MonthNext_Click" ToolTip="Next month" AutomationProperties.Name="Next month" />
+              <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Height="28" Content="Today" Click="MonthToday_Click" Margin="0,0,4,0" />
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE76B;" Click="MonthPrev_Click" Margin="0,0,4,0" ToolTip="Previous month" AutomationProperties.Name="Previous month" />
+              <TextBlock x:Name="MonthTitle" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+            </DockPanel>
+            <ItemsControl x:Name="WeekdayRow" Margin="0,0,0,4">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource Text.Caption}" HorizontalAlignment="Center" /></DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ItemsControl x:Name="MonthGridList" ItemTemplate="{StaticResource DayCell}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" Rows="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            </ItemsControl>
+            <TextBlock x:Name="DayTitle" Style="{StaticResource Text.Section}" Margin="0,24,0,12" />
+            <ItemsControl x:Name="DayEvents" ItemTemplate="{StaticResource EventCard}" />
+            <TextBlock x:Name="DayEmpty" Text="Nothing planned this day." Style="{StaticResource Text.Secondary}" Visibility="Collapsed" />
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+
+      <!-- ===== event detail: an overlay card over a scrim ===== -->
+      <Border x:Name="DetailOverlay" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="DetailScrim_Down">
+        <Border x:Name="DetailBox" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+                Width="520" MaxHeight="620" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,24,24,0">
+              <StackPanel>
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE711;" Click="DetailClose_Click" ToolTip="Close (Esc)" AutomationProperties.Name="Close" Margin="8,0,0,0" />
+                  <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" Visibility="{Binding StatusVisibility}" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Text="{Binding DateText}" Style="{StaticResource Text.Body}" Margin="0,8,0,0" />
+                <TextBlock Text="{Binding WhenLine}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding RepeatText}" Visibility="{Binding RepeatVisibility}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding ByLine}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                <TextBlock Text="{Binding MyLine}" Visibility="{Binding MyLineVisibility}" Style="{StaticResource Text.Caption}" Margin="0,16,0,0" />
+                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource AnswerBar}" Margin="0,8,0,0" />
+                <StackPanel Visibility="{Binding ActionsVisibility}" Margin="0,0,0,12">
+                  <TextBox x:Name="DetailComment" Style="{StaticResource Input}" MaxLength="80" Tag="A short comment (optional)" KeyDown="DetailComment_KeyDown" />
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding Groups}" ItemTemplate="{StaticResource PeopleGroup}" Margin="0,8,0,0" />
+                <TextBlock x:Name="DetailNobody" Text="Nobody has answered yet." Style="{StaticResource Text.Secondary}" Margin="0,0,0,12" Visibility="Collapsed" />
+              </StackPanel>
+            </ScrollViewer>
+            <DockPanel Grid.Row="1" Margin="24,12,24,24">
+              <Button x:Name="DetailDone" DockPanel.Dock="Right" Content="Done" Style="{StaticResource Button.M}" Click="DetailClose_Click" Margin="8,0,0,0" />
+              <Button x:Name="DetailEdit" DockPanel.Dock="Right" Content="Edit" Style="{StaticResource Button.M}" Click="DetailEdit_Click" Margin="8,0,0,0" />
+              <Button x:Name="DetailCancelEvent" Content="Cancel event" Style="{StaticResource GhostButton}" Height="32" Click="DetailCancelEvent_Click" HorizontalAlignment="Left" />
+            </DockPanel>
+          </Grid>
+        </Border>
+      </Border>
+
+      <!-- ===== create / edit form ===== -->
+      <Border x:Name="FormOverlay" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="FormScrim_Down">
+        <Border x:Name="FormBox" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+                Width="480" MaxHeight="620" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,24,24,0">
+              <StackPanel>
+                <TextBlock x:Name="FormHeading" Text="New event" Style="{StaticResource Text.Section}" />
+                <TextBlock x:Name="FormWhere" Style="{StaticResource Text.Secondary}" Margin="0,4,0,16" />
+                <TextBlock Text="Instance or title" Style="{StaticResource Text.Caption}" />
+                <TextBox x:Name="FTitle" Style="{StaticResource Input}" MaxLength="60" Margin="0,4,0,0" TextChanged="FTitle_Changed" KeyDown="Form_KeyDown" />
+                <ItemsControl x:Name="FSuggest" Margin="0,8,0,0">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate><Button Content="{Binding}" Tag="{Binding}" Style="{StaticResource Button.S}" Margin="0,0,8,8" Click="FSuggest_Click" /></DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="When" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                  <ComboBox x:Name="FMonth" Style="{StaticResource Dropdown}" Width="136" SelectionChanged="FMonth_Changed" AutomationProperties.Name="Month" />
+                  <ComboBox x:Name="FDay" Style="{StaticResource Dropdown}" Width="64" Margin="8,0,0,0" AutomationProperties.Name="Day" />
+                  <TextBlock Text="at" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="12,0,12,0" />
+                  <ComboBox x:Name="FHour" Style="{StaticResource Dropdown}" Width="64" AutomationProperties.Name="Hour" />
+                  <TextBlock Text=":" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="8,0,8,0" />
+                  <ComboBox x:Name="FMinute" Style="{StaticResource Dropdown}" Width="64" AutomationProperties.Name="Minute" />
+                </StackPanel>
+                <TextBlock Text="Your local time. Everyone else sees it in theirs." Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+
+                <TextBlock Text="Length" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <ComboBox x:Name="FLength" Style="{StaticResource Dropdown}" Width="152" HorizontalAlignment="Left" Margin="0,4,0,0" AutomationProperties.Name="Length" />
+
+                <TextBlock Text="Who" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <Border Style="{StaticResource SegmentHost}" Margin="0,4,0,0">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="FRoles" Style="{StaticResource Segment}" Content="Roles" GroupName="calroles" IsChecked="True" Checked="FRoles_Changed" />
+                    <RadioButton x:Name="FNoRoles" Style="{StaticResource Segment}" Content="No roles" GroupName="calroles" Checked="FRoles_Changed" />
+                  </StackPanel>
+                </Border>
+                <Grid x:Name="FPlaces" Margin="0,8,0,0">
+                  <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                  <StackPanel Grid.Column="0">
+                    <TextBlock Text="Tank" Style="{StaticResource Text.Secondary}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                      <Button Style="{StaticResource IconButton}" Content="&#xE738;" Tag="tank:-1" Click="FStep_Click" ToolTip="One less" AutomationProperties.Name="One less tank" />
+                      <TextBlock x:Name="FTankN" Text="2" Style="{StaticResource Text.Body}" Width="28" TextAlignment="Center" VerticalAlignment="Center" />
+                      <Button Style="{StaticResource IconButton}" Content="&#xE710;" Tag="tank:1" Click="FStep_Click" ToolTip="One more" AutomationProperties.Name="One more tank" />
+                    </StackPanel>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Text="Healer" Style="{StaticResource Text.Secondary}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                      <Button Style="{StaticResource IconButton}" Content="&#xE738;" Tag="healer:-1" Click="FStep_Click" ToolTip="One less" AutomationProperties.Name="One less healer" />
+                      <TextBlock x:Name="FHealerN" Text="3" Style="{StaticResource Text.Body}" Width="28" TextAlignment="Center" VerticalAlignment="Center" />
+                      <Button Style="{StaticResource IconButton}" Content="&#xE710;" Tag="healer:1" Click="FStep_Click" ToolTip="One more" AutomationProperties.Name="One more healer" />
+                    </StackPanel>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Text="DPS" Style="{StaticResource Text.Secondary}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                      <Button Style="{StaticResource IconButton}" Content="&#xE738;" Tag="dps:-1" Click="FStep_Click" ToolTip="One less" AutomationProperties.Name="One less DPS" />
+                      <TextBlock x:Name="FDpsN" Text="5" Style="{StaticResource Text.Body}" Width="28" TextAlignment="Center" VerticalAlignment="Center" />
+                      <Button Style="{StaticResource IconButton}" Content="&#xE710;" Tag="dps:1" Click="FStep_Click" ToolTip="One more" AutomationProperties.Name="One more DPS" />
+                    </StackPanel>
+                  </StackPanel>
+                </Grid>
+
+                <StackPanel x:Name="FRepeatArea">
+                  <TextBlock Text="Repeat" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                  <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Border Style="{StaticResource SegmentHost}">
+                      <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="FOnce" Style="{StaticResource Segment}" Content="Once" GroupName="calrepeat" IsChecked="True" Checked="FRepeat_Changed" />
+                        <RadioButton x:Name="FWeekly" Style="{StaticResource Segment}" Content="Every week" GroupName="calrepeat" Checked="FRepeat_Changed" />
+                      </StackPanel>
+                    </Border>
+                    <ComboBox x:Name="FWeeks" Style="{StaticResource Dropdown}" Width="152" Margin="8,0,0,0" Visibility="Collapsed" AutomationProperties.Name="How long" />
+                  </StackPanel>
+                  <TextBlock Text="Keeps the same time on your clock, also when the clocks change." Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <StackPanel x:Name="FScopeArea" Visibility="Collapsed">
+                  <TextBlock Text="Apply to" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                  <Border Style="{StaticResource SegmentHost}" Margin="0,4,0,0">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="FScopeThis" Style="{StaticResource Segment}" Content="This event" GroupName="calscope" IsChecked="True" />
+                      <RadioButton x:Name="FScopeFollowing" Style="{StaticResource Segment}" Content="This and following" GroupName="calscope" />
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="FChannelArea">
+                  <TextBlock Text="Post in chat" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                  <ComboBox x:Name="FChannel" Style="{StaticResource Dropdown}" Width="200" HorizontalAlignment="Left" Margin="0,4,0,0" AutomationProperties.Name="Channel" />
+                </StackPanel>
+
+                <TextBlock Text="Note" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <TextBox x:Name="FNote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" KeyDown="Form_KeyDown" />
+                <TextBlock x:Name="FError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,12,0,12" />
+              </StackPanel>
+            </ScrollViewer>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,12,24,24">
+              <Button Content="Cancel" Style="{StaticResource Button.M}" Click="FCancel_Click" />
+              <Button x:Name="FPost" Content="Post it" Style="{StaticResource Button.Primary.M}" Margin="8,0,0,0" Click="FPost_Click" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Border>
+    </Grid>
+  </Border>
+</UserControl>

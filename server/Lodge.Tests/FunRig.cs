@@ -36,12 +36,12 @@ public sealed class FunRig : IDisposable
     public readonly LodgeHub Hub;
     public readonly Dictionary<string, (Member m, FunSock s)> People = new();
 
-    public FunRig(Action<LodgeConfig>? tweak = null)
+    public FunRig(Action<LodgeConfig>? tweak = null, Microsoft.Extensions.Logging.ILogger? log = null)
     {
         var cfg = LodgeConfig.ForTests(Dir.Path);
         tweak?.Invoke(cfg);
         T.WriteCodes(cfg, $"Elan:{T.ElanCode}:owner", $"Bob:{T.BobCode}:officer");
-        Hub = new LodgeHub(cfg, new Auth(cfg, T.Log), new FileStore(cfg), T.Log, Clock);
+        Hub = new LodgeHub(cfg, new Auth(cfg, T.Log), new FileStore(cfg), log ?? T.Log, Clock);
     }
 
     public Member Join(string name, string role)
@@ -59,6 +59,14 @@ public sealed class FunRig : IDisposable
     {
         var j = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(o))!.AsObject();
         return Hub.Chat.Handle(m, (string)j["t"]!, j);
+    }
+
+    // any module (chat, calendar...) - the hub's own dispatch order
+    public async Task Send(Member m, object o)
+    {
+        var j = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(o))!.AsObject();
+        var type = (string)j["t"]!;
+        if (!await Hub.Chat.Handle(m, type, j)) await Hub.Calendar.Handle(m, type, j);
     }
 
     public async Task<string> Say(Member m, string text, string channel = "general")

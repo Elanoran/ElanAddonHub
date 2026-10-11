@@ -244,6 +244,7 @@ public partial class ChatModule : IModule
         if (!ch.VisibleTo(me.Role)) return; // a channel you can't see doesn't exist for you
         if (!IsAuthor(me, msg)) { await hub.Error(me, "You can only edit your own messages"); return; }
         if (Lfg.Is(msg)) { await hub.Error(me, "A sign-up card can't be edited - close it and make a new one", "lfg"); return; }
+        if ((string)msg["kind"] == Cal.Kind) { await hub.Error(me, "An event card follows the event - change it in the Calendar", "cal"); return; }
         var text = Names.MessageText(J.Str(m, "text"));
         if (text.Length == 0) return;
         if (text.Length > 2000) text = Names.Cut(text, 2000);

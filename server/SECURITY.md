@@ -119,6 +119,16 @@ address is only for recognising a device; behind a proxy it is the address the p
 `lodge-admin` also accepts names with any letters now (it was ASCII only, which contradicted the server's rule of `\p{L}\p{N}`), and no
 longer lets a backslash into a name.
 
+## 2.11.0 (raid / event calendar)
+
+- Events live in their own atomic file `calendar.json` (tmp, flush, rename; a tmp is recovered only when the main file is missing; 8 MB cap on load; every loaded event needs an id, title and start; at most 800 kept). Bounds: 200 future events in total (a series that does not fit is refused whole), 40 upcoming per person, 60 sign-ups per event, repeat at most 26 weeks, start within a year, length 15 min to 24 h. Past events are dropped 30 days after their end (on load, on create and by the 15 s housekeeping).
+- Permissions (`Roles.Can`): `CalendarCreate` = member and up (guests view and sign up only); edit / cancel = the organiser (a personal identity, matched by login name) or `CalendarManage` = officer and up. A guest name can never match an organiser.
+- Validation is in one place (`Cal.Parse`): title and note cleaned like any text and `@everyone` / `@here` defused below officer, counts whole numbers 0-40, `tz` limited to letters, digits and `_/+-.()' ` (64 chars), `off` clamped to +-14 h. Sign-ups and every edit run under the store lock, so two people taking the last place cannot both get it; a refused move keeps the old answer; an edit cannot push a role below the people going in it.
+- Budgets: create / edit / cancel spend the Chat budget (they post or refresh a chat card) on top of the Control budget every non-chat frame costs; a month fetch spends the Page budget. No new bucket. Refusals count towards the flood disconnect.
+- Privacy: a sign-up is an explicit act, so the list shows the member by name even when they chose "Appear offline"; the calendar carries no status, game or online flag, and nothing in it depends on presence. The chat card is posted only to a text channel the organiser may see; guests still see the event itself through the calendar (it is a lodge-wide list), like the lodge's roster.
+- Logs: event ids, counts and login names only (`X created calendar event <id> (3 date(s))`); never a title, note or comment. Tested (unit and real-socket).
+- Honest limits: the calendar list is visible to every rank including guests (the chat card follows the channel's rank rule, the event does not); a guest's sign-up is keyed by the connection's name, which another guest may reuse later; the creator's zone id is stored with the event (it is not secret, it only drives recurrence).
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.
@@ -166,9 +176,9 @@ longer lets a backslash into a name.
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 224 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 261 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
-python server/tests/security_integration.py                     # 102 checks against local servers (python -X utf8 on Windows)
+python server/tests/security_integration.py                     # 118 checks against local servers (python -X utf8 on Windows)
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 41 checks
 sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, 41 checks
 ```

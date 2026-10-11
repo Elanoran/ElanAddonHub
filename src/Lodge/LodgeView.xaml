@@ -192,6 +192,25 @@
       </Border>
     </DataTemplate>
 
+    <!-- the chat card of a calendar event: a compact Surface2 card that links to the event (server 2.11; older clients see the fallback line) -->
+    <DataTemplate x:Key="EventChatCard">
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Width="440" HorizontalAlignment="Left" Margin="0,8,0,4" Opacity="{Binding CardOpacity}">
+        <StackPanel>
+          <DockPanel>
+            <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" Visibility="{Binding StatusVisibility}" VerticalAlignment="Center" Margin="12,0,0,0">
+              <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="&#xE787;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock Text="{Binding CardWhen}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+          <TextBlock Text="{Binding FillText}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+          <TextBlock Text="{Binding MyLine}" Visibility="{Binding MyLineVisibility}" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
+          <Button Content="Open in Calendar" Style="{StaticResource Button.S}" HorizontalAlignment="Left" Margin="0,12,0,0" Tag="{Binding}" Click="EventOpen_Click" />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
     <!-- a person who is playing WoW (the "In game" group): the character in class colour, "Lv 27 Hunter", the place, a dungeon / raid / group tag -->
     <DataTemplate x:Key="GamePersonRow">
       <ContentControl Style="{StaticResource Side.Row}" Tag="{Binding}" MouseLeftButtonUp="Member_Click" MouseRightButtonUp="Member_Click">
@@ -346,6 +365,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
 
           <StackPanel Grid.Row="0" Margin="12,0,12,8">
@@ -366,6 +386,17 @@
                 <app:Skeleton Height="12" Width="72" CornerRadius="6" HorizontalAlignment="Left" Margin="12,12,0,12" />
                 <app:Skeleton Height="12" Width="120" CornerRadius="6" HorizontalAlignment="Left" Margin="12,0,0,0" />
               </StackPanel>
+              <!-- the calendar (server 2.11): one quiet row above the channels; the page takes the chat's place -->
+              <ContentControl x:Name="CalendarRow" Style="{StaticResource Side.Row}" Padding="12,0" MinHeight="36" Margin="0,8,0,0" Visibility="Collapsed"
+                              MouseLeftButtonUp="CalendarRow_Click" ToolTip="Raids and events, with who is coming" AutomationProperties.Name="Calendar">
+                <DockPanel>
+                  <Border x:Name="CalendarBadge" DockPanel.Dock="Right" Style="{StaticResource Chip}" Padding="8,0" MinWidth="24" Visibility="Collapsed" VerticalAlignment="Center" ToolTip="Events today">
+                    <TextBlock x:Name="CalendarBadgeText" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Text="&#xE787;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16" VerticalAlignment="Center" />
+                  <TextBlock x:Name="CalendarRowText" Text="Calendar" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
+                </DockPanel>
+              </ContentControl>
               <TextBlock x:Name="TextHeader" Text="Text channels" Style="{StaticResource SectionHeader}" Margin="12,8,0,4" />
               <ItemsControl x:Name="TextList">
                 <ItemsControl.ItemTemplate>
@@ -421,8 +452,16 @@
             </StackPanel>
           </ScrollViewer>
 
+          <!-- the next event: one calm line, "Molten Core · Sat 20:00 · in 2 d" (server 2.11) -->
+          <ContentControl x:Name="NextEventRow" Grid.Row="2" Style="{StaticResource Side.Row}" Padding="12,0" MinHeight="36" Margin="0,8,0,0" Visibility="Collapsed"
+                          MouseLeftButtonUp="NextEvent_Click" ToolTip="Open the next event" AutomationProperties.Name="Next event">
+            <DockPanel>
+              <TextBlock x:Name="NextEventText" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,4" />
+            </DockPanel>
+          </ContentControl>
+
           <!-- in voice -->
-          <Border x:Name="VoiceBar" Grid.Row="2" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="12,8,8,8" Margin="0,8,0,0">
+          <Border x:Name="VoiceBar" Grid.Row="3" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="12,8,8,8" Margin="0,8,0,0">
             <DockPanel>
               <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <ToggleButton x:Name="MuteToggle" Style="{StaticResource IconToggle}" Width="32" Height="32" Content="&#xE720;" Click="MuteDeaf_Click" ToolTip="Mute" />
@@ -438,7 +477,7 @@
           </Border>
 
           <!-- me -->
-          <Border x:Name="MeCard" Grid.Row="3" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="8" Margin="0,8,0,0">
+          <Border x:Name="MeCard" Grid.Row="4" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="8" Margin="0,8,0,0">
             <DockPanel>
               <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE713;"
                       Click="Settings_Click" ToolTip="Settings" />
@@ -457,8 +496,11 @@
         </Grid>
       </Border>
 
+      <!-- ===== the calendar page: takes the chat's place while it is open ===== -->
+      <local:CalendarView x:Name="CalendarPage" Grid.Column="1" Visibility="Collapsed" />
+
       <!-- ===== chat: a Surface1 card ===== -->
-      <Border Grid.Column="1" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
+      <Border x:Name="ChatCard" Grid.Column="1" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -580,6 +622,7 @@
                             </ItemsControl>
                             <!-- "Looking for group" sign-up card (server 2.9) -->
                             <ContentControl Content="{Binding Lfg}" ContentTemplate="{StaticResource LfgCard}" Visibility="{Binding LfgVisibility}" />
+                            <ContentControl Content="{Binding Event}" ContentTemplate="{StaticResource EventChatCard}" Visibility="{Binding EventVisibility}" />
                             <StackPanel Visibility="{Binding FileVisibility}" Margin="0,4,0,4">
                               <Border Visibility="{Binding File.ImageVisibility}" CornerRadius="{StaticResource Radius.Card}" HorizontalAlignment="Left" Cursor="Hand"
                                       MouseLeftButtonUp="Image_Click" Tag="{Binding File}" ClipToBounds="True">

@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.39.0
+- **Raid and event calendar** in the Lodge (Calendar row above the channels): agenda, month view, and event details with who is coming per role. Plan raids, dungeons or social evenings with roles, a date, a length, an optional weekly repeat and a note; answer Going, Maybe or Can't with your role. A card is posted in chat, a toast reminds you 15 minutes before, and the next event shows at the bottom of the sidebar. Weekly events keep their local time across clock changes; times always show in your own time zone. Needs Lodge server 2.11.
+- **Better voice:** a smart buffer per speaker smooths over late audio instead of clicking or cutting out; noise suppression removes fan and hiss; automatic volume lifts quiet microphones and stops loud ones clipping; voice activation keeps the ends of words and the start of sentences. New Standard / High quality setting, a smooth speaking ring, "Test my mic" with all processing, and a connection-quality readout (Settings > Voice).
+- **Invite links open the Outpost when clicked** (Discord, browser, email): the join is filled in and you confirm with Join - nothing happens by itself. The secret part stays masked. Setting: General > "Open elanshub:// links with the Outpost" (on by default, for your Windows user only).
+
 ## 2.38.1
 - **A failed sign-in attempt no longer forgets the sign-in that worked.** Before, trying a wrong code or a broken link in the Lodge join box or in "Edit connection" threw away this PC's saved sign-in, so you were disconnected and needed a new invite. Now whatever you type is only tried: it is saved only after the lodge has welcomed you. If it fails, your old sign-in is still there, the error stays on screen, and a "Back to my saved sign-in" button reconnects you. The same goes for changing the lodge address and for "Upgrade this device".
 - Pasting an invite link whose address is a placeholder (like "<your-lodge-address>") now says "This link is missing the lodge address - ask for a new link" instead of treating the link as a code.

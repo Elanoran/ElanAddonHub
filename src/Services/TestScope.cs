@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "linkopen", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "linkopen", "calendar", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -47,6 +47,7 @@ namespace ElansAddonHub.Services
             ["lodgefun"] = "Lodge 2.37: grouped online list, Looking-for-group cards, item links, history paging, search",
             ["invites"] = "Lodge 2.38: one-time invite links, device tokens, upgrade prompt, Guild Master invite list, Your devices, error messages",
             ["linkopen"] = "clicking an elanshub:// link: accepted links, per-user registration (test root), pipe hand-off, join panel (never auto-joined), Settings toggle",
+            ["calendar"] = "Lodge 2.11: raid / event calendar - agenda grouping, local time, month dots, form checks, sign-up buttons, 15-minute reminders, next-event line, chat card, hidden on older servers",
             ["video"] = "YouTube preview cards + in-app player",
             ["browser"] = "Browser page: URL/search rules, scheme + ad-host lists, tabs, tiles, WebView2 hardening",
             ["presence"] = "member presence",
@@ -68,7 +69,7 @@ namespace ElansAddonHub.Services
         {
             var r = new List<Tuple<Regex, string[]>>();
             void R(string rx, params string[] s) => r.Add(Tuple.Create(new Regex(rx, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), s));
-            var lodgeAll = new[] { "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "linkopen", "video", "viewer", "toasts", "presence", "profile", "round3" };
+            var lodgeAll = new[] { "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "linkopen", "calendar", "video", "viewer", "toasts", "presence", "profile", "round3" };
 
             // ---- shared: everything depends on these
             R(@"^src/(App\.xaml(\.cs)?|MainWindow\.xaml(\.cs)?|MainWindow\.Others\.cs|MainWindow\.Welcome\.cs|ElansAddonHub\.csproj|Motion\.cs|Brand\.cs|SourceIcons\.cs|PillBase\.cs|WelcomeGuide\.cs)$", Star);
@@ -94,6 +95,8 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.InvitesTest\.cs$", "invites");
             R(@"^src/(MainWindow\.LinkOpen(Test)?|Services/LinkOpen)\.cs$", "linkopen", "invites");
             R(@"^src/MainWindow\.DesignTest\.LinkOpen\.cs$");   // screenshot-only design run
+            R(@"^src/MainWindow\.CalendarTest\.cs$", "calendar");
+            R(@"^src/MainWindow\.DesignTest\.Calendar\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.DesignTest\.Invites\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.DesignTest\.LodgeFun\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.ToastTest\.cs$", "toasts");
