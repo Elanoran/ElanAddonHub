@@ -353,6 +353,9 @@ namespace ElansAddonHub
             PvShareGame.IsChecked = !settings.ShareGameOff; PvShareZone.IsChecked = !settings.ShareZoneOff; PvShareXp.IsChecked = !settings.ShareXpOff;
             PvAutoStatus.IsChecked = !settings.AutoStatusOff; PvAutoAway.IsChecked = !settings.AutoAwayOff; PvPixel.IsChecked = !settings.PixelOff;
             PvRememberInvis.IsChecked = !settings.InvisibleForget; PvCfAuto.IsChecked = settings.CfAutoCheck; PvVideo.IsChecked = !settings.VideoPreviewsOff;
+            PvBrPrivate.IsChecked = !settings.BrowserRemember; PvBrAds.IsChecked = !settings.BrowserAdsOff; PvBrChat.IsChecked = settings.BrowserFromChat;
+            if (PvBrSearch.Items.Count == 0) { PvBrSearch.ItemsSource = BrowserUrl.Engines.Select(e => e.Name).ToList(); }
+            PvBrSearch.SelectedIndex = Array.IndexOf(BrowserUrl.Engines, BrowserUrl.EngineById(settings.BrowserSearch));
             PvInvisible.IsChecked = session.Invisible;
             PvInvisible.IsEnabled = session.Me != null;
             PrivacyLodgeLine.Text = string.IsNullOrEmpty(settings.LodgeUrl) ? "You are not in a lodge, so nothing from the first group is sent anywhere."
@@ -363,6 +366,16 @@ namespace ElansAddonHub
         {
             if (loading || !(sender is CheckBox cb)) return;
             if (cb == PvInvisible) { session.SetInvisible(cb.IsChecked == true); return; }
+            if (cb == PvBrPrivate || cb == PvBrAds || cb == PvBrChat)
+            {
+                bool profile = cb == PvBrPrivate;
+                if (cb == PvBrPrivate) settings.BrowserRemember = cb.IsChecked != true;
+                else if (cb == PvBrAds) settings.BrowserAdsOff = cb.IsChecked != true;
+                else settings.BrowserFromChat = cb.IsChecked == true;
+                SettingsStore.Save(settings);
+                host.BrowserSettingsChanged(profile);
+                return;
+            }
             if (cb == PvVideo)
             {
                 settings.VideoPreviewsOff = cb.IsChecked != true;
@@ -375,6 +388,13 @@ namespace ElansAddonHub
             if (target == null) return;
             target.IsChecked = cb.IsChecked;
             if (cb == PvCfAuto) General_Click(target, e); else Lodge_Click(target, e);
+        }
+
+        void BrowserSearch_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (loading || settings == null || PvBrSearch.SelectedIndex < 0) return;
+            settings.BrowserSearch = BrowserUrl.Engines[PvBrSearch.SelectedIndex].Id;
+            SettingsStore.Save(settings);
         }
 
         void PrivacyProfile_Click(object sender, RoutedEventArgs e) => Show("profile");

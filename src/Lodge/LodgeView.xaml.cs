@@ -831,19 +831,36 @@ namespace ElansAddonHub.Lodge
             return YouTube.FindAt(tb.Text, tb.GetCharacterIndexFromPoint(e.GetPosition(tb), false));
         }
 
+        // any http(s) link in the message text (YouTube links included; those are handled first)
+        string WebLinkUnder(object sender, MouseEventArgs e)
+        {
+            if (!(sender is TextBox tb)) return null;
+            return ChatLinks.At(tb.Text, tb.GetCharacterIndexFromPoint(e.GetPosition(tb), false));
+        }
+
+        // a non-YouTube link was clicked: the host decides (Outpost browser or default browser)
+        public event Action<string> OpenLink;
+
         void MessageText_Move(object sender, MouseEventArgs e)
         {
             var tb = (TextBox)sender;
-            if (LinkUnder(sender, e) != null) tb.Cursor = Cursors.Hand; else tb.ClearValue(FrameworkElement.CursorProperty);
+            if (LinkUnder(sender, e) != null || WebLinkUnder(sender, e) != null) tb.Cursor = Cursors.Hand; else tb.ClearValue(FrameworkElement.CursorProperty);
         }
 
         void MessageText_Up(object sender, MouseButtonEventArgs e)
         {
             var tb = (TextBox)sender;
+            if (tb.SelectionLength > 0) return;
             var l = LinkUnder(sender, e);
-            if (l == null || tb.SelectionLength > 0) return;
-            if (tb.Tag is MessageVM m && m.Video?.Thumb != null) VideoPlayer.Open(l, m.Video.Title, m.Video.Channel);   // a preview exists: same overlay as the card
-            else VideoViewer.OpenInBrowser(l);                                             // previews off / unavailable video: the browser
+            if (l != null)
+            {
+                if (tb.Tag is MessageVM m && m.Video?.Thumb != null) VideoPlayer.Open(l, m.Video.Title, m.Video.Channel);   // a preview exists: same overlay as the card
+                else VideoViewer.OpenInBrowser(l);                                             // previews off / unavailable video: the browser
+                return;
+            }
+            var url = WebLinkUnder(sender, e);
+            if (url == null) return;
+            if (OpenLink != null) OpenLink(url); else WebEngine.OpenExternal(url);
         }
 
         public ImageViewer ViewerForTest => Viewer;

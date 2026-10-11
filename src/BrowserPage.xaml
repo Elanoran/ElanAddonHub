@@ -1,0 +1,231 @@
+<UserControl x:Class="ElansAddonHub.BrowserPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             PreviewKeyDown="Page_PreviewKeyDown" SizeChanged="Page_SizeChanged" Focusable="False">
+  <UserControl.Resources>
+    <!-- tab chip (DESIGN 8, like the Settings nav): 32 high, radius 8, hover veil 120 ms; the selected one is a Surface2 tile -->
+    <Style x:Key="TabChip" TargetType="Button">
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Focusable" Value="True" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid Height="32" Background="Transparent">
+              <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+              <ContentPresenter />
+              <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- quick-link tile: 96 wide, a 48 tile (Surface2, radius 10) with the site's icon or a letter, the name under it -->
+    <Style x:Key="TileButton" TargetType="Button">
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid Background="Transparent">
+              <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource Radius.Control}" />
+              <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+              <ContentPresenter />
+              <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Overlay.Pressed}" /></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- the address field's frame: Surface2, radius 8, 1 px accent while it has the keyboard -->
+    <Style x:Key="AddressFrame" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource Brush.Surface2}" />
+      <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Style.Triggers>
+        <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" /></Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <DataTemplate x:Key="TabTemplate">
+      <Button Style="{StaticResource TabChip}" Width="{Binding Width}" Tag="{Binding}" Margin="0,0,4,0" ToolTip="{Binding Title}" ToolTipService.InitialShowDelay="500"
+              Click="Tab_Click" PreviewMouseDown="Tab_MouseDown" AutomationProperties.Name="{Binding Title}">
+        <Grid x:Name="root" Background="Transparent">
+          <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Opacity="{Binding SelectedOpacity}" />
+          <DockPanel Margin="10,0,4,0">
+            <Button x:Name="rm" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="22" Height="22" FontSize="9" Content="&#xE711;" Margin="4,0,0,0"
+                    Opacity="{Binding CloseOpacity}" Tag="{Binding}" Click="TabClose_Click" ToolTip="Close tab" AutomationProperties.Name="Close tab" />
+            <Grid DockPanel.Dock="Left" Width="16" Height="16" Margin="0,0,8,0">
+              <Image Source="{Binding Icon}" Width="16" Height="16" RenderOptions.BitmapScalingMode="HighQuality" />
+              <TextBlock Text="&#xE774;" FontFamily="{StaticResource Font.Icons}" FontSize="13" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Visibility="{Binding GlyphVisibility}" />
+            </Grid>
+            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Secondary}" Foreground="{Binding TitleBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+        </Grid>
+      </Button>
+      <DataTemplate.Triggers>
+        <Trigger SourceName="root" Property="IsMouseOver" Value="True"><Setter TargetName="rm" Property="Opacity" Value="1" /></Trigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate x:Key="TileTemplate">
+      <Grid x:Name="root" Width="104" Height="104" Margin="4" Background="Transparent">
+        <Button Style="{StaticResource TileButton}" Tag="{Binding}" Click="Tile_Click" ToolTip="{Binding Url}" AutomationProperties.Name="{Binding Name}">
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Border Width="48" Height="48" CornerRadius="{StaticResource Radius.ControlLg}" Background="{StaticResource Brush.Surface2}" HorizontalAlignment="Center">
+              <Grid>
+                <Image Source="{Binding Icon}" Width="24" Height="24" RenderOptions.BitmapScalingMode="HighQuality" />
+                <TextBlock Text="{Binding Initial}" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource Brush.Text.Secondary}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Visibility="{Binding LetterVisibility}" />
+              </Grid>
+            </Border>
+            <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" Margin="0,8,0,0" TextAlignment="Center"
+                       TextTrimming="CharacterEllipsis" MaxWidth="92" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="rm" Style="{StaticResource IconButton}" Width="22" Height="22" FontSize="9" Content="&#xE711;" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0"
+                Opacity="0" Tag="{Binding}" Click="TileRemove_Click" ToolTip="Remove tile" AutomationProperties.Name="Remove tile" />
+      </Grid>
+      <DataTemplate.Triggers>
+        <Trigger SourceName="root" Property="IsMouseOver" Value="True"><Setter TargetName="rm" Property="Opacity" Value="1" /></Trigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <!-- page panel (DESIGN 4): the page sits on a scrim; 12 px all round also keeps the rectangular web view clear of the rounded corners -->
+  <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="12">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+
+      <!-- everything above the page: tab strip, toolbar, loading line, download note (hidden while a video is full screen) -->
+      <StackPanel x:Name="Chrome" Grid.Row="0">
+        <DockPanel Height="36" Margin="0,0,0,4">
+          <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="13" Content="&#xE710;" Click="NewTab_Click"
+                  ToolTip="New tab  (Ctrl+T)" AutomationProperties.Name="New tab" VerticalAlignment="Center" />
+          <ItemsControl x:Name="TabStrip" ItemTemplate="{StaticResource TabTemplate}" VerticalAlignment="Center" Focusable="False">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          </ItemsControl>
+        </DockPanel>
+
+        <Grid Height="36">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Button x:Name="BackBtn" Grid.Column="0" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE72B;" Click="Back_Click" ToolTip="Back  (Alt+Left)" AutomationProperties.Name="Back" />
+          <Button x:Name="FwdBtn" Grid.Column="1" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE72A;" Click="Forward_Click" ToolTip="Forward  (Alt+Right)" AutomationProperties.Name="Forward" />
+          <Button x:Name="ReloadBtn" Grid.Column="2" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE72C;" Click="Reload_Click" ToolTip="Reload  (F5)" AutomationProperties.Name="Reload" Margin="0,0,8,0" />
+          <Border x:Name="AddressFrameBox" Grid.Column="3" Style="{StaticResource AddressFrame}" Height="32" ToolTipService.InitialShowDelay="300">
+            <Grid>
+              <TextBlock x:Name="LockGlyph" Text="&#xE721;" FontFamily="{StaticResource Font.Icons}" FontSize="13" Foreground="{StaticResource Brush.Text.Tertiary}"
+                         HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,0,0" IsHitTestVisible="False" />
+              <TextBlock x:Name="AddressHint" Text="Search or enter an address" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}"
+                         VerticalAlignment="Center" Margin="36,0,0,0" IsHitTestVisible="False" />
+              <TextBox x:Name="AddressBox" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Brush.Text.Primary}" CaretBrush="{StaticResource Brush.Text.Primary}"
+                       SelectionBrush="{StaticResource Brush.Accent}" FontSize="13" VerticalContentAlignment="Center" Margin="34,0,8,0" Padding="2,0" SpellCheck.IsEnabled="False"
+                       KeyDown="Address_KeyDown" GotKeyboardFocus="Address_GotFocus" LostKeyboardFocus="Address_LostFocus" TextChanged="Address_TextChanged" AutomationProperties.Name="Address" />
+              <TextBlock x:Name="NotSecureText" Text="Not secure" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Warn}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                         Margin="0,0,12,0" IsHitTestVisible="False" Visibility="Collapsed" />
+            </Grid>
+          </Border>
+        </Grid>
+
+        <!-- thin loading line under the bar: grows from the left while a page loads -->
+        <Border Height="2" Margin="0,2,0,6" ClipToBounds="True">
+          <Border x:Name="Progress" Background="{StaticResource Brush.Accent}" Opacity="0" RenderTransformOrigin="0,0.5">
+            <Border.RenderTransform><ScaleTransform x:Name="ProgressScale" ScaleX="0" /></Border.RenderTransform>
+          </Border>
+        </Border>
+
+        <Border x:Name="Notice" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Padding="12,4,4,4" Margin="0,0,0,8">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="9" Content="&#xE711;" Click="NoticeClose_Click" ToolTip="Dismiss" AutomationProperties.Name="Dismiss" />
+            <Button x:Name="NoticeShow" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Show in folder" Click="NoticeShow_Click" Margin="8,0,4,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="NoticeText" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- the page area: a web view per tab (created on first use) and, instead of it, our own new-tab and error pages -->
+      <Grid x:Name="PageArea" Grid.Row="1">
+        <Grid x:Name="WebHost" />
+
+        <!-- new tab -->
+        <ScrollViewer x:Name="NewTabPanel" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" Background="Transparent">
+          <StackPanel MaxWidth="560" HorizontalAlignment="Center" Margin="0,64,0,24">
+            <TextBlock Text="Browse" Style="{StaticResource Text.Title}" HorizontalAlignment="Center" />
+            <TextBlock x:Name="NtHint" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,24" />
+            <ItemsControl x:Name="TileList" ItemTemplate="{StaticResource TileTemplate}" HorizontalAlignment="Center" Focusable="False">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            </ItemsControl>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+              <Button x:Name="AddTileBtn" Style="{StaticResource GhostButton}" Content="Add a tile" Click="AddTile_Click" Margin="0,0,8,0" />
+              <Button x:Name="ResetTilesBtn" Style="{StaticResource GhostButton}" Content="Restore defaults" Click="ResetTiles_Click" />
+            </StackPanel>
+            <Border x:Name="AddForm" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Margin="0,12,0,0">
+              <StackPanel>
+                <TextBox x:Name="AddName" Style="{StaticResource Input}" Tag="Name" Height="32" MaxLength="40" KeyDown="AddForm_KeyDown" />
+                <TextBox x:Name="AddUrl" Style="{StaticResource Input}" Tag="Address, e.g. wowhead.com" Height="32" Margin="0,8,0,0" KeyDown="AddForm_KeyDown" />
+                <TextBlock x:Name="AddError" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Danger}" Margin="0,8,0,0" Visibility="Collapsed" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                  <Button Style="{StaticResource Button.M}" Content="Cancel" Click="AddCancel_Click" Margin="0,0,8,0" />
+                  <Button Style="{StaticResource Button.Primary.M}" Content="Add" Click="AddOk_Click" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- page could not load: our own calm page instead of the browser's -->
+        <Grid x:Name="ErrorPanel" Visibility="Collapsed">
+          <StackPanel MaxWidth="420" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,48">
+            <TextBlock x:Name="ErrGlyph" Text="&#xE783;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />
+            <TextBlock x:Name="ErrTitle" Style="{StaticResource Text.Section}" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,16,0,0" TextWrapping="Wrap" />
+            <TextBlock x:Name="ErrText" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0" />
+            <TextBlock x:Name="ErrUrl" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="400" Margin="0,8,0,0" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,24,0,0">
+              <Button Style="{StaticResource Button.Primary.M}" Content="Try again" Click="ErrRetry_Click" Margin="0,0,8,0" />
+              <Button Style="{StaticResource Button.M}" Content="Open in your browser" Click="ErrExternal_Click" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Grid>
+
+      <!-- WebView2 could not start: a calm message and a way out -->
+      <Grid x:Name="Fallback" Grid.RowSpan="2" Visibility="Collapsed">
+        <StackPanel MaxWidth="440" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <TextBlock Text="&#xE774;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />
+          <TextBlock Text="The built-in browser isn't available" Style="{StaticResource Text.Section}" HorizontalAlignment="Center" Margin="0,16,0,0" />
+          <TextBlock Text="This page needs Microsoft's WebView2 runtime and it could not start on this PC. Nothing else is affected: links open in your default browser instead."
+                     Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0" />
+          <Button Style="{StaticResource Button.Primary.M}" Content="Open in your browser" Click="FallbackOpen_Click" HorizontalAlignment="Center" Margin="0,24,0,0" />
+          <TextBlock x:Name="FallbackDetail" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,16,0,0" />
+        </StackPanel>
+      </Grid>
+    </Grid>
+  </Border>
+</UserControl>

@@ -60,7 +60,7 @@ namespace ElansAddonHub
             PreviewKeyDown += (s, e) =>
             {
                 if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control || (Keyboard.Modifiers & (ModifierKeys.Alt | ModifierKeys.Shift)) != 0) return;
-                var t = e.Key == Key.D1 || e.Key == Key.NumPad1 ? "addons" : e.Key == Key.D2 || e.Key == Key.NumPad2 ? "lodge" : e.Key == Key.D3 || e.Key == Key.NumPad3 ? "inventory" : e.Key == Key.OemComma ? "settings" : null;
+                var t = TabForKey(e.Key);
                 if (t != null) { ShowTab(t); e.Handled = true; }
             };
             Session.Notify += (from, text) =>
@@ -82,6 +82,9 @@ namespace ElansAddonHub
             LodgePage.Init(Session);
             SettingsPage.Init(this, settings, LodgePage);
             InventoryView.Init(() => settings.WowRoot);
+            BrowserView.Init(settings);
+            BrowserView.ShortcutTab += t => ShowTab(t);
+            LodgePage.OpenLink += OpenChatLink;
             InventoryView.GoToAddons += () => ShowTab("addons");
             InventoryView.GoToSettings += () => { ShowTab("settings"); SettingsPage.Show("general"); };
             InitHealth();
@@ -109,16 +112,18 @@ namespace ElansAddonHub
 
         void Tab_Checked(object sender, RoutedEventArgs e)
         {
-            if (LodgePage == null || SettingsPage == null || InventoryView == null) return;
+            if (LodgePage == null || SettingsPage == null || InventoryView == null || BrowserView == null) return;
             var wasAddons = AddonsPage.Visibility == Visibility.Visible;
             var lodge = TabLodge.IsChecked == true;
             var set = TabSettings.IsChecked == true;
             var inv = TabInventory.IsChecked == true;
+            var brw = TabBrowser.IsChecked == true;
+            BrowserView.Visibility = brw ? Visibility.Visible : Visibility.Collapsed;
             LodgePage.Visibility = lodge ? Visibility.Visible : Visibility.Collapsed;
             SettingsPage.Visibility = set ? Visibility.Visible : Visibility.Collapsed;
             InventoryView.Visibility = inv ? Visibility.Visible : Visibility.Collapsed;
-            AddonsPage.Visibility = !lodge && !set && !inv ? Visibility.Visible : Visibility.Collapsed;
-            RefreshBar.Visibility = !lodge && !set && !inv ? Visibility.Visible : Visibility.Collapsed;
+            AddonsPage.Visibility = !lodge && !set && !inv && !brw ? Visibility.Visible : Visibility.Collapsed;
+            RefreshBar.Visibility = !lodge && !set && !inv && !brw ? Visibility.Visible : Visibility.Collapsed;
             if (AddonsPage.Visibility == Visibility.Visible && !wasAddons) Motion.PageIn(AddonsPage);
             if (lodge) Session.MarkRead();
         }
@@ -155,8 +160,24 @@ namespace ElansAddonHub
 
         public void ShowTab(string tab)
         {
-            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : tab == "inventory" ? TabInventory : TabAddons).IsChecked = true;
+            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : tab == "inventory" ? TabInventory : tab == "browser" ? TabBrowser : TabAddons).IsChecked = true;
         }
+
+        // Ctrl+<key> -> rail page
+        public static string TabForKey(Key k) =>
+            k == Key.D1 || k == Key.NumPad1 ? "addons" : k == Key.D2 || k == Key.NumPad2 ? "lodge" : k == Key.D3 || k == Key.NumPad3 ? "inventory"
+            : k == Key.D4 || k == Key.NumPad4 ? "browser" : k == Key.OemComma ? "settings" : null;
+
+        // a non-YouTube link clicked in Lodge chat: the Browser page when "Open links from chat in the Outpost browser" is on, otherwise the default browser
+        void OpenChatLink(string url)
+        {
+            if (!BrowserUrl.IsAllowedScheme(url)) return;
+            if (settings.BrowserFromChat && !BrowserView.Unavailable) { ShowTab("browser"); BrowserView.OpenUrl(url); }
+            else WebEngine.OpenExternal(url);
+        }
+
+        // Settings > Privacy > Outpost browser
+        public void BrowserSettingsChanged(bool profileChanged) => BrowserView.SettingsChanged(profileChanged);
 
         // ---- for the Settings page
         public string CheckStatus => statusText;
@@ -177,6 +198,7 @@ namespace ElansAddonHub
             // the window's own startup check may still be running (slow network): wait for it
             for (int i = 0; i < 100 && (checking || manifest == null); i++) await Task.Delay(200);
             await Task.Delay(400);
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_BROWSER_SHOTS")) || Environment.GetEnvironmentVariable("ELANSHUB_BROWSER_ONLY") == "1") { System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), await BrowserTest(dir)); Quit(); return; }
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_VIDEO_SHOTS"))) { System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), await VideoTest(dir)); Quit(); return; }
             var designShots = Environment.GetEnvironmentVariable("ELANSHUB_DESIGN_SHOTS");
             if (!string.IsNullOrEmpty(designShots)) { await DesignShots(dir, designShots); return; }
@@ -279,6 +301,7 @@ namespace ElansAddonHub
             }
             result += "\r\n" + await LodgeFeaturesTest(dir);
             result += "\r\n" + await VideoTest(dir);
+            result += "\r\n" + await BrowserTest(dir);
             result += "\r\n" + await PresenceTest(dir);
             result += "\r\n" + await ProfileTest(dir);
             result += "\r\n" + await ToastTest(dir);
