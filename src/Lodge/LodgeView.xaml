@@ -283,7 +283,7 @@
       </DockPanel>
     </Border>
     <!-- ===================== "Upgrade this device": a quiet one-time offer to someone still signing in with a permanent code ===================== -->
-    <Border x:Name="UpgradeNotice" Grid.Row="0" Visibility="Collapsed" Margin="16,2,12,6" Padding="16,12" Background="{StaticResource Brush.Surface2}" CornerRadius="12">
+    <Border x:Name="UpgradeNotice" Grid.Row="0" Visibility="Collapsed" Margin="16,4,12,8" Padding="16,12" Background="{StaticResource Brush.Surface2}" CornerRadius="12">
       <DockPanel>
         <Button x:Name="UpgradeLater" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Not now" Margin="8,0,0,0" Click="UpgradeLater_Click" />
         <Button x:Name="UpgradeNow" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="Upgrade this device" Margin="8,0,0,0" Click="UpgradeNow_Click" />
