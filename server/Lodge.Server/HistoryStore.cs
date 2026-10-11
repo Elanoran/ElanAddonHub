@@ -109,24 +109,29 @@ public sealed class HistoryStore
     {
         try
         {
-            var sb = new StringBuilder();
-            var keep = Messages.Count > Keep ? Messages.GetRange(Messages.Count - Keep, Keep) : Messages;
-            foreach (var m in keep) sb.Append(m.ToJsonString()).Append('\n');
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            while (bytes.Length > maxBytes && keep.Count > 1) // very long messages: drop the oldest until it fits
+            if (Messages.Count > Keep) Messages.RemoveRange(0, Messages.Count - Keep);
+            // every record is serialized once; when the total is over the byte cap the oldest go until it is comfortably under (75 %), so the
+            // next appends don't each trigger another rewrite. What goes is gone from memory too: memory holds what survives a restart.
+            var lines = new List<byte[]>(Messages.Count);
+            long total = 0;
+            foreach (var m in Messages) { var b = Encoding.UTF8.GetBytes(m.ToJsonString() + "\n"); lines.Add(b); total += b.Length; }
+            int first = 0;
+            if (total > maxBytes)
             {
-                keep = keep.GetRange(1, keep.Count - 1);
-                sb.Clear();
-                foreach (var m in keep) sb.Append(m.ToJsonString()).Append('\n');
-                bytes = Encoding.UTF8.GetBytes(sb.ToString());
+                long target = maxBytes / 4 * 3;
+                while (first < lines.Count - 1 && total > target) total -= lines[first++].Length;
+                Messages.RemoveRange(0, first);
             }
+            var bytes = new byte[total];
+            long off = 0;
+            for (int i = first; i < lines.Count; i++) { Buffer.BlockCopy(lines[i], 0, bytes, (int)off, lines[i].Length); off += lines[i].Length; }
             using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 fs.Write(bytes);
                 fs.Flush(flushToDisk: true);
             }
             File.Move(tmp, path, overwrite: true);
-            recordsOnDisk = keep.Count;
+            recordsOnDisk = Messages.Count;
             bytesOnDisk = bytes.Length;
             Dirty = false;
             return true;

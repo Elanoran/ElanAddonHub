@@ -44,6 +44,7 @@ namespace ElansAddonHub
                 await FunGrouping(dir, check);
                 await FunLfg(dir, check);
                 await FunItems(dir, check);
+                await FunHistory(dir, check);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally

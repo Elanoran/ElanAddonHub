@@ -13,6 +13,8 @@ public sealed class Budget
     public readonly TokenBucket Control;       // typing/state/status/voice/game/admin: burst 30, 5 per s
     public readonly TokenBucket VoicePackets;  // burst 150, 60 per s (50 per s is normal)
     public readonly TokenBucket VoiceBytes;    // burst 128 KB, 24 KB per s (~6x a 32 kbit/s stream)
+    public readonly TokenBucket Search;        // search: 6 per minute (a burst of 6)
+    public readonly TokenBucket Page;          // history:before (scrolling up): burst 10, 1 per s
     public readonly TokenBucket ProfileSet;    // profile:set: 1 per 2 s (a burst of 1)
     public readonly TokenBucket DisplayName;   // changing the display name: 1 per 60 s (a burst of 1)
     public DateTime LastUsed;
@@ -21,6 +23,8 @@ public sealed class Budget
     {
         Chat = new TokenBucket(8, 0.8, clock);
         Control = new TokenBucket(30, 5, clock);
+        Search = new TokenBucket(6, 0.1, clock);
+        Page = new TokenBucket(10, 1, clock);
         ProfileSet = new TokenBucket(1, 0.5, clock);
         DisplayName = new TokenBucket(1, 1.0 / 60, clock);
         VoicePackets = new TokenBucket(150, 60, clock);
@@ -211,7 +215,7 @@ public class LodgeHub
             ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
             ["canManage"] = Roles.Can(me.Role, Perm.ManageMembers),
             ["canPin"] = Roles.Can(me.Role, Perm.PinMessages),
-            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg"),
+            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search"),
             ["reactions"] = new JsonArray(ChatModule.ReactionSet.Select(e => (JsonNode)JsonValue.Create(e)).ToArray()), // canonical ids (2.4)
             ["pins"] = pins,
             ["channels"] = new JsonArray(visible.Select(c => (JsonNode)c.ToJson()).ToArray()),

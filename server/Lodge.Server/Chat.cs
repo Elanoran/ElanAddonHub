@@ -118,6 +118,8 @@ public partial class ChatModule : IModule
             case "lfg:leave": await LfgLeave(me, m); return true;
             case "lfg:close": await LfgEnd(me, m, "closed"); return true;
             case "lfg:cancel": await LfgEnd(me, m, "cancelled"); return true;
+            case "history:before": await HistoryBefore(me, m); return true;
+            case "search": await Search(me, m); return true;
             case "typing":
                 var ch = hub.Channels.Get(J.Str(m, "channel")) ?? hub.Channels.DefaultText;
                 if (!ch.VisibleTo(me.Role) || me.Invisible) return true; // invisible members never show as typing

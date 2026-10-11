@@ -54,6 +54,8 @@ namespace ElansAddonHub.Lodge
             GroupList.ItemsSource = session.Groups.Groups;
 
             session.Changed += Refresh;
+            session.OlderRequested += OnOlderRequested;
+            session.OlderLoaded += OnOlderLoaded;
             session.IsAtBottom = () => AtBottom;
             session.PinsChanged += UpdatePins;
             session.MessageAdded += vm =>
@@ -109,6 +111,8 @@ namespace ElansAddonHub.Lodge
                 else ScrollToEnd();
             }
             PinButton.Visibility = s.SupportsPin ? Visibility.Visible : Visibility.Collapsed;
+            SearchButton.Visibility = s.SupportsSearch ? Visibility.Visible : Visibility.Collapsed;   // servers before 2.9 have no search
+            UpdateOlderNote();
             UpdatePins();
             if (s.Selected != null)
                 EmptyText.Visibility = s.MessagesOf(s.Selected.Id).Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -225,7 +229,7 @@ namespace ElansAddonHub.Lodge
             t.Start();
         }
 
-        void MessageScroll_Changed(object sender, ScrollChangedEventArgs e) => UpdateJump();
+        void MessageScroll_Changed(object sender, ScrollChangedEventArgs e) { UpdateJump(); MaybeLoadOlder(e); }
 
         void UpdateJump()
         {
@@ -276,7 +280,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!((sender as FrameworkElement)?.Tag is PinVM p)) return;
             PinPopup.IsOpen = false;
-            JumpTo(p.Id);
+            _ = JumpToAsync(Session.Selected?.Id, p.Id, new DateTimeOffset(DateTime.SpecifyKind(p.At, DateTimeKind.Utc)).ToUnixTimeMilliseconds());
         }
 
         void PinRemove_Click(object sender, RoutedEventArgs e)
@@ -285,14 +289,8 @@ namespace ElansAddonHub.Lodge
             if ((sender as FrameworkElement)?.Tag is PinVM p && Session.Selected != null) _ = Session.UnpinMessage(p.Id, Session.Selected.Id);
         }
 
-        // scroll to a message in this channel and flash it; if it has left the loaded history say so
-        void JumpTo(string id)
-        {
-            var target = id == null ? null : Session.MessagesOf(Session.Selected?.Id).FirstOrDefault(m => m.Id == id);
-            if (target != null) { ScrollToMessage(target, true); return; }
-            ChatNote.Text = "That message is older than what is loaded here";
-            noteUntil = DateTime.UtcNow.AddSeconds(4);
-        }
+        // scroll to a message in this channel and flash it (older ones are loaded first: see LodgeView.History.cs)
+        void JumpTo(string id) => _ = JumpToAsync(Session.Selected?.Id, id, 0);
 
         void ScrollToEnd() => Dispatcher.BeginInvoke(new Action(() => MessageScroll.ScrollToEnd()), DispatcherPriority.Background);
 

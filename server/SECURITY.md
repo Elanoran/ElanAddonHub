@@ -86,6 +86,15 @@
   place at once cannot both get it. A card in a channel the rank cannot see answers like a card that does not exist. The `text` of a card is a
   plain-text fallback that follows the state (older clients, search, pins and reply quotes show it); cards cannot be edited.
 
+- History: `LODGE_HISTORY_MAX` (default 2000, 50-50 000) messages are kept per channel (was a fixed 200); `LODGE_HISTORY_MAX_KB` default 4096. Loading still
+  reads only the tail of the file; a compaction serializes each record once and, when over the byte cap, drops the oldest until the file is at 75 % of it
+  (so appends don't each cause another rewrite) - what is dropped is dropped from memory too. The welcome still carries the newest 100 per channel.
+- `history:before` ({channel, before, beforeAt?, limit<=100}) answers `history:page` with up to 100 older messages (oldest first) and `hasMore`; a channel the
+  rank can't see, a voice room, an unknown channel or an unknown id all answer with the same empty page. Own budget (burst 10, 1 per second) on top of Control.
+- `search` ({q, channel?}) answers `search:result`: case-insensitive substring over the text and attachment names of the text channels the rank can see,
+  newest first, at most 50 hits (`more` when there are others) with channel, id, author, time and a ~120 character snippet. The query is cleaned like any text,
+  cut to 64 characters and needs 2. Budget of 6 per minute (a burst of 6, one more every 10 s); refused searches count towards the flood disconnect.
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.

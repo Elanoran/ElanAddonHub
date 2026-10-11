@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
 
@@ -28,11 +30,54 @@ namespace ElansAddonHub
                 await FunShotGroups(dir);
                 await FunShotLfg(dir);
                 await FunShotItems(dir);
+                await FunShotSearch(dir);
                 System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), "lodge fun design shots done");
             }
             catch (Exception e) { System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), "design shots crashed: " + e); }
             finally { s.LodgeGroupsCollapsed = hadCollapsed; Session.Disconnect(); }
             Quit();
+        }
+
+        async Task FunShotSearch(string dir)
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var phrases = new[] { "Deadmines tonight? We need one more DPS.", "Who is up for Deadmines after dinner?", "Finished Deadmines, the helm finally dropped!", "Anyone remember where the Deadmines entrance is?",
+                "Deadmines on Saturday works for me", "I can tank Deadmines if someone heals", "The Deadmines run last week took forever", "Heading to Deadmines now, meet at the door", "Deadmines or Wailing Caverns first?", "Deadmines gear list is pinned" };
+            var srv = new FunServer(this, 260, now, i => i % 25 == 0 ? phrases[(i / 25 - 1) % phrases.Length] : "just chatting, nothing to see " + i);
+            Session.SentForTest = srv.Handle;
+            Session.Disconnect();
+            LodgePage.ShowChatForTest();
+            Session.IsShownToUser = () => false;
+            string Loot(string id, string text, int minsAgo) => "{\"t\":\"msg\",\"channel\":\"loot\",\"id\":" + Q(id) + ",\"at\":" + (now - minsAgo * 60000L) + ",\"from\":\"Tess\",\"fromId\":3,\"text\":" + Q(text) + "}";
+            Session.FeedForTest(FunHistoryWelcome(srv, 100, Loot("L1", "selling a Deadmines recipe, 3 silver", 3)));
+            Session.Select(Session.TextChannels.First(c => c.Id == "general"));
+            await Task.Delay(700);
+            LodgePage.ScrollToEndForTest();
+            LodgePage.OpenSearch();
+            LodgePage.SearchBoxTextForTest = "deadmines";
+            await LodgePage.RunSearchForTest();
+            await Task.Delay(700);
+            // a popup is its own window and not part of the window's picture: the card is drawn on top at the place it has under the magnifier
+            UpdateLayout();
+            var origin = LodgePage.SearchCardOriginForTest(this);
+            var card = LodgePage.SearchCardForTest;
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                // (a brush of an element with a shadow effect would be shifted by the effect's bounds: the view box pins it to the element's own rectangle)
+                VisualBrush Pinned(Visual v, double w, double h) => new VisualBrush(v) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, w, h), Stretch = Stretch.Fill };
+                dc.DrawRectangle(Pinned(this, ActualWidth, ActualHeight), null, new Rect(0, 0, ActualWidth, ActualHeight));
+                var shadow = new Rect(origin.X, origin.Y + 8, card.ActualWidth, card.ActualHeight);
+                dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(70, 0, 0, 0)), null, shadow, 12, 12);
+                dc.DrawRectangle(Pinned(card, card.ActualWidth, card.ActualHeight), null, new Rect(origin.X, origin.Y, card.ActualWidth, card.ActualHeight));
+            }
+            var bmp = new RenderTargetBitmap((int)ActualWidth, (int)ActualHeight, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(bmp));
+            using (var fs = System.IO.File.Create(System.IO.Path.Combine(dir, "lodge-fun-search.png"))) enc.Save(fs);
+            LodgePage.CloseSearchForTest();
+            Session.SentForTest = null;
         }
 
         async Task FunShotItems(string dir)

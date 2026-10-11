@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:ElansAddonHub.Lodge"
              xmlns:app="clr-namespace:ElansAddonHub"
-             AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
+             AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver" PreviewKeyDown="View_PreviewKeyDown">
   <UserControl.Resources>
     <!-- small round avatar (personal picture or class colour, class badge in game) with role ring, speaking ring and status dot -->
     <DataTemplate x:Key="AvatarSmall">
@@ -68,6 +68,33 @@
         </DockPanel>
       </Border>
     </DataTemplate>
+    <!-- search results: a channel header (quiet caption + count) and its hits: author, time, the snippet with the match picked out -->
+    <DataTemplate x:Key="SearchHit">
+      <Border x:Name="hit" Background="Transparent" CornerRadius="8" Padding="8,6" Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="SearchHit_Click" Margin="0,0,0,2">
+        <StackPanel>
+          <DockPanel>
+            <TextBlock Text="{Binding Time}" DockPanel.Dock="Right" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" Margin="8,0,0,0" />
+            <TextBlock Text="{Binding FromShown}" Foreground="{Binding FromBrush}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+          <TextBlock Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" TextWrapping="Wrap" MaxHeight="34" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"><Run Text="{Binding Before, Mode=OneWay}" /><Run Text="{Binding Match, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="{Binding After, Mode=OneWay}" /></TextBlock>
+        </StackPanel>
+      </Border>
+      <DataTemplate.Triggers>
+        <Trigger SourceName="hit" Property="IsMouseOver" Value="True">
+          <Setter TargetName="hit" Property="Background" Value="{StaticResource Brush.Overlay.Hover}" />
+        </Trigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+    <DataTemplate x:Key="SearchGroup">
+      <StackPanel Margin="0,8,0,0">
+        <DockPanel Margin="8,0,8,4">
+          <TextBlock Text="{Binding Count}" DockPanel.Dock="Right" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" />
+          <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Caption}" />
+        </DockPanel>
+        <ItemsControl ItemsSource="{Binding Hits}" ItemTemplate="{StaticResource SearchHit}" />
+      </StackPanel>
+    </DataTemplate>
+
     <!-- an item chip: icon (or a quiet tile), the name in its quality colour; click = Wowhead Classic -->
     <DataTemplate x:Key="ItemChip">
       <Border x:Name="chip" Height="24" CornerRadius="12" Background="{StaticResource Brush.Overlay.Chip}" Padding="3,0,10,0" Margin="0,0,6,4" Cursor="Hand"
@@ -436,6 +463,9 @@
                   <TextBlock x:Name="PinCount" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
+              <!-- search (server 2.9) -->
+              <Button x:Name="SearchButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="30" Height="26" Margin="8,-3,-4,-3" Content="&#xE721;"
+                      Click="SearchButton_Click" ToolTip="Search messages (Ctrl+F)" Visibility="Collapsed" />
               <TextBlock x:Name="ChatNote" DockPanel.Dock="Right" FontSize="12" Foreground="{StaticResource Gold}" VerticalAlignment="Center"
                          TextTrimming="CharacterEllipsis" MaxWidth="260" />
               <TextBlock Text="#" FontSize="15" Foreground="{StaticResource TextDim}" Margin="0,-2,8,0" VerticalAlignment="Center" />
@@ -444,8 +474,9 @@
           </Border>
 
           <Grid Grid.Row="1">
-          <ScrollViewer x:Name="MessageScroll" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0" ScrollChanged="MessageScroll_Changed">
+          <ScrollViewer x:Name="MessageScroll" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0" ScrollChanged="MessageScroll_Changed" PreviewMouseWheel="MessageScroll_Wheel">
             <StackPanel Margin="0,4,0,8">
+              <TextBlock x:Name="OlderNote" Style="{StaticResource Text.Caption}" HorizontalAlignment="Center" Margin="0,8,0,4" Visibility="Collapsed" />
               <TextBlock x:Name="EmptyText" Foreground="{StaticResource TextDim}" FontSize="12" HorizontalAlignment="Center" Margin="0,30,0,0" />
               <ItemsControl x:Name="Messages">
                 <ItemsControl.ItemTemplate>
@@ -740,6 +771,20 @@
         </Grid>
       </Border>
     </Grid>
+
+    <!-- search (the magnifier in the channel header): one box, results grouped by channel -->
+    <Popup x:Name="SearchPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="6" Opened="SearchPopup_Opened">
+      <Border x:Name="SearchBoxCard" Background="{StaticResource Brush.Surface3}" CornerRadius="12" Padding="12" Width="400" Margin="0,0,14,14">
+        <Border.Effect><DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.5" /></Border.Effect>
+        <StackPanel>
+          <TextBox x:Name="SearchBox" Style="{StaticResource Input}" Tag="Search messages in the channels you can see" MaxLength="64" KeyDown="SearchBox_KeyDown" />
+          <TextBlock x:Name="SearchHint" Style="{StaticResource Text.Caption}" Margin="4,6,0,0" TextWrapping="Wrap" />
+          <ScrollViewer x:Name="SearchScroll" MaxHeight="400" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+            <ItemsControl x:Name="SearchList" ItemTemplate="{StaticResource SearchGroup}" />
+          </ScrollViewer>
+        </StackPanel>
+      </Border>
+    </Popup>
 
     <!-- the composer's "+" menu -->
     <Popup x:Name="PlusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="-6">

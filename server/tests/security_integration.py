@@ -324,6 +324,74 @@ async def suite_e(base):
         for w in (g, b, e): await w.close()
 
 
+async def suite_f(base):
+    """2.9: sign-up cards, paging back and search over real sockets (a fresh server: the chat budgets are untouched)."""
+    async with aiohttp.ClientSession() as s:
+        e = await ws_open(s, base, ELAN, "192.0.2.81"); w = await recv(e, "welcome")
+        b = await ws_open(s, base, BOB, "192.0.2.82"); await recv(b, "welcome")
+        g = await ws_open(s, base, GUEST, "192.0.2.83", name="Pilgrim9"); await recv(g, "welcome")
+        feats = w["features"]
+        check("2.9: welcome announces lfg, history2 and search; version 2.9.x", {"lfg", "history2", "search"} <= set(feats) and w["server"].startswith("2.9"), (feats, w["server"]))
+
+        # ---- sign-up cards
+        await e.send_str(json.dumps({"t": "msg", "channel": "general", "kind": "lfg", "text": "ignored", "lfg": {"title": "Wailing Caverns", "now": True, "slots": {"tank": 1, "healer": 1, "dps": 3}, "note": "bring water"}}))
+        card = await recv(b, "msg", 3, lambda x: x.get("kind") == "lfg")
+        check("lfg: the card is broadcast with its payload and a readable fallback text",
+              card is not None and card["lfg"]["status"] == "open" and card["text"].startswith("[Looking for group] Wailing Caverns - now - Tank 0/1, Healer 0/1, DPS 0/3") and "ignored" not in card["text"], card)
+        cid = card["id"]
+        await b.send_str(json.dumps({"t": "lfg:join", "id": cid, "role": "tank"}))
+        up = await recv(e, "lfg", 3, lambda x: x["id"] == cid)
+        check("lfg: a join is broadcast as the whole new state", up is not None and up["lfg"]["signups"] == [{"n": "Bob", "r": "tank"}] and "Tank 1/1" in up["text"], up)
+        await g.send_str(json.dumps({"t": "lfg:join", "id": cid, "role": "tank"}))
+        err = await recv(g, "error", 3)
+        check("lfg: the tank place is taken - refused with a code", err is not None and err.get("code") == "lfg-full", err)
+        await g.send_str(json.dumps({"t": "lfg:close", "id": cid}))
+        err = await recv(g, "error", 3)
+        check("lfg: a guest who is not the organiser can't close it", err is not None and "organiser" in err["text"], err)
+        await b.send_str(json.dumps({"t": "lfg:close", "id": cid}))
+        up = await recv(e, "lfg", 3, lambda x: x["id"] == cid and x["lfg"]["status"] == "closed")
+        check("lfg: an officer can close it", up is not None, up)
+        await g.send_str(json.dumps({"t": "lfg:join", "id": cid, "role": "dps"}))
+        err = await recv(g, "error", 3)
+        check("lfg: a closed card can't change", err is not None and "closed" in err["text"], err)
+        await e.send_str(json.dumps({"t": "msg", "channel": "general", "kind": "lfg", "text": "", "lfg": {"title": "x", "now": True, "slots": {"tank": 41}}}))
+        err = await recv(e, "error", 3)
+        check("lfg: 41 tanks is refused", err is not None and err.get("code") == "lfg", err)
+        e2 = await ws_open(s, base, ELAN, "192.0.2.84"); w2 = await recv(e2, "welcome")
+        hist = [m for m in w2["history"]["general"] if m.get("kind") == "lfg"]
+        check("lfg: persisted in history with the fallback text (what an older client shows)", len(hist) == 1 and hist[0]["text"].startswith("[Looking for group] Wailing Caverns (closed)") and hist[0]["lfg"]["status"] == "closed", hist)
+        e = e2   # a personal code is one person: the new sign-in replaced the old connection
+
+        # ---- paging back
+        for i in range(6):
+            await e.send_str(json.dumps({"t": "msg", "channel": "general", "text": f"filler {i}"}))
+        last = None
+        for i in range(6): last = await recv(b, "msg", 3, lambda x: x["text"] == f"filler {i}")
+        await b.send_str(json.dumps({"t": "history:before", "channel": "general", "before": last["id"]}))
+        pg = await recv(b, "history:page", 3)
+        check("history: 'before' returns the older messages oldest first with hasMore", pg is not None and [m["text"] for m in pg["messages"]][-1] == "filler 4" and any(m.get("kind") == "lfg" for m in pg["messages"]) and pg["hasMore"] is False, pg and [m["text"] for m in pg["messages"]])
+        await g.send_str(json.dumps({"t": "history:before", "channel": "officers", "before": last["id"]}))
+        pg = await recv(g, "history:page", 3)
+        check("history: a channel the guest can't see answers like an empty one", pg is not None and pg["messages"] == [] and pg["hasMore"] is False, pg)
+
+        # ---- search
+        await b.send_str(json.dumps({"t": "msg", "channel": "officers", "text": "promote Pilgrim9 after the Wailing run"}))
+        await asyncio.sleep(0.3)
+        await b.send_str(json.dumps({"t": "search", "q": "WAILING"}))
+        r = await recv(b, "search:result", 3)
+        check("search: officers see hits in general and officers, newest first", r is not None and [h["channel"] for h in r["hits"]] == ["officers", "general"] and r["hits"][0]["from"] == "Bob" and "snippet" in r["hits"][0], r)
+        await g.send_str(json.dumps({"t": "search", "q": "wailing"}))
+        r = await recv(g, "search:result", 3)
+        check("search: a guest never gets hits from a channel they can't see", r is not None and [h["channel"] for h in r["hits"]] == ["general"] and "promote" not in json.dumps(r), r)
+        for i in range(5):
+            await b.send_str(json.dumps({"t": "search", "q": "filler"}))
+            await recv(b, "search:result", 3)
+        await b.send_str(json.dumps({"t": "search", "q": "filler"}))
+        err = await recv(b, "error", 3)
+        check("search: the seventh search within the minute is refused (rate)", err is not None and err.get("code") == "rate", err)
+        for w_ in (e, b, g): await w_.close()
+
+
 def scan_logs(*datas):
     text = ""
     for d in datas:
@@ -336,20 +404,22 @@ def scan_logs(*datas):
 def main():
     if not os.path.exists(EXE): raise SystemExit(f"build first: {EXE}")
     pa, da, la = start(5291, LODGE_ALLOW_QUERY_CODE="true")  # the first server keeps the legacy ?code= on (default is off since 2.8)
+    pc, dc, lc = start(5293)
     pb, db, lb = start(5292, LODGE_ALLOW_QUERY_CODE="false", LODGE_MAX_STORAGE_MB=1, LODGE_MAX_FILE_MB=1, LODGE_MAX_USERS=5)
     try:
-        wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge")
+        wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge"); wait_up("http://127.0.0.1:5293/lodge")
         asyncio.run(suite_a("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_c("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_d("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_e("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_b("http://127.0.0.1:5292/lodge"))
+        asyncio.run(suite_f("http://127.0.0.1:5293/lodge"))
     finally:
-        for p in (pa, pb): p.terminate()
-        for p in (pa, pb): p.wait(10)
-        for l in (la, lb): l.close()
-    scan_logs(da, db)
-    for d in (da, db): shutil.rmtree(d, ignore_errors=True)
+        for p in (pa, pb, pc): p.terminate()
+        for p in (pa, pb, pc): p.wait(10)
+        for l in (la, lb, lc): l.close()
+    scan_logs(da, db, dc)
+    for d in (da, db, dc): shutil.rmtree(d, ignore_errors=True)
     print(f"\n{sum(results)}/{len(results)} passed")
     sys.exit(0 if all(results) else 1)
 

@@ -14,7 +14,7 @@ namespace ElansAddonHub.Lodge
 {
     // Everything about the lodge except drawing it: connection, channels, people, messages, voice,
     // status, admin requests. The views bind to its collections and call its methods.
-    public class LodgeSession
+    public partial class LodgeSession
     {
         public readonly Settings Settings;
         public readonly ObservableCollection<MemberVM> Members = new ObservableCollection<MemberVM>();
@@ -278,6 +278,7 @@ namespace ElansAddonHub.Lodge
             foreach (var l in messages.Values) l.Clear();
             foreach (var l in pins.Values) l.Clear();
             channelCache.Clear();
+            ResetHistoryState();
             Pending = null;
             failedImages.Clear();
             tick.Stop();
@@ -413,6 +414,8 @@ namespace ElansAddonHub.Lodge
                     var d = list.FirstOrDefault(x => x.Id == m.Str("id"));
                     if (d != null) RemoveMessage(list, d, TextChannels.FirstOrDefault(c => c.Id == m.Str("channel")));
                     break;
+                case "history:page": OnHistoryPage(m); break;
+                case "search:result": OnSearchResult(m); break;
                 case "typing":
                     TypingMap(m.Str("channel") ?? TextChannels.FirstOrDefault()?.Id)[m.Int("id")] = DateTime.UtcNow.AddSeconds(4);
                     break;
@@ -470,6 +473,7 @@ namespace ElansAddonHub.Lodge
             SupportsProfile = features.Contains("profile");
             SupportsDisplayName = features.Contains("displayname");
             SupportsLfg = features.Contains("lfg");
+            ReadHistoryFeatures(features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
@@ -532,7 +536,11 @@ namespace ElansAddonHub.Lodge
             if (m.TryGetValue("history", out var h) && h is Dictionary<string, object> perChannel)
             {
                 foreach (var kv in perChannel)
-                    MergeHistory(kv.Key, (kv.Value as List<object> ?? new List<object>()).OfType<Dictionary<string, object>>().ToList());
+                {
+                    var got = (kv.Value as List<object> ?? new List<object>()).OfType<Dictionary<string, object>>().ToList();
+                    MergeHistory(kv.Key, got);
+                    NoteWelcomeHistory(kv.Key, got.Count);
+                }
             }
             else
                 foreach (var grp in m.List("history").OfType<Dictionary<string, object>>().GroupBy(x => x.Str("channel") ?? TextChannels.FirstOrDefault()?.Id ?? "general"))
@@ -1108,6 +1116,7 @@ namespace ElansAddonHub.Lodge
         void OnServerError(string text, string code, string room)
         {
             text = text ?? "";
+            if (HistoryRateError(text)) return;
             if (pendingRoom != null && (code == "room-full" || text.IndexOf("is full (", StringComparison.OrdinalIgnoreCase) >= 0 || text.StartsWith("You can't join", StringComparison.OrdinalIgnoreCase)))
             {
                 // the server said no: never connected, no mic opened
