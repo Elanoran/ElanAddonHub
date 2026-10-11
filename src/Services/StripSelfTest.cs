@@ -165,6 +165,8 @@ namespace ElansAddonHub.Services
         // a real window in the top-left corner of the screen showing the strip, read back through the screen capture path
         public static async Task<string> Live()
         {
+            // BitBlt/PrintWindow need the real, composited desktop: on the hidden one (Tools\selftest.ps1) this check cannot run
+            if (Environment.GetEnvironmentVariable("ELANSHUB_HIDDEN_DESKTOP") == "1") return "strip live screen capture: skipped (hidden desktop)";
             var payload = StripCodec.BuildPayload(8, 1, 2, 60, "Livetest");
             var win = new Window { WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, Topmost = true, ShowActivated = false, ShowInTaskbar = false, Left = 0, Top = 0, Background = Brushes.DarkSlateGray };
             var canvas = new Canvas(); win.Content = canvas;

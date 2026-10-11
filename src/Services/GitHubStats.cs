@@ -43,6 +43,7 @@ namespace ElansAddonHub.Services
         public static async Task<Dictionary<string, AddonStats>> Load(IEnumerable<string> addonIds)
         {
             var result = new Dictionary<string, AddonStats>();
+            if (FakeUpdateServer.Active) return result;   // self-test: never GitHub
             try
             {
                 if (json == null)
