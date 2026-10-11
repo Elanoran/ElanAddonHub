@@ -109,11 +109,8 @@ namespace ElansAddonHub.Lodge
                 Stage.Children.Add(wv);
                 web = wv;
                 Fit();
-                var env = await CreateEnvironment();
                 // private (InPrivate) profile: no cookies, history or cache survive the window
-                var opts = env.CreateCoreWebView2ControllerOptions();
-                opts.IsInPrivateModeEnabled = true;
-                await wv.EnsureCoreWebView2Async(env, opts);
+                await WebEngine.Attach(wv, WebProfile.Player, true);
                 if (my != token || web != wv) return;   // closed meanwhile
                 Harden(wv.CoreWebView2);
                 var site = Path.Combine(Util.DataDir, "webview2", "site");
@@ -155,63 +152,12 @@ namespace ElansAddonHub.Lodge
             link = null;
         }
 
-        // ---------------------------------------------------------------- WebView2 setup
-
-        static Task<CoreWebView2Environment> envTask;
-        static Task<CoreWebView2Environment> CreateEnvironment() => envTask ?? (envTask = MakeEnvironment());
-
-        static async Task<CoreWebView2Environment> MakeEnvironment()
-        {
-            try
-            {
-                ExtractLoader();
-                var data = Path.Combine(Util.DataDir, "webview2");   // never the exe folder
-                Directory.CreateDirectory(data);
-                var o = new CoreWebView2EnvironmentOptions { AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required" };
-                return await CoreWebView2Environment.CreateAsync(null, data, o);
-            }
-            catch { envTask = null; throw; }
-        }
-
-        // The exe is a single file (Costura), so WebView2Loader.dll travels inside it as a resource: write it to
-        // <data>\webview2\loader\<arch> once and tell WebView2 where it is.
-        static void ExtractLoader()
-        {
-            var arch = RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "arm64" : IntPtr.Size == 8 ? "x64" : "x86";
-            var dir = Path.Combine(Util.DataDir, "webview2", "loader", arch);
-            var file = Path.Combine(dir, "WebView2Loader.dll");
-            var res = "WebView2Loader." + arch + ".dll";
-            using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(res))
-            {
-                if (s == null) throw new InvalidOperationException("embedded " + res + " missing");
-                if (!File.Exists(file) || new FileInfo(file).Length != s.Length)
-                {
-                    Directory.CreateDirectory(dir);
-                    var tmp = file + "." + Process.GetCurrentProcess().Id + ".tmp";
-                    using (var f = File.Create(tmp)) s.CopyTo(f);
-                    try { if (File.Exists(file)) File.Delete(file); File.Move(tmp, file); }
-                    catch { try { File.Delete(tmp); } catch { } if (!File.Exists(file)) throw; }
-                }
-            }
-            CoreWebView2Environment.SetLoaderDllFolderPath(dir);
-        }
+        // ---------------------------------------------------------------- WebView2 setup (environment, loader and the shared hardening live in WebEngine)
 
         void Harden(CoreWebView2 c)
         {
-            var s = c.Settings;
-            s.AreDevToolsEnabled = false;
-            s.AreDefaultContextMenusEnabled = false;      // no context menu at all
-            s.IsStatusBarEnabled = false;
-            s.IsPasswordAutosaveEnabled = false;
-            s.IsGeneralAutofillEnabled = false;
-            s.AreHostObjectsAllowed = false;              // no AddHostObjectToScript, no bridge
-            s.IsWebMessageEnabled = false;                // WebMessageReceived is never subscribed to
-            s.AreBrowserAcceleratorKeysEnabled = false;
-            s.IsZoomControlEnabled = false;
-            s.IsSwipeNavigationEnabled = false;
-            s.IsPinchZoomEnabled = false;
-            try { c.Profile.PreferredTrackingPreventionLevel = CoreWebView2TrackingPreventionLevel.Strict; } catch (Exception e) { Util.Log("video tracking: " + e.Message); }
-
+            WebEngine.Harden(c, true);   // dev tools, host objects, web messages, autofill, permissions, downloads, tracking prevention ...
+            c.Settings.AreDefaultContextMenusEnabled = false;
             c.NavigationStarting += (o, e) =>
             {
                 // our own page, the embed, or nothing
@@ -227,18 +173,12 @@ namespace ElansAddonHub.Lodge
                 e.Cancel = true;
             };
             c.NewWindowRequested += (o, e) => { e.Handled = true; OpenExternal(e.Uri); };
-            c.PermissionRequested += (o, e) => { e.State = CoreWebView2PermissionState.Deny; e.Handled = true; };
-            c.DownloadStarting += (o, e) => { e.Cancel = true; e.Handled = true; };
             // fullscreen is the one thing the page may do: the player then fills the whole overlay
             c.ContainsFullScreenElementChanged += (o, e) => { fullscreen = c.ContainsFullScreenElement; Fit(); };
         }
 
         // anything the player tries to leave for goes to the real browser (http/https only), never into this window
-        static void OpenExternal(string url)
-        {
-            if (Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp))
-                try { Process.Start(new ProcessStartInfo(u.AbsoluteUri) { UseShellExecute = true }); } catch { }
-        }
+        static void OpenExternal(string url) => WebEngine.OpenExternal(url);
 
         // ---------------------------------------------------------------- layout / input
 

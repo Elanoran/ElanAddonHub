@@ -402,6 +402,22 @@
                 <CheckBox x:Name="PvVideo" Style="{StaticResource Switch}" Click="Privacy_Click" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
+            <TextBlock Text="Outpost browser" Style="{StaticResource HeadTight}" />
+            <TextBlock Text="The Browser page in the left rail. Permission requests (camera, location, notifications...) are always refused, and no password is ever saved." Style="{StaticResource Note}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Search engine" Tag="Used when you type words instead of an address.">
+                <ComboBox x:Name="PvBrSearch" Style="{StaticResource Dropdown}" Width="180" SelectionChanged="BrowserSearch_Changed" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Private browsing" Tag="On = cookies, history and cache are forgotten when the Outpost closes. Off = logins are kept on this PC (in the Outpost's data folder) so sites remember you. Changing this closes the open tabs.">
+                <CheckBox x:Name="PvBrPrivate" Style="{StaticResource Switch}" Click="Privacy_Click" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Block ads and trackers" Tag="A small built-in list of well-known ad and tracking hosts is refused. Tracking prevention is always on Strict.">
+                <CheckBox x:Name="PvBrAds" Style="{StaticResource Switch}" Click="Privacy_Click" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Open links from chat in the Outpost browser" Tag="Off = a link in the Lodge chat opens in your default browser. YouTube links keep their own player.">
+                <CheckBox x:Name="PvBrChat" Style="{StaticResource Switch}" Click="Privacy_Click" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
             <TextBlock Text="Stays on your PC" Style="{StaticResource HeadTight}" />
             <TextBlock Text="Read and used here only. Nothing below is uploaded." Style="{StaticResource Note}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>

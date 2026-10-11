@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "video", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3",
+            "lodge", "lodgefeatures", "lodgehardening", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -29,6 +29,7 @@ namespace ElansAddonHub.Services
         // Verified by running each section alone and comparing its lines with the full run.
         static readonly Dictionary<string, string[]> Deps = new Dictionary<string, string[]>
         {
+            ["video"] = new[] { "lodgefeatures" },   // feeds the chat channel the video cards are tested in
         };
 
         // one line of what each section covers (for --list and the docs)
@@ -44,6 +45,7 @@ namespace ElansAddonHub.Services
             ["lodgefeatures"] = "Lodge chat features from synthetic frames",
             ["lodgehardening"] = "Lodge 2.8 hardening: safe file names, merge on welcome, drafts, restored composer, full voice room, unread on delete",
             ["video"] = "YouTube preview cards + in-app player",
+            ["browser"] = "Browser page: URL/search rules, scheme + ad-host lists, tabs, tiles, WebView2 hardening",
             ["presence"] = "member presence",
             ["profile"] = "profiles and the editor",
             ["toasts"] = "toast notifications",
@@ -79,9 +81,10 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/(LodgeClient|AvatarArt|GamePresence)\.cs$", lodgeAll);
             R(@"^src/Services/(VoiceEngine|VoiceEffects)\.cs$", "voice", "lodge");
             R(@"^src/Services/Sounds\.cs$", "toasts", "lodge", "voice");
-            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge");
+            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser");
             R(@"^src/MainWindow\.ProfileTest\.cs$", "profile");
             R(@"^src/MainWindow\.VideoTest\.cs$", "video");
+            R(@"^src/(BrowserPage(\.xaml(\.cs)?)?|MainWindow\.BrowserTest|Services/(WebEngine|BrowserUrl|AdBlock))(\.cs)?$", "browser", "video");
             R(@"^src/MainWindow\.PresenceTest\.cs$", "presence");
             R(@"^src/MainWindow\.HardeningTest\.cs$", "lodgehardening");
             R(@"^src/MainWindow\.ToastTest\.cs$", "toasts");

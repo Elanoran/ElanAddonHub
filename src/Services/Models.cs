@@ -49,6 +49,13 @@ namespace ElansAddonHub.Services
     }
 
     [DataContract]
+    public class QuickLink
+    {
+        [DataMember(Name = "name")] public string Name { get; set; }
+        [DataMember(Name = "url")] public string Url { get; set; }
+    }
+
+    [DataContract]
     public class Settings
     {
         [DataMember(Name = "wowRoot")] public string WowRoot { get; set; }
@@ -83,6 +90,12 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "autoAwayOff")] public bool AutoAwayOff { get; set; }        // false = AFK after 10 min idle
         [DataMember(Name = "pixelOff")] public bool PixelOff { get; set; }              // true = don't read the addon's status strip from the screen
         [DataMember(Name = "videoPreviewsOff")] public bool VideoPreviewsOff { get; set; } // false = YouTube links in chat show a preview card (fetches the thumbnail + title from YouTube)
+        // ---- Outpost browser (Browser page)
+        [DataMember(Name = "browserSearch")] public string BrowserSearch { get; set; }       // search engine id (BrowserUrl.Engines); null = duckduckgo
+        [DataMember(Name = "browserRemember")] public bool BrowserRemember { get; set; }     // false (default) = private browsing: nothing is kept; true = logins/cookies kept under <data>\webview2rowser
+        [DataMember(Name = "browserAdsOff")] public bool BrowserAdsOff { get; set; }         // false (default) = built-in ad / tracker host blocklist on
+        [DataMember(Name = "browserFromChat")] public bool BrowserFromChat { get; set; }     // default off: chat links open in the default browser; on: in the Browser page
+        [DataMember(Name = "browserTiles")] public List<QuickLink> BrowserTiles { get; set; } // null = the default tiles
         [DataMember(Name = "shareGameOff")] public bool ShareGameOff { get; set; }      // false = show friends what I play
         // ---- in-game toasts (Settings > In-game overlay)
         [DataMember(Name = "toastsOff")] public bool ToastsOff { get; set; }
