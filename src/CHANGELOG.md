@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.35.0
+- New Browser page (Ctrl+4): tabs, address bar with search, quick-link tiles for Wowhead and Forever sites. Private by default, strict tracking prevention, built-in ad and tracker blocking, downloads ask first.
+- Every link in Lodge chat is now clickable. Optional: open chat links in the Outpost browser (Settings > Privacy).
+
 ## 2.34.0
 - Lodge chat: YouTube links show a preview card (thumbnail, title, channel). Click to play the video right in the Outpost, in a locked-down private player. Turn previews off under Settings > Privacy.
 - Bags: the character tooltip is shorter - realm and faction, then gold, bags and bank on one line.
