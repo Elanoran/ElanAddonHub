@@ -134,8 +134,8 @@ namespace ElansAddonHub
             var groups = cal.AgendaGroupsForTest;
             string Ids(CalendarRules.DayGroup g) => string.Join(",", g.Events.Select(e => e.Id));
             check("agenda: grouped by LOCAL day - Today, Tomorrow, then weekday and date",
-                groups.Count == 4 && groups[0].Label == "Today" && groups[1].Label == "Tomorrow" && groups[2].Label == new DateTime(2026, 10, 13).ToString("dddd d MMMM", CultureInfo.CurrentCulture)
-                && groups[3].Label == new DateTime(2026, 10, 17).ToString("dddd d MMMM", CultureInfo.CurrentCulture));
+                groups.Count == 4 && groups[0].Label == "Today" && groups[1].Label == "Tomorrow" && groups[2].Label == "Tuesday 13 October"
+                && groups[3].Label == "Saturday 17 October");
             check("agenda: a late event (00:30 local) sits under Tomorrow, in time order", Ids(groups[1]) == "h1,b1,c1" && Ids(groups[0]) == "a1" && Ids(groups[2]) == "f1" && Ids(groups[3]) == "d1");
             check("agenda: an event that is over is not listed (the Stockade this morning)", !groups.SelectMany(g => g.Events).Any(e => e.Id == "g1"));
             check("agenda: a cancelled event stays, dimmed, with a Cancelled chip and no sign-up buttons",
@@ -181,7 +181,7 @@ namespace ElansAddonHub
             await Task.Delay(300);
             var cells = cal.MonthCellsForTest;
             MonthCellVM C(int d) => cells.First(c => c.Cell.Day == new DateTime(2026, 10, d));
-            check("month: 42 cells, the title is the month", cells.Count == 42 && cal.MonthTitleForTest == new DateTime(2026, 10, 1).ToString("MMMM yyyy", CultureInfo.CurrentCulture));
+            check("month: 42 cells, the title is the month", cells.Count == 42 && cal.MonthTitleForTest == "October 2026");
             check("month: one dot per event, three at most (the 12th has three events)", C(11).Cell.Dots == 2 && C(12).Cell.Dots == 3 && C(13).Cell.Dots == 1 && C(17).Cell.Dots == 1 && C(14).Cell.Dots == 0);
             check("month: dot colours show my answer (going / maybe / none / cancelled)", string.Join(",", C(11).DotKeys) == "none,going" && string.Join(",", C(13).DotKeys) == "cancelled" && C(12).Cell.Events.Count == 3);
             check("month: today is marked, days of other months are dimmed", C(11).Cell.IsToday && !C(12).Cell.IsToday && cells.Any(c => !c.Cell.InMonth && c.CellOpacity < 1));
@@ -205,7 +205,7 @@ namespace ElansAddonHub
             cells = cal.MonthCellsForTest;
             check("month: the fetched event shows as a dot on the 5th of December", cells.First(c => c.Cell.Day == new DateTime(2026, 12, 5)).Cell.Dots == 1 && Session.Events.Any(e => e.Id == "x1"));
             check("month: the fetched event also joins the agenda, in a group of its own",
-                cal.IsAgenda == false && CalendarRules.Agenda(Session.Events, CalNow).Last().Label == new DateTime(2026, 12, 5).ToString("dddd d MMMM", CultureInfo.CurrentCulture));
+                cal.IsAgenda == false && CalendarRules.Agenda(Session.Events, CalNow).Last().Label == "Saturday 5 December");
             cal.SetModeForTest(true);
             await Task.Delay(200);
         }
@@ -295,7 +295,7 @@ namespace ElansAddonHub
             check("detail: someone who is not in the online list (Appear offline, or away) is still listed by name, without game data", pat.Name == "Pat" && pat.Line == "" && pat.Member != null && pat.Member.Offline);
             check("detail: open places are counted per role ('1 place open' / '2 places open')", groups.First(g => g.Title == "Tank").OpenText == "1 place open" && groups.First(g => g.Title == "Healer").OpenText == "2 places open");
             var texts = VisualsOf<TextBlock>(cal.DetailBoxForTest).Select(t => t.Text).Where(t => !string.IsNullOrEmpty(t)).ToList();
-            check("detail: shows the date, the organiser and the note", texts.Contains(new DateTime(2026, 10, 12).ToString("dddd d MMMM", CultureInfo.CurrentCulture)) && texts.Any(t => t.Contains("Organised by Elan")) && texts.Contains("Bring fire resistance")
+            check("detail: shows the date, the organiser and the note", texts.Contains("Monday 12 October") && texts.Any(t => t.Contains("Organised by Elan")) && texts.Contains("Bring fire resistance")
                 && texts.Contains("Lv 60 Mage") && texts.Contains("Repeats weekly"));
             check("detail: the owner (an officer) can edit and cancel anyone's event", cal.DetailEditVisibleForTest && cal.DetailCancelVisibleForTest);
             cal.CloseDetailForTest();

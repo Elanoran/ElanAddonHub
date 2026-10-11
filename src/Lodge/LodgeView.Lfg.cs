@@ -48,7 +48,7 @@ namespace ElansAddonHub.Lodge
             for (int i = 0; i < 14; i++)
             {
                 lfgDays.Add(today.AddDays(i));
-                names.Add(i == 0 ? "Today" : i == 1 ? "Tomorrow" : today.AddDays(i).ToString("ddd d MMM", CultureInfo.CurrentCulture));
+                names.Add(i == 0 ? "Today" : i == 1 ? "Tomorrow" : today.AddDays(i).ToString("ddd d MMM", CalendarRules.English));
             }
             LfgDay.ItemsSource = names;
             LfgHour.ItemsSource = Enumerable.Range(0, 24).Select(h => h.ToString("00")).ToList();

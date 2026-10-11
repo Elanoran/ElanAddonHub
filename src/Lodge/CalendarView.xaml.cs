@@ -109,7 +109,7 @@ namespace ElansAddonHub.Lodge
         {
             S.EnsureMonth(year, month);
             var first = new DateTime(year, month, 1);
-            MonthTitle.Text = first.ToString("MMMM yyyy", CultureInfo.CurrentCulture);
+            MonthTitle.Text = first.ToString("MMMM yyyy", CalendarRules.English);
             var fdw = (int)CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek;
             WeekdayRow.ItemsSource = Enumerable.Range(0, 7).Select(i => CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName((DayOfWeek)((fdw + i) % 7))).ToList();
             var cells = CalendarRules.MonthGrid(year, month, S.Events, Now).Select(c => new MonthCellVM(c)).ToList();
@@ -123,7 +123,7 @@ namespace ElansAddonHub.Lodge
         void ShowDay()
         {
             var day = selectedDay ?? CalendarRules.ToLocal(Now).Date;
-            DayTitle.Text = CalendarRules.DayLabel(day, CalendarRules.ToLocal(Now).Date) + (day.Date == CalendarRules.ToLocal(Now).Date.AddDays(0) || day.Date == CalendarRules.ToLocal(Now).Date.AddDays(1) ? " · " + day.ToString("d MMMM", CultureInfo.CurrentCulture) : "");
+            DayTitle.Text = CalendarRules.DayLabel(day, CalendarRules.ToLocal(Now).Date) + (day.Date == CalendarRules.ToLocal(Now).Date.AddDays(0) || day.Date == CalendarRules.ToLocal(Now).Date.AddDays(1) ? " · " + day.ToString("d MMMM", CalendarRules.English) : "");
             var evs = S.Events.Where(e => CalendarRules.ToLocal(e.StartUtc).Date == day.Date).OrderBy(e => e.StartUtc).ToList();
             DayEvents.ItemsSource = evs;
             DayEmpty.Visibility = evs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -300,7 +300,7 @@ namespace ElansAddonHub.Lodge
             var m0 = CalendarRules.ToLocal(Now).Date; m0 = new DateTime(m0.Year, m0.Month, 1);
             if (isEdit && new DateTime(start.Year, start.Month, 1) < m0) m0 = new DateTime(start.Year, start.Month, 1);
             for (int i = 0; i < 13; i++) formMonths.Add(m0.AddMonths(i));
-            FMonth.ItemsSource = formMonths.Select(d => d.ToString("MMMM yyyy", CultureInfo.CurrentCulture)).ToList();
+            FMonth.ItemsSource = formMonths.Select(d => d.ToString("MMMM yyyy", CalendarRules.English)).ToList();
             FHour.ItemsSource = Enumerable.Range(0, 24).Select(h => h.ToString("00")).ToList();
             var minutes = new List<int> { 0, 15, 30, 45 }; if (!minutes.Contains(start.Minute)) { minutes.Add(start.Minute); minutes.Sort(); }
             FMinute.ItemsSource = minutes.Select(x => x.ToString("00")).ToList();

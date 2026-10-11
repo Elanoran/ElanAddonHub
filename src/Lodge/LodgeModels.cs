@@ -587,7 +587,7 @@ namespace ElansAddonHub.Lodge
                 var local = At.ToLocalTime();
                 if (local.Date == DateTime.Today) return local.ToString("HH:mm");
                 if (local.Date == DateTime.Today.AddDays(-1)) return "Yesterday " + local.ToString("HH:mm");
-                return local.ToString("d MMM HH:mm");
+                return local.ToString("d MMM HH:mm", CalendarRules.English);
             }
         }
         bool Compact => Continuation && ReplyFrom == null;
@@ -668,7 +668,7 @@ namespace ElansAddonHub.Lodge
         public string ByShown => DisplayNames.Shown(By);
         public string Shown => !string.IsNullOrEmpty(Text) ? Text : FileName != null ? "[" + FileName + "]" : "";
         public Brush Color => Avatar.ColorFor(By);
-        public string Time => At.ToLocalTime().ToString("d MMM HH:mm");
+        public string Time => At.ToLocalTime().ToString("d MMM HH:mm", CalendarRules.English);
         public bool CanUnpin { get; set; }
         public Visibility UnpinVisibility => CanUnpin ? Visibility.Visible : Visibility.Collapsed;
     }

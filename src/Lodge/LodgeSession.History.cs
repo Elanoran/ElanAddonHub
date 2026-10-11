@@ -36,7 +36,7 @@ namespace ElansAddonHub.Lodge
                 var local = At.ToLocalTime();
                 if (local.Date == DateTime.Today) return local.ToString("HH:mm");
                 if (local.Date == DateTime.Today.AddDays(-1)) return "Yesterday " + local.ToString("HH:mm");
-                return local.ToString("d MMM yyyy HH:mm");
+                return local.ToString("d MMM yyyy HH:mm", CalendarRules.English);
             }
         }
         int MatchAt => string.IsNullOrEmpty(Query) || Snippet == null ? -1 : Snippet.IndexOf(Query, StringComparison.OrdinalIgnoreCase);

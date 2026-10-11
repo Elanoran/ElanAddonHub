@@ -16,6 +16,8 @@ namespace ElansAddonHub.Lodge
     // ---------------------------------------------------------------- pure rules (agenda, month grid, reminders, form checks)
     public static class CalendarRules
     {
+        // day and month names in English like the rest of the app (times and the first weekday still follow Windows)
+        public static readonly CultureInfo English = CultureInfo.GetCultureInfo("en-GB");
         public static Func<TimeZoneInfo> Zone = () => TimeZoneInfo.Local;
         public static readonly TimeSpan RemindBefore = TimeSpan.FromMinutes(15);
         public const int MaxWeeks = 26;
@@ -40,7 +42,7 @@ namespace ElansAddonHub.Lodge
         {
             if (localDay.Date == localToday.Date) return "Today";
             if (localDay.Date == localToday.Date.AddDays(1)) return "Tomorrow";
-            return localDay.ToString("dddd d MMMM", CultureInfo.CurrentCulture);
+            return localDay.ToString("dddd d MMMM", CalendarRules.English);
         }
 
         // "20:00" or "20:00 - 23:00" in local time
@@ -58,8 +60,8 @@ namespace ElansAddonHub.Lodge
             var hm = l.ToString("HH:mm", CultureInfo.CurrentCulture);
             if (l.Date == today) return "Today " + hm;
             if (l.Date == today.AddDays(1)) return "Tomorrow " + hm;
-            if (l.Date > today && l.Date < today.AddDays(7)) return l.ToString("ddd", CultureInfo.CurrentCulture) + " " + hm;
-            return l.ToString("ddd d MMM", CultureInfo.CurrentCulture) + " " + hm;
+            if (l.Date > today && l.Date < today.AddDays(7)) return l.ToString("ddd", CalendarRules.English) + " " + hm;
+            return l.ToString("ddd d MMM", CalendarRules.English) + " " + hm;
         }
 
         // the short countdown of the sidebar line: "in 25 min" / "in 3 h" / "in 2 d" / "now"
@@ -343,7 +345,7 @@ namespace ElansAddonHub.Lodge
         public string StartHm => CalendarRules.ToLocal(StartUtc).ToString("HH:mm", CultureInfo.CurrentCulture);
         public string EndHm => EndUtc > StartUtc ? CalendarRules.ToLocal(EndUtc).ToString("HH:mm", CultureInfo.CurrentCulture) : "";
         public Visibility EndVisibility => EndUtc > StartUtc ? Visibility.Visible : Visibility.Collapsed;
-        public string DateText => CalendarRules.ToLocal(StartUtc).ToString("dddd d MMMM", CultureInfo.CurrentCulture);
+        public string DateText => CalendarRules.ToLocal(StartUtc).ToString("dddd d MMMM", CalendarRules.English);
         public string DayTimeText => CalendarRules.ShortWhen(StartUtc, LfgVM.Clock());
         public string Countdown => Stub || IsCancelled ? "" : LfgVM.CountdownFor(StartUtc, LfgVM.Clock(), false, !IsOver(LfgVM.Clock()));
         public string WhenLine => Countdown.Length > 0 ? TimeText + "  ·  " + Countdown : TimeText;

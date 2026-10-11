@@ -146,7 +146,7 @@ namespace ElansAddonHub.Lodge
                 var today = Clock().ToLocalTime().Date;
                 if (local.Date == today) return "Today " + local.ToString("HH:mm", CultureInfo.CurrentCulture);
                 if (local.Date == today.AddDays(1)) return "Tomorrow " + local.ToString("HH:mm", CultureInfo.CurrentCulture);
-                return local.ToString("ddd d MMM HH:mm", CultureInfo.CurrentCulture);
+                return local.ToString("ddd d MMM HH:mm", CalendarRules.English);
             }
         }
 
