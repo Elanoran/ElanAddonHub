@@ -50,15 +50,8 @@ namespace ElansAddonHub.Lodge
             Session = session;
             TextList.ItemsSource = session.TextChannels;
             RoomList.ItemsSource = session.VoiceRooms;
-            // online list: people not in a voice room (those show under their room)
-            var online = new CollectionViewSource { Source = session.Members }.View;
-            online.Filter = o => ((MemberVM)o).Room == null;
-            if (online is ICollectionViewLiveShaping live && live.CanChangeLiveFiltering)
-            {
-                live.LiveFilteringProperties.Add(nameof(MemberVM.Room));
-                live.IsLiveFiltering = true;
-            }
-            OnlineList.ItemsSource = online;
+            // the grouped online list (In game / Online / Away / Invisible); people in a voice room show under their room
+            GroupList.ItemsSource = session.Groups.Groups;
 
             session.Changed += Refresh;
             session.IsAtBottom = () => AtBottom;
@@ -95,8 +88,6 @@ namespace ElansAddonHub.Lodge
             StatusDot.Fill = (Brush)FindResource(s.Online ? "Accent" : "TextDim");
             StatusText.Text = s.StatusText;
             try { LodgeTitle.Text = s.BaseUrl != null ? new Uri(s.BaseUrl).Host : "Lodge"; } catch { }
-            // one online number: the status line under the lodge name. The section header names the list, it doesn't count again.
-            OnlineCaption.Text = "ONLINE";
             UpdateOffline();
 
             // the channel on screen
@@ -151,8 +142,6 @@ namespace ElansAddonHub.Lodge
         {
             if (Session == null) return;
             TypingText.Text = Session.TypingText(Session.Selected?.Id);
-            var online = Session.Members.Count(m => m.Room == null);
-            OnlineCaption.Visibility = online > 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateOffline();
             if (ChatNote.Text.Length > 0 && DateTime.UtcNow > noteUntil) ChatNote.Text = "";
             if (ChatPanel.Visibility == Visibility.Visible && (Session.IsShownToUser?.Invoke() ?? true)) Session.MarkRead(); // only acts at the bottom
@@ -420,6 +409,14 @@ namespace ElansAddonHub.Lodge
             if (sender == DeafToggle && !deaf) muted = false; // undeafen also unmutes, like Discord
             Session.SetMuteDeaf(muted, deaf);
         }
+
+        // a group header: collapse / expand the group (remembered)
+        void GroupHeader_Click(object sender, MouseButtonEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is MemberGroupVM g) g.Expanded = !g.Expanded;
+            e.Handled = true;
+        }
+        public ItemsControl GroupListForTest => GroupList;
 
         void Settings_Click(object sender, RoutedEventArgs e) => OpenSettings?.Invoke();
 

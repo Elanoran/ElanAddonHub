@@ -117,7 +117,7 @@ namespace ElansAddonHub.Lodge
             d = d ?? "";
             if (d == displayName) return false;
             displayName = d;
-            foreach (var n in new[] { nameof(DisplayName), nameof(HasDisplayName), nameof(Display), nameof(LoginText), nameof(CardNameText), nameof(Tip), nameof(Initial) }) Raise(n);
+            foreach (var n in new[] { nameof(DisplayName), nameof(HasDisplayName), nameof(Display), nameof(LoginText), nameof(CardNameText), nameof(Tip), nameof(Initial), nameof(CharName), nameof(CharOwnerText) }) Raise(n);
             return true;
         }
         // the avatar is the class colour + race code once we know the character (e.g. NE on orange); otherwise name colour + initial
@@ -224,6 +224,7 @@ namespace ElansAddonHub.Lodge
             Raise(nameof(Tip)); Raise(nameof(GameDetail)); Raise(nameof(Color)); Raise(nameof(Initial)); Raise(nameof(IconBrush)); Raise(nameof(InitialVisibility));
             Raise(nameof(BadgeVisibility)); Raise(nameof(BadgeRing)); Raise(nameof(BadgeText)); Raise(nameof(BadgeTextVisibility));
             RaiseCard();
+            RaiseInGame();
         }
 
         // a copy of what someone plays now (the profile editor's preview card)
@@ -241,6 +242,7 @@ namespace ElansAddonHub.Lodge
         {
             this.flags = flags; this.xpPct = xpPct; this.rested = rested; this.groupSize = groupSize; this.inInstance = inInstance; this.instanceName = instanceName;
             RaiseCard();
+            RaiseInGame();
         }
         public bool InCombat => (flags & 1) != 0;
         public bool IsDead => (flags & 2) != 0;
@@ -265,6 +267,26 @@ namespace ElansAddonHub.Lodge
                 return string.Join(" · ", parts);
             }
         }
+        // ---- the "In game" rows of the grouped member list (2.37): the character in class colour, "Lv 27 Hunter", the place, and a small tag
+        public string CharName => string.IsNullOrEmpty(gameName) ? Display : gameName;
+        // the Outpost name next to a character that is called something else ("  ·  Elan")
+        public string CharOwnerText => !string.IsNullOrEmpty(gameName) && !string.Equals(gameName, Display, StringComparison.OrdinalIgnoreCase) ? "  ·  " + Display : "";
+        public string InGameClassLine => ((gameLevel > 0 ? "Lv " + gameLevel + " " : "") + (gameClass ?? "")).Trim();
+        public Visibility InGameClassVisibility => InGameClassLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string ZoneLine => Place ?? "";
+        public Visibility ZoneVisibility => ZoneLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public bool InRaid => (flags & 32) != 0;
+        // Raid / Dungeon / Group 5 (from the presence the hub already sends); empty when solo in the open world
+        public string InstanceTag => InRaid ? "Raid" : inInstance ? "Dungeon" : groupSize > 1 ? "Group " + groupSize : "";
+        public Visibility InstanceTagVisibility => InstanceTag.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string InstanceTagTip => (InRaid ? "In a raid" : inInstance ? "In a dungeon" : "In a group") + (inInstance && !string.IsNullOrEmpty(instanceName) ? ": " + instanceName : "")
+            + (groupSize > 1 ? " (" + groupSize + " players)" : "");
+        void RaiseInGame()
+        {
+            foreach (var n in new[] { nameof(CharName), nameof(CharOwnerText), nameof(InGameClassLine), nameof(InGameClassVisibility), nameof(ZoneLine), nameof(ZoneVisibility),
+                                      nameof(InstanceTag), nameof(InstanceTagVisibility), nameof(InstanceTagTip), nameof(Playing) }) Raise(n);
+        }
+
         // sidebar second line: the place line, else the status note when there is one
         public string SecondLine => invisible && !IsMe ? "invisible" : PlaceLine.Length > 0 ? PlaceLine : (string.IsNullOrEmpty(note) ? "" : note);
         public Visibility SecondVisibility => SecondLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;

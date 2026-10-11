@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:ElansAddonHub.Lodge"
+             xmlns:app="clr-namespace:ElansAddonHub"
              AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
   <UserControl.Resources>
     <!-- small round avatar (personal picture or class colour, class badge in game) with role ring, speaking ring and status dot -->
@@ -66,6 +67,75 @@
           </StackPanel>
         </DockPanel>
       </Border>
+    </DataTemplate>
+    <!-- a person who is playing WoW (the "In game" group): the character in class colour, "Lv 27 Hunter", the place, a dungeon / raid / group tag -->
+    <DataTemplate x:Key="GamePersonRow">
+      <Border Background="Transparent" Padding="6,4" CornerRadius="6" Cursor="Hand" Tag="{Binding}"
+              MouseLeftButtonUp="Member_Click" MouseRightButtonUp="Member_Click">
+        <Border.ToolTip>
+          <ToolTip Style="{StaticResource CardTip}" ContentTemplate="{StaticResource MemberCard}" Content="{Binding}" />
+        </Border.ToolTip>
+        <DockPanel>
+          <Border DockPanel.Dock="Right" Background="{StaticResource Brush.Overlay.Chip}" CornerRadius="8" Padding="6,1" VerticalAlignment="Top" Margin="4,2,0,0"
+                  Visibility="{Binding InstanceTagVisibility}" ToolTip="{Binding InstanceTagTip}">
+            <TextBlock Text="{Binding InstanceTag}" Style="{StaticResource Text.Caption}" />
+          </Border>
+          <TextBlock DockPanel.Dock="Right" Text="{Binding StateGlyph}" FontFamily="{StaticResource Icons}" FontSize="11"
+                     Foreground="{Binding StateBrush}" VerticalAlignment="Top" Margin="4,3,0,0" Visibility="{Binding StateVisibility}" />
+          <Image DockPanel.Dock="Right" Source="{Binding StateIcon}" Width="13" Height="13" Margin="4,3,0,0" VerticalAlignment="Top" Visibility="{Binding StateIconVisibility}" />
+          <TextBlock DockPanel.Dock="Right" Text="&#xE708;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Brush.Warn}" Margin="4,3,0,0"
+                     VerticalAlignment="Top" Visibility="{Binding AfkVisibility}" />
+          <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Top" Margin="0,2,0,0" />
+          <StackPanel Margin="10,0,6,0" VerticalAlignment="Center">
+            <TextBlock FontSize="13" Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis"><Run Text="{Binding CharName, Mode=OneWay}" /><Run Text="{Binding CharOwnerText, Mode=OneWay}" Foreground="{StaticResource Brush.Text.Secondary}" FontSize="11" /></TextBlock>
+            <TextBlock Text="{Binding InGameClassLine}" Visibility="{Binding InGameClassVisibility}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding ZoneLine}" Visibility="{Binding ZoneVisibility}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+        </DockPanel>
+      </Border>
+    </DataTemplate>
+
+    <!-- one group of the online list: a quiet collapsible header (Text.Caption + count), then its people -->
+    <DataTemplate x:Key="MemberGroupTemplate">
+      <StackPanel Margin="0,8,0,0">
+        <Border x:Name="hd" Background="Transparent" CornerRadius="6" Padding="8,3" Cursor="Hand" Tag="{Binding}" ToolTip="{Binding Tip}"
+                MouseLeftButtonUp="GroupHeader_Click">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Left" FontSize="9" Margin="0,0,6,0" RenderTransformOrigin="0.5,0.5">
+              <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Chevron}">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Expanded}" Value="False">
+                      <Setter Property="RenderTransform"><Setter.Value><RotateTransform Angle="-90" /></Setter.Value></Setter>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </TextBlock.Style>
+            </TextBlock>
+            <TextBlock Text="{Binding Count}" DockPanel.Dock="Right" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" />
+            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Caption}" />
+          </DockPanel>
+        </Border>
+        <Border app:Motion.Expand="{Binding Expanded}" Visibility="Collapsed" Opacity="{Binding ListOpacity}">
+          <ItemsControl ItemsSource="{Binding Members}">
+            <ItemsControl.Style>
+              <Style TargetType="ItemsControl">
+                <Setter Property="ItemTemplate" Value="{StaticResource PersonRow}" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding InGame}" Value="True">
+                    <Setter Property="ItemTemplate" Value="{StaticResource GamePersonRow}" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </ItemsControl.Style>
+          </ItemsControl>
+        </Border>
+      </StackPanel>
+      <DataTemplate.Triggers>
+        <Trigger SourceName="hd" Property="IsMouseOver" Value="True">
+          <Setter TargetName="hd" Property="Background" Value="{StaticResource Brush.Overlay.Hover}" />
+        </Trigger>
+      </DataTemplate.Triggers>
     </DataTemplate>
     <!-- sidebar section headers (TEXT CHANNELS / VOICE ROOMS / ONLINE): gold-tinted (green clashed with the selected row and class colours) so the sections stand apart -->
     <Style x:Key="SectionHeader" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
@@ -205,8 +275,7 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
 
-              <TextBlock x:Name="OnlineCaption" Text="ONLINE" Style="{StaticResource SectionHeader}" Margin="8,14,0,4" />
-              <ItemsControl x:Name="OnlineList" ItemTemplate="{StaticResource PersonRow}" />
+              <ItemsControl x:Name="GroupList" ItemTemplate="{StaticResource MemberGroupTemplate}" />
             </StackPanel>
           </ScrollViewer>
 

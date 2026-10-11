@@ -112,6 +112,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "shareZoneOff")] public bool ShareZoneOff { get; set; }      // false = friends see my zone / instance
         [DataMember(Name = "shareXpOff")] public bool ShareXpOff { get; set; }          // false = friends see my XP % and rested state
         [DataMember(Name = "autoStatusOff")] public bool AutoStatusOff { get; set; }    // false = "In combat" / AFK are set as my Lodge status automatically
+        [DataMember(Name = "lodgeGroupsCollapsed")] public string LodgeGroupsCollapsed { get; set; } // collapsed member-list groups, comma separated (ingame,online,away,invisible)
         [DataMember(Name = "lodgeInvisible")] public bool LodgeInvisible { get; set; }  // "Appear offline"
         [DataMember(Name = "invisibleForget")] public bool InvisibleForget { get; set; } // true = Appear offline resets to visible at every start
         [DataMember(Name = "invisibleHintShown")] public bool InvisibleHintShown { get; set; } // the one-time "others can see your messages" note

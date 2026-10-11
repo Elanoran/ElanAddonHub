@@ -40,6 +40,10 @@ namespace ElansAddonHub.Lodge
         public bool CanModerate { get; private set; }
         public bool CanManage { get; private set; }
         public string ServerVersion { get; private set; }
+        // the grouped online list (In game / Online / Away / Invisible); see MemberGroups
+        public MemberGroups Groups { get; private set; }
+        // only the owner is ever sent invisible members (server: Perm.SeeInvisible); the list also checks this itself
+        public bool CanSeeInvisible => MyRole == "owner";
 
         // ---- "your Lodge server is outdated": only for the people who can actually update it (owner / officers / Guild Master panel)
         public bool CanUpdateServer => MyRole == "owner" || MyRole == "officer" || CanManage;
@@ -110,6 +114,7 @@ namespace ElansAddonHub.Lodge
         public LodgeSession(Settings settings)
         {
             Settings = settings;
+            Groups = new MemberGroups(Members, () => CanSeeInvisible, settings);
             Presence = new GamePresence(() => settings.WowRoot, () => !settings.PixelOff);
             AvatarArt.Root = () => settings.WowRoot;
             if (settings.InvisibleForget) settings.LodgeInvisible = false; // "Appear offline" is not remembered across restarts
@@ -553,6 +558,7 @@ namespace ElansAddonHub.Lodge
                     JoinRoom(room, quiet: true);
                 }
             }
+            Groups.Recompute();
             SyncRooms();
             StatusText = OnlineText;
             Auto.MarkSent(Clock(), "online", "");                // a fresh connection starts as Online on the server
