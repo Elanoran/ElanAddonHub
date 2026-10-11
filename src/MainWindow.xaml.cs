@@ -136,13 +136,13 @@ namespace ElansAddonHub
             UpdateBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
             var hubNew = manifest != null && SelfUpdater.IsNewer(manifest.Hub);
             RailVersion.Inlines.Clear();
-            if (hubNew) RailVersion.Inlines.Add(new System.Windows.Documents.Run("● ") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Gold"] });
+            if (hubNew) RailVersion.Inlines.Add(new System.Windows.Documents.Run("● ") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Brush.Warn"] });
             RailVersion.Inlines.Add("v" + App.Version);
             bool testBuild = IsTestBuild;
             if (testBuild)
             {
                 RailVersion.Inlines.Add(new System.Windows.Documents.LineBreak());
-                RailVersion.Inlines.Add(new System.Windows.Documents.Run("TEST BUILD") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Gold"], FontSize = 8, FontWeight = FontWeights.SemiBold });
+                RailVersion.Inlines.Add(new System.Windows.Documents.Run("Test build") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Brush.Warn"] });
             }
             RailVersion.Opacity = hubNew || testBuild ? 1 : 0.6;
             var testTip = UpdateChannel.RunningTestBuild(settings) ? "\nThis is a test build (pre-release)." : manifestPre && hubNew ? "\nThe offered version is a test build (pre-release)." : "";

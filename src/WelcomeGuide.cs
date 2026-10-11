@@ -232,7 +232,7 @@ namespace ElansAddonHub
                 var g = new Grid { Margin = new Thickness(0, 12, 0, 12) };
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                g.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)Application.Current.Resources["Icons"], FontSize = 16, Foreground = Res("Brush.Text.Tertiary"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) });
+                g.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)Application.Current.Resources["Font.Icons"], FontSize = 16, Foreground = Res("Brush.Text.Tertiary"), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) });
                 var sp = new StackPanel();
                 sp.Children.Add(Txt(head, "Text.RowTitle"));
                 sp.Children.Add(Txt(text, "Text.Secondary", null, new Thickness(0, 2, 0, 0)));

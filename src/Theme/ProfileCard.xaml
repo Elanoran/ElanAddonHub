@@ -11,7 +11,7 @@
         <Border Height="56" VerticalAlignment="Top" Background="{Binding Banner}" CornerRadius="12,12,0,0" />
         <Border Height="56" VerticalAlignment="Top" CornerRadius="12,12,0,0">
           <Border.Background>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00000000" Offset="0.5" /><GradientStop Color="#40000000" Offset="1" /></LinearGradientBrush>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="Transparent" Offset="0.5" /><GradientStop Color="{StaticResource Color.Scrim.Glass}" Offset="1" /></LinearGradientBrush>
           </Border.Background>
         </Border>
         <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="16,0,0,0" Width="76" Height="76" CornerRadius="38" Background="{StaticResource Brush.Surface3}" Padding="4">

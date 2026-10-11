@@ -56,7 +56,7 @@ namespace ElansAddonHub
 
             // an overlay (DESIGN 5/8): Surface3, hairline, radius 14, elevation 2; the 40 px margin holds the shadow
             root.Margin = new Thickness(40); root.Background = Res("Brush.Surface3"); root.BorderBrush = Res("Brush.Divider"); root.BorderThickness = new Thickness(1); root.CornerRadius = new CornerRadius(14);
-            root.Effect = new DropShadowEffect { BlurRadius = 40, ShadowDepth = 12, Direction = 270, Opacity = 0.5, Color = Colors.Black };
+            root.Effect = Application.Current.TryFindResource("Elevation.2") as System.Windows.Media.Effects.Effect ?? new DropShadowEffect { BlurRadius = 40, ShadowDepth = 12, Direction = 270, Opacity = 0.5, Color = Colors.Black };
             Loaded += (s, e) => Motion.DialogIn(root);
             Content = root;
 

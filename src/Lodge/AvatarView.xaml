@@ -24,7 +24,7 @@
         <Ellipse Stroke="{Binding Ring}" StrokeThickness="8" Margin="-14" />
         <Border Width="50" Height="50" CornerRadius="25" Background="{Binding StatusBrush}" BorderBrush="{StaticResource Brush.Surface1}" BorderThickness="7"
                 HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-22,0,0,-22" Visibility="{Binding StatusVisibility}">
-          <TextBlock Text="{Binding StatusGlyph}" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="{StaticResource Brush.OnAccent}" FontWeight="Bold"
+          <TextBlock Text="{Binding StatusGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="26" Foreground="{StaticResource Brush.OnAccent}" FontWeight="Bold"
                      HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
         <!-- appear offline: a grey hollow dot -->
