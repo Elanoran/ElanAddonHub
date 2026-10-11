@@ -117,6 +117,8 @@ namespace ElansAddonHub.Lodge
             Settings = settings;
             Groups = new MemberGroups(Members, () => CanSeeInvisible, settings);
             LfgVM.Clock = () => Clock(); LfgVM.MyName = () => Me?.Name; LfgVM.IAmOfficer = () => CanModerate;
+            ItemKnowledge.WowRoot = () => settings.WowRoot;
+            ItemKnowledge.Changed += RefreshItemChips;
             Presence = new GamePresence(() => settings.WowRoot, () => !settings.PixelOff);
             AvatarArt.Root = () => settings.WowRoot;
             if (settings.InvisibleForget) settings.LodgeInvisible = false; // "Appear offline" is not remembered across restarts
@@ -171,6 +173,9 @@ namespace ElansAddonHub.Lodge
         static string OneLine(string t) { t = (t ?? "").Replace("\r", " ").Replace("\n", " "); return t.Length > 90 ? t.Substring(0, 90) + "..." : t; }
 
         // "Show video previews" changed: rebuild (or drop) every message's YouTube card
+        // the item data (names, icons from the Bags addon) arrived or changed: every message rebuilds its chips
+        public void RefreshItemChips() { foreach (var l in messages.Values.ToList()) foreach (var m in l.ToList()) m.RefreshItems(); }
+
         public void RefreshVideos() { foreach (var l in messages.Values.ToList()) foreach (var m in l.ToList()) m.RefreshVideo(); }
 
         public ObservableCollection<MessageVM> MessagesOf(string channel)

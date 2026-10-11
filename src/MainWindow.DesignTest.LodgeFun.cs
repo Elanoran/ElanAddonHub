@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows.Media;
 using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
 
@@ -26,11 +27,34 @@ namespace ElansAddonHub
                 Session.IsShownToUser = () => false;
                 await FunShotGroups(dir);
                 await FunShotLfg(dir);
+                await FunShotItems(dir);
                 System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), "lodge fun design shots done");
             }
             catch (Exception e) { System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), "design shots crashed: " + e); }
             finally { s.LodgeGroupsCollapsed = hadCollapsed; Session.Disconnect(); }
             Quit();
+        }
+
+        async Task FunShotItems(string dir)
+        {
+            ItemKnowledge.WowRoot = () => null;   // synthetic item data and icons only
+            ItemKnowledge.Set(FunItemChars());
+            var cols = new[] { Color.FromRgb(0xE8, 0xE4, 0xDA), Color.FromRgb(0xFF, 0x80, 0x00), Color.FromRgb(0x6C, 0xB4, 0xE0), Color.FromRgb(0xC8, 0xB4, 0x8C), Color.FromRgb(0x9C, 0x6C, 0xD8), Color.FromRgb(0xB0, 0x48, 0xF8) };
+            for (int i = 0; i < cols.Length; i++) FunMakeIcon(1000001 + i, cols[i]);
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            string M(string id, string from, int fromId, string text, int minsAgo) =>
+                "{\"t\":\"msg\",\"channel\":\"general\",\"id\":" + Q(id) + ",\"at\":" + (now - minsAgo * 60000L) + ",\"from\":" + Q(from) + ",\"fromId\":" + fromId + ",\"text\":" + Q(text) + "}";
+            var hist = string.Join(",",
+                M("i1", "Bob", 2, "Who still needs [Runecloth]? I have a stack for the guild bank.", 8),
+                M("i2", "Mia", 3, "Dropped in Stratholme: |cffa335ee|Hitem:12640::::::::60:::::::|h[Lionheart Helm]|h|r - want it?", 6),
+                M("i3", "Kor", 6, "Thunderfury looks like this https://www.wowhead.com/classic/item=19019/thunderfury-blessed-blade-of-the-windseeker, and [Hearthstone] is in your bags", 3),
+                M("i4", "Dax", 8, "Selling [Linen Cloth] and [Wool Cloth], also looking for a [Torch] and a [Moonwell Charm]", 1));
+            Session.FeedForTest(FunWelcome("owner", FunPeople(false), hist));
+            Session.Select(Session.TextChannels.First(c => c.Id == "general"));
+            await Task.Delay(900);
+            LodgePage.ScrollToEndForTest();
+            await Task.Delay(300);
+            Snapshot(System.IO.Path.Combine(dir, "lodge-fun-items.png"));
         }
 
         async Task FunShotLfg(string dir)

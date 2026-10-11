@@ -697,7 +697,7 @@ namespace ElansAddonHub.Lodge
         void MenuCopy_Click(object sender, RoutedEventArgs e)
         {
             MsgMenu.IsOpen = false;
-            try { if (!string.IsNullOrEmpty(menuMsg?.Text)) Clipboard.SetText(menuMsg.Text); } catch { }
+            try { if (!string.IsNullOrEmpty(menuMsg?.Text)) Clipboard.SetText(menuMsg.ShownText); } catch { }
         }
 
         void CancelMode_Click(object sender, RoutedEventArgs e) => CancelMode();
@@ -903,6 +903,19 @@ namespace ElansAddonHub.Lodge
 
         // a non-YouTube link was clicked: the host decides (Outpost browser or default browser)
         public event Action<string> OpenLink;
+        public Action<string> OpenLinkOverrideForTest;   // the self-test must never launch a real browser
+
+        // an item chip: the item on Wowhead Classic, through the same path as every chat link (Settings > Privacy > Outpost browser decides where)
+        void ItemChip_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is ItemChipVM chip)) return;
+            e.Handled = true;
+            var url = chip.Url;
+            if (OpenLinkOverrideForTest != null) OpenLinkOverrideForTest(url);
+            else if (OpenLink != null) OpenLink(url);
+            else WebEngine.OpenExternal(url);
+        }
+        public void ItemChipClickForTest(ItemChipVM chip) => ItemChip_Click(new FrameworkElement { Tag = chip }, new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
 
         void MessageText_Move(object sender, MouseEventArgs e)
         {

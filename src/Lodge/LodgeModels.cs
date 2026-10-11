@@ -452,7 +452,8 @@ namespace ElansAddonHub.Lodge
         public DateTime At { get; set; }
         public FileVM File { get; set; }
         // a "Looking for group" sign-up card (Lodge server 2.9); the text is then only the plain-text fallback for older clients
-        public LfgVM Lfg { get; set; }
+        LfgVM lfg;
+        public LfgVM Lfg { get => lfg; set { if (Set(ref lfg, value)) { Raise(nameof(LfgVisibility)); Raise(nameof(TextVisibility)); RefreshItems(); } } }
         public Visibility LfgVisibility => Lfg != null ? Visibility.Visible : Visibility.Collapsed;
         bool continuation;
         public bool Continuation   // same person, shortly after: no avatar/name
@@ -493,7 +494,22 @@ namespace ElansAddonHub.Lodge
         public Visibility PinToolVisibility => PinEnabled ? Visibility.Visible : Visibility.Collapsed;
         public Visibility ReactionsVisibility => Reactions.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         public void RaiseReactions() => Raise(nameof(ReactionsVisibility));
-        public string Text { get => text; set { if (Set(ref text, value)) { Raise(nameof(TextVisibility)); RefreshVideo(); } } }
+        public string Text { get => text; set { if (Set(ref text, value)) { Raise(nameof(TextVisibility)); Raise(nameof(ShownText)); RefreshVideo(); RefreshItems(); } } }
+
+        // ---- item links (2.37): the text as shown (pasted game links read [Name]), and a chip per item mentioned
+        public string ShownText => ItemLinks.Display(text);
+        public ObservableCollection<ItemChipVM> ItemChips { get; } = new ObservableCollection<ItemChipVM>();
+        public Visibility ItemChipsVisibility => ItemChips.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // (re)builds the chips from the text and what the item data knows right now; called again when that data arrives
+        public void RefreshItems()
+        {
+            var refs = Lfg != null || string.IsNullOrEmpty(text) ? new System.Collections.Generic.List<ItemRef>() : ItemLinks.Find(text, ItemKnowledge.IdOf);
+            if (refs.Count == 0 && ItemChips.Count == 0) return;
+            ItemChips.Clear();
+            foreach (var r in refs) ItemChips.Add(ItemChipVM.From(r));
+            Raise(nameof(ItemChipsVisibility));
+            if (refs.Any(r => r.Id == 0 || ItemKnowledge.Get(r.Id) == null)) ItemKnowledge.EnsureLoaded();   // names / icons may be in the Bags data
+        }
 
         // ---- YouTube preview card (Settings > Privacy > Show video previews)
         VideoVM video;

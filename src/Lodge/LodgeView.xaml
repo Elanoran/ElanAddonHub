@@ -68,6 +68,38 @@
         </DockPanel>
       </Border>
     </DataTemplate>
+    <!-- an item chip: icon (or a quiet tile), the name in its quality colour; click = Wowhead Classic -->
+    <DataTemplate x:Key="ItemChip">
+      <Border x:Name="chip" Height="24" CornerRadius="12" Background="{StaticResource Brush.Overlay.Chip}" Padding="3,0,10,0" Margin="0,0,6,4" Cursor="Hand"
+              Tag="{Binding}" MouseLeftButtonUp="ItemChip_Click">
+        <Border.ToolTip>
+          <ToolTip>
+            <StackPanel MaxWidth="260">
+              <TextBlock Text="{Binding TipTitle}" Foreground="{Binding NameBrush}" Style="{StaticResource Text.RowTitle}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding TipLine}" Style="{StaticResource Text.Caption}" Margin="0,2,0,0" />
+              <TextBlock Text="{Binding TipHint}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" />
+            </StackPanel>
+          </ToolTip>
+        </Border.ToolTip>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Grid Width="18" Height="18">
+            <Border Visibility="{Binding IconVisibility}" CornerRadius="4" ClipToBounds="True">
+              <Image Source="{Binding Icon}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" />
+            </Border>
+            <Border Visibility="{Binding TileVisibility}" CornerRadius="4" Background="{StaticResource Brush.Surface3}">
+              <TextBlock Text="&#xE719;" FontFamily="{StaticResource Icons}" FontSize="10" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+          </Grid>
+          <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="260" />
+        </StackPanel>
+      </Border>
+      <DataTemplate.Triggers>
+        <Trigger SourceName="chip" Property="IsMouseOver" Value="True">
+          <Setter TargetName="chip" Property="Background" Value="{StaticResource Brush.Overlay.Pressed}" />
+        </Trigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
     <!-- one entry of a sign-up card's role row: who signed up (avatar + name in class colour), or an open place -->
     <DataTemplate x:Key="LfgSlot">
       <Grid Margin="0,0,6,4">
@@ -459,11 +491,15 @@
                               </TextBlock>
                               <TextBlock Text="{Binding Time}" FontSize="11" Foreground="{StaticResource TextDim}" Margin="8,2,0,0" />
                             </StackPanel>
-                            <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0"
+                            <TextBox Text="{Binding ShownText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0"
                                      Foreground="{StaticResource Text}" FontSize="13" Padding="0" Margin="0,1,0,0" SelectionBrush="{StaticResource Accent}"
                                      Visibility="{Binding TextVisibility}" ContextMenu="{x:Null}"
                                      Tag="{Binding}" PreviewMouseMove="MessageText_Move" PreviewMouseLeftButtonUp="MessageText_Up" />
                             <TextBlock Text="(edited)" FontSize="11" Foreground="{StaticResource TextDim}" Visibility="{Binding EditedVisibility}" />
+                            <!-- item links: a chip per [Item], Wowhead item URL or pasted game link -->
+                            <ItemsControl ItemsSource="{Binding ItemChips}" Visibility="{Binding ItemChipsVisibility}" Margin="0,4,0,0" ItemTemplate="{StaticResource ItemChip}">
+                              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            </ItemsControl>
                             <!-- "Looking for group" sign-up card (server 2.9) -->
                             <ContentControl Content="{Binding Lfg}" ContentTemplate="{StaticResource LfgCard}" Visibility="{Binding LfgVisibility}" />
                             <StackPanel Visibility="{Binding FileVisibility}" Margin="0,5,0,2">

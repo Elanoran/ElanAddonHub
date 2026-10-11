@@ -43,6 +43,7 @@ namespace ElansAddonHub
                 LodgePage.ShowChatForTest();
                 await FunGrouping(dir, check);
                 await FunLfg(dir, check);
+                await FunItems(dir, check);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally
