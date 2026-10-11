@@ -62,6 +62,7 @@ namespace ElansAddonHub
             bool ok = true;
             Action<string, bool> check = (what, cond) => { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; };
             var hadClock = Session.Clock; var hadShown = Session.IsShownToUser; var hadZone = CalendarRules.Zone; var hadToastsOff = settings.ToastsOff;
+            var hadCombat = Session.Toasts.InCombat; var hadToastClock = Session.Toasts.Clock;
             var sent = new List<Dictionary<string, object>>();
             try
             {
@@ -87,6 +88,7 @@ namespace ElansAddonHub
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally
             {
+                Session.Toasts.InCombat = hadCombat; Session.Toasts.Clock = hadToastClock; Session.Toasts.Visible.Clear();
                 CalendarRules.Zone = hadZone; Session.Clock = hadClock; Session.IsShownToUser = hadShown; settings.ToastsOff = hadToastsOff; Session.SentForTest = null;
                 LodgePage.HideCalendarForTest();
                 Session.Disconnect();
