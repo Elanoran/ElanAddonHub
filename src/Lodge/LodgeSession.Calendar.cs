@@ -1,0 +1,137 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading.Tasks;
+using ElansAddonHub.Services;
+
+namespace ElansAddonHub.Lodge
+{
+    // The raid / event calendar (Lodge server 2.11). The pure rules are in CalendarModels.cs; this holds the events the server sent,
+    // asks for months on demand, sends the changes and fires the "starts in 15 minutes" reminders.
+    public partial class LodgeSession
+    {
+        public bool SupportsCalendar { get; private set; }               // server 2.11: hidden on older servers
+        public ObservableCollection<EventVM> Events { get; } = new ObservableCollection<EventVM>();   // sorted by start, no stubs
+        public event Action CalendarChanged;                              // events added / changed / the answer to a month fetch
+        readonly Dictionary<string, EventVM> eventIndex = new Dictionary<string, EventVM>();
+        readonly HashSet<string> loadedMonths = new HashSet<string>();
+        readonly HashSet<string> eventReminded = new HashSet<string>();
+        public static readonly Version CalendarServer = new Version(2, 11, 0);
+
+        void ReadCalendarFeatures(Dictionary<string, object> m, List<string> features)
+        {
+            var v = ParseVersion(ServerVersion);
+            SupportsCalendar = features.Contains("calendar") && (v == null || v >= CalendarServer);
+            // the welcome is a full refresh: the window it names replaces what we had (chat cards keep their instances)
+            Events.Clear(); loadedMonths.Clear();
+            if (!SupportsCalendar) Changed?.Invoke();
+        }
+
+        // after Me is known (an event stores who signed up; "my" answer is found by name)
+        void LoadWelcomeCalendar(Dictionary<string, object> m)
+        {
+            if (!SupportsCalendar) return;
+            ApplyEvents(m.Child("calendar")?.List("events"));
+            Changed?.Invoke();
+        }
+
+        void ApplyEvents(List<object> list)
+        {
+            if (list == null) return;
+            foreach (var d in list.OfType<Dictionary<string, object>>()) Upsert(d);
+            CalendarChanged?.Invoke();
+        }
+
+        EventVM Upsert(Dictionary<string, object> d)
+        {
+            var id = d.Str("id");
+            if (string.IsNullOrEmpty(id)) return null;
+            if (!eventIndex.TryGetValue(id, out var vm)) eventIndex[id] = vm = new EventVM();
+            var listed = Events.Contains(vm);
+            vm.Apply(d);
+            if (listed) Events.Remove(vm);                            // its start may have moved: put it back in order
+            int at = Events.Count;
+            while (at > 0 && Events[at - 1].StartUtc > vm.StartUtc) at--;
+            Events.Insert(at, vm);
+            return vm;
+        }
+
+        void OnCalendarFrame(Dictionary<string, object> m)
+        {
+            if (!SupportsCalendar) return;
+            ApplyEvents(m.List("events"));
+        }
+
+        public EventVM EventById(string id) => id != null && eventIndex.TryGetValue(id, out var e) ? e : null;
+
+        // the live event behind a chat card (a stand-in built from the card's snapshot when the event is outside the loaded window)
+        public EventVM EventForCard(Dictionary<string, object> snap)
+        {
+            var id = snap?.Str("id");
+            if (string.IsNullOrEmpty(id)) return null;
+            if (!eventIndex.TryGetValue(id, out var vm)) eventIndex[id] = vm = new EventVM();
+            vm.ApplyStub(snap);
+            return vm;
+        }
+
+        // the month view shows a grid of weeks: ask the server for the month (once each) - the welcome only carries what is still to come
+        public void EnsureMonth(int year, int month)
+        {
+            if (!SupportsCalendar) return;
+            var key = year + "-" + month;
+            if (!loadedMonths.Add(key)) return;
+            CalendarRules.MonthWindow(year, month, out var from, out var to);
+            _ = Send(new Dictionary<string, object> { ["t"] = "cal:range", ["from"] = (double)CalendarRules.Ms(from), ["to"] = (double)CalendarRules.Ms(to) });
+        }
+
+        // events the grid of one month may show
+        public IEnumerable<EventVM> EventsBetween(DateTime fromUtc, DateTime toUtc) => Events.Where(e => e.StartUtc >= fromUtc && e.StartUtc < toUtc);
+
+        public Task CalendarCreate(CalendarForm f) => Send(f.ToRequest("cal:create"));
+        public Task CalendarEdit(EventVM e, CalendarForm f) => Send(f.ToRequest("cal:edit", e.Id));
+        public Task CalendarCancel(EventVM e, bool following) => Send(new Dictionary<string, object> { ["t"] = "cal:cancel", ["id"] = e.Id, ["scope"] = following ? "following" : "this" });
+        public Task CalendarLeave(EventVM e) => Send(new Dictionary<string, object> { ["t"] = "cal:leave", ["id"] = e.Id });
+
+        // Going / Maybe / Can't, with the role picked on the card; the comment I wrote before stays unless a new one is given
+        public Task CalendarAnswer(EventVM e, string status, string comment = null)
+        {
+            var d = new Dictionary<string, object> { ["t"] = "cal:signup", ["id"] = e.Id, ["status"] = status, ["comment"] = comment ?? e.MyComment ?? "" };
+            if (e.Roles && status != "declined") { d["role"] = e.SelectedRole; EventVM.LastRole = e.SelectedRole; }
+            return Send(d);
+        }
+
+        public EventVM NextEvent => SupportsCalendar ? CalendarRules.NextEvent(Events, Clock()) : null;
+        public string NextEventLine => SupportsCalendar ? CalendarRules.NextEventLine(NextEvent, Clock()) : "";
+
+        // every few seconds: countdowns move on, and a toast 15 minutes before the start for Going and Maybe (the toast settings and the
+        // combat hold apply: ToastCenter.Push decides)
+        public void CalendarTick()
+        {
+            if (!SupportsCalendar) return;
+            var now = Clock();
+            bool moved = false;
+            foreach (var e in Events.ToList())
+            {
+                moved |= e.RefreshClock();
+                if (!CalendarRules.ReminderDue(e, now, eventReminded)) continue;
+                eventReminded.Add(e.Id);
+                var left = e.StartUtc - now;
+                Toasts.Push(new ToastItem
+                {
+                    Kind = ToastKind.Event, Kicker = "Event", Sender = e.Title + " starts in " + Math.Max(1, (int)Math.Ceiling(left.TotalMinutes)) + " min", Who = Me,
+                    Text = e.MyStatus == "going" ? (e.Roles && !string.IsNullOrEmpty(e.MyRole) ? "You are going as " + EventVM.RoleLabel(e.MyRole) : "You are going") + " · " + CalendarRules.ShortWhen(e.StartUtc, now)
+                        : "You said maybe · " + CalendarRules.ShortWhen(e.StartUtc, now),
+                });
+            }
+            if (moved) CalendarChanged?.Invoke();
+        }
+
+        void ResetCalendar()
+        {
+            Events.Clear(); eventIndex.Clear(); loadedMonths.Clear(); eventReminded.Clear(); SupportsCalendar = false;
+        }
+
+        public bool CalendarRemindedForTest(string id) => eventReminded.Contains(id);
+    }
+}

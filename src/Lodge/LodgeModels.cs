@@ -89,8 +89,10 @@ namespace ElansAddonHub.Lodge
         public bool InvisibleHint { get => invisibleHint; set { if (Set(ref invisibleHint, value)) Raise(nameof(InvisibleHintVisibility)); } }
         public Visibility InvisibleHintVisibility => invisibleHint && IsVoice && !here ? Visibility.Visible : Visibility.Collapsed;
 
-        public Brush RowBrush => selected ? Avatar.Res("Brush.Accent.Tint") : Brushes.Transparent;
-        public Brush NameBrush => selected || unread || here ? Avatar.Res("Brush.Text.Primary") : Avatar.Res("Brush.Text.Secondary");
+        public static bool CalendarShown;                    // the calendar page has the chat's place: no channel looks selected then
+        public void RaiseRow() { Raise(nameof(RowBrush)); Raise(nameof(NameBrush)); }
+        public Brush RowBrush => selected && !CalendarShown ? Avatar.Res("Brush.Accent.Tint") : Brushes.Transparent;
+        public Brush NameBrush => (selected && !CalendarShown) || unread || here ? Avatar.Res("Brush.Text.Primary") : Avatar.Res("Brush.Text.Secondary");
         public FontWeight NameWeight => unread ? FontWeights.SemiBold : FontWeights.Normal;
         public Visibility MentionVisibility => mentions > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility UnreadVisibility => unreadCount > 0 && mentions == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -453,6 +455,10 @@ namespace ElansAddonHub.Lodge
         // a "Looking for group" sign-up card (Lodge server 2.9); the text is then only the plain-text fallback for older clients
         LfgVM lfg;
         public LfgVM Lfg { get => lfg; set { if (Set(ref lfg, value)) { Raise(nameof(LfgVisibility)); Raise(nameof(TextVisibility)); RefreshItems(); } } }
+        // a calendar event's chat card (Lodge server 2.11): the live event, so the card follows its sign-ups; older clients just see "text"
+        EventVM calEvent;
+        public EventVM Event { get => calEvent; set { if (Set(ref calEvent, value)) { Raise(nameof(EventVisibility)); Raise(nameof(TextVisibility)); RefreshItems(); } } }
+        public Visibility EventVisibility => Event != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility LfgVisibility => Lfg != null ? Visibility.Visible : Visibility.Collapsed;
         bool continuation;
         public bool Continuation   // same person, shortly after: no avatar/name
@@ -502,7 +508,7 @@ namespace ElansAddonHub.Lodge
         // (re)builds the chips from the text and what the item data knows right now; called again when that data arrives
         public void RefreshItems()
         {
-            var refs = Lfg != null || string.IsNullOrEmpty(text) ? new System.Collections.Generic.List<ItemRef>() : ItemLinks.Find(text, ItemKnowledge.IdOf);
+            var refs = Lfg != null || Event != null || string.IsNullOrEmpty(text) ? new System.Collections.Generic.List<ItemRef>() : ItemLinks.Find(text, ItemKnowledge.IdOf);
             if (refs.Count == 0 && ItemChips.Count == 0) return;
             ItemChips.Clear();
             foreach (var r in refs) ItemChips.Add(ItemChipVM.From(r));
@@ -572,7 +578,7 @@ namespace ElansAddonHub.Lodge
         public Visibility HeaderVisibility => Compact ? Visibility.Collapsed : Visibility.Visible;
         public Visibility AvatarVisibility => Compact ? Visibility.Hidden : Visibility.Visible;
         public Thickness RowMargin => Compact ? new Thickness(0) : new Thickness(0, 8, 0, 0);
-        public Visibility TextVisibility => string.IsNullOrEmpty(text) || Lfg != null ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility TextVisibility => string.IsNullOrEmpty(text) || Lfg != null || Event != null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility FileVisibility => File == null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility ReplyVisibility => ReplyFrom == null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility EditedVisibility => edited ? Visibility.Visible : Visibility.Collapsed;

@@ -345,6 +345,7 @@ namespace ElansAddonHub
             if (Begin("lodgehardening")) { result += "\r\n" + await HardeningTest(dir); End(); }
             if (Begin("lodgefun")) { result += "\r\n" + await LodgeFunTest(dir); End(); }
             if (Begin("invites")) { result += "\r\n" + await InvitesTest(dir); End(); }
+            if (Begin("calendar")) { result += "\r\n" + await CalendarTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }

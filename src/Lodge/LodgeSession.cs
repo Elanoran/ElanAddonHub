@@ -311,6 +311,7 @@ namespace ElansAddonHub.Lodge
             foreach (var l in messages.Values) l.Clear();
             foreach (var l in pins.Values) l.Clear();
             channelCache.Clear();
+            ResetCalendar();
             ResetHistoryState();
             Pending = null;
             failedImages.Clear();
@@ -430,7 +431,7 @@ namespace ElansAddonHub.Lodge
                     var e = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
                     if (e != null)
                     {
-                        e.Text = SafeFile.Text(m.Str("text")); e.Edited = true;
+                        e.Text = SafeFile.Text(m.Str("text")); if (!m.Bool("card")) e.Edited = true;   // an event card follows its event: not "(edited)"
                         bool was = e.Mentioned;
                         e.Mentioned = !e.Mine && MentionsMe(e.Text, e.From);
                         // an edit that adds a mention to a message I haven't read yet badges the channel; one that removes it takes it back
@@ -487,6 +488,9 @@ namespace ElansAddonHub.Lodge
                 case "admin.invited":
                     AdminInvited?.Invoke(m.Str("name"), m.Str("role"), m.Str("code"));
                     break;
+                case "cal:events": case "cal:range":
+                    OnCalendarFrame(m);
+                    break;
                 case "admin.invites": case "admin.invite.created": case "devices": case "admin.devices":
                     OnInviteFrame(m);
                     break;
@@ -512,6 +516,7 @@ namespace ElansAddonHub.Lodge
             SupportsLfg = features.Contains("lfg");
             ReadHistoryFeatures(features);
             ReadInviteFeatures(m, features);
+            ReadCalendarFeatures(m, features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
@@ -544,6 +549,7 @@ namespace ElansAddonHub.Lodge
             }
             Me = Members.FirstOrDefault(x => x.IsMe);
             if (Me != null) Me.Invisible = Invisible;
+            LoadWelcomeCalendar(m);
             if (m.Child("profile") != null) { MyProfile = ProfileData.Parse(m.Child("profile")); MyProfileChanged?.Invoke(); }
             RefreshAuthorNames();
 
@@ -787,6 +793,7 @@ namespace ElansAddonHub.Lodge
             };
             vm.Continuation = prev != null && IsContinuation(prev, vm);
             if (m.Str("kind") == "lfg" && m.Child("lfg") != null) { vm.Lfg = new LfgVM { Msg = vm }; vm.Lfg.Apply(m.Child("lfg")); }
+            if (m.Str("kind") == "event" && m.Child("event") != null && SupportsCalendar) vm.Event = EventForCard(m.Child("event"));
             var reacts = m.Child("reactions");
             if (reacts != null)
                 foreach (var kv in reacts.OrderBy(k => Array.IndexOf(ReactionSet, k.Key)))
@@ -829,6 +836,7 @@ namespace ElansAddonHub.Lodge
         {
             var text = SafeFile.Text(x.Str("text"));
             if (vm.Text != text) vm.Text = text;
+            if (x.Str("kind") == "event" && x.Child("event") != null && SupportsCalendar) vm.Event = EventForCard(x.Child("event"));
             if (x.Str("kind") == "lfg" && x.Child("lfg") != null)
             {
                 if (vm.Lfg == null) vm.Lfg = new LfgVM { Msg = vm };
@@ -1409,7 +1417,7 @@ namespace ElansAddonHub.Lodge
             if (Pending != null && Clock() - Pending.At > TimeSpan.FromSeconds(15)) Pending = null;   // surely out by now
             if (pendingRoom != null && Clock() - pendingSince > TimeSpan.FromSeconds(6)) { pendingRoom = null; Error?.Invoke("Couldn't join the voice room - no answer from the lodge"); Changed?.Invoke(); }
             AutoStatusTick();
-            if (tickCount % 20 == 0) LfgTick();
+            if (tickCount % 20 == 0) { LfgTick(); CalendarTick(); }
             if (Toasts.NeedsTick) Toasts.Tick();
         }
 
