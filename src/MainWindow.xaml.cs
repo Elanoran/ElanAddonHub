@@ -136,13 +136,13 @@ namespace ElansAddonHub
             UpdateBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
             var hubNew = manifest != null && SelfUpdater.IsNewer(manifest.Hub);
             RailVersion.Inlines.Clear();
-            if (hubNew) RailVersion.Inlines.Add(new System.Windows.Documents.Run("● ") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Gold"] });
+            if (hubNew) RailVersion.Inlines.Add(new System.Windows.Documents.Run("● ") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Brush.Warn"] });
             RailVersion.Inlines.Add("v" + App.Version);
             bool testBuild = IsTestBuild;
             if (testBuild)
             {
                 RailVersion.Inlines.Add(new System.Windows.Documents.LineBreak());
-                RailVersion.Inlines.Add(new System.Windows.Documents.Run("TEST BUILD") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Gold"], FontSize = 8, FontWeight = FontWeights.SemiBold });
+                RailVersion.Inlines.Add(new System.Windows.Documents.Run("Test build") { Foreground = (System.Windows.Media.Brush)Application.Current.Resources["Brush.Warn"] });
             }
             RailVersion.Opacity = hubNew || testBuild ? 1 : 0.6;
             var testTip = UpdateChannel.RunningTestBuild(settings) ? "\nThis is a test build (pre-release)." : manifestPre && hubNew ? "\nThe offered version is a test build (pre-release)." : "";
@@ -521,6 +521,14 @@ namespace ElansAddonHub
         // a popup's content (popups are separate windows, so the window snapshot can't see them)
         void SnapshotElement(FrameworkElement el, string file)
         {
+            // popover cards keep a transparent margin for their shadow: the picture is of the card itself
+            var margin = el.Margin;
+            if (margin != new Thickness(0)) el.Margin = new Thickness(0);
+            try { SnapshotElementCore(el, file); } finally { el.Margin = margin; }
+        }
+
+        void SnapshotElementCore(FrameworkElement el, string file)
+        {
             el.UpdateLayout();
             var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(el);
             var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(
@@ -717,6 +725,7 @@ namespace ElansAddonHub
             if (checking) return;
             checking = true;
             statusText = "Checking for updates...";
+            UpdateCardsSkeleton();
             try
             {
                 var ch = await UpdateChannel.Resolve(settings);
@@ -750,8 +759,13 @@ namespace ElansAddonHub
                 checking = false;
                 if (manifest == null) _ = RefreshOthersAndCheck();
                 UpdateStatusText();
+                UpdateCardsSkeleton();
             }
         }
+
+        // skeleton cards stand in for the list until the first check has produced one (or failed)
+        void UpdateCardsSkeleton() => CardsSkeleton.Visibility = cards.Count == 0 && lastError == null && (checking || manifest == null) ? Visibility.Visible : Visibility.Collapsed;
+        public bool CardsSkeletonForTest => CardsSkeleton.Visibility == Visibility.Visible;
 
         async Task RefreshOthersAndCheck() { await RefreshOthers(); await CheckOthers(); _ = SuggestOthers(); }
 
@@ -784,6 +798,7 @@ namespace ElansAddonHub
             foreach (var gone in cards.Where(c => manifest.Addons == null || manifest.Addons.All(a => a.Id != c.Info.Id)).ToList())
                 cards.Remove(gone);
             RefreshRailBadges();
+            UpdateCardsSkeleton();
         }
 
         async Task AfterCheck()

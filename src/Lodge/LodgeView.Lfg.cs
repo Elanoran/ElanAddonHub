@@ -59,11 +59,34 @@ namespace ElansAddonHub.Lodge
             LfgMinute.SelectedIndex = 0;
 
             RefreshLfgSuggestions();
+            lfgClosing = false; lfgCloseToken++;
+            LfgOverlay.BeginAnimation(OpacityProperty, null);
             LfgOverlay.Visibility = Visibility.Visible;
+            // the scrim fades in (Standard) and the card opens with DialogIn (scale 0.96 -> 1 + fade); both are instant with Windows animations off
+            if (Motion.Enabled) LfgOverlay.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, Motion.Standard) { EasingFunction = Motion.EaseOut });
+            Motion.DialogIn(LfgBox);
             LfgTitle.Focus();
         }
 
-        void CloseLfgForm() { LfgOverlay.Visibility = Visibility.Collapsed; Composer.Focus(); }
+        bool lfgClosing; int lfgCloseToken;
+        void CloseLfgForm()
+        {
+            if (LfgOverlay.Visibility != Visibility.Visible || lfgClosing) return;
+            Composer.Focus();
+            if (!Motion.Enabled) { LfgOverlay.Visibility = Visibility.Collapsed; return; }
+            // DialogOut: the card scales to 0.96 and fades (120 ms), the scrim with it; the form counts as closed at once
+            lfgClosing = true;
+            var my = ++lfgCloseToken;
+            LfgOverlay.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, 0, Motion.Fast) { EasingFunction = Motion.EaseIn, FillBehavior = System.Windows.Media.Animation.FillBehavior.HoldEnd });
+            Motion.DialogOut(LfgBox, () =>
+            {
+                if (my != lfgCloseToken) return;   // opened again meanwhile
+                lfgClosing = false;
+                LfgOverlay.Visibility = Visibility.Collapsed;
+                LfgOverlay.BeginAnimation(OpacityProperty, null);
+                LfgBox.BeginAnimation(OpacityProperty, null); LfgBox.Opacity = 1; LfgBox.RenderTransform = System.Windows.Media.Transform.Identity;
+            });
+        }
 
         void ShowCounts() { LfgTankN.Text = lfgTank.ToString(); LfgHealerN.Text = lfgHealer.ToString(); LfgDpsN.Text = lfgDps.ToString(); }
 
@@ -145,7 +168,7 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---- test hooks
-        public bool LfgFormOpenForTest => LfgOverlay.Visibility == Visibility.Visible;
+        public bool LfgFormOpenForTest => LfgOverlay.Visibility == Visibility.Visible && !lfgClosing;
         public void OpenLfgFormForTest() => OpenLfgForm();
         public void CloseLfgFormForTest() => CloseLfgForm();
         public string LfgTitleForTest { get => LfgTitle.Text; set => LfgTitle.Text = value; }

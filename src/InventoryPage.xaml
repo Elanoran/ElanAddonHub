@@ -1,6 +1,7 @@
 <UserControl x:Class="ElansAddonHub.InventoryPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ElansAddonHub">
   <UserControl.Resources>
     <!-- character list row (DESIGN 8, like the Settings nav): 48 high pill, hover veil, selected = accent tint; the content is the portrait + two lines -->
     <Style x:Key="SideRow" TargetType="RadioButton">
@@ -75,6 +76,36 @@
       </Grid.ColumnDefinitions>
       <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
         <StackPanel>
+          <!-- skeleton rows while the first read of the saved bags is on its way -->
+          <StackPanel x:Name="CharSkeleton" Visibility="Collapsed">
+            <Grid Height="48" Margin="8,0,12,4">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <local:Skeleton Width="32" Height="32" CornerRadius="16" />
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                  <local:Skeleton Height="12" Width="104" CornerRadius="6" />
+                  <local:Skeleton Height="12" Width="72" CornerRadius="6" Margin="0,4,0,0" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+            <Grid Height="48" Margin="8,0,12,4">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <local:Skeleton Width="32" Height="32" CornerRadius="16" />
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                  <local:Skeleton Height="12" Width="88" CornerRadius="6" />
+                  <local:Skeleton Height="12" Width="104" CornerRadius="6" Margin="0,4,0,0" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+            <Grid Height="48" Margin="8,0,12,4">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <local:Skeleton Width="32" Height="32" CornerRadius="16" />
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                  <local:Skeleton Height="12" Width="96" CornerRadius="6" />
+                  <local:Skeleton Height="12" Width="64" CornerRadius="6" Margin="0,4,0,0" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </StackPanel>
           <RadioButton x:Name="AllCard" Style="{StaticResource SideRow}" Click="All_Click" AutomationProperties.Name="All characters">
             <RadioButton.ToolTip>
               <ToolTip Style="{StaticResource CardTip}"><TextBlock Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" Text="Search every character at once" /></ToolTip>
@@ -166,7 +197,7 @@
                           <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                           <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                              <Border Style="{StaticResource Chip}" Margin="0,4,8,0" Padding="8,3" MinHeight="0">
+                              <Border Style="{StaticResource Chip}" Margin="0,4,8,0" Padding="8,2" MinHeight="0">
                                 <StackPanel Orientation="Horizontal">
                                   <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Secondary}" Foreground="{Binding ClassBrush}" />
                                   <TextBlock Text="{Binding Where}" Style="{StaticResource Text.Secondary}" Margin="8,0,0,0" />

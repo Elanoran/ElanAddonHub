@@ -70,8 +70,8 @@
               Click="Tab_Click" PreviewMouseDown="Tab_MouseDown" AutomationProperties.Name="{Binding Title}">
         <Grid x:Name="root" Background="Transparent">
           <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Opacity="{Binding SelectedOpacity}" />
-          <DockPanel Margin="10,0,4,0">
-            <Button x:Name="rm" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="22" Height="22" FontSize="9" Content="&#xE711;" Margin="4,0,0,0"
+          <DockPanel Margin="12,0,4,0">
+            <Button x:Name="rm" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="22" Height="22" FontSize="12" Content="&#xE711;" Margin="4,0,0,0"
                     Opacity="{Binding CloseOpacity}" Tag="{Binding}" Click="TabClose_Click" ToolTip="Close tab" AutomationProperties.Name="Close tab" />
             <Grid DockPanel.Dock="Left" Width="16" Height="16" Margin="0,0,8,0">
               <Image Source="{Binding Icon}" Width="16" Height="16" RenderOptions.BitmapScalingMode="HighQuality" />
@@ -102,7 +102,7 @@
                        TextTrimming="CharacterEllipsis" MaxWidth="92" HorizontalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button x:Name="rm" Style="{StaticResource IconButton}" Width="22" Height="22" FontSize="9" Content="&#xE711;" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0"
+        <Button x:Name="rm" Style="{StaticResource IconButton}" Width="22" Height="22" FontSize="12" Content="&#xE711;" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0"
                 Opacity="0" Tag="{Binding}" Click="TileRemove_Click" ToolTip="Remove tile" AutomationProperties.Name="Remove tile" />
       </Grid>
       <DataTemplate.Triggers>
@@ -146,7 +146,7 @@
               <TextBlock x:Name="AddressHint" Text="Search or enter an address" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}"
                          VerticalAlignment="Center" Margin="36,0,0,0" IsHitTestVisible="False" />
               <TextBox x:Name="AddressBox" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Brush.Text.Primary}" CaretBrush="{StaticResource Brush.Text.Primary}"
-                       SelectionBrush="{StaticResource Brush.Accent}" FontSize="13" VerticalContentAlignment="Center" Margin="34,0,8,0" Padding="2,0" SpellCheck.IsEnabled="False"
+                       SelectionBrush="{StaticResource Brush.Accent}" FontSize="13" VerticalContentAlignment="Center" Margin="36,0,8,0" Padding="2,0" SpellCheck.IsEnabled="False"
                        KeyDown="Address_KeyDown" GotKeyboardFocus="Address_GotFocus" LostKeyboardFocus="Address_LostFocus" TextChanged="Address_TextChanged" AutomationProperties.Name="Address" />
               <TextBlock x:Name="NotSecureText" Text="Not secure" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Warn}" HorizontalAlignment="Right" VerticalAlignment="Center"
                          Margin="0,0,12,0" IsHitTestVisible="False" Visibility="Collapsed" />
@@ -155,7 +155,7 @@
         </Grid>
 
         <!-- thin loading line under the bar: grows from the left while a page loads -->
-        <Border Height="2" Margin="0,2,0,6" ClipToBounds="True">
+        <Border Height="2" Margin="0,2,0,8" ClipToBounds="True">
           <Border x:Name="Progress" Background="{StaticResource Brush.Accent}" Opacity="0" RenderTransformOrigin="0,0.5">
             <Border.RenderTransform><ScaleTransform x:Name="ProgressScale" ScaleX="0" /></Border.RenderTransform>
           </Border>
@@ -163,7 +163,7 @@
 
         <Border x:Name="Notice" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Padding="12,4,4,4" Margin="0,0,0,8">
           <DockPanel>
-            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="9" Content="&#xE711;" Click="NoticeClose_Click" ToolTip="Dismiss" AutomationProperties.Name="Dismiss" />
+            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE711;" Click="NoticeClose_Click" ToolTip="Dismiss" AutomationProperties.Name="Dismiss" />
             <Button x:Name="NoticeShow" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Show in folder" Click="NoticeShow_Click" Margin="8,0,4,0" VerticalAlignment="Center" />
             <TextBlock x:Name="NoticeText" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
           </DockPanel>

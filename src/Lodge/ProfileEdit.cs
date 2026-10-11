@@ -16,7 +16,7 @@ namespace ElansAddonHub.Lodge
         public MemberVM DefaultLook { get; set; }
         bool selected;
         public bool Selected { get => selected; set { if (Set(ref selected, value)) Raise(nameof(RingBrush)); } }
-        public Brush RingBrush => selected ? Avatar.Res("Accent") : Brushes.Transparent;
+        public Brush RingBrush => selected ? Avatar.Res("Brush.Accent") : Brushes.Transparent;
         public Visibility ImageVisibility => Image != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility DefaultVisibility => Image == null ? Visibility.Visible : Visibility.Collapsed;
         public void SetImage(ImageSource img) { Image = img; Raise(nameof(Image)); }
@@ -31,7 +31,7 @@ namespace ElansAddonHub.Lodge
         public Visibility NoneVisibility => Id == null ? Visibility.Visible : Visibility.Collapsed;
         bool selected;
         public bool Selected { get => selected; set { if (Set(ref selected, value)) Raise(nameof(RingBrush)); } }
-        public Brush RingBrush => selected ? Avatar.Res("Text") : Brushes.Transparent;
+        public Brush RingBrush => selected ? Avatar.Res("Brush.Text.Primary") : Brushes.Transparent;
     }
 
     // the Settings > Profile page: everything the member can choose, with a live preview card that shows what others will see.
@@ -147,14 +147,14 @@ namespace ElansAddonHub.Lodge
                 return "Others see \"" + clean + "\", with @" + login + " next to it on your card. You can change it once a minute.";
             }
         }
-        public Brush DisplayHintBrush => !IsGuest && (displayServerError != null || DisplayProblem != null) ? Avatar.Res("Danger") : Avatar.Res("TextDim");
+        public Brush DisplayHintBrush => !IsGuest && (displayServerError != null || DisplayProblem != null) ? Avatar.Res("Brush.Danger") : Avatar.Res("Brush.Text.Secondary");
         public bool CanSave => Supported && !Saving && DisplayProblem == null && (Dirty || statusText == "Not saved." || IsError);
         public bool CanDiscard => Dirty && !Saving;
         public Visibility DiscardVisibility => Dirty && !Saving ? Visibility.Visible : Visibility.Collapsed;
         bool IsError => statusText != "" && !statusText.StartsWith("Saved") && !statusText.StartsWith("Saving");
         // inline status next to the buttons: errors, "Saving...", "Unsaved changes", or "Saved" which fades after a few seconds
         public string StatusText => Saving ? "Saving..." : IsError ? statusText : Dirty ? "Unsaved changes" : statusText;
-        public Brush StatusBrush => Saving ? Avatar.Res("TextDim") : IsError ? Avatar.Res("Danger") : Dirty ? Avatar.Res("Gold") : statusText.StartsWith("Saved") ? Avatar.Res("Accent") : Avatar.Res("TextDim");
+        public Brush StatusBrush => Saving ? Avatar.Res("Brush.Text.Secondary") : IsError ? Avatar.Res("Brush.Danger") : Dirty ? Avatar.Res("Brush.Warn") : statusText.StartsWith("Saved") ? Avatar.Res("Brush.Accent") : Avatar.Res("Brush.Text.Secondary");
 
         void RaiseStatus() { Raise(nameof(CanSave)); Raise(nameof(CanDiscard)); Raise(nameof(DiscardVisibility)); Raise(nameof(StatusText)); Raise(nameof(StatusBrush)); }
         public void BeginSave() { Saving = true; displayServerError = null; statusText = "Saving..."; RaiseStatus(); Raise(nameof(DisplayHint)); Raise(nameof(DisplayHintBrush)); }
@@ -189,7 +189,7 @@ namespace ElansAddonHub.Lodge
         public string About { get => about; set { value = (value ?? "").Replace("\r", " ").Replace("\n", " "); if (Set(ref about, value.Length > 140 ? value.Substring(0, 140) : value)) Update(); } }
         public string PlayTimes { get => playTimes; set { if (Set(ref playTimes, (value ?? "").Length > 40 ? value.Substring(0, 40) : value ?? "")) Update(); } }
         public string AboutCounter => about.Length + " / 140";
-        public Brush AboutCounterBrush => about.Length >= 130 ? Avatar.Res("Gold") : Avatar.Res("TextDim");
+        public Brush AboutCounterBrush => about.Length >= 130 ? Avatar.Res("Brush.Warn") : Avatar.Res("Brush.Text.Secondary");
 
         public string MainChoice
         {

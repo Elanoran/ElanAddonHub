@@ -167,7 +167,7 @@ namespace ElansAddonHub.Lodge
         public void RaiseAll()
         {
             foreach (var n in new[] { nameof(About), nameof(AboutVisibility), nameof(PlayTimes), nameof(PlayTimesVisibility), nameof(CharsVisibility), nameof(NoteText),
-                nameof(NoteVisibility), nameof(Banner), nameof(NowVisibility), nameof(NowLine), nameof(NowClassLine), nameof(OnlineText), nameof(OnlineBrush), nameof(Name), nameof(LoginText), nameof(LoginVisibility), nameof(RoleLabel), nameof(FrameBrush), nameof(NameBrush) }) Raise(n);
+                nameof(NoteVisibility), nameof(LoadingVisibility), nameof(NoteShownVisibility), nameof(Banner), nameof(NowVisibility), nameof(NowLine), nameof(NowClassLine), nameof(OnlineText), nameof(OnlineBrush), nameof(Name), nameof(LoginText), nameof(LoginVisibility), nameof(RoleLabel), nameof(FrameBrush), nameof(NameBrush) }) Raise(n);
         }
 
         public string Name => Member.Display;
@@ -198,9 +198,13 @@ namespace ElansAddonHub.Lodge
         public Visibility CharsVisibility => Chars.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         public string NoteText => Loading && data == null ? "Loading profile..." : data != null && data.Restricted ? "This member keeps their profile to officers." : "";
         public Visibility NoteVisibility => NoteText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // while the server is asked for the rest, skeleton lines stand in for it (the text "Loading profile..." stays for readers / tests)
+        public bool IsLoadingProfile => Loading && data == null;
+        public Visibility LoadingVisibility => IsLoadingProfile ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility NoteShownVisibility => NoteText.Length > 0 && !IsLoadingProfile ? Visibility.Visible : Visibility.Collapsed;
 
         public string OnlineText => Member.Playing ? "Playing" : Member.Id > 0 && !Member.Offline ? Member.StatusLabelText : "Offline";
-        public Brush OnlineBrush => Member.Offline ? Avatar.Res("TextDim") : Member.StatusBrush;
+        public Brush OnlineBrush => Member.Offline ? Avatar.Res("Brush.Text.Secondary") : Member.StatusBrush;
 
         public Visibility NowVisibility => Member.Playing ? Visibility.Visible : Visibility.Collapsed;
         public string NowClassLine => Member.CardClassLine;

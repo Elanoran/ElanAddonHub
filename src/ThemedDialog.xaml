@@ -13,7 +13,7 @@
         <Grid Grid.Row="0">
           <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
           <Border x:Name="Badge" Width="40" Height="40" CornerRadius="20" VerticalAlignment="Top" Margin="0,0,16,0">
-            <TextBlock x:Name="Glyph" FontFamily="{StaticResource Font.Icons}" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <TextBlock x:Name="Glyph" FontFamily="{StaticResource Font.Icons}" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <StackPanel Grid.Column="1" VerticalAlignment="Center">
             <TextBlock x:Name="TitleText" Style="{StaticResource Text.Section}" TextWrapping="Wrap" />

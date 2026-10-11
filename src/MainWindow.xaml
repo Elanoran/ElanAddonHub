@@ -8,7 +8,7 @@
         WindowStyle="None" AllowsTransparency="True" Background="#01000000"
         ResizeMode="CanResize" WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI" UseLayoutRounding="True" SnapsToDevicePixels="True"
-        Foreground="{StaticResource Text}" TextOptions.TextFormattingMode="Display">
+        Foreground="{StaticResource Brush.Text.Primary}" TextOptions.TextFormattingMode="Display">
 
   <!-- resizable from the edges (the 14 px shadow margin is the grab area) -->
   <WindowChrome.WindowChrome>
@@ -58,44 +58,44 @@
       </Grid>
 
       <!-- navigation rail (Discord style): icon buttons with a pill on the edge, Settings pinned at the bottom -->
-      <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0" Background="#B30C0E10" CornerRadius="13,0,0,13" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,1,0">
+      <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0" Background="{StaticResource Brush.Rail}" CornerRadius="13,0,0,13" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,1,0">
         <DockPanel LastChildFill="False">
           <!-- empty drag strip level with the title bar; the paw sits at the bottom, between Settings and the version -->
           <Grid DockPanel.Dock="Top" Height="52" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown" />
-          <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,6">
+          <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,8">
             <RadioButton x:Name="TabSettings" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                          ToolTip="Settings  (Ctrl+,)" ToolTipService.Placement="Right" AutomationProperties.Name="Settings">
-              <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="20" />
+              <TextBlock Text="&#xE713;" FontFamily="{StaticResource Font.Icons}" FontSize="20" />
             </RadioButton>
             <Image x:Name="RailLogo" Source="Assets/hub.png" Width="22" Height="22" Margin="0,8,0,0" RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center" Cursor="Hand" ToolTipService.Placement="Right"
                    MouseLeftButtonDown="Logo_Down" MouseLeftButtonUp="Logo_Click" />
-            <TextBlock x:Name="RailVersion" HorizontalAlignment="Center" Margin="0,4,0,0" FontSize="10" Foreground="{StaticResource Brush.Text.Tertiary}"
+            <TextBlock x:Name="RailVersion" HorizontalAlignment="Center" Margin="0,4,0,0" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}"
                        Cursor="Hand" Background="Transparent" ToolTipService.Placement="Right" MouseLeftButtonUp="RailVersion_Click" />
           </StackPanel>
           <StackPanel DockPanel.Dock="Top" Margin="0,2,0,0">
-            <Grid Margin="0,0,0,6">
+            <Grid Margin="0,0,0,8">
               <RadioButton x:Name="TabAddons" Style="{StaticResource RailButton}" GroupName="tabs" IsChecked="True" Checked="Tab_Checked"
                            ToolTip="Addons  (Ctrl+1)" ToolTipService.Placement="Right" AutomationProperties.Name="Addons">
-                <TextBlock Text="&#xEA86;" FontFamily="{StaticResource Icons}" FontSize="20" />
+                <TextBlock Text="&#xEA86;" FontFamily="{StaticResource Font.Icons}" FontSize="20" />
               </RadioButton>
-              <Border x:Name="UpdateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,7,0" MinWidth="18" Height="18" CornerRadius="9" Padding="4,0"
-                      Background="{StaticResource Gold}" BorderBrush="{StaticResource Bg}" BorderThickness="2" IsHitTestVisible="False" Visibility="Collapsed">
-                <TextBlock x:Name="UpdateBadgeText" FontSize="10" FontWeight="Bold" Foreground="#111315" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />
+              <Border x:Name="UpdateBadge" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,8,0" MinWidth="20" Height="20" CornerRadius="10" Padding="4,0"
+                      Background="{StaticResource Brush.Warn}" BorderBrush="{StaticResource Brush.Bg}" BorderThickness="2" IsHitTestVisible="False" Visibility="Collapsed">
+                <TextBlock x:Name="UpdateBadgeText" Style="{StaticResource Text.Caption}" FontWeight="Bold" Foreground="{StaticResource Brush.OnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Border>
               <!-- unseen addon errors (Addon health): red, bottom right, next to the gold update count -->
-              <Border x:Name="HealthBadge" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,7,3" MinWidth="18" Height="18" CornerRadius="9" Padding="4,0"
-                      Background="{StaticResource Danger}" BorderBrush="{StaticResource Bg}" BorderThickness="2" IsHitTestVisible="False" Visibility="Collapsed">
-                <TextBlock x:Name="HealthBadgeText" FontSize="10" FontWeight="Bold" Foreground="#111315" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />
+              <Border x:Name="HealthBadge" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,4" MinWidth="20" Height="20" CornerRadius="10" Padding="4,0"
+                      Background="{StaticResource Brush.Danger}" BorderBrush="{StaticResource Brush.Bg}" BorderThickness="2" IsHitTestVisible="False" Visibility="Collapsed">
+                <TextBlock x:Name="HealthBadgeText" Style="{StaticResource Text.Caption}" FontWeight="Bold" Foreground="{StaticResource Brush.OnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Border>
             </Grid>
-            <Border Width="28" Height="2" CornerRadius="1" Background="{StaticResource Line}" Margin="0,0,0,6" />
+            <Border Width="28" Height="2" CornerRadius="1" Background="{StaticResource Brush.Divider}" Margin="0,0,0,8" />
             <Grid>
               <RadioButton x:Name="TabLodge" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                            ToolTip="Lodge  (Ctrl+2)" ToolTipService.Placement="Right" AutomationProperties.Name="Lodge">
-                <TextBlock Text="&#xE8BD;" FontFamily="{StaticResource Icons}" FontSize="20" />
+                <TextBlock Text="&#xE8BD;" FontFamily="{StaticResource Font.Icons}" FontSize="20" />
               </RadioButton>
-              <Border x:Name="UnreadDot" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,3,9,0" Width="16" Height="16" CornerRadius="8"
-                      Background="{StaticResource Danger}" BorderBrush="{StaticResource Bg}" BorderThickness="3" IsHitTestVisible="False" Visibility="Collapsed" />
+              <Border x:Name="UnreadDot" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,8,0" Width="16" Height="16" CornerRadius="8"
+                      Background="{StaticResource Brush.Danger}" BorderBrush="{StaticResource Brush.Bg}" BorderThickness="2" IsHitTestVisible="False" Visibility="Collapsed" />
             </Grid>
             <RadioButton x:Name="TabInventory" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                          ToolTip="Inventory - all your characters  (Ctrl+3)" ToolTipService.Placement="Right" AutomationProperties.Name="Inventory">
@@ -106,19 +106,19 @@
             </RadioButton>
             <RadioButton x:Name="TabBrowser" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                          ToolTip="Browser - wowhead and friends  (Ctrl+4)" ToolTipService.Placement="Right" AutomationProperties.Name="Browser">
-              <TextBlock Text="&#xE774;" FontFamily="{StaticResource Icons}" FontSize="20" />
+              <TextBlock Text="&#xE774;" FontFamily="{StaticResource Font.Icons}" FontSize="20" />
             </RadioButton>
           </StackPanel>
         </DockPanel>
       </Border>
 
       <!-- hub self-update banner -->
-      <Border x:Name="HubBanner" Grid.Row="2" Grid.Column="1" Visibility="Collapsed" Margin="16,0,16,10" Padding="14,10"
-              Background="{StaticResource Surface}" CornerRadius="10" BorderBrush="{StaticResource Line}" BorderThickness="1">
+      <Border x:Name="HubBanner" Grid.Row="2" Grid.Column="1" Visibility="Collapsed" Margin="16,0,16,12" Padding="16,8"
+              Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
         <DockPanel>
-          <Button x:Name="HubUpdateButton" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Foreground="{StaticResource Accent}"
-                  FontWeight="SemiBold" Content="Restart &amp; update" Click="HubUpdate_Click" />
-          <TextBlock x:Name="HubBannerText" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap" />
+          <Button x:Name="HubUpdateButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Margin="12,0,0,0"
+                  Content="Restart &amp; update" Click="HubUpdate_Click" />
+          <TextBlock x:Name="HubBannerText" VerticalAlignment="Center" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" TextWrapping="Wrap" />
         </DockPanel>
       </Border>
 
@@ -138,17 +138,56 @@
             </Border>
             <TextBlock x:Name="CheckResult" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}" VerticalAlignment="Center" Margin="0,0,12,0" />
             <StackPanel x:Name="CheckChip" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0" Background="Transparent">
-              <TextBlock Text="&#xE121;" FontFamily="{StaticResource Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,1,4,0" />
+              <TextBlock Text="&#xE121;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,4,0" />
               <TextBlock x:Name="CheckChipText" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
             </StackPanel>
             <Button x:Name="CheckAllButton" Style="{StaticResource SecondaryButton}" Height="32" Width="32" Padding="0" Click="CheckAll_Click"
                     AutomationProperties.Name="Check for updates" ToolTip="Check for updates">
-              <TextBlock x:Name="CheckSpin" Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="14" RenderTransformOrigin="0.5,0.5">
+              <TextBlock x:Name="CheckSpin" Text="&#xE72C;" FontFamily="{StaticResource Font.Icons}" FontSize="16" RenderTransformOrigin="0.5,0.5">
                 <TextBlock.RenderTransform><RotateTransform x:Name="SpinRot" /></TextBlock.RenderTransform>
               </TextBlock>
             </Button>
           </StackPanel>
         </Grid>
+        <!-- skeleton cards while the first update check is running (nothing to list yet) -->
+        <StackPanel x:Name="CardsSkeleton" IsHitTestVisible="False">
+          <ContentControl Style="{StaticResource Card.Raised}">
+            <Grid Margin="16">
+              <StackPanel Orientation="Horizontal">
+                <local:Skeleton Width="80" Height="80" CornerRadius="{StaticResource Radius.ControlLg}" VerticalAlignment="Top" />
+                <StackPanel Margin="16,8,0,0">
+                  <local:Skeleton Height="16" Width="168" CornerRadius="8" />
+                  <local:Skeleton Height="12" Width="240" CornerRadius="6" Margin="0,8,0,0" />
+                  <local:Skeleton Height="12" Width="136" CornerRadius="6" Margin="0,12,0,0" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </ContentControl>
+          <ContentControl Style="{StaticResource Card.Raised}">
+            <Grid Margin="16">
+              <StackPanel Orientation="Horizontal">
+                <local:Skeleton Width="80" Height="80" CornerRadius="{StaticResource Radius.ControlLg}" VerticalAlignment="Top" />
+                <StackPanel Margin="16,8,0,0">
+                  <local:Skeleton Height="16" Width="136" CornerRadius="8" />
+                  <local:Skeleton Height="12" Width="208" CornerRadius="6" Margin="0,8,0,0" />
+                  <local:Skeleton Height="12" Width="120" CornerRadius="6" Margin="0,12,0,0" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </ContentControl>
+          <ContentControl Style="{StaticResource Card.Raised}">
+            <Grid Margin="16">
+              <StackPanel Orientation="Horizontal">
+                <local:Skeleton Width="80" Height="80" CornerRadius="{StaticResource Radius.ControlLg}" VerticalAlignment="Top" />
+                <StackPanel Margin="16,8,0,0">
+                  <local:Skeleton Height="16" Width="152" CornerRadius="8" />
+                  <local:Skeleton Height="12" Width="224" CornerRadius="6" Margin="0,8,0,0" />
+                  <local:Skeleton Height="12" Width="128" CornerRadius="6" Margin="0,12,0,0" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </ContentControl>
+        </StackPanel>
         <ItemsControl x:Name="Cards" Focusable="False">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
@@ -183,14 +222,14 @@
                         </DockPanel>
                       </Border>
                       <!-- versions + stats -->
-                      <StackPanel Margin="0,10,0,0">
+                      <StackPanel Margin="0,12,0,0">
                         <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" />
                         <ItemsControl ItemsSource="{Binding Stats}" Visibility="{Binding StatsVisibility}" Margin="0,4,0,0" Focusable="False">
                           <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                           <ItemsControl.ItemTemplate>
                             <DataTemplate>
                               <StackPanel Orientation="Horizontal" Margin="0,0,16,0" Background="Transparent" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}">
-                                <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,1,4,0" />
+                                <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Font.Icons}" FontSize="11" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,4,0" />
                                 <TextBlock Text="{Binding Text}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
                               </StackPanel>
                             </DataTemplate>
@@ -252,26 +291,26 @@
             <Button x:Name="LinkExactButton" DockPanel.Dock="Right" Style="{StaticResource Button.M}" Content="Link exact" Visibility="Collapsed" Click="LinkExact_Click" Margin="8,0,0,0" ToolTip="Link every addon whose folders match a WoWInterface file exactly" />
             <Button x:Name="CfOpenButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="32" Width="32" Padding="0" Margin="8,0,0,0"
                     Visibility="Collapsed" Click="OpenCf_Click" ToolTip="Open CurseForge" AutomationProperties.Name="Open CurseForge">
-              <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource Icons}" FontSize="14" />
+              <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource Font.Icons}" FontSize="16" />
             </Button>
             <Button x:Name="CfCheckButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Height="32" Width="32" Padding="0" Margin="8,0,0,0"
                     Visibility="Collapsed" Click="CheckCf_Click" AutomationProperties.Name="Check CurseForge now"
                     ToolTip="Check CurseForge now: lets the CurseForge app refresh its update info (started minimized if it isn't running, closed again afterwards)">
-              <TextBlock x:Name="CfSpin" Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="14" RenderTransformOrigin="0.5,0.5">
+              <TextBlock x:Name="CfSpin" Text="&#xE72C;" FontFamily="{StaticResource Font.Icons}" FontSize="16" RenderTransformOrigin="0.5,0.5">
                 <TextBlock.RenderTransform><RotateTransform x:Name="CfSpinRot" /></TextBlock.RenderTransform>
               </TextBlock>
             </Button>
-            <Border x:Name="CfChip" DockPanel.Dock="Right" Visibility="Collapsed" Background="Transparent" Padding="4,3" VerticalAlignment="Center" Margin="8,0,0,0"
+            <Border x:Name="CfChip" DockPanel.Dock="Right" Visibility="Collapsed" Background="Transparent" Padding="4" VerticalAlignment="Center" Margin="8,0,0,0"
                     ToolTipService.ShowDuration="30000">
               <StackPanel Orientation="Horizontal">
                 <Image x:Name="CfChipIcon" Width="14" Height="14" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,4,0" />
-                <TextBlock x:Name="CfChipGlyph" Text="&#xE121;" FontFamily="{StaticResource Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,1,4,0" />
+                <TextBlock x:Name="CfChipGlyph" Text="&#xE121;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,4,0" />
                 <TextBlock x:Name="CfChipText" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
               </StackPanel>
             </Border>
             <TextBlock x:Name="OtherTitle" Text="Other addons" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
             <Border x:Name="OtherInfo" Width="20" Height="20" CornerRadius="10" Margin="8,0,0,0" VerticalAlignment="Center" Background="Transparent" ToolTipService.ShowDuration="30000">
-              <TextBlock Text="&#xE946;" FontFamily="{StaticResource Icons}" FontSize="14" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <TextBlock Text="&#xE946;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
           </DockPanel>
           <ItemsControl x:Name="OtherCards" Focusable="False">
@@ -284,7 +323,7 @@
                       <DockPanel>
                         <TextBlock DockPanel.Dock="Right" Style="{StaticResource Text.Chevron}" local:Motion.Turn="{Binding Expanded}" Margin="12,0,0,0" />
                         <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Visibility="{Binding PillVisibility}" Click="OtherAction_Click" />
-                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" Padding="2,3" Margin="0,0,8,0" Background="Transparent"
+                        <Border DockPanel.Dock="Right" VerticalAlignment="Center" Padding="2,4" Margin="0,0,8,0" Background="Transparent"
                                 ToolTip="{Binding SourceTip}" AutomationProperties.Name="{Binding SourceTip}">
                           <Grid>
                             <Image Source="{Binding SourceImage}" Width="20" Height="20" Visibility="{Binding SourceImageVis}"
@@ -299,7 +338,7 @@
                         </Border>
                         <StackPanel Margin="12,0,8,0" VerticalAlignment="Center">
                           <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Secondary}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding SubtitleTip}" />
+                          <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding SubtitleTip}" />
                         </StackPanel>
                       </DockPanel>
                     </Border>

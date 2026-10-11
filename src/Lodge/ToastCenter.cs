@@ -44,11 +44,11 @@ namespace ElansAddonHub.Lodge
         public string Glyph => Kind == ToastKind.Mention ? "@" : Kind == ToastKind.Reply ? "" : Kind == ToastKind.Reaction ? ""
             : Kind == ToastKind.Pin ? "" : Kind == ToastKind.Update ? "" : "";
         public bool GlyphIsText => Kind == ToastKind.Mention;
-        public Brush Color => Who != null ? Who.Color : Avatar.Frozen("#ABD473");
+        public Brush Color => Who != null ? Who.Color : Avatar.Res("Brush.Accent");
         public Brush IconBrush => Who?.IconBrush;
         public Visibility InitialVisibility => IconBrush != null ? Visibility.Collapsed : Visibility.Visible;
         public string Initial => Who != null ? Who.Initial : Kind == ToastKind.Summary || Kind == ToastKind.Health ? "!" : Avatar.Initial(Sender ?? "H");
-        public Brush NameBrush => Who != null ? Who.ClassBrushOrText : Avatar.Res("Text");
+        public Brush NameBrush => Who != null ? Who.ClassBrushOrText : Avatar.Res("Brush.Text.Primary");
         // the personal avatar and class badge come from the member (the hub's own toasts have none)
         public System.Windows.Media.ImageSource AvatarImage => Who?.AvatarImage;
         public Visibility PersonalVisibility => Who?.PersonalVisibility ?? Visibility.Collapsed;

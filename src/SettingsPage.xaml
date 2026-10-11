@@ -281,11 +281,11 @@
 
               <TextBlock Text="Avatar" Style="{StaticResource Head}" />
               <ContentControl Style="{StaticResource Card.Group}">
-                <ItemsControl ItemsSource="{Binding Avatars}" Margin="13">
+                <ItemsControl ItemsSource="{Binding Avatars}" Margin="12">
                   <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Border x:Name="ring" Width="64" Height="64" CornerRadius="32" BorderThickness="3" BorderBrush="{Binding RingBrush}" Margin="3" Cursor="Hand"
+                      <Border x:Name="ring" Width="64" Height="64" CornerRadius="32" BorderThickness="3" BorderBrush="{Binding RingBrush}" Margin="4" Cursor="Hand"
                               Background="Transparent" Tag="{Binding}" ToolTip="{Binding Name}" MouseLeftButtonUp="Avatar_Click">
                         <Grid Margin="2">
                           <Image Source="{Binding Image}" Visibility="{Binding ImageVisibility}" RenderOptions.BitmapScalingMode="HighQuality" />
@@ -304,7 +304,7 @@
 
               <TextBlock Text="Accent colour" Style="{StaticResource Head}" />
               <ContentControl Style="{StaticResource Card.Group}">
-                <ItemsControl ItemsSource="{Binding Swatches}" Margin="16,13">
+                <ItemsControl ItemsSource="{Binding Swatches}" Margin="16,12">
                   <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -313,7 +313,7 @@
                         <Grid>
                           <Ellipse Margin="4" Fill="{Binding Fill}" />
                           <Ellipse Margin="4" Stroke="{StaticResource Brush.Text.Secondary}" StrokeThickness="1.5" StrokeDashArray="2 2" Visibility="{Binding NoneVisibility}" />
-                          <TextBlock Text="&#xE711;" FontFamily="{StaticResource Font.Icons}" FontSize="10" Foreground="{StaticResource Brush.Text.Secondary}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                          <TextBlock Text="&#xE711;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}" HorizontalAlignment="Center" VerticalAlignment="Center"
                                      Visibility="{Binding NoneVisibility}" />
                         </Grid>
                       </Border>
@@ -713,7 +713,7 @@
                         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="12" Content="&#xE74D;"
                                 Foreground="{StaticResource Brush.Danger}" Tag="{Binding Id}" Click="RemoveChannel_Click" ToolTip="Remove channel" />
                         <TextBlock DockPanel.Dock="Right" Text="{Binding Info}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBlock Text="{Binding Glyph}" FontFamily="{Binding GlyphFont}" FontSize="14" Foreground="{StaticResource Brush.Text.Tertiary}" Width="24" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Glyph}" FontFamily="{Binding GlyphFont}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" Width="24" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Body}" VerticalAlignment="Center" />
                       </DockPanel>
                     </Border>

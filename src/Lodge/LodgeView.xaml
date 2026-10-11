@@ -4,73 +4,75 @@
              xmlns:local="clr-namespace:ElansAddonHub.Lodge"
              xmlns:app="clr-namespace:ElansAddonHub"
              AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver" PreviewKeyDown="View_PreviewKeyDown">
+  <!-- The Lodge follows DESIGN.md: a page panel (Scrim) holding the sidebar (calm rows, like the Settings nav) and the chat (a Surface1 card);
+       Text.* styles, the 4-pt scale, no outlines (fill, elevation, hairlines), accent only for selection / the one action, status colours only for status. -->
   <UserControl.Resources>
     <!-- small round avatar (personal picture or class colour, class badge in game) with role ring, speaking ring and status dot -->
     <DataTemplate x:Key="AvatarSmall">
-      <local:AvatarView Width="22" Height="22" Decor="True" />
+      <local:AvatarView Width="24" Height="24" Decor="True" />
+    </DataTemplate>
+    <DataTemplate x:Key="AvatarMe">
+      <local:AvatarView Width="32" Height="32" Decor="True" />
     </DataTemplate>
     <DataTemplate x:Key="AvatarCard">
-      <local:AvatarView Width="36" Height="36" />
+      <local:AvatarView Width="40" Height="40" />
     </DataTemplate>
 
-    <!-- the hover card of a person: avatar, name, rank / level, place, state, status, voice - a few short lines -->
+    <!-- the hover card of a person: avatar, name, rank / level, place, state, status, voice - a few short lines (the name is the one semibold) -->
     <DataTemplate x:Key="MemberCard">
-      <StackPanel MinWidth="210" MaxWidth="300">
+      <StackPanel MinWidth="216" MaxWidth="304">
         <DockPanel>
-          <Border DockPanel.Dock="Right" CornerRadius="4" Padding="5,1" Margin="12,0,0,0" Background="{Binding FrameBrush}" VerticalAlignment="Center">
-            <TextBlock Text="{Binding RoleLabel}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Brush.OnAccent}" />
+          <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Padding="8,0" Margin="12,0,0,0" Background="{Binding FrameBrush}" VerticalAlignment="Center">
+            <TextBlock Text="{Binding RoleLabel}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.OnAccent}" VerticalAlignment="Center" />
           </Border>
-          <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarCard}" VerticalAlignment="Center" Margin="2,0,10,0" />
-          <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{Binding ClassBrushOrText}"
-                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis"><Run Text="{Binding CardNameText, Mode=OneWay}" /><Run Text="{Binding LoginText, Mode=OneWay}" FontWeight="Normal" FontSize="12" Foreground="{StaticResource TextDim}" /></TextBlock>
+          <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarCard}" VerticalAlignment="Center" Margin="0,0,12,0" />
+          <TextBlock Style="{StaticResource Text.RowTitle}" Foreground="{Binding ClassBrushOrText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"><Run Text="{Binding CardNameText, Mode=OneWay}" /><Run Text="{Binding LoginText, Mode=OneWay}" FontWeight="Normal" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}" /></TextBlock>
         </DockPanel>
-        <TextBlock Text="{Binding CardClassLine}" Visibility="{Binding CardClassVisibility}" FontSize="12" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
-        <StackPanel Orientation="Horizontal" Visibility="{Binding CardStateVisibility}" Margin="0,3,0,0">
-          <Image Source="{Binding StateIcon}" Width="13" Height="13" Margin="0,0,5,0" Visibility="{Binding StateIconVisibility}" VerticalAlignment="Center" />
-          <TextBlock Text="&#xE708;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Brush.Warn}" Margin="0,0,5,0" VerticalAlignment="Center"
+        <TextBlock Text="{Binding CardClassLine}" Visibility="{Binding CardClassVisibility}" Style="{StaticResource Text.Secondary}" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
+        <StackPanel Orientation="Horizontal" Visibility="{Binding CardStateVisibility}" Margin="0,4,0,0">
+          <Image Source="{Binding StateIcon}" Width="12" Height="12" Margin="0,0,4,0" Visibility="{Binding StateIconVisibility}" VerticalAlignment="Center" />
+          <TextBlock Text="&#xE708;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Warn}" Margin="0,0,4,0" VerticalAlignment="Center"
                      Visibility="{Binding AfkVisibility}" />
-          <TextBlock Text="{Binding StateText}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding StateText}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" />
         </StackPanel>
-        <TextBlock Text="{Binding CardPlaceLine}" Visibility="{Binding CardPlaceVisibility}" FontSize="12" Foreground="{StaticResource TextDim}"
-                   Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
-        <TextBlock Text="{Binding CardStatusLine}" Visibility="{Binding CardStatusVisibility}" FontSize="11" Foreground="{StaticResource TextDim}"
-                   Opacity="0.8" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
-        <StackPanel Orientation="Horizontal" Visibility="{Binding CardVoiceVisibility}" Margin="0,6,0,0">
-          <TextBlock Text="{Binding StateGlyph}" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{Binding StateBrush}" Margin="0,0,6,0" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding CardVoiceLine}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
+        <TextBlock Text="{Binding CardPlaceLine}" Visibility="{Binding CardPlaceVisibility}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding CardStatusLine}" Visibility="{Binding CardStatusVisibility}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+        <StackPanel Orientation="Horizontal" Visibility="{Binding CardVoiceVisibility}" Margin="0,8,0,0">
+          <TextBlock Text="{Binding StateGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{Binding StateBrush}" Margin="0,0,4,0" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding CardVoiceLine}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
         </StackPanel>
       </StackPanel>
     </DataTemplate>
 
-    <!-- a person row in the sidebar (voice rooms and online list): name, a dim second line (place / XP / note), small state icons -->
+    <!-- a person row in the sidebar (voice rooms and online list): name, a quiet second line (place / XP / note), small state icons -->
     <DataTemplate x:Key="PersonRow">
-      <Border Background="Transparent" Padding="6,4" CornerRadius="6" Cursor="Hand" Tag="{Binding}"
-              MouseLeftButtonUp="Member_Click" MouseRightButtonUp="Member_Click">
-        <Border.ToolTip>
+      <ContentControl Style="{StaticResource Side.Row}" Tag="{Binding}" MouseLeftButtonUp="Member_Click" MouseRightButtonUp="Member_Click">
+        <ContentControl.ToolTip>
           <ToolTip Style="{StaticResource CardTip}" ContentTemplate="{StaticResource MemberCard}" Content="{Binding}" />
-        </Border.ToolTip>
+        </ContentControl.ToolTip>
         <DockPanel>
-          <TextBlock DockPanel.Dock="Right" Text="{Binding StateGlyph}" FontFamily="{StaticResource Icons}" FontSize="11"
+          <TextBlock DockPanel.Dock="Right" Text="{Binding StateGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="12"
                      Foreground="{Binding StateBrush}" VerticalAlignment="Center" Visibility="{Binding StateVisibility}" />
           <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Center" />
-          <TextBlock DockPanel.Dock="Right" Text="&#xE7FC;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Accent}"
-                     VerticalAlignment="Center" Margin="0,0,6,0" Visibility="{Binding PlayingVisibility}" />
-          <TextBlock DockPanel.Dock="Right" Text="{Binding GameLine}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding ClassBrush}"
-                     VerticalAlignment="Center" Margin="0,0,6,0" Visibility="{Binding GameVisibility}" />
-          <Image DockPanel.Dock="Right" Source="{Binding StateIcon}" Width="13" Height="13" Margin="0,0,5,0" VerticalAlignment="Center" Visibility="{Binding StateIconVisibility}" />
-          <TextBlock DockPanel.Dock="Right" Text="&#xE708;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Brush.Warn}" Margin="0,0,5,0"
+          <TextBlock DockPanel.Dock="Right" Text="&#xE7FC;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}"
+                     VerticalAlignment="Center" Margin="0,0,4,0" Visibility="{Binding PlayingVisibility}" />
+          <TextBlock DockPanel.Dock="Right" Text="{Binding GameLine}" Style="{StaticResource Text.Caption}" Foreground="{Binding ClassBrush}"
+                     VerticalAlignment="Center" Margin="0,0,4,0" Visibility="{Binding GameVisibility}" />
+          <Image DockPanel.Dock="Right" Source="{Binding StateIcon}" Width="12" Height="12" Margin="0,0,4,0" VerticalAlignment="Center" Visibility="{Binding StateIconVisibility}" />
+          <TextBlock DockPanel.Dock="Right" Text="&#xE708;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Warn}" Margin="0,0,4,0"
                      VerticalAlignment="Center" Visibility="{Binding AfkVisibility}" />
-          <StackPanel Margin="10,0,6,0" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Display}" FontSize="13" Opacity="{Binding NameOpacity}" Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="{Binding SecondLine}" Visibility="{Binding SecondVisibility}" FontSize="11" Foreground="{StaticResource TextDim}"
-                       Opacity="{Binding NameOpacity}" TextTrimming="CharacterEllipsis" Margin="0,-1,0,0" />
+          <StackPanel Margin="8,0,4,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Display}" Style="{StaticResource Text.Body}" Opacity="{Binding NameOpacity}" Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding SecondLine}" Visibility="{Binding SecondVisibility}" Style="{StaticResource Text.Caption}"
+                       Opacity="{Binding NameOpacity}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </DockPanel>
-      </Border>
+      </ContentControl>
     </DataTemplate>
-    <!-- search results: a channel header (quiet caption + count) and its hits: author, time, the snippet with the match picked out -->
+
+    <!-- search results: a channel header (quiet caption + count) and its hits: author, time, the snippet with the match picked out (the row's one semibold) -->
     <DataTemplate x:Key="SearchHit">
-      <Border x:Name="hit" Background="Transparent" CornerRadius="8" Padding="8,6" Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="SearchHit_Click" Margin="0,0,0,2">
+      <ContentControl Style="{StaticResource Side.Row}" Padding="8,8" Tag="{Binding}" MouseLeftButtonUp="SearchHit_Click" Margin="0,0,0,2">
         <StackPanel>
           <DockPanel>
             <TextBlock Text="{Binding Time}" DockPanel.Dock="Right" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" Margin="8,0,0,0" />
@@ -78,12 +80,7 @@
           </DockPanel>
           <TextBlock Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" TextWrapping="Wrap" MaxHeight="34" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"><Run Text="{Binding Before, Mode=OneWay}" /><Run Text="{Binding Match, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="{Binding After, Mode=OneWay}" /></TextBlock>
         </StackPanel>
-      </Border>
-      <DataTemplate.Triggers>
-        <Trigger SourceName="hit" Property="IsMouseOver" Value="True">
-          <Setter TargetName="hit" Property="Background" Value="{StaticResource Brush.Overlay.Hover}" />
-        </Trigger>
-      </DataTemplate.Triggers>
+      </ContentControl>
     </DataTemplate>
     <DataTemplate x:Key="SearchGroup">
       <StackPanel Margin="0,8,0,0">
@@ -95,13 +92,13 @@
       </StackPanel>
     </DataTemplate>
 
-    <!-- an item chip: icon (or a quiet tile), the name in its quality colour; click = Wowhead Classic -->
+    <!-- an item chip: 24 high pill, icon (or a quiet tile), the name in its quality colour; click = Wowhead Classic -->
     <DataTemplate x:Key="ItemChip">
-      <Border x:Name="chip" Height="24" CornerRadius="12" Background="{StaticResource Brush.Overlay.Chip}" Padding="3,0,10,0" Margin="0,0,6,4" Cursor="Hand"
+      <Border x:Name="chip" Style="{StaticResource Chip}" Padding="4,0,8,0" Margin="0,0,4,4" Cursor="Hand"
               Tag="{Binding}" MouseLeftButtonUp="ItemChip_Click">
         <Border.ToolTip>
           <ToolTip>
-            <StackPanel MaxWidth="260">
+            <StackPanel MaxWidth="264">
               <TextBlock Text="{Binding TipTitle}" Foreground="{Binding NameBrush}" Style="{StaticResource Text.RowTitle}" TextWrapping="Wrap" />
               <TextBlock Text="{Binding TipLine}" Style="{StaticResource Text.Caption}" Margin="0,2,0,0" />
               <TextBlock Text="{Binding TipHint}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" />
@@ -109,15 +106,15 @@
           </ToolTip>
         </Border.ToolTip>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <Grid Width="18" Height="18">
-            <Border Visibility="{Binding IconVisibility}" CornerRadius="4" ClipToBounds="True">
+          <Grid Width="16" Height="16">
+            <Border Visibility="{Binding IconVisibility}" CornerRadius="8" ClipToBounds="True">
               <Image Source="{Binding Icon}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" />
             </Border>
-            <Border Visibility="{Binding TileVisibility}" CornerRadius="4" Background="{StaticResource Brush.Surface3}">
-              <TextBlock Text="&#xE719;" FontFamily="{StaticResource Icons}" FontSize="10" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Border Visibility="{Binding TileVisibility}" CornerRadius="8" Background="{StaticResource Brush.Surface3}">
+              <TextBlock Text="&#xE719;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
           </Grid>
-          <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="260" />
+          <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" Style="{StaticResource Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="264" />
         </StackPanel>
       </Border>
       <DataTemplate.Triggers>
@@ -129,26 +126,26 @@
 
     <!-- one entry of a sign-up card's role row: who signed up (avatar + name in class colour), or an open place -->
     <DataTemplate x:Key="LfgSlot">
-      <Grid Margin="0,0,6,4">
-        <Border Visibility="{Binding FilledVisibility}" Height="24" CornerRadius="12" Background="{StaticResource Brush.Overlay.Chip}" Padding="3,0,10,0">
+      <Grid Margin="0,0,4,4">
+        <Border Visibility="{Binding FilledVisibility}" Style="{StaticResource Chip}" Padding="4,0,8,0">
           <Border.ToolTip>
             <ToolTip Style="{StaticResource CardTip}" ContentTemplate="{StaticResource MemberCard}" Content="{Binding Member}" />
           </Border.ToolTip>
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-            <local:AvatarView Width="18" Height="18" DataContext="{Binding Member}" />
-            <TextBlock Text="{Binding Shown}" Foreground="{Binding NameBrush}" Style="{StaticResource Text.Secondary}" Margin="6,0,0,0" VerticalAlignment="Center" />
+            <local:AvatarView Width="16" Height="16" DataContext="{Binding Member}" />
+            <TextBlock Text="{Binding Shown}" Foreground="{Binding NameBrush}" Style="{StaticResource Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
           </StackPanel>
         </Border>
         <Border Visibility="{Binding OpenVisibility}" Width="24" Height="24" CornerRadius="12" Background="{StaticResource Brush.Overlay.Hover}" ToolTip="Open place">
-          <TextBlock Text="&#xE710;" FontFamily="{StaticResource Icons}" FontSize="10" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <TextBlock Text="&#xE710;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
       </Grid>
     </DataTemplate>
 
     <DataTemplate x:Key="LfgRole">
-      <Grid Margin="0,0,0,2" Visibility="{Binding RowVisibility}">
+      <Grid Margin="0,0,0,4" Visibility="{Binding RowVisibility}">
         <Grid.ColumnDefinitions><ColumnDefinition Width="72" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-        <StackPanel Margin="0,3,0,0">
+        <StackPanel Margin="0,4,0,0">
           <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Secondary}" />
           <TextBlock Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}"><Run Text="{Binding CountText, Mode=OneWay}" /></TextBlock>
           <TextBlock Text="{Binding MoreText}" Visibility="{Binding MoreVisibility}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" />
@@ -159,21 +156,21 @@
       </Grid>
     </DataTemplate>
 
-    <!-- the sign-up card in chat: instance, local time + countdown, the role slots filling up, buttons -->
+    <!-- the sign-up card in chat: instance, local time + countdown, the role slots filling up, buttons (the title is the one semibold) -->
     <DataTemplate x:Key="LfgCard">
-      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16" Width="440" HorizontalAlignment="Left" Margin="0,6,0,2" Opacity="{Binding CardOpacity}">
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Width="440" HorizontalAlignment="Left" Margin="0,8,0,4" Opacity="{Binding CardOpacity}">
         <StackPanel>
           <DockPanel>
-            <Border DockPanel.Dock="Right" Background="{Binding StatusFill}" CornerRadius="12" Padding="10,0" Height="24" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="{Binding StatusTip}">
-              <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" FontSize="12" VerticalAlignment="Center" />
+            <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="{Binding StatusTip}">
+              <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
             </Border>
-            <TextBlock Text="&#xE902;" FontFamily="{StaticResource Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Text="&#xE902;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
             <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
           </DockPanel>
           <TextBlock Text="{Binding WhenLine}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
-          <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,2,0,0" />
+          <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
           <ItemsControl ItemsSource="{Binding Roles}" ItemTemplate="{StaticResource LfgRole}" Margin="0,12,0,0" />
-          <Grid Visibility="{Binding MaybeVisibility}" Margin="0,2,0,0">
+          <Grid Visibility="{Binding MaybeVisibility}" Margin="0,4,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="72" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
             <TextBlock Text="Maybe" Style="{StaticResource Text.Secondary}" />
             <TextBlock Grid.Column="1" Text="{Binding MaybeNames}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" />
@@ -186,7 +183,7 @@
             <Button Content="Maybe" Style="{StaticResource Button.S}" Margin="0,0,8,8" Tag="{Binding}" Click="LfgMaybe_Click" IsEnabled="{Binding MaybeEnabled}" />
             <Button Content="Leave" Style="{StaticResource GhostButton}" Height="28" Margin="0,0,8,8" Tag="{Binding}" Click="LfgLeave_Click" Visibility="{Binding LeaveVisibility}" />
           </WrapPanel>
-          <StackPanel Orientation="Horizontal" Visibility="{Binding EndVisibility}" Margin="0,0,0,0">
+          <StackPanel Orientation="Horizontal" Visibility="{Binding EndVisibility}">
             <Button Content="Close the group" Style="{StaticResource GhostButton}" Height="28" Margin="0,0,8,0" Tag="{Binding}" Click="LfgClose_Click"
                     ToolTip="The group is set: nobody can sign up or leave any more" />
             <Button Content="Cancel it" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="LfgCancel_Click" ToolTip="Call it off" />
@@ -197,38 +194,36 @@
 
     <!-- a person who is playing WoW (the "In game" group): the character in class colour, "Lv 27 Hunter", the place, a dungeon / raid / group tag -->
     <DataTemplate x:Key="GamePersonRow">
-      <Border Background="Transparent" Padding="6,4" CornerRadius="6" Cursor="Hand" Tag="{Binding}"
-              MouseLeftButtonUp="Member_Click" MouseRightButtonUp="Member_Click">
-        <Border.ToolTip>
+      <ContentControl Style="{StaticResource Side.Row}" Tag="{Binding}" MouseLeftButtonUp="Member_Click" MouseRightButtonUp="Member_Click">
+        <ContentControl.ToolTip>
           <ToolTip Style="{StaticResource CardTip}" ContentTemplate="{StaticResource MemberCard}" Content="{Binding}" />
-        </Border.ToolTip>
+        </ContentControl.ToolTip>
         <DockPanel>
-          <Border DockPanel.Dock="Right" Background="{StaticResource Brush.Overlay.Chip}" CornerRadius="8" Padding="6,1" VerticalAlignment="Top" Margin="4,2,0,0"
+          <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Padding="8,0" VerticalAlignment="Top" Margin="4,0,0,0"
                   Visibility="{Binding InstanceTagVisibility}" ToolTip="{Binding InstanceTagTip}">
-            <TextBlock Text="{Binding InstanceTag}" Style="{StaticResource Text.Caption}" />
+            <TextBlock Text="{Binding InstanceTag}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
           </Border>
-          <TextBlock DockPanel.Dock="Right" Text="{Binding StateGlyph}" FontFamily="{StaticResource Icons}" FontSize="11"
-                     Foreground="{Binding StateBrush}" VerticalAlignment="Top" Margin="4,3,0,0" Visibility="{Binding StateVisibility}" />
-          <Image DockPanel.Dock="Right" Source="{Binding StateIcon}" Width="13" Height="13" Margin="4,3,0,0" VerticalAlignment="Top" Visibility="{Binding StateIconVisibility}" />
-          <TextBlock DockPanel.Dock="Right" Text="&#xE708;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Brush.Warn}" Margin="4,3,0,0"
+          <TextBlock DockPanel.Dock="Right" Text="{Binding StateGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="12"
+                     Foreground="{Binding StateBrush}" VerticalAlignment="Top" Margin="4,2,0,0" Visibility="{Binding StateVisibility}" />
+          <Image DockPanel.Dock="Right" Source="{Binding StateIcon}" Width="12" Height="12" Margin="4,2,0,0" VerticalAlignment="Top" Visibility="{Binding StateIconVisibility}" />
+          <TextBlock DockPanel.Dock="Right" Text="&#xE708;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Warn}" Margin="4,2,0,0"
                      VerticalAlignment="Top" Visibility="{Binding AfkVisibility}" />
           <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Top" Margin="0,2,0,0" />
-          <StackPanel Margin="10,0,6,0" VerticalAlignment="Center">
-            <TextBlock FontSize="13" Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis"><Run Text="{Binding CharName, Mode=OneWay}" /><Run Text="{Binding CharOwnerText, Mode=OneWay}" Foreground="{StaticResource Brush.Text.Secondary}" FontSize="11" /></TextBlock>
+          <StackPanel Margin="8,0,4,0" VerticalAlignment="Center">
+            <TextBlock Style="{StaticResource Text.Body}" Foreground="{Binding ClassBrushOrText}" TextTrimming="CharacterEllipsis"><Run Text="{Binding CharName, Mode=OneWay}" /><Run Text="{Binding CharOwnerText, Mode=OneWay}" Foreground="{StaticResource Brush.Text.Secondary}" FontSize="11" /></TextBlock>
             <TextBlock Text="{Binding InGameClassLine}" Visibility="{Binding InGameClassVisibility}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
             <TextBlock Text="{Binding ZoneLine}" Visibility="{Binding ZoneVisibility}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </DockPanel>
-      </Border>
+      </ContentControl>
     </DataTemplate>
 
     <!-- one group of the online list: a quiet collapsible header (Text.Caption + count), then its people -->
     <DataTemplate x:Key="MemberGroupTemplate">
       <StackPanel Margin="0,8,0,0">
-        <Border x:Name="hd" Background="Transparent" CornerRadius="6" Padding="8,3" Cursor="Hand" Tag="{Binding}" ToolTip="{Binding Tip}"
-                MouseLeftButtonUp="GroupHeader_Click">
+        <ContentControl Style="{StaticResource Side.Row}" Tag="{Binding}" ToolTip="{Binding Tip}" MouseLeftButtonUp="GroupHeader_Click">
           <DockPanel>
-            <TextBlock DockPanel.Dock="Left" FontSize="9" Margin="0,0,6,0" RenderTransformOrigin="0.5,0.5">
+            <TextBlock DockPanel.Dock="Left" Margin="0,0,4,0" RenderTransformOrigin="0.5,0.5">
               <TextBlock.Style>
                 <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Chevron}">
                   <Style.Triggers>
@@ -242,7 +237,7 @@
             <TextBlock Text="{Binding Count}" DockPanel.Dock="Right" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" />
             <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Caption}" />
           </DockPanel>
-        </Border>
+        </ContentControl>
         <Border app:Motion.Expand="{Binding Expanded}" Visibility="Collapsed" Opacity="{Binding ListOpacity}">
           <ItemsControl ItemsSource="{Binding Members}">
             <ItemsControl.Style>
@@ -258,33 +253,33 @@
           </ItemsControl>
         </Border>
       </StackPanel>
-      <DataTemplate.Triggers>
-        <Trigger SourceName="hd" Property="IsMouseOver" Value="True">
-          <Setter TargetName="hd" Property="Background" Value="{StaticResource Brush.Overlay.Hover}" />
-        </Trigger>
-      </DataTemplate.Triggers>
     </DataTemplate>
-    <!-- sidebar section headers (TEXT CHANNELS / VOICE ROOMS / ONLINE): gold-tinted (green clashed with the selected row and class colours) so the sections stand apart -->
-    <Style x:Key="SectionHeader" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
-      <Setter Property="Foreground" Value="{StaticResource Gold}" />
-      <Setter Property="Opacity" Value="0.8" />
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="FontWeight" Value="Bold" />
+
+    <!-- sidebar section headers (Text channels / Voice rooms): quiet Text.Caption, no colour, no bold, no capitals -->
+    <Style x:Key="SectionHeader" TargetType="TextBlock" BasedOn="{StaticResource Text.Caption}" />
+
+    <!-- a popover card (search, menus, status, profile card): Surface3 + hairline + Elevation.2; the 24 px margin holds the shadow, popups give the offset back -->
+    <Style x:Key="PopupCard" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource Brush.Surface3}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Brush.Divider}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource Radius.Card}" />
+      <Setter Property="Margin" Value="24" />
+      <Setter Property="Effect" Value="{StaticResource Elevation.2}" />
     </Style>
   </UserControl.Resources>
 
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
     <!-- ===================== server update note (owner / officers only, dismissible) ===================== -->
-    <Border x:Name="ServerNotice" Grid.Row="0" Visibility="Collapsed" Margin="16,2,12,6" Padding="14,9" Background="{StaticResource Card}" CornerRadius="10"
-            BorderBrush="{StaticResource Gold}" BorderThickness="1">
+    <Border x:Name="ServerNotice" Grid.Row="0" Visibility="Collapsed" Margin="16,4,12,8" Padding="12,8" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}">
       <DockPanel>
-        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="26" Height="26" FontSize="11" Content="&#xE711;" Margin="6,0,0,0" Click="ServerNoticeClose_Click"
+        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE711;" Margin="8,0,0,0" Click="ServerNoticeClose_Click"
                 ToolTip="Dismiss (until the next Lodge server version)" AutomationProperties.Name="Dismiss" />
-        <Button x:Name="ServerNoticeCopy" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="Copy command" Height="28" Padding="12,0" FontSize="12" Click="ServerNoticeCopy_Click"
+        <Button x:Name="ServerNoticeCopy" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Copy command" Click="ServerNoticeCopy_Click"
                 ToolTip="Copies: sudo lodge-update" />
-        <TextBlock Text="&#xE946;" FontFamily="{StaticResource Icons}" FontSize="15" Foreground="{StaticResource Gold}" VerticalAlignment="Center" Margin="0,0,10,0" />
-        <TextBlock x:Name="ServerNoticeText" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0" />
+        <TextBlock Text="&#xE946;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Info}" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBlock x:Name="ServerNoticeText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
       </DockPanel>
     </Border>
     <!-- ===================== "Upgrade this device": a quiet one-time offer to someone still signing in with a permanent code ===================== -->
@@ -327,15 +322,16 @@
       </Border>
     </ScrollViewer>
 
-    <!-- ===================== lodge ===================== -->
-    <Grid x:Name="ChatPanel" Grid.Row="1" Visibility="Collapsed" Margin="14,2,12,10">
+    <!-- ===================== lodge: the page panel (DESIGN 4) holds the sidebar and the chat card ===================== -->
+    <Border x:Name="ChatPanel" Grid.Row="1" Visibility="Collapsed" Margin="16,4,12,12" Padding="16" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}">
+    <Grid>
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="228" />
+        <ColumnDefinition Width="240" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
 
-      <!-- ===== sidebar ===== -->
-      <Border x:Name="SidebarBox" Grid.Column="0" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,8,0">
+      <!-- ===== sidebar: on the panel, no card of its own (like the Settings nav and the Bags character list) ===== -->
+      <Border x:Name="SidebarBox" Grid.Column="0" Margin="0,0,16,0">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -344,74 +340,71 @@
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
 
-          <StackPanel Grid.Row="0" Margin="14,12,10,6">
+          <StackPanel Grid.Row="0" Margin="12,0,12,8">
             <StackPanel Orientation="Horizontal">
-              <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource TextDim}" VerticalAlignment="Center" Margin="0,1,7,0" />
-              <TextBlock x:Name="LodgeTitle" Text="Lodge" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+              <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource Brush.Text.Secondary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <TextBlock x:Name="LodgeTitle" Text="Lodge" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-            <TextBlock x:Name="StatusText" FontSize="11" Foreground="{StaticResource TextDim}" Margin="15,1,0,0" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="StatusText" Style="{StaticResource Text.Caption}" Margin="16,0,0,0" TextTrimming="CharacterEllipsis" />
           </StackPanel>
 
-          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="6,0,4,6">
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0" app:Motion.EdgeFade="True">
             <StackPanel>
-              <TextBlock Text="TEXT CHANNELS" Style="{StaticResource SectionHeader}" Margin="8,6,0,4" />
+              <!-- skeleton rows while the lodge connects (until the welcome frame names the channels) -->
+              <StackPanel x:Name="SidebarSkeleton" Margin="0,8,8,0" Visibility="Collapsed">
+                <app:Skeleton Height="12" Width="72" CornerRadius="6" HorizontalAlignment="Left" Margin="12,0,0,12" />
+                <app:Skeleton Height="12" Width="132" CornerRadius="6" HorizontalAlignment="Left" Margin="12,0,0,16" />
+                <app:Skeleton Height="12" Width="96" CornerRadius="6" HorizontalAlignment="Left" Margin="12,0,0,16" />
+                <app:Skeleton Height="12" Width="72" CornerRadius="6" HorizontalAlignment="Left" Margin="12,12,0,12" />
+                <app:Skeleton Height="12" Width="120" CornerRadius="6" HorizontalAlignment="Left" Margin="12,0,0,0" />
+              </StackPanel>
+              <TextBlock x:Name="TextHeader" Text="Text channels" Style="{StaticResource SectionHeader}" Margin="12,8,0,4" />
               <ItemsControl x:Name="TextList">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <Border Background="{Binding RowBrush}" CornerRadius="6" Padding="8,5" Margin="0,1" Cursor="Hand" Tag="{Binding}"
-                            MouseLeftButtonUp="Channel_Click" x:Name="row">
+                    <ContentControl Style="{StaticResource Side.Row}" Background="{Binding RowBrush}" Padding="12,0" MinHeight="36" Margin="0,0,0,2" Tag="{Binding}"
+                                    MouseLeftButtonUp="Channel_Click">
                       <DockPanel>
                         <!-- @ badge: someone mentioned me here -->
-                        <Border DockPanel.Dock="Right" Background="{StaticResource Brush.Accent}" CornerRadius="8" Padding="6,0" MinWidth="18"
+                        <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{StaticResource Brush.Accent}" Padding="8,0" MinWidth="24"
                                 Visibility="{Binding MentionVisibility}" VerticalAlignment="Center" ToolTip="You were mentioned">
-                          <TextBlock Text="{Binding MentionText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Brush.OnAccent}" HorizontalAlignment="Center" />
+                          <TextBlock Text="{Binding MentionText}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.OnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <!-- unread count -->
-                        <Border DockPanel.Dock="Right" Background="{StaticResource Brush.Overlay.Chip}" CornerRadius="8" Padding="6,0" MinWidth="18"
+                        <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Padding="8,0" MinWidth="24"
                                 Visibility="{Binding UnreadVisibility}" VerticalAlignment="Center" ToolTip="Unread messages">
-                          <TextBlock Text="{Binding UnreadText}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Text}" HorizontalAlignment="Center" />
+                          <TextBlock Text="{Binding UnreadText}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
-                        <TextBlock Text="#" FontSize="15" Foreground="{StaticResource TextDim}" Margin="0,-2,7,0" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding LockText}" DockPanel.Dock="Right" FontSize="11" Foreground="{StaticResource TextDim}"
+                        <TextBlock Text="#" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding LockText}" DockPanel.Dock="Right" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}"
                                    VerticalAlignment="Center" Margin="4,0,4,0" Visibility="{Binding LockVisibility}" />
-                        <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" FontWeight="{Binding NameWeight}" FontSize="13"
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Body}" Foreground="{Binding NameBrush}" FontWeight="{Binding NameWeight}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                       </DockPanel>
-                    </Border>
-                    <DataTemplate.Triggers>
-                      <Trigger SourceName="row" Property="IsMouseOver" Value="True">
-                        <Setter TargetName="row" Property="Background" Value="{StaticResource SurfaceHi}" />
-                      </Trigger>
-                    </DataTemplate.Triggers>
+                    </ContentControl>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
 
-              <TextBlock Text="VOICE ROOMS" Style="{StaticResource SectionHeader}" Margin="8,14,0,4" />
+              <TextBlock x:Name="VoiceHeader" Text="Voice rooms" Style="{StaticResource SectionHeader}" Margin="12,16,0,4" />
               <ItemsControl x:Name="RoomList">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
                     <StackPanel>
-                      <Border CornerRadius="6" Padding="8,5" Margin="0,1" Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="Room_Click"
-                              x:Name="row" Background="Transparent" ToolTip="Click to join">
+                      <ContentControl Style="{StaticResource Side.Row}" Padding="12,0" MinHeight="36" Margin="0,0,0,2" Tag="{Binding}" MouseLeftButtonUp="Room_Click" ToolTip="Click to join">
                         <DockPanel>
-                          <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" FontSize="11" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" ToolTip="{Binding CountTip}" />
-                          <TextBlock DockPanel.Dock="Right" Text="{Binding LockText}" FontSize="11" Foreground="{StaticResource TextDim}"
-                                     VerticalAlignment="Center" Margin="4,0,6,0" Visibility="{Binding LockVisibility}" />
-                          <TextBlock Text="&#xE767;" FontFamily="{StaticResource Icons}" FontSize="12" Foreground="{StaticResource TextDim}"
-                                     Margin="0,0,8,0" VerticalAlignment="Center" />
-                          <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" ToolTip="{Binding CountTip}" />
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding LockText}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}"
+                                     VerticalAlignment="Center" Margin="4,0,8,0" Visibility="{Binding LockVisibility}" />
+                          <TextBlock Text="&#xE767;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16"
+                                     Margin="0,0,0,0" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Body}" Foreground="{Binding NameBrush}" Margin="4,0,0,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         </DockPanel>
-                      </Border>
-                      <TextBlock Text="Joining voice shows you in the room" FontSize="11" Foreground="{StaticResource TextDim}" TextWrapping="Wrap"
-                                 Margin="30,-2,6,3" Visibility="{Binding InvisibleHintVisibility}" />
-                      <ItemsControl ItemsSource="{Binding Members}" ItemTemplate="{StaticResource PersonRow}" Margin="18,0,0,2" />
+                      </ContentControl>
+                      <TextBlock Text="Joining voice shows you in the room" Style="{StaticResource Text.Caption}" TextWrapping="Wrap"
+                                 Margin="32,0,8,4" Visibility="{Binding InvisibleHintVisibility}" />
+                      <ItemsControl ItemsSource="{Binding Members}" ItemTemplate="{StaticResource PersonRow}" Margin="16,0,0,4" />
                     </StackPanel>
-                    <DataTemplate.Triggers>
-                      <Trigger SourceName="row" Property="IsMouseOver" Value="True">
-                        <Setter TargetName="row" Property="Background" Value="{StaticResource SurfaceHi}" />
-                      </Trigger>
-                    </DataTemplate.Triggers>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
@@ -421,33 +414,33 @@
           </ScrollViewer>
 
           <!-- in voice -->
-          <Border x:Name="VoiceBar" Grid.Row="2" Visibility="Collapsed" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="12,8,8,8">
+          <Border x:Name="VoiceBar" Grid.Row="2" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="12,8,8,8" Margin="0,8,0,0">
             <DockPanel>
               <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <ToggleButton x:Name="MuteToggle" Style="{StaticResource IconToggle}" Width="30" Height="30" Content="&#xE720;" Click="MuteDeaf_Click" ToolTip="Mute" />
-                <ToggleButton x:Name="DeafToggle" Style="{StaticResource IconToggle}" Width="30" Height="30" Content="&#xE7F6;" Margin="4,0,0,0" Click="MuteDeaf_Click" ToolTip="Deafen" />
-                <Button Style="{StaticResource IconButton}" Width="30" Height="30" Content="&#xE778;" Foreground="{StaticResource Danger}" Margin="2,0,0,0"
+                <ToggleButton x:Name="MuteToggle" Style="{StaticResource IconToggle}" Width="32" Height="32" Content="&#xE720;" Click="MuteDeaf_Click" ToolTip="Mute" />
+                <ToggleButton x:Name="DeafToggle" Style="{StaticResource IconToggle}" Width="32" Height="32" Content="&#xE7F6;" Margin="4,0,0,0" Click="MuteDeaf_Click" ToolTip="Deafen" />
+                <Button Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE778;" Margin="4,0,0,0"
                         Click="LeaveVoice_Click" ToolTip="Leave voice" />
               </StackPanel>
               <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Voice connected" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
-                <TextBlock x:Name="VoiceRoomText" FontSize="11" Foreground="{StaticResource TextDim}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="Voice connected" Style="{StaticResource Text.RowTitle}" Foreground="{StaticResource Brush.Success}" />
+                <TextBlock x:Name="VoiceRoomText" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </DockPanel>
           </Border>
 
           <!-- me -->
-          <Border Grid.Row="3" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="10,8,6,8">
+          <Border x:Name="MeCard" Grid.Row="3" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="8" Margin="0,8,0,0">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="30" Height="30" Content="&#xE713;" FontSize="13"
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE713;"
                       Click="Settings_Click" ToolTip="Settings" />
-              <Border x:Name="MeRow" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Me_Click" ToolTip="Set your status" CornerRadius="6" Padding="2">
+              <Border x:Name="MeRow" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Me_Click" ToolTip="Set your status" CornerRadius="{StaticResource Radius.Control}" Padding="4">
                 <DockPanel>
-                  <ContentPresenter x:Name="MeAvatar" ContentTemplate="{StaticResource AvatarSmall}" VerticalAlignment="Center" Cursor="Hand" ToolTip="Edit your profile"
+                  <ContentPresenter x:Name="MeAvatar" ContentTemplate="{StaticResource AvatarMe}" VerticalAlignment="Center" Cursor="Hand" ToolTip="Edit your profile"
                                     PreviewMouseLeftButtonUp="MeAvatar_Click" />
-                  <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                    <TextBlock x:Name="MeName" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <TextBlock x:Name="MeStatus" FontSize="11" Foreground="{StaticResource TextDim}" TextTrimming="CharacterEllipsis" />
+                  <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="MeName" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="MeStatus" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
                 </DockPanel>
               </Border>
@@ -456,8 +449,8 @@
         </Grid>
       </Border>
 
-      <!-- ===== chat ===== -->
-      <Border Grid.Column="1" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1">
+      <!-- ===== chat: a Surface1 card ===== -->
+      <Border Grid.Column="1" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -467,112 +460,144 @@
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
 
-          <Border Grid.Row="0" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="16,11">
-            <DockPanel>
-              <!-- pinned messages (only when the server supports pins) -->
-              <Button x:Name="PinButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="Auto" MinWidth="30" Height="26" Padding="9,0"
-                      Margin="8,-3,-4,-3" Click="PinButton_Click" ToolTip="Pinned messages" Visibility="Collapsed">
-                <StackPanel Orientation="Horizontal">
-                  <TextBlock Text="&#xE718;" FontFamily="{StaticResource Icons}" FontSize="13" VerticalAlignment="Center" />
-                  <TextBlock x:Name="PinCount" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
-              <!-- search (server 2.9) -->
-              <Button x:Name="SearchButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="30" Height="26" Margin="8,-3,-4,-3" Content="&#xE721;"
-                      Click="SearchButton_Click" ToolTip="Search messages (Ctrl+F)" Visibility="Collapsed" />
-              <TextBlock x:Name="ChatNote" DockPanel.Dock="Right" FontSize="12" Foreground="{StaticResource Gold}" VerticalAlignment="Center"
-                         TextTrimming="CharacterEllipsis" MaxWidth="260" />
-              <TextBlock Text="#" FontSize="15" Foreground="{StaticResource TextDim}" Margin="0,-2,8,0" VerticalAlignment="Center" />
-              <TextBlock x:Name="ChannelTitle" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
-            </DockPanel>
-          </Border>
+          <StackPanel Grid.Row="0">
+            <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,0,1" Padding="16,8">
+              <DockPanel MinHeight="32">
+                <!-- pinned messages (only when the server supports pins) -->
+                <Button x:Name="PinButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="Auto" MinWidth="32" Height="32" Padding="8,0"
+                        Margin="4,0,0,0" Click="PinButton_Click" ToolTip="Pinned messages" Visibility="Collapsed">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE718;" FontFamily="{StaticResource Font.Icons}" FontSize="16" VerticalAlignment="Center" />
+                    <TextBlock x:Name="PinCount" Style="{StaticResource Text.Secondary}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Margin="4,0,0,0" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <!-- search (server 2.9) -->
+                <Button x:Name="SearchButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Margin="4,0,0,0" Content="&#xE721;"
+                        Click="SearchButton_Click" ToolTip="Search messages (Ctrl+F)" Visibility="Collapsed" />
+                <TextBlock x:Name="ChatNote" DockPanel.Dock="Right" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="8,0,4,0"
+                           TextTrimming="CharacterEllipsis" MaxWidth="320" />
+                <TextBlock x:Name="HeaderHash" Text="#" Style="{StaticResource Text.Section}" Foreground="{StaticResource Brush.Text.Tertiary}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                <TextBlock x:Name="ChannelTitle" Style="{StaticResource Text.Section}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              </DockPanel>
+            </Border>
+            <!-- a gentle one-time tip (the display name): inline, calm, dismissible -->
+            <Border x:Name="HintBar" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Margin="16,8,16,0" Padding="12,4,4,4">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE711;" Margin="8,0,0,0" Click="HintClose_Click"
+                        ToolTip="Dismiss" AutomationProperties.Name="Dismiss tip" />
+                <TextBlock Text="&#xE946;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock x:Name="HintText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+              </DockPanel>
+            </Border>
+          </StackPanel>
 
           <Grid Grid.Row="1">
-          <ScrollViewer x:Name="MessageScroll" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0" ScrollChanged="MessageScroll_Changed" PreviewMouseWheel="MessageScroll_Wheel">
-            <StackPanel Margin="0,4,0,8">
+          <ScrollViewer x:Name="MessageScroll" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0" ScrollChanged="MessageScroll_Changed" PreviewMouseWheel="MessageScroll_Wheel" app:Motion.EdgeFade="True">
+            <StackPanel Margin="0,8,0,8">
               <TextBlock x:Name="OlderNote" Style="{StaticResource Text.Caption}" HorizontalAlignment="Center" Margin="0,8,0,4" Visibility="Collapsed" />
-              <TextBlock x:Name="EmptyText" Foreground="{StaticResource TextDim}" FontSize="12" HorizontalAlignment="Center" Margin="0,30,0,0" />
+              <TextBlock x:Name="EmptyText" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" Margin="0,32,0,0" />
+              <!-- skeleton messages while the history is on its way -->
+              <StackPanel x:Name="MessagesSkeleton" Margin="16,8,16,0" Visibility="Collapsed">
+                <Grid Margin="0,0,0,16">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                  <app:Skeleton Width="32" Height="32" CornerRadius="16" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                  <StackPanel Grid.Column="1"><app:Skeleton Height="12" Width="96" CornerRadius="6" HorizontalAlignment="Left" /><app:Skeleton Height="12" Width="360" CornerRadius="6" HorizontalAlignment="Left" Margin="0,8,0,0" /></StackPanel>
+                </Grid>
+                <Grid Margin="0,0,0,16">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                  <app:Skeleton Width="32" Height="32" CornerRadius="16" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                  <StackPanel Grid.Column="1"><app:Skeleton Height="12" Width="72" CornerRadius="6" HorizontalAlignment="Left" /><app:Skeleton Height="12" Width="280" CornerRadius="6" HorizontalAlignment="Left" Margin="0,8,0,0" /><app:Skeleton Height="12" Width="200" CornerRadius="6" HorizontalAlignment="Left" Margin="0,8,0,0" /></StackPanel>
+                </Grid>
+                <Grid Margin="0,0,0,16">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                  <app:Skeleton Width="32" Height="32" CornerRadius="16" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                  <StackPanel Grid.Column="1"><app:Skeleton Height="12" Width="112" CornerRadius="6" HorizontalAlignment="Left" /><app:Skeleton Height="12" Width="320" CornerRadius="6" HorizontalAlignment="Left" Margin="0,8,0,0" /></StackPanel>
+                </Grid>
+              </StackPanel>
               <ItemsControl x:Name="Messages">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
                     <StackPanel>
                       <!-- "New messages" line, above the first message I haven't read -->
-                      <Grid Visibility="{Binding DividerVisibility}" Margin="12,12,12,2">
+                      <Grid Visibility="{Binding DividerVisibility}" Margin="16,16,16,4">
                         <Border Height="1" Background="{StaticResource Brush.Accent}" Opacity="0.55" VerticalAlignment="Center" />
-                        <Border HorizontalAlignment="Right" Background="{StaticResource Brush.Accent}" CornerRadius="8" Padding="7,1" Margin="0,0,0,0">
-                          <TextBlock Text="NEW" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Brush.OnAccent}" />
+                        <Border HorizontalAlignment="Right" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Chip}">
+                          <Border Style="{StaticResource Chip}" Background="{StaticResource Brush.Accent.Tint}" Padding="8,0">
+                            <TextBlock Text="New" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Accent}" VerticalAlignment="Center" />
+                          </Border>
                         </Border>
                       </Grid>
-                      <Border x:Name="row" Background="{Binding RowBackground}" BorderBrush="{Binding MentionBar}" BorderThickness="2,0,0,0"
-                              Padding="12,2,12,3" Margin="{Binding RowMargin}" PreviewMouseRightButtonUp="Message_RightClick">
+                      <Border x:Name="row" Background="{Binding RowBackground}" Padding="16,4" Margin="{Binding RowMargin}" PreviewMouseRightButtonUp="Message_RightClick">
                         <Grid>
                           <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                           </Grid.RowDefinitions>
                           <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="42" />
+                            <ColumnDefinition Width="44" />
                             <ColumnDefinition />
                           </Grid.ColumnDefinitions>
+                          <!-- the 2 px bar of a message that mentions me -->
+                          <Border Grid.RowSpan="2" Grid.ColumnSpan="2" Width="2" HorizontalAlignment="Left" Margin="-16,-4,0,-4" Background="{Binding MentionBar}" IsHitTestVisible="False" />
 
-                          <!-- the quoted message: a curved connector into the avatar and one dim line -->
-                          <Border Grid.Row="0" Grid.Column="0" Visibility="{Binding ReplyVisibility}" Margin="16,9,3,-3"
-                                  BorderBrush="{StaticResource TextDim}" Opacity="0.55" BorderThickness="2,2,0,0" CornerRadius="7,0,0,0" />
-                          <TextBlock Grid.Row="0" Grid.Column="1" Visibility="{Binding ReplyVisibility}" FontSize="12" TextTrimming="CharacterEllipsis"
-                                     Foreground="{StaticResource TextDim}" Margin="0,2,60,2" Cursor="Hand" Tag="{Binding}"
+                          <!-- the quoted message: a curved connector into the avatar and one quiet line -->
+                          <Border Grid.Row="0" Grid.Column="0" Visibility="{Binding ReplyVisibility}" Margin="16,8,4,-4"
+                                  BorderBrush="{StaticResource Brush.Text.Tertiary}" BorderThickness="2,2,0,0" CornerRadius="8,0,0,0" />
+                          <TextBlock Grid.Row="0" Grid.Column="1" Visibility="{Binding ReplyVisibility}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis"
+                                     Margin="0,4,48,4" Cursor="Hand" Tag="{Binding}"
                                      MouseLeftButtonUp="ReplyQuote_Click" ToolTip="Jump to the original message">
-                            <Run Text="{Binding ReplyShown, Mode=OneWay}" FontWeight="SemiBold" Foreground="{Binding ReplyColor, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding ReplyText, Mode=OneWay}" />
+                            <Run Text="{Binding ReplyShown, Mode=OneWay}" Foreground="{Binding ReplyColor, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding ReplyText, Mode=OneWay}" />
                           </TextBlock>
 
-                          <local:AvatarView Grid.Row="1" Width="34" Height="34" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0" Visibility="{Binding AvatarVisibility}"
+                          <local:AvatarView Grid.Row="1" Grid.Column="0" Width="32" Height="32" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,4,0,0" Visibility="{Binding AvatarVisibility}"
                                             Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="MessageAuthor_Click" />
                           <StackPanel Grid.Row="1" Grid.Column="1">
                             <StackPanel Orientation="Horizontal" Visibility="{Binding HeaderVisibility}">
-                              <TextBlock Text="{Binding FromShown}" FontWeight="SemiBold" FontSize="13" Foreground="{Binding Color}" ToolTipOpening="NameTip_Opening"
+                              <TextBlock Text="{Binding FromShown}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding Color}" ToolTipOpening="NameTip_Opening"
                                          Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="MessageAuthor_Click">
                                 <TextBlock.ToolTip>
                                   <ToolTip Style="{StaticResource CardTip}" ContentTemplate="{StaticResource MemberCard}" Content="{Binding Author}" />
                                 </TextBlock.ToolTip>
                               </TextBlock>
-                              <TextBlock Text="{Binding Time}" FontSize="11" Foreground="{StaticResource TextDim}" Margin="8,2,0,0" />
+                              <TextBlock Text="{Binding Time}" Style="{StaticResource Text.Caption}" Margin="8,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                             <TextBox Text="{Binding ShownText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0"
-                                     Foreground="{StaticResource Text}" FontSize="13" Padding="0" Margin="0,1,0,0" SelectionBrush="{StaticResource Accent}"
+                                     Foreground="{StaticResource Brush.Text.Primary}" FontSize="13" TextBlock.LineHeight="18" Padding="0" Margin="0,2,0,0" SelectionBrush="{StaticResource Brush.Accent}"
                                      Visibility="{Binding TextVisibility}" ContextMenu="{x:Null}"
                                      Tag="{Binding}" PreviewMouseMove="MessageText_Move" PreviewMouseLeftButtonUp="MessageText_Up" />
-                            <TextBlock Text="(edited)" FontSize="11" Foreground="{StaticResource TextDim}" Visibility="{Binding EditedVisibility}" />
+                            <TextBlock Text="(edited)" Style="{StaticResource Text.Caption}" Visibility="{Binding EditedVisibility}" />
                             <!-- item links: a chip per [Item], Wowhead item URL or pasted game link -->
                             <ItemsControl ItemsSource="{Binding ItemChips}" Visibility="{Binding ItemChipsVisibility}" Margin="0,4,0,0" ItemTemplate="{StaticResource ItemChip}">
                               <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                             </ItemsControl>
                             <!-- "Looking for group" sign-up card (server 2.9) -->
                             <ContentControl Content="{Binding Lfg}" ContentTemplate="{StaticResource LfgCard}" Visibility="{Binding LfgVisibility}" />
-                            <StackPanel Visibility="{Binding FileVisibility}" Margin="0,5,0,2">
-                              <Border Visibility="{Binding File.ImageVisibility}" CornerRadius="8" HorizontalAlignment="Left" Cursor="Hand"
+                            <StackPanel Visibility="{Binding FileVisibility}" Margin="0,4,0,4">
+                              <Border Visibility="{Binding File.ImageVisibility}" CornerRadius="{StaticResource Radius.Card}" HorizontalAlignment="Left" Cursor="Hand"
                                       MouseLeftButtonUp="Image_Click" Tag="{Binding File}" ClipToBounds="True">
                                 <Image Source="{Binding File.Image}" MaxHeight="240" MaxWidth="360" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
                               </Border>
-                              <Border Visibility="{Binding File.CardVisibility}" Background="{StaticResource SurfaceHi}" CornerRadius="9" Padding="10,8"
-                                      HorizontalAlignment="Left" MinWidth="230" MaxWidth="360" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                              <Border Visibility="{Binding File.CardVisibility}" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="12,8"
+                                      HorizontalAlignment="Left" MinWidth="232" MaxWidth="360">
                                 <DockPanel>
-                                  <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE896;" Click="Download_Click"
+                                  <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE896;" Click="Download_Click"
                                           Tag="{Binding File}" ToolTip="Save to Downloads" />
-                                  <TextBlock DockPanel.Dock="Left" Text="&#xE7C3;" FontFamily="{StaticResource Icons}" FontSize="20"
-                                             Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                  <TextBlock DockPanel.Dock="Left" Text="&#xE7C3;" FontFamily="{StaticResource Font.Icons}" FontSize="20"
+                                             Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,12,0" />
                                   <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding File.Name}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding File.Name}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" />
                                     <StackPanel Orientation="Horizontal">
-                                      <TextBlock Text="{Binding File.ExtText}" Visibility="{Binding File.ExtVisibility}" FontSize="11" FontWeight="SemiBold"
+                                      <TextBlock Text="{Binding File.ExtText}" Visibility="{Binding File.ExtVisibility}" Style="{StaticResource Text.Caption}"
                                                  Foreground="{Binding File.ExtBrush}" ToolTip="{Binding File.ExtTip}" Margin="0,0,8,0" />
-                                      <TextBlock Text="{Binding File.SizeText}" FontSize="11" Foreground="{StaticResource TextDim}" />
-                                      <TextBlock Text="{Binding File.Status}" FontSize="11" Foreground="{StaticResource Accent}" Margin="8,0,0,0" />
+                                      <TextBlock Text="{Binding File.SizeText}" Style="{StaticResource Text.Caption}" />
+                                      <TextBlock Text="{Binding File.Status}" Style="{StaticResource Text.Caption}" Margin="8,0,0,0" />
                                     </StackPanel>
                                   </StackPanel>
                                 </DockPanel>
                               </Border>
                             </StackPanel>
                             <!-- YouTube preview: thumbnail + play button, title and channel; a click plays it in the viewer -->
-                            <Border Visibility="{Binding VideoVisibility}" HorizontalAlignment="Left" Width="360" Margin="0,6,0,2" CornerRadius="12"
+                            <Border Visibility="{Binding VideoVisibility}" HorizontalAlignment="Left" Width="360" Margin="0,8,0,4" CornerRadius="{StaticResource Radius.Card}"
                                     Background="{StaticResource Brush.Surface2}" Cursor="Hand" Tag="{Binding Video}" ToolTip="{Binding Video.ToolTipText}"
                                     MouseLeftButtonUp="Video_Click">
                               <StackPanel>
@@ -580,8 +605,8 @@
                                   <Border.Background>
                                     <ImageBrush ImageSource="{Binding Video.Thumb}" Stretch="UniformToFill" />
                                   </Border.Background>
-                                  <Border Width="48" Height="48" CornerRadius="24" Background="#99000000" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <TextBlock Text="&#xE768;" FontFamily="{StaticResource Icons}" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="3,0,0,0" />
+                                  <Border Width="48" Height="48" CornerRadius="24" Background="{StaticResource Brush.Scrim.Disc}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE768;" FontFamily="{StaticResource Font.Icons}" FontSize="20" Foreground="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,0,0,0" />
                                   </Border>
                                 </Border>
                                 <StackPanel Visibility="{Binding Video.InfoVisibility}" Margin="12,8,12,12">
@@ -590,19 +615,19 @@
                                 </StackPanel>
                               </StackPanel>
                             </Border>
-                            <!-- reactions: pills with counts, mine highlighted, click toggles -->
-                            <ItemsControl ItemsSource="{Binding Reactions}" Visibility="{Binding ReactionsVisibility}" Margin="0,4,0,1">
+                            <!-- reactions: 24 high pills with counts, mine tinted, click toggles -->
+                            <ItemsControl ItemsSource="{Binding Reactions}" Visibility="{Binding ReactionsVisibility}" Margin="0,4,0,0">
                               <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
                               </ItemsControl.ItemsPanel>
                               <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                  <Border Background="{Binding Fill}" BorderBrush="{Binding Line}" BorderThickness="1" CornerRadius="10" Padding="7,1,8,1"
-                                          Margin="0,0,5,3" Cursor="Hand" Tag="{Binding}" ToolTip="{Binding Tip}" MouseLeftButtonUp="Reaction_Click">
-                                    <StackPanel Orientation="Horizontal">
-                                      <Image Source="{Binding Icon}" Width="17" Height="17" VerticalAlignment="Center" Visibility="{Binding IconVisibility}" RenderOptions.BitmapScalingMode="HighQuality" />
+                                  <Border Style="{StaticResource Chip}" Background="{Binding Fill}" Padding="8,0"
+                                          Margin="0,0,4,4" Cursor="Hand" Tag="{Binding}" ToolTip="{Binding Tip}" MouseLeftButtonUp="Reaction_Click">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                      <Image Source="{Binding Icon}" Width="16" Height="16" VerticalAlignment="Center" Visibility="{Binding IconVisibility}" RenderOptions.BitmapScalingMode="HighQuality" />
                                       <TextBlock Text="{Binding Emoji}" FontFamily="Segoe UI Emoji" FontSize="13" VerticalAlignment="Center" Visibility="{Binding TextVisibility}" />
-                                      <TextBlock Text="{Binding Count}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Text}" Margin="5,0,0,0" VerticalAlignment="Center" />
+                                      <TextBlock Text="{Binding Count}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" Margin="4,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
                                   </Border>
                                 </DataTemplate>
@@ -610,21 +635,20 @@
                             </ItemsControl>
                           </StackPanel>
 
-                          <TextBlock Grid.Row="1" Grid.Column="1" Text="&#xE718;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Gold}"
-                                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,3,2,0" Visibility="{Binding PinnedVisibility}" ToolTip="Pinned" />
+                          <TextBlock Grid.Row="1" Grid.Column="1" Text="&#xE718;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}"
+                                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,0,0" Visibility="{Binding PinnedVisibility}" ToolTip="Pinned" />
 
-                          <!-- hover tools: Reply, React, Pin, More -->
-                          <Border x:Name="tools" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-8,0,0"
-                                  Visibility="Collapsed" Background="{StaticResource SurfaceHi}" CornerRadius="9" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="2">
-                            <Border.Effect><DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.35" /></Border.Effect>
+                          <!-- hover tools (Reply, React, Pin, More): a small elevated pill -->
+                          <Border x:Name="tools" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-12,0,0"
+                                  Visibility="Collapsed" Background="{StaticResource Brush.Surface3}" CornerRadius="14" Padding="2" Effect="{StaticResource Elevation.1}">
                             <StackPanel Orientation="Horizontal">
-                              <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE97A;" ToolTip="Reply"
+                              <Button Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE97A;" ToolTip="Reply"
                                       Tag="{Binding}" Click="Reply_Click" />
-                              <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE899;" ToolTip="Add reaction"
+                              <Button Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE899;" ToolTip="Add reaction"
                                       Tag="{Binding}" Click="React_Click" Visibility="{Binding ReactToolVisibility}" />
-                              <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE718;" ToolTip="Pin / unpin"
+                              <Button Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE718;" ToolTip="Pin / unpin"
                                       Tag="{Binding}" Click="PinTool_Click" Visibility="{Binding PinToolVisibility}" />
-                              <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE712;" ToolTip="More"
+                              <Button Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE712;" ToolTip="More"
                                       Tag="{Binding}" Click="More_Click" />
                             </StackPanel>
                           </Border>
@@ -646,87 +670,99 @@
             </StackPanel>
           </ScrollViewer>
 
-          <!-- floating: Jump to first unread / Jump to present -->
-          <Button x:Name="JumpButton" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,10" Visibility="Collapsed" Click="Jump_Click" Cursor="Hand"
+          <!-- floating: Jump to first unread / Jump to present (a small elevated pill) -->
+          <Button x:Name="JumpButton" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" Visibility="Collapsed" Click="Jump_Click" Cursor="Hand"
                   FocusVisualStyle="{x:Null}">
             <Button.Template>
               <ControlTemplate TargetType="Button">
-                <Border x:Name="bd" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource AccentDark}" BorderThickness="1" CornerRadius="14" Padding="13,5">
-                  <Border.Effect><DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.5" /></Border.Effect>
-                  <ContentPresenter />
-                </Border>
+                <Grid>
+                  <Border x:Name="bd" Background="{StaticResource Brush.Surface3}" CornerRadius="14" Padding="12,4" Height="28" Effect="{StaticResource Elevation.1}">
+                    <ContentPresenter VerticalAlignment="Center" />
+                  </Border>
+                  <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="14" Opacity="0" IsHitTestVisible="False" />
+                </Grid>
                 <ControlTemplate.Triggers>
                   <Trigger Property="IsMouseOver" Value="True">
-                    <Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Surface2}" />
+                    <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                    <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
                   </Trigger>
                 </ControlTemplate.Triggers>
               </ControlTemplate>
             </Button.Template>
             <StackPanel Orientation="Horizontal">
-              <TextBlock x:Name="JumpGlyph" Text="&#xE74B;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,7,0" />
-              <TextBlock x:Name="JumpText" Text="Jump to present" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Text}" VerticalAlignment="Center" />
+              <TextBlock x:Name="JumpGlyph" Text="&#xE74B;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <TextBlock x:Name="JumpText" Text="Jump to present" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
 
           <!-- while dragging files over the chat -->
-          <Border x:Name="DropOverlay" Visibility="Collapsed" IsHitTestVisible="False" Background="{StaticResource Brush.Scrim}" CornerRadius="0,0,0,0" Margin="6">
+          <Border x:Name="DropOverlay" Visibility="Collapsed" IsHitTestVisible="False" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="8">
             <Grid>
-              <Rectangle Stroke="{StaticResource Accent}" StrokeThickness="2" StrokeDashArray="5 4" RadiusX="12" RadiusY="12" Opacity="0.8" />
+              <Rectangle Stroke="{StaticResource Brush.Accent}" StrokeThickness="2" StrokeDashArray="5 4" RadiusX="12" RadiusY="12" Opacity="0.8" />
               <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock x:Name="DropGlyph" Text="&#xE896;" FontFamily="{StaticResource Icons}" FontSize="30" Foreground="{StaticResource Accent}" HorizontalAlignment="Center" />
-                <TextBlock x:Name="DropText" Text="Drop to share" FontSize="15" FontWeight="SemiBold" Margin="0,8,0,0" HorizontalAlignment="Center" />
-                <TextBlock x:Name="DropSub" Text="Pictures and files go to this channel" FontSize="12" Foreground="{StaticResource TextDim}" Margin="0,3,0,0" HorizontalAlignment="Center" />
+                <TextBlock x:Name="DropGlyph" Text="&#xE896;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Accent}" HorizontalAlignment="Center" />
+                <TextBlock x:Name="DropText" Text="Drop to share" Style="{StaticResource Text.Section}" Margin="0,8,0,0" HorizontalAlignment="Center" />
+                <TextBlock x:Name="DropSub" Text="Pictures and files go to this channel" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" HorizontalAlignment="Center" />
               </StackPanel>
             </Grid>
           </Border>
           </Grid>
 
-          <TextBlock x:Name="TypingText" Grid.Row="2" FontSize="12" Foreground="{StaticResource TextDim}" Margin="16,2,0,2" Height="16" />
+          <TextBlock x:Name="TypingText" Grid.Row="2" Style="{StaticResource Text.Caption}" Margin="16,0,16,4" Height="14" />
 
           <!-- offline: calm, and Send is off while it lasts -->
-          <Border x:Name="OfflineBanner" Grid.Row="2" Visibility="Collapsed" Margin="12,2,12,6" Padding="12,6" Background="{StaticResource Brush.Warn.Tint}" CornerRadius="9">
-            <TextBlock x:Name="OfflineText" FontSize="12" Foreground="{StaticResource Brush.Warn}" TextTrimming="CharacterEllipsis" />
+          <Border x:Name="OfflineBanner" Grid.Row="2" Visibility="Collapsed" Margin="16,0,16,8" Padding="12,8" Background="{StaticResource Brush.Warn.Tint}" CornerRadius="{StaticResource Radius.Control}">
+            <TextBlock x:Name="OfflineText" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Warn}" TextTrimming="CharacterEllipsis" />
           </Border>
           <!-- replying / editing -->
-          <Border x:Name="ModeBar" Grid.Row="3" Visibility="Collapsed" Margin="12,0,12,0" Padding="12,6,6,6" Background="{StaticResource SurfaceHi}"
-                  CornerRadius="9,9,0,0" BorderBrush="{StaticResource Line}" BorderThickness="1,1,1,0">
+          <Border x:Name="ModeBar" Grid.Row="3" Visibility="Collapsed" Margin="16,0,16,8" Padding="12,4,4,4" Background="{StaticResource Brush.Surface2}"
+                  CornerRadius="{StaticResource Radius.Control}">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="11" Content="&#xE711;"
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE711;"
                       Click="CancelMode_Click" ToolTip="Cancel (Esc)" />
-              <TextBlock x:Name="ModeText" FontSize="12" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="ModeText" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             </DockPanel>
           </Border>
 
-          <Border Grid.Row="4" Margin="12,0,12,12" Background="{StaticResource SurfaceHi}" CornerRadius="10" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="2">
+          <!-- the composer: a raised Surface2 (radius 12, top highlight, soft shadow); 1 px accent while it has focus -->
+          <Border x:Name="ComposerBox" Grid.Row="4" Margin="16,0,16,16" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" BorderBrush="{StaticResource Brush.Edge}" BorderThickness="1"
+                  Padding="4" Effect="{StaticResource Elevation.1}">
+            <Border.Style>
+              <Style TargetType="Border">
+                <Style.Triggers>
+                  <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}" /></Trigger>
+                </Style.Triggers>
+              </Style>
+            </Border.Style>
             <DockPanel>
-              <Button x:Name="AttachButton" DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="&#xE710;" Click="Plus_Click"
+              <Button x:Name="AttachButton" DockPanel.Dock="Left" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE710;" Click="Plus_Click"
                       ToolTip="Share a file or post a sign-up card (files can also be dropped here, or pasted with Ctrl+V)" />
-              <Button x:Name="SendButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE724;" Foreground="{StaticResource Accent}" Click="Send_Click" ToolTip="Send (Enter)" />
+              <Button x:Name="SendButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE724;" Foreground="{StaticResource Brush.Accent}" Click="Send_Click" ToolTip="Send (Enter)" />
               <Grid>
-                <TextBlock x:Name="ComposerHint" Foreground="{StaticResource TextDim}" FontSize="13" VerticalAlignment="Center" Margin="4,0,0,0" IsHitTestVisible="False" />
-                <TextBox x:Name="Composer" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Text}" CaretBrush="{StaticResource Text}"
+                <TextBlock x:Name="ComposerHint" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" VerticalAlignment="Center" Margin="4,0,0,0" IsHitTestVisible="False" />
+                <TextBox x:Name="Composer" Background="Transparent" BorderThickness="0" Foreground="{StaticResource Brush.Text.Primary}" CaretBrush="{StaticResource Brush.Text.Primary}"
                          FontSize="13" TextWrapping="Wrap" AcceptsReturn="False" MaxLength="2000" MaxHeight="120" VerticalScrollBarVisibility="Auto"
-                         VerticalContentAlignment="Center" Padding="2,7" SelectionBrush="{StaticResource Accent}"
+                         VerticalContentAlignment="Center" Padding="4,8" SelectionBrush="{StaticResource Brush.Accent}"
                          PreviewKeyDown="Composer_PreviewKeyDown" TextChanged="Composer_TextChanged" />
               </Grid>
             </DockPanel>
           </Border>
 
           <!-- the "Looking for group" form -->
-          <Border x:Name="LfgOverlay" Grid.RowSpan="5" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="12" MouseLeftButtonDown="LfgScrim_Down">
-            <Border x:Name="LfgBox" Background="{StaticResource Brush.Surface3}" CornerRadius="14" Padding="24" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center"
+          <Border x:Name="LfgOverlay" Grid.RowSpan="5" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="LfgScrim_Down">
+            <Border x:Name="LfgBox" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+                    Padding="24" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}"
                     MouseLeftButtonDown="LfgBox_Down">
-              <Border.Effect><DropShadowEffect BlurRadius="40" ShadowDepth="12" Direction="270" Opacity="0.5" /></Border.Effect>
               <StackPanel>
                 <TextBlock Text="Looking for group" Style="{StaticResource Text.Section}" />
-                <TextBlock x:Name="LfgWhere" Style="{StaticResource Text.Secondary}" Margin="0,2,0,16" />
+                <TextBlock x:Name="LfgWhere" Style="{StaticResource Text.Secondary}" Margin="0,4,0,16" />
                 <TextBlock Text="Instance or title" Style="{StaticResource Text.Caption}" />
                 <TextBox x:Name="LfgTitle" Style="{StaticResource Input}" MaxLength="60" Margin="0,4,0,0" TextChanged="LfgTitle_Changed" KeyDown="Lfg_KeyDown" />
                 <ItemsControl x:Name="LfgSuggest" Margin="0,8,0,0">
                   <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Button Content="{Binding}" Tag="{Binding}" Style="{StaticResource Button.S}" Height="24" MinHeight="24" Padding="10,0" Margin="0,0,6,6" Click="LfgSuggest_Click" />
+                      <Button Content="{Binding}" Tag="{Binding}" Style="{StaticResource Button.S}" Margin="0,0,8,8" Click="LfgSuggest_Click" />
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -738,10 +774,10 @@
                   </StackPanel>
                 </Border>
                 <StackPanel x:Name="LfgTimeRow" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
-                  <ComboBox x:Name="LfgDay" Style="{StaticResource Dropdown}" Width="150" />
-                  <TextBlock Text="at" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
+                  <ComboBox x:Name="LfgDay" Style="{StaticResource Dropdown}" Width="152" />
+                  <TextBlock Text="at" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="12,0,12,0" />
                   <ComboBox x:Name="LfgHour" Style="{StaticResource Dropdown}" Width="64" />
-                  <TextBlock Text=":" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="6,0,6,0" />
+                  <TextBlock Text=":" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="8,0,8,0" />
                   <ComboBox x:Name="LfgMinute" Style="{StaticResource Dropdown}" Width="64" />
                 </StackPanel>
                 <TextBlock Text="Places" Style="{StaticResource Text.Caption}" Margin="0,16,0,0" />
@@ -785,14 +821,15 @@
         </Grid>
       </Border>
     </Grid>
+    </Border>
 
-    <!-- search (the magnifier in the channel header): one box, results grouped by channel -->
-    <Popup x:Name="SearchPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="6" Opened="SearchPopup_Opened">
-      <Border x:Name="SearchBoxCard" Background="{StaticResource Brush.Surface3}" CornerRadius="12" Padding="12" Width="400" Margin="0,0,14,14">
-        <Border.Effect><DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.5" /></Border.Effect>
+    <!-- search (the magnifier in the channel header): one box, results grouped by channel. Popovers are Surface3 + hairline + Elevation.2,
+         with a 24 px transparent margin that holds the shadow (the offsets in code give it back). -->
+    <Popup x:Name="SearchPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True" PopupAnimation="None" VerticalOffset="-18" Opened="SearchPopup_Opened">
+      <Border x:Name="SearchBoxCard" Style="{StaticResource PopupCard}" Padding="12" Width="400">
         <StackPanel>
           <TextBox x:Name="SearchBox" Style="{StaticResource Input}" Tag="Search messages in the channels you can see" MaxLength="64" KeyDown="SearchBox_KeyDown" />
-          <TextBlock x:Name="SearchHint" Style="{StaticResource Text.Caption}" Margin="4,6,0,0" TextWrapping="Wrap" />
+          <TextBlock x:Name="SearchHint" Style="{StaticResource Text.Caption}" Margin="4,8,0,0" TextWrapping="Wrap" />
           <ScrollViewer x:Name="SearchScroll" MaxHeight="400" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
             <ItemsControl x:Name="SearchList" ItemTemplate="{StaticResource SearchGroup}" />
           </ScrollViewer>
@@ -801,61 +838,58 @@
     </Popup>
 
     <!-- the composer's "+" menu -->
-    <Popup x:Name="PlusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="-6">
-      <Border Background="{StaticResource Brush.Surface3}" CornerRadius="10" Padding="6" Width="220" Margin="0,0,14,14">
-        <Border.Effect><DropShadowEffect BlurRadius="24" ShadowDepth="6" Direction="270" Opacity="0.45" /></Border.Effect>
+    <Popup x:Name="PlusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="None" VerticalOffset="18">
+      <Border Style="{StaticResource PopupCard}" Padding="8" Width="220">
         <StackPanel>
           <Button x:Name="PlusFile" Style="{StaticResource MenuRow}" Click="PlusFile_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE723;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Share a file" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE723;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Width="28" Foreground="{StaticResource Brush.Text.Tertiary}" /><TextBlock Text="Share a file" /></StackPanel>
           </Button>
           <Button x:Name="PlusLfg" Style="{StaticResource MenuRow}" Click="PlusLfg_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE902;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Looking for group" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE902;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Width="28" Foreground="{StaticResource Brush.Text.Tertiary}" /><TextBlock Text="Looking for group" /></StackPanel>
           </Button>
         </StackPanel>
       </Border>
     </Popup>
 
     <!-- message menu (More button / right click) -->
-    <Popup x:Name="MsgMenu" StaysOpen="False" Placement="MousePoint" AllowsTransparency="True" PopupAnimation="Fade">
-      <Border x:Name="MsgMenuBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="5" Width="196" Margin="0,0,12,12">
-        <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.45" /></Border.Effect>
+    <Popup x:Name="MsgMenu" StaysOpen="False" Placement="MousePoint" AllowsTransparency="True" PopupAnimation="None" HorizontalOffset="-24" VerticalOffset="-24">
+      <Border x:Name="MsgMenuBox" Style="{StaticResource PopupCard}" Padding="8" Width="208">
         <StackPanel>
           <Button x:Name="MenuReply" Style="{StaticResource MenuRow}" Click="MenuReply_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE97A;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Reply" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE97A;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Width="28" Foreground="{StaticResource Brush.Text.Tertiary}" /><TextBlock Text="Reply" /></StackPanel>
           </Button>
           <Button x:Name="MenuReact" Style="{StaticResource MenuRow}" Click="MenuReact_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE899;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Add reaction" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE899;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Width="28" Foreground="{StaticResource Brush.Text.Tertiary}" /><TextBlock Text="Add reaction" /></StackPanel>
           </Button>
           <Button x:Name="MenuPin" Style="{StaticResource MenuRow}" Click="MenuPin_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock x:Name="MenuPinGlyph" Text="&#xE718;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock x:Name="MenuPinText" Text="Pin message" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock x:Name="MenuPinGlyph" Text="&#xE718;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Width="28" Foreground="{StaticResource Brush.Text.Tertiary}" /><TextBlock x:Name="MenuPinText" Text="Pin message" /></StackPanel>
           </Button>
           <Button x:Name="MenuCopy" Style="{StaticResource MenuRow}" Click="MenuCopy_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8C8;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Copy text" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8C8;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Width="28" Foreground="{StaticResource Brush.Text.Tertiary}" /><TextBlock Text="Copy text" /></StackPanel>
           </Button>
           <Button x:Name="MenuEdit" Style="{StaticResource MenuRow}" Click="MenuEdit_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE70F;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Edit" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE70F;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Width="28" Foreground="{StaticResource Brush.Text.Tertiary}" /><TextBlock Text="Edit" /></StackPanel>
           </Button>
           <Button x:Name="MenuDelete" Style="{StaticResource MenuRow}" Click="MenuDelete_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74D;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource Danger}" /><TextBlock Text="Delete" Foreground="{StaticResource Danger}" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74D;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Width="28" Foreground="{StaticResource Brush.Danger}" /><TextBlock Text="Delete" Foreground="{StaticResource Brush.Danger}" /></StackPanel>
           </Button>
         </StackPanel>
       </Border>
     </Popup>
 
     <!-- reaction picker: the eight (2.4) or six (2.3) the server allows, 4 per row -->
-    <Popup x:Name="ReactPopup" StaysOpen="False" Placement="Left" AllowsTransparency="True" PopupAnimation="Fade" HorizontalOffset="-4">
-      <Border x:Name="ReactPickerBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="16" Padding="4" Margin="0,0,10,10">
-        <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.45" /></Border.Effect>
+    <Popup x:Name="ReactPopup" StaysOpen="False" Placement="Left" AllowsTransparency="True" PopupAnimation="None" HorizontalOffset="10" VerticalOffset="-24">
+      <Border x:Name="ReactPickerBox" Style="{StaticResource PopupCard}" Padding="8">
         <ItemsControl x:Name="ReactItems">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate><UniformGrid Columns="4" /></ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Button Style="{StaticResource IconButton}" Width="40" Height="40" Margin="1" Tag="{Binding Id}" ToolTip="{Binding Name}" Click="ReactPick_Click">
+              <Button Style="{StaticResource IconButton}" Width="40" Height="40" Margin="2" Tag="{Binding Id}" ToolTip="{Binding Name}" Click="ReactPick_Click">
                 <Grid>
                   <Image Source="{Binding Icon}" Width="28" Height="28" Visibility="{Binding IconVisibility}" RenderOptions.BitmapScalingMode="HighQuality" />
-                  <TextBlock Text="{Binding Id}" FontFamily="Segoe UI Emoji" FontSize="15" Foreground="{StaticResource Text}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding TextVisibility}" />
+                  <TextBlock Text="{Binding Id}" FontFamily="Segoe UI Emoji" FontSize="15" Foreground="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding TextVisibility}" />
                 </Grid>
               </Button>
             </DataTemplate>
@@ -865,35 +899,29 @@
     </Popup>
 
     <!-- pinned messages of this channel -->
-    <Popup x:Name="PinPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="6">
-      <Border x:Name="PinBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="6" Width="340" Margin="0,0,14,14">
-        <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" /></Border.Effect>
+    <Popup x:Name="PinPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True" PopupAnimation="None" VerticalOffset="-18">
+      <Border x:Name="PinBox" Style="{StaticResource PopupCard}" Padding="8" Width="344">
         <StackPanel>
-          <TextBlock x:Name="PinTitle" Text="PINNED MESSAGES" Style="{StaticResource Caption}" Margin="8,5,0,5" />
-          <TextBlock x:Name="PinEmpty" Text="Nothing pinned yet. Officers can pin from a message's menu." FontSize="12" Foreground="{StaticResource TextDim}"
-                     TextWrapping="Wrap" Margin="8,2,8,8" />
-          <ScrollViewer MaxHeight="330" VerticalScrollBarVisibility="Auto">
+          <TextBlock x:Name="PinTitle" Text="Pinned messages" Style="{StaticResource Text.Caption}" Margin="8,4,0,4" />
+          <TextBlock x:Name="PinEmpty" Text="Nothing pinned yet. Officers can pin from a message's menu." Style="{StaticResource Text.Secondary}"
+                     TextWrapping="Wrap" Margin="8,4,8,8" />
+          <ScrollViewer MaxHeight="328" VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="PinList">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border x:Name="pr" Background="Transparent" CornerRadius="8" Padding="8,6,6,6" Cursor="Hand" Tag="{Binding}" MouseLeftButtonUp="PinRow_Click">
+                  <ContentControl Style="{StaticResource Side.Row}" Padding="8,8" Tag="{Binding}" MouseLeftButtonUp="PinRow_Click">
                     <DockPanel>
-                      <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="11" Content="&#xE77A;" ToolTip="Unpin"
+                      <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE77A;" ToolTip="Unpin"
                               VerticalAlignment="Top" Tag="{Binding}" Click="PinRemove_Click" Visibility="{Binding UnpinVisibility}" />
                       <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                          <TextBlock Text="{Binding ByShown}" FontWeight="SemiBold" FontSize="12" Foreground="{Binding Color}" />
-                          <TextBlock Text="{Binding Time}" FontSize="11" Foreground="{StaticResource TextDim}" Margin="8,1,0,0" />
+                          <TextBlock Text="{Binding ByShown}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding Color}" />
+                          <TextBlock Text="{Binding Time}" Style="{StaticResource Text.Caption}" Margin="8,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
-                        <TextBlock Text="{Binding Shown}" FontSize="13" TextWrapping="Wrap" MaxHeight="54" TextTrimming="CharacterEllipsis" Margin="0,2,6,0" />
+                        <TextBlock Text="{Binding Shown}" Style="{StaticResource Text.Body}" TextWrapping="Wrap" MaxHeight="54" TextTrimming="CharacterEllipsis" Margin="0,2,8,0" />
                       </StackPanel>
                     </DockPanel>
-                  </Border>
-                  <DataTemplate.Triggers>
-                    <Trigger SourceName="pr" Property="IsMouseOver" Value="True">
-                      <Setter TargetName="pr" Property="Background" Value="{StaticResource Line}" />
-                    </Trigger>
-                  </DataTemplate.Triggers>
+                  </ContentControl>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -903,70 +931,69 @@
     </Popup>
 
     <!-- status picker -->
-    <Popup x:Name="StatusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="-6">
-      <Border x:Name="StatusBox" Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="6" Width="250">
+    <Popup x:Name="StatusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="None" VerticalOffset="18">
+      <Border x:Name="StatusBox" Style="{StaticResource PopupCard}" Padding="8" Width="256">
         <StackPanel>
           <Button Style="{StaticResource MenuRow}" Click="EditProfile_Click" ToolTip="Display name, avatar, about text, characters, privacy">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE77B;" FontFamily="{StaticResource Icons}" Foreground="{StaticResource Accent}" FontSize="13" Width="24" /><TextBlock Text="Edit profile..." /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE77B;" FontFamily="{StaticResource Font.Icons}" Foreground="{StaticResource Brush.Text.Tertiary}" FontSize="16" Width="28" /><TextBlock Text="Edit profile..." /></StackPanel>
           </Button>
-          <Border Height="1" Background="{StaticResource Line}" Margin="8,3,8,3" />
-          <TextBlock Text="SET YOUR STATUS" Style="{StaticResource Caption}" Margin="8,4,0,4" />
+          <Border Height="1" Background="{StaticResource Brush.Divider}" Margin="8,4,8,4" />
+          <TextBlock Text="Set your status" Style="{StaticResource Text.Caption}" Margin="8,4,0,4" />
           <Button Style="{StaticResource MenuRow}" Tag="online" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal"><Ellipse Width="12" Height="12" Fill="{StaticResource Brush.Accent}" Margin="1,0,11,0" VerticalAlignment="Center" /><TextBlock Text="Online" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><Ellipse Width="12" Height="12" Fill="{StaticResource Brush.Accent}" Margin="8,0,8,0" VerticalAlignment="Center" /><TextBlock Text="Online" /></StackPanel>
           </Button>
           <Button Style="{StaticResource MenuRow}" Tag="away" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE708;" FontFamily="{StaticResource Icons}" Foreground="{StaticResource Brush.Warn}" FontSize="13" Width="24" /><TextBlock Text="AFK" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE708;" FontFamily="{StaticResource Font.Icons}" Foreground="{StaticResource Brush.Warn}" FontSize="16" Width="28" /><TextBlock Text="AFK" /></StackPanel>
           </Button>
           <Button Style="{StaticResource MenuRow}" Tag="busy" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE738;" FontFamily="{StaticResource Icons}" Foreground="{StaticResource Brush.Danger}" FontSize="13" FontWeight="Bold" Width="24" /><TextBlock Text="Busy" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE738;" FontFamily="{StaticResource Font.Icons}" Foreground="{StaticResource Brush.Danger}" FontSize="16" Width="28" /><TextBlock Text="Busy" /></StackPanel>
           </Button>
           <Button Style="{StaticResource MenuRow}" Tag="dungeon" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xEA18;" FontFamily="{StaticResource Icons}" Foreground="#B48CE0" FontSize="13" Width="24" /><TextBlock Text="In a dungeon" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xEA18;" FontFamily="{StaticResource Font.Icons}" Foreground="{StaticResource Brush.Dungeon}" FontSize="16" Width="28" /><TextBlock Text="In a dungeon" /></StackPanel>
           </Button>
           <Button Style="{StaticResource MenuRow}" Tag="lfg" Click="StatusOption_Click">
-            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE716;" FontFamily="{StaticResource Icons}" Foreground="{StaticResource Brush.Info}" FontSize="13" Width="24" /><TextBlock Text="Looking for group" /></StackPanel>
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE716;" FontFamily="{StaticResource Font.Icons}" Foreground="{StaticResource Brush.Info}" FontSize="16" Width="28" /><TextBlock Text="Looking for group" /></StackPanel>
           </Button>
-          <Border Height="1" Background="{StaticResource Line}" Margin="8,5,8,3" />
+          <Border Height="1" Background="{StaticResource Brush.Divider}" Margin="8,4,8,4" />
           <Button Style="{StaticResource MenuRow}" Tag="invisible" Click="StatusOption_Click" ToolTip="Stay connected, but nobody sees you online">
             <DockPanel>
-              <TextBlock x:Name="InvisibleCheck" DockPanel.Dock="Right" Text="&#xE73E;" FontFamily="{StaticResource Icons}" Foreground="{StaticResource Accent}" FontSize="12"
+              <TextBlock x:Name="InvisibleCheck" DockPanel.Dock="Right" Text="&#xE73E;" FontFamily="{StaticResource Font.Icons}" Foreground="{StaticResource Brush.Accent}" FontSize="12"
                          VerticalAlignment="Center" Visibility="Collapsed" />
-              <Ellipse Width="12" Height="12" Stroke="{StaticResource Brush.Text.Secondary}" StrokeThickness="2.5" Margin="1,0,11,0" VerticalAlignment="Center" />
+              <Ellipse Width="12" Height="12" Stroke="{StaticResource Brush.Text.Secondary}" StrokeThickness="2" Margin="8,0,8,0" VerticalAlignment="Center" />
               <TextBlock Text="Appear offline" />
             </DockPanel>
           </Button>
-          <TextBox x:Name="NoteBox" Style="{StaticResource Input}" Tag="What are you up to? (optional)" Margin="2,8,2,2" MaxLength="40" KeyDown="NoteBox_KeyDown" />
-          <TextBlock Text="Enter saves the note" FontSize="11" Foreground="{StaticResource TextDim}" Margin="6,3,0,2" />
+          <TextBox x:Name="NoteBox" Style="{StaticResource Input}" Tag="What are you up to? (optional)" Margin="0,8,0,0" MaxLength="40" KeyDown="NoteBox_KeyDown" />
+          <TextBlock Text="Enter saves the note" Style="{StaticResource Text.Caption}" Margin="8,4,0,0" />
         </StackPanel>
       </Border>
     </Popup>
 
     <!-- person: the profile card, then what you can do with them (mention, join their room, volume, officer tools) -->
-    <Popup x:Name="MemberPopup" StaysOpen="False" Placement="Right" AllowsTransparency="True" PopupAnimation="Fade" HorizontalOffset="6">
-      <Border Background="{StaticResource SurfaceHi}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Margin="0,0,16,16">
-        <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" /></Border.Effect>
+    <Popup x:Name="MemberPopup" StaysOpen="False" Placement="Right" AllowsTransparency="True" PopupAnimation="None" HorizontalOffset="-18" VerticalOffset="-24">
+      <Border Style="{StaticResource PopupCard}" BorderThickness="0">
         <StackPanel Width="300">
           <ContentControl x:Name="PopCard" ContentTemplate="{StaticResource ProfileCard}" />
-          <StackPanel Margin="16,0,16,14">
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-              <Button x:Name="PopMention" Style="{StaticResource SecondaryButton}" Content="Mention" Click="PopMention_Click" ToolTip="Put @name in your message" />
-              <Button x:Name="PopJoin" Style="{StaticResource SecondaryButton}" Content="Join their voice room" Margin="8,0,0,0" Click="PopJoin_Click" />
+          <StackPanel Margin="16,0,16,16">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+              <Button x:Name="PopMention" Style="{StaticResource Button.S}" Content="Mention" Click="PopMention_Click" ToolTip="Put @name in your message" />
+              <Button x:Name="PopJoin" Style="{StaticResource Button.S}" Content="Join their voice room" Margin="8,0,0,0" Click="PopJoin_Click" />
             </StackPanel>
             <StackPanel x:Name="PopVolumeArea" Margin="0,12,0,0">
               <DockPanel>
-                <TextBlock DockPanel.Dock="Right" x:Name="PopVolumeText" FontSize="11" Foreground="{StaticResource TextDim}" />
-                <TextBlock Text="Volume" FontSize="12" />
+                <TextBlock DockPanel.Dock="Right" x:Name="PopVolumeText" Style="{StaticResource Text.Caption}" />
+                <TextBlock Text="Volume" Style="{StaticResource Text.Secondary}" />
               </DockPanel>
-              <Slider x:Name="PopVolume" Minimum="0" Maximum="2" Margin="0,6,0,0" ValueChanged="PopVolume_Changed" />
+              <Slider x:Name="PopVolume" Minimum="0" Maximum="2" Margin="0,8,0,0" ValueChanged="PopVolume_Changed" />
             </StackPanel>
             <StackPanel x:Name="PopModArea" Margin="-8,8,0,0">
               <Button x:Name="PopMute" Style="{StaticResource MenuRow}" Click="PopMute_Click" />
               <Button Style="{StaticResource MenuRow}" Click="PopKick_Click">
-                <TextBlock Text="Kick from the lodge" Foreground="{StaticResource Danger}" />
+                <TextBlock Text="Kick from the lodge" Foreground="{StaticResource Brush.Danger}" />
               </Button>
             </StackPanel>
             <Button x:Name="PopReset" Style="{StaticResource MenuRow}" Margin="-8,0,0,0" Click="PopReset_Click" ToolTip="Guild Master: put their avatar, accent and display name back to the default">
-              <TextBlock Text="Reset profile look to default" Foreground="{StaticResource Danger}" />
+              <TextBlock Text="Reset profile look to default" Foreground="{StaticResource Brush.Danger}" />
             </Button>
           </StackPanel>
         </StackPanel>

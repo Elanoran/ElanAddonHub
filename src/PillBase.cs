@@ -41,17 +41,17 @@ namespace ElansAddonHub
 
         static Brush Res(string key) => (Brush)Application.Current.Resources[key];
         static Brush Tint(string key, byte a) { var c = ((SolidColorBrush)Res(key)).Color; var b = new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B)); b.Freeze(); return b; }
-        static Brush bgQuiet, bgDanger, bgBusy, fgDark;
+        static Brush bgQuiet, bgDanger, bgBusy;
         public Brush PillBg
         {
             get
             {
                 switch (Kind)
                 {
-                    case PillKind.Action: return Res("Accent");
-                    case PillKind.Danger: return bgDanger ?? (bgDanger = Tint("Danger", 0x33));
-                    case PillKind.Busy: return bgBusy ?? (bgBusy = Tint("Accent", 0x26));
-                    default: return bgQuiet ?? (bgQuiet = Tint("Text", 0x14));
+                    case PillKind.Action: return Res("Brush.Accent");
+                    case PillKind.Danger: return bgDanger ?? (bgDanger = Tint("Brush.Danger", 0x33));
+                    case PillKind.Busy: return bgBusy ?? (bgBusy = Tint("Brush.Accent", 0x26));
+                    default: return bgQuiet ?? (bgQuiet = Tint("Brush.Text.Primary", 0x14));
                 }
             }
         }
@@ -61,10 +61,10 @@ namespace ElansAddonHub
             {
                 switch (Kind)
                 {
-                    case PillKind.Action: return fgDark ?? (fgDark = new SolidColorBrush(Color.FromRgb(0x11, 0x13, 0x15)));
-                    case PillKind.Danger: return Res("Danger");
-                    case PillKind.Busy: return Res("Accent");
-                    default: return Res("TextDim");
+                    case PillKind.Action: return Res("Brush.OnAccent");
+                    case PillKind.Danger: return Res("Brush.Danger");
+                    case PillKind.Busy: return Res("Brush.Accent");
+                    default: return Res("Brush.Text.Secondary");
                 }
             }
         }
