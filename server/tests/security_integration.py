@@ -13,6 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 EXE = os.path.join(HERE, "..", "Lodge.Server", "bin", "Release", "net8.0", "lodge.exe" if os.name == "nt" else "lodge")
 ELAN, BOB, GUEST = "synthetic0elan0code0000000000001", "synthetic0bob00code0000000000002", "synthetic0guest0code00000000003"
 results = []
+SECRETS = []   # invites and tokens made during the run (synthetic): none may reach a log
 
 
 def check(name, ok, extra=""):
@@ -331,7 +332,7 @@ async def suite_f(base):
         b = await ws_open(s, base, BOB, "192.0.2.82"); await recv(b, "welcome")
         g = await ws_open(s, base, GUEST, "192.0.2.83", name="Pilgrim9"); await recv(g, "welcome")
         feats = w["features"]
-        check("2.9: welcome announces lfg, history2 and search; version 2.9.x", {"lfg", "history2", "search"} <= set(feats) and w["server"].startswith("2.9"), (feats, w["server"]))
+        check("2.9: welcome announces lfg, history2 and search; version 2.10.x", {"lfg", "history2", "search"} <= set(feats) and w["server"].startswith("2.10"), (feats, w["server"]))
 
         # ---- sign-up cards
         await e.send_str(json.dumps({"t": "msg", "channel": "general", "kind": "lfg", "text": "ignored", "lfg": {"title": "Wailing Caverns", "now": True, "slots": {"tank": 1, "healer": 1, "dps": 3}, "note": "bring water"}}))
@@ -392,34 +393,148 @@ async def suite_f(base):
         for w_ in (e, b, g): await w_.close()
 
 
+async def suite_g(base):
+    """2.10: one-time invites, device tokens, device revoke, lockout on /exchange, retire-code - over real sockets."""
+    ws_base = base.replace("http", "ws")
+    def TH(token, ip): return {"X-Forwarded-For": ip, "X-Lodge-Token": token}
+    async with aiohttp.ClientSession() as s:
+        r = await s.get(base + "/features", headers=H(ip="198.51.100.80"))
+        j = await r.json()
+        check("features: public, announces tokens + invites + the version", r.status == 200 and {"tokens", "invites"} <= set(j["features"]) and j["server"].startswith("2.10"), j)
+
+        a = await ws_open(s, base, ELAN, "192.0.2.50"); w = await recv(a, "welcome")
+        check("owner welcome: canInvite + tokens feature", w and w.get("canInvite") is True and "tokens" in w["features"], w and w["features"])
+        await a.send_str(json.dumps({"t": "admin.invite.create", "kind": "person", "name": "Nova", "role": "member", "hours": 2}))
+        c = await recv(a, "admin.invite.created"); secret = c["secret"]; SECRETS.append(secret)
+        check("invite created: i1. secret, 2 h expiry, pending", secret.startswith("i1.") and len(secret) >= 35 and c["expires"] - c["created"] == 2 * 3600 * 1000 and c["pending"], c)
+        lst = await recv(a, "admin.invites")
+        check("the invite list never carries the secret", lst is not None and secret not in json.dumps(lst) and lst["invites"][0]["name"] == "Nova")
+
+        # the secret in the URL does nothing; in a header it works once
+        r = await s.post(base + f"/exchange?invite={secret}", headers=H(ip="198.51.100.81"), json={"device": "x", "deviceId": "x"})
+        check("exchange: an invite in the query string is not read", r.status == 400, r.status)
+        r = await s.post(base + "/exchange", headers={**H(ip="198.51.100.81"), "X-Lodge-Invite": secret}, json={"device": "Nova-PC", "deviceId": "dev-nova-1"})
+        j = await r.json(); token = j.get("token", ""); SECRETS.append(token)
+        check("exchange: invite in the header -> 200 + device token (t1., 256 bit) + identity", r.status == 200 and token.startswith("t1.") and len(token) >= 46 and j["name"] == "Nova" and j["role"] == "member" and j["device"] == "Nova-PC", j)
+        check("exchange response is not cacheable", r.headers.get("Cache-Control") == "no-store")
+        r = await s.post(base + "/exchange", headers={**H(ip="198.51.100.82"), "X-Lodge-Invite": secret}, json={"device": "Other", "deviceId": "dev-2"})
+        j = await r.json()
+        check("exchange: the same invite again -> 410 'used or expired'", r.status == 410 and "used or expired" in j["error"], j)
+        r = await s.post(base + "/exchange", headers={**H(ip="198.51.100.82"), "X-Lodge-Invite": "i1.never-issued-synthetic"}, json={})
+        check("exchange: an unknown invite -> 401", r.status == 401)
+        r = await s.post(base + "/exchange", headers=H(ip="198.51.100.82"), json={})
+        check("exchange: nothing sent -> 400", r.status == 400)
+        r = await s.get(base + "/exchange", headers=H(ip="198.51.100.82"))
+        check("exchange: GET not allowed", r.status in (404, 405))
+
+        # token auth: ws, health, files
+        t = await s.ws_connect(ws_base + "/ws?name=x", headers=TH(token, "192.0.2.51")); tw = await recv(t, "welcome")
+        check("ws with X-Lodge-Token: signed in as Nova, member, with a device", tw and tw["name"] == "Nova" and tw["role"] == "member" and tw["device"]["name"] == "Nova-PC", tw and tw.get("device"))
+        r = await s.get(base + "/health", headers=TH(token, "192.0.2.52"))
+        check("health with a token: version + online", r.status == 200 and "version" in await r.json())
+        up = await s.post(base + "/files", headers={**TH(token, "192.0.2.52"), "X-File-Name": "a.txt"}, data=b"hello")
+        check("files upload with a token", up.status == 200, up.status)
+        try:
+            bad = await s.ws_connect(ws_base + f"/ws?name=x&token={token}", headers=H(None, "192.0.2.53")); st = 101; await bad.close()
+        except aiohttp.WSServerHandshakeError as e: st = e.status
+        check("a token in the query string is not accepted", st == 401, st)
+        r = await s.get(base + "/health", headers=TH("t1.synthetic-wrong-token", "192.0.2.54"))
+        j = await r.json()
+        check("wrong token -> 401 with a 'signed out' message", r.status == 401 and j.get("reason") == "device-revoked", j)
+
+        # old codes keep working; a code can be upgraded
+        r = await s.get(base + "/health", headers=H(BOB, "192.0.2.55"))
+        check("old personal code still works", r.status == 200)
+        r = await s.post(base + "/exchange", headers=H(BOB, "198.51.100.83"), json={"device": "Bob-PC", "deviceId": "bob-1"})
+        j = await r.json(); btoken = j.get("token", ""); SECRETS.append(btoken)
+        check("upgrade: the old code is exchanged for a device token (same name and rank)", r.status == 200 and j["name"] == "Bob" and j["role"] == "officer", j)
+        r = await s.get(base + "/health", headers=H(BOB, "192.0.2.55"))
+        check("... and the code keeps working until retired", r.status == 200)
+        r = await s.post(base + "/exchange", headers=H(GUEST, "198.51.100.83"), json={})
+        check("upgrade with the shared guest code is refused (403)", r.status == 403, r.status)
+
+        # devices: list, revoke closes the socket at once
+        await a.send_str(json.dumps({"t": "admin.devices", "name": "Nova"}))
+        d = await recv(a, "admin.devices")
+        dev = d["devices"][0] if d and d["devices"] else {}
+        check("admin device list: name, device, coarse address, online - no token", dev.get("device") == "Nova-PC" and dev.get("ip") == "192.0.2.x" and dev.get("online") is True and token not in json.dumps(d), dev)
+        await t.send_str(json.dumps({"t": "device.list"}))
+        own = await recv(t, "devices")
+        check("device.list: the member sees their own, marked current", own and len(own["devices"]) == 1 and own["devices"][0]["current"] is True, own)
+        t0 = time.time()
+        await a.send_str(json.dumps({"t": "device.revoke", "id": dev["id"]}))
+        closed = await recv(t, "_closed", 3)
+        check("revoking a device closes its socket immediately with the reason", closed is not None and time.time() - t0 < 2 and "signed out" in str(closed.get("reason")), closed)
+        r = await s.get(base + "/health", headers=TH(token, "192.0.2.56"))
+        check("the revoked token no longer works", r.status == 401)
+
+        # lockout shared with code guesses
+        ip = "198.51.100.90"
+        await a.send_str(json.dumps({"t": "admin.invite.create", "kind": "guest", "uses": 2}))
+        g = await recv(a, "admin.invite.created"); gsecret = g["secret"]; SECRETS.append(gsecret)
+        for i in range(5): await s.get(base + "/health", headers=H(f"wrong-g{i}", ip))
+        codes = []
+        for i in range(5):
+            r = await s.post(base + "/exchange", headers={**H(ip=ip), "X-Lodge-Invite": f"i1.guess{i}"}, json={}); codes.append(r.status)
+        r = await s.post(base + "/exchange", headers={**H(ip=ip), "X-Lodge-Invite": gsecret}, json={"device": "G", "deviceId": "g1"})
+        check("5 wrong codes + 5 wrong invites from one address: 10th is 401, then 429 even with a valid invite", codes == [401] * 5 and r.status == 429, (codes, r.status))
+        r = await s.post(base + "/exchange", headers={**H(ip="198.51.100.91"), "X-Lodge-Invite": gsecret}, json={"device": "Guest laptop", "deviceId": "g1"})
+        j = await r.json(); gtoken = j.get("token", ""); SECRETS.append(gtoken)
+        check("guest invite -> a guest device token", r.status == 200 and j["guest"] is True and j["role"] == "guest", j)
+        gw = await s.ws_connect(ws_base + "/ws?name=Wanderer", headers=TH(gtoken, "192.0.2.57")); gwel = await recv(gw, "welcome")
+        check("guest token joins as a guest", gwel and gwel["role"] == "guest" and "(guest)" in gwel["name"], gwel and gwel["name"])
+        await gw.send_str(json.dumps({"t": "admin.invites"}))
+        err = await recv(gw, "error")
+        check("a guest cannot list invites", err is not None)
+        await gw.close()
+
+        # retire-code
+        await a.send_str(json.dumps({"t": "admin.retire", "name": "Bob"}))
+        m = await recv(a, "admin.members", 3, lambda d: any(x["name"] == "Bob" and x["hasCode"] is False for x in d["members"]))
+        check("owner retires Bob's code: the members list says so", m is not None)
+        r = await s.get(base + "/health", headers=H(BOB, "192.0.2.58"))
+        check("... the old code is dead", r.status == 401, r.status)
+        r = await s.get(base + "/health", headers=TH(btoken, "192.0.2.59"))
+        check("... Bob's device token works", r.status == 200)
+        bw = await s.ws_connect(ws_base + "/ws?name=Bob", headers=TH(btoken, "192.0.2.59")); bwel = await recv(bw, "welcome")
+        check("... and Bob is still an officer", bwel and bwel["name"] == "Bob" and bwel["role"] == "officer" and bwel["canInvite"] is True)
+        await bw.send_str(json.dumps({"t": "admin.retire", "name": "Elan"}))
+        err = await recv(bw, "error")
+        check("an officer cannot retire codes", err is not None and "rank" in err["text"], err)
+        await bw.close()
+        await a.close(); await t.close()
+
+
 def scan_logs(*datas):
     text = ""
     for d in datas:
         with open(os.path.join(d, "server.log"), encoding="utf-8", errors="replace") as f:
             text += f.read()
-    leaked = [c for c in (ELAN, BOB, GUEST) if c in text] + re.findall(r"wrong-[a-z]?\d", text)
+    leaked = [c for c in (ELAN, BOB, GUEST, *SECRETS) if c and c in text] + [c[3:] for c in SECRETS if c and c[3:] in text] + re.findall(r"wrong-[a-z]?\d", text)
     check("no code (valid or wrong) appears in the server logs", not leaked, leaked[:3])
 
 
 def main():
     if not os.path.exists(EXE): raise SystemExit(f"build first: {EXE}")
+    pg, dg, lg = start(5294)
     pa, da, la = start(5291, LODGE_ALLOW_QUERY_CODE="true")  # the first server keeps the legacy ?code= on (default is off since 2.8)
     pc, dc, lc = start(5293)
     pb, db, lb = start(5292, LODGE_ALLOW_QUERY_CODE="false", LODGE_MAX_STORAGE_MB=1, LODGE_MAX_FILE_MB=1, LODGE_MAX_USERS=5)
     try:
-        wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge"); wait_up("http://127.0.0.1:5293/lodge")
+        wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge"); wait_up("http://127.0.0.1:5293/lodge"); wait_up("http://127.0.0.1:5294/lodge")
         asyncio.run(suite_a("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_c("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_d("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_e("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_b("http://127.0.0.1:5292/lodge"))
         asyncio.run(suite_f("http://127.0.0.1:5293/lodge"))
+        asyncio.run(suite_g("http://127.0.0.1:5294/lodge"))
     finally:
-        for p in (pa, pb, pc): p.terminate()
-        for p in (pa, pb, pc): p.wait(10)
-        for l in (la, lb, lc): l.close()
-    scan_logs(da, db, dc)
-    for d in (da, db, dc): shutil.rmtree(d, ignore_errors=True)
+        for p in (pa, pb, pc, pg): p.terminate()
+        for p in (pa, pb, pc, pg): p.wait(10)
+        for l in (la, lb, lc, lg): l.close()
+    scan_logs(da, db, dc, dg)
+    for d in (da, db, dc, dg): shutil.rmtree(d, ignore_errors=True)
     print(f"\n{sum(results)}/{len(results)} passed")
     sys.exit(0 if all(results) else 1)
 

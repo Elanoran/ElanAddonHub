@@ -50,10 +50,10 @@ if [ -f /etc/lodge/codes ] && [ ! -f "$CODES" ]; then
   echo "== Moved invite codes to $CODES"
 fi
 umask 077
-touch "$CODES" "$CODES.lock"
-chown lodge:lodge "$CODES" "$CODES.lock"   # the service edits the codes (Guild Master panel); lodge-admin and the
-chmod 640 "$CODES"                         # service share codes.lock for every change
-chmod 660 "$CODES.lock"
+touch "$CODES" "$CODES.lock" "$DATA_DIR/invites" "$DATA_DIR/devices"
+chown lodge:lodge "$CODES" "$CODES.lock" "$DATA_DIR/invites" "$DATA_DIR/devices"   # the service edits the codes, the one-time
+chmod 640 "$CODES" "$DATA_DIR/invites" "$DATA_DIR/devices"                         # invites (only hashes) and the device list (token
+chmod 660 "$CODES.lock"                                                            # hashes); lodge-admin and the service share codes.lock
 umask 022
 if ! grep -q '[^[:space:]]' "$CODES" && ! grep -qE '^LODGE_CODE=.{6,}' "$ENV_FILE"; then
   echo "== No invite codes yet. Make one per friend:  sudo lodge-admin add <name>"

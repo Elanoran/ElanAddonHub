@@ -1,41 +1,82 @@
 #!/usr/bin/env bash
-# Personal invite codes for the Lodge - one per friend, tied to their name and rank.
+# Invites, devices and codes for the Lodge.
+#
+# One-time invite links (2.10, the way to let someone in):
+#   sudo lodge-admin invite Bob [role] [--days N | --hours N]   a link for a new person; prints it ONCE (send it privately)
+#   sudo lodge-admin invite --guest [--uses N] [--days N]       a guest link that can be used N times (default 1)
+#   sudo lodge-admin invites                                    pending and used invites (never the secrets)
+#   sudo lodge-admin revoke-invite ID                           the link stops working
+#   sudo lodge-admin devices [name]                             each person's signed-in devices
+#   sudo lodge-admin revoke-device ID                           that device is signed out (disconnected within 15 s)
+#   sudo lodge-admin retire-code Bob [--force]                  Bob's old permanent code stops working (he keeps his devices)
+# An invite lives 7 days unless --days (1-30) / --hours (1-720) says otherwise, and works once. The first time someone
+# opens it, the Outpost trades it for a per-device token; the link is then dead. To print links with your address, set
+# LODGE_PUBLIC_URL=https://your.site/lodge in /etc/lodge/lodge.env.
+#
+# Permanent codes (older way, still supported):
 #   sudo lodge-admin add Bob [role]    new code for Bob (prints it - send it to Bob); role defaults to member
 #   sudo lodge-admin role Bob officer  change Bob's rank (applies within 15 s): owner | officer | veteran | member
-#   sudo lodge-admin remove Bob        Bob's code stops working, he's disconnected within 15 seconds
+#   sudo lodge-admin remove Bob        Bob's code and devices stop working, he's disconnected within 15 seconds
 #   sudo lodge-admin show Bob          print Bob's code again
-#   sudo lodge-admin list              who has a code, with their rank
-# The server re-reads the file by itself; no restart needed. The hub's Guild Master panel edits the same file.
+#   sudo lodge-admin list              who is in, with their rank
+# The server re-reads the files by itself; no restart needed. The hub's Guild Master panel edits the same files.
 #
-# Safety: umask 077; every change holds an flock on <codes>.lock (the server takes the same lock); the new list is
-# written to a private mktemp file in the same folder, given its owner and 0640, then renamed over the old file
-# (atomic: nobody ever reads a partial list). Codes are never logged.
+# Safety: umask 077; every change holds an flock on <codes>.lock (the server takes the same lock); the new file is
+# written to a private mktemp file in the same folder, given its owner and 0640, then renamed over the old one (atomic:
+# nobody ever reads a partial list). Invite secrets and tokens are stored only as SHA-256 hashes; a secret is printed
+# once, to stdout, and never logged. Codes are never logged.
 set -euo pipefail
 umask 077
+
+# letters of any language in names (the server accepts the same: letters, digits, space, _ and -)
+for loc in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8; do
+  if locale -a 2>/dev/null | grep -qix "$loc"; then export LC_ALL="$loc"; break; fi
+done
 
 if [ -n "${LODGE_CODES_FILE:-}" ]; then FILE="$LODGE_CODES_FILE"
 elif [ -f /var/lib/lodge/codes ] || [ ! -f /etc/lodge/codes ]; then FILE=/var/lib/lodge/codes
 else FILE=/etc/lodge/codes; fi
-OWNER="${LODGE_OWNER:-lodge:lodge}"   # the service edits the file too (Guild Master panel)
+OWNER="${LODGE_OWNER:-lodge:lodge}"   # the service edits the files too (Guild Master panel)
 LOCK="$FILE.lock"
 DIR="$(dirname "$FILE")"
+INV="$DIR/invites"
+DEV="$DIR/devices"
+ENVF="${LODGE_ENV_FILE:-/etc/lodge/lodge.env}"
+INV_HEADER="# Lodge invites: id, sha256(secret), kind, name, role, created by, created, expires, max uses, uses, revoked (the secrets are not stored)"
 
 if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo"; exit 1; fi
 mkdir -p "$DIR"
 
 cmd="${1:-list}"
 shift || true
+
+# --- argument parsing: flags anywhere, the rest is the name (and a rank as its last word for add/role/invite)
+days=""; hours=""; uses=""; force=0; guest=0
+rest=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --days|--hours|--uses)
+      if [ "$#" -lt 2 ] || [[ ! "$2" =~ ^[0-9]+$ ]]; then echo "$1 needs a number"; exit 1; fi
+      case "$1" in --days) days="$2";; --hours) hours="$2";; --uses) uses="$2";; esac
+      shift 2 ;;
+    --guest) guest=1; shift ;;
+    --force) force=1; shift ;;
+    *) rest+=("$1"); shift ;;
+  esac
+done
 role=""
-# "add NAME ROLE" / "role NAME ROLE": the last word is the rank when it is one
-if [ "$#" -ge 2 ] && [[ "$cmd" == "add" || "$cmd" == "role" ]] && [[ "${*: -1}" =~ ^(owner|officer|veteran|member)$ ]]; then
-  role="${*: -1}"
-  set -- "${@:1:$(($#-1))}"
+# "add NAME ROLE" / "role NAME ROLE" / "invite NAME ROLE": the last word is the rank when it is one
+if [ "${#rest[@]}" -ge 2 ] && [[ "$cmd" == "add" || "$cmd" == "role" || "$cmd" == "invite" ]] && [[ "${rest[${#rest[@]}-1]}" =~ ^(owner|officer|veteran|member)$ ]]; then
+  role="${rest[${#rest[@]}-1]}"
+  unset 'rest[${#rest[@]}-1]'
 fi
-name="$*"
+name="${rest[*]:-}"
+name="$(printf '%s' "$name" | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
 
 need_name() {
-  if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9\ _-]{0,23}$ ]]; then
-    echo "Name must be 1-24 characters: letters, digits, space, _ or -"
+  local re='^[[:alnum:]][[:alnum:] _-]{0,23}$'
+  if [[ ! "$name" =~ $re ]]; then
+    echo "Name must be 1-24 characters: letters (any language), digits, space, _ or -"
     exit 1
   fi
 }
@@ -61,25 +102,40 @@ lock() {
   fi
 }
 
-# stdin -> the new codes file
-replace() {
+# stdin -> the file named by $1 (the codes file, invites or devices)
+write_to() {
   tmp="$(mktemp "$DIR/.codes.XXXXXXXXXX")"   # 0600 thanks to umask 077
   cat > "$tmp"
   chown "$OWNER" "$tmp" 2>/dev/null || true
   chmod 0640 "$tmp"
-  mv -f -- "$tmp" "$FILE"
+  mv -f -- "$tmp" "$1"
   tmp=""
 }
+replace() { write_to "$FILE"; }
 
 has_code() {
   awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n {f=1} END{exit f?0:1}' "$FILE"
 }
 
+# the stored code field of $name ("" when there is no such person)
+code_field() {
+  awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { print $2; exit }' "$FILE"
+}
+
+now() { date +%s; }
+fmt_time() { date -u -d "@$1" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$1"; }
+sha() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
+envval() { if [ -r "$ENVF" ]; then grep -E "^$1=" "$ENVF" | tail -1 | cut -d= -f2- | sed -E "s/^[\"']//; s/[\"']\$//" || true; fi; }
+
 case "$cmd" in
   add)
     need_name
     lock
-    if has_code; then echo "$name already has a code (sudo lodge-admin show $name)"; exit 1; fi
+    if has_code; then
+      if [[ "$(code_field)" == '!'* ]]; then echo "$name is already in and has no permanent code - make a device link: sudo lodge-admin invite $name"
+      else echo "$name already has a code (sudo lodge-admin show $name)"; fi
+      exit 1
+    fi
     code="$(openssl rand -hex 16)"
     { awk 1 "$FILE"; printf '%s:%s:%s\n' "$name" "$code" "${role:-member}"; } | replace
     echo "Invite code for $name (${role:-member}): $code"
@@ -98,20 +154,120 @@ case "$cmd" in
     lock
     if ! has_code; then echo "No code for $name"; exit 1; fi
     awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { next } { print }' "$FILE" | replace
+    if [ -f "$DEV" ]; then   # their devices go with them
+      awk -F'\t' -v n="$name" 'BEGIN{n=tolower(n)} /^#/ { print; next } tolower($3)==n { next } { print }' "$DEV" | write_to "$DEV"
+    fi
     echo "Removed $name - disconnected within 15 seconds"
     ;;
   show)
     need_name
     if [ ! -f "$FILE" ] || ! has_code; then echo "No code for $name"; exit 1; fi
-    awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { print $2; exit }' "$FILE"
+    c="$(code_field)"
+    if [[ "$c" == '!'* ]]; then echo "$name has no permanent code (retired). Make a device link: sudo lodge-admin invite $name"; exit 1; fi
+    echo "$c"
     ;;
   list)
-    if [ ! -f "$FILE" ]; then echo "(no personal codes yet - sudo lodge-admin add <name>)"; exit 0; fi
-    names="$(awk -F: '!/^[[:space:]]*#/ && NF >= 2 && $1 != "" { r = ($3 == "" ? "member" : $3); printf "%-24s %s\n", $1, r }' "$FILE")"
-    if [ -z "$names" ]; then echo "(no personal codes yet - sudo lodge-admin add <name>)"; else echo "$names"; fi
+    if [ ! -f "$FILE" ]; then echo "(nobody yet - sudo lodge-admin invite <name>)"; exit 0; fi
+    names="$(awk -F: '!/^[[:space:]]*#/ && NF >= 2 && $1 != "" { r = ($3 == "" ? "member" : $3); printf "%-24s %s%s\n", $1, r, (substr($2,1,1) == "!" ? "  (no permanent code)" : "") }' "$FILE")"
+    if [ -z "$names" ]; then echo "(nobody yet - sudo lodge-admin invite <name>)"; else echo "$names"; fi
+    ;;
+
+  # ---------------------------------------------------------------- one-time invites (2.10)
+  invite)
+    if [ "$guest" -eq 1 ]; then
+      kind=guest; iname="-"; irole=guest; maxuses="${uses:-1}"
+      if [ "$maxuses" -lt 1 ] || [ "$maxuses" -gt 50 ]; then echo "--uses must be 1-50"; exit 1; fi
+    else
+      need_name
+      kind=person; iname="$name"; irole="${role:-member}"; maxuses=1
+    fi
+    if [ -n "$days" ]; then h=$((days * 24)); elif [ -n "$hours" ]; then h="$hours"
+    else h="$(envval LODGE_INVITE_HOURS)"; h="${h:-168}"; fi
+    if [[ ! "$h" =~ ^[0-9]+$ ]] || [ "$h" -lt 1 ] || [ "$h" -gt 720 ]; then echo "An invite can live 1 hour to 30 days"; exit 1; fi
+    lock
+    if [ "$kind" = person ]; then
+      if has_code; then   # already in: this is another device, with the rank they have
+        irole="$(awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { print ($3 == "" ? "member" : $3); exit }' "$FILE")"
+        iname="$(awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { print $1; exit }' "$FILE")"
+        echo "$iname is already in - this link adds another device (rank: $irole)" >&2
+      fi
+      if [ -f "$INV" ] && awk -F'\t' -v n="$iname" -v t="$(now)" 'BEGIN{n=tolower(n)}
+           $0 !~ /^#/ && $3=="person" && tolower($4)==n && $11!="1" && $8>t && $10<$9 {f=1} END{exit f?0:1}' "$INV"; then
+        echo "$iname already has a pending invite - revoke it first (sudo lodge-admin invites)"; exit 1
+      fi
+    fi
+    secret="i1.$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=\n')"
+    id="$(openssl rand -hex 5)"
+    created="$(now)"
+    by="$(printf '%s' "${SUDO_USER:-root}" | tr -d '\t\n')"
+    row="$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t0\t0' "$id" "$(sha "$secret")" "$kind" "$iname" "$irole" "$by" "$created" "$((created + h * 3600))" "$maxuses")"
+    { if [ -f "$INV" ]; then awk 1 "$INV"; else echo "$INV_HEADER"; fi; printf '%s\n' "$row"; } | write_to "$INV"
+    url="${LODGE_PUBLIC_URL:-$(envval LODGE_PUBLIC_URL)}"
+    server="${url%/}"
+    case "$server" in https://*) server="${server#https://}";; esac
+    if [ -z "$server" ]; then server="<your-lodge-address>"; echo "(set LODGE_PUBLIC_URL in $ENVF so links carry your address)" >&2; fi
+    if [ "$kind" = guest ]; then who="a guest (up to $maxuses uses)"; else who="$iname ($irole)"; fi
+    echo "Invite $id for $who, valid until $(fmt_time $((created + h * 3600))) UTC:" >&2
+    echo "SEND THIS LINK PRIVATELY (not in a channel). It is shown only now and works once - it cannot be shown again." >&2
+    printf 'elanshub://lodge/join#%s|%s\n' "$server" "$secret"
+    ;;
+  invites)
+    if [ ! -f "$INV" ] || ! grep -qv '^#' "$INV"; then echo "(no invites - sudo lodge-admin invite <name>)"; exit 0; fi
+    t="$(now)"
+    printf '%-10s %-7s %-24s %-8s %-12s %-17s %-5s %s\n' ID KIND NAME ROLE BY "EXPIRES (UTC)" USES STATE
+    while IFS=$'\t' read -r id _ kind iname irole by _ ex mx us rv; do
+      case "$id" in ''|'#'*) continue;; esac
+      if [ "$rv" = 1 ]; then st=revoked; elif [ "$us" -ge "$mx" ]; then st=used; elif [ "$ex" -le "$t" ]; then st=expired; else st=pending; fi
+      [ "$iname" = "-" ] && iname="(guest)"
+      printf '%-10s %-7s %-24s %-8s %-12s %-17s %-5s %s\n' "$id" "$kind" "$iname" "$irole" "$by" "$(fmt_time "$ex")" "$us/$mx" "$st"
+    done < "$INV"
+    ;;
+  revoke-invite)
+    id="${rest[0]:-}"
+    if [[ ! "$id" =~ ^[0-9a-fA-F]+$ ]]; then echo "Usage: sudo lodge-admin revoke-invite ID  (see: sudo lodge-admin invites)"; exit 1; fi
+    lock
+    if [ ! -f "$INV" ] || ! awk -F'\t' -v i="$id" '$0 !~ /^#/ && tolower($1)==tolower(i) {f=1} END{exit f?0:1}' "$INV"; then echo "No invite $id"; exit 1; fi
+    awk -F'\t' -v OFS='\t' -v i="$id" '$0 !~ /^#/ && tolower($1)==tolower(i) { $11 = "1" } { print }' "$INV" | write_to "$INV"
+    echo "Invite $id revoked - the link no longer works"
+    ;;
+  devices)
+    filter="${rest[*]:-}"
+    if [ ! -f "$DEV" ] || ! grep -qv '^#' "$DEV"; then echo "(no devices yet - people get one by opening an invite link)"; exit 0; fi
+    printf '%-10s %-24s %-24s %-17s %-17s %s\n' ID NAME DEVICE "CREATED (UTC)" "LAST SEEN (UTC)" ADDRESS
+    while IFS=$'\t' read -r id _ dn _ dev _ cr ls ip; do
+      case "$id" in ''|'#'*) continue;; esac
+      if [ -n "$filter" ] && [ "${dn,,}" != "${filter,,}" ]; then continue; fi
+      [ "$dn" = "-" ] && dn="(guest)"
+      printf '%-10s %-24s %-24s %-17s %-17s %s\n' "$id" "$dn" "$dev" "$(fmt_time "$cr")" "$(fmt_time "$ls")" "${ip:-}"
+    done < "$DEV"
+    ;;
+  revoke-device)
+    id="${rest[0]:-}"
+    if [[ ! "$id" =~ ^[0-9a-fA-F]+$ ]]; then echo "Usage: sudo lodge-admin revoke-device ID  (see: sudo lodge-admin devices)"; exit 1; fi
+    lock
+    if [ ! -f "$DEV" ] || ! awk -F'\t' -v i="$id" '$0 !~ /^#/ && tolower($1)==tolower(i) {f=1} END{exit f?0:1}' "$DEV"; then echo "No device $id"; exit 1; fi
+    awk -F'\t' -v i="$id" '$0 ~ /^#/ { print; next } tolower($1)==tolower(i) { next } { print }' "$DEV" | write_to "$DEV"
+    echo "Device $id signed out - disconnected within 15 seconds"
+    ;;
+  retire-code)
+    need_name
+    lock
+    if ! has_code; then echo "No member called $name"; exit 1; fi
+    if [[ "$(code_field)" == '!'* ]]; then echo "$name has no permanent code (already retired)"; exit 1; fi
+    if [ "$force" -ne 1 ] && { [ ! -f "$DEV" ] || ! awk -F'\t' -v n="$name" 'BEGIN{n=tolower(n)} $0 !~ /^#/ && tolower($3)==n {f=1} END{exit f?0:1}' "$DEV"; }; then
+      echo "$name has no device on a token yet - retiring the code would lock them out."
+      echo "Send them a link first (sudo lodge-admin invite $name), or use --force."
+      exit 1
+    fi
+    newc="!$(openssl rand -hex 16)"
+    awk -F: -v OFS=: -v n="$name" -v c="$newc" 'BEGIN{n=tolower(n)}
+      !/^[[:space:]]*#/ && tolower($1)==n { print $1, c, $3; next } { print }' "$FILE" | replace
+    echo "$name's permanent code is retired (their devices keep working; a still-connected old client is disconnected within 15 seconds)"
     ;;
   *)
-    echo "Usage: sudo lodge-admin add NAME [role] | role NAME ROLE | remove NAME | show NAME | list"
+    echo "Usage: sudo lodge-admin invite NAME [role] [--days N] | invite --guest [--uses N] | invites | revoke-invite ID"
+    echo "                       | devices [NAME] | revoke-device ID | retire-code NAME"
+    echo "                       | add NAME [role] | role NAME ROLE | remove NAME | show NAME | list"
     exit 1
     ;;
 esac
