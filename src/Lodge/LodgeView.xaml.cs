@@ -38,9 +38,17 @@ namespace ElansAddonHub.Lodge
         public bool ForceOverlayForTest;
         public bool OverlayPreview; // the Settings page shows it while you place it
 
+        // the transparent margin of a popover card (PopupCard) that holds its shadow; popups subtract it from their offsets
+        const double PopupShadow = 24;
+
         public LodgeView()
         {
             InitializeComponent();
+            foreach (var p in new[] { SearchPopup, PlusPopup, MsgMenu, ReactPopup, PinPopup, StatusPopup, MemberPopup })
+            {
+                var pop = p;
+                pop.Opened += (s, e) => Motion.DialogIn(pop.Child as FrameworkElement);   // scale 0.96 -> 1 + fade; instant with Windows animations off
+            }
             tick.Tick += (s, e) => OnTick();
             dropTimer.Tick += (s, e) => { dropTimer.Stop(); DropOverlay.Visibility = Visibility.Collapsed; };
         }
@@ -66,8 +74,8 @@ namespace ElansAddonHub.Lodge
             };
             session.Stopped += why => ShowJoin(why);
             session.ProfileReceived += OnProfileReceived;
-            session.Error += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(6); };
-            session.Hint += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(14); };
+            session.Error += text => { SetNote(text, true); noteUntil = DateTime.UtcNow.AddSeconds(6); };
+            session.Hint += ShowHint;
             session.SendFailed += (p, why) => RestoreText(p.Text);
             session.ToastWillShow = () => !session.Settings.ToastsOff && (OverlayWindow.WowInFront() != IntPtr.Zero || session.Settings.OverlayAlways || ForceToastsForTest);
             tick.Start();
@@ -109,6 +117,7 @@ namespace ElansAddonHub.Lodge
                 // open at the "New messages" line when there is one, otherwise at the newest message
                 if (s.Selected?.Divider != null) ScrollToMessage(s.Selected.Divider, false);
                 else ScrollToEnd();
+                if (IsLoaded && IsVisible && s.Selected != null) Motion.PageIn(MessageScroll);   // a channel switch eases in (fade + 8 px slide)
             }
             PinButton.Visibility = s.SupportsPin ? Visibility.Visible : Visibility.Collapsed;
             SearchButton.Visibility = s.SupportsSearch ? Visibility.Visible : Visibility.Collapsed;   // servers before 2.9 have no search
@@ -116,6 +125,11 @@ namespace ElansAddonHub.Lodge
             UpdatePins();
             if (s.Selected != null)
                 EmptyText.Visibility = s.MessagesOf(s.Selected.Id).Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            // until the welcome frame names the channels the history is on its way: skeleton rows instead of blank space
+            bool connecting = s.Selected == null;
+            MessagesSkeleton.Visibility = SidebarSkeleton.Visibility = connecting ? Visibility.Visible : Visibility.Collapsed;
+            TextHeader.Visibility = VoiceHeader.Visibility = connecting ? Visibility.Collapsed : Visibility.Visible;
+            if (connecting) EmptyText.Visibility = Visibility.Collapsed;
 
             // me
             if (s.Me != null)
@@ -141,6 +155,25 @@ namespace ElansAddonHub.Lodge
                 MuteToggle.Content = MuteToggle.IsChecked == true ? "" : "";
             }
         }
+
+        // the note in the channel header: calm Secondary text; Danger only for a real error (a failed send, upload or download)
+        void SetNote(string text, bool error = false)
+        {
+            ChatNote.Text = text;
+            ChatNote.SetResourceReference(TextBlock.ForegroundProperty, error ? "Brush.Danger" : "Brush.Text.Secondary");
+        }
+
+        // the one-time display-name tip: an inline hint under the header, dismissed with its X (it is never shown again)
+        void ShowHint(string text)
+        {
+            HintText.Text = text;
+            HintBar.Visibility = Visibility.Visible;
+            Motion.PageIn(HintBar);
+        }
+        void HintClose_Click(object sender, RoutedEventArgs e) => HintBar.Visibility = Visibility.Collapsed;
+        public bool HintVisibleForTest => HintBar.Visibility == Visibility.Visible;
+        public string HintTextForTest => HintText.Text;
+        public void CloseHintForTest() => HintClose_Click(null, null);
 
         void OnTick()
         {
@@ -265,14 +298,14 @@ namespace ElansAddonHub.Lodge
             PinCount.Text = n > 0 ? n.ToString() : "";
             PinButton.ToolTip = n == 0 ? "Pinned messages" : $"{n} pinned message{(n == 1 ? "" : "s")}";
             PinEmpty.Visibility = n == 0 ? Visibility.Visible : Visibility.Collapsed;
-            PinTitle.Text = n == 0 ? "PINNED MESSAGES" : $"PINNED MESSAGES - {n}";
+            PinTitle.Text = n == 0 ? "Pinned messages" : $"Pinned messages  ·  {n}";
         }
 
         void PinButton_Click(object sender, RoutedEventArgs e)
         {
             UpdatePins();
             PinPopup.PlacementTarget = PinButton;
-            PinPopup.HorizontalOffset = PinButton.ActualWidth - PinBox.Width - 8;
+            PinPopup.HorizontalOffset = PinButton.ActualWidth - PinBox.Width - 8 - PopupShadow;
             PinPopup.IsOpen = true;
         }
 
@@ -635,6 +668,8 @@ namespace ElansAddonHub.Lodge
             ReactItems.ItemsSource = Session.ReactionSet.Select(id => new ReactionChoice { Id = id }).ToList();
             ReactPopup.Placement = target != null ? PlacementMode.Left : PlacementMode.MousePoint;
             ReactPopup.PlacementTarget = target;
+            ReactPopup.HorizontalOffset = target != null ? 10 : -PopupShadow;   // (card margin holds the shadow)
+            ReactPopup.VerticalOffset = -PopupShadow;
             ReactPopup.IsOpen = true;
         }
 
@@ -741,7 +776,7 @@ namespace ElansAddonHub.Lodge
         void SendText()
         {
             var text = Composer.Text.Trim();
-            if (!Session.Online && !Session.TestFedForView) { ChatNote.Text = "You are offline - your message stays in the box"; noteUntil = DateTime.UtcNow.AddSeconds(6); return; }
+            if (!Session.Online && !Session.TestFedForView) { SetNote("You are offline - your message stays in the box"); noteUntil = DateTime.UtcNow.AddSeconds(6); return; }
             if (editing != null)
             {
                 if (text.Length > 0 && text != editing.Text) _ = Session.Edit(editing.Id, text);
@@ -751,7 +786,7 @@ namespace ElansAddonHub.Lodge
             }
             if (text.Length == 0) return;
             // the text only leaves the box when the send was really started; if it fails later the session hands it back
-            if (!Session.TrySend(text, replyTo?.Id, out var why)) { ChatNote.Text = why; noteUntil = DateTime.UtcNow.AddSeconds(6); return; }
+            if (!Session.TrySend(text, replyTo?.Id, out var why)) { SetNote(why, true); noteUntil = DateTime.UtcNow.AddSeconds(6); return; }
             Composer.Text = "";
             CancelMode();
         }
@@ -840,7 +875,7 @@ namespace ElansAddonHub.Lodge
                     shareDone++;
                     var n = shareTotal > 1 ? $" ({shareDone} of {shareTotal})" : "";
                     var name = System.IO.Path.GetFileName(job.Path);
-                    ChatNote.Text = $"Uploading {name}{n}...";
+                    SetNote($"Uploading {name}{n}...");
                     noteUntil = DateTime.UtcNow.AddMinutes(5);
                     try
                     {
@@ -848,7 +883,7 @@ namespace ElansAddonHub.Lodge
                         var text = first ? Composer.Text.Trim() : "";
                         await Session.Share(job.Path, text, first ? replyTo?.Id : null, pr =>
                         {
-                            ChatNote.Text = $"Uploading {name}{n} {pr * 100:0}%";
+                            SetNote($"Uploading {name}{n} {pr * 100:0}%");
                             noteUntil = DateTime.UtcNow.AddMinutes(5);
                         });
                         if (first && editing == null) { Composer.Text = ""; CancelMode(); }
@@ -857,7 +892,7 @@ namespace ElansAddonHub.Lodge
                     catch (Exception ex)
                     {
                         Util.Log("upload: " + ex.Message);
-                        ChatNote.Text = (ex is InvalidOperationException ? ex.Message : "Upload failed: " + ex.Message) + (shareTotal > 1 ? $" ({name})" : "");
+                        SetNote((ex is InvalidOperationException ? ex.Message : "Upload failed: " + ex.Message) + (shareTotal > 1 ? $" ({name})" : ""), true);
                         noteUntil = DateTime.UtcNow.AddSeconds(8);
                     }
                     finally
@@ -951,7 +986,7 @@ namespace ElansAddonHub.Lodge
                         $"\"{f.Name}\" is a {f.Ext} file. Files like this can run programs on your PC when opened. Only download it if you know the sender and expected it.", "Download anyway", danger: true))
                     return;
                 var target = LodgeSession.DownloadTarget(DownloadsFolder(), f);
-                if (target == null) { f.Status = "failed"; ChatNote.Text = "That file's name can't be saved safely"; noteUntil = DateTime.UtcNow.AddSeconds(8); return; }
+                if (target == null) { f.Status = "failed"; SetNote("That file's name can't be saved safely", true); noteUntil = DateTime.UtcNow.AddSeconds(8); return; }
                 f.Status = "downloading...";
                 await Session.Download(f, target);
                 f.Status = "saved";
@@ -961,7 +996,7 @@ namespace ElansAddonHub.Lodge
             {
                 f.Status = "failed";
                 Util.Log("download: " + ex.Message);
-                ChatNote.Text = "Couldn't download " + f.Name + " - try again in a moment";
+                SetNote("Couldn't download " + f.Name + " - try again in a moment", true);
                 noteUntil = DateTime.UtcNow.AddSeconds(8);
             }
         }

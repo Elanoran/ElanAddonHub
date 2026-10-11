@@ -520,6 +520,14 @@ namespace ElansAddonHub
         // a popup's content (popups are separate windows, so the window snapshot can't see them)
         void SnapshotElement(FrameworkElement el, string file)
         {
+            // popover cards keep a transparent margin for their shadow: the picture is of the card itself
+            var margin = el.Margin;
+            if (margin != new Thickness(0)) el.Margin = new Thickness(0);
+            try { SnapshotElementCore(el, file); } finally { el.Margin = margin; }
+        }
+
+        void SnapshotElementCore(FrameworkElement el, string file)
+        {
             el.UpdateLayout();
             var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(el);
             var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(

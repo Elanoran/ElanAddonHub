@@ -7,25 +7,25 @@
         SizeToContent="WidthAndHeight" FontFamily="Segoe UI" TextOptions.TextFormattingMode="Display"
         UseLayoutRounding="True">
   <!-- who's in voice, over the game; the speaking person lights up. Click-through (see code). -->
-  <ItemsControl x:Name="People" Margin="6">
+  <ItemsControl x:Name="People" Margin="8">
     <ItemsControl.ItemTemplate>
       <DataTemplate>
-        <Grid x:Name="row" Visibility="{Binding OverlayVisibility}" Margin="0,0,0,6" HorizontalAlignment="Left" Opacity="0.6">
-        <Border x:Name="pill" Padding="3,3,11,3" CornerRadius="16" Background="#B3101214" BorderThickness="1.5" BorderBrush="{Binding FrameBrush}">
+        <Grid x:Name="row" Visibility="{Binding OverlayVisibility}" Margin="0,0,0,8" HorizontalAlignment="Left" Opacity="0.6">
+        <Border x:Name="pill" Padding="4,4,12,4" CornerRadius="16" Background="{StaticResource Brush.Game.Pill}" BorderThickness="2" BorderBrush="{Binding FrameBrush}">
           <StackPanel Orientation="Horizontal">
-            <local:AvatarView Width="26" Height="26" Decor="True" RankRing="False" />
-            <TextBlock Text="{Binding Display}" Foreground="White" FontSize="13" FontWeight="SemiBold" Margin="10,0,0,1" VerticalAlignment="Center"
+            <local:AvatarView Width="24" Height="24" Decor="True" RankRing="False" />
+            <TextBlock Text="{Binding Display}" Foreground="{StaticResource Brush.Text.Primary}" Style="{StaticResource Text.RowTitle}" Margin="8,0,0,0" VerticalAlignment="Center"
                        Opacity="{Binding NameOpacity}">
               <TextBlock.Effect>
                 <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.9" Color="Black" />
               </TextBlock.Effect>
             </TextBlock>
-            <TextBlock Text="{Binding StateGlyph}" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="#E06C6C"
-                       Margin="7,1,0,0" VerticalAlignment="Center" Visibility="{Binding MutedVisibility}" />
+            <TextBlock Text="{Binding StateGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Danger}"
+                       Margin="8,0,0,0" VerticalAlignment="Center" Visibility="{Binding MutedVisibility}" />
           </StackPanel>
         </Border>
                   <!-- rank frame: a glow for officers and up, an animated shimmer for the guild master -->
-                  <Border CornerRadius="16" BorderThickness="1.5" BorderBrush="{Binding FrameBrush}" IsHitTestVisible="False"
+                  <Border CornerRadius="16" BorderThickness="2" BorderBrush="{Binding FrameBrush}" IsHitTestVisible="False"
                           Visibility="{Binding GlowVisibility}">
                     <Border.Effect>
                       <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.9" Color="{Binding FrameColor}" />
@@ -58,7 +58,7 @@
         <DataTemplate.Triggers>
           <DataTrigger Binding="{Binding Speaking}" Value="True">
             <Setter TargetName="row" Property="Opacity" Value="1" />
-            <Setter TargetName="pill" Property="Background" Value="#E6101214" />
+            <Setter TargetName="pill" Property="Background" Value="{StaticResource Brush.Game.Pill.Active}" />
           </DataTrigger>
         </DataTemplate.Triggers>
       </DataTemplate>

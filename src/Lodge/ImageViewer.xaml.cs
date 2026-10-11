@@ -26,7 +26,8 @@ namespace ElansAddonHub.Lodge
         double zoom = 1;
         bool dragging; Point dragStart; double startX, startY;
 
-        public bool IsOpen => Visibility == Visibility.Visible;
+        public bool IsOpen => Visibility == Visibility.Visible && !closing;
+        bool closing;   // DialogOut is running: the viewer still shows for 120 ms but counts as closed
         public string CaptionForTest => CapName.Text + " | " + CapInfo.Text;
         public string ErrorForTest => ErrorText.Visibility == Visibility.Visible ? ErrorText.Text : null;
 
@@ -46,23 +47,37 @@ namespace ElansAddonHub.Lodge
             items = PicturesOf(messages);
             index = Math.Max(0, items.IndexOf(current));
             if (items.Count == 0) return;
+            if (closing) { closing = false; closeToken++; BeginAnimation(OpacityProperty, new DoubleAnimation(Opacity, 1, Motion.Fast)); Motion.DialogIn(Stage); }   // re-opened while closing
             if (!IsOpen)
             {
                 Visibility = Visibility.Visible;
-                BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120)));
+                BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, Motion.Fast));   // backdrop fades in, the picture opens with DialogIn
+                Motion.DialogIn(Stage);
             }
             Keyboard.Focus(this); Focus();
             _ = ShowCurrent();
         }
 
+        int closeToken;
         public void Close()
         {
             if (!IsOpen) return;
             loadToken++;
-            Visibility = Visibility.Collapsed;
-            BeginAnimation(OpacityProperty, null);
             Img.Source = null; bitmap = null; items = new List<MessageVM>(); // release the decoded picture
             ResetView();
+            if (!Motion.Enabled) { Visibility = Visibility.Collapsed; BeginAnimation(OpacityProperty, null); return; }
+            // DialogOut (scale to 0.96 + fade, 120 ms) on the picture while the backdrop fades out with it, then the viewer is hidden
+            closing = true;
+            var my = ++closeToken;
+            BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, Motion.Fast) { EasingFunction = Motion.EaseIn, FillBehavior = FillBehavior.HoldEnd });
+            Motion.DialogOut(Stage, () =>
+            {
+                if (my != closeToken || !closing) return;   // re-opened meanwhile
+                closing = false;
+                Visibility = Visibility.Collapsed;
+                BeginAnimation(OpacityProperty, null);
+                Stage.BeginAnimation(OpacityProperty, null); Stage.Opacity = 1; Stage.RenderTransform = Transform.Identity;
+            });
         }
 
         MessageVM Current => index >= 0 && index < items.Count ? items[index] : null;

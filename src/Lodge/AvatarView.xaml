@@ -12,7 +12,7 @@
       <Grid Visibility="{Binding DefaultVisibility}">
         <Ellipse Fill="{Binding Color}" />
         <Ellipse Fill="{Binding IconBrush}" />
-        <TextBlock Text="{Binding Initial}" Visibility="{Binding InitialVisibility}" Foreground="#111315" FontSize="44" FontWeight="Bold"
+        <TextBlock Text="{Binding Initial}" Visibility="{Binding InitialVisibility}" Foreground="{StaticResource Brush.OnAccent}" FontSize="44" FontWeight="Bold"
                    HorizontalAlignment="Center" VerticalAlignment="Center" />
       </Grid>
       <!-- personal avatar: finished art, frame included -->
@@ -22,20 +22,20 @@
       <Grid x:Name="DecorLayer" Visibility="Collapsed">
         <Ellipse x:Name="RankLayer" Stroke="{Binding FrameBrush}" StrokeThickness="6" Margin="-7" />
         <Ellipse Stroke="{Binding Ring}" StrokeThickness="8" Margin="-14" />
-        <Border Width="50" Height="50" CornerRadius="25" Background="{Binding StatusBrush}" BorderBrush="{StaticResource Surface}" BorderThickness="7"
+        <Border Width="50" Height="50" CornerRadius="25" Background="{Binding StatusBrush}" BorderBrush="{StaticResource Brush.Surface1}" BorderThickness="7"
                 HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-22,0,0,-22" Visibility="{Binding StatusVisibility}">
-          <TextBlock Text="{Binding StatusGlyph}" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="#111315" FontWeight="Bold"
+          <TextBlock Text="{Binding StatusGlyph}" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="{StaticResource Brush.OnAccent}" FontWeight="Bold"
                      HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
         <!-- appear offline: a grey hollow dot -->
-        <Border Width="50" Height="50" CornerRadius="25" Background="{StaticResource Surface}" BorderBrush="#8A9199" BorderThickness="11"
+        <Border Width="50" Height="50" CornerRadius="25" Background="{StaticResource Brush.Surface1}" BorderBrush="{StaticResource Brush.Text.Secondary}" BorderThickness="11"
                 HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-22,0,0,-22" Visibility="{Binding InvisibleVisibility}" />
       </Grid>
 
       <!-- class badge: in game only -->
       <Grid Width="46" Height="46" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-8,-8" Visibility="{Binding BadgeVisibility}">
-        <Ellipse Fill="#101214" />
-        <Ellipse Fill="#262B30" Margin="4" />
+        <Ellipse Fill="{StaticResource Brush.Bg}" />
+        <Ellipse Fill="{StaticResource Brush.Surface3}" Margin="4" />
         <Ellipse Fill="{Binding IconBrush}" Margin="4" />
         <TextBlock Text="{Binding BadgeText}" Visibility="{Binding BadgeTextVisibility}" Foreground="{Binding BadgeRing}" FontSize="24" FontWeight="Bold"
                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />

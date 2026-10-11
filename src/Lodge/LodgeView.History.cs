@@ -112,7 +112,7 @@ namespace ElansAddonHub.Lodge
             var list = Session.MessagesOf(channel);
             if (list.All(m => m.Id != id) && Session.HasMoreOlder(channel))
             {
-                ChatNote.Text = "Loading older messages..."; noteUntil = DateTime.UtcNow.AddSeconds(30);
+                SetNote("Loading older messages..."); noteUntil = DateTime.UtcNow.AddSeconds(30);
                 await Session.LoadUntil(channel, id, atMs);
                 if (ChatNote.Text == "Loading older messages...") ChatNote.Text = "";
             }
@@ -120,7 +120,7 @@ namespace ElansAddonHub.Lodge
             if (target != null && Session.Selected?.Id == channel) { ScrollToMessage(target, true); return true; }
             if (Session.Selected?.Id == channel)
             {
-                ChatNote.Text = Session.SupportsPaging ? "That message is no longer in the history" : "That message is older than what is loaded here";
+                SetNote(Session.SupportsPaging ? "That message is no longer in the history" : "That message is older than what is loaded here");
                 noteUntil = DateTime.UtcNow.AddSeconds(4);
             }
             return false;
@@ -143,7 +143,7 @@ namespace ElansAddonHub.Lodge
             if (Session == null || !Session.SupportsSearch) return;
             if (SearchHint.Text.Length == 0) SearchHint.Text = "Press Enter to search";
             SearchPopup.PlacementTarget = SearchButton;
-            SearchPopup.HorizontalOffset = SearchButton.ActualWidth - SearchBoxCard.Width - 8;
+            SearchPopup.HorizontalOffset = SearchButton.ActualWidth - SearchBoxCard.Width - 8 - PopupShadow;
             SearchPopup.IsOpen = true;
         }
 

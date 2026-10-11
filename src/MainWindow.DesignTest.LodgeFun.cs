@@ -64,6 +64,8 @@ namespace ElansAddonHub
             UpdateLayout();
             var origin = LodgePage.SearchCardOriginForTest(this);
             var card = LodgePage.SearchCardForTest;
+            var cardMargin = card.Margin; card.Margin = new Thickness(0);   // the popover keeps a 24 px margin for its shadow: the picture is of the card itself
+            card.UpdateLayout();
             var dv = new DrawingVisual();
             using (var dc = dv.RenderOpen())
             {
@@ -79,6 +81,7 @@ namespace ElansAddonHub
             var enc = new PngBitmapEncoder();
             enc.Frames.Add(BitmapFrame.Create(bmp));
             using (var fs = System.IO.File.Create(System.IO.Path.Combine(dir, "lodge-fun-search.png"))) enc.Save(fs);
+            card.Margin = cardMargin;
             LodgePage.CloseSearchForTest();
             Session.SentForTest = null;
         }
@@ -140,7 +143,7 @@ namespace ElansAddonHub
                 M("h3", "Kor", 6, "Molten Core is on for Saturday, bring fire resistance", 4));
             Session.FeedForTest(FunWelcome("member", FunPeople(false), history));
             await Task.Delay(700);
-            SnapshotElement(LodgePage.SidebarForTest, System.IO.Path.Combine(dir, "lodge-fun-groups.png"));
+            SnapshotOn(LodgePage.SidebarForTest, System.IO.Path.Combine(dir, "lodge-fun-groups.png"), Color.FromRgb(0x14, 0x16, 0x18));   // the sidebar sits on the page panel: give it that colour
             Snapshot(System.IO.Path.Combine(dir, "lodge-fun-groups-window.png"));
         }
 

@@ -89,8 +89,8 @@ namespace ElansAddonHub.Lodge
         public bool InvisibleHint { get => invisibleHint; set { if (Set(ref invisibleHint, value)) Raise(nameof(InvisibleHintVisibility)); } }
         public Visibility InvisibleHintVisibility => invisibleHint && IsVoice && !here ? Visibility.Visible : Visibility.Collapsed;
 
-        public Brush RowBrush => selected ? Avatar.Res("SurfaceHi") : Brushes.Transparent;
-        public Brush NameBrush => selected || unread || here ? Avatar.Res("Text") : Avatar.Res("TextDim");
+        public Brush RowBrush => selected ? Avatar.Res("Brush.Accent.Tint") : Brushes.Transparent;
+        public Brush NameBrush => selected || unread || here ? Avatar.Res("Brush.Text.Primary") : Avatar.Res("Brush.Text.Secondary");
         public FontWeight NameWeight => unread ? FontWeights.SemiBold : FontWeights.Normal;
         public Visibility MentionVisibility => mentions > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility UnreadVisibility => unreadCount > 0 && mentions == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -179,9 +179,9 @@ namespace ElansAddonHub.Lodge
 
         string roomName;
         public string RoomName { get => roomName; set { if (Set(ref roomName, value)) { Raise(nameof(CardVoiceLine)); Raise(nameof(CardVoiceVisibility)); } } }
-        public Brush Ring => speaking ? Avatar.Res("Accent") : Brushes.Transparent;
+        public Brush Ring => speaking ? Avatar.Res("Brush.Accent") : Brushes.Transparent;
         public string StateGlyph => deaf ? "" : (muted || serverMuted) ? "" : "";
-        public Brush StateBrush => deaf || muted || serverMuted ? Avatar.Res("Danger") : Avatar.Res("TextDim");
+        public Brush StateBrush => deaf || muted || serverMuted ? Avatar.Res("Brush.Danger") : Avatar.Res("Brush.Text.Secondary");
         public Visibility StateVisibility => Voice ? Visibility.Visible : Visibility.Collapsed;
         public Visibility MutedVisibility => Voice && (muted || deaf || serverMuted) ? Visibility.Visible : Visibility.Collapsed;
         public Visibility OverlayVisibility => inMyRoom ? Visibility.Visible : Visibility.Collapsed;
@@ -359,9 +359,9 @@ namespace ElansAddonHub.Lodge
             ["PALADIN"] = "#F58CBA", ["PRIEST"] = "#FFFFFF", ["SHAMAN"] = "#0070DE", ["WARLOCK"] = "#9482C9",
         };
         // names take their class colour once we know it (like in WoW)
-        public Brush ClassBrushOrText => gameClassFile != null && ClassColors.ContainsKey(gameClassFile) ? ClassBrush : Avatar.Res("Text");
-        public Brush ClassBrush => gameClassFile != null && ClassColors.TryGetValue(gameClassFile, out var hex) ? Avatar.Frozen(hex) : Avatar.Res("TextDim");
-        public static Brush ClassBrushFor(string classFile) => classFile != null && ClassColors.TryGetValue(classFile.ToUpperInvariant(), out var hex) ? Avatar.Frozen(hex) : Avatar.Res("TextDim");
+        public Brush ClassBrushOrText => gameClassFile != null && ClassColors.ContainsKey(gameClassFile) ? ClassBrush : Avatar.Res("Brush.Text.Primary");
+        public Brush ClassBrush => gameClassFile != null && ClassColors.TryGetValue(gameClassFile, out var hex) ? Avatar.Frozen(hex) : Avatar.Res("Brush.Text.Secondary");
+        public static Brush ClassBrushFor(string classFile) => classFile != null && ClassColors.TryGetValue(classFile.ToUpperInvariant(), out var hex) ? Avatar.Frozen(hex) : Avatar.Res("Brush.Text.Secondary");
         // a stand-in for someone who isn't online (profile card from the server's data): never in the lists
         public bool Offline { get; set; }
         public string StatusLabelText => StatusLabel(status);
@@ -399,9 +399,8 @@ namespace ElansAddonHub.Lodge
             s == "away" ? "AFK" : s == "busy" ? "Busy" : s == "dungeon" ? "In a dungeon" : s == "lfg" ? "Looking for group" : "Online";
         public static string GlyphFor(string s) =>
             s == "away" ? "" : s == "busy" ? "" : s == "dungeon" ? "" : s == "lfg" ? "" : "";
-        static readonly Brush Away = Avatar.Frozen("#E6B85C"), Busy = Avatar.Frozen("#E06C6C"), Dungeon = Avatar.Frozen("#B48CE0"),
-                              Lfg = Avatar.Frozen("#6CB4E0"), On = Avatar.Frozen("#ABD473");
-        public static Brush BrushFor(string s) => s == "away" ? Away : s == "busy" ? Busy : s == "dungeon" ? Dungeon : s == "lfg" ? Lfg : On;
+        // status colours are the theme's (Warn / Danger / Dungeon / Info / Accent), so a palette change reaches the avatars too
+        public static Brush BrushFor(string s) => Avatar.Res(s == "away" ? "Brush.Warn" : s == "busy" ? "Brush.Danger" : s == "dungeon" ? "Brush.Dungeon" : s == "lfg" ? "Brush.Info" : "Brush.Accent");
 
         public string StatusGlyph => GlyphFor(status);
         public Brush StatusBrush => BrushFor(status);
@@ -572,7 +571,7 @@ namespace ElansAddonHub.Lodge
         bool Compact => Continuation && ReplyFrom == null;
         public Visibility HeaderVisibility => Compact ? Visibility.Collapsed : Visibility.Visible;
         public Visibility AvatarVisibility => Compact ? Visibility.Hidden : Visibility.Visible;
-        public Thickness RowMargin => Compact ? new Thickness(0) : new Thickness(0, 10, 0, 0);
+        public Thickness RowMargin => Compact ? new Thickness(0) : new Thickness(0, 8, 0, 0);
         public Visibility TextVisibility => string.IsNullOrEmpty(text) || Lfg != null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility FileVisibility => File == null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility ReplyVisibility => ReplyFrom == null ? Visibility.Collapsed : Visibility.Visible;
@@ -613,9 +612,7 @@ namespace ElansAddonHub.Lodge
     // one reaction pill under a message: the reaction (id or legacy emoji), who reacted
     public class ReactionVM : Bindable
     {
-        static readonly Brush MineFill = Avatar.Frozen("#26ABD473"), PlainFill = Avatar.Frozen("#14FFFFFF"),
-                              MineLine = Avatar.Frozen("#99ABD473"), PlainLine = Avatar.Frozen("#00000000");
-        public MessageVM Msg { get; set; }
+                public MessageVM Msg { get; set; }
         public string Emoji { get; set; }   // the reaction key: a canonical id, or an emoji from an older server
         public ImageSource Icon => ReactionArt.Icon(Emoji);
         public Visibility IconVisibility => Icon != null ? Visibility.Visible : Visibility.Collapsed;
@@ -631,8 +628,8 @@ namespace ElansAddonHub.Lodge
         }
         public int Count => users.Length;
         public bool Mine => mine;
-        public Brush Fill => mine ? MineFill : PlainFill;
-        public Brush Line => mine ? MineLine : PlainLine;
+        public Brush Fill => Avatar.Res(mine ? "Brush.Accent.Tint" : "Brush.Overlay.Chip");
+        public Brush Line => Brushes.Transparent;   // pills have no outline (DESIGN 5); kept for older callers
         public string Tip => users.Length == 0 ? "" : ReactionArt.Name(Emoji) + ": " + string.Join(", ", users.Select(DisplayNames.Shown));
         public void RefreshTip() => Raise(nameof(Tip));
     }

@@ -105,6 +105,21 @@
   <SolidColorBrush x:Key="Brush.Overlay.Pressed" Color="#1AFFFFFF" />
   <SolidColorBrush x:Key="Brush.Divider" Color="#12FFFFFF" />
   <SolidColorBrush x:Key="Brush.Focus" Color="{StaticResource AccentColor}" />
+
+  <!-- media + game surfaces (viewers, in-game overlay): never used on regular pages -->
+  <Color x:Key="Color.Dungeon">#B48CE0</Color>
+  <SolidColorBrush x:Key="Brush.Dungeon" Color="{StaticResource Color.Dungeon}" />
+  <SolidColorBrush x:Key="Brush.Scrim.Strong" Color="#D9000000" />
+  <SolidColorBrush x:Key="Brush.Scrim.Glass" Color="#40000000" />
+  <SolidColorBrush x:Key="Brush.Scrim.Disc" Color="#99000000" />
+  <SolidColorBrush x:Key="Brush.Media" Color="#FF000000" />
+  <SolidColorBrush x:Key="Brush.Game.Pill" Color="#B3101214" />
+  <SolidColorBrush x:Key="Brush.Game.Pill.Active" Color="#E6101214" />
+  <SolidColorBrush x:Key="Brush.Rail" Color="#B30C0E10" />
+  <!-- pressed darkening of a filled (accent / danger / ghost) control, and the text colour on a danger fill -->
+  <SolidColorBrush x:Key="Brush.Press.Dark" Color="#1F000000" />
+  <SolidColorBrush x:Key="Brush.Press.Dark.Soft" Color="#14000000" />
+  <SolidColorBrush x:Key="Brush.OnDanger" Color="#1A0B0B" />
   <!-- 1 px top highlight that fades down the edge: the "light from above" of a raised surface (instead of an outline) -->
   <LinearGradientBrush x:Key="Brush.Edge" StartPoint="0,0" EndPoint="0,1">
     <GradientStop Color="#1AFFFFFF" Offset="0" />
@@ -236,11 +251,8 @@
   </Style>
 
 
-  <Style x:Key="Caption" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextDim}" />
-    <Setter Property="FontSize" Value="10.5" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-  </Style>
+  <!-- old name of Text.Caption (kept for the join box); regular weight, 11 px -->
+  <Style x:Key="Caption" TargetType="TextBlock" BasedOn="{StaticResource Text.Caption}" />
 
   <!-- ===================== Buttons =====================
        Primary (accent fill: THE action of a view, at most one per view) / Secondary (quiet fill) / Ghost (text only) / Danger (destructive confirm).
@@ -262,7 +274,7 @@
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="pr" Background="#1F000000" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark}" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="ring" Margin="-4" CornerRadius="14" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
@@ -318,7 +330,7 @@
               </StackPanel>
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Chip}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="pr" Background="#1F000000" CornerRadius="{StaticResource Radius.Chip}" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark}" CornerRadius="{StaticResource Radius.Chip}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="ring" Margin="-4" CornerRadius="17" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
@@ -346,7 +358,7 @@
 
   <!-- red confirm button for destructive dialogs (Delete, Kick, Remove) -->
   <Style x:Key="DangerButton" TargetType="Button">
-    <Setter Property="Foreground" Value="#1A0B0B" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.OnDanger}" />
     <Setter Property="Background" Value="{StaticResource Brush.Danger}" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -362,7 +374,7 @@
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="pr" Background="#1F000000" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark}" CornerRadius="{StaticResource Radius.ControlLg}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="ring" Margin="-4" CornerRadius="14" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
@@ -394,7 +406,7 @@
               <ContentPresenter VerticalAlignment="Center" />
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="pr" Background="#14000000" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark.Soft}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="ring" Margin="-3" CornerRadius="11" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
@@ -424,7 +436,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="7">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="{StaticResource Radius.Control}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
@@ -441,13 +453,13 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="7">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="{StaticResource Radius.Control}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="bd" Property="Background" Value="{StaticResource Danger}" />
-              <Setter Property="Foreground" Value="White" />
+              <Setter Property="Foreground" Value="{StaticResource Brush.OnDanger}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -525,7 +537,7 @@
       <Setter.Value>
         <ControlTemplate TargetType="Thumb">
           <!-- stretch: with Center alignment and no content the border collapsed to 0 px and the bar was invisible -->
-          <Border x:Name="th" Background="#FFFFFF" CornerRadius="3" Opacity="0.28" />
+          <Border x:Name="th" Background="{StaticResource Brush.Text.Primary}" CornerRadius="3" Opacity="0.28" />
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="th" Property="Opacity" Value="0.55" />
@@ -622,7 +634,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ToolTip">
-          <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.ControlLg}" Padding="12,10">
+          <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.ControlLg}" Padding="12,8">
             <ContentPresenter />
           </Border>
         </ControlTemplate>
@@ -700,7 +712,7 @@
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="pr" Background="#14000000" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark.Soft}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
             <Border x:Name="ring" Margin="-4" CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
@@ -728,7 +740,7 @@
 
   <!-- a row in a small popup menu (status picker) -->
   <Style x:Key="MenuRow" TargetType="Button">
-    <Setter Property="Foreground" Value="{StaticResource Text}" />
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -736,12 +748,47 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="Transparent" CornerRadius="7" Padding="8,7">
-            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
-          </Border>
+          <Grid>
+            <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource Radius.Control}" Padding="8,8">
+              <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
+            </Border>
+            <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="pr" Background="{StaticResource Brush.Overlay.Pressed}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+          </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="bd" Property="Background" Value="{StaticResource Line}" />
+              <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="pr" Property="Opacity" Value="1" /></Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4" /></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- a calm sidebar row that is not a radio button (Lodge channels, voice rooms, people): transparent, white veil on hover (120 ms), the fill the
+       caller sets (Background) is the selected tint (Brush.Accent.Tint). Put the click handler on it; Padding is the inner padding, MinHeight the row height. -->
+  <Style x:Key="Side.Row" TargetType="ContentControl">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ContentControl">
+          <Grid Background="Transparent">
+            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="{StaticResource Radius.Control}" />
+            <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+            <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -807,7 +854,7 @@
             <Trigger Property="IsChecked" Value="True">
               <Setter TargetName="bd" Property="Background" Value="{StaticResource Danger}" />
               <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Danger}" />
-              <Setter Property="Foreground" Value="White" />
+              <Setter Property="Foreground" Value="{StaticResource Brush.OnDanger}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -1044,7 +1091,7 @@
           <Setter Property="Template">
             <Setter.Value>
               <ControlTemplate TargetType="ComboBoxItem">
-                <Border x:Name="bd" Background="Transparent" CornerRadius="6" Padding="8,6" MinHeight="28">
+                <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource Radius.Control}" Padding="12,4" MinHeight="32">
                   <ContentPresenter VerticalAlignment="Center" />
                 </Border>
                 <ControlTemplate.Triggers>
