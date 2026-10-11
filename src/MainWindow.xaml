@@ -60,16 +60,16 @@
       <!-- navigation rail (Discord style): icon buttons with a pill on the edge, Settings pinned at the bottom -->
       <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0" Background="#B30C0E10" CornerRadius="13,0,0,13" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,1,0">
         <DockPanel LastChildFill="False">
-          <Grid DockPanel.Dock="Top" Height="52" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
-            <Image x:Name="RailLogo" Source="Assets/hub.png" Width="26" Height="26" RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" ToolTipService.Placement="Right"
-                   MouseLeftButtonDown="Logo_Down" MouseLeftButtonUp="Logo_Click" />
-          </Grid>
+          <!-- empty drag strip level with the title bar; the paw sits at the bottom, between Settings and the version -->
+          <Grid DockPanel.Dock="Top" Height="52" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown" />
           <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,6">
             <RadioButton x:Name="TabSettings" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                          ToolTip="Settings  (Ctrl+,)" ToolTipService.Placement="Right" AutomationProperties.Name="Settings">
               <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="20" />
             </RadioButton>
-            <TextBlock x:Name="RailVersion" HorizontalAlignment="Center" Margin="0,3,0,0" FontSize="10" Foreground="{StaticResource Brush.Text.Tertiary}"
+            <Image x:Name="RailLogo" Source="Assets/hub.png" Width="22" Height="22" Margin="0,8,0,0" RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center" Cursor="Hand" ToolTipService.Placement="Right"
+                   MouseLeftButtonDown="Logo_Down" MouseLeftButtonUp="Logo_Click" />
+            <TextBlock x:Name="RailVersion" HorizontalAlignment="Center" Margin="0,4,0,0" FontSize="10" Foreground="{StaticResource Brush.Text.Tertiary}"
                        Cursor="Hand" Background="Transparent" ToolTipService.Placement="Right" MouseLeftButtonUp="RailVersion_Click" />
           </StackPanel>
           <StackPanel DockPanel.Dock="Top" Margin="0,2,0,0">
