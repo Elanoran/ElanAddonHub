@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.33.0
+- Bags page redesigned: a compact character list with race portraits (from your WoW install) and the details in a hover tooltip.
+- Item tooltips show how many you have on this character (bags, bank, worn), on your other characters and in the guild bank, plus a total.
+- Bags, Bank and Guild bank are a segmented control; bag cards are softer, special bags are tinted.
+
 ## 2.32.1
 - Murloc voice retuned to sound more like the real thing: higher, with a fast gargle and wild pitch glides.
 
