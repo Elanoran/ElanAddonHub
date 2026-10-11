@@ -320,6 +320,7 @@ namespace ElansAddonHub
             End();
             }
             if (Begin("lodgefeatures")) { result += "\r\n" + await LodgeFeaturesTest(dir); End(); }
+            if (Begin("lodgehardening")) { result += "\r\n" + await HardeningTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }
             if (Begin("profile")) { result += "\r\n" + await ProfileTest(dir); End(); }

@@ -26,6 +26,9 @@ namespace ElansAddonHub.Lodge
         LodgeClient client;
         VoiceEngine voice;
         int tickCount;
+        readonly Dictionary<string, ChannelVM> channelCache = new Dictionary<string, ChannelVM>();   // a channel keeps its object across welcomes
+        readonly HashSet<string> failedImages = new HashSet<string>();                                  // 404 for this session: not asked again
+        static bool housekeepingDone;
 
         // ---- what the views read
         public string BaseUrl => client?.BaseUrl;
@@ -82,6 +85,9 @@ namespace ElansAddonHub.Lodge
         public event Action<string, string> Notify;        // title, text - the window decides how
         public event Action<bool> UnreadChanged;
         public event Action<string> Error;
+        public event Action<string> Hint;                  // a gentle one-time tip
+        public event Action<PendingSend, string> SendFailed; // the text to put back into the box, and why
+        public Func<bool> ToastWillShow;                   // a toast would be on screen right now (then no tray balloon for the same message)
         public event Action<List<Dictionary<string, object>>, List<Dictionary<string, object>>> AdminMembers; // members, channels
         public event Action<string, string, string> AdminInvited; // name, role, code
         public Func<bool> IsShownToUser;                   // the Lodge tab is visible and the window active
@@ -118,6 +124,19 @@ namespace ElansAddonHub.Lodge
             Sounds.Off = settings.SoundsOff;
             YouTube.Enabled = () => !settings.VideoPreviewsOff;
             InitToasts();
+            marksTimer.Tick += (s, e) => { marksTimer.Stop(); WriteMarksAsync(); };
+            try { var disp = System.Windows.Application.Current?.Dispatcher; if (disp != null) disp.ShutdownStarted += (s, e) => FlushMarks(); } catch { }
+            // once per start: old pictures out of the cache, leftovers of pasted screenshots out of %TEMP% (off the UI thread)
+            if (!housekeepingDone && Util.DataDir != null)
+            {
+                housekeepingDone = true;
+                Task.Run(() =>
+                {
+                    SafeFile.PruneCache(CacheDir, TimeSpan.FromDays(30), 200L * 1024 * 1024, DateTime.UtcNow);
+                    SafeFile.DeletePasteLeftovers(Path.GetTempPath());
+                });
+                Task.Run(() => LoadMarks());
+            }
         }
 
         public event Action PresenceChanged;                 // my own character / flags changed (the toasts use it)
@@ -132,10 +151,10 @@ namespace ElansAddonHub.Lodge
             };
         }
 
-        void ToastFor(ToastKind kind, MessageVM vm, string who, string text)
+        bool ToastFor(ToastKind kind, MessageVM vm, string who, string text)
         {
             var ch = TextChannels.FirstOrDefault(c => c.Id == vm.Channel);
-            Toasts.Push(new ToastItem
+            return Toasts.Push(new ToastItem
             {
                 Kind = kind, Sender = DisplayNames.Shown(who), Channel = ch?.Name, ChannelId = vm.Channel, Text = text,
                 Who = Members.FirstOrDefault(m => string.Equals(m.Name, who, StringComparison.OrdinalIgnoreCase)),
@@ -193,9 +212,11 @@ namespace ElansAddonHub.Lodge
         public void Connect(string url, string code)
         {
             Disconnect();
-            client = new LodgeClient(url, code, Settings.LodgeName ?? Environment.UserName) { Invisible = () => Invisible };
-            client.Status += (text, online) =>
+            var c = new LodgeClient(url, code, Settings.LodgeName ?? Environment.UserName) { Invisible = () => Invisible };
+            client = c;
+            c.Status += (text, online) =>
             {
+                if (!ReferenceEquals(client, c)) return;     // the last words of a connection that was replaced
                 StatusText = online ? OnlineText : text;
                 if (!online && client != null && !client.IsRunning)
                 {
@@ -207,20 +228,22 @@ namespace ElansAddonHub.Lodge
                 {
                     // a dropped connection (network blip, server restart) is not the user leaving: remember the room and
                     // the mute/deafen state, and go back in after the reconnect (see Welcome)
-                    if (MyRoom != null && client != null && client.IsRunning)
+                    var wanted = MyRoom ?? pendingRoom;
+                    if (wanted != null && client != null && client.IsRunning)
                     {
-                        rejoinRoom = MyRoom;
+                        rejoinRoom = wanted;
                         rejoinMuted = voice?.Muted ?? false;
                         rejoinDeaf = voice?.Deafened ?? false;
                     }
                     LeaveVoice(false);
+                    FailPending("The connection dropped before your message went through");
                 }
                 Changed?.Invoke();
             };
-            client.Received += OnReceived;
-            client.Voice += (id, data, off, count) => voice?.Incoming(id, data, off, count);
+            c.Received += m => { if (ReferenceEquals(client, c)) OnReceived(m); };   // posts from an old client are ignored
+            c.Voice += (id, data, off, count) => { if (ReferenceEquals(client, c)) voice?.Incoming(id, data, off, count); };
             tick.Start();
-            client.Start();
+            c.Start();
             Changed?.Invoke();
         }
 
@@ -231,12 +254,20 @@ namespace ElansAddonHub.Lodge
         public void Disconnect()
         {
             rejoinRoom = null; // leaving the lodge on purpose
+            pendingRoom = null;
             LeaveVoice(false);
+            FlushMarks();
             client?.Stop();
             client = null;
             TestFed = false;
             Members.Clear();
             foreach (var r in VoiceRooms) r.Members.Clear();
+            // leaving a lodge (or switching to another) starts clean; only a reconnect to the same lodge keeps what is shown
+            foreach (var l in messages.Values) l.Clear();
+            foreach (var l in pins.Values) l.Clear();
+            channelCache.Clear();
+            Pending = null;
+            failedImages.Clear();
             tick.Stop();
             Changed?.Invoke();
         }
@@ -280,6 +311,7 @@ namespace ElansAddonHub.Lodge
                     var oldBadge = mem.BadgeKey;
                     mem.SetAvatar(m.Child("user").Str("avatarId"), m.Child("user").Str("accent"));
                     if (m.Child("user").ContainsKey("displayName")) ApplyDisplayName(mem, m.Child("user").Str("displayName"));
+                    mem.Guest = u.Guest;
                     mem.Room = u.Room; mem.Muted = u.Muted; mem.Deaf = u.Deaf; mem.ServerMuted = u.ServerMuted;
                     mem.Status = u.Status; mem.Note = u.Note; mem.Role = u.Role;
                     mem.Invisible = mem.IsMe ? Invisible : u.Invisible;
@@ -292,6 +324,7 @@ namespace ElansAddonHub.Lodge
                         if (mem.Room == MyRoom) Sounds.Join();
                         else if (oldRoom == MyRoom) Sounds.Leave();
                     }
+                    if (mem.IsMe && pendingRoom != null && mem.Room == pendingRoom) CommitRoom(); // the server confirmed the join
                     if (mem.IsMe)
                     {
                         if (mem.ServerMuted != (voice?.Muted ?? false) && mem.ServerMuted) Error?.Invoke("An officer muted you");
@@ -302,6 +335,7 @@ namespace ElansAddonHub.Lodge
                 case "msg":
                     var vm = AddMessage(m);
                     TypingMap(vm.Channel).Remove(vm.FromId);
+                    if (vm.Mine && Pending != null && Pending.Channel == vm.Channel) Pending = null;   // the server echoed it: it is out
                     OnNewMessage(vm);
                     break;
                 case "react":
@@ -338,12 +372,24 @@ namespace ElansAddonHub.Lodge
                     break;
                 case "edited":
                     var e = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
-                    if (e != null) { e.Text = m.Str("text"); e.Edited = true; e.Mentioned = MentionsMe(e.Text) && !e.Mine; }
+                    if (e != null)
+                    {
+                        e.Text = SafeFile.Text(m.Str("text")); e.Edited = true;
+                        bool was = e.Mentioned;
+                        e.Mentioned = !e.Mine && MentionsMe(e.Text, e.From);
+                        // an edit that adds a mention to a message I haven't read yet badges the channel; one that removes it takes it back
+                        var ech = TextChannels.FirstOrDefault(c => c.Id == e.Channel);
+                        if (ech != null && e.Unread && was != e.Mentioned)
+                        {
+                            ech.Mentions = Math.Max(0, ech.Mentions + (e.Mentioned ? 1 : -1));
+                            UnreadChanged?.Invoke(TextChannels.Any(c => c.Unread));
+                        }
+                    }
                     break;
                 case "deleted":
                     var list = MessagesOf(m.Str("channel"));
                     var d = list.FirstOrDefault(x => x.Id == m.Str("id"));
-                    if (d != null) list.Remove(d);
+                    if (d != null) RemoveMessage(list, d, TextChannels.FirstOrDefault(c => c.Id == m.Str("channel")));
                     break;
                 case "typing":
                     TypingMap(m.Str("channel") ?? TextChannels.FirstOrDefault()?.Id)[m.Int("id")] = DateTime.UtcNow.AddSeconds(4);
@@ -351,6 +397,7 @@ namespace ElansAddonHub.Lodge
                 case "profile":
                     // someone's avatar / accent changed (small broadcast)
                     var pu = Members.FirstOrDefault(x => x.Id == m.Int("id"));
+                    if (pu == null && m.ContainsKey("displayName") && DisplayNames.Remember(m.Str("name"), m.Str("displayName"))) RefreshAuthorNames(); // the name directory stays fresh
                     if (pu != null)
                     {
                         pu.SetAvatar(m.Str("avatarId"), m.Str("accent"));
@@ -373,7 +420,7 @@ namespace ElansAddonHub.Lodge
                     ProfileReceived?.Invoke(pd);
                     break;
                 case "error":
-                    Error?.Invoke(m.Str("text"));
+                    OnServerError(m.Str("text"), m.Str("code"), m.Str("room"));
                     break;
                 case "admin.members":
                     AdminMembers?.Invoke(m.List("members").OfType<Dictionary<string, object>>().ToList(),
@@ -403,16 +450,37 @@ namespace ElansAddonHub.Lodge
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
-            Members.Clear();
+            // the name directory (server 2.8): { login: display name } for people who may be offline - authoritative when present
+            if (m.Child("names") != null)
+            {
+                DisplayNames.Forget();
+                foreach (var kv in m.Child("names")) DisplayNames.Remember(kv.Key, kv.Value as string);
+            }
+
+            // people: the same objects stay (a resync must not flicker the lists), newcomers are added, who left is removed
+            var incoming = new List<MemberVM>();
             foreach (var u in m.List("users").OfType<Dictionary<string, object>>())
             {
-                var mem = ParseMember(u);
-                mem.IsMe = mem.Id == myId;
-                Members.Add(mem);
+                var pm = ParseMember(u);
+                pm.IsMe = pm.Id == myId;
+                incoming.Add(pm);
+            }
+            foreach (var gone in Members.Where(x => incoming.All(i => i.Id != x.Id)).ToList()) Members.Remove(gone);
+            foreach (var pm in incoming)
+            {
+                var have = Members.FirstOrDefault(x => x.Id == pm.Id);
+                if (have == null) { Members.Add(pm); continue; }
+                have.IsMe = pm.IsMe; have.Guest = pm.Guest; have.Name = pm.Name;
+                have.SetAvatar(pm.AvatarId, pm.Accent); have.SetDisplayName(pm.DisplayName);
+                have.Room = pm.Room; have.Muted = pm.Muted; have.Deaf = pm.Deaf; have.ServerMuted = pm.ServerMuted;
+                have.Status = pm.Status; have.Note = pm.Note; have.Role = pm.Role; have.Invisible = pm.Invisible;
+                have.CopyGameFrom(pm);
+                Remember(have);
             }
             Me = Members.FirstOrDefault(x => x.IsMe);
             if (Me != null) Me.Invisible = Invisible;
             if (m.Child("profile") != null) { MyProfile = ProfileData.Parse(m.Child("profile")); MyProfileChanged?.Invoke(); }
+            RefreshAuthorNames();
 
             // channels: a 1.x server has none - pretend it has one text channel and one room
             var chans = m.List("channels").OfType<Dictionary<string, object>>().ToList();
@@ -423,30 +491,35 @@ namespace ElansAddonHub.Lodge
                     new Dictionary<string, object> { ["id"] = "voice", ["name"] = "Voice", ["type"] = "voice" },
                 };
             var keepSelected = Selected?.Id ?? Settings.LastChannel;
-            TextChannels.Clear();
-            VoiceRooms.Clear();
+            var wantChannels = new List<ChannelVM>();
             foreach (var c in chans)
             {
-                var ch = new ChannelVM { Id = c.Str("id"), Name = c.Str("name"), Type = c.Str("type") ?? "text", MinRole = c.Str("minRole"), Max = c.Int("max") };
-                (ch.IsVoice ? VoiceRooms : TextChannels).Add(ch);
+                var id = c.Str("id");
+                if (id == null) continue;
+                if (!channelCache.TryGetValue(id, out var ch)) channelCache[id] = ch = new ChannelVM { Id = id };
+                ch.Name = c.Str("name"); ch.Type = c.Str("type") ?? "text"; ch.MinRole = c.Str("minRole"); ch.Max = c.Int("max");
+                wantChannels.Add(ch);
             }
+            foreach (var id in channelCache.Keys.Where(k => wantChannels.All(w => w.Id != k)).ToList()) channelCache.Remove(id);
+            SyncList(TextChannels, wantChannels.Where(c => !c.IsVoice).ToList());
+            SyncList(VoiceRooms, wantChannels.Where(c => c.IsVoice).ToList());
 
-            // history: per channel (2.x) or one list (1.x)
-            foreach (var key in messages.Keys.ToList()) messages[key].Clear();
+            // history: per channel (2.x) or one list (1.x). Merged into what is already shown: same message objects (scroll position,
+            // decoded pictures, an edit in progress survive), new ones inserted by time, deleted ones removed.
             if (m.TryGetValue("history", out var h) && h is Dictionary<string, object> perChannel)
             {
                 foreach (var kv in perChannel)
-                    foreach (var x in (kv.Value as List<object> ?? new List<object>()).OfType<Dictionary<string, object>>())
-                    {
-                        if (!x.ContainsKey("channel")) x["channel"] = kv.Key;
-                        AddMessage(x);
-                    }
+                    MergeHistory(kv.Key, (kv.Value as List<object> ?? new List<object>()).OfType<Dictionary<string, object>>().ToList());
             }
-            else foreach (var x in m.List("history").OfType<Dictionary<string, object>>()) AddMessage(x);
+            else
+                foreach (var grp in m.List("history").OfType<Dictionary<string, object>>().GroupBy(x => x.Str("channel") ?? TextChannels.FirstOrDefault()?.Id ?? "general"))
+                    MergeHistory(grp.Key, grp.ToList());
 
             // pins (the server keeps its own copy of each), then flag the ones still in the loaded history
-            foreach (var l in pins.Values) l.Clear();
             if (m.Child("pins") != null)
+            {
+                foreach (var l in pins.Values) l.Clear();
+                foreach (var l in messages.Values) foreach (var x in l) x.Pinned = false;
                 foreach (var kv in m.Child("pins"))
                 {
                     var list = PinsOf(kv.Key);
@@ -459,20 +532,25 @@ namespace ElansAddonHub.Lodge
                         if (pm != null) pm.Pinned = true;
                     }
                 }
+            }
+            // what the server can do (and what I may do) may have changed: every shown message follows
+            foreach (var l in messages.Values)
+                foreach (var x in l) { x.ReactEnabled = SupportsReact; x.PinEnabled = CanPin; x.CanDelete = CanModerate; x.RefreshAvatar(); x.RefreshNames(); }
             foreach (var ch in TextChannels) RecomputeUnread(ch);
 
             Select(TextChannels.FirstOrDefault(c => c.Id == keepSelected) ?? TextChannels.FirstOrDefault());
             if (MyRoom != null && VoiceRooms.All(r => r.Id != MyRoom)) LeaveVoice(false);
-            else if (MyRoom != null) SendVoice(MyRoom); // reconnected while in voice
+            else if (MyRoom != null) SendVoice(MyRoom); // resync on the same connection while in voice
             else if (rejoinRoom != null)
             {
-                // the connection dropped while we were in voice: go back into the same room, quietly, same mute/deafen
+                // the connection dropped while we were in voice: go back into the same room, quietly, same mute/deafen.
+                // The server decides (the room may be full by now): see OnServerError.
                 var room = rejoinRoom; bool wasMuted = rejoinMuted, wasDeaf = rejoinDeaf;
                 rejoinRoom = null;
                 if (VoiceRooms.Any(r => r.Id == room))
                 {
+                    pendingMuted = wasMuted; pendingDeaf = wasDeaf;
                     JoinRoom(room, quiet: true);
-                    if (wasMuted || wasDeaf) SetMuteDeaf(wasMuted, wasDeaf);
                 }
             }
             SyncRooms();
@@ -484,6 +562,25 @@ namespace ElansAddonHub.Lodge
             SendGame();
             foreach (var r in VoiceRooms) r.InvisibleHint = Invisible;
             Changed?.Invoke();
+            // a gentle, one-time nudge: without a display name everybody sees the login name
+            if (SupportsDisplayName && Me != null && !Me.Guest && string.IsNullOrEmpty(Me.DisplayName) && !Settings.DisplayNameHintShown)
+            {
+                Settings.DisplayNameHintShown = true;
+                SettingsStore.Save(Settings);
+                Hint?.Invoke("Tip: pick a display name in Settings > Profile - it is what others see instead of your login name");
+            }
+        }
+
+        // keep `list` equal to `want` (same objects, same order) with the fewest changes
+        static void SyncList<T>(ObservableCollection<T> list, List<T> want)
+        {
+            for (int i = list.Count - 1; i >= 0; i--) if (!want.Contains(list[i])) list.RemoveAt(i);
+            for (int i = 0; i < want.Count; i++)
+            {
+                if (i < list.Count && ReferenceEquals(list[i], want[i])) continue;
+                var at = list.IndexOf(want[i]);
+                if (at >= 0) list.Move(at, i); else list.Insert(i, want[i]);
+            }
         }
 
         MemberVM ParseMember(Dictionary<string, object> u)
@@ -594,8 +691,17 @@ namespace ElansAddonHub.Lodge
 
         MessageVM AddMessage(Dictionary<string, object> m)
         {
+            var vm = BuildMessage(m, out var list);
+            list.Add(vm);
+            return vm;
+        }
+
+        static bool IsContinuation(MessageVM prev, MessageVM cur) => prev != null && prev.From == cur.From && (cur.At - prev.At).TotalMinutes < 5;
+
+        MessageVM BuildMessage(Dictionary<string, object> m, out ObservableCollection<MessageVM> list)
+        {
             var channel = m.Str("channel") ?? TextChannels.FirstOrDefault()?.Id ?? "general";
-            var list = MessagesOf(channel);
+            list = MessagesOf(channel);
             var at = DateTimeOffset.FromUnixTimeMilliseconds(m.Long("at")).UtcDateTime;
             var prev = list.LastOrDefault();
             var from = m.Str("from");
@@ -603,32 +709,103 @@ namespace ElansAddonHub.Lodge
             var vm = new MessageVM
             {
                 Id = m.Str("id"), Channel = channel, FromId = m.Int("fromId"), From = from, At = at,
-                Text = m.Str("text"), Edited = m.Bool("edited"),
+                Text = SafeFile.Text(m.Str("text")), Edited = m.Bool("edited"),
                 Mine = Me != null && string.Equals(from, Me.Name, StringComparison.OrdinalIgnoreCase),
                 CanDelete = CanModerate,
-                ReplyFrom = reply?.Str("by") ?? reply?.Str("from"), ReplyText = reply?.Str("snippet") ?? reply?.Str("text"), ReplyId = reply?.Str("id"),
+                ReplyFrom = reply?.Str("by") ?? reply?.Str("from"), ReplyText = SafeFile.Text(reply?.Str("snippet") ?? reply?.Str("text")), ReplyId = reply?.Str("id"),
                 ReactEnabled = SupportsReact, PinEnabled = CanPin,
-                Continuation = prev != null && prev.From == from && (at - prev.At).TotalMinutes < 5,
             };
+            vm.Continuation = prev != null && IsContinuation(prev, vm);
             var reacts = m.Child("reactions");
             if (reacts != null)
                 foreach (var kv in reacts.OrderBy(k => Array.IndexOf(ReactionSet, k.Key)))
                     ApplyReaction(vm, kv.Key, (kv.Value as List<object> ?? new List<object>()).OfType<string>().ToArray());
-            vm.Mentioned = !vm.Mine && MentionsMe(vm.Text);
+            vm.Mentioned = !vm.Mine && MentionsMe(vm.Text, from);
             var f = m.Child("file");
             if (f != null)
             {
-                vm.File = new FileVM { Id = f.Str("id"), Name = f.Str("name"), Size = f.Long("size"), Mime = f.Str("mime") };
+                // the name is cleaned here, before anything else sees it (older servers send it as uploaded)
+                vm.File = new FileVM { Id = f.Str("id"), Name = SafeFile.Name(f.Str("name")), Size = f.Long("size"), Mime = f.Str("mime") };
                 if (vm.File.IsImage) _ = LoadImage(vm.File);
             }
-            list.Add(vm);
             return vm;
         }
 
-        bool MentionsMe(string text)
+        // the welcome's history for one channel, merged into the messages already shown
+        void MergeHistory(string channel, List<Dictionary<string, object>> items)
+        {
+            foreach (var x in items) if (!x.ContainsKey("channel")) x["channel"] = channel;
+            var list = MessagesOf(channel);
+            long oldest = items.Count > 0 ? items.Min(x => x.Long("at")) : long.MaxValue;
+            var ids = new HashSet<string>(items.Select(x => x.Str("id")));
+            // deleted while I was away: inside the time window the server just sent, but not in it
+            if (items.Count > 0)
+                foreach (var gone in list.Where(v => v.Id != null && Ms(v.At) >= oldest && !ids.Contains(v.Id)).ToList()) list.Remove(gone);
+            var byId = new Dictionary<string, MessageVM>();
+            foreach (var v in list) if (v.Id != null) byId[v.Id] = v;
+            foreach (var x in items)
+            {
+                if (x.Str("id") != null && byId.TryGetValue(x.Str("id"), out var have)) { UpdateMessage(have, x); continue; }
+                var vm = BuildMessage(x, out _);
+                int at = list.Count;
+                while (at > 0 && list[at - 1].At > vm.At) at--;
+                list.Insert(at, vm);
+            }
+            for (int i = 0; i < list.Count; i++) list[i].Continuation = i > 0 && IsContinuation(list[i - 1], list[i]);
+        }
+
+        void UpdateMessage(MessageVM vm, Dictionary<string, object> x)
+        {
+            var text = SafeFile.Text(x.Str("text"));
+            if (vm.Text != text) vm.Text = text;
+            vm.Edited = x.Bool("edited");
+            vm.Mentioned = !vm.Mine && MentionsMe(vm.Text, vm.From);
+            var reacts = x.Child("reactions");
+            var keep = new HashSet<string>();
+            if (reacts != null)
+                foreach (var kv in reacts.OrderBy(k => Array.IndexOf(ReactionSet, k.Key)))
+                {
+                    keep.Add(kv.Key);
+                    ApplyReaction(vm, kv.Key, (kv.Value as List<object> ?? new List<object>()).OfType<string>().ToArray());
+                }
+            foreach (var r in vm.Reactions.Where(r => !keep.Contains(r.Emoji)).ToList()) vm.Reactions.Remove(r);
+            vm.RaiseReactions();
+        }
+
+        // a message was deleted: unread numbers, the "New messages" line and the neighbour's header follow
+        void RemoveMessage(ObservableCollection<MessageVM> list, MessageVM d, ChannelVM ch)
+        {
+            int idx = list.IndexOf(d);
+            if (ch != null)
+            {
+                if (d.Unread)
+                {
+                    d.Unread = false;
+                    ch.UnreadCount = Math.Max(0, ch.UnreadCount - 1);
+                    if (d.Mentioned) ch.Mentions = Math.Max(0, ch.Mentions - 1);
+                    if (ch.UnreadCount == 0) ch.Unread = false;
+                }
+                var next = idx >= 0 ? list.Skip(idx + 1).FirstOrDefault(x => x.Unread) : null;
+                if (ch.FirstUnreadId == d.Id) ch.FirstUnreadId = next?.Id;
+                if (ch.Divider == d)
+                {
+                    d.ShowDivider = false; ch.Divider = null;
+                    if (next != null) { ch.Divider = next; next.ShowDivider = true; }
+                }
+                UnreadChanged?.Invoke(TextChannels.Any(c => c.Unread));
+            }
+            list.Remove(d);
+            // the next message may have been a follow-up of the deleted one: it needs its header again
+            if (idx >= 0 && idx < list.Count) list[idx].Continuation = idx > 0 && IsContinuation(list[idx - 1], list[idx]);
+        }
+
+        // @name / @display name for me; @everyone and @here only count from officers and up (a lower rank can't ping the lodge)
+        bool MentionsMe(string text, string from)
         {
             if (string.IsNullOrEmpty(text) || Me == null) return false;
-            return Regex.IsMatch(text, @"@(" + DisplayNames.MentionPattern(Me.Name, Me.DisplayName) + @"|everyone|here)(?![\w])", RegexOptions.IgnoreCase);
+            var group = Members.FirstOrDefault(x => string.Equals(x.Name, from, StringComparison.OrdinalIgnoreCase));
+            bool mayPingAll = group != null && MemberVM.RoleLevel(group.Role) >= MemberVM.RoleLevel("officer");
+            return Regex.IsMatch(text, @"(?<![\w@])@(" + DisplayNames.MentionPattern(Me.Name, Me.DisplayName) + (mayPingAll ? @"|everyone|here" : "") + @")(?![\w])", RegexOptions.IgnoreCase);
         }
 
         void OnNewMessage(MessageVM vm)
@@ -642,6 +819,7 @@ namespace ElansAddonHub.Lodge
             if (looking) SetReadMark(ch, vm);
             else if (ch != null)
             {
+                vm.Unread = true;
                 ch.Unread = true;
                 ch.UnreadCount++;
                 if (vm.Mentioned) ch.Mentions++;
@@ -650,12 +828,15 @@ namespace ElansAddonHub.Lodge
                 UnreadChanged?.Invoke(true);
             }
             if (shown) looking = true; // (notifications: the window is looking at this channel)
-            if (vm.Mentioned) ToastFor(ToastKind.Mention, vm, vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : OneLine(vm.Text));
+            bool toasted = false;
+            if (vm.Mentioned) toasted = ToastFor(ToastKind.Mention, vm, vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : OneLine(vm.Text));
             else if (Me != null && vm.ReplyFrom != null && string.Equals(vm.ReplyFrom, Me.Name, StringComparison.OrdinalIgnoreCase))
-                ToastFor(ToastKind.Reply, vm, vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : OneLine(vm.Text));
+                toasted = ToastFor(ToastKind.Reply, vm, vm.From, string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : OneLine(vm.Text));
             var mode = Settings.NotifyMode ?? "mentions";
             if (vm.Mentioned && mode != "none") Sounds.Mention();
-            if (!looking && (mode == "all" || (mode == "mentions" && vm.Mentioned)))
+            // one notification per message: when a toast is on screen the tray balloon stays quiet
+            bool toastOnScreen = toasted && (ToastWillShow?.Invoke() ?? false);
+            if (!looking && !toastOnScreen && (mode == "all" || (mode == "mentions" && vm.Mentioned)))
                 Notify?.Invoke($"{vm.FromShown} in #{ch?.Name}", string.IsNullOrEmpty(vm.Text) ? "shared " + vm.File?.Name : vm.Text);
         }
 
@@ -698,33 +879,79 @@ namespace ElansAddonHub.Lodge
             return host + "|" + ch.Id;
         }
 
+        readonly object marksLock = new object();
+        readonly DispatcherTimer marksTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+        bool marksDirty;
+
         void LoadMarks()
         {
-            if (readMarks != null) return;
-            readMarks = new Dictionary<string, ReadMark>();
-            try
+            lock (marksLock)
             {
-                if (!File.Exists(ReadFile)) return;
-                var o = Json.Obj(File.ReadAllText(ReadFile));
-                if (o != null)
-                    foreach (var kv in o)
-                        if (kv.Value is Dictionary<string, object> d) readMarks[kv.Key] = new ReadMark { Id = d.Str("id"), At = d.Long("at") };
+                if (readMarks != null) return;
+                var loaded = new Dictionary<string, ReadMark>();
+                try
+                {
+                    if (File.Exists(ReadFile))
+                    {
+                        var o = Json.Obj(File.ReadAllText(ReadFile));
+                        if (o != null)
+                            foreach (var kv in o)
+                                if (kv.Value is Dictionary<string, object> d) loaded[kv.Key] = new ReadMark { Id = d.Str("id"), At = d.Long("at") };
+                    }
+                }
+                catch (Exception e) { Util.Log("read state: " + e.Message); }
+                readMarks = loaded;
             }
-            catch (Exception e) { Util.Log("read state: " + e.Message); }
         }
 
+        // the state is snapshotted on the UI thread and written a moment later on a worker: reading a channel costs no disk time
         void SaveMarks()
         {
-            try
+            marksDirty = true;
+            if (!marksTimer.IsEnabled) marksTimer.Start();
+        }
+
+        string MarksJson()
+        {
+            lock (marksLock)
             {
                 var o = new Dictionary<string, object>();
                 foreach (var kv in readMarks) o[kv.Key] = new Dictionary<string, object> { ["id"] = kv.Value.Id, ["at"] = (double)kv.Value.At };
-                var tmp = ReadFile + ".tmp";
-                File.WriteAllText(tmp, Json.Write(o));
-                if (File.Exists(ReadFile)) File.Delete(ReadFile);
-                File.Move(tmp, ReadFile);
+                return Json.Write(o);
             }
-            catch (Exception e) { Util.Log("read state: " + e.Message); }
+        }
+
+        void WriteMarksAsync()
+        {
+            if (!marksDirty || readMarks == null) return;
+            marksDirty = false;
+            var json = MarksJson();
+            Task.Run(() => WriteMarksFile(json));
+        }
+
+        // now, on this thread (leaving the lodge, quitting)
+        public void FlushMarks()
+        {
+            marksTimer.Stop();
+            if (!marksDirty || readMarks == null) return;
+            marksDirty = false;
+            WriteMarksFile(MarksJson());
+        }
+
+        static readonly object fileLock = new object();
+
+        // temp file in the same folder, then replaced in one step: a crash leaves the old file or the new one, never half
+        static void WriteMarksFile(string json)
+        {
+            lock (fileLock)
+                try
+                {
+                    var tmp = ReadFile + ".tmp";
+                    File.WriteAllText(tmp, json);
+                    if (File.Exists(ReadFile)) File.Replace(tmp, ReadFile, null);
+                    else File.Move(tmp, ReadFile);
+                }
+                catch (Exception e) { Util.Log("read state: " + e.Message); }
         }
 
         static long Ms(DateTime utc) => new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
@@ -734,8 +961,9 @@ namespace ElansAddonHub.Lodge
         {
             if (ch == null) return;
             LoadMarks();
-            if (upTo != null) { readMarks[ReadKey(ch)] = new ReadMark { Id = upTo.Id, At = Ms(upTo.At) }; SaveMarks(); }
+            if (upTo != null) { lock (marksLock) readMarks[ReadKey(ch)] = new ReadMark { Id = upTo.Id, At = Ms(upTo.At) }; SaveMarks(); }
             bool changed = ch.Unread || ch.Mentions > 0 || ch.UnreadCount > 0;
+            foreach (var x in MessagesOf(ch.Id)) x.Unread = false;
             ch.Unread = false; ch.Mentions = 0; ch.UnreadCount = 0; ch.FirstUnreadId = null;
             if (changed) UnreadChanged?.Invoke(TextChannels.Any(c => c.Unread));
         }
@@ -760,7 +988,9 @@ namespace ElansAddonHub.Lodge
                 if (idx >= 0) start = idx + 1;
                 else { start = 0; while (start < list.Count && Ms(list[start].At) <= mark.At) start++; } // the marked message is gone: go by time
             }
+            foreach (var x in list) x.Unread = false;
             var unread = list.Skip(start).Where(x => !x.Mine).ToList();
+            foreach (var x in unread) x.Unread = true;
             ch.UnreadCount = unread.Count;
             ch.Mentions = unread.Count(x => x.Mentioned);
             ch.Unread = unread.Count > 0;
@@ -821,6 +1051,49 @@ namespace ElansAddonHub.Lodge
 
         Task Send(Dictionary<string, object> obj) => client?.Send(obj) ?? Task.CompletedTask;
 
+        // The text I just sent, until the server echoes it. When the send fails (offline, closed socket, rate limit) the view puts it back.
+        public sealed class PendingSend { public string Text, ReplyId, Channel; public DateTime At; }
+        public PendingSend Pending { get; private set; }
+
+        // false = not sent (nothing was queued); `why` says so. The caller keeps the text in the box.
+        public bool TrySend(string text, string replyTo, out string why)
+        {
+            why = null;
+            if (!Online && !TestFed) { why = "You are offline - your message is waiting in the box"; return false; }
+            Pending = new PendingSend { Text = text, ReplyId = replyTo, Channel = Selected?.Id, At = Clock() };
+            _ = SendMessage(text, replyTo);
+            return true;
+        }
+
+        void FailPending(string why)
+        {
+            var p = Pending;
+            if (p == null) return;
+            Pending = null;
+            SendFailed?.Invoke(p, why);
+            Error?.Invoke(why);
+        }
+
+        void OnServerError(string text, string code, string room)
+        {
+            text = text ?? "";
+            if (pendingRoom != null && (code == "room-full" || text.IndexOf("is full (", StringComparison.OrdinalIgnoreCase) >= 0 || text.StartsWith("You can't join", StringComparison.OrdinalIgnoreCase)))
+            {
+                // the server said no: never connected, no mic opened
+                pendingRoom = null; pendingMuted = pendingDeaf = false;
+                Error?.Invoke(code == "room-full" || text.IndexOf("is full", StringComparison.OrdinalIgnoreCase) >= 0 ? text + " - you're not in voice" : text);
+                SyncRooms();
+                Changed?.Invoke();
+                return;
+            }
+            if (Pending != null && (code == "rate" || text.StartsWith("Slow down", StringComparison.OrdinalIgnoreCase) || text.StartsWith("You can't write", StringComparison.OrdinalIgnoreCase)))
+            {
+                FailPending(text);
+                return;
+            }
+            Error?.Invoke(text);
+        }
+
         public Task SendMessage(string text, string replyTo = null, string fileId = null)
         {
             // appearing offline: messages still carry my name - say so once
@@ -849,13 +1122,13 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ files
 
-        public async Task Share(string path, string text, string replyTo)
+        public async Task Share(string path, string text, string replyTo, Action<double> progress = null)
         {
             if (!Online) return;
             if (!CanShareFiles) throw new InvalidOperationException("Initiates can't share files");
             if (new FileInfo(path).Length > MaxFileMb * 1024L * 1024L)
                 throw new InvalidOperationException($"{Path.GetFileName(path)} is larger than {MaxFileMb} MB");
-            var meta = await client.Upload(path);
+            var meta = await client.Upload(path, progress);
             await SendMessage(text, replyTo, meta.Str("id"));
         }
 
@@ -863,10 +1136,13 @@ namespace ElansAddonHub.Lodge
 
         async Task LoadImage(FileVM f)
         {
-            var path = Path.Combine(CacheDir, f.Id + Path.GetExtension(f.Name));
+            var id = SafeFile.Id(f.Id);
+            if (id == null || failedImages.Contains(id)) return;      // never asked for again this session
+            var path = SafeFile.PathIn(CacheDir, id + SafeFile.Ext(f.Name));
+            if (path == null) return;
             try
             {
-                if (!File.Exists(path)) { if (client == null) return; await client.Download(f.Id, path); }
+                if (!File.Exists(path)) { if (client == null) return; await client.Download(id, path); }
                 var bmp = new BitmapImage();
                 bmp.BeginInit();
                 bmp.CacheOption = BitmapCacheOption.OnLoad; // don't keep the file locked
@@ -877,8 +1153,15 @@ namespace ElansAddonHub.Lodge
                 f.LocalPath = path;
                 f.Image = bmp;
             }
-            catch (Exception e) { Util.Log("image: " + e.Message); }
+            catch (Exception e)
+            {
+                if (e is LodgeClient.DownloadException de && de.Status == 404) failedImages.Add(id);
+                Util.Log("image: " + e.Message);
+            }
         }
+
+        // where a download goes: always inside `dir`, with the cleaned name; null = refused
+        public static string DownloadTarget(string dir, FileVM f) => SafeFile.FreePath(dir, f?.Name);
 
         public Task Download(FileVM f, string target) => client.Download(f.Id, target);
 
@@ -886,10 +1169,28 @@ namespace ElansAddonHub.Lodge
 
         public void JoinRoom(string room) => JoinRoom(room, false);
 
+        // The join is only asked for here. MyRoom (and the microphone) follow when the server confirms it with my own "user"
+        // update - a full room answers with an error instead and nothing was opened.
+        string pendingRoom;
+        DateTime pendingSince;
+        bool pendingMuted, pendingDeaf, pendingQuiet;
+        public string PendingRoom => pendingRoom;
+
         // quiet: no join sound (rejoining after a dropped connection)
         public void JoinRoom(string room, bool quiet)
         {
-            if (!Online || room == null) return;
+            if ((!Online && !TestFed) || room == null) return;
+            if (room == MyRoom) return;
+            pendingRoom = room; pendingSince = Clock(); pendingQuiet = quiet;
+            SendVoice(room);
+            Changed?.Invoke();
+        }
+
+        void CommitRoom()
+        {
+            var room = pendingRoom;
+            pendingRoom = null;
+            if (room == null || client == null) return;
             if (voice == null)
             {
                 voice = new VoiceEngine
@@ -903,13 +1204,13 @@ namespace ElansAddonHub.Lodge
                 var c = client;
                 voice.Send = (p, n) => _ = c.SendVoice(p, n);
                 voice.Start(Settings.VoiceInput ?? -1, Settings.VoiceOutput ?? -1, (float)(Settings.VoiceVolume ?? 1));
-                voice.Muted = false;
-                voice.Deafened = false;
+                voice.Muted = pendingMuted || pendingDeaf;
+                voice.Deafened = pendingDeaf;
             }
+            pendingMuted = pendingDeaf = false;
             MyRoom = room;
-            SendVoice(room);
             _ = Send(new Dictionary<string, object> { ["t"] = "state", ["muted"] = voice.Muted, ["deaf"] = voice.Deafened });
-            if (!quiet) Sounds.Join();
+            if (!pendingQuiet) Sounds.Join();
             SyncRooms();
             Changed?.Invoke();
         }
@@ -919,7 +1220,8 @@ namespace ElansAddonHub.Lodge
 
         public void LeaveVoice(bool tellServer = true)
         {
-            if (MyRoom == null && voice == null) return;
+            if (MyRoom == null && voice == null && pendingRoom == null) return;
+            pendingRoom = null;
             MyRoom = null;
             voice?.Dispose();
             voice = null;
@@ -932,7 +1234,7 @@ namespace ElansAddonHub.Lodge
 
         public void SetMuteDeaf(bool muted, bool deaf)
         {
-            if (voice == null) return;
+            if (voice == null) { if (pendingRoom != null) { pendingMuted = muted; pendingDeaf = deaf; } return; }
             voice.Muted = muted || deaf; // deafened people can't talk either
             voice.Deafened = deaf;
             voice.Volume = deaf ? 0 : (float)(Settings.VoiceVolume ?? 1);
@@ -978,6 +1280,8 @@ namespace ElansAddonHub.Lodge
             foreach (var m in Members)
                 m.Speaking = MyRoom != null && m.Room == MyRoom && voice != null && (m.IsMe ? voice.Transmitting : voice.IsSpeaking(m.Id));
             if (tickCount % 50 == 0) CheckIdle();
+            if (Pending != null && Clock() - Pending.At > TimeSpan.FromSeconds(15)) Pending = null;   // surely out by now
+            if (pendingRoom != null && Clock() - pendingSince > TimeSpan.FromSeconds(6)) { pendingRoom = null; Error?.Invoke("Couldn't join the voice room - no answer from the lodge"); Changed?.Invoke(); }
             AutoStatusTick();
             if (Toasts.NeedsTick) Toasts.Tick();
         }
@@ -1097,11 +1401,14 @@ namespace ElansAddonHub.Lodge
         public Task SendForTest(string text) => SendMessage(text);
         // offline rendering test: feed protocol frames without a server
         public bool TestFed { get; private set; }
+        public bool TestFedForView => TestFed;
         public void FeedForTest(string json) { TestFed = true; OnReceived(Json.Obj(json)); }
         public void SetReadMarkForTest(string channel, string id, long at)
         {
             LoadMarks();
-            readMarks["local|" + channel] = new ReadMark { Id = id, At = at };
+            lock (marksLock) readMarks["local|" + channel] = new ReadMark { Id = id, At = at };
         }
+        public bool MarksDirtyForTest => marksDirty;
+        public bool ChannelObjectKept(string id) => channelCache.ContainsKey(id);
     }
 }

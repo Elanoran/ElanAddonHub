@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -35,7 +36,11 @@ namespace ElansAddonHub.Lodge
             };
         }
 
-        // the WoW window when it's in front (Wow.exe, WowClassic.exe, WowClassicB.exe ...), else IntPtr.Zero
+        // the WoW executables, by exact name (WowUp, Wow-something-else and the like are not the game)
+        static readonly string[] WowExes = { "Wow", "WowClassic", "WowT", "WowB", "WowClassicB", "WowClassicT" };
+        public static bool IsWowProcess(string processName) => processName != null && WowExes.Contains(processName.Replace(".exe", ""), StringComparer.OrdinalIgnoreCase);
+
+        // the WoW window when it's in front (Wow.exe, WowClassic.exe, WowT.exe, WowB.exe ...), else IntPtr.Zero
         static uint lastPid;
         static bool lastWasWow;
         public static IntPtr WowInFront()
@@ -46,7 +51,7 @@ namespace ElansAddonHub.Lodge
             if (pid != lastPid)
             {
                 lastPid = pid;
-                try { lastWasWow = Process.GetProcessById((int)pid).ProcessName.StartsWith("Wow", StringComparison.OrdinalIgnoreCase); }
+                try { lastWasWow = IsWowProcess(Process.GetProcessById((int)pid).ProcessName); }
                 catch { lastWasWow = false; }
             }
             return lastWasWow ? fg : IntPtr.Zero;

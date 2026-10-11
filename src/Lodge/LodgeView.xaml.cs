@@ -32,6 +32,7 @@ namespace ElansAddonHub.Lodge
         MessageVM menuMsg, reactTarget;
         readonly DispatcherTimer dropTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
         string jumpMode; // "unread" | "present" | null
+        readonly System.Collections.Generic.Dictionary<string, string> drafts = new System.Collections.Generic.Dictionary<string, string>();   // unsent text per channel
 
         public event Action OpenSettings;
         public bool ForceOverlayForTest;
@@ -71,6 +72,9 @@ namespace ElansAddonHub.Lodge
             session.Stopped += why => ShowJoin(why);
             session.ProfileReceived += OnProfileReceived;
             session.Error += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(6); };
+            session.Hint += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(14); };
+            session.SendFailed += (p, why) => RestoreText(p.Text);
+            session.ToastWillShow = () => !session.Settings.ToastsOff && (OverlayWindow.WowInFront() != IntPtr.Zero || session.Settings.OverlayAlways || ForceToastsForTest);
             tick.Start();
 
             UrlBox.Text = session.Settings.LodgeUrl ?? "";
@@ -91,13 +95,19 @@ namespace ElansAddonHub.Lodge
             StatusDot.Fill = (Brush)FindResource(s.Online ? "Accent" : "TextDim");
             StatusText.Text = s.StatusText;
             try { LodgeTitle.Text = s.BaseUrl != null ? new Uri(s.BaseUrl).Host : "Lodge"; } catch { }
-            OnlineCaption.Text = $"ONLINE - {s.Members.Count(m => m.Room == null)}";
+            // one online number: the status line under the lodge name. The section header names the list, it doesn't count again.
+            OnlineCaption.Text = "ONLINE";
+            UpdateOffline();
 
             // the channel on screen
             if (s.Selected != shownChannel)
             {
+                // what I was typing stays with the channel it was for
+                if (shownChannel != null && editing == null) drafts[shownChannel.Id] = Composer.Text;
                 shownChannel = s.Selected;
                 CancelMode();
+                Composer.Text = s.Selected != null && drafts.TryGetValue(s.Selected.Id, out var draft) ? draft : "";
+                Composer.CaretIndex = Composer.Text.Length;
                 Messages.ItemsSource = s.MessagesOf(s.Selected?.Id);
                 ChannelTitle.Text = s.Selected?.Name ?? "";
                 EmptyText.Text = $"No messages in #{s.Selected?.Name} yet - say hi!";
@@ -142,8 +152,8 @@ namespace ElansAddonHub.Lodge
             if (Session == null) return;
             TypingText.Text = Session.TypingText(Session.Selected?.Id);
             var online = Session.Members.Count(m => m.Room == null);
-            OnlineCaption.Text = $"ONLINE - {online}";
             OnlineCaption.Visibility = online > 0 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateOffline();
             if (ChatNote.Text.Length > 0 && DateTime.UtcNow > noteUntil) ChatNote.Text = "";
             if (ChatPanel.Visibility == Visibility.Visible && (Session.IsShownToUser?.Invoke() ?? true)) Session.MarkRead(); // only acts at the bottom
             UpdateJump();
@@ -152,6 +162,31 @@ namespace ElansAddonHub.Lodge
             if (WowWatch.Shared.Running || st.OverlayAlways || OverlayPreview || ForceOverlayForTest || ForceToastsForTest || (overlay != null && overlay.IsVisible) || (toastWin != null && toastWin.IsVisible) || Session.Toasts?.NeedsTick == true)
                 UpdateOverlay();
         }
+
+        // while disconnected: a calm banner above the box, and Send is off (the text stays in the box)
+        void UpdateOffline()
+        {
+            if (Session == null) return;
+            bool off = !Session.Online && !Session.TestFedForView;
+            OfflineBanner.Visibility = off ? Visibility.Visible : Visibility.Collapsed;
+            if (off) OfflineText.Text = string.IsNullOrEmpty(Session.StatusText) ? "You are offline - reconnecting..." : "You are offline - " + Session.StatusText.TrimEnd('.');
+            SendButton.IsEnabled = !off;
+        }
+
+        // a message that did not go out comes back into the box (in front of anything typed since)
+        void RestoreText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            Composer.Text = Composer.Text.Length == 0 ? text : text + " " + Composer.Text;
+            Composer.CaretIndex = Composer.Text.Length;
+        }
+        public string ComposerTextForTest { get => Composer.Text; set => Composer.Text = value; }
+        public int ComposerMaxLengthForTest => Composer.MaxLength;
+        public bool SendEnabledForTest => SendButton.IsEnabled;
+        public bool OfflineBannerForTest => OfflineBanner.Visibility == Visibility.Visible;
+        public string DraftForTest(string channel) => drafts.TryGetValue(channel, out var d) ? d : null;
+        public void SendTextForTest() => SendText();
+        public string ChatNoteForTest => ChatNote.Text;
 
         // "Your Lodge server is on 2.5 - 2.7 is available ..." for the owner / officers of an outdated server
         void UpdateServerNotice()
@@ -711,7 +746,7 @@ namespace ElansAddonHub.Lodge
         void SendText()
         {
             var text = Composer.Text.Trim();
-            if (!Session.Online) return;
+            if (!Session.Online && !Session.TestFedForView) { ChatNote.Text = "You are offline - your message stays in the box"; noteUntil = DateTime.UtcNow.AddSeconds(6); return; }
             if (editing != null)
             {
                 if (text.Length > 0 && text != editing.Text) _ = Session.Edit(editing.Id, text);
@@ -720,7 +755,8 @@ namespace ElansAddonHub.Lodge
                 return;
             }
             if (text.Length == 0) return;
-            _ = Session.SendMessage(text, replyTo?.Id);
+            // the text only leaves the box when the send was really started; if it fails later the session hands it back
+            if (!Session.TrySend(text, replyTo?.Id, out var why)) { ChatNote.Text = why; noteUntil = DateTime.UtcNow.AddSeconds(6); return; }
             Composer.Text = "";
             CancelMode();
         }
@@ -785,27 +821,57 @@ namespace ElansAddonHub.Lodge
             foreach (var f in files.Where(File.Exists)) _ = Share(f);
         }
 
-        public async Task Share(string path, bool deleteAfter = false)
+        // Several files (a drop, a multi-select, a paste): one upload at a time, in order; only the first carries the caption
+        sealed class ShareJob { public string Path; public bool DeleteAfter; }
+        readonly System.Collections.Generic.Queue<ShareJob> shareQueue = new System.Collections.Generic.Queue<ShareJob>();
+        bool sharing;
+        int shareTotal, shareDone;
+
+        public Task Share(string path, bool deleteAfter = false)
         {
-            ChatNote.Text = $"Uploading {Path.GetFileName(path)}...";
-            noteUntil = DateTime.UtcNow.AddMinutes(5);
+            shareQueue.Enqueue(new ShareJob { Path = path, DeleteAfter = deleteAfter });
+            shareTotal++;
+            return sharing ? Task.CompletedTask : RunShareQueue();
+        }
+
+        async Task RunShareQueue()
+        {
+            sharing = true;
             try
             {
-                var text = Composer.Text.Trim();
-                await Session.Share(path, text, replyTo?.Id);
-                if (editing == null) { Composer.Text = ""; CancelMode(); }
-                ChatNote.Text = "";
+                while (shareQueue.Count > 0)
+                {
+                    var job = shareQueue.Dequeue();
+                    shareDone++;
+                    var n = shareTotal > 1 ? $" ({shareDone} of {shareTotal})" : "";
+                    var name = System.IO.Path.GetFileName(job.Path);
+                    ChatNote.Text = $"Uploading {name}{n}...";
+                    noteUntil = DateTime.UtcNow.AddMinutes(5);
+                    try
+                    {
+                        var first = shareDone == 1;
+                        var text = first ? Composer.Text.Trim() : "";
+                        await Session.Share(job.Path, text, first ? replyTo?.Id : null, pr =>
+                        {
+                            ChatNote.Text = $"Uploading {name}{n} {pr * 100:0}%";
+                            noteUntil = DateTime.UtcNow.AddMinutes(5);
+                        });
+                        if (first && editing == null) { Composer.Text = ""; CancelMode(); }
+                        ChatNote.Text = "";
+                    }
+                    catch (Exception ex)
+                    {
+                        Util.Log("upload: " + ex.Message);
+                        ChatNote.Text = (ex is InvalidOperationException ? ex.Message : "Upload failed: " + ex.Message) + (shareTotal > 1 ? $" ({name})" : "");
+                        noteUntil = DateTime.UtcNow.AddSeconds(8);
+                    }
+                    finally
+                    {
+                        if (job.DeleteAfter) try { File.Delete(job.Path); Directory.Delete(System.IO.Path.GetDirectoryName(job.Path)); } catch { }
+                    }
+                }
             }
-            catch (Exception ex)
-            {
-                Util.Log("upload: " + ex.Message);
-                ChatNote.Text = ex is InvalidOperationException ? ex.Message : "Upload failed: " + ex.Message;
-                noteUntil = DateTime.UtcNow.AddSeconds(8);
-            }
-            finally
-            {
-                if (deleteAfter) try { File.Delete(path); Directory.Delete(Path.GetDirectoryName(path)); } catch { }
-            }
+            finally { sharing = false; shareTotal = 0; shareDone = 0; }
         }
 
         void Image_Click(object sender, MouseButtonEventArgs e)
@@ -853,18 +919,26 @@ namespace ElansAddonHub.Lodge
         async void Download_Click(object sender, RoutedEventArgs e)
         {
             if (!((sender as FrameworkElement)?.Tag is FileVM f)) return;
-            var dir = DownloadsFolder();
-            var target = Path.Combine(dir, f.Name);
-            for (int i = 2; File.Exists(target); i++)
-                target = Path.Combine(dir, $"{Path.GetFileNameWithoutExtension(f.Name)} ({i}){Path.GetExtension(f.Name)}");
-            f.Status = "downloading...";
             try
             {
+                // a program or script: say what it really is before it lands in Downloads
+                if (f.IsRisky && !Dialog.Confirm(Window.GetWindow(this), $"Download a {f.ExtText} file?",
+                        $"\"{f.Name}\" is a {f.Ext} file. Files like this can run programs on your PC when opened. Only download it if you know the sender and expected it.", "Download anyway", danger: true))
+                    return;
+                var target = LodgeSession.DownloadTarget(DownloadsFolder(), f);
+                if (target == null) { f.Status = "failed"; ChatNote.Text = "That file's name can't be saved safely"; noteUntil = DateTime.UtcNow.AddSeconds(8); return; }
+                f.Status = "downloading...";
                 await Session.Download(f, target);
                 f.Status = "saved";
                 Process.Start("explorer.exe", $"/select,\"{target}\"");
             }
-            catch (Exception ex) { f.Status = "failed"; Util.Log("download: " + ex.Message); }
+            catch (Exception ex)
+            {
+                f.Status = "failed";
+                Util.Log("download: " + ex.Message);
+                ChatNote.Text = "Couldn't download " + f.Name + " - try again in a moment";
+                noteUntil = DateTime.UtcNow.AddSeconds(8);
+            }
         }
 
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]

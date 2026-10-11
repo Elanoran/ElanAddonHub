@@ -103,6 +103,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "invisibleForget")] public bool InvisibleForget { get; set; } // true = Appear offline resets to visible at every start
         [DataMember(Name = "invisibleHintShown")] public bool InvisibleHintShown { get; set; } // the one-time "others can see your messages" note
         [DataMember(Name = "notify")] public string NotifyMode { get; set; }          // mentions (default) | all | none
+        [DataMember(Name = "displayNameHintShown")] public bool DisplayNameHintShown { get; set; } // the one-time "pick a display name" tip
         [DataMember(Name = "soundsOff")] public bool SoundsOff { get; set; }
         [DataMember(Name = "peerVolumes")] public Dictionary<string, double> PeerVolumes { get; set; } // by name, 0..2
         [DataMember(Name = "lastChannel")] public string LastChannel { get; set; }

@@ -6,8 +6,8 @@
   <UserControl.Resources>
     <Style x:Key="Pill" TargetType="Button">
       <Setter Property="Focusable" Value="False" />
-      <Setter Property="Foreground" Value="#E8E8E8" />
-      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+      <Setter Property="Background" Value="{StaticResource Brush.Overlay.Chip}" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Margin" Value="0,0,6,0" />
@@ -18,7 +18,7 @@
               <TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" FontSize="{TemplateBinding FontSize}" />
             </Border>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#59FFFFFF" /></Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Overlay.Pressed}" /></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
@@ -26,7 +26,7 @@
     </Style>
     <Style x:Key="RoundGlyph" TargetType="Button" BasedOn="{StaticResource IconButton}">
       <Setter Property="Focusable" Value="False" />
-      <Setter Property="Foreground" Value="#F0F0F0" />
+      <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
       <Setter Property="Background" Value="#40000000" />
     </Style>
   </UserControl.Resources>
@@ -47,7 +47,7 @@
     <!-- hit surface for the picture itself: sits over the whole viewport so pan/double-click work, backdrop clicks close -->
     <Grid x:Name="Hit" Margin="64,56,64,64" Background="Transparent" Cursor="Arrow"
           MouseLeftButtonDown="Hit_Down" MouseMove="Hit_Move" MouseLeftButtonUp="Hit_Up" />
-    <TextBlock x:Name="ErrorText" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#E06C6C" FontSize="14"
+    <TextBlock x:Name="ErrorText" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Brush.Danger}" FontSize="15"
                Visibility="Collapsed" IsHitTestVisible="False" />
 
     <!-- top bar -->
@@ -66,8 +66,8 @@
 
     <!-- caption -->
     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,14" IsHitTestVisible="False">
-      <TextBlock x:Name="CapName" Foreground="#F0F0F0" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="700" />
-      <TextBlock x:Name="CapInfo" Foreground="#A8A8A8" FontSize="11.5" HorizontalAlignment="Center" Margin="0,2,0,0" />
+      <TextBlock x:Name="CapName" Foreground="{StaticResource Brush.Text.Primary}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="700" />
+      <TextBlock x:Name="CapInfo" Foreground="{StaticResource Brush.Text.Secondary}" FontSize="12" HorizontalAlignment="Center" Margin="0,2,0,0" />
     </StackPanel>
   </Grid>
 </UserControl>

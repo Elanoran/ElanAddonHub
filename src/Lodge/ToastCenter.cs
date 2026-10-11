@@ -91,6 +91,8 @@ namespace ElansAddonHub.Lodge
         public bool Enabled(ToastKind k)
         {
             if (settings.ToastsOff) return false;
+            // "Notifications: Nothing" silences the chat toasts too
+            if (settings.NotifyMode == "none" && (k == ToastKind.Mention || k == ToastKind.Reply || k == ToastKind.Reaction || k == ToastKind.Pin)) return false;
             switch (k)
             {
                 case ToastKind.Mention: return !settings.ToastMentionsOff;
@@ -103,12 +105,14 @@ namespace ElansAddonHub.Lodge
             }
         }
 
-        public void Push(ToastItem it)
+        // true = this toast was accepted (shown now, or held until the fight is over)
+        public bool Push(ToastItem it)
         {
-            if (!Enabled(it.Kind)) return;
-            if (it.ChannelId != null && ChannelOnScreen(it.ChannelId)) return;
-            if (InCombat()) { held.Add(it); if (held.Count > 60) held.RemoveAt(0); return; }
+            if (!Enabled(it.Kind)) return false;
+            if (it.ChannelId != null && ChannelOnScreen(it.ChannelId)) return false;
+            if (InCombat()) { held.Add(it); if (held.Count > 60) held.RemoveAt(0); return true; }
             Show(it);
+            return true;
         }
 
         void Show(ToastItem it)

@@ -34,11 +34,18 @@ namespace ElansAddonHub.Lodge
             return Frozen(Palette[Math.Abs(h % Palette.Length)]);
         }
 
+        // frozen brushes are shared: a property that is read on every refresh must not allocate a brush each time
+        static readonly System.Collections.Generic.Dictionary<string, Brush> frozen = new System.Collections.Generic.Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase);
+
         public static Brush Frozen(string hex)
         {
-            var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-            b.Freeze();
-            return b;
+            lock (frozen)
+            {
+                if (frozen.TryGetValue(hex, out var cached)) return cached;
+                var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+                b.Freeze();
+                return frozen[hex] = b;
+            }
         }
 
         public static string Initial(string name) => string.IsNullOrEmpty(name) ? "?" : name.Substring(0, 1).ToUpperInvariant();
@@ -50,10 +57,11 @@ namespace ElansAddonHub.Lodge
     public class ChannelVM : Bindable
     {
         public string Id { get; set; }
-        public string Name { get; set; }
+        string name; int max;
+        public string Name { get => name; set { if (Set(ref name, value)) Raise(nameof(CountTip)); } }
         public string Type { get; set; }   // text | voice
         public string MinRole { get; set; }
-        public int Max { get; set; }
+        public int Max { get => max; set { if (Set(ref max, value)) { Raise(nameof(CountText)); Raise(nameof(CountTip)); } } }
         public bool IsVoice => Type == "voice";
         public string Glyph => IsVoice ? "" : "#";
         public string LockText => MinRole == "veteran" || MinRole == "officer" || MinRole == "owner" ? MemberVM.RoleName(MinRole) + "+" : "";
@@ -61,7 +69,9 @@ namespace ElansAddonHub.Lodge
 
         // people in this voice room (kept in sync by the session)
         public ObservableCollection<MemberVM> Members { get; } = new ObservableCollection<MemberVM>();
-        public string CountText => IsVoice && Max > 0 ? $"{Members.Count}/{Max}" : "";
+        // only when somebody is in the room: "2/5" (or just "2" without a limit); the limit is in the tooltip
+        public string CountText => IsVoice && Members.Count > 0 ? (Max > 0 ? $"{Members.Count}/{Max}" : Members.Count.ToString()) : "";
+        public string CountTip => Max > 0 ? $"max {Max}" : "";
 
         bool selected, unread, here;
         int mentions, unreadCount;
@@ -84,7 +94,7 @@ namespace ElansAddonHub.Lodge
         public FontWeight NameWeight => unread ? FontWeights.SemiBold : FontWeights.Normal;
         public Visibility MentionVisibility => mentions > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility UnreadVisibility => unreadCount > 0 && mentions == 0 ? Visibility.Visible : Visibility.Collapsed;
-        public void RefreshCount() => Raise(nameof(CountText));
+        public void RefreshCount() { Raise(nameof(CountText)); Raise(nameof(CountTip)); }
     }
 
     // ================================================================ people
@@ -197,7 +207,7 @@ namespace ElansAddonHub.Lodge
             r == "owner" ? "#FF8000" : r == "officer" ? "#B048F8" : r == "veteran" ? "#2F8FFF" : r == "guest" ? "#9D9D9D" : "#3EE03E");
         public string RoleLabel => RoleName(role);
         public Color FrameColor => RoleColor(role);
-        public Brush FrameBrush { get { var b = new SolidColorBrush(FrameColor); b.Freeze(); return b; } }
+        public Brush FrameBrush => Avatar.Frozen(FrameColor.ToString());
         public Visibility GlowVisibility => role == "officer" || role == "owner" ? Visibility.Visible : Visibility.Collapsed;
         public Visibility ShimmerVisibility => role == "owner" ? Visibility.Visible : Visibility.Collapsed;
 
@@ -334,7 +344,7 @@ namespace ElansAddonHub.Lodge
         public bool Offline { get; set; }
         public string StatusLabelText => StatusLabel(status);
         // "42 Hunter" next to the name
-        public string GameLine => gameLevel > 0 ? $"{gameLevel}" : "";
+        public string GameLine => gameLevel > 0 ? $"Lv {gameLevel}" : "";
         public Visibility GameVisibility => gameLevel > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility PlayingVisibility => playing ? Visibility.Visible : Visibility.Collapsed;
         public string GameDetail
@@ -388,9 +398,16 @@ namespace ElansAddonHub.Lodge
     public class FileVM : Bindable
     {
         public string Id { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; }       // already cleaned (SafeFile.Name): safe to show and to write to disk
         public long Size { get; set; }
         public string Mime { get; set; }
+        // the real extension, shown on the card; the ones that can run something are flagged and ask before they are downloaded
+        public string Ext => SafeFile.Ext(Name);
+        public bool IsRisky => SafeFile.IsRisky(Name);
+        public string ExtText => Ext.Length > 1 ? Ext.Substring(1).ToUpperInvariant() : "";
+        public Visibility ExtVisibility => ExtText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Brush ExtBrush => IsRisky ? Avatar.Res("Brush.Warn") : Avatar.Res("Brush.Text.Secondary");
+        public string ExtTip => IsRisky ? "A program or script: only open it if you trust the sender" : "";
         public bool IsImage => Mime != null && Mime.StartsWith("image/") && Size <= 8 * 1024 * 1024;
         public string SizeText => Size < 1024 ? $"{Size} B" : Size < 1024 * 1024 ? $"{Size / 1024.0:0} KB" : $"{Size / 1048576.0:0.0} MB";
 
@@ -412,14 +429,21 @@ namespace ElansAddonHub.Lodge
         public string From { get; set; }
         public DateTime At { get; set; }
         public FileVM File { get; set; }
-        public bool Continuation { get; set; } // same person, shortly after: no avatar/name
+        bool continuation;
+        public bool Continuation   // same person, shortly after: no avatar/name
+        {
+            get => continuation;
+            set { if (Set(ref continuation, value)) { Raise(nameof(HeaderVisibility)); Raise(nameof(AvatarVisibility)); Raise(nameof(RowMargin)); } }
+        }
+        public bool Unread { get; set; }       // counted in its channel's unread numbers (cleared when the channel is read)
         public bool Mine { get; set; }
-        public bool CanDelete { get; set; }
+        bool canDelete, reactEnabled, pinEnabled;
+        public bool CanDelete { get => canDelete; set { if (Set(ref canDelete, value)) Raise(nameof(DeleteVisibility)); } }
         public string ReplyFrom { get; set; }
         public string ReplyText { get; set; }
         public string ReplyId { get; set; }
-        public bool ReactEnabled { get; set; }   // the server supports reactions / pins (welcome "features")
-        public bool PinEnabled { get; set; }     // ... and I may pin
+        public bool ReactEnabled { get => reactEnabled; set { if (Set(ref reactEnabled, value)) Raise(nameof(ReactToolVisibility)); } }   // the server supports reactions / pins (welcome "features")
+        public bool PinEnabled { get => pinEnabled; set { if (Set(ref pinEnabled, value)) Raise(nameof(PinToolVisibility)); } }         // ... and I may pin
         bool forceTools;
         public bool ForceTools { get => forceTools; set => Set(ref forceTools, value); } // screenshots only
         public ObservableCollection<ReactionVM> Reactions { get; } = new ObservableCollection<ReactionVM>();
@@ -514,9 +538,9 @@ namespace ElansAddonHub.Lodge
         public Visibility EditedVisibility => edited ? Visibility.Visible : Visibility.Collapsed;
         public Visibility EditVisibility => Mine ? Visibility.Visible : Visibility.Collapsed;
         public Visibility DeleteVisibility => Mine || CanDelete ? Visibility.Visible : Visibility.Collapsed;
-        static readonly Brush MentionTint = Avatar.Frozen("#1FE6B85C"), FlashTint = Avatar.Frozen("#33ABD473"), Gold = Avatar.Frozen("#E6B85C");
-        public Brush RowBackground => flash ? FlashTint : mentioned ? MentionTint : Brushes.Transparent;
-        public Brush MentionBar => mentioned ? Gold : Brushes.Transparent;
+        // the theme's accent (tinted) marks a mention; the colour tokens come from the theme, nothing is hard-coded here
+        public Brush RowBackground => flash ? Avatar.Res("Brush.Accent.Tint") : mentioned ? Avatar.Res("Brush.Accent.Tint") : Brushes.Transparent;
+        public Brush MentionBar => mentioned ? Avatar.Res("Brush.Accent") : Brushes.Transparent;
     }
 
     // reaction art: canonical ids (server 2.4) draw as colour vector badges; anything else (2.3 servers: plain emoji) stays text

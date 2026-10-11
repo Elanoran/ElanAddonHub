@@ -70,11 +70,23 @@ namespace ElansAddonHub.Lodge
             try { s = s.Normalize(NormalizationForm.FormKC); } catch (ArgumentException) { }
             var sb = new StringBuilder();
             bool space = false;
-            foreach (var c in s)
+            for (int i = 0; i < s.Length; i++)
             {
+                var c = s[i];
                 var cat = char.GetUnicodeCategory(c);
                 if (char.IsWhiteSpace(c) || cat == UnicodeCategory.SpaceSeparator) { space = sb.Length > 0; continue; }
-                if (cat == UnicodeCategory.Control || cat == UnicodeCategory.Format || cat == UnicodeCategory.Surrogate
+                if (cat == UnicodeCategory.Surrogate)
+                {
+                    // emoji (a valid pair) stay; only an unpaired surrogate goes
+                    if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+                    {
+                        if (space) { sb.Append(' '); space = false; }
+                        sb.Append(c).Append(s[i + 1]);
+                        i++;
+                    }
+                    continue;
+                }
+                if (cat == UnicodeCategory.Control || cat == UnicodeCategory.Format
                     || cat == UnicodeCategory.PrivateUse || cat == UnicodeCategory.OtherNotAssigned) continue;
                 if (space) { sb.Append(' '); space = false; }
                 sb.Append(c);
