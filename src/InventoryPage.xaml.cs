@@ -52,17 +52,29 @@ namespace ElansAddonHub
             public Brush PortraitBrush { get { return portraitBrush; } private set { portraitBrush = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("PortraitBrush")); } }
             public bool HasPortrait => portraitBrush != null;
 
-            // money, last saves and item counts: what used to fill the card
+            // short tooltip: name, "Realm · Faction", then one icon line - gold, bags, bank
+            // [0] name  [1] realm · faction  [2] money  [3] bags "119 · 12h"  [4] bank "562 · 16h" or "not seen"
             public List<string> TipLines()
             {
-                var l = new List<string>();
-                l.Add(Char.Name + (string.IsNullOrEmpty(Char.Realm) ? "" : " · " + Char.Realm));
-                var who = string.Join(" · ", new[] { Char.Level > 0 ? "Level " + Char.Level : null, Pretty(Char.Class), Char.Faction }.Where(s => !string.IsNullOrEmpty(s)));
-                if (who.Length > 0) l.Add(who);
-                l.Add(InventoryReader.Money(Char.Money));
-                l.Add("Bags saved " + InventoryReader.Ago(Char.BagsAt > 0 ? Char.BagsAt : Char.Updated) + " · " + (Char.Bags?.Sum(i => i.Count) ?? 0) + " items");
-                l.Add(Char.Bank == null ? "Bank not seen yet" : "Bank seen " + InventoryReader.Ago(Char.BankAt) + " · " + Char.Bank.Sum(i => i.Count) + " items");
-                return l;
+                var where = string.Join(" · ", new[] { Char.Realm, Char.Faction }.Where(x => !string.IsNullOrEmpty(x)));
+                return new List<string>
+                {
+                    Char.Name,
+                    where,
+                    InventoryReader.Money(Char.Money),
+                    (Char.Bags?.Sum(i => i.Count) ?? 0).ToString("N0") + " · " + ShortAgo(Char.BagsAt > 0 ? Char.BagsAt : Char.Updated),
+                    Char.Bank == null ? "not seen" : Char.Bank.Sum(i => i.Count).ToString("N0") + " · " + ShortAgo(Char.BankAt),
+                };
+            }
+
+            static string ShortAgo(long unix)
+            {
+                if (unix <= 0) return "never";
+                var span = DateTime.UtcNow - DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime;
+                if (span.TotalMinutes < 1) return "now";
+                if (span.TotalMinutes < 60) return (int)span.TotalMinutes + "m";
+                if (span.TotalHours < 24) return (int)span.TotalHours + "h";
+                return (int)span.TotalDays + "d";
             }
 
             public ToolTip Tip
@@ -70,16 +82,26 @@ namespace ElansAddonHub
                 get
                 {
                     var l = TipLines();
+                    var R = Application.Current.Resources;
                     var sp = new StackPanel();
-                    sp.Children.Add(new TextBlock { Text = l[0], Style = (Style)Application.Current.Resources["Text.RowTitle"], Foreground = ClassBrush });
-                    for (int i = 1; i < l.Count; i++)
-                    {
-                        var money = l[i] == InventoryReader.Money(Char.Money);
-                        sp.Children.Add(new TextBlock { Text = l[i], Style = (Style)Application.Current.Resources[money ? "Text.Body" : "Text.Secondary"], Foreground = money ? Res("Gold") : Res("Brush.Text.Secondary"), Margin = new Thickness(0, i == 1 ? 2 : 4, 0, 0) });
-                    }
-                    var tip = new ToolTip { Style = (Style)Application.Current.Resources["CardTip"], Content = sp };
-                    return tip;
+                    sp.Children.Add(new TextBlock { Text = l[0], Style = (Style)R["Text.RowTitle"], Foreground = ClassBrush });
+                    if (l[1].Length > 0) sp.Children.Add(new TextBlock { Text = l[1], Style = (Style)R["Text.Caption"], Foreground = Res("Brush.Text.Tertiary"), Margin = new Thickness(0, 2, 0, 0) });
+                    var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+                    // a gold coin like the game's, then the bag and bank glyphs
+                    line.Children.Add(new System.Windows.Shapes.Ellipse { Width = 10, Height = 10, Fill = Res("Gold"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+                    line.Children.Add(new TextBlock { Text = l[2], Style = (Style)R["Text.Secondary"], Foreground = Res("Gold"), VerticalAlignment = VerticalAlignment.Center });
+                    Add(line, "\uE719", l[3], "Bags: items · last save");
+                    Add(line, "\uE825", l[4], "Bank: items · last seen");
+                    sp.Children.Add(line);
+                    return new ToolTip { Style = (Style)R["CardTip"], Content = sp };
                 }
+            }
+
+            static void Add(StackPanel line, string glyph, string text, string what)
+            {
+                var R = Application.Current.Resources;
+                line.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)R["Icons"], FontSize = 12, Foreground = Res("Brush.Text.Tertiary"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0), ToolTip = what });
+                line.Children.Add(new TextBlock { Text = text, Style = (Style)R["Text.Secondary"], VerticalAlignment = VerticalAlignment.Center });
             }
 
             // the portrait from the local game data: at once when it is on disk, else when it has been extracted

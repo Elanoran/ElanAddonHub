@@ -60,34 +60,9 @@ namespace ElansAddonHub
             await Task.Delay(1500);
             SnapshotScaled(Path.Combine(dir, "i3-bank-100.png"), 1);
             var slot = FindDown<Border>(InventoryView, b => b.ToolTip is ToolTip tt && tt.Content is StackPanel sp && sp.Children.Count > 0 && (sp.Children[0] as TextBlock)?.Text == "White Cloak");
-            if (slot != null)
-            {
-                var tip = (ToolTip)slot.ToolTip;
-                var content = (UIElement)tip.Content;
-                tip.Content = null;
-                var shell = new ToolTip { Style = tip.Style, Content = content };
-                var at = slot.TranslatePoint(new Point(slot.ActualWidth * 0.6, slot.ActualHeight * 0.8), this);
-                shell.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                var size = shell.DesiredSize;
-                if (at.X + size.Width + 8 > ActualWidth) at.X = ActualWidth - size.Width - 8;
-                if (at.Y + size.Height + 8 > ActualHeight) at.Y = ActualHeight - size.Height - 8;
-                shell.Arrange(new Rect(at, size));
-                shell.UpdateLayout();
-                var dv = new DrawingVisual();
-                using (var dc = dv.RenderOpen())
-                {
-                    dc.DrawRectangle(new VisualBrush(this) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, new Rect(0, 0, ActualWidth, ActualHeight));
-                    dc.PushOpacity(0.35);
-                    dc.DrawRoundedRectangle(Brushes.Black, null, new Rect(at.X - 4, at.Y + 2, size.Width + 8, size.Height + 8), 14, 14);
-                    dc.Pop();
-                    dc.DrawRectangle(new VisualBrush(shell) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, new Rect(at, size));
-                }
-                var bmp = new RenderTargetBitmap((int)ActualWidth, (int)ActualHeight, 96, 96, PixelFormats.Pbgra32);
-                bmp.Render(dv);
-                var enc = new PngBitmapEncoder();
-                enc.Frames.Add(BitmapFrame.Create(bmp));
-                using (var fs = File.Create(Path.Combine(dir, "i2-tooltip-100.png"))) enc.Save(fs);
-            }
+            if (slot != null) ShotTip(slot, (ToolTip)slot.ToolTip, Path.Combine(dir, "i2-tooltip-100.png"));
+            var row = FindDown<RadioButton>(InventoryView, r => r.ToolTip is ToolTip && (r.Tag as string) != null);
+            if (row != null) ShotTip(row, (ToolTip)row.ToolTip, Path.Combine(dir, "i6-chartip-100.png"));
             InventoryView.FilterForTest(null);
             await Task.Delay(600);
             SnapshotScaled(Path.Combine(dir, "i4-all-100.png"), 1);
@@ -96,6 +71,35 @@ namespace ElansAddonHub
             SnapshotScaled(Path.Combine(dir, "i5-search-100.png"), 1);
             File.WriteAllText(Path.Combine(dir, "result.txt"), "design shots done inventory" + (slot == null ? " (no tooltip slot found)" : ""));
             Quit();
+        }
+
+        // a tooltip popup can't be captured: draw its content next to the anchor on top of the window
+        void ShotTip(FrameworkElement anchor, ToolTip tip, string file)
+        {
+            var content = (UIElement)tip.Content;
+            tip.Content = null;
+            var shell = new ToolTip { Style = tip.Style, Content = content };
+            var at = anchor.TranslatePoint(new Point(anchor.ActualWidth * 0.6, anchor.ActualHeight * 0.8), this);
+            shell.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var size = shell.DesiredSize;
+            if (at.X + size.Width + 8 > ActualWidth) at.X = ActualWidth - size.Width - 8;
+            if (at.Y + size.Height + 8 > ActualHeight) at.Y = ActualHeight - size.Height - 8;
+            shell.Arrange(new Rect(at, size));
+            shell.UpdateLayout();
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                dc.DrawRectangle(new VisualBrush(this) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, new Rect(0, 0, ActualWidth, ActualHeight));
+                dc.PushOpacity(0.35);
+                dc.DrawRoundedRectangle(Brushes.Black, null, new Rect(at.X - 4, at.Y + 2, size.Width + 8, size.Height + 8), 14, 14);
+                dc.Pop();
+                dc.DrawRectangle(new VisualBrush(shell) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, new Rect(at, size));
+            }
+            var bmp = new RenderTargetBitmap((int)ActualWidth, (int)ActualHeight, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(bmp));
+            using (var fs = File.Create(file)) enc.Save(fs);
         }
     }
 }

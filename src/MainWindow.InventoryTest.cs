@@ -194,8 +194,8 @@ namespace ElansAddonHub
                 Check("the row of the shown character is the selected one, 'All characters' is not", crow.Count == 2 && crow[0].EndsWith("|True") && crow[1].EndsWith("|False") && !InventoryView.AllSelectedForTest);
                 Check("'All characters' row says how many characters", InventoryView.AllLineForTest == "2 characters", InventoryView.AllLineForTest);
                 var ctip = InventoryView.CharTipForTest("Forever-Elan") ?? new List<string>();
-                Check("hover tooltip holds realm, level/class/faction, gold, saves and counts", ctip.Count == 5 && ctip[0] == "Elan · Forever" && ctip[1] == "Level 25 · Hunter · Horde" && ctip[2] == InventoryReader.Money(123456)
-                    && ctip[3].StartsWith("Bags saved ") && ctip[3].Contains(" ago · ") && ctip[4].StartsWith("Bank seen 3 days ago · "), string.Join(" | ", ctip));
+                Check("hover tooltip: name, realm · faction, gold, bags and bank on one line", ctip.Count == 5 && ctip[0] == "Elan" && ctip[1] == "Forever · Horde" && ctip[2] == InventoryReader.Money(123456)
+                    && System.Text.RegularExpressions.Regex.IsMatch(ctip[3], @"^[\d,.]+ · (now|\d+[mhd])$") && System.Text.RegularExpressions.Regex.IsMatch(ctip[4], @"^[\d,.]+ · 3d$"), string.Join(" | ", ctip));
                 InventoryView.FilterForTest(null);
                 crow = InventoryView.CharRowsForTest();
                 Check("'All characters' selected: no character row is", InventoryView.AllSelectedForTest && crow.All(x => x.EndsWith("|False")));
