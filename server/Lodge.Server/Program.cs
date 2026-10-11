@@ -117,7 +117,7 @@ app.Use(async (ctx, next) =>
 });
 
 // 2.10: what this server can do, so a newer client knows whether to use invite links and device tokens (older servers answer 404)
-app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, features = new[] { "tokens", "invites", "devices" } }));
+app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, features = new[] { "tokens", "invites", "devices", "calendar" } }));
 
 // 2.10: trade a one-time invite (X-Lodge-Invite header, or "invite" in the body) - or, to upgrade a device, the old permanent
 // code (X-Lodge-Code) - for a per-device token. Body (optional JSON, max 4 KB): {"device": "PC name", "deviceId": "random id"}.

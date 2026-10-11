@@ -1,4 +1,4 @@
-# Lodge protocol (v2.10)
+# Lodge protocol (v2.11)
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
@@ -232,3 +232,31 @@ A secret is never accepted in a URL. Link format: `elanshub://lodge/join#<server
 - `admin.invite.created` `{id, kind, name, role, by, created, expires (unix ms), max, uses, used, expired, revoked, pending, secret}` - the only place the secret appears
 - `admin.invites` `{now, invites:[{...as above, no secret}]}` · `devices` / `admin.devices` `{name, now, devices:[{id, name, role, device, created, lastSeen, ip (coarse), current, online}]}`
 - A revoked device's socket is closed (1008, "This device was signed out"); clients don't reconnect after that.
+
+
+## 2.11 additions (raid / event calendar; all optional for clients)
+
+Detect: the welcome's `features` has `"calendar"` (and `server` >= 2.11.0), or `GET /features` lists it. A client that does not see it hides the calendar.
+Old clients ignore every new frame and see the chat card as plain text (see below).
+
+**Event** (`{...}`, in every frame below): `{id, series?, title (<=60), start (ms, UTC), end (ms, 0 = none), note (<=200), status: open|cancelled, by, roles (bool),
+slots:{tank,healer,dps} (0-40 each; at least one when roles), signups:[{n, s: going|maybe|declined, r: tank|healer|dps|"", c (<=80)}], channel?, msg?, tz, off, rep?:{weeks, open}}`.
+`roles: false` is a social event with no role slots. `rep` is on every event of a weekly series (`weeks` 0 = until cancelled).
+
+Server to client:
+- `welcome.calendar` = `{now, events:[event]}`: events still running or starting within the next 30 days (cancelled ones included).
+- `cal:events` `{events:[event]}`: upserts, to everyone (a new event, a changed sign-up list, an edit, a cancellation, new dates of an open-ended series).
+- `cal:range` `{from, to, events}`: the answer to a month fetch.
+- the chat card: a normal `msg` with `kind: "event"`, `event: {id, title, start, end, by, status, weekly}` (a snapshot) and `text` = `[Event] Molten Core - Sat 17 Oct 18:00 UTC - Tank 0/1, Healer 0/3, DPS 0/5 - weekly - note (open the Calendar in Elan's Outpost to sign up)`.
+  Changes arrive as `edited` `{channel, id, text, card: true}` (fill, cancelled), which is also what older clients show; the card itself cannot be edited by hand (`error code "cal"`).
+
+Client to server (errors are `error` with `code: "cal"`, `"cal-full"` or `"rate"`):
+- `cal:create` `{title, start, durationMin? (15-1440) | end?, roles?, slots:{tank,healer,dps}, note?, tz?, off?, repeat?: {weeks: 1-26} | {open: true}, post? (default true), channel? (default: the first public text channel)}` - member and up (guests: error). Start within -10 min / +1 year. `tz` is the creator's IANA or Windows zone id, `off` its UTC offset in minutes now.
+  A repeat makes one event per week, all sharing a `series` id (a repeat of 2-26, or `open` = until cancelled, kept 26 weeks ahead). One chat card is posted (for the first date). Costs the Chat budget.
+- `cal:edit` `{id, scope?: "this"|"following", ...the create fields (not repeat/channel)}` - organiser, or officer and up. `following` also changes the later dates of the series, keeping their date and giving them the new local wall-clock time. A role count below the people going in it is refused. Costs the Chat budget.
+- `cal:cancel` `{id, scope?}` - organiser or officer and up; `following` also ends an open-ended series. Costs the Chat budget.
+- `cal:signup` `{id, status: going|maybe|declined, role?, comment?}` - everyone, guests included. `going` needs a role (when the event has roles) with a free place; `maybe` may name a role without taking a place; one entry per person (answering again moves it; a refused move keeps the old answer). Closed once the event is over (its end, or start + 3 h) or cancelled.
+- `cal:leave` `{id}` - remove your entry.
+- `cal:range` `{from, to}` (ms, at most 62 days) -> `cal:range`. Costs the Page budget (burst 10, 1 per s).
+
+**Time zones.** Instants are UTC. A weekly series is expanded on the server in the creator's zone: date i = first local date + 7 i days at the same local wall-clock time, converted back to UTC, so a 20:00 raid stays 20:00 across a DST change (the UTC instant moves by an hour). A time that does not exist (spring gap) moves forward an hour, an ambiguous one takes its first occurrence. An unknown `tz` falls back to the fixed `off`, and without it UTC. Viewers always see their own local time; the stored zone is only used for expansion.

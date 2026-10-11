@@ -332,7 +332,7 @@ async def suite_f(base):
         b = await ws_open(s, base, BOB, "192.0.2.82"); await recv(b, "welcome")
         g = await ws_open(s, base, GUEST, "192.0.2.83", name="Pilgrim9"); await recv(g, "welcome")
         feats = w["features"]
-        check("2.9: welcome announces lfg, history2 and search; version 2.10.x", {"lfg", "history2", "search"} <= set(feats) and w["server"].startswith("2.10"), (feats, w["server"]))
+        check("2.9: welcome announces lfg, history2 and search; version 2.1x", {"lfg", "history2", "search"} <= set(feats) and w["server"].startswith("2.1"), (feats, w["server"]))
 
         # ---- sign-up cards
         await e.send_str(json.dumps({"t": "msg", "channel": "general", "kind": "lfg", "text": "ignored", "lfg": {"title": "Wailing Caverns", "now": True, "slots": {"tank": 1, "healer": 1, "dps": 3}, "note": "bring water"}}))
@@ -400,7 +400,7 @@ async def suite_g(base):
     async with aiohttp.ClientSession() as s:
         r = await s.get(base + "/features", headers=H(ip="198.51.100.80"))
         j = await r.json()
-        check("features: public, announces tokens + invites + the version", r.status == 200 and {"tokens", "invites"} <= set(j["features"]) and j["server"].startswith("2.10"), j)
+        check("features: public, announces tokens + invites + the version", r.status == 200 and {"tokens", "invites"} <= set(j["features"]) and j["server"].startswith("2.1"), j)
 
         a = await ws_open(s, base, ELAN, "192.0.2.50"); w = await recv(a, "welcome")
         check("owner welcome: canInvite + tokens feature", w and w.get("canInvite") is True and "tokens" in w["features"], w and w["features"])
@@ -505,12 +505,83 @@ async def suite_g(base):
         await a.close(); await t.close()
 
 
+async def suite_h(base):
+    """2.11 calendar over real sockets: features, create/broadcast, ranks, last-place race, range, rate limit, no text in logs."""
+    start_ms = int(time.time() * 1000) + 5 * 86400 * 1000
+    async with aiohttp.ClientSession() as s:
+        r = await s.get(base + "/features")
+        check("calendar: /features lists it", "calendar" in (await r.json())["features"])
+        a = await ws_open(s, base, ELAN, "192.0.2.80", "Elan"); wa = await recv(a, "welcome")
+        b = await ws_open(s, base, BOB, "192.0.2.81", "Bob"); await recv(b, "welcome")
+        g = await ws_open(s, base, GUEST, "192.0.2.82", "Pat"); wg = await recv(g, "welcome")
+        check("calendar: welcome lists the feature and carries an events list", wa and "calendar" in wa["features"] and wa["calendar"]["events"] == [] and wa["calendar"]["now"] > 0)
+        ev = {"t": "cal:create", "title": "SECRETEVENT Molten Core", "start": start_ms, "slots": {"tank": 1, "healer": 0, "dps": 2}, "tz": "Europe/Berlin", "off": 60,
+              "note": "SECRETNOTE", "durationMin": 180, "repeat": {"weeks": 3}}
+        await a.send_str(json.dumps(ev))
+        card = await recv(b, "msg", 3, lambda d: d.get("kind") == "event")
+        got = await recv(b, "cal:events")
+        check("calendar: a weekly series reaches the other members at once", got and len(got["events"]) == 3 and got["events"][0]["by"] == "Elan", got and len(got["events"]))
+        check("calendar: the chat card carries a readable fallback text", card and card["text"].startswith("[Event] SECRETEVENT Molten Core") and "weekly" in card["text"], card and card["text"])
+        gev = await recv(g, "cal:events")
+        check("calendar: a guest sees events", gev is not None)
+        eid = got["events"][0]["id"]
+
+        await g.send_str(json.dumps({"t": "cal:create", "title": "Guest party", "start": start_ms, "slots": {"dps": 1}}))
+        err = await recv(g, "error")
+        check("calendar: a guest cannot create", err is not None and err.get("code") == "cal", err)
+        await g.send_str(json.dumps({"t": "cal:signup", "id": eid, "status": "going", "role": "dps", "comment": "SECRETCOMMENT"}))
+        up = await recv(a, "cal:events", 3, lambda d: any(x["signups"] for x in d["events"]))
+        check("calendar: a guest can sign up and everyone sees it", up and up["events"][0]["signups"][0]["s"] == "going", up)
+        await g.send_str(json.dumps({"t": "cal:cancel", "id": eid}))
+        err = await recv(g, "error")
+        check("calendar: a guest cannot cancel", err is not None, err)
+
+        # the last tank place: two members race for it
+        await a.send_str(json.dumps({"t": "cal:signup", "id": eid, "status": "going", "role": "tank"}))
+        await b.send_str(json.dumps({"t": "cal:signup", "id": eid, "status": "going", "role": "tank"}))
+        await asyncio.sleep(0.7)
+        rr = await s.get(base + "/health", headers=H(ELAN, "192.0.2.83"))
+        await a.close()
+        c = a = await ws_open(s, base, ELAN, "192.0.2.84", "Elan"); wc = await recv(c, "welcome")   # a personal code is one connection
+        mine = [x for x in wc["calendar"]["events"] if x["id"] == eid][0]
+        tanks = [x for x in mine["signups"] if x["r"] == "tank" and x["s"] == "going"]
+        check("calendar: exactly one of two simultaneous sign-ups gets the last tank place", len(tanks) == 1, mine["signups"])
+        check("calendar: a reconnect gets the upcoming events in the welcome", len(wc["calendar"]["events"]) == 3)
+
+        await b.send_str(json.dumps({"t": "cal:cancel", "id": eid, "scope": "following"}))
+        edited = await recv(a, "edited", 3, lambda d: "(cancelled)" in d.get("text", ""))
+        check("calendar: the chat card text follows the cancellation (older clients)", edited is not None)
+        cn = await recv(a, "cal:events", 3, lambda d: all(x["status"] == "cancelled" for x in d["events"]))
+        check("calendar: an officer cancels this and the following dates", cn and len(cn["events"]) == 3, cn and len(cn["events"]))
+
+        await a.send_str(json.dumps({"t": "cal:range", "from": start_ms - 86400000, "to": start_ms + 20 * 86400000}))
+        rg = await recv(a, "cal:range")
+        check("calendar: a month fetch answers with the events in range", rg and len(rg["events"]) == 3, rg)
+        await a.send_str(json.dumps({"t": "cal:range", "from": 1, "to": start_ms}))
+        err = await recv(a, "error")
+        check("calendar: a window over 62 days is refused", err is not None)
+        await a.send_str(json.dumps({"t": "cal:create", "title": "x", "start": start_ms, "slots": {"dps": 1}, "repeat": {"weeks": 99}}))
+        err = await recv(a, "error", 3, lambda d: "26" in d.get("text", ""))
+        check("calendar: more than 26 weeks of repeat is refused", err is not None)
+
+        # budgets: creating spends the chat budget (8 per 10 s) - 12 quick creations cannot all pass
+        ok = 0
+        for i in range(12):
+            await b.send_str(json.dumps({"t": "cal:create", "title": f"Burst {i}", "start": start_ms + (i + 1) * 3600000, "slots": {"dps": 1}, "post": False}))
+        end = time.time() + 2
+        while time.time() < end:
+            m = await recv(b, "cal:events", 0.3, lambda d: d["events"][0]["title"].startswith("Burst"))
+            if m: ok += 1
+        check("calendar: creating is rate limited by the chat budget", 1 <= ok <= 8, ok)
+        await a.close(); await b.close(); await g.close()
+
+
 def scan_logs(*datas):
     text = ""
     for d in datas:
         with open(os.path.join(d, "server.log"), encoding="utf-8", errors="replace") as f:
             text += f.read()
-    leaked = [c for c in (ELAN, BOB, GUEST, *SECRETS) if c and c in text] + [c[3:] for c in SECRETS if c and c[3:] in text] + re.findall(r"wrong-[a-z]?\d", text)
+    leaked = [c for c in (ELAN, BOB, GUEST, *SECRETS) if c and c in text] + [c[3:] for c in SECRETS if c and c[3:] in text] + re.findall(r"wrong-[a-z]?\d", text) + [w for w in ("SECRETEVENT", "SECRETNOTE", "SECRETCOMMENT") if w in text]
     check("no code (valid or wrong) appears in the server logs", not leaked, leaked[:3])
 
 
@@ -519,9 +590,10 @@ def main():
     pg, dg, lg = start(5294)
     pa, da, la = start(5291, LODGE_ALLOW_QUERY_CODE="true")  # the first server keeps the legacy ?code= on (default is off since 2.8)
     pc, dc, lc = start(5293)
+    ph, dh, lh = start(5295)
     pb, db, lb = start(5292, LODGE_ALLOW_QUERY_CODE="false", LODGE_MAX_STORAGE_MB=1, LODGE_MAX_FILE_MB=1, LODGE_MAX_USERS=5)
     try:
-        wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge"); wait_up("http://127.0.0.1:5293/lodge"); wait_up("http://127.0.0.1:5294/lodge")
+        wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge"); wait_up("http://127.0.0.1:5293/lodge"); wait_up("http://127.0.0.1:5294/lodge"); wait_up("http://127.0.0.1:5295/lodge")
         asyncio.run(suite_a("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_c("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_d("http://127.0.0.1:5291/lodge"))
@@ -529,12 +601,13 @@ def main():
         asyncio.run(suite_b("http://127.0.0.1:5292/lodge"))
         asyncio.run(suite_f("http://127.0.0.1:5293/lodge"))
         asyncio.run(suite_g("http://127.0.0.1:5294/lodge"))
+        asyncio.run(suite_h("http://127.0.0.1:5295/lodge"))
     finally:
-        for p in (pa, pb, pc, pg): p.terminate()
-        for p in (pa, pb, pc, pg): p.wait(10)
-        for l in (la, lb, lc, lg): l.close()
-    scan_logs(da, db, dc, dg)
-    for d in (da, db, dc, dg): shutil.rmtree(d, ignore_errors=True)
+        for p in (pa, pb, pc, pg, ph): p.terminate()
+        for p in (pa, pb, pc, pg, ph): p.wait(10)
+        for l in (la, lb, lc, lg, lh): l.close()
+    scan_logs(da, db, dc, dg, dh)
+    for d in (da, db, dc, dg, dh): shutil.rmtree(d, ignore_errors=True)
     print(f"\n{sum(results)}/{len(results)} passed")
     sys.exit(0 if all(results) else 1)
 
