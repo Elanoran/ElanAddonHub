@@ -11,13 +11,24 @@ public class AdminModule : IModule
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
+        if (type.StartsWith("device.")) return await HandleDevice(me, type, m);
         if (!type.StartsWith("admin.") && !type.StartsWith("mod.")) return false;
-        var perm = type.StartsWith("mod.") ? Perm.Moderate : type.StartsWith("admin.channel") ? Perm.ManageChannels : Perm.ManageMembers;
+        var perm = type switch
+        {
+            "admin.invite.create" or "admin.invites" or "admin.invite.revoke" or "admin.devices" => Perm.Invite,   // officers too (2.10)
+            "admin.retire" => Perm.RetireCodes,
+            _ => type.StartsWith("mod.") ? Perm.Moderate : type.StartsWith("admin.channel") ? Perm.ManageChannels : Perm.ManageMembers,
+        };
         if (!Roles.Can(me.Role, perm)) { await hub.Error(me, "Your rank can't do that"); return true; }
         try
         {
             switch (type)
             {
+                case "admin.invite.create": await CreateInvite(me, m); break;
+                case "admin.invites": await SendInvites(me); break;
+                case "admin.invite.revoke": await RevokeInvite(me, m); break;
+                case "admin.devices": await SendDevices(me, "admin.devices", J.Str(m, "name")); break;
+                case "admin.retire": await Retire(me, m); break;
                 case "admin.members": await SendMembers(me); break;
                 case "admin.invite": await Invite(me, m); break;
                 case "admin.role": await SetRole(me, m); break;
@@ -45,7 +56,7 @@ public class AdminModule : IModule
         ["t"] = "admin.members",
         ["members"] = new JsonArray(hub.Auth.ListPersonal().Select(p => (JsonNode)new JsonObject
         {
-            ["name"] = p.Name, ["role"] = p.Role,
+            ["name"] = p.Name, ["role"] = p.Role, ["hasCode"] = hub.Auth.HasPermanentCode(p.Name), ["devices"] = hub.Auth.ListDevices(p.Name).Count,
             ["online"] = hub.Members.Any(x => x.Personal && LodgeHub.Same(x.Name, p.Name) && hub.CanSee(me, x)),
         }).ToArray()),
         ["channels"] = new JsonArray(hub.Channels.All.Select(c => (JsonNode)c.ToJson()).ToArray()),
@@ -58,6 +69,121 @@ public class AdminModule : IModule
         var code = hub.Auth.Add(name, role); // throws with a readable message when the name is bad or taken
         hub.Log.LogInformation("{By} invited {Name} as {Role}", me.Name, name, role);
         await hub.Send(me, new JsonObject { ["t"] = "admin.invited", ["name"] = name, ["role"] = role, ["code"] = code });
+        await SendMembers(me);
+    }
+
+    // ---------------------------------------------------------------- one-time invites and devices (2.10)
+
+    static long Ms(DateTime t) => new DateTimeOffset(DateTime.SpecifyKind(t, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+
+    JsonObject InviteJson(InviteInfo i)
+    {
+        var now = hub.Clock.UtcNow;
+        return new JsonObject
+        {
+            ["id"] = i.Id, ["kind"] = i.Kind, ["name"] = i.Kind == "guest" ? "" : i.Name, ["role"] = i.Role, ["by"] = i.CreatedBy,
+            ["created"] = Ms(i.Created), ["expires"] = Ms(i.Expires), ["max"] = i.MaxUses, ["uses"] = i.Uses,
+            ["used"] = i.Used, ["expired"] = i.Expired(now), ["revoked"] = i.Revoked, ["pending"] = i.Pending(now),
+        };
+    }
+
+    async Task SendInvites(Member me) => await hub.Send(me, new JsonObject
+    {
+        ["t"] = "admin.invites", ["now"] = Ms(hub.Clock.UtcNow),
+        ["invites"] = new JsonArray(hub.Auth.ListInvites().Select(i => (JsonNode)InviteJson(i)).ToArray()),
+    });
+
+    // A person invite makes (or re-uses, for another device) the name; officers can only invite below their own rank.
+    // The secret is in this one reply and nowhere else; it is never logged.
+    async Task CreateInvite(Member me, JsonObject m)
+    {
+        bool guest = J.Str(m, "kind") == "guest";
+        string name = guest ? "" : (J.Str(m, "name") ?? "").Trim();
+        var role = Roles.Normalize(J.Str(m, "role"));
+        if (!guest)
+        {
+            var existing = hub.Auth.ListPersonal().FirstOrDefault(p => Names.Same(p.Name, name));
+            var target = existing.Name != null ? existing.Role : role;
+            bool isOwner = Roles.Level(me.Role) >= Roles.Level("owner");
+            if (!isOwner && Roles.Level(target) >= Roles.Level(me.Role))
+                throw new InvalidOperationException(existing.Name != null ? "You can only invite people below your rank" : "You can only invite ranks below your own");
+        }
+        int hours = J.Int(m, "hours", 0);
+        if (hours <= 0 && J.Int(m, "days", 0) > 0) hours = J.Int(m, "days", 0) * 24;
+        var (info, secret) = hub.Auth.CreateInvite(guest ? "guest" : "person", name, role, me.Name, hours > 0 ? hours : null, J.Int(m, "uses", 1));
+        hub.Log.LogInformation("{By} created invite {Id} ({Kind}, {Role}) expiring {Expires:u}", me.Name, info.Id, info.Kind, info.Role, info.Expires);
+        var o = InviteJson(info);
+        o["t"] = "admin.invite.created";
+        o["secret"] = secret;
+        await hub.Send(me, o);
+        await SendInvites(me);
+    }
+
+    async Task RevokeInvite(Member me, JsonObject m)
+    {
+        var info = hub.Auth.RevokeInvite(J.Str(m, "id"));
+        hub.Log.LogInformation("{By} revoked invite {Id}", me.Name, info.Id);
+        await SendInvites(me);
+    }
+
+    JsonObject DeviceJson(DeviceInfo d, Member viewer) => new()
+    {
+        ["id"] = d.Id, ["name"] = d.Guest ? "" : d.Name, ["role"] = d.Role, ["device"] = d.DeviceName,
+        ["created"] = Ms(d.Created), ["lastSeen"] = Ms(d.LastSeen), ["ip"] = d.LastIp ?? "",
+        ["current"] = viewer.DeviceId == d.Id, ["online"] = hub.Members.Any(x => x.DeviceId == d.Id),
+    };
+
+    Task SendDevices(Member me, string type, string name) => hub.Send(me, new JsonObject
+    {
+        ["t"] = type, ["name"] = name ?? "",
+        ["devices"] = new JsonArray(hub.Auth.ListDevices(string.IsNullOrWhiteSpace(name) ? null : name).Select(d => (JsonNode)DeviceJson(d, me)).ToArray()),
+    });
+
+    // device.list: your own devices. device.revoke {id}: sign one out - yours, or (officer+) a lower-ranked member's.
+    async Task<bool> HandleDevice(Member me, string type, JsonObject m)
+    {
+        try
+        {
+            switch (type)
+            {
+                case "device.list":
+                    // a guest sees only the device they are on
+                    if (me.Personal) await SendDevices(me, "devices", me.Name);
+                    else await hub.Send(me, new JsonObject { ["t"] = "devices", ["name"] = "", ["devices"] = new JsonArray(
+                        hub.Auth.ListDevices().Where(d => d.Id == me.DeviceId).Select(d => (JsonNode)DeviceJson(d, me)).ToArray()) });
+                    break;
+                case "device.revoke":
+                {
+                    var d = hub.Auth.FindDevice(J.Str(m, "id")) ?? throw new InvalidOperationException("That device is already signed out");
+                    bool mine = d.Guest ? d.Id == me.DeviceId : me.Personal && Names.Same(d.Name, me.Name);
+                    if (!mine)
+                    {
+                        if (!Roles.Can(me.Role, Perm.Invite)) throw new InvalidOperationException("Your rank can't do that");
+                        var theirs = d.Guest ? "guest" : hub.Auth.ListPersonal().FirstOrDefault(p => Names.Same(p.Name, d.Name)).Role ?? d.Role;
+                        if (Roles.Level(theirs) >= Roles.Level(me.Role) && Roles.Level(me.Role) < Roles.Level("owner"))
+                            throw new InvalidOperationException("You can only do that to lower ranks");
+                    }
+                    hub.Auth.RevokeDevice(d.Id);
+                    hub.Log.LogInformation("{By} signed out device {Id} of {Name}", me.Name, d.Id, d.Guest ? "a guest" : Names.ForLog(d.Name));
+                    await hub.DisconnectDevice(d.Id);   // the socket closes now, not at the next 15 s check
+                    if (hub.Find(me.Id) != null) await SendDevices(me, mine ? "devices" : "admin.devices", mine ? me.Name : null);
+                    break;
+                }
+                default: return false;
+            }
+        }
+        catch (UnauthorizedAccessException) { await hub.Error(me, "The server can't write its device list - run the server update (install.sh)"); }
+        catch (InvalidOperationException e) { await hub.Error(me, e.Message); }
+        return true;
+    }
+
+    // owner: the person's old permanent code stops working (they must already have a device on a token)
+    async Task Retire(Member me, JsonObject m)
+    {
+        var name = J.Str(m, "name");
+        hub.Auth.RetireCode(name, J.Bool(m, "force"));
+        hub.Log.LogInformation("{By} retired the permanent code of {Name}", me.Name, Names.ForLog(name));
+        await hub.ApplyCodeChanges();
         await SendMembers(me);
     }
 

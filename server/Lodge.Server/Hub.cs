@@ -39,7 +39,8 @@ public class Member
     public string Name;
     public string ClientInfo;
     public string Ip;
-    public string Code;              // re-checked every 15 s: removing a friend's code disconnects them
+    public string Code;              // the credential (code or device token), re-checked every 15 s: removing a code or device disconnects them
+    public string DeviceId;          // set when the connection signed in with a device token (2.10)
     public bool Personal;            // name comes from a personal invite code
     public string Role = "member";
     public WebSocket Ws;
@@ -93,7 +94,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.9.0";
+    public const string Version = "2.10.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -170,7 +171,7 @@ public class LodgeHub
 
         var me = new Member
         {
-            Id = NextId(), Ws = ws, Code = code, Personal = who.Personal, Role = who.Role, Ip = ip,
+            Id = NextId(), Ws = ws, Code = code, DeviceId = who.DeviceId, Personal = who.Personal, Role = who.Role, Ip = ip,
             ClientInfo = Names.ForLog(clientInfo, 32), Budget = BudgetFor(who, ip), Invisible = invisible, LastSeen = Clock.UtcNow,
         };
         lock (admission) me.Name = who.Personal ? UniqueName(Names.Normalize(who.Name)) : UniqueName(GuestName(name), ReservedNames());
@@ -182,6 +183,7 @@ public class LodgeHub
             return;
         }
         Log.LogInformation("{Name} joined as {Role} ({Client})", me.Name, me.Role, me.ClientInfo);
+        if (me.DeviceId != null) Auth.Touch(me.DeviceId, ip);
         try
         {
             await Send(me, Welcome(me));
@@ -215,7 +217,10 @@ public class LodgeHub
             ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
             ["canManage"] = Roles.Can(me.Role, Perm.ManageMembers),
             ["canPin"] = Roles.Can(me.Role, Perm.PinMessages),
-            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search"),
+            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices"),
+            ["canInvite"] = Roles.Can(me.Role, Perm.Invite),
+            ["canRetire"] = Roles.Can(me.Role, Perm.RetireCodes),
+            ["device"] = DeviceView(me),
             ["reactions"] = new JsonArray(ChatModule.ReactionSet.Select(e => (JsonNode)JsonValue.Create(e)).ToArray()), // canonical ids (2.4)
             ["pins"] = pins,
             ["channels"] = new JsonArray(visible.Select(c => (JsonNode)c.ToJson()).ToArray()),
@@ -398,6 +403,24 @@ public class LodgeHub
         }));
     }
 
+    // the device behind a connection (tokens only), for the welcome
+    public JsonNode DeviceView(Member me)
+    {
+        if (me.DeviceId == null) return null;
+        var d = Auth.FindDevice(me.DeviceId);
+        return d == null ? null : new JsonObject { ["id"] = d.Id, ["name"] = d.DeviceName };
+    }
+
+    // a device was revoked: its sockets close right now (the client shows the reason and does not reconnect)
+    public async Task DisconnectDevice(string deviceId, string reason = "This device was signed out")
+    {
+        foreach (var m in members.Values.Where(x => x.DeviceId == deviceId).ToList())
+        {
+            Log.LogInformation("{Name}'s device {Device} was signed out - disconnecting", m.Name, deviceId);
+            await Disconnect(m, reason);
+        }
+    }
+
     // close with a reason the client shows (a clean close stops it reconnecting); frees the slot right away
     public async Task Disconnect(Member m, string reason, WebSocketCloseStatus status = WebSocketCloseStatus.PolicyViolation)
     {
@@ -495,11 +518,11 @@ public class LodgeHub
     {
         foreach (var m in members.Values.ToList())
         {
-            var now = Auth.Check(m.Code);
+            var now = Auth.CheckCredential(m.Code, m.DeviceId != null);
             if (now == null)
             {
-                Log.LogInformation("{Name}'s invite code was removed - disconnecting", m.Name);
-                await Disconnect(m, "Your invite code was removed");
+                Log.LogInformation("{Name}'s {What} was removed - disconnecting", m.Name, m.DeviceId != null ? "device" : "invite code");
+                await Disconnect(m, m.DeviceId != null ? "This device was signed out" : "Your invite code was removed");
             }
             else if (now.Role != m.Role)
             {

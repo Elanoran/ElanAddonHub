@@ -4,7 +4,7 @@ using System.Text;
 namespace Lodge;
 
 // Who a code belongs to. Personal codes carry the friend's name; the shared LODGE_CODE has none.
-public record Identity(string Name, bool Personal, string Role);
+public record Identity(string Name, bool Personal, string Role, string DeviceId = null);
 
 // Invite codes + the wrong-code lockout.
 //   <data>/codes   one "Name:code:role" per line (hub Guild Master panel or `sudo lodge-admin`), re-read when it changes
@@ -12,13 +12,15 @@ public record Identity(string Name, bool Personal, string Role);
 // The codes are read into an immutable snapshot that is swapped in whole; a failed read keeps the previous one.
 // Every write takes the same lock file as lodge-admin (codes.lock) and replaces the file with an atomic rename,
 // so readers never see a half-written list.
-public class Auth
+public partial class Auth
 {
+    // Hash is null for a retired code (the person has devices but no permanent code any more)
     sealed record Entry(string Name, byte[] Hash, string Role);
     sealed record Snapshot(IReadOnlyList<Entry> Personal, DateTime Stamp, long Size);
 
     readonly LodgeConfig cfg;
     readonly ILogger log;
+    readonly IClock clock;
     readonly object writeGate = new();
     readonly byte[] sharedHash;
     volatile Snapshot snap = new(Array.Empty<Entry>(), DateTime.MinValue, -1);
@@ -30,7 +32,9 @@ public class Auth
         this.log = log;
         Strikes = new StrikeTable(clock ?? SystemClock.Instance, cfg.MaxTrackedIps);
         sharedHash = string.IsNullOrEmpty(cfg.Code) ? null : Hash(cfg.Code);
+        this.clock = clock ?? SystemClock.Instance;
         ReloadIfChanged();
+        ReloadDevicesIfChanged();
         if (sharedHash == null && snap.Personal.Count == 0)
             log.LogWarning("No invite codes yet - add one with: sudo lodge-admin add <name>");
     }
@@ -55,7 +59,7 @@ public class Auth
             var list = new List<Entry>();
             if (File.Exists(cfg.CodesFile))
                 foreach (var line in File.ReadAllLines(cfg.CodesFile))
-                    if (Parse(line) is { } p) list.Add(new Entry(p.Name, Hash(p.Code), p.Role));
+                    if (Parse(line) is { } p) list.Add(new Entry(p.Name, IsRetired(p.Code) ? null : Hash(p.Code), p.Role));
             snap = new Snapshot(list, stamp, size); // swapped in whole
             log.LogInformation("Loaded {Count} personal invite codes", list.Count);
         }
@@ -88,7 +92,7 @@ public class Auth
         var h = Hash(code);
         Identity hit = null;
         foreach (var p in snap.Personal)
-            if (CryptographicOperations.FixedTimeEquals(h, p.Hash)) hit ??= new Identity(p.Name, true, p.Role);
+            if (p.Hash != null && CryptographicOperations.FixedTimeEquals(h, p.Hash)) hit ??= new Identity(p.Name, true, p.Role);
         if (sharedHash != null && CryptographicOperations.FixedTimeEquals(h, sharedHash)) hit ??= new Identity(null, false, "guest");
         return hit;
     }
@@ -127,7 +131,11 @@ public class Auth
 
     public void SetRole(string name, string role) => Change(name, p => $"{p.Name}:{p.Code}:{Roles.Normalize(role)}");
 
-    public void Remove(string name) => Change(name, _ => null);
+    public void Remove(string name)
+    {
+        Change(name, _ => null);
+        RevokeDevicesOf(name); // a removed person's devices stop working with them
+    }
 
     void Change(string name, Func<(string Name, string Code, string Role), string> change) => Mutate(lines =>
     {
@@ -145,15 +153,24 @@ public class Auth
 
     // read-modify-write under the shared lock; the new list is written to a private temp file in the same
     // folder and renamed over the old one (atomic), so nobody ever reads a partial file
-    void Mutate(Action<List<string>> edit)
+    void Mutate(Action<List<string>> edit) => Locked(() => { MutateCodesLocked(edit); return 0; });
+
+    // the same, for a caller that already holds the lock (Locked)
+    void MutateCodesLocked(Action<List<string>> edit)
+    {
+        var lines = File.Exists(cfg.CodesFile) ? File.ReadAllLines(cfg.CodesFile).ToList() : new List<string>();
+        edit(lines);
+        AtomicWrite(cfg.CodesFile, string.Join('\n', lines) + "\n");
+        ReloadIfChanged(force: true);
+    }
+
+    // one process-wide gate plus the file lock shared with lodge-admin; the lock is not re-entrant (don't nest)
+    T Locked<T>(Func<T> work)
     {
         lock (writeGate)
         {
             using var _ = CodesLock.Acquire(cfg.CodesFile);
-            var lines = File.Exists(cfg.CodesFile) ? File.ReadAllLines(cfg.CodesFile).ToList() : new List<string>();
-            edit(lines);
-            AtomicWrite(cfg.CodesFile, string.Join("\n", lines) + "\n");
-            ReloadIfChanged(force: true);
+            return work();
         }
     }
 

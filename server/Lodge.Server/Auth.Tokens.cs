@@ -1,0 +1,475 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace Lodge;
+
+// One-time invites and per-device tokens (2.10).
+//
+//   <data>/invites   one tab-separated row per invite:
+//                    id  sha256(secret)  kind(person|guest)  name  role  createdBy  created  expires  maxUses  uses  revoked
+//   <data>/devices   one tab-separated row per device:
+//                    id  sha256(token)  name(- = guest)  role  deviceName  clientDeviceId  created  lastSeen  lastIp(coarse)
+//
+// Times are unix seconds. Only HASHES of the invite secret and the device token are stored; the secrets themselves
+// are shown once (on creation) and never logged. Both files share codes.lock with the codes file and lodge-admin,
+// every write is a read-modify-write under that lock and an atomic rename.
+// A person with devices but no permanent code is a retired line in the codes file: "Name:!<random>:role".
+public sealed record InviteInfo(string Id, string Kind, string Name, string Role, string CreatedBy,
+    DateTime Created, DateTime Expires, int MaxUses, int Uses, bool Revoked)
+{
+    public bool Used => Uses > 0;
+    public bool UsedUp => Uses >= MaxUses;
+    public bool Expired(DateTime now) => now >= Expires;
+    public bool Pending(DateTime now) => !Revoked && !UsedUp && !Expired(now);
+}
+
+public sealed class DeviceInfo
+{
+    public string Id, TokenHash, Name, Role, DeviceName, ClientId, LastIp;
+    public DateTime Created, LastSeen;
+    internal DateTime Persisted;
+    public bool Guest => string.IsNullOrEmpty(Name);
+}
+
+// Status: 200 ok, 401 unknown secret (counts as a wrong guess), 410 used/expired/revoked, 409 can't add the device,
+// 429 blocked by the lockout, 403 not allowed, 500 storage problem
+public sealed record ExchangeOutcome(int Status, string Error, string Reason, string Token = null, DeviceInfo Device = null, Identity Who = null);
+
+public partial class Auth
+{
+    public const string InvitePrefix = "i1.";
+    public const string TokenPrefix = "t1.";
+    public const int MaxInviteHours = 30 * 24;
+
+    sealed class InviteRow
+    {
+        public string Id, Hash, Kind, Name, Role, By;
+        public long Created, Expires;
+        public int Max, Uses;
+        public bool Revoked;
+        public InviteInfo Info() => new(Id, Kind, Name, Role, By, FromUnix(Created), FromUnix(Expires), Max, Uses, Revoked);
+        public string Format() => string.Join('\t', Id, Hash, Kind, Name, Role, By, Created, Expires, Max, Uses, Revoked ? "1" : "0");
+    }
+
+    sealed record DevSnapshot(Dictionary<string, DeviceInfo> ByHash, List<DeviceInfo> All, DateTime Stamp, long Size);
+    volatile DevSnapshot devSnap = new(new(), new(), DateTime.MinValue, -1);
+
+    string DataFolder => Path.GetDirectoryName(Path.GetFullPath(cfg.CodesFile))!;
+    public string InvitesFile => Path.Combine(DataFolder, "invites");
+    public string DevicesFile => Path.Combine(DataFolder, "devices");
+
+    static DateTime FromUnix(long s) => DateTimeOffset.FromUnixTimeSeconds(s).UtcDateTime;
+    static long ToUnix(DateTime t) => new DateTimeOffset(DateTime.SpecifyKind(t, DateTimeKind.Utc)).ToUnixTimeSeconds();
+    long NowUnix() => ToUnix(clock.UtcNow);
+
+    // ---- secrets
+
+    public static bool IsRetired(string code) => code != null && code.StartsWith('!');
+    static string B64Url(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    public static string NewInviteSecret() => InvitePrefix + B64Url(RandomNumberGenerator.GetBytes(24));   // 192 bits
+    public static string NewToken() => TokenPrefix + B64Url(RandomNumberGenerator.GetBytes(32));           // 256 bits
+    static string NewId() => Convert.ToHexString(RandomNumberGenerator.GetBytes(5)).ToLowerInvariant();
+    static string RetiredCode() => "!" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+    public static string HashHex(string secret) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(secret.Trim()))).ToLowerInvariant();
+    static bool SameHash(string a, string b) =>
+        a.Length == b.Length && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(a), Encoding.ASCII.GetBytes(b));
+
+    // a coarse address for the device list: IPv4 -> a.b.c.x, IPv6 -> the first 48 bits
+    public static string CoarseIp(string ip)
+    {
+        if (!System.Net.IPAddress.TryParse(ip ?? "", out var a)) return "";
+        if (a.IsIPv4MappedToIPv6) a = a.MapToIPv4();
+        var b = a.GetAddressBytes();
+        if (b.Length == 4) return $"{b[0]}.{b[1]}.{b[2]}.x";
+        return $"{b[0]:x2}{b[1]:x2}:{b[2]:x2}{b[3]:x2}:{b[4]:x2}{b[5]:x2}::";
+    }
+
+    static string Clean(string s, int max, string fallback)
+    {
+        s = Names.Normalize(s ?? "");
+        if (s.Length > max) s = Names.Cut(s, max).TrimEnd();
+        return s.Length == 0 ? fallback : s.Replace('\t', ' ');
+    }
+
+    // ================================================================ invites
+
+    List<InviteRow> ReadInvites()
+    {
+        var rows = new List<InviteRow>();
+        if (!File.Exists(InvitesFile)) return rows;
+        foreach (var line in File.ReadAllLines(InvitesFile))
+        {
+            if (line.Length == 0 || line[0] == '#') continue;
+            var f = line.Split('\t');
+            if (f.Length < 11) continue;
+            try
+            {
+                rows.Add(new InviteRow
+                {
+                    Id = f[0], Hash = f[1], Kind = f[2], Name = f[3], Role = Roles.Normalize(f[4]), By = f[5],
+                    Created = long.Parse(f[6], CultureInfo.InvariantCulture), Expires = long.Parse(f[7], CultureInfo.InvariantCulture),
+                    Max = Math.Max(1, int.Parse(f[8], CultureInfo.InvariantCulture)), Uses = int.Parse(f[9], CultureInfo.InvariantCulture), Revoked = f[10] == "1",
+                });
+            }
+            catch (FormatException) { }
+        }
+        return rows;
+    }
+
+    void WriteInvites(List<InviteRow> rows)
+    {
+        // rows long past their end are forgotten (a month after expiry)
+        var cutoff = NowUnix() - 30L * 86400;
+        var keep = rows.Where(r => r.Expires > cutoff);
+        var body = "# Lodge invites: id, sha256(secret), kind, name, role, created by, created, expires, max uses, uses, revoked (the secrets are not stored)\n"
+                   + string.Join("", keep.Select(r => r.Format() + "\n"));
+        AtomicWrite(InvitesFile, body);
+    }
+
+    public List<InviteInfo> ListInvites()
+    {
+        lock (writeGate) return ReadInvites().Select(r => r.Info()).OrderByDescending(i => i.Created).ToList();
+    }
+
+    // the secret is returned once and stored only as a hash
+    public (InviteInfo Info, string Secret) CreateInvite(string kind, string name, string role, string createdBy, int? hours = null, int? maxUses = null)
+    {
+        kind = kind == "guest" ? "guest" : "person";
+        int h = Math.Clamp(hours ?? cfg.InviteDefaultHours, 1, MaxInviteHours);
+        string secret = NewInviteSecret();
+        return Locked(() =>
+        {
+            ReloadIfChanged();
+            var rows = ReadInvites();
+            var now = NowUnix();
+            if (rows.Count(r => r.Info().Pending(clock.UtcNow)) >= cfg.MaxPendingInvites)
+                throw new InvalidOperationException("Too many pending invites - revoke some first");
+            string useName = "-", useRole = "guest";
+            int uses = 1;
+            if (kind == "guest") uses = Math.Clamp(maxUses ?? 1, 1, 50);
+            else
+            {
+                name = Names.Normalize(name);
+                if (!NameRule.IsMatch(name)) throw new InvalidOperationException("Names are 1-24 letters (any language), digits, space, _ or -");
+                var existing = snap.Personal.FirstOrDefault(p => Names.Same(p.Name, name));
+                if (existing != null) { useName = existing.Name; useRole = existing.Role; }   // another device for someone who is already in
+                else
+                {
+                    if (snap.Personal.Any(p => Names.Alike(p.Name, name))) throw new InvalidOperationException($"{name} looks just like a name that's already taken");
+                    useName = name;
+                    useRole = Roles.Normalize(role);
+                    if (useRole == "guest") useRole = "member";
+                }
+                if (rows.Any(r => r.Kind == "person" && r.Info().Pending(clock.UtcNow) && Names.Same(r.Name, useName)))
+                    throw new InvalidOperationException($"{useName} already has a pending invite - revoke it first");
+            }
+            var row = new InviteRow
+            {
+                Id = NewId(), Hash = HashHex(secret), Kind = kind, Name = useName, Role = useRole, By = Clean(createdBy, 24, "?"),
+                Created = now, Expires = now + h * 3600L, Max = uses, Uses = 0,
+            };
+            while (rows.Any(r => r.Id == row.Id)) row.Id = NewId();
+            rows.Add(row);
+            WriteInvites(rows);
+            return (row.Info(), secret);
+        });
+    }
+
+    public InviteInfo RevokeInvite(string id) => Locked(() =>
+    {
+        var rows = ReadInvites();
+        var row = rows.FirstOrDefault(r => string.Equals(r.Id, (id ?? "").Trim(), StringComparison.OrdinalIgnoreCase))
+                  ?? throw new InvalidOperationException("No such invite");
+        row.Revoked = true;
+        WriteInvites(rows);
+        return row.Info();
+    });
+
+    // ================================================================ exchange (invite or old code -> device token)
+
+    public ExchangeOutcome ExchangeInvite(string ip, string invite, string deviceName, string clientDeviceId)
+    {
+        if (Blocked(ip)) return Blocked429();
+        if (string.IsNullOrWhiteSpace(invite) || invite.Length > 256) { Fail(ip); return Wrong(); }
+        ExchangeOutcome res;
+        try { res = Locked(() => ExchangeInviteLocked(HashHex(invite), deviceName, clientDeviceId, ip)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.LogWarning("Invite exchange failed to write: {Error}", e.GetType().Name);
+            return new ExchangeOutcome(500, "The server couldn't save the new device", "storage");
+        }
+        if (res.Status == 401) Fail(ip); else if (res.Status == 200) Success(ip);
+        return res;
+    }
+
+    // the old permanent code, exchanged once for a device token ("Upgrade this device")
+    public ExchangeOutcome ExchangeCode(string ip, string code, string deviceName, string clientDeviceId)
+    {
+        if (Blocked(ip)) return Blocked429();
+        var who = Check(code);
+        if (who == null) { Fail(ip); return new ExchangeOutcome(401, "Wrong invite code", "wrong"); }
+        if (!who.Personal) return new ExchangeOutcome(403, "Guests join with an invite link - ask for one", "guest");
+        ExchangeOutcome res;
+        try
+        {
+            res = Locked(() =>
+            {
+                var made = CreateDeviceLocked(who.Name, who.Role, deviceName, clientDeviceId, ip, out var err);
+                return made == null ? err : new ExchangeOutcome(200, null, null, made.Value.Token, made.Value.Device, who with { DeviceId = made.Value.Device.Id });
+            });
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.LogWarning("Code upgrade failed to write: {Error}", e.GetType().Name);
+            return new ExchangeOutcome(500, "The server couldn't save the new device", "storage");
+        }
+        if (res.Status == 200) Success(ip);
+        return res;
+    }
+
+    ExchangeOutcome Blocked429() => new(429, "Too many wrong invite codes - try again in 15 minutes", "blocked");
+    static ExchangeOutcome Wrong() => new(401, "This invite isn't valid - check the link", "wrong");
+    static ExchangeOutcome Gone() => new(410, "This invite has been used or expired - ask for a new one", "used-or-expired");
+
+    ExchangeOutcome ExchangeInviteLocked(string hash, string deviceName, string clientDeviceId, string ip)
+    {
+        ReloadIfChanged();
+        var rows = ReadInvites();
+        InviteRow row = null;
+        foreach (var r in rows) if (SameHash(r.Hash, hash)) row = r;   // no early exit: same work wherever the match is
+        if (row == null) return Wrong();
+        if (!row.Info().Pending(clock.UtcNow)) return Gone();
+
+        string name = null, role = "guest";
+        bool createPerson = false;
+        if (row.Kind == "person")
+        {
+            var existing = snap.Personal.FirstOrDefault(p => Names.Same(p.Name, row.Name));
+            if (existing != null) { name = existing.Name; role = existing.Role; }
+            else { name = row.Name; role = row.Role; createPerson = true; }
+        }
+        // limits first, nothing is written yet
+        if (!DeviceRoom(name, clientDeviceId, out var refusal)) return refusal;
+        if (createPerson)
+        {
+            try
+            {
+                MutateCodesLocked(lines =>
+                {
+                    if (lines.Select(Parse).Any(p => p != null && (Names.Same(p.Value.Name, name) || Names.Alike(p.Value.Name, name))))
+                        throw new InvalidOperationException("name taken");
+                    lines.Add($"{name}:{RetiredCode()}:{role}");
+                });
+            }
+            catch (InvalidOperationException) { return new ExchangeOutcome(409, "That name was just taken - ask for a new invite", "name-taken"); }
+        }
+        // the invite is marked used BEFORE the device exists: a crash in between costs a new invite, never a free extra device
+        row.Uses++;
+        WriteInvites(rows);
+        var made = CreateDeviceLocked(name, role, deviceName, clientDeviceId, ip, out var err);
+        if (made == null)
+        {
+            row.Uses--;
+            try { WriteInvites(rows); } catch (IOException) { }
+            return err;
+        }
+        var who = name == null ? new Identity(null, false, "guest", made.Value.Device.Id) : new Identity(name, true, role, made.Value.Device.Id);
+        log.LogInformation("Invite {Invite} used: new device {Device} for {Name}", row.Id, made.Value.Device.Id, name == null ? "a guest" : Names.ForLog(name));
+        return new ExchangeOutcome(200, null, null, made.Value.Token, made.Value.Device, who);
+    }
+
+    // may this identity get another device (a re-join from the same clientDeviceId replaces its old one)?
+    bool DeviceRoom(string name, string clientId, out ExchangeOutcome refusal)
+    {
+        refusal = null;
+        var devs = ReadDeviceRows();
+        var cid = Clean(clientId, 64, "?");
+        int mine = devs.Count(d => (name == null ? d.Guest : Names.Same(d.Name ?? "", name)) && d.ClientId != cid);
+        if (name != null && mine >= cfg.MaxDevicesPerPerson)
+            refusal = new ExchangeOutcome(409, "This account has too many devices - sign one out first (Settings, Your devices)", "too-many-devices");
+        else if (devs.Count >= cfg.MaxDevicesTotal)
+            refusal = new ExchangeOutcome(409, "The lodge has too many devices - ask the Guild Master", "too-many-devices");
+        return refusal == null;
+    }
+
+    (string Token, DeviceInfo Device)? CreateDeviceLocked(string name, string role, string deviceName, string clientDeviceId, string ip, out ExchangeOutcome err)
+    {
+        err = null;
+        if (!DeviceRoom(name, clientDeviceId, out err)) return null;
+        var devs = ReadDeviceRows();
+        var cid = Clean(clientDeviceId, 64, "?");
+        devs.RemoveAll(d => d.ClientId == cid && (name == null ? d.Guest : Names.Same(d.Name ?? "", name)));
+        var token = NewToken();
+        var now = clock.UtcNow;
+        var dev = new DeviceInfo
+        {
+            Id = NewId(), TokenHash = HashHex(token), Name = name, Role = role, DeviceName = Clean(deviceName, 32, "Unknown device"),
+            ClientId = cid, Created = now, LastSeen = now, LastIp = CoarseIp(ip), Persisted = now,
+        };
+        while (devs.Any(d => d.Id == dev.Id)) dev.Id = NewId();
+        devs.Add(dev);
+        WriteDevices(devs);
+        return (token, dev);
+    }
+
+    // ================================================================ devices
+
+    static string FormatDevice(DeviceInfo d) => string.Join('\t', d.Id, d.TokenHash, d.Name ?? "-", d.Role, d.DeviceName, d.ClientId,
+        ToUnix(d.Created), ToUnix(d.LastSeen), d.LastIp ?? "");
+
+    List<DeviceInfo> ReadDeviceRows()
+    {
+        var list = new List<DeviceInfo>();
+        if (!File.Exists(DevicesFile)) return list;
+        foreach (var line in File.ReadAllLines(DevicesFile))
+        {
+            if (line.Length == 0 || line[0] == '#') continue;
+            var f = line.Split('\t');
+            if (f.Length < 8) continue;
+            try
+            {
+                var d = new DeviceInfo
+                {
+                    Id = f[0], TokenHash = f[1], Name = f[2] == "-" ? null : f[2], Role = Roles.Normalize(f[3]), DeviceName = f[4], ClientId = f[5],
+                    Created = FromUnix(long.Parse(f[6], CultureInfo.InvariantCulture)), LastSeen = FromUnix(long.Parse(f[7], CultureInfo.InvariantCulture)),
+                    LastIp = f.Length > 8 ? f[8] : "",
+                };
+                d.Persisted = d.LastSeen;
+                list.Add(d);
+            }
+            catch (FormatException) { }
+        }
+        return list;
+    }
+
+    void WriteDevices(List<DeviceInfo> devs)
+    {
+        AtomicWrite(DevicesFile, "# Lodge devices: id, sha256(token), name (- = guest), role, device name, client device id, created, last seen, last address (coarse)\n"
+                                 + string.Join("", devs.Select(d => FormatDevice(d) + "\n")));
+        ReloadDevicesIfChanged(force: true);
+    }
+
+    void ReloadDevicesIfChanged(bool force = false)
+    {
+        DateTime stamp;
+        long size;
+        try
+        {
+            var fi = new FileInfo(DevicesFile);
+            stamp = fi.Exists ? fi.LastWriteTimeUtc : DateTime.MinValue;
+            size = fi.Exists ? fi.Length : -1;
+        }
+        catch (Exception e) { log.LogWarning("Can't check the devices file: {Error}", e.GetType().Name); return; }
+        var cur = devSnap;
+        if (!force && stamp == cur.Stamp && size == cur.Size) return;
+        try
+        {
+            var all = ReadDeviceRows();
+            // keep the in-memory last-seen of devices we already know (it is ahead of the file between writes)
+            foreach (var d in all)
+                if (cur.ByHash.TryGetValue(d.TokenHash, out var o) && o.LastSeen > d.LastSeen) { d.LastSeen = o.LastSeen; d.Persisted = o.Persisted; }
+            devSnap = new DevSnapshot(all.GroupBy(d => d.TokenHash).ToDictionary(g => g.Key, g => g.First()), all, stamp, size);
+        }
+        catch (Exception e) { log.LogWarning("Can't read the devices file, keeping the previous list: {Error}", e.GetType().Name); }
+    }
+
+    // Looked up by the hash of the token (a 256-bit random value), so a timing difference can't help guess it.
+    public Identity CheckToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token) || token.Length > 256) return null;
+        ReloadDevicesIfChanged();
+        ReloadIfChanged();
+        if (!devSnap.ByHash.TryGetValue(HashHex(token), out var dev)) return null;
+        if (dev.Guest) return new Identity(null, false, "guest", dev.Id);
+        var p = snap.Personal.FirstOrDefault(x => Names.Same(x.Name, dev.Name));
+        return p == null ? null : new Identity(p.Name, true, p.Role, dev.Id);
+    }
+
+    public Identity CheckCredential(string credential, bool isToken) => isToken ? CheckToken(credential) : Check(credential);
+
+    public List<DeviceInfo> ListDevices(string name = null)
+    {
+        ReloadDevicesIfChanged();
+        return devSnap.All.Where(d => name == null || (!d.Guest && Names.Same(d.Name, name)))
+            .OrderBy(d => d.Name ?? "~", StringComparer.OrdinalIgnoreCase).ThenByDescending(d => d.LastSeen).ToList();
+    }
+
+    public DeviceInfo FindDevice(string id)
+    {
+        ReloadDevicesIfChanged();
+        return devSnap.All.FirstOrDefault(d => string.Equals(d.Id, (id ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    // removes the device (its token stops working at once); returns it so the hub can close its socket
+    public DeviceInfo RevokeDevice(string id) => Locked(() =>
+    {
+        var devs = ReadDeviceRows();
+        var d = devs.FirstOrDefault(x => string.Equals(x.Id, (id ?? "").Trim(), StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException("No such device");
+        devs.Remove(d);
+        WriteDevices(devs);
+        return d;
+    });
+
+    public List<DeviceInfo> RevokeDevicesOf(string name) => Locked(() =>
+    {
+        var devs = ReadDeviceRows();
+        var gone = devs.Where(d => !d.Guest && Names.Same(d.Name, name)).ToList();
+        if (gone.Count > 0) { devs.RemoveAll(gone.Contains); WriteDevices(devs); }
+        return gone;
+    });
+
+    // a connection just authenticated with this device: remember when and from (roughly) where; written at most every 10 minutes
+    public void Touch(string deviceId, string ip)
+    {
+        if (deviceId == null) return;
+        ReloadDevicesIfChanged();
+        var d = devSnap.All.FirstOrDefault(x => x.Id == deviceId);
+        if (d == null) return;
+        var now = clock.UtcNow;
+        var coarse = CoarseIp(ip);
+        bool write = now - d.Persisted > TimeSpan.FromMinutes(10) || (coarse.Length > 0 && coarse != d.LastIp);
+        d.LastSeen = now;
+        if (!write) return;
+        try
+        {
+            Locked(() =>
+            {
+                var devs = ReadDeviceRows();
+                var row = devs.FirstOrDefault(x => x.Id == deviceId);
+                if (row == null) return 0;
+                row.LastSeen = now;
+                if (coarse.Length > 0) row.LastIp = coarse;
+                WriteDevices(devs);
+                return 0;
+            });
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { log.LogWarning("Can't record a device's last seen: {Error}", e.GetType().Name); }
+    }
+
+    // ================================================================ retiring a permanent code
+
+    public bool HasPermanentCode(string name) { ReloadIfChanged(); return snap.Personal.Any(p => Names.Same(p.Name, name) && p.Hash != null); }
+
+    // the person keeps their name, rank and devices; the old code stops working. Refused when they have no device yet
+    // (unless force) - that would lock them out.
+    public void RetireCode(string name, bool force = false) => Locked(() =>
+    {
+        ReloadIfChanged(force: true);
+        ReloadDevicesIfChanged(force: true);
+        var p = snap.Personal.FirstOrDefault(x => Names.Same(x.Name, name)) ?? throw new InvalidOperationException($"No member called {name}");
+        if (p.Hash == null) throw new InvalidOperationException($"{p.Name} has no permanent code (already retired)");
+        if (!force && !devSnap.All.Any(d => !d.Guest && Names.Same(d.Name, p.Name)))
+            throw new InvalidOperationException($"{p.Name} has no device on a token yet - retiring the code would lock them out");
+        MutateCodesLocked(lines =>
+        {
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var q = Parse(lines[i]);
+                if (q != null && Names.Same(q.Value.Name, p.Name)) lines[i] = $"{q.Value.Name}:{RetiredCode()}:{q.Value.Role}";
+            }
+        });
+        log.LogInformation("Permanent code of {Name} retired", Names.ForLog(p.Name));
+        return 0;
+    });
+}

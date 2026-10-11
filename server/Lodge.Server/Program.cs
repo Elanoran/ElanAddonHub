@@ -61,17 +61,37 @@ text-decoration:none;font-weight:600;padding:10px 18px;border-radius:9px}</style
 
 string IpOf(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "?";
 
-// null = allowed (identity set); otherwise the error to return. Every credential check goes through here.
-IResult Gate(HttpContext ctx, string code, out Identity who)
+// null = allowed (identity set); otherwise the error to return. Every credential check goes through here -
+// a device token (X-Lodge-Token, 2.10) and a code (X-Lodge-Code) share one wrong-guess counter per IP.
+IResult Gate(HttpContext ctx, string credential, out Identity who, bool isToken = false)
 {
     who = null;
     var ip = IpOf(ctx);
     if (auth.Blocked(ip))
         return Results.Json(new { error = "Too many wrong invite codes - try again in 15 minutes" }, statusCode: 429);
-    who = auth.Check(code);
-    if (who == null) { auth.Fail(ip); return Results.Json(new { error = "Wrong invite code" }, statusCode: 401); }
+    who = auth.CheckCredential(credential, isToken);
+    if (who == null)
+    {
+        auth.Fail(ip);
+        return isToken
+            ? Results.Json(new { error = "This device was signed out - join again with a new invite", reason = "device-revoked" }, statusCode: 401)
+            : Results.Json(new { error = "Wrong invite code" }, statusCode: 401);
+    }
     auth.Success(ip);
     return null;
+}
+
+IResult GateReq(HttpContext ctx, out Identity who)
+{
+    var (cred, isToken) = CredFrom(ctx);
+    return Gate(ctx, cred, out who, isToken);
+}
+
+// the device token wins over a code when a client sends both
+(string Value, bool Token) CredFrom(HttpContext ctx)
+{
+    var token = ctx.Request.Headers["X-Lodge-Token"].ToString();
+    return !string.IsNullOrEmpty(token) ? (token, true) : (CodeFrom(ctx), false);
 }
 
 // the X-Lodge-Code header wins; ?code= only for 1.x clients and only while LODGE_ALLOW_QUERY_CODE=true (off by default since 2.8)
@@ -86,7 +106,8 @@ string CodeFrom(HttpContext ctx)
 // oracle and costs no strike) - instead of being silently ignored
 app.Use(async (ctx, next) =>
 {
-    if (!cfg.AllowQueryCode && ctx.Request.Query.ContainsKey("code") && string.IsNullOrEmpty(ctx.Request.Headers["X-Lodge-Code"]))
+    if (!cfg.AllowQueryCode && ctx.Request.Query.ContainsKey("code") && string.IsNullOrEmpty(ctx.Request.Headers["X-Lodge-Code"])
+        && string.IsNullOrEmpty(ctx.Request.Headers["X-Lodge-Token"]))
     {
         await Results.Json(new { error = "Send the invite code in the X-Lodge-Code header - please update Elan's Addon Hub" },
             statusCode: 401).ExecuteAsync(ctx);
@@ -95,31 +116,73 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
+// 2.10: what this server can do, so a newer client knows whether to use invite links and device tokens (older servers answer 404)
+app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, features = new[] { "tokens", "invites", "devices" } }));
+
+// 2.10: trade a one-time invite (X-Lodge-Invite header, or "invite" in the body) - or, to upgrade a device, the old permanent
+// code (X-Lodge-Code) - for a per-device token. Body (optional JSON, max 4 KB): {"device": "PC name", "deviceId": "random id"}.
+// The secrets travel in a header/body only, never in a URL. A wrong invite or code counts towards the same lockout as a wrong code.
+app.MapPost("/exchange", async (HttpContext ctx) =>
+{
+    if (ctx.Request.ContentLength > 4096) return Results.Json(new { error = "Request too large" }, statusCode: 413);
+    string device = "", deviceId = "", bodyInvite = "";
+    try
+    {
+        using var ms = new MemoryStream();
+        var buf = new byte[1024];
+        int n;
+        while ((n = await ctx.Request.Body.ReadAsync(buf)) > 0)
+        {
+            ms.Write(buf, 0, n);
+            if (ms.Length > 4096) return Results.Json(new { error = "Request too large" }, statusCode: 413);
+        }
+        if (ms.Length > 0 && System.Text.Json.Nodes.JsonNode.Parse(ms.ToArray()) is System.Text.Json.Nodes.JsonObject o)
+        {
+            device = J.Str(o, "device") ?? ""; deviceId = J.Str(o, "deviceId") ?? ""; bodyInvite = J.Str(o, "invite") ?? "";
+        }
+    }
+    catch (System.Text.Json.JsonException) { return Results.Json(new { error = "Bad request" }, statusCode: 400); }
+    var invite = ctx.Request.Headers["X-Lodge-Invite"].ToString();
+    if (string.IsNullOrEmpty(invite)) invite = bodyInvite;
+    var code = ctx.Request.Headers["X-Lodge-Code"].ToString();
+    ExchangeOutcome r;
+    if (!string.IsNullOrEmpty(invite)) r = auth.ExchangeInvite(IpOf(ctx), invite, device, deviceId);
+    else if (!string.IsNullOrEmpty(code)) r = auth.ExchangeCode(IpOf(ctx), code, device, deviceId);
+    else return Results.Json(new { error = "Send the invite in the X-Lodge-Invite header" }, statusCode: 400);
+    ctx.Response.Headers["Cache-Control"] = "no-store";
+    if (r.Status != 200) return Results.Json(new { error = r.Error, reason = r.Reason }, statusCode: r.Status);
+    return Results.Json(new
+    {
+        token = r.Token, deviceId = r.Device.Id, device = r.Device.DeviceName, name = r.Who.Name, role = r.Who.Role,
+        guest = !r.Who.Personal, server = LodgeHub.Version,
+    });
+});
+
 // public: just "ok". With a code it is an authenticated request like any other: 401 wrong, 429 blocked,
 // otherwise the version and who's online. (No unmetered way to test a code.)
 app.MapGet("/health", (HttpContext ctx) =>
 {
-    var code = CodeFrom(ctx);
-    if (string.IsNullOrEmpty(code)) return Results.Json(new { ok = true });
-    var deny = Gate(ctx, code, out _);
+    var (cred, isToken) = CredFrom(ctx);
+    if (string.IsNullOrEmpty(cred)) return Results.Json(new { ok = true });
+    var deny = Gate(ctx, cred, out _, isToken);
     return deny ?? Results.Json(new { ok = true, version = LodgeHub.Version, online = lodge.VisibleOnline });
 });
 
 app.Map("/ws", async (HttpContext ctx) =>
 {
     if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; return; }
-    var code = CodeFrom(ctx);
-    var deny = Gate(ctx, code, out var who);
+    var (cred, isToken) = CredFrom(ctx);
+    var deny = Gate(ctx, cred, out var who, isToken);
     if (deny != null) { await deny.ExecuteAsync(ctx); return; }
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
-    await lodge.Run(ws, who, code, ctx.Request.Query["name"], ctx.Request.Query["client"], IpOf(ctx), ctx.RequestAborted,
+    await lodge.Run(ws, who, cred, ctx.Request.Query["name"], ctx.Request.Query["client"], IpOf(ctx), ctx.RequestAborted,
         invisible: ctx.Request.Query["vis"] == "invisible"); // hub 2.17+: "Appear offline" from the very first moment (no join is announced)
 });
 
 // upload: raw body, headers X-Lodge-Code + X-File-Name (URL-encoded)
 app.MapPost("/files", async (HttpContext ctx) =>
 {
-    var deny = Gate(ctx, CodeFrom(ctx), out var who);
+    var deny = GateReq(ctx, out var who);
     if (deny != null) return deny;
     if (!Roles.Can(who.Role, Perm.ShareFiles))
         return Results.Json(new { error = "Initiates can't share files - ask the lodge owner for a personal invite" }, statusCode: 403);
@@ -141,7 +204,7 @@ app.MapPost("/files", async (HttpContext ctx) =>
 // download: code in X-Lodge-Code (or legacy ?code=)
 app.MapGet("/files/{id}", (HttpContext ctx, string id) =>
 {
-    var deny = Gate(ctx, CodeFrom(ctx), out _);
+    var deny = GateReq(ctx, out _);
     if (deny != null) return deny;
     var meta = files.Get(id);
     if (meta == null) return Results.NotFound();

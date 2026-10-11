@@ -26,6 +26,10 @@ public class LodgeConfig
     public int MaxUploadsPerIdentity { get; set; } = 2;     // uploads running at once per person (guests: per IP)
     public int UploadTimeoutSeconds { get; set; } = 120;    // one upload may take this long at most
     public int IdleTimeoutSeconds { get; set; } = 75;       // a client that sends app-level pings and then goes silent is dropped
+    public int InviteDefaultHours { get; set; } = 168;       // one-time invites live 7 days unless the creator picks 1 h - 30 d
+    public int MaxPendingInvites { get; set; } = 200;
+    public int MaxDevicesPerPerson { get; set; } = 10;       // device tokens per personal identity
+    public int MaxDevicesTotal { get; set; } = 5000;
     public int HistoryFlushSeconds { get; set; } = 5;       // edits/reactions/deletes reach the disk after this long
 
     static string Env(string key, string fallback)
@@ -63,6 +67,9 @@ public class LodgeConfig
             UploadTimeoutSeconds = Int("LODGE_UPLOAD_TIMEOUT_S", 120, 5, 3600),
             IdleTimeoutSeconds = Int("LODGE_IDLE_TIMEOUT_S", 75, 30, 3600),
             HistoryFlushSeconds = Int("LODGE_HISTORY_FLUSH_S", 5, 1, 600),
+            InviteDefaultHours = Int("LODGE_INVITE_HOURS", 168, 1, 720),
+            MaxPendingInvites = Int("LODGE_MAX_PENDING_INVITES", 200, 1, 10000),
+            MaxDevicesPerPerson = Int("LODGE_MAX_DEVICES_PER_PERSON", 10, 1, 100),
             AllowQueryCode = string.Equals(Env("LODGE_ALLOW_QUERY_CODE", "false"), "true", StringComparison.OrdinalIgnoreCase),
         };
         Directory.CreateDirectory(c.DataDir);

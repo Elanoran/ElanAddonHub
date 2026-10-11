@@ -29,9 +29,11 @@ public static class Roles
         Perm.ManageMembers => AtLeast(role, "owner"),     // invites, ranks, removing people
         Perm.ManageChannels => AtLeast(role, "owner"),
         Perm.SeeInvisible => AtLeast(role, "owner"),      // members who chose "Appear offline" (needed to moderate them)
-        Perm.ResetProfiles => AtLeast(role, "owner"),     // put someone's avatar back to the default (moderation)
+        Perm.ResetProfiles => AtLeast(role, "owner"),
+        Perm.Invite => AtLeast(role, "officer"),          // one-time invite links; see and revoke anyone's devices
+        Perm.RetireCodes => AtLeast(role, "owner"),       // retire a person's permanent code     // put someone's avatar back to the default (moderation)
         _ => false,
     };
 }
 
-public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels, SeeInvisible, ResetProfiles }
+public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels, SeeInvisible, ResetProfiles, Invite, RetireCodes }
