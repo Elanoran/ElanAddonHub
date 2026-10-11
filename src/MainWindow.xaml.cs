@@ -188,64 +188,104 @@ namespace ElansAddonHub
         public void CardArtChanged() { AddonCard.Painted = settings.PaintedArt; foreach (var c in cards) c.RefreshArt(); }
         public void AutoUpdateTurnedOn() => _ = AfterCheck();
 
-        // --selftest <dir>: render the window to PNGs before/after installing the first addon, then quit
+        // --selftest <dir>: render the window to PNGs before/after installing the first addon, then quit.
+        // Sections (see TestScope): --only a,b / --changed <base> run just some of them; no flag runs all. Each section is timed.
         public async Task SelfTest(string dir)
         {
             System.IO.Directory.CreateDirectory(dir);
+            var args = Environment.GetCommandLineArgs();
+            var scope = TestScope.FromArgs(args, out var scopeNote, out var scopeError);
+            if (scopeError != null)
+            {
+                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), "FAIL scope: " + scopeError + "\r\n");
+                Quit(); return;
+            }
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "scope.txt"), scopeNote + "\r\n");
+            var total = System.Diagnostics.Stopwatch.StartNew();
+            var secWatch = new System.Diagnostics.Stopwatch();
+            var timings = new System.Collections.Generic.List<string>();
+            var skipped = new System.Collections.Generic.List<string>();
+            string current = null;
+            // Begin: true when the section is selected (and starts its clock); otherwise it is logged as skipped
+            bool Begin(string name)
+            {
+                if (!scope.Contains(name)) { skipped.Add("skipped " + name); return false; }
+                current = name; secWatch.Restart(); return true;
+            }
+            string Sec(double x) => x.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+            void End() { timings.Add($"section {current}: {Sec(secWatch.Elapsed.TotalSeconds)} s"); }
             Show();
             AddonCard.Painted = settings.PaintedArt;
             await CheckNow();
             // the window's own startup check may still be running (slow network): wait for it
-            for (int i = 0; i < 100 && (checking || manifest == null); i++) await Task.Delay(200);
+            for (int i = 0; i < 100 && (checking || (manifest == null && lastError == null)); i++) await Task.Delay(200);
             await Task.Delay(400);
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_BROWSER_SHOTS")) || Environment.GetEnvironmentVariable("ELANSHUB_BROWSER_ONLY") == "1") { System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), await BrowserTest(dir)); Quit(); return; }
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_VIDEO_SHOTS"))) { System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), await VideoTest(dir)); Quit(); return; }
             var designShots = Environment.GetEnvironmentVariable("ELANSHUB_DESIGN_SHOTS");
             if (!string.IsNullOrEmpty(designShots)) { await DesignShots(dir, designShots); return; }
             Snapshot(System.IO.Path.Combine(dir, "1-before.png"));
-            var card = cards.FirstOrDefault(c => c.ButtonEnabled);
-            if (card != null) await Install(card);
-            await CheckAll();
-            var checkAllLine = $"check-all button: {(CheckAllButton.IsEnabled && CheckResult.Text != "" && CheckChipText.Text != "" ? "ok" : "FAIL")} (result='{CheckResult.Text}', chip='{CheckChipText.Text}', tip={CheckAllButton.ToolTip})";
-            await Task.Delay(400);
-            Snapshot(System.IO.Path.Combine(dir, "2-after.png"));
-            if (cards.Count >= 3 && others.Count >= 4)
+            timings.Add($"section setup: {Sec(total.Elapsed.TotalSeconds)} s");
+            string result = scopeNote;
+            if (Begin("addons"))
             {
-                cards[0].SetPillForTest("Update to 1.23.0", PillKind.Action, "x", true);
-                cards[1].SetPillForTest("Install", PillKind.Action, "x", true);
-                cards[2].SetPillForTest("Updating...", PillKind.Busy, "x", false);
-                others[0].SetPillForTest("Update", PillKind.Action, "x", true);
-                others[1].SetPillForTest("Update", PillKind.Action, "x", true); others[1].Message = "Something went wrong: test";
-                others[2].SetPillForTest("Choose file", PillKind.Action, "x", true);
-                others[3].SetPillForTest("Dev copy", PillKind.Quiet, "x", false);
-                RefreshRailBadges();
-                UpdateBadge.Visibility = Visibility.Visible; UpdateBadgeText.Text = "4";
+                var card = cards.FirstOrDefault(c => c.ButtonEnabled);
+                if (card != null) await Install(card);
+                await CheckAll();
+                var checkAllLine = $"check-all button: {(CheckAllButton.IsEnabled && CheckResult.Text != "" && lastError == null && CheckChipText.Text != "" && FakeUpdateServer.Requests > 0 && cards.Count == FakeUpdateServer.AddonIds.Length ? "ok" : "FAIL")} (result='{CheckResult.Text}', chip='{CheckChipText.Text}', tip={CheckAllButton.ToolTip})";
+                // offline: the (fake) update server stops -> the friendly message, the button recovers; then back online
+                FakeUpdateServer.Stop();
+                await CheckAll();
+                var offlineLine = $"check-all offline: {(CheckAllButton.IsEnabled && CheckResult.Text == "Couldn't reach the update server" ? "ok" : "FAIL")} (result='{CheckResult.Text}')";
+                FakeUpdateServer.Start();
+                await CheckNow();
                 await Task.Delay(400);
-                Snapshot(System.IO.Path.Combine(dir, "16-pills.png"));
-                ShowTab("addons");
+                Snapshot(System.IO.Path.Combine(dir, "2-after.png"));
+                if (cards.Count >= 3 && others.Count >= 4)
+                {
+                    cards[0].SetPillForTest("Update to 1.23.0", PillKind.Action, "x", true);
+                    cards[1].SetPillForTest("Install", PillKind.Action, "x", true);
+                    cards[2].SetPillForTest("Updating...", PillKind.Busy, "x", false);
+                    others[0].SetPillForTest("Update", PillKind.Action, "x", true);
+                    others[1].SetPillForTest("Update", PillKind.Action, "x", true); others[1].Message = "Something went wrong: test";
+                    others[2].SetPillForTest("Choose file", PillKind.Action, "x", true);
+                    others[3].SetPillForTest("Dev copy", PillKind.Quiet, "x", false);
+                    RefreshRailBadges();
+                    UpdateBadge.Visibility = Visibility.Visible; UpdateBadgeText.Text = "4";
+                    await Task.Delay(400);
+                    Snapshot(System.IO.Path.Combine(dir, "16-pills.png"));
+                    ShowTab("addons");
+                }
+                ShowTab("settings");
+                SettingsPage.Show("general");
+                await Task.Delay(300);
+                Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
+                foreach (var sec in new[] { "addons", "lodge", "voice", "overlay", "about" })
+                {
+                    SettingsPage.Show(sec);
+                    await Task.Delay(sec == "about" ? 2200 : 300);
+                    Snapshot(System.IO.Path.Combine(dir, "3-settings-" + sec + ".png"));
+                }
+                SettingsPage.Show("general");
+                result += "\r\n" + string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + checkAllLine + "\r\n" + offlineLine;
+                End();
             }
-            ShowTab("settings");
-            SettingsPage.Show("general");
-            await Task.Delay(300);
-            Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
-            foreach (var sec in new[] { "addons", "lodge", "voice", "overlay", "about" })
-            {
-                SettingsPage.Show(sec);
-                await Task.Delay(sec == "about" ? 2200 : 300);
-                Snapshot(System.IO.Path.Combine(dir, "3-settings-" + sec + ".png"));
-            }
-            SettingsPage.Show("general");
-            var tp = await ThirdPartyTest(dir);
-            tp += "\r\n" + await ViewerTest(dir);
-            tp += Environment.NewLine + VoiceEffects.SelfTest(dir);
+            if (Begin("thirdparty")) { result += "\r\n" + await ThirdPartyTest(dir); End(); }
+            if (Begin("viewer")) { result += "\r\n" + await ViewerTest(dir); End(); }
+            if (Begin("voice")) { result += "\r\n" + VoiceEffects.SelfTest(dir); End(); }
+            // always: cheap, and the one thing that must never be skipped
             var dataInside = System.IO.Path.GetFullPath(Util.DataDir).StartsWith(System.IO.Path.GetFullPath(dir).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
-            tp += "\r\n" + (dataInside ? "ok   " : "FAIL ") + "isolation: data folder is inside the test dir (" + Util.DataDir + ")";
-            tp += Environment.NewLine + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir);
-            var result = string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + checkAllLine + "\r\n" + tp + "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live();
+            result += "\r\n" + (dataInside ? "ok   " : "FAIL ") + "isolation: data folder is inside the test dir (" + Util.DataDir + ")";
+            result += "\r\n" + TestScope.SelfTest();
+            if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir); End(); }
+            if (Begin("strip")) { result += "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live(); End(); }
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
+            if (Begin("lodge"))
+            {
             var lodgeTest = Environment.GetEnvironmentVariable("ELANSHUB_TEST_LODGE");
-            if (!string.IsNullOrEmpty(lodgeTest))
+            if (string.IsNullOrEmpty(lodgeTest)) result += "\r\nlodge live session: not run (set ELANSHUB_TEST_LODGE=url|code|name)";
+            else
             {
                 var p = lodgeTest.Split('|');
                 TabLodge.IsChecked = true;
@@ -299,16 +339,20 @@ namespace ElansAddonHub
                           $"members={Session.Members.Count} messages={all} room={Session.MyRoom} frames sent={Session.Voice?.FramesSent}"
                         + $"\r\n{VoiceEngine.CodecSelfTest()}";
             }
-            result += "\r\n" + await LodgeFeaturesTest(dir);
-            result += "\r\n" + await VideoTest(dir);
-            result += "\r\n" + await BrowserTest(dir);
-            result += "\r\n" + await PresenceTest(dir);
-            result += "\r\n" + await ProfileTest(dir);
-            result += "\r\n" + await ToastTest(dir);
-            result += "\r\n" + await DialogTest(dir);
-            result += "\r\n" + await InventoryTest(dir);
-            result += "\r\n" + await HealthTest(dir);
-            result += "\r\n" + await Round3Test(dir);
+            End();
+            }
+            if (Begin("lodgefeatures")) { result += "\r\n" + await LodgeFeaturesTest(dir); End(); }
+            if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
+            if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
+            if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }
+            if (Begin("profile")) { result += "\r\n" + await ProfileTest(dir); End(); }
+            if (Begin("toasts")) { result += "\r\n" + await ToastTest(dir); End(); }
+            if (Begin("dialogs")) { result += "\r\n" + await DialogTest(dir); End(); }
+            if (Begin("inventory")) { result += "\r\n" + await InventoryTest(dir); End(); }
+            if (Begin("health")) { result += "\r\n" + await HealthTest(dir); End(); }
+            if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
+            result += "\r\n" + string.Join("\r\n", skipped);
+            result += "\r\n" + string.Join("\r\n", timings) + $"\r\ntotal: {Sec(total.Elapsed.TotalSeconds)} s";
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
             Quit();
         }
