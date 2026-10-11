@@ -1325,6 +1325,9 @@ namespace ElansAddonHub.Lodge
                     PttKey = PttKey,
                     ThresholdDb = Settings.VoiceThreshold ?? -45,
                     Preset = VoicePresets.Get(Settings.VoicePreset),
+                    NoiseSuppression = !Settings.VoiceNoiseSuppressOff,
+                    AutoGain = !Settings.VoiceAutoGainOff,
+                    HighQuality = Settings.VoiceHighQuality,
                     PeerVolume = id => PeerVolumeFor(Members.FirstOrDefault(x => x.Id == id)?.Name),
                 };
                 var c = client;
@@ -1397,6 +1400,9 @@ namespace ElansAddonHub.Lodge
             voice.PttKey = PttKey;
             voice.ThresholdDb = Settings.VoiceThreshold ?? -45;
             voice.Preset = VoicePresets.Get(Settings.VoicePreset);
+            voice.NoiseSuppression = !Settings.VoiceNoiseSuppressOff;
+            voice.AutoGain = !Settings.VoiceAutoGainOff;
+            voice.HighQuality = Settings.VoiceHighQuality;
             if (!voice.Deafened) voice.Volume = (float)(Settings.VoiceVolume ?? 1);
         }
 
@@ -1404,7 +1410,11 @@ namespace ElansAddonHub.Lodge
         {
             tickCount++;
             foreach (var m in Members)
-                m.Speaking = MyRoom != null && m.Room == MyRoom && voice != null && (m.IsMe ? voice.Transmitting : voice.IsSpeaking(m.Id));
+            {
+                bool inRoom = MyRoom != null && m.Room == MyRoom && voice != null;
+                m.Speaking = inRoom && (m.IsMe ? voice.Transmitting : voice.IsSpeaking(m.Id));
+                m.SpeakLevel = inRoom ? (m.IsMe ? voice.MyLevel : voice.SpeakLevel(m.Id)) : 0;
+            }
             if (tickCount % 50 == 0) CheckIdle();
             if (Pending != null && Clock() - Pending.At > TimeSpan.FromSeconds(15)) Pending = null;   // surely out by now
             if (pendingRoom != null && Clock() - pendingSince > TimeSpan.FromSeconds(6)) { pendingRoom = null; Error?.Invoke("Couldn't join the voice room - no answer from the lodge"); Changed?.Invoke(); }

@@ -272,7 +272,7 @@ namespace ElansAddonHub
             }
             if (Begin("thirdparty")) { result += "\r\n" + await ThirdPartyTest(dir); End(); }
             if (Begin("viewer")) { result += "\r\n" + await ViewerTest(dir); End(); }
-            if (Begin("voice")) { result += "\r\n" + VoiceEffects.SelfTest(dir); End(); }
+            if (Begin("voice")) { result += "\r\n" + VoiceEffects.SelfTest(dir) + Environment.NewLine + VoiceSelfTest.Run(); End(); }
             // always: cheap, and the one thing that must never be skipped
             var dataInside = System.IO.Path.GetFullPath(Util.DataDir).StartsWith(System.IO.Path.GetFullPath(dir).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
             result += "\r\n" + (dataInside ? "ok   " : "FAIL ") + "isolation: data folder is inside the test dir (" + Util.DataDir + ")";

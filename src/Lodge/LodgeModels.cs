@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.ComponentModel;
@@ -179,7 +180,22 @@ namespace ElansAddonHub.Lodge
 
         string roomName;
         public string RoomName { get => roomName; set { if (Set(ref roomName, value)) { Raise(nameof(CardVoiceLine)); Raise(nameof(CardVoiceVisibility)); } } }
-        public Brush Ring => speaking ? Avatar.Res("Brush.Accent") : Brushes.Transparent;
+        public Brush Ring => speaking ? RingAt(Math.Max(speakLevel, 0.4)) : RingAt(speakLevel * 0.6);
+        // 0..1, from the decoded loudness (not from network events): the ring fades with the voice instead of blinking
+        double speakLevel;
+        public double SpeakLevel { get => speakLevel; set { var q = Math.Round(Math.Max(0, Math.Min(1, value)) * 12) / 12; if (Set(ref speakLevel, q)) Raise(nameof(Ring)); } }
+        static readonly Dictionary<int, Brush> ringBrushes = new Dictionary<int, Brush>();
+        static Brush RingAt(double level)
+        {
+            int step = (int)Math.Round(level * 12);
+            if (step <= 0) return Brushes.Transparent;
+            if (!ringBrushes.TryGetValue(step, out var b))
+            {
+                var c = ((SolidColorBrush)Avatar.Res("Brush.Accent")).Color; c.A = (byte)(255 * (0.35 + 0.65 * step / 12.0));
+                b = new SolidColorBrush(c); b.Freeze(); ringBrushes[step] = b;
+            }
+            return b;
+        }
         public string StateGlyph => deaf ? "" : (muted || serverMuted) ? "" : "";
         public Brush StateBrush => deaf || muted || serverMuted ? Avatar.Res("Brush.Danger") : Avatar.Res("Brush.Text.Secondary");
         public Visibility StateVisibility => Voice ? Visibility.Visible : Visibility.Collapsed;
