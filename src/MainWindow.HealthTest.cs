@@ -186,7 +186,7 @@ namespace ElansAddonHub
                 await Task.Delay(300);
                 Check("watcher: a changed SavedVariables file is re-read by itself", changes > before && health.ErrorCount == 5, "changes " + (changes - before) + ", errors " + health.ErrorCount);
                 Check("new errors: counted (2 new)", health.NewCount == 2);
-                Check("toast in combat: held, not shown", T.Visible.Count == 0 && T.HeldCount == 1, "visible " + T.Visible.Count + " held " + T.HeldCount);
+                Check("toast in combat: held, not shown", T.Visible.Count == 0 && T.HeldCount == 1, "visible " + T.Visible.Count + (T.Visible.Count > 0 ? " [" + T.Visible[0].Kind + ": " + T.Visible[0].Title + "]" : "") + " held " + T.HeldCount + " cur=" + (Session.Presence.Current == null ? "null" : Session.Presence.Current.Flags.ToString()) + " active=" + Session.Presence.Active + " wow=" + WowWatch.Shared.Running);
                 Session.Presence.SetForTest(new GamePresence.Character { Name = "Aldrin", ClassFile = "HUNTER", Level = 60, HasLive = true, CombatKnown = true, Flags = 16 + 64 + 128 }, true);
                 T.Tick();
                 Check("toast after combat: \"Elan's Bags: 2 new errors\"", T.Visible.Count == 1 && T.Visible[0].Kind == ToastKind.Health && T.Visible[0].Title == "Elan's Bags: 2 new errors" && T.Visible[0].Text.Contains("Health"),

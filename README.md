@@ -166,6 +166,5 @@ about 2.3 minutes; a scoped one is the ~3 s of setup plus the sections it picks.
   on screen or takes focus; `-Visible` shows it. Checks that need the real desktop (the live pixel-strip screen
   capture) report `skipped (hidden desktop)` there (`ELANSHUB_HIDDEN_DESKTOP=1`). Do not run two visible
   self-tests at once: they steal each other's focus and the unread-marker checks fail.
-- Known failures today (offline): `check-all button` (needs the update server) and
-  `zip touching another addon: NOT REFUSED`; the wrapper lists them separately from new ones.
+- A clean run has ZERO FAIL lines, so any FAIL is real. The update check talks to a local fake server (`Services/FakeUpdateServer.cs`, never GitHub; `ELANSHUB_FAKE_UPDATE=0` turns it off), and WoW running on the PC is ignored (`ELANSHUB_FAKE_WOW=0` is set for the self-test).
 - `ELANSHUB_TEST_LODGE=url|code|name` still enables the live Lodge session (`lodge` section).

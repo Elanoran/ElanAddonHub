@@ -25,6 +25,8 @@ namespace ElansAddonHub.Services
                 var data = Environment.GetEnvironmentVariable("ELANSHUB_DATA");
                 Directory.CreateDirectory(data);
                 var settings = Path.Combine(data, "settings.json");
+                // never GitHub: the update check talks to a local fake server (Services/FakeUpdateServer.cs)
+                var murl = FakeUpdateServer.Start() ?? "http://127.0.0.1:9/none.json";
                 string root;
                 if (!File.Exists(settings))
                 {
@@ -39,10 +41,13 @@ namespace ElansAddonHub.Services
                     Toc(ao0, "GhLinked", "## Interface: 16001\n## Title: Github Linked\n## Version: 1.0\n## X-Website: https://github.com/example/ghlinked\n");
                     Toc(ao0, "WowiLinked", "## Interface: 16001\n## Title: WoWI Linked\n## Version: 1.0\n## X-WoWI-ID: 4242\n");
                     Toc(ao0, "WagoOnly", "## Interface: 16001\n## Title: Wago Only\n## Version: 1.0\n## X-Wago-ID: abcd1234\n");
-                    File.WriteAllText(settings, "{\"wowRoot\":" + J(root) + ",\"manifestUrl\":\"http://127.0.0.1:9/none.json\",\"runInBackground\":false,\"checkMinutes\":30}");
+                    File.WriteAllText(settings, "{\"wowRoot\":" + J(root) + ",\"manifestUrl\":" + J(murl) + ",\"runInBackground\":false,\"checkMinutes\":30}");
                 }
                 else
                 {
+                    var txt = File.ReadAllText(settings);
+                    var fixedTxt = System.Text.RegularExpressions.Regex.Replace(txt, "\"manifestUrl\"\\s*:\\s*\"[^\"]*\"", m0 => "\"manifestUrl\":" + J(murl));
+                    if (fixedTxt != txt) File.WriteAllText(settings, fixedTxt);
                     var m = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(settings), "\"wowRoot\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
                     if (!m.Success) return;
                     root = m.Groups[1].Value.Replace("\\\\", "\\");

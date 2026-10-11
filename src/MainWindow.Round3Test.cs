@@ -225,18 +225,25 @@ namespace ElansAddonHub
                     return ((proc.TotalProcessorTime - before).TotalMilliseconds, WowWatch.Shared.Polls - polls0);
                 }
                 await Measure(true);   // warm-up (JIT, first timer ticks), not counted
-                var runCpu = (cpuMs: 0.0, polls: 0); var idleCpu = (cpuMs: 0.0, polls: 0);
-                for (int round = 0; round < 2; round++)   // alternate, so a busy moment on the PC hits both the same
+                // 3 alternating samples per mode (a busy moment on the PC hits both the same), compared by MEDIAN with a small absolute
+                // allowance; one retry before it counts as a failure: this is a timing measurement on a shared machine
+                double Median(System.Collections.Generic.List<double> v) { var o = v.OrderBy(x => x).ToList(); return o[o.Count / 2]; }
+                double runMs = 0, idleMs = 0; int idlePolls = 0; bool cpuOk = false; int attempt = 0;
+                for (; attempt < 2 && !cpuOk; attempt++)
                 {
-                    var r = await Measure(true); runCpu = (runCpu.cpuMs + r.cpuMs, runCpu.polls + r.polls);
-                    var i = await Measure(false); idleCpu = (idleCpu.cpuMs + i.cpuMs, idleCpu.polls + i.polls);
+                    var runS = new System.Collections.Generic.List<double>(); var idleS = new System.Collections.Generic.List<double>(); idlePolls = 0;
+                    for (int round = 0; round < 3; round++)
+                    {
+                        var r = await Measure(true); runS.Add(r.cpuMs);
+                        var i = await Measure(false); idleS.Add(i.cpuMs); idlePolls += i.polls;
+                    }
+                    runMs = Median(runS); idleMs = Median(idleS);
+                    cpuOk = idleMs <= runMs * 1.2 + 150;
                 }
-                secs *= 2;
                 wow = false; WowWatch.Shared.Poll();
-                notes.Add($"idle CPU over {secs} s (hub window shown, nothing happening): WoW-running timers {runCpu.cpuMs:0} ms ({runCpu.cpuMs / secs / 10:0.00} % of a core), paused {idleCpu.cpuMs:0} ms ({idleCpu.cpuMs / secs / 10:0.00} % of a core); watcher polls {idleCpu.polls} in {secs} s");
-                Check("idle: paused costs no more CPU than running (" + idleCpu.cpuMs.ToString("0") + " vs " + runCpu.cpuMs.ToString("0") + " ms)", idleCpu.cpuMs <= runCpu.cpuMs * 1.25 + 80);
-            }
-            catch (Exception e) { ok = false; notes.Add("FAIL exception: " + e); }
+                notes.Add($"idle CPU, median of 3 x {secs} s (hub window shown, nothing happening): WoW-running timers {runMs:0} ms ({runMs / secs / 10:0.00} % of a core), paused {idleMs:0} ms ({idleMs / secs / 10:0.00} % of a core); watcher polls {idlePolls}; attempts {attempt}");
+                Check("idle: paused costs no more CPU than running (" + idleMs.ToString("0") + " vs " + runMs.ToString("0") + " ms, median; allowed 1.2x + 150 ms)", cpuOk);
+            }            catch (Exception e) { ok = false; notes.Add("FAIL exception: " + e); }
             finally
             {
                 WowWatch.Shared.Detector = detector0; WowWatch.Shared.Poll();

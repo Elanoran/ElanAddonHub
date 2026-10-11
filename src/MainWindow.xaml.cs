@@ -209,7 +209,13 @@ namespace ElansAddonHub
                 var card = cards.FirstOrDefault(c => c.ButtonEnabled);
                 if (card != null) await Install(card);
                 await CheckAll();
-                var checkAllLine = $"check-all button: {(CheckAllButton.IsEnabled && CheckResult.Text != "" && CheckChipText.Text != "" ? "ok" : "FAIL")} (result='{CheckResult.Text}', chip='{CheckChipText.Text}', tip={CheckAllButton.ToolTip})";
+                var checkAllLine = $"check-all button: {(CheckAllButton.IsEnabled && CheckResult.Text != "" && lastError == null && CheckChipText.Text != "" && FakeUpdateServer.Requests > 0 && cards.Count == FakeUpdateServer.AddonIds.Length ? "ok" : "FAIL")} (result='{CheckResult.Text}', chip='{CheckChipText.Text}', tip={CheckAllButton.ToolTip})";
+                // offline: the (fake) update server stops -> the friendly message, the button recovers; then back online
+                FakeUpdateServer.Stop();
+                await CheckAll();
+                var offlineLine = $"check-all offline: {(CheckAllButton.IsEnabled && CheckResult.Text == "Couldn't reach the update server" ? "ok" : "FAIL")} (result='{CheckResult.Text}')";
+                FakeUpdateServer.Start();
+                await CheckNow();
                 await Task.Delay(400);
                 Snapshot(System.IO.Path.Combine(dir, "2-after.png"));
                 if (cards.Count >= 3 && others.Count >= 4)
@@ -238,7 +244,7 @@ namespace ElansAddonHub
                     Snapshot(System.IO.Path.Combine(dir, "3-settings-" + sec + ".png"));
                 }
                 SettingsPage.Show("general");
-                result += "\r\n" + string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + checkAllLine;
+                result += "\r\n" + string.Join("\r\n", cards.Select(c => $"{c.Info.Id}: {c.State} installed={c.Installed} msg={c.Message}")) + "\r\nstatus=" + statusText + "\r\n" + checkAllLine + "\r\n" + offlineLine;
                 End();
             }
             if (Begin("thirdparty")) { result += "\r\n" + await ThirdPartyTest(dir); End(); }

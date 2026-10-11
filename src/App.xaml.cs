@@ -26,6 +26,8 @@ namespace ElansAddonHub
             var i = Array.IndexOf(a, "--selftest");
             if (i >= 0 && i + 1 < a.Length && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_DATA")))
                 Environment.SetEnvironmentVariable("ELANSHUB_DATA", System.IO.Path.Combine(System.IO.Path.GetFullPath(a[i + 1]), "data"));
+            // hermetic: a WoW running on this PC must not change what the self-test sees (Round3 swaps the detector itself when it needs to)
+            if (i >= 0 && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_FAKE_WOW"))) Environment.SetEnvironmentVariable("ELANSHUB_FAKE_WOW", "0");
         }
 
         Mutex single;

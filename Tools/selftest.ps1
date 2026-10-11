@@ -27,10 +27,7 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $exe = Join-Path $root 'src\bin\Release\ElansAddonHub.exe'
 
 # FAIL lines that are expected today (environment, not regressions). Anything else FAIL-ish is "new".
-$known = @(
-    'check-all button: FAIL'                 # needs the real update server
-    'zip touching another addon: NOT REFUSED' # present on main before the section split
-)
+$known = @()   # none: a clean run has zero FAIL lines, so any FAIL is real
 
 if (-not $NoBuild) {
     Write-Host 'Building Release...'

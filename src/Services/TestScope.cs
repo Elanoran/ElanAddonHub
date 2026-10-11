@@ -66,7 +66,7 @@ namespace ElansAddonHub.Services
             // ---- shared: everything depends on these
             R(@"^src/(App\.xaml(\.cs)?|MainWindow\.xaml(\.cs)?|MainWindow\.Others\.cs|MainWindow\.Welcome\.cs|ElansAddonHub\.csproj|Motion\.cs|Brand\.cs|SourceIcons\.cs|PillBase\.cs|WelcomeGuide\.cs)$", Star);
             R(@"^src/Theme/", Star);
-            R(@"^src/Services/(Util|SettingsStore|Models|Json|Net|SelfTestFixture|TestScope|WowLocator|Splash|SplashScene)\.cs$", Star);
+            R(@"^src/Services/(Util|SettingsStore|Models|Json|Net|SelfTestFixture|FakeUpdateServer|TestScope|WowLocator|Splash|SplashScene)\.cs$", Star);
             R(@"^src/Assets/", Star);
             // ---- inventory
             R(@"^src/InventoryPage", "inventory");
@@ -185,12 +185,20 @@ namespace ElansAddonHub.Services
         }
 
         // git diff --name-only <base>...HEAD + uncommitted tracked changes + untracked files; null if git is not usable.
-        // --full-name: paths are repo-root relative even when the repo dir is a subfolder.
+        // (diff paths are repo-root relative; ls-files needs --full-name for that)
         public static List<string> GitChanged(string baseRef, string repo, out string error)
         {
             error = null;
             var all = new List<string>();
-            foreach (var a in new[] { "diff --name-only --full-name " + baseRef + "...HEAD", "diff --name-only --full-name HEAD", "ls-files --others --exclude-standard --full-name" })
+            var bs = Git("rev-parse --verify --quiet \"" + baseRef + "^{commit}\"", repo, out error);
+            if (bs == null || bs.Count == 0) { error = error ?? "unknown ref " + baseRef; return null; }
+            var hd = Git("rev-parse HEAD", repo, out error);
+            if (hd == null || hd.Count == 0) return null;
+            var cmds = new List<string>();
+            if (bs[0] != hd[0]) cmds.Add("diff --name-only " + baseRef + "...HEAD");   // base == HEAD: only uncommitted work
+            cmds.Add("diff --name-only HEAD");
+            cmds.Add("ls-files --others --exclude-standard --full-name");
+            foreach (var a in cmds)
             {
                 var o = Git(a, repo, out error);
                 if (o == null) return null;
