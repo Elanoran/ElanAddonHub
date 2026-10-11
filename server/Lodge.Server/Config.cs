@@ -19,6 +19,7 @@ public class LodgeConfig
     public int MaxConcurrentUploads { get; init; }
     public int UploadsPer10Min { get; init; }      // per person (guests: per IP)
     public long HistoryMaxBytes { get; init; }     // per channel history file
+    public int HistoryMax { get; set; } = 2000;     // messages kept per channel (2.9; was a fixed 200)
     public int MaxTrackedIps { get; init; }        // wrong-code bookkeeping
     public int HttpPerMinute { get; init; }        // per IP, all HTTP routes
     public bool AllowQueryCode { get; init; }      // legacy ?code= for 1.x clients (off by default since 2.8)
@@ -54,7 +55,8 @@ public class LodgeConfig
             MaxFiles = Int("LODGE_MAX_FILES", 2000, 1, 1_000_000),
             MaxConcurrentUploads = Int("LODGE_MAX_CONCURRENT_UPLOADS", 4, 1, 100),
             UploadsPer10Min = Int("LODGE_UPLOADS_PER_10MIN", 30, 1, 10000),
-            HistoryMaxBytes = Int("LODGE_HISTORY_MAX_KB", 1024, 16, 1024 * 1024) * 1024L,
+            HistoryMaxBytes = Int("LODGE_HISTORY_MAX_KB", 4096, 16, 1024 * 1024) * 1024L,
+            HistoryMax = Int("LODGE_HISTORY_MAX", 2000, 50, 50000),
             MaxTrackedIps = Int("LODGE_MAX_TRACKED_IPS", 10000, 10, 1_000_000),
             HttpPerMinute = Int("LODGE_HTTP_PER_MINUTE", 240, 10, 100000),
             MaxUploadsPerIdentity = Int("LODGE_UPLOADS_PER_USER", 2, 1, 100),
@@ -80,6 +82,6 @@ public class LodgeConfig
         Code = "", CodesFile = Path.Combine(dataDir, "codes"), Urls = "http://127.0.0.1:0", DataDir = dataDir, PathBase = "",
         MaxFileMb = 25, FileDays = 30, MaxUsers = 25, TrustedProxies = Array.Empty<string>(),
         MaxStorageBytes = 2048L * 1024 * 1024, MaxFiles = 2000, MaxConcurrentUploads = 4, UploadsPer10Min = 30,
-        HistoryMaxBytes = 1024 * 1024, MaxTrackedIps = 10000, HttpPerMinute = 240, AllowQueryCode = true,
+        HistoryMaxBytes = 1024 * 1024, HistoryMax = 200, MaxTrackedIps = 10000, HttpPerMinute = 240, AllowQueryCode = true,
     };
 }

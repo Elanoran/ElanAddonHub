@@ -75,6 +75,17 @@
 - Stored in `profiles.json` and re-validated on load (format only); owner reset clears it. Invisible members: unchanged - the broadcast
   goes only to viewers who may see them and lookups answer like offline.
 
+## 2.9.0 (sign-up cards, longer history, search)
+
+- "Looking for group" cards: a chat message with `kind: "lfg"` and a structured payload. Created through the ordinary `msg` path, so it spends the Chat
+  budget; join / maybe / leave / close / cancel are control messages and spend the Control budget. Everything is validated server side in one
+  place (`Lfg`): title 1-60 and note up to 200 characters (cleaned like any text, `@everyone` / `@here` defused below officer), each role count a whole
+  number 0-40 and at least one place, the start time within -10 minutes / +30 days, at most 3 open cards per author and channel. One entry per
+  person (signing up again moves the entry; a refused move keeps the old place), at most 40 maybes, closed and cancelled cards never change again,
+  and only the author or `Perm.Moderate` can close or cancel. Every change happens under the history store's lock, so two people taking the last
+  place at once cannot both get it. A card in a channel the rank cannot see answers like a card that does not exist. The `text` of a card is a
+  plain-text fallback that follows the state (older clients, search, pins and reply quotes show it); cards cannot be edited.
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.

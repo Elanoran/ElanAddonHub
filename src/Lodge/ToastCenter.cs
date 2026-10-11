@@ -10,7 +10,7 @@ namespace ElansAddonHub.Lodge
 {
     // What a toast is about. Reminders (events with a time) come later: add a kind here, give it a setting in
     // ToastCenter.Enabled and call Push - nothing else needs to change.
-    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary, Health }
+    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary, Health, Event }
 
     public class ToastItem
     {
@@ -40,7 +40,7 @@ namespace ElansAddonHub.Lodge
         public int Count { get => count; set => Set(ref count, value); }
         public double Opacity { get => opacity; set => Set(ref opacity, value); }
         public string Kicker => Kind == ToastKind.Mention ? "Mention" : Kind == ToastKind.Reply ? "Reply" : Kind == ToastKind.Reaction ? "Reaction"
-            : Kind == ToastKind.Pin ? "Pinned" : Kind == ToastKind.Update ? "Update" : Kind == ToastKind.Health ? "Health" : "Summary";
+            : Kind == ToastKind.Pin ? "Pinned" : Kind == ToastKind.Update ? "Update" : Kind == ToastKind.Health ? "Health" : Kind == ToastKind.Event ? "Group" : "Summary";
         public string Glyph => Kind == ToastKind.Mention ? "@" : Kind == ToastKind.Reply ? "" : Kind == ToastKind.Reaction ? ""
             : Kind == ToastKind.Pin ? "" : Kind == ToastKind.Update ? "" : "";
         public bool GlyphIsText => Kind == ToastKind.Mention;
@@ -119,7 +119,7 @@ namespace ElansAddonHub.Lodge
         {
             var now = Clock();
             // coalesce a burst: same kind + channel still on screen
-            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health);
+            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health && it.Kind != ToastKind.Event);
             if (same != null)
             {
                 same.Count++;
@@ -131,7 +131,7 @@ namespace ElansAddonHub.Lodge
             var vm = new ToastVM
             {
                 Kind = it.Kind, Sender = it.Sender, Channel = it.Channel, ChannelId = it.ChannelId, Who = it.Who, Born = now, Expires = now + Stay,
-                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
+                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health || it.Kind == ToastKind.Event ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
                 Text = it.Text, Opacity = 0,
             };
             Visible.Add(vm);

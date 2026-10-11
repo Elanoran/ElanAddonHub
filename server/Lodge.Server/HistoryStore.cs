@@ -11,7 +11,8 @@ namespace Lodge;
 //  - Write failures are logged (channel only, never message text) and reported to the caller.
 public sealed class HistoryStore
 {
-    public const int Keep = 200;
+    public const int DefaultKeep = 2000;
+    public int Keep { get; }   // records kept per channel (LODGE_HISTORY_MAX); the file compacts at twice that
     readonly string path, tmp;
     readonly long maxBytes;
     readonly ILogger log;
@@ -28,8 +29,9 @@ public sealed class HistoryStore
     public void MarkDirty() => Dirty = true;
     public bool Flush() => !Dirty || Compact();
 
-    public HistoryStore(string dir, string channel, long maxBytes, ILogger log)
+    public HistoryStore(string dir, string channel, long maxBytes, ILogger log, int keep = DefaultKeep)
     {
+        Keep = Math.Max(10, keep);
         this.channel = channel;
         this.maxBytes = Math.Max(16 * 1024, maxBytes);
         this.log = log;

@@ -68,6 +68,74 @@
         </DockPanel>
       </Border>
     </DataTemplate>
+    <!-- one entry of a sign-up card's role row: who signed up (avatar + name in class colour), or an open place -->
+    <DataTemplate x:Key="LfgSlot">
+      <Grid Margin="0,0,6,4">
+        <Border Visibility="{Binding FilledVisibility}" Height="24" CornerRadius="12" Background="{StaticResource Brush.Overlay.Chip}" Padding="3,0,10,0">
+          <Border.ToolTip>
+            <ToolTip Style="{StaticResource CardTip}" ContentTemplate="{StaticResource MemberCard}" Content="{Binding Member}" />
+          </Border.ToolTip>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <local:AvatarView Width="18" Height="18" DataContext="{Binding Member}" />
+            <TextBlock Text="{Binding Shown}" Foreground="{Binding NameBrush}" Style="{StaticResource Text.Secondary}" Margin="6,0,0,0" VerticalAlignment="Center" />
+          </StackPanel>
+        </Border>
+        <Border Visibility="{Binding OpenVisibility}" Width="24" Height="24" CornerRadius="12" Background="{StaticResource Brush.Overlay.Hover}" ToolTip="Open place">
+          <TextBlock Text="&#xE710;" FontFamily="{StaticResource Icons}" FontSize="10" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </Grid>
+    </DataTemplate>
+
+    <DataTemplate x:Key="LfgRole">
+      <Grid Margin="0,0,0,2" Visibility="{Binding RowVisibility}">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="72" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+        <StackPanel Margin="0,3,0,0">
+          <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Secondary}" />
+          <TextBlock Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}"><Run Text="{Binding CountText, Mode=OneWay}" /></TextBlock>
+          <TextBlock Text="{Binding MoreText}" Visibility="{Binding MoreVisibility}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" />
+        </StackPanel>
+        <ItemsControl Grid.Column="1" ItemsSource="{Binding Slots}" ItemTemplate="{StaticResource LfgSlot}">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        </ItemsControl>
+      </Grid>
+    </DataTemplate>
+
+    <!-- the sign-up card in chat: instance, local time + countdown, the role slots filling up, buttons -->
+    <DataTemplate x:Key="LfgCard">
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16" Width="440" HorizontalAlignment="Left" Margin="0,6,0,2" Opacity="{Binding CardOpacity}">
+        <StackPanel>
+          <DockPanel>
+            <Border DockPanel.Dock="Right" Background="{Binding StatusFill}" CornerRadius="12" Padding="10,0" Height="24" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="{Binding StatusTip}">
+              <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" FontSize="12" VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="&#xE902;" FontFamily="{StaticResource Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock Text="{Binding WhenLine}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+          <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,2,0,0" />
+          <ItemsControl ItemsSource="{Binding Roles}" ItemTemplate="{StaticResource LfgRole}" Margin="0,12,0,0" />
+          <Grid Visibility="{Binding MaybeVisibility}" Margin="0,2,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="72" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <TextBlock Text="Maybe" Style="{StaticResource Text.Secondary}" />
+            <TextBlock Grid.Column="1" Text="{Binding MaybeNames}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" />
+          </Grid>
+          <TextBlock Text="{Binding MyLine}" Visibility="{Binding MyLineVisibility}" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
+          <WrapPanel Visibility="{Binding ActionsVisibility}" Margin="0,12,0,0">
+            <Button Content="Join as Tank" Style="{StaticResource Button.S}" Margin="0,0,8,8" Tag="{Binding}" Click="LfgTank_Click" Visibility="{Binding TankVisibility}" IsEnabled="{Binding TankEnabled}" />
+            <Button Content="Join as Healer" Style="{StaticResource Button.S}" Margin="0,0,8,8" Tag="{Binding}" Click="LfgHealer_Click" Visibility="{Binding HealerVisibility}" IsEnabled="{Binding HealerEnabled}" />
+            <Button Content="Join as DPS" Style="{StaticResource Button.S}" Margin="0,0,8,8" Tag="{Binding}" Click="LfgDps_Click" Visibility="{Binding DpsVisibility}" IsEnabled="{Binding DpsEnabled}" />
+            <Button Content="Maybe" Style="{StaticResource Button.S}" Margin="0,0,8,8" Tag="{Binding}" Click="LfgMaybe_Click" IsEnabled="{Binding MaybeEnabled}" />
+            <Button Content="Leave" Style="{StaticResource GhostButton}" Height="28" Margin="0,0,8,8" Tag="{Binding}" Click="LfgLeave_Click" Visibility="{Binding LeaveVisibility}" />
+          </WrapPanel>
+          <StackPanel Orientation="Horizontal" Visibility="{Binding EndVisibility}" Margin="0,0,0,0">
+            <Button Content="Close the group" Style="{StaticResource GhostButton}" Height="28" Margin="0,0,8,0" Tag="{Binding}" Click="LfgClose_Click"
+                    ToolTip="The group is set: nobody can sign up or leave any more" />
+            <Button Content="Cancel it" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="LfgCancel_Click" ToolTip="Call it off" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
     <!-- a person who is playing WoW (the "In game" group): the character in class colour, "Lv 27 Hunter", the place, a dungeon / raid / group tag -->
     <DataTemplate x:Key="GamePersonRow">
       <Border Background="Transparent" Padding="6,4" CornerRadius="6" Cursor="Hand" Tag="{Binding}"
@@ -396,6 +464,8 @@
                                      Visibility="{Binding TextVisibility}" ContextMenu="{x:Null}"
                                      Tag="{Binding}" PreviewMouseMove="MessageText_Move" PreviewMouseLeftButtonUp="MessageText_Up" />
                             <TextBlock Text="(edited)" FontSize="11" Foreground="{StaticResource TextDim}" Visibility="{Binding EditedVisibility}" />
+                            <!-- "Looking for group" sign-up card (server 2.9) -->
+                            <ContentControl Content="{Binding Lfg}" ContentTemplate="{StaticResource LfgCard}" Visibility="{Binding LfgVisibility}" />
                             <StackPanel Visibility="{Binding FileVisibility}" Margin="0,5,0,2">
                               <Border Visibility="{Binding File.ImageVisibility}" CornerRadius="8" HorizontalAlignment="Left" Cursor="Hand"
                                       MouseLeftButtonUp="Image_Click" Tag="{Binding File}" ClipToBounds="True">
@@ -548,8 +618,8 @@
 
           <Border Grid.Row="4" Margin="12,0,12,12" Background="{StaticResource SurfaceHi}" CornerRadius="10" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="2">
             <DockPanel>
-              <Button x:Name="AttachButton" DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="&#xE723;" Click="Attach_Click"
-                      ToolTip="Share a file (or drop it here, or paste with Ctrl+V)" />
+              <Button x:Name="AttachButton" DockPanel.Dock="Left" Style="{StaticResource IconButton}" Content="&#xE710;" Click="Plus_Click"
+                      ToolTip="Share a file or post a sign-up card (files can also be dropped here, or pasted with Ctrl+V)" />
               <Button x:Name="SendButton" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE724;" Foreground="{StaticResource Accent}" Click="Send_Click" ToolTip="Send (Enter)" />
               <Grid>
                 <TextBlock x:Name="ComposerHint" Foreground="{StaticResource TextDim}" FontSize="13" VerticalAlignment="Center" Margin="4,0,0,0" IsHitTestVisible="False" />
@@ -560,9 +630,95 @@
               </Grid>
             </DockPanel>
           </Border>
+
+          <!-- the "Looking for group" form -->
+          <Border x:Name="LfgOverlay" Grid.RowSpan="5" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="12" MouseLeftButtonDown="LfgScrim_Down">
+            <Border x:Name="LfgBox" Background="{StaticResource Brush.Surface3}" CornerRadius="14" Padding="24" Width="440" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    MouseLeftButtonDown="LfgBox_Down">
+              <Border.Effect><DropShadowEffect BlurRadius="40" ShadowDepth="12" Direction="270" Opacity="0.5" /></Border.Effect>
+              <StackPanel>
+                <TextBlock Text="Looking for group" Style="{StaticResource Text.Section}" />
+                <TextBlock x:Name="LfgWhere" Style="{StaticResource Text.Secondary}" Margin="0,2,0,16" />
+                <TextBlock Text="Instance or title" Style="{StaticResource Text.Caption}" />
+                <TextBox x:Name="LfgTitle" Style="{StaticResource Input}" MaxLength="60" Margin="0,4,0,0" TextChanged="LfgTitle_Changed" KeyDown="Lfg_KeyDown" />
+                <ItemsControl x:Name="LfgSuggest" Margin="0,8,0,0">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Content="{Binding}" Tag="{Binding}" Style="{StaticResource Button.S}" Height="24" MinHeight="24" Padding="10,0" Margin="0,0,6,6" Click="LfgSuggest_Click" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="When" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
+                <Border Style="{StaticResource SegmentHost}" Margin="0,4,0,0">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="LfgNow" Style="{StaticResource Segment}" Content="Now" GroupName="lfgwhen" IsChecked="True" Checked="LfgWhen_Changed" />
+                    <RadioButton x:Name="LfgLater" Style="{StaticResource Segment}" Content="At a set time" GroupName="lfgwhen" Checked="LfgWhen_Changed" />
+                  </StackPanel>
+                </Border>
+                <StackPanel x:Name="LfgTimeRow" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
+                  <ComboBox x:Name="LfgDay" Style="{StaticResource Dropdown}" Width="150" />
+                  <TextBlock Text="at" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="10,0,10,0" />
+                  <ComboBox x:Name="LfgHour" Style="{StaticResource Dropdown}" Width="64" />
+                  <TextBlock Text=":" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="6,0,6,0" />
+                  <ComboBox x:Name="LfgMinute" Style="{StaticResource Dropdown}" Width="64" />
+                </StackPanel>
+                <TextBlock Text="Places" Style="{StaticResource Text.Caption}" Margin="0,16,0,0" />
+                <Grid Margin="0,4,0,0">
+                  <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                  <StackPanel Grid.Column="0">
+                    <TextBlock Text="Tank" Style="{StaticResource Text.Secondary}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                      <Button Style="{StaticResource IconButton}" Content="&#xE738;" Tag="tank:-1" Click="LfgStep_Click" ToolTip="One less" />
+                      <TextBlock x:Name="LfgTankN" Text="1" Style="{StaticResource Text.Body}" Width="28" TextAlignment="Center" VerticalAlignment="Center" />
+                      <Button Style="{StaticResource IconButton}" Content="&#xE710;" Tag="tank:1" Click="LfgStep_Click" ToolTip="One more" />
+                    </StackPanel>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Text="Healer" Style="{StaticResource Text.Secondary}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                      <Button Style="{StaticResource IconButton}" Content="&#xE738;" Tag="healer:-1" Click="LfgStep_Click" ToolTip="One less" />
+                      <TextBlock x:Name="LfgHealerN" Text="1" Style="{StaticResource Text.Body}" Width="28" TextAlignment="Center" VerticalAlignment="Center" />
+                      <Button Style="{StaticResource IconButton}" Content="&#xE710;" Tag="healer:1" Click="LfgStep_Click" ToolTip="One more" />
+                    </StackPanel>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Text="DPS" Style="{StaticResource Text.Secondary}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                      <Button Style="{StaticResource IconButton}" Content="&#xE738;" Tag="dps:-1" Click="LfgStep_Click" ToolTip="One less" />
+                      <TextBlock x:Name="LfgDpsN" Text="3" Style="{StaticResource Text.Body}" Width="28" TextAlignment="Center" VerticalAlignment="Center" />
+                      <Button Style="{StaticResource IconButton}" Content="&#xE710;" Tag="dps:1" Click="LfgStep_Click" ToolTip="One more" />
+                    </StackPanel>
+                  </StackPanel>
+                </Grid>
+                <TextBlock Text="Note (optional)" Style="{StaticResource Text.Caption}" Margin="0,16,0,0" />
+                <TextBox x:Name="LfgNote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" KeyDown="Lfg_KeyDown" />
+                <TextBlock x:Name="LfgError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                  <Button Content="Cancel" Style="{StaticResource Button.M}" Click="LfgCancelForm_Click" />
+                  <Button x:Name="LfgPost" Content="Post it" Style="{StaticResource Button.Primary.M}" Margin="8,0,0,0" Click="LfgPost_Click" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </Border>
         </Grid>
       </Border>
     </Grid>
+
+    <!-- the composer's "+" menu -->
+    <Popup x:Name="PlusPopup" StaysOpen="False" Placement="Top" AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="-6">
+      <Border Background="{StaticResource Brush.Surface3}" CornerRadius="10" Padding="6" Width="220" Margin="0,0,14,14">
+        <Border.Effect><DropShadowEffect BlurRadius="24" ShadowDepth="6" Direction="270" Opacity="0.45" /></Border.Effect>
+        <StackPanel>
+          <Button x:Name="PlusFile" Style="{StaticResource MenuRow}" Click="PlusFile_Click">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE723;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Share a file" /></StackPanel>
+          </Button>
+          <Button x:Name="PlusLfg" Style="{StaticResource MenuRow}" Click="PlusLfg_Click">
+            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE902;" FontFamily="{StaticResource Icons}" FontSize="13" Width="24" Foreground="{StaticResource TextDim}" /><TextBlock Text="Looking for group" /></StackPanel>
+          </Button>
+        </StackPanel>
+      </Border>
+    </Popup>
 
     <!-- message menu (More button / right click) -->
     <Popup x:Name="MsgMenu" StaysOpen="False" Placement="MousePoint" AllowsTransparency="True" PopupAnimation="Fade">

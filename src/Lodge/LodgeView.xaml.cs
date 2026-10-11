@@ -122,7 +122,7 @@ namespace ElansAddonHub.Lodge
                     (s.Invisible ? "Invisible" : string.IsNullOrEmpty(s.MyNote) ? MemberVM.StatusLabel(s.MyStatus) : s.MyNote);
             }
             UpdateServerNotice();
-            AttachButton.Visibility = s.CanShareFiles ? Visibility.Visible : Visibility.Collapsed;
+            AttachButton.Visibility = s.CanShareFiles || s.SupportsLfg ? Visibility.Visible : Visibility.Collapsed;
 
             // voice bar
             var inVoice = s.MyRoom != null;

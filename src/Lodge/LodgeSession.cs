@@ -100,6 +100,7 @@ namespace ElansAddonHub.Lodge
         public ProfileData MyProfile { get; private set; }
         public bool SupportsProfile { get; private set; }
         public bool SupportsDisplayName { get; private set; }   // server 2.7
+        public bool SupportsLfg { get; private set; }           // server 2.9: sign-up cards
         public string MyDisplayName => Me?.DisplayName ?? "";
         public event Action MyProfileChanged;
         public event Action<ProfileData> ProfileReceived;   // an answer to profile:get (and my own after a save)
@@ -115,6 +116,7 @@ namespace ElansAddonHub.Lodge
         {
             Settings = settings;
             Groups = new MemberGroups(Members, () => CanSeeInvisible, settings);
+            LfgVM.Clock = () => Clock(); LfgVM.MyName = () => Me?.Name; LfgVM.IAmOfficer = () => CanModerate;
             Presence = new GamePresence(() => settings.WowRoot, () => !settings.PixelOff);
             AvatarArt.Root = () => settings.WowRoot;
             if (settings.InvisibleForget) settings.LodgeInvisible = false; // "Appear offline" is not remembered across restarts
@@ -343,6 +345,16 @@ namespace ElansAddonHub.Lodge
                     if (vm.Mine && Pending != null && Pending.Channel == vm.Channel) Pending = null;   // the server echoed it: it is out
                     OnNewMessage(vm);
                     break;
+                case "lfg":
+                    // a sign-up card changed: the whole current state arrives (one place per person is the server's rule)
+                    var lm = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
+                    if (lm?.Lfg != null && m.Child("lfg") != null)
+                    {
+                        lm.Lfg.Apply(m.Child("lfg"));
+                        if (m.Str("text") != null) lm.Text = SafeFile.Text(m.Str("text"));
+                        LfgChanged?.Invoke(lm);
+                    }
+                    break;
                 case "react":
                     var rm = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
                     if (rm != null)
@@ -452,6 +464,7 @@ namespace ElansAddonHub.Lodge
             CanPin = SupportsPin && m.Bool("canPin");
             SupportsProfile = features.Contains("profile");
             SupportsDisplayName = features.Contains("displayname");
+            SupportsLfg = features.Contains("lfg");
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
@@ -722,6 +735,7 @@ namespace ElansAddonHub.Lodge
                 ReactEnabled = SupportsReact, PinEnabled = CanPin,
             };
             vm.Continuation = prev != null && IsContinuation(prev, vm);
+            if (m.Str("kind") == "lfg" && m.Child("lfg") != null) { vm.Lfg = new LfgVM { Msg = vm }; vm.Lfg.Apply(m.Child("lfg")); }
             var reacts = m.Child("reactions");
             if (reacts != null)
                 foreach (var kv in reacts.OrderBy(k => Array.IndexOf(ReactionSet, k.Key)))
@@ -764,6 +778,11 @@ namespace ElansAddonHub.Lodge
         {
             var text = SafeFile.Text(x.Str("text"));
             if (vm.Text != text) vm.Text = text;
+            if (x.Str("kind") == "lfg" && x.Child("lfg") != null)
+            {
+                if (vm.Lfg == null) vm.Lfg = new LfgVM { Msg = vm };
+                vm.Lfg.Apply(x.Child("lfg"));
+            }
             vm.Edited = x.Bool("edited");
             vm.Mentioned = !vm.Mine && MentionsMe(vm.Text, vm.From);
             var reacts = x.Child("reactions");
@@ -1055,7 +1074,8 @@ namespace ElansAddonHub.Lodge
             return who.Count == 0 ? "" : who.Count == 1 ? $"{who[0]} is typing..." : $"{string.Join(", ", who)} are typing...";
         }
 
-        Task Send(Dictionary<string, object> obj) => client?.Send(obj) ?? Task.CompletedTask;
+        public Action<Dictionary<string, object>> SentForTest;   // the self-test sees what would go out
+        Task Send(Dictionary<string, object> obj) { SentForTest?.Invoke(obj); return client?.Send(obj) ?? Task.CompletedTask; }
 
         // The text I just sent, until the server echoes it. When the send fails (offline, closed socket, rate limit) the view puts it back.
         public sealed class PendingSend { public string Text, ReplyId, Channel; public DateTime At; }
@@ -1113,6 +1133,54 @@ namespace ElansAddonHub.Lodge
             if (replyTo != null) obj["replyTo"] = replyTo;
             if (fileId != null) obj["file"] = new Dictionary<string, object> { ["id"] = fileId };
             return Send(obj);
+        }
+
+        // ---- sign-up cards ("Looking for group")
+        public event Action<MessageVM> LfgChanged;
+        // the server decides everything (limits, one place per person, who may close); these only ask
+        public Task PostLfg(string title, bool now, DateTime startLocal, int tank, int healer, int dps, string note)
+        {
+            var lfg = new Dictionary<string, object>
+            {
+                ["title"] = title ?? "", ["now"] = now, ["note"] = note ?? "",
+                ["slots"] = new Dictionary<string, object> { ["tank"] = (double)tank, ["healer"] = (double)healer, ["dps"] = (double)dps },
+            };
+            if (!now) lfg["start"] = (double)Ms(startLocal.ToUniversalTime());
+            return Send(new Dictionary<string, object> { ["t"] = "msg", ["channel"] = Selected?.Id, ["kind"] = "lfg", ["text"] = title ?? "", ["lfg"] = lfg });
+        }
+        public Task LfgJoin(MessageVM m, string role) => Send(new Dictionary<string, object> { ["t"] = "lfg:join", ["id"] = m.Id, ["role"] = role });
+        public Task LfgMaybe(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = "lfg:maybe", ["id"] = m.Id });
+        public Task LfgLeave(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = "lfg:leave", ["id"] = m.Id });
+        public Task LfgClose(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = "lfg:close", ["id"] = m.Id });
+        public Task LfgCancel(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = "lfg:cancel", ["id"] = m.Id });
+
+        readonly HashSet<string> lfgReminded = new HashSet<string>();
+        public static readonly TimeSpan LfgRemindBefore = TimeSpan.FromMinutes(10);
+
+        // every few seconds: countdowns move on, and a toast 10 minutes before the start for the groups I signed up for (or organise)
+        public void LfgTick()
+        {
+            var now = Clock();
+            foreach (var kv in messages.ToList())
+                foreach (var m in kv.Value.ToList())
+                {
+                    var l = m.Lfg;
+                    if (l == null) continue;
+                    l.RefreshClock();
+                    if (!l.IsOpen || l.IsNow || Me == null || lfgReminded.Contains(m.Id)) continue;
+                    var left = l.StartUtc - now;
+                    if (left <= TimeSpan.Zero || left > LfgRemindBefore) continue;
+                    bool inIt = (l.MyRole != null && l.MyRole != "maybe") || l.IAmAuthor;
+                    if (!inIt) continue;
+                    lfgReminded.Add(m.Id);
+                    var ch = TextChannels.FirstOrDefault(c => c.Id == m.Channel);
+                    Toasts.Push(new ToastItem
+                    {
+                        Kind = ToastKind.Event, Sender = l.Title + " starts in " + Math.Max(1, (int)Math.Ceiling(left.TotalMinutes)) + " min",
+                        Channel = ch?.Name, ChannelId = m.Channel, Who = Me,
+                        Text = l.MyRole != null && l.MyRole != "maybe" ? "You are signed up as " + (l.MyRole == "tank" ? "Tank" : l.MyRole == "healer" ? "Healer" : "DPS") : "You are organising this group",
+                    });
+                }
         }
 
         public Task Edit(string id, string text) => Send(new Dictionary<string, object> { ["t"] = "edit", ["id"] = id, ["text"] = text });
@@ -1289,6 +1357,7 @@ namespace ElansAddonHub.Lodge
             if (Pending != null && Clock() - Pending.At > TimeSpan.FromSeconds(15)) Pending = null;   // surely out by now
             if (pendingRoom != null && Clock() - pendingSince > TimeSpan.FromSeconds(6)) { pendingRoom = null; Error?.Invoke("Couldn't join the voice room - no answer from the lodge"); Changed?.Invoke(); }
             AutoStatusTick();
+            if (tickCount % 20 == 0) LfgTick();
             if (Toasts.NeedsTick) Toasts.Tick();
         }
 

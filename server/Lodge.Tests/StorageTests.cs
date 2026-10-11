@@ -198,10 +198,10 @@ public class HistoryTests
             for (int i = 0; i < 200_000; i++) w.Write(Msg(i).ToJsonString() + "\n"); // ~15 MB
         Assert.True(new FileInfo(path).Length > 10_000_000);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        var h = new HistoryStore(d.Path, "general", 256 * 1024, T.Log);
+        var h = new HistoryStore(d.Path, "general", 256 * 1024, T.Log, 200);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.True(allocated < 8_000_000, $"allocated {allocated} bytes");
-        Assert.Equal(HistoryStore.Keep, h.Messages.Count);
+        Assert.Equal(h.Keep, h.Messages.Count);
         Assert.Equal("m199999", (string?)h.Messages[^1]["id"]);                  // newest kept, in order
         Assert.Equal("m199800", (string?)h.Messages[0]["id"]);
         h.Append(Msg(200_000));                                                  // first write compacts
@@ -212,13 +212,13 @@ public class HistoryTests
     public void Appends_compact_and_keep_order_and_attachments()
     {
         using var d = new TempDir();
-        var h = new HistoryStore(d.Path, "loot", 1024 * 1024, T.Log);
+        var h = new HistoryStore(d.Path, "loot", 1024 * 1024, T.Log, 200);
         for (int i = 0; i < 1000; i++) Assert.True(h.Append(Msg(i, file: i % 10 == 0)));
-        var again = new HistoryStore(d.Path, "loot", 1024 * 1024, T.Log);
-        Assert.Equal(HistoryStore.Keep, again.Messages.Count);
+        var again = new HistoryStore(d.Path, "loot", 1024 * 1024, T.Log, 200);
+        Assert.Equal(h.Keep, again.Messages.Count);
         Assert.Equal(Enumerable.Range(800, 200).Select(i => $"m{i:D6}"), again.Messages.Select(m => (string?)m["id"]));
         Assert.Equal("pic990.png", (string?)again.Messages.First(m => (string?)m["id"] == "m000990")["file"]!["name"]);
-        Assert.True(File.ReadAllLines(HistoryStore.FileOf(d.Path, "loot")).Length <= HistoryStore.Keep * 2);
+        Assert.True(File.ReadAllLines(HistoryStore.FileOf(d.Path, "loot")).Length <= h.Keep * 2);
     }
 
     [Fact]

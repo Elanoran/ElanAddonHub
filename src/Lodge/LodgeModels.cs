@@ -451,6 +451,9 @@ namespace ElansAddonHub.Lodge
         public string From { get; set; }
         public DateTime At { get; set; }
         public FileVM File { get; set; }
+        // a "Looking for group" sign-up card (Lodge server 2.9); the text is then only the plain-text fallback for older clients
+        public LfgVM Lfg { get; set; }
+        public Visibility LfgVisibility => Lfg != null ? Visibility.Visible : Visibility.Collapsed;
         bool continuation;
         public bool Continuation   // same person, shortly after: no avatar/name
         {
@@ -554,7 +557,7 @@ namespace ElansAddonHub.Lodge
         public Visibility HeaderVisibility => Compact ? Visibility.Collapsed : Visibility.Visible;
         public Visibility AvatarVisibility => Compact ? Visibility.Hidden : Visibility.Visible;
         public Thickness RowMargin => Compact ? new Thickness(0) : new Thickness(0, 10, 0, 0);
-        public Visibility TextVisibility => string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility TextVisibility => string.IsNullOrEmpty(text) || Lfg != null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility FileVisibility => File == null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility ReplyVisibility => ReplyFrom == null ? Visibility.Collapsed : Visibility.Visible;
         public Visibility EditedVisibility => edited ? Visibility.Visible : Visibility.Collapsed;

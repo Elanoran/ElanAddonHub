@@ -89,7 +89,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.8.0";
+    public const string Version = "2.9.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -211,7 +211,7 @@ public class LodgeHub
             ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
             ["canManage"] = Roles.Can(me.Role, Perm.ManageMembers),
             ["canPin"] = Roles.Can(me.Role, Perm.PinMessages),
-            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname"),
+            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg"),
             ["reactions"] = new JsonArray(ChatModule.ReactionSet.Select(e => (JsonNode)JsonValue.Create(e)).ToArray()), // canonical ids (2.4)
             ["pins"] = pins,
             ["channels"] = new JsonArray(visible.Select(c => (JsonNode)c.ToJson()).ToArray()),

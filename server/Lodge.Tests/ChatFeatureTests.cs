@@ -250,7 +250,7 @@ public class ChatFeatureTests
         Assert.Single(r.Hub.Chat.Pins.For("general"));
 
         // push the message out of the 200-message history (several compactions) - the pin keeps its own copy
-        for (int i = 0; i < HistoryStore.Keep * 2 + 20; i++) await r.Say(elan, "filler " + i);
+        for (int i = 0; i < r.Hub.Cfg.HistoryMax * 2 + 20; i++) await r.Say(elan, "filler " + i);
         Assert.DoesNotContain(r.Hub.Chat.HistoryFor("general"), x => (string)x!["id"] == first);
         var welcome = r.Hub.Welcome(bob);
         Assert.Equal("the rules: be nice", (string)welcome["pins"]!["general"]![0]!["text"]!);

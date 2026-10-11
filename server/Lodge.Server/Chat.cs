@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 namespace Lodge;
 
 // Text channels: messages, replies, edits, deletes, typing. History per channel: see HistoryStore.
-public class ChatModule : IModule
+public partial class ChatModule : IModule
 {
     const int SendOnJoin = 100; // per channel, in the welcome
     static readonly TimeSpan TypingEvery = TimeSpan.FromSeconds(2);
@@ -78,7 +78,7 @@ public class ChatModule : IModule
         if (File.Exists(old) && !File.Exists(target)) File.Move(old, target);
     }
 
-    HistoryStore Store(string channel) => stores.GetOrAdd(channel, ch => new HistoryStore(dir, ch, hub.Cfg.HistoryMaxBytes, hub.Log));
+    HistoryStore Store(string channel) => stores.GetOrAdd(channel, ch => new HistoryStore(dir, ch, hub.Cfg.HistoryMaxBytes, hub.Log, hub.Cfg.HistoryMax));
 
     public JsonArray HistoryFor(string channel)
     {
@@ -113,6 +113,11 @@ public class ChatModule : IModule
             case "react": await React(me, m); return true;
             case "pin": await Pin(me, m, true); return true;
             case "unpin": await Pin(me, m, false); return true;
+            case "lfg:join": await LfgJoin(me, m, J.Str(m, "role")); return true;
+            case "lfg:maybe": await LfgJoin(me, m, "maybe"); return true;
+            case "lfg:leave": await LfgLeave(me, m); return true;
+            case "lfg:close": await LfgEnd(me, m, "closed"); return true;
+            case "lfg:cancel": await LfgEnd(me, m, "cancelled"); return true;
             case "typing":
                 var ch = hub.Channels.Get(J.Str(m, "channel")) ?? hub.Channels.DefaultText;
                 if (!ch.VisibleTo(me.Role) || me.Invisible) return true; // invisible members never show as typing
@@ -175,9 +180,22 @@ public class ChatModule : IModule
         var text = Names.MessageText(J.Str(m, "text"));
         if (text.Length > 2000) text = Names.Cut(text, 2000);
         if (!Roles.AtLeast(me.Role, "officer")) text = Names.DefangGroupPings(text); // @everyone / @here are for officers and up
+        JsonObject lfg = null;
+        if (J.Str(m, "kind") == Lfg.Kind)
+        {
+            // a sign-up card: validated whole; the text is replaced by the plain-text fallback
+            var nowMs = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds();
+            lfg = Lfg.Create(J.Obj(m, "lfg"), me.Name, nowMs, Roles.AtLeast(me.Role, "officer"), out var why);
+            if (lfg == null) { await hub.Error(me, why, "lfg"); return; }
+            var st = Store(ch.Id);
+            int open;
+            lock (st) open = st.Messages.Count(x => Lfg.Is(x) && Names.Same((string)x["from"], me.Name) && Lfg.IsOpen((JsonObject)x["lfg"]));
+            if (open >= Lfg.MaxOpenPerAuthor) { await hub.Error(me, $"You already have {Lfg.MaxOpenPerAuthor} open sign-up cards - close one first", "lfg"); return; }
+            text = Lfg.Fallback(lfg);
+        }
         JsonObject file = null;
         var fileId = J.Str(J.Obj(m, "file"), "id");
-        if (fileId != null && Roles.Can(me.Role, Perm.ShareFiles))
+        if (lfg == null && fileId != null && Roles.Can(me.Role, Perm.ShareFiles))
         {
             var meta = hub.Files.Get(fileId);
             if (meta != null) file = new JsonObject { ["id"] = meta.Id, ["name"] = Names.FileName(meta.Name), ["size"] = meta.Size, ["mime"] = meta.Mime };
@@ -192,6 +210,7 @@ public class ChatModule : IModule
             ["from"] = me.Name, ["fromId"] = me.Id, ["text"] = text,
         };
         if (file != null) msg["file"] = file;
+        if (lfg != null) { msg["kind"] = Lfg.Kind; msg["lfg"] = lfg; }
         var replyId = J.Str(m, "replyTo");
         if (!string.IsNullOrEmpty(replyId))
         {
@@ -222,6 +241,7 @@ public class ChatModule : IModule
         if (msg == null) return;
         if (!ch.VisibleTo(me.Role)) return; // a channel you can't see doesn't exist for you
         if (!IsAuthor(me, msg)) { await hub.Error(me, "You can only edit your own messages"); return; }
+        if (Lfg.Is(msg)) { await hub.Error(me, "A sign-up card can't be edited - close it and make a new one", "lfg"); return; }
         var text = Names.MessageText(J.Str(m, "text"));
         if (text.Length == 0) return;
         if (text.Length > 2000) text = Names.Cut(text, 2000);

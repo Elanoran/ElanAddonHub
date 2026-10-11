@@ -21,7 +21,8 @@ namespace ElansAddonHub
 
         // a welcome frame of a 2.9 server: `me` is user 1
         static string FunWelcome(string role, string users, string history = "", string features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"", string server = "2.9.0") =>
-            "{\"t\":\"welcome\",\"you\":1,\"name\":\"Elan\",\"role\":" + Q(role) + ",\"server\":" + Q(server) + ",\"maxFileMb\":25,\"canShareFiles\":true,\"canModerate\":true,\"canManage\":true,\"canPin\":true,"
+            "{\"t\":\"welcome\",\"you\":1,\"name\":\"Elan\",\"role\":" + Q(role) + ",\"server\":" + Q(server) + ",\"maxFileMb\":25,\"canShareFiles\":true,\"canModerate\":" + (role == "owner" || role == "officer" ? "true" : "false")
+            + ",\"canManage\":" + (role == "owner" ? "true" : "false") + ",\"canPin\":" + (role == "owner" || role == "officer" ? "true" : "false") + ","
             + "\"features\":[" + features + "],\"reactions\":[\"ready\",\"notready\",\"lol\",\"love\",\"fight\",\"loot\",\"wipe\",\"epic\"],"
             + "\"channels\":[{\"id\":\"general\",\"name\":\"General\",\"type\":\"text\",\"minRole\":\"guest\"},{\"id\":\"loot\",\"name\":\"Loot\",\"type\":\"text\",\"minRole\":\"guest\"},"
             + "{\"id\":\"hangout\",\"name\":\"Hangout\",\"type\":\"voice\",\"minRole\":\"guest\"}],"
@@ -41,6 +42,7 @@ namespace ElansAddonHub
                 TabLodge.IsChecked = true;
                 LodgePage.ShowChatForTest();
                 await FunGrouping(dir, check);
+                await FunLfg(dir, check);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally
