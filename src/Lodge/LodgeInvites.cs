@@ -20,6 +20,18 @@ namespace ElansAddonHub.Lodge
         public string Secret;         // an invite ("i1....") or an old permanent code, null when the text holds none
         public bool IsInvite;         // Secret is a one-time invite (to be exchanged for a device token)
         public bool IsOldCode => Secret != null && !IsInvite;
+        public bool MissingAddress;   // an elanshub:// link whose server part is empty, a placeholder like <your-lodge-address>, or not a real host
+    }
+
+    // A sign-in that has not been proven yet. It lives in memory only; the session writes it to the settings when the server's welcome arrives,
+    // and drops it when the connect fails. The stored sign-in is untouched until then.
+    public sealed class PendingCredential
+    {
+        public string Url, Secret, DeviceName;
+        public bool IsToken;
+        public bool UrlOnly;          // only the address is new: the stored credential stays as it is
+        public string Name;           // the lodge name to keep once accepted (from an invite exchange)
+        public Action OnCommitted;
     }
 
     public static class InviteLinks
@@ -31,6 +43,21 @@ namespace ElansAddonHub.Lodge
         // a one-time invite: "i1." and at least 22 URL-safe characters (the server makes 32: 192 random bits)
         public static bool LooksLikeInvite(string s) =>
             s != null && s.StartsWith(Prefix, StringComparison.Ordinal) && s.Length >= Prefix.Length + 16 && Regex.IsMatch(s, @"^[A-Za-z0-9._-]+$");
+
+        // a real lodge address: no template brackets, a host that can exist (a dot, localhost, an IP, or an explicit port)
+        public static bool ValidAddress(string server)
+        {
+            if (string.IsNullOrWhiteSpace(server) || server.IndexOfAny(new[] { '<', '>', '{', '}', ' ', '"', (char)39 }) >= 0) return false;
+            var norm = LodgeSession.NormalizeUrl(server);
+            if (!Uri.TryCreate(norm, UriKind.Absolute, out var u) || (u.Scheme != "http" && u.Scheme != "https") || string.IsNullOrEmpty(u.Host)) return false;
+            if (Uri.CheckHostName(u.Host) == UriHostNameType.Unknown) return false;
+            return u.Host.Contains(".") || u.HostNameType == UriHostNameType.IPv4 || u.HostNameType == UriHostNameType.IPv6
+                || u.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || !u.IsDefaultPort;
+        }
+
+        // a whole link pasted where a code belongs
+        public static bool LooksLikeLink(string s) =>
+            s != null && (s.IndexOf("elanshub:", StringComparison.OrdinalIgnoreCase) >= 0 || s.IndexOf("#invite=", StringComparison.OrdinalIgnoreCase) >= 0);
 
         public static string Make(string baseUrl, string invite)
         {
@@ -56,14 +83,16 @@ namespace ElansAddonHub.Lodge
             {
                 frag = frag.Replace("%7C", "|").Replace("%7c", "|");
                 var bar = frag.IndexOf('|');
+                string server = null;
                 if (bar >= 0)
                 {
-                    var server = frag.Substring(0, bar).Trim();
+                    server = frag.Substring(0, bar).Trim();
                     var m = SecretChars.Match(frag.Substring(bar + 1).Trim());
-                    if (server.Length > 0) r.Url = LodgeSession.NormalizeUrl(server);
                     if (m.Success) r.Secret = m.Value;
                 }
-                else if (frag.Length > 0) r.Url = LodgeSession.NormalizeUrl(frag);   // elanshub://lodge/join#server only
+                else if (frag.Length > 0) server = frag.Trim();   // elanshub://lodge/join#server only
+                if (!string.IsNullOrEmpty(server) && ValidAddress(server)) r.Url = LodgeSession.NormalizeUrl(server);
+                else r.MissingAddress = true;                      // never guess: a placeholder is not an address
             }
             else
             {

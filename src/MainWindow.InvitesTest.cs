@@ -22,6 +22,7 @@ namespace ElansAddonHub
         // synthetic secrets only
         const string InvA = "i1.AbCdEfGhIjKlMnOpQrStUvWxYz012345";
         const string TokA = "t1.SyntheticTokenSyntheticTokenSyntheticToken1";
+        const string TokB = "t1.SyntheticTokenSyntheticTokenSyntheticToken2";
 
         static string InvWelcome(string role, string server, bool tokens, bool canInvite, bool canRetire, string deviceName = null, bool guest = false) =>
             "{\"t\":\"welcome\",\"you\":1,\"name\":" + Q(guest ? "Wanderer (guest)" : "Elan") + ",\"role\":" + Q(role) + ",\"server\":" + Q(server) + ",\"maxFileMb\":25,\"canShareFiles\":true,"
@@ -68,6 +69,7 @@ namespace ElansAddonHub
             try
             {
                 Session.Disconnect();
+                Session.NoNetworkForTest = true;
                 Session.SentForTest = o => sentFrames.Add(o);
                 TabLodge.IsChecked = true;
                 LodgePage.ShowChatForTest();
@@ -75,6 +77,7 @@ namespace ElansAddonHub
                 InvitesTokenStore(check);
                 await InvitesMessages(check);
                 await InvitesJoin(dir, check);
+                await InvitesKeepCreds(check);
                 await InvitesUpgrade(check);
                 await InvitesPanels(sentFrames, check);
                 await InvitesOldServer(sentFrames, check);
@@ -85,6 +88,7 @@ namespace ElansAddonHub
                 InviteExchange.Send = sendWas;
                 Session.SentForTest = null;
                 Session.Disconnect();
+                Session.NoNetworkForTest = false;
                 s.LodgeUrl = saved.LodgeUrl; s.LodgeCodeProtected = saved.LodgeCodeProtected; s.LodgeTokenProtected = saved.LodgeTokenProtected; s.LodgeDeviceName = saved.LodgeDeviceName;
                 s.LodgeDeviceId = saved.LodgeDeviceId; s.LodgeUpgradeDeclined = saved.LodgeUpgradeDeclined; s.LodgeName = saved.LodgeName; s.LodgeManualConnect = saved.LodgeManualConnect;
                 SettingsStore.Save(s);
@@ -256,6 +260,9 @@ namespace ElansAddonHub
             LodgePage.JoinWithLink("elanshub://lodge/join#http://127.0.0.1:9/lodge|" + InvA);
             for (int i = 0; i < 20 && ok == null; i++) await Task.Delay(100);
             await Task.Delay(500);
+            check("join: a good invite is not stored before the lodge says welcome", !LodgeCredentials.HasToken(s) && Session.HasPendingCredential);
+            Session.FeedForTest(InvWelcome("member", "2.10.0", true, false, false));
+            await Task.Delay(100);
             check("join: a good invite stores the token (DPAPI) and no code", LodgeCredentials.Load(s, out var cred, out var isTok) && cred == TokA && isTok && !LodgeCredentials.HasCode(s));
             check("join: ...connects with the token", Session.Connected && Session.UsingToken && s.LodgeUrl == "http://127.0.0.1:9/lodge" && s.LodgeName == "Nova");
             check("join: ...with this PC's name and id sent", okBody != null && okBody.Contains("Quest-PC") && okBody.Contains(LodgeCredentials.DeviceId(s)));
@@ -266,10 +273,133 @@ namespace ElansAddonHub
             LodgePage.SignOut();
             LodgePage.JoinWithLink("http://127.0.0.1:9/lodge#invite=0123456789abcdef0123456789abcdef");
             await Task.Delay(300);
+            Session.FeedForTest(InvWelcome("member", "2.9.0", false, false, false));
+            await Task.Delay(100);
             check("join: an old link with a permanent code works as before (stored as a code, no exchange)", LodgeCredentials.Load(s, out var oc, out var ot) && oc == "0123456789abcdef0123456789abcdef" && !ot && Session.Connected && !Session.UsingToken);
             Session.Disconnect();
             LodgePage.SignOut();
             check("join: leaving the lodge forgets the token and the code", !LodgeCredentials.Load(s, out _, out _));
+        }
+
+        // ---------------------------------------------------------------- a failed attempt never costs the sign-in that worked
+        async Task InvitesKeepCreds(InvCheck check)
+        {
+            var s = settings;
+            const string url = "http://127.0.0.1:9/lodge";
+            var asked = new List<HttpRequestMessage>();
+            InviteExchange.Send = req => { asked.Add(req); return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("{\"error\":\"x\",\"reason\":\"wrong\"}") }); };
+            Action saveToken = () => { Session.Disconnect(); LodgeCredentials.Clear(s); s.LodgeUrl = null; LodgeCredentials.StoreToken(s, url, TokA, "Elan-PC"); LodgePage.ShowChatForTest(); };
+            Func<string, bool> stillToken = what => LodgeCredentials.Load(s, out var cr, out var isT) && cr == TokA && isT && s.LodgeUrl == url;
+
+            // 1. a wrong code on top of a saved token
+            saveToken();
+            Session.Connect(url, TokA, true);
+            LodgePage.EditConnection();
+            LodgePage.UrlBoxForTest = url;
+            LodgePage.CodeBoxForTest = "synthetic-wrong-code-123";
+            LodgePage.JoinForTest();
+            check("keep: a code being tried is held in memory, not saved", Session.HasPendingCredential && stillToken(null));
+            Session.StopForTest("Wrong invite code");
+            await Task.Delay(100);
+            check("keep: a wrong code is rejected and the saved token is still there", stillToken(null) && !LodgeCredentials.HasCode(s));
+            check("keep: ...the error stays on the join panel with a way back", LodgePage.JoinPanelVisibleForTest && LodgePage.JoinStatusForTest == "Wrong invite code" && LodgePage.RestoreVisibleForTest && !Session.Connected && !Session.StoppedSignedOut);
+            LodgePage.RestoreSavedForTest();
+            check("keep: 'Back to my saved sign-in' reconnects with the saved token", Session.Connected && Session.UsingToken && !LodgePage.JoinPanelVisibleForTest && !Session.HasPendingCredential && stillToken(null));
+
+            // an unreachable address / refused connect counts as a failed attempt too
+            LodgePage.EditConnection();
+            LodgePage.UrlBoxForTest = "http://127.0.0.1:8/other";
+            LodgePage.CodeBoxForTest = "";
+            LodgePage.JoinForTest();
+            check("keep: a new address alone is also only a candidate", Session.HasPendingCredential && stillToken(null));
+            Session.StopForTest("Can't reach the lodge - check the address and your connection");
+            await Task.Delay(100);
+            check("keep: ...and a failed connect keeps the old address and token", stillToken(null) && LodgePage.RestoreVisibleForTest);
+
+            // 2. a wrong invite
+            saveToken();
+            asked.Clear();
+            LodgePage.JoinWithLink("elanshub://lodge/join#" + url.Substring(7) + "|" + InvA);
+            for (int i = 0; i < 20 && asked.Count == 0; i++) await Task.Delay(100);
+            await Task.Delay(300);
+            check("keep: a wrong invite is rejected and the saved token is still there", asked.Count == 1 && stillToken(null) && LodgePage.JoinStatusForTest.Contains("isn't valid"), LodgePage.JoinStatusForTest);
+            check("keep: ...with a way back to the saved sign-in", LodgePage.RestoreVisibleForTest);
+            // an invite that exchanges fine but whose new token the lodge then refuses
+            InviteExchange.Send = req => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"token\":" + Q(TokB) + ",\"deviceId\":\"d8\",\"device\":\"Elan-PC\",\"name\":\"Nova\",\"role\":\"member\",\"guest\":false}") });
+            saveToken();
+            LodgePage.JoinWithLink("elanshub://lodge/join#" + url.Substring(7) + "|" + InvA);
+            for (int i = 0; i < 20 && !Session.HasPendingCredential; i++) await Task.Delay(100);
+            check("keep: an exchanged token is only a candidate until the welcome", Session.HasPendingCredential && stillToken(null));
+            Session.StopForTest(LodgeClient.SignedOutText, true);
+            await Task.Delay(100);
+            check("keep: ...if the lodge refuses it the old token survives (not treated as a revoked device)", stillToken(null) && !Session.StoppedSignedOut && LodgePage.RestoreVisibleForTest);
+
+            // 3. success replaces, but only after the welcome
+            saveToken();
+            LodgePage.EditConnection();
+            LodgePage.UrlBoxForTest = url;
+            LodgePage.CodeBoxForTest = "synthetic-new-code-12345";
+            LodgePage.JoinForTest();
+            check("keep: before the welcome the old token is still the saved one", stillToken(null));
+            Session.FeedForTest(InvWelcome("member", "2.9.0", false, false, false));
+            check("keep: after the welcome the new code replaces it", LodgeCredentials.Load(s, out var nc, out var nt) && nc == "synthetic-new-code-12345" && !nt && !LodgeCredentials.HasToken(s) && !Session.HasPendingCredential);
+            saveToken();
+            LodgePage.JoinWithLink("elanshub://lodge/join#" + url.Substring(7) + "|" + InvA);
+            for (int i = 0; i < 20 && !Session.HasPendingCredential; i++) await Task.Delay(100);
+            check("keep: a good invite waits for the welcome too", stillToken(null));
+            Session.FeedForTest(InvWelcome("member", "2.10.0", true, false, false));
+            check("keep: ...then its token replaces the old one", LodgeCredentials.Load(s, out var nb, out var nbt) && nb == TokB && nbt && !LodgeCredentials.HasCode(s));
+
+            // 4. a placeholder link says so, stores nothing, and is never read as a code
+            saveToken();
+            asked.Clear();
+            LodgePage.JoinWithLink("elanshub://lodge/join#<your-lodge-address>|" + InvA);
+            await Task.Delay(200);
+            check("placeholder: the clear message is shown", LodgePage.JoinStatusForTest == "This link is missing the lodge address - ask for a new link", LodgePage.JoinStatusForTest);
+            check("placeholder: nothing was stored, tried or connected", stillToken(null) && asked.Count == 0 && !Session.HasPendingCredential && !Session.Connected);
+            LodgePage.JoinWithLink("elanshub://lodge/join#your-lodge-address|" + InvA);
+            check("placeholder: a bare word with no dot is no address either", LodgePage.JoinStatusForTest.Contains("missing the lodge address") && asked.Count == 0);
+            LodgePage.JoinWithLink("elanshub://lodge/join#|" + InvA);
+            check("placeholder: an empty address too", LodgePage.JoinStatusForTest.Contains("missing the lodge address") && stillToken(null));
+            var pl = InviteLinks.Parse("elanshub://lodge/join#<your-lodge-address>|" + InvA);
+            check("placeholder: the parser gives no address", pl.MissingAddress && pl.Url == null);
+            check("placeholder: real addresses (host, ip, lan name with a port) are still fine", !InviteLinks.Parse("elanshub://lodge/join#example.org/lodge|" + InvA).MissingAddress
+                && !InviteLinks.Parse("elanshub://lodge/join#192.168.1.5:5280/lodge|" + InvA).MissingAddress && !InviteLinks.Parse("elanshub://lodge/join#nas:5280/lodge|" + InvA).MissingAddress);
+            // junk that is not a link at all never touches the saved sign-in
+            LodgePage.JoinWithLink("hello there");
+            await Task.Delay(100);
+            check("keep: text that is not a link changes nothing", stillToken(null) && !Session.HasPendingCredential && LodgePage.JoinStatusForTest.StartsWith("Paste the invite link"));
+
+            // 5. the whole link pasted into the CODE box is an invite
+            saveToken();
+            InviteExchange.Send = req => { asked.Add(req); return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("{\"error\":\"x\",\"reason\":\"wrong\"}") }); };
+            asked.Clear();
+            LodgePage.EditConnection();
+            LodgePage.UrlBoxForTest = "";
+            LodgePage.CodeBoxForTest = "elanshub://lodge/join#" + url.Substring(7) + "|" + InvA;
+            LodgePage.JoinForTest();
+            for (int i = 0; i < 20 && asked.Count == 0; i++) await Task.Delay(100);
+            await Task.Delay(200);
+            check("codebox: a link pasted as the code is exchanged as an invite", asked.Count == 1 && asked[0].Headers.Contains("X-Lodge-Invite") && asked[0].Headers.GetValues("X-Lodge-Invite").Single() == InvA
+                && asked[0].RequestUri.AbsolutePath == "/lodge/exchange", asked.Count + " requests");
+            check("codebox: ...the link moved to the link box, the code box is empty, and nothing was saved as a code", LodgePage.CodeBoxForTest == "" && LodgePage.UrlBoxForTest.StartsWith("elanshub:") && stillToken(null) && !LodgeCredentials.HasCode(s));
+            LodgePage.CodeBoxForTest = "elanshub://lodge/join#<your-lodge-address>|" + InvA;
+            LodgePage.UrlBoxForTest = "";
+            LodgePage.JoinForTest();
+            check("codebox: a placeholder link there gets the same clear message", LodgePage.JoinStatusForTest.Contains("missing the lodge address") && stillToken(null) && !LodgeCredentials.HasCode(s));
+
+            // 6. Cancel in "Edit connection" keeps everything
+            saveToken();
+            Session.Connect(url, TokA, true);
+            asked.Clear();
+            LodgePage.EditConnection();
+            LodgePage.UrlBoxForTest = "http://127.0.0.1:7/elsewhere";
+            LodgePage.CodeBoxForTest = "synthetic-typed-code-123";
+            LodgePage.CancelEditForTest();
+            check("cancel: nothing changes, nothing is pending, the chat is back", stillToken(null) && !LodgeCredentials.HasCode(s) && !Session.HasPendingCredential && Session.Connected && !LodgePage.JoinPanelVisibleForTest && asked.Count == 0);
+
+            Session.Disconnect();
+            LodgeCredentials.Clear(s);
         }
 
         // ---------------------------------------------------------------- "Upgrade this device"
@@ -314,6 +444,8 @@ namespace ElansAddonHub
             InviteExchange.Send = req => { req2 = req; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"token\":" + Q(TokA) + ",\"deviceId\":\"d7\",\"device\":\"PC\",\"name\":\"Elan\",\"role\":\"member\",\"guest\":false}") }); };
             var problem = await Session.UpgradeThisDevice();
             check("upgrade: the exchange sends the saved code and succeeds", problem == null && req2 != null && req2.Headers.GetValues("X-Lodge-Code").Single() == "synthetic-old-code-12345" && req2.RequestUri.AbsolutePath.EndsWith("/exchange"));
+            check("upgrade: the saved code stays until the lodge welcomes the new token", LodgeCredentials.HasCode(s) && !LodgeCredentials.HasToken(s));
+            Session.FeedForTest(InvWelcome("member", "2.10.0", true, false, false));
             check("upgrade: the token replaces the code and the session uses it", LodgeCredentials.Load(s, out var c, out var t) && c == TokA && t && !LodgeCredentials.HasCode(s) && Session.UsingToken);
             Session.Disconnect();
             LodgeCredentials.StoreCode(s, s.LodgeUrl, "synthetic-old-code-12345");

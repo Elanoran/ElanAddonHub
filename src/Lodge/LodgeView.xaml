@@ -317,6 +317,8 @@
           <Button x:Name="JoinButton" Style="{StaticResource PrimaryButton}" Content="Join" Margin="0,18,0,0" Click="Join_Click" />
           <Button x:Name="CancelEditButton" Style="{StaticResource GhostButton}" Content="Cancel" HorizontalAlignment="Center" Margin="0,8,0,0"
                   Visibility="Collapsed" Click="CancelEdit_Click" />
+          <Button x:Name="RestoreSavedButton" Style="{StaticResource GhostButton}" Content="Back to my saved sign-in" HorizontalAlignment="Center" Margin="0,8,0,0"
+                  Visibility="Collapsed" Click="RestoreSaved_Click" />
           <TextBlock x:Name="JoinStatus" FontSize="12" Foreground="{StaticResource Danger}" TextWrapping="Wrap" Margin="2,10,0,0" />
         </StackPanel>
       </Border>

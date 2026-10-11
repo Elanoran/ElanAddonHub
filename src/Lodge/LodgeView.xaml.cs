@@ -76,7 +76,7 @@ namespace ElansAddonHub.Lodge
             {
                 // a revoked device: the token is dead, forget it so the next start asks for a new invite instead of retrying forever
                 if (session.StoppedSignedOut) { session.Settings.LodgeTokenProtected = null; SettingsStore.Save(session.Settings); }
-                ShowJoin(why);
+                ShowJoin(why, session.LastStopWasCandidate);
             };
             session.ProfileReceived += OnProfileReceived;
             session.Error += text => { SetNote(text, true); noteUntil = DateTime.UtcNow.AddSeconds(6); };
@@ -252,6 +252,13 @@ namespace ElansAddonHub.Lodge
         void UpgradeLater_Click(object sender, RoutedEventArgs e) => Session.DeclineUpgrade();
         public bool UpgradeNoticeVisibleForTest => UpgradeNotice.Visibility == Visibility.Visible;
         public string JoinStatusForTest => JoinStatus.Text;
+        public bool RestoreVisibleForTest => RestoreSavedButton.Visibility == Visibility.Visible;
+        public bool JoinPanelVisibleForTest => JoinPanel.Visibility == Visibility.Visible;
+        public string UrlBoxForTest { get => UrlBox.Text; set => UrlBox.Text = value; }
+        public string CodeBoxForTest { get => CodeBox.Password; set => CodeBox.Password = value; }
+        public void JoinForTest() => TryJoin();
+        public void RestoreSavedForTest() => RestoreSaved_Click(null, null);
+        public void CancelEditForTest() => CancelEdit_Click(null, null);
         public void DeclineUpgradeForTest() => UpgradeLater_Click(null, null);
         void ServerNoticeCopy_Click(object sender, RoutedEventArgs e)
         {
@@ -360,17 +367,47 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ join / connection
 
-        void ShowJoin(string why)
+        // offerRestore: a new sign-in just failed and an older one is still saved - offer to go back to it (the error stays on screen)
+        bool offerRestore;
+
+        void UpdateRestoreButton()
+        {
+            RestoreSavedButton.Visibility = offerRestore && SavedSignIn(out _, out _, out _) ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        bool SavedSignIn(out string url, out string credential, out bool isToken)
+        {
+            url = Session.Settings.LodgeUrl; credential = null; isToken = false;
+            return !string.IsNullOrEmpty(url) && LodgeCredentials.Load(Session.Settings, out credential, out isToken);
+        }
+
+        void RestoreSaved_Click(object sender, RoutedEventArgs e)
+        {
+            if (!SavedSignIn(out var url, out var cred, out var isToken)) { offerRestore = false; UpdateRestoreButton(); return; }
+            offerRestore = false;
+            UpdateRestoreButton();
+            EndEditConnection();
+            JoinStatus.Text = "";
+            ShowChat();
+            Session.Connect(url, cred, isToken);
+        }
+
+        void ShowJoin(string why, bool offer = false)
         {
             ChatPanel.Visibility = Visibility.Collapsed;
             JoinPanel.Visibility = Visibility.Visible;
+            JoinStatus.Foreground = (Brush)FindResource("Danger");
             JoinStatus.Text = why ?? "";
+            offerRestore = offer;
+            UpdateRestoreButton();
             UrlBox.Text = Session.Settings.LodgeUrl ?? "";
             DeviceBox.Text = LodgeCredentials.DeviceName(Session.Settings);
         }
 
         void ShowChat()
         {
+            offerRestore = false;
+            RestoreSavedButton.Visibility = Visibility.Collapsed;
             JoinPanel.Visibility = Visibility.Collapsed;
             ChatPanel.Visibility = Visibility.Visible;
         }
@@ -388,51 +425,61 @@ namespace ElansAddonHub.Lodge
 
         bool joining;
 
+        void JoinFail(string text)
+        {
+            JoinStatus.Foreground = (Brush)FindResource("Danger");
+            JoinStatus.Text = text;
+            UpdateRestoreButton();
+        }
+
+        const string MissingAddressText = "This link is missing the lodge address - ask for a new link";
+
+        // Nothing here writes the saved sign-in. The new one is handed to the session as a candidate, which stores it only after the welcome.
         void TryJoin()
         {
             if (joining) return;
+            // a whole link pasted into the code box belongs in the link box (and is handled as the link it is)
+            var typed = CodeBox.Password.Trim();
+            if (InviteLinks.LooksLikeLink(typed)) { UrlBox.Text = typed; CodeBox.Password = ""; }
             var link = InviteLinks.Parse(UrlBox.Text);
+            if (link.MissingAddress) { JoinFail(MissingAddressText); return; }
             var url = link.Url;
             var secret = link.Secret ?? CodeBox.Password.Trim();
+            var bad = !Uri.TryCreate(url ?? "", UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http");
             // editing the connection with nothing new typed: keep the saved sign-in
             if (secret.Length == 0 && editingConnection && LodgeCredentials.Load(Session.Settings, out var kept, out var keptIsToken))
             {
-                if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out var ku) || (ku.Scheme != "https" && ku.Scheme != "http")) { JoinStatus.Text = "Paste the invite link you were sent (elanshub://lodge/join#...)"; return; }
+                if (bad) { JoinFail("Paste the invite link you were sent (elanshub://lodge/join#...)"); return; }
                 Session.Settings.LodgeName = NameBox.Text.Trim();
                 Session.Settings.LodgeDeviceName = string.IsNullOrWhiteSpace(DeviceBox.Text) ? null : DeviceBox.Text.Trim();
                 RejoinWithSaved(url, kept, keptIsToken);
                 return;
             }
-            if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http"))
-            {
-                JoinStatus.Text = "Paste the invite link you were sent (elanshub://lodge/join#...)";
-                return;
-            }
+            if (bad) { JoinFail("Paste the invite link you were sent (elanshub://lodge/join#...)"); return; }
             var s = Session.Settings;
             s.LodgeName = NameBox.Text.Trim();
             s.LodgeDeviceName = string.IsNullOrWhiteSpace(DeviceBox.Text) ? null : DeviceBox.Text.Trim();
             if (link.IsInvite || InviteLinks.LooksLikeInvite(secret)) { _ = JoinWithInvite(url, secret); return; }
-            if (secret.Length < 6) { JoinStatus.Text = "Enter your invite code"; return; }
-            // an old permanent code (older server, or an older-style link): works exactly as before
-            LodgeCredentials.StoreCode(s, url, secret);
-            SettingsStore.Save(s);
+            if (secret.Length < 6) { JoinFail("Enter your invite code"); return; }
+            // an old permanent code (older server, or an older-style link): works exactly as before, but is only kept once the lodge says welcome
             UrlBox.Text = url; // the code stays out of the visible box
             CodeBox.Password = "";
             EndEditConnection();
             JoinStatus.Text = "";
             ShowChat();
-            Session.Connect(url, secret);
+            Session.Connect(url, secret, false, new PendingCredential { Url = url, Secret = secret, IsToken = false });
         }
 
+        // only the address changed (or nothing): the saved credential is reused, the new address is kept once the lodge welcomes it
         void RejoinWithSaved(string url, string credential, bool isToken)
         {
             var s = Session.Settings;
-            s.LodgeUrl = url;
-            SettingsStore.Save(s);
+            bool same = string.Equals(url, s.LodgeUrl, StringComparison.OrdinalIgnoreCase);
+            if (same) SettingsStore.Save(s);
             EndEditConnection();
             JoinStatus.Text = "";
             ShowChat();
-            Session.Connect(url, credential, isToken);
+            Session.Connect(url, credential, isToken, same ? null : new PendingCredential { Url = url, UrlOnly = true });
         }
 
         // a one-time invite: trade it for this PC's own token, then connect with that. The invite is sent in a header, never in a URL.
@@ -448,19 +495,21 @@ namespace ElansAddonHub.Lodge
                 var res = await InviteExchange.Exchange(url, invite, null, LodgeCredentials.DeviceName(s), LodgeCredentials.DeviceId(s));
                 if (!res.Ok)
                 {
-                    JoinStatus.Foreground = (Brush)FindResource("Danger");
-                    JoinStatus.Text = res.Message;
+                    offerRestore = true;    // a saved sign-in (if any) is untouched: offer to go back to it
+                    JoinFail(res.Message);
                     return;
                 }
-                LodgeCredentials.StoreToken(s, url, res.Token, LodgeCredentials.DeviceName(s));
-                if (!res.Guest && !string.IsNullOrEmpty(res.Name)) s.LodgeName = res.Name;
-                SettingsStore.Save(s);
+                // the saved sign-in stays until the lodge welcomes the new token
                 UrlBox.Text = url;          // the invite is used up and gone from the box
                 CodeBox.Password = "";
                 EndEditConnection();
                 JoinStatus.Text = "";
                 ShowChat();
-                Session.Connect(url, res.Token, true);
+                Session.Connect(url, res.Token, true, new PendingCredential
+                {
+                    Url = url, Secret = res.Token, IsToken = true, DeviceName = LodgeCredentials.DeviceName(s),
+                    Name = !res.Guest && !string.IsNullOrEmpty(res.Name) ? res.Name : null
+                });
             }
             finally
             {

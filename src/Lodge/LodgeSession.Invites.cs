@@ -101,10 +101,12 @@ namespace ElansAddonHub.Lodge
             if (url == null || string.IsNullOrEmpty(code)) return "There is no saved code to upgrade";
             var res = await InviteExchange.Exchange(url, null, code, LodgeCredentials.DeviceName(Settings), LodgeCredentials.DeviceId(Settings));
             if (!res.Ok) return res.Message;
-            LodgeCredentials.StoreToken(Settings, url, res.Token, LodgeCredentials.DeviceName(Settings));
-            SettingsStore.Save(Settings);
-            Connect(url, res.Token, true);
-            Hint?.Invoke("This device now has its own sign-in. Your permanent code is no longer stored on this PC.");
+            // the saved code stays until the server welcomes the new token
+            Connect(url, res.Token, true, new PendingCredential
+            {
+                Url = url, Secret = res.Token, IsToken = true, DeviceName = LodgeCredentials.DeviceName(Settings),
+                OnCommitted = () => Hint?.Invoke("This device now has its own sign-in. Your permanent code is no longer stored on this PC.")
+            });
             return null;
         }
     }

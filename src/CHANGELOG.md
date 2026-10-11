@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.38.1
+- **A failed sign-in attempt no longer forgets the sign-in that worked.** Before, trying a wrong code or a broken link in the Lodge join box or in "Edit connection" threw away this PC's saved sign-in, so you were disconnected and needed a new invite. Now whatever you type is only tried: it is saved only after the lodge has welcomed you. If it fails, your old sign-in is still there, the error stays on screen, and a "Back to my saved sign-in" button reconnects you. The same goes for changing the lodge address and for "Upgrade this device".
+- Pasting an invite link whose address is a placeholder (like "<your-lodge-address>") now says "This link is missing the lodge address - ask for a new link" instead of treating the link as a code.
+- Pasting the whole invite link into the code box now works: it is moved to the link box and used as an invite.
+
 ## 2.38.0
 - **Lodge redesign.** The Lodge page gets the calm new look: quiet headings, softer channel and member rows, a raised message box, menus with soft shadows instead of outlines, and smooth transitions. The picture and video viewers, profile card, LFG card and search match.
 - **Loading placeholders.** The addon list, the Lodge and the Bags character list show a soft shimmer while they load instead of blank space.

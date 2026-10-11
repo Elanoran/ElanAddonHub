@@ -214,9 +214,16 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ connection
 
-        public void Connect(string url, string code, bool isToken = false)
+        // A sign-in that the server has not accepted yet. The settings keep the previous credential until the welcome arrives.
+        PendingCredential pending;
+        public bool HasPendingCredential => pending != null;
+        public bool LastStopWasCandidate { get; private set; }   // the last stop was a credential that was never accepted (the saved one is untouched)
+
+        // candidate: a new credential / address to store only once the server welcomes this connection
+        public void Connect(string url, string code, bool isToken = false, PendingCredential candidate = null)
         {
             Disconnect();
+            pending = candidate;
             UsingToken = isToken;
             var c = new LodgeClient(url, code, Settings.LodgeName ?? Environment.UserName, isToken) { Invisible = () => Invisible };
             client = c;
@@ -224,12 +231,15 @@ namespace ElansAddonHub.Lodge
             {
                 if (!ReferenceEquals(client, c)) return;     // the last words of a connection that was replaced
                 StatusText = online ? OnlineText : text;
+                if (!online && pending != null && client != null && client.IsRunning && text != "Connecting...")
+                {
+                    // the first connect with a new credential did not work (unreachable, full, refused): drop it, keep what was saved
+                    StopConnection(text != null && text.StartsWith("Offline") ? "Can't reach the lodge - check the address and your connection" : text, false);
+                    return;
+                }
                 if (!online && client != null && !client.IsRunning)
                 {
-                    var why = text;
-                    StoppedSignedOut = c.SignedOut;   // this device's token was revoked: the view forgets it
-                    Disconnect();
-                    Stopped?.Invoke(why);
+                    StopConnection(text, c.SignedOut);
                 }
                 if (!online)
                 {
@@ -250,8 +260,34 @@ namespace ElansAddonHub.Lodge
             c.Received += m => { if (ReferenceEquals(client, c)) OnReceived(m); };   // posts from an old client are ignored
             c.Voice += (id, data, off, count) => { if (ReferenceEquals(client, c)) voice?.Incoming(id, data, off, count); };
             tick.Start();
-            c.Start();
+            if (!NoNetworkForTest) c.Start();
             Changed?.Invoke();
+        }
+
+        // the connection ended for good. A credential that was never accepted is discarded and never counts as "signed out".
+        void StopConnection(string why, bool signedOut)
+        {
+            LastStopWasCandidate = pending != null;
+            StoppedSignedOut = signedOut && !LastStopWasCandidate;   // a revoked saved token: the view forgets it
+            Disconnect();
+            Stopped?.Invoke(why);
+        }
+
+        public bool NoNetworkForTest;   // the self-test connects without opening a socket and feeds frames itself
+        public void StopForTest(string why, bool signedOut = false) => StopConnection(why, signedOut);
+
+        // the welcome arrived: now the credential (and address) is proven, and only now replaces the saved one
+        void CommitPending()
+        {
+            var p = pending;
+            if (p == null) return;
+            pending = null;
+            if (p.UrlOnly) Settings.LodgeUrl = p.Url;
+            else if (p.IsToken) LodgeCredentials.StoreToken(Settings, p.Url, p.Secret, p.DeviceName ?? LodgeCredentials.DeviceName(Settings));
+            else LodgeCredentials.StoreCode(Settings, p.Url, p.Secret);
+            if (!string.IsNullOrWhiteSpace(p.Name)) Settings.LodgeName = p.Name;
+            SettingsStore.Save(Settings);
+            p.OnCommitted?.Invoke();
         }
 
         // voice room to go back into after a dropped connection (null = the user left, or wasn't in voice)
@@ -261,6 +297,7 @@ namespace ElansAddonHub.Lodge
         public void Disconnect()
         {
             rejoinRoom = null; // leaving the lodge on purpose
+            pending = null;    // a credential that was not accepted yet is simply dropped
             pendingRoom = null;
             UsingToken = false;
             LeaveVoice(false);
@@ -458,6 +495,7 @@ namespace ElansAddonHub.Lodge
 
         void Welcome(Dictionary<string, object> m)
         {
+            CommitPending();
             int myId = m.Int("you");
             ServerVersion = m.Str("server");
             MyRole = m.Str("role") ?? "member";
