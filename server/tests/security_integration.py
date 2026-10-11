@@ -101,11 +101,11 @@ async def suite_a(base):
         r = await s.get(base + "/health", headers=H(ELAN, ip))
         check("success before the block resets the count", r.status == 200)
 
-        # ---- 7. credentials: header wins over query; query allowed by default (1.x clients)
+        # ---- 7. credentials: header wins over query; query allowed only when LODGE_ALLOW_QUERY_CODE=true (first server)
         r = await s.get(base + f"/health?code={ELAN}", headers=H("wrong-header", "198.51.100.40"))
         check("header takes precedence over ?code=", r.status == 401)
         r = await s.get(base + f"/health?code={ELAN}", headers=H(ip="198.51.100.41"))
-        check("legacy ?code= still works by default", r.status == 200 and "version" in await r.json())
+        check("legacy ?code= works when LODGE_ALLOW_QUERY_CODE=true", r.status == 200 and "version" in await r.json())
 
         # ---- 4. budgets
         a = await ws_open(s, base, ELAN, "192.0.2.1"); await recv(a, "welcome")
@@ -335,7 +335,7 @@ def scan_logs(*datas):
 
 def main():
     if not os.path.exists(EXE): raise SystemExit(f"build first: {EXE}")
-    pa, da, la = start(5291)
+    pa, da, la = start(5291, LODGE_ALLOW_QUERY_CODE="true")  # the first server keeps the legacy ?code= on (default is off since 2.8)
     pb, db, lb = start(5292, LODGE_ALLOW_QUERY_CODE="false", LODGE_MAX_STORAGE_MB=1, LODGE_MAX_FILE_MB=1, LODGE_MAX_USERS=5)
     try:
         wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge")

@@ -291,7 +291,7 @@ public class ProfileTests
         var bob = await l.Join(T.BobCode);
         var g = await l.JoinGuest("Wanderer");
         g.Say("{\"t\":\"status\",\"status\":\"online\",\"note\":\"\",\"visibility\":\"invisible\"}"); await Lodge3.Settle();
-        Assert.False((bool)(await l.Get(bob, "Wanderer"))["found"]!);
+        Assert.False((bool)(await l.Get(bob, "Wanderer (guest)"))["found"]!);
     }
 
     // ---------------------------------------------------------------- live updates / welcome
@@ -419,15 +419,15 @@ public class ProfileTests
         await l.Set(g, "{\"t\":\"profile:set\",\"avatarId\":\"av.fish\",\"about\":\"just passing\"}");
         Assert.Equal("av.fish", (string?)g.Profile()["avatarId"]);
         var bob = await l.Join(T.BobCode);
-        Assert.Equal("av.fish", (string?)(await l.Get(bob, "Wanderer"))["avatarId"]);   // visible while they are here
-        Assert.Null(l.Hub.Profiles.Peek("Wanderer"));                                   // but nothing in the store...
+        Assert.Equal("av.fish", (string?)(await l.Get(bob, "Wanderer (guest)"))["avatarId"]);   // visible while they are here
+        Assert.Null(l.Hub.Profiles.Peek("Wanderer (guest)"));                                   // but nothing in the store...
         l.Hub.Profiles.Flush();
         var disk = File.ReadAllText(Path.Combine(l.Dir.Path, "profiles.json"));          // ...or on disk
         Assert.DoesNotContain("av.fish", disk, StringComparison.Ordinal);
         Assert.DoesNotContain("wanderer", disk, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Gchar", disk, StringComparison.Ordinal);
         g.Hangup(); await Lodge3.Settle();
-        Assert.False((bool)(await l.Get(bob, "Wanderer"))["found"]!);                   // gone with the session
+        Assert.False((bool)(await l.Get(bob, "Wanderer (guest)"))["found"]!);                   // gone with the session
         var g2 = await l.JoinGuest("Wanderer");
         Assert.Null(g2.Of("welcome")[0]["profile"]!["avatarId"]);
     }

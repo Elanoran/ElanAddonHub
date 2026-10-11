@@ -15,51 +15,9 @@ public sealed class SystemClock : IClock
 // One canonical form for display names, used for personal names, guest reservations and reconnect matching:
 // Unicode NFKC (fullwidth/compatibility forms fold to plain letters), control and format characters
 // removed, any run of whitespace becomes one space, trimmed, at most 24 characters.
-public static class Names
+public static partial class Names
 {
     public const int Max = 24;
-
-    // message snippets (reply quotes): the same cleaning as names, bounded to `max` characters with an ellipsis
-    public static string Snippet(string text, int max)
-    {
-        var s = Clean(text);
-        return s.Length > max ? s[..max].TrimEnd() + "…" : s;
-    }
-
-    // free text (profile about / play times / character names): the same cleaning as names, hard-cut at `max` characters
-    public static string Text(string text, int max)
-    {
-        var r = Clean(text);
-        return r.Length > max ? r[..max].TrimEnd() : r;
-    }
-
-    public static string Normalize(string name)
-    {
-        var r = Clean(name);
-        return r.Length > Max ? r[..Max].TrimEnd() : r;
-    }
-
-    // the cleaned form without the length cut (display names are checked against 2-24 instead of being truncated)
-    public static string Full(string text) => Clean(text);
-
-    static string Clean(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return "";
-        string s;
-        try { s = name.Normalize(NormalizationForm.FormKC); } catch (ArgumentException) { s = name; } // invalid surrogates
-        var sb = new StringBuilder(s.Length);
-        bool space = false;
-        foreach (var c in s)
-        {
-            var cat = char.GetUnicodeCategory(c);
-            if (char.IsWhiteSpace(c) || cat == UnicodeCategory.SpaceSeparator) { space = sb.Length > 0; continue; }
-            if (cat is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.Surrogate
-                or UnicodeCategory.PrivateUse or UnicodeCategory.OtherNotAssigned) continue;
-            if (space) { sb.Append(' '); space = false; }
-            sb.Append(c);
-        }
-        return sb.ToString();
-    }
 
     public static bool Same(string a, string b) =>
         string.Equals(Normalize(a), Normalize(b), StringComparison.OrdinalIgnoreCase);

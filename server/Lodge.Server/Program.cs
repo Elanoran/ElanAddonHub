@@ -74,7 +74,7 @@ IResult Gate(HttpContext ctx, string code, out Identity who)
     return null;
 }
 
-// the X-Lodge-Code header wins; ?code= only for 1.x clients and only while LODGE_ALLOW_QUERY_CODE isn't false
+// the X-Lodge-Code header wins; ?code= only for 1.x clients and only while LODGE_ALLOW_QUERY_CODE=true (off by default since 2.8)
 string CodeFrom(HttpContext ctx)
 {
     var code = ctx.Request.Headers["X-Lodge-Code"].ToString();
@@ -145,6 +145,9 @@ app.MapGet("/files/{id}", (HttpContext ctx, string id) =>
     if (deny != null) return deny;
     var meta = files.Get(id);
     if (meta == null) return Results.NotFound();
+    // the content is private (a code is needed) and never to be sniffed into something executable
+    ctx.Response.Headers["Cache-Control"] = "private, no-store";
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
     return Results.File(files.PathOf(id), meta.Mime, meta.Name, enableRangeProcessing: true);
 });
 
@@ -154,6 +157,7 @@ lodge.StartRevalidation(app.Lifetime.ApplicationStopping);
 app.Lifetime.ApplicationStopping.Register(() =>
 {
     try { lodge.CloseAllForShutdown(TimeSpan.FromSeconds(3)).Wait(TimeSpan.FromSeconds(4)); } catch { }
+    try { lodge.Chat.FlushAll(); } catch { }          // edits/reactions still waiting for their debounced write
 });
 app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}",
     LodgeHub.Version, cfg.Urls, cfg.PathBase, cfg.DataDir, cfg.AllowQueryCode ? "allowed" : "off");

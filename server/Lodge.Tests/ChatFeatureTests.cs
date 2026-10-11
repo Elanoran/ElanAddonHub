@@ -127,6 +127,7 @@ public class ChatFeatureTests
         Assert.Equal(new[] { "Elan" }, off["users"]!.AsArray().Select(x => (string)x!).ToArray());
 
         // saved with the history record, and still there after a restart
+        r.Hub.Chat.FlushAll(); // reactions reach the disk after a short quiet period (or at shutdown)
         var again = new HistoryStore(System.IO.Path.Combine(r.Dir.Path, "history"), "general", 1 << 20, T.Log);
         var rec = again.Messages.Single(x => (string)x["id"] == id);
         var stored = rec["reactions"]!.AsObject();
@@ -138,6 +139,7 @@ public class ChatFeatureTests
         // removing the last reaction removes the field again
         await r.Do(elan, new { t = "react", id, emoji = "ready" });
         await r.Do(bob, new { t = "react", id, emoji = "love" });
+        r.Hub.Chat.FlushAll();
         var cleared = new HistoryStore(System.IO.Path.Combine(r.Dir.Path, "history"), "general", 1 << 20, T.Log);
         Assert.Null(cleared.Messages.Single(x => (string)x["id"] == id)["reactions"]);
     }

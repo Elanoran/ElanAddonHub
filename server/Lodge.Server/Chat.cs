@@ -114,7 +114,7 @@ public class ChatModule : IModule
             case "pin": await Pin(me, m, true); return true;
             case "unpin": await Pin(me, m, false); return true;
             case "typing":
-                var ch = hub.Channels.Get((string)m["channel"]) ?? hub.Channels.DefaultText;
+                var ch = hub.Channels.Get(J.Str(m, "channel")) ?? hub.Channels.DefaultText;
                 if (!ch.VisibleTo(me.Role) || me.Invisible) return true; // invisible members never show as typing
                 // coalesced: at most one "typing" per person and channel every 2 s
                 var now = hub.Clock.UtcNow;
@@ -127,22 +127,60 @@ public class ChatModule : IModule
         return false;
     }
 
+    // ---- history writes are debounced: edits, deletes and reactions mark the store dirty and a flush follows after
+    // FlushDelay of quiet; shutdown flushes everything (FlushAll)
+    public TimeSpan FlushDelay = TimeSpan.FromSeconds(5);
+    readonly HashSet<HistoryStore> flushQueued = new();
+
+    void QueueFlush(HistoryStore s)
+    {
+        lock (flushQueued) if (!flushQueued.Add(s)) return;
+        _ = Task.Delay(FlushDelay).ContinueWith(_ => FlushOne(s));
+    }
+
+    void FlushOne(HistoryStore s)
+    {
+        lock (flushQueued) flushQueued.Remove(s);
+        try { lock (s) s.Flush(); } catch (Exception e) { hub.Log.LogWarning("History flush failed: {Error}", e.GetType().Name); }
+    }
+
+    // shutdown / tests: everything that is waiting goes to disk now
+    public int FlushAll()
+    {
+        int n = 0;
+        foreach (var s in stores.Values)
+            lock (s) if (s.Dirty) { s.Flush(); n++; }
+        return n;
+    }
+
+    // may `me` change this message? Personal members: their own login name (it is unique to them - guests can never
+    // take a personal name). Guests: only messages from their CURRENT connection (the connection id is the only thing
+    // that tells guests with the same name apart), and only ones sent since the server started.
+    bool IsAuthor(Member me, JsonObject msg)
+    {
+        if (me.Personal) return Names.Same((string)msg["from"], me.Name);
+        var fromId = msg["fromId"] is JsonValue v && v.TryGetValue<int>(out var i) ? i : -1;
+        var at = msg["at"] is JsonValue av && av.TryGetValue<long>(out var l) ? l : 0;
+        return fromId == me.Id && at >= new DateTimeOffset(hub.StartedAt).ToUnixTimeMilliseconds();
+    }
+
     async Task Message(Member me, JsonObject m)
     {
-        var ch = hub.Channels.Get((string)m["channel"]) ?? hub.Channels.DefaultText; // old hubs send no channel
+        var ch = hub.Channels.Get(J.Str(m, "channel")) ?? hub.Channels.DefaultText; // old hubs send no channel
         if (ch.Type != "text" || !ch.VisibleTo(me.Role)) { await hub.Error(me, "You can't write in that channel"); return; }
 
         // 8 messages per 10 s, per person - kept across reconnects (guests: per IP)
-        if (!me.Budget.Chat.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little"); return; }
+        if (!me.Budget.Chat.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
 
-        var text = ((string)m["text"] ?? "").Trim();
-        if (text.Length > 2000) text = text[..2000];
+        var text = Names.MessageText(J.Str(m, "text"));
+        if (text.Length > 2000) text = Names.Cut(text, 2000);
+        if (!Roles.AtLeast(me.Role, "officer")) text = Names.DefangGroupPings(text); // @everyone / @here are for officers and up
         JsonObject file = null;
-        var fileId = (string)m["file"]?["id"];
+        var fileId = J.Str(J.Obj(m, "file"), "id");
         if (fileId != null && Roles.Can(me.Role, Perm.ShareFiles))
         {
             var meta = hub.Files.Get(fileId);
-            if (meta != null) file = new JsonObject { ["id"] = meta.Id, ["name"] = meta.Name, ["size"] = meta.Size, ["mime"] = meta.Mime };
+            if (meta != null) file = new JsonObject { ["id"] = meta.Id, ["name"] = Names.FileName(meta.Name), ["size"] = meta.Size, ["mime"] = meta.Mime };
         }
         if (text.Length == 0 && file == null) return;
 
@@ -154,7 +192,7 @@ public class ChatModule : IModule
             ["from"] = me.Name, ["fromId"] = me.Id, ["text"] = text,
         };
         if (file != null) msg["file"] = file;
-        var replyId = m["replyTo"] is JsonValue rv && rv.TryGetValue<string>(out var rs) ? rs : null;
+        var replyId = J.Str(m, "replyTo");
         if (!string.IsNullOrEmpty(replyId))
         {
             // the quoted message must exist in THIS channel's history, otherwise the reply is sent without a quote
@@ -180,46 +218,47 @@ public class ChatModule : IModule
 
     async Task Edit(Member me, JsonObject m)
     {
-        var (ch, s, msg) = FindMessage((string)m["id"]);
+        var (ch, s, msg) = FindMessage(J.Str(m, "id"));
         if (msg == null) return;
-        if (!Names.Same((string)msg["from"], me.Name)) { await hub.Error(me, "You can only edit your own messages"); return; }
-        var text = ((string)m["text"] ?? "").Trim();
+        if (!ch.VisibleTo(me.Role)) return; // a channel you can't see doesn't exist for you
+        if (!IsAuthor(me, msg)) { await hub.Error(me, "You can only edit your own messages"); return; }
+        var text = Names.MessageText(J.Str(m, "text"));
         if (text.Length == 0) return;
-        if (text.Length > 2000) text = text[..2000];
-        bool saved;
-        lock (s) { msg["text"] = text; msg["edited"] = true; saved = s.Compact(); }
+        if (text.Length > 2000) text = Names.Cut(text, 2000);
+        if (!Roles.AtLeast(me.Role, "officer")) text = Names.DefangGroupPings(text);
+        lock (s) { msg["text"] = text; msg["edited"] = true; s.MarkDirty(); }
+        QueueFlush(s);
         await hub.Broadcast(new JsonObject { ["t"] = "edited", ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["text"] = text }, Viewers(ch));
         var pinned = Pins.UpdateText(ch.Id, (string)msg["id"], text);
         if (pinned != null) await hub.Broadcast(new JsonObject { ["t"] = "pin", ["channel"] = ch.Id, ["pin"] = pinned }, Viewers(ch));
-        if (!saved) await hub.Error(me, "The server couldn't save the edit");
     }
 
     async Task Delete(Member me, JsonObject m)
     {
-        var (ch, s, msg) = FindMessage((string)m["id"]);
+        var (ch, s, msg) = FindMessage(J.Str(m, "id"));
         if (msg == null) return;
-        if (!Names.Same((string)msg["from"], me.Name) && !Roles.Can(me.Role, Perm.Moderate))
+        if (!ch.VisibleTo(me.Role)) return;
+        if (!IsAuthor(me, msg) && !Roles.Can(me.Role, Perm.Moderate))
         {
             await hub.Error(me, "Only officers can delete other people's messages");
             return;
         }
-        bool saved;
-        lock (s) { s.Messages.Remove(msg); saved = s.Compact(); }
+        lock (s) { s.Messages.Remove(msg); s.MarkDirty(); }
+        QueueFlush(s);
         hub.Log.LogInformation("{Name} deleted a message from {From} in {Channel}", me.Name, Names.ForLog((string)msg["from"]), ch.Id);
         await hub.Broadcast(new JsonObject { ["t"] = "deleted", ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
         if (Pins.Unpin(ch.Id, (string)msg["id"], out _))
             await hub.Broadcast(new JsonObject { ["t"] = "unpin", ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
-        if (!saved) await hub.Error(me, "The server couldn't save the delete");
     }
 
     // toggles the sender's reaction; the whole list for that reaction is broadcast (idempotent for clients)
     async Task React(Member me, JsonObject m)
     {
-        var emoji = CanonReaction((string)m["emoji"]);
+        var emoji = CanonReaction(J.Str(m, "emoji"));
         if (emoji == null) return; // not in the fixed set: ignored (already paid for by the control budget)
-        var (ch, s, msg) = FindMessage((string)m["id"]);
+        var (ch, s, msg) = FindMessage(J.Str(m, "id"));
         if (msg == null || !ch.VisibleTo(me.Role)) return;
-        bool on, full = false, saved = true;
+        bool on, full = false;
         JsonArray users;
         lock (s)
         {
@@ -234,19 +273,19 @@ public class ChatModule : IModule
                 all.Remove(emoji);
                 if (list.Count > 0) all[emoji] = list;
                 if (all.Count > 0) msg["reactions"] = all; else msg.Remove("reactions");
-                saved = s.Compact();
+                s.MarkDirty();
             }
             users = new JsonArray(list.Select(x => (JsonNode)JsonValue.Create((string)x)).ToArray());
         }
         if (full) { await hub.Error(me, "That reaction is full"); return; }
+        QueueFlush(s);
         await hub.Broadcast(new JsonObject { ["t"] = "react", ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["reaction"] = emoji, ["emoji"] = EmojiOf(emoji), ["users"] = users, ["by"] = me.Name, ["on"] = on }, Viewers(ch));
-        if (!saved) await hub.Error(me, "The server couldn't save that reaction");
     }
 
     async Task Pin(Member me, JsonObject m, bool pin)
     {
         if (!Roles.Can(me.Role, Perm.PinMessages)) { await hub.Error(me, "Only officers can pin messages"); return; }
-        var id = (string)m["id"];
+        var id = J.Str(m, "id");
         if (string.IsNullOrEmpty(id)) return;
         var now = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds();
         if (pin)
@@ -270,7 +309,7 @@ public class ChatModule : IModule
         else
         {
             // the pin may outlive its message, so look it up by pin id in the channels this person can see
-            var want = (string)m["channel"];
+            var want = J.Str(m, "channel");
             var ch = hub.Channels.All.FirstOrDefault(c => c.Type == "text" && c.VisibleTo(me.Role) && Pins.Has(c.Id, id) && (want == null || c.Id == want));
             if (ch == null) return;
             if (Pins.Unpin(ch.Id, id, out var saved))
@@ -283,7 +322,7 @@ public class ChatModule : IModule
 
     public void DropChannel(string id)
     {
-        stores.TryRemove(id, out _);
+        if (stores.TryRemove(id, out var gone)) lock (gone) gone.Flush();
         Pins.DropChannel(id);
         // keep the file (renamed) in case it was removed by mistake
         var f = HistoryStore.FileOf(dir, id);

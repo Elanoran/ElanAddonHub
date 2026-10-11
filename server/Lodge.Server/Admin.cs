@@ -53,8 +53,8 @@ public class AdminModule : IModule
 
     async Task Invite(Member me, JsonObject m)
     {
-        var name = ((string)m["name"] ?? "").Trim();
-        var role = Roles.Normalize((string)m["role"]);
+        var name = (J.Str(m, "name") ?? "").Trim();
+        var role = Roles.Normalize(J.Str(m, "role"));
         var code = hub.Auth.Add(name, role); // throws with a readable message when the name is bad or taken
         hub.Log.LogInformation("{By} invited {Name} as {Role}", me.Name, name, role);
         await hub.Send(me, new JsonObject { ["t"] = "admin.invited", ["name"] = name, ["role"] = role, ["code"] = code });
@@ -63,8 +63,8 @@ public class AdminModule : IModule
 
     async Task SetRole(Member me, JsonObject m)
     {
-        var name = (string)m["name"];
-        var role = Roles.Normalize((string)m["role"]);
+        var name = J.Str(m, "name");
+        var role = Roles.Normalize(J.Str(m, "role"));
         if (role != "owner" && hub.Auth.ListPersonal().Count(p => p.Role == "owner" && !LodgeHub.Same(p.Name, name)) == 0)
             throw new InvalidOperationException("The lodge needs at least one Guild Master");
         hub.Auth.SetRole(name, role);
@@ -75,7 +75,7 @@ public class AdminModule : IModule
 
     async Task Remove(Member me, JsonObject m)
     {
-        var name = (string)m["name"];
+        var name = J.Str(m, "name");
         if (LodgeHub.Same(name, me.Name)) throw new InvalidOperationException("You can't remove yourself");
         hub.Auth.Remove(name);
         hub.Log.LogInformation("{By} removed {Name}", me.Name, name);
@@ -85,9 +85,9 @@ public class AdminModule : IModule
 
     async Task AddChannel(Member me, JsonObject m)
     {
-        var name = ((string)m["name"] ?? "").Trim();
+        var name = (J.Str(m, "name") ?? "").Trim();
         if (name.Length is < 1 or > 24) throw new InvalidOperationException("Channel names are 1-24 characters");
-        var ch = hub.Channels.Add(name, (string)m["type"], (string)m["minRole"], m["max"]?.GetValue<int>() ?? 0);
+        var ch = hub.Channels.Add(name, J.Str(m, "type"), J.Str(m, "minRole"), J.Int(m, "max"));
         hub.Log.LogInformation("{By} added channel {Id}", me.Name, ch.Id);
         await hub.Resync();
         await SendMembers(me);
@@ -95,7 +95,7 @@ public class AdminModule : IModule
 
     async Task RemoveChannel(Member me, JsonObject m)
     {
-        var id = (string)m["id"];
+        var id = J.Str(m, "id");
         if (!hub.Channels.Remove(id)) throw new InvalidOperationException("That channel can't be removed (the last text channel stays)");
         hub.Chat.DropChannel(id);
         foreach (var x in hub.Members.Where(x => x.Room == id)) x.Room = null;
@@ -107,7 +107,7 @@ public class AdminModule : IModule
     // officers can only act on lower ranks
     Member Target(Member me, JsonObject m)
     {
-        var t = hub.Find(m["id"]?.GetValue<int>() ?? 0) ?? throw new InvalidOperationException("They're not online");
+        var t = hub.Find(J.Int(m, "id")) ?? throw new InvalidOperationException("They're not online");
         if (!hub.CanSee(me, t)) throw new InvalidOperationException("They're not online"); // an officer can't act on someone invisible
         if (Roles.Level(t.Role) >= Roles.Level(me.Role)) throw new InvalidOperationException("You can only do that to lower ranks");
         return t;
@@ -123,8 +123,9 @@ public class AdminModule : IModule
     async Task ServerMute(Member me, JsonObject m)
     {
         var t = Target(me, m);
-        t.ServerMuted = m["on"]?.GetValue<bool>() == true;
-        hub.Log.LogInformation("{By} {Action} {Name}", me.Name, t.ServerMuted ? "server-muted" : "unmuted", t.Name);
+        bool on = J.Bool(m, "on");
+        hub.SetServerMuted(t, on); // by identity: a reconnect keeps it
+        hub.Log.LogInformation("{By} {Action} {Name}", me.Name, on ? "server-muted" : "unmuted", t.Name);
         await hub.BroadcastUser(t);
     }
 }

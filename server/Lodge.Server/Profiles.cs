@@ -71,8 +71,9 @@ public static class ProfileRules
     public static string Fold(string name)
     {
         var sb = new System.Text.StringBuilder();
-        foreach (var ch in Names.Normalize(name).ToLowerInvariant())
+        foreach (var raw in Names.Normalize(name)) // Cyrillic/Greek look-alikes fold to Latin first
         {
+            var ch = char.ToLowerInvariant(Names.Latin(raw));
             switch (ch)
             {
                 case '0': sb.Append('o'); break;
@@ -433,7 +434,7 @@ public class ProfileModule : IModule
             bool seeOnline = !online.Invisible || online.Id == viewer.Id || Roles.Can(viewer.Role, Perm.SeeInvisible);
             if (seeOnline) return Build(viewer, online.Name, online.Profile, online.Role, online.Personal, online);
             if (!online.Personal) return new JsonObject { ["name"] = name, ["found"] = false }; // an invisible guest: nobody here
-            return Build(viewer, online.Name, online.Profile, online.Role, true, null); // invisible personal: the stored profile, like offline
+            return Build(viewer, online.Name, online.Profile, online.Role, true, null, hideSeen: true); // invisible personal: the stored profile, like offline - but without "seen", which would be "now"
         }
         var list = hub.Auth.ListPersonal();
         int at = list.FindIndex(x => LodgeHub.Same(x.Name, name));
@@ -444,7 +445,7 @@ public class ProfileModule : IModule
 
     public JsonObject OwnView(Member me) => Build(me, me.Name, me.Profile, me.Role, me.Personal, me);
 
-    JsonObject Build(Member viewer, string name, Profile p, string role, bool personal, Member online)
+    JsonObject Build(Member viewer, string name, Profile p, string role, bool personal, Member online, bool hideSeen = false)
     {
         bool self = (online != null && online.Id == viewer.Id) || (personal && viewer.Personal && LodgeHub.Same(viewer.Name, name));
         bool allowed = self || p.VisibleTo != "officers" || Roles.AtLeast(viewer.Role, "officer");
@@ -470,8 +471,9 @@ public class ProfileModule : IModule
                 var cj = new JsonObject
                 {
                     ["name"] = c.Name, ["class"] = c.Class, ["classFile"] = c.ClassFile, ["race"] = c.Race, ["raceFile"] = c.RaceFile,
-                    ["level"] = c.Level, ["seen"] = c.Seen, ["main"] = isMain,
+                    ["level"] = c.Level, ["main"] = isMain,
                 };
+                if (!hideSeen) cj["seen"] = c.Seen;
                 if (self) cj["hidden"] = hid;
                 arr.Add(cj);
             }

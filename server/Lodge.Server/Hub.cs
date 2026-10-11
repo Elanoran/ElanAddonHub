@@ -41,7 +41,9 @@ public class Member
     public WebSocket Ws;
     public string Room;              // voice room id, null = not in voice
     public bool Muted, Deaf;         // set by the person
-    public bool ServerMuted;         // set by an officer
+    public bool ServerMuted;         // set by an officer (kept by identity across reconnects, see LodgeHub.SetServerMuted)
+    public DateTime LastSeen;        // last frame received (any kind)
+    public bool Pings;               // sent an app-level ping at least once: only such clients are dropped for silence
     public string Status = "online"; // online | away | busy | dungeon | lfg
     public string Note = "";
     public JsonObject Game;          // what they're playing (from the hub), null = not shared
@@ -87,7 +89,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.7.1";
+    public const string Version = "2.8.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -105,7 +107,11 @@ public class LodgeHub
     readonly ConcurrentDictionary<int, Member> members = new();
     readonly ConcurrentDictionary<string, Budget> budgets = new();
     readonly object admission = new();
+    readonly object roomGate = new();
+    readonly HashSet<string> serverMuted = new(); // identity keys, see IdentityKey
     int nextId;
+    public readonly DateTime StartedAt;
+    public object RoomGate => roomGate;
 
     public int Online => members.Count;
     // what the public /health reports: invisible members are not counted
@@ -115,11 +121,11 @@ public class LodgeHub
 
     public LodgeHub(LodgeConfig cfg, Auth auth, FileStore files, ILogger log, IClock clock = null)
     {
-        Cfg = cfg; Auth = auth; Files = files; Log = log; Clock = clock ?? SystemClock.Instance;
+        Cfg = cfg; Auth = auth; Files = files; Log = log; Clock = clock ?? SystemClock.Instance; StartedAt = Clock.UtcNow;
         Channels = new Channels(cfg.DataDir);
         Profiles = new ProfileStore(cfg.DataDir, log, Clock);
         ProfileMod = new ProfileModule(this);
-        Chat = new ChatModule(this);
+        Chat = new ChatModule(this) { FlushDelay = TimeSpan.FromSeconds(cfg.HistoryFlushSeconds) };
         Voice = new VoiceModule(this);
         modules = new IModule[] { Chat, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
@@ -161,9 +167,10 @@ public class LodgeHub
         var me = new Member
         {
             Id = NextId(), Ws = ws, Code = code, Personal = who.Personal, Role = who.Role, Ip = ip,
-            ClientInfo = Names.ForLog(clientInfo, 32), Budget = BudgetFor(who, ip), Invisible = invisible,
+            ClientInfo = Names.ForLog(clientInfo, 32), Budget = BudgetFor(who, ip), Invisible = invisible, LastSeen = Clock.UtcNow,
         };
-        lock (admission) me.Name = who.Personal ? UniqueName(Names.Normalize(who.Name)) : UniqueName(GuestName(name), Auth.PersonalNames);
+        lock (admission) me.Name = who.Personal ? UniqueName(Names.Normalize(who.Name)) : UniqueName(GuestName(name), ReservedNames());
+        me.ServerMuted = IsServerMuted(me);
         me.Profile = who.Personal ? Profiles.For(me.Name) : new Profile(); // guests: a session-only profile, never stored
         if (!TryAdmit(me))
         {
@@ -210,6 +217,7 @@ public class LodgeHub
             ["channels"] = new JsonArray(visible.Select(c => (JsonNode)c.ToJson()).ToArray()),
             ["users"] = new JsonArray(members.Values.Where(m => CanSee(me, m)).Select(m => (JsonNode)UserFor(m, me)).ToArray()),
             ["profile"] = ProfileMod.OwnView(me),
+            ["names"] = NameDirectory(), // 2.8: { login: display name } so offline authors show their display name too
             ["history"] = history,
         };
     }
@@ -230,6 +238,7 @@ public class LodgeHub
                 if (msg.Length > MaxFrame) return; // nobody needs frames that big
             } while (!r.EndOfMessage);
 
+            me.LastSeen = Clock.UtcNow;
             if (r.MessageType == WebSocketMessageType.Binary)
             {
                 // voice over budget is dropped quietly (a burst after a hiccup shouldn't cost anything else)
@@ -240,15 +249,24 @@ public class LodgeHub
             JsonObject m;
             try { m = JsonNode.Parse(Encoding.UTF8.GetString(msg.GetBuffer(), 0, (int)msg.Length))?.AsObject(); } catch { continue; }
             if (m == null) continue;
-            var type = (string)m["t"] ?? "";
+            var type = J.Str(m, "t") ?? "";
             if (type != "msg" && !me.Budget.Control.TryTake())
             {
                 if (me.CountDrop(Clock) > FloodDropsPerMinute) { await Disconnect(me, "Too many messages - slow down"); return; }
                 continue;
             }
-            if (type == "ping") { await Send(me, new JsonObject { ["t"] = "pong" }); continue; }
-            foreach (var mod in modules)
-                if (await mod.Handle(me, type, m)) break;
+            if (type == "ping") { me.Pings = true; await Send(me, new JsonObject { ["t"] = "pong" }); continue; }
+            // a message of the wrong shape must cost that message only, never the connection
+            try
+            {
+                foreach (var mod in modules)
+                    if (await mod.Handle(me, type, m)) break;
+            }
+            catch (Exception e) when (e is not OperationCanceledException and not WebSocketException)
+            {
+                Log.LogWarning("{Name}: dropped a malformed '{Type}' message ({Error})", me.Name, Names.ForLog(type, 16), e.GetType().Name);
+                me.CountDrop(Clock);
+            }
             if (me.RecentDrops(Clock) > FloodDropsPerMinute) { await Disconnect(me, "Too many messages - slow down"); return; }
         }
     }
@@ -257,7 +275,14 @@ public class LodgeHub
 
     public Task Send(Member to, JsonObject obj) => SendRaw(to, Encoding.UTF8.GetBytes(obj.ToJsonString()), WebSocketMessageType.Text);
 
-    public Task Error(Member to, string text) => Send(to, new JsonObject { ["t"] = "error", ["text"] = text });
+    // code (2.8, optional): a machine-readable reason next to the text - "rate", "room-full" (with the room id)
+    public Task Error(Member to, string text, string code = null, string room = null)
+    {
+        var o = new JsonObject { ["t"] = "error", ["text"] = text };
+        if (code != null) o["code"] = code;
+        if (room != null) o["room"] = room;
+        return Send(to, o);
+    }
 
     public async Task SendRaw(Member to, byte[] data, WebSocketMessageType type)
     {
@@ -310,10 +335,13 @@ public class LodgeHub
 
     // apply a change that may alter who can see `me` (visibility, voice room): viewers who gain sight get a join,
     // who lose it a leave, who keep it an update
-    public async Task Mutate(Member me, Action change)
+    public Task Mutate(Member me, Action change) => MutateIf(me, () => { change(); return true; });
+
+    // `change` returns false when it decided not to change anything: nobody is told
+    public async Task MutateIf(Member me, Func<bool> change)
     {
         var before = members.Values.Where(v => v.Id != me.Id && CanSee(v, me)).Select(v => v.Id).ToHashSet();
-        change();
+        if (!change()) return;
         var sends = new List<Task>();
         foreach (var v in members.Values)
         {
@@ -367,13 +395,13 @@ public class LodgeHub
     }
 
     // close with a reason the client shows (a clean close stops it reconnecting); frees the slot right away
-    public async Task Disconnect(Member m, string reason)
+    public async Task Disconnect(Member m, string reason, WebSocketCloseStatus status = WebSocketCloseStatus.PolicyViolation)
     {
         if (!members.TryRemove(m.Id, out _)) return;
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await m.Ws.CloseOutputAsync(WebSocketCloseStatus.PolicyViolation, reason, cts.Token);
+            await m.Ws.CloseOutputAsync(status, reason, cts.Token);
         }
         catch { }
         var ws = m.Ws;
@@ -393,12 +421,58 @@ public class LodgeHub
                 try
                 {
                     await ApplyCodeChanges();
+                    await SweepIdle();
                     Auth.Strikes.Sweep();
                     SweepBudgets();
                 }
                 catch (Exception e) { Log.LogWarning("Housekeeping failed: {Error}", e.GetType().Name); }
             }
         });
+    }
+
+    // A client that pings (hub 2.8+: every 20 s) and then goes silent is a dead connection the proxy chain has not
+    // noticed: close it with "going away" so its client reconnects at once. Clients that never ping (older hubs) are
+    // left alone. Returns how many were closed.
+    public async Task<int> SweepIdle()
+    {
+        var limit = TimeSpan.FromSeconds(Cfg.IdleTimeoutSeconds);
+        int n = 0;
+        foreach (var m in members.Values.ToList())
+            if (m.Pings && Clock.UtcNow - m.LastSeen > limit)
+            {
+                Log.LogInformation("{Name} went silent - closing the connection", m.Name);
+                await Disconnect(m, "Connection timed out", WebSocketCloseStatus.EndpointUnavailable);
+                n++;
+            }
+        return n;
+    }
+
+    // ---- server-mute is kept per identity (a personal code, or a guest's address), so leaving and coming back does not lift it
+    public static string IdentityKey(Member m) => m.Personal ? "p:" + ProfileRules.Key(m.Name) : "g:" + m.Ip;
+
+    public bool IsServerMuted(Member m) { lock (serverMuted) return serverMuted.Contains(IdentityKey(m)); }
+
+    public void SetServerMuted(Member target, bool on)
+    {
+        var key = IdentityKey(target);
+        lock (serverMuted)
+        {
+            if (!on) serverMuted.Remove(key);
+            else if (serverMuted.Count < 1000) serverMuted.Add(key);
+        }
+        foreach (var x in members.Values.Where(x => IdentityKey(x) == key)) x.ServerMuted = on;
+    }
+
+    // { login: display name } for every personal member who set one (the welcome carries it; profile updates keep it fresh)
+    public JsonObject NameDirectory()
+    {
+        var o = new JsonObject();
+        foreach (var (name, _) in Auth.ListPersonal())
+        {
+            var dn = Profiles.Peek(name)?.DisplayName;
+            if (!string.IsNullOrEmpty(dn)) o[name] = dn;
+        }
+        return o;
     }
 
     // budgets of identities with no connection for 10 minutes are forgotten
@@ -438,32 +512,41 @@ public class LodgeHub
 
     public static bool Same(string a, string b) => Names.Same(a, b);
 
-    // a guest can't look like a personal member: their normalized name gets " (guest)" when it matches one,
-    // shortened to fit the 24 characters
+    public const string GuestTag = " (guest)";
+
+    // Guests always carry a visible " (guest)" tag (shortened name + tag fit the 24 characters). The unique-name step
+    // keeps even a suffixed name off every login name and display name - same letters under case, NFKC and the
+    // Cyrillic/Greek look-alike fold count as the same.
     public string GuestName(string name)
     {
         name = Names.Normalize(name);
+        while (name.EndsWith("(guest)", StringComparison.OrdinalIgnoreCase)) name = name[..^7].TrimEnd();
         if (name.Length == 0) name = "Guest";
-        if (Auth.PersonalNames.Any(p => Names.Same(p, name)))
-        {
-            const string tag = " (guest)";
-            name = name.Length + tag.Length > Names.Max ? name[..(Names.Max - tag.Length)].TrimEnd() + tag : name + tag;
-        }
-        return name;
+        return name.Length + GuestTag.Length > Names.Max ? Names.Cut(name, Names.Max - GuestTag.Length).TrimEnd() + GuestTag : name + GuestTag;
     }
 
-    // reserved: for guests, every personal name - a " 2" suffix must not land on one either
+    // every name a guest must not be mistaken for: login names, display names (stored and online)
+    public IEnumerable<string> ReservedNames()
+    {
+        var all = new List<string>(Auth.PersonalNames);
+        foreach (var m in members.Values) { all.Add(m.Name); if (!string.IsNullOrEmpty(m.Profile?.DisplayName)) all.Add(m.Profile.DisplayName); }
+        lock (Profiles.Gate) foreach (var (_, shown) in Profiles.DisplayNames()) all.Add(shown);
+        return all;
+    }
+
+    // reserved: for guests, every login and display name - a " 2" suffix must not land on one either.
+    // All comparisons use Names.Key (case, NFKC and look-alike insensitive).
     public string UniqueName(string name, IEnumerable<string> reserved = null)
     {
         name = Names.Normalize(name);
         if (name.Length == 0) name = "Guest";
-        var taken = members.Values.Select(m => Names.Normalize(m.Name).ToLowerInvariant()).ToHashSet();
-        if (reserved != null) foreach (var r in reserved) taken.Add(Names.Normalize(r).ToLowerInvariant());
+        var taken = members.Values.Select(m => Names.Key(m.Name)).ToHashSet();
+        if (reserved != null) foreach (var r in reserved) taken.Add(Names.Key(r));
         var candidate = name;
-        for (int i = 2; taken.Contains(candidate.ToLowerInvariant()); i++)
+        for (int i = 2; taken.Contains(Names.Key(candidate)); i++)
         {
             var suffix = " " + i;
-            candidate = (name.Length + suffix.Length > Names.Max ? name[..(Names.Max - suffix.Length)].TrimEnd() : name) + suffix;
+            candidate = (name.Length + suffix.Length > Names.Max ? Names.Cut(name, Names.Max - suffix.Length).TrimEnd() : name) + suffix;
         }
         return candidate;
     }

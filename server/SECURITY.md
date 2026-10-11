@@ -85,8 +85,25 @@
 - The codes file stays `lodge:lodge 0640` in the data folder (the service edits it for the Guild Master panel);
   `lodge.env` stays `root:lodge 0640`. `install.sh` adds `codes.lock` (`lodge:lodge 0660`) and leaves systemd
   drop-ins alone.
-- `?code=` still works by default for 1.x hubs. Turn it off with `LODGE_ALLOW_QUERY_CODE=false` once everyone
-  runs hub 2.x.
+- `?code=` is **off by default since 2.8** (`LODGE_ALLOW_QUERY_CODE=true` brings it back for 1.x hubs): such a request
+  gets a clear 401 and is never checked.
+
+## 2.8 hardening
+
+- File names are cleaned on the server (`Names.FileName`) and again by the client: path parts, drive letters, the
+  Windows-invalid characters `\ / : * ? " < > |`, control and format characters (bidi overrides, zero-width), leading and
+  trailing dots/spaces, device names (CON, NUL, COM1...) and length. Downloads carry `Cache-Control: private, no-store` and
+  `X-Content-Type-Options: nosniff`.
+- Chat text loses bidi overrides/isolates and more than 3 blank lines in a row; `@everyone`/`@here` from below officer are
+  defused (a zero-width space after the `@`).
+- Guests always carry a " (guest)" tag and can not take a name that matches a login or display name under case, NFKC and
+  the Cyrillic/Greek look-alike fold. Invite names may use any letters but not a look-alike of an existing name.
+- Uploads: 2 at once per person (guests: per address), 2 minute limit per upload.
+- Edit/delete need channel visibility; edit/delete of own messages match the author identity (guests: only messages from
+  their current connection). Server-mute is kept per identity across reconnects. The voice room cap check and the join are
+  one atomic step. A malformed message of any type is dropped and logged; the connection stays open.
+- A client that pings (2.8+) and then goes silent for 75 s is closed (clients that never ping are left alone).
+- History: edits/deletes/reactions are written after 5 quiet seconds and at shutdown (atomic temp file + rename).
 
 ## Backups and updates (`lodge-backup`, `lodge-update`)
 

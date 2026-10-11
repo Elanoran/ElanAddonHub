@@ -21,6 +21,13 @@ public sealed class HistoryStore
 
     public List<JsonObject> Messages { get; } = new();
 
+    // edits, deletes and reactions change the messages in memory at once but reach the disk later (the owner of the
+    // store flushes after a short quiet period, on shutdown and when the file gets too big): a burst of reactions
+    // costs one rewrite instead of one each. Callers hold lock(store).
+    public bool Dirty { get; private set; }
+    public void MarkDirty() => Dirty = true;
+    public bool Flush() => !Dirty || Compact();
+
     public HistoryStore(string dir, string channel, long maxBytes, ILogger log)
     {
         this.channel = channel;
@@ -119,6 +126,7 @@ public sealed class HistoryStore
             File.Move(tmp, path, overwrite: true);
             recordsOnDisk = keep.Count;
             bytesOnDisk = bytes.Length;
+            Dirty = false;
             return true;
         }
         catch (Exception e)

@@ -40,6 +40,7 @@ public class FileStore
     long usedBytes, reservedBytes;
     int fileCount, reservedFiles;
     readonly ConcurrentDictionary<string, Queue<DateTime>> recent = new();
+    readonly Dictionary<string, int> running = new(); // uploads in flight per identity (under gate)
     static readonly FileExtensionContentTypeProvider Types = new();
     static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -86,7 +87,13 @@ public class FileStore
         if (!ValidId(id)) return null;
         var meta = Path.Combine(dir, id + ".json");
         if (!File.Exists(meta) || !File.Exists(PathOf(id))) return null;
-        try { return JsonSerializer.Deserialize<FileMeta>(File.ReadAllText(meta), Json); } catch { return null; }
+        try
+        {
+            var m = JsonSerializer.Deserialize<FileMeta>(File.ReadAllText(meta), Json);
+            if (m != null) m.Name = Clean(m.Name); // files stored by older servers may carry a name that isn't safe everywhere
+            return m;
+        }
+        catch { return null; }
     }
 
     // per person (guests: per IP) - a rolling 10 minute window
@@ -105,13 +112,28 @@ public class FileStore
     public async Task<FileMeta> Save(Stream body, long? declaredLength, string name, string by, string rateKey, CancellationToken ct)
     {
         if (declaredLength > cfg.MaxFileBytes) throw new FileTooBigException();
-        if (!await slots.WaitAsync(0, ct)) throw new UploadRefusedException(429, "Too many uploads at once - try again in a moment");
+        // one person (guests: one address) can't hold all the slots: at most MaxUploadsPerIdentity at once
+        var who = rateKey ?? "?";
+        lock (gate)
+        {
+            running.TryGetValue(who, out var n0);
+            if (n0 >= cfg.MaxUploadsPerIdentity) throw new UploadRefusedException(429, $"You already have {n0} uploads running - wait for one to finish");
+            running[who] = n0 + 1;
+        }
+        bool slotTaken = false;
         long reserved = 0;
         bool fileReserved = false;
         string part = null;
+        // an upload that crawls (a stalled or very slow sender) is cut off after UploadTimeoutSeconds
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(cfg.UploadTimeoutSeconds));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+        var origCt = ct;
+        ct = linked.Token;
         try
         {
-            CheckRate(rateKey ?? "?");
+            if (!await slots.WaitAsync(0, ct)) throw new UploadRefusedException(429, "Too many uploads at once - try again in a moment");
+            slotTaken = true;
+            CheckRate(who);
             reserved = declaredLength ?? cfg.MaxFileBytes;
             lock (gate)
             {
@@ -160,6 +182,10 @@ public class FileStore
             }
             return meta;
         }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !origCt.IsCancellationRequested)
+        {
+            throw new UploadRefusedException(408, "The upload took too long and was stopped");
+        }
         finally
         {
             if (part != null)
@@ -168,21 +194,19 @@ public class FileStore
                 TryDelete(Path.Combine(dir, Path.GetFileNameWithoutExtension(part) + ".json.tmp"));
                 TryDelete(Path.Combine(dir, Path.GetFileNameWithoutExtension(part) + ".json"));
             }
-            if (fileReserved) lock (gate) { reservedBytes -= reserved; reservedFiles--; }
-            slots.Release();
+            lock (gate)
+            {
+                if (fileReserved) { reservedBytes -= reserved; reservedFiles--; }
+                if (running.TryGetValue(who, out var left)) { if (left <= 1) running.Remove(who); else running[who] = left - 1; }
+            }
+            if (slotTaken) slots.Release();
         }
     }
 
     static void TryDelete(string f) { try { if (File.Exists(f)) File.Delete(f); } catch { } }
 
-    static string Clean(string name)
-    {
-        name = Path.GetFileName(name ?? "").Trim();
-        foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
-        name = new string(name.Where(c => !char.IsControl(c)).ToArray());
-        if (name.Length == 0) name = "file";
-        return name.Length > 120 ? name[..120] : name;
-    }
+    // see Names.FileName: no path parts, no Windows-invalid or invisible characters, no device names
+    static string Clean(string name) => Names.FileName(name);
 
     // expired uploads go; their space and slot come back
     public int Expire()

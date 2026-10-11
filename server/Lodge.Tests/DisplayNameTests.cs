@@ -167,7 +167,7 @@ public class DisplayNameTests
         Assert.Null(Err(g));
         g.Clear(); await l.Set(g, "{\"t\":\"profile:set\",\"avatarId\":\"av.fish\"}");
         Assert.Equal("av.fish", (string?)g.Profile()["avatarId"]);
-        Assert.Equal("", l.Hub.Members.First(m => m.Name == "Wanderer").Profile.DisplayName);
+        Assert.Equal("", l.Hub.Members.First(m => m.Name == "Wanderer (guest)").Profile.DisplayName);
         // a guest cannot be named like a display name holder? Their name stays "(guest)"-tagged only for login names - unchanged.
     }
 

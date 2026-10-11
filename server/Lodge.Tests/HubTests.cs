@@ -172,8 +172,8 @@ public class HubTests
         var longName = new string('A', 40);
         var n = hub.UniqueName(hub.GuestName(longName), hub.Auth.PersonalNames);
         Assert.Equal(24, n.Length);
-        Assert.Equal("Tom", hub.UniqueName(hub.GuestName("Tom"), hub.Auth.PersonalNames));
-        Assert.Equal("Guest", hub.UniqueName(hub.GuestName("\u0001\u0002"), hub.Auth.PersonalNames));
+        Assert.Equal("Tom (guest)", hub.UniqueName(hub.GuestName("Tom"), hub.Auth.PersonalNames));
+        Assert.Equal("Guest (guest)", hub.UniqueName(hub.GuestName("\u0001\u0002"), hub.Auth.PersonalNames));
         // a guest asking for "Bob" gets the guest tag even before Bob is online
         Assert.Equal("Bob (guest)", hub.UniqueName(hub.GuestName("bob"), hub.Auth.PersonalNames), ignoreCase: true);
     }

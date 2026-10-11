@@ -106,7 +106,7 @@ public class Auth
 
     // ---- editing the codes file (the hub's Guild Master panel; lodge-admin does the same from a shell)
 
-    static readonly System.Text.RegularExpressions.Regex NameRule = new(@"^[A-Za-z0-9][A-Za-z0-9 _-]{0,23}$");
+    static readonly System.Text.RegularExpressions.Regex NameRule = new(@"^[\p{L}\p{N}][\p{L}\p{N} _-]{0,23}$");
 
     // new codes: 128 bits (32 hex characters); older, shorter codes keep working
     public static string NewCode() => Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
@@ -114,12 +114,12 @@ public class Auth
     public string Add(string name, string role)
     {
         name = Names.Normalize(name);
-        if (!NameRule.IsMatch(name)) throw new InvalidOperationException("Names are 1-24 letters, digits, space, _ or -");
+        if (!NameRule.IsMatch(name)) throw new InvalidOperationException("Names are 1-24 letters (any language), digits, space, _ or -");
         var code = NewCode();
         Mutate(lines =>
         {
-            if (lines.Select(Parse).Any(p => p != null && Names.Same(p.Value.Name, name)))
-                throw new InvalidOperationException($"{name} already has a code");
+            if (lines.Select(Parse).Any(p => p != null && (Names.Same(p.Value.Name, name) || Names.Alike(p.Value.Name, name))))
+                throw new InvalidOperationException($"{name} already has a code (or a name that looks just like it)");
             lines.Add($"{name}:{code}:{Roles.Normalize(role)}");
         });
         return code;

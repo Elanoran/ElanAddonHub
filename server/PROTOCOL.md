@@ -1,11 +1,11 @@
-# Lodge protocol (v2.7)
+# Lodge protocol (v2.8)
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
 `Name:code:role` in `<data>/codes`, managed from the hub's Guild Master panel or `lodge-admin`) or the optional
 shared `LODGE_CODE` (rank: guest). Send codes in the `X-Lodge-Code` header, never in a URL (query strings end
-up in proxy logs); the header wins when both are present. `?code=` is accepted for 1.x hubs until
-`LODGE_ALLOW_QUERY_CODE=false` - then any request carrying `?code=` gets 401 "use the header" (not a strike).
+up in proxy logs); the header wins when both are present. `?code=` is refused by default
+(2.8; `LODGE_ALLOW_QUERY_CODE=true` accepts it for 1.x hubs) - a request carrying `?code=` gets 401 "use the header" (not a strike).
 Every credential check - `/health` with a code, `/ws`, `/files` - shares one wrong-code counter per client IP:
 the 10th wrong code within 15 minutes is still 401, then the IP gets 429 for 15 minutes even with a valid code.
 At most `LODGE_MAX_TRACKED_IPS` addresses are tracked; beyond that unknown addresses share one counter.
@@ -189,3 +189,14 @@ officer+, members and channels owner. Status is one of online | away | busy | du
 - Client → server: one Opus packet per frame (48 kHz mono, 20 ms), only while in a room and not muted.
 - Server → client: `[sender id: int32 little-endian][Opus packet]`, sent to everyone else in the same room who
   isn't deafened. "Speaking" indicators are derived from incoming packets on the client.
+
+## 2.8 additions (all optional for clients; older clients ignore them)
+
+- `welcome.names`: `{ login: displayName }` for every member who set a display name (also offline ones). Profile updates
+  (`profile`) keep carrying `name` + `displayName`.
+- `error` may carry `code` (`rate`, `room-full`) and `room`. A full voice room answers `error` with `code: "room-full"`
+  and the room id; the join is confirmed by the `user` message with your own `room`.
+- `ping` every 20 s from the client; the server answers `pong` and closes a pinging connection that was silent for 75 s
+  with close code 1001. Clients that never ping are not closed for silence.
+- Guest names always end in " (guest)". `@everyone`/`@here` from below officer arrive with a zero-width space after the `@`.
+- `profile:data` leaves out a character's `seen` when the member is invisible to the viewer.

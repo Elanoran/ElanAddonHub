@@ -16,23 +16,32 @@ public class VoiceModule : IModule
         switch (type)
         {
             case "voice":
-                string room = (string)m["room"];
-                if (m["on"] != null) room = m["on"]!.GetValue<bool>() ? room ?? hub.Channels.DefaultVoice(me.Role)?.Id : null; // 1.x hubs
+                string room = J.Str(m, "room");
+                var on = J.BoolOrNull(m, "on");
+                if (on != null) room = on == true ? room ?? hub.Channels.DefaultVoice(me.Role)?.Id : null; // 1.x hubs
+                Channel ch = null;
                 if (room != null)
                 {
-                    var ch = hub.Channels.Get(room);
+                    ch = hub.Channels.Get(room);
                     if (ch == null || ch.Type != "voice" || !ch.VisibleTo(me.Role)) { await hub.Error(me, "You can't join that room"); return true; }
-                    if (ch.Max > 0 && me.Room != room && hub.Members.Count(x => x.Room == room) >= ch.Max)
+                }
+                // the cap check and the join are one step under a lock: simultaneous joins can't both take the last place.
+                // An invisible member in a room is shown (masked) to that room's viewers.
+                bool full = false;
+                await hub.MutateIf(me, () =>
+                {
+                    lock (hub.RoomGate)
                     {
-                        await hub.Error(me, $"{ch.Name} is full ({ch.Max})");
+                        if (ch != null && ch.Max > 0 && me.Room != room && hub.Members.Count(x => x.Room == room) >= ch.Max) { full = true; return false; }
+                        me.Room = room;
                         return true;
                     }
-                }
-                await hub.Mutate(me, () => me.Room = room); // an invisible member in a room is shown (masked) to that room's viewers
+                });
+                if (full) await hub.Error(me, $"{ch.Name} is full ({ch.Max})", "room-full", room);
                 return true;
             case "state":
-                me.Muted = m["muted"]?.GetValue<bool>() == true;
-                me.Deaf = m["deaf"]?.GetValue<bool>() == true;
+                me.Muted = J.Bool(m, "muted");
+                me.Deaf = J.Bool(m, "deaf");
                 await hub.BroadcastUser(me);
                 return true;
         }
