@@ -1,4 +1,4 @@
-# Lodge protocol (v2.8)
+# Lodge protocol (v2.10)
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
@@ -200,3 +200,35 @@ officer+, members and channels owner. Status is one of online | away | busy | du
   with close code 1001. Clients that never ping are not closed for silence.
 - Guest names always end in " (guest)". `@everyone`/`@here` from below officer arrive with a zero-width space after the `@`.
 - `profile:data` leaves out a character's `seen` when the member is invisible to the viewer.
+
+## 2.10 additions (one-time invites, device tokens; all optional for clients)
+
+Detect: the welcome's `features` has `"tokens"`, `"invites"`, `"devices"` and `server` is >= 2.10.0; or `GET /features` (public, no
+auth) answers `{"server":"2.10.0","features":["tokens","invites","devices"]}` (older servers answer 404). Without them, keep using codes.
+
+### HTTP
+
+| Request | Auth | Result |
+|---|---|---|
+| `GET /features` | none | `{server, features}` |
+| `POST /exchange` header `X-Lodge-Invite: <invite>` (or `X-Lodge-Code: <old code>` to upgrade a device, or `invite` in the body), JSON body `{"device":"PC name","deviceId":"<random>"}` max 4 KB | the invite / code itself | 200 `{token, deviceId, device, name, role, guest, server}` (`Cache-Control: no-store`) |
+
+Errors are `{error, reason}`: 401 `wrong` (unknown invite or wrong code - counts towards the lockout), 410 `used-or-expired` (used up, expired or
+revoked - no strike), 429 `blocked` (the same per-IP lockout as wrong codes), 409 `too-many-devices` / `name-taken`, 403 `guest` (the shared
+guest code can't be upgraded), 400 (nothing sent; an invite in the query string is not read), 413 (body too large), 500 `storage`.
+`/ws`, `/files/*`, `/health` also accept `X-Lodge-Token: <token>` (it wins over `X-Lodge-Code`); a wrong token is 401 `{reason:"device-revoked"}` and counts towards the lockout.
+A secret is never accepted in a URL. Link format: `elanshub://lodge/join#<server>|<invite>` (server = `host/path`, or `http://host:port/path`).
+
+### WebSocket (client to server)
+
+- `admin.invite.create` `{kind: "person"|"guest", name, role, hours (1-720; 0 = server default 168), uses (guest, 1-50)}` - owner and officer (officers: ranks below their own; for an existing name the invite adds a device with that person's current rank)
+- `admin.invites` · `admin.invite.revoke` `{id}` · `admin.devices` `{name?}` - owner and officer
+- `device.list` - your own devices (a guest sees only theirs) · `device.revoke` `{id}` - your own, or a lower rank's (owner: anyone's)
+- `admin.retire` `{name, force?}` - owner: the person's permanent code stops working (`admin.members` entries carry `hasCode` and `devices`)
+
+### WebSocket (server to client)
+
+- `welcome` adds `canInvite`, `canRetire`, `device: {id, name}` (tokens only)
+- `admin.invite.created` `{id, kind, name, role, by, created, expires (unix ms), max, uses, used, expired, revoked, pending, secret}` - the only place the secret appears
+- `admin.invites` `{now, invites:[{...as above, no secret}]}` · `devices` / `admin.devices` `{name, now, devices:[{id, name, role, device, created, lastSeen, ip (coarse), current, online}]}`
+- A revoked device's socket is closed (1008, "This device was signed out"); clients don't reconnect after that.

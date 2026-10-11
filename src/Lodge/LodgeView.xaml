@@ -287,24 +287,38 @@
         <TextBlock x:Name="ServerNoticeText" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,10,0" />
       </DockPanel>
     </Border>
+    <!-- ===================== "Upgrade this device": a quiet one-time offer to someone still signing in with a permanent code ===================== -->
+    <Border x:Name="UpgradeNotice" Grid.Row="0" Visibility="Collapsed" Margin="16,2,12,6" Padding="16,12" Background="{StaticResource Brush.Surface2}" CornerRadius="12">
+      <DockPanel>
+        <Button x:Name="UpgradeLater" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Not now" Margin="8,0,0,0" Click="UpgradeLater_Click" />
+        <Button x:Name="UpgradeNow" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="Upgrade this device" Margin="8,0,0,0" Click="UpgradeNow_Click" />
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="Give this PC its own sign-in" Style="{StaticResource Text.RowTitle}" />
+          <TextBlock x:Name="UpgradeText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,2,0,0"
+                     Text="Your permanent code is swapped for a key only this PC holds, so a code or link that leaks cannot be reused. You can sign this PC out any time under Settings, Lodge, Your devices." />
+        </StackPanel>
+      </DockPanel>
+    </Border>
     <!-- ===================== join ===================== -->
     <ScrollViewer x:Name="JoinPanel" Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <Border Margin="16,30,12,12" Padding="22" Background="{StaticResource Card}" CornerRadius="12" MaxWidth="460"
               BorderBrush="{StaticResource Line}" BorderThickness="1" VerticalAlignment="Top">
         <StackPanel>
           <TextBlock x:Name="JoinTitle" Text="Join a lodge" FontSize="15" FontWeight="SemiBold" />
-          <TextBlock Text="Chat, voice and files with your friends. Paste the invite link you were sent." FontSize="12"
+          <TextBlock Text="Chat, voice and files with your friends. Paste the invite link you were sent - it works once, and this PC then gets its own sign-in." FontSize="12"
                      Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,4,0,16" />
           <TextBlock Text="INVITE LINK OR ADDRESS" Style="{StaticResource Caption}" Margin="0,0,0,5" />
-          <TextBox x:Name="UrlBox" Style="{StaticResource Input}" Tag="https://example.com/lodge#invite=..." TextChanged="UrlBox_TextChanged" />
+          <TextBox x:Name="UrlBox" Style="{StaticResource Input}" Tag="elanshub://lodge/join#example.com/lodge|..." TextChanged="UrlBox_TextChanged" />
           <StackPanel x:Name="CodeArea">
             <TextBlock x:Name="CodeCaption" Text="INVITE CODE" Style="{StaticResource Caption}" Margin="0,12,0,5" />
             <PasswordBox x:Name="CodeBox" Style="{StaticResource SecretInput}" KeyDown="CodeBox_KeyDown" />
           </StackPanel>
-          <TextBlock x:Name="CodeFromLink" Text="Invite code found in the link" FontSize="12" Foreground="{StaticResource Accent}"
+          <TextBlock x:Name="CodeFromLink" Text="Invite found in the link" FontSize="12" Foreground="{StaticResource Accent}"
                      Margin="2,6,0,0" Visibility="Collapsed" />
           <TextBlock Text="NAME  (only used with a shared guest code)" Style="{StaticResource Caption}" Margin="0,12,0,5" />
           <TextBox x:Name="NameBox" Style="{StaticResource Input}" Tag="Your name" />
+          <TextBlock Text="THIS PC  (shown in Your devices, so you can sign it out later)" Style="{StaticResource Caption}" Margin="0,12,0,5" />
+          <TextBox x:Name="DeviceBox" Style="{StaticResource Input}" Tag="PC name" MaxLength="32" />
           <Button x:Name="JoinButton" Style="{StaticResource PrimaryButton}" Content="Join" Margin="0,18,0,0" Click="Join_Click" />
           <Button x:Name="CancelEditButton" Style="{StaticResource GhostButton}" Content="Cancel" HorizontalAlignment="Center" Margin="0,8,0,0"
                   Visibility="Collapsed" Click="CancelEdit_Click" />

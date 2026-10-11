@@ -14,6 +14,34 @@ sudo /opt/lodge-src/server/deploy/install.sh
 daily `lodge-backup.timer` (04:15 plus up to 20 minutes random delay). systemd drop-ins in
 `/etc/systemd/system/lodge.service.d/` are never touched.
 
+## Invites, devices and codes (2.10): `lodge-admin`
+
+```bash
+sudo lodge-admin invite Bob                 # a one-time link for a new person (member); prints it ONCE, on stdout, send it privately
+sudo lodge-admin invite Bob officer --days 2
+sudo lodge-admin invite --guest --uses 3    # a guest link three people can use
+sudo lodge-admin invites                    # pending / used / expired / revoked (never the secrets)
+sudo lodge-admin revoke-invite <id>
+sudo lodge-admin devices [name]             # each person's signed-in devices
+sudo lodge-admin revoke-device <id>         # signed out and disconnected within 15 seconds
+sudo lodge-admin retire-code Bob            # Bob's old permanent code stops working; his devices keep working (refused if he has none, --force overrides)
+```
+
+Set `LODGE_PUBLIC_URL=https://your.site/lodge` in `/etc/lodge/lodge.env` so the printed link carries your address
+(`elanshub://lodge/join#your.site/lodge|<invite>`). The link goes to stdout and the warning to stderr, so `lodge-admin invite Bob > link.txt`
+keeps only the link. An invite works once and lives 7 days by default (`LODGE_INVITE_HOURS`, or `--days 1-30` / `--hours 1-720`). Opening it in
+the Outpost trades it for a key that belongs to that PC. Names may contain any letters. The same actions are in the Outpost: Settings, Guild Master
+(owner and officers) and Settings, Lodge, Your devices (everyone).
+
+Data: `/var/lib/lodge/invites` and `/var/lib/lodge/devices` (`lodge:lodge 0640`, only hashes; changed under `codes.lock` like the codes file, included
+in the backups). `install.sh` creates them.
+
+**After updating to 2.10** (`sudo lodge-update`): nothing breaks - every personal code and the shared guest code keep working. Then, at your own pace:
+1. make new invites instead of sending codes: `sudo lodge-admin invite <name> [role]` (or the Guild Master page);
+2. people who still use a code get a quiet "Upgrade this device" in the Outpost (Lodge tab); their code keeps working until you retire it;
+3. when `sudo lodge-admin devices <name>` shows all of someone's PCs, retire the old code: `sudo lodge-admin retire-code <name>` (Guild Master page: "Retire code").
+Older Outposts can only use codes: don't retire a code whose owner still runs one.
+
 ## Updating: `lodge-update`
 
 ```bash

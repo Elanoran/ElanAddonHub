@@ -37,6 +37,39 @@ namespace ElansAddonHub
             public Brush RoleBrush { get { var b = new SolidColorBrush(MemberVM.RoleColor(Role)); b.Freeze(); return b; } }
             public Brush DotBrush => Online ? (Brush)Application.Current.Resources["Brush.Success"] : (Brush)Application.Current.Resources["Brush.Text.Tertiary"];
             public string OnlineText => Online ? "Online" : "Offline";
+            // 2.10 servers: whether a permanent code still exists and how many devices have a token (-1 = the server doesn't say)
+            public bool HasCode { get; set; } = true;
+            public int Devices { get; set; } = -1;
+            public bool CanRetire { get; set; }
+            public string DevicesText => Devices < 0 ? "" : Devices == 1 ? "1 device" : Devices + " devices";
+            public Visibility RetireVisibility => CanRetire && HasCode && Devices > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // one row of the invite list (Guild Master)
+        public class InviteRowVM
+        {
+            readonly InviteVM i;
+            public InviteRowVM(InviteVM i) { this.i = i; }
+            public string Id => i.Id;
+            public string Title => i.Title + " · " + i.RoleText;
+            public string Detail => i.Detail;
+            public string State => i.State;
+            public double RowOpacity => i.RowOpacity;
+            public Visibility RevokeVisibility => i.CanRevoke ? Visibility.Visible : Visibility.Collapsed;
+            public Brush StateBrush => (Brush)Application.Current.Resources[i.Pending ? "Brush.Accent.Tint" : "Brush.Overlay.Chip"];
+            public Brush StateText => (Brush)Application.Current.Resources[i.Pending ? "Brush.Text.Primary" : "Brush.Text.Secondary"];
+        }
+
+        // one row of a device list: your own (Settings > Lodge) or everyone's (Guild Master)
+        public class DeviceRowVM
+        {
+            readonly DeviceVM d;
+            public DeviceRowVM(DeviceVM d) { this.d = d; }
+            public string Id => d.Id;
+            public string Title => d.Title;
+            public string GmTitle => d.Who + " · " + d.Title;
+            public string Detail => d.Detail;
+            public Visibility CurrentVisibility => d.Current ? Visibility.Visible : Visibility.Collapsed;
         }
 
         public class ChannelRow
@@ -124,16 +157,22 @@ namespace ElansAddonHub
             loading = false;
             UpdateLabels();
 
-            session.Changed += () => NavGm.Visibility = session.CanManage ? Visibility.Visible : Visibility.Collapsed;
+            InitInvites();
+            session.Changed += () => { NavGm.Visibility = session.CanManage || session.CanInvite ? Visibility.Visible : Visibility.Collapsed; UpdateInviteMode(); UpdateDevicesCard(); };
             session.AdminMembers += FillAdmin;
             session.AdminInvited += (name, role, code) =>
             {
-                InviteTitle.Text = $"Invite for {name} ({MemberVM.RoleName(role)})";
-                InviteLink.Text = LodgeSession.InviteLink(session.BaseUrl, code);
+                // a permanent code (older server, or the Advanced button): the link carries the code itself
+                InviteTitle.Text = $"Permanent code for {name} ({MemberVM.RoleName(role)})";
+                InviteLink.Text = LodgeSession.InviteLink(session.LodgeAddress, code);
+                InviteNote.Text = "This link holds a code that works until you remove the person. Send it privately, and consider a one-time link instead.";
                 InviteResult.Visibility = Visibility.Visible;
                 InviteName.Text = "";
                 GmStatus.Text = "";
             };
+            session.InviteCreated += ShowCreatedInvite;
+            session.InvitesChanged += FillInvites;
+            session.DevicesChanged += FillDevices;
             session.Error += text => { if (SecGm.Visibility == Visibility.Visible) GmStatus.Text = text; };
             InitProfile();
         }
@@ -215,7 +254,15 @@ namespace ElansAddonHub
             if (NavProfile.IsChecked == true) ProfileEnter();
             UpdateProfileBar();
             UpdateAbout();
-            if (NavGm.IsChecked == true) { GmStatus.Text = ""; session.RequestAdmin(); }
+            if (NavGm.IsChecked == true)
+            {
+                GmStatus.Text = "";
+                UpdateInviteMode();
+                if (session.CanManage) session.RequestAdmin();
+                session.RequestInvites();
+                session.RequestAllDevices();
+            }
+            if (NavLodge.IsChecked == true) { session.RequestMyDevices(); UpdateDevicesCard(); }
             SyncPrivacy();
             if (NavAddons.IsChecked == true) UpdateCfStatus();
             var c = session.Presence.Current;
@@ -533,7 +580,11 @@ namespace ElansAddonHub
         void FillAdmin(List<Dictionary<string, object>> members, List<Dictionary<string, object>> channels)
         {
             loading = true;
-            MemberRows.ItemsSource = members.Select(m => new MemberRow { Name = m.Str("name"), Role = m.Str("role"), Online = m.Bool("online") })
+            MemberRows.ItemsSource = members.Select(m => new MemberRow
+                {
+                    Name = m.Str("name"), Role = m.Str("role"), Online = m.Bool("online"),
+                    HasCode = !m.ContainsKey("hasCode") || m.Bool("hasCode"), Devices = m.ContainsKey("devices") ? m.Int("devices") : -1, CanRetire = session.CanRetire,
+                })
                 .OrderByDescending(m => MemberVM.RoleLevel(m.Role)).ThenBy(m => m.Name).ToList();
             ChannelRows.ItemsSource = channels.Select(c =>
             {
@@ -553,21 +604,177 @@ namespace ElansAddonHub
             Dictionary<string, object> C(string n, string type, string min, int max) => new Dictionary<string, object> { ["id"] = n, ["name"] = n, ["type"] = type, ["minRole"] = min, ["max"] = max };
             FillAdmin(new List<Dictionary<string, object>> { M("Elan", "owner", true), M("Bob", "officer", true), M("Dax", "member", false) },
                 new List<Dictionary<string, object>> { C("general", "text", "guest", 0), C("officers", "text", "officer", 0), C("Campfire", "voice", "guest", 8) });
-            InviteTitle.Text = "Invite for Cleo (Member)";
-            InviteLink.Text = "https://nasferatu.dk/lodge#invite=XXXX-XXXX";
+            InviteTitle.Text = "Invite for Cleo (Member) - copied";
+            InviteLink.Text = "elanshub://lodge/join#nasferatu.dk/lodge|i1.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+            InviteNote.Text = "Works once, expires in 7 days. Send it privately (a DM, not a channel). It is shown only now.";
             InviteResult.Visibility = Visibility.Visible;
         }
 
+        // ---------------------------------------------------------------- one-time invite links (server 2.10)
+
+        sealed class Choice { public string Label; public int Value; public override string ToString() => Label; }
+
+        void InitInvites()
+        {
+            InviteExpiry.ItemsSource = new[]
+            {
+                new Choice { Label = "1 hour", Value = 1 }, new Choice { Label = "1 day", Value = 24 },
+                new Choice { Label = "7 days", Value = 168 }, new Choice { Label = "30 days", Value = 720 },
+            };
+            InviteExpiry.SelectedIndex = 2;
+            InviteUses.ItemsSource = new[]
+            {
+                new Choice { Label = "1 person", Value = 1 }, new Choice { Label = "3 people", Value = 3 },
+                new Choice { Label = "5 people", Value = 5 }, new Choice { Label = "10 people", Value = 10 },
+            };
+            InviteUses.SelectedIndex = 0;
+        }
+
+        bool GuestKind => InvGuest.IsChecked == true;
+        string inviteRoleFor;
+
+        // the panel offers one-time links when the server can do them; an older server can only make permanent codes
+        void UpdateInviteMode()
+        {
+            if (InviteButton == null) return;
+            bool links = session.SupportsTokens;
+            InviteKindHost.Visibility = links ? Visibility.Visible : Visibility.Collapsed;
+            InviteExpiry.Visibility = links ? Visibility.Visible : Visibility.Collapsed;
+            AdvancedButton.Visibility = links && session.CanManage ? Visibility.Visible : Visibility.Collapsed;
+            bool guest = links && GuestKind;
+            InviteName.Visibility = guest ? Visibility.Collapsed : Visibility.Visible;
+            InviteRole.Visibility = guest ? Visibility.Collapsed : Visibility.Visible;
+            InviteUses.Visibility = guest ? Visibility.Visible : Visibility.Collapsed;
+            InviteButton.Content = links ? "Create invite link" : "Create invite";
+            // officers invite below their own rank; only the Guild Master picks any rank
+            if (inviteRoleFor != session.MyRole)
+            {
+                inviteRoleFor = session.MyRole;
+                var offered = session.MyRole == "owner" || !session.SupportsTokens ? Ranks : Ranks.Where(r => MemberVM.RoleLevel(r.Id) < MemberVM.RoleLevel(session.MyRole)).ToList();
+                InviteRole.ItemsSource = offered;
+                InviteRole.SelectedItem = offered.FirstOrDefault(r => r.Id == "member") ?? offered.FirstOrDefault();
+            }
+            InviteHelp.Text = links
+                ? (guest ? "A guest link lets people in as guests (chat and voice, no files). It stops working after the chosen number of people, or when it expires."
+                         : "The link works once and is copied for you. Send it privately: it lets one person in, and then it is used up.")
+                : "Your Lodge server is older than 2.10, so this makes a permanent code. Update the server (sudo lodge-update) to send one-time links instead.";
+            InviteHelp.Foreground = (Brush)Application.Current.Resources[links ? "Brush.Text.Secondary" : "Brush.Warn"];
+            GmOwnerOnly.Visibility = session.CanManage ? Visibility.Visible : Visibility.Collapsed;   // officers see invites and devices, not ranks and channels
+        }
+
+        void InviteKind_Changed(object sender, RoutedEventArgs e) { if (session != null) UpdateInviteMode(); }
+
         void Invite_Click(object sender, RoutedEventArgs e)
+        {
+            var role = (InviteRole.SelectedItem as RoleOption)?.Id ?? "member";
+            if (session.SupportsTokens)
+            {
+                var hours = (InviteExpiry.SelectedItem as Choice)?.Value ?? 168;
+                if (GuestKind) { session.CreateInvite("guest", "", "guest", hours, (InviteUses.SelectedItem as Choice)?.Value ?? 1); return; }
+                var who = InviteName.Text.Trim();
+                if (who.Length == 0) { GmStatus.Text = "Type their name first"; return; }
+                GmStatus.Text = "";
+                session.CreateInvite("person", who, role, hours);
+                return;
+            }
+            var name = InviteName.Text.Trim();
+            if (name.Length == 0) { GmStatus.Text = "Type their name first"; return; }
+            session.Invite(name, role);
+        }
+
+        // Advanced: the old kind of invite, a code that works until the person is removed. Only on purpose.
+        void Advanced_Click(object sender, RoutedEventArgs e)
         {
             var name = InviteName.Text.Trim();
             if (name.Length == 0) { GmStatus.Text = "Type their name first"; return; }
+            if (!Dialog.Confirm(Window.GetWindow(this), "Make a permanent code?",
+                "A permanent code works until you remove the person, and anyone who sees the link can use it. A one-time link is safer: it is used up the first time it is opened. Only make a code for someone whose Outpost is too old for invite links.",
+                "Make a code", danger: true)) return;
             session.Invite(name, (InviteRole.SelectedItem as RoleOption)?.Id ?? "member");
+        }
+
+        string lastInviteLink;
+
+        void ShowCreatedInvite(InviteVM inv, string link)
+        {
+            lastInviteLink = link;
+            InviteTitle.Text = inv.IsGuest ? "Guest link" + (inv.Max > 1 ? $" for {inv.Max} people" : "") + " - copied" : $"Invite for {inv.Name} ({MemberVM.RoleName(inv.Role)}) - copied";
+            InviteLink.Text = link;
+            InviteNote.Text = $"Works {(inv.Max > 1 ? $"for {inv.Max} people, " : "once, ")}expires {AgoText.In(inv.Expires, inv.Now)}. Send it privately (a DM, not a channel). It is shown only now.";
+            InviteResult.Visibility = Visibility.Visible;
+            InviteName.Text = "";
+            GmStatus.Text = "";
+            try { Clipboard.SetText(link); } catch { }
         }
 
         void CopyInvite_Click(object sender, RoutedEventArgs e)
         {
             try { Clipboard.SetText(InviteLink.Text); InviteTitle.Text = "Copied - now send it to them"; } catch { }
+        }
+
+        void FillInvites()
+        {
+            var rows = session.Invites.Select(i => new InviteRowVM(i)).ToList();
+            InviteRows.ItemsSource = rows;
+            InvitesEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        void RevokeInvite_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is string id) session.RevokeInvite(id);
+        }
+
+        // ---------------------------------------------------------------- devices
+
+        void FillDevices()
+        {
+            var mine = session.MyDevices.Select(d => new DeviceRowVM(d)).ToList();
+            MyDeviceRows.ItemsSource = mine;
+            var all = session.AllDevices.Select(d => new DeviceRowVM(d)).ToList();
+            AllDeviceRows.ItemsSource = all;
+            AllDevicesEmpty.Visibility = all.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateDevicesCard();
+        }
+
+        // what the "Your devices" card says, depending on how this PC signs in
+        void UpdateDevicesCard()
+        {
+            if (MyDevicesEmpty == null) return;
+            bool any = session.MyDevices.Count > 0;
+            MyDevicesEmpty.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+            UpgradeDeviceButton.Visibility = session.UpgradeOffered || (session.SupportsTokens && !session.UsingToken && LodgeCredentials.HasCode(settings)) ? Visibility.Visible : Visibility.Collapsed;
+            if (!session.Connected && !session.TestFedForView) MyDevicesEmpty.Text = "Join a lodge to see its devices.";
+            else if (!session.SupportsTokens) MyDevicesEmpty.Text = "This lodge's server is older than 2.10 and signs you in with a permanent code. Ask the Guild Master to update it (sudo lodge-update) to use device keys.";
+            else if (!session.UsingToken && !any) MyDevicesEmpty.Text = "This PC still signs in with your permanent code. Upgrade it to give this PC its own key.";
+            else MyDevicesEmpty.Text = "No devices.";
+        }
+
+        void RevokeDevice_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is string id)) return;
+            bool here = id == session.DeviceId;
+            if (Dialog.Confirm(Window.GetWindow(this), here ? "Sign out this PC?" : "Sign out this device?",
+                here ? "You will be disconnected from the lodge and need a new invite link to come back." : "It is disconnected at once. It can only come back with a new invite link.",
+                "Sign out", danger: true))
+                session.RevokeDevice(id);
+        }
+
+        async void UpgradeDevice_Click(object sender, RoutedEventArgs e)
+        {
+            UpgradeDeviceButton.IsEnabled = false;
+            var problem = await session.UpgradeThisDevice();
+            UpgradeDeviceButton.IsEnabled = true;
+            if (problem != null) MyDevicesEmpty.Text = problem;
+            else session.RequestMyDevices();
+        }
+
+        void RetireCode_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is string name)) return;
+            if (Dialog.Confirm(Window.GetWindow(this), $"Retire {name}'s code?",
+                $"Their old permanent code stops working for good. Their devices keep working. Only do this when all of {name}'s PCs have joined with an invite or been upgraded.",
+                "Retire code", danger: true))
+                session.RetireCode(name);
         }
 
         void MemberRole_Changed(object sender, SelectionChangedEventArgs e)
@@ -617,7 +824,26 @@ namespace ElansAddonHub
             try { Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true }); } catch { }
         }
 
-        // test hook
+        // test hooks
         public void InviteForTest(string name, string role) => session.Invite(name, role);
+        public List<InviteRowVM> InviteRowsForTest => (InviteRows.ItemsSource as List<InviteRowVM>) ?? new List<InviteRowVM>();
+        public List<DeviceRowVM> MyDeviceRowsForTest => (MyDeviceRows.ItemsSource as List<DeviceRowVM>) ?? new List<DeviceRowVM>();
+        public List<DeviceRowVM> AllDeviceRowsForTest => (AllDeviceRows.ItemsSource as List<DeviceRowVM>) ?? new List<DeviceRowVM>();
+        public List<MemberRow> MemberRowsForTest => (MemberRows.ItemsSource as List<MemberRow>) ?? new List<MemberRow>();
+        public bool GmOwnerOnlyVisibleForTest => GmOwnerOnly.Visibility == Visibility.Visible;
+        public bool NavGmVisibleForTest => NavGm.Visibility == Visibility.Visible;
+        public string InviteButtonTextForTest => InviteButton.Content as string;
+        public string InviteLinkForTest => InviteLink.Text;
+        public string InviteTitleForTest => InviteTitle.Text;
+        public string InviteNoteForTest => InviteNote.Text;
+        public bool InviteResultVisibleForTest => InviteResult.Visibility == Visibility.Visible;
+        public bool AdvancedVisibleForTest => AdvancedButton.Visibility == Visibility.Visible;
+        public bool InviteKindVisibleForTest => InviteKindHost.Visibility == Visibility.Visible;
+        public string DevicesNoteForTest => MyDevicesEmpty.Text;
+        public bool UpgradeDeviceVisibleForTest => UpgradeDeviceButton.Visibility == Visibility.Visible;
+        public void SetGuestKindForTest(bool guest) { (guest ? InvGuest : InvPerson).IsChecked = true; UpdateInviteMode(); }
+        public void CreateInviteClickForTest(string name) { InviteName.Text = name; Invite_Click(null, null); }
+        public void RevokeInviteForTest(string id) => session.RevokeInvite(id);
+        public ScrollViewer ScrollForShots => Scroll;
     }
 }

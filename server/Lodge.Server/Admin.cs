@@ -135,7 +135,7 @@ public class AdminModule : IModule
 
     Task SendDevices(Member me, string type, string name) => hub.Send(me, new JsonObject
     {
-        ["t"] = type, ["name"] = name ?? "",
+        ["t"] = type, ["name"] = name ?? "", ["now"] = Ms(hub.Clock.UtcNow),
         ["devices"] = new JsonArray(hub.Auth.ListDevices(string.IsNullOrWhiteSpace(name) ? null : name).Select(d => (JsonNode)DeviceJson(d, me)).ToArray()),
     });
 
@@ -149,7 +149,7 @@ public class AdminModule : IModule
                 case "device.list":
                     // a guest sees only the device they are on
                     if (me.Personal) await SendDevices(me, "devices", me.Name);
-                    else await hub.Send(me, new JsonObject { ["t"] = "devices", ["name"] = "", ["devices"] = new JsonArray(
+                    else await hub.Send(me, new JsonObject { ["t"] = "devices", ["name"] = "", ["now"] = Ms(hub.Clock.UtcNow), ["devices"] = new JsonArray(
                         hub.Auth.ListDevices().Where(d => d.Id == me.DeviceId).Select(d => (JsonNode)DeviceJson(d, me)).ToArray()) });
                     break;
                 case "device.revoke":

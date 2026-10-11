@@ -83,7 +83,7 @@ namespace ElansAddonHub
             title.Style = Sty("Text.Title");
             sub.Style = Sty("Text.Body"); sub.Foreground = Res("Brush.Text.Secondary");
             linkError.Style = Sty("Text.Caption"); linkError.Foreground = Res("Brush.Danger");
-            linkBox = new TextBox { Style = Sty("Input"), Tag = "https://example.com/lodge#invite=...", MaxLength = 400 };
+            linkBox = new TextBox { Style = Sty("Input"), Tag = "elanshub://lodge/join#example.com/lodge|...", MaxLength = 400 };
 
             var grid = new Grid();
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -256,7 +256,7 @@ namespace ElansAddonHub
                 var url = LodgeSession.ParseInvite(linkBox.Text, out var code);
                 if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http") || string.IsNullOrEmpty(code) || code.Length < 6)
                 {
-                    linkError.Text = "That doesn't look like an invite link. It should look like https://...#invite=... - paste the whole link, or skip this step.";
+                    linkError.Text = "That doesn't look like an invite link. It should look like elanshub://lodge/join#... - paste the whole link, or skip this step.";
                     return;
                 }
             }

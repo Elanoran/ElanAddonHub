@@ -76,6 +76,11 @@ namespace ElansAddonHub.Services
         // ---- Lodge (chat/voice). The invite code is stored encrypted for this Windows user (DPAPI).
         [DataMember(Name = "lodgeUrl")] public string LodgeUrl { get; set; }
         [DataMember(Name = "lodgeCode")] public string LodgeCodeProtected { get; set; }
+        // 2.38: a one-time invite is traded for a per-device token (DPAPI too); once there is a token the permanent code is no longer kept here
+        [DataMember(Name = "lodgeToken")] public string LodgeTokenProtected { get; set; }
+        [DataMember(Name = "lodgeDevice")] public string LodgeDeviceName { get; set; }          // shown in "Your devices"; the PC name unless changed
+        [DataMember(Name = "lodgeDeviceId")] public string LodgeDeviceId { get; set; }          // random, made once; lets a re-join replace this device instead of adding another
+        [DataMember(Name = "lodgeUpgradeNo")] public string LodgeUpgradeDeclined { get; set; }  // lodge address for which "Upgrade this device" was dismissed
         [DataMember(Name = "lodgeName")] public string LodgeName { get; set; }
         [DataMember(Name = "lodgeManualConnect")] public bool LodgeManualConnect { get; set; } // false = connect when the hub starts
         [DataMember(Name = "voicePtt")] public bool VoicePushToTalk { get; set; }

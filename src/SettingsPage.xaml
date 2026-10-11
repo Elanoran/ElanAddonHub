@@ -204,6 +204,34 @@
                 </StackPanel>
               </StackPanel>
             </ContentControl>
+            <TextBlock Text="Your devices" Style="{StaticResource HeadTight}" />
+            <TextBlock x:Name="DevicesNote" Style="{StaticResource Note}" Text="Each PC you sign in from has its own key. Sign one out here and it is disconnected at once." />
+            <ContentControl Style="{StaticResource Card.Rows}" Margin="0,0,0,12">
+              <StackPanel>
+                <TextBlock x:Name="MyDevicesEmpty" Style="{StaticResource Text.Secondary}" Margin="0,12" TextWrapping="Wrap" Text="Nothing to show yet." />
+                <ItemsControl x:Name="MyDeviceRows">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,1,0,0" Padding="0,8">
+                        <DockPanel>
+                          <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Sign out" Tag="{Binding Id}" Click="RevokeDevice_Click"
+                                  AutomationProperties.Name="Sign out this device" />
+                          <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Margin="8,0,8,0" Visibility="{Binding CurrentVisibility}" VerticalAlignment="Center">
+                            <TextBlock Text="This PC" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                          </Border>
+                          <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Detail}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </DockPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button x:Name="UpgradeDeviceButton" Style="{StaticResource Button.M}" Content="Upgrade this device" HorizontalAlignment="Left" Margin="0,4,0,12" Visibility="Collapsed"
+                        Click="UpgradeDevice_Click" ToolTip="Swap the saved permanent code for a key only this PC holds" />
+              </StackPanel>
+            </ContentControl>
             <TextBlock Text="Presence" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Connect when the Outpost starts" Tag="Friends see you online while the Outpost runs.">
@@ -569,11 +597,24 @@
 
             <TextBlock Text="Invite someone" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Group}" Margin="0,0,0,12">
-              <DockPanel Margin="16,12">
-                <Button DockPanel.Dock="Right" Style="{StaticResource Button.Primary.M}" Width="116" Content="Create invite" Margin="8,0,0,0" Click="Invite_Click" />
-                <ComboBox x:Name="InviteRole" DockPanel.Dock="Right" Style="{StaticResource Dropdown}" Width="132" Margin="8,0,0,0" />
-                <TextBox x:Name="InviteName" Style="{StaticResource Input}" Height="32" Tag="Their name" MaxLength="24" />
-              </DockPanel>
+              <StackPanel Margin="16,12">
+                <Border x:Name="InviteKindHost" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="0,0,0,8">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="InvPerson" Style="{StaticResource Segment}" Content="A person" GroupName="invkind" IsChecked="True" Checked="InviteKind_Changed" />
+                    <RadioButton x:Name="InvGuest" Style="{StaticResource Segment}" Content="A guest link" GroupName="invkind" Checked="InviteKind_Changed" />
+                  </StackPanel>
+                </Border>
+                <DockPanel>
+                  <Button x:Name="InviteButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.M}" Width="156" Content="Create invite link" Margin="8,0,0,0" Click="Invite_Click" />
+                  <ComboBox x:Name="InviteExpiry" DockPanel.Dock="Right" Style="{StaticResource Dropdown}" Width="116" Margin="8,0,0,0" ToolTip="How long the link works" />
+                  <ComboBox x:Name="InviteRole" DockPanel.Dock="Right" Style="{StaticResource Dropdown}" Width="132" Margin="8,0,0,0" />
+                  <ComboBox x:Name="InviteUses" DockPanel.Dock="Right" Style="{StaticResource Dropdown}" Width="132" Margin="8,0,0,0" Visibility="Collapsed" ToolTip="How many people can use the link" />
+                  <TextBox x:Name="InviteName" Style="{StaticResource Input}" Height="32" Tag="Their name" MaxLength="24" />
+                </DockPanel>
+                <TextBlock x:Name="InviteHelp" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Text="The link works once and is copied for you. Send it privately: it lets one person in, and then it is used up." />
+                <Button x:Name="AdvancedButton" Style="{StaticResource GhostButton}" Content="Advanced: make a permanent code instead" HorizontalAlignment="Left" Margin="-8,4,0,0" Click="Advanced_Click" />
+              </StackPanel>
             </ContentControl>
             <ContentControl x:Name="InviteResult" Style="{StaticResource Card.Group}" Margin="0,0,0,12" Visibility="Collapsed">
               <StackPanel Margin="16,12">
@@ -582,12 +623,62 @@
                   <Button DockPanel.Dock="Right" Style="{StaticResource Button.M}" Content="Copy" Margin="8,0,0,0" Click="CopyInvite_Click" />
                   <TextBox x:Name="InviteLink" Style="{StaticResource Input}" Height="32" IsReadOnly="True" FontSize="12" />
                 </DockPanel>
-                <TextBlock Text="Send it privately (e.g. a Discord DM). Opening it in a browser explains what to do; the Outpost's Lodge tab takes the whole link."
+                <TextBlock x:Name="InviteNote" Text="Send it privately (a DM, not a channel). It is shown only now."
                            Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0" />
               </StackPanel>
             </ContentControl>
             <TextBlock x:Name="GmStatus" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="4,0,0,12" />
 
+            <TextBlock Text="Invites" Style="{StaticResource HeadTight}" Margin="4,12,0,2" />
+            <TextBlock Text="Links made so far. Revoke a pending one to cancel it." Style="{StaticResource Note}" />
+            <ContentControl Style="{StaticResource Card.Rows}" Margin="0,0,0,12">
+              <StackPanel>
+                <TextBlock x:Name="InvitesEmpty" Style="{StaticResource Text.Secondary}" Margin="0,12" Text="No invites yet." />
+                <ItemsControl x:Name="InviteRows">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,1,0,0" Padding="0,8" Opacity="{Binding RowOpacity}">
+                        <DockPanel>
+                          <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Revoke" Visibility="{Binding RevokeVisibility}" Tag="{Binding Id}" Click="RevokeInvite_Click" />
+                          <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Margin="8,0,8,0" Background="{Binding StateBrush}" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding State}" Style="{StaticResource Text.Caption}" Foreground="{Binding StateText}" VerticalAlignment="Center" />
+                          </Border>
+                          <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Detail}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </DockPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </ContentControl>
+
+            <TextBlock Text="Devices" Style="{StaticResource HeadTight}" Margin="4,12,0,2" />
+            <TextBlock Text="Every signed-in device. Signing one out disconnects it at once; they can join again with a new invite." Style="{StaticResource Note}" />
+            <ContentControl Style="{StaticResource Card.Rows}" Margin="0,0,0,12">
+              <StackPanel>
+                <TextBlock x:Name="AllDevicesEmpty" Style="{StaticResource Text.Secondary}" Margin="0,12" Text="No devices yet." />
+                <ItemsControl x:Name="AllDeviceRows">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,1,0,0" Padding="0,8">
+                        <DockPanel>
+                          <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Sign out" Tag="{Binding Id}" Click="RevokeDevice_Click" />
+                          <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding GmTitle}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Detail}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </DockPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </ContentControl>
+
+            <StackPanel x:Name="GmOwnerOnly">
             <TextBlock Text="Members" Style="{StaticResource Head}" Margin="4,12,0,8" />
             <ContentControl Style="{StaticResource Card.Rows}">
               <ItemsControl x:Name="MemberRows">
@@ -599,6 +690,9 @@
                                 Foreground="{StaticResource Brush.Danger}" Tag="{Binding Name}" Click="RemoveMember_Click" ToolTip="Remove (their code stops working)" />
                         <ComboBox DockPanel.Dock="Right" Style="{StaticResource Dropdown}" Width="140" Margin="8,0,8,0" ItemsSource="{Binding Roles}"
                                   SelectedItem="{Binding RoleItem, Mode=OneWay}" Tag="{Binding Name}" SelectionChanged="MemberRole_Changed" />
+                        <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Retire code" Visibility="{Binding RetireVisibility}" Tag="{Binding Name}"
+                                Click="RetireCode_Click" ToolTip="Their old permanent code stops working. Their devices keep working." />
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding DevicesText}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
                         <Ellipse Width="8" Height="8" Fill="{Binding DotBrush}" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="{Binding OnlineText}" />
                         <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding RoleBrush}" VerticalAlignment="Center" />
                       </DockPanel>
@@ -643,6 +737,7 @@
                 <TextBox x:Name="NewChannelName" Style="{StaticResource Input}" Height="32" Tag="New channel name" MaxLength="24" />
               </DockPanel>
             </ContentControl>
+            </StackPanel>
           </StackPanel>
 
           <!-- ========== About ========== -->

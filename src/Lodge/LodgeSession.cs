@@ -187,20 +187,13 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ invite links
 
-        // "https://site/lodge#invite=CODE" (the part after # never reaches any server or log) or just an address
+        // "elanshub://lodge/join#server|invite", "https://site/lodge#invite=CODE" (the part after # never reaches any server or log) or just an address.
+        // `code` is the secret in the link: a one-time invite (InviteLinks.LooksLikeInvite) or an old permanent code. See InviteLinks.Parse.
         public static string ParseInvite(string text, out string code)
         {
-            code = null;
-            text = (text ?? "").Trim();
-            var hash = text.IndexOf('#');
-            if (hash >= 0)
-            {
-                var frag = text.Substring(hash + 1);
-                var m = Regex.Match(frag, @"(?:^|&)invite=([A-Za-z0-9]+)");
-                if (m.Success) code = m.Groups[1].Value;
-                text = text.Substring(0, hash);
-            }
-            return NormalizeUrl(text);
+            var link = InviteLinks.Parse(text);
+            code = link.Secret;
+            return link.Url;
         }
 
         public static string InviteLink(string baseUrl, string code) => baseUrl.TrimEnd('/') + "#invite=" + code;
@@ -221,10 +214,11 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ connection
 
-        public void Connect(string url, string code)
+        public void Connect(string url, string code, bool isToken = false)
         {
             Disconnect();
-            var c = new LodgeClient(url, code, Settings.LodgeName ?? Environment.UserName) { Invisible = () => Invisible };
+            UsingToken = isToken;
+            var c = new LodgeClient(url, code, Settings.LodgeName ?? Environment.UserName, isToken) { Invisible = () => Invisible };
             client = c;
             c.Status += (text, online) =>
             {
@@ -233,6 +227,7 @@ namespace ElansAddonHub.Lodge
                 if (!online && client != null && !client.IsRunning)
                 {
                     var why = text;
+                    StoppedSignedOut = c.SignedOut;   // this device's token was revoked: the view forgets it
                     Disconnect();
                     Stopped?.Invoke(why);
                 }
@@ -267,6 +262,7 @@ namespace ElansAddonHub.Lodge
         {
             rejoinRoom = null; // leaving the lodge on purpose
             pendingRoom = null;
+            UsingToken = false;
             LeaveVoice(false);
             FlushMarks();
             client?.Stop();
@@ -454,6 +450,9 @@ namespace ElansAddonHub.Lodge
                 case "admin.invited":
                     AdminInvited?.Invoke(m.Str("name"), m.Str("role"), m.Str("code"));
                     break;
+                case "admin.invites": case "admin.invite.created": case "devices": case "admin.devices":
+                    OnInviteFrame(m);
+                    break;
             }
         }
 
@@ -474,6 +473,7 @@ namespace ElansAddonHub.Lodge
             SupportsDisplayName = features.Contains("displayname");
             SupportsLfg = features.Contains("lfg");
             ReadHistoryFeatures(features);
+            ReadInviteFeatures(m, features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 

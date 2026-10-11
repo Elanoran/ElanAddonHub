@@ -64,7 +64,12 @@ namespace ElansAddonHub.Lodge
                 EmptyText.Visibility = Visibility.Collapsed;
                 if (vm.Mine || AtBottom) ScrollToEnd();
             };
-            session.Stopped += why => ShowJoin(why);
+            session.Stopped += why =>
+            {
+                // a revoked device: the token is dead, forget it so the next start asks for a new invite instead of retrying forever
+                if (session.StoppedSignedOut) { session.Settings.LodgeTokenProtected = null; SettingsStore.Save(session.Settings); }
+                ShowJoin(why);
+            };
             session.ProfileReceived += OnProfileReceived;
             session.Error += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(6); };
             session.Hint += text => { ChatNote.Text = text; noteUntil = DateTime.UtcNow.AddSeconds(14); };
@@ -74,11 +79,11 @@ namespace ElansAddonHub.Lodge
 
             UrlBox.Text = session.Settings.LodgeUrl ?? "";
             NameBox.Text = session.Settings.LodgeName ?? Environment.UserName;
-            var code = SettingsStore.Unprotect(session.Settings.LodgeCodeProtected);
-            if (!string.IsNullOrEmpty(session.Settings.LodgeUrl) && !string.IsNullOrEmpty(code) && !session.Settings.LodgeManualConnect)
+            DeviceBox.Text = LodgeCredentials.DeviceName(session.Settings);
+            if (!string.IsNullOrEmpty(session.Settings.LodgeUrl) && LodgeCredentials.Load(session.Settings, out var credential, out var isToken) && !session.Settings.LodgeManualConnect)
             {
                 ShowChat();
-                session.Connect(session.Settings.LodgeUrl, code);
+                session.Connect(session.Settings.LodgeUrl, credential, isToken);
             }
             Refresh();
         }
@@ -126,6 +131,7 @@ namespace ElansAddonHub.Lodge
                     (s.Invisible ? "Invisible" : string.IsNullOrEmpty(s.MyNote) ? MemberVM.StatusLabel(s.MyStatus) : s.MyNote);
             }
             UpdateServerNotice();
+            UpdateUpgradeNotice();
             AttachButton.Visibility = s.CanShareFiles || s.SupportsLfg ? Visibility.Visible : Visibility.Collapsed;
 
             // voice bar
@@ -189,6 +195,31 @@ namespace ElansAddonHub.Lodge
             if (show) { ServerNoticeText.Text = Session.ServerNoticeText; ServerNoticeCopy.Content = "Copy command"; }
         }
         void ServerNoticeClose_Click(object sender, RoutedEventArgs e) => Session.DismissServerNotice();
+
+        // "Give this PC its own sign-in": shown once to someone on a permanent code on a 2.10 server; Not now is remembered for this lodge
+        void UpdateUpgradeNotice()
+        {
+            var show = Session != null && Session.UpgradeOffered && !upgrading;
+            UpgradeNotice.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        bool upgrading;
+
+        async void UpgradeNow_Click(object sender, RoutedEventArgs e)
+        {
+            upgrading = true;
+            UpgradeNow.IsEnabled = false;
+            var problem = await Session.UpgradeThisDevice();
+            upgrading = false;
+            UpgradeNow.IsEnabled = true;
+            if (problem != null) { ChatNote.Text = problem; noteUntil = DateTime.UtcNow.AddSeconds(8); }
+            UpdateUpgradeNotice();
+        }
+
+        void UpgradeLater_Click(object sender, RoutedEventArgs e) => Session.DeclineUpgrade();
+        public bool UpgradeNoticeVisibleForTest => UpgradeNotice.Visibility == Visibility.Visible;
+        public string JoinStatusForTest => JoinStatus.Text;
+        public void DeclineUpgradeForTest() => UpgradeLater_Click(null, null);
         void ServerNoticeCopy_Click(object sender, RoutedEventArgs e)
         {
             try { Clipboard.SetText(Brand.ServerUpdateCommand); ServerNoticeCopy.Content = "Copied"; } catch { }
@@ -302,6 +333,7 @@ namespace ElansAddonHub.Lodge
             JoinPanel.Visibility = Visibility.Visible;
             JoinStatus.Text = why ?? "";
             UrlBox.Text = Session.Settings.LodgeUrl ?? "";
+            DeviceBox.Text = LodgeCredentials.DeviceName(Session.Settings);
         }
 
         void ShowChat()
@@ -312,36 +344,97 @@ namespace ElansAddonHub.Lodge
 
         void UrlBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            LodgeSession.ParseInvite(UrlBox.Text, out var code);
-            CodeFromLink.Visibility = code != null ? Visibility.Visible : Visibility.Collapsed;
-            CodeArea.Visibility = code != null ? Visibility.Collapsed : Visibility.Visible;
+            var link = InviteLinks.Parse(UrlBox.Text);
+            CodeFromLink.Text = link.IsInvite ? "One-time invite found in the link" : "Invite code found in the link";
+            CodeFromLink.Visibility = link.Secret != null ? Visibility.Visible : Visibility.Collapsed;
+            CodeArea.Visibility = link.Secret != null ? Visibility.Collapsed : Visibility.Visible;
         }
 
         void Join_Click(object sender, RoutedEventArgs e) => TryJoin();
         void CodeBox_KeyDown(object sender, KeyEventArgs e) { if (e.Key == Key.Enter) TryJoin(); }
 
+        bool joining;
+
         void TryJoin()
         {
-            var url = LodgeSession.ParseInvite(UrlBox.Text, out var linkCode);
-            var code = linkCode ?? CodeBox.Password.Trim();
-            if (code.Length == 0 && editingConnection) code = SettingsStore.Unprotect(Session.Settings.LodgeCodeProtected) ?? ""; // keep the saved one
-            if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http"))
+            if (joining) return;
+            var link = InviteLinks.Parse(UrlBox.Text);
+            var url = link.Url;
+            var secret = link.Secret ?? CodeBox.Password.Trim();
+            // editing the connection with nothing new typed: keep the saved sign-in
+            if (secret.Length == 0 && editingConnection && LodgeCredentials.Load(Session.Settings, out var kept, out var keptIsToken))
             {
-                JoinStatus.Text = "Paste the invite link you were sent (https://...#invite=...)";
+                if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out var ku) || (ku.Scheme != "https" && ku.Scheme != "http")) { JoinStatus.Text = "Paste the invite link you were sent (elanshub://lodge/join#...)"; return; }
+                Session.Settings.LodgeName = NameBox.Text.Trim();
+                Session.Settings.LodgeDeviceName = string.IsNullOrWhiteSpace(DeviceBox.Text) ? null : DeviceBox.Text.Trim();
+                RejoinWithSaved(url, kept, keptIsToken);
                 return;
             }
-            if (code.Length < 6) { JoinStatus.Text = "Enter your invite code"; return; }
+            if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http"))
+            {
+                JoinStatus.Text = "Paste the invite link you were sent (elanshub://lodge/join#...)";
+                return;
+            }
             var s = Session.Settings;
-            s.LodgeUrl = url;
-            s.LodgeCodeProtected = SettingsStore.Protect(code);
             s.LodgeName = NameBox.Text.Trim();
+            s.LodgeDeviceName = string.IsNullOrWhiteSpace(DeviceBox.Text) ? null : DeviceBox.Text.Trim();
+            if (link.IsInvite || InviteLinks.LooksLikeInvite(secret)) { _ = JoinWithInvite(url, secret); return; }
+            if (secret.Length < 6) { JoinStatus.Text = "Enter your invite code"; return; }
+            // an old permanent code (older server, or an older-style link): works exactly as before
+            LodgeCredentials.StoreCode(s, url, secret);
             SettingsStore.Save(s);
             UrlBox.Text = url; // the code stays out of the visible box
             CodeBox.Password = "";
             EndEditConnection();
             JoinStatus.Text = "";
             ShowChat();
-            Session.Connect(url, code);
+            Session.Connect(url, secret);
+        }
+
+        void RejoinWithSaved(string url, string credential, bool isToken)
+        {
+            var s = Session.Settings;
+            s.LodgeUrl = url;
+            SettingsStore.Save(s);
+            EndEditConnection();
+            JoinStatus.Text = "";
+            ShowChat();
+            Session.Connect(url, credential, isToken);
+        }
+
+        // a one-time invite: trade it for this PC's own token, then connect with that. The invite is sent in a header, never in a URL.
+        async Task JoinWithInvite(string url, string invite)
+        {
+            joining = true;
+            JoinButton.IsEnabled = false;
+            JoinStatus.Foreground = (Brush)FindResource("TextDim");
+            JoinStatus.Text = "Joining...";
+            try
+            {
+                var s = Session.Settings;
+                var res = await InviteExchange.Exchange(url, invite, null, LodgeCredentials.DeviceName(s), LodgeCredentials.DeviceId(s));
+                if (!res.Ok)
+                {
+                    JoinStatus.Foreground = (Brush)FindResource("Danger");
+                    JoinStatus.Text = res.Message;
+                    return;
+                }
+                LodgeCredentials.StoreToken(s, url, res.Token, LodgeCredentials.DeviceName(s));
+                if (!res.Guest && !string.IsNullOrEmpty(res.Name)) s.LodgeName = res.Name;
+                SettingsStore.Save(s);
+                UrlBox.Text = url;          // the invite is used up and gone from the box
+                CodeBox.Password = "";
+                EndEditConnection();
+                JoinStatus.Text = "";
+                ShowChat();
+                Session.Connect(url, res.Token, true);
+            }
+            finally
+            {
+                joining = false;
+                JoinButton.IsEnabled = true;
+                JoinStatus.Foreground = (Brush)FindResource("Danger");
+            }
         }
 
         // the first-run guide: join with a link that was already checked (code inside the link)
@@ -380,7 +473,7 @@ namespace ElansAddonHub.Lodge
         public void SignOut()
         {
             Session.Disconnect();
-            Session.Settings.LodgeCodeProtected = null;
+            LodgeCredentials.Clear(Session.Settings);
             SettingsStore.Save(Session.Settings);
             ShowJoin("");
         }

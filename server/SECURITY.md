@@ -95,6 +95,30 @@
   newest first, at most 50 hits (`more` when there are others) with channel, id, author, time and a ~120 character snippet. The query is cleaned like any text,
   cut to 64 characters and needs 2. Budget of 6 per minute (a burst of 6, one more every 10 s); refused searches count towards the flood disconnect.
 
+## 2.10.0 (one-time invites, device tokens)
+
+The problem this removes: a permanent personal code pasted into a DM stays valid, in that chat's history, forever. Now a link lets one
+person in once, and what that person keeps afterwards is a key that belongs to one device and can be revoked on its own.
+
+| Item | How it works |
+|---|---|
+| Invites | Owner and officers create them (officers: ranks below their own only). 192 random bits (`i1.` + 32 base64url characters), stored only as a SHA-256 hash in `<data>/invites` with id, kind (person / guest), name, rank, creator, created, expiry (1 h to 30 d, default 7 d, `LODGE_INVITE_HOURS`), maximum uses (1; guest invites may allow up to 50) and the use count. The secret is returned once, to the creator, over the socket; the list (`admin.invites`) never carries it or its hash. Revoked, used-up and expired invites all answer the same way (410), and rows are forgotten 30 days after they end. |
+| Link | `elanshub://lodge/join#<server>\|<invite>`. The secret lives in the #fragment only: a fragment is never sent to any server or proxy, and the client ignores a secret that arrives in a query or path. Old `https://site/lodge#invite=<code>` links still parse (a permanent code). |
+| Exchange | `POST /exchange`, the invite in the `X-Lodge-Invite` header (or `invite` in the JSON body), never in the URL. The body (max 4 KB) names the device (PC name, editable) and carries a random device id. Under the codes lock, in this order: validate, check the device limits, create the person if the invite is for a new name, mark the invite used, write the device. Marking the invite used comes BEFORE the device exists, so a crash costs a new invite, never a free extra device; two simultaneous exchanges of one invite are serialized and exactly one wins (tested with 24 in parallel). |
+| Device token | 256 random bits (`t1.` + 43 base64url characters), stored only as a SHA-256 hash in `<data>/devices` next to the person (or "guest"), device name, client device id, created, last seen and a COARSE last address (IPv4 /24, IPv6 /48). Looked up by hash, so a timing difference can't reveal anything about a random 256-bit value. Sent in `X-Lodge-Token` (`/ws`, `/files`, `/health`) and never in a URL (`?token=` is not read). A person has at most 10 devices (`LODGE_MAX_DEVICES_PER_PERSON`); joining again from the same device id replaces its old entry. |
+| Revoking | `device.revoke` (your own, or - officer and owner - a lower-ranked member's; the owner may revoke anyone's) removes the row and closes that device's socket on the spot. A removal made with `lodge-admin revoke-device` is noticed by the 15 s check. Removing a person removes their devices. |
+| Lockout | A wrong invite and a wrong code share the one per-IP `StrikeTable`: the 10th wrong guess is still 401, the next request 429 even with a valid invite or code. A used, expired or revoked invite is NOT a strike (somebody re-pasting an old link must not lock themselves out). |
+| Retiring a code | `admin.retire` / `lodge-admin retire-code` (owner) replaces the person's code in the codes file with `!<random>`: the name, rank and devices stay, the old code can never match again (an entry that starts with `!` has no hash), and a connection still on the old code is disconnected within 15 s. Refused when the person has no device yet (would lock them out) unless forced from the shell. |
+| Compatibility | Personal codes and the shared guest code work exactly as before; nobody is locked out by the update. A new Outpost feature-detects by the welcome (`tokens` feature and server >= 2.10.0) and `GET /features`; on an older server it keeps using the code. An old Outpost keeps using its code. A downgrade of the server after codes were retired leaves those people with the unguessable `!...` code (they can't sign in until the server is updated again). |
+| Logs | Neither an invite, a token, a code nor any hash is ever logged; only invite and device ids, names and ranks (`Invite <id> used: new device <id> for <name>`, `<name> signed out device <id>`). The unit tests and the real-socket test scan the logs for every secret they create, their hashes and the part after the prefix. |
+
+Honest limits: an invite is a bearer secret until it is used or expires, so send it privately and prefer short lifetimes; whoever opens
+it first gets in (the creator sees "used" in the list at once). A device token is as private as the PC's Windows user (DPAPI). The coarse
+address is only for recognising a device; behind a proxy it is the address the proxy reports. `lodge-admin` shows invite and device ids, never secrets.
+
+`lodge-admin` also accepts names with any letters now (it was ASCII only, which contradicted the server's rule of `\p{L}\p{N}`), and no
+longer lets a backslash into a name.
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.
@@ -142,10 +166,10 @@
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 110 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 224 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
-python server/tests/security_integration.py                     # 48 checks against two local servers
-sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 15 checks
+python server/tests/security_integration.py                     # 102 checks against local servers (python -X utf8 on Windows)
+sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 41 checks
 sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, 41 checks
 ```
 
@@ -158,4 +182,5 @@ All use synthetic codes and temp folders; none talks to a real lodge.
 - The wrong-code lockout and rate limits trust the client IP from the reverse proxy; if the proxy allows spoofed
   `X-Forwarded-For`, per-IP limits weaken. Proxy/NPM settings are host-side and outside this repo.
 - Budgets are in memory: a restart resets them (and the strike table).
-- The shared guest code, if enabled, is only as private as the people who have it; prefer personal codes.
+- The shared guest code, if enabled, is only as private as the people who have it; prefer personal codes or guest invites.
+- Permanent codes that were never retired stay valid (that is the compatibility promise). Retire them (`lodge-admin retire-code <name>`) once a person's PCs have their own keys.

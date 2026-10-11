@@ -11,12 +11,13 @@ using ElansAddonHub.Lodge;
 namespace ElansAddonHub.Services
 {
     // Connection to a Lodge server (see server/PROTOCOL.md). The invite code only ever travels in the
-    // X-Lodge-Code header - never in a URL, so it can't end up in proxy logs.
+    // X-Lodge-Code header (or, since 2.38 / server 2.10, the per-device token in X-Lodge-Token) - never in a URL, so it can't end up in proxy logs.
     // JSON events are raised on the UI thread; voice frames on the network thread.
     public class LodgeClient
     {
         public string BaseUrl { get; }
         readonly string code;
+        readonly bool isToken;                                       // the credential is a device token (X-Lodge-Token), not a permanent code
         readonly string name;
         readonly SynchronizationContext ui;
         ClientWebSocket ws;
@@ -31,12 +32,14 @@ namespace ElansAddonHub.Services
         public Func<bool> Invisible;                                 // asked at every (re)connect: appear offline from the first moment
         public bool Online { get; private set; }
         public bool IsRunning => !stopped;
+        public bool SignedOut { get; private set; }                  // stopped because the server no longer knows this device (revoked)
         public event Action<Dictionary<string, object>> Received;   // UI thread
         public event Action<int, byte[], int, int> Voice;            // network thread: sender, data, offset, count
         public event Action<string, bool> Status;                    // UI thread: text, online
 
-        public LodgeClient(string baseUrl, string code, string name)
+        public LodgeClient(string baseUrl, string code, string name, bool isToken = false)
         {
+            this.isToken = isToken;
             BaseUrl = baseUrl.Trim().TrimEnd('/');
             this.code = code.Trim();
             this.name = name ?? "";
@@ -85,6 +88,8 @@ namespace ElansAddonHub.Services
             return 0;
         }
 
+        public const string SignedOutText = "This device was signed out - join again with a new invite link";
+
         // the server accepted the socket and closed it again at once with this reason
         public static bool IsFullClose(string reason) => reason != null && reason.IndexOf("is full", StringComparison.OrdinalIgnoreCase) >= 0;
 
@@ -101,7 +106,7 @@ namespace ElansAddonHub.Services
                 {
                     SetStatus("Connecting...", false);
                     mine = ws = new ClientWebSocket();
-                    ws.Options.SetRequestHeader("X-Lodge-Code", code);
+                    ws.Options.SetRequestHeader(isToken ? "X-Lodge-Token" : "X-Lodge-Code", code);
                     ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
                     cts = new CancellationTokenSource();
                     using (var t = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
@@ -120,6 +125,7 @@ namespace ElansAddonHub.Services
                         else
                         {
                             stopped = true;
+                            if (isToken && (ws.CloseStatusDescription ?? "").IndexOf("signed out", StringComparison.OrdinalIgnoreCase) >= 0) SignedOut = true;
                             SetStatus(ws.CloseStatusDescription ?? "The lodge closed the connection", false);
                             return;
                         }
@@ -140,7 +146,8 @@ namespace ElansAddonHub.Services
                     if (status == 401)
                     {
                         stopped = true;
-                        SetStatus("Wrong invite code", false);
+                        SignedOut = isToken;
+                        SetStatus(isToken ? SignedOutText : "Wrong invite code", false);
                         return;
                     }
                     if (status == 429) why = "Too many wrong codes - wait 15 minutes";
@@ -250,7 +257,7 @@ namespace ElansAddonHub.Services
         HttpRequestMessage Request(HttpMethod m, string path)
         {
             var req = new HttpRequestMessage(m, BaseUrl + path);
-            req.Headers.Add("X-Lodge-Code", code);
+            req.Headers.Add(isToken ? "X-Lodge-Token" : "X-Lodge-Code", code);
             return req;
         }
 
@@ -306,7 +313,7 @@ namespace ElansAddonHub.Services
                 case 429: return string.IsNullOrEmpty(serverText) ? "Too many uploads right now - try again in a few minutes" : serverText;
                 case 507: return "The lodge's file storage is full - ask the Guild Master to free some space";
                 case 403: return "Initiates can't share files";
-                case 401: return "Your invite code isn't valid any more";
+                case 401: return "Your sign-in isn't valid any more - join again with a new invite link";
                 default: return string.IsNullOrEmpty(serverText) ? $"Upload failed ({status})" : serverText;
             }
         }

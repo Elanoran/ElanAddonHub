@@ -61,15 +61,16 @@ The **Lodge** tab is a small private Discord for you and your friends:
   10 minutes idle.
 - **Ranks** - Guild Master, Officer, Veteran, Member and Initiate (guest), shown as WoW item-quality frames.
   Officers can mute or kick lower ranks and delete messages; Initiates can't share files.
-- **Guild Master panel** (Settings) - create invite links, change ranks, remove people, add and remove channels.
+- **Guild Master panel** (Settings) - create one-time invite links (copied for you, listed and revocable), change ranks, remove people, see and sign out devices, add and remove channels.
 - **What you're playing** - names in WoW class colours with level, and a game icon while you're in WoW. Comes
   from the small **Elan's Hub** companion addon (installed by the hub for everyone; WoW saves it on /reload and logout).
 - **In-game overlay** - the people in your voice room on top of WoW, whoever talks lights up. A click-through
   window (Windowed/Fullscreen mode) - nothing is injected into the game.
 
-Join with the **invite link** you were sent (`https://<site>/lodge#invite=...`). A lodge runs on someone's own
-server - see [`server/`](server/): one small .NET service behind an existing web server. Your code is stored
-encrypted for your Windows user and only ever sent in a request header, never in a URL.
+Join with the **invite link** you were sent (`elanshub://lodge/join#<site>/lodge|...`; older `https://<site>/lodge#invite=...`
+links work too). The link works once: the Outpost trades it for a key that belongs to this PC (Settings, Lodge, Your devices lets
+you sign a PC out). A lodge runs on someone's own server - see [`server/`](server/): one small .NET service behind an existing
+web server. Your key is stored encrypted for your Windows user and only ever sent in a request header, never in a URL.
 
 ## Elan's Hunter Helper
 
