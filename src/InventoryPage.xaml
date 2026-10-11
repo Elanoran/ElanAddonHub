@@ -1,8 +1,41 @@
 <UserControl x:Class="ElansAddonHub.InventoryPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <UserControl.Resources>
+    <!-- character list row (DESIGN 8, like the Settings nav): 48 high pill, hover veil, selected = accent tint; the content is the portrait + two lines -->
+    <Style x:Key="SideRow" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="GroupName" Value="inv-char" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Grid Height="48" Background="Transparent">
+              <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource Radius.Control}" />
+              <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+              <ContentPresenter Margin="8,0,12,0" VerticalAlignment="Center" />
+              <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Accent.Tint}" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </UserControl.Resources>
+
   <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art -->
-  <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16,12">
+  <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -10,66 +43,76 @@
     </Grid.RowDefinitions>
 
     <!-- title + search -->
-    <Grid Grid.Row="0" Margin="0,0,0,10">
+    <Grid Grid.Row="0" Margin="0,0,0,16">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
       <StackPanel VerticalAlignment="Center">
-        <TextBlock x:Name="TitleText" Text="Inventory" FontSize="17" FontWeight="SemiBold" />
-        <TextBlock x:Name="Summary" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+        <TextBlock x:Name="TitleText" Text="Inventory" Style="{StaticResource Text.Title}" />
+        <TextBlock x:Name="Summary" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
       </StackPanel>
-      <TextBox x:Name="SearchBox" Grid.Column="1" Style="{StaticResource Input}" Width="250" Tag="Search every bag, bank and worn item" TextChanged="Search_Changed"
+      <TextBox x:Name="SearchBox" Grid.Column="1" Style="{StaticResource Input}" Width="256" Tag="Search every bag, bank and worn item" TextChanged="Search_Changed"
                VerticalAlignment="Center" AutomationProperties.Name="Search all characters" />
     </Grid>
 
     <!-- empty state -->
-    <Border x:Name="EmptyBox" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource Card}" CornerRadius="12" BorderBrush="{StaticResource Line}" BorderThickness="1"
-            Padding="28,34" VerticalAlignment="Top" Margin="0,6,4,0">
+    <Border x:Name="EmptyBox" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}"
+            Padding="32" VerticalAlignment="Top" Margin="0,4,4,0">
       <StackPanel HorizontalAlignment="Center" MaxWidth="460">
-        <Image x:Name="EmptyIcon" Width="84" Height="84" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,12" />
-        <TextBlock x:Name="EmptyTitle" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
-        <TextBlock x:Name="EmptyText" FontSize="12.5" Foreground="{StaticResource TextDim}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0" />
-        <Button x:Name="EmptyButton" Style="{StaticResource PrimaryButton}" Content="Go to Addons" HorizontalAlignment="Center" Margin="0,16,0,0" Padding="16,0" Height="32" Click="GoAddons_Click" />
+        <Image x:Name="EmptyIcon" Width="80" Height="80" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,12" />
+        <TextBlock x:Name="EmptyTitle" Style="{StaticResource Text.Section}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+        <TextBlock x:Name="EmptyText" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <Button x:Name="EmptyButton" Style="{StaticResource Button.Primary.M}" Content="Go to Addons" HorizontalAlignment="Center" Margin="0,16,0,0" Click="GoAddons_Click" />
       </StackPanel>
     </Border>
 
     <!-- characters on the left, items on the right -->
     <Grid x:Name="Body" Grid.Row="1">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="232" />
+        <ColumnDefinition Width="240" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
-      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
+      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
         <StackPanel>
-          <TextBlock Text="CHARACTERS" Style="{StaticResource Caption}" Margin="2,2,0,8" />
-          <Border x:Name="AllCard" Margin="0,0,0,6" Padding="11,9" CornerRadius="10" Cursor="Hand" BorderThickness="1" MouseLeftButtonUp="All_Click"
-                  ToolTip="Search every character at once" AutomationProperties.Name="All characters">
-            <StackPanel>
-              <TextBlock Text="All characters" FontSize="14" FontWeight="SemiBold" />
-              <TextBlock x:Name="AllLine" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-          </Border>
-          <ItemsControl x:Name="CharList">
+          <RadioButton x:Name="AllCard" Style="{StaticResource SideRow}" Click="All_Click" AutomationProperties.Name="All characters">
+            <RadioButton.ToolTip>
+              <ToolTip Style="{StaticResource CardTip}"><TextBlock Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" Text="Search every character at once" /></ToolTip>
+            </RadioButton.ToolTip>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+              <Grid Width="32" Height="32">
+                <Ellipse Fill="{StaticResource Brush.Overlay.Chip}" />
+                <TextBlock Text="&#xE716;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Secondary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Grid>
+              <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="All characters" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="AllLine" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+          </RadioButton>
+          <ItemsControl x:Name="CharList" Focusable="False">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Margin="0,0,0,6" Padding="11,9" CornerRadius="10" Cursor="Hand" Background="{Binding Fill}" BorderBrush="{Binding Edge}" BorderThickness="1"
-                        Tag="{Binding Key}" MouseLeftButtonUp="Char_Click" ToolTip="{Binding Tip}">
-                  <StackPanel>
-                    <DockPanel>
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding LevelText}" FontSize="11.5" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding Name}" Foreground="{Binding ClassBrush}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    </DockPanel>
-                    <TextBlock Text="{Binding Line2}" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding Money}" FontSize="12" Foreground="{StaticResource Gold}" Margin="0,4,0,0" />
-                    <TextBlock Text="{Binding BagsLine}" FontSize="11" Foreground="{StaticResource TextDim}" Margin="0,3,0,0" />
-                    <TextBlock Text="{Binding BankLine}" FontSize="11" Foreground="{Binding BankBrush}" />
-                  </StackPanel>
-                </Border>
+                <RadioButton Style="{StaticResource SideRow}" IsChecked="{Binding Selected, Mode=OneWay}" Tag="{Binding Key}" Click="Char_Click" ToolTip="{Binding Tip}"
+                             AutomationProperties.Name="{Binding Name}">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid Width="32" Height="32">
+                      <Ellipse Fill="{Binding ClassTint}" />
+                      <TextBlock Text="{Binding Initial}" Foreground="{Binding ClassBrush}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <Ellipse Fill="{Binding PortraitBrush}" />
+                    </Grid>
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding ClassBrush}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Line2}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </Grid>
+                </RadioButton>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <TextBlock x:Name="SaveHint" Text="WoW saves this when you /reload or log out." FontSize="11" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="2,6,0,0" Opacity="0.8" />
+          <TextBlock x:Name="SaveHint" Text="WoW saves this when you /reload or log out." Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="8,8,0,0" />
         </StackPanel>
       </ScrollViewer>
 
@@ -79,50 +122,54 @@
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <DockPanel Grid.Row="0" Margin="2,2,0,6">
-          <Button x:Name="ClearFilter" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Show all characters" FontSize="11.5" Click="ClearFilter_Click" Visibility="Collapsed" />
-          <TextBlock x:Name="ViewInfo" DockPanel.Dock="Right" FontSize="12" Foreground="{StaticResource TextDim}" VerticalAlignment="Center" Margin="12,0,6,4" />
-          <TextBlock x:Name="ResultCaption" Style="{StaticResource Caption}" VerticalAlignment="Center" Visibility="Collapsed" />
-          <StackPanel x:Name="TabStrip" Orientation="Horizontal">
-            <RadioButton x:Name="TabBags" Style="{StaticResource Tab}" Content="Bags" GroupName="inv-view" IsChecked="True" Tag="bags" Checked="Tab_Checked" AutomationProperties.Name="Bags" />
-            <RadioButton x:Name="TabBank" Style="{StaticResource Tab}" Content="Bank" GroupName="inv-view" Tag="bank" Checked="Tab_Checked" AutomationProperties.Name="Bank" />
-            <RadioButton x:Name="TabGuild" Style="{StaticResource Tab}" Content="Guild bank" GroupName="inv-view" Tag="guild" Checked="Tab_Checked" Visibility="Collapsed" AutomationProperties.Name="Guild bank" />
-          </StackPanel>
+        <DockPanel Grid.Row="0" Margin="0,0,0,12">
+          <Button x:Name="ClearFilter" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Show all characters" Click="ClearFilter_Click" Visibility="Collapsed" />
+          <TextBlock x:Name="ResultCaption" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Visibility="Collapsed" />
+          <Border x:Name="TabStrip" Style="{StaticResource SegmentHost}">
+            <StackPanel Orientation="Horizontal">
+              <RadioButton x:Name="TabBags" Style="{StaticResource Segment}" Content="Bags" GroupName="inv-view" IsChecked="True" Tag="bags" Checked="Tab_Checked" AutomationProperties.Name="Bags" />
+              <RadioButton x:Name="TabBank" Style="{StaticResource Segment}" Content="Bank" GroupName="inv-view" Tag="bank" Checked="Tab_Checked" AutomationProperties.Name="Bank" />
+              <RadioButton x:Name="TabGuild" Style="{StaticResource Segment}" Content="Guild bank" GroupName="inv-view" Tag="guild" Checked="Tab_Checked" Visibility="Collapsed" AutomationProperties.Name="Guild bank" />
+            </StackPanel>
+          </Border>
         </DockPanel>
-        <TextBlock x:Name="IconNote" Grid.Row="1" FontSize="11.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="2,0,0,8" Visibility="Collapsed" />
-        <ScrollViewer x:Name="BagsScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0" SizeChanged="BagsScroll_SizeChanged">
+        <StackPanel Grid.Row="1">
+          <TextBlock x:Name="ViewInfo" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="4,0,0,12" />
+          <TextBlock x:Name="IconNote" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="4,0,0,12" Visibility="Collapsed" />
+        </StackPanel>
+        <ScrollViewer x:Name="BagsScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0" SizeChanged="BagsScroll_SizeChanged">
           <StackPanel>
             <WrapPanel x:Name="BagsHost" />
-            <TextBlock x:Name="BagsMessage" FontSize="12.5" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="4,8,0,0" Visibility="Collapsed" />
+            <TextBlock x:Name="BagsMessage" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="4,8,0,0" Visibility="Collapsed" />
           </StackPanel>
         </ScrollViewer>
-        <ScrollViewer x:Name="ResultScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
+        <ScrollViewer x:Name="ResultScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
           <StackPanel>
             <ItemsControl x:Name="Results">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Margin="0,0,0,6" Padding="10,9" CornerRadius="10" Background="{StaticResource Card}" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                  <Border Margin="0,0,0,8" Padding="{StaticResource Pad.Row}" CornerRadius="{StaticResource Radius.Card}" Background="{StaticResource Brush.Surface1}">
                     <Grid>
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                       </Grid.ColumnDefinitions>
-                      <Border Width="38" Height="38" CornerRadius="7" Background="{Binding TileFill}" BorderBrush="{Binding QualityBrush}" BorderThickness="2" VerticalAlignment="Top" Margin="0,0,11,0">
-                        <TextBlock Text="{Binding Initial}" Foreground="{Binding QualityBrush}" FontSize="17" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <Border Width="40" Height="40" CornerRadius="{StaticResource Radius.Control}" Background="{Binding TileFill}" BorderBrush="{Binding QualityBrush}" BorderThickness="2" VerticalAlignment="Top" Margin="0,0,12,0">
+                        <TextBlock Text="{Binding Initial}" Foreground="{Binding QualityBrush}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                       </Border>
                       <StackPanel Grid.Column="1">
                         <DockPanel>
-                          <TextBlock DockPanel.Dock="Right" Text="{Binding TotalText}" FontSize="13" FontWeight="SemiBold" Margin="10,0,2,0" ToolTip="Total across all characters" />
-                          <TextBlock Text="{Binding Name}" Foreground="{Binding QualityBrush}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding TotalText}" Style="{StaticResource Text.Body}" Margin="12,0,0,0" ToolTip="Total across all characters" />
+                          <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding QualityBrush}" TextTrimming="CharacterEllipsis" />
                         </DockPanel>
-                        <ItemsControl ItemsSource="{Binding Holdings}" Margin="0,3,0,0" Focusable="False">
+                        <ItemsControl ItemsSource="{Binding Holdings}" Margin="0,4,0,0" Focusable="False">
                           <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                           <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                              <Border Margin="0,3,6,0" Padding="8,3" CornerRadius="6" Background="{StaticResource SurfaceHi}">
+                              <Border Style="{StaticResource Chip}" Margin="0,4,8,0" Padding="8,3" MinHeight="0">
                                 <StackPanel Orientation="Horizontal">
-                                  <TextBlock Text="{Binding Name}" Foreground="{Binding ClassBrush}" FontSize="11.5" FontWeight="SemiBold" />
-                                  <TextBlock Text="{Binding Where}" Foreground="{StaticResource TextDim}" FontSize="11.5" Margin="6,0,0,0" />
+                                  <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Secondary}" Foreground="{Binding ClassBrush}" />
+                                  <TextBlock Text="{Binding Where}" Style="{StaticResource Text.Secondary}" Margin="8,0,0,0" />
                                 </StackPanel>
                               </Border>
                             </DataTemplate>
@@ -134,8 +181,8 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <TextBlock x:Name="MoreText" FontSize="11.5" Foreground="{StaticResource TextDim}" Margin="4,2,0,6" Visibility="Collapsed" TextWrapping="Wrap" />
-            <TextBlock x:Name="NoMatch" Text="Nothing matches." FontSize="12.5" Foreground="{StaticResource TextDim}" Margin="4,10,0,0" Visibility="Collapsed" />
+            <TextBlock x:Name="MoreText" Style="{StaticResource Text.Secondary}" Margin="4,4,0,8" Visibility="Collapsed" TextWrapping="Wrap" />
+            <TextBlock x:Name="NoMatch" Text="Nothing matches." Style="{StaticResource Text.Secondary}" Margin="4,8,0,0" Visibility="Collapsed" />
           </StackPanel>
         </ScrollViewer>
       </Grid>

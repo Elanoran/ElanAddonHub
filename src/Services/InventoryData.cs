@@ -137,7 +137,9 @@ namespace ElansAddonHub.Services
     public class InvChar
     {
         public string Key, Name, Realm, Class, Faction;
+        public string RaceFile;                  // "Orc", "NightElf", "Scourge"...: Elan's Bags does not save it yet; filled from the Outpost's ElansHub.lua (see ReadLooks)
         public int Level;
+        public int Sex;                          // 2 male, 3 female (UnitSex), 0 = unknown
         public long Money;
         public long Updated, BagsAt, BankAt;
         public bool Hidden;
@@ -158,6 +160,57 @@ namespace ElansAddonHub.Services
         public int Bags, Bank, Equipped, GuildBank;
         public long GuildSeen;
         public int Total => Bags + Bank + Equipped + GuildBank;
+    }
+
+    // how many of one item a character holds, per place
+    public class InvCount
+    {
+        public InvChar Char;
+        public int Bags, Bank, Equipped;
+        public int Total => Bags + Bank + Equipped;
+        // "Bags 14 · Bank 20 · Total 34" (just "Bags 14" when it is in one place only)
+        public string Detail
+        {
+            get
+            {
+                var parts = new List<string>();
+                if (Bags > 0) parts.Add("Bags " + Bags.ToString("N0"));
+                if (Bank > 0) parts.Add("Bank " + Bank.ToString("N0"));
+                if (Equipped > 0) parts.Add("Worn " + Equipped.ToString("N0"));
+                if (parts.Count > 1) parts.Add("Total " + Total.ToString("N0"));
+                return string.Join(" · ", parts);
+            }
+        }
+    }
+
+    public class InvGuildCount { public InvGuild Guild; public int Count; public long Seen; }
+
+    public class InvItemTotals
+    {
+        public int Id;
+        public List<InvCount> Chars = new List<InvCount>();
+        public List<InvGuildCount> Guilds = new List<InvGuildCount>();
+    }
+
+    public class ItemTip
+    {
+        public int Id;
+        public InvCount Me;
+        public List<InvCount> Others = new List<InvCount>();
+        public List<InvGuildCount> Guilds = new List<InvGuildCount>();
+        public int Grand => (Me?.Total ?? 0) + Others.Sum(o => o.Total) + Guilds.Sum(g => g.Count);
+        public int Sources => (Me != null ? 1 : 0) + Others.Count + Guilds.Count;
+        public bool ShowGrand => Sources > 1;
+        // plain text of what the tooltip shows (for the self-test)
+        public List<string> Lines()
+        {
+            var l = new List<string>();
+            if (Me != null) l.Add("This: " + Me.Char.Name + " " + Me.Detail);
+            foreach (var o in Others) l.Add("Other: " + o.Char.Name + " " + o.Detail);
+            foreach (var g in Guilds) l.Add("Guild: " + g.Guild.Name + " " + g.Count.ToString("N0"));
+            if (ShowGrand) l.Add("All: " + Grand.ToString("N0"));
+            return l;
+        }
     }
 
     public class InvResult
@@ -258,8 +311,58 @@ namespace ElansAddonHub.Services
                 catch (Exception e) { Util.Log("inventory read failed: " + f + ": " + e.Message); }
             }
             data.Chars = best.Values.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            ApplyLooks(data.Chars, ReadLooks(root));
             data.Guilds = guilds.Values.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
             return data;
+        }
+
+        // race and sex per character, from the Outpost companion's SavedVariables (ElansHub.lua, "chars": raceFile / sex / name / realm).
+        // Read-only. Elan's Bags itself saves class and faction only. Key: "name|realm" (lower case).
+        public class Look { public string RaceFile; public int Sex; }
+
+        public static Dictionary<string, Look> ReadLooks(string root)
+        {
+            var res = new Dictionary<string, Look>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in GamePresence.SavedVariablesFiles(root))
+            {
+                try { ParseLooks(ReadShared(f), res); }
+                catch (Exception e) { Util.Log("inventory looks failed: " + f + ": " + e.Message); }
+            }
+            return res;
+        }
+
+        public static void ParseLooks(string text, Dictionary<string, Look> into)
+        {
+            var db = LuaData.ReadGlobals(text).TryGetValue("ElansHubDB", out var v) ? v as Dictionary<string, object> : null;
+            var chars = db?.Child("chars");
+            if (chars == null) return;
+            foreach (var kv in chars)
+            {
+                var c = kv.Value as Dictionary<string, object>;
+                if (c == null) continue;
+                var name = c.Str("name");
+                var race = c.Str("raceFile");
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(race)) continue;
+                var look = new Look { RaceFile = race, Sex = c.Int("sex") };
+                into[LookKey(name, c.Str("realm"))] = look;
+                into[LookKey(name, null)] = look;   // name only, when the realm is spelled differently
+            }
+        }
+
+        static string LookKey(string name, string realm) => (name ?? "").ToLowerInvariant() + "|" + (realm ?? "").ToLowerInvariant();
+
+        public static void ApplyLooks(IEnumerable<InvChar> chars, Dictionary<string, Look> looks)
+        {
+            if (looks == null || looks.Count == 0) return;
+            foreach (var c in chars)
+            {
+                if (!string.IsNullOrEmpty(c.RaceFile) && c.Sex >= 2) continue;
+                if (looks.TryGetValue(LookKey(c.Name, c.Realm), out var l) || looks.TryGetValue(LookKey(c.Name, null), out l))
+                {
+                    if (string.IsNullOrEmpty(c.RaceFile)) c.RaceFile = l.RaceFile;
+                    if (c.Sex < 2) c.Sex = l.Sex;
+                }
+            }
         }
 
         public static InvData ParseAll(string text, string file = null)
@@ -294,6 +397,8 @@ namespace ElansAddonHub.Services
                     Realm = Str(t, "realm"),
                     Class = Str(t, "class"),
                     Faction = Str(t, "faction"),
+                    RaceFile = Str(t, "raceFile"),     // a later Elan's Bags may save these two
+                    Sex = (int)Num(t, "sex"),
                     Level = (int)Num(t, "level"),
                     Money = (long)Num(t, "money"),
                     Updated = (long)Num(t, "updated"),
@@ -470,6 +575,60 @@ namespace ElansAddonHub.Services
                     return terms.All(t => hay.Contains(t));
                 });
             return res.OrderByDescending(r => r.Quality).ThenBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+
+        // ---- per item totals (built once per data load; the tooltips only look things up)
+        // Counts come from the saved bag layout when there is one (that includes the reagent bag and the bank bags), else from the summed lists.
+        public static Dictionary<int, InvItemTotals> BuildIndex(IEnumerable<InvChar> chars, IEnumerable<InvGuild> guilds)
+        {
+            var idx = new Dictionary<int, InvItemTotals>();
+            InvItemTotals Of(int id) { if (!idx.TryGetValue(id, out var t)) idx[id] = t = new InvItemTotals { Id = id }; return t; }
+            foreach (var c in chars)
+            {
+                if (c.Hidden) continue;
+                var per = new Dictionary<int, InvCount>();
+                void Add(int id, int n, int where)
+                {
+                    if (id <= 0) return;
+                    if (!per.TryGetValue(id, out var k)) per[id] = k = new InvCount { Char = c };
+                    if (where == 0) k.Bags += n; else if (where == 1) k.Bank += n; else k.Equipped += n;
+                }
+                void FromLayout(List<InvContainer> conts, List<InvItem> list, int where)
+                {
+                    if (conts != null && conts.Count > 0) { foreach (var ct in conts) foreach (var sl in ct.Slots.Values) Add(sl.Id, sl.Count, where); }
+                    else if (list != null) foreach (var it in list) Add(it.Id, it.Count, where);
+                }
+                FromLayout(c.BagsCont, c.Bags, 0);
+                FromLayout(c.BankCont, c.Bank, 1);
+                foreach (var it in c.Equipped ?? new List<InvItem>()) Add(it.Id, it.Count, 2);
+                foreach (var kv in per) Of(kv.Key).Chars.Add(kv.Value);
+            }
+            if (guilds != null)
+                foreach (var g in guilds)
+                {
+                    var per = new Dictionary<int, InvGuildCount>();
+                    foreach (var tab in g.Tabs)
+                        foreach (var sl in tab.Slots.Values)
+                        {
+                            if (sl.Id <= 0) continue;
+                            if (!per.TryGetValue(sl.Id, out var k)) per[sl.Id] = k = new InvGuildCount { Guild = g, Seen = tab.At };
+                            k.Count += sl.Count;
+                            if (tab.At > k.Seen) k.Seen = tab.At;
+                        }
+                    foreach (var kv in per) Of(kv.Key).Guilds.Add(kv.Value);
+                }
+            return idx;
+        }
+
+        // what the item tooltip says about item `id` seen on `me`: me, the other characters, the guild banks, everything together
+        public static ItemTip TipFor(Dictionary<int, InvItemTotals> index, int id, InvChar me)
+        {
+            var tip = new ItemTip { Id = id };
+            if (index == null || !index.TryGetValue(id, out var t)) return tip;
+            tip.Me = me == null ? null : t.Chars.FirstOrDefault(k => ReferenceEquals(k.Char, me) || k.Char.Key == me.Key);
+            tip.Others = t.Chars.Where(k => k != tip.Me).OrderByDescending(k => k.Total).ThenBy(k => k.Char.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            tip.Guilds = t.Guilds.OrderByDescending(g => g.Count).ThenBy(g => g.Guild.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            return tip;
         }
 
         public static string Ago(long unix, DateTime? now = null)

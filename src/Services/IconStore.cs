@@ -175,6 +175,17 @@ namespace ElansAddonHub.Services
             var log = Path.Combine(dir, "result.txt");
             try
             {
+                // "a-b": a range of ids (to find the ids of named icons such as the race portraits)
+                var rng = idText.Split('-');
+                if (rng.Length == 2 && int.TryParse(rng[0], out var lo) && int.TryParse(rng[1], out var hi) && hi >= lo && hi - lo < 2000)
+                {
+                    var rroot = Environment.GetEnvironmentVariable("ELANSHUB_WOW");
+                    if (string.IsNullOrEmpty(rroot)) rroot = WowLocator.Find();
+                    var got = Extract(new HashSet<int>(Enumerable.Range(lo, hi - lo + 1)), rroot, Flavor);
+                    foreach (var kv in got) File.WriteAllBytes(Path.Combine(dir, kv.Key + ".png"), kv.Value);
+                    File.WriteAllText(log, "ok range " + lo + "-" + hi + ": " + got.Count + " found");
+                    return 0;
+                }
                 if (!int.TryParse(idText, out var id)) throw new ArgumentException("file id expected");
                 var root = Environment.GetEnvironmentVariable("ELANSHUB_WOW");
                 if (string.IsNullOrEmpty(root)) root = WowLocator.Find();

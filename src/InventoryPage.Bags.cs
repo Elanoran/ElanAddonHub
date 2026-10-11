@@ -42,7 +42,7 @@ namespace ElansAddonHub
         static Color Hex(string hex) => (Color)ColorConverter.ConvertFromString(hex);
         static Color Mix(Color a, Color b, double t) => Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
         static Brush Solid(Color c, byte alpha = 255) { var b = new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B)); b.Freeze(); return b; }
-        static Color CardColor() => (Application.Current.Resources["Card"] as SolidColorBrush)?.Color ?? Color.FromRgb(0x16, 0x18, 0x1C);
+        static Color SurfaceColor() => (Application.Current.Resources["Brush.Surface1"] as SolidColorBrush)?.Color ?? Color.FromRgb(0x16, 0x19, 0x1C);
         static readonly Color SlotColor = Color.FromRgb(0x0A, 0x0B, 0x0D), EmptyEdgeColor = Color.FromRgb(0x23, 0x26, 0x2B);
 
         void Tab_Checked(object sender, RoutedEventArgs e)
@@ -163,8 +163,8 @@ namespace ElansAddonHub
             if (!tabs.Any(t => t.Index == guildTab)) guildTab = (tabs.FirstOrDefault(t => t.Seen != null) ?? tabs[0]).Index;
             var cur = tabs.First(t => t.Index == guildTab);
             guildCols = GuildCols();
-            var wrap = new StackPanel { Margin = new Thickness(0, 0, 10, 10) };
-            var strip = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+            var wrap = new StackPanel { Margin = new Thickness(0, 0, 12, 12) };
+            var strip = new WrapPanel();
             foreach (var t in tabs)
             {
                 var tt = t;
@@ -172,19 +172,19 @@ namespace ElansAddonHub
                 var content = new StackPanel { Orientation = Orientation.Horizontal };
                 if (t.Icon > 0)
                 {
-                    var img = new Image { Width = 18, Height = 18, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = t.Seen != null ? 1 : 0.45 };
+                    var img = new Image { Width = 16, Height = 16, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = t.Seen != null ? 1 : 0.45 };
                     RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
                     BindIcon(t.Icon, img, null);
                     content.Children.Add(img);
                 }
                 content.Children.Add(new TextBlock { Text = t.Label, VerticalAlignment = VerticalAlignment.Center, Opacity = t.Seen != null ? 1 : 0.55 });
-                content.Children.Add(new TextBlock { Text = " · " + (t.Seen != null ? InventoryReader.Ago(t.Seen.At) : "not seen"), FontSize = 10.5, Foreground = Res("TextDim"), VerticalAlignment = VerticalAlignment.Center });
-                var rb = new RadioButton { Style = (Style)FindResource("Segment"), Content = content, GroupName = "inv-gtab", IsChecked = t.Index == guildTab, Margin = new Thickness(0, 0, 6, 4), ToolTip = t.Label + " (tab " + t.Index + ") · " + seen };
+                content.Children.Add(new TextBlock { Text = " · " + (t.Seen != null ? InventoryReader.Ago(t.Seen.At) : "not seen"), Style = TextStyle("Text.Caption"), VerticalAlignment = VerticalAlignment.Center });
+                var rb = new RadioButton { Style = (Style)FindResource("Segment"), Content = content, GroupName = "inv-gtab", IsChecked = t.Index == guildTab, ToolTip = t.Label + " (tab " + t.Index + ") · " + seen };
                 rb.Checked += (s, e) => { if (guildTab != tt.Index) { guildTab = tt.Index; RenderBags(c); } };
                 strip.Children.Add(rb);
                 guildTabInfo.Add(t.Index + "|" + t.Label + "|" + (t.Seen != null ? "seen" : "unseen") + "|" + seen + "|" + t.Icon);
             }
-            wrap.Children.Add(strip);
+            wrap.Children.Add(new Border { Style = (Style)FindResource("SegmentHost"), Margin = new Thickness(0, 0, 0, 12), Child = strip });
             var seenCount = tabs.Count(t => t.Seen != null);
             var money = InventoryReader.Money(g.Money);
             if (cur.Seen == null)
@@ -223,11 +223,12 @@ namespace ElansAddonHub
             var title = pile ? "Items" : guild ? c.BagName : c.Title;
             var sp = pile || guild ? null : c.Special;
             Color spc = sp != null ? Hex(sp.Hex) : default(Color);
-            var panel = new Border { Background = sp != null ? Solid(Mix(CardColor(), spc, 0.09)) : Res("Card"), BorderBrush = sp != null ? Solid(spc, 0x99) : Res("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 9, 10, 8), Margin = new Thickness(0, 0, 10, 10), VerticalAlignment = VerticalAlignment.Top };
+            // a bag card: Surface1, no outline; a special bag (reagents, quiver...) is tinted in its colour instead
+            var panel = new Border { Background = sp != null ? Solid(Mix(SurfaceColor(), spc, 0.12)) : Res("Brush.Surface1"), CornerRadius = (CornerRadius)FindResource("Radius.Card"), Padding = new Thickness(12), Margin = new Thickness(0, 0, 12, 12), VerticalAlignment = VerticalAlignment.Top };
             var stack = new StackPanel { Width = gridW };
 
             // header: bag icon, name, free/total
-            var head = new DockPanel { Margin = new Thickness(0, 0, 0, 7), LastChildFill = true };
+            var head = new DockPanel { Margin = new Thickness(0, 0, 0, 8), LastChildFill = true };
             var iconBox = new Border { Width = 26, Height = 26, CornerRadius = new CornerRadius(4), Background = SlotBg, BorderThickness = new Thickness(1.5), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
             iconBox.BorderBrush = c.BagItemId > 0 ? EdgeFor(c.BagQuality) : EmptyEdge;
             var holder = new Grid();
@@ -242,20 +243,20 @@ namespace ElansAddonHub
             DockPanel.SetDock(iconBox, Dock.Left);
             head.Children.Add(iconBox);
             string free;
-            Brush freeBrush = Res("TextDim");
+            Brush freeBrush = Res("Brush.Text.Secondary");
             if (pile) free = c.Used + " stacks";
             else
             {
                 free = c.Free + "/" + c.Size;
-                if (c.Free == 0) freeBrush = Res("Danger"); else if (c.Free <= 2) freeBrush = Res("Gold");
+                if (c.Free == 0) freeBrush = Res("Brush.Danger"); else if (c.Free <= 2) freeBrush = Res("Brush.Warn");
             }
-            var freeText = new TextBlock { Text = free, FontSize = 11.5, Foreground = freeBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), ToolTip = pile ? null : "free slots / size" };
+            var freeText = new TextBlock { Text = free, Style = TextStyle("Text.Caption"), Foreground = freeBrush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0), ToolTip = pile ? null : "free slots / size" };
             DockPanel.SetDock(freeText, Dock.Right);
             head.Children.Add(freeText);
             var titleText = new TextBlock
             {
-                Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
-                Foreground = c.BagItemId > 0 ? Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, c.BagQuality))]) : Res("Text"),
+                Text = title, Style = TextStyle("Text.RowTitle"), TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
+                Foreground = c.BagItemId > 0 ? Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, c.BagQuality))]) : Res("Brush.Text.Primary"),
             };
             if (sp == null) head.Children.Add(titleText);
             else
@@ -263,10 +264,10 @@ namespace ElansAddonHub
                 // name with a small coloured chip ("Reagents only") under it; the tooltip explains
                 var chip = new Border
                 {
-                    CornerRadius = new CornerRadius(8), Padding = new Thickness(6, 0.5, 6, 1), Margin = new Thickness(0, 2, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,
-                    Background = Solid(spc, 0x33), BorderBrush = Solid(spc, 0x99), BorderThickness = new Thickness(1),
-                    ToolTip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = new TextBlock { Text = sp.Explain + " Its empty slots are not counted as free space.", TextWrapping = TextWrapping.Wrap, MaxWidth = 240, FontSize = 12 } },
-                    Child = new TextBlock { Text = sp.Only, FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Solid(spc) },
+                    CornerRadius = (CornerRadius)FindResource("Radius.Control"), Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,
+                    Background = Solid(spc, 0x33),
+                    ToolTip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = new TextBlock { Text = sp.Explain + " Its empty slots are not counted as free space.", TextWrapping = TextWrapping.Wrap, MaxWidth = 240, Style = TextStyle("Text.Secondary"), Foreground = Res("Brush.Text.Primary") } },
+                    Child = new TextBlock { Text = sp.Only, Style = TextStyle("Text.Caption"), Foreground = Solid(spc) },
                 };
                 ToolTipService.SetInitialShowDelay(chip, 150);
                 var st = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -309,7 +310,7 @@ namespace ElansAddonHub
                 if (sp != null)
                 {
                     slotsSpecialEmpty++;
-                    bd.ToolTip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = new TextBlock { Text = sp.Name + " - only " + sp.What + " fit here", FontSize = 12 } };
+                    bd.ToolTip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = new TextBlock { Text = sp.Name + " - only " + sp.What + " fit here", Style = TextStyle("Text.Secondary"), Foreground = Res("Brush.Text.Primary") } };
                     ToolTipService.SetInitialShowDelay(bd, 150);
                 }
                 return bd;
@@ -342,15 +343,57 @@ namespace ElansAddonHub
             return bd;
         }
 
+        Style TextStyle(string key) => (Style)FindResource(key);
+
+        TextBlock Line(string text, string style, Brush fg = null, double top = 0)
+        {
+            var t = new TextBlock { Text = text, Style = TextStyle(style), Margin = new Thickness(0, top, 0, 0) };
+            if (fg != null) t.Foreground = fg;
+            return t;
+        }
+
+        // name (left) and numbers (right) on one line
+        FrameworkElement CountRow(string name, Brush nameBrush, string detail, double top)
+        {
+            var g = new Grid { Margin = new Thickness(0, top, 0, 0) };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.Children.Add(Line(name, "Text.Body", nameBrush));
+            var d = Line(detail, "Text.Secondary", Res("Brush.Text.Primary"));
+            d.Margin = new Thickness(24, 0, 0, 0);
+            d.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(d, 1);
+            g.Children.Add(d);
+            return g;
+        }
+
+        // item tooltip: the name, what THIS character holds (bags / bank / total), the other characters, the guild bank and everything together
         object SlotTip(InvSlot s, string where, string bagTitle, int slotNo, InvChar owner, bool guild)
         {
-            var sp = new StackPanel { MinWidth = 120 };
-            sp.Children.Add(new TextBlock { Text = s.Name, FontWeight = FontWeights.SemiBold, FontSize = 13, Foreground = Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, s.Quality))]) });
-            if (s.Count > 1) sp.Children.Add(new TextBlock { Text = "Count: " + s.Count.ToString("N0"), FontSize = 12, Margin = new Thickness(0, 3, 0, 0) });
+            var sp = new StackPanel { MinWidth = 200 };
+            sp.Children.Add(Line(s.Name, "Text.RowTitle", Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, s.Quality))])));
+            var tip = InventoryReader.TipFor(index, s.Id, owner);
+            if (tip.Me != null) sp.Children.Add(CountRow(tip.Me.Char.Name, ClassBrushOf(tip.Me.Char.Class), tip.Me.Detail, 8));
+            if (tip.Others.Count > 0)
+            {
+                sp.Children.Add(Line("Other characters", "Text.Caption", null, 12));
+                foreach (var o in tip.Others) sp.Children.Add(CountRow(o.Char.Name, ClassBrushOf(o.Char.Class), o.Detail, 4));
+            }
+            if (tip.Guilds.Count > 0)
+            {
+                sp.Children.Add(Line("Guild bank", "Text.Caption", null, 12));
+                foreach (var g in tip.Guilds) sp.Children.Add(CountRow(g.Guild.Name, Res("Brush.Text.Primary"), g.Count.ToString("N0"), 4));
+            }
+            if (tip.ShowGrand)
+            {
+                sp.Children.Add(new Border { Height = 1, Background = Res("Brush.Divider"), Margin = new Thickness(0, 8, 0, 8) });
+                sp.Children.Add(CountRow("All together", Res("Brush.Text.Primary"), tip.Grand.ToString("N0"), 0));
+            }
             var loc = guild ? where + " · " + bagTitle + " · slot " + slotNo
                 : (owner != null ? owner.Name + " · " : "") + where + (where == "Bags" || where == "Bank" ? " · " + bagTitle : "") + " · slot " + slotNo;
-            sp.Children.Add(new TextBlock { Text = loc, FontSize = 11.5, Foreground = Res("TextDim"), Margin = new Thickness(0, 4, 0, 0) });
-            sp.Children.Add(new TextBlock { Text = "Item ID " + s.Id, FontSize = 11, Foreground = Res("TextDim") });
+            if (s.Count > 1) loc += " · stack of " + s.Count.ToString("N0");
+            sp.Children.Add(Line(loc, "Text.Caption", null, 12));
+            sp.Children.Add(Line("Item ID " + s.Id, "Text.Caption"));
             return new ToolTip { Style = (Style)FindResource("CardTip"), Content = sp };
         }
 

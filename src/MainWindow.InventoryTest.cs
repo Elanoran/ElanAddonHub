@@ -186,6 +186,64 @@ namespace ElansAddonHub
                 Check("clearing the search brings the bags back", InventoryView.TabStripVisibleForTest);
                 InventoryView.FilterForTest(null);
 
+                // ---- compact character list: portrait + name + "Lv 25 Hunter"; realm, gold, save times and counts are in the hover tooltip
+                InventoryView.FilterForTest("Forever-Elan");
+                var crow = InventoryView.CharRowsForTest();
+                Check("character rows: one line each, 'Lv <level> <Class>', no realm / gold / save times", crow.Count == 2 && crow[0].StartsWith("Elan|Lv 25 Hunter|") && crow[1].StartsWith("Measley|Lv 22 Paladin|"), string.Join(" ; ", crow));
+                Check("no race / sex saved yet: the class icon stands in (hunter, paladin)", crow.Count == 2 && crow[0].Split('|')[2] == "626000" && crow[1].Split('|')[2] == "626003" && crow[0].Split('|')[3] == "False", string.Join(" ; ", crow));
+                Check("the row of the shown character is the selected one, 'All characters' is not", crow.Count == 2 && crow[0].EndsWith("|True") && crow[1].EndsWith("|False") && !InventoryView.AllSelectedForTest);
+                Check("'All characters' row says how many characters", InventoryView.AllLineForTest == "2 characters", InventoryView.AllLineForTest);
+                var ctip = InventoryView.CharTipForTest("Forever-Elan") ?? new List<string>();
+                Check("hover tooltip holds realm, level/class/faction, gold, saves and counts", ctip.Count == 5 && ctip[0] == "Elan · Forever" && ctip[1] == "Level 25 · Hunter · Horde" && ctip[2] == InventoryReader.Money(123456)
+                    && ctip[3].StartsWith("Bags saved ") && ctip[3].Contains(" ago · ") && ctip[4].StartsWith("Bank seen 3 days ago · "), string.Join(" | ", ctip));
+                InventoryView.FilterForTest(null);
+                crow = InventoryView.CharRowsForTest();
+                Check("'All characters' selected: no character row is", InventoryView.AllSelectedForTest && crow.All(x => x.EndsWith("|False")));
+                // race + sex from the Outpost companion's ElansHub.lua (Elan's Bags saves class and faction only)
+                var hubFile = Path.Combine(sv, "ElansHub.lua");
+                File.WriteAllText(hubFile, "ElansHubDB = {\n\t[\"current\"] = \"Forever-Elan\",\n\t[\"chars\"] = {\n"
+                    + "\t\t[\"Forever-Elan\"] = { [\"name\"] = \"Elan\", [\"realm\"] = \"Forever\", [\"classFile\"] = \"HUNTER\", [\"raceFile\"] = \"Orc\", [\"sex\"] = 2, [\"level\"] = 25 },\n"
+                    + "\t\t[\"Forever-Measley\"] = { [\"name\"] = \"Measley\", [\"realm\"] = \"Forever\", [\"classFile\"] = \"PALADIN\", [\"raceFile\"] = \"Scourge\", [\"sex\"] = 3, [\"level\"] = 22 },\n"
+                    + "\t},\n}\n", new UTF8Encoding(false));
+                InventoryView.Reload();
+                crow = InventoryView.CharRowsForTest();
+                Check("race + sex known: the race portrait (orc male, undead female)", crow.Count == 2 && crow[0].Split('|')[2] == "236452" && crow[1].Split('|')[2] == "236457" && crow[0].Split('|')[3] == "True" && crow[1].Split('|')[3] == "True", string.Join(" ; ", crow));
+                Check("portrait ids: race + sex first, then class, else none", CharPortrait.IconFor("Orc", 3, "HUNTER") == 236451 && CharPortrait.IconFor("Human", 2, "MAGE") == 236448 && CharPortrait.IconFor("Orc", 0, "HUNTER") == 626000
+                    && CharPortrait.IconFor("Elf", 2, "WARRIOR") == 626008 && CharPortrait.IconFor(null, 0, null) == 0);
+                // the portrait is read from the game data and cached like an item icon: with a cached picture the row has its image at once
+                Directory.CreateDirectory(IconStore.Dir);
+                foreach (var ic in new[] { 236452, 236457 }) File.WriteAllBytes(IconStore.PathFor(ic), TestIconPng(ic));
+                IconStore.ForgetMemory();
+                InventoryView.Reload();
+                crow = InventoryView.CharRowsForTest();
+                Check("cached portrait icons are on the rows at once", crow.Count == 2 && crow.All(x => x.Split('|')[4] == "True"), string.Join(" ; ", crow));
+                await Task.Delay(300);
+                Snapshot(P("17-inventory-characters.png"));
+                foreach (var ic in new[] { 236452, 236457 }) { try { File.Delete(IconStore.PathFor(ic)); } catch { } }
+                IconStore.ForgetMemory();
+                var looks = new Dictionary<string, InventoryReader.Look>();
+                InventoryReader.ParseLooks(File.ReadAllText(hubFile), looks);
+                Check("ElansHub.lua parser: race + sex per name", looks.TryGetValue("elan|forever", out var lk) && lk.RaceFile == "Orc" && lk.Sex == 2);
+
+                // ---- item tooltip counts: this character (bags / bank / total), other characters, guild bank, grand total; built once per load
+                Check("index is built once per load (8 distinct items, hidden character left out)", InventoryView.IndexSizeForTest == 8, InventoryView.IndexSizeForTest.ToString());
+                var tl = InventoryView.ItemTipForTest(100, "Forever-Elan");
+                Check("tooltip, this character: 'Bags 20 · Bank 10 · Total 30'", tl.Count > 0 && tl[0] == "This: Elan Bags 20 · Bank 10 · Total 30", string.Join(" | ", tl));
+                Check("tooltip, other characters listed with their split", tl.Contains("Other: Measley Bags 3"), string.Join(" | ", tl));
+                Check("tooltip, grand total across everything (33, the hidden character does not count)", tl.Last() == "All: 33" && tl.Count == 3, string.Join(" | ", tl));
+                tl = InventoryView.ItemTipForTest(100, "Forever-Measley");
+                Check("same item from the other character: this = Measley 3, other = Elan with split", tl.SequenceEqual(new[] { "This: Measley Bags 3", "Other: Elan Bags 20 · Bank 10 · Total 30", "All: 33" }), string.Join(" | ", tl));
+                tl = InventoryView.ItemTipForTest(109, "Forever-Elan");
+                Check("worn + bank bag item with the guild bank: this, other, guild, grand", tl.SequenceEqual(new[] { "This: Elan Bank 1 · Worn 1 · Total 2", "Other: Measley Worn 1", "Guild: Test Guild 2", "All: 5" }), string.Join(" | ", tl));
+                tl = InventoryView.ItemTipForTest(101, "Forever-Elan");
+                Check("guild bank total shown (40), grand total 45", tl.SequenceEqual(new[] { "This: Elan Bags 5", "Guild: Test Guild 40", "All: 45" }), string.Join(" | ", tl));
+                tl = InventoryView.ItemTipForTest(107, "Forever-Elan");
+                Check("only one source: no grand total line", tl.SequenceEqual(new[] { "This: Elan Bags 2 · Bank 2 · Total 4" }), string.Join(" | ", tl));
+                tl = InventoryView.ItemTipForTest(3010, "Forever-Elan");
+                Check("an item only in the guild bank: no 'this character' line, no grand total", tl.SequenceEqual(new[] { "Guild: Test Guild 1" }), string.Join(" | ", tl));
+                Check("an unknown item has no counts", InventoryView.ItemTipForTest(424242, "Forever-Elan").Count == 0);
+                InventoryView.FilterForTest(null);
+
                 // opt-in (ELANSHUB_TEST_REALICONS=1): read the real icons from the local game data, cached in the test data folder
                 if (Environment.GetEnvironmentVariable("ELANSHUB_TEST_REALICONS") == "1")
                 {
@@ -276,6 +334,10 @@ namespace ElansAddonHub
                 panels = InventoryView.PanelsForTest();
                 Check("special data: backpack, quiver and the reagent bag", panels.SequenceEqual(new[] { "Backpack|4|16", "Linen Bag|2|6", "Light Leather Reagent Bag|2|8" }), string.Join(",", panels));
                 Check("reagent bag gets the 'Reagents only' chip, the quiver 'Arrows only'", InventoryView.ChipsForTest().SequenceEqual(new[] { "Linen Bag|Arrows only", "Light Leather Reagent Bag|Reagents only" }), string.Join(",", InventoryView.ChipsForTest()));
+                var tsp = InventoryView.ItemTipForTest(100, "Forever-Elan");
+                Check("tooltip counts include the reagent bag (backpack 20 + reagent bag 15 = 35 in bags, 10 in the bank)", tsp.Count > 0 && tsp[0] == "This: Elan Bags 35 · Bank 10 · Total 45" && tsp.Last() == "All: 48", string.Join(" | ", tsp));
+                tsp = InventoryView.ItemTipForTest(107, "Forever-Elan");
+                Check("tooltip counts include bank bags (main bank 2 + herb pouch 6 = 8) and the reagent bag (2 + 3 = 5)", tsp.SequenceEqual(new[] { "This: Elan Bags 5 · Bank 8 · Total 13" }), string.Join(" | ", tsp));
                 Check("empty special slots are tinted + have a tooltip (4 quiver + 6 reagent)", InventoryView.SpecialEmptySlotsForTest == 10, InventoryView.SpecialEmptySlotsForTest.ToString());
                 Check("footer info: general space apart, specials after", InventoryView.ViewInfoForTest.StartsWith("12 free of 16 slots · Quiver 4 free · Reagents 6 free"), InventoryView.ViewInfoForTest);
                 await Task.Delay(300);
