@@ -31,6 +31,9 @@ namespace ElansAddonHub
                 await FunShotLfg(dir);
                 await FunShotItems(dir);
                 await FunShotSearch(dir);
+                await FunShotChat(dir);
+                await FunShotViewer(dir);
+                await FunShotProfile(dir);
                 System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), "lodge fun design shots done");
             }
             catch (Exception e) { System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), "design shots crashed: " + e); }
@@ -139,6 +142,90 @@ namespace ElansAddonHub
             await Task.Delay(700);
             SnapshotElement(LodgePage.SidebarForTest, System.IO.Path.Combine(dir, "lodge-fun-groups.png"));
             Snapshot(System.IO.Path.Combine(dir, "lodge-fun-groups-window.png"));
+        }
+
+        // a lively channel: replies, an edited message, hover tools forced on one row, text in the composer
+        async Task FunShotChat(string dir)
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            Session.Disconnect();
+            LodgePage.ShowChatForTest();
+            Session.IsShownToUser = () => false;
+            string M(string id, string from, int fromId, string text, int minsAgo, string extra = "") =>
+                "{\"t\":\"msg\",\"channel\":\"general\",\"id\":" + Q(id) + ",\"at\":" + (now - minsAgo * 60000L) + ",\"from\":" + Q(from) + ",\"fromId\":" + fromId + ",\"text\":" + Q(text) + extra + "}";
+            var hist = string.Join(",",
+                M("c1", "Bob", 2, "Deadmines tonight? We need one more DPS.", 30),
+                M("c2", "Mia", 3, "I can heal, give me ten minutes to finish a quest", 28),
+                M("c3", "Bob", 2, "Great, meet at the entrance at 20:00", 27),
+                M("c4", "Kor", 6, "Molten Core is on for Saturday, bring fire resistance", 14, ",\"edited\":true"),
+                M("c5", "Mia", 3, "Yes, sign me up for that too", 12, ",\"replyTo\":{\"id\":\"c4\",\"by\":\"Kor\",\"snippet\":\"Molten Core is on for Saturday, bring fire resistance\"}"),
+                M("c6", "Dax", 8, "Does anyone have a spare Rejuvenation potion?", 3));
+            Session.FeedForTest(FunWelcome("owner", FunPeople(false), hist));
+            Session.Select(Session.TextChannels.First(c => c.Id == "general"));
+            await Task.Delay(800);
+            LodgePage.ScrollToEndForTest();
+            await Task.Delay(300);
+            var msgs = Session.MessagesOf("general");
+            if (msgs.Count > 3) msgs[3].ForceTools = true;
+            LodgePage.ComposerTextForTest = "Heading over now";
+            await Task.Delay(400);
+            Snapshot(System.IO.Path.Combine(dir, "lodge-fun-chat.png"));
+            if (msgs.Count > 3) msgs[3].ForceTools = false;
+            LodgePage.ComposerTextForTest = "";
+        }
+
+        async Task FunShotViewer(string dir)
+        {
+            var msgs = new List<MessageVM>();
+            for (int i = 0; i < 2; i++)
+            {
+                var path = System.IO.Path.Combine(dir, $"viewer-shot{i}.png");
+                var dv = new DrawingVisual();
+                using (var dc = dv.RenderOpen())
+                {
+                    dc.DrawRectangle(new LinearGradientBrush(Color.FromRgb((byte)(40 + i * 80), 120, 220), Color.FromRgb(240, (byte)(60 + i * 70), 90), 35), null, new Rect(0, 0, 1600, 900));
+                    dc.DrawEllipse(Brushes.White, null, new Point(800, 450), 220, 220);
+                }
+                var rt = new RenderTargetBitmap(1600, 900, 96, 96, PixelFormats.Pbgra32);
+                rt.Render(dv);
+                var enc = new PngBitmapEncoder();
+                enc.Frames.Add(BitmapFrame.Create(rt));
+                using (var fs = System.IO.File.Create(path)) enc.Save(fs);
+                msgs.Add(new MessageVM { Id = "v" + i, From = "Bob", At = DateTime.UtcNow, File = new FileVM { Id = "v" + i, Name = $"sunset-{i + 1}.png", Size = new System.IO.FileInfo(path).Length, Mime = "image/png", LocalPath = path } });
+            }
+            var v = LodgePage.ViewerForTest;
+            v.Open(msgs, msgs[0]);
+            await Task.Delay(900);
+            Snapshot(System.IO.Path.Combine(dir, "lodge-fun-viewer.png"));
+            v.Close();
+            await Task.Delay(100);
+        }
+
+        async Task FunShotProfile(string dir)
+        {
+            Session.Disconnect();
+            LodgePage.ShowChatForTest();
+            Session.IsShownToUser = () => false;
+            Session.FeedForTest(FunWelcome("owner", FunPeople(false), ""));
+            await Task.Delay(500);
+            var bob = Session.Members.First(m => m.Name == "Bob");
+            LodgePage.ShowProfileCard(bob, LodgePage.SidebarForTest);
+            await Task.Delay(200);
+            Session.FeedForTest(Json.Write(new Dictionary<string, object>
+            {
+                ["t"] = "profile:data",
+                ["profile"] = new Dictionary<string, object>
+                {
+                    ["name"] = "Bob", ["found"] = true, ["guest"] = false, ["role"] = "officer", ["online"] = true, ["restricted"] = false, ["avatarId"] = "av.shield", ["accent"] = "azure",
+                    ["about"] = "Paladin tank, officer of the lodge. Ask me about dungeon runs.", ["playTimes"] = "weekday evenings CET",
+                    ["main"] = "Measley", ["game"] = Game("Measley", "Paladin", "PALADIN", "Human", "Human", 25, "Wailing Caverns"),
+                    ["chars"] = new List<object> { Char("Measley", "Paladin", "PALADIN", "Human", 25, true), Char("Bobhunter", "Hunter", "HUNTER", "Dwarf", 40), Char("Bobwarlock", "Warlock", "WARLOCK", "Undead", 18) },
+                },
+            }));
+            await Task.Delay(500);
+            SnapshotElement(LodgePage.PopupCardForTest, System.IO.Path.Combine(dir, "lodge-fun-profile.png"));
+            LodgePage.CloseProfileForTest();
+            await Task.Delay(100);
         }
     }
 }
