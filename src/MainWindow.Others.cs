@@ -491,7 +491,9 @@ namespace ElansAddonHub
                 }
                 // Foo belongs to a different addon: must be refused
                 string err1 = null;
+                var foo = Path.Combine(addOnsDir, "Foo"); Directory.CreateDirectory(foo);   // the other addon the zip would overwrite (not part of the fixture)
                 try { AddonSources.InstallZip(addOnsDir, plain.Entry, plain.Link, "2.0", clientInterface, zip, null); } catch (Exception ex) { err1 = ex.Message; }
+                finally { try { Directory.Delete(foo, true); } catch { } }
                 sb.AppendLine("zip touching another addon: " + (err1 ?? "NOT REFUSED"));
                 File.Delete(zip);
                 using (var za = System.IO.Compression.ZipFile.Open(zip, System.IO.Compression.ZipArchiveMode.Create))

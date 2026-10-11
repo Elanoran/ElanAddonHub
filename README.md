@@ -139,3 +139,32 @@ with download links, SHA-256 checksums and the changelog.
 
 Testing without clicking: `ElansAddonHub.exe --selftest <dir>` renders the window to PNGs, installs the
 first addon that needs it, writes `result.txt` and quits. Log: `%LOCALAPPDATA%\ElansAddonHub\hub.log`.
+
+### Running the self-test
+
+Use the wrapper, not the bare exe. It builds Release, uses a fresh scratch folder under `%TEMP%` (never the
+real `%LOCALAPPDATA%\ElansAddonHub`), prints the FAIL lines and the per-section timing, and exits non-zero on
+new failures:
+
+    Tools\selftest.ps1                          what this branch changed vs origin/main (the default)
+    Tools\selftest.ps1 -Changed v2.33.0         ...vs a tag or any ref
+    Tools\selftest.ps1 -Only inventory,toasts   just those sections
+    Tools\selftest.ps1 -Full                    everything
+    Tools\selftest.ps1 -List                    section names
+
+**During development use the default (`--changed`); run `-Full` before every release.** A full run takes
+about 2.3 minutes; a scoped one is the ~3 s of setup plus the sections it picks.
+
+- Sections: `addons thirdparty viewer voice update strip lodge lodgefeatures presence profile toasts dialogs
+  inventory health round3`. The exe takes `--only a,b`, `--changed <base> [--repo <dir>]` and `--list`; no flag
+  runs everything. Unselected sections are logged as `skipped <name>` in `result.txt`, each run section as
+  `section <name>: 12.3 s`, plus `total:`. `scope.txt` says why each file chose its sections.
+- The path -> section table, the section dependencies and their unit checks are in `src/Services/TestScope.cs`.
+  Unknown or shared files (App, MainWindow, csproj, Theme, Motion, Util, SettingsStore, ...) select ALL: add a
+  new test block to `TestScope.All`/`Info` and the table when you add one.
+- The wrapper runs on a hidden Windows desktop (`Tools\HiddenRun.cs`), so no window, toast or dialog appears
+  on screen or takes focus; `-Visible` shows it. Checks that need the real desktop (the live pixel-strip screen
+  capture) report `skipped (hidden desktop)` there (`ELANSHUB_HIDDEN_DESKTOP=1`). Do not run two visible
+  self-tests at once: they steal each other's focus and the unread-marker checks fail.
+- A clean run has ZERO FAIL lines, so any FAIL is real. The update check talks to a local fake server (`Services/FakeUpdateServer.cs`, never GitHub; `ELANSHUB_FAKE_UPDATE=0` turns it off), and WoW running on the PC is ignored (`ELANSHUB_FAKE_WOW=0` is set for the self-test).
+- `ELANSHUB_TEST_LODGE=url|code|name` still enables the live Lodge session (`lodge` section).

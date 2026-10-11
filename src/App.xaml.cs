@@ -26,6 +26,8 @@ namespace ElansAddonHub
             var i = Array.IndexOf(a, "--selftest");
             if (i >= 0 && i + 1 < a.Length && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_DATA")))
                 Environment.SetEnvironmentVariable("ELANSHUB_DATA", System.IO.Path.Combine(System.IO.Path.GetFullPath(a[i + 1]), "data"));
+            // hermetic: a WoW running on this PC must not change what the self-test sees (Round3 swaps the detector itself when it needs to)
+            if (i >= 0 && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_FAKE_WOW"))) Environment.SetEnvironmentVariable("ELANSHUB_FAKE_WOW", "0");
         }
 
         Mutex single;
@@ -47,8 +49,21 @@ namespace ElansAddonHub
             finally { reporting = false; }
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern bool AttachConsole(int pid);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int n);
+
+        // --list: the self-test section names (stdout when redirected, else the parent console)
+        static void PrintSections()
+        {
+            var h = GetStdHandle(-11);
+            if (h == IntPtr.Zero || h == new IntPtr(-1)) AttachConsole(-1);
+            var text = string.Join("\r\n", TestScope.All.Select(n => n.PadRight(15) + TestScope.Info[n])) + "\r\n";
+            using (var o = Console.OpenStandardOutput()) { var b = System.Text.Encoding.UTF8.GetBytes(text); o.Write(b, 0, b.Length); o.Flush(); }
+        }
+
         protected override void OnStartup(StartupEventArgs e)
         {
+            if (Array.IndexOf(e.Args, "--list") >= 0) { PrintSections(); Shutdown(0); return; }
             // hard guard: a self-test must never run against the real data folder
             if (Array.IndexOf(e.Args, "--selftest") >= 0)
             {
