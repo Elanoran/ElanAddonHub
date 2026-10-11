@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ElansAddonHub.Lodge;
 
 namespace ElansAddonHub.Services
 {
@@ -22,6 +23,10 @@ namespace ElansAddonHub.Services
         CancellationTokenSource cts;
         readonly SemaphoreSlim sendLock = new SemaphoreSlim(1, 1);
         volatile bool stopped;
+        DateTime lastRx = DateTime.UtcNow;                           // the last frame of any kind (message, pong, voice)
+        volatile bool pongSeen;                                      // the server answers pings (2.x): only then is silence a dead connection
+        public static readonly TimeSpan PingEvery = TimeSpan.FromSeconds(20), DeadAfter = TimeSpan.FromSeconds(45);
+        public static readonly TimeSpan FullRetry = TimeSpan.FromSeconds(60);
 
         public Func<bool> Invisible;                                 // asked at every (re)connect: appear offline from the first moment
         public bool Online { get; private set; }
@@ -62,6 +67,27 @@ namespace ElansAddonHub.Services
             Online = false;
         }
 
+        // the HTTP status behind a failed handshake: the response of the inner WebException when there is one, else the number
+        // in the message ("... returned status code '401' ...") - .NET Framework gives no property for it on the WebSocketException
+        public static int StatusOf(Exception e)
+        {
+            for (var x = e; x != null; x = x.InnerException)
+            {
+                if (x is System.Net.WebException we && we.Response is System.Net.HttpWebResponse hr) return (int)hr.StatusCode;
+            }
+            for (var x = e; x != null; x = x.InnerException)
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(x.Message ?? "", @"status code '?\(?(\d{3})");
+                if (m.Success) return int.Parse(m.Groups[1].Value);
+                m = System.Text.RegularExpressions.Regex.Match(x.Message ?? "", @"\((\d{3})\)");
+                if (m.Success) return int.Parse(m.Groups[1].Value);
+            }
+            return 0;
+        }
+
+        // the server accepted the socket and closed it again at once with this reason
+        public static bool IsFullClose(string reason) => reason != null && reason.IndexOf("is full", StringComparison.OrdinalIgnoreCase) >= 0;
+
         async Task Loop()
         {
             int[] backoff = { 2, 4, 8, 15, 30 };
@@ -69,26 +95,38 @@ namespace ElansAddonHub.Services
             while (!stopped)
             {
                 string why = null;
+                int waitOverride = 0;
+                ClientWebSocket mine = null;
                 try
                 {
                     SetStatus("Connecting...", false);
-                    ws = new ClientWebSocket();
+                    mine = ws = new ClientWebSocket();
                     ws.Options.SetRequestHeader("X-Lodge-Code", code);
                     ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
                     cts = new CancellationTokenSource();
                     using (var t = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
                         await ws.ConnectAsync(new Uri(WsUrl()), t.Token);
                     attempt = 0;
+                    lastRx = DateTime.UtcNow; pongSeen = false;
                     await ReceiveLoop(cts.Token);
                     if (ws.CloseStatus == WebSocketCloseStatus.PolicyViolation)
                     {
-                        stopped = true;
-                        SetStatus(ws.CloseStatusDescription ?? "The lodge closed the connection", false);
-                        return;
+                        if (IsFullClose(ws.CloseStatusDescription) && !stopped)
+                        {
+                            // not a verdict: somebody leaves sooner or later - keep knocking, calmly
+                            why = "The lodge is full - trying again every minute";
+                            waitOverride = (int)FullRetry.TotalSeconds;
+                        }
+                        else
+                        {
+                            stopped = true;
+                            SetStatus(ws.CloseStatusDescription ?? "The lodge closed the connection", false);
+                            return;
+                        }
                     }
-                    if (ws.CloseStatus == WebSocketCloseStatus.EndpointUnavailable)
+                    else if (ws.CloseStatus == WebSocketCloseStatus.EndpointUnavailable)
                     {
-                        // the server is restarting (update): not an error - come back quickly (voice is rejoined by the session)
+                        // the server is restarting (update, or it dropped a silent connection): come back quickly (voice is rejoined by the session)
                         if (stopped) return;
                         SetStatus("Lodge restarting - reconnecting...", false);
                         try { await Task.Delay(TimeSpan.FromSeconds(2)); } catch { }
@@ -98,24 +136,63 @@ namespace ElansAddonHub.Services
                 }
                 catch (Exception e)
                 {
-                    var all = e.ToString();
-                    if (all.Contains("(401)") || all.Contains("'401'"))
+                    var status = StatusOf(e);
+                    if (status == 401)
                     {
                         stopped = true;
                         SetStatus("Wrong invite code", false);
                         return;
                     }
-                    if (all.Contains("(429)") || all.Contains("'429'")) why = "Too many wrong codes - wait 15 minutes";
+                    if (status == 429) why = "Too many wrong codes - wait 15 minutes";
                     if (!stopped) Util.Log("lodge: " + e.GetBaseException().Message);
                 }
+                finally
+                {
+                    // every socket is disposed - a reconnect loop must not pile up handles
+                    try { mine?.Dispose(); } catch { }
+                    if (ReferenceEquals(ws, mine)) ws = null;
+                }
                 if (stopped) return;
-                var wait = backoff[Math.Min(attempt++, backoff.Length - 1)];
+                var wait = waitOverride > 0 ? waitOverride : backoff[Math.Min(attempt++, backoff.Length - 1)];
                 SetStatus(why ?? $"Offline - reconnecting in {wait}s", false);
                 try { await Task.Delay(TimeSpan.FromSeconds(wait)); } catch { }
             }
         }
 
+        // an app-level ping every 20 s (the proxy chain can hold a dead connection open for minutes), and when the server is known
+        // to answer them, 45 s without any frame means the connection is gone: abort it so the loop reconnects
+        async Task Keepalive(ClientWebSocket sock, CancellationToken ct)
+        {
+            try
+            {
+                while (!ct.IsCancellationRequested && sock.State == WebSocketState.Open)
+                {
+                    await Task.Delay(PingEvery, ct);
+                    if (sock.State != WebSocketState.Open) return;
+                    if (pongSeen && DateTime.UtcNow - lastRx > DeadAfter)
+                    {
+                        Util.Log("lodge: no sign of life for " + (int)(DateTime.UtcNow - lastRx).TotalSeconds + " s - reconnecting");
+                        try { sock.Abort(); } catch { }
+                        return;
+                    }
+                    await SendRaw(Encoding.UTF8.GetBytes("{\"t\":\"ping\"}"), WebSocketMessageType.Text, 1000);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception e) { Util.Log("lodge keepalive: " + e.Message); }
+        }
+
         async Task ReceiveLoop(CancellationToken ct)
+        {
+            using (var ka = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                var kat = Keepalive(ws, ka.Token);
+                try { await ReceiveFrames(ct); }
+                finally { ka.Cancel(); }
+            }
+        }
+
+        async Task ReceiveFrames(CancellationToken ct)
         {
             var buf = new byte[16 * 1024];
             var msg = new MemoryStream();
@@ -131,6 +208,7 @@ namespace ElansAddonHub.Services
                     msg.Write(buf, 0, r.Count);
                 } while (!r.EndOfMessage);
 
+                lastRx = DateTime.UtcNow;
                 var data = msg.GetBuffer();
                 var len = (int)msg.Length;
                 if (r.MessageType == WebSocketMessageType.Binary)
@@ -141,6 +219,7 @@ namespace ElansAddonHub.Services
                 Dictionary<string, object> obj;
                 try { obj = Json.Obj(Encoding.UTF8.GetString(data, 0, len)); } catch { continue; }
                 if (obj == null) continue;
+                if (obj.Str("t") == "pong") { pongSeen = true; continue; }
                 if (first && obj.Str("t") == "welcome") { first = false; SetStatus("Online", true); }
                 Post(() => Received?.Invoke(obj));
             }
@@ -175,14 +254,37 @@ namespace ElansAddonHub.Services
             return req;
         }
 
-        public async Task<Dictionary<string, object>> Upload(string file)
+        // a read-through stream that reports how far the upload is
+        sealed class ProgressStream : Stream
+        {
+            readonly Stream inner; readonly Action<double> report; long pos;
+            public ProgressStream(Stream inner, Action<double> report) { this.inner = inner; this.report = report; }
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => inner.Length;
+            public override long Position { get => pos; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                var n = inner.Read(buffer, offset, count);
+                pos += n;
+                if (inner.Length > 0) report?.Invoke(Math.Min(1.0, (double)pos / inner.Length));
+                return n;
+            }
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        }
+
+        public async Task<Dictionary<string, object>> Upload(string file, Action<double> progress = null)
         {
             using (var fs = File.OpenRead(file))
             using (var req = Request(HttpMethod.Post, "/files"))
             {
-                req.Headers.Add("X-File-Name", Uri.EscapeDataString(Path.GetFileName(file)));
+                req.Headers.Add("X-File-Name", Uri.EscapeDataString(SafeFile.Name(Path.GetFileName(file))));
                 req.Headers.Add("X-Lodge-Name", Uri.EscapeDataString(name));
-                req.Content = new StreamContent(fs);
+                req.Content = new StreamContent(progress == null ? (Stream)fs : new ProgressStream(fs, progress));
                 using (var resp = await Net.Http.SendAsync(req))
                 {
                     var text = await resp.Content.ReadAsStringAsync();
@@ -200,7 +302,8 @@ namespace ElansAddonHub.Services
             switch (status)
             {
                 case 413: return "That file is too big for this lodge";
-                case 429: return "Too many uploads right now - try again in a few minutes";
+                case 408: return "The upload took too long and was stopped";
+                case 429: return string.IsNullOrEmpty(serverText) ? "Too many uploads right now - try again in a few minutes" : serverText;
                 case 507: return "The lodge's file storage is full - ask the Guild Master to free some space";
                 case 403: return "Initiates can't share files";
                 case 401: return "Your invite code isn't valid any more";
@@ -208,12 +311,19 @@ namespace ElansAddonHub.Services
             }
         }
 
+        public class DownloadException : InvalidOperationException
+        {
+            public int Status { get; }
+            public DownloadException(int status) : base($"Download failed ({status})") { Status = status; }
+        }
+
         public async Task Download(string id, string toFile)
         {
+            if (SafeFile.Id(id) == null) throw new InvalidOperationException("That file can't be downloaded");
             using (var req = Request(HttpMethod.Get, "/files/" + id))
             using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead))
             {
-                if (!resp.IsSuccessStatusCode) throw new InvalidOperationException($"Download failed ({(int)resp.StatusCode})");
+                if (!resp.IsSuccessStatusCode) throw new DownloadException((int)resp.StatusCode);
                 var tmp = toFile + ".part";
                 using (var src = await resp.Content.ReadAsStreamAsync())
                 using (var dst = File.Create(tmp))
