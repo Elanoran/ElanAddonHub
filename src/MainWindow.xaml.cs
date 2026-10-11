@@ -724,6 +724,7 @@ namespace ElansAddonHub
             if (checking) return;
             checking = true;
             statusText = "Checking for updates...";
+            UpdateCardsSkeleton();
             try
             {
                 var ch = await UpdateChannel.Resolve(settings);
@@ -757,8 +758,13 @@ namespace ElansAddonHub
                 checking = false;
                 if (manifest == null) _ = RefreshOthersAndCheck();
                 UpdateStatusText();
+                UpdateCardsSkeleton();
             }
         }
+
+        // skeleton cards stand in for the list until the first check has produced one (or failed)
+        void UpdateCardsSkeleton() => CardsSkeleton.Visibility = cards.Count == 0 && lastError == null && (checking || manifest == null) ? Visibility.Visible : Visibility.Collapsed;
+        public bool CardsSkeletonForTest => CardsSkeleton.Visibility == Visibility.Visible;
 
         async Task RefreshOthersAndCheck() { await RefreshOthers(); await CheckOthers(); _ = SuggestOthers(); }
 
@@ -791,6 +797,7 @@ namespace ElansAddonHub
             foreach (var gone in cards.Where(c => manifest.Addons == null || manifest.Addons.All(a => a.Id != c.Info.Id)).ToList())
                 cards.Remove(gone);
             RefreshRailBadges();
+            UpdateCardsSkeleton();
         }
 
         async Task AfterCheck()

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -170,10 +171,10 @@ namespace ElansAddonHub
         public InventoryPage()
         {
             InitializeComponent();
-            debounce.Tick += (s, e) => { debounce.Stop(); Reload(); };
-            Loaded += (s, e) => { IconStore.ProblemChanged -= OnIconProblemChanged; IconStore.ProblemChanged += OnIconProblemChanged; EnsureWatchers(); Reload(); };
+            debounce.Tick += (s, e) => { debounce.Stop(); ReloadAsync(); };
+            Loaded += (s, e) => { IconStore.ProblemChanged -= OnIconProblemChanged; IconStore.ProblemChanged += OnIconProblemChanged; EnsureWatchers(); ReloadAsync(); };
             Unloaded += (s, e) => { IconStore.ProblemChanged -= OnIconProblemChanged; DisposeWatchers(); };
-            IsVisibleChanged += (s, e) => { if (IsVisible) { EnsureWatchers(); Reload(); } };
+            IsVisibleChanged += (s, e) => { if (IsVisible) { EnsureWatchers(); ReloadAsync(); } };
             EmptyIcon.Source = Application.Current.TryFindResource("Icon.Bags") as System.Windows.Media.ImageSource;
         }
 
@@ -182,7 +183,7 @@ namespace ElansAddonHub
             wowRoot = root;
             IconStore.WowRoot = root;
             EnsureWatchers();
-            Reload();
+            ReloadAsync();
         }
 
         // (re)create the watchers when the WoW folder changed or new account folders appeared
@@ -215,12 +216,53 @@ namespace ElansAddonHub
             watchedRoot = null;
         }
 
+        int loadGen;        // a newer load (or a synchronous Reload) makes an older, slower one drop its result
+        bool loadedOnce;    // the first look shows skeleton rows until the file has been read
+
+        static InvData ReadSafe(string root)
+        {
+            try { return InventoryReader.ReadData(root); }
+            catch (Exception e) { Util.Log("inventory: " + e.Message); return new InvData(); }
+        }
+
+        // the page's own refreshes (shown, file changed, startup) read the SavedVariables off the UI thread; the first one shows a skeleton character list
+        async void ReloadAsync()
+        {
+            var gen = ++loadGen;
+            var root = wowRoot();
+            if (!loadedOnce) ShowCharSkeleton(true);
+            var read = await Task.Run(() => ReadSafe(root));
+            if (gen != loadGen) return;
+            Apply(root, read);
+        }
+
+        void ShowCharSkeleton(bool on)
+        {
+            CharSkeleton.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            var rest = on ? Visibility.Collapsed : Visibility.Visible;
+            AllCard.Visibility = CharList.Visibility = SaveHint.Visibility = rest;
+        }
+        public bool CharSkeletonForTest => CharSkeleton.Visibility == Visibility.Visible;
+        // the page as it is on its very first look, before the saved bags have been read (screenshots)
+        public void LoadingStateForTest()
+        {
+            EmptyBox.Visibility = Visibility.Collapsed; Body.Visibility = Visibility.Visible;
+            CharList.ItemsSource = null; Summary.Text = "";
+            ShowCharSkeleton(true);
+        }
+
+        // synchronous (tests, and callers that need the result at once)
         public void Reload()
         {
+            loadGen++;
             var root = wowRoot();
-            InvData read;
-            try { read = InventoryReader.ReadData(root); }
-            catch (Exception e) { Util.Log("inventory: " + e.Message); read = new InvData(); }
+            Apply(root, ReadSafe(root));
+        }
+
+        void Apply(string root, InvData read)
+        {
+            loadedOnce = true;
+            ShowCharSkeleton(false);
             data = read;
             chars = read.Chars;
             index = InventoryReader.BuildIndex(chars.Where(c => !c.Hidden), read.Guilds);

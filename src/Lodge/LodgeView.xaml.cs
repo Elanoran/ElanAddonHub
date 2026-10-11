@@ -128,7 +128,7 @@ namespace ElansAddonHub.Lodge
             // until the welcome frame names the channels the history is on its way: skeleton rows instead of blank space
             bool connecting = s.Selected == null;
             MessagesSkeleton.Visibility = SidebarSkeleton.Visibility = connecting ? Visibility.Visible : Visibility.Collapsed;
-            TextHeader.Visibility = VoiceHeader.Visibility = connecting ? Visibility.Collapsed : Visibility.Visible;
+            TextHeader.Visibility = VoiceHeader.Visibility = HeaderHash.Visibility = MeCard.Visibility = connecting ? Visibility.Collapsed : Visibility.Visible;
             if (connecting) EmptyText.Visibility = Visibility.Collapsed;
 
             // me

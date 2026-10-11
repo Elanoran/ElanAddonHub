@@ -149,6 +149,45 @@
             </Button>
           </StackPanel>
         </Grid>
+        <!-- skeleton cards while the first update check is running (nothing to list yet) -->
+        <StackPanel x:Name="CardsSkeleton" IsHitTestVisible="False">
+          <ContentControl Style="{StaticResource Card.Raised}">
+            <Grid Margin="16">
+              <StackPanel Orientation="Horizontal">
+                <local:Skeleton Width="80" Height="80" CornerRadius="{StaticResource Radius.ControlLg}" VerticalAlignment="Top" />
+                <StackPanel Margin="16,8,0,0">
+                  <local:Skeleton Height="16" Width="168" CornerRadius="8" />
+                  <local:Skeleton Height="12" Width="240" CornerRadius="6" Margin="0,8,0,0" />
+                  <local:Skeleton Height="12" Width="136" CornerRadius="6" Margin="0,12,0,0" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </ContentControl>
+          <ContentControl Style="{StaticResource Card.Raised}">
+            <Grid Margin="16">
+              <StackPanel Orientation="Horizontal">
+                <local:Skeleton Width="80" Height="80" CornerRadius="{StaticResource Radius.ControlLg}" VerticalAlignment="Top" />
+                <StackPanel Margin="16,8,0,0">
+                  <local:Skeleton Height="16" Width="136" CornerRadius="8" />
+                  <local:Skeleton Height="12" Width="208" CornerRadius="6" Margin="0,8,0,0" />
+                  <local:Skeleton Height="12" Width="120" CornerRadius="6" Margin="0,12,0,0" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </ContentControl>
+          <ContentControl Style="{StaticResource Card.Raised}">
+            <Grid Margin="16">
+              <StackPanel Orientation="Horizontal">
+                <local:Skeleton Width="80" Height="80" CornerRadius="{StaticResource Radius.ControlLg}" VerticalAlignment="Top" />
+                <StackPanel Margin="16,8,0,0">
+                  <local:Skeleton Height="16" Width="152" CornerRadius="8" />
+                  <local:Skeleton Height="12" Width="224" CornerRadius="6" Margin="0,8,0,0" />
+                  <local:Skeleton Height="12" Width="128" CornerRadius="6" Margin="0,12,0,0" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </ContentControl>
+        </StackPanel>
         <ItemsControl x:Name="Cards" Focusable="False">
           <ItemsControl.ItemTemplate>
             <DataTemplate>

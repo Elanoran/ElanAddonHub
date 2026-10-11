@@ -416,7 +416,7 @@
           </Border>
 
           <!-- me -->
-          <Border Grid.Row="3" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="8" Margin="0,8,0,0">
+          <Border x:Name="MeCard" Grid.Row="3" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="8" Margin="0,8,0,0">
             <DockPanel>
               <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE713;"
                       Click="Settings_Click" ToolTip="Settings" />
@@ -462,7 +462,7 @@
                         Click="SearchButton_Click" ToolTip="Search messages (Ctrl+F)" Visibility="Collapsed" />
                 <TextBlock x:Name="ChatNote" DockPanel.Dock="Right" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Margin="8,0,4,0"
                            TextTrimming="CharacterEllipsis" MaxWidth="320" />
-                <TextBlock Text="#" Style="{StaticResource Text.Section}" Foreground="{StaticResource Brush.Text.Tertiary}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                <TextBlock x:Name="HeaderHash" Text="#" Style="{StaticResource Text.Section}" Foreground="{StaticResource Brush.Text.Tertiary}" Margin="0,0,4,0" VerticalAlignment="Center" />
                 <TextBlock x:Name="ChannelTitle" Style="{StaticResource Text.Section}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </DockPanel>
             </Border>
