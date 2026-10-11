@@ -3,6 +3,15 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.35.0
+- Lodge hardening (works with every Lodge server; some parts need the 2.8 server update): downloaded file names are cleaned and always saved inside Downloads, programs and scripts (.exe, .bat, .ps1 ...) ask before they download and show their real extension, hidden text-direction tricks are removed from messages.
+- Lodge chat: a message that did not go out (offline, rate limit, dropped connection) comes back into the box; the box keeps a draft per channel; an offline banner replaces a silently dead Send button; several dropped files upload one after another with progress.
+- A reconnect or server update no longer wipes what you are reading: scroll position, the message you are writing and loaded pictures stay. Deleting a message fixes the unread numbers and the "New messages" line.
+- Voice: a full room no longer leaves you "connected" with an open microphone. @everyone and @here only count from officers up.
+- Names: messages from people who are offline show their display name; one online number; levels read "Lv 27".
+- Settings: every sharing switch lives under Privacy (the Lodge page links to it); the tray notification setting moved next to the toasts. "Notify me about: Nothing" now silences toasts too.
+- The picture cache is trimmed at start (30 days, 200 MB); the in-game overlay no longer mistakes WowUp for WoW.
+
 ## 2.34.0
 - Lodge chat: YouTube links show a preview card (thumbnail, title, channel). Click to play the video right in the Outpost, in a locked-down private player. Turn previews off under Settings > Privacy.
 - Bags: the character tooltip is shorter - realm and faction, then gold, bags and bank on one line.

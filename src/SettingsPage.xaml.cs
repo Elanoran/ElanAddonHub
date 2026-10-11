@@ -85,13 +85,6 @@ namespace ElansAddonHub
             PaintedBox.IsChecked = s.PaintedArt;
             SplashBox.IsChecked = !s.NoSplash;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
-            AutoAwayBox.IsChecked = !s.AutoAwayOff;
-            ShareGameBox.IsChecked = !s.ShareGameOff;
-            PixelBox.IsChecked = !s.PixelOff;
-            ShareZoneBox.IsChecked = !s.ShareZoneOff;
-            ShareXpBox.IsChecked = !s.ShareXpOff;
-            AutoStatusBox.IsChecked = !s.AutoStatusOff;
-            RememberInvisibleBox.IsChecked = !s.InvisibleForget;
 
             ModeVa.IsChecked = !s.VoicePushToTalk;
             ModePtt.IsChecked = s.VoicePushToTalk;
@@ -150,7 +143,7 @@ namespace ElansAddonHub
         public void Show(string section)
         {
             var nav = section == "folder" ? NavGeneral : section == "addons" ? NavAddons : section == "lodge" ? NavLodge : section == "profile" ? NavProfile : section == "voice" ? NavVoice : section == "privacy" ? NavPrivacy
-                    : section == "overlay" ? NavOverlay : section == "notify" ? NavNotify : section == "gm" ? NavGm : section == "about" ? NavAbout : NavGeneral;
+                    : section == "overlay" ? NavOverlay : section == "notify" ? NavOverlay : section == "gm" ? NavGm : section == "about" ? NavAbout : NavGeneral;
             nav.IsChecked = true;
             RefreshSection();
         }
@@ -206,7 +199,7 @@ namespace ElansAddonHub
             var map = new (RadioButton nav, FrameworkElement sec)[]
             {
                 (NavGeneral, SecGeneral), (NavAddons, SecAddons), (NavLodge, SecLodge), (NavProfile, SecProfile), (NavPrivacy, SecPrivacy), (NavVoice, SecVoice),
-                (NavOverlay, SecOverlay), (NavNotify, SecNotify), (NavGm, SecGm), (NavAbout, SecAbout),
+                (NavOverlay, SecOverlay), (NavGm, SecGm), (NavAbout, SecAbout),
             };
             FrameworkElement shown = null;
             foreach (var (nav, sec) in map) { bool on = nav.IsChecked == true; sec.Visibility = on ? Visibility.Visible : Visibility.Collapsed; if (on) shown = sec; }
@@ -226,7 +219,7 @@ namespace ElansAddonHub
             SyncPrivacy();
             if (NavAddons.IsChecked == true) UpdateCfStatus();
             var c = session.Presence.Current;
-            ShareGameRow.Tag = (session.Presence.Playing ? "WoW is running. " : "")
+            PvShareGameRow.Tag = (session.Presence.Playing ? "WoW is running. " : "")
                 + (c != null ? $"Friends see {c.Name}, level {c.Level} {c.Class}{(c.Zone != null ? " in " + c.Zone : "")} " + (session.Presence.Strip.Status == "ok" ? "(live)." : "(updates on /reload and logout).") + ""
                              : "Friends see when you're in WoW. Install Elan's Hub (Addons tab) to also show your character, class and level.");
         }
@@ -309,20 +302,10 @@ namespace ElansAddonHub
         {
             if (loading) return;
             settings.LodgeManualConnect = AutoConnectBox.IsChecked != true;
-            settings.AutoAwayOff = AutoAwayBox.IsChecked != true;
-            var share = settings.ShareGameOff;
-            settings.ShareGameOff = ShareGameBox.IsChecked != true;
-            var px = settings.PixelOff;
-            settings.PixelOff = PixelBox.IsChecked != true;
-            var zone = settings.ShareZoneOff; var xp = settings.ShareXpOff;
-            settings.ShareZoneOff = ShareZoneBox.IsChecked != true;
-            settings.ShareXpOff = ShareXpBox.IsChecked != true;
-            settings.AutoStatusOff = AutoStatusBox.IsChecked != true;
-            settings.InvisibleForget = RememberInvisibleBox.IsChecked != true;
             SettingsStore.Save(settings);
-            if (share != settings.ShareGameOff || zone != settings.ShareZoneOff || xp != settings.ShareXpOff) session.SendGame();
-            if (px != settings.PixelOff) session.Presence.Poll();
         }
+
+        void OpenPrivacy_Click(object sender, RoutedEventArgs e) => Show("privacy");
 
         // ================================================================ CurseForge status (Settings > Addons)
 
@@ -370,11 +353,20 @@ namespace ElansAddonHub
                 session.RefreshVideos();
                 return;
             }
-            CheckBox target = cb == PvShareGame ? ShareGameBox : cb == PvShareZone ? ShareZoneBox : cb == PvShareXp ? ShareXpBox : cb == PvAutoStatus ? AutoStatusBox
-                : cb == PvAutoAway ? AutoAwayBox : cb == PvPixel ? PixelBox : cb == PvRememberInvis ? RememberInvisibleBox : cb == PvCfAuto ? CfAutoBox : null;
-            if (target == null) return;
-            target.IsChecked = cb.IsChecked;
-            if (cb == PvCfAuto) General_Click(target, e); else Lodge_Click(target, e);
+            if (cb == PvCfAuto) { CfAutoBox.IsChecked = cb.IsChecked; General_Click(CfAutoBox, e); return; }
+            var share = settings.ShareGameOff; var px = settings.PixelOff; var zone = settings.ShareZoneOff; var xp = settings.ShareXpOff;
+            bool on = cb.IsChecked == true;
+            if (cb == PvShareGame) settings.ShareGameOff = !on;
+            else if (cb == PvShareZone) settings.ShareZoneOff = !on;
+            else if (cb == PvShareXp) settings.ShareXpOff = !on;
+            else if (cb == PvAutoStatus) settings.AutoStatusOff = !on;
+            else if (cb == PvAutoAway) settings.AutoAwayOff = !on;
+            else if (cb == PvPixel) settings.PixelOff = !on;
+            else if (cb == PvRememberInvis) settings.InvisibleForget = !on;
+            else return;
+            SettingsStore.Save(settings);
+            if (share != settings.ShareGameOff || zone != settings.ShareZoneOff || xp != settings.ShareXpOff) session.SendGame();
+            if (px != settings.PixelOff) session.Presence.Poll();
         }
 
         void PrivacyProfile_Click(object sender, RoutedEventArgs e) => Show("profile");

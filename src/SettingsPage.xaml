@@ -100,7 +100,6 @@
         <RadioButton x:Name="NavPrivacy" Style="{StaticResource Nav}" Tag="&#xE72E;" Content="Privacy" Checked="Nav_Checked" />
         <RadioButton x:Name="NavVoice" Style="{StaticResource Nav}" Tag="&#xE720;" Content="Voice" Checked="Nav_Checked" />
         <RadioButton x:Name="NavOverlay" Style="{StaticResource Nav}" Tag="&#xE81E;" Content="In-game overlay" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavNotify" Style="{StaticResource Nav}" Tag="&#xEA8F;" Content="Notifications" Checked="Nav_Checked" />
         <RadioButton x:Name="NavGm" Style="{StaticResource Nav}" Tag="&#xEA18;" Content="Guild Master" Checked="Nav_Checked" Visibility="Collapsed" />
         <RadioButton x:Name="NavAbout" Style="{StaticResource Nav}" Tag="&#xE946;" Content="About" Checked="Nav_Checked" />
       </StackPanel>
@@ -210,26 +209,8 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Connect when the Outpost starts" Tag="Friends see you online while the Outpost runs.">
                 <CheckBox x:Name="AutoConnectBox" Style="{StaticResource Switch}" Click="Lodge_Click" />
               </HeaderedContentControl>
-              <HeaderedContentControl x:Name="ShareGameRow" Style="{StaticResource Setting.Row}" Header="Show what I'm playing">
-                <CheckBox x:Name="ShareGameBox" Style="{StaticResource Switch}" Click="Lodge_Click" />
-              </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Detect my character live" Tag="Reads the tiny status strip the Elan's Hub addon draws in the top-left corner of the game (only that corner of the screen, nothing is sent to or read from WoW). Off = the Hub learns your character only on /reload or logout.">
-                <CheckBox x:Name="PixelBox" Style="{StaticResource Switch}" Click="Lodge_Click" />
-              </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="AFK automatically" Tag="After 10 minutes without mouse or keyboard (also in WoW), back to Online when you return.">
-                <CheckBox x:Name="AutoAwayBox" Style="{StaticResource Switch}" Click="Lodge_Click" />
-              </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share my zone" Tag="Friends see where you are (zone or dungeon). Off = no zone or instance name is sent.">
-                <CheckBox x:Name="ShareZoneBox" Style="{StaticResource Switch}" Click="Lodge_Click" />
-              </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share my XP" Tag="Friends see your XP percentage and whether you're rested. Off = neither is sent.">
-                <CheckBox x:Name="ShareXpBox" Style="{StaticResource Switch}" Click="Lodge_Click" />
-              </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Set my Lodge status automatically" Tag="In combat shows as Busy (In combat) and goes back a few seconds after the fight; the game's AFK flag shows as AFK. A status you chose yourself is never changed.">
-                <CheckBox x:Name="AutoStatusBox" Style="{StaticResource Switch}" Click="Lodge_Click" />
-              </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Remember Appear offline" Tag="Keep &quot;Appear offline&quot; (pick it by clicking your name in the Lodge) after the Outpost restarts. Off = you're visible again at every start.">
-                <CheckBox x:Name="RememberInvisibleBox" Style="{StaticResource Switch}" Click="Lodge_Click" />
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="What I share, my status and Appear offline" Tag="Those switches live in one place: Privacy.">
+                <Button Style="{StaticResource Button.M}" Content="Open Privacy" Click="OpenPrivacy_Click" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
           </StackPanel>
@@ -381,12 +362,12 @@
           <!-- ========== Privacy ========== -->
           <StackPanel x:Name="SecPrivacy" Visibility="Collapsed">
             <TextBlock Text="Privacy" Style="{StaticResource PageTitle}" />
-            <TextBlock Text="What the Outpost shares, with whom, and where you can switch it off. These are the same switches as on the other pages - change one here or there." Style="{StaticResource Note}" Margin="4,0,0,4" />
+            <TextBlock Text="What the Outpost shares, with whom, and where you can switch it off. Every sharing switch lives here, and only here; the Lodge page links to this one." Style="{StaticResource Note}" Margin="4,0,0,4" />
             <TextBlock x:Name="PrivacyLodgeLine" Style="{StaticResource Text.Secondary}" Margin="4,0,0,16" TextWrapping="Wrap" />
             <TextBlock Text="Shared with your lodge" Style="{StaticResource HeadTight}" />
             <TextBlock Text="Only the people on the Lodge server you joined see this, and only while you are connected." Style="{StaticResource Note}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="What I'm playing" Tag="Your character's name, race, class and level, and that WoW is running.">
+              <HeaderedContentControl x:Name="PvShareGameRow" Style="{StaticResource Setting.Row}" Header="What I'm playing" Tag="Your character's name, race, class and level, and that WoW is running.">
                 <CheckBox x:Name="PvShareGame" Style="{StaticResource Switch}" Click="Privacy_Click" />
               </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="My zone" Tag="The zone or dungeon you are in. Off = no zone or instance name is sent.">
@@ -521,8 +502,17 @@
                 <CheckBox x:Name="OverlayAlwaysBox" Style="{StaticResource Switch}" Click="Overlay_Click" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
-            <TextBlock Text="Toasts" Style="{StaticResource Head}" />
+            <TextBlock Text="Toasts and notifications" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Notify me about" Tag="Chat notifications: the toasts below, and a small note from the tray while you're elsewhere. Nothing = neither. Write @Name to mention someone; @everyone and @here only work from officers up.">
+                <Border Style="{StaticResource SegmentHost}">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="NotifyAll" Style="{StaticResource Segment}" Content="All messages" GroupName="notify" Checked="Notify_Changed" />
+                    <RadioButton x:Name="NotifyMentions" Style="{StaticResource Segment}" Content="Only @mentions" GroupName="notify" Checked="Notify_Changed" />
+                    <RadioButton x:Name="NotifyNone" Style="{StaticResource Segment}" Content="Nothing" GroupName="notify" Checked="Notify_Changed" />
+                  </StackPanel>
+                </Border>
+              </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Show toasts over WoW" Tag="Small cards for mentions and replies. None while you're in combat - they wait and arrive as one summary after the fight, and none for the channel you're looking at in the Hub.">
                 <CheckBox x:Name="ToastsBox" Style="{StaticResource Switch}" Click="Overlay_Click" />
               </HeaderedContentControl>
@@ -555,23 +545,6 @@
                 </Border>
               </HeaderedContentControl>
             </StackPanel></ContentControl>
-          </StackPanel>
-
-          <!-- ========== Notifications ========== -->
-          <StackPanel x:Name="SecNotify" Visibility="Collapsed">
-            <TextBlock Text="Notifications" Style="{StaticResource PageTitle}" />
-            <ContentControl Style="{StaticResource Card.Rows}" Margin="0,0,0,8"><StackPanel>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Notify me about">
-                <Border Style="{StaticResource SegmentHost}">
-                  <StackPanel Orientation="Horizontal">
-                    <RadioButton x:Name="NotifyAll" Style="{StaticResource Segment}" Content="All messages" GroupName="notify" Checked="Notify_Changed" />
-                    <RadioButton x:Name="NotifyMentions" Style="{StaticResource Segment}" Content="Only @mentions" GroupName="notify" Checked="Notify_Changed" />
-                    <RadioButton x:Name="NotifyNone" Style="{StaticResource Segment}" Content="Nothing" GroupName="notify" Checked="Notify_Changed" />
-                  </StackPanel>
-                </Border>
-              </HeaderedContentControl>
-            </StackPanel></ContentControl>
-            <TextBlock Text="A small note from the tray while you're elsewhere (e.g. in WoW). Write @Name to mention someone, @everyone for all." Style="{StaticResource Note}" />
           </StackPanel>
 
           <!-- ========== Guild Master ========== -->
