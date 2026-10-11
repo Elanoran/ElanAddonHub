@@ -74,6 +74,7 @@ namespace ElansAddonHub
                     Shutdown(2); return;
                 }
             }
+            if (Array.IndexOf(e.Args, "--selftest") >= 0) LinkOpen.SelfTestRun = true;   // the real elanshub:// registration is off limits to a self-test
             base.OnStartup(e);
             // Windows animations off: every Motion.* duration becomes instant (DESIGN.md, Motion)
             if (!SystemParameters.ClientAreaAnimation)
@@ -109,10 +110,13 @@ namespace ElansAddonHub
                 showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, lockName.Replace("Single", "Show"));
                 if (!first)
                 {
-                    showSignal.Set();
+                    // an elanshub:// link goes to the running hub (which brings itself forward and opens the join); otherwise just bring it forward
+                    var link = LinkOpen.FromArgs(e.Args);
+                    if (link == null || !LinkPipe.Send(LinkPipe.NameFor(lockName.Substring("ElansAddonHub.Single".Length)), link)) showSignal.Set();
                     Shutdown();
                     return;
                 }
+                linkPipeName = LinkPipe.NameFor(lockName.Substring("ElansAddonHub.Single".Length));
             }
 
             DispatcherUnhandledException += (s, ex) =>
@@ -147,12 +151,26 @@ namespace ElansAddonHub
             }) { IsBackground = true };
             thread.Start();
 
+            // elanshub:// links: keep the registration current (it follows the exe after a self-update or a move) and listen for links from a second start
+            if (testDir == null && !e.Args.Contains("--test-selfupdate"))
+            {
+                try { if (!SettingsStore.Load().NoLinkHandler) LinkOpen.EnsureRegistered(SelfUpdater.ExePath); }
+                catch (Exception ex) { Util.Log("link handler: " + ex.Message); }
+                if (linkPipeName != null)
+                    linkServer = new LinkPipe.Server(linkPipeName, l => Dispatcher.BeginInvoke(new Action(() => main.OpenInviteLink(l))));
+            }
+            var startLink = testDir == null ? LinkOpen.FromArgs(e.Args) : null;
+
             if (testDir != null) _ = main.SelfTest(testDir);
             else if (e.Args.Contains("--test-selfupdate")) { main.Show(); _ = main.TestSelfUpdate(); }
             else if (e.Args.Contains("--tray")) main.StartHidden();
             else if (splash) { main.StartWithSplash(); }
             else main.Show();
+            if (startLink != null) main.OpenInviteLinkWhenReady(startLink);
         }
+
+        string linkPipeName;
+        LinkPipe.Server linkServer;
 
         MainWindow main;
     }

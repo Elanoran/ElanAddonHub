@@ -142,6 +142,9 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Start with Windows" Tag="Starts quietly in the tray when you log in.">
                 <CheckBox x:Name="StartupBox" Style="{StaticResource Switch}" Click="General_Click" />
               </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Open elanshub:// links with the Outpost" Tag="Clicking an invite link in Discord, a browser or an email opens the Outpost with the join filled in. Nothing is joined until you press Join.">
+                <CheckBox x:Name="LinkBox" Style="{StaticResource Switch}" Click="General_Click" />
+              </HeaderedContentControl>
             </StackPanel></ContentControl>
           </StackPanel>
 
@@ -625,6 +628,8 @@
                 </DockPanel>
                 <TextBlock x:Name="InviteNote" Text="Send it privately (a DM, not a channel). It is shown only now."
                            Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                <TextBlock x:Name="InviteClickHint" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="Clicking the link opens the Outpost with the join filled in. If your chat app does not make it clickable, the person can copy it and paste it under Join a lodge." />
               </StackPanel>
             </ContentControl>
             <TextBlock x:Name="GmStatus" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="4,0,0,12" />

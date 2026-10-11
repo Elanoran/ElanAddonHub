@@ -111,6 +111,7 @@ namespace ElansAddonHub
 
             BackgroundBox.IsChecked = s.RunInBackground;
             StartupBox.IsChecked = s.StartWithWindows;
+            LinkBox.IsChecked = !s.NoLinkHandler;
             AutoUpdateBox.IsChecked = s.AutoUpdate;
             ChannelTest.IsChecked = UpdateChannel.IsTest(s);
             ChannelStable.IsChecked = !UpdateChannel.IsTest(s);
@@ -301,6 +302,11 @@ namespace ElansAddonHub
             {
                 settings.StartWithWindows = StartupBox.IsChecked == true;
                 SettingsStore.ApplyStartWithWindows(settings.StartWithWindows, SelfUpdater.ExePath);
+            }
+            if (settings.NoLinkHandler == (LinkBox.IsChecked == true))
+            {
+                settings.NoLinkHandler = LinkBox.IsChecked != true;
+                LinkOpen.Apply(!settings.NoLinkHandler, SelfUpdater.ExePath);   // off removes the registration again
             }
             SettingsStore.Save(settings);
             if (artChanged) host.CardArtChanged();
@@ -834,6 +840,9 @@ namespace ElansAddonHub
         public bool NavGmVisibleForTest => NavGm.Visibility == Visibility.Visible;
         public string InviteButtonTextForTest => InviteButton.Content as string;
         public string InviteLinkForTest => InviteLink.Text;
+        public void SetLinkHandlerForTest(bool on) { LinkBox.IsChecked = on; General_Click(LinkBox, null); }
+        public bool LinkBoxForTest => LinkBox.IsChecked == true;
+        public string InviteClickHintForTest => InviteClickHint.Text;
         public string InviteTitleForTest => InviteTitle.Text;
         public string InviteNoteForTest => InviteNote.Text;
         public bool InviteResultVisibleForTest => InviteResult.Visibility == Visibility.Visible;

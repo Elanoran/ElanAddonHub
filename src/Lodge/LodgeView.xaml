@@ -302,6 +302,12 @@
           <TextBlock x:Name="JoinTitle" Text="Join a lodge" FontSize="15" FontWeight="SemiBold" />
           <TextBlock Text="Chat, voice and files with your friends. Paste the invite link you were sent - it works once, and this PC then gets its own sign-in." FontSize="12"
                      Foreground="{StaticResource TextDim}" TextWrapping="Wrap" Margin="0,4,0,16" />
+          <Border x:Name="IncomingBanner" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="10" Padding="12" Margin="0,0,0,16">
+            <StackPanel>
+              <TextBlock x:Name="IncomingTitle" Style="{StaticResource Text.RowTitle}" TextWrapping="Wrap" />
+              <TextBlock x:Name="IncomingText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
+            </StackPanel>
+          </Border>
           <TextBlock Text="INVITE LINK OR ADDRESS" Style="{StaticResource Caption}" Margin="0,0,0,5" />
           <TextBox x:Name="UrlBox" Style="{StaticResource Input}" Tag="elanshub://lodge/join#example.com/lodge|..." TextChanged="UrlBox_TextChanged" />
           <StackPanel x:Name="CodeArea">

@@ -394,6 +394,7 @@ namespace ElansAddonHub.Lodge
 
         void ShowJoin(string why, bool offer = false)
         {
+            ClearIncoming();
             ChatPanel.Visibility = Visibility.Collapsed;
             JoinPanel.Visibility = Visibility.Visible;
             JoinStatus.Foreground = (Brush)FindResource("Danger");
@@ -406,6 +407,7 @@ namespace ElansAddonHub.Lodge
 
         void ShowChat()
         {
+            ClearIncoming();
             offerRestore = false;
             RestoreSavedButton.Visibility = Visibility.Collapsed;
             JoinPanel.Visibility = Visibility.Collapsed;
@@ -414,7 +416,7 @@ namespace ElansAddonHub.Lodge
 
         void UrlBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            var link = InviteLinks.Parse(UrlBox.Text);
+            var link = InviteLinks.Parse(EffectiveLinkText);
             CodeFromLink.Text = link.IsInvite ? "One-time invite found in the link" : "Invite code found in the link";
             CodeFromLink.Visibility = link.Secret != null ? Visibility.Visible : Visibility.Collapsed;
             CodeArea.Visibility = link.Secret != null ? Visibility.Collapsed : Visibility.Visible;
@@ -440,8 +442,8 @@ namespace ElansAddonHub.Lodge
             if (joining) return;
             // a whole link pasted into the code box belongs in the link box (and is handled as the link it is)
             var typed = CodeBox.Password.Trim();
-            if (InviteLinks.LooksLikeLink(typed)) { UrlBox.Text = typed; CodeBox.Password = ""; }
-            var link = InviteLinks.Parse(UrlBox.Text);
+            if (InviteLinks.LooksLikeLink(typed)) { ClearIncoming(); UrlBox.Text = typed; CodeBox.Password = ""; }
+            var link = InviteLinks.Parse(EffectiveLinkText);
             if (link.MissingAddress) { JoinFail(MissingAddressText); return; }
             var url = link.Url;
             var secret = link.Secret ?? CodeBox.Password.Trim();
@@ -522,8 +524,81 @@ namespace ElansAddonHub.Lodge
         // the first-run guide: join with a link that was already checked (code inside the link)
         public void JoinWithLink(string link) { UrlBox.Text = link; NameBox.Text = Session.Settings.LodgeName ?? Environment.UserName; TryJoin(); }
 
+
+        // ================================================================ an elanshub:// link was clicked (see Services/LinkOpen.cs)
+        // The link is shown for the person to confirm: nothing connects until they press Join. The secret part is kept in memory and the box shows it masked.
+        string incoming, incomingShown;
+        string EffectiveLinkText => incoming != null && UrlBox.Text == incomingShown ? incoming : UrlBox.Text;
+
+        void ClearIncoming()
+        {
+            incoming = incomingShown = null;
+            IncomingBanner.Visibility = Visibility.Collapsed;
+        }
+
+        // "nasferatu.dk/lodge" - how a lodge address is shown to people
+        public static string ShortAddress(string url)
+        {
+            var u = (url ?? "").Trim();
+            foreach (var p in new[] { "https://", "http://" }) if (u.StartsWith(p, StringComparison.OrdinalIgnoreCase)) { u = u.Substring(p.Length); break; }
+            return u.TrimEnd('/');
+        }
+
+        public static string MaskSecret(string secret)
+        {
+            if (string.IsNullOrEmpty(secret)) return "";
+            var keep = secret.StartsWith(InviteLinks.Prefix, StringComparison.Ordinal) ? InviteLinks.Prefix.Length : 0;
+            return secret.Substring(0, keep) + new string((char)0x2022, 12);
+        }
+
+        // the sentence under the "You were invited" title: depends on whether this PC is already signed in, and to which lodge
+        public static string IncomingWording(string linkUrl, string savedUrl, bool signedIn)
+        {
+            var target = ShortAddress(linkUrl);
+            if (!signedIn || string.IsNullOrEmpty(savedUrl))
+                return "Check that you trust whoever sent this link, then press Join. Nothing happens until you do.";
+            var current = ShortAddress(savedUrl);
+            if (string.Equals(target, current, StringComparison.OrdinalIgnoreCase))
+                return "This link is for " + target + ". You are signed in to " + current + ". Joining adds this PC as another device.";
+            return "This link is for " + target + ". You are signed in to " + current + ". Joining switches this PC to " + target + " and signs it out of " + current + ". Nothing changes until you press Join.";
+        }
+
+        public void ShowInviteLink(string link)
+        {
+            if (joining) return;
+            link = LinkOpen.Validate(link);
+            if (link == null) return;
+            var parsed = InviteLinks.Parse(link);
+            var target = LodgeSession.NormalizeUrl(parsed.Url);
+            var signedIn = SavedSignIn(out var savedUrl, out _, out _);
+            editingConnection = false;
+            EndEditConnection();
+            incoming = link;
+            incomingShown = InviteLinks.LinkStart + "#" + ShortAddress(parsed.Url) + (parsed.Secret != null ? "|" + MaskSecret(parsed.Secret) : "");
+            ChatPanel.Visibility = Visibility.Collapsed;
+            JoinPanel.Visibility = Visibility.Visible;
+            offerRestore = false;
+            UpdateRestoreButton();
+            UrlBox.Text = incomingShown;
+            CodeBox.Password = "";
+            DeviceBox.Text = LodgeCredentials.DeviceName(Session.Settings);
+            if (string.IsNullOrWhiteSpace(NameBox.Text)) NameBox.Text = Session.Settings.LodgeName ?? "";
+            JoinStatus.Text = "";
+            IncomingTitle.Text = "You were invited to " + ShortAddress(parsed.Url);
+            IncomingText.Text = IncomingWording(target, savedUrl, signedIn);
+            IncomingBanner.Visibility = Visibility.Visible;
+            if (signedIn) CancelEditButton.Visibility = Visibility.Visible;      // a way out that changes nothing
+        }
+
+        public string IncomingTitleForTest => IncomingBanner.Visibility == Visibility.Visible ? IncomingTitle.Text : null;
+        public string IncomingTextForTest => IncomingBanner.Visibility == Visibility.Visible ? IncomingText.Text : null;
+        public bool CancelVisibleForTest => CancelEditButton.Visibility == Visibility.Visible;
+        public bool JoiningForTest => joining;
+        public string NameBoxForTest { get => NameBox.Text; set => NameBox.Text = value; }
+
         public void EditConnection()
         {
+            ClearIncoming();
             editingConnection = true;
             UrlBox.Text = Session.Settings.LodgeUrl ?? "";
             NameBox.Text = Session.Settings.LodgeName ?? "";
@@ -539,8 +614,11 @@ namespace ElansAddonHub.Lodge
 
         void CancelEdit_Click(object sender, RoutedEventArgs e)
         {
+            var wasIncoming = incoming != null;
             EndEditConnection();
-            if (Session.Connected) ShowChat();
+            if (wasIncoming) UrlBox.Text = "";
+            ClearIncoming();
+            if (Session.Connected || (wasIncoming && SavedSignIn(out _, out _, out _))) ShowChat();
         }
 
         void EndEditConnection()
