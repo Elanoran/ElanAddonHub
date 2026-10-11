@@ -511,13 +511,31 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Voice changer" Tag="Sound like an orc, a gnome or a murloc: everyone in your voice room hears it.">
                 <ComboBox x:Name="PresetBox" Style="{StaticResource Dropdown}" Width="260" SelectionChanged="Preset_Changed" />
               </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Hear myself" Tag="Try the voice changer on yourself. Use headphones, or it will feed back.">
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Noise suppression" Tag="Takes out fans, hiss and hum from your microphone. Works before the voice changer.">
+                <CheckBox x:Name="NoiseBox" Style="{StaticResource Switch}" Click="Voice_Changed" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Automatic volume" Tag="Lifts a quiet microphone and keeps a loud one from clipping.">
+                <CheckBox x:Name="AgcBox" Style="{StaticResource Switch}" Click="Voice_Changed" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Voice quality" Tag="High uses about 50 % more data while you talk.">
+                <Border Style="{StaticResource SegmentHost}">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="QualityStd" Style="{StaticResource Segment}" Content="Standard" GroupName="vq" Checked="Voice_Changed" />
+                    <RadioButton x:Name="QualityHigh" Style="{StaticResource Segment}" Content="High (48 kbps)" GroupName="vq" Checked="Voice_Changed" />
+                  </StackPanel>
+                </Border>
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Test my mic" Tag="Hear yourself as the others will, with noise suppression, volume and the voice changer. Use headphones, or it will feed back.">
                 <CheckBox x:Name="MonitorBox" Style="{StaticResource Switch}" Click="Monitor_Click" />
               </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Sounds" Tag="A soft chime when people join or leave your room, and when you're mentioned.">
                 <CheckBox x:Name="SoundsBox" Style="{StaticResource Switch}" Click="Voice_Changed" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
+            <TextBlock Text="Connection quality" Style="{StaticResource Head}" />
+            <ContentControl Style="{StaticResource Card.Group}">
+              <TextBlock x:Name="QualityText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="16,12" Text="Join a voice room to see how the connection to each speaker is doing." />
+            </ContentControl>
           </StackPanel>
 
           <!-- ========== Overlay ========== -->

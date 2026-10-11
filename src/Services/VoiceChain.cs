@@ -29,6 +29,7 @@ namespace ElansAddonHub.Services
         public Action<short[]> Monitor;       // the processed frame, before the gate (for "Hear myself")
 
         public bool Transmitting { get; private set; }
+        public double Level01 { get; private set; } // 0..1 smoothed mic level while transmitting (the speaking ring of "me")
         public double LevelDb { get; private set; } = -90;
         public double GainDb => agc.GainDb;
         public int FramesSent { get; private set; }
@@ -62,7 +63,7 @@ namespace ElansAddonHub.Services
         {
             e.Bitrate = highQuality ? HighBitrate : StandardBitrate;
             e.SignalType = OpusSignal.OPUS_SIGNAL_VOICE;
-            e.Complexity = 6;               // measured: see the "voice cpu" self-test line; 8 costs ~1.5x for no audible gain on speech at 32 kbps
+            e.Complexity = 6;               // measured (see the "voice cpu" self-test line): ~0.75 ms per 20 ms frame vs 0.86 at 8 and 0.61 at 4; speech at 32 kbps gains nothing audible above 6
             e.UseVBR = true;
             e.UseInbandFEC = true;          // the packet carries a low-rate copy of the previous frame: free insurance after a reconnect
             e.PacketLossPercent = 5;        // tells the encoder how much of the bit budget to spend on that
@@ -106,6 +107,8 @@ namespace ElansAddonHub.Services
                 else if (!open) preroll.Push(frame);
             }
             Transmitting = open;
+            double lv = open ? Math.Max(0, Math.Min(1, (LevelDb + 55) / 30)) : 0;
+            Level01 += (lv - Level01) * (lv > Level01 ? 0.6 : 0.12);
             if (open) Encode(frame, send);
 
             ProcessMs = ProcessMs * 0.95 + (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency * 0.05;

@@ -369,8 +369,22 @@ namespace ElansAddonHub.Services
                 long t0 = Stopwatch.GetTimestamp(); peer.Read(buf, 0, Frame); if (k >= 50) rx.Add((Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency);
             }
             double rxMean = rx.Average();
+            // Opus encode cost by complexity, on speech-like frames (why the shipped value is what it is)
+            var cx = new System.Text.StringBuilder();
+            foreach (var c in new[] { 4, 6, 8, 10 })
+            {
+                var e2 = VoiceChain.CreateEncoder(false); e2.Complexity = c;
+                var fr = new short[Frame]; var pk2 = new byte[1500]; var vv = new float[Frame]; double tot = 0; int bytes = 0;
+                for (int k = 0; k < 300; k++)
+                {
+                    Voiced(vv, (long)k * Frame, 32768 * Math.Pow(10, -24 / 20.0)); for (int i = 0; i < Frame; i++) fr[i] = (short)vv[i];
+                    long t0 = Stopwatch.GetTimestamp(); int n = e2.Encode(fr, Frame, pk2, pk2.Length);
+                    if (k >= 50) { tot += (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency; bytes += n; }
+                }
+                cx.Append($" c{c} {tot / 250:0.00} ms/{bytes / 250} B;");
+            }
             bool ok = m1 < 2 && p1 < 5 && p2 < 8 && m2 < 4 && rxMean < 1;
-            return L(ok, $"voice cpu per 20 ms frame (budget 2 ms normal voice): {a}; {b}; receive per speaker {rxMean:0.00} ms");
+            return L(ok, $"voice cpu per 20 ms frame (budget 2 ms normal voice): {a}; {b}; receive per speaker {rxMean:0.00} ms; Opus encode by complexity:{cx}");
         }
     }
 }

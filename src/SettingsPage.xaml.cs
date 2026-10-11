@@ -124,6 +124,10 @@ namespace ElansAddonHub
             ThresholdSlider.Value = s.VoiceThreshold ?? -45;
             VolumeSlider.Value = s.VoiceVolume ?? 1;
             SoundsBox.IsChecked = !s.SoundsOff;
+            NoiseBox.IsChecked = !s.VoiceNoiseSuppressOff;
+            AgcBox.IsChecked = !s.VoiceAutoGainOff;
+            QualityStd.IsChecked = !s.VoiceHighQuality;
+            QualityHigh.IsChecked = s.VoiceHighQuality;
             PttKeyButton.Content = VoiceEngine.KeyName(session.PttKey);
             InputBox.ItemsSource = VoiceEngine.InputDevices();
             OutputBox.ItemsSource = VoiceEngine.OutputDevices();
@@ -271,6 +275,26 @@ namespace ElansAddonHub
                              : "Friends see when you're in WoW. Install Elan's Hub (Addons tab) to also show your character, class and level.");
         }
 
+        int qualityTick;
+
+        // Connection quality: per speaker, from their jitter buffer (refreshed twice a second while this page is open)
+        void UpdateQuality()
+        {
+            if (++qualityTick % 5 != 0) return;
+            var v = session?.Voice;
+            if (v == null) { QualityText.Text = "Join a voice room to see how the connection to each speaker is doing."; return; }
+            var st = v.Stats();
+            if (st.Count == 0) { QualityText.Text = "Nobody is talking right now. Jitter, buffer delay and concealed frames show up here while someone speaks."; return; }
+            var sb = new System.Text.StringBuilder();
+            foreach (var s in st)
+            {
+                var name = session.Members.FirstOrDefault(m => m.Id == s.Id)?.Name ?? "Someone";
+                sb.AppendLine($"{name}: jitter {s.JitterMs:0} ms, delay {s.BufferMs:0} ms (aims for {s.TargetMs:0}), {s.Concealed} frame{(s.Concealed == 1 ? "" : "s")} concealed, {s.Underruns} gap{(s.Underruns == 1 ? "" : "s")}");
+            }
+            sb.Append($"Your microphone: {v.ProcessMs:0.0} ms of processing per 20 ms.");
+            QualityText.Text = sb.ToString();
+        }
+
         void OnTick()
         {
             // mic level under the sensitivity slider
@@ -282,6 +306,7 @@ namespace ElansAddonHub
                 LevelHint.Text = "Talk normally: the gold bar should pass the dot when you speak, not when you're quiet.";
             }
             else LevelBar.Width = 0;
+            if (SecVoice.Visibility == Visibility.Visible) UpdateQuality();
             if (capturingKey > 0) CaptureKey();
         }
 
@@ -452,8 +477,12 @@ namespace ElansAddonHub
             if (loading || settings == null) return;
             settings.VoicePushToTalk = ModePtt.IsChecked == true;
             settings.SoundsOff = SoundsBox.IsChecked != true;
+            settings.VoiceNoiseSuppressOff = NoiseBox.IsChecked != true;
+            settings.VoiceAutoGainOff = AgcBox.IsChecked != true;
+            settings.VoiceHighQuality = QualityHigh.IsChecked == true;
             SettingsStore.Save(settings);
             session.ApplyVoiceSettings(false);
+            if (preview != null) { preview.NoiseSuppression = !settings.VoiceNoiseSuppressOff; preview.AutoGain = !settings.VoiceAutoGainOff; }
             UpdateLabels();
         }
 
@@ -491,7 +520,7 @@ namespace ElansAddonHub
         {
             StopPreview();
             if (MonitorBox.IsChecked != true) return;
-            preview = new VoiceEngine { Monitor = true, Muted = true, Preset = VoicePresets.Get(settings?.VoicePreset) };
+            preview = new VoiceEngine { Monitor = true, Muted = true, Preset = VoicePresets.Get(settings?.VoicePreset), NoiseSuppression = settings?.VoiceNoiseSuppressOff != true, AutoGain = settings?.VoiceAutoGainOff != true };
             preview.Start(settings?.VoiceInput ?? -1, settings?.VoiceOutput ?? -1, 1f);
             if (preview.MicError != null) { StopPreview(); MonitorBox.IsChecked = false; }
             IsVisibleChanged -= StopPreviewOnHide; IsVisibleChanged += StopPreviewOnHide;

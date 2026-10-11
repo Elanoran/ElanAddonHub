@@ -151,6 +151,7 @@ namespace ElansAddonHub.Services
         public bool Transmitting => chain.Transmitting;
         public double LevelDb => chain.LevelDb;
         public double ProcessMs => chain.ProcessMs;
+        public float MyLevel => (float)chain.Level01;
         public string MicError { get; private set; }
         public int FramesSent => chain.FramesSent;
 
@@ -318,7 +319,7 @@ namespace ElansAddonHub.Services
         // Codec self-check for the test run: encode a tone, decode it, compare energy.
         public static string CodecSelfTest()
         {
-            var enc = OpusCodecFactory.CreateEncoder(Rate, 1, OpusApplication.OPUS_APPLICATION_VOIP);
+            var enc = VoiceChain.CreateEncoder(false);
             var dec = OpusCodecFactory.CreateDecoder(Rate, 1);
             var pcm = new short[Frame];
             var outPcm = new short[5760];
