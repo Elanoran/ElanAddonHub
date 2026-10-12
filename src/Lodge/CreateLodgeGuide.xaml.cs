@@ -73,6 +73,9 @@ namespace ElansAddonHub.Lodge
             if (step == Steps) LinkBox.Focus();
         }
 
+        public void CopyCommandsForTest() => CopyCommands_Click(null, null);
+        public string CopyNoteForTest => CopyNote.Text;
+        public void ReadmeClickForTest() => Readme_Click(null, null);
         public void NextForTest() => Next_Click(null, null);
         public void BackForTest() => Back_Click(null, null);
 

@@ -202,13 +202,18 @@ namespace ElansAddonHub.Lodge
                     var body = Json.Obj(await resp.Content.ReadAsStringAsync());
                     var lodge = body.Child("lodge");
                     if (lodge == null) return null;
-                    var name = (lodge.Str("name") ?? "").Trim();
+                    // the address in a link can be anyone's server: show at most what a real lodge may hold (40 / 280 characters, 4 lines), as plain text
+                    var name = Clamp((lodge.Str("name") ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim(), LodgeSession.MaxLodgeName);
                     if (name.Length == 0) return null;
-                    return new LodgeBanner { Name = name, Welcome = (lodge.Str("welcome") ?? "").Trim() };
+                    var welcome = Clamp((lodge.Str("welcome") ?? "").Replace("\r\n", "\n").Trim(), LodgeSession.MaxLodgeWelcome);
+                    welcome = string.Join("\n", welcome.Split('\n').Take(LodgeSession.MaxLodgeWelcomeLines));
+                    return new LodgeBanner { Name = name, Welcome = welcome };
                 }
             }
             catch (Exception) { return null; }
         }
+
+        static string Clamp(string s, int max) => s.Length <= max ? s : s.Substring(0, max).TrimEnd();
 
         // the sentence shown when the exchange did not work
         public static string Friendly(int status, string reason, string serverError, bool codeUpgrade = false)

@@ -690,7 +690,7 @@
             <ContentControl Style="{StaticResource Card.Group}" Margin="0,0,0,12">
               <StackPanel Margin="16,12">
                 <TextBlock Text="Name" Style="{StaticResource Text.Caption}" />
-                <TextBox x:Name="LodgeNameBox" Style="{StaticResource Input}" Height="32" Margin="0,4,0,0" MaxLength="40" Tag="For example: The Silver Lodge" />
+                <TextBox x:Name="LodgeNameBox" Style="{StaticResource Input}" Height="36" Margin="0,4,0,0" MaxLength="40" Tag="For example: The Silver Lodge" />
                 <TextBlock Text="Welcome text" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
                 <TextBox x:Name="LodgeWelcomeBox" Style="{StaticResource Input}" Height="72" Margin="0,4,0,0" MaxLength="280" AcceptsReturn="True" TextWrapping="Wrap"
                          VerticalScrollBarVisibility="Auto" Tag="A short hello for new people (optional)" />

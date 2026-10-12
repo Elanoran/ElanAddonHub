@@ -31,7 +31,7 @@
                      Text="On the server, run these two commands. The installer builds the lodge, starts it and prints a one-time owner link at the end." />
           <Border Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16">
             <StackPanel>
-              <TextBox x:Name="Commands" Style="{StaticResource Input}" Height="56" IsReadOnly="True" AcceptsReturn="True" FontFamily="{StaticResource Font.Mono}" FontSize="12" />
+              <TextBox x:Name="Commands" Style="{StaticResource Input}" TextWrapping="Wrap" IsReadOnly="True" AcceptsReturn="True" FontFamily="{StaticResource Font.Mono}" FontSize="12" />
               <DockPanel Margin="0,8,0,0">
                 <Button x:Name="CopyCommands" DockPanel.Dock="Right" Style="{StaticResource Button.M}" Content="Copy commands" Click="CopyCommands_Click" />
                 <TextBlock x:Name="CopyNote" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" Text="Run them as a user who can use sudo." />
@@ -47,7 +47,7 @@
                      Text="It starts with elanshub://lodge/join# and works once, for one hour. You choose your name next, and you become the Guild Master." />
           <Border Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16">
             <StackPanel>
-              <TextBox x:Name="LinkBox" Style="{StaticResource Input}" Height="32" Tag="elanshub://lodge/join#your.site/lodge|..." />
+              <TextBox x:Name="LinkBox" Style="{StaticResource Input}" Height="36" Tag="elanshub://lodge/join#your.site/lodge|..." />
               <TextBlock x:Name="LinkProblem" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
               <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,8,0,0"
                          Text="No link, or it has expired? On the server run: sudo lodge-admin claim-owner" />

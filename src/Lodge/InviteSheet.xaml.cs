@@ -19,6 +19,7 @@ namespace ElansAddonHub.Lodge
         public InviteForm FormForTest => Form;
         public InviteListView PendingForTest => Pending;
         public bool IsOpen => overlay.IsOpen;
+        public string WhereForTest => Where.Text;
 
         public void Bind(LodgeSession s)
         {
@@ -32,7 +33,7 @@ namespace ElansAddonHub.Lodge
         {
             if (session == null || !session.CanInvite) return;
             Form.Reset();
-            Form.UpdateMode();
+            Form.ResetChoices();
             Where.Text = "To " + session.LodgeDisplayName + (string.IsNullOrEmpty(session.LodgeAddress) ? "" : " · " + LodgeView.ShortAddress(session.LodgeAddress));
             session.RequestInvites();
             overlay.Open();

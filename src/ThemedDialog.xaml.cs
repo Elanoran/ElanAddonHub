@@ -144,23 +144,39 @@ namespace ElansAddonHub
         }
     }
 
+    // What a dialog was asked, for the self-test (see Dialog.TestHook).
+    public sealed class DialogCall { public string Kind, Title, Text, Confirm, Phrase; }
+
     // MessageBox replacement. All calls block like MessageBox.Show; owner may be null.
     public static class Dialog
     {
+        // Test seam: when set, no real (modal, blocking) window opens. The hook sees the question and answers it (true = the confirm button).
+        // For a typed question the hook is told the phrase that would have to be typed; the real gating of the confirm button is checked on
+        // ThemedDialog.Create directly (TypedBoxForTest / ConfirmButtonForTest), without showing it.
+        public static Func<DialogCall, bool> TestHook;
+
+        static bool Ask(string kind, string title, string text, string confirm, string phrase = null, bool fallback = false)
+        {
+            var hook = TestHook;
+            return hook == null ? fallback : hook(new DialogCall { Kind = kind, Title = title, Text = text, Confirm = confirm, Phrase = phrase });
+        }
+
         // a question with two buttons; danger = red confirm button, focus on the cancel button
         public static bool Confirm(Window owner, string title, string text, string confirmText = "OK", bool danger = false, string cancelText = "Cancel") =>
-            ThemedDialog.Run(owner, danger ? DialogKind.Danger : DialogKind.Question, title, text, confirmText, cancelText);
+            TestHook != null ? Ask(danger ? "danger" : "question", title, text, confirmText)
+                             : ThemedDialog.Run(owner, danger ? DialogKind.Danger : DialogKind.Question, title, text, confirmText, cancelText);
 
         // a destructive question that is only confirmed by typing a phrase (the lodge's name); the confirm button is off until it matches
         public static bool ConfirmTyped(Window owner, string title, string text, string confirmText, string phrase) =>
-            ThemedDialog.Run(owner, DialogKind.Danger, title, text, confirmText, "Cancel", phrase);
+            TestHook != null ? Ask("typed", title, text, confirmText, phrase)
+                             : ThemedDialog.Run(owner, DialogKind.Danger, title, text, confirmText, "Cancel", phrase);
 
         // a warning-flavoured two-button question (e.g. "this replaces a git copy")
         public static bool ConfirmWarn(Window owner, string title, string text, string confirmText = "Continue", string cancelText = "Cancel") =>
-            ThemedDialog.Run(owner, DialogKind.Warning, title, text, confirmText, cancelText);
+            TestHook != null ? Ask("warning", title, text, confirmText) : ThemedDialog.Run(owner, DialogKind.Warning, title, text, confirmText, cancelText);
 
-        public static void Info(Window owner, string title, string text) => ThemedDialog.Run(owner, DialogKind.Info, title, text, "OK", null);
-        public static void Warn(Window owner, string title, string text) => ThemedDialog.Run(owner, DialogKind.Warning, title, text, "OK", null);
-        public static void Error(Window owner, string title, string text) => ThemedDialog.Run(owner, DialogKind.Error, title, text, "OK", null);
+        public static void Info(Window owner, string title, string text) { if (TestHook != null) Ask("info", title, text, "OK"); else ThemedDialog.Run(owner, DialogKind.Info, title, text, "OK", null); }
+        public static void Warn(Window owner, string title, string text) { if (TestHook != null) Ask("warn", title, text, "OK"); else ThemedDialog.Run(owner, DialogKind.Warning, title, text, "OK", null); }
+        public static void Error(Window owner, string title, string text) { if (TestHook != null) Ask("error", title, text, "OK"); else ThemedDialog.Run(owner, DialogKind.Error, title, text, "OK", null); }
     }
 }

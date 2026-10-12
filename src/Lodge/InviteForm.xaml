@@ -12,7 +12,7 @@
     </Border>
     <StackPanel x:Name="NameArea">
       <TextBlock Text="Their name" Style="{StaticResource Text.Caption}" />
-      <TextBox x:Name="InviteName" Style="{StaticResource Input}" Height="32" Margin="0,4,0,0" MaxLength="24" KeyDown="InviteName_KeyDown" />
+      <TextBox x:Name="InviteName" Style="{StaticResource Input}" Height="36" Margin="0,4,0,0" MaxLength="24" KeyDown="InviteName_KeyDown" />
     </StackPanel>
     <Grid Margin="0,12,0,0">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -37,7 +37,7 @@
     <Border x:Name="InviteResult" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16" Margin="0,16,0,0">
       <StackPanel>
         <TextBlock x:Name="InviteTitle" Style="{StaticResource Text.RowTitle}" TextWrapping="Wrap" />
-        <TextBox x:Name="InviteLink" Style="{StaticResource Input}" Height="32" IsReadOnly="True" FontSize="12" Margin="0,8,0,0" />
+        <TextBox x:Name="InviteLink" Style="{StaticResource Input}" Height="36" IsReadOnly="True" FontSize="12" Margin="0,8,0,0" />
         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
           <Button x:Name="CopyButton" Style="{StaticResource Button.M}" Content="Copy" Click="CopyInvite_Click" ToolTip="Copy the elanshub:// link (opens the Outpost)" />
           <Button x:Name="CopyWebButton" Style="{StaticResource Button.M}" Content="Copy as web link" Margin="8,0,0,0" Click="CopyWeb_Click"

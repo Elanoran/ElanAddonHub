@@ -86,9 +86,11 @@ namespace ElansAddonHub.Lodge
             RoleCaption.Text = guest ? "People who can use it" : "Rank";
             InviteButton.Content = links ? "Create link" : "Create invite";
             // officers invite below their own rank; only the Guild Master picks any rank
-            if (inviteRoleFor != session.MyRole)
+            // (the list depends on the rank AND on whether the server makes one-time links, so both are part of the key)
+            var rankKey = session.MyRole + "|" + links;
+            if (inviteRoleFor != rankKey)
             {
-                inviteRoleFor = session.MyRole;
+                inviteRoleFor = rankKey;
                 var offered = RankOptions();
                 InviteRole.ItemsSource = offered;
                 InviteRole.SelectedItem = offered.FirstOrDefault(r => r.Id == "member") ?? offered.FirstOrDefault();
@@ -144,19 +146,36 @@ namespace ElansAddonHub.Lodge
         // a ready-made person invite: "Send a new device link" on a profile card (the rank is the person's own; the server adds a device for them)
         public void StartDeviceLink(string name, string role)
         {
-            InvPerson.IsChecked = true;
-            UpdateMode();
+            ResetChoices();
             InviteName.Text = name ?? "";
             var opt = RankOptions().FirstOrDefault(r => r.Id == role);
-            if (opt != null) InviteRole.SelectedItem = opt;
             InviteResult.Visibility = Visibility.Collapsed;
+            // never fall back to another rank: a device link must carry the person's own rank, or nothing at all
+            if (opt == null) { SetStatus("You can only send a device link to people ranked below you"); return; }
+            InviteRole.SelectedItem = opt;
             SetStatus(null);
             Invite_Click(null, null);
+        }
+
+        // the sheet always opens on the defaults (a person, Member, 7 days, 1 person), not on whatever the last invite used:
+        // a device link made later must not inherit a 1 hour expiry or a guest link's settings
+        public void ResetChoices()
+        {
+            InvPerson.IsChecked = true;
+            InviteExpiry.SelectedIndex = 2;
+            InviteUses.SelectedIndex = 0;
+            if (session != null)
+            {
+                var offered = RankOptions();
+                InviteRole.SelectedItem = offered.FirstOrDefault(r => r.Id == "member") ?? offered.FirstOrDefault();
+                UpdateMode();
+            }
         }
 
         public void Reset()
         {
             InviteResult.Visibility = Visibility.Collapsed;
+            InviteLink.Text = ""; lastLink = lastSecretLink = null;   // a link is shown once: it does not linger in a form that was closed
             InviteName.Text = "";
             SetStatus(null);
         }
@@ -168,12 +187,22 @@ namespace ElansAddonHub.Lodge
             SetResult(title, link, InviteLinks.MakeWeb(session.LodgeAddress, SecretOf(link)), note);
             InviteName.Text = "";
             SetStatus(null);
-            try { Clipboard.SetText(link); } catch { }
+            PutOnClipboard(link);
             Created?.Invoke(inv, link);
         }
 
         // the invite secret inside an elanshub:// link
         static string SecretOf(string link) => InviteLinks.Parse(link).Secret ?? "";
+
+        // the self-test sets this so a test never touches (or overwrites) the real clipboard; null = the real one
+        public static Action<string> ClipboardSeam;
+
+        static bool PutOnClipboard(string text)
+        {
+            var seam = ClipboardSeam;
+            if (seam != null) { seam(text); return true; }
+            try { Clipboard.SetText(text); return true; } catch { return false; }
+        }
 
         void SetResult(string title, string link, string webLink, string note)
         {
@@ -187,13 +216,13 @@ namespace ElansAddonHub.Lodge
 
         void CopyInvite_Click(object sender, RoutedEventArgs e)
         {
-            try { Clipboard.SetText(lastLink ?? InviteLink.Text); InviteTitle.Text = "Copied - now send it to them"; } catch { }
+            if (PutOnClipboard(lastLink ?? InviteLink.Text)) InviteTitle.Text = "Copied - now send it to them";
         }
 
         void CopyWeb_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrEmpty(lastSecretLink)) return;
-            try { Clipboard.SetText(lastSecretLink); InviteTitle.Text = "Web link copied - now send it to them"; } catch { }
+            if (PutOnClipboard(lastSecretLink)) InviteTitle.Text = "Web link copied - now send it to them";
         }
 
         // ---- test hooks
@@ -216,6 +245,11 @@ namespace ElansAddonHub.Lodge
         public void CreateClickForTest(string name) { InviteName.Text = name; Invite_Click(null, null); }
         public void CopyWebClickForTest() => CopyWeb_Click(null, null);
         public void CopyClickForTest() => CopyInvite_Click(null, null);
+        public void SelectRoleForTest(string id) { var o = (InviteRole.ItemsSource as IEnumerable<SettingsPage.RoleOption>)?.FirstOrDefault(r => r.Id == id); if (o != null) InviteRole.SelectedItem = o; }
+        public void SelectExpiryForTest(int hours) { var o = (InviteExpiry.ItemsSource as IEnumerable<Choice>)?.FirstOrDefault(c => c.Value == hours); if (o != null) InviteExpiry.SelectedItem = o; }
+        public void SelectUsesForTest(int uses) { var o = (InviteUses.ItemsSource as IEnumerable<Choice>)?.FirstOrDefault(c => c.Value == uses); if (o != null) InviteUses.SelectedItem = o; }
+        public bool UsesVisibleForTest => InviteUses.Visibility == Visibility.Visible;
+        public bool NameVisibleForTest => NameArea.Visibility == Visibility.Visible;
         public void SetResultForDesign(string title, string link, string webLink, string note) => SetResult(title, link, webLink, note);
     }
 }

@@ -507,7 +507,7 @@ namespace ElansAddonHub.Lodge
                 var res = await InviteExchange.Exchange(url, invite, null, LodgeCredentials.DeviceName(s), LodgeCredentials.DeviceId(s), NameBox.Text);
                 if (!res.Ok)
                 {
-                    if (res.Reason == "name-required") NameCaption.Text = "YOUR NAME IN THE LODGE  (you will be its Guild Master)";
+                    if (res.Reason == "name-required") NameCaption.Text = NameCaptionOwner;
                     offerRestore = true;    // a saved sign-in (if any) is untouched: offer to go back to it
                     JoinFail(res.Message);
                     return;
@@ -541,10 +541,14 @@ namespace ElansAddonHub.Lodge
         string incoming, incomingShown;
         string EffectiveLinkText => incoming != null && UrlBox.Text == incomingShown ? incoming : UrlBox.Text;
 
+        const string NameCaptionDefault = "NAME  (only used with a shared guest code)";
+        const string NameCaptionOwner = "YOUR NAME IN THE LODGE  (you will be its Guild Master)";
+
         void ClearIncoming()
         {
             incoming = incomingShown = null;
             IncomingBanner.Visibility = Visibility.Collapsed;
+            NameCaption.Text = NameCaptionDefault;   // the Guild Master wording belongs to one owner link only: it must not stick to the next join
         }
 
         // "nasferatu.dk/lodge" - how a lodge address is shown to people
@@ -600,7 +604,8 @@ namespace ElansAddonHub.Lodge
                 ? "This is the owner link from your server. Type the name you want below, then press Join: you become the Guild Master."
                 : IncomingWording(target, savedUrl, signedIn);
             IncomingBanner.Visibility = Visibility.Visible;
-            if (ownerLink) { NameBox.Text = ""; NameCaption.Text = "YOUR NAME IN THE LODGE  (you will be its Guild Master)"; }
+            NameCaption.Text = ownerLink ? NameCaptionOwner : NameCaptionDefault;
+            if (ownerLink) NameBox.Text = "";
             _ = ShowBannerFor(parsed.Url, ownerLink);
             if (signedIn) CancelEditButton.Visibility = Visibility.Visible;      // a way out that changes nothing
         }
@@ -647,6 +652,7 @@ namespace ElansAddonHub.Lodge
         void CancelEdit_Click(object sender, RoutedEventArgs e)
         {
             var wasIncoming = incoming != null;
+            CodeBox.Password = "";      // a code typed and then cancelled must not wait there to be sent with the next join
             EndEditConnection();
             if (wasIncoming) UrlBox.Text = "";
             ClearIncoming();
@@ -668,6 +674,7 @@ namespace ElansAddonHub.Lodge
             Session.Disconnect();
             LodgeCredentials.Clear(Session.Settings);
             SettingsStore.Save(Session.Settings);
+            CodeBox.Password = "";      // (see CancelEdit_Click)
             ShowJoin("");
             if (!string.IsNullOrEmpty(note)) { JoinStatus.Foreground = (Brush)FindResource("TextDim"); JoinStatus.Text = note; }
         }
@@ -831,6 +838,9 @@ namespace ElansAddonHub.Lodge
         public void ShowMemberForTest(MemberVM m) { popMember = m; UpdateDeviceLinkRow(m.Role); }
         public bool DeviceLinkVisibleForTest => PopDeviceLink.Visibility == Visibility.Visible;
         public void DeviceLinkClickForTest() => PopDeviceLink_Click(null, null);
+        public void InviteSideClickForTest() => InviteSide_Click(null, null);
+        public void CreateLodgeClickForTest() => CreateLodge_Click(null, null);
+        public string NameCaptionForTest => NameCaption.Text;
 
         void PopMention_Click(object sender, RoutedEventArgs e)
         {

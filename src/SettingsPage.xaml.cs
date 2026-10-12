@@ -891,5 +891,11 @@ namespace ElansAddonHub
         public bool LeaveLodgeEnabledForTest => LeaveLodgeButton.IsEnabled;
         public string LodgeAddressTextForTest => LodgeAddress.Text;
         public void DangerPanelDesign() { SignOutPcButton.UpdateLayout(); }
+        public void SignOutPcClickForTest() => SignOutPc_Click(null, null);
+        public void LeaveLodgeClickForTest() => LeaveLodge_Click(null, null);
+        public void TransferConfirmClickForTest() => Transfer_Click(null, null);   // through the confirm dialog (Dialog.TestHook answers it)
+        public int LodgeNameMaxForTest => LodgeNameBox.MaxLength;
+        public int LodgeWelcomeMaxForTest => LodgeWelcomeBox.MaxLength;
+        public string TransferActionTextForTest => TransferButton.Content as string;
     }
 }

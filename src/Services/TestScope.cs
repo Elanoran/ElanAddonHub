@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "linkopen", "calendar", "wowevents", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -47,6 +47,7 @@ namespace ElansAddonHub.Services
             ["lodgehardening"] = "Lodge 2.8 hardening: safe file names, merge on welcome, drafts, restored composer, full voice room, unread on delete",
             ["lodgefun"] = "Lodge 2.37: grouped online list, Looking-for-group cards, item links, history paging, search",
             ["invites"] = "Lodge 2.38: one-time invite links, device tokens, upgrade prompt, Guild Master invite list, Your devices, error messages",
+            ["invites2"] = "Lodge 2.12 invites in the app: the Invite sheet (ranks by role, person / guest, Copy and Copy as web link, open invites + Revoke), web-link parsing, profile-card device link, Create-a-lodge guide, Danger zone (typed name, leave, transfer ownership), Your lodge card, join banner",
             ["linkopen"] = "clicking an elanshub:// link: accepted links, per-user registration (test root), pipe hand-off, join panel (never auto-joined), Settings toggle",
             ["calendar"] = "Lodge 2.11: raid / event calendar - agenda grouping, local time, month dots, form checks, sign-up buttons, 15-minute reminders, next-event line, chat card, hidden on older servers",
             ["wowevents"] = "WoW's own calendar in the Lodge calendar (companion addon data): parsing, local time, agenda 'until', month bands, switches, the strip above the chat (fixed height, no shift of the message list), nothing sent to the server",
@@ -71,7 +72,7 @@ namespace ElansAddonHub.Services
         {
             var r = new List<Tuple<Regex, string[]>>();
             void R(string rx, params string[] s) => r.Add(Tuple.Create(new Regex(rx, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), s));
-            var lodgeAll = new[] { "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "linkopen", "calendar", "wowevents", "video", "viewer", "toasts", "presence", "profile", "round3" };
+            var lodgeAll = new[] { "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "video", "viewer", "toasts", "presence", "profile", "round3" };
 
             // ---- shared: everything depends on these
             R(@"^src/(App\.xaml(\.cs)?|MainWindow\.xaml(\.cs)?|MainWindow\.Others\.cs|MainWindow\.Welcome\.cs|ElansAddonHub\.csproj|Motion\.cs|Brand\.cs|SourceIcons\.cs|PillBase\.cs|WelcomeGuide\.cs)$", Star);
@@ -87,7 +88,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/(LodgeClient|AvatarArt|GamePresence|ItemLinks)\.cs$", lodgeAll);
             R(@"^src/Services/(VoiceEngine|VoiceEffects)\.cs$", "voice", "lodge");
             R(@"^src/Services/Sounds\.cs$", "toasts", "lodge", "voice");
-            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "linkopen", "calendar", "wowevents");
+            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents");
             R(@"^src/MainWindow\.ProfileTest\.cs$", "profile");
             R(@"^src/MainWindow\.VideoTest\.cs$", "video");
             R(@"^src/(BrowserPage(\.xaml(\.cs)?)?|MainWindow\.BrowserTest|Services/(WebEngine|BrowserUrl|AdBlock))(\.cs)?$", "browser", "video");
@@ -95,6 +96,8 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.HardeningTest\.cs$", "lodgehardening");
             R(@"^src/MainWindow\.LodgeFunTest\.cs$", "lodgefun");
             R(@"^src/MainWindow\.InvitesTest\.cs$", "invites");
+            R(@"^src/MainWindow\.Invites2Test\.cs$", "invites2");
+            R(@"^src/MainWindow\.DesignTest\.Invites2\.cs$");   // screenshot-only design run
             R(@"^src/(MainWindow\.LinkOpen(Test)?|Services/LinkOpen)\.cs$", "linkopen", "invites");
             R(@"^src/MainWindow\.DesignTest\.LinkOpen\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.CalendarTest\.cs$", "calendar");
@@ -106,7 +109,7 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.DesignTest\.LodgeFun\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.ToastTest\.cs$", "toasts");
             R(@"^src/MainWindow\.DesignTest(\.Toasts)?\.cs$");     // screenshot-only design runs, not part of --selftest
-            R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites");
+            R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites", "invites2");
             // ---- addons
             R(@"^src/(AddonCard|ThirdPartyCard)\.cs$", "addons", "thirdparty", "startup");
             R(@"^src/(MainWindow\.Startup(ShiftTest(\.Checks)?)?\.cs|Skeleton\.cs)$", "startup", "addons");
@@ -118,7 +121,7 @@ namespace ElansAddonHub.Services
             R(@"^src/(HealthDialog\.cs|MainWindow\.Health(Test)?\.cs)$", "health");
             R(@"^src/Services/(AddonHealth|HealthMonitor|WowWatch)\.cs$", "health", "round3");
             R(@"^src/MainWindow\.Round3Test\.cs$", "round3");
-            R(@"^src/ThemedDialog", "dialogs");
+            R(@"^src/ThemedDialog", "dialogs", "invites2");
             R(@"^src/Services/(StripSelfTest|PixelStrip)\.cs$", "strip");
             // ---- not exercised by the self-test
             R(@"^(docs/|README\.md$|DESIGN\.md$|\.gitignore$|\.gitattributes$|src/CHANGELOG\.md$|Tools/)");
@@ -267,7 +270,7 @@ namespace ElansAddonHub.Services
             Ck("one shared file among specific ones -> ALL", Map("src/InventoryPage.xaml", "src/Motion.cs").Count == All.Length);
             Ck("docs only -> nothing", Map("README.md", "docs/design/x.png", "src/CHANGELOG.md").Count == 0);
             Ck("no changes -> nothing", Map().Count == 0);
-            Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "inventory" || a == "health")));
+            Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "invites2" || a == "inventory" || a == "health")));
             Ck("every rule section is a real section", Rules.SelectMany(r => r.Item2).All(s => s == Star || All.Contains(s)));
             Ck("every dependency is a real section", Deps.All(d => All.Contains(d.Key) && d.Value.All(All.Contains)));
             Ck("every section has a description", All.All(Info.ContainsKey));
