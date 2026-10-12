@@ -118,7 +118,7 @@ namespace ElansAddonHub
             {
                 // Segoe MDL2 Assets: E121 clock, E896 download, E1CB tag
                 if (st.Released != null) l.Add(new StatChip("\uE121", GitHubStats.ShortAgo(st.Released.Value),
-                    "Released " + GitHubStats.Ago(st.Released.Value) + ", " + st.Released.Value.ToLocalTime().ToString("d MMM yyyy")));
+                    "Released " + GitHubStats.Ago(st.Released.Value) + ", " + st.Released.Value.ToLocalTime().ToString("d MMM yyyy", Lodge.CalendarRules.English)));
                 if (st.Downloads > 0) l.Add(new StatChip("\uE896", st.Downloads.ToString(), st.Downloads + (st.Downloads == 1 ? " download" : " downloads")));
                 if (st.Releases > 0) l.Add(new StatChip("\uE1CB", st.Releases.ToString(), st.Releases + (st.Releases == 1 ? " release" : " releases")));
             }

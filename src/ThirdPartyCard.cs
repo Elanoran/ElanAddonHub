@@ -162,7 +162,7 @@ namespace ElansAddonHub
                 var seen = $"checked {CurseForgeLocal.Ago(CfChecked)}" + (CurseForgeLocal.IsStale(CfChecked) ? " - old, press Check CurseForge now" : "");
                 if (State == TpState.UpdateAvailable)
                 {
-                    VersionLine = $"Update available: {cf.LatestFileName}" + (cf.LatestDate > DateTime.MinValue.AddDays(2) ? ", " + cf.LatestDate.ToLocalTime().ToString("d MMM yyyy") : "") + $" ({seen})";
+                    VersionLine = $"Update available: {cf.LatestFileName}" + (cf.LatestDate > DateTime.MinValue.AddDays(2) ? ", " + cf.LatestDate.ToLocalTime().ToString("d MMM yyyy", Lodge.CalendarRules.English) : "") + $" ({seen})";
                     ButtonText = "Update via CurseForge"; ButtonEnabled = true;
                     SetPill("Update via CurseForge", PillKind.Action, "Ask the CurseForge app to install the update (the hub never changes CurseForge-managed folders itself)", true);
                 }
