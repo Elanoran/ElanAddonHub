@@ -53,6 +53,8 @@ function fn.StartMoving(s) s.__moving = true end
 function fn.StopMovingOrSizing(s) s.__moving = false s.__x, s.__y = 33, 44 end
 function fn.SetOwner(s, o) s.owner = o s.lines = {} end
 function fn.AddLine(s, t) s.lines[#s.lines + 1] = t end
+function fn.SetMouseClickEnabled(s, v) s.__click = v end
+function fn.SetMouseMotionEnabled(s, v) s.__motion = v end
 function fn.AddDoubleLine(s, a, b) s.lines[#s.lines + 1] = a .. " | " .. b end
 function MT.__index(t, k)
   if fn[k] then return fn[k] end
@@ -190,6 +192,16 @@ local frames = ALLF
 for _, f in ipairs(frames) do Fire(f, "OnEvent", "PLAYER_LOGIN") end
 local db = ElansHubDB
 ok("pixel strip frame created", _G.ElansHubPixelStrip ~= nil)
+do  -- hover help: motion only (clicks pass through), tooltip opens below the strip, never over the squares
+  local hit = _G.ElansHubPixelStrip.hit
+  ok("strip hover area exists, motion on, clicks off", hit ~= nil and hit.__motion == true and hit.__click == false)
+  Fire(hit, "OnEnter")
+  local tip = table.concat(GameTooltip.lines, " | ")
+  local p = GameTooltip.__pts[1] or {}
+  ok("strip tooltip explains it and how to turn it off", tip:find("status strip") and tip:find("/ehub pixel off") and GameTooltip.owner == hit)
+  ok("strip tooltip is anchored below the strip", p[1] == "TOPLEFT" and p[2] == hit and p[3] == "BOTTOMLEFT" and (p[5] or 0) < 0)
+  Fire(hit, "OnLeave")
+end
 ok("db has chars after login", db.chars and db.chars["Realm-Elan"] ~= nil)
 ok("rl registered", SlashCmdList.ELANSHUBRELOAD ~= nil)
 ok("minimap button exists", _G.ElansHubMinimapButton and _G.ElansHubMinimapButton.__shown)

@@ -112,6 +112,28 @@ local function ensureStrip()
       if row == 0 then cells[i] = t else cells2[i] = t end
     end
   end
+  -- hover help: an invisible child over the strip that only listens to mouse movement, so clicks still reach whatever
+  -- is underneath. The tooltip opens BELOW the strip, so it never covers the squares the Outpost reads. A client that
+  -- can't do motion-only gets no tooltip rather than a click-eating frame.
+  if strip.SetMouseClickEnabled and strip.SetMouseMotionEnabled then
+    local hit = CreateFrame("Frame", nil, strip)
+    hit:SetAllPoints(strip)
+    hit:SetMouseMotionEnabled(true)
+    hit:SetMouseClickEnabled(false)
+    hit:SetScript("OnEnter", function(self)
+      if not GameTooltip then return end
+      GameTooltip:SetOwner(self, "ANCHOR_NONE")
+      GameTooltip:ClearAllPoints()
+      GameTooltip:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -12)
+      GameTooltip:AddLine("Elan's Hub status strip", 0.67, 0.83, 0.45)
+      GameTooltip:AddLine("These little coloured squares let Elan's Outpost on this PC see which character you play and what you are doing, without a /reload.", 1, 1, 1, true)
+      GameTooltip:AddLine("Presence only - no health, positions or combat data. Nothing is sent anywhere from here.", 0.7, 0.7, 0.7, true)
+      GameTooltip:AddLine("/ehub pixel off hides it.", 0.7, 0.7, 0.7)
+      GameTooltip:Show()
+    end)
+    hit:SetScript("OnLeave", function(self) if GameTooltip and (not GameTooltip.IsOwned or GameTooltip:IsOwned(self)) then GameTooltip:Hide() end end)
+    strip.hit = hit
+  end
 end
 
 local function applyScale()
