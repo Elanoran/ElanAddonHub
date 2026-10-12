@@ -143,6 +143,10 @@ longer lets a backslash into a name.
   `no-referrer`, `no-store`. It never redirects by itself: the person clicks "Open in the Outpost".
 - **Lodge name / welcome** are public (an invitee sees them): validated, capped at 40 / 280 characters, owner only.
 
+## Outpost 2.40 (client): a link asks nothing
+
+- Opening, pasting or receiving an invite link (elanshub:// click, web link, the Create-a-lodge guide) makes **no network request of any kind** until the person presses Join: the join banner shows only what is in the link (plus the lodge name and welcome text the app already knows when the link is for the lodge it is signed in to), so an arbitrary host in a link learns neither the IP address nor that the link was opened before the person consents. The `linkopen` and `invites2` self-tests assert zero requests before Join.
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.

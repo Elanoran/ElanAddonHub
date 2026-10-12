@@ -51,6 +51,7 @@ namespace ElansAddonHub
 
         async Task DesignShots(string dir, string scaleText)
         {
+            if (scaleText.StartsWith("inputs")) { await InputShots(dir); return; }
             if (scaleText.StartsWith("toasts")) { await ToastAndWelcomeShots(dir); return; }
             if (scaleText.StartsWith("inventory")) { await InventoryShots(dir); return; }
             if (scaleText.StartsWith("lodgefun")) { await LodgeFunShots(dir); return; }

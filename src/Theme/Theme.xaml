@@ -654,7 +654,9 @@
     <Setter Property="CaretBrush" Value="{StaticResource Brush.Text.Primary}" />
     <Setter Property="SelectionBrush" Value="{StaticResource Brush.Accent}" />
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="Padding" Value="10,8" />
+    <!-- DESIGN 8, Input: 13 px text on an 18 px line needs 18 px of content area; 10,8 left only 14 px of a 32 px box and cut g j p q y. 4 above/below leaves 22. -->
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="MinHeight" Value="32" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="TextBox">
@@ -676,13 +678,18 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+    <Style.Triggers>
+      <Trigger Property="AcceptsReturn" Value="True"><Setter Property="Padding" Value="10,8" /></Trigger>
+    </Style.Triggers>
   </Style>
 
   <Style x:Key="SecretInput" TargetType="PasswordBox">
     <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
     <Setter Property="CaretBrush" Value="{StaticResource Brush.Text.Primary}" />
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="Padding" Value="10,8" />
+    <!-- DESIGN 8, Input: 13 px text on an 18 px line needs 18 px of content area; 10,8 left only 14 px of a 32 px box and cut g j p q y. 4 above/below leaves 22. -->
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="MinHeight" Value="32" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="PasswordBox">

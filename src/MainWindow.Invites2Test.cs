@@ -382,11 +382,12 @@ namespace ElansAddonHub
         {
             var s = settings;
             var lodge = LodgePage;
-            var asked = new List<HttpRequestMessage>(); var banners = new List<HttpRequestMessage>(); var bodies = new List<string>();
+            var asked = new List<HttpRequestMessage>(); var everything = new List<HttpRequestMessage>(); var bodies = new List<string>();
             Func<HttpResponseMessage> postAnswer = () => new HttpResponseMessage(HttpStatusCode.Gone) { Content = new StringContent("{\"error\":\"x\",\"reason\":\"used-or-expired\"}") };
             InviteExchange.Send = async req =>
             {
-                if (req.Method == HttpMethod.Get) { banners.Add(req); return new HttpResponseMessage(HttpStatusCode.NotFound); }
+                everything.Add(req);
+                if (req.Method == HttpMethod.Get) return new HttpResponseMessage(HttpStatusCode.NotFound);
                 asked.Add(req); bodies.Add(req.Content == null ? "" : await req.Content.ReadAsStringAsync());
                 return postAnswer();
             };
@@ -440,7 +441,7 @@ namespace ElansAddonHub
             check("guide: ...it says you become the Guild Master and that nothing happens until Join", (lodge.IncomingTextForTest ?? "").Contains("Guild Master") && (lodge.IncomingTextForTest ?? "").Contains("owner link"));
             check("guide: ...the name box is empty and captioned for the Guild Master's name", lodge.NameBoxForTest == "" && lodge.NameCaptionForTest.Contains("Guild Master"), lodge.NameCaptionForTest);
             check("guide: ...the secret is masked in the link box", lodge.UrlBoxForTest.StartsWith("elanshub://lodge/join#example.org/lodge|i1.") && !lodge.UrlBoxForTest.Contains(InvA.Substring(5, 20)) && lodge.UrlBoxForTest.Contains("•"), lodge.UrlBoxForTest);
-            check("guide: ...nothing was exchanged by itself (only the public GET /features, no secret), nothing committed", asked.Count == 0 && banners.All(b => b.Method == HttpMethod.Get && !b.RequestUri.ToString().Contains(InvA)) && !Session.HasPendingCredential && TokenIs(s, TokB) && s.LodgeUrl == oldUrl);
+            check("guide: ...ZERO requests of any kind so far (opening the guide, every step, the refusals, handing the link on), nothing committed", asked.Count == 0 && everything.Count == 0 && !Session.HasPendingCredential && TokenIs(s, TokB) && s.LodgeUrl == oldUrl);
 
             // join without a name: the server says name-required -> the caption changes and nothing is committed
             lodge.NameBoxForTest = "";
@@ -471,12 +472,14 @@ namespace ElansAddonHub
 
             // the web form of the owner link is accepted too
             Session.Disconnect(); LodgeCredentials.Clear(s); s.LodgeUrl = null; lodge.SignOut();
+            everything.Clear();
             lodge.CreateLodgeClickForTest();
             g.NextForTest(); g.NextForTest();
             g.LinkBoxForTest = InviteLinks.MakeWeb("https://example.org/lodge", InvA);
             g.NextForTest();
-            await Task.Delay(300);
+            await Task.Delay(600);
             check("guide: the web form of the owner link (#join=) is accepted as well", !g.IsOpen && lodge.IncomingTitleForTest == "Your new lodge: example.org/lodge", lodge.IncomingTitleForTest);
+            check("guide: ...and handing the web form on makes no request either", everything.Count == 0, everything.Count + " requests");
             lodge.SignOut();
             check("guide: Escape / the close button leave without a trace", CloseGuideCheck(g));
         }
@@ -752,89 +755,77 @@ namespace ElansAddonHub
             Session.Disconnect();
         }
 
-        // ---------------------------------------------------------------- the join banner (GET /features)
+        // ---------------------------------------------------------------- the join banner (no request before Join)
         async Task Inv2Banner(InvCheck check)
         {
             var s = settings;
             var lodge = LodgePage;
             var reqs = new List<HttpRequestMessage>();
-            string featuresBody = null; HttpStatusCode featuresStatus = HttpStatusCode.OK;
-            InviteExchange.Send = async req =>
+            bool joined = false;
+            InviteExchange.Send = req =>
             {
                 reqs.Add(req);
-                if (req.RequestUri.Host == "slow.example.test") await Task.Delay(600);
-                if (req.RequestUri.Host == "boom.example.test") throw new HttpRequestException("connection refused");
-                return new HttpResponseMessage(featuresStatus) { Content = new StringContent(featuresBody ?? "") };
+                return Task.FromResult(joined
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"token\":" + Q(TokA) + ",\"deviceId\":\"d1\",\"device\":\"Cleo-PC\",\"name\":\"Cleo\",\"role\":\"member\",\"guest\":false}") }
+                    : new HttpResponseMessage(HttpStatusCode.NotFound));
             };
             Session.Disconnect();
             LodgeCredentials.Clear(s);
             s.LodgeUrl = null; s.LodgeManualConnect = false;
             lodge.SignOut();
-            string Feat(string name, string welcome) => "{\"server\":\"2.12.0\",\"features\":[\"tokens\",\"invites\",\"leave\",\"lodgeinfo\"],\"lodge\":{\"name\":" + Q(name) + ",\"welcome\":" + Q(welcome) + "}}";
             string Link(string host) => "elanshub://lodge/join#" + host + "/lodge|" + InvA;
 
-            featuresBody = Feat("The Silver Lodge", "Welcome in.\nBe kind to each other.");
+            // not signed in: only what the link itself says
             OpenInviteLink(Link("banner.example.test"));
-            await Task.Delay(400);
-            check("banner: the join screen shows the lodge's name from /features", lodge.IncomingTitleForTest == "You were invited to The Silver Lodge", lodge.IncomingTitleForTest);
-            check("banner: ...and its welcome text above the usual 'nothing happens until you press Join'", (lodge.IncomingTextForTest ?? "").StartsWith("Welcome in.\nBe kind to each other.") && (lodge.IncomingTextForTest ?? "").Contains("Nothing happens until you do"), lodge.IncomingTextForTest);
-            check("banner: the request is a plain GET /features with no secret and no sign-in", reqs.Count >= 1 && reqs.All(q => q.Method == HttpMethod.Get && q.RequestUri.AbsolutePath == "/lodge/features" && !q.RequestUri.ToString().Contains(InvA) && !q.Headers.Contains("X-Lodge-Invite") && !q.Headers.Contains("X-Lodge-Code") && !q.Headers.Contains("Authorization")));
+            await Task.Delay(800);
+            check("banner: the join screen shows only the address from the link", lodge.IncomingTitleForTest == "You were invited to banner.example.test/lodge", lodge.IncomingTitleForTest);
+            check("banner: ...a calm line says the lodge's name appears once you join", (lodge.IncomingTextForTest ?? "").Contains(LodgeView.NameAfterJoinLine) && (lodge.IncomingTextForTest ?? "").Contains("Nothing happens until you do"), lodge.IncomingTextForTest);
+            check("banner: ZERO requests of any kind were made by opening the link", reqs.Count == 0, reqs.Count + " requests");
             check("banner: ...and nothing was joined or saved by looking", !Session.HasPendingCredential && !LodgeCredentials.HasToken(s) && !Session.Connected);
 
-            // markup is text
-            reqs.Clear();
-            featuresBody = Feat("<b>Evil</b> & Co", "<script>alert(1)</script>");
-            OpenInviteLink(Link("html.example.test"));
-            await Task.Delay(300);
-            check("banner: markup in the name or text is shown as plain text", lodge.IncomingTitleForTest == "You were invited to <b>Evil</b> & Co" && (lodge.IncomingTextForTest ?? "").StartsWith("<script>"), lodge.IncomingTitleForTest);
+            // a web link pasted into the box
+            lodge.SignOut();
+            lodge.UrlBoxForTest = InviteLinks.MakeWeb("https://paste.example.test/lodge", InvA);
+            await Task.Delay(800);
+            check("banner: a web link pasted into the box makes no request of any kind", reqs.Count == 0, reqs.Count + " requests");
 
-            // size caps on what any server may say
-            featuresBody = Feat(new string('N', 100), string.Join("\n", Enumerable.Range(1, 10).Select(i => "line " + i)));
-            OpenInviteLink(Link("big.example.test"));
-            await Task.Delay(300);
-            var title = lodge.IncomingTitleForTest ?? "";
-            var txt = lodge.IncomingTextForTest ?? "";
-            var welcomePart = txt.Contains("\n\n") ? txt.Substring(0, txt.IndexOf("\n\n", StringComparison.Ordinal)) : txt;
-            check("banner: a long name is cut to 40 characters", title == "You were invited to " + new string('N', 40), title);
-            check("banner: a welcome text of ten lines is cut to four", welcomePart.Split('\n').Length == 4 && welcomePart.EndsWith("line 4"), welcomePart);
-            featuresBody = Feat("Big", new string('w', 1000));
-            OpenInviteLink(Link("big2.example.test"));
-            await Task.Delay(300);
-            txt = lodge.IncomingTextForTest ?? "";
-            welcomePart = txt.Contains("\n\n") ? txt.Substring(0, txt.IndexOf("\n\n", StringComparison.Ordinal)) : txt;
-            check("banner: a 1000 character welcome text is cut to 280", welcomePart.Length == 280, welcomePart.Length.ToString());
-
-            // nothing usable -> the plain address stays
-            featuresBody = Feat("", "A text but no name");
-            OpenInviteLink(Link("noname.example.test"));
-            await Task.Delay(300);
-            check("banner: a lodge without a name keeps the plain address (and no stray welcome text)", lodge.IncomingTitleForTest == "You were invited to noname.example.test/lodge" && !(lodge.IncomingTextForTest ?? "").Contains("A text but no name"), lodge.IncomingTitleForTest);
-            featuresStatus = HttpStatusCode.NotFound; featuresBody = "<html>404</html>";
-            OpenInviteLink(Link("old.example.test"));
-            await Task.Delay(300);
-            check("banner: an older server (404) keeps the plain address", lodge.IncomingTitleForTest == "You were invited to old.example.test/lodge", lodge.IncomingTitleForTest);
-            featuresStatus = HttpStatusCode.OK; featuresBody = "this is not json";
-            OpenInviteLink(Link("junk.example.test"));
-            await Task.Delay(300);
-            check("banner: an answer that is not JSON keeps the plain address", lodge.IncomingTitleForTest == "You were invited to junk.example.test/lodge");
-            OpenInviteLink(Link("boom.example.test"));
-            await Task.Delay(300);
-            check("banner: an unreachable server keeps the plain address and does not throw", lodge.IncomingTitleForTest == "You were invited to boom.example.test/lodge");
-
-            // a slow answer for an earlier link must not overwrite a newer link's panel
-            featuresBody = Feat("Slow Lodge", "slow text");
-            OpenInviteLink(Link("slow.example.test"));
-            await Task.Delay(100);
-            featuresBody = Feat("Fast Lodge", "");
-            OpenInviteLink(Link("fast.example.test"));
-            await Task.Delay(1000);
-            check("banner: a slow answer for an older link does not replace the newer link's banner", lodge.IncomingTitleForTest == "You were invited to Fast Lodge" && !(lodge.IncomingTextForTest ?? "").Contains("slow text"), lodge.IncomingTitleForTest);
-
-            // an owner link says 'Your lodge'
-            featuresBody = Feat("The Silver Lodge", "Hello");
+            // an owner link says 'Your new lodge'
             lodge.ShowInviteLink(Link("owner.example.test"), true);
+            await Task.Delay(800);
+            check("banner: an owner link says 'Your new lodge: <address>' and still asks nothing", lodge.IncomingTitleForTest == "Your new lodge: owner.example.test/lodge" && reqs.Count == 0, lodge.IncomingTitleForTest);
+
+            // signed in to ANOTHER lodge: the known name belongs to the other lodge and is not shown for this link
+            lodge.SignOut();
+            LodgeCredentials.StoreToken(s, Inv2Url, TokB, "Cleo-PC");
+            s.LodgeUrl = Inv2Url;
+            Session.FeedForTest(Inv2Welcome("member", false, "The Silver Lodge", "Welcome in.\nBe kind to each other."));
+            OpenInviteLink(Link("elsewhere.example.test"));
+            await Task.Delay(800);
+            check("banner: a link for another lodge shows its address, never the signed-in lodge's name", lodge.IncomingTitleForTest == "You were invited to elsewhere.example.test/lodge" && !(lodge.IncomingTextForTest ?? "").Contains("Welcome in."), lodge.IncomingTitleForTest);
+            check("banner: ...with no request of any kind", reqs.Count == 0, reqs.Count + " requests");
+
+            // signed in to THE SAME lodge: the name and welcome text the app already knows (no request)
+            OpenInviteLink("elanshub://lodge/join#example.org/lodge|" + InvA);
+            await Task.Delay(800);
+            check("banner: already signed in to that lodge -> the known name from the current session", lodge.IncomingTitleForTest == "You were invited to The Silver Lodge", lodge.IncomingTitleForTest);
+            check("banner: ...with its welcome text above the usual wording", (lodge.IncomingTextForTest ?? "").StartsWith("Welcome in.\nBe kind to each other.") && (lodge.IncomingTextForTest ?? "").Contains("Joining adds this PC as another device"), lodge.IncomingTextForTest);
+            check("banner: ...and still ZERO requests of any kind", reqs.Count == 0, reqs.Count + " requests");
+            lodge.CancelEditForTest();
+            Session.Disconnect();
+
+            // after Join and the welcome the name comes from the welcome
+            LodgeCredentials.Clear(s); s.LodgeUrl = null;
+            lodge.SignOut();
+            OpenInviteLink(Link("example.org"));
             await Task.Delay(300);
-            check("banner: for an owner link the title says 'Your lodge: <name>'", lodge.IncomingTitleForTest == "Your lodge: The Silver Lodge", lodge.IncomingTitleForTest);
+            check("banner: before Join the name is not shown", lodge.IncomingTitleForTest == "You were invited to example.org/lodge" && reqs.Count == 0, lodge.IncomingTitleForTest);
+            joined = true;
+            lodge.JoinForTest();
+            for (int i = 0; i < 20 && !Session.HasPendingCredential; i++) await Task.Delay(100);
+            check("banner: pressing Join is what makes the first request", reqs.Count == 1 && reqs[0].Method == HttpMethod.Post, reqs.Count + " requests");
+            Session.FeedForTest(Inv2Welcome("member", false, "The Silver Lodge", "Welcome in. Be kind."));
+            await Task.Delay(200);
+            check("banner: after the welcome frame the lodge name and welcome text are the session's", Session.LodgeName == "The Silver Lodge" && Session.LodgeWelcome == "Welcome in. Be kind.", Session.LodgeName);
             lodge.SignOut();
         }
     }

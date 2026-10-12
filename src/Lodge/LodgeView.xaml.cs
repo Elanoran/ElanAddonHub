@@ -567,6 +567,8 @@ namespace ElansAddonHub.Lodge
         }
 
         // the sentence under the "You were invited" title: depends on whether this PC is already signed in, and to which lodge
+        public const string NameAfterJoinLine = "The lodge's name appears once you join.";
+
         public static string IncomingWording(string linkUrl, string savedUrl, bool signedIn)
         {
             var target = ShortAddress(linkUrl);
@@ -599,25 +601,26 @@ namespace ElansAddonHub.Lodge
             DeviceBox.Text = LodgeCredentials.DeviceName(Session.Settings);
             if (string.IsNullOrWhiteSpace(NameBox.Text)) NameBox.Text = Session.Settings.LodgeName ?? "";
             JoinStatus.Text = "";
-            IncomingTitle.Text = (ownerLink ? "Your new lodge: " : "You were invited to ") + ShortAddress(parsed.Url);
-            IncomingText.Text = ownerLink
+            // No network request is made for a link, ever, before Join: the banner holds only what the link says, plus the name this PC already knows
+            // when the link is for the lodge it is signed in to (from the welcome / lodge.info of the current session).
+            var known = signedIn && string.Equals(target, LodgeSession.NormalizeUrl(savedUrl), StringComparison.OrdinalIgnoreCase) && (Session.Online || Session.TestFed) && !string.IsNullOrWhiteSpace(Session.LodgeName);
+            var wording = ownerLink
                 ? "This is the owner link from your server. Type the name you want below, then press Join: you become the Guild Master."
                 : IncomingWording(target, savedUrl, signedIn);
+            if (known)
+            {
+                IncomingTitle.Text = (ownerLink ? "Your lodge: " : "You were invited to ") + Session.LodgeName.Trim();
+                IncomingText.Text = (string.IsNullOrWhiteSpace(Session.LodgeWelcome) ? "" : Session.LodgeWelcome.Trim() + "\n\n") + wording;
+            }
+            else
+            {
+                IncomingTitle.Text = (ownerLink ? "Your new lodge: " : "You were invited to ") + ShortAddress(parsed.Url);
+                IncomingText.Text = wording + "\n\n" + NameAfterJoinLine;
+            }
             IncomingBanner.Visibility = Visibility.Visible;
             NameCaption.Text = ownerLink ? NameCaptionOwner : NameCaptionDefault;
             if (ownerLink) NameBox.Text = "";
-            _ = ShowBannerFor(parsed.Url, ownerLink);
             if (signedIn) CancelEditButton.Visibility = Visibility.Visible;      // a way out that changes nothing
-        }
-
-        // the lodge's own name and welcome text (server 2.12, public) replace the bare address in the banner
-        async Task ShowBannerFor(string url, bool ownerLink)
-        {
-            var banner = await InviteExchange.FetchBanner(url);
-            if (banner == null || incoming == null || IncomingBanner.Visibility != Visibility.Visible) return;
-            if (!string.Equals(InviteLinks.Parse(incoming).Url, url, StringComparison.OrdinalIgnoreCase)) return;   // another link replaced it meanwhile
-            IncomingTitle.Text = (ownerLink ? "Your lodge: " : "You were invited to ") + banner.Name;
-            if (banner.Welcome.Length > 0) IncomingText.Text = banner.Welcome + "\n\n" + IncomingText.Text;
         }
 
         // an owner link pasted in the web form is accepted too: hand it on as the elanshub:// link it stands for

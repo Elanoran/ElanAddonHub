@@ -785,6 +785,7 @@ namespace ElansAddonHub
         public void CloseTabForTest(BrowserTab t) => CloseTab(t);
         public void SelectTabForTest(BrowserTab t) => SelectTab(t);
         public bool KeyForTest(Key k, ModifierKeys m) => HandleKey(k, m);
+        public void OpenAddFormForTest() { AddForm.Visibility = Visibility.Visible; }
         public void AddTileForTest(string name, string url) => AddTileCore(name, url);
         public string AddressTextForTest { get => AddressBox.Text; set => AddressBox.Text = value; }
         public bool AddressFocusedForTest => AddressBox.IsKeyboardFocused;

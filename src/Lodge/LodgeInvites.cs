@@ -149,7 +149,6 @@ namespace ElansAddonHub.Lodge
         public string Message;                   // a calm sentence for the person, set when !Ok
     }
 
-    public sealed class LodgeBanner { public string Name, Welcome; }
 
     public static class InviteExchange
     {
@@ -189,31 +188,6 @@ namespace ElansAddonHub.Lodge
             if (!res.Ok) res.Message = Friendly(res.Status, res.Reason, res.ServerError, string.IsNullOrEmpty(invite));
             return res;
         }
-
-        // The lodge's public name and welcome text (server 2.12, GET /features). Null when the server is older or can't be reached.
-        public static async Task<LodgeBanner> FetchBanner(string baseUrl)
-        {
-            try
-            {
-                using (var req = new HttpRequestMessage(HttpMethod.Get, baseUrl.TrimEnd('/') + "/features"))
-                using (var resp = await Send(req))
-                {
-                    if (!resp.IsSuccessStatusCode) return null;
-                    var body = Json.Obj(await resp.Content.ReadAsStringAsync());
-                    var lodge = body.Child("lodge");
-                    if (lodge == null) return null;
-                    // the address in a link can be anyone's server: show at most what a real lodge may hold (40 / 280 characters, 4 lines), as plain text
-                    var name = Clamp((lodge.Str("name") ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim(), LodgeSession.MaxLodgeName);
-                    if (name.Length == 0) return null;
-                    var welcome = Clamp((lodge.Str("welcome") ?? "").Replace("\r\n", "\n").Trim(), LodgeSession.MaxLodgeWelcome);
-                    welcome = string.Join("\n", welcome.Split('\n').Take(LodgeSession.MaxLodgeWelcomeLines));
-                    return new LodgeBanner { Name = name, Welcome = welcome };
-                }
-            }
-            catch (Exception) { return null; }
-        }
-
-        static string Clamp(string s, int max) => s.Length <= max ? s : s.Substring(0, max).TrimEnd();
 
         // the sentence shown when the exchange did not work
         public static string Friendly(int status, string reason, string serverError, bool codeUpgrade = false)
