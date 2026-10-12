@@ -3,6 +3,18 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.40.0
+- **Invite from the Lodge:** owners and officers have an Invite button in the sidebar - a person or a guest link, a rank and an expiry. Copy the Outpost link, or a web link that is clickable in any chat app (it opens a small "You're invited" page on your server; the code in it never reaches the server). Open invites are listed with Revoke, and a member's profile card has "Send a new device link".
+- **Create a lodge:** a 3-step guide on the join screen. A new server's installer prints a one-time owner link (works once, for one hour, only while the lodge has no owner) - no permanent codes. A locked-out owner gets back in with `sudo lodge-admin recover-owner <name>`.
+- **Leaving safely:** Settings > Lodge has a Danger zone - "Sign out this PC" (an owner signing out their only PC types the lodge name to confirm) and "Leave the lodge". The last Guild Master is asked to transfer ownership first. Guild Master can name the lodge and set a welcome text.
+- **Opening an invite link contacts nothing** until you press Join.
+- **Upcoming events above the chat:** the next events of the week as small cards under the channel name (switch in Settings > Lodge).
+- **In-game WoW events in the calendar:** holidays and world events, raid resets and your own and guild calendar events from the game, as read-only "WoW" cards (needs Elan's Hub 1.9.0 and a /reload; they stay on your PC).
+- **Addons page no longer jumps while it loads:** placeholders match your last visit and real cards fade in place; the update banner moved to the title bar.
+- Text boxes no longer cut off the bottom of letters like g, j, p and y.
+- Day and month names are English everywhere (month view, addon cards).
+- Needs Lodge server 2.12 for the invite, ownership and lodge-name features.
+
 ## 2.39.0
 - **Raid and event calendar** in the Lodge (Calendar row above the channels): agenda, month view, and event details with who is coming per role. Plan raids, dungeons or social evenings with roles, a date, a length, an optional weekly repeat and a note; answer Going, Maybe or Can't with your role. A card is posted in chat, a toast reminds you 15 minutes before, and the next event shows at the bottom of the sidebar. Weekly events keep their local time across clock changes; times always show in your own time zone. Needs Lodge server 2.11.
 - **Better voice:** a smart buffer per speaker smooths over late audio instead of clicking or cutting out; noise suppression removes fan and hiss; automatic volume lifts quiet microphones and stops loud ones clipping; voice activation keeps the ends of words and the start of sentences. New Standard / High quality setting, a smooth speaking ring, "Test my mic" with all processing, and a connection-quality readout (Settings > Voice).
