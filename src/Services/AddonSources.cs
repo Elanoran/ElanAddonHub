@@ -310,18 +310,14 @@ namespace ElansAddonHub.Services
             {
                 // we installed it: the toc may not carry a comparable version, but we know which release we put there
                 if (string.Equals(link.InstalledRemote, rv, StringComparison.OrdinalIgnoreCase)) return false;
-                var a = Numeric(rv); var b = Numeric(link.InstalledRemote);
-                if (a != null && b != null) return Util.CompareVersions(a, b) > 0;
+                var cmp = DevVersion.Compare(rv, link.InstalledRemote);
+                if (cmp != null) return cmp.Value > 0;
                 return true;
             }
             var lv = (e.Version ?? "").Trim();
-            var ln = Numeric(lv); var rn = Numeric(rv);
-            if (ln != null && rn != null)
-            {
-                var c = Util.CompareVersions(rn, ln);
-                if (c != 0) return c > 0;
-                return false;
-            }
+            // a git-describe build ("v4.11.23-7-g9bc5970") counts as its base release plus 7 commits
+            var cv = DevVersion.Compare(rv, lv);
+            if (cv != null) return cv.Value > 0;
             if (lv.TrimStart('v', 'V') == rv.TrimStart('v', 'V')) return false;
             // versions can't be compared: the remote must be clearly newer by date than the installed files
             return r.Date != null && r.Date.Value > e.Modified.AddDays(1);

@@ -13,7 +13,7 @@ namespace ElansAddonHub.Services
         public string Key;                       // primary folder name (also the key for saved links)
         public List<string> Folders = new List<string>();
         public string Title, Version, Author, Notes, Interface;
-        public string CurseId, WowiId, WagoId, Website, GithubRepo;   // GithubRepo = "owner/repo" from the toc
+        public string CurseId, WowiId, WagoId, Website, GithubRepo, IconTexture;   // GithubRepo = "owner/repo" from the toc
         public bool IsDev;                       // a folder holds .git: a development copy, never updated
         public DateTime Modified;                // newest toc write time of the primary folder (UTC)
         public string TocName;                   // which toc file was read
@@ -185,6 +185,7 @@ namespace ElansAddonHub.Services
                     WowiId = Pick(t => t.Get("X-WoWI-ID")),
                     WagoId = Pick(t => t.Get("X-Wago-ID")),
                     Website = Pick(t => t.Get("X-Website")),
+                    IconTexture = Pick(t => t.Get("IconTexture")),
                     Modified = pt.Modified,
                     TocName = Path.GetFileName(pt.File),
                 };

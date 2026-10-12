@@ -27,6 +27,8 @@ namespace ElansAddonHub
         {
             full = v;
             if (string.IsNullOrWhiteSpace(v)) return "";
+            var dev = ElansAddonHub.Services.DevVersion.Label(v);       // git-describe build: "v4.11.23 · development build (+7)"
+            if (dev != null) return dev;
             var s = v.Trim().TrimStart('#').Trim();
             if (s.Length <= 14) return s;
             var m = System.Text.RegularExpressions.Regex.Match(s, @"(20\d{2})(\d{2})(\d{2})");

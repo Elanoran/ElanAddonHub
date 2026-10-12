@@ -85,8 +85,9 @@ namespace ElansAddonHub
                         var nc = new ThirdPartyCard(e) { CfChecked = checkedAt };
                         nc.Refresh();
                         others.Insert(at, nc);
+                        nc.LoadLogo(dir);
                     }
-                    else if (!card.IsBusy) { card.CfChecked = checkedAt; card.SetEntry(e); }
+                    else if (!card.IsBusy) { card.CfChecked = checkedAt; card.SetEntry(e); card.LoadLogo(dir); }
                 }
                 RememberLayout(null, others.Count);
             }
@@ -121,7 +122,7 @@ namespace ElansAddonHub
             suggesting = true;
             try
             {
-                var open = others.Where(c => c.State == TpState.Local && !c.Entry.IsDev && string.IsNullOrEmpty(c.Link.Github) && string.IsNullOrEmpty(c.Link.Wowi)).ToList();
+                var open = others.Where(c => c.State == TpState.Local && c.Source != "Self" && !c.Entry.IsDev && string.IsNullOrEmpty(c.Link.Github) && string.IsNullOrEmpty(c.Link.Wowi)).ToList();
                 if (open.Count == 0) return;
                 var ix = await AddonSuggest.LoadIndex();
                 if (ix == null) return;

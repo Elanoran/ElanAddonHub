@@ -20,7 +20,7 @@ namespace ElansAddonHub.Services
         // execution order == order of the full run
         public static readonly string[] All =
         {
-            "addons", "thirdparty", "startup", "viewer", "voice", "update", "strip",
+            "addons", "thirdparty", "startup", "selfupdated", "viewer", "voice", "update", "strip",
             "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs",
         };
 
@@ -38,6 +38,7 @@ namespace ElansAddonHub.Services
             ["addons"] = "install + check-all + pills + settings tour (Hunter Helper cards)",
             ["thirdparty"] = "other addons: scan, suggest, CurseForge, zip install/rollback, real GitHub/WoWI lookups",
             ["startup"] = "Addons page start-up: placeholders match the cards, nothing above the bottom of a list moves while the check and the scan run (cold start, slow update server, counts equal / different / first run), counts remembered",
+            ["selfupdated"] = "addons that update themselves: the Self source (CurseForge / Wago id but not managed by the CurseForge app), git-describe dev builds (label, comparisons), the addon's own logo as the row icon (IconTexture, heuristic, depth / size / path limits, decode cache, no network)",
             ["viewer"] = "in-app picture viewer",
             ["voice"] = "voice effects",
             ["update"] = "update channel + installer",
@@ -84,6 +85,7 @@ namespace ElansAddonHub.Services
             // ---- inventory
             R(@"^src/InventoryPage", "inventory");
             R(@"^src/Services/(InventoryData|IconStore|IconSheet|Blp|Casc|CharPortrait|LuaData|ZoneNames)\.cs$", "inventory");
+            R(@"^src/Services/Blp\.cs$", "selfupdated");
             R(@"^src/MainWindow\.(InventoryTest|DesignTest\.Inventory)\.cs$", "inventory");
             // ---- lodge: chat, voice, files, profiles, toasts, presence, viewer
             R(@"^src/Lodge/", lodgeAll);
@@ -113,9 +115,11 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.DesignTest(\.Toasts)?\.cs$");     // screenshot-only design runs, not part of --selftest
             R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites", "invites2");
             // ---- addons
-            R(@"^src/(AddonCard|ThirdPartyCard)\.cs$", "addons", "thirdparty", "startup");
+            R(@"^src/(AddonCard|ThirdPartyCard)\.cs$", "addons", "thirdparty", "startup", "selfupdated");
+            R(@"^src/(MainWindow\.SelfUpdatedTest|Services/(AddonLogo|DevVersion))\.cs$", "selfupdated", "thirdparty");
+            R(@"^src/MainWindow\.DesignTest\.SelfUpdated\.cs$");   // screenshot-only design run
             R(@"^src/(MainWindow\.Startup(ShiftTest(\.Checks)?)?\.cs|Skeleton\.cs)$", "startup", "addons");
-            R(@"^src/Services/(AddonScanner|AddonSuggest|AddonSources|CurseForgeLocal|GitHubStats)\.cs$", "thirdparty", "addons");
+            R(@"^src/Services/(AddonScanner|AddonSuggest|AddonSources|CurseForgeLocal|GitHubStats)\.cs$", "thirdparty", "addons", "selfupdated");
             R(@"^src/Services/(Installer|SelfUpdater)\.cs$", "update", "addons");
             R(@"^src/Services/UpdateChannel\.cs$", "update", "round3");
             R(@"^addon/", "addons");

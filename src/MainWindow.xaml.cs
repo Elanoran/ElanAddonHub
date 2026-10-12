@@ -273,6 +273,7 @@ namespace ElansAddonHub
             }
             if (Begin("thirdparty")) { result += "\r\n" + await ThirdPartyTest(dir); End(); }
             if (Begin("startup")) { result += "\r\n" + await StartupShiftTest(dir); End(); }
+            if (Begin("selfupdated")) { result += "\r\n" + await SelfUpdatedTest(dir); End(); }
             if (Begin("viewer")) { result += "\r\n" + await ViewerTest(dir); End(); }
             if (Begin("voice")) { result += "\r\n" + VoiceEffects.SelfTest(dir) + Environment.NewLine + VoiceSelfTest.Run(); End(); }
             // always: cheap, and the one thing that must never be skipped

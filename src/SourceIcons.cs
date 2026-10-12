@@ -19,6 +19,19 @@ namespace ElansAddonHub
         // Own drawing: "installed by hand" = an arrow dropping into an open tray.
         public static readonly Geometry Manual = Freeze(Geometry.Parse("M6.8 1H9.2V6.2H12L8 10.4 4 6.2H6.8Z M1.5 9.8H3.6V12.9H12.4V9.8H14.5V15H1.5Z"));
 
+        // Own drawing: "updates itself" = two arrows chasing each other in a circle (stroked arcs widened into one fill, so the card can colour it like the others).
+        public static readonly Geometry Self = MakeSelf();
+
+        static Geometry MakeSelf()
+        {
+            var arcs = Geometry.Parse("M3.2 7.1 A4.9 4.9 0 0 1 12.1 5.2 M12.8 8.9 A4.9 4.9 0 0 1 3.9 10.8");
+            var ring = arcs.GetWidenedPathGeometry(new System.Windows.Media.Pen(System.Windows.Media.Brushes.Black, 1.6) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Flat });
+            var heads = Geometry.Parse("M14.1 3.6 L14.6 8 L10.2 6.3Z M1.9 12.4 L1.4 8 L5.8 9.7Z");
+            var g = new GeometryGroup { FillRule = FillRule.Nonzero };
+            g.Children.Add(ring); g.Children.Add(heads);
+            return Freeze(g);
+        }
+
         static Geometry Freeze(Geometry g) { g.Freeze(); return g; }
 
         static ImageSource cf; static bool cfTried;

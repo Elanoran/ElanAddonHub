@@ -302,7 +302,11 @@
                           </Grid>
                         </Border>
                         <Border Width="36" Height="36" CornerRadius="{StaticResource Radius.ControlLg}" Background="{StaticResource Brush.Overlay.Chip}" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Letter}" FontSize="15" Foreground="{StaticResource Brush.Text.Secondary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                          <Grid>
+                            <TextBlock Text="{Binding Letter}" FontSize="15" Foreground="{StaticResource Brush.Text.Secondary}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding LetterVis}" />
+                            <Image Source="{Binding Logo}" Width="28" Height="28" Visibility="{Binding LogoVis}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
+                          </Grid>
                         </Border>
                         <StackPanel Margin="12,0,8,0" VerticalAlignment="Center">
                           <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />

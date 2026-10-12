@@ -171,7 +171,7 @@ namespace ElansAddonHub.Services
                 {
                     Key = key, Folders = have.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList(), Title = string.IsNullOrEmpty(add.Name) ? src.Title : add.Name,
                     Version = src.Version, Author = src.Author, Notes = src.Notes, Interface = src.Interface, CurseId = add.Id.ToString(),
-                    Website = src.Website, Modified = src.Modified, TocName = src.TocName, Cf = add,
+                    Website = src.Website, IconTexture = src.IconTexture, Modified = src.Modified, TocName = src.TocName, Cf = add,
                 };
                 if (string.IsNullOrEmpty(n.Version)) n.Version = Regex_StripZip(add.InstalledFileName);
                 foreach (var e in result.ToList())

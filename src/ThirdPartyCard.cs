@@ -26,7 +26,7 @@ namespace ElansAddonHub
         string PrettyLocal => VersionText.Pretty(Entry.Version, out _);
         public string Subtitle => string.Join("  ·  ", new[] { PrettyLocal, Author }.Where(x => !string.IsNullOrEmpty(x)));
         // full raw version on hover (only when it was shortened)
-        public string SubtitleTip => string.IsNullOrEmpty(Entry.Version) || PrettyLocal == Entry.Version ? null : "Version: " + Entry.Version;
+        public string SubtitleTip => DevVersion.Tip(Entry.Version) ?? (string.IsNullOrEmpty(Entry.Version) || PrettyLocal == Entry.Version ? null : "Version: " + Entry.Version);
         // The one line under the name in the Other addons list. It carries what used to be a second line (the update found, the file to pick, a suggested match),
         // so a row is the same height whatever has arrived: lookups and suggestions land later and must not push the rows below them.
         public string RowSubtitle => ShowSuggestion ? SuggestText : VersionVisibility == Visibility.Visible ? VersionLine : Subtitle;
@@ -52,6 +52,7 @@ namespace ElansAddonHub
         public Visibility DevVisibility => Entry.IsDev ? Visibility.Visible : Visibility.Collapsed;
         public Visibility LinkVisibility => Entry.IsDev || Entry.Cf != null ? Visibility.Collapsed : Visibility.Visible;
         public string LinkedTo { get; private set; }
+        public const string SelfTip = "Not managed by CurseForge - updated outside the Outpost (by hand or by the addon's own updater)";
         public Visibility UnlinkVisibility => Entry.Cf == null && (Link.Github != null || Link.Wowi != null) ? Visibility.Visible : Visibility.Collapsed;
         public Visibility RollbackVisibility => !Entry.IsDev && Entry.Cf == null && AddonSources.Backups(Entry.Key).Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Visibility CfVisibility => Entry.Cf != null ? Visibility.Visible : Visibility.Collapsed;
@@ -62,7 +63,7 @@ namespace ElansAddonHub
 
         // automatic match for an unlinked addon (confirmed by the user with one click)
         public Suggestion Suggested { get; set; }
-        public bool ShowSuggestion => Suggested != null && !Entry.IsDev && State == TpState.Local
+        public bool ShowSuggestion => Suggested != null && Source != "Self" && !Entry.IsDev && State == TpState.Local
             && string.IsNullOrEmpty(Link.Github) && string.IsNullOrEmpty(Link.Wowi);
         public Visibility SuggestVisibility => ShowSuggestion ? Visibility.Visible : Visibility.Collapsed;
         public string SuggestText => Suggested == null ? "" : "Suggested: " + Suggested.Text;
@@ -148,8 +149,8 @@ namespace ElansAddonHub
             }
             else if (!string.IsNullOrEmpty(gh)) { Source = "GitHub"; SetBadge("Accent"); WebsiteUrl = "https://github.com/" + gh; WebsiteText = "Open GitHub"; LinkedTo = "Updates from github.com/" + gh; }
             else if (!string.IsNullOrEmpty(wid)) { Source = "WoWInterface"; SetBadge("Accent"); WebsiteUrl = $"https://www.wowinterface.com/downloads/info{wid}"; WebsiteText = "Open WoWInterface"; LinkedTo = "Updates from WoWInterface #" + wid; }
-            else if (!string.IsNullOrEmpty(Entry.CurseId)) { Source = "CurseForge"; SetBadge("TextDim"); WebsiteUrl = null; LinkedTo = "No automatic updates (CurseForge) - paste a GitHub or WoWInterface link to enable them"; }
-            else if (!string.IsNullOrEmpty(Entry.WagoId)) { Source = "Wago"; SetBadge("TextDim"); WebsiteUrl = null; LinkedTo = "No automatic updates (Wago) - paste a GitHub or WoWInterface link to enable them"; }
+            // a CurseForge / Wago id in the toc but not managed by the CurseForge app: the addon is updated outside the Outpost (by hand or by its own updater)
+            else if (!string.IsNullOrEmpty(Entry.CurseId) || !string.IsNullOrEmpty(Entry.WagoId)) { Source = "Self"; SetBadge("TextDim"); WebsiteUrl = null; LinkedTo = SelfTip; }
             else { Source = "Local"; SetBadge("Gold"); WebsiteUrl = Entry.Website != null && Entry.Website.StartsWith("https://") ? Entry.Website : null; WebsiteText = "Open website"; LinkedTo = "No source linked - paste a GitHub or WoWInterface link below"; }
             if (WebsiteUrl == null && Entry.Website != null && Entry.Website.StartsWith("https://") && Source != "Local") { WebsiteUrl = Entry.Website; WebsiteText = "Open website"; }
             CurseUrl = Entry.Cf != null || string.IsNullOrEmpty(Entry.CurseId) ? null : "https://www.curseforge.com/projects/" + Entry.CurseId;
@@ -194,13 +195,43 @@ namespace ElansAddonHub
 
         // Source icon: CurseForge = icon of the user's installed app, GitHub = Octicons mark, Local = hand-installed glyph (gold); WoWInterface/Wago = letter chips.
         public ImageSource SourceImage => Source == "CurseForge" ? SourceIcons.CurseForge() : null;
-        public Geometry SourceGeometry => Source == "GitHub" ? SourceIcons.GitHub : Source == "Local" ? SourceIcons.Manual : null;
+        public Geometry SourceGeometry => Source == "GitHub" ? SourceIcons.GitHub : Source == "Local" ? SourceIcons.Manual : Source == "Self" ? SourceIcons.Self : null;
         public string SourceChip => Source == "WoWInterface" ? "WoWI" : Source == "Wago" ? "Wago" : (SourceImage == null && SourceGeometry == null ? Source : null);
         public Visibility SourceImageVis => SourceImage != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility SourceGeoVis => SourceGeometry != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility SourceChipVis => SourceChip != null ? Visibility.Visible : Visibility.Collapsed;
         public Brush SourceGlyphBrush => (Brush)Application.Current.Resources[Source == "Local" ? "Gold" : "Text"];
-        public string SourceTip => Source == "Local" ? "Installed manually - link a GitHub or WoWInterface page to get updates" : "Source: " + Source;
+        public string SourceTip => Source == "Local" ? "Installed manually - link a GitHub or WoWInterface page to get updates" : Source == "Self" ? SelfTip : "Source: " + Source;
+
+        // The addon's own logo (a .blp / .tga from its folder, see AddonLogo) in the 36 px tile instead of the letter. Decoded off the UI thread into a fixed
+        // slot, so nothing moves when it arrives; no logo = the letter, as before.
+        public ImageSource Logo { get; private set; }
+        public Visibility LogoVis => Logo != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility LetterVis => Logo == null ? Visibility.Visible : Visibility.Collapsed;
+        public System.Threading.Tasks.Task LogoTask = System.Threading.Tasks.Task.CompletedTask;   // the self-test waits for it
+        string logoKey; int logoGen;
+
+        public void LoadLogo(string addOnsDir)
+        {
+            if (string.IsNullOrEmpty(addOnsDir)) return;
+            var e = Entry;
+            var key = addOnsDir + "|" + e.Key + "|" + string.Join("+", e.Folders) + "|" + e.Modified.Ticks + "|" + e.IconTexture;
+            if (key == logoKey) return;
+            logoKey = key;
+            var gen = ++logoGen;
+            var disp = Application.Current?.Dispatcher;
+            if (disp == null) return;
+            LogoTask = System.Threading.Tasks.Task.Run(() =>
+            {
+                ImageSource img = null;
+                try { img = AddonLogo.Load(addOnsDir, e.Folders.ToList(), e.IconTexture, e.Modified); } catch (Exception ex) { Util.Log("addon logo failed: " + ex.Message); }
+                disp.BeginInvoke(new Action(() =>
+                {
+                    if (gen != logoGen) return;
+                    Logo = img; Notify(nameof(Logo)); Notify(nameof(LogoVis)); Notify(nameof(LetterVis));
+                }));
+            });
+        }
 
         void SetBadge(string color)
         {

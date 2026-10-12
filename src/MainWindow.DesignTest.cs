@@ -60,6 +60,7 @@ namespace ElansAddonHub
             if (scaleText.StartsWith("linkopen")) { await LinkOpenShots(dir); return; }
             if (scaleText.StartsWith("calendar")) { await CalendarShots(dir); return; }
             if (scaleText.StartsWith("wowevents")) { await WowEventsShots(dir); return; }
+            if (scaleText.StartsWith("selfupdated")) { await SelfUpdatedShots(dir); return; }
             if (scaleText.StartsWith("skeleton")) { await SkeletonShots(dir); return; }
             if (scaleText.StartsWith("startup")) { await StartupShots(dir); return; }
             double scale = 1;
