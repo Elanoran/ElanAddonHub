@@ -62,6 +62,8 @@ namespace ElansAddonHub.Lodge
             GroupList.ItemsSource = session.Groups.Groups;
 
             session.Changed += Refresh;
+            InviteSheetHost.Bind(session);
+            CreateGuide.LinkAccepted += link => ShowInviteLink(link, true);
             CalendarPage.Init(session);
             session.CalendarChanged += UpdateCalendarChrome;
             ChatCard.SizeChanged += (s, e) => { if (e.WidthChanged) UpdateEventsStrip(); };   // how many pills fit follows the width
@@ -107,6 +109,7 @@ namespace ElansAddonHub.Lodge
             StatusText.Text = s.StatusText;
             try { LodgeTitle.Text = s.BaseUrl != null ? new Uri(s.BaseUrl).Host : "Lodge"; } catch { }
             UpdateOffline();
+            InviteSideButton.Visibility = s.CanInvite ? Visibility.Visible : Visibility.Collapsed;   // owners and officers
 
             UpdateCalendarChrome();
 
@@ -501,9 +504,10 @@ namespace ElansAddonHub.Lodge
             try
             {
                 var s = Session.Settings;
-                var res = await InviteExchange.Exchange(url, invite, null, LodgeCredentials.DeviceName(s), LodgeCredentials.DeviceId(s));
+                var res = await InviteExchange.Exchange(url, invite, null, LodgeCredentials.DeviceName(s), LodgeCredentials.DeviceId(s), NameBox.Text);
                 if (!res.Ok)
                 {
+                    if (res.Reason == "name-required") NameCaption.Text = "YOUR NAME IN THE LODGE  (you will be its Guild Master)";
                     offerRestore = true;    // a saved sign-in (if any) is untouched: offer to go back to it
                     JoinFail(res.Message);
                     return;
@@ -570,10 +574,10 @@ namespace ElansAddonHub.Lodge
             return "This link is for " + target + ". You are signed in to " + current + ". Joining switches this PC to " + target + " and signs it out of " + current + ". Nothing changes until you press Join.";
         }
 
-        public void ShowInviteLink(string link)
+        public void ShowInviteLink(string link, bool ownerLink = false)
         {
             if (joining) return;
-            link = LinkOpen.Validate(link);
+            link = LinkOpen.Validate(link) ?? (ownerLink ? FromWebOrNull(link) : null);
             if (link == null) return;
             var parsed = InviteLinks.Parse(link);
             var target = LodgeSession.NormalizeUrl(parsed.Url);
@@ -591,10 +595,31 @@ namespace ElansAddonHub.Lodge
             DeviceBox.Text = LodgeCredentials.DeviceName(Session.Settings);
             if (string.IsNullOrWhiteSpace(NameBox.Text)) NameBox.Text = Session.Settings.LodgeName ?? "";
             JoinStatus.Text = "";
-            IncomingTitle.Text = "You were invited to " + ShortAddress(parsed.Url);
-            IncomingText.Text = IncomingWording(target, savedUrl, signedIn);
+            IncomingTitle.Text = (ownerLink ? "Your new lodge: " : "You were invited to ") + ShortAddress(parsed.Url);
+            IncomingText.Text = ownerLink
+                ? "This is the owner link from your server. Type the name you want below, then press Join: you become the Guild Master."
+                : IncomingWording(target, savedUrl, signedIn);
             IncomingBanner.Visibility = Visibility.Visible;
+            if (ownerLink) { NameBox.Text = ""; NameCaption.Text = "YOUR NAME IN THE LODGE  (you will be its Guild Master)"; }
+            _ = ShowBannerFor(parsed.Url, ownerLink);
             if (signedIn) CancelEditButton.Visibility = Visibility.Visible;      // a way out that changes nothing
+        }
+
+        // the lodge's own name and welcome text (server 2.12, public) replace the bare address in the banner
+        async Task ShowBannerFor(string url, bool ownerLink)
+        {
+            var banner = await InviteExchange.FetchBanner(url);
+            if (banner == null || incoming == null || IncomingBanner.Visibility != Visibility.Visible) return;
+            if (!string.Equals(InviteLinks.Parse(incoming).Url, url, StringComparison.OrdinalIgnoreCase)) return;   // another link replaced it meanwhile
+            IncomingTitle.Text = (ownerLink ? "Your lodge: " : "You were invited to ") + banner.Name;
+            if (banner.Welcome.Length > 0) IncomingText.Text = banner.Welcome + "\n\n" + IncomingText.Text;
+        }
+
+        // an owner link pasted in the web form is accepted too: hand it on as the elanshub:// link it stands for
+        static string FromWebOrNull(string text)
+        {
+            var l = InviteLinks.Parse(text);
+            return l.IsInvite && l.Url != null ? InviteLinks.Make(l.Url, l.Secret) : null;
         }
 
         public string IncomingTitleForTest => IncomingBanner.Visibility == Visibility.Visible ? IncomingTitle.Text : null;
@@ -637,12 +662,14 @@ namespace ElansAddonHub.Lodge
             CancelEditButton.Visibility = Visibility.Collapsed;
         }
 
-        public void SignOut()
+        // forget the sign-in on THIS PC only (the lodge itself is untouched). note: a calm line for the join box, e.g. after leaving.
+        public void SignOut(string note = "")
         {
             Session.Disconnect();
             LodgeCredentials.Clear(Session.Settings);
             SettingsStore.Save(Session.Settings);
             ShowJoin("");
+            if (!string.IsNullOrEmpty(note)) { JoinStatus.Foreground = (Brush)FindResource("TextDim"); JoinStatus.Text = note; }
         }
 
         // ================================================================ sidebar
@@ -761,6 +788,7 @@ namespace ElansAddonHub.Lodge
             PopJoin.Visibility = joinable ? Visibility.Visible : Visibility.Collapsed;
             PopJoin.Content = "Join " + (string.IsNullOrEmpty(m.RoomName) ? "their voice room" : m.RoomName);
             PopReset.Visibility = Session.CanManage && !m.IsMe && (m.HasAvatar || m.HasDisplayName) ? Visibility.Visible : Visibility.Collapsed;
+            UpdateDeviceLinkRow(m.Role);
             MemberPopup.PlacementTarget = target;
             MemberPopup.IsOpen = true;
             Session.RequestProfile(m.Name);
@@ -772,8 +800,37 @@ namespace ElansAddonHub.Lodge
             popCard.Loading = false;
             if (popCard.Member.Offline && pd.Found) { popCard.Member.Role = pd.Role; popCard.Member.SetAvatar(pd.AvatarId, pd.Accent); popCard.Member.SetDisplayName(pd.DisplayName); popCard.Member.Offline = !pd.Online; }
             popCard.Data = pd;
+            UpdateDeviceLinkRow(popCard.Member.Role);
             PopReset.Visibility = Session.CanManage && !popCard.Member.IsMe && (popCard.Member.HasAvatar || popCard.Member.HasDisplayName) ? Visibility.Visible : Visibility.Collapsed;
         }
+
+        // "Send a new device link": owners and officers, for people below them (officers) who are members (not guests, not me)
+        void UpdateDeviceLinkRow(string theirRole)
+        {
+            var m = popMember;
+            PopDeviceLink.Visibility = m != null && !m.IsMe && !m.Guest
+                && InviteRanks.CanSendDeviceLink(Session.MyRole, Session.CanInvite, Session.SupportsTokens, theirRole ?? m.Role, m.Guest)
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        void PopDeviceLink_Click(object sender, RoutedEventArgs e)
+        {
+            MemberPopup.IsOpen = false;
+            if (popMember == null) return;
+            InviteSheetHost.Open(popMember.Name, popMember.Role);
+        }
+
+        void InviteSide_Click(object sender, RoutedEventArgs e) => InviteSheetHost.Open();
+
+        void CreateLodge_Click(object sender, RoutedEventArgs e) => CreateGuide.Open();
+
+        public InviteSheet InviteSheetForTest => InviteSheetHost;
+        public CreateLodgeGuide GuideForTest => CreateGuide;
+        public bool InviteButtonVisibleForTest => InviteSideButton.Visibility == Visibility.Visible;
+        public bool CreateLodgeVisibleForTest => CreateLodgeButton.Visibility == Visibility.Visible && JoinPanel.Visibility == Visibility.Visible;
+        public void ShowMemberForTest(MemberVM m) { popMember = m; UpdateDeviceLinkRow(m.Role); }
+        public bool DeviceLinkVisibleForTest => PopDeviceLink.Visibility == Visibility.Visible;
+        public void DeviceLinkClickForTest() => PopDeviceLink_Click(null, null);
 
         void PopMention_Click(object sender, RoutedEventArgs e)
         {

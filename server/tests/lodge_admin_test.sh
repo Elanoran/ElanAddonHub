@@ -115,6 +115,46 @@ bash "$ADMIN" revoke-device zzz >/dev/null 2>&1 && bad "bad device id accepted" 
 bash "$ADMIN" remove "Zoë Ångström" >/dev/null && ! grep -q 'Ångström' "$DEV" && ok "remove: the person's devices go with them" || bad "remove devices"
 [ -z "$(ls -A "$T" | grep '^\.codes\.')" ] && ok "no temp files left after the invite tests" || bad "temp files after invites"
 
+# ================================================================ 2.12: owner claim, recovery, last-owner guard
+orig_codes="$LODGE_CODES_FILE"
+T2="$(mktemp -d)"; export LODGE_CODES_FILE="$T2/codes"; INV="$T2/invites"; DEV="$T2/devices"
+# an owner exists in the main test lodge: claim-owner refuses
+LODGE_CODES_FILE="$orig_codes" bash "$ADMIN" claim-owner >/dev/null 2>&1 && bad "claim-owner with an owner" || ok "claim-owner: refused while an owner exists"
+# an empty lodge: it prints one link
+bash "$ADMIN" add Mia member >/dev/null          # a member only, still no owner
+claim="$(bash "$ADMIN" claim-owner 2>"$T2/err")"
+[[ "$claim" =~ ^elanshub://lodge/join#example\.test/lodge\|i1\.[A-Za-z0-9_-]{32}$ ]] && ok "claim-owner: link on stdout, normal invite format" || bad "claim link" "$claim"
+grep -q 'OWNER LINK' "$T2/err" && grep -q 'ONCE' "$T2/err" && ok "claim-owner: the warning goes to stderr" || bad "claim warning"
+csecret="${claim##*|}"
+row="$(awk -F'\t' '$3=="owner-claim"' "$INV")"
+[ "$(echo "$row" | awk -F'\t' '{print $8-$7}')" -eq 3600 ] && [ "$(echo "$row" | awk -F'\t' '{print $9}')" -eq 1 ] && ok "claim-owner: 1 hour, single use" || bad "claim row" "$row"
+! grep -q -- "$csecret" "$INV" && grep -q "$(printf '%s' "$csecret" | sha256sum | cut -d' ' -f1)" "$INV" && ok "claim-owner: only the hash is stored" || bad "claim storage"
+[ "$(mode_owner "$INV")" = "640 root:lodgetest" ] && ok "claim-owner: invites file keeps 0640 root:lodgetest" || bad "claim mode" "$(mode_owner "$INV")"
+claim2="$(bash "$ADMIN" claim-owner 2>/dev/null)"
+[ "$(awk -F'\t' '$3=="owner-claim" && $11=="0"' "$INV" | wc -l)" -eq 1 ] && ok "claim-owner: a new link retires the older open one" || bad "one open claim"
+bash "$ADMIN" claim-owner --if-needed >/dev/null 2>&1; [ "$(awk -F'\t' '$3=="owner-claim"' "$INV" | wc -l)" -eq 3 ] && ok "claim-owner makes a link again while there is no owner" || bad "claim again"
+# recovery needs an owner
+bash "$ADMIN" claim-owner --recover >/dev/null 2>&1 && bad "recover without an owner" || ok "claim-owner --recover: refused when there is no owner"
+bash "$ADMIN" recover-owner Mia >/dev/null 2>&1 && bad "recover-owner for a member" || ok "recover-owner: refused for someone who is not an owner"
+bash "$ADMIN" add Boss owner >/dev/null
+bash "$ADMIN" claim-owner >/dev/null 2>&1 && bad "claim with an owner" || ok "claim-owner: refused as soon as an owner exists"
+bash "$ADMIN" claim-owner --if-needed >/dev/null 2>&1 && ok "claim-owner --if-needed: quiet success when there is an owner" || bad "if-needed"
+rlink="$(bash "$ADMIN" recover-owner boss 2>"$T2/err2")"
+[[ "$rlink" =~ ^elanshub://lodge/join#example\.test/lodge\|i1\.[A-Za-z0-9_-]{32}$ ]] && ok "recover-owner: a link for the existing owner" || bad "recover link" "$rlink"
+awk -F'\t' '$3=="owner-claim" && $4=="Boss" && $11=="0"' "$INV" | grep -q . && ok "recover-owner: bound to the owner's name" || bad "recover row"
+grep -q 'NEW device' "$T2/err2" && ok "recover-owner: says it only adds a device" || bad "recover note"
+[ "$(grep -c '^Boss:' "$LODGE_CODES_FILE")" -eq 1 ] && ok "recover-owner changes no codes" || bad "recover changed codes"
+bash "$ADMIN" claim-owner --recover >/dev/null 2>&1 && ok "claim-owner --recover works with an owner" || bad "recover flag"
+# last owner guard
+bash "$ADMIN" role Boss member >/dev/null 2>&1 && bad "demoted the last owner" || ok "role: the last owner can't be demoted"
+bash "$ADMIN" remove Boss >/dev/null 2>&1 && bad "removed the last owner" || ok "remove: the last owner can't be removed"
+grep -q '^Boss:[0-9a-f]\{32\}:owner$' "$LODGE_CODES_FILE" && ok "the last owner is untouched" || bad "owner changed"
+bash "$ADMIN" role Mia owner >/dev/null && bash "$ADMIN" role Boss officer >/dev/null && ok "with a second owner the first can step down" || bad "step down"
+bash "$ADMIN" invite Mia >/dev/null 2>&1; bash "$ADMIN" remove Mia >/dev/null 2>&1 && bad "removed the last owner (Mia)" || ok "remove: Mia is now the last owner"
+bash "$ADMIN" role Mia officer --force >/dev/null 2>&1 && ok "--force overrides from the console" || bad "force"
+export LODGE_CODES_FILE="$orig_codes"; INV="$T/invites"; DEV="$T/devices"
+rm -rf "$T2"
+
 rm -rf "$T" "$watch_log"
 echo "lodge-admin: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

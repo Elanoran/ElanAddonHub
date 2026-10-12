@@ -494,6 +494,9 @@ namespace ElansAddonHub.Lodge
                 case "admin.invites": case "admin.invite.created": case "devices": case "admin.devices":
                     OnInviteFrame(m);
                     break;
+                case "lodge.info": case "member.left":
+                    OnLeaveFrame(m);
+                    break;
             }
         }
 
@@ -1162,6 +1165,7 @@ namespace ElansAddonHub.Lodge
         void OnServerError(string text, string code, string room)
         {
             text = text ?? "";
+            if (code == "last-owner") { LeaveRefused?.Invoke(text); return; }   // the last Guild Master tried to leave
             if (HistoryRateError(text)) return;
             if (pendingRoom != null && (code == "room-full" || text.IndexOf("is full (", StringComparison.OrdinalIgnoreCase) >= 0 || text.StartsWith("You can't join", StringComparison.OrdinalIgnoreCase)))
             {

@@ -14,6 +14,8 @@ namespace ElansAddonHub
         Window scrim;
         public bool Result { get; private set; }
         public FrameworkElement RootForTest => Outer;
+        public TextBox TypedBoxForTest => TypedBox;
+        public Button ConfirmButtonForTest { get; private set; }
 
         ThemedDialog() { InitializeComponent(); }
 
@@ -31,7 +33,7 @@ namespace ElansAddonHub
         }
 
         // confirmText == null: a single "OK" button (info style). danger puts keyboard focus on the safe button.
-        public static ThemedDialog Create(DialogKind kind, string title, string text, string confirmText, string cancelText)
+        public static ThemedDialog Create(DialogKind kind, string title, string text, string confirmText, string cancelText, string typedPhrase = null)
         {
             var d = new ThemedDialog();
             var (glyph, role) = Look(kind);
@@ -59,9 +61,19 @@ namespace ElansAddonHub
                 IsCancel = cancel == null,
             };
             ok.Click += (s, e) => { d.Result = true; d.Close(); };
+            d.ConfirmButtonForTest = ok;
+            if (typedPhrase != null)
+            {
+                // the confirm button works only when the phrase has been typed (case does not matter, spaces around do not count)
+                d.TypedBox.Visibility = Visibility.Visible;
+                d.TypedBox.Tag = typedPhrase;
+                ok.IsEnabled = false;
+                ok.IsDefault = false;
+                d.TypedBox.TextChanged += (s, e) => ok.IsEnabled = string.Equals(d.TypedBox.Text.Trim(), typedPhrase.Trim(), StringComparison.OrdinalIgnoreCase);
+            }
             if (cancel != null) d.Buttons.Children.Add(cancel);
             d.Buttons.Children.Add(ok);
-            var focus = danger && cancel != null ? cancel : ok;
+            Control focus = typedPhrase != null ? (Control)d.TypedBox : danger && cancel != null ? cancel : ok;
             d.Loaded += (s, e) => { focus.Focus(); Motion.DialogIn(d.Root); };
             d.PreviewKeyDown += (s, e) => { if (e.Key == Key.Escape && cancel == null) { d.Result = false; d.Close(); e.Handled = true; } };
             d.MouseLeftButtonDown += (s, e) => { if (e.ButtonState == MouseButtonState.Pressed) try { d.DragMove(); } catch { } };
@@ -109,13 +121,13 @@ namespace ElansAddonHub
             base.OnClosed(e);
         }
 
-        public static bool Run(Window owner, DialogKind kind, string title, string text, string confirmText, string cancelText)
+        public static bool Run(Window owner, DialogKind kind, string title, string text, string confirmText, string cancelText, string typedPhrase = null)
         {
             try
             {
                 if (owner == null) owner = Application.Current?.MainWindow;
                 if (owner != null && !owner.IsLoaded) owner = null;
-                var d = Create(kind, title, text, confirmText, cancelText);
+                var d = Create(kind, title, text, confirmText, cancelText, typedPhrase);
                 if (owner != null && owner.IsVisible) { d.Owner = owner; d.ShowScrim(owner); }
                 else d.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                 d.ShowDialog();
@@ -138,6 +150,10 @@ namespace ElansAddonHub
         // a question with two buttons; danger = red confirm button, focus on the cancel button
         public static bool Confirm(Window owner, string title, string text, string confirmText = "OK", bool danger = false, string cancelText = "Cancel") =>
             ThemedDialog.Run(owner, danger ? DialogKind.Danger : DialogKind.Question, title, text, confirmText, cancelText);
+
+        // a destructive question that is only confirmed by typing a phrase (the lodge's name); the confirm button is off until it matches
+        public static bool ConfirmTyped(Window owner, string title, string text, string confirmText, string phrase) =>
+            ThemedDialog.Run(owner, DialogKind.Danger, title, text, confirmText, "Cancel", phrase);
 
         // a warning-flavoured two-button question (e.g. "this replaces a git copy")
         public static bool ConfirmWarn(Window owner, string title, string text, string confirmText = "Continue", string cancelText = "Cancel") =>

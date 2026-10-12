@@ -260,3 +260,26 @@ Client to server (errors are `error` with `code: "cal"`, `"cal-full"` or `"rate"
 - `cal:range` `{from, to}` (ms, at most 62 days) -> `cal:range`. Costs the Page budget (burst 10, 1 per s).
 
 **Time zones.** Instants are UTC. A weekly series is expanded on the server in the creator's zone: date i = first local date + 7 i days at the same local wall-clock time, converted back to UTC, so a 20:00 raid stays 20:00 across a DST change (the UTC instant moves by an hour). A time that does not exist (spring gap) moves forward an hour, an ambiguous one takes its first occurrence. An unknown `tz` falls back to the fixed `off`, and without it UTC. Viewers always see their own local time; the stored zone is only used for expansion.
+
+## 2.12 additions (starting a lodge, inviting from the app, leaving)
+
+Detect: the welcome's `features` has `"leave"` / `"lodgeinfo"`, or `GET /features` (public) lists them; `GET /features` also carries `lodge: {name, welcome}`.
+
+**Owner claim (a new lodge).** `sudo lodge-admin claim-owner` (and `install.sh` at the end of a fresh install) writes an invite of kind `owner-claim`
+(role owner, 1 hour, one use) and prints the normal link `elanshub://lodge/join#<server>|<invite>` to the console only. It exists only while the lodge has
+no owner. `POST /exchange` takes the same invite header plus **`"name"`** in the body: the name the person wants (Names rules). Without a valid name the answer is
+400 `{reason: "name-required"}` and the link is NOT used up. A claim creates the owner (a retired code marker, no permanent code) and a device token;
+409 `owner-exists` (an owner appeared first; the link is burned), 409 `name-taken`. `sudo lodge-admin recover-owner NAME` / `claim-owner --recover` make the same kind of
+link for a locked-out owner: it only adds a device for an existing owner (409 `not-owner` for anyone else).
+
+**Lodge name and welcome text.** `admin.lodge.set` `{name (max 40), welcome (max 280 chars, 4 lines)}` - owner; both are cleaned like names (control and bidi characters out)
+and an empty value clears it. The server answers every client with `lodge.info` `{lodge: {name, welcome}}`; the welcome frame carries `lodge`.
+
+**Leaving.** `member.leave` - any member: the server removes their codes entry, all their devices and their pending device links (messages stay), sends `member.left`,
+closes their sockets. The last Guild Master is refused: `error` `{code: "last-owner", text: "Transfer ownership first"}`. A guest only signs the device out.
+Transfer = `admin.role` `{name, role: "owner"}` for someone else (owner). The last-owner rule is one function (`Auth.EnsureOtherOwner`) used by leave, `admin.role`,
+`admin.remove` and `lodge-admin role|remove` (`--force` from the console only).
+
+**Web invite page.** `GET /` shows the lodge name and welcome. A web link is `https://<server>/#join=<server>|<invite>` (e.g. `https://example.org/lodge/#join=example.org/lodge|i1....`):
+the fragment never reaches the server; an inline script (CSP nonce) turns it into the `elanshub://` link behind an "Open in the Outpost" button. Headers: strict CSP
+(`default-src 'none'`, nonce script and style, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.

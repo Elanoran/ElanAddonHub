@@ -94,7 +94,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.11.0";
+    public const string Version = "2.12.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -109,6 +109,7 @@ public class LodgeHub
     public readonly ChatModule Chat;
     public readonly VoiceModule Voice;
     public readonly CalendarModule Calendar;
+    public readonly LodgeInfoStore Info;
     readonly IModule[] modules;
     readonly ConcurrentDictionary<int, Member> members = new();
     readonly ConcurrentDictionary<string, Budget> budgets = new();
@@ -134,6 +135,7 @@ public class LodgeHub
         Chat = new ChatModule(this) { FlushDelay = TimeSpan.FromSeconds(cfg.HistoryFlushSeconds) };
         Voice = new VoiceModule(this);
         Calendar = new CalendarModule(this);
+        Info = new LodgeInfoStore(cfg.DataDir);
         modules = new IModule[] { Chat, Calendar, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
@@ -219,7 +221,8 @@ public class LodgeHub
             ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
             ["canManage"] = Roles.Can(me.Role, Perm.ManageMembers),
             ["canPin"] = Roles.Can(me.Role, Perm.PinMessages),
-            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar"),
+            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo"),
+            ["lodge"] = Info.ToJson(),
             ["calendar"] = Calendar.WelcomeView(),
             ["canInvite"] = Roles.Can(me.Role, Perm.Invite),
             ["canRetire"] = Roles.Can(me.Role, Perm.RetireCodes),

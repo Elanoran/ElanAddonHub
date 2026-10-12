@@ -12,11 +12,13 @@ public class AdminModule : IModule
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
         if (type.StartsWith("device.")) return await HandleDevice(me, type, m);
+        if (type == "member.leave") return await Leave(me);
         if (!type.StartsWith("admin.") && !type.StartsWith("mod.")) return false;
         var perm = type switch
         {
             "admin.invite.create" or "admin.invites" or "admin.invite.revoke" or "admin.devices" => Perm.Invite,   // officers too (2.10)
             "admin.retire" => Perm.RetireCodes,
+            "admin.lodge.set" => Perm.ManageMembers,
             _ => type.StartsWith("mod.") ? Perm.Moderate : type.StartsWith("admin.channel") ? Perm.ManageChannels : Perm.ManageMembers,
         };
         if (!Roles.Can(me.Role, perm)) { await hub.Error(me, "Your rank can't do that"); return true; }
@@ -29,6 +31,7 @@ public class AdminModule : IModule
                 case "admin.invite.revoke": await RevokeInvite(me, m); break;
                 case "admin.devices": await SendDevices(me, "admin.devices", J.Str(m, "name")); break;
                 case "admin.retire": await Retire(me, m); break;
+                case "admin.lodge.set": await SetLodgeInfo(me, m); break;
                 case "admin.members": await SendMembers(me); break;
                 case "admin.invite": await Invite(me, m); break;
                 case "admin.role": await SetRole(me, m); break;
@@ -90,7 +93,7 @@ public class AdminModule : IModule
     async Task SendInvites(Member me) => await hub.Send(me, new JsonObject
     {
         ["t"] = "admin.invites", ["now"] = Ms(hub.Clock.UtcNow),
-        ["invites"] = new JsonArray(hub.Auth.ListInvites().Select(i => (JsonNode)InviteJson(i)).ToArray()),
+        ["invites"] = new JsonArray(hub.Auth.ListInvites().Where(i => i.Kind != Auth.ClaimKind).Select(i => (JsonNode)InviteJson(i)).ToArray()),
     });
 
     // A person invite makes (or re-uses, for another device) the name; officers can only invite below their own rank.
@@ -191,9 +194,7 @@ public class AdminModule : IModule
     {
         var name = J.Str(m, "name");
         var role = Roles.Normalize(J.Str(m, "role"));
-        if (role != "owner" && hub.Auth.ListPersonal().Count(p => p.Role == "owner" && !LodgeHub.Same(p.Name, name)) == 0)
-            throw new InvalidOperationException("The lodge needs at least one Guild Master");
-        hub.Auth.SetRole(name, role);
+        hub.Auth.SetRole(name, role);   // refuses to demote the last Guild Master
         hub.Log.LogInformation("{By} made {Name} {Role}", me.Name, name, role);
         await hub.ApplyCodeChanges();
         await SendMembers(me);
@@ -207,6 +208,42 @@ public class AdminModule : IModule
         hub.Log.LogInformation("{By} removed {Name}", me.Name, name);
         await hub.ApplyCodeChanges();
         await SendMembers(me);
+    }
+
+    // owner: the lodge's display name and welcome text (validated and length-capped by LodgeInfoStore)
+    async Task SetLodgeInfo(Member me, JsonObject m)
+    {
+        hub.Info.Set(J.Str(m, "name"), J.Str(m, "welcome"));
+        hub.Log.LogInformation("{By} changed the lodge name / welcome text", me.Name);
+        await hub.Broadcast(new JsonObject { ["t"] = "lodge.info", ["lodge"] = hub.Info.ToJson() });
+    }
+
+    // "Leave the lodge": the person's membership goes (codes entry, all devices, pending device links); their messages stay.
+    // The last Guild Master is refused with code "last-owner" - they transfer ownership first (admin.role -> owner for someone else).
+    async Task<bool> Leave(Member me)
+    {
+        try
+        {
+            if (!me.Personal)
+            {
+                // a guest has no membership: this only signs the device out
+                if (me.DeviceId != null) { hub.Auth.RevokeDevice(me.DeviceId); await hub.Send(me, new JsonObject { ["t"] = "member.left" }); await hub.DisconnectDevice(me.DeviceId); }
+                else await hub.Error(me, "Nothing to leave");
+                return true;
+            }
+            var devices = hub.Auth.Leave(me.Name);
+            hub.Log.LogInformation("{Name} left the lodge ({Count} devices signed out)", Names.ForLog(me.Name), devices.Count);
+            await hub.Send(me, new JsonObject { ["t"] = "member.left" });
+            foreach (var d in devices) await hub.DisconnectDevice(d.Id, "You left the lodge");
+            await hub.ApplyCodeChanges();   // sessions on a permanent code, and anything left over
+        }
+        catch (InvalidOperationException e) when (e.Message == Auth.LastOwnerMessage)
+        {
+            await hub.Error(me, "Transfer ownership first", "last-owner");
+        }
+        catch (InvalidOperationException e) { await hub.Error(me, e.Message); }
+        catch (UnauthorizedAccessException) { await hub.Error(me, "The server can't write its codes file - run the server update (install.sh)"); }
+        return true;
     }
 
     async Task AddChannel(Member me, JsonObject m)

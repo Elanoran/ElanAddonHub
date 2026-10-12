@@ -57,14 +57,51 @@ namespace ElansAddonHub.Lodge
 
         // a whole link pasted where a code belongs
         public static bool LooksLikeLink(string s) =>
-            s != null && (s.IndexOf("elanshub:", StringComparison.OrdinalIgnoreCase) >= 0 || s.IndexOf("#invite=", StringComparison.OrdinalIgnoreCase) >= 0);
+            s != null && (s.IndexOf("elanshub:", StringComparison.OrdinalIgnoreCase) >= 0 || s.IndexOf("#invite=", StringComparison.OrdinalIgnoreCase) >= 0
+                          || s.IndexOf("#join=", StringComparison.OrdinalIgnoreCase) >= 0);
 
         public static string Make(string baseUrl, string invite)
         {
+            return LinkStart + "#" + ServerPart(baseUrl) + "|" + invite;
+        }
+
+        // "host/lodge" (https is implied), or "http://host:5280/lodge" for a lodge without TLS
+        static string ServerPart(string baseUrl)
+        {
             var server = (baseUrl ?? "").Trim().TrimEnd('/');
             if (server.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) server = server.Substring(8);
-            return LinkStart + "#" + server + "|" + invite;
+            return server;
         }
+
+        // The same invite as a link that works in a browser and in any chat app:  https://host/lodge/#join=host/lodge|<invite>
+        // The server's page at GET / reads the part after # in the browser only (it never reaches the server) and offers an
+        // "Open in the Outpost" button that builds the elanshub:// link from it.
+        public static string MakeWeb(string baseUrl, string invite)
+        {
+            var server = ServerPart(baseUrl);
+            var page = server.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? server : "https://" + server;
+            return page + "/#join=" + server + "|" + invite;
+        }
+
+        // the part after "join=" of a web link, or the part after "#" of an elanshub:// link: "server|invite" (| may arrive as %7C)
+        static void ReadJoin(string value, JoinLink r)
+        {
+            value = value.Replace("%7C", "|").Replace("%7c", "|");
+            var bar = value.IndexOf('|');
+            string server = null;
+            if (bar >= 0)
+            {
+                server = value.Substring(0, bar).Trim();
+                var m = SecretChars.Match(value.Substring(bar + 1).Trim());
+                if (m.Success) r.Secret = m.Value;
+            }
+            else if (value.Length > 0) server = value.Trim();   // elanshub://lodge/join#server only
+            if (!string.IsNullOrEmpty(server) && ValidAddress(server)) r.Url = LodgeSession.NormalizeUrl(server);
+            else r.MissingAddress = true;                      // never guess: a placeholder is not an address
+        }
+
+        // https://host/lodge/#join=host/lodge|invite (the web form of a link)
+        static readonly Regex WebJoin = new Regex(@"(?:^|&)join=([^&\s]+)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
         // Accepts: elanshub://lodge/join#server|invite (| may arrive as %7C), https://site/lodge#invite=SECRET, a bare address.
         // A secret is only ever read from the #fragment: "?invite=" / "?code=" in a query are ignored, so a link that sends one to a
@@ -81,18 +118,14 @@ namespace ElansAddonHub.Lodge
             var frag = hash >= 0 ? text.Substring(hash + 1) : "";
             if (before.StartsWith("elanshub:", StringComparison.OrdinalIgnoreCase))
             {
-                frag = frag.Replace("%7C", "|").Replace("%7c", "|");
-                var bar = frag.IndexOf('|');
-                string server = null;
-                if (bar >= 0)
-                {
-                    server = frag.Substring(0, bar).Trim();
-                    var m = SecretChars.Match(frag.Substring(bar + 1).Trim());
-                    if (m.Success) r.Secret = m.Value;
-                }
-                else if (frag.Length > 0) server = frag.Trim();   // elanshub://lodge/join#server only
-                if (!string.IsNullOrEmpty(server) && ValidAddress(server)) r.Url = LodgeSession.NormalizeUrl(server);
-                else r.MissingAddress = true;                      // never guess: a placeholder is not an address
+                ReadJoin(frag, r);
+            }
+            else if (WebJoin.Match(frag) is Match web && web.Success)
+            {
+                // the web form: only the fragment is read; the page address and any query are ignored (the join= value names the lodge)
+                string v;
+                try { v = Uri.UnescapeDataString(web.Groups[1].Value); } catch (UriFormatException) { v = web.Groups[1].Value; }
+                ReadJoin(v, r);
             }
             else
             {
@@ -116,13 +149,15 @@ namespace ElansAddonHub.Lodge
         public string Message;                   // a calm sentence for the person, set when !Ok
     }
 
+    public sealed class LodgeBanner { public string Name, Welcome; }
+
     public static class InviteExchange
     {
         // test seam: the self-test answers from a canned server
         public static Func<HttpRequestMessage, Task<HttpResponseMessage>> Send = req => Net.Http.SendAsync(req);
 
         // POST {base}/exchange. The invite (or, to upgrade a device, the old code) goes in a header, the device in the body - never in the URL.
-        public static async Task<ExchangeResult> Exchange(string baseUrl, string invite, string oldCode, string deviceName, string deviceId)
+        public static async Task<ExchangeResult> Exchange(string baseUrl, string invite, string oldCode, string deviceName, string deviceId, string name = null)
         {
             var res = new ExchangeResult();
             try
@@ -131,7 +166,9 @@ namespace ElansAddonHub.Lodge
                 {
                     if (!string.IsNullOrEmpty(invite)) req.Headers.Add("X-Lodge-Invite", invite);
                     else req.Headers.Add("X-Lodge-Code", oldCode ?? "");
-                    req.Content = new StringContent(Json.Write(new Dictionary<string, object> { ["device"] = deviceName ?? "", ["deviceId"] = deviceId ?? "" }), Encoding.UTF8, "application/json");
+                    var body0 = new Dictionary<string, object> { ["device"] = deviceName ?? "", ["deviceId"] = deviceId ?? "" };
+                    if (!string.IsNullOrWhiteSpace(name)) body0["name"] = name.Trim();   // only an owner link uses it: the name the new Guild Master wants
+                    req.Content = new StringContent(Json.Write(body0), Encoding.UTF8, "application/json");
                     using (var resp = await Send(req))
                     {
                         res.Status = (int)resp.StatusCode;
@@ -153,6 +190,26 @@ namespace ElansAddonHub.Lodge
             return res;
         }
 
+        // The lodge's public name and welcome text (server 2.12, GET /features). Null when the server is older or can't be reached.
+        public static async Task<LodgeBanner> FetchBanner(string baseUrl)
+        {
+            try
+            {
+                using (var req = new HttpRequestMessage(HttpMethod.Get, baseUrl.TrimEnd('/') + "/features"))
+                using (var resp = await Send(req))
+                {
+                    if (!resp.IsSuccessStatusCode) return null;
+                    var body = Json.Obj(await resp.Content.ReadAsStringAsync());
+                    var lodge = body.Child("lodge");
+                    if (lodge == null) return null;
+                    var name = (lodge.Str("name") ?? "").Trim();
+                    if (name.Length == 0) return null;
+                    return new LodgeBanner { Name = name, Welcome = (lodge.Str("welcome") ?? "").Trim() };
+                }
+            }
+            catch (Exception) { return null; }
+        }
+
         // the sentence shown when the exchange did not work
         public static string Friendly(int status, string reason, string serverError, bool codeUpgrade = false)
         {
@@ -168,6 +225,20 @@ namespace ElansAddonHub.Lodge
                 default: return string.IsNullOrEmpty(serverError) ? "The lodge answered with an error (" + status + ") - try again in a moment" : serverError;
             }
         }
+    }
+
+    // Who may be offered which rank in the invite sheet and on the Guild Master page: the Guild Master any rank, officers only ranks below their own
+    // (the server enforces the same rule). An old server without invite links makes permanent codes, which any manager may give at any rank.
+    public static class InviteRanks
+    {
+        public static readonly string[] All = { "owner", "officer", "veteran", "member" };
+
+        public static List<string> Offered(string myRole, bool serverHasLinks) =>
+            myRole == "owner" || !serverHasLinks ? All.ToList() : All.Where(r => MemberVM.RoleLevel(r) < MemberVM.RoleLevel(myRole)).ToList();
+
+        // may I send this member a new device link? (officers: only people below them)
+        public static bool CanSendDeviceLink(string myRole, bool canInvite, bool serverHasLinks, string theirRole, bool guest) =>
+            canInvite && serverHasLinks && !guest && (myRole == "owner" || MemberVM.RoleLevel(theirRole) < MemberVM.RoleLevel(myRole));
     }
 
     // The sign-in this PC keeps for one lodge. A device token (DPAPI-protected) replaces the old permanent code.

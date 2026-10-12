@@ -129,6 +129,20 @@ longer lets a backslash into a name.
 - Logs: event ids, counts and login names only (`X created calendar event <id> (3 date(s))`); never a title, note or comment. Tested (unit and real-socket).
 - Honest limits: the calendar list is visible to every rank including guests (the chat card follows the channel's rank rule, the event does not); a guest's sign-up is keyed by the connection's name, which another guest may reuse later; the creator's zone id is stored with the event (it is not secret, it only drives recurrence).
 
+## 2.12.0 (starting a lodge, inviting from the app, leaving)
+
+- **Owner claim.** A brand-new lodge has no owner, so nobody can invite anybody. The server console is the proof of ownership: `install.sh` (fresh install) and
+  `sudo lodge-admin claim-owner` make ONE `owner-claim` invite - 1 hour, single use, printed only to stdout with a warning, stored only as a SHA-256, never logged
+  (the log says only that "an owner link was used" with the id). It exists only while there is no owner (checked at creation AND at use; a link that loses the race is burned),
+  a newer link revokes the older one. The person types the name in the Outpost; Names rules apply. No permanent code is created. `claim-owner` refuses when an owner exists;
+  `recover-owner NAME` / `--recover` only adds a device for an existing owner. Wrong/odd names never use the link up; a wrong secret counts towards the normal lockout.
+- **Last owner.** One rule for leave, role change, remove and the console (`--force`): the lodge always keeps a Guild Master. Leaving removes the codes entry, every device and the
+  pending device links of that name, and closes the sockets; messages stay as they were.
+- **Web invite page.** The fragment (`#join=...`) is never sent to the server, so the page cannot log, count or leak it: it is static HTML (the lodge name and welcome text
+  are HTML-encoded), one inline script allowed by a per-response nonce, `default-src 'none'` (no fetch/XHR/images/frames possible), `frame-ancestors 'none'`, `nosniff`,
+  `no-referrer`, `no-store`. It never redirects by itself: the person clicks "Open in the Outpost".
+- **Lodge name / welcome** are public (an invitee sees them): validated, capped at 40 / 280 characters, owner only.
+
 ## Compatibility
 
 - Wrong code on `/health` now answers **401** (before: 200 `{"ok":true}`); with an IP that's blocked, **429**.

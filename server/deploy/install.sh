@@ -55,9 +55,6 @@ chown lodge:lodge "$CODES" "$CODES.lock" "$DATA_DIR/invites" "$DATA_DIR/devices"
 chmod 640 "$CODES" "$DATA_DIR/invites" "$DATA_DIR/devices"                         # invites (only hashes) and the device list (token
 chmod 660 "$CODES.lock"                                                            # hashes); lodge-admin and the service share codes.lock
 umask 022
-if ! grep -q '[^[:space:]]' "$CODES" && ! grep -qE '^LODGE_CODE=.{6,}' "$ENV_FILE"; then
-  echo "== No invite codes yet. Make one per friend:  sudo lodge-admin add <name>"
-fi
 
 # only the main unit file is replaced: drop-ins in /etc/systemd/system/lodge.service.d/ are left alone
 install -m 644 "$REPO_DIR/server/deploy/lodge.service" /etc/systemd/system/lodge.service
@@ -76,7 +73,15 @@ BASE="$(grep -E '^LODGE_PATHBASE=' "$ENV_FILE" | cut -d= -f2-)"
 # the service needs a moment to start: try quietly for up to 15 s
 for i in $(seq 1 15); do
   sleep 1
-  if curl -fs "http://127.0.0.1:${PORT:-5280}${BASE}/health" >/dev/null 2>&1; then echo "== Lodge is running"; exit 0; fi
+  if curl -fs "http://127.0.0.1:${PORT:-5280}${BASE}/health" >/dev/null 2>&1; then
+    echo "== Lodge is running"
+    # A brand-new lodge has no Guild Master yet: print the one-time OWNER LINK (to this console only - it is never logged).
+    # Updates (lodge-update sets LODGE_SKIP_CLAIM) and lodges that already have an owner print nothing.
+    if [ "${LODGE_SKIP_CLAIM:-}" != 1 ]; then
+      /usr/local/bin/lodge-admin claim-owner --if-needed || echo "   (run  sudo lodge-admin claim-owner  to make the owner link)"
+    fi
+    exit 0
+  fi
 done
 echo "== Lodge did not answer - check: journalctl -u lodge -n 50"
 exit 1
