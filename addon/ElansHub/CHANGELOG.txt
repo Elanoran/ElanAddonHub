@@ -22,3 +22,5 @@
 1.9.1 Fixes the in-game calendar merging repeating holidays into one month-long span: Call to Arms weekends or a fishing contest every Sunday are now saved as separate occurrences (the game's START / ONGOING / END day marks are used, and an occurrence joins only consecutive days). The Outpost's calendar can now tell them apart. /reload to update the saved calendar.
 
 1.9.2 New /ehub copy: shows your recent chat lines as plain text in a box you can copy from (Ctrl+A, Ctrl+C) - handy for /run output. New /ehub talentapi: lists which talent functions this WoW client has (saved for Elan's Outpost too).
+
+1.9.3 New /ehub talentprobe: walks this client's talent trees (read-only) and shows/saves what it finds, so Elan's Hunter Helper can read your talents on WoW Forever.

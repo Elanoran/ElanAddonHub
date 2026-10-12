@@ -382,6 +382,11 @@ SlashCmdList.ELANSHUB = function(msg)
     if EHUB.ShowCopy then EHUB.ShowCopy(EHUB.ChatLines(200), "Recent chat - Ctrl+A, Ctrl+C") end
     return
   end
+  if a == "talentprobe" then
+    local lines = EHUB.TalentProbe and EHUB.TalentProbe()
+    if lines and EHUB.ShowCopy then EHUB.ShowCopy(lines, "Talent trees in this client (also saved for the Outpost after /reload)") end
+    return
+  end
   if a == "talentapi" then
     local lines = EHUB.TalentApi and EHUB.TalentApi()
     if lines and EHUB.ShowCopy then EHUB.ShowCopy(lines, "Talent functions in this client (also saved for the Outpost after /reload)") end

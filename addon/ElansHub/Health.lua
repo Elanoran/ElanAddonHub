@@ -171,3 +171,48 @@ function EHUB.TalentApi()
   ElansHubDB.probe = { what = "talentapi", at = time and time() or 0, version = EHUB.Version and EHUB.Version() or "?", lines = lines }
   return lines
 end
+
+-- /ehub talentprobe: how does THIS client store the talent trees? (Forever shows classic trees on retail's C_Traits
+-- engine.) Walks the trait chain read-only: config -> trees -> nodes -> rank -> spell name, plus the point currencies.
+function EHUB.TalentProbe()
+  local L = {}
+  local function p(...) local t = {} for i = 1, select("#", ...) do local v = select(i, ...)
+    t[#t + 1] = (issecretvalue and issecretvalue(v)) and "SECRET" or tostring(v) end L[#L + 1] = table.concat(t, " ") end
+  local function call(name, f, ...) if type(f) ~= "function" then p(name, "MISSING") return nil end
+    local r = { pcall(f, ...) } if not r[1] then p(name, "ERROR", r[2]) return nil end return select(2, unpack(r)) end
+  local CT, TR = C_ClassTalents, C_Traits
+  local cfg = CT and (call("GetActiveConfigID", CT.GetActiveConfigID))
+  p("activeConfigID", cfg)
+  if not cfg and CT then
+    local spec = call("GetSpecialization", C_SpecializationInfo and C_SpecializationInfo.GetSpecialization)
+    local specID = spec and call("GetSpecializationInfo", C_SpecializationInfo.GetSpecializationInfo, spec)
+    local ids = specID and call("GetConfigIDsBySpecID", CT.GetConfigIDsBySpecID, specID)
+    p("spec", spec, specID, "configs", type(ids) == "table" and table.concat(ids, ",") or ids)
+    cfg = type(ids) == "table" and ids[1] or nil
+  end
+  local info = cfg and TR and call("GetConfigInfo", TR.GetConfigInfo, cfg)
+  if type(info) == "table" then p("config", info.name, "type", info.type, "trees", table.concat(info.treeIDs or {}, ",")) end
+  for _, tree in ipairs(type(info) == "table" and info.treeIDs or {}) do
+    local cur = call("GetTreeCurrencyInfo", TR.GetTreeCurrencyInfo, cfg, tree, false)
+    for _, c in ipairs(type(cur) == "table" and cur or {}) do p("currency", c.traitCurrencyID, "have", c.quantity, "spent", c.spent, "max", c.maxQuantity) end
+    local nodes = call("GetTreeNodes", TR.GetTreeNodes, tree) or {}
+    p("tree", tree, "nodes", #nodes)
+    local shown = 0
+    for _, id in ipairs(nodes) do
+      local d = call("GetNodeInfo", TR.GetNodeInfo, cfg, id)
+      if type(d) == "table" and shown < 60 then
+        local eid = (d.activeEntry and d.activeEntry.entryID) or (d.entryIDs and d.entryIDs[1])
+        local e = eid and call("GetEntryInfo", TR.GetEntryInfo, cfg, eid)
+        local def = type(e) == "table" and e.definitionID and call("GetDefinitionInfo", TR.GetDefinitionInfo, e.definitionID)
+        local sp = type(def) == "table" and (def.spellID or def.overriddenSpellID)
+        local nm = sp and C_Spell and C_Spell.GetSpellName and call("GetSpellName", C_Spell.GetSpellName, sp)
+        p("node", id, "rank", d.currentRank, "/", d.maxRanks, "x", d.posX, "y", d.posY, "visible", d.isVisible, nm or ("spell " .. tostring(sp)))
+        shown = shown + 1
+      end
+    end
+  end
+  for _, g in ipairs({ "PlayerTalentFrame", "ClassTalentFrame", "PlayerSpellsFrame", "TalentFrame" }) do p("frame", g, _G[g] ~= nil) end
+  ElansHubDB = ElansHubDB or {}
+  ElansHubDB.probe = { what = "talentprobe", at = time and time() or 0, version = EHUB.Version and EHUB.Version() or "?", lines = L }
+  return L
+end

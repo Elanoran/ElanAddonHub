@@ -801,6 +801,32 @@ do
   _G.ElansHubCopy:Hide()
 end
 
+-- /ehub talentprobe walks C_Traits read-only: config -> tree -> node rank -> spell name, plus point currencies
+do
+  C_ClassTalents = { GetActiveConfigID = function() return 7 end }
+  C_Traits = {
+    GetConfigInfo = function(c) return c == 7 and { name = "Primary", type = 1, treeIDs = { 100 } } or nil end,
+    GetTreeCurrencyInfo = function() return { { traitCurrencyID = 3, quantity = 1, spent = 19, maxQuantity = 51 } } end,
+    GetTreeNodes = function() return { 1, 2 } end,
+    GetNodeInfo = function(_, id) return id == 1 and { currentRank = 2, maxRanks = 5, entryIDs = { 11 }, posX = 10, posY = 20, isVisible = true }
+      or { currentRank = 0, maxRanks = 1, entryIDs = { 12 }, isVisible = true } end,
+    GetEntryInfo = function(_, e) return { definitionID = e + 10 } end,
+    GetDefinitionInfo = function(d) return { spellID = d == 21 and 5555 or 6666 } end,
+  }
+  local oldSpell = C_Spell
+  C_Spell = { GetSpellName = function(id) return id == 5555 and "Ferocity" or "Other" end }
+  SlashCmdList.ELANSHUB("talentprobe")
+  local all = table.concat(ElansHubDB.probe and ElansHubDB.probe.lines or {}, " | ")
+  ok("talentprobe: walks config, currency and node ranks with spell names", ElansHubDB.probe.what == "talentprobe"
+    and all:find("activeConfigID 7", 1, true) and all:find("currency 3 have 1 spent 19", 1, true)
+    and all:find("node 1 rank 2 / 5", 1, true) and all:find("Ferocity", 1, true))
+  C_Traits.GetNodeInfo = function() error("boom") end
+  SlashCmdList.ELANSHUB("talentprobe")
+  ok("talentprobe: a failing API is reported, never thrown", table.concat(ElansHubDB.probe.lines, " | "):find("GetNodeInfo ERROR", 1, true) ~= nil)
+  C_ClassTalents, C_Traits, C_Spell = nil, nil, oldSpell
+  _G.ElansHubCopy:Hide()
+end
+
 -- no combat log, no secure frames, no blocked
 local cl = false
 for _, e in ipairs(EVENTS) do if e:find("COMBAT_LOG") then cl = true end end
