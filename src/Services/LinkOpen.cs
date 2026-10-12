@@ -204,6 +204,21 @@ namespace ElansAddonHub.Services
                 if (await Task.WhenAny(read, Task.Delay(3000)) != read) { Rejected++; Util.Log("link pipe: a client sent nothing for 3 s; dropped"); return; }
                 await read;
                 var nl = Array.IndexOf(buf, (byte)'\n', 0, n);
+                if (nl < 0 && n == buf.Length)
+                {
+                    // oversized: read off the rest (up to 64 KB, 1 s) so the writer finishes and gets its 'N' instead of a broken pipe
+                    var drain = Task.Run(async () =>
+                    {
+                        var junk = new byte[4096];
+                        for (int total = 0; total < 64 * 1024;)
+                        {
+                            var r = await pipe.ReadAsync(junk, 0, junk.Length);
+                            if (r <= 0 || Array.IndexOf(junk, (byte)'\n', 0, r) >= 0) break;
+                            total += r;
+                        }
+                    });
+                    await Task.WhenAny(drain, Task.Delay(1000));
+                }
                 var len = nl >= 0 ? nl : n;
                 string link = len > 0 && len <= LinkOpen.MaxBytes ? LinkOpen.Validate(Encoding.UTF8.GetString(buf, 0, len)) : null;
                 if (link != null) Accepted++; else Rejected++;
