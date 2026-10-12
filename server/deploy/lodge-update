@@ -59,7 +59,8 @@ wait_health() {
 # here), so read it from the checked-out source that the build is made from
 src_version() { grep -hoE 'const string Version = "[^"]+"' "$SRC/server/Lodge.Server/Hub.cs" 2>/dev/null | sed -E 's/.*"([^"]+)"/\1/' || true; }
 label() { echo "$(src_version) ($("${GIT[@]}" rev-parse --short HEAD))"; }
-run_install() { bash "$INSTALL"; }
+# an update never prints an owner link (that is for a fresh install, see install.sh)
+run_install() { LODGE_SKIP_CLAIM=1 bash "$INSTALL"; }
 
 old="$("${GIT[@]}" rev-parse HEAD)"
 old_label="$(label)"

@@ -13,7 +13,14 @@
 # opens it, the Outpost trades it for a per-device token; the link is then dead. To print links with your address, set
 # LODGE_PUBLIC_URL=https://your.site/lodge in /etc/lodge/lodge.env.
 #
-# Permanent codes (older way, still supported):
+# Starting a lodge / getting back in (2.12) - the console is the proof that you own the server:
+#   sudo lodge-admin claim-owner              the one-time OWNER LINK for a new lodge (install.sh prints one at the end of a fresh install).
+#                                             Paste it into the Outpost (Lodge tab), type the name you want: you become the Guild Master.
+#                                             Refused when an owner exists. Lives 1 hour, works once; printed here only, stored as a hash.
+#   sudo lodge-admin recover-owner Elan       a one-time link that adds a NEW device for the existing owner Elan (locked out of every PC)
+#   sudo lodge-admin claim-owner --recover    the same, the person types which owner they are
+#
+# Permanent codes (legacy - new people should get invite links; `add` is kept for old setups):
 #   sudo lodge-admin add Bob [role]    new code for Bob (prints it - send it to Bob); role defaults to member
 #   sudo lodge-admin role Bob officer  change Bob's rank (applies within 15 s): owner | officer | veteran | member
 #   sudo lodge-admin remove Bob        Bob's code and devices stop working, he's disconnected within 15 seconds
@@ -51,7 +58,7 @@ cmd="${1:-list}"
 shift || true
 
 # --- argument parsing: flags anywhere, the rest is the name (and a rank as its last word for add/role/invite)
-days=""; hours=""; uses=""; force=0; guest=0
+days=""; hours=""; uses=""; force=0; guest=0; recover=0; ifneeded=0
 rest=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -61,6 +68,8 @@ while [ "$#" -gt 0 ]; do
       shift 2 ;;
     --guest) guest=1; shift ;;
     --force) force=1; shift ;;
+    --recover) recover=1; shift ;;
+    --if-needed) ifneeded=1; shift ;;
     *) rest+=("$1"); shift ;;
   esac
 done
@@ -127,7 +136,81 @@ fmt_time() { date -u -d "@$1" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$1"; }
 sha() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
 envval() { if [ -r "$ENVF" ]; then grep -E "^$1=" "$ENVF" | tail -1 | cut -d= -f2- | sed -E "s/^[\"']//; s/[\"']\$//" || true; fi; }
 
+# a codes line's role field, normalised the way the server does (gm / guildmaster = owner)
+role_of() { awk -F: -v n="$1" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { r=tolower($3); if (r=="gm"||r=="guildmaster") r="owner"; print (r==""?"member":r); exit }' "$FILE"; }
+# number of owners in the codes file other than $1 (all of them when $1 is empty)
+other_owners() {
+  awk -F: -v n="$1" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && NF>=2 && $1!="" { r=tolower($3); if (r=="gm"||r=="guildmaster") r="owner"; if (r=="owner" && tolower($1)!=n) c++ } END{print c+0}' "$FILE"
+}
+has_owner() {
+  [ "$(other_owners "")" -gt 0 ] && return 0
+  [ -f "$DEV" ] && awk -F'\t' '$0 !~ /^#/ && $3!="-" && tolower($4)=="owner" {f=1} END{exit f?0:1}' "$DEV" && return 0
+  return 1
+}
+# refuse to take away the last Guild Master (same rule as the server): role change, remove, leave
+guard_last_owner() {
+  if [ "$force" -ne 1 ] && [ "$(role_of "$name")" = owner ] && [ "$(other_owners "$name")" -eq 0 ]; then
+    echo "$name is the last Guild Master - make someone else an owner first (sudo lodge-admin role NAME owner), or use --force"
+    exit 1
+  fi
+}
+# the pending device links of $name stop working
+revoke_pending_invites() {
+  [ -f "$INV" ] || return 0
+  awk -F'\t' -v OFS='\t' -v n="$name" -v t="$(now)" 'BEGIN{n=tolower(n)} $0 !~ /^#/ && $3=="person" && tolower($4)==n && $11!="1" && $8>t && $10<$9 { $11="1" } { print }' "$INV" | write_to "$INV"
+}
+
+# one OWNER LINK: kind owner-claim, 1 hour, single use. $1 = "-" (claim a lodge with no owner), "*" (recovery, the person types
+# which owner they are) or the owner's name (recovery for that owner). Prints the link to stdout, the warning to stderr.
+make_claim() {
+  local iname="$1" created h=1 id secret row url server
+  secret="i1.$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=\n')"
+  id="$(openssl rand -hex 5)"
+  created="$(now)"
+  row="$(printf '%s\t%s\towner-claim\t%s\towner\tconsole\t%s\t%s\t1\t0\t0' "$id" "$(sha "$secret")" "$iname" "$created" "$((created + h * 3600))")"
+  { if [ -f "$INV" ]; then   # only one open owner link at a time: older ones die
+      awk -F'\t' -v OFS='\t' -v t="$created" '$0 !~ /^#/ && $3=="owner-claim" && $11!="1" && $8>t && $10<$9 { $11="1" } { print }' "$INV"
+    else echo "$INV_HEADER"; fi; printf '%s\n' "$row"; } | write_to "$INV"
+  url="${LODGE_PUBLIC_URL:-$(envval LODGE_PUBLIC_URL)}"
+  server="${url%/}"
+  case "$server" in https://*) server="${server#https://}";; esac
+  if [ -z "$server" ]; then server="<your-lodge-address>"; echo "(set LODGE_PUBLIC_URL=https://your.site/lodge in $ENVF, then run this command again, so the link carries your address)" >&2; fi
+  {
+    echo "=========================================================================="
+    echo " OWNER LINK - whoever opens this first becomes the lodge's Guild Master."
+    echo " It works ONCE and for 1 HOUR (valid until $(fmt_time $((created + h * 3600))) UTC)."
+    echo " It is printed only here: it is not logged or stored (only a hash is kept)."
+    echo " Do not paste it in a chat, a ticket or a screenshot. Paste it into the Outpost,"
+    echo " Lodge tab, and type the name you want."
+    echo "=========================================================================="
+  } >&2
+  printf 'elanshub://lodge/join#%s|%s\n' "$server" "$secret"
+}
+
 case "$cmd" in
+  claim-owner)
+    lock
+    if [ "$recover" -eq 1 ]; then
+      has_owner || { echo "This lodge has no Guild Master to recover - run: sudo lodge-admin claim-owner"; exit 1; }
+      make_claim "*"
+    else
+      if has_owner; then
+        if [ "$ifneeded" -eq 1 ]; then exit 0; fi   # install.sh: quietly nothing to do
+        echo "This lodge already has a Guild Master, so it can't be claimed."
+        echo "If the owner is locked out of every PC: sudo lodge-admin recover-owner <their name>"
+        exit 1
+      fi
+      make_claim "-"
+    fi
+    ;;
+  recover-owner)
+    need_name
+    lock
+    if ! has_code || [ "$(role_of "$name")" != owner ]; then echo "$name is not a Guild Master of this lodge (sudo lodge-admin list)"; exit 1; fi
+    oname="$(awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { print $1; exit }' "$FILE")"
+    echo "This adds a NEW device for the existing owner $oname (nothing else changes)." >&2
+    make_claim "$oname"
+    ;;
   add)
     need_name
     lock
@@ -145,6 +228,7 @@ case "$cmd" in
     if [ -z "$role" ]; then echo "Usage: sudo lodge-admin role NAME owner|officer|veteran|member"; exit 1; fi
     lock
     if ! has_code; then echo "No code for $name"; exit 1; fi
+    if [ "$role" != owner ]; then guard_last_owner; fi
     awk -F: -v OFS=: -v n="$name" -v r="$role" 'BEGIN{n=tolower(n)}
       !/^[[:space:]]*#/ && tolower($1)==n { print $1, $2, r; next } { print }' "$FILE" | replace
     echo "$name is now $role (applies within 15 seconds)"
@@ -153,7 +237,9 @@ case "$cmd" in
     need_name
     lock
     if ! has_code; then echo "No code for $name"; exit 1; fi
+    guard_last_owner
     awk -F: -v n="$name" 'BEGIN{n=tolower(n)} !/^[[:space:]]*#/ && tolower($1)==n { next } { print }' "$FILE" | replace
+    revoke_pending_invites
     if [ -f "$DEV" ]; then   # their devices go with them
       awk -F'\t' -v n="$name" 'BEGIN{n=tolower(n)} /^#/ { print; next } tolower($3)==n { next } { print }' "$DEV" | write_to "$DEV"
     fi
@@ -167,7 +253,7 @@ case "$cmd" in
     echo "$c"
     ;;
   list)
-    if [ ! -f "$FILE" ]; then echo "(nobody yet - sudo lodge-admin invite <name>)"; exit 0; fi
+    if [ ! -f "$FILE" ]; then echo "(nobody yet - sudo lodge-admin claim-owner)"; exit 0; fi
     names="$(awk -F: '!/^[[:space:]]*#/ && NF >= 2 && $1 != "" { r = ($3 == "" ? "member" : $3); printf "%-24s %s%s\n", $1, r, (substr($2,1,1) == "!" ? "  (no permanent code)" : "") }' "$FILE")"
     if [ -z "$names" ]; then echo "(nobody yet - sudo lodge-admin invite <name>)"; else echo "$names"; fi
     ;;
@@ -265,7 +351,8 @@ case "$cmd" in
     echo "$name's permanent code is retired (their devices keep working; a still-connected old client is disconnected within 15 seconds)"
     ;;
   *)
-    echo "Usage: sudo lodge-admin invite NAME [role] [--days N] | invite --guest [--uses N] | invites | revoke-invite ID"
+    echo "Usage: sudo lodge-admin claim-owner [--recover] | recover-owner NAME"
+    echo "                       | invite NAME [role] [--days N] | invite --guest [--uses N] | invites | revoke-invite ID"
     echo "                       | devices [NAME] | revoke-device ID | retire-code NAME"
     echo "                       | add NAME [role] | role NAME ROLE | remove NAME | show NAME | list"
     exit 1

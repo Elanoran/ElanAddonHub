@@ -36,7 +36,7 @@ public partial class Auth
         ReloadIfChanged();
         ReloadDevicesIfChanged();
         if (sharedHash == null && snap.Personal.Count == 0)
-            log.LogWarning("No invite codes yet - add one with: sudo lodge-admin add <name>");
+            log.LogWarning("No members yet - make the owner link with: sudo lodge-admin claim-owner");
     }
 
     static byte[] Hash(string s) => SHA256.HashData(Encoding.UTF8.GetBytes(s.Trim()));
@@ -129,15 +129,46 @@ public partial class Auth
         return code;
     }
 
-    public void SetRole(string name, string role) => Change(name, p => $"{p.Name}:{p.Code}:{Roles.Normalize(role)}");
+    public void SetRole(string name, string role)
+    {
+        role = Roles.Normalize(role);
+        Mutate(lines =>
+        {
+            if (role != "owner") EnsureOtherOwner(lines, name);
+            ChangeLines(lines, name, p => $"{p.Name}:{p.Code}:{role}");
+        });
+    }
 
     public void Remove(string name)
     {
-        Change(name, _ => null);
+        Mutate(lines => { EnsureOtherOwner(lines, name); ChangeLines(lines, name, _ => null); });
+        Locked(() => { RevokePendingInvitesLocked(name); return 0; });
         RevokeDevicesOf(name); // a removed person's devices stop working with them
     }
 
-    void Change(string name, Func<(string Name, string Code, string Role), string> change) => Mutate(lines =>
+    // The one last-owner rule (leave, role change, remove): if `name` is an owner now, someone else must stay one.
+    static void EnsureOtherOwner(List<string> lines, string name)
+    {
+        var people = lines.Select(Parse).Where(p => p != null).Select(p => p!.Value).ToList();
+        if (!people.Any(p => Names.Same(p.Name, name) && p.Role == "owner")) return;
+        if (!people.Any(p => p.Role == "owner" && !Names.Same(p.Name, name))) throw new InvalidOperationException(LastOwnerMessage);
+    }
+
+    // A person leaves for good: the codes entry, every device and every pending device link go; their messages stay.
+    // Refused for the last Guild Master. Returns the signed-out devices (the hub closes their sockets).
+    public List<DeviceInfo> Leave(string name) => Locked(() =>
+    {
+        ReloadIfChanged(force: true);
+        MutateCodesLocked(lines => { EnsureOtherOwner(lines, name); ChangeLines(lines, name, _ => null); });
+        var devs = ReadDeviceRows();
+        var gone = devs.Where(d => !d.Guest && Names.Same(d.Name, name)).ToList();
+        if (gone.Count > 0) { devs.RemoveAll(gone.Contains); WriteDevices(devs); }
+        RevokePendingInvitesLocked(name);
+        return gone;
+    });
+
+
+    static void ChangeLines(List<string> lines, string name, Func<(string Name, string Code, string Role), string> change)
     {
         bool found = false;
         for (int i = lines.Count - 1; i >= 0; i--)
@@ -149,7 +180,7 @@ public partial class Auth
             if (replaced == null) lines.RemoveAt(i); else lines[i] = replaced;
         }
         if (!found) throw new InvalidOperationException($"No code for {name}");
-    });
+    }
 
     // read-modify-write under the shared lock; the new list is written to a private temp file in the same
     // folder and renamed over the old one (atomic), so nobody ever reads a partial file

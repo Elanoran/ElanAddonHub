@@ -188,12 +188,12 @@ public partial class Auth
 
     // ================================================================ exchange (invite or old code -> device token)
 
-    public ExchangeOutcome ExchangeInvite(string ip, string invite, string deviceName, string clientDeviceId)
+    public ExchangeOutcome ExchangeInvite(string ip, string invite, string deviceName, string clientDeviceId, string typedName = null)
     {
         if (Blocked(ip)) return Blocked429();
         if (string.IsNullOrWhiteSpace(invite) || invite.Length > 256) { Fail(ip); return Wrong(); }
         ExchangeOutcome res;
-        try { res = Locked(() => ExchangeInviteLocked(HashHex(invite), deviceName, clientDeviceId, ip)); }
+        try { res = Locked(() => ExchangeInviteLocked(HashHex(invite), deviceName, clientDeviceId, ip, typedName)); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             log.LogWarning("Invite exchange failed to write: {Error}", e.GetType().Name);
@@ -232,7 +232,7 @@ public partial class Auth
     static ExchangeOutcome Wrong() => new(401, "This invite isn't valid - check the link", "wrong");
     static ExchangeOutcome Gone() => new(410, "This invite has been used or expired - ask for a new one", "used-or-expired");
 
-    ExchangeOutcome ExchangeInviteLocked(string hash, string deviceName, string clientDeviceId, string ip)
+    ExchangeOutcome ExchangeInviteLocked(string hash, string deviceName, string clientDeviceId, string ip, string typedName)
     {
         ReloadIfChanged();
         var rows = ReadInvites();
@@ -242,8 +242,14 @@ public partial class Auth
         if (!row.Info().Pending(clock.UtcNow)) return Gone();
 
         string name = null, role = "guest";
-        bool createPerson = false;
-        if (row.Kind == "person")
+        bool createPerson = false, promote = false;
+        if (row.Kind == ClaimKind)
+        {
+            var claim = ResolveClaim(rows, row, typedName);
+            if (claim.Refusal != null) return claim.Refusal;
+            (name, role, createPerson, promote) = (claim.Name, "owner", claim.Create, claim.Promote);
+        }
+        else if (row.Kind == "person")
         {
             var existing = snap.Personal.FirstOrDefault(p => Names.Same(p.Name, row.Name));
             if (existing != null) { name = existing.Name; role = existing.Role; }
@@ -251,6 +257,7 @@ public partial class Auth
         }
         // limits first, nothing is written yet
         if (!DeviceRoom(name, clientDeviceId, out var refusal)) return refusal;
+        if (promote) MutateCodesLocked(lines => ChangeLines(lines, name, p => $"{p.Name}:{p.Code}:owner"));
         if (createPerson)
         {
             try
@@ -276,7 +283,104 @@ public partial class Auth
         }
         var who = name == null ? new Identity(null, false, "guest", made.Value.Device.Id) : new Identity(name, true, role, made.Value.Device.Id);
         log.LogInformation("Invite {Invite} used: new device {Device} for {Name}", row.Id, made.Value.Device.Id, name == null ? "a guest" : Names.ForLog(name));
+        if (row.Kind == ClaimKind) log.LogInformation("Owner link {Invite} used: {Name} is now a Guild Master of this lodge", row.Id, Names.ForLog(name));
         return new ExchangeOutcome(200, null, null, made.Value.Token, made.Value.Device, who);
+    }
+
+    // ---- owner claim (2.12): a console-made, one-hour, single-use invite that creates the first Guild Master
+    //   kind "owner-claim", name "-"   claim a lodge that has NO owner; the person types the name they want
+    //   kind "owner-claim", name "*"   recovery: the typed name must already be an owner
+    //   kind "owner-claim", name NAME  recovery for that owner
+    // The secret is printed once, to the console, by lodge-admin / install.sh; it is stored only as a hash and never logged.
+    public const string ClaimKind = "owner-claim";
+    public const int ClaimHours = 1;
+    public const string LastOwnerMessage = "The lodge needs at least one Guild Master";
+
+    // the codes are the authority; a device that still says "owner" counts too (a damaged codes file must not make the lodge claimable)
+    public bool HasOwner()
+    {
+        ReloadIfChanged();
+        ReloadDevicesIfChanged();
+        return snap.Personal.Any(p => p.Role == "owner") || devSnap.All.Any(d => !d.Guest && d.Role == "owner");
+    }
+
+    public (InviteInfo Info, string Secret) CreateOwnerClaim(string boundName = null, bool recover = false)
+    {
+        string secret = NewInviteSecret();
+        return Locked(() =>
+        {
+            ReloadIfChanged(force: true);
+            ReloadDevicesIfChanged(force: true);
+            bool owner = HasOwner();
+            string useName = "-";
+            if (!recover)
+            {
+                if (owner) throw new InvalidOperationException("This lodge already has a Guild Master (use --recover if they are locked out)");
+            }
+            else
+            {
+                if (!owner) throw new InvalidOperationException("This lodge has no Guild Master to recover - use claim-owner");
+                useName = "*";
+                if (!string.IsNullOrWhiteSpace(boundName))
+                {
+                    var o = snap.Personal.FirstOrDefault(p => p.Role == "owner" && Names.Same(p.Name, boundName))
+                            ?? throw new InvalidOperationException($"{Names.ForLog(boundName)} is not a Guild Master of this lodge");
+                    useName = o.Name;
+                }
+            }
+            var rows = ReadInvites();
+            var now = NowUnix();
+            foreach (var r in rows.Where(r => r.Kind == ClaimKind && r.Info().Pending(clock.UtcNow))) r.Revoked = true;   // one open claim at a time
+            var row = new InviteRow
+            {
+                Id = NewId(), Hash = HashHex(secret), Kind = ClaimKind, Name = useName, Role = "owner", By = "console",
+                Created = now, Expires = now + ClaimHours * 3600L, Max = 1, Uses = 0,
+            };
+            while (rows.Any(r => r.Id == row.Id)) row.Id = NewId();
+            rows.Add(row);
+            WriteInvites(rows);
+            return (row.Info(), secret);
+        });
+    }
+
+    sealed record ClaimPlan(ExchangeOutcome Refusal, string Name, bool Create, bool Promote);
+
+    ClaimPlan ResolveClaim(List<InviteRow> rows, InviteRow row, string typed)
+    {
+        static ClaimPlan No(ExchangeOutcome o) => new(o, null, false, false);
+        typed = Names.Normalize(typed ?? "");
+        if (row.Name == "-")
+        {
+            if (HasOwner())
+            {
+                row.Revoked = true;   // somebody else got there first: this link is dead
+                try { WriteInvites(rows); } catch (IOException) { }
+                return No(new ExchangeOutcome(409, "This lodge already has a Guild Master", "owner-exists"));
+            }
+            if (!NameRule.IsMatch(typed)) return No(NameNeeded());
+            var existing = snap.Personal.FirstOrDefault(p => Names.Same(p.Name, typed));
+            if (existing != null) return new ClaimPlan(null, existing.Name, false, existing.Role != "owner");
+            if (snap.Personal.Any(p => Names.Alike(p.Name, typed))) return No(new ExchangeOutcome(409, $"{typed} looks just like a name that's already taken - pick another", "name-taken"));
+            return new ClaimPlan(null, typed, true, false);
+        }
+        var target = row.Name == "*" ? typed : row.Name;
+        if (row.Name == "*" && !NameRule.IsMatch(target)) return No(NameNeeded());
+        var o = snap.Personal.FirstOrDefault(p => p.Role == "owner" && Names.Same(p.Name, target));
+        if (o == null) return No(new ExchangeOutcome(409, "That is not a Guild Master of this lodge", "not-owner"));
+        return new ClaimPlan(null, o.Name, false, false);
+    }
+
+    static ExchangeOutcome NameNeeded() =>
+        new(400, "Type the name you want in the lodge (1-24 letters, digits, space, _ or -)", "name-required");
+
+    // a person who left or was removed: their pending device links stop working
+    int RevokePendingInvitesLocked(string name)
+    {
+        var rows = ReadInvites();
+        int n = 0;
+        foreach (var r in rows.Where(r => r.Kind == "person" && Names.Same(r.Name, name) && r.Info().Pending(clock.UtcNow))) { r.Revoked = true; n++; }
+        if (n > 0) WriteInvites(rows);
+        return n;
     }
 
     // may this identity get another device (a re-join from the same clientDeviceId replaces its old one)?

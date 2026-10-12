@@ -21,10 +21,10 @@ def check(name, ok, extra=""):
     print(("PASS " if ok else "FAIL ") + name + (f"  -> {extra}" if extra != "" else ""))
 
 
-def start(port, **env):
+def start(port, empty=False, **env):
     data = tempfile.mkdtemp(prefix="lodge-it-")
     with open(os.path.join(data, "codes"), "w") as f:
-        f.write(f"Elan:{ELAN}:owner\nBob:{BOB}:officer\n")
+        f.write("" if empty else f"Elan:{ELAN}:owner\nBob:{BOB}:officer\n")
     e = dict(os.environ, LODGE_DATA=data, LODGE_URLS=f"http://127.0.0.1:{port}", LODGE_CODE=GUEST, LODGE_CODES_FILE="")
     e.update({k: str(v) for k, v in env.items()})
     log = open(os.path.join(data, "server.log"), "w")
@@ -576,6 +576,94 @@ async def suite_h(base):
         await a.close(); await b.close(); await g.close()
 
 
+def claim_row(data, name="-", hours=1, secret=None):
+    """What `lodge-admin claim-owner` writes: kind owner-claim, role owner, single use, only the sha256 of the secret."""
+    import hashlib, base64, secrets as sec
+    secret = secret or "i1." + base64.urlsafe_b64encode(sec.token_bytes(24)).decode().rstrip("=")
+    now = int(time.time())
+    row = "\t".join(["c1c1c1c1c1", hashlib.sha256(secret.encode()).hexdigest(), "owner-claim", name, "owner", "console", str(now), str(now + hours * 3600), "1", "0", "0"])
+    with open(os.path.join(data, "invites"), "w") as f:
+        f.write("# Lodge invites\n" + row + "\n")
+    SECRETS.append(secret)
+    return secret
+
+
+async def suite_i(base, data):
+    """2.12: owner claim on an empty lodge, the web invite page, leaving, the last-owner guard - over real sockets."""
+    ws_base = base.replace("http", "ws")
+    def TH(token, ip): return {"X-Forwarded-For": ip, "X-Lodge-Token": token}
+    async with aiohttp.ClientSession() as s:
+        # ---- the public page
+        r = await s.get(base + "/?join=i1.shouldnotbeechoed", headers=H(ip="198.51.100.150"))
+        body = await r.text()
+        csp = r.headers.get("Content-Security-Policy", "")
+        check("web page: 200 html with a strict CSP (default-src none, nonce script, frame-ancestors none)", r.status == 200 and "default-src 'none'" in csp and "frame-ancestors 'none'" in csp and "script-src 'nonce-" in csp and "unsafe-inline" not in csp, csp)
+        check("web page: nosniff, no-referrer, no-store", r.headers.get("X-Content-Type-Options") == "nosniff" and r.headers.get("Referrer-Policy") == "no-referrer" and "no-store" in r.headers.get("Cache-Control", ""))
+        nonce = re.search(r"script-src 'nonce-([^']+)'", csp).group(1)
+        check("web page: the one script carries the nonce and nothing of the query/fragment is echoed", f'<script nonce="{nonce}">' in body and "shouldnotbeechoed" not in body and "fetch(" not in body and "XMLHttpRequest" not in body)
+        r2 = await s.get(base + "/", headers=H(ip="198.51.100.150"))
+        nonce2 = re.search(r"script-src 'nonce-([^']+)'", r2.headers["Content-Security-Policy"]).group(1)
+        check("web page: a fresh nonce per response", nonce2 != nonce)
+
+        # ---- owner claim on a lodge with no owner
+        secret = claim_row(data)
+        r = await s.get(base + "/features", headers=H(ip="198.51.100.151"))
+        j = await r.json()
+        check("features: leave + lodgeinfo, public lodge info", {"leave", "lodgeinfo"} <= set(j["features"]) and "lodge" in j, j)
+        ip = "198.51.100.152"
+        r = await s.post(base + "/exchange", headers={**H(ip=ip), "X-Lodge-Invite": secret}, json={"device": "Home PC", "deviceId": "owner-pc"})
+        j = await r.json()
+        check("claim: no name typed -> 400 name-required, the link is not used up", r.status == 400 and j.get("reason") == "name-required", j)
+        r = await s.post(base + "/exchange", headers={**H(ip=ip), "X-Lodge-Invite": secret}, json={"device": "Home PC", "deviceId": "owner-pc", "name": "Aurelia"})
+        j = await r.json()
+        token = j.get("token", ""); SECRETS.append(token)
+        check("claim: with a name -> 200, device token, role owner", r.status == 200 and token.startswith("t1.") and j["name"] == "Aurelia" and j["role"] == "owner", j)
+        r = await s.post(base + "/exchange", headers={**H(ip=ip), "X-Lodge-Invite": secret}, json={"device": "Other", "deviceId": "x", "name": "Mallory"})
+        check("claim: single use - the second try is 410", r.status == 410, r.status)
+        with open(os.path.join(data, "codes")) as f:
+            codes = f.read()
+        check("claim: no permanent code was created (a retired marker only)", re.search(r"^Aurelia:!", codes, re.M) is not None and ":owner" in codes)
+
+        # ---- lodge name and welcome
+        a = await s.ws_connect(ws_base + "/ws?name=x", headers=TH(token, "198.51.100.153"))
+        w = await recv(a, "welcome")
+        check("welcome: you are the owner, with the lodge info block", w is not None and w["role"] == "owner" and "lodge" in w, w and w["role"])
+        await a.send_str(json.dumps({"t": "admin.lodge.set", "name": "The <b>Silver</b> Lodge", "welcome": "Be kind.\nHave fun."}))
+        li = await recv(a, "lodge.info")
+        check("lodge.info broadcast after the owner sets it", li is not None and li["lodge"]["name"] == "The <b>Silver</b> Lodge", li)
+        r = await s.get(base + "/", headers=H(ip="198.51.100.150"))
+        body = await r.text()
+        check("web page: shows the name HTML-encoded and the welcome text", "The &lt;b&gt;Silver&lt;/b&gt; Lodge" in body and "<b>Silver</b>" not in body and "Be kind." in body)
+        await a.send_str(json.dumps({"t": "admin.lodge.set", "name": "N" * 41, "welcome": ""}))
+        e = await recv(a, "error")
+        check("lodge name over 40 characters is refused", e is not None and "40" in e["text"], e)
+
+        # ---- the last owner can't leave; transfer; leave
+        await a.send_str(json.dumps({"t": "member.leave"}))
+        e = await recv(a, "error", pred=lambda d: d.get("code") == "last-owner")
+        check("leave: the last owner is refused with code last-owner", e is not None and e["text"] == "Transfer ownership first", e)
+        await a.send_str(json.dumps({"t": "admin.role", "name": "Aurelia", "role": "member"}))
+        e = await recv(a, "error", pred=lambda d: "Guild Master" in d.get("text", ""))
+        check("role change: the last owner can't be demoted", e is not None, e)
+        await a.send_str(json.dumps({"t": "admin.invite.create", "kind": "person", "name": "Nova", "role": "member", "hours": 2}))
+        c = await recv(a, "admin.invite.created"); nsecret = c["secret"]; SECRETS.append(nsecret)
+        r = await s.post(base + "/exchange", headers={**H(ip="198.51.100.154"), "X-Lodge-Invite": nsecret}, json={"device": "Nova-PC", "deviceId": "nova-1"})
+        j = await r.json(); ntoken = j["token"]; SECRETS.append(ntoken)
+        await a.send_str(json.dumps({"t": "admin.role", "name": "Nova", "role": "owner"}))
+        await asyncio.sleep(0.5)
+        await a.send_str(json.dumps({"t": "member.leave"}))
+        left = await recv(a, "member.left")
+        gone = await recv(a, "_closed")
+        check("leave: after a transfer the old owner leaves - member.left, then the socket closes", left is not None and gone is not None)
+        r = await s.get(base + "/health", headers={"X-Forwarded-For": "198.51.100.155", "X-Lodge-Token": token})
+        check("leave: the leaver's device token no longer works", r.status == 401, r.status)
+        r = await s.get(base + "/health", headers={"X-Forwarded-For": "198.51.100.156", "X-Lodge-Token": ntoken})
+        check("leave: the new owner is unaffected", r.status == 200, r.status)
+        with open(os.path.join(data, "codes")) as f:
+            codes = f.read()
+        check("leave: the codes entry is gone, the new owner stays", "Aurelia" not in codes and re.search(r"^Nova:.*:owner$", codes, re.M) is not None)
+
+
 def scan_logs(*datas):
     text = ""
     for d in datas:
@@ -591,9 +679,10 @@ def main():
     pa, da, la = start(5291, LODGE_ALLOW_QUERY_CODE="true")  # the first server keeps the legacy ?code= on (default is off since 2.8)
     pc, dc, lc = start(5293)
     ph, dh, lh = start(5295)
+    pi, di, li = start(5296, empty=True)
     pb, db, lb = start(5292, LODGE_ALLOW_QUERY_CODE="false", LODGE_MAX_STORAGE_MB=1, LODGE_MAX_FILE_MB=1, LODGE_MAX_USERS=5)
     try:
-        wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge"); wait_up("http://127.0.0.1:5293/lodge"); wait_up("http://127.0.0.1:5294/lodge"); wait_up("http://127.0.0.1:5295/lodge")
+        wait_up("http://127.0.0.1:5291/lodge"); wait_up("http://127.0.0.1:5292/lodge"); wait_up("http://127.0.0.1:5293/lodge"); wait_up("http://127.0.0.1:5294/lodge"); wait_up("http://127.0.0.1:5295/lodge"); wait_up("http://127.0.0.1:5296/lodge")
         asyncio.run(suite_a("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_c("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_d("http://127.0.0.1:5291/lodge"))
@@ -602,12 +691,13 @@ def main():
         asyncio.run(suite_f("http://127.0.0.1:5293/lodge"))
         asyncio.run(suite_g("http://127.0.0.1:5294/lodge"))
         asyncio.run(suite_h("http://127.0.0.1:5295/lodge"))
+        asyncio.run(suite_i("http://127.0.0.1:5296/lodge", di))
     finally:
-        for p in (pa, pb, pc, pg, ph): p.terminate()
-        for p in (pa, pb, pc, pg, ph): p.wait(10)
-        for l in (la, lb, lc, lg, lh): l.close()
-    scan_logs(da, db, dc, dg, dh)
-    for d in (da, db, dc, dg, dh): shutil.rmtree(d, ignore_errors=True)
+        for p in (pa, pb, pc, pg, ph, pi): p.terminate()
+        for p in (pa, pb, pc, pg, ph, pi): p.wait(10)
+        for l in (la, lb, lc, lg, lh, li): l.close()
+    scan_logs(da, db, dc, dg, dh, di)
+    for d in (da, db, dc, dg, dh, di): shutil.rmtree(d, ignore_errors=True)
     print(f"\n{sum(results)}/{len(results)} passed")
     sys.exit(0 if all(results) else 1)
 

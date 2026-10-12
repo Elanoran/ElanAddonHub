@@ -14,6 +14,26 @@ sudo /opt/lodge-src/server/deploy/install.sh
 daily `lodge-backup.timer` (04:15 plus up to 20 minutes random delay). systemd drop-ins in
 `/etc/systemd/system/lodge.service.d/` are never touched.
 
+## Starting a lodge: the owner link (2.12)
+
+A fresh install has no Guild Master. At the end of `install.sh` it prints an **OWNER LINK** (once, to the console only; valid 1 hour, works once):
+
+```bash
+sudo git clone https://github.com/Elanoran/ElanAddonHub /opt/lodge-src
+sudo /opt/lodge-src/server/deploy/install.sh        # prints the owner link at the end
+```
+
+Set `LODGE_PUBLIC_URL=https://your.site/lodge` in `/etc/lodge/lodge.env` first (then `sudo systemctl restart lodge`) so the link carries your address; if you forgot, set it
+and run `sudo lodge-admin claim-owner` for a new one. In the Outpost: Lodge tab, "Create a lodge" shows these steps; paste the link into the join box, type the name you want, Join.
+You are the Guild Master (Settings, Guild Master: lodge name, welcome text, ranks, invites). No code is made for you.
+
+```bash
+sudo lodge-admin claim-owner                 # a new owner link (refused when the lodge has an owner)
+sudo lodge-admin recover-owner Elan          # locked out of every PC? a link that adds a new device for the owner Elan
+```
+
+Everyone else is invited from the app (Lodge sidebar, Invite) or with `sudo lodge-admin invite <name>`. `lodge-admin add` (permanent codes) still works for old setups but is no longer the way in.
+
 ## Invites, devices and codes (2.10): `lodge-admin`
 
 ```bash

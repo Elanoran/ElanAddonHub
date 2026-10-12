@@ -45,19 +45,13 @@ var auth = new Auth(cfg, app.Logger);
 var files = new FileStore(cfg);
 var lodge = new LodgeHub(cfg, auth, files, app.Logger);
 
-// opening an invite link in a browser lands here (the code after # never reaches the server)
-app.MapGet("/", () => Results.Content("""
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>You're invited to the lodge</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1113;color:#e8eaed;font:15px/1.6 'Segoe UI',system-ui,sans-serif}
-main{max-width:430px;padding:32px;background:#16191c;border:1px solid #262b30;border-radius:14px}h1{margin:0 0 6px;font-size:21px}
-p{color:#8a9199;margin:0 0 18px}ol{padding-left:20px;margin:0 0 20px}li{margin:6px 0}a.btn{display:inline-block;background:#abd473;color:#111315;
-text-decoration:none;font-weight:600;padding:10px 18px;border-radius:9px}</style></head><body><main>
-<h1>You're invited to the lodge</h1><p>Chat, voice and files with your friends, inside Elan's Addon Hub.</p>
-<ol><li>Download <b>Elan's Addon Hub</b> and start it.</li><li>Open the <b>Lodge</b> tab.</li>
-<li>Paste the <b>whole invite link</b> you were sent and press Join.</li></ol>
-<a class="btn" href="https://github.com/Elanoran/ElanAddonHub/releases/latest">Download the hub</a></main></body></html>
-""", "text/html"));
+// opening an invite link in a browser lands here (see InvitePage: the part after # never reaches the server; the page is the same for everyone)
+app.MapGet("/", (HttpContext ctx) =>
+{
+    var nonce = InvitePage.NewNonce();
+    foreach (var h in InvitePage.Headers(nonce)) ctx.Response.Headers[h.Key] = h.Value;
+    return Results.Content(InvitePage.Render(nonce, lodge.Info.Name, lodge.Info.Welcome), "text/html; charset=utf-8");
+});
 
 string IpOf(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "?";
 
@@ -117,7 +111,7 @@ app.Use(async (ctx, next) =>
 });
 
 // 2.10: what this server can do, so a newer client knows whether to use invite links and device tokens (older servers answer 404)
-app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, features = new[] { "tokens", "invites", "devices", "calendar" } }));
+app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, features = new[] { "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo" }, lodge = new { name = lodge.Info.Name, welcome = lodge.Info.Welcome } }));
 
 // 2.10: trade a one-time invite (X-Lodge-Invite header, or "invite" in the body) - or, to upgrade a device, the old permanent
 // code (X-Lodge-Code) - for a per-device token. Body (optional JSON, max 4 KB): {"device": "PC name", "deviceId": "random id"}.
@@ -125,7 +119,7 @@ app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, feat
 app.MapPost("/exchange", async (HttpContext ctx) =>
 {
     if (ctx.Request.ContentLength > 4096) return Results.Json(new { error = "Request too large" }, statusCode: 413);
-    string device = "", deviceId = "", bodyInvite = "";
+    string device = "", deviceId = "", bodyInvite = "", typedName = "";
     try
     {
         using var ms = new MemoryStream();
@@ -138,7 +132,7 @@ app.MapPost("/exchange", async (HttpContext ctx) =>
         }
         if (ms.Length > 0 && System.Text.Json.Nodes.JsonNode.Parse(ms.ToArray()) is System.Text.Json.Nodes.JsonObject o)
         {
-            device = J.Str(o, "device") ?? ""; deviceId = J.Str(o, "deviceId") ?? ""; bodyInvite = J.Str(o, "invite") ?? "";
+            device = J.Str(o, "device") ?? ""; deviceId = J.Str(o, "deviceId") ?? ""; bodyInvite = J.Str(o, "invite") ?? ""; typedName = J.Str(o, "name") ?? "";
         }
     }
     catch (System.Text.Json.JsonException) { return Results.Json(new { error = "Bad request" }, statusCode: 400); }
@@ -146,7 +140,7 @@ app.MapPost("/exchange", async (HttpContext ctx) =>
     if (string.IsNullOrEmpty(invite)) invite = bodyInvite;
     var code = ctx.Request.Headers["X-Lodge-Code"].ToString();
     ExchangeOutcome r;
-    if (!string.IsNullOrEmpty(invite)) r = auth.ExchangeInvite(IpOf(ctx), invite, device, deviceId);
+    if (!string.IsNullOrEmpty(invite)) r = auth.ExchangeInvite(IpOf(ctx), invite, device, deviceId, typedName);
     else if (!string.IsNullOrEmpty(code)) r = auth.ExchangeCode(IpOf(ctx), code, device, deviceId);
     else return Results.Json(new { error = "Send the invite in the X-Lodge-Invite header" }, statusCode: 400);
     ctx.Response.Headers["Cache-Control"] = "no-store";
