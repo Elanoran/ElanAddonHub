@@ -25,6 +25,9 @@ namespace ElansAddonHub.Services
         public static bool Active { get; private set; }
         public static string ManifestUrl => "http://127.0.0.1:" + port + "/manifest.json";
         public static int Requests;
+        // self-test knobs: hold the manifest back (a slow network) and offer a newer hub (shows the update banner)
+        public static int DelayMs;
+        public static string HubVersion;
 
         public static string Start()
         {
@@ -94,7 +97,7 @@ namespace ElansAddonHub.Services
             var addons = AddonIds.Select(id => "{\"id\":" + J(id) + ",\"name\":" + J(id) + ",\"description\":" + J("Self-test addon " + id) + ",\"version\":\"1.0.0\","
                 + "\"url\":" + J(b + id + "-1.0.0.zip") + ",\"sha256\":" + J(Sha(zips[id])) + ",\"flavor\":" + J(Flavor) + ",\"flavorName\":\"Classic (test)\","
                 + "\"folders\":[" + J(id) + "],\"required\":false,\"changelog\":[{\"version\":\"1.0.0\",\"text\":\"First test release\"}]}");
-            return "{\"hub\":{\"version\":" + J(App.Version) + ",\"url\":" + J(b + "hub.exe") + ",\"sha256\":\"\"},\"addons\":[" + string.Join(",", addons) + "]}";
+            return "{\"hub\":{\"version\":" + J(HubVersion ?? App.Version) + ",\"url\":" + J(b + "hub.exe") + ",\"sha256\":\"\"},\"addons\":[" + string.Join(",", addons) + "]}";
         }
 
         static void Serve(HttpListenerContext c)
@@ -102,7 +105,7 @@ namespace ElansAddonHub.Services
             System.Threading.Interlocked.Increment(ref Requests);
             var path = c.Request.Url.AbsolutePath.TrimStart('/');
             byte[] body = null; string type = "application/octet-stream";
-            if (path == "manifest.json") { body = Encoding.UTF8.GetBytes(Manifest()); type = "application/json"; }
+            if (path == "manifest.json") { if (DelayMs > 0) System.Threading.Thread.Sleep(DelayMs); body = Encoding.UTF8.GetBytes(Manifest()); type = "application/json"; }
             else if (path.EndsWith("-1.0.0.zip") && zips.TryGetValue(path.Substring(0, path.Length - "-1.0.0.zip".Length), out var z)) { body = z; type = "application/zip"; }
             if (body == null) { c.Response.StatusCode = 404; c.Response.Close(); return; }
             c.Response.ContentType = type; c.Response.ContentLength64 = body.Length;

@@ -128,7 +128,7 @@
       <local:InventoryPage x:Name="InventoryView" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <local:BrowserPage x:Name="BrowserView" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <ScrollViewer x:Name="AddonsPage" Grid.Row="3" Grid.Column="1" VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True">
-       <StackPanel MaxWidth="680" Margin="{StaticResource Pad.Page}">
+       <StackPanel x:Name="AddonsRoot" MaxWidth="680" Margin="{StaticResource Pad.Page}">
         <!-- one-click "check everything", right above the cards (same column as the cards) -->
         <Grid Margin="0,0,0,12" Height="32">
           <StackPanel x:Name="RefreshBar" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">

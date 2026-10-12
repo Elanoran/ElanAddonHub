@@ -58,6 +58,7 @@ namespace ElansAddonHub
             if (scaleText.StartsWith("linkopen")) { await LinkOpenShots(dir); return; }
             if (scaleText.StartsWith("calendar")) { await CalendarShots(dir); return; }
             if (scaleText.StartsWith("skeleton")) { await SkeletonShots(dir); return; }
+            if (scaleText.StartsWith("startup")) { await StartupShots(dir); return; }
             double scale = 1;
             double.TryParse(scaleText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out scale);
             if (scale < 0.5) scale = 1;
