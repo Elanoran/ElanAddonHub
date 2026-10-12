@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -52,6 +52,7 @@ namespace ElansAddonHub.Services
             ["linkopen"] = "clicking an elanshub:// link: accepted links, per-user registration (test root), pipe hand-off, join panel (never auto-joined), Settings toggle",
             ["calendar"] = "Lodge 2.11: raid / event calendar - agenda grouping, local time, month dots, form checks, sign-up buttons, 15-minute reminders, next-event line, chat card, hidden on older servers",
             ["wowevents"] = "WoW's own calendar in the Lodge calendar (companion addon data): parsing, local time, agenda 'until', month bands, switches, the strip above the chat (fixed height, no shift of the message list), nothing sent to the server",
+            ["flightshare"] = "Lodge 2.13 shared flight times: Hunter Helper saved variables (validation, several accounts), upload batches (500 legs, once per 10 minutes, only what changed), merge answer, SharedData.lua (escaping, injection, structure, written only when the toc lists it, atomically), setting off, guests, older server = nothing",
             ["video"] = "YouTube preview cards + in-app player",
             ["browser"] = "Browser page: URL/search rules, scheme + ad-host lists, tabs, tiles, WebView2 hardening",
             ["presence"] = "member presence",
@@ -74,7 +75,7 @@ namespace ElansAddonHub.Services
         {
             var r = new List<Tuple<Regex, string[]>>();
             void R(string rx, params string[] s) => r.Add(Tuple.Create(new Regex(rx, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), s));
-            var lodgeAll = new[] { "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "video", "viewer", "toasts", "presence", "profile", "round3" };
+            var lodgeAll = new[] { "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "video", "viewer", "toasts", "presence", "profile", "round3" };
 
             // ---- shared: everything depends on these
             R(@"^src/(App\.xaml(\.cs)?|MainWindow\.xaml(\.cs)?|MainWindow\.Others\.cs|MainWindow\.Welcome\.cs|ElansAddonHub\.csproj|Motion\.cs|Brand\.cs|SourceIcons\.cs|PillBase\.cs|WelcomeGuide\.cs)$", Star);
@@ -92,7 +93,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/(LodgeClient|AvatarArt|GamePresence|ItemLinks)\.cs$", lodgeAll);
             R(@"^src/Services/(VoiceEngine|VoiceEffects)\.cs$", "voice", "lodge");
             R(@"^src/Services/Sounds\.cs$", "toasts", "lodge", "voice");
-            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents");
+            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare");
             R(@"^src/MainWindow\.ProfileTest\.cs$", "profile");
             R(@"^src/MainWindow\.VideoTest\.cs$", "video");
             R(@"^src/(BrowserPage(\.xaml(\.cs)?)?|MainWindow\.BrowserTest|Services/(WebEngine|BrowserUrl|AdBlock))(\.cs)?$", "browser", "video");
@@ -107,6 +108,7 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.CalendarTest\.cs$", "calendar");
             R(@"^src/MainWindow\.WowEventsTest\.cs$", "wowevents");
             R(@"^src/Services/WowCalendar\.cs$", "wowevents", "calendar", "lodge");
+            R(@"^src/(MainWindow\.FlightShareTest|Services/FlightShare)\.cs$", "flightshare", "lodge");
             R(@"^src/MainWindow\.DesignTest\.Calendar\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.DesignTest\.WowEvents\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.DesignTest\.Invites\.cs$");   // screenshot-only design run

@@ -123,6 +123,7 @@ namespace ElansAddonHub
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
             EventsStripBox.IsChecked = !s.EventsStripOff;
             WowEventsBox.IsChecked = !s.WowEventsOff;
+            FlightShareBox.IsChecked = !s.FlightShareOff;
 
             ModeVa.IsChecked = !s.VoicePushToTalk;
             ModePtt.IsChecked = s.VoicePushToTalk;
@@ -472,8 +473,11 @@ namespace ElansAddonHub
             bool calendarChanged = settings.EventsStripOff != (EventsStripBox.IsChecked != true) || settings.WowEventsOff != (WowEventsBox.IsChecked != true);
             settings.EventsStripOff = EventsStripBox.IsChecked != true;
             settings.WowEventsOff = WowEventsBox.IsChecked != true;
+            bool flightChanged = settings.FlightShareOff != (FlightShareBox.IsChecked != true);
+            settings.FlightShareOff = FlightShareBox.IsChecked != true;
             SettingsStore.Save(settings);
             if (calendarChanged) session.WowCalendarSettingsChanged();
+            if (flightChanged) session.FlightSettingsChanged();
         }
 
         void OpenPrivacy_Click(object sender, RoutedEventArgs e) => Show("privacy");

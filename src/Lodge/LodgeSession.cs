@@ -312,6 +312,7 @@ namespace ElansAddonHub.Lodge
             foreach (var l in pins.Values) l.Clear();
             channelCache.Clear();
             ResetCalendar();
+            ResetFlights();
             ResetHistoryState();
             Pending = null;
             failedImages.Clear();
@@ -497,6 +498,8 @@ namespace ElansAddonHub.Lodge
                 case "lodge.info": case "member.left":
                     OnLeaveFrame(m);
                     break;
+                case "flights.shared": OnFlightShared(m); break;
+                case "flights.data": OnFlightData(m); break;
             }
         }
 
@@ -520,6 +523,7 @@ namespace ElansAddonHub.Lodge
             ReadHistoryFeatures(features);
             ReadInviteFeatures(m, features);
             ReadCalendarFeatures(m, features);
+            ReadFlightFeatures(features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
@@ -640,6 +644,7 @@ namespace ElansAddonHub.Lodge
             lastGameJson = null;
             SendGame();
             foreach (var r in VoiceRooms) r.InvisibleHint = Invisible;
+            FlightSync(connect: true);                          // shared flight times (a no-op without the server feature)
             Changed?.Invoke();
             // a gentle, one-time nudge: without a display name everybody sees the login name
             if (SupportsDisplayName && Me != null && !Me.Guest && string.IsNullOrEmpty(Me.DisplayName) && !Settings.DisplayNameHintShown)
@@ -1431,7 +1436,7 @@ namespace ElansAddonHub.Lodge
             if (Pending != null && Clock() - Pending.At > TimeSpan.FromSeconds(15)) Pending = null;   // surely out by now
             if (pendingRoom != null && Clock() - pendingSince > TimeSpan.FromSeconds(6)) { pendingRoom = null; Error?.Invoke("Couldn't join the voice room - no answer from the lodge"); Changed?.Invoke(); }
             AutoStatusTick();
-            if (tickCount % 20 == 0) { LfgTick(); CalendarTick(); }
+            if (tickCount % 20 == 0) { LfgTick(); CalendarTick(); FlightTick(); }
             if (Toasts.NeedsTick) Toasts.Tick();
         }
 

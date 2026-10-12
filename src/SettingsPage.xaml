@@ -242,6 +242,12 @@
                 <CheckBox x:Name="WowEventsBox" Style="{StaticResource Switch}" Click="Lodge_Click" AutomationProperties.Name="Show in-game WoW events" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
+            <TextBlock Text="Flight times" Style="{StaticResource Head}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share flight times with the lodge" Tag="Your learned flight-path times are shared; you get everyone's. Times only, nothing else. With this off nothing is uploaded, but you still receive everyone's.">
+                <CheckBox x:Name="FlightShareBox" Style="{StaticResource Switch}" Click="Lodge_Click" AutomationProperties.Name="Share flight times with the lodge" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
             <TextBlock Text="Presence" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Connect when the Outpost starts" Tag="Friends see you online while the Outpost runs.">

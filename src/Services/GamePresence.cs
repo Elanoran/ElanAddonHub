@@ -222,7 +222,10 @@ namespace ElansAddonHub.Services
         }
 
         // <root>\_<flavor>_\WTF\Account\<ACCOUNT>\SavedVariables\ElansHub.lua
-        public static List<string> SavedVariablesFiles(string root)
+        public static List<string> SavedVariablesFiles(string root) => SavedVariablesFiles(root, "ElansHub.lua");
+
+        // the same walk for another addon's file (e.g. ElansHunterHelper.lua): every flavor, every account folder; read-only
+        public static List<string> SavedVariablesFiles(string root, string fileName)
         {
             var files = new List<string>();
             if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return files;
@@ -234,7 +237,7 @@ namespace ElansAddonHub.Services
                     if (!Directory.Exists(accounts)) continue;
                     foreach (var acc in Directory.GetDirectories(accounts))
                     {
-                        var f = Path.Combine(acc, "SavedVariables", "ElansHub.lua");
+                        var f = Path.Combine(acc, "SavedVariables", fileName);
                         if (File.Exists(f)) files.Add(f);
                     }
                 }
