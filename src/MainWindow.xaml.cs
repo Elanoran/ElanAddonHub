@@ -278,6 +278,7 @@ namespace ElansAddonHub
             // always: cheap, and the one thing that must never be skipped
             var dataInside = System.IO.Path.GetFullPath(Util.DataDir).StartsWith(System.IO.Path.GetFullPath(dir).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
             result += "\r\n" + (dataInside ? "ok   " : "FAIL ") + "isolation: data folder is inside the test dir (" + Util.DataDir + ")";
+            result += "\r\n" + (Services.Sounds.Muted ? "ok   " : "FAIL ") + "isolation: sound is muted (a hidden test must not be heard)";
             result += "\r\n" + TestScope.SelfTest();
             if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir); End(); }
             if (Begin("strip")) { result += "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live(); End(); }

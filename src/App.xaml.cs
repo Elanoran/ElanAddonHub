@@ -75,6 +75,7 @@ namespace ElansAddonHub
                 }
             }
             if (Array.IndexOf(e.Args, "--selftest") >= 0) LinkOpen.SelfTestRun = true;   // the real elanshub:// registration is off limits to a self-test
+            if (Array.IndexOf(e.Args, "--selftest") >= 0) Sounds.Muted = true;          // and nothing a self-test plays may reach the speakers
             base.OnStartup(e);
             // Windows animations off: every Motion.* duration becomes instant (DESIGN.md, Motion)
             if (!SystemParameters.ClientAreaAnimation)

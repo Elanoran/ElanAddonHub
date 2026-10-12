@@ -169,7 +169,7 @@ namespace ElansAddonHub.Services
             try
             {
                 speakers = new WaveOutEvent { DeviceNumber = outputDevice, DesiredLatency = 120, NumberOfBuffers = 3 };
-                speakers.Init(volume);
+                speakers.Init(Sounds.Muted ? new VolumeSampleProvider(volume) { Volume = 0f } : (ISampleProvider)volume);   // self-test: same pipeline, no sound
                 speakers.Play();
             }
             catch (Exception e) { Util.Log("speakers: " + e.Message); }

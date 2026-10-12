@@ -8,6 +8,8 @@ namespace ElansAddonHub.Services
     public static class Sounds
     {
         public static bool Off;
+        // a self-test runs on a hidden desktop: it must not be heard either (chimes skipped, voice output silent)
+        public static bool Muted;
         const int Rate = 44100;
 
         public static void Join() => Play(new[] { 660.0, 880.0 });
@@ -16,7 +18,7 @@ namespace ElansAddonHub.Services
 
         static void Play(double[] notes, double noteLen = 0.09)
         {
-            if (Off) return;
+            if (Off || Muted) return;
             try
             {
                 int per = (int)(Rate * noteLen);
