@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.41.0
+- **Calendar events are easy to tell apart:** Lodge events, in-game holidays, raid resets and your own and guild events each have their own colour, and every holiday keeps its own colour. The month view shows labelled chips and bars ("20:00 Karaoke", "Darkmoon Faire") with "+N more" instead of grey lines; cards get a coloured bar and a type label. New filter chips: Lodge, Holidays, Raid resets, My game events.
+- **Repeating holidays fixed:** Call to Arms weekends and the Sunday fishing contest are separate events again instead of one month-long span (needs Elan's Hub 1.9.1 and a /reload). In-game times name the day: "Thu 15 Oct 17:00 - Mon 19 Oct 16:00".
+- **Addons updated outside CurseForge** (like RestedXP) show a "Self" source - "updated outside the Outpost" - instead of a misleading CurseForge chip. Development builds read "v4.11.23 · development build (+7)" and are not flagged as outdated against their own release.
+- **Addon logos:** other addons show their own logo (from the addon's folder), read locally.
+
 ## 2.40.0
 - **Invite from the Lodge:** owners and officers have an Invite button in the sidebar - a person or a guest link, a rank and an expiry. Copy the Outpost link, or a web link that is clickable in any chat app (it opens a small "You're invited" page on your server; the code in it never reaches the server). Open invites are listed with Revoke, and a member's profile card has "Send a new device link".
 - **Create a lodge:** a 3-step guide on the join screen. A new server's installer prints a one-time owner link (works once, for one hour, only while the lodge has no owner) - no permanent codes. A locked-out owner gets back in with `sudo lodge-admin recover-owner <name>`.
