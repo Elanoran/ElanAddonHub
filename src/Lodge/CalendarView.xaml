@@ -73,10 +73,42 @@
       </Border>
     </DataTemplate>
 
+    <!-- a WoW event (from the game's own calendar): the same card, quieter - the game's picture, a "WoW" chip, no answer buttons -->
+    <DataTemplate x:Key="WowCard">
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Margin="0,0,0,12" Opacity="{Binding CardOpacity}"
+              Tag="{Binding}" MouseLeftButtonUp="Card_Click" Cursor="Hand">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock Text="{Binding StartHm}" Style="{StaticResource Text.Body}" />
+            <TextBlock Text="{Binding EndHm}" Visibility="{Binding EndVisibility}" Style="{StaticResource Text.Caption}" />
+          </StackPanel>
+          <StackPanel Grid.Column="1">
+            <DockPanel>
+              <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="From your in-game calendar. Only on this PC.">
+                <TextBlock Text="WoW" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+              </Border>
+              <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" Visibility="{Binding StatusVisibility}" VerticalAlignment="Center" Margin="12,0,0,0">
+                <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
+              </Border>
+              <Image DockPanel.Dock="Left" Source="{Binding IconImage}" Visibility="{Binding IconVisibility}" Width="24" Height="24" Margin="0,0,8,0" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="{Binding SubLine}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding FillText}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding MyLine}" Visibility="{Binding MyLineVisibility}" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </DataTemplate>
+
+    <local:EventCardSelector x:Key="CardPicker" Server="{StaticResource EventCard}" Wow="{StaticResource WowCard}" />
+
     <DataTemplate x:Key="DayGroup">
       <StackPanel Margin="0,0,0,12">
         <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Section}" Margin="0,0,0,12" />
-        <ItemsControl ItemsSource="{Binding Events}" ItemTemplate="{StaticResource EventCard}" />
+        <ItemsControl ItemsSource="{Binding Events}" ItemTemplateSelector="{StaticResource CardPicker}" />
       </StackPanel>
     </DataTemplate>
 
@@ -86,10 +118,11 @@
         <Border Background="{Binding Fill}" CornerRadius="{StaticResource Radius.Control}" />
         <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
         <TextBlock Text="{Binding Number}" Style="{StaticResource Text.Body}" Foreground="{Binding NumberBrush}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0" />
-        <ItemsControl ItemsSource="{Binding Dots}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8" IsHitTestVisible="False">
+        <ItemsControl ItemsSource="{Binding Dots}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" IsHitTestVisible="False">
           <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate><DataTemplate><Ellipse Width="6" Height="6" Fill="{Binding}" Margin="2,0" /></DataTemplate></ItemsControl.ItemTemplate>
         </ItemsControl>
+        <Border Height="4" VerticalAlignment="Bottom" Margin="{Binding BandMargin}" Background="{StaticResource Brush.Text.Disabled}" Visibility="{Binding BandVisibility}" IsHitTestVisible="False" />
       </Grid>
       <DataTemplate.Triggers>
         <Trigger SourceName="cell" Property="IsMouseOver" Value="True"><Setter TargetName="hv" Property="Opacity" Value="1" /></Trigger>
@@ -122,7 +155,7 @@
   <Border Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
     <Grid>
       <Grid x:Name="Main">
-        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 
         <!-- header: title, Agenda | Month, New event -->
         <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,0,1" Padding="16,8">
@@ -139,8 +172,18 @@
           </DockPanel>
         </Border>
 
+        <!-- WoW's own events: the switch and a quiet note (only once the addon has saved a calendar) -->
+        <Border x:Name="WowBar" Grid.Row="1" Visibility="Collapsed" Padding="16,8">
+          <DockPanel MinHeight="24">
+            <CheckBox x:Name="WowSwitch" DockPanel.Dock="Right" Style="{StaticResource Switch}" Click="WowSwitch_Click" Margin="12,0,0,0" ToolTip="Holidays, raid resets and your own in-game events"
+                      AutomationProperties.Name="Show in-game WoW events" />
+            <TextBlock DockPanel.Dock="Right" Text="Show in-game WoW events" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
+            <TextBlock x:Name="WowCaption" Text="WoW events come from your game and update after a /reload or logout." Style="{StaticResource Text.Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+        </Border>
+
         <!-- agenda -->
-        <ScrollViewer x:Name="AgendaScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
+        <ScrollViewer x:Name="AgendaScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
           <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
             <ItemsControl x:Name="AgendaList" ItemTemplate="{StaticResource DayGroup}" />
             <StackPanel x:Name="AgendaEmpty" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
@@ -153,7 +196,7 @@
         </ScrollViewer>
 
         <!-- month -->
-        <ScrollViewer x:Name="MonthScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" app:Motion.EdgeFade="True">
+        <ScrollViewer x:Name="MonthScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" app:Motion.EdgeFade="True">
           <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
             <DockPanel Margin="0,0,0,12">
               <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE76C;" Click="MonthNext_Click" ToolTip="Next month" AutomationProperties.Name="Next month" />
@@ -169,7 +212,7 @@
               <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" Rows="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             </ItemsControl>
             <TextBlock x:Name="DayTitle" Style="{StaticResource Text.Section}" Margin="0,24,0,12" />
-            <ItemsControl x:Name="DayEvents" ItemTemplate="{StaticResource EventCard}" />
+            <ItemsControl x:Name="DayEvents" ItemTemplateSelector="{StaticResource CardPicker}" />
             <TextBlock x:Name="DayEmpty" Text="Nothing planned this day." Style="{StaticResource Text.Secondary}" Visibility="Collapsed" />
           </StackPanel>
         </ScrollViewer>
@@ -188,6 +231,10 @@
                   <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" Visibility="{Binding StatusVisibility}" VerticalAlignment="Center" Margin="12,0,0,0">
                     <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
                   </Border>
+                  <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Visibility="{Binding WowVisibility}" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="From your in-game calendar. Only on this PC.">
+                    <TextBlock Text="WoW" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                  </Border>
+                  <Image DockPanel.Dock="Left" Source="{Binding IconImage}" Visibility="{Binding IconVisibility}" Width="24" Height="24" Margin="0,0,8,0" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </DockPanel>
                 <TextBlock Text="{Binding DateText}" Style="{StaticResource Text.Body}" Margin="0,8,0,0" />

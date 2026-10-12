@@ -192,6 +192,36 @@
       </Border>
     </DataTemplate>
 
+    <!-- an event in the strip above the chat: a Surface2 pill (two lines), veil on hover, focus ring from the keyboard -->
+    <Style x:Key="Pill.Event" TargetType="Button">
+      <Setter Property="Background" Value="{StaticResource Brush.Surface2}" />
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid>
+              <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="{StaticResource Radius.Card}" />
+              <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Card}" Opacity="0" IsHitTestVisible="False" />
+              <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+              <Border x:Name="pr" Background="{StaticResource Brush.Press.Dark.Soft}" CornerRadius="{StaticResource Radius.Card}" Opacity="0" IsHitTestVisible="False" />
+              <Border x:Name="ring" Margin="-3" CornerRadius="15" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="pr" Property="Opacity" Value="1" /></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
     <!-- the chat card of a calendar event: a compact Surface2 card that links to the event (server 2.11; older clients see the fallback line) -->
     <DataTemplate x:Key="EventChatCard">
       <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Width="440" HorizontalAlignment="Left" Margin="0,8,0,4" Opacity="{Binding CardOpacity}">
@@ -537,6 +567,35 @@
                         ToolTip="Dismiss" AutomationProperties.Name="Dismiss tip" />
                 <TextBlock Text="&#xE946;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <TextBlock x:Name="HintText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+              </DockPanel>
+            </Border>
+            <!-- upcoming events: a strip of fixed height (64) under the header. It is 0 high and collapsed when there is nothing to show; it grows / shrinks with
+                 the Standard motion and the message list is held in place while it does (LodgeView.Calendar.cs). Switch: Settings > Lodge. -->
+            <Border x:Name="EventsStrip" Height="0" Visibility="Collapsed" ClipToBounds="True" AutomationProperties.Name="Upcoming events">
+              <DockPanel Margin="16,8">
+                <Button x:Name="StripAll" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Height="28" Content="See all" Click="StripAll_Click" Margin="8,0,0,0"
+                        VerticalAlignment="Center" ToolTip="Open the Calendar" AutomationProperties.Name="See all events" />
+                <ItemsControl x:Name="StripItems" Focusable="False" HorizontalAlignment="Left">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Style="{StaticResource Pill.Event}" Width="200" Height="48" Margin="0,0,8,0" Tag="{Binding}" Click="StripItem_Click" ToolTip="{Binding StripTip}"
+                              AutomationProperties.Name="{Binding Summary}">
+                        <StackPanel>
+                          <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding StripFill}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            <Image DockPanel.Dock="Left" Source="{Binding IconImage}" Visibility="{Binding IconVisibility}" Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
+                          </DockPanel>
+                          <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding StripStatus}" Foreground="{Binding StripStatusBrush}" Style="{StaticResource Text.Caption}" Margin="8,0,0,0" />
+                            <TextBlock Text="{Binding StripWhen}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
+                          </DockPanel>
+                        </StackPanel>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
               </DockPanel>
             </Border>
           </StackPanel>

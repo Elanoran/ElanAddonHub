@@ -64,6 +64,7 @@ namespace ElansAddonHub.Lodge
             session.Changed += Refresh;
             CalendarPage.Init(session);
             session.CalendarChanged += UpdateCalendarChrome;
+            ChatCard.SizeChanged += (s, e) => { if (e.WidthChanged) UpdateEventsStrip(); };   // how many pills fit follows the width
             session.OlderRequested += OnOlderRequested;
             session.OlderLoaded += OnOlderLoaded;
             session.IsAtBottom = () => AtBottom;
@@ -306,7 +307,7 @@ namespace ElansAddonHub.Lodge
             t.Start();
         }
 
-        void MessageScroll_Changed(object sender, ScrollChangedEventArgs e) { UpdateJump(); MaybeLoadOlder(e); }
+        void MessageScroll_Changed(object sender, ScrollChangedEventArgs e) { HoldMessagesInPlace(e); UpdateJump(); MaybeLoadOlder(e); }
 
         void UpdateJump()
         {
