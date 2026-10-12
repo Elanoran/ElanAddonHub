@@ -41,6 +41,7 @@ namespace ElansAddonHub
                 settings.WowRoot = WowLocator.Find();
                 SettingsStore.Save(settings);
             }
+            PrepareStartupLayout();   // placeholders for the remembered number of cards, before the first frame
 
             checkTimer.Interval = TimeSpan.FromMinutes(settings.CheckMinutes);
             checkTimer.Tick += async (s, e) => await CheckNow();
@@ -765,10 +766,6 @@ namespace ElansAddonHub
             }
         }
 
-        // skeleton cards stand in for the list until the first check has produced one (or failed)
-        void UpdateCardsSkeleton() => CardsSkeleton.Visibility = cards.Count == 0 && lastError == null && (checking || manifest == null) ? Visibility.Visible : Visibility.Collapsed;
-        public bool CardsSkeletonForTest => CardsSkeleton.Visibility == Visibility.Visible;
-
         async Task RefreshOthersAndCheck() { await RefreshOthers(); await CheckOthers(); _ = SuggestOthers(); }
 
         async Task LoadStats()
@@ -799,6 +796,7 @@ namespace ElansAddonHub
             }
             foreach (var gone in cards.Where(c => manifest.Addons == null || manifest.Addons.All(a => a.Id != c.Info.Id)).ToList())
                 cards.Remove(gone);
+            RememberLayout(cards.Count, null);
             RefreshRailBadges();
             UpdateCardsSkeleton();
         }

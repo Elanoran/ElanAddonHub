@@ -27,6 +27,10 @@ namespace ElansAddonHub
         public string Subtitle => string.Join("  ·  ", new[] { PrettyLocal, Author }.Where(x => !string.IsNullOrEmpty(x)));
         // full raw version on hover (only when it was shortened)
         public string SubtitleTip => string.IsNullOrEmpty(Entry.Version) || PrettyLocal == Entry.Version ? null : "Version: " + Entry.Version;
+        // The one line under the name in the Other addons list. It carries what used to be a second line (the update found, the file to pick, a suggested match),
+        // so a row is the same height whatever has arrived: lookups and suggestions land later and must not push the rows below them.
+        public string RowSubtitle => ShowSuggestion ? SuggestText : VersionVisibility == Visibility.Visible ? VersionLine : Subtitle;
+        public string RowSubtitleTip => ShowSuggestion ? SuggestHint : VersionVisibility == Visibility.Visible ? VersionLine : SubtitleTip;
         public string Notes => Entry.Notes;
         public Visibility NotesVisibility => string.IsNullOrEmpty(Entry.Notes) ? Visibility.Collapsed : Visibility.Visible;
         public string FolderList => (Entry.Folders.Count == 1 ? "Folder: " : $"{Entry.Folders.Count} folders: ") + string.Join(", ", Entry.Folders);
@@ -180,7 +184,10 @@ namespace ElansAddonHub
                     break;
                 case TpState.UpToDate: SetPill("Up to date", PillKind.Quiet, "You have the latest version", false); VersionLine = "Installed " + (local == "" ? (Link.InstalledRemote ?? "?") : local); ButtonText = ""; ButtonEnabled = false; break;
                 case TpState.Unknown: SetPill(null, PillKind.Quiet, null, false); VersionLine = "Installed " + (local == "" ? "?" : local) + "  ·  checking..."; ButtonText = ""; ButtonEnabled = false; break;
-                default: SetPill(null, PillKind.Quiet, null, false); VersionLine = "Installed " + (local == "" ? "?" : local); ButtonText = ""; ButtonEnabled = false; break;
+                default:
+                    if (ShowSuggestion) SetPill("Suggestion", PillKind.Quiet, "A likely match was found. Open the details to link it.", false);
+                    else SetPill(null, PillKind.Quiet, null, false);
+                    VersionLine = "Installed " + (local == "" ? "?" : local); ButtonText = ""; ButtonEnabled = false; break;
             }
             Notify(string.Empty);
         }

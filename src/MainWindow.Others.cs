@@ -57,7 +57,7 @@ namespace ElansAddonHub
             try
             {
                 var flavor = settings.WowRoot == null ? null : ClientFlavor();
-                if (flavor == null) { addOnsDir = null; others.Clear(); UpdateOthersHeader(); return; }
+                if (flavor == null) { addOnsDir = null; others.Clear(); RememberLayout(null, 0); UpdateOthersHeader(); return; }
                 addOnsDir = WowLocator.AddOnsDir(settings.WowRoot, flavor);
                 var dir = addOnsDir; var own = OwnFolders().ToList();
                 int iface = 0;
@@ -88,9 +88,10 @@ namespace ElansAddonHub
                     }
                     else if (!card.IsBusy) { card.CfChecked = checkedAt; card.SetEntry(e); }
                 }
+                RememberLayout(null, others.Count);
             }
             catch (Exception e) { Util.Log("addon scan failed: " + e); }
-            finally { scanning = false; UpdateOthersHeader(); }
+            finally { scanning = false; othersLoaded = true; UpdateOthersHeader(); }
         }
 
         // ask GitHub / WoWInterface (cached, keyless) about every linked addon
@@ -167,13 +168,16 @@ namespace ElansAddonHub
 
         void UpdateOthersHeader()
         {
+            UpdateCardsSkeleton();
+            // until the first scan has finished the section is there with the remembered count and skeleton rows; then the real count
+            int shown = others.Count > 0 || othersLoaded || !othersExpected ? others.Count : OtherSlots;
             LinkExactButton.Visibility = others.Any(x => x.ShowSuggestion && x.Suggested.Exact && x.Suggested.FlavorFits) ? Visibility.Visible : Visibility.Collapsed;
-            OtherPanel.Visibility = others.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            OtherPanel.Visibility = others.Count > 0 || OthersSkeletonWanted ? Visibility.Visible : Visibility.Collapsed;
             var updates = others.Count(c => c.State == TpState.UpdateAvailable);
-            OtherTitle.Text = $"Other addons  ·  {others.Count}" + (updates > 0 ? $"  ·  {updates} update{(updates == 1 ? "" : "s")}" : "");
+            OtherTitle.Text = $"Other addons  ·  {shown}" + (updates > 0 ? $"  ·  {updates} update{(updates == 1 ? "" : "s")}" : "");
             RefreshRailBadges();
             UpdateAllButton.Visibility = updates > 0 ? Visibility.Visible : Visibility.Collapsed;
-            SearchBox.Visibility = others.Count > 8 ? Visibility.Visible : Visibility.Collapsed;
+            SearchBox.Visibility = shown > 8 ? Visibility.Visible : Visibility.Collapsed;
             var linked = others.Count(c => c.State != TpState.Local && c.State != TpState.DevCopy);
             var info = $"Found in {addOnsDir}.\nUpdates come from GitHub releases and WoWInterface (no accounts or keys)."
                 + (linked == 0 ? "\nOpen an addon and paste a GitHub or WoWInterface link to keep it updated." : "");

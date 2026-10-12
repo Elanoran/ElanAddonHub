@@ -24,6 +24,8 @@ namespace ElansAddonHub
             public Dictionary<string, double[]> First = new Dictionary<string, double[]>();     // key -> { y, height } in the first frame
             public Dictionary<string, double[]> Settled = new Dictionary<string, double[]>();
             public Dictionary<string, double> Peak = new Dictionary<string, double>();          // key -> largest |y - first y| at any sample
+            public Dictionary<string, double[]> Seen = new Dictionary<string, double[]>();      // key -> { y, height } the first time it was on screen
+            public Dictionary<string, double[]> Drift = new Dictionary<string, double[]>();     // key -> { largest |dy|, largest |dh| } since it was first on screen
             public int Frames, OursFirst, OursFinal, OthersFirst, OthersFinal;
             public bool TimedOut;
             public List<string> Notes = new List<string>();
@@ -34,6 +36,16 @@ namespace ElansAddonHub
             public IEnumerable<string> Vanished() => First.Keys.Where(k => !Settled.ContainsKey(k));
             public IEnumerable<string> HeightChanged() => Settled.Keys.Where(k => First.ContainsKey(k) && Math.Abs(Settled[k][1] - First[k][1]) > 1);
 
+            public void Track(Dictionary<string, double[]> s)
+            {
+                foreach (var kv in s)
+                {
+                    if (!Seen.ContainsKey(kv.Key)) { Seen[kv.Key] = kv.Value; continue; }
+                    var sn = Seen[kv.Key]; var dr = Drift.TryGetValue(kv.Key, out var o) ? o : new double[2];
+                    dr[0] = Math.Max(dr[0], Math.Abs(kv.Value[0] - sn[0])); dr[1] = Math.Max(dr[1], Math.Abs(kv.Value[1] - sn[1])); Drift[kv.Key] = dr;
+                }
+            }
+
             public string Report()
             {
                 var sb = new StringBuilder();
@@ -43,7 +55,9 @@ namespace ElansAddonHub
                 foreach (var k in HeightChanged().OrderBy(x => x, StringComparer.Ordinal))
                     sb.AppendLine($"  HEIGHT   {k}: {First[k][1]:0.#} -> {Settled[k][1]:0.#}");
                 foreach (var k in Appeared().OrderBy(x => x, StringComparer.Ordinal))
-                    sb.AppendLine($"  APPEARS  {k}: not in the first frame, ends at y {Settled[k][0]:0.#} (h {Settled[k][1]:0.#})");
+                    sb.AppendLine($"  APPEARS  {k}: not in the first frame; first seen y {Seen[k][0]:0.#} h {Seen[k][1]:0.#}, ends y {Settled[k][0]:0.#} h {Settled[k][1]:0.#}");
+                foreach (var k in Drift.Keys.Where(k => Drift[k][0] > 1 || Drift[k][1] > 1).OrderBy(x => x, StringComparer.Ordinal))
+                    sb.AppendLine($"  DRIFTS   {k}: after it was first on screen it moved up to {Drift[k][0]:0.#} px and changed height by up to {Drift[k][1]:0.#} px");
                 foreach (var k in Vanished().OrderBy(x => x, StringComparer.Ordinal))
                     sb.AppendLine($"  VANISHES {k}: was at y {First[k][0]:0.#} (h {First[k][1]:0.#})");
                 foreach (var n in Notes) sb.AppendLine("  " + n);
@@ -61,7 +75,7 @@ namespace ElansAddonHub
         // the element standing in for slot i of a list: the real card when there is one, else the skeleton card
         static FrameworkElement ShiftSlot(ItemsControl real, int realCount, Panel skeleton, int i)
         {
-            if (i < realCount && real.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement c && c.IsVisible && c.ActualHeight > 0) return c;
+            if (i < realCount && real.ItemContainerGenerator.ContainerFromIndex(i) is DependencyObject cp && FindDown<FrameworkElement>(cp) is FrameworkElement c && c.IsVisible && c.ActualHeight > 0) return c;   // the card itself (the container also holds its margin)
             if (skeleton != null && skeleton.IsVisible && i < skeleton.Children.Count) return skeleton.Children[i] as FrameworkElement;
             return null;
         }
@@ -127,6 +141,7 @@ namespace ElansAddonHub
                 run.OthersFirst = (FindName("OtherSkeleton") as Panel)?.Children.Count ?? 0;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 run.First = ShiftSample();
+                run.Track(run.First);
                 var frames = frameAtMs?.ToList() ?? new List<int>();
                 int idleSamples = 0;
                 var started = CheckNow();
@@ -136,6 +151,7 @@ namespace ElansAddonHub
                     await Task.Delay(50);
                     var s = ShiftSample();
                     run.Frames++;
+                    run.Track(s);
                     foreach (var kv in s)
                         if (run.First.TryGetValue(kv.Key, out var f)) { var dv = Math.Abs(kv.Value[0] - f[0]); if (!run.Peak.TryGetValue(kv.Key, out var pk) || dv > pk) run.Peak[kv.Key] = dv; }
                     while (frameDir != null && frames.Count > 0 && sw.ElapsedMilliseconds >= frames[0])
@@ -151,6 +167,7 @@ namespace ElansAddonHub
                 run.TimedOut = sw.ElapsedMilliseconds >= 20000;
                 if (frameDir != null) { SnapshotScaled(Path.Combine(frameDir, "st-final.png"), 1); }
                 run.Settled = ShiftSample();
+                run.Track(run.Settled);
                 run.OursFinal = cards.Count; run.OthersFinal = others.Count;
             }
             finally { FakeUpdateServer.DelayMs = 0; FakeUpdateServer.HubVersion = null; }
@@ -168,15 +185,6 @@ namespace ElansAddonHub
             }
             catch (Exception e) { File.WriteAllText(Path.Combine(dir, "result.txt"), "startup shots crashed: " + e); }
             Quit();
-        }
-
-        // BEFORE: the Addons page as the window has it before the first update check answers (nothing remembered)
-        void ResetColdState()
-        {
-            cards.Clear(); others.Clear(); manifest = null; lastError = null; checking = false;
-            HubBanner.Visibility = Visibility.Collapsed;
-            OtherPanel.Visibility = Visibility.Collapsed;
-            UpdateCardsSkeleton();
         }
     }
 }

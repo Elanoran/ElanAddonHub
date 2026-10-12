@@ -141,5 +141,8 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "welcomeDone")] public bool WelcomeDone { get; set; }        // the first-run guide was finished or skipped
         [DataMember(Name = "windowWidth")] public double? WindowWidth { get; set; }
         [DataMember(Name = "windowHeight")] public double? WindowHeight { get; set; }
+        // how many cards the Addons page had after the last good load (our list, the Other addons list): the next start shows that many placeholders
+        [DataMember(Name = "lastAddonCount")] public int? LastAddonCount { get; set; }
+        [DataMember(Name = "lastOtherCount")] public int? LastOtherCount { get; set; }
     }
 }
