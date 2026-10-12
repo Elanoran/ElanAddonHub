@@ -23,6 +23,7 @@ namespace ElansAddonHub
         {
             public Dictionary<string, double[]> First = new Dictionary<string, double[]>();     // key -> { y, height } in the first frame
             public Dictionary<string, double[]> Settled = new Dictionary<string, double[]>();
+            public Dictionary<string, double[]> BeforeLate;                                      // the page once the check and the scan were done, just before stats / suggestions / a found update arrive
             public Dictionary<string, double> Peak = new Dictionary<string, double>();          // key -> largest |y - first y| at any sample
             public Dictionary<string, double[]> Seen = new Dictionary<string, double[]>();      // key -> { y, height } the first time it was on screen
             public Dictionary<string, double[]> Drift = new Dictionary<string, double[]>();     // key -> { largest |dy|, largest |dh| } since it was first on screen
@@ -161,7 +162,7 @@ namespace ElansAddonHub
                     }
                     bool busy = checking || scanning || checkingOthers || !started.IsCompleted;
                     idleSamples = busy ? 0 : idleSamples + 1;
-                    if (idleSamples >= 3 && !late) { late = true; await ShiftLateArrivals(); idleSamples = 0; run.Notes.Add($"late arrivals applied at {sw.ElapsedMilliseconds} ms"); continue; }
+                    if (idleSamples >= 3 && !late) { late = true; run.BeforeLate = ShiftSample(); await ShiftLateArrivals(); idleSamples = 0; run.Notes.Add($"late arrivals applied at {sw.ElapsedMilliseconds} ms"); continue; }
                     if (late && idleSamples >= 10) break;
                 }
                 run.TimedOut = sw.ElapsedMilliseconds >= 20000;

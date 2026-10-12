@@ -20,7 +20,7 @@ namespace ElansAddonHub.Services
         // execution order == order of the full run
         public static readonly string[] All =
         {
-            "addons", "thirdparty", "viewer", "voice", "update", "strip",
+            "addons", "thirdparty", "startup", "viewer", "voice", "update", "strip",
             "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "linkopen", "calendar", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3",
         };
 
@@ -37,6 +37,7 @@ namespace ElansAddonHub.Services
         {
             ["addons"] = "install + check-all + pills + settings tour (Hunter Helper cards)",
             ["thirdparty"] = "other addons: scan, suggest, CurseForge, zip install/rollback, real GitHub/WoWI lookups",
+            ["startup"] = "Addons page start-up: placeholders match the cards, nothing above the bottom of a list moves while the check and the scan run (cold start, slow update server, counts equal / different / first run), counts remembered",
             ["viewer"] = "in-app picture viewer",
             ["voice"] = "voice effects",
             ["update"] = "update channel + installer",
@@ -103,7 +104,8 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.DesignTest(\.Toasts)?\.cs$");     // screenshot-only design runs, not part of --selftest
             R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites");
             // ---- addons
-            R(@"^src/(AddonCard|ThirdPartyCard)\.cs$", "addons", "thirdparty");
+            R(@"^src/(AddonCard|ThirdPartyCard)\.cs$", "addons", "thirdparty", "startup");
+            R(@"^src/(MainWindow\.Startup(ShiftTest(\.Checks)?)?\.cs|Skeleton\.cs)$", "startup", "addons");
             R(@"^src/Services/(AddonScanner|AddonSuggest|AddonSources|CurseForgeLocal|GitHubStats)\.cs$", "thirdparty", "addons");
             R(@"^src/Services/(Installer|SelfUpdater)\.cs$", "update", "addons");
             R(@"^src/Services/UpdateChannel\.cs$", "update", "round3");

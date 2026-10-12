@@ -72,8 +72,8 @@ namespace ElansAddonHub
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(16, 12, 16, 12) };
             row.Children.Add(new Skeleton { Width = 36, Height = 36, CornerRadius = (CornerRadius)FindResource("Radius.ControlLg"), VerticalAlignment = VerticalAlignment.Center });
             var col = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            col.Children.Add(new Skeleton { Height = 12, Width = TitleW[(i + 2) % TitleW.Length] - 24, CornerRadius = new CornerRadius(6), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 3, 0, 3) });
-            col.Children.Add(new Skeleton { Height = 10, Width = LineW[(i + 1) % LineW.Length], CornerRadius = new CornerRadius(5), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 2) });
+            col.Children.Add(new Skeleton { Height = 12, Width = TitleW[(i + 2) % TitleW.Length] - 24, CornerRadius = new CornerRadius(6), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 2) });
+            col.Children.Add(new Skeleton { Height = 10, Width = LineW[(i + 1) % LineW.Length], CornerRadius = new CornerRadius(5), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 4) });
             row.Children.Add(col);
             card.Content = row;
             return card;
