@@ -487,7 +487,7 @@ namespace ElansAddonHub
             check("gm: Revoke sends admin.invite.revoke with the id", sent.Count == 1 && sent[0].Str("t") == "admin.invite.revoke" && sent[0].Str("id") == "a1");
 
             // creating
-            check("gm: a 2.10 server shows the person/guest choice, the expiry and the Advanced button", SettingsPage.InviteKindVisibleForTest && SettingsPage.InviteButtonTextForTest == "Create invite link" && SettingsPage.AdvancedVisibleForTest);
+            check("gm: a 2.10 server shows the person/guest choice, the expiry and the Advanced button", SettingsPage.InviteKindVisibleForTest && SettingsPage.InviteButtonTextForTest == "Create link" && SettingsPage.AdvancedVisibleForTest);
             sent.Clear();
             SettingsPage.CreateInviteClickForTest("Cleo");
             var create = sent.FirstOrDefault(f => f.Str("t") == "admin.invite.create");
