@@ -14,6 +14,8 @@ local function clean(v)
   return v
 end
 
+EHUB.Clean = clean -- shared with the other modules: nil for a missing or secret value
+
 local function version()
   local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
   local ok, v = pcall(get, ADDON, "Version")
@@ -173,6 +175,7 @@ local function rd(fn, ...)
 end
 
 local function num(v) if type(v) == "number" and v == v then return v end return nil end
+EHUB.Rd = rd
 
 local function readPresence()
   local P = { flags1 = 0, flags2 = 0, mapId = 0, instanceId = 0, xp = 0, group = 0 }
@@ -347,6 +350,10 @@ SlashCmdList.ELANSHUB = function(msg)
   end
   if a == "" or a == "settings" or a == "config" or a == "options" then
     if EHUB.OpenSettings then EHUB.OpenSettings("general") end
+    return
+  end
+  if a == "calendar" then
+    if EHUB.CalendarCommand then EHUB.CalendarCommand(b) end
     return
   end
   if a == "diag" then

@@ -560,6 +560,189 @@ ok("init with stored chat data arms the delayed cleanup", #TIMERS == t0 + 1)
 RunTimers()
 ok("delayed cleanup ran at login", db.chat.chars["Realm-Elan"] == nil and db.chat.chars["Realm-Otto"] ~= nil)
 
+
+-- ================= in-game calendar (Calendar.lua): C_Calendar mock, reads, combat guard, throttle, missing API, secret values
+do
+  local realTime, realDate = time, date
+  local NOWU = 1791831600 -- real unix "now": Mon 12 Oct 2026 19:00 UTC; the mock realm clock is UTC-5 (14:00 there)
+  time = function(t) if t then return realTime(t) end return NOWU end
+  local function T(y, mo, d, h, mi) return { year = y, month = mo, monthDay = d, hour = h or 0, minute = mi or 0 } end
+  CAL = { now = T(2026, 10, 12, 14, 0), view = { month = 10, year = 2026 }, ev = {}, opened = 0, setabs = 0, calls = 0 }
+  local function put(mo, d, e) CAL.ev[mo] = CAL.ev[mo] or {} CAL.ev[mo][d] = CAL.ev[mo][d] or {} table.insert(CAL.ev[mo][d], e) end
+  -- Hallow's End 18-31 Oct: every day lists it; the real times are on each entry
+  for d = 18, 31 do
+    put(10, d, { title = "Hallow's End", calendarType = "HOLIDAY", texture = 235456, sequenceType = d == 18 and "START" or (d == 31 and "END" or "ONGOING"),
+      startTime = T(2026, 10, 18, 0, 0), endTime = T(2026, 10, 31, 23, 59), __hol = { name = "Hallow's End", description = "Trick or treat!", texture = 235456 } })
+  end
+  -- a holiday without any times: derived from the days it is listed on (14th and 15th)
+  put(10, 14, { title = "Fishing Extravaganza", calendarType = "HOLIDAY", texture = 133888 })
+  put(10, 15, { title = "Fishing Extravaganza", calendarType = "HOLIDAY", texture = 133888 })
+  put(10, 14, { title = "Karazhan run", calendarType = "PLAYER", inviteStatus = 3, startTime = T(2026, 10, 14, 20, 0), endTime = T(2026, 10, 14, 23, 0) })
+  put(10, 15, { title = "Guild night", calendarType = "GUILD_EVENT", inviteStatus = 8, startTime = T(2026, 10, 15, 21, 0) })
+  put(10, 13, { title = "Molten Core", calendarType = "RAID_LOCKOUT", startTime = T(2026, 10, 13, 9, 0) })
+  put(10, 16, { title = SECRET, calendarType = "PLAYER", startTime = T(2026, 10, 16, 20, 0) }) -- a secret title: dropped
+  put(10, 17, { title = "Secret time", calendarType = "PLAYER", startTime = { year = 2026, month = 10, monthDay = 17, hour = SECRET, minute = 0 } }) -- unusable time: dropped
+  put(11, 2, { title = "Day of the Dead", calendarType = "HOLIDAY", texture = 133001, startTime = T(2026, 11, 2, 0, 0), endTime = T(2026, 11, 3, 23, 59) })
+  local function mon(off) local m = CAL.view.month + off if m > 12 then m = m - 12 end return m end
+  local function installApi()
+    C_Calendar = {
+      OpenCalendar = function() CAL.opened = CAL.opened + 1 end,
+      GetMonthInfo = function(off) local m = CAL.view.month + off local y = CAL.view.year if m > 12 then m = m - 12 y = y + 1 end return { month = m, year = y, numDays = 31, firstWeekday = 1 } end,
+      SetAbsMonth = function(m, y) CAL.view = { month = m, year = y } CAL.setabs = CAL.setabs + 1 end,
+      GetNumDayEvents = function(off, d)
+        CAL.calls = CAL.calls + 1
+        if CAL.throwDay then error("calendar API exploded") end
+        if CAL.secretCount then return SECRET end
+        local t = CAL.ev[mon(off)] and CAL.ev[mon(off)][d] return t and #t or 0
+      end,
+      GetDayEvent = function(off, d, i) return CAL.ev[mon(off)][d][i] end,
+      GetHolidayInfo = function(off, d, i) return CAL.ev[mon(off)][d][i].__hol end,
+    }
+    C_DateAndTime = { GetCurrentCalendarTime = function() return CAL.now end }
+    GetNumSavedInstances = function() return 2 end
+    GetSavedInstanceInfo = function(i)
+      if i == 1 then return "Molten Core", 1, 64800, 9, true, false, 0, true, 40, "40 Player" end
+      return "Onyxia's Lair", 2, 259200, 9, true, false, 0, true, 40, "40 Player"
+    end
+    GetCurrentRegion = function() return 3 end
+  end
+  installApi()
+  local calFrame = _G.ElansHubCalendarFrame
+  ok("calendar: frame created at login, listens for the calendar event", calFrame ~= nil)
+  local function evt(e) Fire(calFrame, "OnEvent", e) end
+  ElansHubDB.calendar = nil
+  local forbiddenBefore = FORBIDDEN
+  NOW = 5000
+  -- 1) first read: the view is on September, so the addon moves it to October and waits for the second event
+  CAL.view = { month = 9, year = 2026 }
+  RunTimers() -- the login timer fires the first read
+  ok("calendar: login timer starts a read -> OpenCalendar called once", CAL.opened == 1 and ElansHubDB.calendar == nil)
+  evt("CALENDAR_UPDATE_EVENT_LIST")
+  ok("calendar: viewed month corrected with SetAbsMonth, still waiting", CAL.setabs == 1 and CAL.view.month == 10 and ElansHubDB.calendar == nil)
+  evt("CALENDAR_UPDATE_EVENT_LIST")
+  local c = ElansHubDB.calendar
+  ok("calendar: stored after the event", c and c.v == 1 and type(c.events) == "table" and #c.events > 0)
+  ok("calendar: server offset measured (-5 h) and rounded", c and c.serverOffset == -18000)
+  ok("calendar: realm, region and tz note recorded", c and c.realm == "Realm" and c.region == 3 and tostring(c.tz):find("realm", 1, true) and type(c.localOffset) == "number" and c.at == NOWU)
+  local by = {}
+  for _, e in ipairs(c and c.events or {}) do by[e.title] = e end
+  local hw = by["Hallow's End"]
+  local n = 0 for _, e in ipairs(c.events) do if e.title == "Hallow's End" then n = n + 1 end end
+  ok("calendar: a holiday spanning days is ONE entry, all-day", n == 1 and hw and hw.kind == "holiday" and hw.allDay == true)
+  ok("calendar: holiday start/finish = realm fields minus offset (18 Oct 00:00 realm = 05:00 UTC)", hw and hw.start == 1792299600 and hw.finish == 1793509140)
+  ok("calendar: holiday icon, description and raw text kept", hw and hw.icon == 235456 and hw.desc == "Trick or treat!" and hw.startText == "2026-10-18 00:00" and hw.endText == "2026-10-31 23:59")
+  local fish = by["Fishing Extravaganza"]
+  ok("calendar: a holiday without times spans the days it is listed on", fish and fish.allDay == true and fish.finish - fish.start == 2 * 86400 and fish.icon == 133888)
+  local kar = by["Karazhan run"]
+  ok("calendar: player event with times and invite status", kar and kar.kind == "player" and kar.status == "going" and kar.finish - kar.start == 3 * 3600 and kar.startText == "2026-10-14 20:00" and not kar.allDay)
+  ok("calendar: guild event with maybe status", by["Guild night"] and by["Guild night"].kind == "guild" and by["Guild night"].status == "maybe")
+  ok("calendar: calendar raid lockout is a raid reset", by["Molten Core"] and by["Molten Core"].kind == "raidreset" and by["Molten Core"].src == "calendar")
+  local ony = by["Onyxia's Lair resets"]
+  ok("calendar: saved instance adds a reset (now + remaining seconds); a duplicate of the calendar's is skipped", ony and ony.kind == "raidreset" and ony.src == "lockout" and ony.start == NOWU + 259200 and not by["Molten Core resets"])
+  ok("calendar: next month is read too", by["Day of the Dead"] and by["Day of the Dead"].kind == "holiday")
+  local allTitled = true
+  for _, e in ipairs(c.events) do if type(e.title) ~= "string" then allTitled = false end end
+  ok("calendar: secret title / secret time events are dropped without error", by["Secret time"] == nil and allTitled)
+  local sorted = true
+  for i = 2, #c.events do if (c.events[i - 1].start or 0) > (c.events[i].start or 0) then sorted = false end end
+  ok("calendar: events sorted by start", sorted)
+  ok("calendar: status line says ok", E.CalendarStatus():find("^ok:") ~= nil)
+  -- 2) throttle: a second request inside the hour does nothing
+  local opened = CAL.opened
+  ok("calendar: second request within the hour is throttled", E.CalendarRefresh(false) == "throttled" and CAL.opened == opened)
+  NOW = NOW + 3601
+  CAL.view = { month = 10, year = 2026 }
+  ElansHubDB.calendar = nil
+  RunTimers() -- the hourly tick
+  ok("calendar: the hourly tick reads again", CAL.opened == opened + 1)
+  evt("CALENDAR_UPDATE_EVENT_LIST")
+  ok("calendar: ... and stores again", ElansHubDB.calendar ~= nil and #ElansHubDB.calendar.events > 0)
+  -- 3) no event arrives: it reads anyway after the wait
+  NOW = NOW + 3601
+  ElansHubDB.calendar = nil
+  RunTimers() -- hourly tick starts a read
+  RunTimers() -- the wait timer fires without a CALENDAR_UPDATE_EVENT_LIST
+  ok("calendar: no event arrives -> reads anyway after the wait", ElansHubDB.calendar ~= nil)
+  -- 4) combat guard
+  NOW = NOW + 3601
+  ElansHubDB.calendar = nil
+  opened = CAL.opened
+  MOCK_COMBAT = true
+  ok("calendar: in combat -> nothing requested", E.CalendarRefresh(true) == "combat" and CAL.opened == opened and ElansHubDB.calendar == nil)
+  evt("CALENDAR_UPDATE_EVENT_LIST")
+  ok("calendar: a stray event in combat reads nothing", ElansHubDB.calendar == nil)
+  MOCK_COMBAT = false
+  evt("PLAYER_REGEN_ENABLED")
+  ok("calendar: after combat the waiting read starts", CAL.opened == opened + 1)
+  MOCK_COMBAT = true
+  evt("CALENDAR_UPDATE_EVENT_LIST")
+  ok("calendar: combat starts while waiting -> nothing read, kept pending", ElansHubDB.calendar == nil)
+  MOCK_COMBAT = false
+  evt("PLAYER_REGEN_ENABLED")
+  ok("calendar: ... and requested again after the fight", CAL.opened == opened + 2)
+  evt("CALENDAR_UPDATE_EVENT_LIST")
+  ok("calendar: stored once combat is over", ElansHubDB.calendar ~= nil)
+  -- 5) secret / throwing API
+  NOW = NOW + 3601
+  ElansHubDB.calendar = nil
+  CAL.secretCount = true
+  E.CalendarRefresh(true) evt("CALENDAR_UPDATE_EVENT_LIST")
+  ok("calendar: secret day counts mean no calendar events (only the two lockouts remain)", ElansHubDB.calendar and #ElansHubDB.calendar.events == 2 and ElansHubDB.calendar.events[1].src == "lockout")
+  CAL.secretCount = false
+  NOW = NOW + 3601
+  CAL.throwDay = true
+  local okc = pcall(function() E.CalendarRefresh(true) evt("CALENDAR_UPDATE_EVENT_LIST") end)
+  ok("calendar: a throwing API never errors out", okc)
+  CAL.throwDay = false
+  -- 6) no usable calendar clock: events keep only the wall-clock text, no unix times
+  NOW = NOW + 3601
+  C_DateAndTime = nil
+  CAL.view = { month = 10, year = 2026 }
+  E.CalendarRefresh(true)
+  evt("CALENDAR_UPDATE_EVENT_LIST")
+  c = ElansHubDB.calendar
+  ok("calendar: without a calendar clock there is no offset", c and c.serverOffset == nil)
+  local kar2
+  for _, e in ipairs(c and c.events or {}) do if e.title == "Karazhan run" then kar2 = e end end
+  ok("calendar: ... and events keep startText only", kar2 and kar2.start == nil and kar2.startText == "2026-10-14 20:00")
+  -- 7) the older C_Calendar.GetDate gives the same offset
+  NOW = NOW + 3601
+  C_Calendar.GetDate = function() return { weekday = 2, month = 10, monthDay = 12, year = 2026, hour = 14, minute = 0 } end
+  E.CalendarRefresh(true) evt("CALENDAR_UPDATE_EVENT_LIST")
+  ok("calendar: C_Calendar.GetDate works as the clock", ElansHubDB.calendar and ElansHubDB.calendar.serverOffset == -18000)
+  -- 8) switched off
+  NOW = NOW + 3601
+  ElansHubDB.calendarOff = true
+  opened = CAL.opened
+  ok("calendar: /ehub calendar off -> no reads", E.CalendarRefresh(true) == "off" and CAL.opened == opened)
+  SlashCmdList.ELANSHUB("calendar on")
+  ok("calendar: /ehub calendar on re-enables", ElansHubDB.calendarOff == nil)
+  -- 9) missing API: stores nothing, says so in diag, never errors, no chat spam
+  ElansHubDB.calendar = nil
+  C_Calendar, C_DateAndTime, GetNumSavedInstances, GetSavedInstanceInfo = nil, nil, nil, nil
+  NOW = NOW + 3601
+  local chat0 = #CHAT
+  local okm, r = pcall(E.CalendarRefresh, true)
+  ok("calendar: no C_Calendar -> 'missing', nothing stored, no error", okm and r == "missing" and ElansHubDB.calendar == nil)
+  ok("calendar: status says it is missing", E.CalendarStatus():find("missing", 1, true) ~= nil)
+  evt("CALENDAR_UPDATE_EVENT_LIST") evt("PLAYER_REGEN_ENABLED") RunTimers()
+  ok("calendar: events and timers with no API are harmless", ElansHubDB.calendar == nil)
+  SlashCmdList.ELANSHUB("diag")
+  local run = ElansHubDB.diag and ElansHubDB.diag.runs and ElansHubDB.diag.runs[1]
+  ok("calendar: /ehub diag records that the API is missing", run and tostring(run.calendar):find("missing", 1, true) ~= nil)
+  local chatty = false
+  for k = chat0 + 1, #CHAT do if CHAT[k]:lower():find("calendar", 1, true) then chatty = true end end
+  ok("calendar: nothing printed on its own", not chatty)
+  installApi()
+  SlashCmdList.ELANSHUB("diag")
+  run = ElansHubDB.diag.runs[1]
+  ok("calendar: /ehub diag records the state when the API is there", run and tostring(run.calendar) ~= "" and not tostring(run.calendar):find("missing", 1, true))
+  ok("calendar: no forbidden unit APIs called", FORBIDDEN == forbiddenBefore)
+  C_Calendar, C_DateAndTime, GetNumSavedInstances, GetSavedInstanceInfo, GetCurrentRegion = nil, nil, nil, nil, nil
+  time, date = realTime, realDate
+  ElansHubDB.calendar = nil
+end
+
 -- no combat log, no secure frames, no blocked
 local cl = false
 for _, e in ipairs(EVENTS) do if e:find("COMBAT_LOG") then cl = true end end
