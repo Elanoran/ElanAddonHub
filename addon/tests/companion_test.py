@@ -777,6 +777,30 @@ do
   ElansHubDB.calendar = nil
 end
 
+-- /ehub copy: recent chat as plain text in a copyable box; /ehub talentapi: what talent API the client has
+do
+  local msgs = { "|cffabd473Elan's Hub|r: hello", "You receive loot: |cff9d9d9d|Hitem:123::|h[Linen Scrap]|h|r", MOCK_SECRET_TEXT or "plain line" }
+  DEFAULT_CHAT_FRAME = CreateFrame("Frame", "ChatFrame1")
+  DEFAULT_CHAT_FRAME.GetNumMessages = function() return #msgs end
+  DEFAULT_CHAT_FRAME.GetMessageInfo = function(_, i) return msgs[i] end
+  SlashCmdList.ELANSHUB("copy")
+  local cf = _G.ElansHubCopy
+  local txt = cf and cf.edit and cf.edit.__text or ""
+  ok("copy: window opens with the chat lines", cf ~= nil and txt:find("Elan's Hub: hello", 1, true) ~= nil)
+  ok("copy: colour codes and links become plain text", txt:find("You receive loot: [Linen Scrap]", 1, true) ~= nil and not txt:find("|c", 1, true))
+  ok("copy: Esc closes it (UISpecialFrames)", (function() for _, n in ipairs(UISpecialFrames) do if n == "ElansHubCopy" then return true end end end)())
+  C_FakeTalents = { GetTalentInfo = function() end, GetNumTalents = function() end, Other = function() end }
+  GetTalentInfo = nil
+  SlashCmdList.ELANSHUB("talentapi")
+  local lines = ElansHubDB.probe and ElansHubDB.probe.lines or {}
+  local all = table.concat(lines, " | ")
+  ok("talentapi: finds C_ talent functions and flags the missing classic ones", all:find("C_FakeTalents.GetTalentInfo", 1, true)
+    and all:find("GetTalentInfo: MISSING", 1, true) and not all:find("C_FakeTalents.Other", 1, true) and ElansHubDB.probe.what == "talentapi")
+  ok("talentapi: the result is shown to copy", _G.ElansHubCopy.edit.__text:find("C_FakeTalents.GetNumTalents", 1, true) ~= nil)
+  C_FakeTalents, DEFAULT_CHAT_FRAME = nil, nil
+  _G.ElansHubCopy:Hide()
+end
+
 -- no combat log, no secure frames, no blocked
 local cl = false
 for _, e in ipairs(EVENTS) do if e:find("COMBAT_LOG") then cl = true end end

@@ -378,6 +378,15 @@ SlashCmdList.ELANSHUB = function(msg)
     if EHUB.CalendarCommand then EHUB.CalendarCommand(b) end
     return
   end
+  if a == "copy" then
+    if EHUB.ShowCopy then EHUB.ShowCopy(EHUB.ChatLines(200), "Recent chat - Ctrl+A, Ctrl+C") end
+    return
+  end
+  if a == "talentapi" then
+    local lines = EHUB.TalentApi and EHUB.TalentApi()
+    if lines and EHUB.ShowCopy then EHUB.ShowCopy(lines, "Talent functions in this client (also saved for the Outpost after /reload)") end
+    return
+  end
   if a == "diag" then
     if EHUB.Diag then EHUB.Diag() end
     return

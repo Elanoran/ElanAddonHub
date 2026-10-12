@@ -92,3 +92,82 @@ function EHUB.AutoCheck()
 end
 
 table.insert(EHUB.inits, EHUB.AutoCheck)
+
+-- ============================================================ copy window + probes
+-- Chat text can't be selected in WoW. /ehub copy shows the recent chat lines (and /ehub talentapi its findings) in a
+-- plain text box: Ctrl+A, Ctrl+C. Probe results are also kept in ElansHubDB.probe so Elan's Outpost can read them
+-- after a /reload. Read-only: nothing here calls a protected function.
+local copyFrame
+local function plain(t)
+  t = t:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+  t = t:gsub("|H.-|h(.-)|h", "%1"):gsub("|T.-|t", ""):gsub("|A.-|a", "")
+  return t
+end
+EHUB.PlainText = plain
+
+function EHUB.ChatLines(max)
+  local out, f = {}, DEFAULT_CHAT_FRAME
+  if not (f and f.GetNumMessages and f.GetMessageInfo) then return out end
+  local ok, n = pcall(f.GetNumMessages, f)
+  if not ok or type(n) ~= "number" or (issecretvalue and issecretvalue(n)) then return out end
+  for i = math.max(1, n - (max or 200) + 1), n do
+    local ok2, text = pcall(f.GetMessageInfo, f, i)
+    if ok2 and type(text) == "string" and not (issecretvalue and issecretvalue(text)) then out[#out + 1] = plain(text) end
+  end
+  return out
+end
+
+function EHUB.ShowCopy(lines, title)
+  local UI = EHUB.UI
+  if not copyFrame then
+    local f = CreateFrame("Frame", "ElansHubCopy", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    f:SetSize(620, 420) f:SetPoint("CENTER") f:SetFrameStrata("DIALOG")
+    f:EnableMouse(true) f:SetMovable(true) f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving) f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    if UI and UI.Skin then UI.Skin(f) end
+    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal") f.title:SetPoint("TOPLEFT", 14, -12)
+    f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall") f.hint:SetPoint("TOPRIGHT", -40, -14)
+    f.hint:SetText("Ctrl+A, then Ctrl+C to copy")
+    local close = CreateFrame("Button", nil, f, "UIPanelCloseButton") close:SetPoint("TOPRIGHT", -4, -4)
+    local sf = CreateFrame("ScrollFrame", "ElansHubCopyScroll", f, "UIPanelScrollFrameTemplate")
+    sf:SetPoint("TOPLEFT", 12, -36) sf:SetPoint("BOTTOMRIGHT", -30, 12)
+    local eb = CreateFrame("EditBox", nil, sf)
+    eb:SetMultiLine(true) eb:SetAutoFocus(true) eb:SetFontObject("ChatFontNormal") eb:SetWidth(570)
+    eb:SetScript("OnEscapePressed", function() f:Hide() end)
+    sf:SetScrollChild(eb)
+    f.edit = eb
+    table.insert(UISpecialFrames, "ElansHubCopy")
+    copyFrame = f
+  end
+  copyFrame.title:SetText(title or "Elan's Hub - copy")
+  copyFrame.edit:SetText(table.concat(lines or {}, "\n"))
+  copyFrame:Show()
+  copyFrame.edit:SetFocus() copyFrame.edit:HighlightText()
+  return copyFrame
+end
+
+-- Which talent functions does this client have? (the classic GetTalentInfo family may be gone)
+function EHUB.TalentApi()
+  local lines, seen = {}, {}
+  local function add(s) if not seen[s] then seen[s] = true lines[#lines + 1] = s end end
+  for k, v in pairs(_G) do
+    if type(k) == "string" and k:find("Talent") and type(v) == "function" then add(k) end
+  end
+  for k, v in pairs(_G) do
+    if type(k) == "string" and k:find("^C_") and type(v) == "table" then
+      local ok = pcall(function()
+        for f, fv in pairs(v) do
+          if type(f) == "string" and type(fv) == "function" and (f:find("Talent") or f:find("Spec")) then add(k .. "." .. f) end
+        end
+      end)
+      if not ok then add(k .. " (could not be listed)") end
+    end
+  end
+  table.sort(lines)
+  for _, n in ipairs({ "GetTalentInfo", "GetNumTalentTabs", "GetTalentTabInfo", "UnitCharacterPoints", "GetUnspentTalentPoints" }) do
+    table.insert(lines, 1, n .. ": " .. (type(_G[n]) == "function" and "present" or "MISSING"))
+  end
+  ElansHubDB = ElansHubDB or {}
+  ElansHubDB.probe = { what = "talentapi", at = time and time() or 0, version = EHUB.Version and EHUB.Version() or "?", lines = lines }
+  return lines
+end
