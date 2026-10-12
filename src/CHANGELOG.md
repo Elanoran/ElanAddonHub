@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.42.0
+- **Shared flight times:** the flight-path times Elan's Hunter Helper learns are shared with your lodge, and everyone's merged times are handed to the game through Elan's Hub, so flight timers become exact sooner - even for legs you haven't flown. Settings > Lodge > "Share flight times with the lodge" (on by default; times only; with it off nothing is uploaded, but you still receive everyone's).
+- Needs Lodge server 2.13 and Elan's Hub 1.10.0 (one full WoW restart, as the companion gets a new file). On an older server nothing happens.
+
 ## 2.41.0
 - **Calendar events are easy to tell apart:** Lodge events, in-game holidays, raid resets and your own and guild events each have their own colour, and every holiday keeps its own colour. The month view shows labelled chips and bars ("20:00 Karaoke", "Darkmoon Faire") with "+N more" instead of grey lines; cards get a coloured bar and a type label. New filter chips: Lodge, Holidays, Raid resets, My game events.
 - **Repeating holidays fixed:** Call to Arms weekends and the Sunday fishing contest are separate events again instead of one month-long span (needs Elan's Hub 1.9.1 and a /reload). In-game times name the day: "Thu 15 Oct 17:00 - Mon 19 Oct 16:00".
