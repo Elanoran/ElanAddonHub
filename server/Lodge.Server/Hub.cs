@@ -17,6 +17,7 @@ public sealed class Budget
     public readonly TokenBucket Page;          // history:before (scrolling up): burst 10, 1 per s
     public readonly TokenBucket ProfileSet;    // profile:set: 1 per 2 s (a burst of 1)
     public readonly TokenBucket DisplayName;   // changing the display name: 1 per 60 s (a burst of 1)
+    public readonly TokenBucket FlightShare;   // flights.share: one per 10 minutes (a burst of 1)
     public DateTime LastUsed;
 
     public Budget(IClock clock)
@@ -27,6 +28,7 @@ public sealed class Budget
         Page = new TokenBucket(10, 1, clock);
         ProfileSet = new TokenBucket(1, 0.5, clock);
         DisplayName = new TokenBucket(1, 1.0 / 60, clock);
+        FlightShare = new TokenBucket(1, 1.0 / Flights.ShareEvery.TotalSeconds, clock);
         VoicePackets = new TokenBucket(150, 60, clock);
         VoiceBytes = new TokenBucket(128 * 1024, 24 * 1024, clock);
         LastUsed = clock.UtcNow;
@@ -94,7 +96,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.12.0";
+    public const string Version = "2.13.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -109,6 +111,7 @@ public class LodgeHub
     public readonly ChatModule Chat;
     public readonly VoiceModule Voice;
     public readonly CalendarModule Calendar;
+    public readonly FlightModule Flight;
     public readonly LodgeInfoStore Info;
     readonly IModule[] modules;
     readonly ConcurrentDictionary<int, Member> members = new();
@@ -135,8 +138,9 @@ public class LodgeHub
         Chat = new ChatModule(this) { FlushDelay = TimeSpan.FromSeconds(cfg.HistoryFlushSeconds) };
         Voice = new VoiceModule(this);
         Calendar = new CalendarModule(this);
+        Flight = new FlightModule(this);
         Info = new LodgeInfoStore(cfg.DataDir);
-        modules = new IModule[] { Chat, Calendar, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
+        modules = new IModule[] { Chat, Calendar, Flight, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
     // personal codes: one budget per person; guests (shared code): one per IP, so several friends on one guest
@@ -221,7 +225,7 @@ public class LodgeHub
             ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
             ["canManage"] = Roles.Can(me.Role, Perm.ManageMembers),
             ["canPin"] = Roles.Can(me.Role, Perm.PinMessages),
-            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo"),
+            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights"),
             ["lodge"] = Info.ToJson(),
             ["calendar"] = Calendar.WelcomeView(),
             ["canInvite"] = Roles.Can(me.Role, Perm.Invite),
@@ -456,6 +460,7 @@ public class LodgeHub
                     await ApplyCodeChanges();
                     await SweepIdle();
                     await Calendar.Tick();
+                    Flight.Tick();
                     Auth.Strikes.Sweep();
                     SweepBudgets();
                 }

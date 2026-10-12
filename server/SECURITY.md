@@ -191,12 +191,22 @@ longer lets a backslash into a name.
   sends an invite code anywhere (the version is read from the source, not from an authenticated `/health`), and the
   health probe only talks to `127.0.0.1`. Systemd drop-ins and `lodge.env` ownership are left alone.
 
+## 2.13.0 (shared flight times)
+
+- Two messages, nothing else: `flights.share` (members and up; legs `{ "<faction>|<idA>><idB>": {t, n} }`, up to 500 per message, optional `names` `{id: name}`) and `flights.get` (anyone, guests included). Answers: `flights.shared {ok, accepted, rejected, why?}` (`why`: `guest`, `rate`, `empty`, `save`) and `flights.data {at, legs, names}`. The `flights` feature is in the welcome and in `/features`; an older server simply does not answer.
+- Everything is validated server side in one place (`Flights`): faction exactly `Horde` or `Alliance`, ids 1-32 characters of letters/digits/space and `' . , -` (no quote, backslash, bracket, `|` or `>`), the two ids different, 1 <= t <= 1800 (rounded to 0.1), 1 <= n <= 50 and whole, anything not a number refused. A name is cleaned like any text (NFKC, control/format characters out), loses `" \ < > | [ ]` and is cut at 60. Entries that fail count as `rejected`; a malformed message costs nothing and never throws.
+- Budgets: the per-identity `FlightShare` bucket (burst 1, one token per 10 minutes) on top of the Control budget; a refused share counts towards the flood disconnect. `flights.get` spends the Page budget (burst 10, 1 per second). Guests never contribute (`Perm.FlightShare` = member and up), they read.
+- Storage: `<data>/flights.json`, atomic (tmp, flush, rename; a tmp is used only if the main file is missing), 12 MB cap on load, every loaded key/value re-validated. Bounds: 5000 distinct legs, 1500 legs per identity (one member cannot fill the table), 20 contributors per leg, 3000 names. Contributions older than 120 days are dropped (on every share and every 15 s); a value re-sent unchanged does not re-order anything and only refreshes its age after 30 days.
+- Aggregate: per leg, each identity keeps ONE latest `{t, n, at}`; the merged value is the sample-weighted mean of the accepted contributions, `n` summed and capped at 50. Outliers: taken in the order they were stored, a contribution more than +-40 % from an aggregate that already holds n >= 5 is stored but held back; it joins only when another held-back identity agrees with it within 40 % (an ordinary value nearby does not rescue a stray one). The result is recomputed from the stored data alone, so it is the same after a restart. Honest limit: two colluding members can move a value together; the damage is bounded to a flight timer being off.
+- Names are voted (most contributors win, ties alphabetical) and kept only for ids used by a leg.
+- Logs: counts only (`X shared flight times (N stored, M refused)`); never a key, id, name or time. Tested (unit and real-socket).
+
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 261 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 323 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
-python server/tests/security_integration.py                     # 118 checks against local servers (python -X utf8 on Windows)
+python server/tests/security_integration.py                     # 150 checks against local servers (python -X utf8 on Windows)
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 41 checks
 sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, 41 checks
 ```

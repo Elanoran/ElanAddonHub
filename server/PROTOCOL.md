@@ -283,3 +283,10 @@ Transfer = `admin.role` `{name, role: "owner"}` for someone else (owner). The la
 **Web invite page.** `GET /` shows the lodge name and welcome. A web link is `https://<server>/#join=<server>|<invite>` (e.g. `https://example.org/lodge/#join=example.org/lodge|i1....`):
 the fragment never reaches the server; an inline script (CSP nonce) turns it into the `elanshub://` link behind an "Open in the Outpost" button. Headers: strict CSP
 (`default-src 'none'`, nonce script and style, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.
+
+## 2.13 additions (shared flight times; optional for clients)
+
+Feature `flights` (welcome `features` and `GET /features`). A client on an older server sends nothing.
+
+- `flights.share` `{legs: {"<Horde|Alliance>|<idA>><idB>": {t: seconds (1-1800), n: samples (1-50)}}, names?: {id: name}}` - member and up, at most 500 legs (and 300 names) per message, at most one per 10 minutes per identity, frame limit 64 KB. Answer `flights.shared` `{ok, accepted, rejected, why?}`; `why` is `guest` (guests cannot contribute), `rate`, `empty` or `save`. Each identity's latest value per leg replaces its previous one.
+- `flights.get` `{}` - answer `flights.data` `{at (unix s), legs: {key: {t, n}}, names: {id: name}}`: per leg the weighted average over contributors with n summed and capped at 50, outliers (+-40 % from an aggregate with n >= 5) held back until another outlier confirms them. Guests may read. Page budget.

@@ -664,12 +664,54 @@ async def suite_i(base, data):
         check("leave: the codes entry is gone, the new owner stays", "Aurelia" not in codes and re.search(r"^Nova:.*:owner$", codes, re.M) is not None)
 
 
+async def suite_j(base, data):
+    """2.13 flight times over real sockets: feature, share/get merge, rate limit, guests read-only, validation, outliers, no data in logs."""
+    async with aiohttp.ClientSession() as s:
+        r = await s.get(base + "/features")
+        check("flights: /features lists it", "flights" in (await r.json())["features"])
+        a = await ws_open(s, base, ELAN, "192.0.2.90", "Elan"); wa = await recv(a, "welcome")
+        b = await ws_open(s, base, BOB, "192.0.2.91", "Bob"); await recv(b, "welcome")
+        g = await ws_open(s, base, GUEST, "192.0.2.92", "Pat"); await recv(g, "welcome")
+        check("flights: the welcome lists the feature", wa and "flights" in wa["features"], wa and wa["features"])
+        await a.send_str(json.dumps({"t": "flights.get"}))
+        d = await recv(a, "flights.data")
+        check("flights: an empty table to start with", d is not None and d["legs"] == {} and d["names"] == {}, d)
+        legs = {"Horde|SECRETFLIGHT1>22": {"t": 100.0, "n": 6}, "Horde|bad key": {"t": 100, "n": 6}, "Alliance|1>2": {"t": 9999, "n": 1}, "Alliance|3>4": {"t": 60, "n": 2}}
+        await a.send_str(json.dumps({"t": "flights.share", "legs": legs, "names": {"SECRETFLIGHT1": "SECRETNAME one", "22": "Crossroads"}}))
+        rep = await recv(a, "flights.shared")
+        check("flights: valid legs stored, invalid ones counted as refused", rep and rep["ok"] and rep["accepted"] == 2 and rep["rejected"] == 2, rep)
+        await a.send_str(json.dumps({"t": "flights.share", "legs": {"Horde|7>8": {"t": 50, "n": 1}}}))
+        rep = await recv(a, "flights.shared")
+        check("flights: a second share inside 10 minutes is refused (rate)", rep and not rep["ok"] and rep["why"] == "rate", rep)
+        await b.send_str(json.dumps({"t": "flights.share", "legs": {"Horde|SECRETFLIGHT1>22": {"t": 110.0, "n": 4}, "Alliance|3>4": {"t": 400, "n": 3}}}))
+        rep = await recv(b, "flights.shared")
+        check("flights: another member has their own budget", rep and rep["ok"] and rep["accepted"] == 2, rep)
+        await g.send_str(json.dumps({"t": "flights.share", "legs": {"Horde|9>10": {"t": 70, "n": 3}}}))
+        rep = await recv(g, "flights.shared")
+        check("flights: a guest cannot contribute", rep and not rep["ok"] and rep["why"] == "guest", rep)
+        await g.send_str(json.dumps({"t": "flights.get"}))
+        d = await recv(g, "flights.data")
+        l = d and d["legs"]
+        check("flights: a guest can read the merged table (weighted average, n summed)", l and l["Horde|SECRETFLIGHT1>22"] == {"t": 104.0, "n": 10} and "Horde|9>10" not in l, l)
+        check("flights: a young aggregate (n < 5) takes any value, so the second member's 400 s joins", l and l["Alliance|3>4"]["n"] == 5, l and l.get("Alliance|3>4"))
+        check("flights: names come back for used ids", d and d["names"].get("22") == "Crossroads", d and d["names"])
+        await b.send_str(json.dumps({"t": "flights.share", "legs": "not-an-object"}))
+        await b.send_str(json.dumps({"t": "flights.get"}))
+        d = await recv(b, "flights.data")
+        check("flights: a malformed share does not break the connection", d is not None)
+        for ws in (a, b, g): await ws.close()
+    with open(os.path.join(data, "flights.json"), encoding="utf-8") as f:
+        stored = json.load(f)
+    check("flights: flights.json is written, per-contributor", stored["v"] == 1 and set(stored["legs"]["Horde|SECRETFLIGHT1>22"]) == {"elan", "bob"}, list(stored["legs"]))
+    check("flights: no temp file left behind", not os.path.exists(os.path.join(data, "flights.json.tmp")))
+
+
 def scan_logs(*datas):
     text = ""
     for d in datas:
         with open(os.path.join(d, "server.log"), encoding="utf-8", errors="replace") as f:
             text += f.read()
-    leaked = [c for c in (ELAN, BOB, GUEST, *SECRETS) if c and c in text] + [c[3:] for c in SECRETS if c and c[3:] in text] + re.findall(r"wrong-[a-z]?\d", text) + [w for w in ("SECRETEVENT", "SECRETNOTE", "SECRETCOMMENT") if w in text]
+    leaked = [c for c in (ELAN, BOB, GUEST, *SECRETS) if c and c in text] + [c[3:] for c in SECRETS if c and c[3:] in text] + re.findall(r"wrong-[a-z]?\d", text) + [w for w in ("SECRETEVENT", "SECRETNOTE", "SECRETCOMMENT", "SECRETFLIGHT", "SECRETNAME") if w in text]
     check("no code (valid or wrong) appears in the server logs", not leaked, leaked[:3])
 
 
@@ -692,6 +734,7 @@ def main():
         asyncio.run(suite_g("http://127.0.0.1:5294/lodge"))
         asyncio.run(suite_h("http://127.0.0.1:5295/lodge"))
         asyncio.run(suite_i("http://127.0.0.1:5296/lodge", di))
+        asyncio.run(suite_j("http://127.0.0.1:5295/lodge", dh))
     finally:
         for p in (pa, pb, pc, pg, ph, pi): p.terminate()
         for p in (pa, pb, pc, pg, ph, pi): p.wait(10)
