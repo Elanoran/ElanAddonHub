@@ -24,3 +24,5 @@
 1.9.2 New /ehub copy: shows your recent chat lines as plain text in a box you can copy from (Ctrl+A, Ctrl+C) - handy for /run output. New /ehub talentapi: lists which talent functions this WoW client has (saved for Elan's Outpost too).
 
 1.9.3 New /ehub talentprobe: walks this client's talent trees (read-only) and shows/saves what it finds, so Elan's Hunter Helper can read your talents on WoW Forever.
+
+1.10.0 New file SharedData.lua: Elan's Outpost writes the lodge's shared flight-path times into it, for Elan's Hunter Helper to read (an ElansHubShared table; empty until the Outpost fills it). The addon file list changed, so a ONE-TIME full WoW restart is needed after this update (a /reload does not pick up a new file in the .toc).

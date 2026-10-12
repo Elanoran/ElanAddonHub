@@ -174,6 +174,8 @@ files = [l.strip() for l in toc.splitlines() if l.strip() and not l.startswith("
 for f in files:
     loader(open(os.path.join(ADDON, f), encoding="utf-8").read(), f)
 print("loaded", files)
+shared_ok = L.eval("type(ElansHubShared) == 'table'")
+shared_listed = "SharedData.lua" in files and files[-1] == "SharedData.lua"
 import re as _re
 SRC = "".join(open(os.path.join(ADDON, f), encoding="utf-8").read() for f in files)
 
@@ -841,6 +843,18 @@ for row in res.values() if hasattr(res, "values") else res:
 _dump = os.environ.get("STRIP_DUMP")
 if _dump:
     open(_dump, "w").write("\n".join(L.globals().STRIPDUMP.values()) + "\n")
+check("SharedData.lua is in the toc, after the other files", shared_listed)
+check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
+_gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
+check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
+check("toc version is 1.10.0", "## Version: 1.10.0" in toc and "1.10.0" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("changelog says a one-time WoW restart is needed", "ONE-TIME" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.10.0")[-1])
+# an Outpost-written file replaces the table cleanly and a second load keeps it
+L.execute("ElansHubShared = nil")
+loader('ElansHubShared = { flights = { legs = { ["Horde|11>22"] = { t = 61.5, n = 3 } }, names = { ["11"] = "A" }, at = 1 } }', "SharedData.lua(generated)")
+check("generated shape loads", L.eval("ElansHubShared.flights.legs['Horde|11>22'].t") == 61.5)
+loader(open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read(), "SharedData.lua")
+check("the shipped default never wipes data already there", L.eval("ElansHubShared.flights ~= nil"))
 for api in ("UnitHealth", "UnitPower", "UnitBuff", "UnitDebuff", "UnitAura", "GetSpellCooldown", "UnitPosition", "GetPlayerMapPosition", "C_UnitAuras", "CombatLog"):
     check("source never mentions " + api, api not in SRC)
 print("FAILED:" if fails else "ALL OK", fails)
