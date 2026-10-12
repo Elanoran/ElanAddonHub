@@ -9,6 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Shapes;
 using ElansAddonHub.Services;
 
 namespace ElansAddonHub.Lodge
@@ -24,12 +25,6 @@ namespace ElansAddonHub.Lodge
         public Brush Fill => selected ? Avatar.Res("Brush.Accent.Tint") : Cell.IsToday ? Avatar.Res("Brush.Overlay.Chip") : System.Windows.Media.Brushes.Transparent;
         public Brush NumberBrush => Avatar.Res(Cell.InMonth ? "Brush.Text.Primary" : "Brush.Text.Tertiary");
         public double CellOpacity => Cell.InMonth ? 1 : 0.6;
-        // a WoW holiday covering this day: a thin band along the bottom that joins the neighbouring days
-        public Visibility BandVisibility => Cell.Bands.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        public Thickness BandMargin => new Thickness(Cell.BandHead ? 4 : -4, 0, Cell.BandTail ? 4 : -4, 4);
-        // one dot per event (three at most): Success = going, Warn = maybe, Tertiary = no answer or cancelled
-        public List<Brush> Dots => Cell.Events.Take(3).Select(e => Avatar.Res(e.IsCancelled ? "Brush.Text.Disabled" : e.MyStatus == "going" ? "Brush.Success" : e.MyStatus == "maybe" ? "Brush.Warn" : "Brush.Text.Tertiary")).ToList();
-        public List<string> DotKeys => Cell.Events.Take(3).Select(e => e.IsCancelled ? "cancelled" : e.MyStatus ?? "none").ToList();
     }
 
     // agenda / day cards: the Lodge event card, or the quiet read-only card of a WoW event
@@ -98,7 +93,7 @@ namespace ElansAddonHub.Lodge
             ShowWowBar();
             if (agenda)
             {
-                var groups = CalendarRules.Agenda(S.ViewEvents, Now);
+                var groups = CalendarRules.Agenda(S.CalendarEvents, Now);
                 var sig = string.Join("|", groups.SelectMany(g => g.Events.Select(e => g.Label + ":" + e.Id)));
                 if (force || sig != lastSignature) { AgendaList.ItemsSource = groups; lastSignature = sig; }
                 AgendaEmpty.Visibility = groups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -114,12 +109,40 @@ namespace ElansAddonHub.Lodge
             bool show = S.WowAvailable || !S.WowEventsEnabled;
             WowBar.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
             settingWowSwitch = true; WowSwitch.IsChecked = S.WowEventsEnabled; settingWowSwitch = false;
+            WowCaption.Text = S.WowData != null && S.WowData.Events.Any(x => x.Recurring)
+                ? "Some holidays repeat every week. Update Elan's Hub to 1.9.1 and /reload to see each date."
+                : "WoW events come from your game and update after a /reload or logout.";
+            ShowFilters();
         }
 
         void WowSwitch_Click(object sender, RoutedEventArgs e)
         {
             if (S == null || settingWowSwitch) return;
             S.Settings.WowEventsOff = WowSwitch.IsChecked != true;
+            SettingsStore.Save(S.Settings);
+            S.WowCalendarSettingsChanged();
+        }
+
+        // the filter chips (Lodge / Holidays / Raid resets / My game events): a toggle each, saved in the settings
+        void ShowFilters()
+        {
+            FilterBar.Visibility = WowBar.Visibility;
+            settingFilters = true;
+            FilterLodge.IsChecked = S.CalendarKindShown("lodge");
+            FilterHoliday.IsChecked = !S.Settings.CalHideHolidays; FilterReset.IsChecked = !S.Settings.CalHideResets; FilterMine.IsChecked = !S.Settings.CalHideMine;
+            FilterHoliday.IsEnabled = FilterReset.IsEnabled = FilterMine.IsEnabled = S.WowEventsEnabled;      // the in-game kinds are all off with the switch
+            settingFilters = false;
+        }
+        bool settingFilters;
+
+        void Filter_Click(object sender, RoutedEventArgs e)
+        {
+            if (S == null || settingFilters) return;
+            var on = (sender as ToggleButton)?.IsChecked == true;
+            if (sender == FilterLodge) S.Settings.CalHideLodge = !on;
+            else if (sender == FilterHoliday) S.Settings.CalHideHolidays = !on;
+            else if (sender == FilterReset) S.Settings.CalHideResets = !on;
+            else if (sender == FilterMine) S.Settings.CalHideMine = !on;
             SettingsStore.Save(S.Settings);
             S.WowCalendarSettingsChanged();
         }
@@ -142,19 +165,62 @@ namespace ElansAddonHub.Lodge
             MonthTitle.Text = first.ToString("MMMM yyyy", CalendarRules.English);
             var fdw = (int)CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek;
             WeekdayRow.ItemsSource = Enumerable.Range(0, 7).Select(i => CalendarRules.English.DateTimeFormat.GetAbbreviatedDayName((DayOfWeek)((fdw + i) % 7))).ToList();
-            var cells = CalendarRules.MonthGrid(year, month, S.ViewEvents, Now).Select(c => new MonthCellVM(c)).ToList();
+            var cells = CalendarRules.MonthGrid(year, month, S.CalendarEvents, Now).Select(c => new MonthCellVM(c)).ToList();
             var today = CalendarRules.ToLocal(Now).Date;
             if (selectedDay == null || selectedDay.Value.Year != year || selectedDay.Value.Month != month) selectedDay = today.Year == year && today.Month == month ? today : first;
             foreach (var c in cells) c.Selected = c.Cell.Day == selectedDay.Value;
             MonthGridList.ItemsSource = cells;
+            monthLayout = CalendarRules.Layout(cells.Select(c => c.Cell).ToList());
+            DrawOverlay(cells);
             ShowDay();
+        }
+
+        // ---- the bars and chips over the month grid (positions come from CalendarRules.Layout; everything has a fixed size, nothing here changes the grid's height)
+        CalendarRules.MonthLayout monthLayout;
+        static readonly double[] LaneTop = { 28, 48 };        // y of line 0 / 1 inside a 84 high day slot: number 4..22, then 16 high lines 4 apart, then "+N more"
+        const double ChipHeight = 16, MoreTop = 68;
+
+        void DrawOverlay(IList<MonthCellVM> cells)
+        {
+            MonthOverlay.Children.Clear();
+            if (monthLayout == null) return;
+            var cap = (Style)FindResource("Text.Caption");
+            foreach (var s in monthLayout.Segs)
+            {
+                var ev = s.Ev;
+                double dim = cells[s.Row * CalendarRules.Columns + s.Col].Cell.InMonth ? 1 : 0.6;
+                var cr = new CornerRadius(s.LeftOpen ? 0 : 8, s.RightOpen ? 0 : 8, s.RightOpen ? 0 : 8, s.LeftOpen ? 0 : 8);
+                var g = new Grid { Height = ChipHeight, VerticalAlignment = VerticalAlignment.Top, Opacity = dim, ClipToBounds = true, IsHitTestVisible = false };
+                g.Margin = new Thickness(s.LeftOpen ? 0 : 4, LaneTop[s.Lane], s.RightOpen ? 0 : 4, 0);
+                g.Children.Add(new Border { Background = ev.TintBrush, CornerRadius = cr });
+                if (!s.LeftOpen || s.IsBar)
+                    g.Children.Add(new Rectangle { Width = 3, Height = 8, RadiusX = 1.5, RadiusY = 1.5, Fill = ev.BarBrush, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) });
+                g.Children.Add(new TextBlock
+                {
+                    Text = s.Label, Style = cap, Foreground = Avatar.Res("Brush.Text.Primary"), TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap,
+                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0),
+                });
+                if (ev.IsCancelled) g.Opacity = dim * 0.6;
+                Grid.SetRow(g, s.Row); Grid.SetColumn(g, s.Col); Grid.SetColumnSpan(g, s.Span);
+                g.Tag = s;
+                MonthOverlay.Children.Add(g);
+            }
+            for (int i = 0; i < monthLayout.More.Length && i < cells.Count; i++)
+            {
+                int n = monthLayout.More[i];
+                if (n <= 0) continue;
+                var t = new TextBlock { Text = "+" + n + " more", Style = cap, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, MoreTop, 0, 0), Opacity = cells[i].Cell.InMonth ? 1 : 0.6, IsHitTestVisible = false };
+                Grid.SetRow(t, i / CalendarRules.Columns); Grid.SetColumn(t, i % CalendarRules.Columns);
+                t.Tag = i;
+                MonthOverlay.Children.Add(t);
+            }
         }
 
         void ShowDay()
         {
             var day = selectedDay ?? CalendarRules.ToLocal(Now).Date;
             DayTitle.Text = CalendarRules.DayLabel(day, CalendarRules.ToLocal(Now).Date) + (day.Date == CalendarRules.ToLocal(Now).Date.AddDays(0) || day.Date == CalendarRules.ToLocal(Now).Date.AddDays(1) ? " · " + day.ToString("d MMMM", CalendarRules.English) : "");
-            var evs = S.ViewEvents.Where(e => e.IsBand ? CalendarRules.BandCovers(e, day) : CalendarRules.ToLocal(e.StartUtc).Date == day.Date).OrderBy(e => e.IsBand ? 0 : 1).ThenBy(e => e.StartUtc).ToList();
+            var evs = S.CalendarEvents.Where(e => !e.Recurring).Where(e => e.IsBand ? CalendarRules.BandCovers(e, day) : CalendarRules.ToLocal(e.StartUtc).Date == day.Date).OrderBy(e => e.IsBand ? 0 : 1).ThenBy(e => e.StartUtc).ToList();
             DayEvents.ItemsSource = evs;
             DayEmpty.Visibility = evs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -493,6 +559,11 @@ namespace ElansAddonHub.Lodge
         public int FormChannelCountForTest => FChannel.Items.Count;
         public bool NewButtonVisibleForTest => NewButton.Visibility == Visibility.Visible;
         public FrameworkElement MonthGridElementForTest => MonthGridList;
+        public Grid MonthOverlayForTest => MonthOverlay;
+        public CalendarRules.MonthLayout MonthLayoutForTest => monthLayout;
+        public bool FilterBarVisibleForTest => FilterBar.Visibility == Visibility.Visible;
+        public ToggleButton FilterButtonForTest(string group) => group == "lodge" ? FilterLodge : group == "holiday" ? FilterHoliday : group == "raidreset" ? FilterReset : FilterMine;
+        public void ClickFilterForTest(string group, bool on) { var b = FilterButtonForTest(group); b.IsChecked = on; Filter_Click(b, null); }
         public bool WowBarVisibleForTest => WowBar.Visibility == Visibility.Visible;
         public bool WowSwitchOnForTest => WowSwitch.IsChecked == true;
         public string WowCaptionForTest => WowCaption.Text;

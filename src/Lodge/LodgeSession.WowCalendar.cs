@@ -25,6 +25,23 @@ namespace ElansAddonHub.Lodge
         // what the agenda and the month grid list: the server's events plus WoW's (when shown)
         public IEnumerable<EventVM> ViewEvents => WowEventsEnabled && WowEvents.Count > 0 ? Events.Concat(WowEvents) : (IEnumerable<EventVM>)Events;
 
+        // the filter chips on the Calendar page: lodge | holiday | raidreset | mine. The three WoW kinds are also off while "Show in-game WoW events" is.
+        public bool CalendarKindShown(string group)
+        {
+            if (Settings == null) return true;
+            switch (group)
+            {
+                case "lodge": return !Settings.CalHideLodge;
+                case "holiday": return WowEventsEnabled && !Settings.CalHideHolidays;
+                case "raidreset": return WowEventsEnabled && !Settings.CalHideResets;
+                case "mine": return WowEventsEnabled && !Settings.CalHideMine;
+                default: return true;
+            }
+        }
+
+        // what the Calendar page lists (agenda, month, day list): ViewEvents minus the kinds the filter chips switched off. The strip above the chat is not filtered.
+        public IEnumerable<EventVM> CalendarEvents => ViewEvents.Where(e => CalendarKindShown(CalendarColors.GroupOf(e)));
+
         // what the strip above the chat lists
         public List<EventVM> StripEvents(DateTime nowUtc) => SupportsCalendar && EventsStripEnabled ? CalendarRules.Upcoming(ViewEvents, nowUtc) : new List<EventVM>();
 

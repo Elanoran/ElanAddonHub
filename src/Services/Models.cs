@@ -99,6 +99,11 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "pixelOff")] public bool PixelOff { get; set; }              // true = don't read the addon's status strip from the screen
         [DataMember(Name = "videoPreviewsOff")] public bool VideoPreviewsOff { get; set; } // false = YouTube links in chat show a preview card (fetches the thumbnail + title from YouTube)
         [DataMember(Name = "eventsStripOff")] public bool EventsStripOff { get; set; }      // false (default) = the next events show in a strip above the Lodge chat
+        // the filter chips above the Calendar: which kinds are hidden (all false = everything shown). "Show in-game WoW events" (WowEventsOff) stays the master switch for the three WoW kinds.
+        [DataMember(Name = "calHideLodge")] public bool CalHideLodge { get; set; }
+        [DataMember(Name = "calHideHolidays")] public bool CalHideHolidays { get; set; }
+        [DataMember(Name = "calHideResets")] public bool CalHideResets { get; set; }
+        [DataMember(Name = "calHideMine")] public bool CalHideMine { get; set; }
         [DataMember(Name = "wowEventsOff")] public bool WowEventsOff { get; set; }          // false (default) = WoW's own calendar (from the companion addon) is listed in the Calendar
         // ---- Outpost browser (Browser page)
         [DataMember(Name = "browserSearch")] public string BrowserSearch { get; set; }       // search engine id (BrowserUrl.Engines); null = duckduckgo

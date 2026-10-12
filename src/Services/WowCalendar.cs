@@ -19,6 +19,9 @@ namespace ElansAddonHub.Services
         public string StartText, EndText, Desc, Status;   // Status (player / guild): going | maybe | declined | invited
         public bool AllDay;
         public int Icon;                                  // texture file id, 0 = none
+        public int Days;                                  // holiday: how many days this one occurrence lasts (addon 1.9.1+), 0 = not stored
+        public bool Seq;                                  // the game marked the days START / ONGOING / END (addon 1.9.1+)
+        public bool Recurring;                            // old-format data: several weekly occurrences merged into one long span (see Parse); never drawn as a band
     }
 
     public class WowCalendarData
@@ -26,6 +29,7 @@ namespace ElansAddonHub.Services
         public long At;                                   // unix seconds of the read in game
         public string Realm;
         public int Region;
+        public int Version;                               // the addon's calendar format: 1 = holidays merged by title (1.9.0), 2 = one entry per occurrence (1.9.1+)
         public int? ServerOffsetSeconds;                  // the calendar clock's offset from UTC when it was read (null = unknown)
         public List<WowEvent> Events = new List<WowEvent>();
         public bool Found;                                // a calendar block was there at all
@@ -62,6 +66,7 @@ namespace ElansAddonHub.Services
             data.At = cal.Long("at");
             data.Realm = cal.Str("realm");
             data.Region = cal.Int("region");
+            data.Version = cal.Int("v");
             if (cal.TryGetValue("serverOffset", out var so) && so is double off) data.ServerOffsetSeconds = (int)off;
             foreach (var d in Items(cal.Child("events")))
             {
@@ -72,14 +77,30 @@ namespace ElansAddonHub.Services
                 var e = new WowEvent
                 {
                     Title = title, Kind = kind, Start = d.Long("start"), Finish = d.Long("finish"), StartText = d.Str("startText"), EndText = d.Str("endText"),
-                    Desc = SafeFile.Text(d.Str("desc") ?? "").Trim(), Status = d.Str("status"), AllDay = d.Bool("allDay"), Icon = d.Int("icon"),
+                    Desc = SafeFile.Text(d.Str("desc") ?? "").Trim(), Status = d.Str("status"), AllDay = d.Bool("allDay"), Icon = d.Int("icon"), Days = d.Int("days"), Seq = d.Bool("seq"),
                 };
                 if (e.Desc.Length > 400) e.Desc = e.Desc.Substring(0, 400);
                 if (e.Start <= 0 && ParseText(e.StartText) == null) continue;     // no usable time at all
+                e.Recurring = data.Version < 2 && IsMergedRecurring(e);
                 data.Events.Add(e);
                 if (data.Events.Count >= MaxEvents) break;
             }
             return data;
+        }
+
+        // Titles of holidays that repeat every week (a battleground weekend, a Sunday fishing contest). Addon 1.9.0 joined all their occurrences into ONE
+        // entry from the first start to the last end; with such data the real occurrences cannot be told apart any more.
+        static readonly System.Text.RegularExpressions.Regex WeeklyTitle = new System.Text.RegularExpressions.Regex(@"^\s*Call to Arms\b|Fishing Extravaganza",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        public const int MaxSingleOccurrenceDays = 21;
+
+        // Old-format data (format 1) with a holiday span longer than three weeks whose title is a weekly event: that span is the merge of many weeks, not one
+        // occurrence. It is kept as a "recurring" entry (listed once in the agenda, no month-long band) until the addon (1.9.1) saves real occurrences.
+        public static bool IsMergedRecurring(WowEvent e)
+        {
+            if (e.Kind != "holiday" || !WeeklyTitle.IsMatch(e.Title)) return false;
+            var s = StartUtc(e); var f = EndUtc(e);
+            return s != null && f != null && (f.Value - s.Value).TotalDays > MaxSingleOccurrenceDays;
         }
 
         // the newest calendar among all SavedVariables\ElansHub.lua files (one per account / client)

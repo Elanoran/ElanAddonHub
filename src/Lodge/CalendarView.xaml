@@ -46,47 +46,88 @@
       </WrapPanel>
     </DataTemplate>
 
-    <!-- one event in the agenda: start time on the left, instance + when + role fill + my answer on the right -->
+    <!-- a filter chip above the calendar: a toggle (shown / hidden) with the kind's colour as a dot; checked = tinted in that colour (Background = the Tint brush, Tag = the solid one) -->
+    <Style x:Key="FilterChip" TargetType="ToggleButton">
+      <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Grid Height="24" Background="Transparent">
+              <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource Radius.Chip}" />
+              <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Chip}" Opacity="0" IsHitTestVisible="False" />
+              <StackPanel Orientation="Horizontal" Margin="12,0" VerticalAlignment="Center">
+                <Ellipse x:Name="dot" Width="8" Height="8" Fill="{TemplateBinding Tag}" Opacity="0.4" Margin="0,0,8,0" />
+                <ContentPresenter VerticalAlignment="Center" />
+              </StackPanel>
+              <Border x:Name="ring" Margin="-2" CornerRadius="14" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+                <Setter TargetName="bd" Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+                <Setter TargetName="dot" Property="Opacity" Value="1" />
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5" /></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- one event in the agenda: a bar in the kind's colour, start time on the left, instance + when + role fill + my answer on the right -->
     <DataTemplate x:Key="EventCard">
-      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Margin="0,0,0,12" Opacity="{Binding CardOpacity}"
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Margin="0,0,0,12" Opacity="{Binding CardOpacity}"
               Tag="{Binding}" MouseLeftButtonUp="Card_Click" Cursor="Hand">
         <Grid>
-          <Grid.ColumnDefinitions><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-          <StackPanel>
-            <TextBlock Text="{Binding StartHm}" Style="{StaticResource Text.Body}" />
-            <TextBlock Text="{Binding EndHm}" Visibility="{Binding EndVisibility}" Style="{StaticResource Text.Caption}" />
-          </StackPanel>
-          <StackPanel Grid.Column="1">
-            <DockPanel>
-              <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" Visibility="{Binding StatusVisibility}" VerticalAlignment="Center" Margin="12,0,0,0">
-                <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
-              </Border>
-              <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-            </DockPanel>
-            <TextBlock Text="{Binding SubLine}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
-            <TextBlock Text="{Binding FillText}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
-            <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
-            <TextBlock Text="{Binding MyLine}" Visibility="{Binding MyLineVisibility}" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
-            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource AnswerBar}" Margin="0,12,0,0" />
-          </StackPanel>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <Border Background="{Binding BarBrush}" CornerRadius="12,0,0,12" />
+          <Grid Grid.Column="1" Margin="12,16,16,16">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock Text="{Binding StartHm}" Style="{StaticResource Text.Body}" />
+              <TextBlock Text="{Binding EndHm}" Visibility="{Binding EndVisibility}" Style="{StaticResource Text.Caption}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1">
+              <DockPanel>
+                <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" Visibility="{Binding StatusVisibility}" VerticalAlignment="Center" Margin="12,0,0,0">
+                  <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
+                </Border>
+                <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding TintBrush}" VerticalAlignment="Center" Margin="12,0,0,0">
+                  <TextBlock Text="{Binding TypeLabel}" Foreground="{Binding BarBrush}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              </DockPanel>
+              <TextBlock Text="{Binding SubLine}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+              <TextBlock Text="{Binding FillText}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
+              <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
+              <TextBlock Text="{Binding MyLine}" Visibility="{Binding MyLineVisibility}" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
+              <ContentControl Content="{Binding}" ContentTemplate="{StaticResource AnswerBar}" Margin="0,12,0,0" />
+            </StackPanel>
+          </Grid>
         </Grid>
       </Border>
     </DataTemplate>
 
-    <!-- a WoW event (from the game's own calendar): the same card, quieter - the game's picture, a "WoW" chip, no answer buttons -->
+    <!-- a WoW event (from the game's own calendar): the same card, quieter - a bar in its colour, the game's picture, a type chip (Holiday / Raid reset / Guild event / Your event),
+         the day and time named in full, the description cut to 2 lines, no answer buttons -->
     <DataTemplate x:Key="WowCard">
-      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Margin="0,0,0,12" Opacity="{Binding CardOpacity}"
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Margin="0,0,0,12" Opacity="{Binding CardOpacity}"
               Tag="{Binding}" MouseLeftButtonUp="Card_Click" Cursor="Hand">
         <Grid>
-          <Grid.ColumnDefinitions><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-          <StackPanel>
-            <TextBlock Text="{Binding StartHm}" Style="{StaticResource Text.Body}" />
-            <TextBlock Text="{Binding EndHm}" Visibility="{Binding EndVisibility}" Style="{StaticResource Text.Caption}" />
-          </StackPanel>
-          <StackPanel Grid.Column="1">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="4" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <Border Background="{Binding BarBrush}" CornerRadius="12,0,0,12" />
+          <StackPanel Grid.Column="1" Margin="12,16,16,16">
             <DockPanel>
-              <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="From your in-game calendar. Only on this PC.">
-                <TextBlock Text="WoW" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+              <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding TintBrush}" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="From your in-game calendar. Only on this PC.">
+                <TextBlock Text="{Binding TypeLabel}" Foreground="{Binding BarBrush}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
               </Border>
               <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" Visibility="{Binding StatusVisibility}" VerticalAlignment="Center" Margin="12,0,0,0">
                 <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
@@ -94,15 +135,14 @@
               <Image DockPanel.Dock="Left" Source="{Binding IconImage}" Visibility="{Binding IconVisibility}" Width="24" Height="24" Margin="0,0,8,0" VerticalAlignment="Center" />
               <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
             </DockPanel>
+            <TextBlock Text="{Binding TimeText}" Style="{StaticResource Text.Body}" Margin="0,4,0,0" />
             <TextBlock Text="{Binding SubLine}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
-            <TextBlock Text="{Binding FillText}" Style="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
             <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32" Margin="0,4,0,0" />
             <TextBlock Text="{Binding MyLine}" Visibility="{Binding MyLineVisibility}" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
           </StackPanel>
         </Grid>
       </Border>
     </DataTemplate>
-
     <local:EventCardSelector x:Key="CardPicker" Server="{StaticResource EventCard}" Wow="{StaticResource WowCard}" />
 
     <DataTemplate x:Key="DayGroup">
@@ -112,23 +152,17 @@
       </StackPanel>
     </DataTemplate>
 
-    <!-- a day of the month grid: the number, up to three dots (one per event; Success = I am going, Warn = maybe) -->
+    <!-- a day of the month grid: the number; its bars and chips are drawn over the grid by CalendarView (MonthOverlay). Fixed 80 high inside a 2 px margin: 84 per row, however many events -->
     <DataTemplate x:Key="DayCell">
-      <Grid x:Name="cell" Margin="2" Height="48" Tag="{Binding}" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Day_Click" Opacity="{Binding CellOpacity}">
+      <Grid x:Name="cell" Margin="2" Height="80" Tag="{Binding}" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Day_Click" Opacity="{Binding CellOpacity}">
         <Border Background="{Binding Fill}" CornerRadius="{StaticResource Radius.Control}" />
         <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
-        <TextBlock Text="{Binding Number}" Style="{StaticResource Text.Body}" Foreground="{Binding NumberBrush}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0" />
-        <ItemsControl ItemsSource="{Binding Dots}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" IsHitTestVisible="False">
-          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate><DataTemplate><Ellipse Width="6" Height="6" Fill="{Binding}" Margin="2,0" /></DataTemplate></ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <Border Height="4" VerticalAlignment="Bottom" Margin="{Binding BandMargin}" Background="{StaticResource Brush.Text.Disabled}" Visibility="{Binding BandVisibility}" IsHitTestVisible="False" />
+        <TextBlock Text="{Binding Number}" Style="{StaticResource Text.Body}" Foreground="{Binding NumberBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,4,0,0" />
       </Grid>
       <DataTemplate.Triggers>
         <Trigger SourceName="cell" Property="IsMouseOver" Value="True"><Setter TargetName="hv" Property="Opacity" Value="1" /></Trigger>
       </DataTemplate.Triggers>
     </DataTemplate>
-
     <!-- a person in the detail card: avatar + name in class colour, "Lv 60 Priest" where the game data has it, their comment -->
     <DataTemplate x:Key="Person">
       <StackPanel Margin="0,0,0,8">
@@ -155,7 +189,7 @@
   <Border Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
     <Grid>
       <Grid x:Name="Main">
-        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 
         <!-- header: title, Agenda | Month, New event -->
         <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,0,1" Padding="16,8">
@@ -182,8 +216,22 @@
           </DockPanel>
         </Border>
 
+        <!-- filter chips: which kinds the agenda and the month show (saved in the settings); the three in-game kinds follow the switch above -->
+        <Border x:Name="FilterBar" Grid.Row="2" Visibility="Collapsed" Padding="16,0,16,8">
+          <StackPanel Orientation="Horizontal">
+            <ToggleButton x:Name="FilterLodge" Style="{StaticResource FilterChip}" Content="Lodge" Tag="{StaticResource Brush.Cal.Lodge}" Background="{StaticResource Brush.Cal.Lodge.Tint}" Click="Filter_Click"
+                          Margin="0,0,8,0" ToolTip="Events made in the Lodge" AutomationProperties.Name="Show Lodge events" />
+            <ToggleButton x:Name="FilterHoliday" Style="{StaticResource FilterChip}" Content="Holidays" Tag="{StaticResource Brush.Cal.Holiday.1}" Background="{StaticResource Brush.Cal.Holiday.1.Tint}" Click="Filter_Click"
+                          Margin="0,0,8,0" ToolTip="In-game holidays and world events (each has its own colour)" AutomationProperties.Name="Show holidays" />
+            <ToggleButton x:Name="FilterReset" Style="{StaticResource FilterChip}" Content="Raid resets" Tag="{StaticResource Brush.Cal.Raid}" Background="{StaticResource Brush.Cal.Raid.Tint}" Click="Filter_Click"
+                          Margin="0,0,8,0" ToolTip="When your raid lockouts end" AutomationProperties.Name="Show raid resets" />
+            <ToggleButton x:Name="FilterMine" Style="{StaticResource FilterChip}" Content="My game events" Tag="{StaticResource Brush.Cal.Mine}" Background="{StaticResource Brush.Cal.Mine.Tint}" Click="Filter_Click"
+                          ToolTip="Your own and your guild's events from the in-game calendar" AutomationProperties.Name="Show my game events" />
+          </StackPanel>
+        </Border>
+
         <!-- agenda -->
-        <ScrollViewer x:Name="AgendaScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
+        <ScrollViewer x:Name="AgendaScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
           <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
             <ItemsControl x:Name="AgendaList" ItemTemplate="{StaticResource DayGroup}" />
             <StackPanel x:Name="AgendaEmpty" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
@@ -196,7 +244,7 @@
         </ScrollViewer>
 
         <!-- month -->
-        <ScrollViewer x:Name="MonthScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" app:Motion.EdgeFade="True">
+        <ScrollViewer x:Name="MonthScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" app:Motion.EdgeFade="True">
           <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
             <DockPanel Margin="0,0,0,12">
               <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE76C;" Click="MonthNext_Click" ToolTip="Next month" AutomationProperties.Name="Next month" />
@@ -208,9 +256,20 @@
               <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource Text.Caption}" HorizontalAlignment="Center" /></DataTemplate></ItemsControl.ItemTemplate>
             </ItemsControl>
-            <ItemsControl x:Name="MonthGridList" ItemTemplate="{StaticResource DayCell}">
-              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" Rows="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            </ItemsControl>
+            <Grid>
+              <ItemsControl x:Name="MonthGridList" ItemTemplate="{StaticResource DayCell}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" Rows="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              </ItemsControl>
+              <!-- bars and chips, laid out by CalendarRules.Layout over the same 7 x 6 cells (rows 84 = the cell 80 + its 2 px margins) -->
+              <Grid x:Name="MonthOverlay" IsHitTestVisible="False" VerticalAlignment="Top" ClipToBounds="True">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" />
+                </Grid.RowDefinitions>
+              </Grid>
+            </Grid>
             <TextBlock x:Name="DayTitle" Style="{StaticResource Text.Section}" Margin="0,24,0,12" />
             <ItemsControl x:Name="DayEvents" ItemTemplateSelector="{StaticResource CardPicker}" />
             <TextBlock x:Name="DayEmpty" Text="Nothing planned this day." Style="{StaticResource Text.Secondary}" Visibility="Collapsed" />
@@ -231,8 +290,8 @@
                   <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding StatusFill}" Visibility="{Binding StatusVisibility}" VerticalAlignment="Center" Margin="12,0,0,0">
                     <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" />
                   </Border>
-                  <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Visibility="{Binding WowVisibility}" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="From your in-game calendar. Only on this PC.">
-                    <TextBlock Text="WoW" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                  <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{Binding TintBrush}" VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="{Binding ByLine}">
+                    <TextBlock Text="{Binding TypeLabel}" Foreground="{Binding BarBrush}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
                   </Border>
                   <Image DockPanel.Dock="Left" Source="{Binding IconImage}" Visibility="{Binding IconVisibility}" Width="24" Height="24" Margin="0,0,8,0" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" TextWrapping="Wrap" VerticalAlignment="Center" />

@@ -58,6 +58,7 @@ namespace ElansAddonHub
             if (scaleText.StartsWith("invite2")) { await Invite2Shots(dir); return; }
             if (scaleText.StartsWith("invites")) { await InvitesShots(dir); return; }
             if (scaleText.StartsWith("linkopen")) { await LinkOpenShots(dir); return; }
+            if (scaleText.StartsWith("calendar-distinct")) { await CalendarDistinctShots(dir); return; }
             if (scaleText.StartsWith("calendar")) { await CalendarShots(dir); return; }
             if (scaleText.StartsWith("wowevents")) { await WowEventsShots(dir); return; }
             if (scaleText.StartsWith("skeleton")) { await SkeletonShots(dir); return; }
