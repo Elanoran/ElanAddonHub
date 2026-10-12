@@ -25,7 +25,7 @@ namespace ElansAddonHub
         static DateTime RealmUtc(int day, int hour, int minute) => new DateTime(2026, 10, day, hour, minute, 0, DateTimeKind.Utc).AddHours(5);
         static DateTime Utc(int day, int hour, int minute = 0) => new DateTime(2026, 10, day, hour, minute, 0, DateTimeKind.Utc);
 
-        static string WowEv(string title, string kind, DateTime? start, DateTime? end, string startText = null, string endText = null, bool allDay = false, int icon = 0, string desc = null, string status = null)
+        static string WowEv(string title, string kind, DateTime? start, DateTime? end, string startText = null, string endText = null, bool allDay = false, int icon = 0, string desc = null, string status = null, int days = 0, bool seq = false)
         {
             var sb = new StringBuilder("\t\t\t{\n");
             void Kv(string k, string v) { if (v != null) sb.Append("\t\t\t\t[\"" + k + "\"] = " + v + ",\n"); }
@@ -33,15 +33,15 @@ namespace ElansAddonHub
             Kv("start", start == null ? null : UnixSecs(start.Value).ToString(CultureInfo.InvariantCulture));
             Kv("finish", end == null ? null : UnixSecs(end.Value).ToString(CultureInfo.InvariantCulture));
             Kv("startText", startText == null ? null : LuaStr(startText)); Kv("endText", endText == null ? null : LuaStr(endText));
-            Kv("allDay", allDay ? "true" : null); Kv("icon", icon > 0 ? icon.ToString() : null);
+            Kv("allDay", allDay ? "true" : null); Kv("icon", icon > 0 ? icon.ToString() : null); Kv("days", days > 0 ? days.ToString() : null); Kv("seq", seq ? "true" : null);
             Kv("desc", desc == null ? null : LuaStr(desc)); Kv("status", status == null ? null : LuaStr(status)); Kv("src", LuaStr("calendar"));
             sb.Append("\t\t\t},\n");
             return sb.ToString();
         }
 
-        static string WowLua(string events, int? offset = -18000) =>
+        static string WowLua(string events, int? offset = -18000, int v = 2) =>
             "ElansHubDB = {\n\t[\"current\"] = \"Forever-Elan\",\n\t[\"chars\"] = {\n\t\t[\"Forever-Elan\"] = {\n\t\t\t[\"name\"] = \"Elan\",\n\t\t\t[\"realm\"] = \"Forever\",\n\t\t},\n\t},\n"
-            + "\t[\"calendar\"] = {\n\t\t[\"v\"] = 1,\n\t\t[\"at\"] = " + UnixSecs(CalNow.AddMinutes(-20)) + ",\n\t\t[\"realm\"] = \"Forever\",\n\t\t[\"region\"] = 3,\n"
+            + "\t[\"calendar\"] = {\n\t\t[\"v\"] = " + v + ",\n\t\t[\"at\"] = " + UnixSecs(CalNow.AddMinutes(-20)) + ",\n\t\t[\"realm\"] = \"Forever\",\n\t\t[\"region\"] = 3,\n"
             + (offset == null ? "" : "\t\t[\"serverOffset\"] = " + offset + ",\n") + "\t\t[\"localOffset\"] = 7200,\n\t\t[\"tz\"] = \"Times in the in-game calendar are the realm's clock.\",\n"
             + "\t\t[\"events\"] = {\n" + events + "\t\t},\n\t},\n\t[\"bugs\"] = {},\n}\n";
 
@@ -112,6 +112,7 @@ namespace ElansAddonHub
                 await WowAgenda(check, sent);
                 await WowMonth(check, sent);
                 await WowToggles(check);
+                await WowDistinct(check, sent);
                 await WowDetail(check, sent);
                 await WowStrip(check, sent);
                 await WowNoShift(check, sent);
@@ -163,7 +164,7 @@ namespace ElansAddonHub
             var mc = EventVM.FromWow(d.Events.First(e => e.Title == "Molten Core resets"));
             var dm = EventVM.FromWow(d.Events.First(e => e.Title == "Darkmoon Faire"));
             check("time: unix seconds are the real instant (Karazhan 18:00 UTC = 13:00 on the realm clock)", kara.StartUtc == Utc(14, 18) && kara.EndUtc == Utc(14, 21));
-            check("time: shown in the PC's zone (UTC+2: 20:00 - 23:00)", kara.StartHm == "20:00" && kara.EndHm == "23:00" && kara.TimeText == "20:00 - 23:00");
+            check("time: shown in the PC's zone (UTC+2: 20:00 - 23:00), with the weekday in front", kara.StartHm == "20:00" && kara.EndHm == "23:00" && kara.TimeText == "Wed 20:00 - 23:00");
             check("time: a raid reset is a single local time (17:00 on Wed 14 Oct)", mc.StartHm == "17:00" && mc.EndVisibility == Visibility.Collapsed && mc.DayTimeText == "Wed 17:00");
             check("time: wall-clock text without unix seconds is read as this PC's local time (21:30 local = 19:30 UTC)", text.StartUtc == Utc(13, 19, 30) && text.StartHm == "21:30");
             check("time: a holiday is 'All day' with no end time shown", dm.StartHm == "All day" && dm.EndVisibility == Visibility.Collapsed && dm.TimeText == "All day" && dm.AllDay);
@@ -207,7 +208,7 @@ namespace ElansAddonHub
                 && CalendarRules.UntilText(Utc(21, 4, 59), CalNow) == "until Wed 21 Oct" && CalendarRules.UntilText(RealmUtc(16, 23, 59).AddMinutes(1), CalNow) == "until Sat");
             check("agenda: WoW cards have no sign-up buttons or role list and cannot be edited", Session.WowEvents.All(e => e.ActionsVisibility == Visibility.Collapsed && !e.CanManage && !e.GoingEnabled));
             var texts = VisualsOf<TextBlock>(cal.AgendaListElementForTest).Select(t => t.Text).ToList();
-            check("drawn: every WoW card carries the quiet 'WoW' chip (7 in the agenda), 'All day' and 'until Sat' are on screen", texts.Count(t => t == "WoW") == 7 && texts.Contains("All day") && texts.Contains("until Sat") && texts.Contains("Holiday"));
+            check("drawn: every WoW card carries its type chip (7 in the agenda: 2 Holiday, Raid reset, Guild event, 2 Your event... ), 'All day' and 'until Sat' are on screen", new[] { "Holiday", "Raid reset", "Guild event", "Your event" }.Sum(k => texts.Count(t => t == k)) == 7 && texts.Count(t => t == "Holiday") == 2 && texts.Contains("All day") && texts.Contains("until Sat"));
             var imgs = VisualsOf<Image>(cal.AgendaListElementForTest).Where(i => i.Source != null).ToList();
             check("drawn: the holiday pictures come from the local icon cache (2 holidays have one)", imgs.Count == 2 && Session.WowEvents.First(e => e.Title == "Darkmoon Faire").IconVisibility == Visibility.Visible && Session.WowEvents.First(e => e.Title == "Molten Core resets").IconVisibility == Visibility.Collapsed);
             check("drawn: the caption says WoW events update after a /reload or logout, and the switch is on", cal.WowBarVisibleForTest && cal.WowCaptionForTest.Contains("/reload") && cal.WowCaptionForTest.Contains("logout") && cal.WowSwitchOnForTest);
@@ -222,19 +223,36 @@ namespace ElansAddonHub
             await Task.Delay(500);
             var cells = cal.MonthCellsForTest;
             MonthCellVM C(int d) => cells.First(c => c.Cell.Day == new DateTime(2026, 10, d));
-            check("month: a holiday is an all-day band over every day it covers (Darkmoon 5-17, Hallow's End 13-21)", Enumerable.Range(5, 17).All(d => C(d).Cell.Bands.Count > 0) && C(4).Cell.Bands.Count == 0 && C(22).Cell.Bands.Count == 0);
+            check("month: a holiday covers every day from its first to its last (Darkmoon 5-17, Hallow's End 13-21)", Enumerable.Range(5, 17).All(d => C(d).Cell.Bands.Count > 0) && C(4).Cell.Bands.Count == 0 && C(22).Cell.Bands.Count == 0);
             check("month: two holidays overlap on the 13th-17th", C(13).Cell.Bands.Count == 2 && C(17).Cell.Bands.Count == 2 && C(12).Cell.Bands.Count == 1 && C(18).Cell.Bands.Count == 1);
-            check("month: the band starts on the 5th, runs on, ends on the 17th; the next holiday's band starts on the 18th and ends on the 21st",
-                C(5).Cell.BandHead && !C(6).Cell.BandHead && !C(16).Cell.BandTail && C(17).Cell.BandTail && C(18).Cell.BandHead && !C(19).Cell.BandHead && C(21).Cell.BandTail && C(5).BandMargin.Left == 4 && C(6).BandMargin.Left == -4);
-            check("month: bands are not dots (the 14th has the raid reset and Karazhan = 2 dots; a day with only a holiday has none)", C(14).Cell.Dots == 2 && string.Join(",", C(14).DotKeys) == "none,going" && C(19).Cell.Dots == 0 && C(19).BandVisibility == Visibility.Visible);
-            check("month: a day without a holiday draws no band", C(23).BandVisibility == Visibility.Collapsed);
-            var stripes = VisualsOf<Border>(cal.MonthGridElementForTest).Where(b => b.Height == 4 && b.Visibility == Visibility.Visible && b.ActualHeight > 0).ToList();
-            check("drawn: 17 band stripes (the 5th to the 21st)", stripes.Count == 17);
-            check("month: the selected day lists the bands first, then the day's events by time", cal.DayEventsForTest.Select(e => e.Title).SequenceEqual(new[] { "Darkmoon Faire", "Hallow's End", "Molten Core resets", "Karazhan run" }));
+            var lay = cal.MonthLayoutForTest;
+            int Ix(int d) => cells.IndexOf(C(d));
+            // a bar is drawn per week row, labelled with its title, square on a side where it goes on (into the next row, or past a day that is full)
+            bool BarOk(CalendarRules.MonthSeg s)
+            {
+                CalendarRules.BandSpan(s.Ev, out var bf, out var bl);
+                var rs = cells[s.Row * 7].Cell.Day.Date; var re = cells[s.Row * 7 + 6].Cell.Day.Date;
+                int f = Math.Max(0, (bf - rs).Days), l = Math.Min(6, (bl - rs).Days);
+                return s.Label == s.Ev.Title && s.Col >= f && s.Col + s.Span - 1 <= l && s.LeftOpen == (s.Col > f || bf < rs) && s.RightOpen == (s.Col + s.Span - 1 < l || bl > re);
+            }
+            check("month: every holiday bar is labelled with its title, inside the days it covers, square where it goes on", lay.Bars.Any() && lay.Bars.All(BarOk));
+            check("month: Darkmoon Faire (5-17) is drawn in " + lay.Bars.Count(s => s.Ev.Title == "Darkmoon Faire") + " part(s), the first of them labelled at its start, none outside 5-17", lay.Bars.Count(s => s.Ev.Title == "Darkmoon Faire") >= 1
+                && lay.Bars.Where(s => s.Ev.Title == "Darkmoon Faire").All(s => Enumerable.Range(s.Row * 7 + s.Col, s.Span).All(i => cells[i].Cell.Day.Month == 10 && cells[i].Cell.Day.Day >= 5 && cells[i].Cell.Day.Day <= 17)));            var overlay = cal.MonthOverlayForTest;
+            var labels = overlay.Children.OfType<Grid>().SelectMany(g => g.Children.OfType<TextBlock>()).Select(t => t.Text).ToList();
+            check("drawn: the bar title is on screen once per week row it covers", labels.Count(t => t == "Darkmoon Faire") == lay.Bars.Count(s => s.Ev.Title == "Darkmoon Faire") && labels.Count(t => t == "Darkmoon Faire") >= 1 && labels.Contains("20:00 Karazhan run"));
+            check("month: a day has two lines at most under its number and nothing is lost: shown + ''+N more'' = every event of the day", cells.Select((c, i) => lay.ShownOn(i) <= 2 && lay.ShownOn(i) + lay.More[i] == c.Cell.Count).All(x => x));
+            check("month: a day with an event of its own always keeps one chip (the Lodge event is not pushed out by two holidays)", cells.Select((c, i) => c.Cell.Events.Count == 0 || lay.Chips.Any(s => s.Row * 7 + s.Col == i)).All(x => x));
+            check("month: the 14th has two holidays, the raid reset and Karazhan: one bar, my Karazhan run first, ''+2 more''", lay.Segs.Count(s => s.Row * 7 + s.Col <= Ix(14) && Ix(14) < s.Row * 7 + s.Col + s.Span) == 2
+                && lay.Chips.Any(s => s.Row * 7 + s.Col == Ix(14) && s.Label == "20:00 Karazhan run") && lay.More[Ix(14)] == 2);
+            check("month: the 25th shows the far guild raid as a chip with its time", lay.Chips.Any(s => s.Row * 7 + s.Col == Ix(25) && s.Label == "21:00 Far guild raid"));
+            check("month: holidays are bars, never chips (the chips of the 14th are timed events)", lay.Chips.All(s => !s.Ev.IsBand) && lay.Bars.All(s => s.Ev.IsBand));
+            check("month: bars in their colour, a holiday's colour is the one its title hashes to", lay.Bars.All(s => s.Ev.ColorKey == "Brush.Cal.Holiday." + CalendarColors.HolidayIndex(s.Ev.Title)));
+            check("drawn: fixed size - the grid is 504 high (6 x 84), every day 80 high, every bar and chip 16 high", Math.Abs(cal.MonthGridElementForTest.ActualHeight - 504) < 0.5
+                && VisualsOf<Grid>(cal.MonthGridElementForTest).Where(g => g.Tag is MonthCellVM).All(g => Math.Abs(g.ActualHeight - 80) < 0.5) && overlay.Children.OfType<Grid>().All(g => Math.Abs(g.ActualHeight - 16) < 0.5));            check("month: the selected day lists the bands first, then the day's events by time", cal.DayEventsForTest.Select(e => e.Title).SequenceEqual(new[] { "Darkmoon Faire", "Hallow's End", "Molten Core resets", "Karazhan run" }));
             cal.SelectDayForTest(new DateTime(2026, 10, 19));
             check("month: on the 19th the day list shows only the running holiday", cal.DayEventsForTest.Select(e => e.Title).SequenceEqual(new[] { "Hallow's End" }));
             cal.SelectDayForTest(new DateTime(2026, 10, 25));
-            check("month: the far guild raid is a dot on the 25th", C(25).Cell.Dots == 1 && string.Join(",", C(25).DotKeys) == "going");
+            check("month: the far guild raid is one event on the 25th", C(25).Cell.Events.Count == 1 && C(25).Cell.Events[0].MyStatus == "going");
         }
 
         // ---------------------------------------------------------------- toggles
@@ -253,7 +271,7 @@ namespace ElansAddonHub
             check("toggle: the bar stays so it can be switched back on; the Settings switch follows", cal.WowBarVisibleForTest && !cal.WowSwitchOnForTest);
             cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 14));
             await Task.Delay(300);
-            check("toggle: off -> no bands in the month, and the 14th has no dots", cal.MonthCellsForTest.All(c => c.Cell.Bands.Count == 0) && cal.DayEventsForTest.Count == 0);
+            check("toggle: off -> no bars in the month, and the 14th has no events", cal.MonthCellsForTest.All(c => c.Cell.Bands.Count == 0) && cal.DayEventsForTest.Count == 0);
             check("toggle: off -> the strip lists no WoW events either", !LodgePage.StripItemsForTest.Any(e => e.IsWow));
             cal.SetModeForTest(true);
             ClickBox(wowBox, true);
@@ -288,7 +306,7 @@ namespace ElansAddonHub
             check("detail: dates span the holiday, description and source are stated", hw.DateText == "Tuesday 13 October - Wednesday 21 October" && hw.Note == "Trick or treat!" && hw.ByLine == "From your in-game calendar - only on this PC");
             check("detail: no Edit, no Cancel event, no 'Nobody has answered yet', no answer buttons", !cal.DetailEditVisibleForTest && !cal.DetailCancelVisibleForTest && hw.ActionsVisibility == Visibility.Collapsed && hw.Groups.Count == 0);
             var texts = VisualsOf<TextBlock>(cal.DetailBoxForTest).Where(t => t.IsVisible).Select(t => t.Text).ToList();
-            check("detail: drawn - title, 'WoW' chip, the description; no 'Nobody has answered yet'", texts.Contains("Hallow's End") && texts.Contains("WoW") && texts.Contains("Trick or treat!") && !texts.Contains("Nobody has answered yet."));
+            check("detail: drawn - title, 'Holiday' chip, the description; no 'Nobody has answered yet'", texts.Contains("Hallow's End") && texts.Contains("Holiday") && texts.Contains("Trick or treat!") && !texts.Contains("Nobody has answered yet."));
             cal.CloseDetailForTest();
             await Task.Delay(300);
             var kara = Session.WowEvents.First(e => e.Title == "Karazhan run");

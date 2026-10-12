@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -182,8 +182,21 @@ namespace ElansAddonHub
             var cells = cal.MonthCellsForTest;
             MonthCellVM C(int d) => cells.First(c => c.Cell.Day == new DateTime(2026, 10, d));
             check("month: 42 cells, the title is the month", cells.Count == 42 && cal.MonthTitleForTest == "October 2026");
-            check("month: one dot per event, three at most (the 12th has three events)", C(11).Cell.Dots == 2 && C(12).Cell.Dots == 3 && C(13).Cell.Dots == 1 && C(17).Cell.Dots == 1 && C(14).Cell.Dots == 0);
-            check("month: dot colours show my answer (going / maybe / none / cancelled)", string.Join(",", C(11).DotKeys) == "none,going" && string.Join(",", C(13).DotKeys) == "cancelled" && C(12).Cell.Events.Count == 3);
+            var lay = cal.MonthLayoutForTest;
+            int Ix(int d) => cells.IndexOf(C(d));
+            string[] ChipsOn(int d) => lay.Chips.Where(s => s.Row * 7 + s.Col == Ix(d)).OrderBy(s => s.Lane).Select(s => s.Label).ToArray();
+            check("month: a day shows up to two labelled chips, each with its time (the 11th has two events)", string.Join("|", ChipsOn(11)) == "10:00 Stockade|21:00 The Deadmines" && lay.More[Ix(11)] == 0);
+            check("month: a day with three events shows two chips and '+1 more' (the 12th), the earliest first", string.Join("|", ChipsOn(12)) == "00:30 Night run|20:00 Molten Core" && lay.More[Ix(12)] == 1 && C(12).Cell.Events.Count == 3);
+            check("month: one event = one chip, an empty day none (13th, 17th, 14th)", ChipsOn(13).Length == 1 && ChipsOn(17).Length == 1 && ChipsOn(14).Length == 0 && lay.More[Ix(13)] == 0);
+            var overlay = cal.MonthOverlayForTest;
+            var drawn = overlay.Children.OfType<Grid>().ToList();
+            var moreText = overlay.Children.OfType<TextBlock>().Select(t => t.Text).ToList();
+            check("drawn: one chip per layout entry, each 16 high, and exactly one '+1 more' label", drawn.Count == lay.Segs.Count && drawn.All(g => Math.Abs(g.ActualHeight - 16) < 0.5) && moreText.SequenceEqual(new[] { "+1 more" }));
+            check("drawn: Lodge chips carry the accent colour (the same colour as the Lodge type label)", drawn.Count > 0 && Session.Events.All(e => e.ColorKey == "Brush.Cal.Lodge" && e.TypeLabel == "Lodge") && ((System.Windows.Media.SolidColorBrush)Session.Events[0].BarBrush).Color == ((System.Windows.Media.SolidColorBrush)FindResource("Brush.Accent")).Color);
+            var grid0 = cal.MonthGridElementForTest;
+            double gridH = grid0.ActualHeight;
+            check("month: fixed cell size - 42 cells of 84 x 84 slots, the grid is 504 high, with or without events", Math.Abs(gridH - 504) < 0.5 && cal.MonthCellsForTest.Count == 42
+                && VisualsOf<Grid>(grid0).Where(g => g.Tag is MonthCellVM).All(g => Math.Abs(g.ActualHeight - 80) < 0.5));
             check("month: today is marked, days of other months are dimmed", C(11).Cell.IsToday && !C(12).Cell.IsToday && cells.Any(c => !c.Cell.InMonth && c.CellOpacity < 1));
             check("month: the selected day lists its events, soonest first", cal.DayEventsForTest.Select(e => e.Id).SequenceEqual(new[] { "h1", "b1", "c1" }) && cal.DayTitleForTest.StartsWith("Tomorrow") && C(12).Selected);
             cal.SelectDayForTest(new DateTime(2026, 10, 17));
@@ -193,7 +206,7 @@ namespace ElansAddonHub
             check("month: the current month is fetched once too (the welcome only carries what is still to come)", sent.Count(o => (string)o["t"] == "cal:range") == 1);
             sent.Clear();
 
-            // a month beyond the welcome's 30 days is fetched once, and its events draw dots when the answer arrives
+            // a month beyond the welcome's 30 days is fetched once, and its events draw chips when the answer arrives
             cal.ShowMonthForTest(2026, 12);
             await Task.Delay(100);
             var req = sent.Where(o => (string)o["t"] == "cal:range").ToList();
@@ -203,7 +216,7 @@ namespace ElansAddonHub
             Session.FeedForTest("{\"t\":\"cal:range\",\"from\":1,\"to\":2,\"events\":[" + CalEv("x1", "Naxxramas", new DateTime(2026, 12, 5, 18, 0, 0, DateTimeKind.Utc), 180, "Elan", true, 2, 3, 5) + "]}");
             await Task.Delay(200);
             cells = cal.MonthCellsForTest;
-            check("month: the fetched event shows as a dot on the 5th of December", cells.First(c => c.Cell.Day == new DateTime(2026, 12, 5)).Cell.Dots == 1 && Session.Events.Any(e => e.Id == "x1"));
+            check("month: the fetched event shows as a chip on the 5th of December, and the grid keeps its size", cal.MonthLayoutForTest.Chips.Any(s => s.Label == "20:00 Naxxramas") && Session.Events.Any(e => e.Id == "x1") && Math.Abs(cal.MonthGridElementForTest.ActualHeight - gridH) < 0.5);
             check("month: the fetched event also joins the agenda, in a group of its own",
                 cal.IsAgenda == false && CalendarRules.Agenda(Session.Events, CalNow).Last().Label == "Saturday 5 December");
             cal.SetModeForTest(true);

@@ -595,7 +595,20 @@ do
   put(10, 16, { title = SECRET, calendarType = "PLAYER", startTime = T(2026, 10, 16, 20, 0) }) -- a secret title: dropped
   put(10, 17, { title = "Secret time", calendarType = "PLAYER", startTime = { year = 2026, month = 10, monthDay = 17, hour = SECRET, minute = 0 } }) -- unusable time: dropped
   put(11, 2, { title = "Day of the Dead", calendarType = "HOLIDAY", texture = 133001, startTime = T(2026, 11, 2, 0, 0), endTime = T(2026, 11, 3, 23, 59) })
-  local function mon(off) local m = CAL.view.month + off if m > 12 then m = m - 12 end return m end
+  -- weekly Call to Arms: Fri 16 - Mon 19 Oct and Fri 23 - Mon 26 Oct (two occurrences), a single-day contest on Sundays 18 and 25
+  local function seqEv(title, tex, idx, n, s, e, st) return { title = title, calendarType = "HOLIDAY", texture = tex, sequenceType = st, sequenceIndex = idx, numSequenceDays = n, startTime = s, endTime = e } end
+  for w = 0, 1 do
+    local f = 16 + 7 * w
+    for k = 0, 3 do
+      put(10, f + k, seqEv("Call to Arms: Warsong Gulch", 134000, k + 1, 4, T(2026, 10, f, 9, 0), T(2026, 10, f + 3, 8, 0), k == 0 and "START" or (k == 3 and "END" or "ONGOING")))
+    end
+    put(10, 18 + 7 * w, seqEv("Stranglethorn Fishing Extravaganza", 133889, 1, 1, T(2026, 10, 18 + 7 * w, 14, 0), T(2026, 10, 18 + 7 * w, 16, 0), "START"))
+  end
+  -- two back-to-back occurrences (END on 3 Nov, START on 4 Nov) must not merge
+  put(11, 3, seqEv("Back to back", 134100, 2, 2, T(2026, 11, 2, 0, 0), T(2026, 11, 3, 23, 59), "END"))
+  put(11, 2, seqEv("Back to back", 134100, 1, 2, T(2026, 11, 2, 0, 0), T(2026, 11, 3, 23, 59), "START"))
+  put(11, 4, seqEv("Back to back", 134100, 1, 2, T(2026, 11, 4, 0, 0), T(2026, 11, 5, 23, 59), "START"))
+  put(11, 5, seqEv("Back to back", 134100, 2, 2, T(2026, 11, 4, 0, 0), T(2026, 11, 5, 23, 59), "END"))  local function mon(off) local m = CAL.view.month + off if m > 12 then m = m - 12 end return m end
   local function installApi()
     C_Calendar = {
       OpenCalendar = function() CAL.opened = CAL.opened + 1 end,
@@ -633,7 +646,7 @@ do
   ok("calendar: viewed month corrected with SetAbsMonth, still waiting", CAL.setabs == 1 and CAL.view.month == 10 and ElansHubDB.calendar == nil)
   evt("CALENDAR_UPDATE_EVENT_LIST")
   local c = ElansHubDB.calendar
-  ok("calendar: stored after the event", c and c.v == 1 and type(c.events) == "table" and #c.events > 0)
+  ok("calendar: stored after the event", c and c.v == 2 and type(c.events) == "table" and #c.events > 0)
   ok("calendar: server offset measured (-5 h) and rounded", c and c.serverOffset == -18000)
   ok("calendar: realm, region and tz note recorded", c and c.realm == "Realm" and c.region == 3 and tostring(c.tz):find("realm", 1, true) and type(c.localOffset) == "number" and c.at == NOWU)
   local by = {}
@@ -643,7 +656,16 @@ do
   ok("calendar: a holiday spanning days is ONE entry, all-day", n == 1 and hw and hw.kind == "holiday" and hw.allDay == true)
   ok("calendar: holiday start/finish = realm fields minus offset (18 Oct 00:00 realm = 05:00 UTC)", hw and hw.start == 1792299600 and hw.finish == 1793509140)
   ok("calendar: holiday icon, description and raw text kept", hw and hw.icon == 235456 and hw.desc == "Trick or treat!" and hw.startText == "2026-10-18 00:00" and hw.endText == "2026-10-31 23:59")
-  local fish = by["Fishing Extravaganza"]
+  local nCtA, nFish, nB2B, ctaS = 0, 0, 0, {}
+  for _, e in ipairs(c.events) do
+    if e.title == "Call to Arms: Warsong Gulch" then nCtA = nCtA + 1 ctaS[#ctaS + 1] = e end
+    if e.title == "Stranglethorn Fishing Extravaganza" then nFish = nFish + 1 end
+    if e.title == "Back to back" then nB2B = nB2B + 1 end
+  end
+  ok("calendar: a weekly holiday is TWO separate occurrences, not one month-long span", nCtA == 2 and ctaS[1] and ctaS[1].finish - ctaS[1].start < 5 * 86400)
+  ok("calendar: each occurrence keeps its own start/end and day count", ctaS[2] and ctaS[2].start - ctaS[1].start == 7 * 86400 and ctaS[1].days == 4 and ctaS[1].seq == true)
+  ok("calendar: a one-day weekly contest is one entry per Sunday", nFish == 2)
+  ok("calendar: END then START on the next day stay separate", nB2B == 2)  local fish = by["Fishing Extravaganza"]
   ok("calendar: a holiday without times spans the days it is listed on", fish and fish.allDay == true and fish.finish - fish.start == 2 * 86400 and fish.icon == 133888)
   local kar = by["Karazhan run"]
   ok("calendar: player event with times and invite status", kar and kar.kind == "player" and kar.status == "going" and kar.finish - kar.start == 3 * 3600 and kar.startText == "2026-10-14 20:00" and not kar.allDay)

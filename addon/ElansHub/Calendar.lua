@@ -18,8 +18,9 @@
 -- only the wall-clock text (startText / endText, "YYYY-MM-DD HH:MM") and treats it as its own local time.
 --
 -- ElansHubDB.calendar = { v = 1, at = unix of the read, realm, region, serverOffset (s or nil), localOffset (s), tz = explanation,
+--   (v = 2: one entry per OCCURRENCE of a holiday, see readDay; v = 1 merged every same-titled holiday into one span)
 --   events = { { title, kind = "holiday"|"raidreset"|"player"|"guild", start (unix), finish (unix), startText, endText, allDay,
---               icon (texture file id), desc, status = "going"|"maybe"|"declined"|"invited" (player/guild), src = "calendar"|"lockout" } } }
+--               icon (texture file id), days (holiday: days of the occurrence), seq (true: START/ONGOING/END were marked), desc, status = "going"|"maybe"|"declined"|"invited" (player/guild), src = "calendar"|"lockout" } } }
 
 local ADDON, EHUB = ...
 EHUB = EHUB or {}
@@ -139,7 +140,24 @@ local function kindOf(ct)
   return "player"
 end
 
--- one day's events -> merged into `acc` (a holiday that spans days is one entry: earliest start, latest end)
+-- CalendarEvent sequenceType -> "START" | "ONGOING" | "END" (string, or a number some clients return); nil when the event has none
+local SEQ_NUM = { [1] = "START", [2] = "ONGOING", [3] = "END" }
+local function seqOf(v)
+  v = clean(v)
+  if type(v) == "string" then
+    v = v:upper()
+    if v == "START" or v == "ONGOING" or v == "END" then return v end
+    return nil
+  end
+  if type(v) == "number" then return SEQ_NUM[v] end
+  return nil
+end
+
+-- One day's events -> `acc`. A holiday that lasts several days is listed on each of its days; the game marks the days of ONE occurrence with
+-- sequenceType START, ONGOING..., END (plus sequenceIndex / numSequenceDays). So an entry joins the occurrence still open for that title only when
+-- it is on the very next day, is not a START and the previous day was not the END. Everything else (a gap of days, a new START, a repeat after an
+-- END) is a NEW occurrence: Call to Arms every weekend or a fishing contest every Sunday stay separate events instead of one month-long span.
+-- (1.9.0 merged every same-titled holiday of the two months into one: earliest start to latest end.)
 local function readDay(acc, offset, y, mo, d)
   local C = C_Calendar
   local n = num(pc(C.GetNumDayEvents, offset, d)) or 0
@@ -159,19 +177,31 @@ local function readDay(acc, offset, y, mo, d)
         if e0 and e0 < s0 then e0 = nil end
         local icon = num(ev.texture)
         if not icon then icon = nil end
+        local dayNo = daysFromCivil(y, mo, d)
+        local seq = seqOf(ev.sequenceType)
         local key = kind .. "|" .. title .. "|" .. (kind == "holiday" and tostring(icon or "") or tostring(s0))
-        local rec = acc.by[key]
+        local rec = kind == "holiday" and acc.open[key] or acc.by[key]
+        if rec and kind == "holiday" then
+          local joins = rec.lastDay == dayNo - 1 and seq ~= "START" and not rec.ended
+          if rec.lastDay == dayNo and seq ~= "START" and not rec.ended and s0 == rec.s0 then joins = true end -- a repeated entry of the same day
+          if not joins then rec = nil end
+        end
         if not rec then
-          rec = { title = title, kind = kind, s = s0, e = e0, sf = sf or dayStart, ef = ef, icon = icon, dayEnd = asSecs(dayStart) + 86400 }
-          if kind == "holiday" and not sf then rec.sf = dayStart end
-          acc.by[key] = rec
+          rec = { title = title, kind = kind, s = s0, s0 = s0, e = e0, sf = sf or dayStart, ef = ef, icon = icon, dayEnd = asSecs(dayStart) + 86400, days = 0 }
           acc.list[#acc.list + 1] = rec
+          if kind == "holiday" then acc.open[key] = rec else acc.by[key] = rec end
         else
           if s0 < rec.s then rec.s, rec.sf = s0, sf or dayStart end
           if e0 and (not rec.e or e0 > rec.e) then rec.e, rec.ef = e0, ef end
           local de = asSecs(dayStart) + 86400
           if de > rec.dayEnd then rec.dayEnd = de end
         end
+        rec.lastDay = dayNo
+        rec.days = rec.days + 1
+        if seq then rec.seq = true end
+        if seq == "END" then rec.ended = true end
+        local nd = num(ev.numSequenceDays)
+        if nd and nd >= 1 and nd <= 366 and (not rec.numDays or nd > rec.numDays) then rec.numDays = math.floor(nd) end
         if kind == "player" or kind == "guild" then
           local st = clean(ev.inviteStatus)
           if type(st) == "number" and STATUS[st] then rec.status = STATUS[st] end
@@ -184,7 +214,6 @@ local function readDay(acc, offset, y, mo, d)
     end
   end
 end
-
 local function readLockouts(list, offsetSecs)
   if not (GetNumSavedInstances and GetSavedInstanceInfo) then return end
   local n = num(pc(GetNumSavedInstances)) or 0
@@ -212,7 +241,7 @@ local function build()
   local C = C_Calendar
   local now = calendarNow()
   local off = serverOffset(now)
-  local acc = { by = {}, list = {} }
+  local acc = { by = {}, open = {}, list = {} }
   local yy, mm
   if now then yy, mm = now.year, now.month end
   if not yy then
@@ -234,6 +263,7 @@ local function build()
   local real = num(time and time())
   for _, r in ipairs(acc.list) do
     local e = { title = r.title, kind = r.kind, startText = text(r.sf), icon = r.icon, desc = r.desc, status = r.status, src = "calendar" }
+    if r.kind == "holiday" then e.days = r.numDays or r.days; e.seq = r.seq or nil end
     local endSecs = r.e
     local ef = r.ef
     if r.kind == "holiday" and not endSecs then
@@ -260,7 +290,7 @@ local function build()
   local region
   if GetCurrentRegion then region = num(pc(GetCurrentRegion)) end
   return {
-    v = 1, at = real, realm = str(pc(GetRealmName), 60), region = region, serverOffset = off, localOffset = localOffset(),
+    v = 2, at = real, realm = str(pc(GetRealmName), 60), region = region, serverOffset = off, localOffset = localOffset(),
     tz = TZ_NOTE, events = list,
   }
 end

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using ElansAddonHub.Services;
@@ -102,12 +103,9 @@ namespace ElansAddonHub.Lodge
             public DateTime Day { get; set; }              // local date
             public bool InMonth { get; set; }
             public bool IsToday { get; set; }
-            public List<EventVM> Events { get; set; } = new List<EventVM>();   // timed events starting this day
-            public List<EventVM> Bands { get; set; } = new List<EventVM>();    // all-day WoW events (holidays) that cover this day
-            public bool BandHead { get; set; }                                 // the band drawn here starts today (the day before draws none or another)
-            public bool BandTail { get; set; }                                 // ... ends today
-            public int Count => Events.Count;
-            public int Dots => Math.Min(3, Events.Count);
+            public List<EventVM> Events { get; set; } = new List<EventVM>();   // events starting this day that are not spans (chips)
+            public List<EventVM> Bands { get; set; } = new List<EventVM>();    // multi-day / all-day WoW events (holidays) that cover this day (bars)
+            public int Count => Events.Count + Bands.Count;
             public string Number => Day.Day.ToString(CultureInfo.InvariantCulture);
         }
 
@@ -120,6 +118,7 @@ namespace ElansAddonHub.Lodge
             var start = first.AddDays(-back);
             var today = ToLocal(nowUtc).Date;
             events = events.ToList();
+            events = events.Where(e => !e.Recurring).ToList();                  // old-format merged weekly holidays are never drawn in the grid
             var bands = events.Where(e => e.IsBand).ToList();
             var byDay = events.Where(e => !e.IsBand).GroupBy(e => ToLocal(e.StartUtc).Date).ToDictionary(g => g.Key, g => g.OrderBy(e => e.StartUtc).ToList());
             var cells = new List<DayCell>();
@@ -129,22 +128,123 @@ namespace ElansAddonHub.Lodge
                 cells.Add(new DayCell { Day = d, InMonth = d.Month == month, IsToday = d == today, Events = byDay.TryGetValue(d, out var l) ? l : new List<EventVM>(),
                     Bands = bands.Where(b => BandCovers(b, d)).OrderBy(b => b.StartUtc).ToList() });
             }
-            // the cell draws its first band (the earliest holiday); it starts / ends where the neighbouring day draws another one
-            for (int i = 0; i < cells.Count; i++)
-            {
-                var mine = cells[i].Bands.FirstOrDefault();
-                cells[i].BandHead = i == 0 || cells[i - 1].Bands.FirstOrDefault() != mine;
-                cells[i].BandTail = i == cells.Count - 1 || cells[i + 1].Bands.FirstOrDefault() != mine;
-            }
             return cells;
+        }
+
+        // ---------------------------------------------------------------- month cell content: labelled bars and chips
+        public const int MaxLanes = 2;                      // lines of content a day cell has under its number: bars and chips share them
+        public const int Columns = 7, GridRows = 6;
+
+        public class MonthSeg
+        {
+            public int Row, Col, Span, Lane;                // grid position; Span = days covered in this week row
+            public EventVM Ev;
+            public bool IsBar;                              // a multi-day / all-day holiday (one continuous bar per week row); otherwise a one-day chip
+            public bool LeftOpen, RightOpen;                // the bar goes on beyond this week row (drawn square on that side)
+            public string Label;                            // the text the bar / chip carries ("20:00 Karaoke", "Hallow's End")
+        }
+
+        public class MonthLayout
+        {
+            public List<MonthSeg> Segs { get; } = new List<MonthSeg>();
+            public int[] More { get; } = new int[Columns * GridRows];       // per day: events that did not fit ("+N more")
+            public IEnumerable<MonthSeg> Bars => Segs.Where(s => s.IsBar);
+            public IEnumerable<MonthSeg> Chips => Segs.Where(s => !s.IsBar);
+            public int ShownOn(int cellIndex) => Segs.Count(s => s.Row * Columns + s.Col <= cellIndex && cellIndex < s.Row * Columns + s.Col + s.Span);
+        }
+
+        // which events a day shows first when there is not room for all: Lodge events, then my own and guild events, raid resets, holidays
+        public static int ChipPriority(EventVM e) => !e.IsWow ? 0 : e.WowKind == "player" ? 1 : e.WowKind == "guild" ? 2 : e.WowKind == "raidreset" ? 3 : 4;
+
+        public static string ChipLabel(EventVM e)
+        {
+            if (e.IsWow && e.WowKind == "holiday") return e.Title;
+            return CalendarRules.ToLocal(e.StartUtc).ToString("HH:mm", CultureInfo.CurrentCulture) + " " + e.Title;
+        }
+
+        // The first and last local day a bar covers.
+        public static void BandSpan(EventVM e, out DateTime first, out DateTime last)
+        {
+            first = ToLocal(e.StartUtc).Date;
+            last = e.EndUtc > e.StartUtc ? ToLocal(e.EndUtc.AddMinutes(-1)).Date : first;
+        }
+
+        // Lays the six week rows out. Every day has MaxLanes lines under its number. A multi-day holiday takes ONE line for the days it covers inside a week
+        // row (so it reads as a single bar, labelled where the row starts and again after a gap); the lines left on a day go to its one-day events, most important
+        // first. A day always keeps one line for its own event when it has one (a Lodge event is never pushed out by two holidays). What does not fit is counted
+        // as "+N more".
+        public static MonthLayout Layout(IList<DayCell> cells)
+        {
+            var res = new MonthLayout();
+            for (int row = 0; row < GridRows && (row + 1) * Columns <= cells.Count; row++)
+            {
+                int r0 = row * Columns;
+                var cap = new int[Columns]; var occ = new bool[Columns, MaxLanes]; var hidden = new int[Columns];
+                for (int c = 0; c < Columns; c++) cap[c] = MaxLanes - (cells[r0 + c].Events.Count > 0 ? 1 : 0);
+                var bars = new List<(EventVM ev, int first, int last)>();
+                foreach (var ev in cells.Skip(r0).Take(Columns).SelectMany(x => x.Bands).Distinct())
+                {
+                    int f = -1, l = -1;
+                    for (int c = 0; c < Columns; c++) if (cells[r0 + c].Bands.Contains(ev)) { if (f < 0) f = c; l = c; }
+                    bars.Add((ev, f, l));
+                }
+                foreach (var b in bars.OrderBy(x => x.first).ThenByDescending(x => x.last - x.first).ThenBy(x => x.ev.StartUtc).ThenBy(x => x.ev.Title, StringComparer.Ordinal))
+                {
+                    // the line (0 or 1) that is free on most of the bar's days; the bar is drawn on the runs of days where it is free, the other days are counted as "more"
+                    int lane = 0, best = -1;
+                    for (int L = 0; L < MaxLanes; L++)
+                    {
+                        int n = 0;
+                        for (int c = b.first; c <= b.last; c++) if (L < cap[c] && !occ[c, L]) n++;
+                        if (n > best) { best = n; lane = L; }
+                    }
+                    BandSpan(b.ev, out var bf, out var bl);
+                    bool startsBefore = bf < cells[r0].Day.Date, endsAfter = bl > cells[r0 + Columns - 1].Day.Date;
+                    for (int c = b.first; c <= b.last; c++)
+                    {
+                        if (lane >= cap[c] || occ[c, lane]) { hidden[c]++; continue; }
+                        int e = c;
+                        while (e + 1 <= b.last && lane < cap[e + 1] && !occ[e + 1, lane]) e++;
+                        for (int k = c; k <= e; k++) occ[k, lane] = true;
+                        res.Segs.Add(new MonthSeg
+                        {
+                            Row = row, Col = c, Span = e - c + 1, Lane = lane, Ev = b.ev, IsBar = true, Label = b.ev.Title,
+                            LeftOpen = c > b.first || startsBefore, RightOpen = e < b.last || endsAfter,
+                        });
+                        c = e;
+                    }
+                }
+                for (int c = 0; c < Columns; c++)
+                {
+                    var free = Enumerable.Range(0, MaxLanes).Where(L => !occ[c, L]).ToList();
+                    var chips = cells[r0 + c].Events.OrderBy(ChipPriority).ThenBy(e => e.StartUtc).ThenBy(e => e.Title, StringComparer.Ordinal).ToList();
+                    var shown = chips.Take(free.Count).OrderBy(e => e.StartUtc).ThenBy(e => ChipPriority(e)).ToList();
+                    for (int i = 0; i < shown.Count; i++)
+                        res.Segs.Add(new MonthSeg { Row = row, Col = c, Span = 1, Lane = free[i], Ev = shown[i], IsBar = false, Label = ChipLabel(shown[i]) });
+                    res.More[r0 + c] = chips.Count - shown.Count + hidden[c];
+                }
+            }
+            return res;
         }
 
         // an all-day band (a holiday) covers the local days from its start to its end (the end is exclusive)
         public static bool BandCovers(EventVM e, DateTime localDay)
         {
-            var first = ToLocal(e.StartUtc).Date;
-            var last = e.EndUtc > e.StartUtc ? ToLocal(e.EndUtc.AddMinutes(-1)).Date : first;
+            if (e.Recurring) return false;
+            BandSpan(e, out var first, out var last);
             return localDay.Date >= first && localDay.Date <= last;
+        }
+
+        // "Sun 23:00" (an instant) / "Sun 23:00 - 00:00" (one day) / "Thu 15 Oct 17:00 - Mon 19 Oct 16:00" (several days). Ends are exclusive, so 00:00 ends the day before.
+        public static string WowWhen(DateTime startUtc, DateTime endUtc)
+        {
+            var s = ToLocal(startUtc);
+            var hm = s.ToString("HH:mm", CultureInfo.CurrentCulture);
+            if (endUtc <= startUtc) return s.ToString("ddd", English) + " " + hm;
+            var e = ToLocal(endUtc);
+            if (ToLocal(endUtc.AddMinutes(-1)).Date > s.Date)
+                return s.ToString("ddd d MMM", English) + " " + hm + " - " + e.ToString("ddd d MMM", English) + " " + e.ToString("HH:mm", CultureInfo.CurrentCulture);
+            return s.ToString("ddd", English) + " " + hm + " - " + e.ToString("HH:mm", CultureInfo.CurrentCulture);
         }
 
         // the window of UTC instants that covers a month's grid (what a month fetch asks for): the local month widened by a day on each side
@@ -188,6 +288,42 @@ namespace ElansAddonHub.Lodge
             e == null ? "" : e.Title + " · " + ShortWhen(e.StartUtc, nowUtc) + " · " + ShortCountdown(e.StartUtc, nowUtc);
     }
 
+    // ---------------------------------------------------------------- colours of the calendar kinds (tokens: Theme.xaml "calendar kinds", DESIGN.md "Calendar colours")
+    public static class CalendarColors
+    {
+        public const int HolidayHues = 7;                    // Brush.Cal.Holiday.1 ... 7
+        public static readonly string[] Kinds = { "lodge", "holiday", "raidreset", "player", "guild" };
+        public static readonly string[] Groups = { "lodge", "holiday", "raidreset", "mine" };      // what the filter chips switch
+
+        // stable across runs and PCs (FNV-1a over the lower-cased, trimmed title; string.GetHashCode is randomised per process)
+        public static int HolidayIndex(string title)
+        {
+            uint h = 2166136261;
+            foreach (var b in Encoding.UTF8.GetBytes(((title ?? "").Trim()).ToLowerInvariant())) { h ^= b; h *= 16777619; }
+            return (int)(h % HolidayHues) + 1;
+        }
+
+        public static string Key(string kind, string title) =>
+            kind == "holiday" ? "Brush.Cal.Holiday." + HolidayIndex(title) : kind == "raidreset" ? "Brush.Cal.Raid" : kind == "player" ? "Brush.Cal.Mine" : kind == "guild" ? "Brush.Cal.Guild" : "Brush.Cal.Lodge";
+
+        // the filter group of an entry: lodge | holiday | raidreset | mine (my own and guild events in the game)
+        public static string GroupOf(EventVM e) => !e.IsWow ? "lodge" : e.WowKind == "holiday" ? "holiday" : e.WowKind == "raidreset" ? "raidreset" : "mine";
+
+        // WCAG contrast ratio of two colours (alpha ignored: pass blended colours)
+        public static double Contrast(Color a, Color b)
+        {
+            double L(Color c) { double F(byte v) { var s = v / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); } return 0.2126 * F(c.R) + 0.7152 * F(c.G) + 0.0722 * F(c.B); }
+            double x = L(a), y = L(b);
+            return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
+        }
+
+        // `top` drawn over `under` at top's own alpha
+        public static Color Over(Color top, Color under)
+        {
+            double a = top.A / 255.0;
+            return Color.FromRgb((byte)Math.Round(top.R * a + under.R * (1 - a)), (byte)Math.Round(top.G * a + under.G * (1 - a)), (byte)Math.Round(top.B * a + under.B * (1 - a)));
+        }
+    }
     // ---------------------------------------------------------------- the create / edit form's data and its checks
     public class CalendarForm
     {
@@ -315,7 +451,8 @@ namespace ElansAddonHub.Lodge
         public bool AllDay { get; private set; }
         public int IconId { get; private set; }                      // texture file id for IconStore, 0 = none
         string wowStatus = "";
-        public bool IsBand => IsWow && EndUtc > StartUtc && (AllDay || CalendarRules.ToLocal(EndUtc.AddMinutes(-1)).Date > CalendarRules.ToLocal(StartUtc).Date);
+        public bool Recurring { get; private set; }                  // old-format data: weekly occurrences merged into one long span (listed once, never drawn in the month)
+        public bool IsBand => IsWow && !Recurring && EndUtc > StartUtc && (AllDay || CalendarRules.ToLocal(EndUtc.AddMinutes(-1)).Date > CalendarRules.ToLocal(StartUtc).Date);
         bool Running => IsWow && StartUtc <= LfgVM.Clock() && !IsOver(LfgVM.Clock());
         string UntilShort => IsWow && EndUtc > StartUtc ? CalendarRules.UntilText(EndUtc, LfgVM.Clock()) : "";
 
@@ -324,7 +461,7 @@ namespace ElansAddonHub.Lodge
             var s = WowCalendar.StartUtc(w);
             if (s == null) return null;
             var e = WowCalendar.EndUtc(w);
-            var vm = new EventVM { IsWow = true, WowKind = w.Kind, AllDay = w.AllDay, IconId = w.Icon, wowStatus = w.Status ?? "" };
+            var vm = new EventVM { IsWow = true, WowKind = w.Kind, AllDay = w.AllDay, IconId = w.Icon, wowStatus = w.Status ?? "", Recurring = w.Recurring };
             vm.Id = "wow:" + w.Kind + ":" + s.Value.Ticks.ToString(CultureInfo.InvariantCulture) + ":" + w.Title;
             vm.Title = w.Title; vm.Note = w.Desc ?? ""; vm.Status = "open"; vm.Roles = false;
             vm.StartUtc = s.Value;
@@ -353,6 +490,15 @@ namespace ElansAddonHub.Lodge
         }
         public Visibility IconVisibility => IconImage != null ? Visibility.Visible : Visibility.Collapsed;
         public Visibility WowVisibility => IsWow ? Visibility.Visible : Visibility.Collapsed;
+
+        // ---- which kind of calendar entry this is, and its colour (the same colour on the month chip, the agenda bar and the type label)
+        public string KindKey => IsWow ? WowKind : "lodge";                   // lodge | holiday | raidreset | player | guild
+        public string TypeLabel => !IsWow ? "Lodge" : WowKind == "holiday" ? "Holiday" : WowKind == "raidreset" ? "Raid reset" : WowKind == "guild" ? "Guild event" : "Your event";
+        public string ColorKey => CalendarColors.Key(KindKey, Title);          // resource key of the solid brush, e.g. "Brush.Cal.Holiday.3"
+        public Brush BarBrush => Avatar.Res(ColorKey);
+        public Brush TintBrush => Avatar.Res(ColorKey + ".Tint");
+        public bool MultiDay => EndUtc > StartUtc && CalendarRules.ToLocal(EndUtc.AddMinutes(-1)).Date > CalendarRules.ToLocal(StartUtc).Date;
+        public Visibility TimeLineVisibility => IsWow && !Recurring ? Visibility.Visible : Visibility.Collapsed;
 
         // the strip above the chat: "Molten Core    8/10" over "Sat 20:00 · in 2 d    Going"
         public string StripFill
@@ -440,9 +586,10 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---- what the cards show
-        public string TimeText => IsWow && AllDay ? "All day" : CalendarRules.TimeRange(StartUtc, EndUtc);
+        // WoW entries name the day: "Sun 23:00 - 00:00", and for a holiday of several days "Thu 15 Oct 17:00 - Mon 19 Oct 16:00" (never two bare times)
+        public string TimeText => !IsWow ? CalendarRules.TimeRange(StartUtc, EndUtc) : Recurring ? "Repeats weekly" : AllDay ? "All day" : CalendarRules.WowWhen(StartUtc, EndUtc);
         public string StartHm => IsWow && AllDay ? "All day" : CalendarRules.ToLocal(StartUtc).ToString("HH:mm", CultureInfo.CurrentCulture);
-        public string EndHm => IsWow && AllDay ? "" : EndUtc > StartUtc ? CalendarRules.ToLocal(EndUtc).ToString("HH:mm", CultureInfo.CurrentCulture) : "";
+        public string EndHm => IsWow && (AllDay || MultiDay) ? "" : EndUtc > StartUtc ? CalendarRules.ToLocal(EndUtc).ToString("HH:mm", CultureInfo.CurrentCulture) : "";
         public Visibility EndVisibility => EndHm.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public string DateText
         {
@@ -474,6 +621,7 @@ namespace ElansAddonHub.Lodge
                 if (IsWow)
                 {
                     var parts = new List<string>();
+                    if (Recurring) return Running ? UntilShort : "";
                     if (Running) parts.Add(UntilShort.Length > 0 ? UntilShort : "now");
                     else { if (Countdown.Length > 0) parts.Add(Countdown); if (IsBand && UntilShort.Length > 0) parts.Add(UntilShort); }
                     return string.Join("  ·  ", parts);

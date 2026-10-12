@@ -102,6 +102,30 @@
   <SolidColorBrush x:Key="Brush.Danger.Tint" Color="#29E06C6C" />
   <SolidColorBrush x:Key="Brush.Info.Tint" Color="#266CA8E0" />
 
+  <!-- calendar kinds (Lodge calendar, month chips, agenda bars): one muted colour per kind; Lodge = the accent. Holidays take one of seven hues by a stable hash of their title (CalendarColors.HolidayIndex), so a title keeps its colour. Bars/chips are the colour at 100 %, the chip fill is its Tint (18 %); chip text stays Text.Primary (>= 7:1 on the tint, checked by the calendar self-test). -->
+  <SolidColorBrush x:Key="Brush.Cal.Lodge" Color="{StaticResource AccentColor}" />
+  <SolidColorBrush x:Key="Brush.Cal.Lodge.Tint" Color="#2EABD473" />
+  <SolidColorBrush x:Key="Brush.Cal.Raid" Color="#EE8B82" />
+  <SolidColorBrush x:Key="Brush.Cal.Raid.Tint" Color="#2EEE8B82" />
+  <SolidColorBrush x:Key="Brush.Cal.Mine" Color="#E8C95A" />
+  <SolidColorBrush x:Key="Brush.Cal.Mine.Tint" Color="#2EE8C95A" />
+  <SolidColorBrush x:Key="Brush.Cal.Guild" Color="#CFC9B8" />
+  <SolidColorBrush x:Key="Brush.Cal.Guild.Tint" Color="#2ECFC9B8" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.1" Color="#9CA8EC" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.1.Tint" Color="#2E9CA8EC" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.2" Color="#5FB4D0" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.2.Tint" Color="#2E5FB4D0" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.3" Color="#5FB8A6" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.3.Tint" Color="#2E5FB8A6" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.4" Color="#BC99E4" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.4.Tint" Color="#2EBC99E4" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.5" Color="#D98BB8" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.5.Tint" Color="#2ED98BB8" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.6" Color="#DBA062" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.6.Tint" Color="#2EDBA062" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.7" Color="#9AA7BD" />
+  <SolidColorBrush x:Key="Brush.Cal.Holiday.7.Tint" Color="#2E9AA7BD" />
+
   <!-- overlays: white veils on any surface (hover 6 %, pressed 10 %, chips 8 %); hairline dividers 7 % -->
   <SolidColorBrush x:Key="Brush.Overlay.Chip" Color="#14FFFFFF" />
   <SolidColorBrush x:Key="Brush.Overlay.Hover" Color="#0FFFFFFF" />
