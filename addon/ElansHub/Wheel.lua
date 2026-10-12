@@ -374,6 +374,7 @@ function EHUB.Diag(silent, auto)
     fileIdApi = type(GetFileIDFromPath),
     wheelIsSecure = false,
     combatLogRegistered = false,
+    calendar = EHUB.CalendarStatus and EHUB.CalendarStatus() or "n/a",
     emoteErrors = d.emoteErrors or 0,
     lastEmoteError = d.lastEmoteError,
   }

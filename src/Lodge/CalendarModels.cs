@@ -102,7 +102,10 @@ namespace ElansAddonHub.Lodge
             public DateTime Day { get; set; }              // local date
             public bool InMonth { get; set; }
             public bool IsToday { get; set; }
-            public List<EventVM> Events { get; set; } = new List<EventVM>();
+            public List<EventVM> Events { get; set; } = new List<EventVM>();   // timed events starting this day
+            public List<EventVM> Bands { get; set; } = new List<EventVM>();    // all-day WoW events (holidays) that cover this day
+            public bool BandHead { get; set; }                                 // the band drawn here starts today (the day before draws none or another)
+            public bool BandTail { get; set; }                                 // ... ends today
             public int Count => Events.Count;
             public int Dots => Math.Min(3, Events.Count);
             public string Number => Day.Day.ToString(CultureInfo.InvariantCulture);
@@ -116,14 +119,32 @@ namespace ElansAddonHub.Lodge
             int back = ((int)first.DayOfWeek - (int)fdw + 7) % 7;
             var start = first.AddDays(-back);
             var today = ToLocal(nowUtc).Date;
-            var byDay = events.GroupBy(e => ToLocal(e.StartUtc).Date).ToDictionary(g => g.Key, g => g.OrderBy(e => e.StartUtc).ToList());
+            events = events.ToList();
+            var bands = events.Where(e => e.IsBand).ToList();
+            var byDay = events.Where(e => !e.IsBand).GroupBy(e => ToLocal(e.StartUtc).Date).ToDictionary(g => g.Key, g => g.OrderBy(e => e.StartUtc).ToList());
             var cells = new List<DayCell>();
             for (int i = 0; i < 42; i++)
             {
                 var d = start.AddDays(i);
-                cells.Add(new DayCell { Day = d, InMonth = d.Month == month, IsToday = d == today, Events = byDay.TryGetValue(d, out var l) ? l : new List<EventVM>() });
+                cells.Add(new DayCell { Day = d, InMonth = d.Month == month, IsToday = d == today, Events = byDay.TryGetValue(d, out var l) ? l : new List<EventVM>(),
+                    Bands = bands.Where(b => BandCovers(b, d)).OrderBy(b => b.StartUtc).ToList() });
+            }
+            // the cell draws its first band (the earliest holiday); it starts / ends where the neighbouring day draws another one
+            for (int i = 0; i < cells.Count; i++)
+            {
+                var mine = cells[i].Bands.FirstOrDefault();
+                cells[i].BandHead = i == 0 || cells[i - 1].Bands.FirstOrDefault() != mine;
+                cells[i].BandTail = i == cells.Count - 1 || cells[i + 1].Bands.FirstOrDefault() != mine;
             }
             return cells;
+        }
+
+        // an all-day band (a holiday) covers the local days from its start to its end (the end is exclusive)
+        public static bool BandCovers(EventVM e, DateTime localDay)
+        {
+            var first = ToLocal(e.StartUtc).Date;
+            var last = e.EndUtc > e.StartUtc ? ToLocal(e.EndUtc.AddMinutes(-1)).Date : first;
+            return localDay.Date >= first && localDay.Date <= last;
         }
 
         // the window of UTC instants that covers a month's grid (what a month fetch asks for): the local month widened by a day on each side
@@ -132,6 +153,23 @@ namespace ElansAddonHub.Lodge
             fromUtc = ToUtc(new DateTime(year, month, 1).AddDays(-7));
             toUtc = ToUtc(new DateTime(year, month, 1).AddMonths(1).AddDays(7));
         }
+
+        // "until 06:59" (today) / "until tomorrow" / "until Sun" (within the week) / "until Sat 31 Oct"; the end is exclusive, so a 00:00 end belongs to the day before
+        public static string UntilText(DateTime endUtc, DateTime nowUtc)
+        {
+            var last = ToLocal(endUtc.AddMinutes(-1)); var today = ToLocal(nowUtc).Date;
+            if (last.Date <= today) return "until " + ToLocal(endUtc).ToString("HH:mm", CultureInfo.CurrentCulture);
+            if (last.Date == today.AddDays(1)) return "until tomorrow";
+            if (last.Date < today.AddDays(7)) return "until " + last.ToString("ddd", English);
+            return "until " + last.ToString("ddd d MMM", English);
+        }
+
+        // the strip above the chat: the next events within `days`, soonest first. Lodge events that are open and not declined, plus the player's own and
+        // guild events from the in-game calendar (timed ones); holidays and raid resets are calendar material, not a reminder.
+        public static List<EventVM> Upcoming(IEnumerable<EventVM> events, DateTime nowUtc, int max = 3, int days = 7) =>
+            events.Where(e => !e.Stub && !e.IsCancelled && !e.IsOver(nowUtc) && e.MyStatus != "declined" && !e.AllDay
+                    && (!e.IsWow || e.WowKind == "player" || e.WowKind == "guild") && e.StartUtc < nowUtc.AddDays(days))
+                .OrderBy(e => e.StartUtc).Take(max).ToList();
 
         // a reminder is due 15 minutes before the start (and not after it) for everyone who answered Going or Maybe, once per event
         public static bool ReminderDue(EventVM e, DateTime nowUtc, ISet<string> already)
@@ -264,12 +302,73 @@ namespace ElansAddonHub.Lodge
 
         public bool IsCancelled => Status == "cancelled";
         public bool IsOver(DateTime nowUtc) => nowUtc > OverUtc;
-        public DateTime OverUtc => EndUtc > StartUtc ? EndUtc : StartUtc.AddHours(3);
-        public bool IsOpen => !IsCancelled && !Stub && !IsOver(LfgVM.Clock());
+        public DateTime OverUtc => EndUtc > StartUtc ? EndUtc : StartUtc.AddHours(IsWow ? 1 : 3);
+        public bool IsOpen => !IsWow && !IsCancelled && !Stub && !IsOver(LfgVM.Clock());
         public bool IAmOrganiser => By != null && string.Equals(By, LfgVM.MyName(), StringComparison.OrdinalIgnoreCase);
-        public bool CanManage => !Stub && !IsCancelled && (IAmOrganiser || LfgVM.IAmOfficer());
+        public bool CanManage => !IsWow && !Stub && !IsCancelled && (IAmOrganiser || LfgVM.IAmOfficer());
         public string ByShown => By == null ? "" : DisplayNames.Shown(By);
-        public string ByLine => By == null ? "" : "Organised by " + ByShown;
+        public string ByLine => IsWow ? "From your in-game calendar - only on this PC" : By == null ? "" : "Organised by " + ByShown;
+
+        // ---- WoW's own calendar (read from the companion addon's saved variables): read-only, local to this PC, never sent to the server
+        public bool IsWow { get; private set; }
+        public string WowKind { get; private set; } = "";           // holiday | raidreset | player | guild
+        public bool AllDay { get; private set; }
+        public int IconId { get; private set; }                      // texture file id for IconStore, 0 = none
+        string wowStatus = "";
+        public bool IsBand => IsWow && EndUtc > StartUtc && (AllDay || CalendarRules.ToLocal(EndUtc.AddMinutes(-1)).Date > CalendarRules.ToLocal(StartUtc).Date);
+        bool Running => IsWow && StartUtc <= LfgVM.Clock() && !IsOver(LfgVM.Clock());
+        string UntilShort => IsWow && EndUtc > StartUtc ? CalendarRules.UntilText(EndUtc, LfgVM.Clock()) : "";
+
+        public static EventVM FromWow(WowEvent w)
+        {
+            var s = WowCalendar.StartUtc(w);
+            if (s == null) return null;
+            var e = WowCalendar.EndUtc(w);
+            var vm = new EventVM { IsWow = true, WowKind = w.Kind, AllDay = w.AllDay, IconId = w.Icon, wowStatus = w.Status ?? "" };
+            vm.Id = "wow:" + w.Kind + ":" + s.Value.Ticks.ToString(CultureInfo.InvariantCulture) + ":" + w.Title;
+            vm.Title = w.Title; vm.Note = w.Desc ?? ""; vm.Status = "open"; vm.Roles = false;
+            vm.StartUtc = s.Value;
+            vm.EndUtc = e != null && e.Value > s.Value ? e.Value : DateTime.MinValue;
+            vm.MyStatus = w.Status == "going" || w.Status == "maybe" || w.Status == "declined" ? w.Status : null;
+            return vm;
+        }
+
+        ImageSource iconImg; bool iconAsked;
+        // the holiday's picture from the game's own files (IconStore: local, read-only, no network); null until it is cached / when unresolvable
+        public ImageSource IconImage
+        {
+            get
+            {
+                if (!IsWow || IconId <= 0) return null;
+                if (iconImg != null) return iconImg;
+                iconImg = IconStore.TryGet(IconId);
+                if (iconImg == null && !iconAsked && !string.IsNullOrEmpty(IconStore.WowRoot()))
+                {
+                    iconAsked = true;
+                    var disp = Application.Current?.Dispatcher;
+                    IconStore.Request(IconId, img => disp?.BeginInvoke(new Action(() => { iconImg = img; Raise(nameof(IconImage)); Raise(nameof(IconVisibility)); })));
+                }
+                return iconImg;
+            }
+        }
+        public Visibility IconVisibility => IconImage != null ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility WowVisibility => IsWow ? Visibility.Visible : Visibility.Collapsed;
+
+        // the strip above the chat: "Molten Core    8/10" over "Sat 20:00 · in 2 d    Going"
+        public string StripFill
+        {
+            get
+            {
+                if (IsWow) return "WoW";
+                if (!Roles) return Count("going") + " going";
+                int total = RoleIds.Sum(SlotsOf), going = RoleIds.Sum(Going);
+                return total > 0 ? going + "/" + total : "";
+            }
+        }
+        public string StripWhen => CalendarRules.ShortWhen(StartUtc, LfgVM.Clock()) + "  ·  " + CalendarRules.ShortCountdown(StartUtc, LfgVM.Clock());
+        public string StripStatus => MyStatus == "going" ? "Going" : MyStatus == "maybe" ? "Maybe" : "";
+        public Brush StripStatusBrush => Avatar.Res(MyStatus == "going" ? "Brush.Success" : "Brush.Warn");
+        public string StripTip => Title + "\n" + CalendarRules.ToLocal(StartUtc).ToString("dddd d MMMM HH:mm", CalendarRules.English) + (IsWow ? "\nFrom your in-game calendar" : "\nOpen it in the Calendar");
 
         public int SlotsOf(string role) => role == "tank" ? Tank : role == "healer" ? Healer : role == "dps" ? Dps : 0;
         public int Going(string role) => Signups.Count(s => s.Status == "going" && s.Role == role);
@@ -341,19 +440,47 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---- what the cards show
-        public string TimeText => CalendarRules.TimeRange(StartUtc, EndUtc);
-        public string StartHm => CalendarRules.ToLocal(StartUtc).ToString("HH:mm", CultureInfo.CurrentCulture);
-        public string EndHm => EndUtc > StartUtc ? CalendarRules.ToLocal(EndUtc).ToString("HH:mm", CultureInfo.CurrentCulture) : "";
-        public Visibility EndVisibility => EndUtc > StartUtc ? Visibility.Visible : Visibility.Collapsed;
-        public string DateText => CalendarRules.ToLocal(StartUtc).ToString("dddd d MMMM", CalendarRules.English);
+        public string TimeText => IsWow && AllDay ? "All day" : CalendarRules.TimeRange(StartUtc, EndUtc);
+        public string StartHm => IsWow && AllDay ? "All day" : CalendarRules.ToLocal(StartUtc).ToString("HH:mm", CultureInfo.CurrentCulture);
+        public string EndHm => IsWow && AllDay ? "" : EndUtc > StartUtc ? CalendarRules.ToLocal(EndUtc).ToString("HH:mm", CultureInfo.CurrentCulture) : "";
+        public Visibility EndVisibility => EndHm.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string DateText
+        {
+            get
+            {
+                var text = CalendarRules.ToLocal(StartUtc).ToString("dddd d MMMM", CalendarRules.English);
+                if (IsBand) text += " - " + CalendarRules.ToLocal(EndUtc.AddMinutes(-1)).ToString("dddd d MMMM", CalendarRules.English);
+                return text;
+            }
+        }
         public string DayTimeText => CalendarRules.ShortWhen(StartUtc, LfgVM.Clock());
-        public string Countdown => Stub || IsCancelled ? "" : LfgVM.CountdownFor(StartUtc, LfgVM.Clock(), false, !IsOver(LfgVM.Clock()));
-        public string WhenLine => Countdown.Length > 0 ? TimeText + "  ·  " + Countdown : TimeText;
+        public string Countdown => Stub || IsCancelled || Running ? "" : LfgVM.CountdownFor(StartUtc, LfgVM.Clock(), false, !IsOver(LfgVM.Clock()));
+        public string WhenLine
+        {
+            get
+            {
+                var tail = Running ? UntilShort : Countdown;
+                return tail.Length > 0 ? TimeText + "  ·  " + tail : TimeText;
+            }
+        }
         // the chat card: "Sat 20:00  ·  in 2 days  ·  every week"
         public string CardWhen => DayTimeText + (Countdown.Length > 0 ? "  ·  " + Countdown : "") + (Weekly ? "  ·  every week" : "");
         public string RepeatText => Weekly ? "Repeats weekly" : "";
         // the agenda card's second line: "in 2 days  ·  every week"
-        public string SubLine => Countdown.Length > 0 ? Countdown + (Weekly ? "  ·  every week" : "") : Weekly ? "Every week" : "";
+        public string SubLine
+        {
+            get
+            {
+                if (IsWow)
+                {
+                    var parts = new List<string>();
+                    if (Running) parts.Add(UntilShort.Length > 0 ? UntilShort : "now");
+                    else { if (Countdown.Length > 0) parts.Add(Countdown); if (IsBand && UntilShort.Length > 0) parts.Add(UntilShort); }
+                    return string.Join("  ·  ", parts);
+                }
+                return Countdown.Length > 0 ? Countdown + (Weekly ? "  ·  every week" : "") : Weekly ? "Every week" : "";
+            }
+        }
         public Visibility RepeatVisibility => Weekly ? Visibility.Visible : Visibility.Collapsed;
         public Visibility NoteVisibility => string.IsNullOrEmpty(Note) ? Visibility.Collapsed : Visibility.Visible;
 
@@ -363,6 +490,7 @@ namespace ElansAddonHub.Lodge
             get
             {
                 if (Stub) return "";
+                if (IsWow) return WowCalendar.KindLabel(WowKind) + (WowCalendar.StatusWord(wowStatus).Length > 0 && WowKind != "holiday" && WowKind != "raidreset" ? "  ·  " + WowCalendar.StatusWord(wowStatus) : "");
                 var parts = new List<string>();
                 if (Roles) { foreach (var r in RoleIds) if (SlotsOf(r) > 0) parts.Add(RoleLabel(r) + " " + Going(r) + "/" + SlotsOf(r)); }
                 else parts.Add(Count("going") + " going");
@@ -383,6 +511,7 @@ namespace ElansAddonHub.Lodge
             get
             {
                 if (Stub || MyStatus == null) return "";
+                if (IsWow) return "In-game invite: " + WowCalendar.StatusWord(MyStatus);
                 if (MyStatus == "going") return Roles && !string.IsNullOrEmpty(MyRole) ? "You are going as " + RoleLabel(MyRole) : "You are going";
                 if (MyStatus == "maybe") return Roles && !string.IsNullOrEmpty(MyRole) ? "You are a maybe (" + RoleLabel(MyRole) + ")" : "You are a maybe";
                 return "You can't make it";
@@ -436,7 +565,7 @@ namespace ElansAddonHub.Lodge
             if (w == lastWhen) return false;
             lastWhen = w;
             Raise(nameof(Countdown)); Raise(nameof(WhenLine)); Raise(nameof(CardWhen)); Raise(nameof(SubLine)); Raise(nameof(DayTimeText)); Raise(nameof(StatusText)); Raise(nameof(StatusFill)); Raise(nameof(StatusBrush)); Raise(nameof(StatusVisibility));
-            Raise(nameof(CardOpacity)); RaiseButtons();
+            Raise(nameof(CardOpacity)); Raise(nameof(StripWhen)); Raise(nameof(StripFill)); Raise(nameof(StripStatus)); RaiseButtons();
             return true;
         }
 
@@ -451,7 +580,8 @@ namespace ElansAddonHub.Lodge
             lastWhen = WhenLine + "|" + StatusText + "|" + DayTimeText;
             foreach (var n in new[] { nameof(Title), nameof(Note), nameof(By), nameof(ByShown), nameof(ByLine), nameof(Status), nameof(IsCancelled), nameof(IsOpen), nameof(Weekly), nameof(RepeatText), nameof(RepeatVisibility),
                 nameof(NoteVisibility), nameof(TimeText), nameof(StartHm), nameof(EndHm), nameof(EndVisibility), nameof(DateText), nameof(DayTimeText), nameof(Countdown), nameof(WhenLine), nameof(CardWhen), nameof(SubLine), nameof(FillText), nameof(StatusText), nameof(StatusFill),
-                nameof(StatusBrush), nameof(StatusVisibility), nameof(CardOpacity), nameof(RoleChoices), nameof(SelectedRoleLabel), nameof(Summary), nameof(CanManage), nameof(IAmOrganiser), nameof(Groups) }) Raise(n);
+                nameof(StatusBrush), nameof(StatusVisibility), nameof(CardOpacity), nameof(RoleChoices), nameof(SelectedRoleLabel), nameof(Summary), nameof(CanManage), nameof(IAmOrganiser), nameof(Groups),
+                nameof(StripFill), nameof(StripWhen), nameof(StripStatus), nameof(StripStatusBrush), nameof(StripTip) }) Raise(n);
             RaiseButtons();
         }
     }

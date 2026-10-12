@@ -24,9 +24,20 @@ namespace ElansAddonHub.Lodge
         public Brush Fill => selected ? Avatar.Res("Brush.Accent.Tint") : Cell.IsToday ? Avatar.Res("Brush.Overlay.Chip") : System.Windows.Media.Brushes.Transparent;
         public Brush NumberBrush => Avatar.Res(Cell.InMonth ? "Brush.Text.Primary" : "Brush.Text.Tertiary");
         public double CellOpacity => Cell.InMonth ? 1 : 0.6;
+        // a WoW holiday covering this day: a thin band along the bottom that joins the neighbouring days
+        public Visibility BandVisibility => Cell.Bands.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public Thickness BandMargin => new Thickness(Cell.BandHead ? 4 : -4, 0, Cell.BandTail ? 4 : -4, 4);
         // one dot per event (three at most): Success = going, Warn = maybe, Tertiary = no answer or cancelled
         public List<Brush> Dots => Cell.Events.Take(3).Select(e => Avatar.Res(e.IsCancelled ? "Brush.Text.Disabled" : e.MyStatus == "going" ? "Brush.Success" : e.MyStatus == "maybe" ? "Brush.Warn" : "Brush.Text.Tertiary")).ToList();
         public List<string> DotKeys => Cell.Events.Take(3).Select(e => e.IsCancelled ? "cancelled" : e.MyStatus ?? "none").ToList();
+    }
+
+    // agenda / day cards: the Lodge event card, or the quiet read-only card of a WoW event
+    public class EventCardSelector : DataTemplateSelector
+    {
+        public DataTemplate Server { get; set; }
+        public DataTemplate Wow { get; set; }
+        public override DataTemplate SelectTemplate(object item, DependencyObject container) => (item as EventVM)?.IsWow == true ? Wow : Server;
     }
 
     // The calendar page of the Lodge: Agenda (default) and Month, the event detail card and the create / edit form. All state is in LodgeSession.
@@ -84,14 +95,33 @@ namespace ElansAddonHub.Lodge
         void Rebuild(bool force)
         {
             if (S == null) return;
+            ShowWowBar();
             if (agenda)
             {
-                var groups = CalendarRules.Agenda(S.Events, Now);
+                var groups = CalendarRules.Agenda(S.ViewEvents, Now);
                 var sig = string.Join("|", groups.SelectMany(g => g.Events.Select(e => g.Label + ":" + e.Id)));
                 if (force || sig != lastSignature) { AgendaList.ItemsSource = groups; lastSignature = sig; }
                 AgendaEmpty.Visibility = groups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
             else BuildMonth();
+        }
+
+        // the quiet bar under the header: the switch for WoW's own events and the note that they update after a /reload or logout
+        // (shown once the addon has saved a calendar, or while the switch is off so it can be turned back on)
+        bool settingWowSwitch;
+        void ShowWowBar()
+        {
+            bool show = S.WowAvailable || !S.WowEventsEnabled;
+            WowBar.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            settingWowSwitch = true; WowSwitch.IsChecked = S.WowEventsEnabled; settingWowSwitch = false;
+        }
+
+        void WowSwitch_Click(object sender, RoutedEventArgs e)
+        {
+            if (S == null || settingWowSwitch) return;
+            S.Settings.WowEventsOff = WowSwitch.IsChecked != true;
+            SettingsStore.Save(S.Settings);
+            S.WowCalendarSettingsChanged();
         }
 
         void Mode_Changed(object sender, RoutedEventArgs e)
@@ -111,8 +141,8 @@ namespace ElansAddonHub.Lodge
             var first = new DateTime(year, month, 1);
             MonthTitle.Text = first.ToString("MMMM yyyy", CalendarRules.English);
             var fdw = (int)CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek;
-            WeekdayRow.ItemsSource = Enumerable.Range(0, 7).Select(i => CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName((DayOfWeek)((fdw + i) % 7))).ToList();
-            var cells = CalendarRules.MonthGrid(year, month, S.Events, Now).Select(c => new MonthCellVM(c)).ToList();
+            WeekdayRow.ItemsSource = Enumerable.Range(0, 7).Select(i => CalendarRules.English.DateTimeFormat.GetAbbreviatedDayName((DayOfWeek)((fdw + i) % 7))).ToList();
+            var cells = CalendarRules.MonthGrid(year, month, S.ViewEvents, Now).Select(c => new MonthCellVM(c)).ToList();
             var today = CalendarRules.ToLocal(Now).Date;
             if (selectedDay == null || selectedDay.Value.Year != year || selectedDay.Value.Month != month) selectedDay = today.Year == year && today.Month == month ? today : first;
             foreach (var c in cells) c.Selected = c.Cell.Day == selectedDay.Value;
@@ -124,7 +154,7 @@ namespace ElansAddonHub.Lodge
         {
             var day = selectedDay ?? CalendarRules.ToLocal(Now).Date;
             DayTitle.Text = CalendarRules.DayLabel(day, CalendarRules.ToLocal(Now).Date) + (day.Date == CalendarRules.ToLocal(Now).Date.AddDays(0) || day.Date == CalendarRules.ToLocal(Now).Date.AddDays(1) ? " · " + day.ToString("d MMMM", CalendarRules.English) : "");
-            var evs = S.Events.Where(e => CalendarRules.ToLocal(e.StartUtc).Date == day.Date).OrderBy(e => e.StartUtc).ToList();
+            var evs = S.ViewEvents.Where(e => e.IsBand ? CalendarRules.BandCovers(e, day) : CalendarRules.ToLocal(e.StartUtc).Date == day.Date).OrderBy(e => e.IsBand ? 0 : 1).ThenBy(e => e.StartUtc).ToList();
             DayEvents.ItemsSource = evs;
             DayEmpty.Visibility = evs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -213,7 +243,7 @@ namespace ElansAddonHub.Lodge
         {
             if (detail == null) return;
             DetailEdit.Visibility = DetailCancelEvent.Visibility = detail.CanManage ? Visibility.Visible : Visibility.Collapsed;
-            DetailNobody.Visibility = detail.Signups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            DetailNobody.Visibility = detail.Signups.Count == 0 && !detail.IsWow ? Visibility.Visible : Visibility.Collapsed;
         }
 
         void CloseDetail()
@@ -462,6 +492,11 @@ namespace ElansAddonHub.Lodge
         public string FormHeadingForTest => FormHeading.Text;
         public int FormChannelCountForTest => FChannel.Items.Count;
         public bool NewButtonVisibleForTest => NewButton.Visibility == Visibility.Visible;
+        public FrameworkElement MonthGridElementForTest => MonthGridList;
+        public bool WowBarVisibleForTest => WowBar.Visibility == Visibility.Visible;
+        public bool WowSwitchOnForTest => WowSwitch.IsChecked == true;
+        public string WowCaptionForTest => WowCaption.Text;
+        public void ClickWowSwitchForTest(bool on) { WowSwitch.IsChecked = on; WowSwitch_Click(WowSwitch, null); }
         public FrameworkElement MonthScrollForTest => MonthScroll;
         public FrameworkElement AgendaScrollForTest => AgendaScroll;
     }

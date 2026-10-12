@@ -33,6 +33,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsCalendar) return;
             ApplyEvents(m.Child("calendar")?.List("events"));
+            ReloadWowEvents(true);                                    // WoW's own calendar from the companion addon (local, read-only)
             Changed?.Invoke();
         }
 
@@ -109,6 +110,7 @@ namespace ElansAddonHub.Lodge
         public void CalendarTick()
         {
             if (!SupportsCalendar) return;
+            WowCalendarTick();
             var now = Clock();
             bool moved = false;
             foreach (var e in Events.ToList())

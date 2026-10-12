@@ -16,3 +16,5 @@
 1.7.0 New settings window with a tab list on the left (General, Emote wheel, About) like Elan's Hunter Helper; /ehub wheel opens the Emote wheel page and the window remembers the last page. Removed the Emotes chat tab - emotes are back in General (a one-time cleanup puts them back where 1.6.0 took them from, and closes the tab if the Hub made it).
 
 1.8.0 Addon health for Elan's Outpost: errors of this addon are kept in the saved variables (ElansHubDB.bugs), and on the first login after an update one quiet /ehub diag run is stored (about 10 s after login, out of combat) with a one-time chat hint to /reload so the Outpost can check it.
+
+1.9.0 Saves the in-game calendar for Elan's Outpost: holidays and world events (Darkmoon Faire, Hallow's End...), raid reset times and your own calendar / guild events, so the Lodge calendar can show them. Pure API reads, out of combat, once after login and then at most once an hour; nothing is sent anywhere by the addon. /ehub calendar shows the state (refresh | on | off), /ehub diag records whether the client has the calendar API. Turn it off with /ehub calendar off.

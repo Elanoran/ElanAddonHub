@@ -235,6 +235,15 @@
                         Click="UpgradeDevice_Click" ToolTip="Swap the saved permanent code for a key only this PC holds" />
               </StackPanel>
             </ContentControl>
+            <TextBlock Text="Calendar" Style="{StaticResource Head}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Show upcoming events above the chat" Tag="The next one to three events of the week as small cards under the channel name. Nothing shows when there are none.">
+                <CheckBox x:Name="EventsStripBox" Style="{StaticResource Switch}" Click="Lodge_Click" AutomationProperties.Name="Show upcoming events above the chat" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Show in-game WoW events" Tag="Holidays, raid resets and your own in-game calendar events, read from Elan's Hub in your game. They stay on this PC, are never sent to the Lodge, and update after a /reload or logout.">
+                <CheckBox x:Name="WowEventsBox" Style="{StaticResource Switch}" Click="Lodge_Click" AutomationProperties.Name="Show in-game WoW events" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
             <TextBlock Text="Presence" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Connect when the Outpost starts" Tag="Friends see you online while the Outpost runs.">

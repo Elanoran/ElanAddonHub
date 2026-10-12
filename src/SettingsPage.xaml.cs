@@ -119,6 +119,8 @@ namespace ElansAddonHub
             PaintedBox.IsChecked = s.PaintedArt;
             SplashBox.IsChecked = !s.NoSplash;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
+            EventsStripBox.IsChecked = !s.EventsStripOff;
+            WowEventsBox.IsChecked = !s.WowEventsOff;
 
             ModeVa.IsChecked = !s.VoicePushToTalk;
             ModePtt.IsChecked = s.VoicePushToTalk;
@@ -380,7 +382,11 @@ namespace ElansAddonHub
         {
             if (loading) return;
             settings.LodgeManualConnect = AutoConnectBox.IsChecked != true;
+            bool calendarChanged = settings.EventsStripOff != (EventsStripBox.IsChecked != true) || settings.WowEventsOff != (WowEventsBox.IsChecked != true);
+            settings.EventsStripOff = EventsStripBox.IsChecked != true;
+            settings.WowEventsOff = WowEventsBox.IsChecked != true;
             SettingsStore.Save(settings);
+            if (calendarChanged) session.WowCalendarSettingsChanged();
         }
 
         void OpenPrivacy_Click(object sender, RoutedEventArgs e) => Show("privacy");
