@@ -335,7 +335,7 @@
           </StackPanel>
           <TextBlock x:Name="CodeFromLink" Text="Invite found in the link" FontSize="12" Foreground="{StaticResource Accent}"
                      Margin="2,6,0,0" Visibility="Collapsed" />
-          <TextBlock Text="NAME  (only used with a shared guest code)" Style="{StaticResource Caption}" Margin="0,12,0,5" />
+          <TextBlock x:Name="NameCaption" Text="NAME  (only used with a shared guest code)" Style="{StaticResource Caption}" Margin="0,12,0,5" />
           <TextBox x:Name="NameBox" Style="{StaticResource Input}" Tag="Your name" />
           <TextBlock Text="THIS PC  (shown in Your devices, so you can sign it out later)" Style="{StaticResource Caption}" Margin="0,12,0,5" />
           <TextBox x:Name="DeviceBox" Style="{StaticResource Input}" Tag="PC name" MaxLength="32" />
@@ -345,6 +345,8 @@
           <Button x:Name="RestoreSavedButton" Style="{StaticResource GhostButton}" Content="Back to my saved sign-in" HorizontalAlignment="Center" Margin="0,8,0,0"
                   Visibility="Collapsed" Click="RestoreSaved_Click" />
           <TextBlock x:Name="JoinStatus" FontSize="12" Foreground="{StaticResource Danger}" TextWrapping="Wrap" Margin="2,10,0,0" />
+          <Button x:Name="CreateLodgeButton" Style="{StaticResource GhostButton}" Content="Create a lodge" HorizontalAlignment="Center" Margin="0,8,0,0"
+                  Click="CreateLodge_Click" ToolTip="Start your own lodge on a server of your own" />
         </StackPanel>
       </Border>
     </ScrollViewer>
@@ -368,13 +370,17 @@
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
 
-          <StackPanel Grid.Row="0" Margin="12,0,12,8">
-            <StackPanel Orientation="Horizontal">
-              <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource Brush.Text.Secondary}" VerticalAlignment="Center" Margin="0,0,8,0" />
-              <TextBlock x:Name="LodgeTitle" Text="Lodge" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
+          <DockPanel Grid.Row="0" Margin="12,0,12,8">
+            <Button x:Name="InviteSideButton" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Invite" Visibility="Collapsed" VerticalAlignment="Top"
+                    Click="InviteSide_Click" ToolTip="Invite someone to the lodge" />
+            <StackPanel>
+              <StackPanel Orientation="Horizontal">
+                <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{StaticResource Brush.Text.Secondary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock x:Name="LodgeTitle" Text="Lodge" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <TextBlock x:Name="StatusText" Style="{StaticResource Text.Caption}" Margin="16,0,0,0" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-            <TextBlock x:Name="StatusText" Style="{StaticResource Text.Caption}" Margin="16,0,0,0" TextTrimming="CharacterEllipsis" />
-          </StackPanel>
+          </DockPanel>
 
           <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0" app:Motion.EdgeFade="True">
             <StackPanel>
@@ -1043,6 +1049,10 @@
                 <TextBlock Text="Kick from the lodge" Foreground="{StaticResource Brush.Danger}" />
               </Button>
             </StackPanel>
+            <Button x:Name="PopDeviceLink" Style="{StaticResource MenuRow}" Margin="-8,0,0,0" Click="PopDeviceLink_Click" Visibility="Collapsed"
+                    ToolTip="Makes a one-time link that adds another PC for this person (they keep their rank)">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE71B;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Width="28" Foreground="{StaticResource Brush.Text.Tertiary}" /><TextBlock Text="Send a new device link" /></StackPanel>
+            </Button>
             <Button x:Name="PopReset" Style="{StaticResource MenuRow}" Margin="-8,0,0,0" Click="PopReset_Click" ToolTip="Guild Master: put their avatar, accent and display name back to the default">
               <TextBlock Text="Reset profile look to default" Foreground="{StaticResource Brush.Danger}" />
             </Button>
@@ -1055,5 +1065,7 @@
     <!-- in-app picture viewer (covers the whole Lodge) -->
     <local:ImageViewer x:Name="Viewer" Grid.RowSpan="9" Grid.ColumnSpan="9" />
     <local:VideoViewer x:Name="VideoPlayer" Grid.RowSpan="9" Grid.ColumnSpan="9" />
+    <local:InviteSheet x:Name="InviteSheetHost" Grid.RowSpan="9" Grid.ColumnSpan="9" />
+    <local:CreateLodgeGuide x:Name="CreateGuide" Grid.RowSpan="9" Grid.ColumnSpan="9" />
   </Grid>
 </UserControl>

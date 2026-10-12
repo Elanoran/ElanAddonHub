@@ -27,6 +27,7 @@ namespace ElansAddonHub.Lodge
             CanRetire = SupportsTokens && m.Bool("canRetire");
             DeviceId = m.Child("device")?.Str("id");
             DeviceName = m.Child("device")?.Str("name");
+            ReadLodgeInfo(m, features);
             Changed?.Invoke();
         }
 

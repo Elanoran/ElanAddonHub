@@ -202,8 +202,6 @@
                 <TextBlock x:Name="LodgeWho" Style="{StaticResource Text.Secondary}" Margin="0,2,0,12" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal">
                   <Button Style="{StaticResource Button.M}" Content="Edit connection" Click="EditConnection_Click" />
-                  <Button Style="{StaticResource Button.M}" Content="Leave this lodge" Foreground="{StaticResource Brush.Danger}" Margin="8,0,0,0"
-                          Click="SignOut_Click" ToolTip="Disconnect and forget the address and code" />
                 </StackPanel>
               </StackPanel>
             </ContentControl>
@@ -244,6 +242,31 @@
                 <Button Style="{StaticResource Button.M}" Content="Open Privacy" Click="OpenPrivacy_Click" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
+
+            <!-- Danger zone: two different things. Sign out = forget this PC only. Leave = leave the lodge for good. -->
+            <TextBlock Text="Danger zone" Style="{StaticResource Head}" />
+            <TextBlock Style="{StaticResource Note}" Text="Signing out only forgets this PC. Leaving removes you from the lodge itself." />
+            <ContentControl Style="{StaticResource Card.Rows}" Margin="0,0,0,12"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Sign out this PC" Tag="Forgets the sign-in on this PC only. You, your other devices and your messages stay; a new invite link brings this PC back.">
+                <Button x:Name="SignOutPcButton" Style="{StaticResource Button.M}" Content="Sign out this PC" Click="SignOutPc_Click" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Leave the lodge" Tag="Removes you from the lodge for good: your name, all your devices and your open invite links. Your messages stay, with your name on them.">
+                <Button x:Name="LeaveLodgeButton" Style="{StaticResource Button.Danger.M}" Content="Leave the lodge" Click="LeaveLodge_Click" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
+            <Border x:Name="TransferPanel" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16" Margin="0,0,0,12">
+              <StackPanel>
+                <TextBlock x:Name="TransferTitle" Text="Transfer ownership first" Style="{StaticResource Text.RowTitle}" />
+                <TextBlock x:Name="TransferText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Text="You are the last Guild Master, and a lodge always needs one. Pick someone to take over; afterwards you can leave, or stay." />
+                <DockPanel x:Name="TransferRow" Margin="0,12,0,0">
+                  <Button x:Name="TransferButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.M}" Content="Transfer ownership" Margin="8,0,0,0" Click="Transfer_Click" />
+                  <ComboBox x:Name="TransferPick" Style="{StaticResource Dropdown}" />
+                </DockPanel>
+                <TextBlock x:Name="TransferEmpty" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed"
+                           Text="There is nobody else in the lodge to take over. Invite someone first (Guild Master, Invite someone)." />
+              </StackPanel>
+            </Border>
           </StackPanel>
 
           <!-- ========== Profile ========== -->
@@ -619,35 +642,7 @@
             <TextBlock Text="Invite someone" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Group}" Margin="0,0,0,12">
               <StackPanel Margin="16,12">
-                <Border x:Name="InviteKindHost" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="0,0,0,8">
-                  <StackPanel Orientation="Horizontal">
-                    <RadioButton x:Name="InvPerson" Style="{StaticResource Segment}" Content="A person" GroupName="invkind" IsChecked="True" Checked="InviteKind_Changed" />
-                    <RadioButton x:Name="InvGuest" Style="{StaticResource Segment}" Content="A guest link" GroupName="invkind" Checked="InviteKind_Changed" />
-                  </StackPanel>
-                </Border>
-                <DockPanel>
-                  <Button x:Name="InviteButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.M}" Width="156" Content="Create invite link" Margin="8,0,0,0" Click="Invite_Click" />
-                  <ComboBox x:Name="InviteExpiry" DockPanel.Dock="Right" Style="{StaticResource Dropdown}" Width="116" Margin="8,0,0,0" ToolTip="How long the link works" />
-                  <ComboBox x:Name="InviteRole" DockPanel.Dock="Right" Style="{StaticResource Dropdown}" Width="132" Margin="8,0,0,0" />
-                  <ComboBox x:Name="InviteUses" DockPanel.Dock="Right" Style="{StaticResource Dropdown}" Width="132" Margin="8,0,0,0" Visibility="Collapsed" ToolTip="How many people can use the link" />
-                  <TextBox x:Name="InviteName" Style="{StaticResource Input}" Height="32" Tag="Their name" MaxLength="24" />
-                </DockPanel>
-                <TextBlock x:Name="InviteHelp" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0"
-                           Text="The link works once and is copied for you. Send it privately: it lets one person in, and then it is used up." />
-                <Button x:Name="AdvancedButton" Style="{StaticResource GhostButton}" Content="Advanced: make a permanent code instead" HorizontalAlignment="Left" Margin="-8,4,0,0" Click="Advanced_Click" />
-              </StackPanel>
-            </ContentControl>
-            <ContentControl x:Name="InviteResult" Style="{StaticResource Card.Group}" Margin="0,0,0,12" Visibility="Collapsed">
-              <StackPanel Margin="16,12">
-                <TextBlock x:Name="InviteTitle" Style="{StaticResource Text.RowTitle}" />
-                <DockPanel Margin="0,8,0,0">
-                  <Button DockPanel.Dock="Right" Style="{StaticResource Button.M}" Content="Copy" Margin="8,0,0,0" Click="CopyInvite_Click" />
-                  <TextBox x:Name="InviteLink" Style="{StaticResource Input}" Height="32" IsReadOnly="True" FontSize="12" />
-                </DockPanel>
-                <TextBlock x:Name="InviteNote" Text="Send it privately (a DM, not a channel). It is shown only now."
-                           Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0" />
-                <TextBlock x:Name="InviteClickHint" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0"
-                           Text="Clicking the link opens the Outpost with the join filled in. If your chat app does not make it clickable, the person can copy it and paste it under Join a lodge." />
+                <local:InviteForm x:Name="GmInvite" AllowAdvanced="True" />
               </StackPanel>
             </ContentControl>
             <TextBlock x:Name="GmStatus" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="4,0,0,12" />
@@ -655,27 +650,7 @@
             <TextBlock Text="Invites" Style="{StaticResource HeadTight}" Margin="4,12,0,2" />
             <TextBlock Text="Links made so far. Revoke a pending one to cancel it." Style="{StaticResource Note}" />
             <ContentControl Style="{StaticResource Card.Rows}" Margin="0,0,0,12">
-              <StackPanel>
-                <TextBlock x:Name="InvitesEmpty" Style="{StaticResource Text.Secondary}" Margin="0,12" Text="No invites yet." />
-                <ItemsControl x:Name="InviteRows">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,1,0,0" Padding="0,8" Opacity="{Binding RowOpacity}">
-                        <DockPanel>
-                          <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Revoke" Visibility="{Binding RevokeVisibility}" Tag="{Binding Id}" Click="RevokeInvite_Click" />
-                          <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Margin="8,0,8,0" Background="{Binding StateBrush}" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding State}" Style="{StaticResource Text.Caption}" Foreground="{Binding StateText}" VerticalAlignment="Center" />
-                          </Border>
-                          <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{Binding Detail}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
-                          </StackPanel>
-                        </DockPanel>
-                      </Border>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-              </StackPanel>
+              <local:InviteListView x:Name="GmInvites" />
             </ContentControl>
 
             <TextBlock Text="Devices" Style="{StaticResource HeadTight}" Margin="4,12,0,2" />
@@ -702,6 +677,19 @@
             </ContentControl>
 
             <StackPanel x:Name="GmOwnerOnly">
+            <TextBlock Text="Your lodge" Style="{StaticResource Head}" Margin="4,12,0,8" />
+            <ContentControl Style="{StaticResource Card.Group}" Margin="0,0,0,12">
+              <StackPanel Margin="16,12">
+                <TextBlock Text="Name" Style="{StaticResource Text.Caption}" />
+                <TextBox x:Name="LodgeNameBox" Style="{StaticResource Input}" Height="32" Margin="0,4,0,0" MaxLength="40" Tag="For example: The Silver Lodge" />
+                <TextBlock Text="Welcome text" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <TextBox x:Name="LodgeWelcomeBox" Style="{StaticResource Input}" Height="72" Margin="0,4,0,0" MaxLength="280" AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" Tag="A short hello for new people (optional)" />
+                <TextBlock x:Name="LodgeInfoHint" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Text="Shown on the invite page and when someone joins. It is public: nobody has to be signed in to read it, so keep secrets out of it." />
+                <Button x:Name="LodgeInfoSave" Style="{StaticResource Button.Primary.M}" Content="Save" HorizontalAlignment="Right" Margin="0,12,0,0" Click="LodgeInfoSave_Click" />
+              </StackPanel>
+            </ContentControl>
             <TextBlock Text="Members" Style="{StaticResource Head}" Margin="4,12,0,8" />
             <ContentControl Style="{StaticResource Card.Rows}">
               <ItemsControl x:Name="MemberRows">

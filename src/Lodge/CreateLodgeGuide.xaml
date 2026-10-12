@@ -1,0 +1,64 @@
+<UserControl x:Class="ElansAddonHub.Lodge.CreateLodgeGuide"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             PreviewKeyDown="Guide_KeyDown">
+  <!-- "Create a lodge": three steps in an overlay card like the welcome guide (Surface3, hairline, Elevation.2, radius 14, padding 24, 560 wide),
+       progress = 8 px dots (current = 24 px accent pill), step content in Surface2 cards, only the last button is Primary. -->
+  <Border x:Name="Overlay" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" MouseLeftButtonDown="Scrim_Down">
+    <Border x:Name="Box" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+            Padding="24" Width="560" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down">
+      <StackPanel>
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE711;" Click="Close_Click" ToolTip="Close (Esc)" AutomationProperties.Name="Close" />
+          <StackPanel x:Name="Dots" Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center" />
+        </DockPanel>
+        <StackPanel x:Name="Step1" Margin="0,16,0,0">
+          <TextBlock Text="You need a small Linux server and a domain" Style="{StaticResource Text.Title}" TextWrapping="Wrap" />
+          <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,16"
+                     Text="A lodge is one small program that runs on a server you control. Everyone's chat, voice and files stay on your machine." />
+          <Border Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16">
+            <StackPanel>
+              <TextBlock Text="What to get" Style="{StaticResource Text.RowTitle}" />
+              <TextBlock Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0"
+                         Text="A small Ubuntu server (1 GB of memory is plenty), a domain or subdomain that points to it, and a web server with HTTPS in front (nginx or Caddy). The guide in the repository walks through all three." />
+              <Button x:Name="ReadmeLink" Style="{StaticResource GhostButton}" Content="Open the setup guide on GitHub" HorizontalAlignment="Left" Margin="-8,8,0,0" Click="Readme_Click" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <StackPanel x:Name="Step2" Visibility="Collapsed" Margin="0,16,0,0">
+          <TextBlock Text="Install the lodge" Style="{StaticResource Text.Title}" TextWrapping="Wrap" />
+          <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,16"
+                     Text="On the server, run these two commands. The installer builds the lodge, starts it and prints a one-time owner link at the end." />
+          <Border Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16">
+            <StackPanel>
+              <TextBox x:Name="Commands" Style="{StaticResource Input}" Height="56" IsReadOnly="True" AcceptsReturn="True" FontFamily="{StaticResource Font.Mono}" FontSize="12" />
+              <DockPanel Margin="0,8,0,0">
+                <Button x:Name="CopyCommands" DockPanel.Dock="Right" Style="{StaticResource Button.M}" Content="Copy commands" Click="CopyCommands_Click" />
+                <TextBlock x:Name="CopyNote" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" Text="Run them as a user who can use sudo." />
+              </DockPanel>
+            </StackPanel>
+          </Border>
+          <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,8,0,0"
+                     Text="Put the web server's HTTPS address in /etc/lodge/lodge.env as LODGE_PUBLIC_URL so the owner link carries it (the setup guide shows how)." />
+        </StackPanel>
+        <StackPanel x:Name="Step3" Visibility="Collapsed" Margin="0,16,0,0">
+          <TextBlock Text="Paste the owner link the installer printed" Style="{StaticResource Text.Title}" TextWrapping="Wrap" />
+          <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,16"
+                     Text="It starts with elanshub://lodge/join# and works once, for one hour. You choose your name next, and you become the Guild Master." />
+          <Border Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16">
+            <StackPanel>
+              <TextBox x:Name="LinkBox" Style="{StaticResource Input}" Height="32" Tag="elanshub://lodge/join#your.site/lodge|..." />
+              <TextBlock x:Name="LinkProblem" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
+              <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,8,0,0"
+                         Text="No link, or it has expired? On the server run: sudo lodge-admin claim-owner" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0">
+          <Button x:Name="BackButton" Style="{StaticResource GhostButton}" Content="Back" Click="Back_Click" />
+          <Button x:Name="NextButton" Style="{StaticResource Button.Primary.M}" Content="Next" Margin="8,0,0,0" Click="Next_Click" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Border>
+</UserControl>

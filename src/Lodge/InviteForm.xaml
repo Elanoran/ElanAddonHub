@@ -1,0 +1,53 @@
+<UserControl x:Class="ElansAddonHub.Lodge.InviteForm"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- The invite form, shared by Settings > Guild Master and the Lodge's Invite sheet (DESIGN.md "Invites and devices"): a Segment (A person / A guest link),
+       the name, rank + expiry dropdowns, one Primary button, then the created link (Copy / Copy as web link). No chrome of its own: the host supplies the card. -->
+  <StackPanel>
+    <Border x:Name="InviteKindHost" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="0,0,0,12">
+      <StackPanel Orientation="Horizontal">
+        <RadioButton x:Name="InvPerson" Style="{StaticResource Segment}" Content="A person" GroupName="invkind" IsChecked="True" Checked="InviteKind_Changed" />
+        <RadioButton x:Name="InvGuest" Style="{StaticResource Segment}" Content="A guest link" GroupName="invkind" Checked="InviteKind_Changed" />
+      </StackPanel>
+    </Border>
+    <StackPanel x:Name="NameArea">
+      <TextBlock Text="Their name" Style="{StaticResource Text.Caption}" />
+      <TextBox x:Name="InviteName" Style="{StaticResource Input}" Height="32" Margin="0,4,0,0" MaxLength="24" KeyDown="InviteName_KeyDown" />
+    </StackPanel>
+    <Grid Margin="0,12,0,0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+      <StackPanel>
+        <TextBlock x:Name="RoleCaption" Text="Rank" Style="{StaticResource Text.Caption}" />
+        <ComboBox x:Name="InviteRole" Style="{StaticResource Dropdown}" Margin="0,4,0,0" />
+        <ComboBox x:Name="InviteUses" Style="{StaticResource Dropdown}" Margin="0,4,0,0" Visibility="Collapsed" ToolTip="How many people can use the link" />
+      </StackPanel>
+      <StackPanel x:Name="ExpiryArea" Grid.Column="2">
+        <TextBlock Text="Expires" Style="{StaticResource Text.Caption}" />
+        <ComboBox x:Name="InviteExpiry" Style="{StaticResource Dropdown}" Margin="0,4,0,0" ToolTip="How long the link works" />
+      </StackPanel>
+    </Grid>
+    <TextBlock x:Name="InviteHelp" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,12,0,0"
+               Text="The link works once. Send it privately: it lets one person in, and then it is used up." />
+    <TextBlock x:Name="FormStatus" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
+    <DockPanel Margin="0,12,0,0">
+      <Button x:Name="InviteButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.M}" MinWidth="120" Content="Create link" Click="Invite_Click" />
+      <Button x:Name="AdvancedButton" Style="{StaticResource GhostButton}" Content="Advanced: make a permanent code instead" HorizontalAlignment="Left" Click="Advanced_Click" />
+    </DockPanel>
+
+    <Border x:Name="InviteResult" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="12" Padding="16" Margin="0,16,0,0">
+      <StackPanel>
+        <TextBlock x:Name="InviteTitle" Style="{StaticResource Text.RowTitle}" TextWrapping="Wrap" />
+        <TextBox x:Name="InviteLink" Style="{StaticResource Input}" Height="32" IsReadOnly="True" FontSize="12" Margin="0,8,0,0" />
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+          <Button x:Name="CopyButton" Style="{StaticResource Button.M}" Content="Copy" Click="CopyInvite_Click" ToolTip="Copy the elanshub:// link (opens the Outpost)" />
+          <Button x:Name="CopyWebButton" Style="{StaticResource Button.M}" Content="Copy as web link" Margin="8,0,0,0" Click="CopyWeb_Click"
+                  ToolTip="A normal https:// link that works in any chat app and explains how to open it" />
+        </StackPanel>
+        <TextBlock x:Name="InviteNote" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0"
+                   Text="Send it privately (a DM, not a channel). It is shown only now." />
+        <TextBlock x:Name="InviteClickHint" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0"
+                   Text="Clicking the link opens the Outpost with the join filled in. If your chat app does not make it clickable, the person can copy it and paste it under Join a lodge." />
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

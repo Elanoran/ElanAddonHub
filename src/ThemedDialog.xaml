@@ -9,7 +9,7 @@
     <Border x:Name="Root" Margin="40" Width="400" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1"
             CornerRadius="{StaticResource Radius.Window}" Effect="{StaticResource Elevation.2}">
       <Grid Margin="24">
-        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
         <Grid Grid.Row="0">
           <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
           <Border x:Name="Badge" Width="40" Height="40" CornerRadius="20" VerticalAlignment="Top" Margin="0,0,16,0">
@@ -20,7 +20,9 @@
             <TextBlock x:Name="BodyText" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
           </StackPanel>
         </Grid>
-        <StackPanel x:Name="Buttons" Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0" />
+        <!-- only for "type the name to confirm" questions (Dialog.ConfirmTyped): the confirm button stays off until the phrase matches -->
+        <TextBox x:Name="TypedBox" Grid.Row="1" Style="{StaticResource Input}" Height="32" Margin="0,16,0,0" Visibility="Collapsed" />
+        <StackPanel x:Name="Buttons" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0" />
       </Grid>
     </Border>
   </Grid>

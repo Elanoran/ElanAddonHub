@@ -50,6 +50,8 @@ namespace ElansAddonHub
         {
             readonly InviteVM i;
             public InviteRowVM(InviteVM i) { this.i = i; }
+            public bool ShowState { get; set; } = true;
+            public Visibility StateVisibility => ShowState ? Visibility.Visible : Visibility.Collapsed;
             public string Id => i.Id;
             public string Title => i.Title + " · " + i.RoleText;
             public string Detail => i.Detail;
@@ -152,8 +154,6 @@ namespace ElansAddonHub
             NotifyMentions.IsChecked = mode == "mentions";
             NotifyNone.IsChecked = mode == "none";
 
-            InviteRole.ItemsSource = Ranks;
-            InviteRole.SelectedItem = Ranks.First(r => r.Id == "member");
             NewMinRole.ItemsSource = ChannelRanks;
             NewMinRole.SelectedItem = ChannelRanks.First();
             AboutVersion.Text = $"Version {App.Version}";
@@ -162,21 +162,15 @@ namespace ElansAddonHub
             loading = false;
             UpdateLabels();
 
-            InitInvites();
+            GmInvite.Bind(session);          // the same form and list the Lodge sidebar Invite sheet uses
+            GmInvites.Bind(session);
+            GmInvite.Created += (inv, link) => GmStatus.Text = "";
+            session.LodgeInfoChanged += FillLodgeInfo;
+            session.LeaveRefused += ShowTransfer;
+            session.Left += () => { lodge.SignOut("You left the lodge. Your messages stay, with your name on them."); RefreshSection(); };
+            FillLodgeInfo();
             session.Changed += () => { NavGm.Visibility = session.CanManage || session.CanInvite ? Visibility.Visible : Visibility.Collapsed; UpdateInviteMode(); UpdateDevicesCard(); };
             session.AdminMembers += FillAdmin;
-            session.AdminInvited += (name, role, code) =>
-            {
-                // a permanent code (older server, or the Advanced button): the link carries the code itself
-                InviteTitle.Text = $"Permanent code for {name} ({MemberVM.RoleName(role)})";
-                InviteLink.Text = LodgeSession.InviteLink(session.LodgeAddress, code);
-                InviteNote.Text = "This link holds a code that works until you remove the person. Send it privately, and consider a one-time link instead.";
-                InviteResult.Visibility = Visibility.Visible;
-                InviteName.Text = "";
-                GmStatus.Text = "";
-            };
-            session.InviteCreated += ShowCreatedInvite;
-            session.InvitesChanged += FillInvites;
             session.DevicesChanged += FillDevices;
             session.Error += text => { if (SecGm.Visibility == Visibility.Visible) GmStatus.Text = text; };
             InitProfile();
@@ -262,6 +256,8 @@ namespace ElansAddonHub
             if (NavGm.IsChecked == true)
             {
                 GmStatus.Text = "";
+                FillLodgeInfo();
+                GmInvite.Reset();
                 UpdateInviteMode();
                 if (session.CanManage) session.RequestAdmin();
                 session.RequestInvites();
@@ -369,11 +365,102 @@ namespace ElansAddonHub
 
         void EditConnection_Click(object sender, RoutedEventArgs e) { host.ShowTab("lodge"); lodge.EditConnection(); }
 
-        void SignOut_Click(object sender, RoutedEventArgs e)
+        // ---- Danger zone. Two different actions: "Sign out this PC" forgets this PC only; "Leave the lodge" removes the membership on the server.
+
+        // An owner who has only this one device would lock themselves out of their own lodge: they type the lodge's name to confirm, and the dialog
+        // says how to get back in.
+        public bool SignOutNeedsTyping => LeavePolicy.SignOutNeedsTypedName(session.MyRole, session.MyDevices.Count);
+        public string SignOutPhrase => LeavePolicy.Phrase(session.LodgeName, session.LodgeAddress ?? settings.LodgeUrl);
+
+        void SignOutPc_Click(object sender, RoutedEventArgs e)
         {
-            if (!Dialog.Confirm(Window.GetWindow(this), "Leave this lodge?", "The Outpost forgets the address and your code. You need an invite code to join again.", "Leave", danger: true)) return;
+            var owner = Window.GetWindow(this);
+            if (SignOutNeedsTyping)
+            {
+                var phrase = SignOutPhrase;
+                if (!Dialog.ConfirmTyped(owner, "Sign out the only device of a Guild Master?",
+                        "This is the only PC you are signed in on. Nobody else can let you back in, and the lodge keeps your Guild Master place. To get back in, run this on the server:\n\n"
+                        + LeavePolicy.RecoverCommand(session.Me?.Name) + "\n\nType " + phrase + " to confirm.", "Sign out this PC", phrase)) return;
+            }
+            else if (!Dialog.Confirm(owner, "Sign out this PC?", "The Outpost forgets the sign-in on this PC. You and your other devices stay in the lodge; a new invite link brings this PC back.", "Sign out", danger: true)) return;
             lodge.SignOut();
             RefreshSection();
+        }
+
+        void LeaveLodge_Click(object sender, RoutedEventArgs e)
+        {
+            if (!session.SupportsLeave)
+            {
+                Dialog.Info(Window.GetWindow(this), "This lodge's server is too old", "Leaving a lodge needs server 2.12. Ask the Guild Master to update it (sudo lodge-update), or sign out this PC.");
+                return;
+            }
+            TransferPanel.Visibility = Visibility.Collapsed;
+            if (!Dialog.Confirm(Window.GetWindow(this), "Leave the lodge?",
+                "You are removed from the lodge for good: your name, all your devices and your open invite links. Your messages stay, with your name on them. To come back you need a new invite.",
+                "Leave the lodge", danger: true)) return;
+            session.RequestLeave();
+        }
+
+        // the server said no: I am the last Guild Master
+        void ShowTransfer(string text)
+        {
+            TransferTitle.Text = string.IsNullOrEmpty(text) ? "Transfer ownership first" : text;
+            TransferText.Text = "You are the last Guild Master, and a lodge always needs one. Pick someone to take over; afterwards you can leave, or stay.";
+            TransferPanel.Visibility = Visibility.Visible;
+            session.RequestAdmin();
+            FillTransferPick();
+        }
+
+        List<KeyValuePair<string, string>> adminPeople = new List<KeyValuePair<string, string>>();
+
+        // officers first; members only when there is no officer
+        void FillTransferPick()
+        {
+            if (TransferPanel.Visibility != Visibility.Visible) return;
+            var me = session.Me?.Name;
+            if (adminPeople.Any(p => p.Value == "owner" && !string.Equals(p.Key, me, StringComparison.OrdinalIgnoreCase)))
+            {
+                TransferTitle.Text = "Ownership transferred";
+                TransferText.Text = "Someone else is a Guild Master now. You can leave the lodge, or stay.";
+                TransferRow.Visibility = Visibility.Collapsed; TransferEmpty.Visibility = Visibility.Collapsed;
+                return;
+            }
+            var names = LeavePolicy.TransferCandidates(adminPeople, me);
+            TransferPick.ItemsSource = names;
+            TransferPick.SelectedIndex = names.Count > 0 ? 0 : -1;
+            bool any = names.Count > 0;
+            TransferRow.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            TransferEmpty.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+            if (any && adminPeople.All(p => p.Value != "officer")) TransferText.Text = "You are the last Guild Master, and a lodge always needs one. There is no officer, so you can pick any member. Afterwards you can leave, or stay.";
+        }
+
+        void Transfer_Click(object sender, RoutedEventArgs e)
+        {
+            var name = TransferPick.SelectedItem as string;
+            if (name == null) return;
+            if (!Dialog.Confirm(Window.GetWindow(this), "Transfer ownership to " + name + "?",
+                name + " becomes a Guild Master: they can invite, change ranks and remove people. You stay a Guild Master until you leave or someone changes your rank.", "Transfer ownership")) return;
+            session.TransferOwnership(name);
+            session.RequestAdmin();
+        }
+
+        void LodgeInfoSave_Click(object sender, RoutedEventArgs e)
+        {
+            var problem = LodgeSession.CheckLodgeInfo(LodgeNameBox.Text, LodgeWelcomeBox.Text);
+            if (problem != null) { GmStatus.Text = problem; return; }
+            GmStatus.Text = "";
+            session.SetLodgeInfo(LodgeNameBox.Text.Trim(), LodgeWelcomeBox.Text.Trim());
+        }
+
+        void FillLodgeInfo()
+        {
+            if (LodgeNameBox == null) return;
+            if (!LodgeNameBox.IsKeyboardFocused) LodgeNameBox.Text = session.LodgeName ?? "";
+            if (!LodgeWelcomeBox.IsKeyboardFocused) LodgeWelcomeBox.Text = session.LodgeWelcome ?? "";
+            LodgeInfoSave.IsEnabled = session.SupportsLodgeInfo;
+            LodgeInfoHint.Text = session.SupportsLodgeInfo
+                ? "Shown on the invite page and when someone joins. It is public: nobody has to be signed in to read it, so keep secrets out of it."
+                : "Your Lodge server is older than 2.12 and can't keep a lodge name yet. Update it (sudo lodge-update).";
         }
 
         void Lodge_Click(object sender, RoutedEventArgs e)
@@ -614,6 +701,8 @@ namespace ElansAddonHub
 
         void FillAdmin(List<Dictionary<string, object>> members, List<Dictionary<string, object>> channels)
         {
+            adminPeople = members.Select(m => new KeyValuePair<string, string>(m.Str("name"), m.Str("role"))).ToList();
+            FillTransferPick();
             loading = true;
             MemberRows.ItemsSource = members.Select(m => new MemberRow
                 {
@@ -639,124 +728,18 @@ namespace ElansAddonHub
             Dictionary<string, object> C(string n, string type, string min, int max) => new Dictionary<string, object> { ["id"] = n, ["name"] = n, ["type"] = type, ["minRole"] = min, ["max"] = max };
             FillAdmin(new List<Dictionary<string, object>> { M("Elan", "owner", true), M("Bob", "officer", true), M("Dax", "member", false) },
                 new List<Dictionary<string, object>> { C("general", "text", "guest", 0), C("officers", "text", "officer", 0), C("Campfire", "voice", "guest", 8) });
-            InviteTitle.Text = "Invite for Cleo (Member) - copied";
-            InviteLink.Text = "elanshub://lodge/join#nasferatu.dk/lodge|i1.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-            InviteNote.Text = "Works once, expires in 7 days. Send it privately (a DM, not a channel). It is shown only now.";
-            InviteResult.Visibility = Visibility.Visible;
+            GmInvite.SetResultForDesign("Invite for Cleo (Member) - copied", "elanshub://lodge/join#nasferatu.dk/lodge|i1.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+                "https://nasferatu.dk/lodge/#join=nasferatu.dk/lodge|i1.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", "Works once, expires in 7 days. Send it privately (a DM, not a channel). It is shown only now.");
         }
 
-        // ---------------------------------------------------------------- one-time invite links (server 2.10)
+        // ---------------------------------------------------------------- one-time invite links (server 2.10): the form and the list are shared controls (InviteForm, InviteListView)
 
-        sealed class Choice { public string Label; public int Value; public override string ToString() => Label; }
-
-        void InitInvites()
-        {
-            InviteExpiry.ItemsSource = new[]
-            {
-                new Choice { Label = "1 hour", Value = 1 }, new Choice { Label = "1 day", Value = 24 },
-                new Choice { Label = "7 days", Value = 168 }, new Choice { Label = "30 days", Value = 720 },
-            };
-            InviteExpiry.SelectedIndex = 2;
-            InviteUses.ItemsSource = new[]
-            {
-                new Choice { Label = "1 person", Value = 1 }, new Choice { Label = "3 people", Value = 3 },
-                new Choice { Label = "5 people", Value = 5 }, new Choice { Label = "10 people", Value = 10 },
-            };
-            InviteUses.SelectedIndex = 0;
-        }
-
-        bool GuestKind => InvGuest.IsChecked == true;
-        string inviteRoleFor;
-
-        // the panel offers one-time links when the server can do them; an older server can only make permanent codes
+        // the owner-only part of the page (ranks, channels, lodge name) is for the Guild Master; officers see invites and devices
         void UpdateInviteMode()
         {
-            if (InviteButton == null) return;
-            bool links = session.SupportsTokens;
-            InviteKindHost.Visibility = links ? Visibility.Visible : Visibility.Collapsed;
-            InviteExpiry.Visibility = links ? Visibility.Visible : Visibility.Collapsed;
-            AdvancedButton.Visibility = links && session.CanManage ? Visibility.Visible : Visibility.Collapsed;
-            bool guest = links && GuestKind;
-            InviteName.Visibility = guest ? Visibility.Collapsed : Visibility.Visible;
-            InviteRole.Visibility = guest ? Visibility.Collapsed : Visibility.Visible;
-            InviteUses.Visibility = guest ? Visibility.Visible : Visibility.Collapsed;
-            InviteButton.Content = links ? "Create invite link" : "Create invite";
-            // officers invite below their own rank; only the Guild Master picks any rank
-            if (inviteRoleFor != session.MyRole)
-            {
-                inviteRoleFor = session.MyRole;
-                var offered = session.MyRole == "owner" || !session.SupportsTokens ? Ranks : Ranks.Where(r => MemberVM.RoleLevel(r.Id) < MemberVM.RoleLevel(session.MyRole)).ToList();
-                InviteRole.ItemsSource = offered;
-                InviteRole.SelectedItem = offered.FirstOrDefault(r => r.Id == "member") ?? offered.FirstOrDefault();
-            }
-            InviteHelp.Text = links
-                ? (guest ? "A guest link lets people in as guests (chat and voice, no files). It stops working after the chosen number of people, or when it expires."
-                         : "The link works once and is copied for you. Send it privately: it lets one person in, and then it is used up.")
-                : "Your Lodge server is older than 2.10, so this makes a permanent code. Update the server (sudo lodge-update) to send one-time links instead.";
-            InviteHelp.Foreground = (Brush)Application.Current.Resources[links ? "Brush.Text.Secondary" : "Brush.Warn"];
-            GmOwnerOnly.Visibility = session.CanManage ? Visibility.Visible : Visibility.Collapsed;   // officers see invites and devices, not ranks and channels
-        }
-
-        void InviteKind_Changed(object sender, RoutedEventArgs e) { if (session != null) UpdateInviteMode(); }
-
-        void Invite_Click(object sender, RoutedEventArgs e)
-        {
-            var role = (InviteRole.SelectedItem as RoleOption)?.Id ?? "member";
-            if (session.SupportsTokens)
-            {
-                var hours = (InviteExpiry.SelectedItem as Choice)?.Value ?? 168;
-                if (GuestKind) { session.CreateInvite("guest", "", "guest", hours, (InviteUses.SelectedItem as Choice)?.Value ?? 1); return; }
-                var who = InviteName.Text.Trim();
-                if (who.Length == 0) { GmStatus.Text = "Type their name first"; return; }
-                GmStatus.Text = "";
-                session.CreateInvite("person", who, role, hours);
-                return;
-            }
-            var name = InviteName.Text.Trim();
-            if (name.Length == 0) { GmStatus.Text = "Type their name first"; return; }
-            session.Invite(name, role);
-        }
-
-        // Advanced: the old kind of invite, a code that works until the person is removed. Only on purpose.
-        void Advanced_Click(object sender, RoutedEventArgs e)
-        {
-            var name = InviteName.Text.Trim();
-            if (name.Length == 0) { GmStatus.Text = "Type their name first"; return; }
-            if (!Dialog.Confirm(Window.GetWindow(this), "Make a permanent code?",
-                "A permanent code works until you remove the person, and anyone who sees the link can use it. A one-time link is safer: it is used up the first time it is opened. Only make a code for someone whose Outpost is too old for invite links.",
-                "Make a code", danger: true)) return;
-            session.Invite(name, (InviteRole.SelectedItem as RoleOption)?.Id ?? "member");
-        }
-
-        string lastInviteLink;
-
-        void ShowCreatedInvite(InviteVM inv, string link)
-        {
-            lastInviteLink = link;
-            InviteTitle.Text = inv.IsGuest ? "Guest link" + (inv.Max > 1 ? $" for {inv.Max} people" : "") + " - copied" : $"Invite for {inv.Name} ({MemberVM.RoleName(inv.Role)}) - copied";
-            InviteLink.Text = link;
-            InviteNote.Text = $"Works {(inv.Max > 1 ? $"for {inv.Max} people, " : "once, ")}expires {AgoText.In(inv.Expires, inv.Now)}. Send it privately (a DM, not a channel). It is shown only now.";
-            InviteResult.Visibility = Visibility.Visible;
-            InviteName.Text = "";
-            GmStatus.Text = "";
-            try { Clipboard.SetText(link); } catch { }
-        }
-
-        void CopyInvite_Click(object sender, RoutedEventArgs e)
-        {
-            try { Clipboard.SetText(InviteLink.Text); InviteTitle.Text = "Copied - now send it to them"; } catch { }
-        }
-
-        void FillInvites()
-        {
-            var rows = session.Invites.Select(i => new InviteRowVM(i)).ToList();
-            InviteRows.ItemsSource = rows;
-            InvitesEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        void RevokeInvite_Click(object sender, RoutedEventArgs e)
-        {
-            if ((sender as FrameworkElement)?.Tag is string id) session.RevokeInvite(id);
+            if (GmInvite == null) return;
+            GmInvite.UpdateMode();
+            GmOwnerOnly.Visibility = session.CanManage ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // ---------------------------------------------------------------- devices
@@ -861,27 +844,46 @@ namespace ElansAddonHub
 
         // test hooks
         public void InviteForTest(string name, string role) => session.Invite(name, role);
-        public List<InviteRowVM> InviteRowsForTest => (InviteRows.ItemsSource as List<InviteRowVM>) ?? new List<InviteRowVM>();
+        public List<InviteRowVM> InviteRowsForTest => GmInvites.RowsForTest;
         public List<DeviceRowVM> MyDeviceRowsForTest => (MyDeviceRows.ItemsSource as List<DeviceRowVM>) ?? new List<DeviceRowVM>();
         public List<DeviceRowVM> AllDeviceRowsForTest => (AllDeviceRows.ItemsSource as List<DeviceRowVM>) ?? new List<DeviceRowVM>();
         public List<MemberRow> MemberRowsForTest => (MemberRows.ItemsSource as List<MemberRow>) ?? new List<MemberRow>();
         public bool GmOwnerOnlyVisibleForTest => GmOwnerOnly.Visibility == Visibility.Visible;
         public bool NavGmVisibleForTest => NavGm.Visibility == Visibility.Visible;
-        public string InviteButtonTextForTest => InviteButton.Content as string;
-        public string InviteLinkForTest => InviteLink.Text;
+        public string InviteButtonTextForTest => GmInvite.ButtonTextForTest;
+        public string InviteLinkForTest => GmInvite.LinkForTest;
+        public InviteForm GmInviteForTest => GmInvite;
         public void SetLinkHandlerForTest(bool on) { LinkBox.IsChecked = on; General_Click(LinkBox, null); }
         public bool LinkBoxForTest => LinkBox.IsChecked == true;
-        public string InviteClickHintForTest => InviteClickHint.Text;
-        public string InviteTitleForTest => InviteTitle.Text;
-        public string InviteNoteForTest => InviteNote.Text;
-        public bool InviteResultVisibleForTest => InviteResult.Visibility == Visibility.Visible;
-        public bool AdvancedVisibleForTest => AdvancedButton.Visibility == Visibility.Visible;
-        public bool InviteKindVisibleForTest => InviteKindHost.Visibility == Visibility.Visible;
+        public string InviteClickHintForTest => GmInvite.ClickHintForTest;
+        public string InviteTitleForTest => GmInvite.TitleForTest;
+        public string InviteNoteForTest => GmInvite.NoteForTest;
+        public bool InviteResultVisibleForTest => GmInvite.ResultVisibleForTest;
+        public bool AdvancedVisibleForTest => GmInvite.AdvancedVisibleForTest;
+        public bool InviteKindVisibleForTest => GmInvite.KindVisibleForTest;
         public string DevicesNoteForTest => MyDevicesEmpty.Text;
         public bool UpgradeDeviceVisibleForTest => UpgradeDeviceButton.Visibility == Visibility.Visible;
-        public void SetGuestKindForTest(bool guest) { (guest ? InvGuest : InvPerson).IsChecked = true; UpdateInviteMode(); }
-        public void CreateInviteClickForTest(string name) { InviteName.Text = name; Invite_Click(null, null); }
+        public void SetGuestKindForTest(bool guest) => GmInvite.SetGuestKindForTest(guest);
+        public void CreateInviteClickForTest(string name) => GmInvite.CreateClickForTest(name);
         public void RevokeInviteForTest(string id) => session.RevokeInvite(id);
         public ScrollViewer ScrollForShots => Scroll;
+        public bool TransferVisibleForTest => TransferPanel.Visibility == Visibility.Visible;
+        public string TransferTitleForTest => TransferTitle.Text;
+        public List<string> TransferChoicesForTest => (TransferPick.ItemsSource as List<string>) ?? new List<string>();
+        public bool TransferRowVisibleForTest => TransferRow.Visibility == Visibility.Visible;
+        public bool TransferEmptyVisibleForTest => TransferEmpty.Visibility == Visibility.Visible;
+        public string TransferTextForTest => TransferText.Text;
+        public void PickTransferForTest(string name) => TransferPick.SelectedItem = name;
+        public void TransferClickForTest() { var name = TransferPick.SelectedItem as string; if (name != null) { session.TransferOwnership(name); session.RequestAdmin(); } }
+        public string LodgeNameBoxForTest { get => LodgeNameBox.Text; set => LodgeNameBox.Text = value; }
+        public string LodgeWelcomeBoxForTest { get => LodgeWelcomeBox.Text; set => LodgeWelcomeBox.Text = value; }
+        public void LodgeInfoSaveForTest() => LodgeInfoSave_Click(null, null);
+        public string GmStatusForTest => GmStatus.Text;
+        public bool LodgeInfoSaveEnabledForTest => LodgeInfoSave.IsEnabled;
+        public void FillAdminForTest(List<Dictionary<string, object>> members, List<Dictionary<string, object>> channels) => FillAdmin(members, channels);
+        public void ShowTransferForTest(string text) => ShowTransfer(text);
+        public bool LeaveLodgeEnabledForTest => LeaveLodgeButton.IsEnabled;
+        public string LodgeAddressTextForTest => LodgeAddress.Text;
+        public void DangerPanelDesign() { SignOutPcButton.UpdateLayout(); }
     }
 }
