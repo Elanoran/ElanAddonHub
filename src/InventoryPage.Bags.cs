@@ -410,17 +410,17 @@ namespace ElansAddonHub
             if (tip.Guilds.Count > 0)
             {
                 sp.Children.Add(Line("Guild bank", "Text.Caption", null, 12));
-                foreach (var g in tip.Guilds) sp.Children.Add(CountRow(g.Guild.Name, Res("Brush.Text.Primary"), g.Count.ToString("N0"), 4));
+                foreach (var g in tip.Guilds) sp.Children.Add(CountRow(g.Guild.Name, Res("Brush.Text.Primary"), g.Count.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English), 4));
             }
             if (tip.ShowGrand)
             {
                 sp.Children.Add(new Border { Height = 1, Background = Res("Brush.Divider"), Margin = new Thickness(0, 8, 0, 8) });
-                sp.Children.Add(CountRow("All together", Res("Brush.Text.Primary"), tip.Grand.ToString("N0"), 0));
+                sp.Children.Add(CountRow("All together", Res("Brush.Text.Primary"), tip.Grand.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English), 0));
             }
             var loc = where == "Worn" ? (owner != null ? owner.Name + " · " : "") + bagTitle
                 : guild ? where + " · " + bagTitle + " · slot " + slotNo
                 : (owner != null ? owner.Name + " · " : "") + where + (where == "Bags" || where == "Bank" ? " · " + bagTitle : "") + " · slot " + slotNo;
-            if (s.Count > 1) loc += " · stack of " + s.Count.ToString("N0");
+            if (s.Count > 1) loc += " · stack of " + s.Count.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English);
             sp.Children.Add(Line(loc, "Text.Caption", null, 12));
             sp.Children.Add(Line("Item ID " + s.Id, "Text.Caption"));
             return new ToolTip { Style = (Style)FindResource("CardTip"), Content = sp };

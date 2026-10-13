@@ -173,7 +173,7 @@ namespace ElansAddonHub
             if (core != null && core.XpMax > 0 && c.Level > 0)
             {
                 var pct = (int)Math.Min(100, core.Xp * 100 / core.XpMax);
-                var xp = "Experience " + core.Xp.ToString("N0") + " / " + core.XpMax.ToString("N0") + " (" + pct + " %)" + (core.Rested > 0 ? " · Rested " + core.Rested.ToString("N0") : "");
+                var xp = "Experience " + core.Xp.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " / " + core.XpMax.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " (" + pct + " %)" + (core.Rested > 0 ? " · Rested " + core.Rested.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) : "");
                 info.Children.Add(Line(xp, "Text.Caption", null, 12));
                 var bar = Bar(core.Xp, core.Rested, core.XpMax);
                 bar.Margin = new Thickness(0, 4, 0, 0);
@@ -212,9 +212,9 @@ namespace ElansAddonHub
                 int total = c.BagsCont.Where(x => x.Special == null).Sum(x => x.Size), used = c.BagsCont.Where(x => x.Special == null).Sum(x => x.Used);
                 bagText = (total - used) + " free of " + total;
             }
-            else if (c.Bags.Count > 0) bagText = c.Bags.Sum(i => i.Count).ToString("N0") + " items";
+            else if (c.Bags.Count > 0) bagText = c.Bags.Sum(i => i.Count).ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " items";
             tiles.Children.Add(Tile("Bag space", bagText));
-            tiles.Children.Add(Tile("Bank", c.Bank == null ? "not seen yet" : c.Bank.Sum(i => i.Count).ToString("N0") + " items"));
+            tiles.Children.Add(Tile("Bank", c.Bank == null ? "not seen yet" : c.Bank.Sum(i => i.Count).ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " items"));
             var gear = HubModules.GearOf(c.Hub);
             double avg = gear == null ? 0 : gear.Ilvl > 0 ? gear.Ilvl : (gear.Slots.Values.Any(s => s.Il > 0) ? gear.Slots.Values.Where(s => s.Il > 0).Average(s => s.Il) : 0);
             tiles.Children.Add(Tile("Item level", avg > 0 ? Fmt(avg) : "—"));
@@ -283,7 +283,7 @@ namespace ElansAddonHub
             }
         }
         static string Pct(double v) => v.ToString("0.##", CultureInfo.InvariantCulture) + "%";
-        static string Whole(double v) => Math.Round(v).ToString("N0");
+        static string Whole(double v) => Math.Round(v).ToString("N0", ElansAddonHub.Lodge.CalendarRules.English);
         static string Dmg(HubDamage d) => d == null || d.Min == null || d.Max == null ? null : Math.Round(d.Min.Value).ToString("0", CultureInfo.InvariantCulture) + " - " + Math.Round(d.Max.Value).ToString("0", CultureInfo.InvariantCulture);
         static string Swing(HubDamage d) => d == null || d.Speed == null || d.Speed.Value <= 0 ? null : d.Speed.Value.ToString("0.00", CultureInfo.InvariantCulture);
 

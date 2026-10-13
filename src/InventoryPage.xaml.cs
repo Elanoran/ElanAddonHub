@@ -64,8 +64,8 @@ namespace ElansAddonHub
                     Char.Name,
                     where,
                     InventoryReader.Money(Char.Money),
-                    (Char.Bags?.Sum(i => i.Count) ?? 0).ToString("N0") + " · " + ShortAgo(Char.BagsAt > 0 ? Char.BagsAt : Char.Updated),
-                    Char.Bank == null ? "not seen" : Char.Bank.Sum(i => i.Count).ToString("N0") + " · " + ShortAgo(Char.BankAt),
+                    (Char.Bags?.Sum(i => i.Count) ?? 0).ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " · " + ShortAgo(Char.BagsAt > 0 ? Char.BagsAt : Char.Updated),
+                    Char.Bank == null ? "not seen" : Char.Bank.Sum(i => i.Count).ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " · " + ShortAgo(Char.BankAt),
                 };
             }
 
@@ -359,7 +359,7 @@ namespace ElansAddonHub
                 QualityBrush = Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, r.Quality))]),
                 TileFill = TileFillFor(r.Quality),
                 Initial = Initial(r.Name),
-                TotalText = "× " + r.Total.ToString("N0"),
+                TotalText = "× " + r.Total.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English),
                 Holdings = r.Holdings.OrderByDescending(h => h.Total).ThenBy(h => h.Char?.Name ?? h.GuildLabel).Select(h => new HoldingRow
                 {
                     Name = h.Char != null ? h.Char.Name : h.GuildLabel,

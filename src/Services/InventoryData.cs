@@ -180,10 +180,10 @@ namespace ElansAddonHub.Services
             get
             {
                 var parts = new List<string>();
-                if (Bags > 0) parts.Add("Bags " + Bags.ToString("N0"));
-                if (Bank > 0) parts.Add("Bank " + Bank.ToString("N0"));
-                if (Equipped > 0) parts.Add("Worn " + Equipped.ToString("N0"));
-                if (parts.Count > 1) parts.Add("Total " + Total.ToString("N0"));
+                if (Bags > 0) parts.Add("Bags " + Bags.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English));
+                if (Bank > 0) parts.Add("Bank " + Bank.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English));
+                if (Equipped > 0) parts.Add("Worn " + Equipped.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English));
+                if (parts.Count > 1) parts.Add("Total " + Total.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English));
                 return string.Join(" · ", parts);
             }
         }
@@ -213,8 +213,8 @@ namespace ElansAddonHub.Services
             var l = new List<string>();
             if (Me != null) l.Add("This: " + Me.Char.Name + " " + Me.Detail);
             foreach (var o in Others) l.Add("Other: " + o.Char.Name + " " + o.Detail);
-            foreach (var g in Guilds) l.Add("Guild: " + g.Guild.Name + " " + g.Count.ToString("N0"));
-            if (ShowGrand) l.Add("All: " + Grand.ToString("N0"));
+            foreach (var g in Guilds) l.Add("Guild: " + g.Guild.Name + " " + g.Count.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English));
+            if (ShowGrand) l.Add("All: " + Grand.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English));
             return l;
         }
     }
