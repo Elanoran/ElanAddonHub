@@ -96,6 +96,7 @@ namespace ElansAddonHub
             if (ElansAddonHub.Services.Maps.MapData.AutoStart) _ = Task.Delay(3500).ContinueWith(t => ElansAddonHub.Services.Maps.MapData.Start());
             BrowserView.Init(settings);
             BrowserView.ShortcutTab += t => ShowTab(t);
+            ProfessionsView.Init(() => settings.WowRoot, () => Session?.AtlasData);
             LodgePage.OpenLink += OpenChatLink;
             InventoryView.GoToAddons += () => ShowTab("addons");
             InventoryView.GoToSettings += () => { ShowTab("settings"); SettingsPage.Show("general"); };
@@ -124,18 +125,20 @@ namespace ElansAddonHub
 
         void Tab_Checked(object sender, RoutedEventArgs e)
         {
-            if (LodgePage == null || SettingsPage == null || InventoryView == null || BrowserView == null) return;
+            if (LodgePage == null || SettingsPage == null || InventoryView == null || BrowserView == null || ProfessionsView == null) return;
             var wasAddons = AddonsPage.Visibility == Visibility.Visible;
             var lodge = TabLodge.IsChecked == true;
             var set = TabSettings.IsChecked == true;
             var inv = TabInventory.IsChecked == true;
             var brw = TabBrowser.IsChecked == true;
+            var prf = TabProfessions.IsChecked == true;
+            ProfessionsView.Visibility = prf ? Visibility.Visible : Visibility.Collapsed;
             BrowserView.Visibility = brw ? Visibility.Visible : Visibility.Collapsed;
             LodgePage.Visibility = lodge ? Visibility.Visible : Visibility.Collapsed;
             SettingsPage.Visibility = set ? Visibility.Visible : Visibility.Collapsed;
             InventoryView.Visibility = inv ? Visibility.Visible : Visibility.Collapsed;
-            AddonsPage.Visibility = !lodge && !set && !inv && !brw ? Visibility.Visible : Visibility.Collapsed;
-            RefreshBar.Visibility = !lodge && !set && !inv && !brw ? Visibility.Visible : Visibility.Collapsed;
+            AddonsPage.Visibility = !lodge && !set && !inv && !brw && !prf ? Visibility.Visible : Visibility.Collapsed;
+            RefreshBar.Visibility = !lodge && !set && !inv && !brw && !prf ? Visibility.Visible : Visibility.Collapsed;
             if (AddonsPage.Visibility == Visibility.Visible && !wasAddons) Motion.PageIn(AddonsPage);
             if (lodge) Session.MarkRead();
         }
@@ -172,7 +175,7 @@ namespace ElansAddonHub
 
         public void ShowTab(string tab)
         {
-            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : tab == "inventory" ? TabInventory : tab == "browser" ? TabBrowser : TabAddons).IsChecked = true;
+            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : tab == "inventory" ? TabInventory : tab == "browser" ? TabBrowser : tab == "professions" ? TabProfessions : TabAddons).IsChecked = true;
         }
 
         // Ctrl+<key> -> rail page
@@ -374,6 +377,7 @@ namespace ElansAddonHub
             if (Begin("seendata")) { result += "\r\n" + await SeenDataTest(dir); End(); }
             if (Begin("mapdata")) { result += "\r\n" + await MapDataTest(dir); End(); }
             if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }
+            if (Begin("professions")) { result += "\r\n" + await ProfessionsTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }

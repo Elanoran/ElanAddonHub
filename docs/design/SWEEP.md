@@ -61,6 +61,7 @@ The app-wide check of DESIGN.md: raw hex colours, FontSize values outside the Te
 | `ItemLinks.QualityHex`, `InventoryPage.QualityHex` / `EdgeHex` | item quality hex | the game's quality colours |
 | `MemberVM.RoleColor`, `OverlayWindow.xaml` frame gradient | rank hex (orange / purple / blue / grey / green) | rank frames are WoW item-quality metaphors; the Guild Master frame is animated art |
 | `Avatar.Palette`, `AvatarCatalog.AccentHex`, `InventoryData` family colours | name palette, accent swatches, bag-family tags | identity colours a person or bag type is known by |
+| `RecipeBands.SkillPalette` (`Services/Professions/ProfessionModel.cs`) | orange / yellow / green / grey skill-up hex | the game's own skill-up colours identify a recipe's difficulty; always written out as a word beside the colour (DESIGN 4, identity colours) |
 | `AddonIcons.xaml`, `Avatars.xaml`, `ReactionIcons.xaml`, `SplashScene.cs` | vector art colours | our own flat artwork, not UI chrome |
 | `InventoryPage.Bags.cs` | slot grid colours, 1 / 1.5 / 3 px insets, radius 3, outlined stack numbers (`Brushes.Black` / `White`) | the in-game bag look (explicitly excluded in the brief) |
 | `AvatarView.xaml` | font 24 / 26 / 44, radii, margins | artwork on a 100-unit `Viewbox` that scales with the avatar; the numbers are not screen pixels |
