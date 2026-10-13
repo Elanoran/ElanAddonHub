@@ -99,6 +99,7 @@ namespace ElansAddonHub
             BrowserView.Init(settings);
             BrowserView.ShortcutTab += t => ShowTab(t);
             ProfessionsView.Init(() => settings.WowRoot, () => Session?.AtlasData);
+            InitAtlas();
             LodgePage.OpenLink += OpenChatLink;
             InventoryView.GoToAddons += () => ShowTab("addons");
             InventoryView.GoToSettings += () => { ShowTab("settings"); SettingsPage.Show("general"); };
@@ -127,7 +128,7 @@ namespace ElansAddonHub
 
         void Tab_Checked(object sender, RoutedEventArgs e)
         {
-            if (LodgePage == null || SettingsPage == null || InventoryView == null || BrowserView == null || ProfessionsView == null) return;
+            if (LodgePage == null || SettingsPage == null || InventoryView == null || BrowserView == null || ProfessionsView == null || AtlasView == null) return;
             var wasAddons = AddonsPage.Visibility == Visibility.Visible;
             var lodge = TabLodge.IsChecked == true;
             var set = TabSettings.IsChecked == true;
@@ -138,12 +139,14 @@ namespace ElansAddonHub
             if (tal) TalentsView.Shown();
             var prf = TabProfessions.IsChecked == true;
             ProfessionsView.Visibility = prf ? Visibility.Visible : Visibility.Collapsed;
+            var atl = TabAtlas.IsChecked == true;
             BrowserView.Visibility = brw ? Visibility.Visible : Visibility.Collapsed;
+            AtlasView.Visibility = atl ? Visibility.Visible : Visibility.Collapsed;
             LodgePage.Visibility = lodge ? Visibility.Visible : Visibility.Collapsed;
             SettingsPage.Visibility = set ? Visibility.Visible : Visibility.Collapsed;
             InventoryView.Visibility = inv ? Visibility.Visible : Visibility.Collapsed;
-            AddonsPage.Visibility = !lodge && !set && !inv && !brw && !tal && !prf ? Visibility.Visible : Visibility.Collapsed;
-            RefreshBar.Visibility = !lodge && !set && !inv && !brw && !tal && !prf ? Visibility.Visible : Visibility.Collapsed;
+            AddonsPage.Visibility = !lodge && !set && !inv && !brw && !tal && !prf && !atl ? Visibility.Visible : Visibility.Collapsed;
+            RefreshBar.Visibility = !lodge && !set && !inv && !brw && !tal && !prf && !atl ? Visibility.Visible : Visibility.Collapsed;
             if (AddonsPage.Visibility == Visibility.Visible && !wasAddons) Motion.PageIn(AddonsPage);
             if (lodge) Session.MarkRead();
         }
@@ -180,13 +183,13 @@ namespace ElansAddonHub
 
         public void ShowTab(string tab)
         {
-            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : tab == "inventory" ? TabInventory : tab == "browser" ? TabBrowser : tab == "talents" ? TabTalents : tab == "professions" ? TabProfessions : TabAddons).IsChecked = true;
+            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : tab == "inventory" ? TabInventory : tab == "browser" ? TabBrowser : tab == "atlas" ? TabAtlas : tab == "talents" ? TabTalents : tab == "professions" ? TabProfessions : TabAddons).IsChecked = true;
         }
 
         // Ctrl+<key> -> rail page
         public static string TabForKey(Key k) =>
             k == Key.D1 || k == Key.NumPad1 ? "addons" : k == Key.D2 || k == Key.NumPad2 ? "lodge" : k == Key.D3 || k == Key.NumPad3 ? "inventory"
-            : k == Key.D4 || k == Key.NumPad4 ? "browser" : k == Key.D6 || k == Key.NumPad6 ? "talents" : k == Key.OemComma ? "settings" : null;
+            : k == Key.D4 || k == Key.NumPad4 ? "browser" : k == Key.D5 || k == Key.NumPad5 ? "atlas" : k == Key.D6 || k == Key.NumPad6 ? "talents" : k == Key.OemComma ? "settings" : null;
 
         // a non-YouTube link clicked in Lodge chat: the Browser page when "Open links from chat in the Outpost browser" is on, otherwise the default browser
         void OpenChatLink(string url)
@@ -394,6 +397,7 @@ namespace ElansAddonHub
             if (Begin("health")) { result += "\r\n" + await HealthTest(dir); End(); }
             if (Begin("inputs")) { result += "\r\n" + await InputsTest(dir); End(); }
             if (Begin("atlasclassic")) { result += "\r\n" + await AtlasClassicTest(dir); End(); }
+            if (Begin("atlaspage")) { result += "\r\n" + await AtlasPageTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
             result += "\r\n" + string.Join("\r\n", skipped);
             result += "\r\n" + string.Join("\r\n", timings) + $"\r\ntotal: {Sec(total.Elapsed.TotalSeconds)} s";

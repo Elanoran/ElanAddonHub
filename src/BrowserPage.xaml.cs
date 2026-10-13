@@ -522,6 +522,7 @@ namespace ElansAddonHub
                     case Key.D2: case Key.NumPad2: ShortcutTab?.Invoke("lodge"); return true;
                     case Key.D3: case Key.NumPad3: ShortcutTab?.Invoke("inventory"); return true;
                     case Key.D4: case Key.NumPad4: return true;   // already here
+                    case Key.D5: case Key.NumPad5: ShortcutTab?.Invoke("atlas"); return true;
                     case Key.OemComma: ShortcutTab?.Invoke("settings"); return true;
                 }
                 return false;

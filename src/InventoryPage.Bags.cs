@@ -365,6 +365,7 @@ namespace ElansAddonHub
             }
             bd.Child = g;
             bd.ToolTip = SlotTip(s, where, bagTitle, slotNo, owner, guild, sub);
+            bd.MouseLeftButtonUp += (o, ev) => CtrlAtlas(s.Id, ev);
             ToolTipService.SetInitialShowDelay(bd, 150);
             ToolTipService.SetShowDuration(bd, 30000);
             return bd;
