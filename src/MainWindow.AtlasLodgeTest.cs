@@ -50,8 +50,8 @@ namespace ElansAddonHub
                 + " { i = 0, c = 1, src = \"fish\", at = " + A + " }, { i = 7, c = 1, src = \"mob:5\", at = " + A + " } }";
         }
 
-        string AtlasWelcome(string role, string server, bool feature) =>
-            FunWelcome(role, FunPeople(false), "", "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"atlas\"" : ""), server);
+        string AtlasWelcome(string role, string server, bool feature, bool seen = false) =>
+            FunWelcome(role, FunPeople(false), "", "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"atlas\"" : "") + (seen ? ",\"atlas2\"" : ""), server);
 
         sealed class FakeRevealed : AtlasObs.IRevealedItemsSource
         {
@@ -64,7 +64,7 @@ namespace ElansAddonHub
             var notes = new List<string>();
             bool ok = true;
             Action<string, bool> check = (what, cond) => { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; };
-            var hadRoot = settings.WowRoot; var hadOff = settings.AtlasShareOff; var hadClock = Session.Clock; var hadSource = AtlasObs.RevealedSource;
+            var hadRoot = settings.WowRoot; var hadOff = settings.AtlasShareOff; var hadClock = Session.Clock; var hadSource = AtlasObs.RevealedSource; var hadSeen = AtlasObs.SeenSource;
             var sent = new List<Dictionary<string, object>>();
             var now = new DateTime(2026, 10, 12, 12, 0, 0, DateTimeKind.Utc);
             atlasRoot = Path.Combine(dir, "atlaswow");
@@ -86,13 +86,14 @@ namespace ElansAddonHub
                 AtlasModuleRead(check);
                 AtlasBatching(check);
                 await AtlasSession(check, sent, () => now, t => now = t);
+                await AtlasSeenTest(check, sent, () => now, t => now = t);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally
             {
                 Session.Disconnect();
                 Session.SentForTest = null; Session.Clock = hadClock; settings.WowRoot = hadRoot; settings.AtlasShareOff = hadOff;
-                AtlasObs.TestSource = null; AtlasObs.RevealedSource = hadSource; Session.AtlasResetForTest();
+                AtlasObs.TestSource = null; AtlasObs.RevealedSource = hadSource; AtlasObs.SeenSource = hadSeen; Session.AtlasResetForTest();
                 foreach (var f in new[] { sentFile, cacheFile })
                 {
                     if (f == null) continue;
@@ -365,6 +366,109 @@ namespace ElansAddonHub
             Session.AtlasSync();
             check("disconnected: nothing happens without a lodge", sent.Count == 0 && !Session.SupportsAtlas);
             check("the real game folder was never involved (all files are under the scratch folder)", Directory.GetFiles(atlasRoot, "*", SearchOption.AllDirectories).All(f => f.StartsWith(atlasRoot)));
+            await Task.CompletedTask;
+        }
+        sealed class FakeSeen : AtlasObs.ISeenSource
+        {
+            public List<ElansAddonHub.Services.Db2.WdbCreature> N = new List<ElansAddonHub.Services.Db2.WdbCreature>();
+            public List<ElansAddonHub.Services.Db2.WdbObject> O = new List<ElansAddonHub.Services.Db2.WdbObject>();
+            public List<ElansAddonHub.Services.Db2.WdbQuest> Q = new List<ElansAddonHub.Services.Db2.WdbQuest>();
+            public IEnumerable<ElansAddonHub.Services.Db2.WdbCreature> Npcs() { return N; }
+            public IEnumerable<ElansAddonHub.Services.Db2.WdbObject> Objects() { return O; }
+            public IEnumerable<ElansAddonHub.Services.Db2.WdbQuest> Quests() { return Q; }
+        }
+
+        // ---------------------------------------------------------------- seen details (feature "atlas2"): batches, session gating, read API
+        async Task AtlasSeenTest(Action<string, bool> check, List<Dictionary<string, object>> sent, Func<DateTime> getNow, Action<DateTime> setNow)
+        {
+            var src = new FakeSeen();
+            src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 100, Name = "Hogger", Title = "", Type = 7, Family = 0, Rank = 1 });
+            src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 101, Name = "Evil\u0001\nName", Title = "Smith", Type = 7 });
+            src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 102, Name = "" });                       // no name
+            src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 0, Name = "Zero" });                     // bad id
+            src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 103, Name = new string('L', 200), Title = new string('T', 200) });   // cut
+            src.O.Add(new ElansAddonHub.Services.Db2.WdbObject { Id = 50, Name = "Copper Vein", Type = 25 });
+            src.Q.Add(new ElansAddonHub.Services.Db2.WdbQuest { Id = 900, Title = "Wolves", Level = 5, MinLevel = 3, Objectives = "Kill 8 wolves.\r\nReturn." });
+            src.Q.Add(new ElansAddonHub.Services.Db2.WdbQuest { Id = 901, Title = "Long", Level = -1, Objectives = new string('o', 3000) });
+            AtlasObs.SeenSource = src;
+
+            // ---- batches
+            check("seen: without the sub-feature nothing of it goes out", AtlasObs.MakeBatch(null, null, new Dictionary<string, string>()) == null);
+            var b = AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true);
+            var sn = b?.Frame.Child("seenNpcs");
+            check("seen: with it, valid npcs / objects / quests go out (3 of 5 npcs: no name and id 0 are left out)", b != null && sn != null && sn.Count == 3 && b.Frame.Child("seenObjects").Count == 1 && b.Frame.Child("seenQuests").Count == 2);
+            check("seen: npc fields", sn.Child("100").Str("name") == "Hogger" && sn.Child("100").NLong("type") == 7 && sn.Child("100").NLong("rank") == 1 && sn.Child("101").Str("title") == "Smith");
+            check("seen: control characters never leave", !Json.Write(b.Frame).Contains("\\u0001") && sn.Child("101").Str("name").IndexOf('\u0001') < 0 && sn.Child("101").Str("name").IndexOf('\n') < 0);
+            check("seen: names and titles are cut (80), objectives at 1000 with line breaks kept", sn.Child("103").Str("name").Length == 80 && sn.Child("103").Str("title").Length == 80
+                && b.Frame.Child("seenQuests").Child("901").Str("objectives").Length == 1000 && b.Frame.Child("seenQuests").Child("900").Str("objectives") == "Kill 8 wolves.\nReturn." && b.Frame.Child("seenQuests").Child("901").NLong("level") == -1);
+            check("seen: the frame carries no key but the section names", b.Frame.Keys.All(k => k == "t" || k == "seenNpcs" || k == "seenObjects" || k == "seenQuests"));
+            check("seen: sent ids are not sent again (deltas)", AtlasObs.MakeBatch(null, null, b.Sigs, true) == null);
+            src.N[0].Title = "Gnoll Boss"; src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 104, Name = "New" });
+            var d = AtlasObs.MakeBatch(null, null, b.Sigs, true);
+            check("seen: a changed or new id goes out alone", d != null && d.Frame.Child("seenNpcs").Count == 2 && d.Frame.Child("seenNpcs").Child("100").Str("title") == "Gnoll Boss" && d.Frame.Child("seenObjects") == null && d.Frame.Child("seenQuests") == null);
+            src.N.Clear();
+            for (int i = 1; i <= 350; i++) src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = i, Name = "N" + i });
+            src.O.Clear(); src.Q.Clear();
+            var big = AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true);
+            check("seen: at most 300 npcs per message, the rest waits", big != null && big.Frame.Child("seenNpcs").Count == AtlasObs.MaxSeenNpcsPerShare && big.Remaining == 50);
+            var rest = AtlasObs.MakeBatch(null, null, big.Sigs, true);
+            check("seen: the next message carries the rest", rest != null && rest.Frame.Child("seenNpcs").Count == 50 && rest.Remaining == 0);
+            AtlasObs.SeenSource = new FakeSeen { N = null };
+            check("seen: a source with no lists shares nothing and never throws", AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true) == null);
+
+            // ---- the session: only against a server that advertises atlas2
+            src.N.Clear(); src.O.Clear(); src.Q.Clear();
+            src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 100, Name = "Hogger", Type = 7, Rank = 1 });
+            src.O.Add(new ElansAddonHub.Services.Db2.WdbObject { Id = 50, Name = "Copper Vein", Type = 25 });
+            src.Q.Add(new ElansAddonHub.Services.Db2.WdbQuest { Id = 900, Title = "Wolves", Level = 5, MinLevel = 3, Objectives = "Kill." });
+            AtlasObs.SeenSource = src;
+            var sentFile = Session.AtlasSentPathForTest; var cacheFile = Session.AtlasCachePathForTest;
+            Session.Disconnect(); Session.AtlasResetForTest(); sent.Clear();
+            try { File.Delete(sentFile); File.Delete(cacheFile); } catch { }
+            WriteAtlasHub("ACC1", AtlasLua(AtlasFixture()));
+            Session.FeedForTest(AtlasWelcome("member", "2.15.0", true));
+            var shares = AFrames(sent, "atlas.share");
+            check("seen session: a server with 'atlas' but not 'atlas2' gets no seen sections", Session.SupportsAtlas && !Session.SupportsAtlasSeen && shares.Count == 1 && shares[0].Child("seenNpcs") == null && shares[0].Child("seenObjects") == null && shares[0].Child("seenQuests") == null && !Json.Write(shares[0]).Contains("Hogger"));
+            Session.Disconnect(); Session.AtlasResetForTest(); sent.Clear();
+            try { File.Delete(sentFile); File.Delete(cacheFile); } catch { }
+            Session.FeedForTest(AtlasWelcome("member", "2.15.0", true, true));
+            shares = AFrames(sent, "atlas.share");
+            check("seen session: with 'atlas2' the first upload carries them next to the observations", Session.SupportsAtlasSeen && shares.Count == 1 && shares[0].Child("kills").Count == 4 && shares[0].Child("seenNpcs").Child("100").Str("name") == "Hogger"
+                && shares[0].Child("seenObjects").Child("50").Str("name") == "Copper Vein" && shares[0].Child("seenQuests").Child("900").Str("title") == "Wolves");
+            Session.FeedForTest("{\"t\":\"atlas.shared\",\"ok\":true,\"accepted\":14,\"unchanged\":0,\"rejected\":0,\"rev\":60,\"epoch\":\"es1\"}");
+            check("seen session: what was sent is remembered on disk (11 + 3 entries)", Session.AtlasSentForTest.Count == 14 && Session.AtlasSentForTest.ContainsKey("N100") && Session.AtlasSentForTest.ContainsKey("G50") && Session.AtlasSentForTest.ContainsKey("W900"));
+            // a restart: nothing is sent again, a new npc is
+            Session.Disconnect(); Session.AtlasResetForTest(); sent.Clear();
+            src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 105, Name = "Fresh" });
+            Session.FeedForTest(AtlasWelcome("member", "2.15.0", true, true));
+            shares = AFrames(sent, "atlas.share");
+            check("seen session: after a restart only the id not sent before goes out", shares.Count == 1 && shares[0].Child("kills") == null && shares[0].Child("seenNpcs").Count == 1 && shares[0].Child("seenNpcs").Child("105") != null && shares[0].Child("seenObjects") == null);
+            Session.FeedForTest("{\"t\":\"atlas.shared\",\"ok\":true,\"accepted\":1,\"unchanged\":0,\"rejected\":0,\"rev\":61,\"epoch\":\"es1\"}");
+
+            // ---- the read API
+            sent.Clear();
+            Session.FeedForTest(AtlasPage("es1", 70, "\"seenNpcs\":{\"100\":{\"name\":\"Hogger\",\"title\":\"Gnoll\",\"type\":7,\"family\":0,\"rank\":1},\"7\":{\"name\":\"\"},\"8\":{\"name\":\"Bad\\u0001\"},\"9\":{\"name\":\"X\",\"type\":-5},\"99999999\":{\"name\":\"Huge\"}},"
+                + "\"seenObjects\":{\"50\":{\"name\":\"Copper Vein\",\"type\":25},\"51\":{\"name\":5}},"
+                + "\"seenQuests\":{\"900\":{\"title\":\"Wolves\",\"level\":5,\"minLevel\":3,\"objectives\":\"Kill 8.\\nBack.\"},\"901\":{\"title\":\"L\",\"level\":9999},\"902\":{\"title\":\"Any\",\"level\":-1}}", full: true));
+            var a = Session.AtlasData;
+            var npc = a.Npc(100); var obj = a.Object(50); var q = a.QuestInfo(900);
+            check("read API: Npc(id) -> name, title, type, family, rank", npc != null && npc.Name == "Hogger" && npc.Title == "Gnoll" && npc.Type == 7 && npc.Rank == 1 && a.Npc(101) == null);
+            check("read API: invalid npcs of the answer are left out (empty name, control character, negative type, huge id)", a.SeenNpcCount == 1 && a.Dropped >= 4);
+            check("read API: Object(id) -> name and type; a non-text name is left out", obj != null && obj.Name == "Copper Vein" && obj.Type == 25 && a.Object(51) == null && a.SeenObjectCount == 1);
+            check("read API: QuestInfo(id) -> title, levels, objectives; level 9999 is left out, level -1 (any) is kept", q != null && q.Title == "Wolves" && q.Level == 5 && q.MinLevel == 3 && q.Objectives == "Kill 8.\nBack." && a.QuestInfo(901) == null && a.QuestInfo(902).Level == -1);
+            check("read API: the seen details count as data", a.HasData);
+            // the cache file round trip
+            Session.AtlasSaveCacheForTest();
+            Session.Disconnect(); Session.AtlasResetForTest(); sent.Clear();
+            Session.FeedForTest(AtlasWelcome("member", "2.15.0", true, true));
+            check("read API: the cache brings the seen details back after a restart", Session.AtlasData.Npc(100)?.Title == "Gnoll" && Session.AtlasData.Object(50)?.Type == 25 && Session.AtlasData.QuestInfo(900)?.Objectives == "Kill 8.\nBack." && Session.AtlasData.SeenNpcCount == 1);
+            // an incremental answer adds records; a full one drops what the lodge no longer has
+            Session.FeedForTest(AtlasPage("es1", 75, "\"seenNpcs\":{\"101\":{\"name\":\"Brann\"}}"));
+            check("read API: an incremental answer adds records", Session.AtlasData.Npc(101)?.Name == "Brann" && Session.AtlasData.Npc(100) != null);
+            Session.FeedForTest(AtlasPage("es2", 3, "\"seenNpcs\":{\"5\":{\"name\":\"Only\"}}", full: true));
+            check("read API: a 'full' answer replaces them", Session.AtlasData.Npc(5) != null && Session.AtlasData.Npc(100) == null && Session.AtlasData.Object(50) == null && Session.AtlasData.QuestInfo(900) == null);
+            Session.Disconnect(); Session.AtlasResetForTest();
+            try { File.Delete(sentFile); File.Delete(cacheFile); } catch { }
             await Task.CompletedTask;
         }
     }

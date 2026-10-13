@@ -221,7 +221,7 @@ public class LodgeHub
     {
         var f = new List<string> { "reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights" };
         if (Cfg.FilesEnabled) f.Add("files");
-        if (Cfg.AtlasEnabled) f.Add("atlas");
+        if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests
         return f.ToArray();
     }
 

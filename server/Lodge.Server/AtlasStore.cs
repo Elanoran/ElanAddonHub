@@ -36,6 +36,9 @@ public sealed class AtlasStore
     readonly Dictionary<int, Atlas.Quest> quests = new();
     readonly Dictionary<int, SpawnSet> spawns = new();
     readonly Dictionary<int, Atlas.Revealed> revealed = new();
+    readonly Dictionary<int, Atlas.SeenNpc> seenNpcs = new();
+    readonly Dictionary<int, Atlas.SeenObject> seenObjects = new();
+    readonly Dictionary<int, Atlas.SeenQuest> seenQuests = new();
     readonly List<Atlas.Find> finds = new();
     readonly HashSet<string> findKeys = new(StringComparer.Ordinal);
     long rev;
@@ -64,6 +67,9 @@ public sealed class AtlasStore
     public int MemberCount { get { lock (Gate) return members.Count; } }
     public int FindCount { get { lock (Gate) return finds.Count; } }
     public int VendorCount { get { lock (Gate) return vendors.Count; } }
+    public int SeenNpcCount { get { lock (Gate) return seenNpcs.Count; } }
+    public int SeenObjectCount { get { lock (Gate) return seenObjects.Count; } }
+    public int SeenQuestCount { get { lock (Gate) return seenQuests.Count; } }
     public int SourceCount(int kind) { lock (Gate) return aggs[kind].Count; }
 
     // ---------------------------------------------------------------- loading
@@ -127,6 +133,15 @@ public sealed class AtlasStore
         if (root["items"] is JsonObject io)
             foreach (var (key, node) in io)
                 if (revealed.Count < Atlas.MaxRevealed && Atlas.Key(key, Atlas.MaxItemId, out var id) && Atlas.ParseRevealed(node, out var x)) { x.By = By(node); x.Rev = R(node); revealed[id] = x; }
+        if (root["seenNpcs"] is JsonObject sno)
+            foreach (var (key, node) in sno)
+                if (seenNpcs.Count < Atlas.MaxSeenNpcs && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenNpc(node, out var x)) { x.Rev = R(node); seenNpcs[id] = x; }
+        if (root["seenObjects"] is JsonObject sob)
+            foreach (var (key, node) in sob)
+                if (seenObjects.Count < Atlas.MaxSeenObjects && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenObject(node, out var x)) { x.Rev = R(node); seenObjects[id] = x; }
+        if (root["seenQuests"] is JsonObject sqo)
+            foreach (var (key, node) in sqo)
+                if (seenQuests.Count < Atlas.MaxSeenQuests && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenQuest(node, out var x)) { x.Rev = R(node); seenQuests[id] = x; }
         if (root["finds"] is JsonArray fa)
             foreach (var node in fa)
             {
@@ -171,7 +186,7 @@ public sealed class AtlasStore
         public int Total => Accepted + Unchanged + Rejected;
     }
 
-    static readonly string[] Sections = { "kills", "objects", "fishing", "vendors", "quests", "finds", "spawns", "items" };
+    static readonly string[] Sections = { "kills", "objects", "fishing", "vendors", "quests", "finds", "spawns", "items", "seenNpcs", "seenObjects", "seenQuests" };
 
     // True when the message carries at least one known, non-empty section
     public static bool HasContent(JsonObject m) =>
@@ -195,6 +210,9 @@ public sealed class AtlasStore
         Quests(r, m["quests"], now);
         Spawns(r, identity, m["spawns"]);
         Revealed(r, identity, m["items"]);
+        Seen(r, m["seenNpcs"], Atlas.MaxSeenNpcsPerShare, seenNpcs, Atlas.MaxSeenNpcs, (JsonNode n, out Atlas.SeenNpc v) => Atlas.ParseSeenNpc(n, out v), (a, b) => a.Fill(b), (v, rv) => v.Rev = rv);
+        Seen(r, m["seenObjects"], Atlas.MaxSeenObjectsPerShare, seenObjects, Atlas.MaxSeenObjects, (JsonNode n, out Atlas.SeenObject v) => Atlas.ParseSeenObject(n, out v), (a, b) => a.Fill(b), (v, rv) => v.Rev = rv);
+        Seen(r, m["seenQuests"], Atlas.MaxSeenQuestsPerShare, seenQuests, Atlas.MaxSeenQuests, (JsonNode n, out Atlas.SeenQuest v) => Atlas.ParseSeenQuest(n, out v), (a, b) => a.Fill(b), (v, rv) => v.Rev = rv);
         Finds(r, md, identity, who, m["finds"], now);
         if (md.Total == 0 && md.FindCount == 0 && !r.Changed && md.Src.All(s => s.Count == 0)) members.Remove(identity);   // nothing of this person was kept
         if (r.Changed) Dirty = true;
@@ -301,6 +319,32 @@ public sealed class AtlasStore
         }
     }
 
+    delegate bool SeenParse<T>(JsonNode n, out T v);
+
+    // npc / object / quest details the clients have seen: the first good description of an id stays, a later one may fill fields that are still empty
+    void Seen<T>(ShareResult r, JsonNode sect, int maxPerShare, Dictionary<int, T> table, int cap, SeenParse<T> parse, Func<T, T, bool> fill, Action<T, long> setRev)
+    {
+        if (sect == null) return;
+        if (sect is not JsonObject so) { r.Rejected++; return; }
+        int seen = 0;
+        foreach (var (key, node) in so)
+        {
+            if (++seen > maxPerShare) { r.Rejected++; continue; }
+            if (!Atlas.Key(key, Atlas.MaxId, out var id) || !parse(node, out var v)) { r.Rejected++; continue; }
+            if (table.TryGetValue(id, out var old))
+            {
+                if (!fill(old, v)) { r.Unchanged++; continue; }
+                setRev(old, ++rev);
+            }
+            else
+            {
+                if (table.Count >= cap) { r.Rejected++; continue; }
+                setRev(v, ++rev); table[id] = v;
+            }
+            r.Accepted++; r.Changed = true;
+        }
+    }
+
     void Finds(ShareResult r, MemberData md, string identity, string who, JsonNode sect, long now)
     {
         if (sect == null) return;
@@ -370,6 +414,10 @@ public sealed class AtlasStore
         return o;
     }
 
+    static JsonObject SeenNpcJson(Atlas.SeenNpc x) => new() { ["name"] = x.Name, ["title"] = x.Title, ["type"] = x.Type, ["family"] = x.Family, ["rank"] = x.Rank };
+    static JsonObject SeenObjectJson(Atlas.SeenObject x) => new() { ["name"] = x.Name, ["type"] = x.Type };
+    static JsonObject SeenQuestJson(Atlas.SeenQuest x) => new() { ["title"] = x.Title, ["level"] = x.Level, ["minLevel"] = x.MinLevel, ["objectives"] = x.Objectives };
+
     static JsonObject FindJson(Atlas.Find f, string by)
     {
         var o = new JsonObject { ["s"] = f.Rev, ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At, ["by"] = by };
@@ -377,7 +425,7 @@ public sealed class AtlasStore
         return o;
     }
 
-    // { t:"atlas.data", epoch, rev, full?, more?, kills, objects, fishing, vendors, quests, spawns, items, finds }
+    // { t:"atlas.data", epoch, rev, full?, more?, kills, objects, fishing, vendors, quests, spawns, items, finds, seenNpcs, seenObjects, seenQuests }
     // Records changed after `since`, in revision order, cut into pages of about Atlas.PageBytes: with more = true ask again with since = rev.
     // full = the client's state cannot be continued (since 0, another epoch, or a revision this store never reached): it replaces everything it had.
     // The aggregate record of a source is replaced as a whole. nameOf turns a find's login into the name shown (display name). Caller holds Gate.
@@ -392,10 +440,13 @@ public sealed class AtlasStore
         foreach (var kv in spawns) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 5, kv.Key));
         foreach (var kv in revealed) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 6, kv.Key));
         for (int i = 0; i < finds.Count; i++) if (finds[i].Rev > since) cand.Add((finds[i].Rev, 7, i));
+        foreach (var kv in seenNpcs) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 8, kv.Key));
+        foreach (var kv in seenObjects) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 9, kv.Key));
+        foreach (var kv in seenQuests) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 10, kv.Key));
         cand.Sort((a, b) => a.rev.CompareTo(b.rev));
 
-        var secs = new JsonObject[7];
-        for (int i = 0; i < 7; i++) secs[i] = new JsonObject();
+        var secs = new JsonObject[11];
+        for (int i = 0; i < 11; i++) secs[i] = new JsonObject();
         var fa = new JsonArray();
         int bytes = 0, taken = 0;
         long last = since;
@@ -409,6 +460,9 @@ public sealed class AtlasStore
                 case 4: node = QuestJson(quests[c.key]); break;
                 case 5: node = new JsonArray(spawns[c.key].Pts.Select(p => (JsonNode)new JsonObject { ["z"] = p.Z, ["x"] = p.X, ["y"] = p.Y }).ToArray()); break;
                 case 6: node = RevealedJson(revealed[c.key]); break;
+                case 8: node = SeenNpcJson(seenNpcs[c.key]); break;
+                case 9: node = SeenObjectJson(seenObjects[c.key]); break;
+                case 10: node = SeenQuestJson(seenQuests[c.key]); break;
                 default: node = FindJson(finds[c.key], nameOf(finds[c.key].Who)); break;
             }
             int size = node.ToJsonString().Length + key.Length + 6;
@@ -421,6 +475,7 @@ public sealed class AtlasStore
         {
             ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = more ? last : rev, ["at"] = NowSec,
             ["kills"] = secs[0], ["objects"] = secs[1], ["fishing"] = secs[2], ["vendors"] = secs[3], ["quests"] = secs[4], ["spawns"] = secs[5], ["items"] = secs[6], ["finds"] = fa,
+            ["seenNpcs"] = secs[8], ["seenObjects"] = secs[9], ["seenQuests"] = secs[10],
         };
         if (full) res["full"] = true;
         if (more) res["more"] = true;
@@ -473,12 +528,19 @@ public sealed class AtlasStore
                 };
             var io = new JsonObject();
             foreach (var (id, x) in revealed) { var j = RevealedJson(x); j["b"] = x.By; j["r"] = x.Rev; io[id.ToString(CultureInfo.InvariantCulture)] = j; }
+            var sno = new JsonObject();
+            foreach (var (id, x) in seenNpcs) { var j = SeenNpcJson(x); j["r"] = x.Rev; sno[id.ToString(CultureInfo.InvariantCulture)] = j; }
+            var sob = new JsonObject();
+            foreach (var (id, x) in seenObjects) { var j = SeenObjectJson(x); j["r"] = x.Rev; sob[id.ToString(CultureInfo.InvariantCulture)] = j; }
+            var sqo = new JsonObject();
+            foreach (var (id, x) in seenQuests) { var j = SeenQuestJson(x); j["r"] = x.Rev; sqo[id.ToString(CultureInfo.InvariantCulture)] = j; }
             var fa = new JsonArray();
             foreach (var f in finds) { var j = FindJson(f, ""); j.Remove("by"); j.Remove("s"); j["b"] = f.Identity; j["w"] = f.Who; j["r"] = f.Rev; fa.Add(j); }
             var root = new JsonObject
             {
                 ["v"] = 1, ["epoch"] = Epoch, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev,
                 ["vendors"] = vo, ["quests"] = qo, ["spawns"] = sp, ["items"] = io, ["finds"] = fa,
+                ["seenNpcs"] = sno, ["seenObjects"] = sob, ["seenQuests"] = sqo,
             };
             var bytes = Encoding.UTF8.GetBytes(root.ToJsonString());
             using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
