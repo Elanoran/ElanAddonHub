@@ -17,7 +17,7 @@ namespace ElansAddonHub
     // Read-only: the hub never writes to the WoW folder. Re-reads when WoW saves the file (FileSystemWatcher + debounce).
     public partial class InventoryPage : UserControl
     {
-        const int MaxRows = 250;
+        const int MaxRows = 250, ExtraMax = 40;
 
         static readonly Dictionary<string, string> ClassColors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -155,6 +155,7 @@ namespace ElansAddonHub
             public string Initial { get; set; }
             public string TotalText { get; set; }
             public List<HoldingRow> Holdings { get; set; }
+            public bool NotOwned { get; set; }      // from the game data only: none of your characters has it
         }
 
         Func<string> wowRoot = () => null;
@@ -352,6 +353,21 @@ namespace ElansAddonHub
             var only = filterKey == null ? null : vis.FirstOrDefault(c => c.Key == filterKey);
             var query = SearchBox.Text ?? "";
             var all = InventoryReader.Search(vis, query, only, GuildsOf(only != null ? new List<InvChar> { only } : vis));
+            // items of the game data (your own WoW files) that match the words but are on none of these characters
+            var extra = new List<ResultRow>();
+            if (query.Trim().Length >= 2 && ElansAddonHub.Services.Db2.ItemData.Ready)
+            {
+                var have = new HashSet<int>(all.Select(r => r.Id));
+                foreach (var it in ElansAddonHub.Services.Db2.ItemData.Search(query, ExtraMax, i => have.Contains(i.Id)))
+                {
+                    int q = Math.Max(0, Math.Min(QualityHex.Length - 1, it.Quality));
+                    extra.Add(new ResultRow
+                    {
+                        Name = it.Name, Id = it.Id, QualityBrush = Frozen(QualityHex[q]), TileFill = TileFillFor(q), Initial = Initial(it.Name), TotalText = "", NotOwned = true,
+                        Holdings = new List<HoldingRow> { new HoldingRow { Name = "Not on your characters", ClassBrush = Res("Brush.Text.Secondary"), Where = "" } },
+                    });
+                }
+            }
             var shown = all.Take(MaxRows).Select(r => new ResultRow
             {
                 Name = r.Name,
@@ -368,13 +384,14 @@ namespace ElansAddonHub
                         h.GuildBank > 0 ? "guild bank " + h.GuildBank + (h.GuildSeen > 0 ? " (seen " + InventoryReader.Ago(h.GuildSeen) + ")" : "") : null }.Where(s => s != null)),
                 }).ToList(),
             }).ToList();
+            if (shown.Count < MaxRows) shown.AddRange(extra.Take(MaxRows - shown.Count));
             Results.ItemsSource = shown;
             ResultCaption.Visibility = Visibility.Visible;
             var scope = only != null ? "on " + only.Name : "across all characters";
-            ResultCaption.Text = query.Trim().Length == 0 ? "Everything " + scope : all.Count + (all.Count == 1 ? " match " : " matches ") + scope;
+            ResultCaption.Text = query.Trim().Length == 0 ? "Everything " + scope : all.Count + (all.Count == 1 ? " match " : " matches ") + scope + (extra.Count > 0 ? " · plus " + extra.Count + " from the game data" : "");
             MoreText.Visibility = all.Count > MaxRows ? Visibility.Visible : Visibility.Collapsed;
             MoreText.Text = "Showing the first " + MaxRows + " of " + all.Count + " items. Type in the search box to narrow it down.";
-            NoMatch.Visibility = all.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            NoMatch.Visibility = all.Count == 0 && extra.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             NoMatch.Text = query.Trim().Length == 0 ? "No items saved yet." : "Nothing matches \"" + query.Trim() + "\".";
             ResultScroll.ScrollToTop();
         }
@@ -428,6 +445,7 @@ namespace ElansAddonHub
         public void SetSearchForTest(string text) { SearchBox.Text = text; if (Body.Visibility == Visibility.Visible) RenderView(); }
         public void FilterForTest(string key) { filterKey = key; userAll = key == null; Render(wowRoot()); }
         public int ResultCountForTest => (Results.ItemsSource as List<ResultRow>)?.Count ?? 0;
+        public List<string> ResultTipForTest(int index) => ResultTipLines(((Results.ItemsSource as List<ResultRow>) ?? new List<ResultRow>()).ElementAtOrDefault(index));
         public List<string> ResultTextsForTest() => ((Results.ItemsSource as List<ResultRow>) ?? new List<ResultRow>())
             .Select(r => r.Name + " " + r.TotalText + " [" + string.Join("; ", r.Holdings.Select(h => h.Name + " " + h.Where)) + "]").ToList();
         public int CharCountForTest => (CharList.ItemsSource as List<CharRow>)?.Count ?? 0;
@@ -439,6 +457,8 @@ namespace ElansAddonHub
         public string AllLineForTest => AllLine.Text;
         public List<string> ItemTipForTest(int itemId, string charKey) => InventoryReader.TipFor(index, itemId, charKey == null ? null : chars.FirstOrDefault(c => c.Key == charKey)).Lines();
         public int IndexSizeForTest => index.Count;
+        public string ResultCaptionForTest => ResultCaption.Text;
+        public bool NoMatchVisibleForTest => NoMatch.Visibility == Visibility.Visible;
         public int WatcherCountForTest => watchers.Count;
         public FrameworkElement BodyForTest => this;
     }

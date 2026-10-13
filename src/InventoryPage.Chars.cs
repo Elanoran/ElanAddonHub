@@ -216,7 +216,7 @@ namespace ElansAddonHub
             tiles.Children.Add(Tile("Bag space", bagText));
             tiles.Children.Add(Tile("Bank", c.Bank == null ? "not seen yet" : c.Bank.Sum(i => i.Count).ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " items"));
             var gear = HubModules.GearOf(c.Hub);
-            double avg = gear == null ? 0 : gear.Ilvl > 0 ? gear.Ilvl : (gear.Slots.Values.Any(s => s.Il > 0) ? gear.Slots.Values.Where(s => s.Il > 0).Average(s => s.Il) : 0);
+            double avg = gear == null ? 0 : AvgIl(gear);
             tiles.Children.Add(Tile("Item level", avg > 0 ? Fmt(avg) : "—"));
             var tal = HubModules.TalentsOf(c.Hub);
             int spent = tal == null ? 0 : (tal.Spent > 0 ? tal.Spent : tal.Nodes.Sum(n => n.R));
@@ -230,6 +230,10 @@ namespace ElansAddonHub
         readonly Dictionary<int, FrameworkElement> dollSlots = new Dictionary<int, FrameworkElement>();
         WrapPanel gearWrap;
         FrameworkElement gearDollCard, gearStatsCard;
+
+        // item level of a worn item: the one the Hub saved (what the game showed), else the base level from the game data (your own WoW files)
+        static int ItemIl(HubItem it) => it.Il > 0 ? it.Il : (ElansAddonHub.Services.Db2.ItemData.Get(it.I)?.ItemLevel ?? 0);
+        static double AvgIl(HubGearModule g) => g.Ilvl > 0 ? g.Ilvl : (g.Slots.Values.Any(s => ItemIl(s) > 0) ? g.Slots.Values.Where(s => ItemIl(s) > 0).Average(s => ItemIl(s)) : 0);
 
         static string IdentityLine(InvChar c)
         {
@@ -343,7 +347,7 @@ namespace ElansAddonHub
             gearWrap = null; gearDollCard = gearStatsCard = null;
             if (!Gate(c, "gear", "gear", "No gear saved for " + c.Name + " yet")) return;
             var g = HubModules.GearOf(c.Hub);
-            double avg = g.Ilvl > 0 ? g.Ilvl : (g.Slots.Values.Any(s => s.Il > 0) ? g.Slots.Values.Where(s => s.Il > 0).Average(s => s.Il) : 0);
+            double avg = AvgIl(g);
             ViewInfo.Text = (avg > 0 ? "Average item level " + Fmt(avg) + " · " : "") + g.Slots.Count + (g.Slots.Count == 1 ? " item worn" : " items worn") + " · " + UpdatedLine(g.At, CharacterMerge.FromHub);
             charTabInfo.Add("gearinfo|" + (avg > 0 ? Fmt(avg) : "-") + "|" + g.Slots.Count);
             if (g.Slots.Count == 0) { ShowEmptyTab(c.Name + " wears nothing.", null); return; }
@@ -355,8 +359,8 @@ namespace ElansAddonHub
                 if (g.Slots.TryGetValue(id, out var it))
                 {
                     var name = CharacterMerge.NameFor(it, null);
-                    el = MakeSlot(new InvSlot { Slot = id, Id = it.I, Count = 1, Quality = it.Q, Icon = it.Ic, Name = name }, "Worn", slotName, id, c, false, null, DollSlot, slotName + (it.Il > 0 ? " · Item level " + it.Il : ""));
-                    charTabInfo.Add("slot|" + id + "|" + slotName + "|" + name + "|" + it.Il);
+                    el = MakeSlot(new InvSlot { Slot = id, Id = it.I, Count = 1, Quality = it.Q, Icon = it.Ic, Name = name }, "Worn", slotName, id, c, false, null, DollSlot, slotName + (ItemIl(it) > 0 ? " · Item level " + ItemIl(it) : ""));
+                    charTabInfo.Add("slot|" + id + "|" + slotName + "|" + name + "|" + ItemIl(it));
                 }
                 else el = EmptyDollSlot(id, slotName);
                 el.Margin = new Thickness(0, 0, 0, 4);
