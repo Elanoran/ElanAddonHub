@@ -1,0 +1,168 @@
+<UserControl x:Class="ElansAddonHub.TalentsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ElansAddonHub">
+  <UserControl.Resources>
+    <!-- class picker chip (DESIGN 8, like the character rows): 36 high pill, hover veil, selected = accent tint -->
+    <Style x:Key="ClassChip" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="GroupName" Value="talent-class" />
+      <Setter Property="Margin" Value="0,0,4,4" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Grid Height="36" Background="Transparent">
+              <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource Radius.Control}" />
+              <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+              <ContentPresenter Margin="8,0,12,0" VerticalAlignment="Center" />
+              <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True"><Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Accent.Tint}" /></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- a build in the list: a Surface2 row inside the Surface1 card, hover veil, focus ring -->
+    <Style x:Key="BuildRow" TargetType="Button">
+      <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid Background="Transparent">
+              <Border x:Name="bd" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" />
+              <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+              <ContentPresenter Margin="12,8" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+              <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </UserControl.Resources>
+
+  <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art -->
+  <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True" x:Name="PageScroll">
+      <StackPanel Margin="0,0,8,0">
+        <StackPanel Margin="0,0,0,16">
+          <TextBlock Text="Talents" Style="{StaticResource Text.Title}" />
+          <TextBlock x:Name="Summary" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextWrapping="Wrap"
+                     Text="Plan a build for any class from the talent trees in your game, try recommended builds, and share it as a code." />
+        </StackPanel>
+
+        <!-- class picker -->
+        <WrapPanel x:Name="ClassBar" Margin="0,0,0,12" />
+
+        <!-- nothing to show: game data off, not read yet, or a game update this Outpost does not know -->
+        <Border x:Name="EmptyBox" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="32" Margin="0,0,0,12">
+          <StackPanel HorizontalAlignment="Center" MaxWidth="460">
+            <TextBlock Text="&#xE946;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" Margin="0,0,0,12" />
+            <TextBlock x:Name="EmptyTitle" Style="{StaticResource Text.Body}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+            <TextBlock x:Name="EmptyText" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0" />
+          </StackPanel>
+        </Border>
+
+        <!-- the calculator -->
+        <Border x:Name="CalcCard" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Margin="0,0,0,12">
+          <StackPanel>
+            <Grid Margin="0,0,0,12">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock x:Name="ClassTitle" Style="{StaticResource Text.Section}" />
+                <TextBlock x:Name="PointsLine" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Margin="0,0,12,0">
+                  <TextBlock Text="Level" Style="{StaticResource Text.Caption}" Margin="0,0,0,4" />
+                  <ComboBox x:Name="LevelBox" Style="{StaticResource Dropdown}" Width="80" SelectionChanged="Level_Changed" AutomationProperties.Name="Character level" />
+                </StackPanel>
+                <StackPanel x:Name="LegacyPanel">
+                  <TextBlock Text="Legacy: Talented" Style="{StaticResource Text.Caption}" Margin="0,0,0,4"
+                             ToolTip="The Forever Legacy talent Talented moves one talent point earlier per rank (5 ranks: the first point at level 5)." />
+                  <ComboBox x:Name="LegacyBox" Style="{StaticResource Dropdown}" Width="80" SelectionChanged="Legacy_Changed" AutomationProperties.Name="Legacy Talented ranks" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+
+            <!-- the trees (scaled down to fit a narrow window) -->
+            <Viewbox x:Name="TreeBox" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+              <Canvas x:Name="TreeCanvas" />
+            </Viewbox>
+
+            <TextBlock x:Name="HintLine" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" TextWrapping="Wrap"
+                       Text="Click a talent for +1, right-click for -1. A row opens when enough points are spent in the rows above it." />
+
+            <!-- actions -->
+            <WrapPanel Margin="0,12,0,0">
+              <Button x:Name="UndoButton" Style="{StaticResource Button.M}" Content="Undo" Margin="0,0,8,8" Click="Undo_Click" />
+              <Button x:Name="ResetButton" Style="{StaticResource Button.M}" Content="Reset" Margin="0,0,8,8" Click="Reset_Click" />
+              <Button x:Name="CharButton" Style="{StaticResource Button.M}" Content="Load from my character" Margin="0,0,8,8" Click="Char_Click" />
+              <Button x:Name="CopyButton" Style="{StaticResource Button.M}" Content="Copy build code" Margin="0,0,8,8" Click="Copy_Click" />
+            </WrapPanel>
+            <Popup x:Name="CharPopup" StaysOpen="False" Placement="Bottom" PlacementTarget="{Binding ElementName=CharButton}" AllowsTransparency="True">
+              <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.ControlLg}" Padding="4" Margin="8">
+                <StackPanel x:Name="CharList" MinWidth="220" />
+              </Border>
+            </Popup>
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <TextBox x:Name="CodeBox" Style="{StaticResource Input}" Tag="Paste a build code (ETB1-...) here" AutomationProperties.Name="Build code" KeyDown="Code_KeyDown" />
+              <Button x:Name="ImportButton" Grid.Column="1" Style="{StaticResource Button.M}" Content="Import" Margin="8,0,0,0" Click="Import_Click" />
+            </Grid>
+            <TextBlock x:Name="StatusLine" Style="{StaticResource Text.Secondary}" Margin="0,8,0,0" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <!-- builds -->
+        <Border x:Name="BuildsCard" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Margin="0,0,0,12">
+          <StackPanel>
+            <Grid Margin="0,0,0,12">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <TextBlock Text="Builds" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+              <Border Grid.Column="1" Style="{StaticResource SegmentHost}">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton x:Name="SegRec" Style="{StaticResource Segment}" GroupName="talent-builds" Content="Recommended" IsChecked="True" Checked="BuildsTab_Checked" />
+                  <RadioButton x:Name="SegSaved" Style="{StaticResource Segment}" GroupName="talent-builds" Content="Saved" Checked="BuildsTab_Checked" />
+                </StackPanel>
+              </Border>
+            </Grid>
+            <StackPanel x:Name="BuildList" />
+            <TextBlock x:Name="BuildsNote" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0" />
+            <!-- the build that is open -->
+            <Border x:Name="DetailBox" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Padding="16,12" Margin="0,12,0,0">
+              <StackPanel x:Name="DetailPanel" />
+            </Border>
+            <!-- save the current layout -->
+            <Grid Margin="0,16,0,0">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <TextBox x:Name="SaveName" Style="{StaticResource Input}" Tag="Name" MaxLength="40" AutomationProperties.Name="Build name" />
+              <TextBox x:Name="SaveNotes" Grid.Column="1" Style="{StaticResource Input}" Tag="Notes (optional)" MaxLength="600" Margin="8,0,0,0" AutomationProperties.Name="Build notes" />
+              <Button x:Name="SaveButton" Grid.Column="2" Style="{StaticResource Button.Primary.M}" Content="Save build" Margin="8,0,0,0" Click="Save_Click" />
+            </Grid>
+          </StackPanel>
+        </Border>
+        <TextBlock x:Name="CreditLine" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,12"
+                   Text="Talent trees are read from your own game files; nothing is downloaded or uploaded. Spell names, descriptions and icons belong to Blizzard Entertainment." />
+      </StackPanel>
+    </ScrollViewer>
+  </Border>
+</UserControl>

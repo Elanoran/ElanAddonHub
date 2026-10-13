@@ -64,6 +64,30 @@ namespace ElansAddonHub.Services.Db2
             };
         }
 
+        // the same, with some effect amounts replaced (effect index 0-based -> base amount): the rank of a talent changes them (Atlas layer G)
+        public static SpellView Spell(int id, IDictionary<int, float> effectPoints)
+        {
+            if (effectPoints == null || effectPoints.Count == 0) return Spell(id);
+            var sn = Spells;
+            var s = sn?.Get(id);
+            if (s == null) return null;
+            var copy = new SpellInfo
+            {
+                Id = s.Id, Name = s.Name, Rank = s.Rank, Desc = s.Desc, Aura = s.Aura, IconId = s.IconId, CastMs = s.CastMs, DurationMs = s.DurationMs, RangeMax = s.RangeMax,
+                Effects = s.Effects.Select(e => new EffectInfo
+                {
+                    Index = e.Index, Effect = e.Effect, Aura = e.Aura, PeriodMs = e.PeriodMs, Chain = e.Chain, ItemType = e.ItemType, Misc = e.Misc, Trigger = e.Trigger,
+                    Points = effectPoints.TryGetValue(e.Index, out var p) ? p : e.Points, Coef = e.Coef, Radius = e.Radius,
+                }).ToArray(),
+            };
+            Func<int, SpellInfo> look = x => x == id ? copy : sn.Get(x);
+            return new SpellView
+            {
+                Id = copy.Id, Name = copy.Name, Rank = copy.Rank, IconId = copy.IconId, CastMs = copy.CastMs, DurationMs = copy.DurationMs, RangeMax = copy.RangeMax,
+                Description = SpellText.Expand(copy.Desc, copy, look), AuraDescription = SpellText.Expand(copy.Aura, copy, look),
+            };
+        }
+
         public static SkillInfo Skill(int id) => Spells != null && Spells.Skills.TryGetValue(id, out var s) ? s : null;
 
         // a profession / secondary skill by its name ("Alchemy"); other skills (weapons, languages) only when no profession has the name

@@ -33,7 +33,7 @@ namespace ElansAddonHub
             return b;
         }
         static Brush Res(string key) => (Brush)Application.Current.Resources[key];
-        static Brush ClassBrushOf(string cls) => cls != null && ClassColors.TryGetValue(cls, out var hex) ? Frozen(hex) : Res("Brush.Text.Primary");
+        internal static Brush ClassBrushOf(string cls) => cls != null && ClassColors.TryGetValue(cls, out var hex) ? Frozen(hex) : Res("Brush.Text.Primary");
 
         // one compact row of the character list: portrait, name in class colour, "Lv 27 Paladin". The rest is in the hover tooltip.
         public class CharRow : INotifyPropertyChanged

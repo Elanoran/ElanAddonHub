@@ -94,6 +94,8 @@ namespace ElansAddonHub
             ElansAddonHub.Services.Maps.MapData.WowRoot = () => settings.WowRoot;   // Atlas maps: the same "Game data" switch and WoW folder as the item data
             ElansAddonHub.Services.Maps.MapData.Enabled = () => !settings.ItemDataOff;
             if (ElansAddonHub.Services.Maps.MapData.AutoStart) _ = Task.Delay(3500).ContinueWith(t => ElansAddonHub.Services.Maps.MapData.Start());
+            TalentsView.Init(() => settings.WowRoot);                                // Atlas layer G: talent trees from the user's own game files (follows the item data's switch)
+            if (ElansAddonHub.Services.Db2.TalentData.AutoStart) _ = Task.Delay(4000).ContinueWith(t => ElansAddonHub.Services.Db2.TalentData.Start());
             BrowserView.Init(settings);
             BrowserView.ShortcutTab += t => ShowTab(t);
             LodgePage.OpenLink += OpenChatLink;
@@ -130,12 +132,15 @@ namespace ElansAddonHub
             var set = TabSettings.IsChecked == true;
             var inv = TabInventory.IsChecked == true;
             var brw = TabBrowser.IsChecked == true;
+            var tal = TabTalents.IsChecked == true;
+            TalentsView.Visibility = tal ? Visibility.Visible : Visibility.Collapsed;
+            if (tal) TalentsView.Shown();
             BrowserView.Visibility = brw ? Visibility.Visible : Visibility.Collapsed;
             LodgePage.Visibility = lodge ? Visibility.Visible : Visibility.Collapsed;
             SettingsPage.Visibility = set ? Visibility.Visible : Visibility.Collapsed;
             InventoryView.Visibility = inv ? Visibility.Visible : Visibility.Collapsed;
-            AddonsPage.Visibility = !lodge && !set && !inv && !brw ? Visibility.Visible : Visibility.Collapsed;
-            RefreshBar.Visibility = !lodge && !set && !inv && !brw ? Visibility.Visible : Visibility.Collapsed;
+            AddonsPage.Visibility = !lodge && !set && !inv && !brw && !tal ? Visibility.Visible : Visibility.Collapsed;
+            RefreshBar.Visibility = !lodge && !set && !inv && !brw && !tal ? Visibility.Visible : Visibility.Collapsed;
             if (AddonsPage.Visibility == Visibility.Visible && !wasAddons) Motion.PageIn(AddonsPage);
             if (lodge) Session.MarkRead();
         }
@@ -172,13 +177,13 @@ namespace ElansAddonHub
 
         public void ShowTab(string tab)
         {
-            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : tab == "inventory" ? TabInventory : tab == "browser" ? TabBrowser : TabAddons).IsChecked = true;
+            (tab == "lodge" ? TabLodge : tab == "settings" ? TabSettings : tab == "inventory" ? TabInventory : tab == "browser" ? TabBrowser : tab == "talents" ? TabTalents : TabAddons).IsChecked = true;
         }
 
         // Ctrl+<key> -> rail page
         public static string TabForKey(Key k) =>
             k == Key.D1 || k == Key.NumPad1 ? "addons" : k == Key.D2 || k == Key.NumPad2 ? "lodge" : k == Key.D3 || k == Key.NumPad3 ? "inventory"
-            : k == Key.D4 || k == Key.NumPad4 ? "browser" : k == Key.OemComma ? "settings" : null;
+            : k == Key.D4 || k == Key.NumPad4 ? "browser" : k == Key.D6 || k == Key.NumPad6 ? "talents" : k == Key.OemComma ? "settings" : null;
 
         // a non-YouTube link clicked in Lodge chat: the Browser page when "Open links from chat in the Outpost browser" is on, otherwise the default browser
         void OpenChatLink(string url)
@@ -374,6 +379,7 @@ namespace ElansAddonHub
             if (Begin("seendata")) { result += "\r\n" + await SeenDataTest(dir); End(); }
             if (Begin("mapdata")) { result += "\r\n" + await MapDataTest(dir); End(); }
             if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }
+            if (Begin("talents")) { result += "\r\n" + await TalentsTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }
