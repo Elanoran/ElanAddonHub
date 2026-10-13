@@ -235,6 +235,29 @@ their own HUD; they register into it:
 So Hunter Helper adds shot timers, Quick Shots, aspect and distance; a future class addon adds its own
 (swing timer, seals). Class addons list `ElansToolkit` as a dependency.
 
+## Atlas: items, maps, instances and where things come from
+
+Goal: a complete item and world reference for WoW Forever in the Outpost, where a Lodge can trace every item it
+finds (who found it, from what, where, how often).
+
+**Principle: we never ship game or third-party data.** Each Outpost reads the user's own WoW install (read-only) and
+downloads public data itself on request; the Lodge only pools what its members observe. Every value carries its
+source label: **Forever** (the user's client, or observed by the Lodge) or **Classic baseline** (unverified).
+
+| Layer | Source | Where | Status |
+|---|---|---|---|
+| A. Items | Client `ItemSparse`/`Item` DB2 from CASC + revealed items in `Cache\ADB\enUS\DBCache.bin` | Outpost `Services\Db2`, `ItemData` | building |
+| B. Maps & instances | Client `UiMap`, `UiMapArt*`, `UiMapAssignment`, `Map`, `AreaTable` DB2 + map tile textures (BLP) | Outpost `Services\Maps` | planned |
+| C. Classic baseline | Public cMaNGOS classic-db dump (GPL-3.0), downloaded by the user's Outpost on request, credited; creatures, spawns, creature/object loot with chances, vendors, quests | Outpost `Services\Atlas\Classic` | planned |
+| D. Observations | Elan's Toolkit records loot (incl. kills with no drop), object loot, vendor stock and prices, quest rewards, and items the client reveals; with zone + position | Toolkit → Hub module `atlas.obs` (account) | planned |
+| E. Lodge pool | Lodge server feature `atlas`: members upload observations, the server aggregates (counts, per-member dedupe, outlier and rate limits), everyone downloads the aggregate | server `AtlasModule` + `LodgeSession.Atlas` | planned |
+| F. Atlas page | Search items / mobs / zones / instances; item page (tooltip, sources with Lodge-observed % and Classic %, vendors, quests, who in the Lodge has it); zone and instance maps with spawn and find markers | Outpost UI | planned |
+
+Rules for the Atlas: read-only access to the game folder; downloads only on the user's click (size and licence shown);
+sharing observations is on by default per Lodge member and can be switched off; observations carry no character names
+when pooled (the Lodge sees "a member", the Outpost shows names only for the user's own characters); combat-safe
+collection (loot, merchant and quest windows only, never the combat log).
+
 ## Migration (dual read)
 
 Existing flows keep working while data moves to the Hub:
