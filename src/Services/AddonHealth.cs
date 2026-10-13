@@ -86,35 +86,6 @@ namespace ElansAddonHub.Services
             new HealthAddonDef { Id = "ElansHub", Title = "Elan's Hub companion", DbName = "ElansHubDB", Slash = "/ehub diag" },
         };
 
-        // WTF\Account\*\SavedVariables of every client folder
-        public static List<string> Dirs(string root)
-        {
-            var dirs = new List<string>();
-            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return dirs;
-            try
-            {
-                foreach (var flavor in Directory.GetDirectories(root, "_*_"))
-                {
-                    var accounts = Path.Combine(flavor, "WTF", "Account");
-                    if (!Directory.Exists(accounts)) continue;
-                    foreach (var acc in Directory.GetDirectories(accounts))
-                    {
-                        var d = Path.Combine(acc, "SavedVariables");
-                        if (Directory.Exists(d)) dirs.Add(d);
-                    }
-                }
-            }
-            catch { }
-            return dirs;
-        }
-
-        static string ReadShared(string path)
-        {
-            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            using (var sr = new StreamReader(fs, new UTF8Encoding(false), true))
-                return sr.ReadToEnd();
-        }
-
         // version from the toc of the installed addon (first flavor that has it)
         static string InstalledVersion(string root, string folder)
         {
@@ -145,7 +116,7 @@ namespace ElansAddonHub.Services
             var rep = new HealthReport();
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var guilds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            rep.Folders = Dirs(root);
+            rep.Folders = SavedVarsFiles.Dirs(root);
             foreach (var def in Defs)
             {
                 var h = new AddonHealth { Def = def, Installed = string.IsNullOrEmpty(root) ? null : InstalledVersion(root, def.Id) };
@@ -155,20 +126,21 @@ namespace ElansAddonHub.Services
                 foreach (var dir in rep.Folders)
                 {
                     var file = Path.Combine(dir, def.File);
-                    if (!File.Exists(file)) continue;
+                    if (!File.Exists(file) || SavedVarsFiles.IsLink(file)) continue;
                     try
                     {
                         var written = File.GetLastWriteTimeUtc(file);
                         h.HasFile = true;
                         if (written > h.FileWritten) h.FileWritten = written;
-                        var globals = LuaData.ReadGlobals(ReadShared(file));
+                        var globals = SavedVarsCache.Get(file);   // parsed once per change, shared with the flights / inventory readers; read only
+                        if (globals == null) continue;            // locked or damaged and never read before: counts as unreadable
                         parsedOk = true;
                         if (!globals.TryGetValue(def.DbName, out var dbObj) || !(dbObj is Dictionary<string, object> db)) continue;
                         // runs and "saved with" from the newest file only
                         if (written >= bestWritten)
                         {
                             bestWritten = written;
-                            h.SavedWith = Str(db, "lastVersion") ?? Str(db, "version");
+                            h.SavedWith = db.Text("lastVersion") ?? db.Text("version");
                             h.Runs = ReadRuns(db);
                         }
                         foreach (var b in ReadBugs(db, def.Id, out var other))
@@ -224,7 +196,7 @@ namespace ElansAddonHub.Services
             foreach (var kv in list.OrderBy(k => int.TryParse(k.Key, out var n) ? n : int.MaxValue))
             {
                 if (!(kv.Value is Dictionary<string, object> t)) continue;
-                var addon = Str(t, "addon");
+                var addon = t.Text("addon");
                 string id = Defs.FirstOrDefault(d => string.Equals(d.Id, addon, StringComparison.OrdinalIgnoreCase))?.Id;
                 if (id == null)
                 {
@@ -233,8 +205,8 @@ namespace ElansAddonHub.Services
                 }
                 var b = new HealthBug
                 {
-                    Addon = id, Msg = Str(t, "msg") ?? "?", Stack = Str(t, "stack") ?? "", Version = Str(t, "version"),
-                    Count = Math.Max(1, (int)Num(t, "count")), Time = Str(t, "time"), At = (long)Num(t, "at"),
+                    Addon = id, Msg = t.Text("msg") ?? "?", Stack = t.Text("stack") ?? "", Version = t.Text("version"),
+                    Count = Math.Max(1, t.Int("count")), Time = t.Text("time"), At = t.Long("at"),
                 };
                 if (b.At <= 0) b.At = ParseLocal(b.Time);
                 res.Add(b);
@@ -246,25 +218,25 @@ namespace ElansAddonHub.Services
         {
             var res = new List<HealthRun>();
             if (!db.TryGetValue("diag", out var d) || !(d is Dictionary<string, object> diag)) return res;
-            var autoVersion = Str(diag, "autoVersion");
+            var autoVersion = diag.Text("autoVersion");
             if (!diag.TryGetValue("runs", out var r) || !(r is Dictionary<string, object> runs)) return res;
             foreach (var kv in runs.OrderBy(k => int.TryParse(k.Key, out var n) ? n : int.MaxValue))
             {
                 if (!(kv.Value is Dictionary<string, object> t)) continue;
-                var run = new HealthRun { Version = Str(t, "version"), At = (long)Num(t, "at"), Auto = t.TryGetValue("auto", out var a) && a is bool ab && ab,
-                    Ok = (int)Num(t, "ok"), Secret = (int)Num(t, "secret"), Err = (int)Num(t, "err") };
+                var run = new HealthRun { Version = t.Text("version"), At = t.Long("at"), Auto = t.TryGetValue("auto", out var a) && a is bool ab && ab,
+                    Ok = t.Int("ok"), Secret = t.Int("secret"), Err = t.Int("err") };
                 if (t.TryGetValue("ctx", out var c) && c is Dictionary<string, object> ctx)
                 {
-                    run.Label = Str(ctx, "label");
-                    run.Time = Str(ctx, "time");
-                    run.Build = Str(ctx, "build");
+                    run.Label = ctx.Text("label");
+                    run.Time = ctx.Text("time");
+                    run.Build = ctx.Text("build");
                     run.InCombat = ctx.TryGetValue("inCombat", out var ic) && ic is bool icb && icb;
                 }
                 else
                 {
                     // the Hub companion's flat run: plain fields
                     run.Label = run.Auto ? "auto" : "manual";
-                    run.InCombat = t.TryGetValue("inCombat", out var ic) && ic is bool icb ? icb : string.Equals(Str(t, "combatLockdown"), "true", StringComparison.OrdinalIgnoreCase);
+                    run.InCombat = t.TryGetValue("inCombat", out var ic) && ic is bool icb ? icb : string.Equals(t.Text("combatLockdown"), "true", StringComparison.OrdinalIgnoreCase);
                     run.Time = null;
                     foreach (var f in t) if (!(f.Value is Dictionary<string, object>) && f.Key != "time" && f.Key != "at" && f.Key != "auto" && f.Key != "version")
                         run.Res[f.Key] = Convert.ToString(f.Value is bool bb ? (bb ? "true" : "false") : f.Value, CultureInfo.InvariantCulture) ?? "";
@@ -273,8 +245,8 @@ namespace ElansAddonHub.Services
                     foreach (var f in res2) run.Res[f.Key] = Convert.ToString(f.Value, CultureInfo.InvariantCulture) ?? "";
                 if (t.TryGetValue("errors", out var er) && er is Dictionary<string, object> errs)
                     foreach (var f in errs.OrderBy(k => int.TryParse(k.Key, out var n) ? n : int.MaxValue)) run.ProbeErrors.Add(Convert.ToString(f.Value, CultureInfo.InvariantCulture));
-                if (run.At <= 0) run.At = ParseLocal(run.Time ?? Str(t, "time"));
-                if (run.At <= 0 && Str(t, "time") != null && long.TryParse(Str(t, "time"), out var unix)) run.At = unix;
+                if (run.At <= 0) run.At = ParseLocal(run.Time ?? t.Text("time"));
+                if (run.At <= 0 && t.Text("time") != null && long.TryParse(t.Text("time"), out var unix)) run.At = unix;
                 if (run.Version == null && run.Auto) run.Version = autoVersion;
                 res.Add(run);
             }
@@ -288,13 +260,13 @@ namespace ElansAddonHub.Services
                 foreach (var kv in chars)
                 {
                     if (!(kv.Value is Dictionary<string, object> c)) continue;
-                    var n = Str(c, "name"); if (!string.IsNullOrEmpty(n)) names.Add(n);
-                    var g0 = Str(c, "guild"); if (!string.IsNullOrEmpty(g0)) guildNames.Add(g0);
+                    var n = c.Text("name"); if (!string.IsNullOrEmpty(n)) names.Add(n);
+                    var g0 = c.Text("guild"); if (!string.IsNullOrEmpty(g0)) guildNames.Add(g0);
                     var dash = kv.Key.IndexOf('-');
                     if (dash > 0 && string.IsNullOrEmpty(n)) names.Add(kv.Key.Substring(dash + 1));
                 }
             if (db.TryGetValue("guilds", out var g) && g is Dictionary<string, object> guilds)
-                foreach (var kv in guilds) if (kv.Value is Dictionary<string, object> gt) { var v = Str(gt, "name"); if (!string.IsNullOrEmpty(v)) guildNames.Add(v); }
+                foreach (var kv in guilds) if (kv.Value is Dictionary<string, object> gt) { var v = gt.Text("name"); if (!string.IsNullOrEmpty(v)) guildNames.Add(v); }
         }
 
         public static long ParseLocal(string s)
@@ -304,9 +276,6 @@ namespace ElansAddonHub.Services
                 return new DateTimeOffset(DateTime.SpecifyKind(d, DateTimeKind.Local)).ToUnixTimeSeconds();
             return 0;
         }
-
-        static string Str(Dictionary<string, object> t, string k) => t.TryGetValue(k, out var v) && v != null ? Convert.ToString(v, CultureInfo.InvariantCulture) : null;
-        static double Num(Dictionary<string, object> t, string k) => t.TryGetValue(k, out var v) && v is double d ? d : 0;
 
         // ================================================================ seen / new
 

@@ -231,55 +231,9 @@ namespace ElansAddonHub.Services
     {
         public const string FileName = "ElansBags.lua";
 
-        public static List<string> Files(string root)
-        {
-            var files = new List<string>();
-            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return files;
-            try
-            {
-                foreach (var flavor in Directory.GetDirectories(root, "_*_"))
-                {
-                    var accounts = Path.Combine(flavor, "WTF", "Account");
-                    if (!Directory.Exists(accounts)) continue;
-                    foreach (var acc in Directory.GetDirectories(accounts))
-                    {
-                        var f = Path.Combine(acc, "SavedVariables", FileName);
-                        if (File.Exists(f)) files.Add(f);
-                    }
-                }
-            }
-            catch { }
-            return files;
-        }
-
-        // the SavedVariables folders to watch (they may not contain the file yet)
-        public static List<string> Dirs(string root)
-        {
-            var dirs = new List<string>();
-            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return dirs;
-            try
-            {
-                foreach (var flavor in Directory.GetDirectories(root, "_*_"))
-                {
-                    var accounts = Path.Combine(flavor, "WTF", "Account");
-                    if (!Directory.Exists(accounts)) continue;
-                    foreach (var acc in Directory.GetDirectories(accounts))
-                    {
-                        var d = Path.Combine(acc, "SavedVariables");
-                        if (Directory.Exists(d)) dirs.Add(d);
-                    }
-                }
-            }
-            catch { }
-            return dirs;
-        }
-
-        static string ReadShared(string path)
-        {
-            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            using (var sr = new StreamReader(fs, new UTF8Encoding(false), true))
-                return sr.ReadToEnd();
-        }
+        // the Bags files / SavedVariables folders of every client folder: SavedVarsFiles is the one walk (these two stay for the Characters page)
+        public static List<string> Files(string root) => SavedVarsFiles.For(root, FileName);
+        public static List<string> Dirs(string root) => SavedVarsFiles.Dirs(root);
 
         // all characters of all files; the same character in two files (two clients) keeps the newer record
         public static List<InvChar> Read(string root) => ReadData(root).Chars;
@@ -303,11 +257,11 @@ namespace ElansAddonHub.Services
             var best = new Dictionary<string, InvChar>(StringComparer.OrdinalIgnoreCase);
             var guilds = new Dictionary<string, InvGuild>(StringComparer.OrdinalIgnoreCase);
             var data = new InvData();
-            foreach (var f in Files(root))
+            foreach (var f in SavedVarsFiles.For(root, FileName))
             {
                 try
                 {
-                    var one = ParseAll(ReadShared(f), f);
+                    var one = ParseAllFrom(SavedVarsCache.Get(f), f);
                     foreach (var c in one.Chars)
                         if (!best.TryGetValue(c.Key, out var old) || c.Updated >= old.Updated) best[c.Key] = c;
                     foreach (var g in one.Guilds)
@@ -329,17 +283,19 @@ namespace ElansAddonHub.Services
         public static Dictionary<string, Look> ReadLooks(string root)
         {
             var res = new Dictionary<string, Look>(StringComparer.OrdinalIgnoreCase);
-            foreach (var f in GamePresence.SavedVariablesFiles(root))
+            foreach (var f in SavedVarsFiles.For(root, HubData.FileName))
             {
-                try { ParseLooks(ReadShared(f), res); }
+                try { ParseLooksFrom(SavedVarsCache.Get(f), res); }
                 catch (Exception e) { Util.Log("inventory looks failed: " + f + ": " + e.Message); }
             }
             return res;
         }
 
-        public static void ParseLooks(string text, Dictionary<string, Look> into)
+        public static void ParseLooks(string text, Dictionary<string, Look> into) => ParseLooksFrom(LuaData.ReadGlobals(text), into);
+
+        public static void ParseLooksFrom(Dictionary<string, object> globals, Dictionary<string, Look> into)
         {
-            var db = LuaData.ReadGlobals(text).TryGetValue("ElansHubDB", out var v) ? v as Dictionary<string, object> : null;
+            var db = globals != null && globals.TryGetValue("ElansHubDB", out var v) ? v as Dictionary<string, object> : null;
             var chars = db?.Child("chars");
             if (chars == null) return;
             foreach (var kv in chars)
@@ -371,17 +327,19 @@ namespace ElansAddonHub.Services
             }
         }
 
-        public static InvData ParseAll(string text, string file = null)
+        public static InvData ParseAll(string text, string file = null) => ParseAllFrom(LuaData.ReadGlobals(text), file);
+
+        // the same from an already parsed file (SavedVarsCache); the tables are shared, read only
+        public static InvData ParseAllFrom(Dictionary<string, object> globals, string file = null)
         {
             var data = new InvData();
             var list = data.Chars;
-            var globals = LuaData.ReadGlobals(text);
-            if (!globals.TryGetValue("ElansBagsDB", out var dbObj) || !(dbObj is Dictionary<string, object> db)) return data;
+            if (globals == null || !globals.TryGetValue("ElansBagsDB", out var dbObj) || !(dbObj is Dictionary<string, object> db)) return data;
             if (db.TryGetValue("client", out var clObj) && clObj is Dictionary<string, object> cl && cl.Count > 0)
             {
                 data.Client.Known = true;
-                data.Client.Build = Str(cl, "build");
-                data.Client.ReagentBag = (int)Num(cl, "reagentBag");
+                data.Client.Build = cl.Text("build");
+                data.Client.ReagentBag = cl.Int("reagentBag");
                 if (cl.TryGetValue("guildBank", out var gbObj) && gbObj is Dictionary<string, object> gbApi)
                 {
                     bool Has(string k) => gbApi.TryGetValue(k, out var v) && v is bool b && b;
@@ -399,21 +357,21 @@ namespace ElansAddonHub.Services
                 var c = new InvChar
                 {
                     Key = kv.Key,
-                    Name = Str(t, "name") ?? kv.Key,
-                    Realm = Str(t, "realm"),
-                    Class = Str(t, "class"),
-                    Faction = Str(t, "faction"),
-                    RaceFile = Str(t, "raceFile"),     // a later Elan's Bags may save these two
-                    Sex = (int)Num(t, "sex"),
-                    Level = (int)Num(t, "level"),
-                    Money = (long)Num(t, "money"),
-                    Updated = (long)Num(t, "updated"),
-                    BagsAt = (long)Num(t, "bagsAt"),
-                    BankAt = (long)Num(t, "bankAt"),
+                    Name = t.Text("name") ?? kv.Key,
+                    Realm = t.Text("realm"),
+                    Class = t.Text("class"),
+                    Faction = t.Text("faction"),
+                    RaceFile = t.Text("raceFile"),     // a later Elan's Bags may save these two
+                    Sex = t.Int("sex"),
+                    Level = t.Int("level"),
+                    Money = t.Long("money"),
+                    Updated = t.Long("updated"),
+                    BagsAt = t.Long("bagsAt"),
+                    BankAt = t.Long("bankAt"),
                     Hidden = t.TryGetValue("hidden", out var h) && h is bool hb && hb,
                     File = file,
                 };
-                c.Guild = Str(t, "guild");
+                c.Guild = t.Text("guild");
                 c.Bags = Items(t, "bags") ?? new List<InvItem>();
                 c.Bank = Items(t, "bank");
                 c.Equipped = Items(t, "equipped") ?? new List<InvItem>();
@@ -440,8 +398,8 @@ namespace ElansAddonHub.Services
             foreach (var kv in conts)
             {
                 if (!(kv.Value is Dictionary<string, object> ct) || !int.TryParse(kv.Key, out var bag)) continue;
-                var c = new InvContainer { BagId = bag, Size = (int)Num(ct, "n"), Family = (int)Num(ct, "k"), BagItemId = (int)Num(ct, "id"), BagIcon = (int)Num(ct, "ic"), BagQuality = ct.ContainsKey("q") ? (int)Num(ct, "q") : 1 };
-                var link = Str(ct, "l");
+                var c = new InvContainer { BagId = bag, Size = ct.Int("n"), Family = ct.Int("k"), BagItemId = ct.Int("id"), BagIcon = ct.Int("ic"), BagQuality = ct.ContainsKey("q") ? ct.Int("q") : 1 };
+                var link = ct.Text("l");
                 if (link != null) { var m = NameInLink.Match(link); if (m.Success) c.BagName = m.Groups[1].Value; }
                 if (ct.TryGetValue("s", out var so) && so is Dictionary<string, object> slots) ReadSlots(slots, c.Slots, names);
                 if (c.Size <= 0) c.Size = c.Slots.Count == 0 ? 0 : c.Slots.Keys.Max();
@@ -456,31 +414,31 @@ namespace ElansAddonHub.Services
             foreach (var sv in slots)
             {
                 if (!(sv.Value is Dictionary<string, object> st) || !int.TryParse(sv.Key, out var slot)) continue;
-                var id = (int)Num(st, "i");
+                var id = st.Int("i");
                 if (id <= 0) continue;
                 string name = null;
-                var link = Str(st, "l");
+                var link = st.Text("l");
                 if (link != null) { var m = NameInLink.Match(link); if (m.Success) name = m.Groups[1].Value; }
-                int q = st.ContainsKey("q") ? (int)Num(st, "q") : -1;
-                int icon = (int)Num(st, "ic");
+                int q = st.ContainsKey("q") ? st.Int("q") : -1;
+                int icon = st.Int("ic");
                 if (names != null && names.TryGetValue(id, out var known))
                 {
                     name = name ?? known.Name;
                     if (q < 0) q = known.Quality;
                     if (icon <= 0) icon = known.Icon;
                 }
-                into[slot] = new InvSlot { Slot = slot, Id = id, Count = Math.Max(1, (int)Num(st, "c")), Quality = q < 0 ? 1 : q, Icon = icon, Name = name ?? ("Item #" + id) };
+                into[slot] = new InvSlot { Slot = slot, Id = id, Count = Math.Max(1, st.Int("c")), Quality = q < 0 ? 1 : q, Icon = icon, Name = name ?? ("Item #" + id) };
             }
         }
 
         static InvGuild ParseGuild(string key, Dictionary<string, object> t)
         {
-            var g = new InvGuild { Key = key, Name = Str(t, "name") ?? key, Realm = Str(t, "realm"), Money = (long)Num(t, "money"), Updated = (long)Num(t, "updated"), NumTabs = (int)Num(t, "numTabs") };
+            var g = new InvGuild { Key = key, Name = t.Text("name") ?? key, Realm = t.Text("realm"), Money = t.Long("money"), Updated = t.Long("updated"), NumTabs = t.Int("numTabs") };
             if (t.TryGetValue("tabs", out var to) && to is Dictionary<string, object> tabs)
                 foreach (var kv in tabs)
                 {
                     if (!(kv.Value is Dictionary<string, object> tt) || !int.TryParse(kv.Key, out var idx)) continue;
-                    var tab = new InvGuildTab { Index = idx, Name = Str(tt, "name"), Icon = (int)Num(tt, "icon"), At = (long)Num(tt, "at"), Size = (int)Num(tt, "n") };
+                    var tab = new InvGuildTab { Index = idx, Name = tt.Text("name"), Icon = tt.Int("icon"), At = tt.Long("at"), Size = tt.Int("n") };
                     if (tt.TryGetValue("s", out var so) && so is Dictionary<string, object> slots) ReadSlots(slots, tab.Slots, null);
                     if (tab.Size <= 0) tab.Size = 98;
                     g.Tabs.Add(tab);
@@ -490,14 +448,11 @@ namespace ElansAddonHub.Services
                 foreach (var kv in metas)
                 {
                     if (!(kv.Value is Dictionary<string, object> mt) || !int.TryParse(kv.Key, out var idx)) continue;
-                    g.Meta.Add(new InvGuildTabMeta { Index = idx, Name = Str(mt, "name"), Icon = (int)Num(mt, "icon"), CanView = !(mt.TryGetValue("view", out var vv) && vv is bool vb && !vb) });
+                    g.Meta.Add(new InvGuildTabMeta { Index = idx, Name = mt.Text("name"), Icon = mt.Int("icon"), CanView = !(mt.TryGetValue("view", out var vv) && vv is bool vb && !vb) });
                 }
             g.Meta = g.Meta.OrderBy(x => x.Index).ToList();
             return g;
         }
-
-        static string Str(Dictionary<string, object> t, string k) => t.TryGetValue(k, out var v) && v != null ? Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture) : null;
-        static double Num(Dictionary<string, object> t, string k) => t.TryGetValue(k, out var v) && v is double d ? d : 0;
 
         static readonly Regex NameInLink = new Regex(@"\[(.+?)\]", RegexOptions.Compiled);
         static readonly Regex ColorInLink = new Regex(@"\|c[0-9a-fA-F]{2}([0-9a-fA-F]{6})", RegexOptions.Compiled);
@@ -513,11 +468,11 @@ namespace ElansAddonHub.Services
             foreach (var e in list.Values)
             {
                 if (!(e is Dictionary<string, object> it)) continue;
-                var id = (int)Num(it, "i");
+                var id = it.Int("i");
                 if (id <= 0) continue;
-                var link = Str(it, "l");
+                var link = it.Text("l");
                 string name = null;
-                int q = it.ContainsKey("q") ? (int)Num(it, "q") : -1;
+                int q = it.ContainsKey("q") ? it.Int("q") : -1;
                 if (link != null)
                 {
                     var m = NameInLink.Match(link);
@@ -528,7 +483,7 @@ namespace ElansAddonHub.Services
                         if (cm.Success && ColorQuality.TryGetValue(cm.Groups[1].Value, out var cq)) q = cq;
                     }
                 }
-                res.Add(new InvItem { Id = id, Count = Math.Max(1, (int)Num(it, "c")), Quality = q < 0 ? 1 : q, Icon = (int)Num(it, "ic"), Name = name ?? ("Item #" + id) });
+                res.Add(new InvItem { Id = id, Count = Math.Max(1, it.Int("c")), Quality = q < 0 ? 1 : q, Icon = it.Int("ic"), Name = name ?? ("Item #" + id) });
             }
             return res;
         }

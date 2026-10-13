@@ -47,7 +47,7 @@ namespace ElansAddonHub.Services
         public void EnsureWatchers()
         {
             var root = wowRoot();
-            var dirs = HealthReader.Dirs(root);
+            var dirs = SavedVarsFiles.Dirs(root);
             if (watchedRoot == root && watchers.Count == dirs.Count) return;
             Dispose();
             watchedRoot = root;

@@ -69,11 +69,18 @@ namespace ElansAddonHub.Services
 
         public static HubModel Parse(string luaText)
         {
+            try { return string.IsNullOrEmpty(luaText) ? new HubModel() : FromGlobals(LuaData.ReadGlobals(luaText)); }
+            catch (Exception e) { Util.Log("hub data: parse failed (" + e.GetType().Name + ")"); return new HubModel(); }
+        }
+
+        // the same from an already parsed file (SavedVarsCache); the tables are shared, so the model keeps references into them and nobody may write to them
+        public static HubModel FromGlobals(Dictionary<string, object> globals)
+        {
             var model = new HubModel();
             try
             {
-                if (string.IsNullOrEmpty(luaText)) return model;
-                if (!LuaData.ReadGlobals(luaText).TryGetValue("ElansHubData", out var v) || !(v is Dictionary<string, object> root)) return model;
+                if (globals == null) return model;
+                if (!globals.TryGetValue("ElansHubData", out var v) || !(v is Dictionary<string, object> root)) return model;
                 model.Found = true;
                 model.Schema = root.Int("schema");
                 var chars = root.Child("chars");
@@ -129,37 +136,27 @@ namespace ElansAddonHub.Services
         // the newest ElansHub.lua among all flavors / accounts. Parsed again only when the path, mtime or size changed; a failed read keeps the last good model.
         public static HubModel Read(string root)
         {
-            string file = null; DateTime stamp = DateTime.MinValue; long size = 0;
+            string file = null; DateTime stamp = DateTime.MinValue;
             foreach (var f in SavedVarsFiles.For(root, FileName))
             {
                 try
                 {
                     var fi = new FileInfo(f);
-                    if (file == null || fi.LastWriteTimeUtc > stamp) { file = f; stamp = fi.LastWriteTimeUtc; size = fi.Length; }
+                    if (file == null || fi.LastWriteTimeUtc > stamp) { file = f; stamp = fi.LastWriteTimeUtc; }
                 }
                 catch { }
             }
             lock (gate)
             {
                 if (file == null) { cacheKey = ""; cached = new HubModel(); return cached; }
-                var key = file + "|" + stamp.Ticks.ToString(CultureInfo.InvariantCulture) + "|" + size.ToString(CultureInfo.InvariantCulture);
-                if (key == cacheKey) return cached;
+                var p = SavedVarsCache.Load(file);                               // one parse per change, shared with the other readers; a locked file keeps the last good parse
+                if (p == null) return cached;                                    // never readable yet: keep the last good model, try again next time
+                if (p.Key == cacheKey) return cached;
                 try
                 {
-                    string text = null;
-                    for (int i = 0; i < 3 && text == null; i++)                  // WoW may still hold the file while writing
-                    {
-                        try
-                        {
-                            using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-                            using (var sr = new StreamReader(fs, new UTF8Encoding(false), true)) text = sr.ReadToEnd();
-                        }
-                        catch (IOException) { System.Threading.Thread.Sleep(50); }
-                    }
-                    if (text == null) return cached;                             // keep the last good read, try again next time
-                    var model = Parse(text);
+                    var model = FromGlobals(p.Globals);
                     model.SourceFile = file;
-                    cached = model; cacheKey = key;
+                    cached = model; cacheKey = p.Key;
                 }
                 catch (Exception e) { Util.Log("hub data: read failed (" + e.GetType().Name + ")"); }
                 return cached;

@@ -119,10 +119,16 @@ namespace ElansAddonHub.Services
         // validated legs and names of one SavedVariables text; anything that fails validation is counted and left out. Never throws.
         public static Local Parse(string luaText)
         {
-            var r = new Local();
-            Dictionary<string, object> db;
-            try { db = LuaData.ReadGlobals(luaText ?? "").TryGetValue("ElansHunterHelperDB", out var v) ? v as Dictionary<string, object> : null; }
-            catch (Exception e) { Util.Log("flights: unreadable saved variables (" + e.GetType().Name + ")"); return r; }
+            Dictionary<string, object> globals;
+            try { globals = LuaData.ReadGlobals(luaText ?? ""); }
+            catch (Exception e) { Util.Log("flights: unreadable saved variables (" + e.GetType().Name + ")"); return new Local(); }
+            return FromGlobals(globals);
+        }
+
+        // the same from an already parsed file (SavedVarsCache); the tables are shared, read only
+        public static Local FromGlobals(Dictionary<string, object> globals)
+        {
+            var db = globals != null && globals.TryGetValue("ElansHunterHelperDB", out var v) ? v as Dictionary<string, object> : null;
             return FromTables(db?.Child("flightLegs"), db?.Child("flightNodeNames"));
         }
 
@@ -150,33 +156,19 @@ namespace ElansAddonHub.Services
             return r;
         }
 
-        static string ReadShared(string file)
-        {
-            if (new FileInfo(file).Length > MaxFileBytes) return null;
-            for (int i = 0; i < 4; i++)   // WoW may still hold the file while writing
-            {
-                try
-                {
-                    using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-                    using (var sr = new StreamReader(fs, new UTF8Encoding(false), true)) return sr.ReadToEnd();
-                }
-                catch (IOException) { System.Threading.Thread.Sleep(80); }
-            }
-            return null;
-        }
-
         // every account's ElansHunterHelper.lua under the WoW folder (read only): per key the newest value wins (then the larger sample count)
         public static Local Read(string root)
         {
             if (TestSource != null) return TestSource() ?? new Local();
             var all = new Local();
-            foreach (var f in GamePresence.SavedVariablesFiles(root, HunterHelperFile))
+            foreach (var f in SavedVarsFiles.For(root, HunterHelperFile))
             {
                 try
                 {
-                    var text = ReadShared(f);
-                    if (text == null) continue;
-                    var one = Parse(text);
+                    if (new FileInfo(f).Length > MaxFileBytes) continue;   // bigger than any real file: not read
+                    var globals = SavedVarsCache.Get(f);                   // parsed once per change, shared with the health reader
+                    if (globals == null) continue;
+                    var one = FromGlobals(globals);
                     all.Files++; all.Dropped += one.Dropped;
                     foreach (var kv in one.Legs)
                         if (!all.Legs.TryGetValue(kv.Key, out var have) || kv.Value.At > have.At || (kv.Value.At == have.At && kv.Value.N > have.N)) all.Legs[kv.Key] = kv.Value;
@@ -208,7 +200,7 @@ namespace ElansAddonHub.Services
         {
             if (TestSource != null) { changed = true; return Read(root); }
             string key = "";
-            try { key = string.Join("|", GamePresence.SavedVariablesFiles(root, HunterHelperFile).Concat(GamePresence.SavedVariablesFiles(root, HubData.FileName)).Select(f => f + ":" + File.GetLastWriteTimeUtc(f).Ticks + ":" + new FileInfo(f).Length)); }
+            try { key = string.Join("|", SavedVarsFiles.For(root, HunterHelperFile).Concat(SavedVarsFiles.For(root, HubData.FileName)).Select(f => f + ":" + File.GetLastWriteTimeUtc(f).Ticks + ":" + new FileInfo(f).Length)); }
             catch { }
             if (cached != null && key == cacheKey) { changed = false; return cached; }
             cached = Read(root); cacheKey = key; changed = true;
@@ -391,7 +383,7 @@ namespace ElansAddonHub.Services
                     var dest = Path.Combine(dir, SharedFileName);
                     var tmp = dest + ".tmp";
                     if (File.Exists(dest) && IsReparse(dest)) { res.Skipped++; continue; }
-                    if (File.Exists(dest) && Body(ReadShared(dest)) == Body(lua)) { res.Unchanged.Add(dest); continue; }
+                    if (File.Exists(dest) && Body(SavedVarsFiles.SafeRead(dest)) == Body(lua)) { res.Unchanged.Add(dest); continue; }
                     try
                     {
                         using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))

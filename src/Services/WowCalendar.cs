@@ -56,10 +56,17 @@ namespace ElansAddonHub.Services
 
         public static WowCalendarData Parse(string luaText)
         {
+            Dictionary<string, object> globals;
+            try { globals = LuaData.ReadGlobals(luaText ?? ""); }
+            catch (Exception e) { Util.Log("wow calendar: " + e.Message); return new WowCalendarData(); }
+            return FromGlobals(globals);
+        }
+
+        // the same from an already parsed file (SavedVarsCache); the tables are shared, read only
+        public static WowCalendarData FromGlobals(Dictionary<string, object> globals)
+        {
             var data = new WowCalendarData();
-            Dictionary<string, object> db;
-            try { db = LuaData.ReadGlobals(luaText ?? "").TryGetValue("ElansHubDB", out var v) ? v as Dictionary<string, object> : null; }
-            catch (Exception e) { Util.Log("wow calendar: " + e.Message); return data; }
+            var db = globals != null && globals.TryGetValue("ElansHubDB", out var v) ? v as Dictionary<string, object> : null;
             var cal = db?.Child("calendar");
             if (cal == null) return data;
             data.Found = true;
@@ -108,14 +115,11 @@ namespace ElansAddonHub.Services
         {
             if (TestSource != null) return TestSource() ?? new WowCalendarData();
             WowCalendarData best = new WowCalendarData();
-            foreach (var f in GamePresence.SavedVariablesFiles(root))
+            foreach (var f in SavedVarsFiles.For(root, HubData.FileName))
             {
                 try
                 {
-                    string text;
-                    using (var fs = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-                    using (var sr = new StreamReader(fs, new UTF8Encoding(false), true)) text = sr.ReadToEnd();
-                    var d = Parse(text);
+                    var d = FromGlobals(SavedVarsCache.Get(f));
                     d.SourceFile = f;
                     if (d.Found && (!best.Found || d.At >= best.At)) best = d;
                 }
@@ -129,7 +133,7 @@ namespace ElansAddonHub.Services
         {
             if (TestSource != null) { changed = true; return Read(root); }
             string key = "";
-            try { key = string.Join("|", GamePresence.SavedVariablesFiles(root).Select(f => f + ":" + File.GetLastWriteTimeUtc(f).Ticks + ":" + new FileInfo(f).Length)); }
+            try { key = string.Join("|", SavedVarsFiles.For(root, HubData.FileName).Select(f => f + ":" + File.GetLastWriteTimeUtc(f).Ticks + ":" + new FileInfo(f).Length)); }
             catch { }
             if (cached != null && key == cacheKey) { changed = false; return cached; }
             cached = Read(root); cacheKey = key; changed = true;
