@@ -181,7 +181,7 @@ namespace ElansAddonHub
                     Session.FeedForTest(Inv2Welcome("owner", true));
                     await Visit("Settings guild master", () => SettingsPage.Show("gm"));
                     ShowTab("inventory");
-                    await Visit("Inventory page", null);
+                    await Visit("Characters page", null);
                     ShowTab("browser");
                     await Visit("Browser page", null);
                     await Visit("Browser add-a-tile form", () => BrowserView.OpenAddFormForTest());

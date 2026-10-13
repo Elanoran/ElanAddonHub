@@ -241,7 +241,7 @@ namespace ElansAddonHub
                 list.Children.Add(list.Children.Count == 0 ? (UIElement)g : new Border { BorderBrush = Res("Brush.Divider"), BorderThickness = new Thickness(0, 1, 0, 0), Child = g });
             }
             Tip("", "It lives in the tray", "Closing the window keeps the Outpost running quietly next to the clock: updates are checked and you stay online in your Lodge. Right-click the icon to quit.");
-            Tip("", "Quick keys", "Ctrl+1 Addons, Ctrl+2 Lodge, Ctrl+3 Inventory, Ctrl+, Settings.");
+            Tip("", "Quick keys", "Ctrl+1 Addons, Ctrl+2 Lodge, Ctrl+3 Characters, Ctrl+, Settings.");
             Tip("", "You're in control", "Settings > Privacy lists everything that is shared and lets you switch it off.");
             Tip("", "Open this guide again", "Settings > About > Show welcome guide.");
         }

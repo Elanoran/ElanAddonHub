@@ -3,6 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.44.0
+- **Inventory is now Characters:** one list of your characters on the left (portrait, name in class colour, level, realm), and on the right Overview, Bags, Bank, Guild bank, Gear, Talents and Professions. The old bag, bank and guild bank views, the search across characters and the item tooltips with counts across characters are all still there, now as tabs.
+- **Overview:** portrait, level, race and class, guild, zone, experience bar with rested, gold, free bag space, item level, talents and professions at a glance. **Gear** lists what is worn with item levels and the average. **Talents** draws your points as a grid per tree. **Professions** shows skill against maximum.
+- **Reads Elan's Hub first:** everything comes from the Hub's saved data when it has it (needs Elan's Hub 1.12.0, one /reload or log out on each character); Elan's Bags' own save still fills in for a character the Hub hasn't seen, and the newer of the two wins. Same-named characters on different realms are kept apart. Each tab says how old its data is and where it came from.
+- A tab whose data was saved by a newer Hub says "Update Elan's Outpost to show ..." instead of guessing; a tab with no data yet tells you to log in to that character with Elan's Hub 1.12.0 or newer.
+- The page also follows changes to Elan's Hub's saved file while you play.
+
 ## 2.43.0
 - **Groundwork for the new data layer (nothing new to see yet):** the Outpost can now read what Elan's Hub 1.11.0 saves in its new `ElansHubData` (character basics today, more addons later), keeps the last good read if the game is writing the file, and says "Update Elan's Outpost" for data from a newer Hub instead of guessing.
 - **Shared flight times survive a Hub update:** installing or updating Elan's Hub replaces its `SharedData.lua` with the empty shipped file; the Outpost now writes the lodge's flight times back right after the install instead of waiting for the next sync.

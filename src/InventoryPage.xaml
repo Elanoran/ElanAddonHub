@@ -50,7 +50,7 @@
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
       <StackPanel VerticalAlignment="Center">
-        <TextBlock x:Name="TitleText" Text="Inventory" Style="{StaticResource Text.Title}" />
+        <TextBlock x:Name="TitleText" Text="Characters" Style="{StaticResource Text.Title}" />
         <TextBlock x:Name="Summary" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
       </StackPanel>
       <TextBox x:Name="SearchBox" Grid.Column="1" Style="{StaticResource Input}" Width="256" Tag="Search every bag, bank and worn item" TextChanged="Search_Changed"
@@ -158,9 +158,13 @@
           <TextBlock x:Name="ResultCaption" Style="{StaticResource Text.Secondary}" VerticalAlignment="Center" Visibility="Collapsed" />
           <Border x:Name="TabStrip" Style="{StaticResource SegmentHost}">
             <StackPanel Orientation="Horizontal">
-              <RadioButton x:Name="TabBags" Style="{StaticResource Segment}" Content="Bags" GroupName="inv-view" IsChecked="True" Tag="bags" Checked="Tab_Checked" AutomationProperties.Name="Bags" />
+              <RadioButton x:Name="TabOverview" Style="{StaticResource Segment}" Content="Overview" GroupName="inv-view" IsChecked="True" Tag="overview" Checked="Tab_Checked" AutomationProperties.Name="Overview" />
+              <RadioButton x:Name="TabBags" Style="{StaticResource Segment}" Content="Bags" GroupName="inv-view" Tag="bags" Checked="Tab_Checked" AutomationProperties.Name="Bags" />
               <RadioButton x:Name="TabBank" Style="{StaticResource Segment}" Content="Bank" GroupName="inv-view" Tag="bank" Checked="Tab_Checked" AutomationProperties.Name="Bank" />
               <RadioButton x:Name="TabGuild" Style="{StaticResource Segment}" Content="Guild bank" GroupName="inv-view" Tag="guild" Checked="Tab_Checked" Visibility="Collapsed" AutomationProperties.Name="Guild bank" />
+              <RadioButton x:Name="TabGear" Style="{StaticResource Segment}" Content="Gear" GroupName="inv-view" Tag="gear" Checked="Tab_Checked" AutomationProperties.Name="Gear" />
+              <RadioButton x:Name="TabTalents" Style="{StaticResource Segment}" Content="Talents" GroupName="inv-view" Tag="talents" Checked="Tab_Checked" AutomationProperties.Name="Talents" />
+              <RadioButton x:Name="TabProfs" Style="{StaticResource Segment}" Content="Professions" GroupName="inv-view" Tag="professions" Checked="Tab_Checked" AutomationProperties.Name="Professions" />
             </StackPanel>
           </Border>
         </DockPanel>
@@ -171,6 +175,7 @@
         <ScrollViewer x:Name="BagsScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0" SizeChanged="BagsScroll_SizeChanged">
           <StackPanel>
             <WrapPanel x:Name="BagsHost" />
+            <StackPanel x:Name="CharHost" Visibility="Collapsed" />
             <TextBlock x:Name="BagsMessage" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="4,8,0,0" Visibility="Collapsed" />
           </StackPanel>
         </ScrollViewer>

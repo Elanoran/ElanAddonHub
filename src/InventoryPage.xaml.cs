@@ -47,7 +47,8 @@ namespace ElansAddonHub
             public string Initial => InventoryPage.Initial(Char.Name);
             public Brush ClassBrush => ClassBrushOf(Char.Class);
             public Brush ClassTint => TintOf(Char.Class);
-            public string Line2 => string.Join(" ", new[] { Char.Level > 0 ? "Lv " + Char.Level : null, Pretty(Char.Class) }.Where(s => !string.IsNullOrEmpty(s)));
+            // "Lv 60 Hunter · Realm": the realm tells two characters of the same name apart
+            public string Line2 => string.Join(" · ", new[] { string.Join(" ", new[] { Char.Level > 0 ? "Lv " + Char.Level : null, Pretty(Char.Class) }.Where(s => !string.IsNullOrEmpty(s))), Char.Realm }.Where(s => !string.IsNullOrEmpty(s)));
             public int PortraitId => CharPortrait.IconFor(Char.RaceFile, Char.Sex, Char.Class);
             public bool IsRacePortrait => CharPortrait.RaceIcon(Char.RaceFile, Char.Sex) > 0;
             public Brush PortraitBrush { get { return portraitBrush; } private set { portraitBrush = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("PortraitBrush")); } }
@@ -117,7 +118,7 @@ namespace ElansAddonHub
             }
 
             // the game icons have a baked-in bevelled frame: crop it so the circle shows the picture only
-            static Brush MakeBrush(ImageSource src)
+            internal static Brush MakeBrush(ImageSource src)
             {
                 var b = new ImageBrush(src) { Stretch = Stretch.Fill, ViewboxUnits = BrushMappingMode.RelativeToBoundingBox, Viewbox = new Rect(0.08, 0.08, 0.84, 0.84) };
                 RenderOptions.SetBitmapScalingMode(b, BitmapScalingMode.HighQuality);
@@ -191,22 +192,24 @@ namespace ElansAddonHub
         {
             var root = wowRoot();
             var dirs = InventoryReader.Dirs(root);
-            if (watchedRoot == root && watchers.Count == dirs.Count) return;
+            if (watchedRoot == root && watchers.Count == dirs.Count * 2) return;
             DisposeWatchers();
             watchedRoot = root;
+            // the legacy ElansBags.lua and the Hub's ElansHub.lua: one watcher each per SavedVariables folder, one shared 700 ms debounce
             foreach (var d in dirs)
-            {
-                try
+                foreach (var file in new[] { InventoryReader.FileName, HubData.FileName })
                 {
-                    var w = new FileSystemWatcher(d, InventoryReader.FileName) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName | NotifyFilters.CreationTime };
-                    FileSystemEventHandler h = (s, e) => Dispatcher.BeginInvoke(new Action(() => { debounce.Stop(); debounce.Start(); }));
-                    w.Changed += h; w.Created += h; w.Deleted += h;
-                    w.Renamed += (s, e) => Dispatcher.BeginInvoke(new Action(() => { debounce.Stop(); debounce.Start(); }));
-                    w.EnableRaisingEvents = true;
-                    watchers.Add(w);
+                    try
+                    {
+                        var w = new FileSystemWatcher(d, file) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName | NotifyFilters.CreationTime };
+                        FileSystemEventHandler h = (s, e) => Dispatcher.BeginInvoke(new Action(() => { debounce.Stop(); debounce.Start(); }));
+                        w.Changed += h; w.Created += h; w.Deleted += h;
+                        w.Renamed += (s, e) => Dispatcher.BeginInvoke(new Action(() => { debounce.Stop(); debounce.Start(); }));
+                        w.EnableRaisingEvents = true;
+                        watchers.Add(w);
+                    }
+                    catch { }
                 }
-                catch { }
-            }
         }
 
         void DisposeWatchers()
@@ -221,7 +224,7 @@ namespace ElansAddonHub
 
         static InvData ReadSafe(string root)
         {
-            try { return InventoryReader.ReadData(root); }
+            try { return CharacterMerge.Merge(HubData.Read(root), InventoryReader.ReadData(root)); }
             catch (Exception e) { Util.Log("inventory: " + e.Message); return new InvData(); }
         }
 
@@ -286,21 +289,18 @@ namespace ElansAddonHub
                 ShowEmpty("I can't find your WoW folder", "Pick it in Settings > General, then come back here.", true);
                 return;
             }
-            if (InventoryReader.Files(root).Count == 0)
-            {
-                ShowEmpty("No inventory data yet", "Install Elan's Bags and log in once on each character. WoW then saves what they carry when you /reload or log out, and it shows up here.", true);
-                return;
-            }
             if (vis.Count == 0)
             {
-                ShowEmpty("No characters yet", "Elan's Bags is installed, but no character has been saved yet. Log in on each character once, then /reload or log out.", false);
+                bool any = InventoryReader.Files(root).Count > 0 || SavedVarsFiles.For(root, HubData.FileName).Count > 0;
+                if (!any) ShowEmpty("No characters yet", "Install Elan's Hub and log in once on each character. WoW then saves what they carry and know when you /reload or log out, and it shows up here.", true);
+                else ShowEmpty("No characters yet", "Elan's Hub is installed, but no character has been saved yet. Log in on each character once, then /reload or log out.", false);
                 return;
             }
             EmptyBox.Visibility = Visibility.Collapsed;
             Body.Visibility = Visibility.Visible;
             var newest = vis.Max(c => c.Updated);
             Summary.Text = vis.Count + (vis.Count == 1 ? " character" : " characters") + " · " + TotalMoneyText(vis) + " in total · latest save " + InventoryReader.Ago(newest);
-            var flavor = InventoryReader.FlavorOf(vis[0].File);
+            var flavor = InventoryReader.FlavorOf(vis.Select(c => c.File).FirstOrDefault(f => f != null));
             if (flavor != null) IconStore.Flavor = flavor;
             var rows = vis.Select(c => new CharRow { Char = c, Selected = c.Key == filterKey }).ToList();
             foreach (var r in rows) r.LoadPortrait();
@@ -334,6 +334,7 @@ namespace ElansAddonHub
         void ShowEmpty(string title, string text, bool addonsButton)
         {
             Body.Visibility = Visibility.Collapsed;
+            CharList.ItemsSource = null;            // no stale rows behind the empty state (the folder may have changed)
             EmptyBox.Visibility = Visibility.Visible;
             EmptyTitle.Text = title;
             EmptyText.Text = text;

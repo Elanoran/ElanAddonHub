@@ -17,7 +17,7 @@ namespace ElansAddonHub
     {
         const double SlotSize = 38;
 
-        string tab = "bags";
+        string tab = "overview";       // overview | bags | bank | guild | gear | talents | professions
         int guildTab = -1;
         bool suppressTab;
         int renderGen;
@@ -62,7 +62,11 @@ namespace ElansAddonHub
         void SetTabChecked(string which)
         {
             suppressTab = true;
-            try { (which == "bank" ? TabBank : which == "guild" ? TabGuild : TabBags).IsChecked = true; }
+            try
+            {
+                (which == "bank" ? TabBank : which == "guild" ? TabGuild : which == "overview" ? TabOverview : which == "gear" ? TabGear
+                    : which == "talents" ? TabTalents : which == "professions" ? TabProfs : TabBags).IsChecked = true;
+            }
             finally { suppressTab = false; }
             tab = which;
         }
@@ -82,11 +86,21 @@ namespace ElansAddonHub
             var flavor = InventoryReader.FlavorOf(c.File);
             if (flavor != null) IconStore.Flavor = flavor;
             var guild = GuildFor(c);
-            TabGuild.Visibility = guild != null ? Visibility.Visible : Visibility.Collapsed;
-            if (tab == "guild" && guild == null) tab = "bags";
+            bool guildTooNew = guild == null && HubModules.StateOf(data.Hub, "guildbank") == HubModState.TooNew;
+            TabGuild.Visibility = guild != null || guildTooNew ? Visibility.Visible : Visibility.Collapsed;
+            if (tab == "guild" && guild == null && !guildTooNew) tab = "bags";
             SetTabChecked(tab);
+            CharHost.Children.Clear();
+            bool custom = tab == "overview" || tab == "gear" || tab == "talents" || tab == "professions";
+            BagsHost.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
+            CharHost.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
 
-            if (tab == "guild") { RenderGuild(c, guild); }
+            if (custom) { RenderCharTab(c); }
+            else if (tab == "guild")
+            {
+                if (guild == null) { ViewInfo.Text = ""; ShowMessage(UpdateOutpost("the guild bank")); }
+                else RenderGuild(c, guild);
+            }
             else
             {
                 bool bank = tab == "bank";
@@ -95,7 +109,14 @@ namespace ElansAddonHub
                 if (bank && items == null)
                 {
                     ViewInfo.Text = "";
-                    ShowMessage("The bank has not been opened with " + c.Name + " yet. Visit a banker once, then /reload or log out, and it shows up here.");
+                    ShowMessage(c.Hub != null && HubModules.StateOf(c.Hub, "bank") == HubModState.TooNew ? UpdateOutpost("the bank")
+                        : "The bank has not been opened with " + c.Name + " yet. Visit a banker once, then /reload or log out, and it shows up here.");
+                }
+                else if (!bank && c.BagsFrom == null)
+                {
+                    ViewInfo.Text = "";
+                    ShowMessage(c.Hub != null && HubModules.StateOf(c.Hub, "bags") == HubModState.TooNew ? UpdateOutpost("the bags")
+                        : "No bags saved for " + c.Name + " yet. Log in to this character with Elan's Hub 1.12.0 or newer, then /reload or log out.");
                 }
                 else
                 {
@@ -121,8 +142,10 @@ namespace ElansAddonHub
                     var specialInfo = string.Concat(conts.Where(x => x.Special != null).GroupBy(x => x.Special.Key)
                         .Select(g => " · " + g.First().Special.Short + " " + g.Sum(x => x.Free) + " free"));
                     var at = bank ? c.BankAt : (c.BagsAt > 0 ? c.BagsAt : c.Updated);
-                    ViewInfo.Text = lastNoLayout ? (items.Sum(i => i.Count) + " items · saved " + InventoryReader.Ago(at))
-                        : (total - used) + " free of " + total + " slots" + specialInfo + " · " + (bank ? "seen " : "saved ") + InventoryReader.Ago(at);
+                    var from = bank ? c.BankFrom : c.BagsFrom;
+                    ViewInfo.Text = (lastNoLayout ? (items.Sum(i => i.Count) + " items · saved " + InventoryReader.Ago(at))
+                        : (total - used) + " free of " + total + " slots" + specialInfo + " · " + (bank ? "seen " : "saved ") + InventoryReader.Ago(at))
+                        + (from != null ? " · " + from : "");
                     if (conts.Count > 0 && conts.SelectMany(x => x.Slots.Values).Any() && conts.SelectMany(x => x.Slots.Values).All(s => s.Icon <= 0)) lastNoIcons = true;
                 }
             }
@@ -389,7 +412,8 @@ namespace ElansAddonHub
                 sp.Children.Add(new Border { Height = 1, Background = Res("Brush.Divider"), Margin = new Thickness(0, 8, 0, 8) });
                 sp.Children.Add(CountRow("All together", Res("Brush.Text.Primary"), tip.Grand.ToString("N0"), 0));
             }
-            var loc = guild ? where + " · " + bagTitle + " · slot " + slotNo
+            var loc = where == "Worn" ? (owner != null ? owner.Name + " · " : "") + bagTitle
+                : guild ? where + " · " + bagTitle + " · slot " + slotNo
                 : (owner != null ? owner.Name + " · " : "") + where + (where == "Bags" || where == "Bank" ? " · " + bagTitle : "") + " · slot " + slotNo;
             if (s.Count > 1) loc += " · stack of " + s.Count.ToString("N0");
             sp.Children.Add(Line(loc, "Text.Caption", null, 12));
@@ -451,6 +475,29 @@ namespace ElansAddonHub
         }
 
         void OnIconProblemChanged() => Dispatcher.BeginInvoke(new Action(UpdateIconNote));
+
+        // a talent as a slot: a placeholder tile with the first letter of its name (the spell icon is not known by its id), rank "r/m" in the corner
+        FrameworkElement TalentNodeBox(HubTalentNode n)
+        {
+            bool maxed = n.M > 0 && n.R >= n.M, any = n.R > 0;
+            var edge = maxed ? EdgeFor(6) : any ? EdgeFor(2) : EmptyEdge;
+            var bd = new Border { Width = SlotSize, Height = SlotSize, Margin = new Thickness(1.5), CornerRadius = new CornerRadius(4), Background = SlotBg, BorderThickness = new Thickness(1.5), BorderBrush = edge, SnapsToDevicePixels = true, Opacity = any ? 1 : 0.55 };
+            var g = new Grid();
+            var q = maxed ? 6 : any ? 2 : 1;
+            var fb = new Border { Margin = new Thickness(2), CornerRadius = new CornerRadius(3), Background = TileFillFor(q) };
+            fb.Child = new TextBlock { Text = string.IsNullOrEmpty(n.N) ? "?" : Initial(n.N), Foreground = Frozen(QualityHex[q]), FontSize = 16, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            g.Children.Add(fb);
+            var rank = n.M > 0 ? n.R + "/" + n.M : n.R.ToString(CultureInfo.InvariantCulture);
+            foreach (var p in Outlined(rank)) g.Children.Add(p);
+            bd.Child = g;
+            var tip = new StackPanel { MinWidth = 160 };
+            tip.Children.Add(Line(string.IsNullOrEmpty(n.N) ? "Talent " + n.Id : n.N, "Text.RowTitle"));
+            tip.Children.Add(Line("Rank " + rank.Replace("/", " of "), "Text.Secondary", null, 4));
+            if (n.S > 0) tip.Children.Add(Line("Spell ID " + n.S, "Text.Caption", null, 4));
+            bd.ToolTip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = tip };
+            ToolTipService.SetInitialShowDelay(bd, 150);
+            return bd;
+        }
 
         // ---- self-test hooks
         public void ResultsForTest(string key) { filterKey = key; userAll = key == null; Render(wowRoot()); RenderResults(); }
