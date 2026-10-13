@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "hubdata", "readers", "characters", "itemdata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "hubdata", "readers", "characters", "itemdata", "spelldata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -66,6 +66,7 @@ namespace ElansAddonHub.Services
             ["readers"] = "how the app reads the game's saved files: one folder walk finds the same files as the old per-reader walks (flavors, accounts, links skipped), ElansHub.lua parsed once when presence + calendar + looks + hub + health + flights ask (parses counted), parsed again after a change, last good parse kept for a half-written or locked file, two threads reading at once",
             ["characters"] = "Characters page (Hub data): Hub modules bags / bank / guildbank / gear / talents / professions (parsing, TooNew), merge of Hub and Bags characters (Hub primary, newer wins, realm-exact keys), conversion to the inventory model, talent grouping, Overview / Gear / Talents / Professions tabs, empty states",
             ["itemdata"] = "Atlas item data (2.48.0): the WDC5 table reader (inline / bit-packed / signed / pallet / pallet array / common data, string block, id list, copy table, an encrypted section skipped), the DBCache.bin hotfix reader (override, add, invalid and truncated rows), the ItemSparse layout table (an unknown layout hash = unavailable, nothing guessed), stat amounts from the item-level budgets, the saved index (round trip, invalidated by a new game build or a changed DBCache.bin, debounced refresh), name search, tooltip lines, the Characters page (slot and result tooltips, not-revealed text, items you do not own in the search, gear item level fallback), the Settings line and switch; optional read-only smoke check of the real game files",
+            ["spelldata"] = "Atlas A2 + A4 and the item details: spells (names, ranks, descriptions with the $s1 / $o1 / $d tokens filled in, icons, cast time, duration, range), skills and professions, recipes and reagents (what makes an item, what uses it), factions and their templates (friendly / hostile to the Alliance and the Horde), armor and weapon damage from the item-level tables, item effects (Use / Equip / Chance on hit), item sets with bonuses; the WDC5 additions (relationship data, uncompressed arrays, the string space across sections); an unknown layout makes only that table unavailable; the saved index keyed by the game build; tooltips on the Characters page (item facts, set count, recipes under a profession, the spell in a talent tile); the revealed-items hook of the Lodge; optional read-only check of the real game files",
             ["health"] = "addon health",
             ["inputs"] = "text inputs: Input / SecretInput / Dropdown draw g j p q y without clipping at 100 % and 125 % (pixel check)",
             ["round3"] = "settings round 3 (WoW watch, lodge update, welcome, ...)",
@@ -90,9 +91,10 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/(Util|SettingsStore|Models|Json|Net|SelfTestFixture|FakeUpdateServer|TestScope|WowLocator|Splash|SplashScene)\.cs$", Star);
             R(@"^src/Assets/", Star);
             // ---- inventory
-            R(@"^src/InventoryPage", "inventory", "characters", "itemdata");
+            R(@"^src/InventoryPage", "inventory", "characters", "itemdata", "spelldata");
             R(@"^src/Services/(InventoryData|IconStore|IconSheet|Blp|Casc|CharPortrait|LuaData|ZoneNames)\.cs$", "inventory");
-            R(@"^src/(Services/(Db2/|Casc\.cs)|MainWindow\.ItemDataTest\.cs)", "itemdata");
+            R(@"^src/(Services/(Db2/|Casc\.cs)|MainWindow\.ItemDataTest\.cs)", "itemdata", "spelldata");
+            R(@"^src/MainWindow\.SpellDataTest\.cs$", "spelldata");
             R(@"^src/(MainWindow\.HubDataTest|Services/(HubData|SavedVarsFiles|LuaData))\.cs$", "hubdata", "characters");
             R(@"^src/(MainWindow\.ReadersTest|Services/(SavedVarsFiles|GamePresence|InventoryData|WowCalendar|FlightShare|AddonHealth|HealthMonitor|HubData|LuaData))\.cs$", "readers");
             R(@"^src/(MainWindow\.CharactersTest|Services/(HubModules|CharacterMerge))\.cs$", "characters", "inventory");
@@ -281,8 +283,8 @@ namespace ElansAddonHub.Services
             void Ck(string w, bool c) { n.Add((c ? "ok   " : "FAIL ") + w); ok &= c; }
             bool Same(IEnumerable<string> a, params string[] b) => a.SequenceEqual(b);
             List<string> Map(params string[] f) => FromPaths(f, out _);
-            Ck("inventory files -> the Characters page sections only (characters, inventory)", Same(Map("src/InventoryPage.xaml.cs", "src/Services/InventoryData.cs", "src/Services/IconStore.cs"), "readers", "characters", "itemdata", "inventory"));
-            Ck("backslash paths are normalised", Same(Map("src\\InventoryPage.Bags.cs"), "characters", "itemdata", "inventory"));
+            Ck("inventory files -> the Characters page sections only (characters, inventory)", Same(Map("src/InventoryPage.xaml.cs", "src/Services/InventoryData.cs", "src/Services/IconStore.cs"), "readers", "characters", "itemdata", "spelldata", "inventory"));
+            Ck("backslash paths are normalised", Same(Map("src\\InventoryPage.Bags.cs"), "characters", "itemdata", "spelldata", "inventory"));
             var lodge = Map("src/Lodge/LodgeView.xaml.cs");
             Ck("Lodge files -> lodge, viewer, toasts, presence (not inventory)", new[] { "lodge", "viewer", "toasts", "presence" }.All(lodge.Contains) && !lodge.Contains("inventory"));
             Ck("Theme and Motion -> ALL", Map("src/Theme/Theme.xaml").Count == All.Length && Map("src/Motion.cs").Count == All.Length);
@@ -291,7 +293,7 @@ namespace ElansAddonHub.Services
             Ck("one shared file among specific ones -> ALL", Map("src/InventoryPage.xaml", "src/Motion.cs").Count == All.Length);
             Ck("docs only -> nothing", Map("README.md", "docs/design/x.png", "src/CHANGELOG.md").Count == 0);
             Ck("no changes -> nothing", Map().Count == 0);
-            Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "invites2" || a == "characters" || a == "itemdata" || a == "inventory" || a == "health")));
+            Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "invites2" || a == "characters" || a == "itemdata" || a == "spelldata" || a == "inventory" || a == "health")));
             Ck("every rule section is a real section", Rules.SelectMany(r => r.Item2).All(s => s == Star || All.Contains(s)));
             Ck("every dependency is a real section", Deps.All(d => All.Contains(d.Key) && d.Value.All(All.Contains)));
             Ck("every section has a description", All.All(Info.ContainsKey));

@@ -118,7 +118,7 @@ namespace ElansAddonHub
             var probe = Build(new int[4]);
             int secStart = BitConverter.ToInt32(probe, 204 + 8);            // section 0 file_offset
             var offs = new int[4];
-            for (int k = 0; k < 4; k++) offs[k] = secStart + 48 + strAt[k] - (secStart + 12 * k + 8);
+            for (int k = 0; k < 4; k++) offs[k] = 72 + strAt[k] - (12 * k + 8);   // the client counts the records of ALL sections (6 rows of 12 bytes, the locked ones too) before the string blocks
             expectCount = new[] { 5 };
             return Build(offs);
         }

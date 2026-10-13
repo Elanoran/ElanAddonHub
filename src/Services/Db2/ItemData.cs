@@ -103,7 +103,7 @@ namespace ElansAddonHub.Services.Db2
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 1;          // bump when the parsing or the cache file changes meaning
+        public const int FormatVersion = 2;          // bump when the parsing or the cache file changes meaning (2: weapon damage spread, flags and item set id)
 
         // ---- hooks
         public static Func<string> WowRoot = () => null;
@@ -141,7 +141,7 @@ namespace ElansAddonHub.Services.Db2
                 {
                     case State.Disabled: return "Item data: off";
                     case State.Loading: return "Item data: reading your WoW installation...";
-                    case State.Ready: return "Item data: read from your WoW installation (" + Count.ToString("N0", CultureInfo.InvariantCulture) + " items, " + Revealed.ToString("N0", CultureInfo.InvariantCulture) + " revealed)";
+                    case State.Ready: return "Item data: read from your WoW installation (" + Count.ToString("N0", CultureInfo.InvariantCulture) + " items, " + Revealed.ToString("N0", CultureInfo.InvariantCulture) + " revealed" + SpellData.StatusExtra + ")";
                     case State.Unavailable: return "Item data: unavailable" + (string.IsNullOrEmpty(reason) ? "" : " (" + reason + ")");
                     default: return "Item data: not read yet";
                 }
@@ -156,6 +156,7 @@ namespace ElansAddonHub.Services.Db2
         {
             Interlocked.Increment(ref StartCountForTest);
             if (!SafeEnabled()) { Disable(); return; }
+            SpellData.Start();                       // spells, skills, factions and item details are read alongside (same switch, same WoW folder)
             lock (gate)
             {
                 again = true;
@@ -171,6 +172,7 @@ namespace ElansAddonHub.Services.Db2
         public static void Disable()
         {
             snap = null;
+            SpellData.Disable();
             StopWatching();
             SetState(State.Disabled, null);
         }
@@ -512,6 +514,7 @@ namespace ElansAddonHub.Services.Db2
                 w.Write((byte)i.Quality); w.Write((short)i.ItemLevel); w.Write((short)i.RequiredLevel); w.Write((byte)i.InventoryType);
                 w.Write((short)i.ClassId); w.Write((short)i.SubclassId); w.Write(i.IconId); w.Write((byte)i.Bonding); w.Write(i.Stackable);
                 w.Write(i.DelayMs); w.Write((byte)i.ContainerSlots); w.Write(i.SellPrice); w.Write(i.BuyPrice);
+                w.Write(i.DmgVariance); w.Write(i.Flags2); w.Write((ushort)i.ItemSetId);
                 if (i.Stats == null) w.Write(-1);
                 else { w.Write(i.Stats.Length); foreach (var s in i.Stats) w.Write(s); }
             }
@@ -562,6 +565,7 @@ namespace ElansAddonHub.Services.Db2
                 i.Quality = r.ReadByte(); i.ItemLevel = r.ReadInt16(); i.RequiredLevel = r.ReadInt16(); i.InventoryType = r.ReadByte();
                 i.ClassId = r.ReadInt16(); i.SubclassId = r.ReadInt16(); i.IconId = r.ReadInt32(); i.Bonding = r.ReadByte(); i.Stackable = r.ReadInt32();
                 i.DelayMs = r.ReadInt32(); i.ContainerSlots = r.ReadByte(); i.SellPrice = r.ReadInt64(); i.BuyPrice = r.ReadInt64();
+                i.DmgVariance = r.ReadSingle(); i.Flags2 = r.ReadInt32(); i.ItemSetId = r.ReadUInt16();
                 int sc = r.ReadInt32();
                 if (sc < 0) i.Stats = null;
                 else if (sc == 0) i.Stats = ClientItem.NoStats;

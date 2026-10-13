@@ -51,7 +51,12 @@ namespace ElansAddonHub.Services.Db2
         public int EncryptedSections { get; private set; }
         public int EncryptedRecords { get; private set; }
 
-        struct Rec { public int Id; public int Pos; public int Size; }
+        struct Rec { public int Id; public int Pos; public int Size; public int Foreign; public long Cat; }
+
+        // String offsets of a table with fixed records count in the layout the client works with: the records of ALL sections one after the other (a locked
+        // section included), then the string blocks of all sections. A record's position there is `Cat`; strSecs maps that string space back to the file.
+        long totalRecBytes;
+        readonly List<long[]> strSecs = new List<long[]>();      // { start in the joined string space, size, position in the file }
 
         byte[] d;
         Rec[] recs = new Rec[0];
@@ -132,16 +137,21 @@ namespace ElansAddonHub.Services.Db2
             }
 
             var list = new List<Rec>(Math.Max(0, Math.Min(recordCount, 1 << 22)));
+            long catBefore = 0, strBefore = 0;
+            if (!Sparse) for (int s = 0; s < sectionCount; s++) totalRecBytes += Math.Max(0L, (long)I32(d, secAt + s * 40 + 12)) * RecordSize;
             for (int s = 0; s < sectionCount; s++)
             {
                 int h = secAt + s * 40;
                 ulong key = BitConverter.ToUInt64(d, h);
                 int fileOffset = I32(d, h + 8), recCount = I32(d, h + 12), strSize = I32(d, h + 16), recEnd = I32(d, h + 20), idSize = I32(d, h + 24),
                     omCount = I32(d, h + 32), copyCount = I32(d, h + 36);
+                long catBase = catBefore, strBase = strBefore;
+                catBefore += Math.Max(0L, (long)recCount) * RecordSize; strBefore += Math.Max(0, strSize);
                 if (key != 0) { EncryptedSections++; EncryptedRecords += Math.Max(0, recCount); continue; }
                 if (recCount < 0 || omCount < 0 || copyCount < 0 || fileOffset < 0 || fileOffset > d.Length) throw new Db2Exception("section " + s + " is out of range");
                 long pos = Sparse ? recEnd : (long)fileOffset + (long)recCount * RecordSize + strSize;
                 if (pos < fileOffset || pos > d.Length) throw new Db2Exception("section " + s + " is out of range");
+                if (!Sparse) strSecs.Add(new[] { strBase, Math.Max(0, strSize), (long)fileOffset + (long)recCount * RecordSize });
                 var ids = new int[recCount];
                 bool haveIds = idSize >= 4L * recCount && recCount > 0;
                 if (haveIds)
@@ -155,6 +165,7 @@ namespace ElansAddonHub.Services.Db2
                 pos += 8L * copyCount;
                 int omAt = (int)pos;
                 int first = list.Count;
+                int relSize = I32(d, h + 28);
                 if (Sparse)
                 {
                     if (pos + 6L * omCount > d.Length) throw new Db2Exception("section " + s + ": offset map runs past the end");
@@ -173,10 +184,22 @@ namespace ElansAddonHub.Services.Db2
                     if ((long)fileOffset + (long)recCount * RecordSize > d.Length) throw new Db2Exception("section " + s + ": records run past the end");
                     for (int k = 0; k < recCount; k++)
                     {
-                        var r = new Rec { Pos = fileOffset + k * RecordSize, Size = RecordSize };
+                        var r = new Rec { Pos = fileOffset + k * RecordSize, Size = RecordSize, Cat = catBase + (long)k * RecordSize };
                         r.Id = haveIds ? ids[k] : (int)ReadField(r, 0, IdIndex, 0);
                         list.Add(r);
                     }
+                }
+                // relationship data (the foreign key of a "relation" column that is not stored in the record): u32 count, min, max, then (foreign id, record index) pairs
+                if (!Sparse && relSize >= 12 && omAt + (long)relSize <= d.Length)
+                {
+                    int rn = I32(d, omAt);
+                    if (rn >= 0 && 12L + 8L * rn <= relSize)
+                        for (int k = 0; k < rn; k++)
+                        {
+                            int fk = I32(d, omAt + 12 + k * 8), ri = I32(d, omAt + 16 + k * 8);
+                            if (ri < 0 || ri >= recCount || first + ri >= list.Count) continue;
+                            var rr = list[first + ri]; rr.Foreign = fk; list[first + ri] = rr;
+                        }
                 }
                 // the copy table: new id = a copy of an existing record
                 var local = new Dictionary<int, int>();
@@ -184,8 +207,8 @@ namespace ElansAddonHub.Services.Db2
                 for (int k = 0; k < copyCount; k++)
                 {
                     int newId = I32(d, copyAt + k * 8), srcId = I32(d, copyAt + k * 8 + 4);
-                    if (local.TryGetValue(srcId, out int si)) list.Add(new Rec { Id = newId, Pos = list[si].Pos, Size = list[si].Size });
-                    else if (byId.TryGetValue(srcId, out int gi) && gi < list.Count) list.Add(new Rec { Id = newId, Pos = list[gi].Pos, Size = list[gi].Size });
+                    if (local.TryGetValue(srcId, out int si)) list.Add(new Rec { Id = newId, Pos = list[si].Pos, Size = list[si].Size, Foreign = list[si].Foreign, Cat = list[si].Cat });
+                    else if (byId.TryGetValue(srcId, out int gi) && gi < list.Count) list.Add(new Rec { Id = newId, Pos = list[gi].Pos, Size = list[gi].Size, Foreign = list[gi].Foreign, Cat = list[gi].Cat });
                 }
                 for (int k = first; k < list.Count; k++) byId[list[k].Id] = k;
             }
@@ -259,15 +282,38 @@ namespace ElansAddonHub.Services.Db2
         // value of a field as an unsigned number (bit-packed signed fields are sign extended); element = array index
         public long Field(int index, int field, int element = 0) => ReadField(recs[index], index, field, element);
 
+        // the foreign key of record `index` from the relationship data (a "relation" column such as SpellMisc.SpellID that is not in the record); 0 = none
+        public int Foreign(int index) => recs[index].Foreign;
+
+        // element `element` of an array field of `len` entries. Arrays stored without compression keep ONE field entry whose size is the whole array,
+        // so the element is cut out of it; every other storage type already knows its element size.
+        public long FieldArr(int index, int field, int element, int len)
+        {
+            var f = Fields[field];
+            if (f.StorageType == StorageNone && len > 1 && f.SizeBits > 0 && f.SizeBits % len == 0)
+            {
+                int eb = f.SizeBits / len;
+                return ReadBits((long)recs[index].Pos * 8 + f.OffsetBits + (long)element * eb, eb);
+            }
+            return ReadField(recs[index], index, field, element);
+        }
+
+        public static float AsFloat(long v) => BitConverter.ToSingle(BitConverter.GetBytes((uint)v), 0);
+
         // a string field of a table with fixed records: the value is an offset from the field's own position into the string block
         public string String(int index, int field)
         {
             var r = recs[index];
             var f = Fields[field];
             long v = ReadField(r, index, field, 0);
-            long at = (long)r.Pos + (f.OffsetBits >> 3) + (int)v;
-            if (at < 0 || at >= d.Length) return "";
-            return CString(d, (int)at, d.Length);
+            long x = r.Cat + (f.OffsetBits >> 3) + (int)v - totalRecBytes;      // where the string is in the joined string space
+            foreach (var s in strSecs)
+                if (x >= s[0] && x < s[0] + s[1])
+                {
+                    long at = s[2] + (x - s[0]);
+                    return at < 0 || at >= d.Length ? "" : CString(d, (int)at, d.Length);
+                }
+            return "";
         }
 
         public static string CString(byte[] b, int at, int limit)

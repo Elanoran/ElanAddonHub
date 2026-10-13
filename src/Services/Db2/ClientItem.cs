@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Collections.Generic;
 
@@ -20,6 +21,15 @@ namespace ElansAddonHub.Services.Db2
         public int[] Stats = NoStats;
         public string Source = "client";              // "client" (shipped item table) or "cache" (a row the server pushed to this client: a revealed item)
         public int[] StatsRaw;                        // while loading: [type, share of the budget (1/10000)] pairs, turned into Stats by ItemTables.ResolveStats
+
+        // for armor and weapon damage (the game works them out from item-level tables, see ItemDetails)
+        public float DmgVariance;                     // the damage spread of a weapon (ItemSparse.DmgVariance)
+        public int Flags2;                            // ItemSparse.Flags[1]; 0x200 = a caster weapon (uses the caster damage tables)
+        public int ItemSetId;                         // ItemSparse.ItemSet, 0 = none
+
+        // armor and weapon damage from the game's item-level tables; 0 / false while those tables are not read (or not known to this version)
+        public int Armor => ItemDetails.ArmorOf(this);
+        public bool TryDamage(out int min, out int max, out double dps) => ItemDetails.DamageOf(this, out min, out max, out dps);
 
         public bool Revealed => Source == "cache";
         public int StatCount => Stats == null ? 0 : Stats.Length / 2;
@@ -137,7 +147,8 @@ namespace ElansAddonHub.Services.Db2
     {
         public const string NotRevealed = "Not revealed yet on WoW Forever";
 
-        public static List<TipLine> Lines(ClientItem it)
+        // `worn` = the item ids the character wears (for the "(2/8)" count of an item set); null = none known
+        public static List<TipLine> Lines(ClientItem it, ICollection<int> worn = null)
         {
             var l = new List<TipLine>();
             if (it == null) return l;
@@ -152,8 +163,16 @@ namespace ElansAddonHub.Services.Db2
                 var cls = ItemNames.Class(it.ClassId);
                 if (cls != null && it.ClassId != 15) l.Add(new TipLine { Kind = "slot", Text = cls, Right = null });
             }
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            int armor = it.ClassId == 4 ? it.Armor : 0;
+            if (armor > 0) l.Add(new TipLine { Kind = "armor", Text = armor.ToString(inv) + " Armor" });
+            int dmin = 0, dmax = 0; double dps = 0;
+            bool hasDmg = (it.ClassId == 2 || it.InventoryType == 24) && it.TryDamage(out dmin, out dmax, out dps);
+            if (hasDmg && it.ClassId == 2 && dmax > 0) l.Add(new TipLine { Kind = "damage", Text = dmin.ToString(inv) + " - " + dmax.ToString(inv) + " Damage" });
             if (it.ClassId == 2 && it.DelayMs > 0)
-                l.Add(new TipLine { Kind = "speed", Text = "Speed " + (it.DelayMs / 1000.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) });
+                l.Add(new TipLine { Kind = "speed", Text = "Speed " + (it.DelayMs / 1000.0).ToString("0.00", inv) });
+            if (hasDmg && dps > 0)
+                l.Add(new TipLine { Kind = "dps", Text = it.ClassId == 2 ? "(" + dps.ToString("0.0", inv) + " damage per second)" : "Adds " + dps.ToString("0.0", inv) + " damage per second to ranged attacks" });
             if (it.ContainerSlots > 0)
                 l.Add(new TipLine { Kind = "bag", Text = it.ContainerSlots + " Slot " + (it.ClassId == 11 ? "Quiver" : "Bag") });
             var bind = ItemNames.Bonding(it.Bonding);
@@ -166,9 +185,42 @@ namespace ElansAddonHub.Services.Db2
                     l.Add(new TipLine { Kind = "stat", Text = (v > 0 ? "+" : "-") + Math.Abs(v).ToString(System.Globalization.CultureInfo.InvariantCulture) + " " + ItemNames.Stat(it.Stats[i]) });
                 }
             if (it.RequiredLevel > 1) l.Add(new TipLine { Kind = "req", Text = "Requires Level " + it.RequiredLevel });
+            foreach (var e in ItemDetails.EffectsOf(it.Id))     // "Equip: ...", "Use: ...", "Chance on hit: ..." (the spell's own description)
+            {
+                var sp = SpellData.Spell(e.Value);
+                var txt = sp == null ? null : (string.IsNullOrWhiteSpace(sp.Description) ? sp.AuraDescription : sp.Description);
+                var pre = ItemDetails.TriggerPrefix(e.Key);
+                if (pre == null || string.IsNullOrWhiteSpace(txt)) continue;
+                l.Add(new TipLine { Kind = "effect", Text = pre + txt.Trim() });
+            }
             if (!string.IsNullOrWhiteSpace(it.Description)) l.Add(new TipLine { Kind = "desc", Text = "\"" + it.Description.Trim() + "\"" });
+            AddSetLines(l, it, worn);
             if (it.SellPrice > 0) l.Add(new TipLine { Kind = "price", Text = "Sell Price:", Copper = it.SellPrice });
             return l;
+        }
+
+        // "Set name (2/8)", the pieces, and the set bonuses ("(2) Set: ...")
+        static void AddSetLines(List<TipLine> l, ClientItem it, ICollection<int> worn)
+        {
+            var set = ItemDetails.SetOf(it);
+            if (set == null) return;
+            int have = 0;
+            if (worn != null) foreach (var id in set.Items) if (id > 0 && worn.Contains(id)) have++;
+            int total = set.Items.Count(i => i > 0);
+            l.Add(new TipLine { Kind = "setname", Text = set.Name + " (" + have + "/" + total + ")" });
+            foreach (var id in set.Items)
+            {
+                if (id <= 0) continue;
+                var p = ItemData.Get(id);
+                l.Add(new TipLine { Kind = worn != null && worn.Contains(id) ? "setitem-worn" : "setitem", Text = p != null && !string.IsNullOrEmpty(p.Name) ? p.Name : "Item " + id });
+            }
+            foreach (var b in set.Bonuses)
+            {
+                var sp = SpellData.Spell(b.Value);
+                var txt = sp == null ? null : (string.IsNullOrWhiteSpace(sp.Description) ? sp.AuraDescription : sp.Description);
+                if (string.IsNullOrWhiteSpace(txt)) continue;
+                l.Add(new TipLine { Kind = have >= b.Key ? "setbonus-on" : "setbonus", Text = "(" + b.Key + ") Set: " + txt.Trim() });
+            }
         }
 
         // gold / silver / copper parts of an amount (zero parts left out except a lone 0c)

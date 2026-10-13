@@ -170,8 +170,40 @@ quest gives them come later). One principle decides everything about it:
 - Used by the Characters page: item tooltips (bags, bank, guild bank, gear), "not revealed yet on WoW Forever" for items the
   client does not know, matches for items you do not own in the search ("Not on your characters"), and the item level on the
   Gear tab when the Hub did not save one. Elan's addons never see or need this data; it is Outpost-only.
-- Not in the client, so not in this layer: armor values and weapon damage (computed from further tables, not read yet), loot
-  tables, vendors, spawns, quest givers.
+- Not in the client, so not in this layer: loot tables, vendors, spawns, quest givers. (Armor, weapon damage, item effects and
+  item sets are not stored in the item either: the next section reads them from further tables.)
+
+### Spells, skills, recipes, factions and item details (layers A2 + A4)
+
+Same rules as the item layer (read-only, layout-checked, background, saved index keyed by the game build, same off switch), implemented in
+`Services/Db2/SpellData.cs` (service), `SpellModel.cs` (model + parsing), `SpellTables.cs` (the table registry), `SpellText.cs`
+(description tokens), `ItemDetailTables.cs`, `FactionData.cs`, `RevealedItems.cs`. It starts and stops with `ItemData` and keeps its own
+index `cache\spelldata.bin`. Each table has its own layout check; an unknown layout hash makes only THAT table unavailable (its group keeps
+what the other tables give), the reason goes to the log and the Settings "Game data" line ("..., spell data unavailable (...)").
+Layouts known (WoWDBDefs, build 1.60.1.70338): Spell E3D134FB (sparse: NameSubtext, Description, AuraDescription), SpellName 782EE721,
+SpellMisc 434B3607, SpellEffect 5362E3D4, SpellReagents FF40D202, SpellDuration A931BD2B, SpellCastTimes 75B6BD3A, SpellRange ADA13705,
+SpellRadius F9A913EE, SkillLine 6763217C, SkillLineAbility 224F7EA0, Faction 6D443C38, FactionTemplate 22B6DC22, ItemArmorTotal EB155D51,
+ItemArmorQuality 2935AA9D, ItemArmorShield 7E6C94F9, ArmorLocation FB67352F, ItemDamage{OneHand,OneHandCaster,TwoHand,TwoHandCaster,Ammo}
+56F30531, ItemDamage{Ranged,Thrown,Wand} 3CD722C1, ItemEffect 4CA77678, ItemXItemEffect 96F083AD, ItemSet F79068A4, ItemSetSpell 2666A73F.
+
+- **Reader additions (`Wdc5`)**: relationship data (the foreign key of a column that is not stored in the record: SpellMisc / SpellEffect ->
+  spell, ItemXItemEffect -> item, ItemSetSpell -> set), arrays stored without compression (one field entry for the whole array), and the
+  string space of tables with several sections (the client counts the records of ALL sections, locked ones included, before the string blocks).
+- **Spells**: `SpellData.Spell(id)` = name, rank text, icon, cast time, duration, range and the descriptions with the tokens filled in
+  (`$s1 $m1 $o1 $t1 $a1 $x1 $q1 $d`, `$12345s1`, `$@spellname123`, `${...}` arithmetic, `$/1000;s1`, `$l a:b;`, `$g`, `$?s1[a][b]` = else branch).
+  Anything it cannot work out (character-scaled amounts, `$w1`, unknown letters) stays EXACTLY as the game wrote it. Amounts are the table's base
+  amount (for a "14 to 22" spell the client's table holds the middle: 18).
+- **Skills and recipes**: `SpellsOfSkill(skill)`, `RecipesOfSkill(skill)`, `RecipesProducing(item)` (spell, skill, rank, reagents), `ReagentFor(item)`.
+  A recipe = a skill-line ability of a profession (SkillLine category 9 / 11) whose spell makes an item (effect 24) or uses reagents.
+- **Factions (A4)**: `FactionData.Name(id)`, `NameOfTemplate(templateId)`, `GroupOfTemplate`, `ToAlliance(template)` / `ToHorde(template)` (friendly /
+  hostile / neutral by the client's own rule: enemy group and enemy factions first, then friends), `Describe(template)`.
+- **Item details**: armor = ItemArmorQuality x ItemArmorTotal x ArmorLocation (shields from ItemArmorShield), weapon damage per second from the ItemDamage
+  table of the weapon kind (caster weapons = `Flags[1] & 0x200`), x speed, spread from `DmgVariance`; item effects ("Use: / Equip: / Chance on hit:" with the
+  spell's own description) and item sets ("Set name (n/N)", the pieces, the bonuses). `ClientItem.Armor` / `TryDamage` compute from these tables on demand.
+- **Ids**: `AtlasIds.Item/Spell/Skill/Faction` build and parse the `item:` / `spell:` / `skill:` / `faction:` links.
+- **Used by**: item tooltips (armor, damage, speed, dps, effects, set), Characters > Professions ("Recipes you can learn for this profession", each with the
+  item's tooltip and the reagents), Characters > Talents (the spell's rank and description in the tile's tooltip), the Settings line, and the Lodge hook
+  (`RevealedItemsSource` hands the DBCache-revealed items to `AtlasObs.RevealedSource`; armor and damage stay local, the wire format has no field for them).
 
 ### Later layers (not built, not decided)
 
@@ -290,9 +322,9 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
 | Layer | Source | Where | Status |
 |---|---|---|---|
 | A. Items | Client `ItemSparse`/`Item` DB2 from CASC + revealed items in `Cache\ADB\enUS\DBCache.bin` | Outpost `Services\Db2`, `ItemData` | building |
-| A2. Spells, skills, professions | Client `SpellName`, `Spell`, `SpellEffect`, `SpellMisc`, `SkillLine`, `SkillLineAbility`, `ItemEffect`, `ItemSet` DB2 (recipes, what a skill/profession teaches, item use/equip effects) | Outpost `Services\Db2`, `SpellData` | planned |
+| A2. Spells, skills, professions | Client `SpellName`, `Spell`, `SpellEffect`, `SpellMisc`, `SkillLine`, `SkillLineAbility`, `ItemEffect`, `ItemSet` DB2 (recipes, what a skill/profession teaches, item use/equip effects) | Outpost `Services\Db2`, `SpellData` | built (Outpost, Services\Db2\SpellData) |
 | A3. What the client has seen | The client's own caches of things the player met: `creaturecache.wdb` (Forever NPC names, levels, types), `gameobjectcache.wdb`, `questcache.wdb` — like revealed items, they fill the Forever-only gaps and are pooled in the Lodge | Outpost `Services\Db2` (WDB reader) | planned |
-| A4. Factions & reputation | Client `Faction` / `FactionTemplate` DB2 (which faction an NPC/vendor belongs to, reputation rewards) | Outpost `Services\Db2` | planned |
+| A4. Factions & reputation | Client `Faction` / `FactionTemplate` DB2 (which faction an NPC/vendor belongs to, reputation rewards) | Outpost `Services\Db2` | built (Outpost, Services\Db2\FactionData) |
 | B. Maps & instances | Client `UiMap`, `UiMapArt*`, `UiMapAssignment`, `Map`, `AreaTable` DB2 + map tile textures (BLP) | Outpost `Services\Maps` | planned |
 | C. Classic baseline | Public cMaNGOS classic-db dump (GPL-3.0), downloaded by the user's Outpost on request, credited; creatures, spawns, creature/object loot with chances, vendors, quests | Outpost `Services\Atlas\Classic` | planned |
 | D. Observations | Elan's Toolkit records loot (incl. kills with no drop), object loot, vendor stock and prices, quest rewards, and items the client reveals; with zone + position | Toolkit → Hub module `atlas.obs` (account) | planned |

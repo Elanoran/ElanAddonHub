@@ -68,6 +68,7 @@ namespace ElansAddonHub.Services
             public int Id, Quality, ItemLevel, RequiredLevel, Class, SubClass, Slot;
             public string Name;
             public int[][] Stats = new int[0][];                               // { statType, value }
+            public int Armor, DmgMin, DmgMax;                                  // worked out by the Outpost from the client's item-level tables; kept locally, not on the wire (no field in atlas.share items yet)
         }
 
         // item details the game client revealed (name, quality, item level, slot, stats) that the Outpost shares with the Lodge. Another layer (ItemData, read from

@@ -127,6 +127,7 @@ namespace ElansAddonHub
             AtlasShareBox.IsChecked = !s.AtlasShareOff;
             ItemDataBox.IsChecked = !s.ItemDataOff;
             ElansAddonHub.Services.Db2.ItemData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Db2.ItemData.Changed += OnItemDataChanged;
+            ElansAddonHub.Services.Db2.SpellData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Db2.SpellData.Changed += OnItemDataChanged;
             UpdateItemDataLine();
 
             ModeVa.IsChecked = !s.VoicePushToTalk;

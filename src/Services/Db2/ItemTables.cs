@@ -32,6 +32,7 @@ namespace ElansAddonHub.Services.Db2
             public int MinFixed;                                       // bytes the fixed part must have (record shorter than this = skipped)
             public int StatValue, StatType, StatSlots;                 // StatPercentEditor[], StatModifier_bonusStat[]
             public int Stackable, SellPrice, BuyPrice, ItemDelay, ItemLevel, Bonding, ContainerSlots, RequiredLevel, InventoryType, Quality;
+            public int DmgVariance = -1, Flags2 = -1, ItemSet = -1;   // float damage spread, Flags[1] (0x200 = caster weapon), item set id (optional: -1 = this layout does not say)
         }
 
         public static readonly SparseLayout[] SparseLayouts =
@@ -41,6 +42,7 @@ namespace ElansAddonHub.Services.Db2
                 LayoutHash = 0x6FCC3191, Build = "1.60.1.70338", MinFixed = 302,
                 StatValue = 76, StatType = 116, StatSlots = 10, Stackable = 156, SellPrice = 180, BuyPrice = 184, ItemDelay = 272, ItemLevel = 280,
                 Bonding = 293, ContainerSlots = 295, RequiredLevel = 298, InventoryType = 299, Quality = 300,
+                DmgVariance = 4, Flags2 = 204, ItemSet = 266,
             },
         };
 
@@ -131,6 +133,9 @@ namespace ElansAddonHub.Services.Db2
                 SellPrice = BitConverter.ToUInt32(a, f + L.SellPrice), BuyPrice = BitConverter.ToUInt32(a, f + L.BuyPrice),
             };
             if (it.RequiredLevel < 0) it.RequiredLevel = 0;
+            if (L.DmgVariance >= 0) it.DmgVariance = BitConverter.ToSingle(a, f + L.DmgVariance);
+            if (L.Flags2 >= 0) it.Flags2 = BitConverter.ToInt32(a, f + L.Flags2);
+            if (L.ItemSet >= 0) it.ItemSetId = BitConverter.ToUInt16(a, f + L.ItemSet);
             var raw = new List<int>();
             for (int i = 0; i < L.StatSlots; i++)
             {

@@ -398,7 +398,7 @@ namespace ElansAddonHub
         static readonly Brush SilverCoin = Frozen("#C0C7D0"), CopperCoin = Frozen("#C8764A");
 
         // returns true when the game data knew the item; an item it does not know (still hidden on WoW Forever) says so
-        bool AddItemFacts(StackPanel sp, int id)
+        bool AddItemFacts(StackPanel sp, int id, ICollection<int> worn = null)
         {
             var it = ElansAddonHub.Services.Db2.ItemData.Get(id);
             if (it == null)
@@ -407,7 +407,7 @@ namespace ElansAddonHub
                 return false;
             }
             bool first = true;
-            foreach (var l in ElansAddonHub.Services.Db2.ItemText.Lines(it))
+            foreach (var l in ElansAddonHub.Services.Db2.ItemText.Lines(it, worn))
             {
                 double top = first ? 4 : 2;
                 first = false;
@@ -428,6 +428,29 @@ namespace ElansAddonHub
                             break;
                         }
                     case "price": sp.Children.Add(PriceRow(l.Text, l.Copper, top + 2)); break;
+                    case "armor": case "damage": sp.Children.Add(Line(l.Text, "Text.Body", Res("Brush.Text.Primary"), top)); break;
+                    case "effect": case "setbonus-on":
+                        {
+                            var e = Line(l.Text, "Text.Body", Res("Brush.Success"), top + (l.Kind == "effect" ? 2 : 0));
+                            e.TextWrapping = TextWrapping.Wrap; e.MaxWidth = 280;
+                            sp.Children.Add(e);
+                            break;
+                        }
+                    case "setbonus":
+                        {
+                            var e = Line(l.Text, "Text.Secondary", null, top);
+                            e.TextWrapping = TextWrapping.Wrap; e.MaxWidth = 280;
+                            sp.Children.Add(e);
+                            break;
+                        }
+                    case "setname": sp.Children.Add(Line(l.Text, "Text.Body", Res("Brush.Warn"), top + 8)); break;
+                    case "setitem": case "setitem-worn":
+                        {
+                            var e = Line(l.Text, "Text.Secondary", l.Kind == "setitem-worn" ? Res("Brush.Text.Primary") : null, top);
+                            e.Margin = new Thickness(10, top, 0, 0);
+                            sp.Children.Add(e);
+                            break;
+                        }
                     case "ilvl": sp.Children.Add(Line(l.Text, "Text.Body", Res("Brush.Text.Primary"), top)); break;
                     default: sp.Children.Add(Line(l.Text, "Text.Secondary", Res("Brush.Text.Primary"), top)); break;
                 }
@@ -508,7 +531,9 @@ namespace ElansAddonHub
             var sp = new StackPanel { MinWidth = 200 };
             sp.Children.Add(Line(s.Name, "Text.RowTitle", Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, s.Quality))])));
             if (!string.IsNullOrEmpty(sub)) sp.Children.Add(Line(sub, "Text.Secondary", null, 2));
-            AddItemFacts(sp, s.Id);
+            // the pieces this character wears (for the "(2/5)" of an item set)
+            ICollection<int> worn = where == "Worn" && owner != null && owner.Hub != null && HubModules.StateOf(owner.Hub, "gear") == HubModState.Ok ? HubModules.GearOf(owner.Hub).Slots.Values.Select(x => x.I).ToList() : null;
+            AddItemFacts(sp, s.Id, worn);
             var tip = InventoryReader.TipFor(index, s.Id, owner);
             AddCountRows(sp, tip);
             var loc = where == "Worn" ? (owner != null ? owner.Name + " · " : "") + bagTitle
@@ -604,6 +629,19 @@ namespace ElansAddonHub
             var tip = new StackPanel { MinWidth = 160 };
             tip.Children.Add(Line(string.IsNullOrEmpty(n.N) ? "Talent " + n.Id : n.N, "Text.RowTitle"));
             tip.Children.Add(Line("Rank " + rank.Replace("/", " of "), "Text.Secondary", null, 4));
+            var spell = n.S > 0 ? ElansAddonHub.Services.Db2.SpellData.Spell(n.S) : null;
+            if (spell != null)
+            {
+                if (!string.IsNullOrEmpty(spell.Rank)) tip.Children.Add(Line(spell.Rank, "Text.Secondary", null, 2));
+                var sd = !string.IsNullOrWhiteSpace(spell.Description) ? spell.Description : spell.AuraDescription;
+                if (!string.IsNullOrWhiteSpace(sd))
+                {
+                    var d = Line(sd.Trim(), "Text.Body", Res("Brush.Warn"), 6);
+                    d.TextWrapping = TextWrapping.Wrap; d.MaxWidth = 280;
+                    tip.Children.Add(d);
+                }
+                charTabInfo.Add("talentspell|" + n.S + "|" + spell.Name);
+            }
             if (n.S > 0) tip.Children.Add(Line("Spell ID " + n.S, "Text.Caption", null, 4));
             bd.ToolTip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = tip };
             ToolTipService.SetInitialShowDelay(bd, 150);

@@ -76,7 +76,7 @@ namespace ElansAddonHub
             }
             if (Array.IndexOf(e.Args, "--selftest") >= 0) LinkOpen.SelfTestRun = true;   // the real elanshub:// registration is off limits to a self-test
             if (Array.IndexOf(e.Args, "--selftest") >= 0) Sounds.Muted = true;          // and nothing a self-test plays may reach the speakers
-            if (Array.IndexOf(e.Args, "--selftest") >= 0) ElansAddonHub.Services.Db2.ItemData.AutoStart = false;   // a self-test never reads the real game files on its own
+            if (Array.IndexOf(e.Args, "--selftest") >= 0) { ElansAddonHub.Services.Db2.ItemData.AutoStart = false; ElansAddonHub.Services.Db2.SpellData.AutoStart = false; }   // a self-test never reads the real game files on its own
             base.OnStartup(e);
             // Windows animations off: every Motion.* duration becomes instant (DESIGN.md, Motion)
             if (!SystemParameters.ClientAreaAnimation)
