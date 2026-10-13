@@ -4,12 +4,12 @@ using Xunit;
 namespace Lodge.Tests;
 
 // Lodge 2.15: crowd-shared Atlas observations (feature "atlas")
-public class AtlasTests
+public partial class AtlasTests
 {
     static Dictionary<string, object> Item(long n, long c) => new() { ["n"] = n, ["c"] = c };
 
     // an observation of one source: cumulative kills n, drops { item: (times, total) }, zones { map: n }
-    static Dictionary<string, object> Ctr(long n, Dictionary<string, object>? items = null, Dictionary<string, object>? z = null)
+    internal static Dictionary<string, object> Ctr(long n, Dictionary<string, object>? items = null, Dictionary<string, object>? z = null)
     {
         var o = new Dictionary<string, object> { ["n"] = n };
         if (items != null) o["items"] = items;
@@ -17,9 +17,9 @@ public class AtlasTests
         return o;
     }
 
-    static Dictionary<string, object> Kills(string npc, Dictionary<string, object> ctr) => new() { [npc] = ctr };
+    internal static Dictionary<string, object> Kills(string npc, Dictionary<string, object> ctr) => new() { [npc] = ctr };
 
-    static async Task<JsonObject> Share(FunRig r, Member m, object payload, bool advance = true)
+    internal static async Task<JsonObject> Share(FunRig r, Member m, object payload, bool advance = true)
     {
         if (advance) r.Clock.Advance(TimeSpan.FromMinutes(3));
         r.Sock(m.Name).Clear();
@@ -29,10 +29,10 @@ public class AtlasTests
         return r.Sock(m.Name).Of("atlas.shared").Last();
     }
 
-    static async Task<JsonObject> ShareKills(FunRig r, Member m, string npc, Dictionary<string, object> ctr, bool advance = true) =>
+    internal static async Task<JsonObject> ShareKills(FunRig r, Member m, string npc, Dictionary<string, object> ctr, bool advance = true) =>
         await Share(r, m, new { kills = Kills(npc, ctr) }, advance);
 
-    static async Task<JsonObject> Get(FunRig r, Member m, long since = 0, string? epoch = null)
+    internal static async Task<JsonObject> Get(FunRig r, Member m, long since = 0, string? epoch = null)
     {
         r.Clock.Advance(TimeSpan.FromSeconds(2));
         r.Sock(m.Name).Clear();
@@ -40,7 +40,7 @@ public class AtlasTests
         return r.Sock(m.Name).Of("atlas.data").Last();
     }
 
-    static async Task<JsonObject> GetAll(FunRig r, Member m) => await Get(r, m);
+    internal static async Task<JsonObject> GetAll(FunRig r, Member m) => await Get(r, m);
 
     // every page of a full download; the finds of all pages in one array
     static async Task<List<JsonNode>> AllFinds(FunRig r, Member m)
@@ -57,10 +57,10 @@ public class AtlasTests
         return res;
     }
 
-    static JsonNode? Kill(JsonObject d, string npc) => d["kills"]![npc];
-    static long N(JsonNode? o) => (long)o!["n"]!;
+    internal static JsonNode? Kill(JsonObject d, string npc) => d["kills"]![npc];
+    internal static long N(JsonNode? o) => (long)o!["n"]!;
 
-    static long Unix(FunRig r) => new DateTimeOffset(r.Clock.UtcNow).ToUnixTimeSeconds();
+    internal static long Unix(FunRig r) => new DateTimeOffset(r.Clock.UtcNow).ToUnixTimeSeconds();
 
     // ---------------------------------------------------------------- validation
 

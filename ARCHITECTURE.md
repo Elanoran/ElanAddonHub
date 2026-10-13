@@ -214,8 +214,7 @@ ItemArmorQuality 2935AA9D, ItemArmorShield 7E6C94F9, ArmorLocation FB67352F, Ite
   The records are the server's query answers; the file carries no layout hash, so every decoder checks the exact length it computes and a file where most
   records do not fit is left out ("layout not recognised"). Creature: bit-packed name lengths, names, flags, type / family / rank, displays, title, quest items.
   Game object: type, display, 7 strings, 35 data fields, quest items. Quest: id, type, level, minimum level, sort (zone), then title / objectives / description.
-- Sharing: `AtlasObs.SeenSource` (`ISeenSource`) is the hook for pooling seen NPCs / objects / quests in the Lodge. The batch builder does not send them yet:
-  the Lodge server has no fields for them.
+- Sharing: `AtlasObs.SeenSource` (`ISeenSource`) feeds the Lodge pool: with a server that advertises the sub-feature `atlas2` the batch builder adds `seenNpcs` / `seenObjects` / `seenQuests` (ids not sent before, persisted in the upload record with keys `N` / `G` / `W`), and `LodgeAtlas.Npc(id)` / `Object(id)` / `QuestInfo(id)` return what the Lodge pooled (first description stays, later ones fill empty fields).
 
 
 ### Map layer (Atlas layer B: world, zone and instance maps + one coordinate system)

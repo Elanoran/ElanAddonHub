@@ -79,8 +79,8 @@ namespace ElansAddonHub.Services
         public static IRevealedItemsSource RevealedSource = Empty;
 
         // What the client has SEEN (layer A3, SeenData: creaturecache.wdb / gameobjectcache.wdb / questcache.wdb): the NPCs, objects and quests this player's client has met on
-        // Forever. The Lodge sync shares the revealed items above; the same is meant for these (`npcs`, `objects`, `quests` details in the atlas.share batch: ids, names, types).
-        // TODO: MakeBatch does not include them yet, because the Lodge server has no matching fields - add them here and in server/Atlas once it does.
+        // Forever. Like the revealed items above they are shared with the Lodge, as `seenNpcs`, `seenObjects` and `seenQuests` sections of the atlas.share batch (ids, names,
+        // types; the sections are named so because `objects` and `quests` already carry loot counters and quest rewards). Only sent to a server that advertises "atlas2".
         public interface ISeenSource { IEnumerable<ElansAddonHub.Services.Db2.WdbCreature> Npcs(); IEnumerable<ElansAddonHub.Services.Db2.WdbObject> Objects(); IEnumerable<ElansAddonHub.Services.Db2.WdbQuest> Quests(); }
         sealed class NoSeen : ISeenSource
         {
@@ -89,6 +89,132 @@ namespace ElansAddonHub.Services
             public IEnumerable<ElansAddonHub.Services.Db2.WdbQuest> Quests() { return new ElansAddonHub.Services.Db2.WdbQuest[0]; }
         }
         public static ISeenSource SeenSource = new NoSeen();
+        public class SeenNpc { public int Id, Type, Family, Rank; public string Name = "", Title = ""; }
+        public class SeenObject { public int Id, Type; public string Name = ""; }
+        public class SeenQuest { public int Id, Level, MinLevel; public string Title = "", Objectives = ""; }
+        public const int MaxSeenNpcs = 40000, MaxSeenObjects = 40000, MaxSeenQuests = 20000;
+        public const int MaxSeenNpcsPerShare = 300, MaxSeenObjectsPerShare = 300, MaxSeenQuestsPerShare = 100;
+        public const int MaxTitleLength = 80, MaxObjectivesLength = 1000;
+
+        // a string for the wire: control characters dropped (newline and tab kept where multiline), trimmed, cut to `max`
+        static string SeenStr(string s, int max, bool multiline)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            var sb = new StringBuilder(Math.Min(s.Length, max));
+            foreach (var c in s)
+            {
+                if (sb.Length >= max) break;
+                if (char.IsControl(c)) { if (multiline && (c == '\n' || c == '\t')) sb.Append(c); else if (c != '\r') sb.Append(' '); }
+                else sb.Append(c);
+            }
+            return sb.ToString().Trim();
+        }
+
+        static bool SeenText(object o, int max, bool multiline, bool required, out string s)
+        {
+            s = "";
+            if (o == null) return !required;
+            var str = o as string;
+            if (str == null || str.Length > max) return false;
+            foreach (var c in str) if (char.IsControl(c) && !(multiline && (c == '\n' || c == '\t' || c == '\r'))) return false;
+            s = str.Trim();
+            return !required || s.Length > 0;
+        }
+
+        static object Field(Dictionary<string, object> o, string k) { object v; return o.TryGetValue(k, out v) ? v : null; }
+
+        // the same rules as the server (a lodge answer is checked again here)
+        public static SeenNpc ParseSeenNpc(int id, object node, ref int dropped)
+        {
+            var o = node as Dictionary<string, object>;
+            string name, title;
+            if (o == null || !SeenText(Field(o, "name"), MaxNameLength, false, true, out name) || !SeenText(Field(o, "title"), MaxTitleLength, false, false, out title)) { dropped++; return null; }
+            bool ok = true;
+            var r = new SeenNpc { Id = id, Name = name, Title = title };
+            r.Type = OptInt(o, "type", 0, 100, ref ok); r.Family = OptInt(o, "family", 0, 1000, ref ok); r.Rank = OptInt(o, "rank", 0, 20, ref ok);
+            if (!ok) { dropped++; return null; }
+            return r;
+        }
+
+        public static SeenObject ParseSeenObject(int id, object node, ref int dropped)
+        {
+            var o = node as Dictionary<string, object>;
+            string name;
+            if (o == null || !SeenText(Field(o, "name"), MaxNameLength, false, true, out name)) { dropped++; return null; }
+            bool ok = true;
+            var r = new SeenObject { Id = id, Name = name, Type = OptInt(o, "type", 0, 1000, ref ok) };
+            if (!ok) { dropped++; return null; }
+            return r;
+        }
+
+        public static SeenQuest ParseSeenQuest(int id, object node, ref int dropped)
+        {
+            var o = node as Dictionary<string, object>;
+            string title, obj;
+            if (o == null || !SeenText(Field(o, "title"), MaxNameLength * 2, false, true, out title) || !SeenText(Field(o, "objectives"), MaxObjectivesLength, true, false, out obj)) { dropped++; return null; }
+            bool ok = true;
+            var r = new SeenQuest { Id = id, Title = title, Objectives = obj };
+            r.Level = OptInt(o, "level", -1, 255, ref ok); r.MinLevel = OptInt(o, "minLevel", 0, 255, ref ok);
+            if (!ok) { dropped++; return null; }
+            return r;
+        }
+
+        internal static Dictionary<string, object> SeenNpcNode(SeenNpc n)
+        {
+            return new Dictionary<string, object> { ["name"] = n.Name, ["title"] = n.Title, ["type"] = n.Type, ["family"] = n.Family, ["rank"] = n.Rank };
+        }
+
+        internal static Dictionary<string, object> SeenObjectNode(SeenObject n)
+        {
+            return new Dictionary<string, object> { ["name"] = n.Name, ["type"] = n.Type };
+        }
+
+        internal static Dictionary<string, object> SeenQuestNode(SeenQuest n)
+        {
+            return new Dictionary<string, object> { ["title"] = n.Title, ["level"] = n.Level, ["minLevel"] = n.MinLevel, ["objectives"] = n.Objectives };
+        }
+
+        public static string Sig(SeenNpc n) { return Hash(n.Name + "|" + n.Title + "|" + n.Type + "|" + n.Family + "|" + n.Rank); }
+        public static string Sig(SeenObject n) { return Hash(n.Name + "|" + n.Type); }
+        public static string Sig(SeenQuest n) { return Hash(n.Title + "|" + n.Level + "|" + n.MinLevel + "|" + n.Objectives); }
+
+        // what this client has seen, as validated shapes ready for the wire (anything that fails the rules is left out)
+        static IEnumerable<SeenNpc> SeenNpcs(ISeenSource src)
+        {
+            int seen = 0;
+            foreach (var c in src.Npcs() ?? new ElansAddonHub.Services.Db2.WdbCreature[0])
+            {
+                if (c == null || c.Id < 1 || c.Id > MaxId || ++seen > MaxSeenNpcs) continue;
+                var n = new SeenNpc { Id = c.Id, Name = SeenStr(c.Name, MaxNameLength, false), Title = SeenStr(c.Title, MaxTitleLength, false), Type = c.Type, Family = c.Family, Rank = c.Rank };
+                int d = 0;
+                if (n.Name.Length > 0 && ParseSeenNpc(n.Id, ToParsed(SeenNpcNode(n)), ref d) != null) yield return n;
+            }
+        }
+
+        static IEnumerable<SeenObject> SeenObjects(ISeenSource src)
+        {
+            int seen = 0;
+            foreach (var c in src.Objects() ?? new ElansAddonHub.Services.Db2.WdbObject[0])
+            {
+                if (c == null || c.Id < 1 || c.Id > MaxId || ++seen > MaxSeenObjects) continue;
+                var n = new SeenObject { Id = c.Id, Name = SeenStr(c.Name, MaxNameLength, false), Type = c.Type };
+                int d = 0;
+                if (n.Name.Length > 0 && ParseSeenObject(n.Id, ToParsed(SeenObjectNode(n)), ref d) != null) yield return n;
+            }
+        }
+
+        static IEnumerable<SeenQuest> SeenQuests(ISeenSource src)
+        {
+            int seen = 0;
+            foreach (var c in src.Quests() ?? new ElansAddonHub.Services.Db2.WdbQuest[0])
+            {
+                if (c == null || c.Id < 1 || c.Id > MaxId || ++seen > MaxSeenQuests) continue;
+                var n = new SeenQuest { Id = c.Id, Title = SeenStr(c.Title, MaxNameLength * 2, false), Level = c.Level, MinLevel = c.MinLevel, Objectives = SeenStr(c.Objectives, MaxObjectivesLength, true) };
+                int d = 0;
+                if (n.Title.Length > 0 && ParseSeenQuest(n.Id, ToParsed(SeenQuestNode(n)), ref d) != null) yield return n;
+            }
+        }
+
 
         public class Snapshot
         {
@@ -526,7 +652,8 @@ namespace ElansAddonHub.Services
 
         // The entries whose signature differs from what was uploaded before, as one atlas.share frame within the per-section counts and 56 KB.
         // Null when nothing changed. `revealed` = the item details to share (validated again here); `sent` = key -> signature of what the lodge already has.
-        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent)
+        // `includeSeen` = the lodge takes seenNpcs / seenObjects / seenQuests (feature "atlas2"): the details AtlasObs.SeenSource holds go too, only ids not sent before (sent keys N / G / W + id).
+        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent, bool includeSeen = false)
         {
             var cands = new List<Cand>();
             void Add(string section, string key, string sentKey, string sig, object node, long order = 0)
@@ -566,11 +693,23 @@ namespace ElansAddonHub.Services
                     if (again != null) Add("items", I(again.Id), "i" + again.Id, Sig(again), RevealedNode(again));
                 }
             }
+            if (includeSeen)
+            {
+                var src = SeenSource;
+                try
+                {
+                    foreach (var n in SeenNpcs(src)) Add("seenNpcs", I(n.Id), "N" + n.Id, Sig(n), SeenNpcNode(n));
+                    foreach (var n in SeenObjects(src)) Add("seenObjects", I(n.Id), "G" + n.Id, Sig(n), SeenObjectNode(n));
+                    foreach (var n in SeenQuests(src)) Add("seenQuests", I(n.Id), "W" + n.Id, Sig(n), SeenQuestNode(n));
+                }
+                catch (Exception) { }                                              // a source that fails shares nothing more this round
+            }
             if (cands.Count == 0) return null;
             var limits = new Dictionary<string, int>
             {
                 ["kills"] = MaxKillsPerShare, ["objects"] = MaxObjectsPerShare, ["fishing"] = MaxFishingPerShare, ["vendors"] = MaxVendorsPerShare, ["quests"] = MaxQuestsPerShare,
                 ["spawns"] = MaxSpawnNpcsPerShare, ["finds"] = MaxFindsPerShare, ["items"] = MaxRevealedPerShare,
+                ["seenNpcs"] = MaxSeenNpcsPerShare, ["seenObjects"] = MaxSeenObjectsPerShare, ["seenQuests"] = MaxSeenQuestsPerShare,
             };
             var b = new Batch();
             var frame = new Dictionary<string, object> { ["t"] = "atlas.share" };
