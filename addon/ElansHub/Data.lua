@@ -126,6 +126,23 @@ H.Version = EHUB.Version and EHUB.Version() or nil
 
 function H.CharKey() return charKey() end
 
+-- Every character the Hub has data for: { { key = "Realm-Name", at = time, modules = { "core", "bags", ... } }, ... },
+-- newest first. Feature addons use this instead of reading ElansHubData themselves.
+function H.Characters()
+  local out = {}
+  if not loaded then return out end
+  for key, c in pairs(ensure().chars) do
+    if type(key) == "string" and type(c) == "table" and type(c.mods) == "table" then
+      local mods = {}
+      for name in pairs(c.mods) do if type(name) == "string" then mods[#mods + 1] = name end end
+      table.sort(mods)
+      out[#out + 1] = { key = key, at = type(c.at) == "number" and c.at or 0, modules = mods }
+    end
+  end
+  table.sort(out, function(a, b) if a.at ~= b.at then return a.at > b.at end return a.key < b.key end)
+  return out
+end
+
 function H.Publish(module, version, data, opts)
   if not validModule(module) then return false, "bad module name" end
   if type(version) ~= "number" or version ~= math.floor(version) or version < 1 or version > 999 then

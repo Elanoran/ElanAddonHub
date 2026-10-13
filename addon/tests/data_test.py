@@ -154,6 +154,14 @@ check("error in a callback is isolated (publish ok, store done, later callbacks 
 L.execute("unsub(); unsub()")
 check("unsubscribe stops the callback (and is idempotent)", lua("ElansHub.Publish('sub.mod', 1, { a = 4 }) return #SUBLOG == 3"))
 
+# Characters
+L.execute("ElansHubData.chars['Other-Alt'] = { at = 1, mods = { bags = { v = 1, data = {} }, core = { v = 1, data = {} } } }; ElansHubData.chars['Bad'] = 5")
+check("Characters lists every character with modules, newest first, sorted module names",
+      lua("local l = ElansHub.Characters() local by, idx = {}, {} for i, c in ipairs(l) do by[c.key], idx[c.key] = c, i end local a = by['Other-Alt'] return l[1].key == 'Realm-Elan' and a and a.at == 1 and table.concat(a.modules, ',') == 'bags,core' and by['Bad'] == nil and idx['Other-Alt'] > idx['Realm-Elan']"))
+check("Characters returns a fresh list (changing it does not touch the Hub)",
+      lua("local l = ElansHub.Characters() l[1].key = 'x' table.insert(l[1].modules, 'zzz') local m = ElansHub.Characters() return m[1].key == 'Realm-Elan' and ElansHubData.chars['Realm-Elan'].mods.zzz == nil"))
+L.execute("ElansHubData.chars['Other-Alt'] = nil; ElansHubData.chars['Bad'] = nil")
+
 # core
 L.globals().C = L.eval("{ name = 'Elan', realm = 'Realm', class = 'Hunter', classFile = 'HUNTER', race = 'Orc', raceFile = 'Orc', sex = 2, faction = 'Horde', level = 60, zone = 'Z', subzone = '', guild = 'G', updated = 5 }")
 L.execute("EHUB.PublishCore(C)")

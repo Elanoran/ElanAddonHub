@@ -84,6 +84,8 @@ end
   never break the Hub or other subscribers. Returns an unsubscribe function, or `nil, reason`. Use it to refresh a
   display when `ElansHub.Get` data changed; guard it like Publish: `if H and H.Subscribe then ... end`.
 - `ElansHub.CharKey()` returns `"Realm-Name"`, the one key format for characters everywhere.
+- `ElansHub.Characters()` (Hub 1.13.0) lists every character the Hub has data for: `{ { key, at, modules = { ... } } }`,
+  newest first. Feature addons use it instead of reading `ElansHubData` directly.
 
 ### Stored layout (`ElansHubData`, in `ElansHub.lua`)
 
