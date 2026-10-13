@@ -25,6 +25,26 @@ One sentence version: **addons → Hub → Outpost → Lodge, and back the same 
   the flight timer (Hunter Helper), which every class could use.
 - **Settings** stay in each addon's own SavedVariables and are never read by the Outpost.
 
+## Three shared layers
+
+| Layer | Holds | Where |
+|---|---|---|
+| **Live data** | What changes while you play: character data, bags, talents, handed-over feature data | Elan's Hub (`Publish` / `Get` / `Subscribe`) |
+| **Shared code and reference data** | Code and fixed data used by **two or more** addons: map/minimap pins, Bug Trap, Diag, theme, widgets, tooltips, the secret-value check, `copyDefaults`; shared QuestieDB-derived data (zone names, NPC positions) | **ElansLib** (planned, see below) |
+| **Own** | Everything only one addon uses (e.g. hunter trainers, pet abilities) | That addon |
+
+### ElansLib (planned)
+
+- One source folder in the addon repo (ElansHunterHelper, `lib/ElansLib/`). The release script copies it into every addon that
+  lists it, so it is never edited inside an addon.
+- Embedded, LibStub style: each copy carries a version number, and when several addons load, the newest
+  copy wins. No extra addon to install, and an addon one version behind still works.
+- Modules are added only when a second addon needs the same thing; until then the code stays in its addon.
+- Generated reference data shared with the Outpost (e.g. zone names, today hard-coded in `ZoneNames.cs`)
+  comes from the same generator, so the game and the Outpost agree.
+- Migration order: pins, Bug Trap, Diag first (most copies), then theme/widgets/tooltips, one addon at a time
+  with its tests.
+
 ## Paths and how fast they are
 
 | Path | Direction | Speed | Use for |
@@ -165,7 +185,7 @@ only after the addon versions that wrote the old keys are no longer offered by t
 - `ElansHub.lua` is parsed separately by four Outpost readers, and the folder walk is written four times.
   One shared reader should parse it once per change. **Started (Outpost 2.43.0):** `SavedVarsFiles.For` and
   `HubData` do this for `ElansHubData`; the existing readers are not moved over yet.
-- BugTrap, Diag, Tip, Theme, Widgets and the secret helper are copied between addons. Candidate for a
-  shared, versioned library later.
+- BugTrap, Diag, Tip, Theme, Widgets, map pins and the secret helper are copied between addons (4 copies
+  once Elan's Toolkit lands). **Planned:** ElansLib (see "Three shared layers").
 - Character race/sex are joined onto Bags characters by name, with a name-only fallback that can mix up
   same-named characters on different realms. The `core` module removes the need for this join.
