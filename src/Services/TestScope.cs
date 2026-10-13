@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "lodgefiles", "hubdata", "readers", "characters", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "lodgefiles", "hubdata", "readers", "characters", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs", "atlasclassic",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -67,6 +67,7 @@ namespace ElansAddonHub.Services
             ["health"] = "addon health",
             ["inputs"] = "text inputs: Input / SecretInput / Dropdown draw g j p q y without clipping at 100 % and 125 % (pixel check)",
             ["round3"] = "settings round 3 (WoW watch, lodge update, welcome, ...)",
+            ["atlasclassic"] = "Atlas layer C, Classic baseline (cMaNGOS classic-db): SQL statement reader and value parser (escapes, NULL, negative / decimal, multi-row INSERT, REPLACE, UPDATE / DELETE with WHERE, @variables), loot chances (groups, references, quest-only, loops), update scripts above the dump's version, downloader against a fake GitHub (size shown first, progress, cancel, damaged / truncated / non-SQL dump refused, earlier set untouched, https only, safe names), index round trip, queries and the Classic baseline label",
         };
 
         const string Star = "*";
@@ -92,6 +93,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/(InventoryData|IconStore|IconSheet|Blp|Casc|CharPortrait|LuaData|ZoneNames)\.cs$", "inventory");
             R(@"^src/(MainWindow\.HubDataTest|Services/(HubData|SavedVarsFiles|LuaData))\.cs$", "hubdata", "characters");
             R(@"^src/(MainWindow\.ReadersTest|Services/(SavedVarsFiles|GamePresence|InventoryData|WowCalendar|FlightShare|AddonHealth|HealthMonitor|HubData|LuaData))\.cs$", "readers");
+            R(@"^src/(MainWindow.AtlasClassicTest.cs|Services/Atlas/Classic/)", "atlasclassic");
             R(@"^src/(MainWindow\.CharactersTest|Services/(HubModules|CharacterMerge))\.cs$", "characters", "inventory");
             R(@"^src/Services/Blp\.cs$", "selfupdated");
             R(@"^src/MainWindow\.(InventoryTest|DesignTest\.Inventory)\.cs$", "inventory");
