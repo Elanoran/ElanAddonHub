@@ -169,6 +169,14 @@ namespace ElansAddonHub
         string watchedRoot;
         public event Action GoToAddons;
         public event Action GoToSettings;
+        public event Action<string> OpenAtlas;      // Ctrl+click on an item: its page in the Atlas
+        bool CtrlAtlas(int itemId, MouseButtonEventArgs e)
+        {
+            if (itemId <= 0 || (Keyboard.Modifiers & ModifierKeys.Control) == 0 || OpenAtlas == null) return false;
+            e.Handled = true; OpenAtlas(ElansAddonHub.Services.Db2.AtlasIds.Item(itemId));
+            return true;
+        }
+        void Result_Click(object sender, MouseButtonEventArgs e) { if ((sender as FrameworkElement)?.DataContext is ResultRow r) CtrlAtlas(r.Id, e); }
 
         public InventoryPage()
         {

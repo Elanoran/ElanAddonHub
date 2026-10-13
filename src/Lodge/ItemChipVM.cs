@@ -25,7 +25,7 @@ namespace ElansAddonHub.Lodge
 
         public string TipTitle => Name;
         public string TipLine => (Quality >= 0 && Quality < ItemLinks.QualityNames.Length ? ItemLinks.QualityNames[Quality] + " · " : "") + (Ref.Id > 0 ? "Item #" + Ref.Id : "Item name not known here");
-        public string TipHint => Ref.Id > 0 ? "Click to open on Wowhead Classic" : "Click to search Wowhead Classic";
+        public string TipHint => Ref.Id > 0 ? "Click to open on Wowhead Classic · Ctrl+click for Atlas" : "Click to search Wowhead Classic";
 
         public ItemChipVM(ItemRef r, ItemInfo info)
         {

@@ -1243,10 +1243,12 @@ namespace ElansAddonHub.Lodge
         public Action<string> OpenLinkOverrideForTest;   // the self-test must never launch a real browser
 
         // an item chip: the item on Wowhead Classic, through the same path as every chat link (Settings > Privacy > Outpost browser decides where)
+        public event Action<string> OpenAtlas;   // Ctrl+click on an item chip: the item's page in the Atlas
         void ItemChip_Click(object sender, MouseButtonEventArgs e)
         {
             if (!((sender as FrameworkElement)?.Tag is ItemChipVM chip)) return;
             e.Handled = true;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && chip.Ref.Id > 0 && OpenAtlas != null) { OpenAtlas(Services.Db2.AtlasIds.Item(chip.Ref.Id)); return; }
             var url = chip.Url;
             if (OpenLinkOverrideForTest != null) OpenLinkOverrideForTest(url);
             else if (OpenLink != null) OpenLink(url);
