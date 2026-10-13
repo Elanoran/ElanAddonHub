@@ -179,6 +179,7 @@ namespace ElansAddonHub.Lodge
         void SetNote(string text, bool error = false)
         {
             ChatNote.Text = text;
+            ChatNote.ToolTip = string.IsNullOrEmpty(text) ? null : text;   // the note is short on screen: the whole text on hover
             ChatNote.SetResourceReference(TextBlock.ForegroundProperty, error ? "Brush.Danger" : "Brush.Text.Secondary");
         }
 
@@ -1182,11 +1183,13 @@ namespace ElansAddonHub.Lodge
                     {
                         var first = shareDone == 1;
                         var text = first ? Composer.Text.Trim() : "";
-                        await Session.Share(job.Path, text, first ? replyTo?.Id : null, pr =>
+                        // the progress is reported from the upload's own (background) thread: hand it to the window's thread,
+                        // touching the note from there threw "the calling thread cannot access this object" and failed every upload
+                        await Session.Share(job.Path, text, first ? replyTo?.Id : null, pr => Dispatcher.BeginInvoke(new Action(() =>
                         {
                             SetNote($"Uploading {name}{n} {pr * 100:0}%");
                             noteUntil = DateTime.UtcNow.AddMinutes(5);
-                        });
+                        })));
                         if (first && editing == null) { Composer.Text = ""; CancelMode(); }
                         ChatNote.Text = "";
                     }
