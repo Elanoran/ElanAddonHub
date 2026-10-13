@@ -86,6 +86,10 @@ namespace ElansAddonHub
             ElansAddonHub.Services.Db2.ItemData.WowRoot = () => settings.WowRoot;
             ElansAddonHub.Services.Db2.ItemData.Enabled = () => !settings.ItemDataOff;
             if (ElansAddonHub.Services.Db2.ItemData.AutoStart) _ = Task.Delay(2500).ContinueWith(t => ElansAddonHub.Services.Db2.ItemData.Start());   // item data from the user's own game files, in the background
+            ElansAddonHub.Services.SeenData.WowRoot = () => settings.WowRoot;   // what the client has seen (creature / object / quest caches), same switch as the item data
+            ElansAddonHub.Services.SeenData.Enabled = () => !settings.ItemDataOff;
+            ElansAddonHub.Services.AtlasObs.SeenSource = ElansAddonHub.Services.SeenData.AsSource;
+            if (ElansAddonHub.Services.SeenData.AutoStart) _ = Task.Delay(3500).ContinueWith(t => ElansAddonHub.Services.SeenData.Start());
             BrowserView.Init(settings);
             BrowserView.ShortcutTab += t => ShowTab(t);
             LodgePage.OpenLink += OpenChatLink;
@@ -363,6 +367,7 @@ namespace ElansAddonHub
             if (Begin("readers")) { result += "\r\n" + await ReadersTest(dir); End(); }
             if (Begin("characters")) { result += "\r\n" + await CharactersTest(dir); End(); }
             if (Begin("itemdata")) { result += "\r\n" + await ItemDataTest(dir); End(); }
+            if (Begin("seendata")) { result += "\r\n" + await SeenDataTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }

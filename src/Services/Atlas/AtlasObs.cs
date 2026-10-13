@@ -77,6 +77,18 @@ namespace ElansAddonHub.Services
         public static readonly IRevealedItemsSource Empty = new NoRevealed();
         public static IRevealedItemsSource RevealedSource = Empty;
 
+        // What the client has SEEN (layer A3, SeenData: creaturecache.wdb / gameobjectcache.wdb / questcache.wdb): the NPCs, objects and quests this player's client has met on
+        // Forever. The Lodge sync shares the revealed items above; the same is meant for these (`npcs`, `objects`, `quests` details in the atlas.share batch: ids, names, types).
+        // TODO: MakeBatch does not include them yet, because the Lodge server has no matching fields - add them here and in server/Atlas once it does.
+        public interface ISeenSource { IEnumerable<ElansAddonHub.Services.Db2.WdbCreature> Npcs(); IEnumerable<ElansAddonHub.Services.Db2.WdbObject> Objects(); IEnumerable<ElansAddonHub.Services.Db2.WdbQuest> Quests(); }
+        sealed class NoSeen : ISeenSource
+        {
+            public IEnumerable<ElansAddonHub.Services.Db2.WdbCreature> Npcs() { return new ElansAddonHub.Services.Db2.WdbCreature[0]; }
+            public IEnumerable<ElansAddonHub.Services.Db2.WdbObject> Objects() { return new ElansAddonHub.Services.Db2.WdbObject[0]; }
+            public IEnumerable<ElansAddonHub.Services.Db2.WdbQuest> Quests() { return new ElansAddonHub.Services.Db2.WdbQuest[0]; }
+        }
+        public static ISeenSource SeenSource = new NoSeen();
+
         public class Snapshot
         {
             public Dictionary<int, Counter> Kills = new Dictionary<int, Counter>(), Objects = new Dictionary<int, Counter>(), Fishing = new Dictionary<int, Counter>();

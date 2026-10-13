@@ -173,6 +173,18 @@ quest gives them come later). One principle decides everything about it:
 - Not in the client, so not in this layer: armor values and weapon damage (computed from further tables, not read yet), loot
   tables, vendors, spawns, quest givers.
 
+### A3: what the client has seen (`SeenData`)
+
+- Reads `Cache\WDB\<locale>\creaturecache.wdb`, `gameobjectcache.wdb`, `questcache.wdb` (read-only, shared) in the background; saved index
+  `cache\seendata.bin` keyed by the three files' sizes and times; looked at again (debounced) when the game rewrites one; off with the same
+  "Read item data from my WoW installation" switch. API: `SeenData.Npc(id)`, `Object(id)`, `Quest(id)`, `Search(text, max, kind)` (ids `npc:` / `obj:` / `quest:`).
+- WDB container: 24-byte header (magic reversed, build, locale reversed, size, record version, cache version), then `id, length, bytes` records up to `0, 0`.
+  The records are the server's query answers; the file carries no layout hash, so every decoder checks the exact length it computes and a file where most
+  records do not fit is left out ("layout not recognised"). Creature: bit-packed name lengths, names, flags, type / family / rank, displays, title, quest items.
+  Game object: type, display, 7 strings, 35 data fields, quest items. Quest: id, type, level, minimum level, sort (zone), then title / objectives / description.
+- Sharing: `AtlasObs.SeenSource` (`ISeenSource`) is the hook for pooling seen NPCs / objects / quests in the Lodge. The batch builder does not send them yet:
+  the Lodge server has no fields for them.
+
 ### Later layers (not built, not decided)
 
 Sources, loot and vendors cannot be read from the client (its Adventure Guide tables are empty). Any such layer needs its own
@@ -291,7 +303,7 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
 |---|---|---|---|
 | A. Items | Client `ItemSparse`/`Item` DB2 from CASC + revealed items in `Cache\ADB\enUS\DBCache.bin` | Outpost `Services\Db2`, `ItemData` | building |
 | A2. Spells, skills, professions | Client `SpellName`, `Spell`, `SpellEffect`, `SpellMisc`, `SkillLine`, `SkillLineAbility`, `ItemEffect`, `ItemSet` DB2 (recipes, what a skill/profession teaches, item use/equip effects) | Outpost `Services\Db2`, `SpellData` | planned |
-| A3. What the client has seen | The client's own caches of things the player met: `creaturecache.wdb` (Forever NPC names, levels, types), `gameobjectcache.wdb`, `questcache.wdb` — like revealed items, they fill the Forever-only gaps and are pooled in the Lodge | Outpost `Services\Db2` (WDB reader) | planned |
+| A3. What the client has seen | The client's own caches of things the player met: `creaturecache.wdb` (Forever NPC names, levels, types), `gameobjectcache.wdb`, `questcache.wdb` — like revealed items, they fill the Forever-only gaps and are pooled in the Lodge | Outpost `Services\Db2` (WDB reader), `SeenData` | built (unreleased) |
 | A4. Factions & reputation | Client `Faction` / `FactionTemplate` DB2 (which faction an NPC/vendor belongs to, reputation rewards) | Outpost `Services\Db2` | planned |
 | B. Maps & instances | Client `UiMap`, `UiMapArt*`, `UiMapAssignment`, `Map`, `AreaTable` DB2 + map tile textures (BLP) | Outpost `Services\Maps` | planned |
 | C. Classic baseline | Public cMaNGOS classic-db dump (GPL-3.0), downloaded by the user's Outpost on request, credited; creatures, spawns, creature/object loot with chances, vendors, quests | Outpost `Services\Atlas\Classic` | planned |
