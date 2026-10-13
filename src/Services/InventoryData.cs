@@ -132,6 +132,7 @@ namespace ElansAddonHub.Services
         public List<InvChar> Chars = new List<InvChar>();
         public List<InvGuild> Guilds = new List<InvGuild>();
         public InvClient Client = new InvClient();
+        public HubModel Hub;                     // set by CharacterMerge.Merge: the Hub's data (module states, account modules)
     }
 
     public class InvChar
@@ -150,6 +151,11 @@ namespace ElansAddonHub.Services
         public List<InvItem> Bank;               // null: the bank was never opened
         public List<InvItem> Equipped = new List<InvItem>();
         public string File;
+        // Characters page (see CharacterMerge): where the bags / bank came from, and the Hub's record of this character when it has one
+        public HubChar Hub;
+        public HubCore Core;                     // Hub core v1, null when the Hub has none (or it is newer than this app understands)
+        public string BagsFrom, BankFrom;        // CharacterMerge.FromHub / FromBags, null when there is nothing
+        public InvChar Clone() => (InvChar)MemberwiseClone();
     }
 
     // one item with everything the characters hold of it

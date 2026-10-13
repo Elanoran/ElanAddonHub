@@ -73,7 +73,7 @@ namespace ElansAddonHub
                     new GuideAddon { Id = "elanshub", Name = "Elan's Hub", Description = "The small companion: your character, class and level for the Lodge and the Outpost. Needed for the other addons.", Required = true, Checked = true },
                     new GuideAddon { Id = "hunter", Name = "Elan's Hunter Helper", Description = "Pet, ammo, trap and aspect helpers for hunters, with a built-in pet and talent guide." },
                     new GuideAddon { Id = "paladin", Name = "Elan's Paladin Helper", Description = "Auras, blessings and seals at a glance for paladins." },
-                    new GuideAddon { Id = "bags", Name = "Elan's Bags", Description = "One bag window for all bags, bank and guild bank - also readable from the Outpost's Inventory page.", Installed = true },
+                    new GuideAddon { Id = "bags", Name = "Elan's Bags", Description = "One bag window for all bags, bank and guild bank - also readable from the Outpost's Characters page.", Installed = true },
                 };
                 s.WelcomeDone = false;
                 GuideAddonsOverride = fake; GuideInstalledForTest = new List<string>(); GuideJoinedForTest = new List<string>();

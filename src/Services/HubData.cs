@@ -60,6 +60,7 @@ namespace ElansAddonHub.Services
         public static readonly Dictionary<string, int> Supported = new Dictionary<string, int>(StringComparer.Ordinal)
         {
             ["core"] = 1,
+            ["bags"] = 1, ["bank"] = 1, ["guildbank"] = 1, ["gear"] = 1, ["talents"] = 1, ["professions"] = 1,     // typed readers: HubModules.cs
         };
 
         static readonly object gate = new object();

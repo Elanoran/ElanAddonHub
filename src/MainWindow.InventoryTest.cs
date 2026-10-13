@@ -112,10 +112,10 @@ namespace ElansAddonHub
                 InventoryView.Init(() => root);
                 TabInventory.IsChecked = true;
                 await Task.Delay(400);
-                Check("rail item opens the Inventory page", InventoryView.IsVisible && !AddonsPage.IsVisible);
-                Check("empty state when the addon saved nothing yet", InventoryView.EmptyTitleForTest == "No inventory data yet" && InventoryView.EmptyTextForTest.Contains("Install Elan's Bags and log in once"));
+                Check("rail item opens the Characters page", InventoryView.IsVisible && !AddonsPage.IsVisible);
+                Check("empty state when nothing was saved yet", InventoryView.EmptyTitleForTest == "No characters yet" && InventoryView.EmptyTextForTest.Contains("Install Elan's Hub and log in once"));
                 Snapshot(P("17-inventory-empty.png"));
-                Check("a watcher is set up on the SavedVariables folder", InventoryView.WatcherCountForTest == 1);
+                Check("two watchers are set up on the SavedVariables folder (ElansBags.lua and ElansHub.lua)", InventoryView.WatcherCountForTest == 2);
 
                 // WoW writes the file: the page notices (FileSystemWatcher + debounce)
                 File.WriteAllText(file, BagsLua(3), new UTF8Encoding(false));
@@ -125,7 +125,8 @@ namespace ElansAddonHub
                 Snapshot(P("17-inventory.png"));
 
                 // ---- the in-game look: one character, Bags / Bank / Guild bank tabs
-                Check("default view: the character saved last (Elan), Bags tab, tab strip shown", InventoryView.SelectedKeyForTest == "Forever-Elan" && InventoryView.TitleForTest == "Elan" && InventoryView.TabStripVisibleForTest);
+                Check("default view: the character saved last (Elan), Overview tab, tab strip shown", InventoryView.SelectedKeyForTest == "Forever-Elan" && InventoryView.TitleForTest == "Elan" && InventoryView.TabStripVisibleForTest && InventoryView.TabForTest == "overview", InventoryView.SelectedKeyForTest + "|" + InventoryView.TitleForTest + "|" + InventoryView.TabStripVisibleForTest + "|" + InventoryView.TabForTest);
+                InventoryView.SelectTabForTest("bags");
                 var panels = InventoryView.PanelsForTest();
                 Check("bags tab: backpack 4 of 16 used + Linen Bag 2 of 6", panels.SequenceEqual(new[] { "Backpack|4|16", "Linen Bag|2|6" }));
                 Check("every slot is drawn (22), 6 hold items", InventoryView.SlotsDrawnForTest == 22 && InventoryView.SlotsFilledForTest == 6);
@@ -146,7 +147,7 @@ namespace ElansAddonHub
                 Snapshot(P("17-inventory-bags.png"));
                 InventoryView.SelectTabForTest("bank");
                 panels = InventoryView.PanelsForTest();
-                Check("bank tab: main bank 2 of 28 + Rare Satchel 1 of 8", panels.SequenceEqual(new[] { "Bank|2|28", "Rare Satchel|1|8" }));
+                Check("bank tab: main bank 2 of 28 + Rare Satchel 1 of 8", panels.SequenceEqual(new[] { "Bank|2|28", "Rare Satchel|1|8" }), string.Join(",", panels));
                 await Task.Delay(200);
                 Snapshot(P("17-inventory-bank.png"));
                 Check("guild bank tab appears for a character whose guild bank was saved", InventoryView.GuildTabVisibleForTest);
@@ -189,7 +190,7 @@ namespace ElansAddonHub
                 // ---- compact character list: portrait + name + "Lv 25 Hunter"; realm, gold, save times and counts are in the hover tooltip
                 InventoryView.FilterForTest("Forever-Elan");
                 var crow = InventoryView.CharRowsForTest();
-                Check("character rows: one line each, 'Lv <level> <Class>', no realm / gold / save times", crow.Count == 2 && crow[0].StartsWith("Elan|Lv 25 Hunter|") && crow[1].StartsWith("Measley|Lv 22 Paladin|"), string.Join(" ; ", crow));
+                Check("character rows: 'Lv <level> <Class> · <realm>', no gold / save times", crow.Count == 2 && crow[0].StartsWith("Elan|Lv 25 Hunter · Forever|") && crow[1].StartsWith("Measley|Lv 22 Paladin · Forever|"), string.Join(" ; ", crow));
                 Check("no race / sex saved yet: the class icon stands in (hunter, paladin)", crow.Count == 2 && crow[0].Split('|')[2] == "626000" && crow[1].Split('|')[2] == "626003" && crow[0].Split('|')[3] == "False", string.Join(" ; ", crow));
                 Check("the row of the shown character is the selected one, 'All characters' is not", crow.Count == 2 && crow[0].EndsWith("|True") && crow[1].EndsWith("|False") && !InventoryView.AllSelectedForTest);
                 Check("'All characters' row says how many characters", InventoryView.AllLineForTest == "2 characters", InventoryView.AllLineForTest);
