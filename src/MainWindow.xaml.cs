@@ -90,6 +90,9 @@ namespace ElansAddonHub
             ElansAddonHub.Services.SeenData.Enabled = () => !settings.ItemDataOff;
             ElansAddonHub.Services.AtlasObs.SeenSource = ElansAddonHub.Services.SeenData.AsSource;
             if (ElansAddonHub.Services.SeenData.AutoStart) _ = Task.Delay(3500).ContinueWith(t => ElansAddonHub.Services.SeenData.Start());
+            ElansAddonHub.Services.Maps.MapData.WowRoot = () => settings.WowRoot;   // Atlas maps: the same "Game data" switch and WoW folder as the item data
+            ElansAddonHub.Services.Maps.MapData.Enabled = () => !settings.ItemDataOff;
+            if (ElansAddonHub.Services.Maps.MapData.AutoStart) _ = Task.Delay(3500).ContinueWith(t => ElansAddonHub.Services.Maps.MapData.Start());
             BrowserView.Init(settings);
             BrowserView.ShortcutTab += t => ShowTab(t);
             LodgePage.OpenLink += OpenChatLink;
@@ -368,6 +371,7 @@ namespace ElansAddonHub
             if (Begin("characters")) { result += "\r\n" + await CharactersTest(dir); End(); }
             if (Begin("itemdata")) { result += "\r\n" + await ItemDataTest(dir); End(); }
             if (Begin("seendata")) { result += "\r\n" + await SeenDataTest(dir); End(); }
+            if (Begin("mapdata")) { result += "\r\n" + await MapDataTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }

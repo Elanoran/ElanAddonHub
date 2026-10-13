@@ -128,6 +128,7 @@ namespace ElansAddonHub
             ItemDataBox.IsChecked = !s.ItemDataOff;
             ElansAddonHub.Services.Db2.ItemData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Db2.ItemData.Changed += OnItemDataChanged;
             ElansAddonHub.Services.SeenData.Changed -= OnItemDataChanged; ElansAddonHub.Services.SeenData.Changed += OnItemDataChanged;
+            ElansAddonHub.Services.Maps.MapData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Maps.MapData.Changed += OnItemDataChanged;
             UpdateItemDataLine();
 
             ModeVa.IsChecked = !s.VoicePushToTalk;
@@ -342,7 +343,7 @@ namespace ElansAddonHub
             }
             SettingsStore.Save(settings);
             if (artChanged) host.CardArtChanged();
-            if (itemDataChanged) { if (itemDataOff) { ElansAddonHub.Services.Db2.ItemData.Disable(); ElansAddonHub.Services.SeenData.Disable(); } else { ElansAddonHub.Services.Db2.ItemData.Start(); ElansAddonHub.Services.SeenData.Start(); } UpdateItemDataLine(); }
+            if (itemDataChanged) { if (itemDataOff) { ElansAddonHub.Services.Db2.ItemData.Disable(); ElansAddonHub.Services.SeenData.Disable(); ElansAddonHub.Services.Maps.MapData.Disable(); } else { ElansAddonHub.Services.Db2.ItemData.Start(); ElansAddonHub.Services.SeenData.Start(); ElansAddonHub.Services.Maps.MapData.Start(); } UpdateItemDataLine(); }
             if (sender == AutoUpdateBox && settings.AutoUpdate) host.AutoUpdateTurnedOn();
         }
 
@@ -361,10 +362,10 @@ namespace ElansAddonHub
             ChannelHint.Text = ChannelText();
         }
 
-        void ChangeFolder_Click(object sender, RoutedEventArgs e) { host.PickWowFolder(); ElansAddonHub.Services.Db2.ItemData.Start(); ElansAddonHub.Services.SeenData.Start(); RefreshSection(); }
+        void ChangeFolder_Click(object sender, RoutedEventArgs e) { host.PickWowFolder(); ElansAddonHub.Services.Db2.ItemData.Start(); ElansAddonHub.Services.SeenData.Start(); ElansAddonHub.Services.Maps.MapData.Start(); RefreshSection(); }
 
         // "Item data: read from your WoW installation (N items, M revealed)" under the Game data switch
-        void UpdateItemDataLine() => ItemDataRow.Tag = ElansAddonHub.Services.Db2.ItemData.StatusLine + ". " + ElansAddonHub.Services.SeenData.StatusLine + ". Read-only, on this PC: nothing is uploaded and nothing is written to the WoW folder.";
+        void UpdateItemDataLine() => ItemDataRow.Tag = ElansAddonHub.Services.Db2.ItemData.StatusLine + ElansAddonHub.Services.Maps.MapData.StatusSuffix + ". " + ElansAddonHub.Services.SeenData.StatusLine + ". Read-only, on this PC: nothing is uploaded and nothing is written to the WoW folder.";
         void OnItemDataChanged() => Dispatcher.BeginInvoke(new Action(UpdateItemDataLine));
 
         async void CheckNow_Click(object sender, RoutedEventArgs e)

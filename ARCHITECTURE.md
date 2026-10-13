@@ -185,6 +185,33 @@ quest gives them come later). One principle decides everything about it:
 - Sharing: `AtlasObs.SeenSource` (`ISeenSource`) is the hook for pooling seen NPCs / objects / quests in the Lodge. The batch builder does not send them yet:
   the Lodge server has no fields for them.
 
+
+### Map layer (Atlas layer B: world, zone and instance maps + one coordinate system)
+
+Same rules as the item layer (own game files, read-only, layout-checked, background, off with the same "Game data" switch). The index lives in `cache\mapdata.bin`
+(keyed by the game build); map pictures are PNGs in `atlas\maps\<version>-<buildkey8>_<uiMapId>.png` that are made on first use.
+
+| Table (CASC FileDataID) | Layout (1.60.1.70338) | Gives |
+|---|---|---|
+| `UiMap` (1957206) | `DB51D55F` | the map tree: id, name, parent, type (cosmic / world / continent / zone / dungeon / micro / orphan), flags, system. **Required**: without it the layer is unavailable. |
+| `UiMapXMapArt` (1957217), `UiMapArt` (1957202), `UiMapArtStyleLayer` (1957208), `UiMapArtTile` (1957210) | `EAE7DA2A`, `3AE7D144`, `3F597F5A`, `2DA5B77B` | which BLP tiles make a map's picture: layer size, tile size, (row, col, FileDataID). The links (`UiMapID`, `UiMapArtID`, `UiMapArtStyleID`) are "noninline relation" columns: they come from the WDC5 relationship section (`Wdc5.ParentOf`). All four or no art. |
+| `UiMapAssignment` (1957219) | `C9CC8DFB` | the world rectangle (map id, x / y) each UiMap shows, and which part of the picture it fills (`UiMin` / `UiMax`): the whole coordinate system. |
+| `Map` (1349477) | `D43AFAC3` | map ids, names, instance type (1 dungeon, 2 raid, 3 battleground, 4 arena), max players. Some rows are key-locked and skipped. |
+| `UiMapGroupMember` (1957204) | `0FF75B01` | floors of multi-floor maps (this client's table is empty). |
+| `AreaTable` (1353545) | `9995B797` | area names and parents (`UiMapForArea`). |
+
+- **Ids**: `zone:<uiMapID>` = `MapData.Index.Get(id)`, `instance:<mapId>` = `Index.Instance(id)`. Markers hold fractions (0..1 from the left / top of a UiMap's picture), the numbers
+  the game's own coordinates use, so an observation (uiMap + fractions) and a Classic baseline position (map id + x / y) meet on one map through `WorldToMap` / `MapToWorld` / `Convert`.
+- **World <-> map**: world x is north, y is west. `fx = (MaxY - y) / (MaxY - MinY)`, `fy = (MaxX - x) / (MaxX - MinX)`, then mapped into the assignment's `UiMin..UiMax` window.
+  The most specific map wins: city / dungeon / battleground (no "show overlays" flag; a tight rectangle) > zone (a loose rectangle that overlaps its neighbours, so the one the point is most
+  central in wins) > continent > world map. The zone rectangles are boxes, not outlines: near a border the answer is the best the data allows.
+- **This client's data**: 60 UiMaps (the world, 4 continent maps of which 2 are alternative copies, about 50 zones and cities, 4 battlegrounds / islands), all with art (1002 x 668, 12 tiles each; the 3,840 x 2,560 style in the table is used by none of them),
+  71 Map rows of which 54 are named instances. **Dungeons and raids have no UiMap and no picture in the game files**, so only the battlegrounds (Alterac Valley, Warsong Gulch,
+  Arathi Basin, Darkspear Islands) have a map; the others are listed with no floors (the control says "no map in the game files"). An instance map would need another source.
+- **Pictures**: `MapRender` decodes the tiles one at a time (existing `Blp` decoder) straight into the picture, writes the PNG next to the index and forgets the bitmap; a failed map is not retried
+  for 90 s. The `AtlasMap` control loads only the map it shows and lets go of it when it leaves the screen.
+- **Control** (`Controls/AtlasMap.cs`): `ShowMap(uiMapId)`, `ShowInstance(mapId)`, `AddMarkers(...)`, `ClearMarkers()`, `LinkClicked(id)`, `MapChanged(uiMapId)`; wheel / drag / keyboard, breadcrumb up the tree,
+  floor selector, markers that overlap on the screen merge into one numbered marker.
 ### Later layers (not built, not decided)
 
 Sources, loot and vendors cannot be read from the client (its Adventure Guide tables are empty). Any such layer needs its own
