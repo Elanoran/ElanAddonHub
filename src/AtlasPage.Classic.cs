@@ -124,7 +124,7 @@ namespace ElansAddonHub
                     {
                         var bar = new ProgressBar { Style = (Style)FindResource("ThinProgress"), Minimum = 0, Maximum = 100, Value = Math.Round(s.Fraction * 100), Margin = new Thickness(0, 12, 0, 0), IsIndeterminate = s.State == ClassicCardState.Asking };
                         classicBody.Children.Add(bar);
-                        var ph = Tb((s.State == ClassicCardState.Downloading ? "Downloading · " : s.State == ClassicCardState.Importing ? "Reading · " : "") + s.Phase + (s.State == ClassicCardState.Asking ? "" : " · " + Math.Round(s.Fraction * 100) + " %"), "Text.Secondary", null, 8);
+                        var ph = Tb((s.State == ClassicCardState.Importing ? "Reading · " : "") + s.Phase + (s.State == ClassicCardState.Asking ? "" : " · " + Math.Round(s.Fraction * 100) + " %"), "Text.Secondary", null, 8);
                         ph.TextTrimming = TextTrimming.CharacterEllipsis; classicBody.Children.Add(ph);
                         var c = new Button { Content = "Cancel", Style = (Style)FindResource("Button.M"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 12, 0, 0) };
                         c.Click += (a, e) => s.Cancel();
@@ -169,7 +169,7 @@ namespace ElansAddonHub
             var links = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
             var lic = s.LicensePath();
             if (lic != null) links.Children.Add(GhostButton("Licence (file on this PC)", () => OpenLocal(lic), lic));
-            links.Children.Add(GhostButton("cMaNGOS classic-db on GitHub", () => OpenWeb(ClassicSetup.LicenseUrl.Replace("/blob/master/LICENSE.md", "")), "https://github.com/cmangos/classic-db"));
+            links.Children.Add(GhostButton("cMaNGOS classic-db on GitHub", () => OpenWeb(ClassicSetup.RepoUrl), ClassicSetup.RepoUrl));
             classicBody.Children.Add(links);
         }
 

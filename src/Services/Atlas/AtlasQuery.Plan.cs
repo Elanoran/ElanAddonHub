@@ -34,12 +34,12 @@ namespace ElansAddonHub.Services.Atlas
             }
 
             // up to MaxSpawnsPerSource of a thing's spawn points, spread over the list (not just the first ones)
-            public void Classic(IReadOnlyList<ClassicSpawn> spawns, MarkerKind kind, string label, string tip, string link)
+            public void Classic(IReadOnlyList<ClassicSpawn> spawns, MarkerKind kind, string label, string tip, string link, int max = MaxSpawnsPerSource)
             {
                 if (spawns == null || spawns.Count == 0) return;
                 var idx = MapData.Index;
                 if (idx == null) { MapsMissing = true; return; }
-                int take = Math.Min(spawns.Count, MaxSpawnsPerSource);
+                int take = Math.Min(spawns.Count, Math.Max(1, max));
                 double step = spawns.Count / (double)take;
                 for (int i = 0; i < take; i++)
                 {
@@ -80,14 +80,10 @@ namespace ElansAddonHub.Services.Atlas
                 var s = spawns[i];
                 var p = idx.WorldToMap(s.Map, s.X, s.Y);
                 if (p == null) { var inst = idx.Instance(s.Map); if (inst != null && !inst.Placeholder) instance = inst.Name; continue; }
-                var z = Zone(idx, p.Value.UiMapId);
-                count.TryGetValue(z, out var c); count[z] = c + 1;
+                count.TryGetValue(p.Value.UiMapId, out var c); count[p.Value.UiMapId] = c + 1;
             }
             if (count.Count == 0) return instance;
             return ZoneName(count.OrderByDescending(k => k.Value).ThenBy(k => k.Key).First().Key);
         }
-
-        // a zone (not a continent): the map itself, or its zone-type parent for a city / floor
-        static int Zone(MapIndex idx, int uiMap) => uiMap;
     }
 }

@@ -39,7 +39,7 @@ namespace ElansAddonHub.Services.Atlas
     {
         public static string ButtonText => "Get Classic data (about 19 MB, cMaNGOS, GPL-3.0)";
         public const string CreditLine = "Classic baseline: cMaNGOS classic-db (GPL-3.0), downloaded to this PC on request and labelled \"Classic baseline\" wherever it is shown.";
-        public const string LicenseUrl = "https://github.com/cmangos/classic-db/blob/master/LICENSE.md";
+        public const string RepoUrl = "https://github.com/cmangos/classic-db";
 
         public IClassicBackend Backend;
         public ClassicSetup(IClassicBackend backend = null) { Backend = backend ?? new RealClassicBackend(); State = FromBackend(); }

@@ -157,6 +157,7 @@ namespace ElansAddonHub
             public int Queries, Downloads, Builds, Deletes;
             public Exception FailQuery, FailDownload, FailBuild;
             public Action<CancellationToken> OnDownload;
+            public TaskCompletionSource<bool> Hold;                // the download waits here after its first progress report (a screenshot of the card in progress)
             public ClassicState State() => St;
             public ClassicIndex Index() => St == ClassicState.Ready ? Idx : null;
             public Task<ClassicRemote> Query(CancellationToken ct)
@@ -176,6 +177,7 @@ namespace ElansAddonHub
                     ct.ThrowIfCancellationRequested();
                     progress?.Report(new ClassicDownloadProgress { Phase = "Downloading the dump", File = remote.DumpName, BytesDone = i * 1000, BytesTotal = 4000 });
                     OnDownload?.Invoke(ct);
+                    if (i == 2 && Hold != null) await Hold.Task.ConfigureAwait(false);
                     await Task.Delay(15, ct).ConfigureAwait(false);
                 }
                 St = ClassicState.Downloaded;

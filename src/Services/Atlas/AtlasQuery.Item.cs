@@ -318,17 +318,23 @@ namespace ElansAddonHub.Services.Atlas
                     plan.Spot(f.Zone, f.X, f.Y, MarkerKind.Find, (string.IsNullOrEmpty(f.By) ? "A member" : f.By) + " found it", row.Detail + " · " + F, row.Link);
                 }
             }
+            // the baseline's spawn points: the fewer sources there are, the more of each is drawn - a dozen sources would bury the Lodge's own markers
+            int classicSources = src.Rows.Count(r => r.Tier != 0 || r.Extra.Contains(C));
+            int per = classicSources <= 1 ? MaxSpawnsPerSource : classicSources <= 4 ? 16 : 6;
             int quests = 0;
+            bool strong = src.Rows.Any(x => x.Sort >= 1 && (x.Type == "Drop" || x.Type == "Object") && x.Tier != 1);
             foreach (var r in src.Rows)
             {
                 if (plan.Full) break;
                 var k = r.Key;
+                // a baseline drop under 1 % is only drawn when nothing better says where the item is (it would bury the real places)
+                if (r.Tier == 2 && r.Sort < 1 && (r.Type == "Drop" || r.Type == "Object") && (strong || plan.Total > 0)) continue;
                 if (k.StartsWith("npc:", StringComparison.Ordinal) && int.TryParse(k.Substring(4), out var nid) && done.Add(k))
-                    plan.Classic(ClassicAtlas.Spawns(nid), MarkerKind.Spawn, r.Title, r.Detail + " · " + C, r.Link);
+                    plan.Classic(ClassicAtlas.Spawns(nid), MarkerKind.Spawn, r.Title, r.Detail + " · " + C, r.Link, per);
                 else if (k.StartsWith("obj:", StringComparison.Ordinal) && int.TryParse(k.Substring(4), out var oid) && done.Add(k))
-                    plan.Classic(ClassicAtlas.Current?.ObjectSpawns(oid), MarkerKind.Node, r.Title, r.Detail + " · " + C, r.Link);
+                    plan.Classic(ClassicAtlas.Current?.ObjectSpawns(oid), MarkerKind.Node, r.Title, r.Detail + " · " + C, r.Link, per);
                 else if (k.StartsWith("vendor:", StringComparison.Ordinal) && int.TryParse(k.Substring(7), out var vid) && done.Add(k))
-                    plan.Classic(ClassicAtlas.Spawns(vid), MarkerKind.Vendor, r.Title, "Sells it · " + C, r.Link);
+                    plan.Classic(ClassicAtlas.Spawns(vid), MarkerKind.Vendor, r.Title, "Sells it · " + C, r.Link, per);
                 else if (k.StartsWith("quest:", StringComparison.Ordinal) && quests < 3 && int.TryParse(k.Substring(6), out var qid) && done.Add(k))
                 {
                     quests++;

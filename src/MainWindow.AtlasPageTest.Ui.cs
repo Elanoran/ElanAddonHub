@@ -34,6 +34,7 @@ namespace ElansAddonHub
         async Task AtlasPageUiTest(string dir, string work, CheckFn Check)
         {
             var classic = ClassicAtlas.Current;
+            var h0 = Height;
             // ---- the rail entry and the page opening
             Check("nav: the rail has an Atlas button with Ctrl+5 in its tooltip, and Ctrl+5 means the Atlas page", TabAtlas != null && TabAtlas.ToolTip.ToString().Contains("Ctrl+5") && TabForKey(Key.D5) == "atlas" && TabForKey(Key.NumPad5) == "atlas");
             ShowTab("atlas");
@@ -101,6 +102,26 @@ namespace ElansAddonHub
             ClickButton(AtlasView.ClassicRemoveForTest);
             await Task.Delay(150); UpdateLayout();
             Check("classic card: Remove deletes the data and the card offers the download again", fake.Deletes == 1 && setup.State == ClassicCardState.NotDownloaded && AtlasView.ClassicPrimaryForTest != null && AtlasTexts(AtlasView.ClassicCardForTest).Contains("Not downloaded"));
+            // the card while it works (a picture for the design notes): the download holds at 50 %
+            fake.Hold = new TaskCompletionSource<bool>();
+            ClickButton(AtlasView.ClassicPrimaryForTest);
+            await WaitFor(() => setup.State == ClassicCardState.Downloading && setup.Fraction >= 0.5, 5000);
+            await Task.Delay(250); UpdateLayout();
+            var progTexts = AtlasTexts(AtlasView.ClassicCardForTest);
+            Check("classic card: while downloading it shows a progress bar, 'Downloading the dump · the file · 50 %' and a Cancel button (and no Get button)", progTexts.Any(t => t.StartsWith("Downloading the dump · ClassicDB_test.sql.gz") && t.EndsWith("50 %")) && progTexts.Contains("Cancel") && AtlasView.ClassicCancelForTest != null && AtlasView.ClassicPrimaryForTest == null
+                && AtlasWalk(AtlasView.ClassicCardForTest).OfType<ProgressBar>().Any(b => Math.Abs(b.Value - 50) < 1), string.Join(" | ", progTexts));
+            Height = 1000; await Task.Delay(300); UpdateLayout();
+            AtlasView.Scroller_ScrollToForTest(AtlasView.ClassicCardForTest);
+            await Task.Delay(200);
+            Snapshot(Path.Combine(dir, "atlas-page-classic-progress.png"));
+            Height = h0; await Task.Delay(100);
+            fake.Hold.SetResult(true);
+            Check("classic card: ... and finishes after the hold", await WaitFor(() => setup.State == ClassicCardState.Ready, 8000));
+            fake.Hold = null;
+            await Task.Delay(100);
+            AtlasView.ConfirmRemoveOverrideForTest = () => true;
+            ClickButton(AtlasView.ClassicRemoveForTest);
+            await Task.Delay(100);
             // a failed download: the message, a retry, nothing half-done
             fake.FailDownload = new ClassicDownloadException("GitHub is limiting requests from this connection right now. Try again in a while.");
             AtlasView.ConfirmOverrideForTest = r => true;
@@ -180,7 +201,7 @@ namespace ElansAddonHub
                 tx.Contains("12% · 340 kills · 3 members") && tx.Contains("Classic baseline: 10%") && tx.Contains("Forever") && tx.Contains("Classic baseline") && tx.Contains("+ 30 world-drop sources under 0.1%"));
             Check("item page: wide window -> two columns (the card on the left, the tables on the right)", AtlasView.WideForTest);
             Check("item page: one map with a zone picker (Greenvale first)", AtlasView.MapsForTest.Count == 1 && AtlasView.zonePicks.Count == 1 && AtlasView.zonePicks[0].SelectedIndex == 0 && AtlasView.zonePicks[0].Items.Count >= 2);
-            Check("item page: the map loads after the page is drawn, shows the best zone with its markers", await MapReady() && AtlasView.MapsForTest[0].UiMapId == 11 && AtlasView.MapsForTest[0].MarkerCount == AtlasQuery.Build("item:100").Map.Best.Markers.Count && AtlasView.MapsForTest[0].MarkerCount >= 5);
+            Check("item page: the map loads after the page is drawn, shows the best zone with its markers", await MapReady() && AtlasView.MapsForTest[0].UiMapId == 11 && AtlasView.MapsForTest[0].MarkerCount == AtlasQuery.Build("item:100").Map.Best.Markers.Count && AtlasView.MapsForTest[0].MarkerCount >= 4);
             var picker = AtlasView.zonePicks[0];
             int hk = picker.Items.Cast<ComboBoxItem>().ToList().FindIndex(i => ((AtlasMapZone)i.Tag).UiMapId == 13);
             picker.SelectedIndex = hk;
@@ -197,7 +218,9 @@ namespace ElansAddonHub
             Check("item page: the folded line opens in place (30 more rows) and 'Hide those 30' closes it again", afterOpen == before + 30 && AtlasTexts(fold).Contains("Hide those 30"), before + " -> " + afterOpen);
             ClickButton(fold); UpdateLayout();
             Check("item page: ... and closes", AtlasWalk(AtlasView).OfType<ContentControl>().Count(c => c.Tag is string s && s.StartsWith("npc:")) == before);
+            Height = 900; await Task.Delay(300); UpdateLayout(); await MapReady(); await Task.Delay(300);
             Snapshot(Path.Combine(dir, "atlas-page-item.png"));
+            Height = h0; await Task.Delay(200);
 
             // ---- links and history
             var row = RowFor("npc:1");
@@ -302,8 +325,9 @@ namespace ElansAddonHub
             Check("tab: when the Lodge pool changed meanwhile the page is drawn again", !ReferenceEquals(AtlasView.Model, modelBefore) && AtlasView.Model.Id == "item:100");
 
             // ---- screenshots of the start page: with data, and with nothing at all
-            await AtlasView.GoStart(); await Task.Delay(300); UpdateLayout();
+            Height = 1000; await AtlasView.GoStart(); await Task.Delay(400); UpdateLayout();
             Snapshot(Path.Combine(dir, "atlas-page-start.png"));
+            Height = h0;
             ClassicAtlas.Use(null); ItemData.SetForTest(null, ItemData.State.Disabled, "off"); SpellData.SetForTest(null, SpellData.State.Disabled); SeenData.SetForTest(null, SeenData.State.Disabled); MapData.SetForTest(null, null, MapData.State.Disabled);
             AtlasQuery.Context.Lodge = () => null;
             AtlasView.UseClassicSetup(new ClassicSetup(new FakeClassic { Dir = fake.Dir }));

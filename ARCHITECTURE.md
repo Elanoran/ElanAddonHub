@@ -368,7 +368,7 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
 | C. Classic baseline | Public cMaNGOS classic-db dump (GPL-3.0), downloaded by the user's Outpost on request, credited; creatures, spawns, creature/object loot with chances, vendors, quests | Outpost `Services\Atlas\Classic` | built (unreleased) |
 | D. Observations | Elan's Toolkit records loot (incl. kills with no drop), object loot, vendor stock and prices, quest rewards, and items the client reveals; with zone + position | Toolkit → Hub module `atlas.obs` (account) | built (Toolkit, unreleased) |
 | E. Lodge pool | Lodge server feature `atlas`: members upload observations, the server aggregates (counts, per-member dedupe, outlier and rate limits), everyone downloads the aggregate | server `AtlasModule` + `LodgeSession.Atlas` | built (server 2.15.0, unreleased) |
-| F. Atlas page | Search items / mobs / zones / instances; item page (tooltip, sources with Lodge-observed % and Classic %, vendors, quests, who in the Lodge has it); zone and instance maps with spawn and find markers | Outpost UI | next |
+| F. Atlas page | Search items / mobs / zones / instances; item page (tooltip, sources with Lodge-observed % and Classic %, vendors, quests, who in the Lodge has it); zone and instance maps with spawn and find markers | Outpost UI (`AtlasPage`, `Services\Atlas\AtlasQuery*`) | built (unreleased) |
 
 ### `atlas.obs` v1 (Elan's Toolkit, account) — cumulative since first record
 ```lua
@@ -392,6 +392,34 @@ details) → the server keeps one record set per member and stores per field max
 per npc, the newest 2000 finds (with the member's Lodge display name — never character names), up to 50 spawn points
 per npc, and revealed items by id. `atlas.get { since, epoch }` → `atlas.data` (everything changed since a server revision, in pages; the whole set again when the epoch differs). Members can switch
 sharing off; guests can read but not share. Feature can be disabled by the owner (`LODGE_ATLAS_ENABLED=0`).
+
+### Atlas page (layer F: the page that ties the layers together)
+
+Rail item 5 (Ctrl+5). `AtlasPage` (`src/AtlasPage*.cs`, `AtlasPage.xaml`) only draws; `Services/Atlas/AtlasQuery*.cs` combines every layer into **page models** (`AtlasModel.cs`) on a worker thread and never throws:
+a layer that is missing (no Classic download, no Lodge, game data off) only leaves its rows out and puts a note on the page that says what would turn it on.
+
+- **Search** (`AtlasQuery.Search`): one box, results grouped by kind (items, NPCs, objects, quests, zones, instances, spells, skills, factions), at most 6 per group with the number that matched. Match rank (exact, prefix, a word starts with it,
+  inside) first, then **Forever before Classic baseline** (a creature the client has seen and the baseline has is ONE hit, labelled Forever), then the shorter name. Groups are ordered by their best hit. One letter or blank finds nothing;
+  `item:100`, `Item 100`, `npc=5` go straight to the thing (an id nobody knows still opens a page that says so). Arrow keys + Enter, Esc closes; the answer of an older keystroke is dropped.
+- **Pages** (`AtlasQuery.Build(id)` for `item: npc: obj: quest: zone: instance: spell: skill: faction:`): identity card (the game's own tooltip for an item, facts with their source for the rest), tables (`AtlasSection` / `AtlasRow`), one map, notes.
+  Every row carries a `Label` (**Forever** = this client's data or observed by the Lodge, **Classic baseline**), a `Tier` (0 Lodge-observed, 1 client tables such as recipes, 2 Classic baseline) and a link; rows sort by tier first, so Forever-observed rows rank above Classic ones.
+  - *Item*: "Your characters" (bags, bank, worn, guild banks: the Characters page's own index), **Where it comes from** = Lodge drops (`12% · 340 kills · 3 members`), Lodge vendors (price, stack, limit), Lodge quests, recipes that make it, then the baseline's drops, vendors, quest rewards,
+    skinning, pickpocketing and objects. A source both layers know is **one row**: the Lodge's figure on top, the baseline's own figure on the row's second line ("Classic baseline: 10%"). Classic loot under 0.1 % is folded into one line
+    ("+ 30 world-drop sources under 0.1%", it opens in place); an item with nothing but tiny sources still shows its best 6. Then "Used in recipes", "Needed for quests" (baseline) and "Found by the Lodge" (newest first, the member's Lodge display name, source, zone, age).
+    An item the client does not know but a Lodge member's game revealed takes its name, quality, level, slot and stats from the pool; one only the baseline knows says the game has not shown it yet.
+  - *NPC*: title / rank / type from the client's cache (Forever), level / family / faction (through the client's `Faction` tables) from the baseline, loot (Lodge chance from kills merged with the baseline's table), skinning, pickpocketing, what it sells, the quests it gives, a map of its spawns.
+  - *Zone*: map, `In <continent>`, creature level range (baseline: 5th to 95th percentile of the non-service creatures standing in it), the creatures in it (bosses and rares first), objects, quests sorted under it (the client's cache first, then the baseline), notable drops (the Lodge's finds there, then the best of the baseline's loot).
+    A continent lists its zones instead. *Instance*: type and players (client), the baseline's bosses (creature rank 3 standing on that map) with the Lodge's kills, their better loot, other creatures; the map, or "no map in the game files" (this client has no dungeon art).
+    *Quest*, *object*, *spell* (description, recipe with reagents), *skill* (recipes), *faction* (parts) are compact.
+- **Map markers** (`PlanBuilder`): Classic world coordinates go through `MapIndex.WorldToMap` (the most specific zone map wins), Lodge points are zone fractions already. Per source at most 40 baseline places (fewer when many sources compete: 16 for up to four, 6 above),
+  600 in all; a baseline drop under 1 % is only drawn when nothing better says where the item is; folded sources put nothing on the map. Places inside an instance with no map are counted and offered as a link to the instance page. One `AtlasMap` per page, a zone picker when the places span several zones,
+  the picture loads after the rest of the page is drawn.
+- **Classic baseline card** (start page, `ClassicSetup` + `AtlasPage.Classic.cs`): not downloaded -> button "Get Classic data (about 19 MB, cMaNGOS, GPL-3.0)" -> the question with the exact size, the dump, the update files and the licence notice -> download progress -> reading progress -> "Ready · dump of <date> · counts";
+  Cancel at any step, a failure shows GitHub's message and "Try again", Remove asks first. The credit line and a link to the licence file in the data folder are always there. The card talks to `IClassicBackend` (the real downloader / importer, or a fake in the self-test); nothing is fetched without the click and the question.
+- **Start page**: the data status of each layer, the Classic card, the Lodge pool (state of the session, sources / vendors / finds / members, last update) and the Lodge's recent finds. Coming back to the tab redraws the page only when something it was drawn from changed.
+- **History**: back / forward (buttons, Alt+Left / Alt+Right, mouse side buttons), a new visit drops the forward part, 80 entries. **Open in Atlas**: Ctrl+click on an item chip in Lodge chat and on an item in the Characters page (bags, search results); `MainWindow.OpenInAtlas(idOrName)`.
+- **Never blocks**: pages and searches are built in `Task.Run`; a skeleton stands in after 150 ms; an answer that arrives after a newer click is dropped. Tables over 40 rows are a virtualising list (`AtlasList`), a zone's creature list is capped at 400. Search is local only, nothing is sent anywhere.
+- Self-test section `atlaspage` (invented world + optional read-only run on the real game files), see `TestScope`.
 
 ### Foundation the layers share
 - **One id scheme for links everywhere:** `item:123`, `npc:456`, `obj:789`, `quest:12`, `zone:1440` (uiMapID),

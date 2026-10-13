@@ -151,7 +151,9 @@ namespace ElansAddonHub
                 var lodgeVend = z13?.Markers.FirstOrDefault(m => m.Kind == MarkerKind.Vendor && Math.Abs(m.Fx - 0.667) < 1e-9 && Math.Abs(m.Fy - 0.75) < 1e-9);
                 Check("map: the Lodge's spawn points and finds (zone fractions) go where they are, tooltips say Forever; the Lodge vendor sits on Highkeep", lodgeSpot != null && lodgeFind != null && lodgeFind.Tooltip.Contains("Forever") && lodgeVend != null && lodgeVend.LinkId == "npc:2");
                 Check("map: the zone with the most Lodge-observed places is the one shown first; the zone picker has Greenvale and Highkeep", plan.Best.UiMapId == 11 && plan.Zones.Count >= 2 && plan.Zones.Select(z => z.UiMapId).Contains(13));
-                Check("map: at most 40 places per source (61 wolf spawns -> at most 40 markers), at most 600 in all", z11.Markers.Count(m => m.LinkId == "npc:3") <= AtlasQuery.MaxSpawnsPerSource && plan.MarkerCount <= AtlasQuery.MaxMarkers);
+                Check("map: a baseline drop under 1 % (Plains Wolf, 0.5 %) is not drawn while better places are known; at most 600 places in all", z11.Markers.All(m => m.LinkId != "npc:3") && plan.MarkerCount <= AtlasQuery.MaxMarkers);
+                var wolfOnly = AtlasQuery.Build("item:101");
+                Check("map: ... but with nothing better the baseline's places are all there are, 40 at most per source (61 wolf spawns, 45 % and 33 % drops)", wolfOnly.Map.Zones.SelectMany(z => z.Markers).Count(m => m.LinkId == "npc:3") <= AtlasQuery.MaxSpawnsPerSource && wolfOnly.Map.Zones.SelectMany(z => z.Markers).Count(m => m.LinkId == "npc:3") > 10 && wolfOnly.Map.MarkerCount <= AtlasQuery.MaxMarkers);
                 var tinyMarkers = plan.Zones.SelectMany(z => z.Markers).Count(m => m.LinkId != null && m.LinkId.StartsWith("npc:") && int.Parse(m.LinkId.Substring(4)) >= 10);
                 Check("map: folded world-drop sources put nothing on the map", tinyMarkers == 0);
                 var cl2 = classic.Npcs[1].Spawns[0];

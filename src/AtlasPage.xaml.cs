@@ -40,7 +40,13 @@ namespace ElansAddonHub
             PreviewMouseUp += Page_PreviewMouseUp;
             PreviewMouseDown += Page_PreviewMouseDown;
             Loaded += (s, e) => { Subscribe(); if (model == null && !started) { started = true; _ = GoStart(false); } };
-            IsVisibleChanged += (s, e) => { if (IsVisible && started && Signature() != drawnSig) DataChanged(); };
+            IsVisibleChanged += (s, e) =>
+            {
+                if (!IsVisible || !started) return;
+                if (Signature() != drawnSig) DataChanged();
+                // the start page is for searching: the box is ready to type in
+                if (IsStart) Dispatcher.BeginInvoke(new Action(() => { if (IsVisible && IsStart && !(Keyboard.FocusedElement is TextBox)) SearchBox.Focus(); }), DispatcherPriority.Input);
+            };
             Unloaded += (s, e) => Unsubscribe();
             UpdateNav();
         }
@@ -151,6 +157,7 @@ namespace ElansAddonHub
             return false;
         }
 
+        public void Scroller_ScrollToForTest(FrameworkElement el) { UpdateLayout(); el?.BringIntoView(); }
         public void FocusSearch() { SearchBox.Focus(); SearchBox.SelectAll(); }
 
         // ---- build off the UI thread, draw on it
