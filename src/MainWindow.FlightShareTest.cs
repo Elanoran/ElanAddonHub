@@ -286,6 +286,7 @@ namespace ElansAddonHub
         {
             var dest = Path.Combine(HubDir("_classic_beta_"), "SharedData.lua");
             WriteHh("ACC1", FlightFixture1()); WriteHh("ACC2", FlightFixture2());
+            check("hub install: with no lodge data received yet nothing is written", Session.RewriteSharedData() == 0 && !File.Exists(dest));
 
             // ---- a current server, sharing on
             sent.Clear();
@@ -304,6 +305,12 @@ namespace ElansAddonHub
             check("download: only valid data reaches the file (3 legs; the injection key and the 99999 s leg are gone), names escaped and only for used nodes",
                 back.Child("legs").Count == 3 && (double)back.Child("legs").Child("Horde|11>22")["t"] == 63.2 && back.Child("names").Count == 2 && (string)back.Child("names")["22"] == "Crossroads" && !written.Contains("os.execute"));
             check("download: an old companion folder next to it was not touched", !File.Exists(Path.Combine(HubDir("_classic_"), "SharedData.lua")) && !Directory.Exists(HubDir("_retail_")));
+
+            // ---- Installing / updating the Hub put the empty shipped SharedData.lua back: the Outpost writes the last lodge data into it again
+            File.WriteAllText(dest, "ElansHubShared = ElansHubShared or {}\n");
+            check("hub install: SharedData.lua is rewritten from the last lodge data, same content as the download", Session.RewriteSharedData() == 1 && File.ReadAllText(dest).Contains("[\"Horde|11>22\"] = { t = 63.2, n = 20 }") && File.ReadAllText(dest).Contains("Crossroads"));
+            check("hub install: an old companion (toc without SharedData.lua) is still not touched", !File.Exists(Path.Combine(HubDir("_classic_"), "SharedData.lua")));
+            check("hub install: a second rewrite finds the file unchanged", Session.RewriteSharedData() == 0);
 
             // ---- a changed file: the table is asked for at once, the upload waits for its slot (one per 10 minutes)
             sent.Clear();

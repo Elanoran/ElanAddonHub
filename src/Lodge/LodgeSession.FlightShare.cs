@@ -147,6 +147,17 @@ namespace ElansAddonHub.Lodge
             Changed?.Invoke();
         }
 
+        // After Elan's Hub was installed or updated its SharedData.lua is the empty shipped one: write the last lodge data back (the same validated BuildLua / WriteShared
+        // path as a download). Nothing is written when no flight data has arrived in this session. Returns the number of files written.
+        public int RewriteSharedData()
+        {
+            var data = FlightData;
+            if (data == null) return 0;
+            var res = FlightShare.WriteShared(Settings?.WowRoot, FlightShare.BuildLua(data, Clock()));
+            Util.Log("flights: SharedData.lua restored after the Hub install, " + res.Written.Count + " file(s) written, " + res.Unchanged.Count + " unchanged");
+            return res.Written.Count;
+        }
+
         // every 2 s with the other ticks: look for a changed saved-variables file about every 30 s; send a waiting batch when its slot comes
         void FlightTick()
         {
@@ -163,7 +174,7 @@ namespace ElansAddonHub.Lodge
         // test hooks
         public bool FlightBacklogForTest => flightBacklog;
         public bool FlightInflightForTest => flightInflight != null;
-        public void FlightResetForTest() { flightSent = null; flightInflight = null; flightNextShare = DateTime.MinValue; flightGuest = false; flightBacklog = false; flightLocal = null; FlightShare.ResetCache(); }
+        public void FlightResetForTest() { FlightData = null; flightSent = null; flightInflight = null; flightNextShare = DateTime.MinValue; flightGuest = false; flightBacklog = false; flightLocal = null; FlightShare.ResetCache(); }
         public Dictionary<string, string> FlightSentForTest => FlightSent();
     }
 }

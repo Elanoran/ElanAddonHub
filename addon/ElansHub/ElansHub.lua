@@ -59,6 +59,7 @@ local function snapshot()
   db.online = not loggingOut
   db.session = session
   db.version = version()
+  if EHUB.PublishCore then pcall(EHUB.PublishCore, c) end -- new data layer (Data.lua); the legacy keys above stay for older Outposts
 end
 
 -- ============================================================ status strip

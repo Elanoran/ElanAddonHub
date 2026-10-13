@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.43.0
+- **Groundwork for the new data layer (nothing new to see yet):** the Outpost can now read what Elan's Hub 1.11.0 saves in its new `ElansHubData` (character basics today, more addons later), keeps the last good read if the game is writing the file, and says "Update Elan's Outpost" for data from a newer Hub instead of guessing.
+- **Shared flight times survive a Hub update:** installing or updating Elan's Hub replaces its `SharedData.lua` with the empty shipped file; the Outpost now writes the lodge's flight times back right after the install instead of waiting for the next sync.
+- Works with Elan's Hub 1.11.0 (one full WoW restart, as the companion gets a new file); older Hubs keep working as before.
+
 ## 2.42.0
 - **Shared flight times:** the flight-path times Elan's Hunter Helper learns are shared with your lodge, and everyone's merged times are handed to the game through Elan's Hub, so flight timers become exact sooner - even for legs you haven't flown. Settings > Lodge > "Share flight times with the lodge" (on by default; times only; with it off nothing is uploaded, but you still receive everyone's).
 - Needs Lodge server 2.13 and Elan's Hub 1.10.0 (one full WoW restart, as the companion gets a new file). On an older server nothing happens.

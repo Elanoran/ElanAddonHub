@@ -354,6 +354,7 @@ namespace ElansAddonHub
             if (Begin("calendar")) { result += "\r\n" + await CalendarTest(dir); End(); }
             if (Begin("wowevents")) { result += "\r\n" + await WowEventsTest(dir); End(); }
             if (Begin("flightshare")) { result += "\r\n" + await FlightShareTest(dir); End(); }
+            if (Begin("hubdata")) { result += "\r\n" + await HubDataTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }
@@ -868,6 +869,8 @@ namespace ElansAddonHub
             {
                 await Installer.Install(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p), replaceDev);
                 if (settings.SkipVersions != null && settings.SkipVersions.Remove(card.Info.Id)) SettingsStore.Save(settings);
+                // the update replaced SharedData.lua with the empty shipped file: put the lodge's flight times back (only if some arrived this session)
+                if (string.Equals(card.Info.Id, "ElansHub", StringComparison.OrdinalIgnoreCase)) { try { Session.RewriteSharedData(); } catch (Exception e) { Util.Log("flights: could not restore SharedData.lua after the Hub install (" + e.GetType().Name + ")"); } }
                 card.SetBusy(false);
                 card.Update(card.Info, settings.WowRoot);
                 RefreshRailBadges();

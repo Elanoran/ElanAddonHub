@@ -26,3 +26,5 @@
 1.9.3 New /ehub talentprobe: walks this client's talent trees (read-only) and shows/saves what it finds, so Elan's Hunter Helper can read your talents on WoW Forever.
 
 1.10.0 New file SharedData.lua: Elan's Outpost writes the lodge's shared flight-path times into it, for Elan's Hunter Helper to read (an ElansHubShared table; empty until the Outpost fills it). The addon file list changed, so a ONE-TIME full WoW restart is needed after this update (a /reload does not pick up a new file in the .toc).
+
+1.11.0 New data layer for Elan's Outpost: a public ElansHub.Publish / Get / CharKey API (Data.lua, new SavedVariable ElansHubData) that other Elan addons will hand their data to, stored versioned per character. The Hub itself now also saves your character basics (name, class, level, XP, rested XP, money, guild, zone) there. Pure API reads, out of combat; nothing is sent anywhere by the addon. The addon file list and SavedVariables changed, so a ONE-TIME full WoW restart is needed after this update (a /reload does not pick up a new file in the .toc).

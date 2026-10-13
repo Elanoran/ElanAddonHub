@@ -119,7 +119,7 @@ Existing flows keep working while data moves to the Hub:
 
 | Today | Moves to | Status |
 |---|---|---|
-| Hub `ElansHubDB.chars` / `current` / `online` | `ElansHubData` `core` | groundwork |
+| Hub `ElansHubDB.chars` / `current` / `online` | `ElansHubData` `core` | done (Hub 1.11.0, Outpost 2.43.0 reads it, not shown yet) |
 | Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` | later |
 | Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), feature itself moves to the Hub | later |
 | Health (`bugs`, `diag` in each addon's file) | stays per addon for now | later: shared helper |
@@ -129,10 +129,12 @@ only after the addon versions that wrote the old keys are no longer offered by t
 
 ## Known issues found while mapping (to fix)
 
-- Installing or updating Elan's Hub replaces `SharedData.lua` with the empty shipped file until the next
-  flight sync. The Outpost should rewrite it right after installing the Hub.
+- ~~Installing or updating Elan's Hub replaces `SharedData.lua` with the empty shipped file until the next
+  flight sync.~~ **Done (Outpost 2.43.0):** the Outpost rewrites it right after installing the Hub, from the last
+  lodge data it received in this session (nothing is written if none arrived yet).
 - `ElansHub.lua` is parsed separately by four Outpost readers, and the folder walk is written four times.
-  One shared reader should parse it once per change.
+  One shared reader should parse it once per change. **Started (Outpost 2.43.0):** `SavedVarsFiles.For` and
+  `HubData` do this for `ElansHubData`; the existing readers are not moved over yet.
 - BugTrap, Diag, Tip, Theme, Widgets and the secret helper are copied between addons. Candidate for a
   shared, versioned library later.
 - Character race/sex are joined onto Bags characters by name, with a name-only fallback that can mix up
