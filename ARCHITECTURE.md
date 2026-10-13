@@ -253,7 +253,7 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
 | B. Maps & instances | Client `UiMap`, `UiMapArt*`, `UiMapAssignment`, `Map`, `AreaTable` DB2 + map tile textures (BLP) | Outpost `Services\Maps` | planned |
 | C. Classic baseline | Public cMaNGOS classic-db dump (GPL-3.0), downloaded by the user's Outpost on request, credited; creatures, spawns, creature/object loot with chances, vendors, quests | Outpost `Services\Atlas\Classic` | planned |
 | D. Observations | Elan's Toolkit records loot (incl. kills with no drop), object loot, vendor stock and prices, quest rewards, and items the client reveals; with zone + position | Toolkit → Hub module `atlas.obs` (account) | planned |
-| E. Lodge pool | Lodge server feature `atlas`: members upload observations, the server aggregates (counts, per-member dedupe, outlier and rate limits), everyone downloads the aggregate | server `AtlasModule` + `LodgeSession.Atlas` | planned |
+| E. Lodge pool | Lodge server feature `atlas`: members upload observations, the server aggregates (counts, per-member dedupe, outlier and rate limits), everyone downloads the aggregate | server `AtlasModule` + `LodgeSession.Atlas` | built (server 2.15, see server/PROTOCOL.md) |
 | F. Atlas page | Search items / mobs / zones / instances; item page (tooltip, sources with Lodge-observed % and Classic %, vendors, quests, who in the Lodge has it); zone and instance maps with spawn and find markers | Outpost UI | planned |
 
 ### `atlas.obs` v1 (Elan's Toolkit, account) — cumulative since first record
@@ -273,10 +273,10 @@ its last upload (like flight times). Revealed-item details are not in the addon:
 `DBCache.bin` and shares parsed fields (name, quality, item level, slot, stats) with the Lodge.
 
 ### Lodge feature `atlas` (server 2.15.0)
-`atlas.share { kills, objects, fishing, vendors, quests, finds, spawns, items }` (deltas; `items` = revealed item
-details) → the server adds counts per member (each member's totals capped and checked), keeps the newest vendor list
+`atlas.share { kills, objects, fishing, vendors, quests, finds, spawns, items }` (only the entries that changed, but each carrying the member's CUMULATIVE totals; `items` = revealed item
+details) → the server keeps one record set per member and stores per field max(stored, sent), so a resend, a lost answer or a restored upload record can never count twice; the Lodge aggregate is the sum over members (each member's totals capped and checked), keeps the newest vendor list
 per npc, the newest 2000 finds (with the member's Lodge display name — never character names), up to 50 spawn points
-per npc, and revealed items by id. `atlas.get { since }` → `atlas.data` (everything changed since). Members can switch
+per npc, and revealed items by id. `atlas.get { since, epoch }` → `atlas.data` (everything changed since a server revision, in pages; the whole set again when the epoch differs). Members can switch
 sharing off; guests can read but not share. Feature can be disabled by the owner (`LODGE_ATLAS_ENABLED=0`).
 
 ### Foundation the layers share

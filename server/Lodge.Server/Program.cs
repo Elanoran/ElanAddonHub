@@ -111,7 +111,7 @@ app.Use(async (ctx, next) =>
 });
 
 // 2.10: what this server can do, so a newer client knows whether to use invite links and device tokens (older servers answer 404)
-app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, features = lodge.FeatureList().Where(f => f is "tokens" or "invites" or "devices" or "calendar" or "leave" or "lodgeinfo" or "flights" or "files"), lodge = new { name = lodge.Info.Name, welcome = lodge.Info.Welcome } }));
+app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, features = lodge.FeatureList().Where(f => f is "tokens" or "invites" or "devices" or "calendar" or "leave" or "lodgeinfo" or "flights" or "files" or "atlas"), lodge = new { name = lodge.Info.Name, welcome = lodge.Info.Welcome } }));
 
 // 2.10: trade a one-time invite (X-Lodge-Invite header, or "invite" in the body) - or, to upgrade a device, the old permanent
 // code (X-Lodge-Code) - for a per-device token. Body (optional JSON, max 4 KB): {"device": "PC name", "deviceId": "random id"}.
@@ -267,6 +267,7 @@ app.Lifetime.ApplicationStopping.Register(() =>
 {
     try { lodge.CloseAllForShutdown(TimeSpan.FromSeconds(3)).Wait(TimeSpan.FromSeconds(4)); } catch { }
     try { lodge.Chat.FlushAll(); } catch { }          // edits/reactions still waiting for their debounced write
+    try { lodge.AtlasPool.Flush(); } catch { }             // atlas changes not yet written
 });
 app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}",
     LodgeHub.Version, cfg.Urls, cfg.PathBase, cfg.DataDir, cfg.AllowQueryCode ? "allowed" : "off");

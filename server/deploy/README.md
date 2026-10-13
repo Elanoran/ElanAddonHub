@@ -121,3 +121,16 @@ upload limit is set. Backups include `slots/` (`LODGE_BACKUP_FILES=0` leaves it 
 ```bash
 sudo bash server/tests/lodge_ops_test.sh      # backup, rotation, restore, update, rollback (temp folders, fake systemctl/curl)
 ```
+
+## The Atlas pool (2.15)
+
+Members who run Elan's Toolkit pool what it saw in game - which mobs dropped what (and how often), vendor stock, who found which item and where, mob spawn
+points, item details the game client revealed - and everybody in the lodge gets the totals in the Outpost's Atlas. The server keeps one record set per member
+and shows the sum, so a member re-sending data never counts twice. Guests can read, not share; every member can switch sharing off in the Outpost
+(Settings, Lodge). Characters' names are never sent (finds show the member's lodge name). The data lives in `data/atlas.json` (a few MB; inside `data/`, so
+`lodge-backup` includes it). After `sudo lodge-update` nothing else needs to be done; the only setting (in `/etc/lodge/lodge.env`, then
+`sudo systemctl restart lodge`):
+
+| Setting | Meaning |
+|---|---|
+| `LODGE_ATLAS_ENABLED` (1) | `0` switches the feature off: not advertised, `atlas.share` / `atlas.get` answer `disabled`, the data stays on disk |

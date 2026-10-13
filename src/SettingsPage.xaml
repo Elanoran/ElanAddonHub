@@ -248,6 +248,12 @@
                 <CheckBox x:Name="FlightShareBox" Style="{StaticResource Switch}" Click="Lodge_Click" AutomationProperties.Name="Share flight times with the lodge" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
+            <TextBlock Text="Atlas" Style="{StaticResource Head}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share my Atlas observations with this Lodge" Tag="What Elan's Toolkit saw in game (drops, vendors, finds, spawn points) is pooled with the lodge; you get everyone's totals. No character names. Guests never share. With this off nothing is uploaded, but you still receive the lodge's Atlas.">
+                <CheckBox x:Name="AtlasShareBox" Style="{StaticResource Switch}" Click="Lodge_Click" AutomationProperties.Name="Share my Atlas observations with this Lodge" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
             <TextBlock Text="Presence" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Connect when the Outpost starts" Tag="Friends see you online while the Outpost runs.">

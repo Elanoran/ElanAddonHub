@@ -18,6 +18,7 @@ public sealed class Budget
     public readonly TokenBucket ProfileSet;    // profile:set: 1 per 2 s (a burst of 1)
     public readonly TokenBucket DisplayName;   // changing the display name: 1 per 60 s (a burst of 1)
     public readonly TokenBucket FlightShare;   // flights.share: one per 10 minutes (a burst of 1)
+    public readonly TokenBucket AtlasShare;    // atlas.share: a burst of 3, then one per 2 minutes
     public DateTime LastUsed;
 
     public Budget(IClock clock)
@@ -29,6 +30,7 @@ public sealed class Budget
         ProfileSet = new TokenBucket(1, 0.5, clock);
         DisplayName = new TokenBucket(1, 1.0 / 60, clock);
         FlightShare = new TokenBucket(1, 1.0 / Flights.ShareEvery.TotalSeconds, clock);
+        AtlasShare = new TokenBucket(Atlas.ShareBurst, 1.0 / Atlas.ShareEvery.TotalSeconds, clock);
         VoicePackets = new TokenBucket(150, 60, clock);
         VoiceBytes = new TokenBucket(128 * 1024, 24 * 1024, clock);
         LastUsed = clock.UtcNow;
@@ -112,6 +114,7 @@ public class LodgeHub
     public readonly VoiceModule Voice;
     public readonly CalendarModule Calendar;
     public readonly FlightModule Flight;
+    public readonly AtlasModule AtlasPool;
     public readonly FilesModule SharedFiles;
     public readonly LodgeInfoStore Info;
     readonly IModule[] modules;
@@ -140,9 +143,10 @@ public class LodgeHub
         Voice = new VoiceModule(this);
         Calendar = new CalendarModule(this);
         Flight = new FlightModule(this);
+        AtlasPool = new AtlasModule(this);
         SharedFiles = new FilesModule(this);
         Info = new LodgeInfoStore(cfg.DataDir);
-        modules = new IModule[] { Chat, Calendar, Flight, SharedFiles, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
+        modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, SharedFiles, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
     // personal codes: one budget per person; guests (shared code): one per IP, so several friends on one guest
@@ -217,6 +221,7 @@ public class LodgeHub
     {
         var f = new List<string> { "reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights" };
         if (Cfg.FilesEnabled) f.Add("files");
+        if (Cfg.AtlasEnabled) f.Add("atlas");
         return f.ToArray();
     }
 
@@ -473,6 +478,7 @@ public class LodgeHub
                     await SweepIdle();
                     await Calendar.Tick();
                     Flight.Tick();
+                    AtlasPool.Tick();
                     Auth.Strikes.Sweep();
                     SweepBudgets();
                 }

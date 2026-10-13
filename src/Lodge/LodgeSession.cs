@@ -313,6 +313,7 @@ namespace ElansAddonHub.Lodge
             channelCache.Clear();
             ResetCalendar();
             ResetFlights();
+            ResetAtlas();
             ResetFiles();
             ResetHistoryState();
             Pending = null;
@@ -501,6 +502,8 @@ namespace ElansAddonHub.Lodge
                     break;
                 case "flights.shared": OnFlightShared(m); break;
                 case "flights.data": OnFlightData(m); break;
+                case "atlas.shared": OnAtlasShared(m); break;
+                case "atlas.data": OnAtlasData(m); break;
                 case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
             }
         }
@@ -526,6 +529,7 @@ namespace ElansAddonHub.Lodge
             ReadInviteFeatures(m, features);
             ReadCalendarFeatures(m, features);
             ReadFlightFeatures(features);
+            ReadAtlasFeatures(features);
             ReadFilesFeatures(m, features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
@@ -648,6 +652,7 @@ namespace ElansAddonHub.Lodge
             SendGame();
             foreach (var r in VoiceRooms) r.InvisibleHint = Invisible;
             FlightSync(connect: true);                          // shared flight times (a no-op without the server feature)
+            AtlasSync(connect: true);                          // the Lodge's Atlas pool (a no-op without the server feature)
             RequestFiles();                                     // the Files page (a no-op without the server feature)
             Changed?.Invoke();
             // a gentle, one-time nudge: without a display name everybody sees the login name
@@ -1440,7 +1445,7 @@ namespace ElansAddonHub.Lodge
             if (Pending != null && Clock() - Pending.At > TimeSpan.FromSeconds(15)) Pending = null;   // surely out by now
             if (pendingRoom != null && Clock() - pendingSince > TimeSpan.FromSeconds(6)) { pendingRoom = null; Error?.Invoke("Couldn't join the voice room - no answer from the lodge"); Changed?.Invoke(); }
             AutoStatusTick();
-            if (tickCount % 20 == 0) { LfgTick(); CalendarTick(); FlightTick(); }
+            if (tickCount % 20 == 0) { LfgTick(); CalendarTick(); FlightTick(); AtlasTick(); }
             if (Toasts.NeedsTick) Toasts.Tick();
         }
 
