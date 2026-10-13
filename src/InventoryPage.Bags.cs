@@ -394,17 +394,68 @@ namespace ElansAddonHub
             return g;
         }
 
-        // item tooltip: the name, what THIS character holds (bags / bank / total), the other characters, the guild bank and everything together
-        object SlotTip(InvSlot s, string where, string bagTitle, int slotNo, InvChar owner, bool guild, string sub = null)
+        // ---- what the game's own item data says (level, slot, stats, requirements, price): read from the player's WoW install, see ItemData
+        static readonly Brush SilverCoin = Frozen("#C0C7D0"), CopperCoin = Frozen("#C8764A");
+
+        // returns true when the game data knew the item; an item it does not know (still hidden on WoW Forever) says so
+        bool AddItemFacts(StackPanel sp, int id)
         {
-            var sp = new StackPanel { MinWidth = 200 };
-            sp.Children.Add(Line(s.Name, "Text.RowTitle", Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, s.Quality))])));
-            if (!string.IsNullOrEmpty(sub)) sp.Children.Add(Line(sub, "Text.Secondary", null, 2));
-            var tip = InventoryReader.TipFor(index, s.Id, owner);
+            var it = ElansAddonHub.Services.Db2.ItemData.Get(id);
+            if (it == null)
+            {
+                if (ElansAddonHub.Services.Db2.ItemData.Ready) sp.Children.Add(Line(ElansAddonHub.Services.Db2.ItemText.NotRevealed, "Text.Secondary", Res("Brush.Warn"), 4));
+                return false;
+            }
+            bool first = true;
+            foreach (var l in ElansAddonHub.Services.Db2.ItemText.Lines(it))
+            {
+                double top = first ? 4 : 2;
+                first = false;
+                switch (l.Kind)
+                {
+                    case "slot":
+                        {
+                            var row = CountRow(l.Text, Res("Brush.Text.Primary"), l.Right ?? "", top);
+                            sp.Children.Add(row);
+                            break;
+                        }
+                    case "stat": sp.Children.Add(Line(l.Text, "Text.Body", Res("Brush.Success"), top)); break;
+                    case "desc":
+                        {
+                            var d = Line(l.Text, "Text.Secondary", Res("Brush.Warn"), top + 2);
+                            d.TextWrapping = TextWrapping.Wrap; d.MaxWidth = 280;
+                            sp.Children.Add(d);
+                            break;
+                        }
+                    case "price": sp.Children.Add(PriceRow(l.Text, l.Copper, top + 2)); break;
+                    case "ilvl": sp.Children.Add(Line(l.Text, "Text.Body", Res("Brush.Text.Primary"), top)); break;
+                    default: sp.Children.Add(Line(l.Text, "Text.Secondary", Res("Brush.Text.Primary"), top)); break;
+                }
+            }
+            return true;
+        }
+
+        // "Sell Price: 25 (gold dot) 53 (silver dot) 55 (copper dot)"
+        FrameworkElement PriceRow(string label, long copper, double top)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, top, 0, 0) };
+            row.Children.Add(new TextBlock { Text = label, Style = TextStyle("Text.Secondary"), Foreground = Res("Brush.Text.Primary"), VerticalAlignment = VerticalAlignment.Center });
+            foreach (var c in ElansAddonHub.Services.Db2.ItemText.Coins(copper))
+            {
+                var fill = c.Value == 'g' ? Res("Brush.Warn") : c.Value == 's' ? SilverCoin : CopperCoin;
+                row.Children.Add(new TextBlock { Text = c.Key.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English), Style = TextStyle("Text.Body"), Margin = new Thickness(8, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center });
+                row.Children.Add(new Ellipse { Width = 12, Height = 12, Fill = fill, VerticalAlignment = VerticalAlignment.Center });
+            }
+            return row;
+        }
+
+        // this character, the other characters, the guild banks and everything together
+        void AddCountRows(StackPanel sp, ItemTip tip, string othersHeader = "Other characters")
+        {
             if (tip.Me != null) sp.Children.Add(CountRow(tip.Me.Char.Name, ClassBrushOf(tip.Me.Char.Class), tip.Me.Detail, 8));
             if (tip.Others.Count > 0)
             {
-                sp.Children.Add(Line("Other characters", "Text.Caption", null, 12));
+                sp.Children.Add(Line(othersHeader, "Text.Caption", null, 12));
                 foreach (var o in tip.Others) sp.Children.Add(CountRow(o.Char.Name, ClassBrushOf(o.Char.Class), o.Detail, 4));
             }
             if (tip.Guilds.Count > 0)
@@ -417,6 +468,49 @@ namespace ElansAddonHub
                 sp.Children.Add(new Border { Height = 1, Background = Res("Brush.Divider"), Margin = new Thickness(0, 8, 0, 8) });
                 sp.Children.Add(CountRow("All together", Res("Brush.Text.Primary"), tip.Grand.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English), 0));
             }
+        }
+
+        // the tooltip of a search result: the same facts and counts as a slot, or "Not on your characters" for an item that only the game data knows
+        ToolTip ResultTip(ResultRow r)
+        {
+            var sp = new StackPanel { MinWidth = 200 };
+            sp.Children.Add(Line(r.Name, "Text.RowTitle", r.QualityBrush));
+            AddItemFacts(sp, r.Id);
+            if (r.NotOwned) sp.Children.Add(Line("Not on your characters", "Text.Caption", null, 12));
+            else AddCountRows(sp, InventoryReader.TipFor(index, r.Id, null), "Characters");
+            sp.Children.Add(Line("Item ID " + r.Id, "Text.Caption", null, 12));
+            return new ToolTip { Style = (Style)FindResource("CardTip"), Content = sp };
+        }
+
+        void ResultTip_Opened(object sender, RoutedEventArgs e)
+        {
+            if (sender is ToolTip tt && tt.PlacementTarget is FrameworkElement fe && fe.DataContext is ResultRow r) tt.Content = ((ToolTip)ResultTip(r)).Content;
+        }
+
+        // the texts of a result row's tooltip, in order (self-test)
+        List<string> ResultTipLines(ResultRow r)
+        {
+            var res = new List<string>();
+            if (r == null) return res;
+            void Walk(object o)
+            {
+                if (o is TextBlock tb) res.Add(tb.Text);
+                else if (o is Panel p) foreach (var ch in p.Children) Walk(ch);
+                else if (o is Border bd) Walk(bd.Child);
+            }
+            Walk(ResultTip(r).Content);
+            return res;
+        }
+
+        // item tooltip: the name, what THIS character holds (bags / bank / total), the other characters, the guild bank and everything together
+        object SlotTip(InvSlot s, string where, string bagTitle, int slotNo, InvChar owner, bool guild, string sub = null)
+        {
+            var sp = new StackPanel { MinWidth = 200 };
+            sp.Children.Add(Line(s.Name, "Text.RowTitle", Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, s.Quality))])));
+            if (!string.IsNullOrEmpty(sub)) sp.Children.Add(Line(sub, "Text.Secondary", null, 2));
+            AddItemFacts(sp, s.Id);
+            var tip = InventoryReader.TipFor(index, s.Id, owner);
+            AddCountRows(sp, tip);
             var loc = where == "Worn" ? (owner != null ? owner.Name + " · " : "") + bagTitle
                 : guild ? where + " · " + bagTitle + " · slot " + slotNo
                 : (owner != null ? owner.Name + " · " : "") + where + (where == "Bags" || where == "Bank" ? " · " + bagTitle : "") + " · slot " + slotNo;
@@ -535,6 +629,32 @@ namespace ElansAddonHub
         public string TitleForTest => TitleText.Text;
         public string ViewInfoForTest => ViewInfo.Text;
         public string SelectedKeyForTest => filterKey;
+        // the tooltip of a bag slot holding item `id` (name, game data facts, counts), as texts and as an element to photograph
+        InvSlot TestSlot(int id) { var any = chars.SelectMany(c => c.Bags.Concat(c.Bank ?? new List<InvItem>())).FirstOrDefault(i => i.Id == id); var known = ElansAddonHub.Services.Db2.ItemData.Get(id); return new InvSlot { Slot = 1, Id = id, Count = 1, Quality = any?.Quality ?? known?.Quality ?? 1, Name = any?.Name ?? known?.Name ?? "Item #" + id }; }
+        public List<string> SlotTipLinesForTest(int id, string charKey) => TipTexts((ToolTip)SlotTip(TestSlot(id), "Bags", "Backpack", 1, chars.FirstOrDefault(c => c.Key == charKey), false));
+        public FrameworkElement SlotTipSheetForTest(int id, string charKey) => TipSheet((ToolTip)SlotTip(TestSlot(id), "Bags", "Backpack", 1, chars.FirstOrDefault(c => c.Key == charKey), false));
+        public FrameworkElement ResultTipSheetForTest(int rowIndex) => TipSheet(ResultTip(((Results.ItemsSource as List<ResultRow>) ?? new List<ResultRow>())[rowIndex]));
+        static List<string> TipTexts(ToolTip tip)
+        {
+            var res = new List<string>();
+            void Walk(object o)
+            {
+                if (o is TextBlock tb) res.Add(tb.Text);
+                else if (o is Panel p) foreach (var ch in p.Children) Walk(ch);
+                else if (o is Border bd) Walk(bd.Child);
+            }
+            Walk(tip.Content);
+            return res;
+        }
+        // a tooltip drawn in a plain frame (the real one is a popup window that a screenshot of the page does not show)
+        FrameworkElement TipSheet(ToolTip tip)
+        {
+            var frame = new Border { Background = Res("Brush.Surface3"), BorderBrush = Res("Brush.Divider"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 8) };
+            var content = tip.Content; tip.Content = null; frame.Child = (UIElement)content;
+            frame.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            frame.Arrange(new Rect(frame.DesiredSize));
+            return frame;
+        }
         public void RefreshIconsForTest() { var only = filterKey == null ? null : Visible.FirstOrDefault(c => c.Key == filterKey); if (only != null) RenderBags(only); }
     }
 }

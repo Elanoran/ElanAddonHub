@@ -19,6 +19,8 @@ namespace ElansAddonHub.Services
         readonly int[] idxCount = new int[16];
         readonly Dictionary<int, FileStream> archives = new Dictionary<int, FileStream>();
         public string Product, BuildName;
+        // false (icons): an encrypted (key-locked) BLTE block throws. true (item tables): such a block reads as zeros, so the caller can skip the part that is locked.
+        public bool ZeroFillEncrypted;
         byte[] rootCKey, encodingEKey;
         // encoding file: page index (first ckey of every page) and a random access view
         BlteFile encoding;
@@ -30,7 +32,7 @@ namespace ElansAddonHub.Services
 
         static FileStream OpenShared(string path) => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16);
 
-        static string ProductFor(string flavor)
+        internal static string ProductFor(string flavor)
         {
             switch (flavor)
             {
@@ -160,7 +162,7 @@ namespace ElansAddonHub.Services
         BlteFile OpenEKey(byte[] ekey)
         {
             if (!TryFind(ekey, out var loc)) throw new FileNotFoundException("file is not in the local storage (ekey " + BitConverter.ToString(ekey, 0, 9).Replace("-", "") + ")");
-            return new BlteFile(Archive(loc.Archive), loc.Offset + 30, loc.Size - 30);
+            return new BlteFile(Archive(loc.Archive), loc.Offset + 30, loc.Size - 30, ZeroFillEncrypted);
         }
 
         void OpenEncoding()
@@ -324,9 +326,11 @@ namespace ElansAddonHub.Services
         readonly Queue<int> order = new Queue<int>();
         readonly object gate = new object();
 
-        public BlteFile(FileStream src, long start, int size)
+        readonly bool zeroFill;
+
+        public BlteFile(FileStream src, long start, int size, bool zeroFillEncrypted = false)
         {
-            this.src = src; this.start = start;
+            this.src = src; this.start = start; zeroFill = zeroFillEncrypted;
             var h = new byte[12];
             Read(start, h, 0, 12);
             if (h[0] != 'B' || h[1] != 'L' || h[2] != 'T' || h[3] != 'E') throw new IOException("not a BLTE block");
@@ -381,6 +385,7 @@ namespace ElansAddonHub.Services
                         dec = o.ToArray();
                     }
                     break;
+                case 'E' when zeroFill: dec = new byte[decSize[i] > 0 ? decSize[i] : 0]; break;
                 default: throw new NotSupportedException("BLTE block type '" + (char)raw[0] + "' (encrypted or unknown) is not supported");
             }
             cache[i] = dec; order.Enqueue(i);

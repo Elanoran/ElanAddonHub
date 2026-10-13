@@ -136,6 +136,49 @@ mix even though WoW saves both into the same file.
 - **Read-only consumers.** Feature addons may read Hub data with `ElansHub.Get`, never write another
   addon's tables.
 
+## Atlas: the game's own data (Outpost 2.48.0)
+
+Atlas is the Outpost's reference layer about the game itself (items first; where things drop, who sells them and which
+quest gives them come later). One principle decides everything about it:
+
+- **The Outpost reads the user's own game files, locally, read-only, at runtime. It never ships, bundles, downloads or
+  uploads third-party or game data.** Nothing from Blizzard's tables, and nothing from another project's database, is in
+  the installer or on the Lodge server. If a layer needs data the user's install does not hold, that layer is a separate,
+  later decision (see "Later layers"); it is not smuggled in here.
+- **Read-only, shared.** Every file is opened `FileShare.ReadWrite | Delete` (the game rewrites some of them while it runs)
+  and nothing is written to the WoW folder. The only thing Atlas writes is its own compact index in the Outpost's data
+  folder (`cache\itemdata.bin`).
+- **Layout-checked, never guessed.** Each table's layout hash is written in the file by the game. The Outpost has a small table
+  of the layouts it knows (`Services/Db2/ItemTables.cs`, from WoWDBDefs for build 1.60.1.70338). A hash it does not know means
+  the game was patched: item data says "unavailable: game updated", logs it, and every screen behaves as it did before Atlas.
+- **Background, never on the UI thread.** The index is built on a worker, once per game build; the next start loads the saved
+  index. A changed `DBCache.bin` (the game learned new items) re-reads only that file, after a quiet moment.
+- **Off switch.** Settings > General > "Read item data from my WoW installation" (default on).
+
+### Item data layer v1 (client tables + hotfix cache)
+
+| Source | Holds | How it is read |
+|---|---|---|
+| `ItemSparse.db2` (CASC, FileDataID 1572924, WDC5, layout `6FCC3191`) | name, description, quality, item level, required level, slot, binding, sell/buy price, stat shares, speed, bag size | `Casc.cs` (read-only CASC reader; key-locked blocks read as zeros) + `Services/Db2/Wdc5.cs`. Records are "sparse" (strings inline); the 80 rows in key-locked sections are skipped. |
+| `Item.db2` (841626, layout `9A2A4834`) | class, subclass, icon file id | same reader; optional (without it item classes are unknown) |
+| `RandPropPoints.db2` (1310245, layout `4FD22743`) | item-level budgets | The game stores stats as a share of a per-item-level budget: amount = budget(item level, quality, slot group) x share / 10000, rounded. Without this table the stat amounts are left out, not guessed. Optional. |
+| `Cache\ADB\<locale>\DBCache.bin` (XFTH v9) | the item rows the server pushed to this client, among them items that were hidden until somebody found them ("revealed") | `Services/Db2/DbCache.cs`. Same row layout as `ItemSparse`; its `Item` rows give class / icon. A row in the cache wins over the shipped one. |
+
+- `ItemData` (`Services/Db2/ItemData.cs`) turns that into `id -> ClientItem` plus a lower-case name index (prefix / word / substring
+  search). Memory is about 7 MB for 24,000 items; first read about 0.3 s, a start from the saved index about 50 ms.
+- The saved index is keyed by the game build (`.build.info`) and, for the revealed part, `DBCache.bin`'s size and time.
+- Used by the Characters page: item tooltips (bags, bank, guild bank, gear), "not revealed yet on WoW Forever" for items the
+  client does not know, matches for items you do not own in the search ("Not on your characters"), and the item level on the
+  Gear tab when the Hub did not save one. Elan's addons never see or need this data; it is Outpost-only.
+- Not in the client, so not in this layer: armor values and weapon damage (computed from further tables, not read yet), loot
+  tables, vendors, spawns, quest givers.
+
+### Later layers (not built, not decided)
+
+Sources, loot and vendors cannot be read from the client (its Adventure Guide tables are empty). Any such layer needs its own
+decision on where the data comes from, how it is labelled (for example "Classic baseline" versus "seen on Forever") and what its licence
+requires, before any of it enters a release. Until then Atlas answers only what the user's own installation can answer.
+
 ## Schemas
 
 ### `core` v1 (Hub, per character)

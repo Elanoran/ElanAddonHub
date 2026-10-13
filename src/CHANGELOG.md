@@ -3,6 +3,14 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.48.0
+- **Atlas, step one: item facts from your own WoW installation.** The Outpost now reads WoW Forever's item tables straight from your game folder (read-only, nothing is uploaded, nothing is written to the WoW folder, nothing is shipped with the Outpost): about 24,000 items, among them the ones the game has "revealed" to you since they were found on the server. It reads in the background (about a third of a second the first time, the next start is instant) and keeps itself current when the game learns new items.
+- **Item tooltips on the Characters page** (bags, bank, guild bank, gear slots, search results) now show the item the way the game does: name in its quality colour, Item Level, slot and type, binding, stats (+5 Agility ...), Requires Level, flavour text and the sell price in gold, silver and copper, followed by your characters' counts as before. An item the game does not know yet says **"Not revealed yet on WoW Forever"** and shows what the link told us.
+- **Search finds items you do not own.** Typing a name in the Characters search also lists matching items from the game data, marked "Not on your characters", with the same tooltip.
+- **Gear tab:** the item level of a worn item (and the average) comes from the game data when Elan's Hub did not save one.
+- **Settings > General > Game data:** "Read item data from my WoW installation" (on by default) with a line such as "Item data: read from your WoW installation (23,984 items, 4,756 revealed)". If the game has been patched in a way this version does not know yet, it says so and everything works as before.
+- Armor values and weapon damage are not shown yet (they are not in the item table itself); where items drop and who sells them is a later step.
+
 ## 2.47.0
 - **Files page in the Lodge:** officers and the owner share named files with the whole lodge - a UI pack, a guide, a build. Everyone (guests too) sees them in the new **Files** row under the Calendar and can **Save...** them (a Save-as dialog that starts in Downloads); the file is checked against its SHA-256 on arrival and, if it is damaged, nothing is saved. Saved files carry the Windows "downloaded from the Internet" mark, and nothing is ever opened or run for you.
 - **Versions:** uploading to an existing file with **Replace** makes a new version; the newest 3 are kept, older ones can be saved, and officers can **Roll back** to one. A file shows **Updated** when it changed since you last saved it on this PC, or **New** when you never did. When someone changes a file a quiet line above the chat says so ("Wing updated Raid UI pack (v3)").

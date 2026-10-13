@@ -125,6 +125,9 @@ namespace ElansAddonHub
             WowEventsBox.IsChecked = !s.WowEventsOff;
             FlightShareBox.IsChecked = !s.FlightShareOff;
             AtlasShareBox.IsChecked = !s.AtlasShareOff;
+            ItemDataBox.IsChecked = !s.ItemDataOff;
+            ElansAddonHub.Services.Db2.ItemData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Db2.ItemData.Changed += OnItemDataChanged;
+            UpdateItemDataLine();
 
             ModeVa.IsChecked = !s.VoicePushToTalk;
             ModePtt.IsChecked = s.VoicePushToTalk;
@@ -250,6 +253,7 @@ namespace ElansAddonHub
             lodge.OverlayPreview = NavOverlay.IsChecked == true && IsVisible;
 
             FolderText.Text = settings.WowRoot ?? "Not found - press Change";
+            UpdateItemDataLine();
             CheckText.Text = host.CheckStatus;
             LodgeAddress.Text = string.IsNullOrEmpty(settings.LodgeUrl) ? "Not connected to a lodge" : settings.LodgeUrl;
             LodgeWho.Text = session.Me == null ? (session.Connected ? session.StatusText : "Join one from the Lodge tab")
@@ -320,6 +324,8 @@ namespace ElansAddonHub
             settings.AutoUpdate = AutoUpdateBox.IsChecked == true;
             settings.CfAutoCheck = CfAutoBox.IsChecked == true;
             settings.NoSplash = SplashBox.IsChecked != true;
+            bool itemDataOff = ItemDataBox.IsChecked != true, itemDataChanged = settings.ItemDataOff != itemDataOff;
+            settings.ItemDataOff = itemDataOff;
             bool art = PaintedBox.IsChecked == true;
             bool artChanged = settings.PaintedArt != art;
             settings.PaintedArt = art;
@@ -335,6 +341,7 @@ namespace ElansAddonHub
             }
             SettingsStore.Save(settings);
             if (artChanged) host.CardArtChanged();
+            if (itemDataChanged) { if (itemDataOff) ElansAddonHub.Services.Db2.ItemData.Disable(); else ElansAddonHub.Services.Db2.ItemData.Start(); UpdateItemDataLine(); }
             if (sender == AutoUpdateBox && settings.AutoUpdate) host.AutoUpdateTurnedOn();
         }
 
@@ -353,7 +360,11 @@ namespace ElansAddonHub
             ChannelHint.Text = ChannelText();
         }
 
-        void ChangeFolder_Click(object sender, RoutedEventArgs e) { host.PickWowFolder(); RefreshSection(); }
+        void ChangeFolder_Click(object sender, RoutedEventArgs e) { host.PickWowFolder(); ElansAddonHub.Services.Db2.ItemData.Start(); RefreshSection(); }
+
+        // "Item data: read from your WoW installation (N items, M revealed)" under the Game data switch
+        void UpdateItemDataLine() => ItemDataRow.Tag = ElansAddonHub.Services.Db2.ItemData.StatusLine + ". Read-only, on this PC: nothing is uploaded and nothing is written to the WoW folder.";
+        void OnItemDataChanged() => Dispatcher.BeginInvoke(new Action(UpdateItemDataLine));
 
         async void CheckNow_Click(object sender, RoutedEventArgs e)
         {

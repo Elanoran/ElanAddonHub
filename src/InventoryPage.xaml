@@ -185,7 +185,9 @@
             <ItemsControl x:Name="Results">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Margin="0,0,0,8" Padding="{StaticResource Pad.Row}" CornerRadius="{StaticResource Radius.Card}" Background="{StaticResource Brush.Surface1}">
+                  <Border Margin="0,0,0,8" Padding="{StaticResource Pad.Row}" CornerRadius="{StaticResource Radius.Card}" Background="{StaticResource Brush.Surface1}"
+                          ToolTipService.InitialShowDelay="150" ToolTipService.ShowDuration="30000">
+                    <Border.ToolTip><ToolTip Style="{StaticResource CardTip}" Opened="ResultTip_Opened" /></Border.ToolTip>
                     <Grid>
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />

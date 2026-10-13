@@ -134,6 +134,12 @@
                 <TextBlock x:Name="FolderText" Style="{StaticResource Text.Mono}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
               </DockPanel>
             </ContentControl>
+            <TextBlock Text="Game data" Style="{StaticResource Head}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl x:Name="ItemDataRow" Style="{StaticResource Setting.Row}" Header="Read item data from my WoW installation" Tag="Item names, levels, stats and prices come from your own game files, read-only, on this PC. Nothing is uploaded and nothing is written to the WoW folder.">
+                <CheckBox x:Name="ItemDataBox" Style="{StaticResource Switch}" Click="General_Click" AutomationProperties.Name="Read item data from my WoW installation" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
             <TextBlock Text="Startup" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Run in background" Tag="Closing the window keeps the Outpost in the tray: updates are checked and you stay online in the lodge.">

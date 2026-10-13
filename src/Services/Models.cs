@@ -107,6 +107,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "flightShareOff")] public bool FlightShareOff { get; set; }      // false (default) = my learned flight-path times are uploaded to the lodge (times only); off = nothing is uploaded, downloading still works
         [DataMember(Name = "atlasShareOff")] public bool AtlasShareOff { get; set; }        // false (default) = what Elan's Toolkit observed (loot, vendors, finds, spawn points; no character names) is shared with the lodge, guests never share; off = nothing is uploaded, the lodge's Atlas is still received
         [DataMember(Name = "wowEventsOff")] public bool WowEventsOff { get; set; }          // false (default) = WoW's own calendar (from the companion addon) is listed in the Calendar
+        [DataMember(Name = "itemDataOff")] public bool ItemDataOff { get; set; }            // false (default) = item names, stats and levels are read from the user's own WoW installation (Atlas); true = not read
         // ---- Outpost browser (Browser page)
         [DataMember(Name = "browserSearch")] public string BrowserSearch { get; set; }       // search engine id (BrowserUrl.Engines); null = duckduckgo
         [DataMember(Name = "browserRemember")] public bool BrowserRemember { get; set; }     // false (default) = private browsing: nothing is kept; true = logins/cookies kept under <data>\webview2rowser
