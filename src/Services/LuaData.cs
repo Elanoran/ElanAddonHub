@@ -26,6 +26,11 @@ namespace ElansAddonHub.Services
             return result;
         }
 
+        // a value of a parsed table as text whatever its Lua type ("5" for the number 5, "true"); null when absent. (Json.Str gives null for a non-string.)
+        // For numbers use Json.cs's Int / Long / Bool / Child on the same tables.
+        public static string Text(this Dictionary<string, object> t, string k) =>
+            t != null && t.TryGetValue(k, out var v) && v != null ? Convert.ToString(v, CultureInfo.InvariantCulture) : null;
+
         static void Skip(string s, ref int i)
         {
             while (i < s.Length)

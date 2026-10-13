@@ -80,7 +80,7 @@ namespace ElansAddonHub.Services
             DateTime started = DateTime.MinValue;
             var playing = watch.Running && WowRunning(out started);
 
-            var files = SavedVariablesFiles(wowRoot());
+            var files = SavedVarsFiles.For(wowRoot(), HubData.FileName);
             Watch(files);
             var sig = string.Join("|", files.Select(f => f + "@" + SafeStamp(f).Ticks));
             if (sig != lastSig)
@@ -221,51 +221,17 @@ namespace ElansAddonHub.Services
             return any;
         }
 
-        // <root>\_<flavor>_\WTF\Account\<ACCOUNT>\SavedVariables\ElansHub.lua
-        public static List<string> SavedVariablesFiles(string root) => SavedVariablesFiles(root, "ElansHub.lua");
-
-        // the same walk for another addon's file (e.g. ElansHunterHelper.lua): every flavor, every account folder; read-only
-        public static List<string> SavedVariablesFiles(string root, string fileName)
-        {
-            var files = new List<string>();
-            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return files;
-            try
-            {
-                foreach (var flavor in Directory.GetDirectories(root, "_*_"))
-                {
-                    var accounts = Path.Combine(flavor, "WTF", "Account");
-                    if (!Directory.Exists(accounts)) continue;
-                    foreach (var acc in Directory.GetDirectories(accounts))
-                    {
-                        var f = Path.Combine(acc, "SavedVariables", fileName);
-                        if (File.Exists(f)) files.Add(f);
-                    }
-                }
-            }
-            catch { }
-            return files;
-        }
-
         public static string NewestSavedVariables(string root) =>
-            SavedVariablesFiles(root).OrderByDescending(SafeStamp).FirstOrDefault();
+            SavedVarsFiles.For(root, HubData.FileName).OrderByDescending(SafeStamp).FirstOrDefault();
 
         public static Character Read(string file)
         {
             if (file == null) return null;
             try
             {
-                string text = null;
-                for (int i = 0; i < 4 && text == null; i++) // WoW may still hold the file while writing
-                {
-                    try
-                    {
-                        using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-                        using (var r = new StreamReader(fs)) text = r.ReadToEnd();
-                    }
-                    catch (IOException) { System.Threading.Thread.Sleep(80); }
-                }
-                if (text == null) return null;
-                var db = LuaData.ReadGlobals(text).TryGetValue("ElansHubDB", out var v) ? v as Dictionary<string, object> : null;
+                var globals = SavedVarsCache.Get(file);   // parsed once per change, shared with the calendar / looks / health readers
+                if (globals == null) return null;
+                var db = globals.TryGetValue("ElansHubDB", out var v) ? v as Dictionary<string, object> : null;
                 var chars = db?.Child("chars");
                 var cur = chars?.Child(db.Str("current") ?? "");
                 if (cur == null) return null;
