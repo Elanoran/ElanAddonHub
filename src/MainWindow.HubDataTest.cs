@@ -28,7 +28,7 @@ ElansHubData = {
 					[""faction""] = ""Horde"", [""level""] = 60, [""xp""] = 1500, [""xpMax""] = 4500, [""rested""] = 300, [""money""] = 123456789, [""guild""] = ""The Lodge"",
 					[""zone""] = ""Orgrimmar"", [""subzone""] = ""Valley of Strength"", [""updated""] = 1790000499, [""somethingNew""] = true,
 				} },
-				[""hunter.pets""] = { [""v""] = 3, [""at""] = 1790000400, [""by""] = ""ElansHunterHelper"", [""ver""] = ""1.26.0"", [""data""] = { [""count""] = 4 } },
+				[""hunter.unlisted""] = { [""v""] = 3, [""at""] = 1790000400, [""by""] = ""ElansHunterHelper"", [""ver""] = ""1.26.0"", [""data""] = { [""count""] = 4 } },
 			},
 		},
 		[""Realm-Old""] = {
@@ -77,7 +77,7 @@ ElansHubData = {
                     && core.Zone == "Orgrimmar" && core.Subzone == "Valley of Strength" && core.Updated == 1790000499L);
                 var cm = elan.Modules["core"];
                 check("parse: module metadata (v, at, by, ver) is kept and an unknown extra field is ignored", cm.V == 1 && cm.At == 1790000500L && cm.By == "ElansHub" && cm.Ver == "1.11.0" && !cm.TooNew);
-                check("parse: a module this app has no table entry for is exposed as stored, not TooNew", elan.Modules["hunter.pets"].V == 3 && !elan.Modules["hunter.pets"].TooNew && elan.Modules["hunter.pets"].Data != null && elan.Modules["hunter.pets"].Data.Int("count") == 4);
+                check("parse: a module this app has no table entry for is exposed as stored, not TooNew", elan.Modules["hunter.unlisted"].V == 3 && !elan.Modules["hunter.unlisted"].TooNew && elan.Modules["hunter.unlisted"].Data != null && elan.Modules["hunter.unlisted"].Data.Int("count") == 4);
                 var old = m.Char("Realm-Old");
                 check("parse: core v2 is newer than Supported[core]=1: marked TooNew, Data not exposed, no typed core", HubData.Supported["core"] == 1 && old.Modules["core"].TooNew && old.Modules["core"].V == 2 && old.Modules["core"].Data == null && old.Core == null);
                 check("parse: account modules are read", m.AccountModules.ContainsKey("hunter.flight") && m.AccountModules["hunter.flight"].V == 1 && m.AccountModules["hunter.flight"].Data.Child("legs").Count == 2);

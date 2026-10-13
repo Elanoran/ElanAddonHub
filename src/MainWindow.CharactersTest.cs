@@ -51,6 +51,10 @@ namespace ElansAddonHub
                 + "links={" + Link(200, "Helm of Testing", "0070dd") + "," + Link(201, "Plain Chestguard", "1eff00") + "," + Link(202, "Epic Blade", "a335ee") + "," + Link(109, "White Cloak", "ffffff") + "}"));
             s.Append(Mod("talents", 1, now - 300, "at=" + (now - 300) + ",api='traits',spent=35,unspent=2,nodes={\n" + nodes + "}"));
             s.Append(Mod("professions", 1, now - 300, "at=" + (now - 300) + ",list={{name='Mining',skill=225,max=300,ic=136248,kind='primary'},{name='Herbalism',skill=300,max=300,ic=136065,kind='primary'},{name='Cooking',skill=75,max=150,ic=133971,kind='secondary'}}"));
+            // hunter.pets v1 as Hunter Helper 1.26.5 writes it, plus odd entries a reader must skip (a bare ability id, a number where a table goes, a text junk pet)
+            s.Append(Mod("hunter.pets", 1, now - 200, "at=" + (now - 200) + ",active='Rex:Bear',pets={['Rex:Bear']={name='Rex',family='Bear',familyId='bear',level=40,loyalty=5,ic=132127,tpTotal=80,tpSpent=30,happiness=3,"
+                + "abilities={{id='bite',name='Bite',rank=4},{id='growl',name='Growl',rank=3},{id='bogus'},7}},['Spot:Wolf']={name='Spot',family='Wolf',familyId='wolf',level=22,loyaltyText='Faithful',stable=2,abilities={{id='bite',name='Bite',rank=2}}},"
+                + "['Odd:Cat']='junk'},known={bite=6,claw=4,fasterattack=2,weird='x',zero=0}"));
             s.Append("}},\n");
             s.Append("['Forever-Measley']={at=" + (now - 5000) + ",mods={\n");
             s.Append(Mod("core", 1, now - 5000, Core("Measley", "Forever", "Paladin", "PALADIN", "Human", 2, "Alliance", "22", 2503000, "", now - 5000)));
@@ -69,7 +73,7 @@ namespace ElansAddonHub
             s.Append("}},\n");
             s.Append("['Forever-Future']={at=" + (now - 800) + ",mods={\n");
             s.Append(Mod("core", 1, now - 800, Core("Future", "Forever", "Priest", "PRIEST", "Dwarf", 3, "Alliance", "30", 99, "", now - 800)));
-            foreach (var m in new[] { "bags", "bank", "gear", "talents", "professions" }) s.Append(Mod(m, 2, now - 800, "surprise=true"));
+            foreach (var m in new[] { "bags", "bank", "gear", "talents", "professions", "hunter.pets" }) s.Append(Mod(m, 2, now - 800, "surprise=true"));
             s.Append("}},\n");
             s.Append("},\n['account']={['mods']={\n");
             s.Append(Mod("guildbank", 1, now - 30, "guilds={['Forever-Test Guild']={name='Test Guild',realm='Forever',money=999000,at=" + (now - 30) + ",tabs={[1]={name='Consumables',ic=134328,at=" + (now - 30)
@@ -109,6 +113,43 @@ namespace ElansAddonHub
                 Check("talents v1: ic parsed as a number (0 when missing or not a number)", tal != null && tal.Nodes[3].Ic == 135004 && tal.Nodes[7].Ic == 135008 && tal.Nodes[0].Ic == 0 && tal.Nodes[4].Ic == 0 && tal.Nodes.Count(n => n.Ic > 0) == 6, tal == null ? "null" : string.Join(",", tal.Nodes.Select(n => n.Ic)));
                 var prof = HubModules.ProfessionsOf(elan);
                 Check("professions v1: name, skill / max, icon, kind", prof != null && prof.List.Count == 3 && prof.List[0].Name == "Mining" && prof.List[0].Skill == 225 && prof.List[0].Max == 300 && prof.List[0].Ic == 136248 && prof.List[2].Kind == "secondary");
+                // ---- hunter.pets v1 (Hunter Helper 1.26.5)
+                Check("supported table lists hunter.pets at v1", HubData.Supported["hunter.pets"] == 1);
+                var pets = HubModules.PetsOf(elan);
+                Check("hunter.pets v1: active key, 2 pets (the text junk one skipped), with you first, the stable after", pets != null && pets.Active == "Rex:Bear" && pets.Pets.Select(p => p.Key).SequenceEqual(new[] { "Rex:Bear", "Spot:Wolf" })
+                    && pets.WithYou.Count() == 1 && pets.Stabled.Single().Key == "Spot:Wolf" && pets.At == now - 200, pets == null ? "null" : string.Join(",", pets.Pets.Select(p => p.Key)));
+                var rex = pets?.Pets[0]; var spot = pets?.Pets[1];
+                Check("hunter.pets v1: pet fields - name, family, familyId, level, loyalty 5 (Faithful), icon, training points, happiness",
+                    rex != null && rex.Name == "Rex" && rex.Family == "Bear" && rex.FamilyId == "bear" && rex.Level == 40 && rex.Loyalty == 5 && HubModules.LoyaltyNames[rex.Loyalty - 1] == "Faithful" && rex.Ic == 132127 && rex.TpTotal == 80 && rex.TpSpent == 30 && rex.Happiness == 3 && !rex.InStable);
+                Check("hunter.pets v1: abilities in order with ranks (a bare id gets its name from the id, rank 0; a number row is skipped)", rex != null && rex.Abilities.Select(a => a.Name + ":" + a.Rank).SequenceEqual(new[] { "Bite:4", "Growl:3", "Bogus:0" }), rex == null ? "null" : string.Join(",", rex.Abilities.Select(a => a.Name + ":" + a.Rank)));
+                Check("hunter.pets v1: stabled pet - slot 2, loyalty from its text, no icon, no training points", spot != null && spot.Stable == 2 && spot.InStable && spot.Loyalty == 0 && spot.LoyaltyText == "Faithful" && spot.Ic == 0 && spot.TpTotal == -1 && spot.Happiness == 0);
+                Check("hunter.pets v1: known abilities {id = rank}; non-numbers and rank 0 dropped", pets != null && pets.Known.Count == 3 && pets.Known["bite"] == 6 && pets.Known["claw"] == 4 && pets.Known["fasterattack"] == 2 && HubModules.PetAbilityName("fasterattack") == "Faster Attack" && HubModules.PetAbilityName("newthing") == "Newthing");
+                var futPets = hub.Char("Forever-Future");
+                Check("hunter.pets v2: TooNew, no data exposed, the character's other modules unaffected", futPets.Modules["hunter.pets"].TooNew && futPets.Modules["hunter.pets"].Data == null && HubModules.StateOf(futPets, "hunter.pets") == HubModState.TooNew && HubModules.PetsOf(futPets) == null);
+                Check("hunter.pets missing: Missing, no data", HubModules.StateOf(hub.Char("Forever-Newbie"), "hunter.pets") == HubModState.Missing && HubModules.PetsOf(hub.Char("Forever-Newbie")) == null && HubModules.PetsOf(null) == null);
+                bool petJunkOk = true; HubPetsModule pj = null, pbig = null;
+                try
+                {
+                    var pjHub = HubData.Parse("ElansHubData = { chars = { ['A-B'] = { mods = { ['hunter.pets'] = { v = 1, data = { active = 7, pets = { 5, { name = 5 }, { name = 'X', level = 'a', stable = -3, loyalty = 1e999, ic = 'q', abilities = 4 }, { name = 'Y', abilities = { 3, { id = {}, rank = 'x' }, { name = 'Z', rank = -2 } } } }, known = { 'x', a = {}, b = -1 } } } } } } }");
+                    pj = HubModules.PetsOf(pjHub.Char("A-B"));
+                    var sb = new StringBuilder("ElansHubData = { chars = { ['A-B'] = { mods = { ['hunter.pets'] = { v = 1, data = { pets = {");
+                    for (int i = 1; i <= 60; i++)
+                    {
+                        sb.Append("['P" + i + "']={name='Pet" + i + "',stable=" + i + ",abilities={");
+                        for (int j = 1; j <= 60; j++) sb.Append("{id='a" + j + "',rank=" + j + "},");
+                        sb.Append("}},");
+                    }
+                    sb.Append("},known={");
+                    for (int i = 1; i <= 150; i++) sb.Append("k" + i + "=" + i + ",");
+                    sb.Append("}}}}}}}");
+                    pbig = HubModules.PetsOf(HubData.Parse(sb.ToString()).Char("A-B"));
+                }
+                catch (Exception) { petJunkOk = false; }
+                Check("hunter.pets: odd values (numbers for tables, text for numbers, 1e999, negative slot, unnamed rows) are skipped or zeroed without throwing",
+                    petJunkOk && pj != null && pj.Active == null && pj.Pets.Count == 2 && pj.Pets[0].Name == "X" && pj.Pets[0].Level == 0 && pj.Pets[0].Stable == 0 && pj.Pets[0].Loyalty == 0 && pj.Pets[0].Ic == 0 && pj.Pets[0].Abilities.Count == 0
+                    && pj.Pets[1].Abilities.Count == 1 && pj.Pets[1].Abilities[0].Name == "Z" && pj.Pets[1].Abilities[0].Rank == 0 && pj.Known.Count == 0, pj == null ? "null" : pj.Pets.Count + " pets");
+                Check("hunter.pets: caps - at most 40 pets, 40 abilities per pet, 100 known abilities", petJunkOk && pbig != null && pbig.Pets.Count == HubModules.MaxPets && pbig.Pets.All(p => p.Abilities.Count == HubModules.MaxPetAbilities) && pbig.Known.Count == HubModules.MaxKnown, pbig == null ? "null" : pbig.Pets.Count + "/" + pbig.Known.Count);
+
                 var gb = HubModules.GuildBankOf(hub);
                 Check("guildbank v1 (account): guild, money, tab with name / icon / items", gb != null && gb.Guilds.Count == 1 && gb.Guilds[0].Key == "Forever-Test Guild" && gb.Guilds[0].Money == 999000 && gb.Guilds[0].Tabs.Count == 1 && gb.Guilds[0].Tabs[0].Name == "Consumables" && gb.Guilds[0].Tabs[0].S[1].C == 41 && gb.Guilds[0].Tabs[0].S[1].Name == "Minor Healing Potion");
 
@@ -263,6 +304,21 @@ namespace ElansAddonHub
                 await Task.Delay(300);
                 Snapshot(P("20-characters-professions.png"));
 
+                // the Pet tab: hunters only
+                Check("Pet tab is shown for the hunter (classFile HUNTER)", InventoryView.PetTabVisibleForTest);
+                InventoryView.SelectTabForTest("pet");
+                var pt = InventoryView.CharTabLinesForTest();
+                Check("pet: with you - Rex, Bear, level 40, Faithful, training points, abilities with ranks", pt.Contains("pet|with you|Rex|Bear|40|Faithful|Training points 30 / 80|Bite 4, Growl 3, Bogus"), string.Join(" | ", pt));
+                Check("pet: stabled - Spot in slot 2, loyalty from its text, no training points", pt.Contains("pet|stable 2|Spot|Wolf|22|Faithful||Bite 2"), string.Join(" | ", pt));
+                Check("pet: 'Your hunter can teach' lists the known abilities by name with ranks", pt.Contains("known|Bite 6, Claw 4, Faster Attack 2"), string.Join(" | ", pt));
+                Check("pet: counts line (1 with you, 1 stabled, 3 known) and the age line names Hunter Helper", pt.Contains("petinfo|1|1|3") && InventoryView.ViewInfoForTest.StartsWith("2 pets · Updated ") && InventoryView.ViewInfoForTest.EndsWith("Hunter Helper"), InventoryView.ViewInfoForTest);
+                await Task.Delay(300);
+                Snapshot(P("20-characters-pet.png"));
+                InventoryView.FilterForTest("Forever-Measley");
+                Check("Pet tab is hidden for a Paladin, and the page falls back to Overview", !InventoryView.PetTabVisibleForTest && InventoryView.TabForTest == "overview", InventoryView.TabForTest);
+                InventoryView.FilterForTest("Forever-Elan");
+                Check("back on the hunter the tab is there again", InventoryView.PetTabVisibleForTest);
+
                 InventoryView.SelectTabForTest("bags");
                 var panels = InventoryView.PanelsForTest();
                 Check("bags from the Hub: backpack 4/16, Linen Bag 1/6, reagent bag 2/8; the reagent bag has its chip, free space apart",
@@ -317,6 +373,22 @@ namespace ElansAddonHub
                 Check("search 'linen' across Hub and Bags characters: 55 in all, Elan's split from the Hub", rs.Count == 1 && rs[0].Contains("× 55") && rs[0].Contains("Elan bags 35 · bank 10") && rs[0].Contains("Measley bags 7") && rs[0].Contains("Measley bags 3"), string.Join(" | ", rs));
                 InventoryView.SetSearchForTest("");
 
+                // two more hunters: one with no pets module yet (the empty state), one whose pets module is newer than this app (TooNew)
+                File.WriteAllText(hubFile, HubCharsLua(now, now - 60).Replace("class='Rogue',classFile='ROGUE'", "class='Hunter',classFile='HUNTER'").Replace("class='Priest',classFile='PRIEST'", "class='Hunter',classFile='HUNTER'"), new UTF8Encoding(false));
+                File.SetLastWriteTimeUtc(hubFile, DateTime.UtcNow.AddSeconds(3));
+                InventoryView.FilterForTest("Forever-Newbie");
+                InventoryView.SelectTabForTest("pet");
+                for (int i = 0; i < 40 && !InventoryView.PetTabVisibleForTest; i++) { await Task.Delay(200); InventoryView.FilterForTest("Forever-Newbie"); }
+                Check("Pet tab shows for a hunter with no pets module too", InventoryView.PetTabVisibleForTest);
+                InventoryView.SelectTabForTest("pet");
+                Check("pet, module missing: 'No pets saved' (the hint says to log in with Hunter Helper 1.26.5)", InventoryView.CharTabLinesForTest().SequenceEqual(new[] { "empty|No pets saved for Newbie yet" }), string.Join(" | ", InventoryView.CharTabLinesForTest()));
+                await Task.Delay(300);
+                Snapshot(P("20-characters-pet-empty.png"));
+                InventoryView.FilterForTest("Forever-Future");
+                InventoryView.SelectTabForTest("pet");
+                Check("pet, module too new: 'Update Elan's Outpost to show pets.'", InventoryView.CharTabLinesForTest().SequenceEqual(new[] { "empty|Update Elan's Outpost to show pets." }), string.Join(" | ", InventoryView.CharTabLinesForTest()));
+                InventoryView.SelectTabForTest("overview");
+
                 // the Hub file changes while the page is open: the page follows (watcher + debounce)
                 InventoryView.FilterForTest("Forever-Elan");
                 InventoryView.SelectTabForTest("overview");
@@ -351,7 +423,7 @@ namespace ElansAddonHub
                 InventoryView.Init(() => settings.WowRoot);
                 ShowTab("addons");
             }
-            notes.Insert(0, "characters (2.44.0): " + (ok ? "all ok" : "FAILURES"));
+            notes.Insert(0, "characters (2.46.0): " + (ok ? "all ok" : "FAILURES"));
             return string.Join("\r\n", notes);
         }
     }

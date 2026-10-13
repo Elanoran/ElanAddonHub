@@ -38,6 +38,7 @@ namespace ElansAddonHub
                 case "gear": RenderGear(c); break;
                 case "talents": RenderTalents(c); break;
                 case "professions": RenderProfessions(c); break;
+                case "pet": RenderPet(c); break;
                 default: RenderOverview(c); break;
             }
         }
@@ -70,12 +71,12 @@ namespace ElansAddonHub
         }
 
         // false (and an empty state shown) when the module is missing or too new
-        bool Gate(InvChar c, string module, string what, string missingLine)
+        bool Gate(InvChar c, string module, string what, string missingLine, string missingHint = null, string tooNewHint = null)
         {
             var st = HubModules.StateOf(c.Hub, module);
             if (st == HubModState.Ok) return true;
-            if (st == HubModState.TooNew) ShowEmptyTab(UpdateOutpost(what), "This was saved by a newer Elan's Hub than this Outpost understands.");
-            else ShowEmptyTab(missingLine, "Log in to this character with Elan's Hub 1.12.0 or newer, then /reload or log out.");
+            if (st == HubModState.TooNew) ShowEmptyTab(UpdateOutpost(what), tooNewHint ?? "This was saved by a newer Elan's Hub than this Outpost understands.");
+            else ShowEmptyTab(missingLine, missingHint ?? "Log in to this character with Elan's Hub 1.12.0 or newer, then /reload or log out.");
             return false;
         }
 
@@ -351,7 +352,121 @@ namespace ElansAddonHub
             CharHost.Children.Add(wrap);
         }
 
+        // ---- Pet (hunters only; Hunter Helper hands the data to Elan's Hub as hunter.pets)
+        Border Chip(string text)
+        {
+            return new Border { Background = Res("Brush.Overlay.Chip"), CornerRadius = (CornerRadius)FindResource("Radius.Chip"), Height = 24, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 8, 8),
+                Child = new TextBlock { Text = text, Style = TextStyle("Text.Secondary"), VerticalAlignment = VerticalAlignment.Center } };
+        }
+
+        static string AbilityText(HubPetAbility a) => a.Rank > 0 ? a.Name + " " + a.Rank : a.Name;
+        static string LoyaltyOf(HubPet p) => p.Loyalty > 0 ? HubModules.LoyaltyNames[p.Loyalty - 1] : p.LoyaltyText;
+
+        // one pet: family icon (or the family's first letter), name, level / family / loyalty, and its abilities with ranks
+        FrameworkElement PetCard(HubPet p, bool full)
+        {
+            double size = full ? 48 : 32;
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var icon = new Grid { Width = size, Height = size, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Top };
+            var fb = new Border { CornerRadius = (CornerRadius)FindResource(full ? "Radius.ControlLg" : "Radius.Control"), Background = Res("Brush.Overlay.Chip"),
+                Child = new TextBlock { Text = Initial(p.Family ?? p.FamilyId ?? p.Name), Foreground = Res("Brush.Text.Secondary"), FontSize = full ? 20 : 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+            var img = new Image { Stretch = Stretch.Uniform };
+            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+            icon.Children.Add(fb);
+            icon.Children.Add(img);
+            if (p.Ic > 0) BindIcon(p.Ic, img, fb);
+            row.Children.Add(icon);
+
+            var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            info.Children.Add(new TextBlock { Text = p.Name, Style = TextStyle(full ? "Text.Section" : "Text.RowTitle"), TextTrimming = TextTrimming.CharacterEllipsis });
+            var bits = new List<string>();
+            if (p.Level > 0) bits.Add("Level " + p.Level);
+            if (!string.IsNullOrEmpty(p.Family)) bits.Add(p.Family);
+            var loy = LoyaltyOf(p);
+            if (!string.IsNullOrEmpty(loy)) bits.Add(loy);
+            if (p.Happiness > 0) bits.Add(p.Happiness == 1 ? "Unhappy" : p.Happiness == 2 ? "Content" : "Happy");
+            if (p.InStable) bits.Add("Stable slot " + p.Stable);
+            var sub = string.Join(" · ", bits);
+            info.Children.Add(Line(sub, "Text.Secondary", null, 2));
+            Grid.SetColumn(info, 1);
+            row.Children.Add(info);
+
+            string tp = null;
+            if (full && p.TpTotal > 0)
+            {
+                tp = "Training points " + p.TpSpent + " / " + p.TpTotal;
+                var r = Line(tp, "Text.Caption");
+                r.VerticalAlignment = VerticalAlignment.Top;
+                r.Margin = new Thickness(12, 4, 0, 0);
+                Grid.SetColumn(r, 2);
+                row.Children.Add(r);
+            }
+
+            var body = new StackPanel();
+            body.Children.Add(row);
+            var abil = string.Join(", ", p.Abilities.Select(AbilityText));
+            if (full)
+            {
+                if (p.Abilities.Count > 0)
+                {
+                    var wrap = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+                    foreach (var a in p.Abilities) wrap.Children.Add(Chip(AbilityText(a)));
+                    body.Children.Add(wrap);
+                }
+                else body.Children.Add(Line("No abilities saved for this pet yet.", "Text.Caption", null, 12));
+            }
+            else if (p.Abilities.Count > 0)
+            {
+                var t = Line(string.Join(" · ", p.Abilities.Select(AbilityText)), "Text.Caption", null, 8);
+                t.TextWrapping = TextWrapping.Wrap;
+                body.Children.Add(t);
+            }
+            charTabInfo.Add("pet|" + (p.InStable ? "stable " + p.Stable : "with you") + "|" + p.Name + "|" + p.Family + "|" + p.Level + "|" + loy + "|" + (tp ?? "") + "|" + abil);
+            var card = full ? CardBox(body) : new Border { Background = Res("Brush.Surface1"), CornerRadius = (CornerRadius)FindResource("Radius.Card"), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 0, 0, 4), Child = body };
+            return card;
+        }
+
+        void RenderPet(InvChar c)
+        {
+            if (!Gate(c, "hunter.pets", "pets", "No pets saved for " + c.Name + " yet", "Log in to this hunter with Hunter Helper 1.26.5 or newer, then /reload or log out.",
+                "This was saved by a newer Hunter Helper than this Outpost understands.")) return;
+            var m = HubModules.PetsOf(c.Hub);
+            var withYou = m.WithYou.ToList();
+            var stabled = m.Stabled.ToList();
+            ViewInfo.Text = m.Pets.Count + (m.Pets.Count == 1 ? " pet" : " pets") + " · " + UpdatedLine(m.At, "Hunter Helper");
+            charTabInfo.Add("petinfo|" + withYou.Count + "|" + stabled.Count + "|" + m.Known.Count);
+            if (m.Pets.Count == 0 && m.Known.Count == 0) { ShowEmptyTab(c.Name + " has no pets saved yet.", "Call a pet or visit a stable master with Hunter Helper, then /reload or log out."); return; }
+            var col = Column(680);
+            foreach (var p in withYou) col.Children.Add(PetCard(p, true));
+            void Header(string title)
+            {
+                var gh = Line(title, "Text.Caption", null, 0);
+                gh.Margin = new Thickness(4, col.Children.Count == 0 ? 0 : 12, 0, 8);
+                col.Children.Add(gh);
+            }
+            if (stabled.Count > 0)
+            {
+                Header("Stabled");
+                foreach (var p in stabled) col.Children.Add(PetCard(p, false));
+            }
+            if (m.Known.Count > 0)
+            {
+                Header("Your hunter can teach");
+                var wrap = new WrapPanel();
+                var known = m.Known.OrderBy(k => HubModules.PetAbilityName(k.Key), StringComparer.CurrentCultureIgnoreCase).ToList();
+                foreach (var k in known) wrap.Children.Add(Chip(HubModules.PetAbilityName(k.Key) + " " + k.Value));
+                var card = CardBox(wrap, 4);
+                card.Padding = new Thickness(16, 16, 16, 8);
+                col.Children.Add(card);
+                charTabInfo.Add("known|" + string.Join(", ", known.Select(k => HubModules.PetAbilityName(k.Key) + " " + k.Value)));
+            }
+        }
+
         // ---- self-test hooks
+        public bool PetTabVisibleForTest => TabPet.Visibility == Visibility.Visible;
         public List<string> CharTabLinesForTest() => charTabInfo.ToList();
         public string TabForTest => tab;
         // as on the very first look: the newest character, Overview tab, no search

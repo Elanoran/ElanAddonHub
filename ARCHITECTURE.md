@@ -170,7 +170,26 @@ Raw positions; the Outpost groups them into trees for display. `api` says which 
 Same format as Hunter Helper's old `flightLegs` / `flightNodeNames`. Published by Elan's Toolkit, which owns
 the flight timer from Toolkit 0.2.0, with `by = "ElansToolkit"`. The Outpost shares it with the Lodge.
 
-_hunter.pets is added when it is migrated._
+### `hunter.pets` v1 (Hunter Helper, per character)
+```
+{ at,
+  active = petKey or nil,                      -- the pet that is with the hunter ("Name:Family")
+  pets = { [petKey] = {
+      name, family (text), familyId (Hunter Helper's family id, e.g. "bear"), level,
+      loyalty = 1..6, loyaltyText = text as the game gave it (stabled pets only have this),
+      ic = icon file id (only when known as a number),
+      stable = stable slot, or nil = with you,
+      tpTotal, tpSpent = training points (when readable),
+      happiness = 1 unhappy | 2 content | 3 happy (the active pet, only when readable out of combat),
+      abilities = { { id = abilityId, name, rank } } } },
+  known = { [abilityId] = rank } }             -- abilities the hunter can teach at Beast Training
+```
+`petKey` is `name:family` as in Hunter Helper's own saved data. `abilityId` is Hunter Helper's lower-case ability id
+(`bite`, `fasterattack`...); the Outpost has a small id-to-name table for `known`, and falls back to the id's text. Only pets that are
+with the hunter or seen in the stable are published, never older leftovers. Published by Hunter Helper 1.26.5 (`by = "ElansHunterHelper"`)
+a few seconds after a stable visit, a pet change or learning an ability, never in combat (it follows after combat). Hunter Helper keeps its
+own copy (`cdb.pets`) for its own use; this module is only the hand-over. The Outpost caps what it reads (40 pets, 40 abilities per pet,
+100 known), skips odd values, and shows the Pet tab on the Characters page for hunters only (Outpost 2.46.0).
 
 ## The HUD: one bar, every class adds to it
 
@@ -194,6 +213,7 @@ Existing flows keep working while data moves to the Hub:
 | Hub `ElansHubDB.chars` / `current` / `online` | `ElansHubData` `core` | done (Hub 1.11.0, Outpost 2.43.0 reads it, not shown yet) |
 | Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` (+ `gear`, `talents`, `professions` new) | done (Hub 1.12.0 collects; Outpost 2.44.0 Characters page reads it, Elan's Bags data as fallback) |
 | Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), published by Elan's Toolkit, which takes over the flight timer and the HUD | done (Toolkit 0.2.0 publishes, Hunter Helper 1.26.0 plugs in, Outpost 2.45.0 reads Hub + old file) |
+| Hunter Helper `cdb.pets` / `cdb.known` (pets, stable, abilities; the Outpost never read it) | Hub `hunter.pets` (per character), published by Hunter Helper | done (Hunter Helper 1.26.5 publishes, Outpost 2.46.0 shows it as the Pet tab; `cdb` stays Hunter Helper's own) |
 | Health (`bugs`, `diag` in each addon's file) | stays per addon for now | later: shared helper |
 
 The Outpost reads the new layout first and falls back to the legacy keys. A legacy reader is deleted

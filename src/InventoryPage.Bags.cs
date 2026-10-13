@@ -17,7 +17,7 @@ namespace ElansAddonHub
     {
         const double SlotSize = 38;
 
-        string tab = "overview";       // overview | bags | bank | guild | gear | talents | professions
+        string tab = "overview";       // overview | bags | bank | guild | gear | talents | professions | pet
         int guildTab = -1;
         bool suppressTab;
         int renderGen;
@@ -65,7 +65,7 @@ namespace ElansAddonHub
             try
             {
                 (which == "bank" ? TabBank : which == "guild" ? TabGuild : which == "overview" ? TabOverview : which == "gear" ? TabGear
-                    : which == "talents" ? TabTalents : which == "professions" ? TabProfs : TabBags).IsChecked = true;
+                    : which == "talents" ? TabTalents : which == "professions" ? TabProfs : which == "pet" ? TabPet : TabBags).IsChecked = true;
             }
             finally { suppressTab = false; }
             tab = which;
@@ -89,9 +89,13 @@ namespace ElansAddonHub
             bool guildTooNew = guild == null && HubModules.StateOf(data.Hub, "guildbank") == HubModState.TooNew;
             TabGuild.Visibility = guild != null || guildTooNew ? Visibility.Visible : Visibility.Collapsed;
             if (tab == "guild" && guild == null && !guildTooNew) tab = "bags";
+            // the Pet tab belongs to hunters only
+            bool hunter = string.Equals(c.Class, "HUNTER", StringComparison.OrdinalIgnoreCase);
+            TabPet.Visibility = hunter ? Visibility.Visible : Visibility.Collapsed;
+            if (tab == "pet" && !hunter) tab = "overview";
             SetTabChecked(tab);
             CharHost.Children.Clear();
-            bool custom = tab == "overview" || tab == "gear" || tab == "talents" || tab == "professions";
+            bool custom = tab == "overview" || tab == "gear" || tab == "talents" || tab == "professions" || tab == "pet";
             BagsHost.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
             CharHost.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
 

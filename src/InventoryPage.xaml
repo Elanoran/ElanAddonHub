@@ -165,6 +165,7 @@
               <RadioButton x:Name="TabGear" Style="{StaticResource Segment}" Content="Gear" GroupName="inv-view" Tag="gear" Checked="Tab_Checked" AutomationProperties.Name="Gear" />
               <RadioButton x:Name="TabTalents" Style="{StaticResource Segment}" Content="Talents" GroupName="inv-view" Tag="talents" Checked="Tab_Checked" AutomationProperties.Name="Talents" />
               <RadioButton x:Name="TabProfs" Style="{StaticResource Segment}" Content="Professions" GroupName="inv-view" Tag="professions" Checked="Tab_Checked" AutomationProperties.Name="Professions" />
+              <RadioButton x:Name="TabPet" Style="{StaticResource Segment}" Content="Pet" GroupName="inv-view" Tag="pet" Checked="Tab_Checked" Visibility="Collapsed" AutomationProperties.Name="Pet" />
             </StackPanel>
           </Border>
         </DockPanel>

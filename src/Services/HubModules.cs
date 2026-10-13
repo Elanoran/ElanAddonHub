@@ -99,8 +99,60 @@ namespace ElansAddonHub.Services
         public List<HubProfession> List = new List<HubProfession>();
     }
 
+    public class HubPetAbility
+    {
+        public string Id, Name;
+        public int Rank;
+    }
+
+    public class HubPet
+    {
+        public string Key, Name, Family, FamilyId, LoyaltyText;
+        public int Level, Loyalty, Ic;                 // Loyalty 1-6, 0 = not known; Ic = icon file id, 0 = none
+        public int Stable;                             // stable slot; 0 = with you (no slot published)
+        public int TpTotal = -1, TpSpent = -1;         // -1 = not known
+        public int Happiness;                          // 1 unhappy, 2 content, 3 happy; 0 = not known
+        public List<HubPetAbility> Abilities = new List<HubPetAbility>();
+        public bool InStable => Stable > 0;
+    }
+
+    // hunter.pets (Hunter Helper, per character): { at, active = petKey, pets = { [petKey] = { name, family, familyId, level, loyalty, loyaltyText, ic, stable,
+    // tpTotal, tpSpent, happiness, abilities = { { id, name, rank } } } }, known = { [abilityId] = rank } }
+    public class HubPetsModule
+    {
+        public long At;
+        public string Active;                          // key of the pet that is with the hunter, null when none
+        public List<HubPet> Pets = new List<HubPet>(); // with you first (the active one first), then the stable by slot
+        public Dictionary<string, int> Known = new Dictionary<string, int>(StringComparer.Ordinal);
+        public IEnumerable<HubPet> WithYou => Pets.Where(p => !p.InStable);
+        public IEnumerable<HubPet> Stabled => Pets.Where(p => p.InStable);
+    }
+
     public static class HubModules
     {
+        public const int MaxPets = 40, MaxPetAbilities = 40, MaxKnown = 100, MaxText = 48;
+
+        // names for the abilities a hunter can teach (the module only carries ids there); mirrors Hunter Helper's ability list
+        public static readonly Dictionary<string, string> PetAbilityNames = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["arcaneresistance"] = "Arcane Resistance", ["bite"] = "Bite", ["charge"] = "Charge", ["claw"] = "Claw", ["cower"] = "Cower", ["dash"] = "Dash",
+            ["demoralizingscreech"] = "Demoralizing Screech", ["dismember"] = "Dismember", ["dive"] = "Dive", ["dustcloud"] = "Dust Cloud", ["fasterattack"] = "Faster Attack",
+            ["fireresistance"] = "Fire Resistance", ["frostresistance"] = "Frost Resistance", ["furioushowl"] = "Furious Howl", ["greatstamina"] = "Great Stamina", ["growl"] = "Growl",
+            ["lavabreath"] = "Lava Breath", ["lightningbreath"] = "Lightning Breath", ["mine"] = "Mine!", ["naturalarmor"] = "Natural Armor", ["natureresistance"] = "Nature Resistance",
+            ["pinch"] = "Pinch", ["prowl"] = "Prowl", ["savagerend"] = "Savage Rend", ["scorpidpoison"] = "Scorpid Poison", ["shadowresistance"] = "Shadow Resistance",
+            ["shellshield"] = "Shell Shield", ["slowerattack"] = "Slower Attack", ["swipe"] = "Swipe", ["tendonrip"] = "Tendon Rip", ["thunderstomp"] = "Thunderstomp",
+            ["trickstersdance"] = "Trickster's Dance", ["web"] = "Web", ["sonicblast"] = "Sonic Blast",
+        };
+        public static readonly string[] LoyaltyNames = { "Rebellious", "Unruly", "Submissive", "Dependable", "Faithful", "Best Friend" };
+
+        // the display name of a pet ability id; unknown ids get their text with the first letter capitalised
+        public static string PetAbilityName(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "?";
+            if (PetAbilityNames.TryGetValue(id, out var n)) return n;
+            return char.ToUpperInvariant(id[0]) + id.Substring(1);
+        }
+
         public static HubModState StateOf(HubModule m)
         {
             if (m == null) return HubModState.Missing;
@@ -269,6 +321,57 @@ namespace ElansAddonHub.Services
                         N = n.Str("n"), X = Num(n, "x"), Y = Num(n, "y"), HasPos = n.ContainsKey("x") && n.ContainsKey("y"),
                     };
                     res.Nodes.Add(node);
+                }
+            return res;
+        }
+
+        static string Short(string s) => string.IsNullOrWhiteSpace(s) ? null : (s.Length > MaxText ? s.Substring(0, MaxText) : s);
+        static int Clamp(double v, int lo, int hi) => (int)Math.Max(lo, Math.Min(hi, v));
+
+        // hunter.pets v1
+        public static HubPetsModule PetsOf(HubChar c)
+        {
+            var m = Mod(c, "hunter.pets");
+            if (!Usable(m)) return null;
+            var d = m.Data;
+            var res = new HubPetsModule { At = AtOf(m, d), Active = Short(d.Str("active")) };
+            var pets = d.Child("pets");
+            if (pets != null)
+                foreach (var kv in pets)
+                {
+                    if (res.Pets.Count >= MaxPets) break;
+                    if (!(kv.Value is Dictionary<string, object> p)) continue;
+                    var name = Short(p.Str("name"));
+                    if (name == null) continue;
+                    var pet = new HubPet
+                    {
+                        Key = kv.Key, Name = name, Family = Short(p.Str("family")), FamilyId = Short(p.Str("familyId")), LoyaltyText = Short(p.Str("loyaltyText")),
+                        Level = Clamp(Num(p, "level"), 0, 1000), Loyalty = Clamp(Num(p, "loyalty"), 0, 6), Ic = Clamp(Num(p, "ic"), 0, int.MaxValue),
+                        Stable = Clamp(Num(p, "stable"), 0, 1000), Happiness = Clamp(Num(p, "happiness"), 0, 3),
+                    };
+                    if (p.ContainsKey("tpTotal") && Num(p, "tpTotal") > 0) { pet.TpTotal = Clamp(Num(p, "tpTotal"), 0, 100000); pet.TpSpent = Clamp(Num(p, "tpSpent"), 0, 100000); }
+                    var abs = p.Child("abilities");
+                    if (abs != null)
+                        foreach (var ak in abs.OrderBy(k => int.TryParse(k.Key, out var n) ? n : int.MaxValue))
+                        {
+                            if (pet.Abilities.Count >= MaxPetAbilities) break;
+                            if (!(ak.Value is Dictionary<string, object> a)) continue;
+                            var id = Short(a.Str("id"));
+                            var an = Short(a.Str("name")) ?? (id != null ? PetAbilityName(id) : null);
+                            if (an == null) continue;
+                            pet.Abilities.Add(new HubPetAbility { Id = id, Name = an, Rank = Clamp(Num(a, "rank"), 0, 100) });
+                        }
+                    res.Pets.Add(pet);
+                }
+            // with you: the active pet first; then the stable by slot; alphabetical within the same rank
+            res.Pets = res.Pets.OrderBy(p => p.InStable ? 1 : 0).ThenBy(p => p.Key == res.Active ? 0 : 1).ThenBy(p => p.Stable).ThenBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            var known = d.Child("known");
+            if (known != null)
+                foreach (var kv in known)
+                {
+                    if (res.Known.Count >= MaxKnown) break;
+                    if (string.IsNullOrEmpty(kv.Key) || kv.Key.Length > MaxText || !(kv.Value is double r) || double.IsNaN(r) || r < 1) continue;
+                    res.Known[kv.Key] = Clamp(r, 1, 100);
                 }
             return res;
         }
