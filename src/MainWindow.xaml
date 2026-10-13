@@ -108,6 +108,10 @@
                          ToolTip="Browser - wowhead and friends  (Ctrl+4)" ToolTipService.Placement="Right" AutomationProperties.Name="Browser">
               <TextBlock Text="&#xE774;" FontFamily="{StaticResource Font.Icons}" FontSize="20" />
             </RadioButton>
+            <RadioButton x:Name="TabTalents" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
+                         ToolTip="Talents - plan a build  (Ctrl+6)" ToolTipService.Placement="Right" AutomationProperties.Name="Talents">
+              <TextBlock Text="&#xE734;" FontFamily="{StaticResource Font.Icons}" FontSize="20" />
+            </RadioButton>
           </StackPanel>
         </DockPanel>
       </Border>
@@ -127,6 +131,7 @@
       <local:SettingsPage x:Name="SettingsPage" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <local:InventoryPage x:Name="InventoryView" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <local:BrowserPage x:Name="BrowserView" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
+      <local:TalentsPage x:Name="TalentsView" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <ScrollViewer x:Name="AddonsPage" Grid.Row="3" Grid.Column="1" VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True">
        <StackPanel x:Name="AddonsRoot" MaxWidth="680" Margin="{StaticResource Pad.Page}">
         <!-- one-click "check everything", right above the cards (same column as the cards) -->

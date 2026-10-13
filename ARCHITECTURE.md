@@ -243,6 +243,45 @@ Same rules as the item layer (own game files, read-only, layout-checked, backgro
   for 90 s. The `AtlasMap` control loads only the map it shows and lets go of it when it leaves the screen.
 - **Control** (`Controls/AtlasMap.cs`): `ShowMap(uiMapId)`, `ShowInstance(mapId)`, `AddMarkers(...)`, `ClearMarkers()`, `LinkClicked(id)`, `MapChanged(uiMapId)`; wheel / drag / keyboard, breadcrumb up the tree,
   floor selector, markers that overlap on the screen merge into one numbered marker.
+### Talent layer (Atlas layer G: calculator, builds, codes)
+
+Same rules as the other client layers (own game files, read-only, layout-checked, background, saved index `cache	alentdata.bin` keyed by the game build, same "Game data"
+switch: `TalentData` follows `ItemData`'s state, so no Settings code changed). Code: `Services/Db2/TalentTables.cs` (registry), `TalentData.cs` (service),
+`TalentParse.cs` (tables -> trees, saved index); `Services/Talents/` (model, rules, build code, builds); `TalentsPage`.
+
+| Table (CASC FileDataID) | Layout (1.60.1.70338) | Gives |
+|---|---|---|
+| `ChrClasses` (1361031) `AFC9B0C2`, `SkillLineXTraitTree` (4505477) `853B88D6`, `SkillLine` / `SkillLineAbility` (spell layer) | | tree -> class: the class bit of the tree's skill line abilities; the three tree names of a class = the class skill line most of a column band's talents belong to |
+| `TraitNode` (4420297) `A01A518A`, `TraitNodeXTraitNodeEntry` (4420304) `802ED455`, `TraitNodeEntry` (4420298) `733B015D`, `TraitDefinition` (4420327) `060A9F4C` | | nodes with positions, max ranks, spell per entry, optional own name / icon / text |
+| `TraitEdge` (4420308) `907C9B77` | | arrows: 2 sufficient / 3 required for availability, 4 exclusive, 0 visual |
+| `TraitNodeGroup` (4420300) `ECA626BE`, `...XTraitNode` (4420302) `B9288EB8`, `TraitCond` (4543085) `BFDD1994`, `...GroupXTraitCond` (4543090) `3F06B639`, `TraitNodeXTraitCond` (4543092) `E2160AA8` | | the gates: a condition "N points spent in group G" on the group of the gated row; G = the rows above it |
+| `TraitTreeXTraitCurrency` (4524218) `E093CD62`, `TraitTreeXTraitCost` (4420306) `19EEFE95`, `TraitCost` (4420295) `70C65F17`, `TraitCurrency` (4524216) `A8B0874B`, `TraitCurrencySource` (4539393) `4C49B6AA` | | point currency of a tree (3820), cost per rank (1), the cap (51), the level sources |
+| `TraitDefinitionEffectPoints` (4536895) `7E18C372`, `CurvePoint` (892586) `7D4954A1` | | rank curves: rank n of a talent = the curve's value for spell effect i (so descriptions can be rank-aware, `SpellData.Spell(id, effectPoints)`) |
+
+Required tables unknown / missing = layer unavailable ("game updated", logged, Settings line); the optional ones (currency, curves, node conditions) only take their feature.
+
+- **This client**: 17 trait trees, 9 of them the class trees (one per class; three trees side by side in one trait tree, 50-54 talents, 7 rows, 4 columns, 51 points). The other eight (ids 1058,
+  1066, 1081, 1083 = leftovers of earlier tree layouts; 1187/1188/1189 = the Legacy trees with their own currency 4225) are not shown.
+- **Repairs** (`TalentNormalise`): a position above 20000 is divided by 10 (102800, 39300, 21300), then snapped to the 600-unit grid when within 150; two nodes of one spell in a tree (Hunter Lightning Reflexes,
+  Priest Holy Specialization) keep the one whose position needed no repair, the other is an alias (a character's rank or a code naming it lands on the node that stays). Each repair is a note in the log.
+- **Rules** (`TalentRules`, data driven, no per-class code): a node is available when all its conditions hold (group condition = points spent in the group, the node's own points not counted) and its
+  edges allow it (every required source full; if it has sufficient edges, one of them full; an exclusive edge blocks it while the other holds a point). Hook `EdgeNeedsFull` (default true: the classic
+  rule that a prerequisite must be maxed). A refund is allowed when every node that still holds a point is still available. All seven Hunter Helper builds of the real client pass these rules point by point.
+- **Points by level**: the sources of currency 3820 are one point at each level 10..60 (capped at `SourcedMax` 51) plus five sources "Talented Rank n (Level 10-n)" that exist only once the Forever
+  Legacy talent "Talented" has n ranks (so with 5 ranks the first point is at level 5). The Legacy ranks are a choice in the calculator (and inferred from a character's level and points). If the currency
+  tables cannot be read, `TalentRules.StandardSources()` (one point per level from 10) stands in.
+- **Build codes** (`BuildCode`): `ETB1-<base64url>`: version, class, talents as (node id delta, rank), CRC-16. Refused with words: not a code, damaged, wrong check sum, newer version, class or node not in this
+  game build, rank above the max, layout the rules do not allow. `BuildCode.Find(text)` finds a code inside a chat message (hook for a Lodge chip; the Lodge UI is not touched).
+- **Recommended builds**: Hunter reads Hunter Helper's own list from the installed addon (`<WowRoot>\<flavor>\Interface\AddOns\ElansHunterHelper\Data\Builds.lua`, read-only, 512 KB cap, parsed with `LuaData`),
+  names mapped to nodes by the spell name (case and punctuation ignored), unmatched names reported, the order replayed through the rules with the level of each point. Other classes: none yet (see below).
+  Saved builds (name, notes, code) live in `talentbuilds.json` in the Outpost's data folder.
+- **Community builds, researched**: talentsforever.com publishes its talent data as JSON (`/data.json`, `/export/<class>.json`) under CC BY 4.0 (credit with a link; icons and text stay Blizzard's), but the file has
+  talents and tooltips only - its "popular builds" are web pages built from a private tally, not data, and the terms ask not to scrape. foreverwisp.com publishes no build data and no open licence (Wisp's talent
+  helper lives in its addon). So there is no machine-readable, openly licensed list of builds for the other eight classes; the list says "No recommended builds for this class yet" and offers saved builds and codes. A
+  future "Get community builds" fetch would be an opt-in download on the user's click with the source, licence and credit shown (like the Classic baseline) once a source exists.
+- **Hand-off to the game**: not wired. `SharedData.lua` has one writer (`FlightShare.WriteShared` writes the whole file from the flight data); a second key means changing that writer and its safety tests.
+  `TalentHandoff.Fragment(class, name, order)` builds the validated, escaped `talentBuild = { class = "HUNTER", name = "...", order = { { "Deadly Aspects", 5 }, ... } },` text for that day.
+
 ### Later layers (not built, not decided)
 
 Sources, loot and vendors cannot be read from the client (its Adventure Guide tables are empty). Any such layer needs its own
@@ -367,7 +406,7 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
 | C. Classic baseline | Public cMaNGOS classic-db dump (GPL-3.0), downloaded by the user's Outpost on request, credited; creatures, spawns, creature/object loot with chances, vendors, quests | Outpost `Services\Atlas\Classic` | built (unreleased) |
 | D. Observations | Elan's Toolkit records loot (incl. kills with no drop), object loot, vendor stock and prices, quest rewards, and items the client reveals; with zone + position | Toolkit → Hub module `atlas.obs` (account) | built (Toolkit, unreleased) |
 | E. Lodge pool | Lodge server feature `atlas`: members upload observations, the server aggregates (counts, per-member dedupe, outlier and rate limits), everyone downloads the aggregate | server `AtlasModule` + `LodgeSession.Atlas` | built (server 2.15.0, unreleased) |
-| G. Talent calculator & builds | Client talent trees (`Trait*` DB2: trees, nodes, entries, edges, conditions, currencies + spell text from A2); characters' real talents from the Hub `talents` module; recommended builds: Hunter Helper's own build list (read from the installed addon) plus openly licensed community builds fetched on the user's click, plus builds shared in the Lodge | Outpost Talents page, build links, hand-off to Hunter Helper's planner | building |
+| G. Talent calculator & builds | Client talent trees (`Trait*` DB2: trees, nodes, entries, edges, conditions, currencies + spell text from A2); characters' real talents from the Hub `talents` module; recommended builds: Hunter Helper's own build list (read from the installed addon) plus openly licensed community builds fetched on the user's click, plus builds shared in the Lodge | Outpost Talents page (`TalentsPage`, Ctrl+6), build codes, hand-off hook for Hunter Helper | built (unreleased) |
 | H. Professions & camping | Client `SkillLine`/`SkillLineAbility` (recipes with skill-up colours), `SpellReagents`, created items, camp kits and camp items (Forever camping: blueprint recipes, the buff spells they give); recipe sources from the Classic baseline and the Lodge pool; the user's characters' professions and items (Hub) | Outpost Professions page (per profession: recipes, colours, reagents with sources, what you can craft from all characters' items, a skill-up plan, camping items and buffs); later: Lodge "who can craft this" | building |
 | F. Atlas page | Search items / mobs / zones / instances; item page (tooltip, sources with Lodge-observed % and Classic %, vendors, quests, who in the Lodge has it); zone and instance maps with spawn and find markers | Outpost UI | next |
 
