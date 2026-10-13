@@ -112,19 +112,32 @@ namespace ElansAddonHub.Services
             lock (e.Gate)
             {
                 string key;
+                bool fresh;
                 try
                 {
                     var fi = new FileInfo(path);
                     if (!fi.Exists) return e.Good;                  // gone for a moment (the game replaces the file) or for good: callers walk the folders first, so they only ask for files that are there
                     key = path + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length;
+                    // two writes inside one file-time tick can leave the same time and size: while a file is that new, the
+                    // content itself decides (cheap compared to parsing, and only for a few seconds after a write)
+                    fresh = (DateTime.UtcNow - fi.LastWriteTimeUtc).TotalSeconds < 3;
                 }
                 catch { return e.Good; }
+                string freshText = null;
+                if (fresh)
+                {
+                    freshText = SavedVarsFiles.SafeRead(path);
+                    if (freshText != null) key += "#" + freshText.GetHashCode().ToString("x8");
+                }
                 if (e.Good != null && e.Good.Key == key) return e.Good;
                 if (e.FailedKey == key) return e.Good;          // this exact content did not parse: do not try again until the file changes
                 try
                 {
-                    var text = SavedVarsFiles.SafeRead(path);
+                    var text = freshText ?? SavedVarsFiles.SafeRead(path);
                     if (text == null) return e.Good;             // still locked: keep the last good parse, ask again next time
+                    if (freshText == null) key += "#" + text.GetHashCode().ToString("x8");
+                    if (e.Good != null && e.Good.Key == key) return e.Good;
+                    if (e.FailedKey == key) return e.Good;
                     Interlocked.Increment(ref parses);
                     try { e.Good = new Parsed { Key = key, Globals = LuaData.ReadGlobals(text) }; e.FailedKey = null; }
                     catch (Exception ex) { e.FailedKey = key; Util.Log("saved variables: unreadable " + Path.GetFileName(path) + " (" + ex.GetType().Name + ")"); }
