@@ -393,6 +393,10 @@ SlashCmdList.ELANSHUB = function(msg)
     if lines and EHUB.ShowCopy then EHUB.ShowCopy(lines, "Talent functions in this client (also saved for the Outpost after /reload)") end
     return
   end
+  if a == "data" then
+    if EHUB.DataCommand then EHUB.DataCommand() end
+    return
+  end
   if a == "diag" then
     if EHUB.Diag then EHUB.Diag() end
     return

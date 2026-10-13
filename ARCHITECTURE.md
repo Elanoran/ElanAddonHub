@@ -150,7 +150,7 @@ Existing flows keep working while data moves to the Hub:
 | Today | Moves to | Status |
 |---|---|---|
 | Hub `ElansHubDB.chars` / `current` / `online` | `ElansHubData` `core` | done (Hub 1.11.0, Outpost 2.43.0 reads it, not shown yet) |
-| Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` (+ `gear`, `talents`, `professions` new) | in progress (Hub 1.12.0, Outpost Characters page) |
+| Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` (+ `gear`, `talents`, `professions` new) | Hub 1.12.0 collects; Outpost shows on Characters page |
 | Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), feature itself moves to the Hub | later |
 | Health (`bugs`, `diag` in each addon's file) | stays per addon for now | later: shared helper |
 
