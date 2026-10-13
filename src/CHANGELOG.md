@@ -11,6 +11,9 @@ Keep one `## x.y.z` section per hub version.
 - **Settings > General > Game data:** "Read item data from my WoW installation" (on by default) with a line such as "Item data: read from your WoW installation (23,984 items, 4,756 revealed)". If the game has been patched in a way this version does not know yet, it says so and everything works as before.
 - Armor values and weapon damage are not shown yet (they are not in the item table itself); where items drop and who sells them is a later step.
 
+## 2.47.1
+- Fixed: sharing images and files in Lodge chat failed every time ("the calling thread cannot access this object"): the upload percentage was updated from the upload's own thread. The upload now works, and the note at the top of the chat shows its whole text when you hover it.
+
 ## 2.47.0
 - **Files page in the Lodge:** officers and the owner share named files with the whole lodge - a UI pack, a guide, a build. Everyone (guests too) sees them in the new **Files** row under the Calendar and can **Save...** them (a Save-as dialog that starts in Downloads); the file is checked against its SHA-256 on arrival and, if it is damaged, nothing is saved. Saved files carry the Windows "downloaded from the Internet" mark, and nothing is ever opened or run for you.
 - **Versions:** uploading to an existing file with **Replace** makes a new version; the newest 3 are kept, older ones can be saved, and officers can **Roll back** to one. A file shows **Updated** when it changed since you last saved it on this PC, or **New** when you never did. When someone changes a file a quiet line above the chat says so ("Wing updated Raid UI pack (v3)").
