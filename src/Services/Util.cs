@@ -100,9 +100,19 @@ namespace ElansAddonHub.Services
 
         public static void DeleteDir(string dir)
         {
-            if (!Directory.Exists(dir)) return;
-            foreach (var f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories)) File.SetAttributes(f, FileAttributes.Normal);
-            Directory.Delete(dir, true);
+            // a virus scanner or the indexer can hold a file for a moment ("the directory is not empty"): try a few times
+            for (int attempt = 0; ; attempt++)
+            {
+                if (!Directory.Exists(dir)) return;
+                try
+                {
+                    foreach (var f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories)) File.SetAttributes(f, FileAttributes.Normal);
+                    Directory.Delete(dir, true);
+                    return;
+                }
+                catch (IOException) when (attempt < 4) { System.Threading.Thread.Sleep(150 * (attempt + 1)); }
+                catch (UnauthorizedAccessException) when (attempt < 4) { System.Threading.Thread.Sleep(150 * (attempt + 1)); }
+            }
         }
 
         public static bool IsUrl(string s) =>
