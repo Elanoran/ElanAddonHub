@@ -33,7 +33,7 @@ namespace ElansAddonHub
             foreach (var x0 in new[] { 1800, 5400, 9000 })
                 for (int col = 0; col < 3; col++)
                     for (int row = 0; row < 3; row++, nid++)
-                        nodes.Append("[" + nid + "]={id=" + nid + ",r=" + (nid % 3) + ",m=3,x=" + (x0 + col * 600) + ",y=" + (600 + row * 600) + ",s=" + (1000 + nid) + (nid % 2 == 0 ? ",n='Talent " + nid + "'" : "") + "},\n");
+                        nodes.Append("[" + nid + "]={id=" + nid + ",r=" + (nid % 3) + ",m=3,x=" + (x0 + col * 600) + ",y=" + (600 + row * 600) + ",s=" + (1000 + nid) + (nid % 2 == 0 ? ",n='Talent " + nid + "'" : "") + (nid % 4 == 0 ? ",ic=" + (135000 + nid) : nid == 5 ? ",ic='junk'" : "") + "},\n");
             nodes.Append("[" + nid++ + "]={id=900,r=1,m=1,x=102800,y=600,s=5,n='Bogus'},\n");
             nodes.Append("[" + nid++ + "]={id=901,r=1,m=1,s=6,n='Nowhere'},\n");
             var s = new StringBuilder("ElansHubData = {\n['schema']=1,\n['chars']={\n");
@@ -106,6 +106,7 @@ namespace ElansAddonHub
                 Check("gear v1: average item level, 4 slots with item level, names from links", gear != null && Math.Abs(gear.Ilvl - 58.5) < 0.001 && gear.Slots.Keys.SequenceEqual(new[] { 1, 5, 15, 16 }) && gear.Slots[1].Il == 62 && gear.Slots[1].Name == "Helm of Testing" && gear.Slots[16].Q == 4);
                 var tal = HubModules.TalentsOf(elan);
                 Check("talents v1: api, spent / unspent, 29 nodes (27 placed + a bogus one + one without a position)", tal != null && tal.Api == "traits" && tal.Spent == 35 && tal.Unspent == 2 && tal.Nodes.Count == 29 && tal.Nodes.Count(n => n.HasPos) == 28 && tal.Nodes[1].N == "Talent 2", tal == null ? "null" : tal.Nodes.Count.ToString());
+                Check("talents v1: ic parsed as a number (0 when missing or not a number)", tal != null && tal.Nodes[3].Ic == 135004 && tal.Nodes[7].Ic == 135008 && tal.Nodes[0].Ic == 0 && tal.Nodes[4].Ic == 0 && tal.Nodes.Count(n => n.Ic > 0) == 6, tal == null ? "null" : string.Join(",", tal.Nodes.Select(n => n.Ic)));
                 var prof = HubModules.ProfessionsOf(elan);
                 Check("professions v1: name, skill / max, icon, kind", prof != null && prof.List.Count == 3 && prof.List[0].Name == "Mining" && prof.List[0].Skill == 225 && prof.List[0].Max == 300 && prof.List[0].Ic == 136248 && prof.List[2].Kind == "secondary");
                 var gb = HubModules.GuildBankOf(hub);
@@ -253,6 +254,7 @@ namespace ElansAddonHub
                 Check("talents: 35 spent, 2 unspent, 3 trees, 2 loose nodes", tl.Contains("talentinfo|35|2|3|2") && InventoryView.ViewInfoForTest.StartsWith("35 points spent · 2 unspent"), string.Join(" | ", tl));
                 Check("talents: three 3x3 trees of 9 nodes each, the bogus and the position-less node drawn apart", tl.Count(x => x.StartsWith("tree|")) == 3 && tl.All(x => !x.StartsWith("tree|") || x.Contains("|3x3|")) && tl.Contains("loose|2"), string.Join(" | ", tl));
                 await Task.Delay(300);
+                Check("talents: a node with an icon id draws an icon image (letter tile underneath until it loads), the others keep the letter tile", InventoryView.TalentIconsForTest == 6 && InventoryView.TalentNodesForTest == 29, InventoryView.TalentIconsForTest + " icons of " + InventoryView.TalentNodesForTest);
                 Snapshot(P("20-characters-talents.png"));
 
                 InventoryView.SelectTabForTest("professions");

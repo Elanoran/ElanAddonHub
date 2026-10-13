@@ -238,6 +238,56 @@
     </DrawingImage.Drawing>
   </DrawingImage>
 
+  <!-- ===================== Elan's Toolkit: a steel wrench crossed over a rolled map, a red pin on it ===================== -->
+  <DrawingImage x:Key="Icon.Toolkit">
+    <DrawingImage.Drawing>
+      <DrawingGroup>
+        <StaticResource ResourceKey="Draw.Frame" />
+        <DrawingGroup ClipGeometry="{StaticResource Geo.ArtClip}">
+          <!-- warm workbench wall -->
+          <GeometryDrawing><GeometryDrawing.Geometry><RectangleGeometry Rect="7,7,114,114" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Brush><RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.35" RadiusX="0.85" RadiusY="0.85"><GradientStop Color="#F2CF8C" Offset="0" /><GradientStop Color="#C98A3E" Offset="0.4" /><GradientStop Color="#7A4A1E" Offset="0.78" /><GradientStop Color="#2E1A0A" Offset="1" /></RadialGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+          <GeometryDrawing Brush="#4A2C12" Geometry="M7,108 L121,108 L121,121 L7,121 Z" />
+          <GeometryDrawing Brush="#8A5A2A" Geometry="M7,106 L121,106 L121,109 L7,109 Z" />
+          <!-- rolled map (parchment) -->
+          <DrawingGroup>
+            <DrawingGroup.Transform><RotateTransform Angle="-14" CenterX="64" CenterY="72" /></DrawingGroup.Transform>
+            <GeometryDrawing Geometry="M20,44 L108,44 L108,100 L20,100 Z">
+              <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FFF3CC" Offset="0" /><GradientStop Color="#E8C985" Offset="0.6" /><GradientStop Color="#B98D4A" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush>
+              <GeometryDrawing.Pen><Pen Brush="#3A2208" Thickness="2" LineJoin="Round" /></GeometryDrawing.Pen>
+            </GeometryDrawing>
+            <GeometryDrawing Geometry="M26,62 C38,52 48,72 60,62 S82,56 100,66"><GeometryDrawing.Pen><Pen Brush="#9A6E36" Thickness="1.4"><Pen.DashStyle><DashStyle Dashes="2,2" /></Pen.DashStyle></Pen></GeometryDrawing.Pen></GeometryDrawing>
+            <GeometryDrawing Geometry="M30,88 C44,78 58,92 72,84 S92,80 102,86"><GeometryDrawing.Pen><Pen Brush="#9A6E36" Thickness="1.4"><Pen.DashStyle><DashStyle Dashes="2,2" /></Pen.DashStyle></Pen></GeometryDrawing.Pen></GeometryDrawing>
+            <!-- the two rolls -->
+            <GeometryDrawing Geometry="M14,40 L26,40 L26,104 L14,104 Z M102,40 L114,40 L114,104 L102,104 Z">
+              <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#FFF3CC" Offset="0" /><GradientStop Color="#D9B06A" Offset="0.5" /><GradientStop Color="#8A5E28" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush>
+              <GeometryDrawing.Pen><Pen Brush="#3A2208" Thickness="2" LineJoin="Round" /></GeometryDrawing.Pen>
+            </GeometryDrawing>
+          </DrawingGroup>
+          <!-- steel wrench, slanted -->
+          <DrawingGroup>
+            <DrawingGroup.Transform><TransformGroup><RotateTransform Angle="38" CenterX="64" CenterY="68" /><TranslateTransform X="-4" Y="-2" /></TransformGroup></DrawingGroup.Transform>
+            <GeometryDrawing Geometry="M46,12 L58,12 L58,28 L70,28 L70,12 L82,12 C92,22 92,42 82,54 L72,60 L72,110 C72,119 56,119 56,110 L56,60 L46,54 C36,42 36,22 46,12 Z">
+              <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#F4F7FA" Offset="0" /><GradientStop Color="#A3AEBA" Offset="0.45" /><GradientStop Color="#4C5662" Offset="1" /></LinearGradientBrush></GeometryDrawing.Brush>
+              <GeometryDrawing.Pen><Pen Brush="#1B222A" Thickness="2.4" LineJoin="Round" /></GeometryDrawing.Pen>
+            </GeometryDrawing>
+            <GeometryDrawing Brush="#80FFFFFF" Geometry="M60,62 L63,62 L63,110 L60,110 Z M42,22 L47,18 L47,40 L43,36 Z" />
+            <GeometryDrawing><GeometryDrawing.Geometry><EllipseGeometry Center="64,108" RadiusX="3.2" RadiusY="3.2" /></GeometryDrawing.Geometry>
+              <GeometryDrawing.Brush><SolidColorBrush Color="#2A3036" /></GeometryDrawing.Brush></GeometryDrawing>
+          </DrawingGroup>
+          <!-- red map pin -->
+          <GeometryDrawing Geometry="M98,70 C88,70 81,77 81,86 C81,98 98,116 98,116 C98,116 115,98 115,86 C115,77 108,70 98,70 Z">
+            <GeometryDrawing.Brush><RadialGradientBrush GradientOrigin="0.35,0.3"><GradientStop Color="#FF8A70" Offset="0" /><GradientStop Color="#D2352A" Offset="0.55" /><GradientStop Color="#7E1810" Offset="1" /></RadialGradientBrush></GeometryDrawing.Brush>
+            <GeometryDrawing.Pen><Pen Brush="#3A0F0A" Thickness="2" LineJoin="Round" /></GeometryDrawing.Pen>
+          </GeometryDrawing>
+          <GeometryDrawing Brush="#FFF1E0"><GeometryDrawing.Geometry><EllipseGeometry Center="98,86" RadiusX="6" RadiusY="6" /></GeometryDrawing.Geometry>
+            <GeometryDrawing.Pen><Pen Brush="#3A0F0A" Thickness="1.4" /></GeometryDrawing.Pen></GeometryDrawing>
+          <StaticResource ResourceKey="Draw.Finish" />
+        </DrawingGroup>
+      </DrawingGroup>
+    </DrawingImage.Drawing>
+  </DrawingImage>
+
   <!-- ===================== Elan's Hub: lodge tent + campfire under the stars ===================== -->
   <DrawingImage x:Key="Icon.Hub">
     <DrawingImage.Drawing>

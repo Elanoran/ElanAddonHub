@@ -9,6 +9,7 @@ Keep one `## x.y.z` section per hub version.
 - **Reads Elan's Hub first:** everything comes from the Hub's saved data when it has it (needs Elan's Hub 1.12.0, one /reload or log out on each character); Elan's Bags' own save still fills in for a character the Hub hasn't seen, and the newer of the two wins. Same-named characters on different realms are kept apart. Each tab says how old its data is and where it came from.
 - A tab whose data was saved by a newer Hub says "Update Elan's Outpost to show ..." instead of guessing; a tab with no data yet tells you to log in to that character with Elan's Hub 1.12.0 or newer.
 - The page also follows changes to Elan's Hub's saved file while you play.
+- **Elan's Toolkit** shows up in Addon health (errors and diag from `/etk diag`) and has its own card artwork. The Talents tab draws the real talent icons (needs Elan's Hub 1.12.0 with the icon field; older saves keep the letter tiles).
 
 ## 2.43.0
 - **Groundwork for the new data layer (nothing new to see yet):** the Outpost can now read what Elan's Hub 1.11.0 saves in its new `ElansHubData` (character basics today, more addons later), keeps the last good read if the game is writing the file, and says "Update Elan's Outpost" for data from a newer Hub instead of guessing.

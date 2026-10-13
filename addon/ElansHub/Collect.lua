@@ -181,7 +181,8 @@ local function traitNodeName(cfg, d)
   local sp = ok2 and type(di) == "table" and (num(di.spellID) or num(di.overriddenSpellID)) or nil
   if not sp then return nil, nil end
   local nameFn = (C_Spell and C_Spell.GetSpellName) or GetSpellInfo
-  return sp, str(rd(nameFn, sp))
+  local iconFn = (C_Spell and C_Spell.GetSpellTexture) or GetSpellTexture
+  return sp, str(rd(nameFn, sp)), num(rd(iconFn, sp))
 end
 
 local function scanTraits()
@@ -202,8 +203,8 @@ local function scanTraits()
           if okD and type(d) == "table" and clean(d.isVisible) ~= false then
             local m, r = num(d.maxRanks), num(d.currentRank) or 0
             if m and m > 0 then
-              local sp, name = traitNodeName(cfg, d)
-              nodes[#nodes + 1] = { id = num(id), r = r, m = m, x = num(d.posX), y = num(d.posY), s = sp, n = name }
+              local sp, name, ic = traitNodeName(cfg, d)
+              nodes[#nodes + 1] = { id = num(id), r = r, m = m, x = num(d.posX), y = num(d.posY), s = sp, n = name, ic = ic }
               spent = spent + r
             end
           end
@@ -230,11 +231,11 @@ local function scanClassic()
   local nodes, spent = {}, 0
   for tab = 1, tabs do
     for i = 1, num(rd(GetNumTalents, tab)) or 0 do
-      local ok, name, _, tier, column, rank, max = pcall(GetTalentInfo, tab, i)
+      local ok, name, icon, tier, column, rank, max = pcall(GetTalentInfo, tab, i)
       if ok then
-        name, rank, max = str(name), num(rank) or 0, num(max)
+        name, rank, max, icon = str(name), num(rank) or 0, num(max), num(icon)
         if name and max and max > 0 then
-          nodes[#nodes + 1] = { id = tab * 100 + i, r = rank, m = max, x = num(column), y = num(tier), n = name, tab = tab }
+          nodes[#nodes + 1] = { id = tab * 100 + i, r = rank, m = max, x = num(column), y = num(tier), n = name, ic = icon, tab = tab }
           spent = spent + rank
         end
       end

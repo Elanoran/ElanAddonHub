@@ -71,13 +71,13 @@ namespace ElansAddonHub.Services
 
     public class HubTalentNode
     {
-        public int Id, R, M, S;
+        public int Id, R, M, S, Ic;                    // Ic = spell icon file id, 0 when missing
         public double X, Y;
         public string N;
         public bool HasPos;
     }
 
-    // talents: { at, api = "traits" | "classic", spent, unspent, nodes = { { id, r, m, x, y, s, n } } }
+    // talents: { at, api = "traits" | "classic", spent, unspent, nodes = { { id, r, m, x, y, s, n, ic } } }
     public class HubTalentsModule
     {
         public long At;
@@ -265,7 +265,7 @@ namespace ElansAddonHub.Services
                     if (!(kv.Value is Dictionary<string, object> n)) continue;
                     var node = new HubTalentNode
                     {
-                        Id = n.Int("id"), R = Math.Max(0, (int)Math.Min(1000, Num(n, "r"))), M = Math.Max(0, (int)Math.Min(1000, Num(n, "m"))), S = (int)Math.Max(0, Math.Min(int.MaxValue, Num(n, "s"))),
+                        Id = n.Int("id"), R = Math.Max(0, (int)Math.Min(1000, Num(n, "r"))), M = Math.Max(0, (int)Math.Min(1000, Num(n, "m"))), S = (int)Math.Max(0, Math.Min(int.MaxValue, Num(n, "s"))), Ic = (int)Math.Max(0, Math.Min(int.MaxValue, Num(n, "ic"))),
                         N = n.Str("n"), X = Num(n, "x"), Y = Num(n, "y"), HasPos = n.ContainsKey("x") && n.ContainsKey("y"),
                     };
                     res.Nodes.Add(node);

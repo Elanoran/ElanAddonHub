@@ -375,6 +375,13 @@ namespace ElansAddonHub
                 var bagsCard = cards.FirstOrDefault(c => c.Info.Id == "ElansBags");
                 Check("Elan's Bags card exists, optional and not class bound", bagsCard != null && !bagsCard.Info.Required && (bagsCard.Info.Classes == null || bagsCard.Info.Classes.Count == 0) && !bagsCard.RecommendedForYou);
                 Check("card uses the new vector icon", bagsCard != null && ReferenceEquals(bagsCard.Logo, System.Windows.Application.Current.TryFindResource("Icon.Bags")));
+                var tkInfo = new AddonInfo { Id = "ElansToolkit", Name = "Elan's Toolkit", Description = "Toolkit", Version = "0.1.0", Folders = new List<string> { "ElansToolkit" }, Changelog = new List<ChangeEntry>() };
+                var tkCard = new AddonCard(tkInfo);
+                var tkIcon = System.Windows.Application.Current.TryFindResource("Icon.Toolkit");
+                Check("Icon.Toolkit exists and the Toolkit card uses it (a frozen vector image, not the hub fallback)", tkIcon is System.Windows.Media.DrawingImage di && di.IsFrozen && ReferenceEquals(tkCard.Logo, tkIcon) && !ReferenceEquals(tkIcon, System.Windows.Application.Current.TryFindResource("Icon.Hub")));
+                var ctl = AddonCard.Painted; AddonCard.Painted = true;
+                Check("painted mode: the Toolkit card falls back to hub.png (no PNG yet)", tkCard.Logo is string tkLogo && tkLogo.EndsWith("/Assets/hub.png"));
+                AddonCard.Painted = ctl;
                 Check("card offers Install", bagsCard != null && bagsCard.ButtonEnabled && bagsCard.State == CardState.NotInstalled);
                 if (bagsCard != null) bagsCard.Expanded = true;
                 ShowTab("addons");

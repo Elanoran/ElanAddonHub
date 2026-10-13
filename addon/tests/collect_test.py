@@ -277,13 +277,14 @@ C_Traits = {
   GetDefinitionInfo = function(d) return { spellID = TRAITS.def[d] } end,
   GetTreeCurrencyInfo = function(c, t, b) return { { quantity = 4 } } end,
 }
-C_Spell = { GetSpellName = function(id) return TRAITS.spell[id] end }
+C_Spell = { GetSpellName = function(id) return TRAITS.spell[id] end, GetSpellTexture = function(id) if id == 41 then return 135130 end if id == 42 then return SECRET end return nil end }
 ''')
 L.execute("CLOCK = CLOCK + 10; TIMERS = {}; Fire('TRAIT_CONFIG_UPDATED') RunTimers()")
 d, v, at = L.eval(get("talents"))
 check("talents v1 stored, api traits", d is not None and v == 1 and d["api"] == "traits")
 check("talents: spent = sum of ranks of counted nodes, unspent from currency", lua("local d = ElansHub.Get('talents') return d.spent == 2 and d.unspent == 4"))
 check("talents: nodes with maxRanks > 0 only (rank 0 included), fields id/r/m/x/y/s/n", lua("local d = ElansHub.Get('talents') local a, b = d.nodes[1], d.nodes[2] return #d.nodes == 2 and a.id == 11 and a.r == 2 and a.m == 3 and a.x == 1200 and a.y == 2100 and a.s == 41 and a.n == 'Aimed Shot' and b.id == 12 and b.r == 0 and b.n == 'Rapid Fire'"))
+check("talents: ic = spell texture id, absent when the API gives nothing or a secret value", lua("local d = ElansHub.Get('talents') return d.nodes[1].ic == 135130 and d.nodes[2].ic == nil"))
 L.execute("CLOCK = CLOCK + 10; TRAITS.info[11].currentRank = SECRET; C_Spell.GetSpellName = function() return SECRET end")
 L.execute("Fire('PLAYER_TALENT_UPDATE') RunTimers()")
 check("secret rank counts as 0 and a secret name is dropped", lua("local d = ElansHub.Get('talents') return d.nodes[1].r == 0 and d.nodes[1].n == nil and d.spent == 0"))
@@ -297,11 +298,11 @@ CLOCK = CLOCK + 10
 C_ClassTalents = nil
 function GetNumTalentTabs() return 1 end
 function GetNumTalents(t) return 2 end
-function GetTalentInfo(t, i) if i == 1 then return 'Improved Aspect', 1, 1, 2, 3, 5 end return 'Nothing', 1, 1, 1, 0, 0 end
+function GetTalentInfo(t, i) if i == 1 then return 'Improved Aspect', 132329, 1, 2, 3, 5 end return 'Nothing', 1, 1, 1, 0, 0 end
 function UnitCharacterPoints() return 7 end
 Fire('PLAYER_TALENT_UPDATE') RunTimers()
 ''')
-check("classic fallback (api=classic) when the trait chain is missing", lua("local d = ElansHub.Get('talents') return d.api == 'classic' and d.spent == 3 and d.unspent == 7 and #d.nodes == 1 and d.nodes[1].n == 'Improved Aspect' and d.nodes[1].m == 5 and d.nodes[1].x == 2 and d.nodes[1].y == 1"))
+check("classic fallback (api=classic) when the trait chain is missing", lua("local d = ElansHub.Get('talents') return d.api == 'classic' and d.spent == 3 and d.unspent == 7 and #d.nodes == 1 and d.nodes[1].n == 'Improved Aspect' and d.nodes[1].m == 5 and d.nodes[1].x == 2 and d.nodes[1].y == 1 and d.nodes[1].ic == 132329"))
 
 # ---------------------------------------------------------------- professions
 L.execute(r'''

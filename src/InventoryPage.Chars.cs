@@ -31,6 +31,7 @@ namespace ElansAddonHub
         void RenderCharTab(InvChar c)
         {
             charTabInfo.Clear();
+            talentNodes = talentIcons = 0;
             ViewInfo.Text = "";
             switch (tab)
             {

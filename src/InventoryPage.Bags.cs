@@ -476,9 +476,13 @@ namespace ElansAddonHub
 
         void OnIconProblemChanged() => Dispatcher.BeginInvoke(new Action(UpdateIconNote));
 
-        // a talent as a slot: a placeholder tile with the first letter of its name (the spell icon is not known by its id), rank "r/m" in the corner
+        // a talent as a slot: its spell icon (ic), else a placeholder tile with the first letter of its name; rank "r/m" in the corner
+        int talentNodes, talentIcons;
+        public int TalentNodesForTest => talentNodes;
+        public int TalentIconsForTest => talentIcons;
         FrameworkElement TalentNodeBox(HubTalentNode n)
         {
+            talentNodes++;
             bool maxed = n.M > 0 && n.R >= n.M, any = n.R > 0;
             var edge = maxed ? EdgeFor(6) : any ? EdgeFor(2) : EmptyEdge;
             var bd = new Border { Width = SlotSize, Height = SlotSize, Margin = new Thickness(1.5), CornerRadius = new CornerRadius(4), Background = SlotBg, BorderThickness = new Thickness(1.5), BorderBrush = edge, SnapsToDevicePixels = true, Opacity = any ? 1 : 0.55 };
@@ -487,6 +491,14 @@ namespace ElansAddonHub
             var fb = new Border { Margin = new Thickness(2), CornerRadius = new CornerRadius(3), Background = TileFillFor(q) };
             fb.Child = new TextBlock { Text = string.IsNullOrEmpty(n.N) ? "?" : Initial(n.N), Foreground = Frozen(QualityHex[q]), FontSize = 16, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(fb);
+            if (n.Ic > 0)
+            {
+                var img = new Image { Stretch = Stretch.Uniform, Margin = new Thickness(2) };
+                RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+                g.Children.Add(img);
+                BindIcon(n.Ic, img, fb);
+                talentIcons++;
+            }
             var rank = n.M > 0 ? n.R + "/" + n.M : n.R.ToString(CultureInfo.InvariantCulture);
             foreach (var p in Outlined(rank)) g.Children.Add(p);
             bd.Child = g;

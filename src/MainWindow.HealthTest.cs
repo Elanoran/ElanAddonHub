@@ -122,6 +122,23 @@ namespace ElansAddonHub
                 var facts = string.Join("\n", HealthReader.Facts(bags));
                 Check("facts: secret values, probe errors and missing APIs summarized", facts.Contains("Secret values:") && facts.Contains("unit:player:UnitHealth") && facts.Contains("Probe errors:") && facts.Contains("Missing APIs:") && facts.Contains("C_GuildBank") && facts.Contains("1 out of combat, 1 in combat"), facts);
 
+                // ---- Elan's Toolkit (/etk diag, ElansToolkitDB): its own folder so the counts of the main flow stay as they are
+                var tkDef = HealthReader.Defs.FirstOrDefault(d => d.Id == "ElansToolkit");
+                Check("defs: Elan's Toolkit (ElansToolkitDB, /etk diag) is registered next to the other four", tkDef != null && tkDef.Title == "Elan's Toolkit" && tkDef.DbName == "ElansToolkitDB" && tkDef.Slash == "/etk diag" && HealthReader.Defs.Length == 5, HealthReader.Defs.Length.ToString());
+                var tkRoot = Path.Combine(dir, "healthwow-toolkit");
+                if (Directory.Exists(tkRoot)) Directory.Delete(tkRoot, true);
+                var tkSv = Path.Combine(tkRoot, "_classic_beta_", "WTF", "Account", "TESTACC", "SavedVariables");
+                Directory.CreateDirectory(tkSv);
+                var tkAdd = Path.Combine(tkRoot, "_classic_beta_", "Interface", "AddOns", "ElansToolkit");
+                Directory.CreateDirectory(tkAdd);
+                File.WriteAllText(Path.Combine(tkAdd, "ElansToolkit_Camelot.toc"), "## Interface: 16001\n## Title: Elan's Toolkit\n## Version: 0.1.0\n");
+                File.WriteAllText(Path.Combine(tkSv, "ElansToolkit.lua"), SvFile("ElansToolkitDB", D("lastVersion", "0.1.0",
+                    "bugs", Lst(HealthBugLua("ElansToolkit", "Interface/AddOns/ElansToolkit/Core.lua:21: attempt to index a nil value", "ElansToolkit/Core.lua:21: in function `Open'", 4, "0.1.0", now - 300),
+                                HealthBugLua("Questie", "Interface/AddOns/Questie/X.lua:1: not ours", "x", 1, "9", now - 100)))));
+                var tkRep = HealthReader.Read(tkRoot);
+                var tk = tkRep.Addons.FirstOrDefault(a => a.Def.Id == "ElansToolkit");
+                Check("toolkit: bugs are read (message, count, version), other addons' errors are not", tk != null && tk.Installed == "0.1.0" && tk.Bugs.Count == 1 && tk.Bugs[0].Count == 4 && tk.Bugs[0].Version == "0.1.0" && tk.Bugs[0].FirstLine.Contains("Core.lua:21") && tk.OtherErrors == 1, tk == null ? "null" : tk.Bugs.Count + " bugs");
+
                 // ---- the app: monitor + chip + rail badge + panel
                 s.ToastsOff = false; s.ToastHealthOff = false; s.HealthSeen = null; s.HealthToasted = null;
                 health.Root = () => root;
