@@ -49,7 +49,8 @@ namespace ElansAddonHub.Services
         public HealthAddonDef Def;
         public string Installed;                  // version in the toc of the installed addon (null: not installed)
         public bool HasFile;
-        public bool Unreadable;                   // the file exists but could not be parsed (damaged or caught half-written)
+        public bool FromHub;                      // bugs / diag came from Elan's Hub (module `health`), not from the addon's own file
+        public bool Unreadable;                  // the file exists but could not be parsed (damaged or caught half-written)
         public DateTime FileWritten;              // newest SavedVariables write (UTC)
         public string SavedWith;                  // db.lastVersion: the version at the last login that was saved
         public List<HealthRun> Runs = new List<HealthRun>();
@@ -117,12 +118,42 @@ namespace ElansAddonHub.Services
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var guilds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             rep.Folders = SavedVarsFiles.Dirs(root);
+            var hub = ReadHub(rep.Folders, names, guilds);   // Elan's Hub "health" module (newer addons), plus the names the Hub knows
             foreach (var def in Defs)
             {
                 var h = new AddonHealth { Def = def, Installed = string.IsNullOrEmpty(root) ? null : InstalledVersion(root, def.Id) };
                 DateTime bestWritten = DateTime.MinValue;
                 bool parsedOk = false;
                 var bugs = new Dictionary<string, HealthBug>(StringComparer.Ordinal);
+                void Merge(HealthBug b)
+                {
+                    if (bugs.TryGetValue(b.Key, out var old))
+                    {
+                        old.Count = Math.Max(old.Count, b.Count);
+                        if (b.At > old.At) { old.At = b.At; old.Time = b.Time; old.Version = b.Version ?? old.Version; }
+                    }
+                    else bugs[b.Key] = b;
+                }
+                // Hub first: when the Hub has an entry for this addon its bugs / diag / version are used, else the addon's own saved variables
+                var hubEntry = hub?.Addons.Child(def.Id);
+                if (hubEntry != null)
+                {
+                    h.FromHub = true; h.HasFile = true; parsedOk = true;
+                    if (hub.Written > h.FileWritten) h.FileWritten = hub.Written;
+                    h.SavedWith = hubEntry.Child("diag").Text("lastVersion") ?? hubEntry.Text("version");
+                    h.Runs = ReadRuns(hubEntry);
+                    var list = ReadBugs(hubEntry, def.Id, out var otherOwn);
+                    h.OtherErrors += otherOwn;
+                    foreach (var b in list) Merge(b);
+                }
+                if (hub?.Other != null && def.Id == hub.HostId)   // errors of non-Elan addons that the host kept ("all" mode)
+                {
+                    h.HasFile = true; parsedOk = true;
+                    if (hub.Written > h.FileWritten) h.FileWritten = hub.Written;
+                    var list = ReadBugs(hub.Other, def.Id, out var otherOthers);
+                    h.OtherErrors += otherOthers;
+                    foreach (var b in list) Merge(b);
+                }
                 foreach (var dir in rep.Folders)
                 {
                     var file = Path.Combine(dir, def.File);
@@ -136,23 +167,21 @@ namespace ElansAddonHub.Services
                         if (globals == null) continue;            // locked or damaged and never read before: counts as unreadable
                         parsedOk = true;
                         if (!globals.TryGetValue(def.DbName, out var dbObj) || !(dbObj is Dictionary<string, object> db)) continue;
-                        // runs and "saved with" from the newest file only
-                        if (written >= bestWritten)
+                        if (hubEntry == null)   // legacy: the addon's own tables (an addon that does not hand its health to the Hub yet)
                         {
-                            bestWritten = written;
-                            h.SavedWith = db.Text("lastVersion") ?? db.Text("version");
-                            h.Runs = ReadRuns(db);
-                        }
-                        foreach (var b in ReadBugs(db, def.Id, out var other))
-                        {
-                            h.OtherErrors += other;
-                            other = 0;
-                            if (bugs.TryGetValue(b.Key, out var old))
+                            // runs and "saved with" from the newest file only
+                            if (written >= bestWritten)
                             {
-                                old.Count = Math.Max(old.Count, b.Count);
-                                if (b.At > old.At) { old.At = b.At; old.Time = b.Time; old.Version = b.Version ?? old.Version; }
+                                bestWritten = written;
+                                h.SavedWith = db.Text("lastVersion") ?? db.Text("version");
+                                h.Runs = ReadRuns(db);
                             }
-                            else bugs[b.Key] = b;
+                            foreach (var b in ReadBugs(db, def.Id, out var other))
+                            {
+                                h.OtherErrors += other;
+                                other = 0;
+                                Merge(b);
+                            }
                         }
                         CollectNames(db, names, guilds);
                     }
@@ -186,6 +215,63 @@ namespace ElansAddonHub.Services
             rep.Names = names.Where(n => n != null && n.Length >= 3).ToList();
             rep.Guilds = guilds.Where(n => n != null && n.Length >= 3).ToList();
             return rep;
+        }
+
+        // What Elan's Hub holds in its account module `health` v1: { addons = { [folder] = { version, bugs, diag } }, other = { bugs } }.
+        class HubHealth
+        {
+            public Dictionary<string, object> Addons, Other;
+            public string HostId;          // the addon that published it (it kept the "other" errors)
+            public DateTime Written;       // ElansHub.lua write time (UTC)
+            public long At;
+        }
+
+        // Reads every ElansHub.lua (one per account): collects the character and guild names the Hub knows (for the anonymous report)
+        // and returns the newest usable `health` module, or null when there is none, it is too new for this app, or the file cannot be read.
+        static HubHealth ReadHub(List<string> folders, HashSet<string> names, HashSet<string> guilds)
+        {
+            HubHealth best = null;
+            foreach (var dir in folders)
+            {
+                var file = Path.Combine(dir, HubData.FileName);
+                try
+                {
+                    if (!File.Exists(file) || SavedVarsFiles.IsLink(file)) continue;
+                    var written = File.GetLastWriteTimeUtc(file);
+                    var globals = SavedVarsCache.Get(file);
+                    if (globals == null) continue;
+                    var model = HubData.FromGlobals(globals);
+                    if (!model.Found) continue;
+                    foreach (var c in model.Characters)
+                    {
+                        var core = c.Core;
+                        if (!string.IsNullOrEmpty(core?.Name)) names.Add(core.Name);
+                        else
+                        {
+                            var dash = c.Key?.IndexOf('-') ?? -1;
+                            if (dash > 0) names.Add(c.Key.Substring(dash + 1));
+                        }
+                        if (!string.IsNullOrEmpty(core?.Guild)) guilds.Add(core.Guild);
+                    }
+                    if (model.AccountModules.TryGetValue("guildbank", out var gb) && gb != null && !gb.TooNew && gb.Data != null)
+                    {
+                        var gl = gb.Data.Child("guilds");
+                        if (gl != null) foreach (var kv in gl) { var n = (kv.Value as Dictionary<string, object>).Text("name"); if (!string.IsNullOrEmpty(n)) guilds.Add(n); }
+                    }
+                    if (!model.AccountModules.TryGetValue("health", out var m) || m == null || m.TooNew || m.V != 1 || m.Data == null) continue;
+                    var addons = m.Data.Child("addons");
+                    if (addons == null) continue;
+                    if (best != null && m.At < best.At) continue;
+                    var by = m.By;
+                    best = new HubHealth
+                    {
+                        Addons = addons, Other = m.Data.Child("other"), At = m.At, Written = written,
+                        HostId = Defs.FirstOrDefault(d => string.Equals(d.Id, by, StringComparison.OrdinalIgnoreCase))?.Id ?? "ElansToolkit",
+                    };
+                }
+                catch (Exception e) { Util.Log("health read failed: " + file + ": " + e.Message); }
+            }
+            return best;
         }
 
         static List<HealthBug> ReadBugs(Dictionary<string, object> db, string fileAddon, out int other)

@@ -232,6 +232,9 @@ namespace ElansAddonHub
                 Check("no WoW data: chip is quiet, rail badge gone", HealthChipText.Text.StartsWith("Health") && HealthBadge.Visibility == Visibility.Collapsed && health.Report.Addons.Count == 0);
                 SnapshotOn(dlg.RootForTest, P("19-health-panel-empty.png"), Color.FromRgb(0x0F, 0x11, 0x13));
                 dlg.Close();
+
+                // Hub `health` module: Hub only / legacy only / mixed / TooNew / other / names from core / watcher
+                foreach (var n in await HealthHubTest(dir)) { notes.Add(n); ok &= !n.StartsWith("FAIL"); }
             }
             catch (Exception e) { ok = false; notes.Add("FAIL exception: " + e); }
             finally

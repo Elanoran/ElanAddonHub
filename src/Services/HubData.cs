@@ -62,6 +62,7 @@ namespace ElansAddonHub.Services
             ["core"] = 1, ["flight"] = 1,                                                                         // flight: account module, FlightOf below
             ["bags"] = 1, ["bank"] = 1, ["guildbank"] = 1, ["gear"] = 1, ["talents"] = 1, ["professions"] = 1,     // typed readers: HubModules.cs
             ["hunter.pets"] = 1,                                                                                  // Hunter Helper 1.26.5: HubModules.PetsOf
+            ["health"] = 1,                                                                                       // account module from Elan's Toolkit's Bug Trap: AddonHealth.cs (HealthReader)
         };
 
         static readonly object gate = new object();

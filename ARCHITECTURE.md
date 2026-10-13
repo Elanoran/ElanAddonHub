@@ -193,6 +193,23 @@ a few seconds after a stable visit, a pet change or learning an ability, never i
 own copy (`cdb.pets`) for its own use; this module is only the hand-over. The Outpost caps what it reads (40 pets, 40 abilities per pet,
 100 known), skips odd values, and shows the Pet tab on the Characters page for hunters only (Outpost 2.46.0).
 
+### `health` v1 (Elan's Toolkit's Bug Trap host, account)
+```
+{ addons = { [addonFolder] = {                  -- every addon registered with the Bug Trap (Toolkit, Hunter Helper, Paladin Helper, Bags)
+      version,                                  -- the addon's version as it reported it
+      bugs = { { msg, stack, count, time, at, version, addon } },     -- max 40, newest first (the saved Bug Trap shape)
+      diag = { runs = { <db.diag.runs entry> },                      -- max 6, newest first, same shape as db.diag.runs
+               autoVersion, lastVersion } } },                       -- db.diag.autoVersion, db.lastVersion
+  other = { bugs = { ... } } }                  -- errors of non-Elan addons the host kept (mode "all"), max 40
+```
+Built from the per-addon tables the Bug Trap and Diag keep anyway (`db.bugs`, `db.diag`, `db.lastVersion`), which are still written as
+before: this is a second copy for the Outpost. Published by the Toolkit's Bug Trap host (ElansLib BugTrap 4, `by = "ElansToolkit"`) about 5 s
+after the last new error or finished Diag run (a burst is one publish), not while in combat (it follows after combat), once after login and,
+if something is still waiting, at `PLAYER_LEAVING_WORLD`. Nothing is published without Elan's Hub. The Outpost reads an addon's bugs / diag /
+version from here when the module has an entry for it and is not too new; an addon without an entry (older addon version, or the Hub companion's
+own `ElansHubDB`) falls back to its own saved variables. `other.bugs` are counted as "other addons" on the host and never listed or reported.
+Character and guild names for the anonymous report also come from `core` (and `guildbank`).
+
 ## The HUD: one bar, every class adds to it
 
 Elan's Toolkit owns the movable HUD block and its general segments: the cast bar (your casts and
@@ -216,7 +233,7 @@ Existing flows keep working while data moves to the Hub:
 | Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` (+ `gear`, `talents`, `professions` new) | done (Hub 1.12.0 collects; Outpost 2.44.0 Characters page reads it, Elan's Bags data as fallback) |
 | Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), published by Elan's Toolkit, which takes over the flight timer and the HUD | done (Toolkit 0.2.0 publishes, Hunter Helper 1.26.0 plugs in, Outpost 2.45.0 reads Hub + old file) |
 | Hunter Helper `cdb.pets` / `cdb.known` (pets, stable, abilities; the Outpost never read it) | Hub `hunter.pets` (per character), published by Hunter Helper | done (Hunter Helper 1.26.5 publishes, Outpost 2.46.0 shows it as the Pet tab; `cdb` stays Hunter Helper's own) |
-| Health (`bugs`, `diag` in each addon's file) | stays per addon for now | later: shared helper |
+| Health (`bugs`, `diag` in each addon's file) | Hub `health` (account), published by the Toolkit's Bug Trap host | done, dual: Hub first, per-addon fallback (Toolkit 0.3.1 / Hunter Helper 1.26.6 / Paladin 0.6.9 / Bags 0.4.15 with ElansLib BugTrap 4 publish, Outpost 2.46.0 reads Hub first, then each addon's own file; the per-addon tables are still written) |
 
 The Outpost reads the new layout first and falls back to the legacy keys. A legacy reader is deleted
 only after the addon versions that wrote the old keys are no longer offered by the Outpost.
