@@ -79,6 +79,10 @@ end
 - `ElansHub.Get(module [, charKey])` returns `data, version, at` for reading shared data in-game (for
   example Bags showing alt counts). `charKey` defaults to the current character, `"account"` for
   account-scoped modules.
+- `ElansHub.Subscribe(module, fn)` calls `fn(module, scope, charKey)` after `module` was stored (also after a queued
+  publish flushed; `charKey` is `"account"` for account scope). The call is pcall-wrapped, so a failing callback can
+  never break the Hub or other subscribers. Returns an unsubscribe function, or `nil, reason`. Use it to refresh a
+  display when `ElansHub.Get` data changed; guard it like Publish: `if H and H.Subscribe then ... end`.
 - `ElansHub.CharKey()` returns `"Realm-Name"`, the one key format for characters everywhere.
 
 ### Stored layout (`ElansHubData`, in `ElansHub.lua`)

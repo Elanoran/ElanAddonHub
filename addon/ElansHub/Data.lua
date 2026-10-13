@@ -77,6 +77,19 @@ local function ensure()
   return d
 end
 
+local subs, nextSub = {}, 0 -- Subscribe() callbacks: [token] = { module, fn }
+
+local function notify(item)
+  local list = {}
+  for token, s in pairs(subs) do
+    if s.module == item.module then list[#list + 1] = { token, s } end
+  end
+  table.sort(list, function(a, b) return a[1] < b[1] end) -- registration order
+  for _, e in ipairs(list) do
+    if subs[e[1]] then pcall(e[2].fn, item.module, item.scope, item.key or "account") end
+  end
+end
+
 local function store(item)
   local d = ensure()
   local entry = { v = item.version, at = time(), by = item.by, ver = item.ver, data = item.data }
@@ -89,6 +102,7 @@ local function store(item)
     c.mods[item.module] = entry
     c.at = entry.at
   end
+  notify(item)
 end
 
 local function flush()
@@ -141,6 +155,17 @@ function H.Publish(module, version, data, opts)
   end
   store(item)
   return true
+end
+
+-- fn(module, scope, charKey) runs (pcall-wrapped) after `module` was stored, also after a queued publish flushed.
+-- charKey is "account" for account-scoped modules. Returns an unsubscribe function, or nil, reason.
+function H.Subscribe(module, fn)
+  if not validModule(module) then return nil, "bad module name" end
+  if type(fn) ~= "function" then return nil, "fn must be a function" end
+  nextSub = nextSub + 1
+  local token = nextSub
+  subs[token] = { module = module, fn = fn }
+  return function() subs[token] = nil end
 end
 
 function H.Get(module, key)

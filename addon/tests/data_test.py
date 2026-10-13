@@ -136,6 +136,24 @@ check("flush stamps the store time", lua("return ElansHubData.chars['Realm-Elan'
 L.execute("Fire('PLAYER_REGEN_ENABLED')")
 check("second flush is harmless", lua("return ElansHub.Get('combat.mod').n == 3"))
 
+# Subscribe
+check("Subscribe rejects a bad module / non-function", lua("local a, w = ElansHub.Subscribe('Bad', print) local b = ElansHub.Subscribe('ok', 5) return a == nil and w == 'bad module name' and b == nil"))
+L.execute("SUBLOG = {}; unsub = ElansHub.Subscribe('sub.mod', function(m, sc, k) SUBLOG[#SUBLOG + 1] = m .. '|' .. sc .. '|' .. k end)")
+check("Subscribe returns an unsubscribe function", lua("return type(unsub) == 'function'"))
+L.execute("ElansHub.Publish('sub.mod', 1, { a = 1 }) ElansHub.Publish('other.mod', 1, { a = 1 })")
+check("callback fires after store with module, scope, charKey (only for its module)", lua("return #SUBLOG == 1 and SUBLOG[1] == 'sub.mod|char|Realm-Elan'"))
+check("callback sees the stored data", lua("local seen ElansHub.Subscribe('sub.seen', function() seen = ElansHub.Get('sub.seen') end) ElansHub.Publish('sub.seen', 1, { q = 7 }) return seen and seen.q == 7"))
+L.execute("ElansHub.Publish('sub.mod', 1, { a = 2 }, { scope = 'account' })")
+check("account scope reports charKey 'account'", lua("return SUBLOG[2] == 'sub.mod|account|account'"))
+L.execute("MOCK_COMBAT = true; ElansHub.Publish('sub.mod', 1, { a = 3 })")
+check("no callback while the publish is only queued", lua("return #SUBLOG == 2"))
+L.execute("MOCK_COMBAT = false; Fire('PLAYER_REGEN_ENABLED')")
+check("callback fires after the combat flush", lua("return #SUBLOG == 3 and SUBLOG[3] == 'sub.mod|char|Realm-Elan'"))
+L.execute("BADCALLS = 0; ElansHub.Subscribe('sub.err', function() BADCALLS = BADCALLS + 1 error('boom') end); GOOD = 0; ElansHub.Subscribe('sub.err', function() GOOD = GOOD + 1 end)")
+check("error in a callback is isolated (publish ok, store done, later callbacks still run)", lua("local ok = ElansHub.Publish('sub.err', 1, { z = 1 }) return ok == true and BADCALLS == 1 and GOOD == 1 and ElansHub.Get('sub.err').z == 1"))
+L.execute("unsub(); unsub()")
+check("unsubscribe stops the callback (and is idempotent)", lua("ElansHub.Publish('sub.mod', 1, { a = 4 }) return #SUBLOG == 3"))
+
 # core
 L.globals().C = L.eval("{ name = 'Elan', realm = 'Realm', class = 'Hunter', classFile = 'HUNTER', race = 'Orc', raceFile = 'Orc', sex = 2, faction = 'Horde', level = 60, zone = 'Z', subzone = '', guild = 'G', updated = 5 }")
 L.execute("EHUB.PublishCore(C)")
