@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 var cfg = LodgeConfig.FromEnv();
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(cfg.Urls);
-builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = cfg.MaxFileBytes + (1 << 20));
+builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = Math.Max(cfg.MaxFileBytes, cfg.FilesMaxBytes) + (1 << 20));
 // sockets are closed cleanly on stop (below), so a restart needn't wait the default 30 s
 builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(8));
 // ASP.NET's per-request logs contain full URLs (a 1.x client puts its code in ?code=): keep them out of the journal
@@ -111,7 +111,7 @@ app.Use(async (ctx, next) =>
 });
 
 // 2.10: what this server can do, so a newer client knows whether to use invite links and device tokens (older servers answer 404)
-app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, features = new[] { "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights" }, lodge = new { name = lodge.Info.Name, welcome = lodge.Info.Welcome } }));
+app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, features = lodge.FeatureList().Where(f => f is "tokens" or "invites" or "devices" or "calendar" or "leave" or "lodgeinfo" or "flights" or "files"), lodge = new { name = lodge.Info.Name, welcome = lodge.Info.Welcome } }));
 
 // 2.10: trade a one-time invite (X-Lodge-Invite header, or "invite" in the body) - or, to upgrade a device, the old permanent
 // code (X-Lodge-Code) - for a per-device token. Body (optional JSON, max 4 KB): {"device": "PC name", "deviceId": "random id"}.
@@ -206,6 +206,58 @@ app.MapGet("/files/{id}", (HttpContext ctx, string id) =>
     ctx.Response.Headers["Cache-Control"] = "private, no-store";
     ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
     return Results.File(files.PathOf(id), meta.Mime, meta.Name, enableRangeProcessing: true);
+});
+
+// 2.14 shared files ("files" feature). Same credential headers as every route. The slot list, delete and roll back are WebSocket
+// messages (FilesModule); only the bytes travel here, streamed to disk.
+string Unesc(HttpContext ctx, string header)
+{
+    try { return Uri.UnescapeDataString(ctx.Request.Headers[header].ToString()); } catch { return ""; }
+}
+
+IResult FilesFail(FilesException e) => Results.Json(new { error = e.Message, reason = e.Reason }, statusCode: e.Status);
+
+async Task<IResult> PutSlot(HttpContext ctx, string slotId)
+{
+    var deny = GateReq(ctx, out var who);
+    if (deny != null) return deny;
+    var shared = lodge.SharedFiles;
+    var by = who.Name ?? Names.ForLog(ctx.Request.Headers["X-Lodge-Name"].ToString(), 24);
+    var rateKey = who.Personal ? "p:" + who.Name.ToLowerInvariant() : "g:" + IpOf(ctx);
+    try
+    {
+        var view = await shared.Upload(by, who.Role, rateKey, slotId, Unesc(ctx, "X-Slot-Name"), Unesc(ctx, "X-File-Name"), Unesc(ctx, "X-Note"),
+            ctx.Request.Headers["X-Sha256"].ToString(), ctx.Request.ContentLength, ctx.Request.Body, ctx.RequestAborted);
+        return Results.Json(view);
+    }
+    catch (FilesException e) { return FilesFail(e); }
+    catch (OperationCanceledException) { return Results.StatusCode(499); }
+    catch (BadHttpRequestException) { return Results.Json(new { error = "File is larger than " + cfg.FilesMaxMb + " MB", reason = "too-big" }, statusCode: 413); }
+    catch (IOException e)
+    {
+        app.Logger.LogWarning("Shared file upload failed: {Error}", e.GetType().Name);
+        return Results.Json(new { error = "The server couldn't store the file", reason = "save" }, statusCode: 500);
+    }
+}
+
+app.MapPut("/slots/new", async (HttpContext ctx) => await PutSlot(ctx, null));
+app.MapPut("/slots/{id}", async (HttpContext ctx, string id) => await PutSlot(ctx, id));
+
+app.MapGet("/slots/{id}/{v:int}", (HttpContext ctx, string id, int v) =>
+{
+    var deny = GateReq(ctx, out var who);
+    if (deny != null) return deny;
+    if (!Roles.Can(who.Role, Perm.FilesRead)) return Results.Json(new { error = "Not allowed", reason = "forbidden" }, statusCode: 403);
+    try
+    {
+        var fs = lodge.SharedFiles.OpenVersion(id, v, out var ver);
+        ctx.Response.Headers["Cache-Control"] = "private, no-store";
+        ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        ctx.Response.Headers["X-Sha256"] = ver.Sha256;
+        // always a download, never rendered or run: attachment + octet-stream, under the sanitised display name
+        return Results.File(fs, "application/octet-stream", ver.FileName, enableRangeProcessing: true);
+    }
+    catch (FilesException e) { return FilesFail(e); }
 });
 
 files.StartCleanup(app.Lifetime.ApplicationStopping);

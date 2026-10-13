@@ -5,7 +5,7 @@
 #   sudo lodge-backup restore <archive> [--yes]
 #                                      stop the service, move the current data aside, restore, fix owner/modes, start, check /health
 # Settings (environment or /etc/lodge/lodge.env):
-#   LODGE_BACKUP_FILES=1|0   include the uploaded files/ folder (default 1)
+#   LODGE_BACKUP_FILES=1|0   include the uploaded files/ and shared slots/ folders (default 1)
 #   LODGE_BACKUP_KEEP=14     how many archives to keep (the oldest are deleted after a successful backup)
 #   LODGE_BACKUP_DIR=/var/backups/lodge
 #
@@ -64,7 +64,7 @@ do_backup() {
   trap 'rm -f "$part"' EXIT
 
   local ex=(--exclude='*.part' --exclude='*.tmp' --exclude='.*.tmp*')
-  if [ "$WITH_FILES" = "0" ]; then ex+=(--exclude="$base/files"); fi
+  if [ "$WITH_FILES" = "0" ]; then ex+=(--exclude="$base/files" --exclude="$base/slots"); fi
 
   # take the codes lock for the whole archive: no code change can be captured half-way
   touch "$DATA_DIR/$CODES.lock" 2>/dev/null || true

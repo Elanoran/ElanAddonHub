@@ -1,0 +1,138 @@
+<UserControl x:Class="ElansAddonHub.Lodge.FilesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ElansAddonHub.Lodge"
+             xmlns:app="clr-namespace:ElansAddonHub">
+  <UserControl.Resources>
+    <!-- one slot: name, newest version, who and when, the note; a progress line while it uploads or saves; the buttons -->
+    <DataTemplate x:Key="SlotCard">
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Card}" Padding="16" Margin="0,0,0,12" AutomationProperties.Name="{Binding Name}">
+        <StackPanel>
+          <DockPanel>
+            <Border DockPanel.Dock="Right" Style="{StaticResource Chip}" Background="{StaticResource Brush.Info.Tint}" Visibility="{Binding BadgeVisibility}" VerticalAlignment="Center"
+                    Margin="12,0,0,0" ToolTip="{Binding BadgeTip}">
+              <TextBlock Text="{Binding Badge}" Foreground="{StaticResource Brush.Info}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+          <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
+          <TextBlock Text="{Binding MetaLine}" Style="{StaticResource Text.Caption}" Margin="0,2,0,0" />
+          <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,8,0,0" />
+          <StackPanel Visibility="{Binding ProgressVisibility}" Margin="0,12,0,0">
+            <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="1" Value="{Binding Progress}" />
+            <TextBlock Text="{Binding BusyText}" Style="{StaticResource Text.Caption}" Margin="0,4,0,0" />
+          </StackPanel>
+          <TextBlock Text="{Binding Error}" Visibility="{Binding ErrorVisibility}" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8,0,0" />
+          <WrapPanel Margin="0,12,0,0" IsEnabled="{Binding IdleEnabled}">
+            <Button Content="Save..." Style="{StaticResource Button.Primary.S}" Tag="{Binding}" Click="Save_Click" Margin="0,0,8,0" ToolTip="Save the newest version to this PC" AutomationProperties.Name="Save" />
+            <Button Content="{Binding VersionsLabel}" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Versions_Click" Margin="0,0,8,0" ToolTip="Earlier versions" AutomationProperties.Name="Versions" />
+            <Button Content="Replace" Style="{StaticResource Button.S}" Tag="{Binding}" Click="Replace_Click" Visibility="{Binding ManageVisibility}" Margin="0,0,8,0"
+                    ToolTip="Upload a new version of this file" AutomationProperties.Name="Replace" />
+            <Button Content="Delete" Style="{StaticResource GhostButton}" Height="28" Tag="{Binding}" Click="Delete_Click" Visibility="{Binding ManageVisibility}"
+                    ToolTip="Remove this file and all its versions" AutomationProperties.Name="Delete" />
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <!-- one kept version in the Versions card -->
+    <DataTemplate x:Key="VersionRow">
+      <Border Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Padding="12" Margin="0,0,0,8">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+            <Button Content="Save..." Style="{StaticResource Button.S}" Tag="{Binding}" Click="VersionSave_Click" Margin="0,0,8,0" AutomationProperties.Name="Save this version" />
+            <Button Content="Roll back" Style="{StaticResource Button.S}" Tag="{Binding}" Click="VersionRollBack_Click" Visibility="{Binding RollBackVisibility}"
+                    ToolTip="Make this the newest version again (newer ones are removed)" AutomationProperties.Name="Roll back to this version" />
+          </StackPanel>
+          <StackPanel>
+            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.RowTitle}" />
+            <TextBlock Text="{Binding Line}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding By}" Style="{StaticResource Text.Caption}" />
+            <TextBlock Text="{Binding Note}" Visibility="{Binding NoteVisibility}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
+          </StackPanel>
+        </DockPanel>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Border Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
+    <Grid>
+      <Grid x:Name="Main">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+
+        <!-- header: title, Upload new (officers and the owner) -->
+        <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,0,1" Padding="16,8">
+          <DockPanel MinHeight="32">
+            <Button x:Name="NewButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="Upload new" Click="New_Click" Margin="8,0,0,0"
+                    ToolTip="Share a file with the lodge" Visibility="Collapsed" />
+            <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Text="Files" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+          </DockPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
+          <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
+            <ItemsControl x:Name="SlotList" ItemTemplate="{StaticResource SlotCard}" />
+            <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
+              <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />
+              <TextBlock Text="No files shared yet" Style="{StaticResource Text.Body}" HorizontalAlignment="Center" Margin="0,12,0,0" />
+              <TextBlock x:Name="EmptyHint" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0" />
+            </StackPanel>
+            <TextBlock x:Name="UsageText" Style="{StaticResource Text.Caption}" Margin="0,8,0,0" />
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+
+      <!-- ===== versions: an overlay card over a scrim ===== -->
+      <Border x:Name="VersionsOverlay" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="Scrim_Down">
+        <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+                Width="520" MaxHeight="620" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,24,24,0">
+              <StackPanel>
+                <TextBlock x:Name="VersionsHeading" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="VersionsSub" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,16" />
+                <ItemsControl x:Name="VersionList" ItemTemplate="{StaticResource VersionRow}" />
+                <TextBlock x:Name="VersionsError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,0,0,12" />
+              </StackPanel>
+            </ScrollViewer>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,12,24,24">
+              <Button Content="Done" Style="{StaticResource Button.M}" Click="VersionsClose_Click" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Border>
+
+      <!-- ===== upload form: a new slot, or a new version of one ===== -->
+      <Border x:Name="FormOverlay" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="Scrim_Down">
+        <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+                Width="480" MaxHeight="620" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="Box_Down">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,24,24,0">
+              <StackPanel>
+                <TextBlock x:Name="FormHeading" Text="Upload a file" Style="{StaticResource Text.Section}" />
+                <TextBlock x:Name="FormSub" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,16" />
+                <TextBlock Text="Name" Style="{StaticResource Text.Caption}" />
+                <TextBox x:Name="FName" Style="{StaticResource Input}" MaxLength="60" Margin="0,4,0,0" Tag="What people see in the list" KeyDown="Form_KeyDown" AutomationProperties.Name="Name" />
+                <TextBlock Text="File" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <DockPanel Margin="0,4,0,0">
+                  <Button x:Name="FPick" DockPanel.Dock="Left" Content="Choose file..." Style="{StaticResource Button.M}" Click="FPick_Click" />
+                  <TextBlock x:Name="FFile" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0,0,0" Text="No file chosen" />
+                </DockPanel>
+                <TextBlock Text="Note" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                <TextBox x:Name="FNote" Style="{StaticResource Input}" MaxLength="200" Margin="0,4,0,0" Tag="What changed (optional)" KeyDown="Form_KeyDown" AutomationProperties.Name="Note" />
+                <TextBlock x:Name="FError" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Danger}" TextWrapping="Wrap" Margin="0,12,0,12" />
+              </StackPanel>
+            </ScrollViewer>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,12,24,24">
+              <Button Content="Cancel" Style="{StaticResource Button.M}" Click="FCancel_Click" />
+              <Button x:Name="FGo" Content="Upload" Style="{StaticResource Button.Primary.M}" Margin="8,0,0,0" Click="FGo_Click" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Border>
+    </Grid>
+  </Border>
+</UserControl>

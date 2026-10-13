@@ -201,10 +201,20 @@ longer lets a backslash into a name.
 - Names are voted (most contributors win, ties alphabetical) and kept only for ids used by a leg.
 - Logs: counts only (`X shared flight times (N stored, M refused)`); never a key, id, name or time. Tested (unit and real-socket).
 
+## 2.14.0 (shared files)
+
+- Who: `Perm.FilesRead` (everybody, guests included) lists and downloads; `Perm.FilesManage` (officer and owner) uploads a new slot, a new version, rolls back and deletes. The check is made server side in `FilesModule` for every upload, delete and roll back (not only in the client). `Perm.ShareFiles` (chat attachments) is unrelated.
+- Transport: authenticated HTTP like `/files` (device token or code header, same wrong-credential lockout): `PUT /slots/new`, `PUT /slots/{id}`, `GET /slots/{id}/{v}`. Content-Length is required and checked against the maximum before anything is read; the body is streamed to `<id>.part` while a SHA-256 is computed (never held in memory), and must match the announced length and `X-Sha256` exactly. Only then is it renamed to its server-generated name (32 random hex characters + `.bin`) and the index (`index.json`, written tmp + atomic rename) updated; any failure deletes the partial file and changes nothing.
+- File names are display-only: sanitised (`Names.FileName`: no path parts, drive letters, `: * ? " < > |`, control/format characters, device names) and never used as a path. Slot names and notes are cleaned text. Downloads are `application/octet-stream`, `Content-Disposition: attachment`, `nosniff`, `Cache-Control: private, no-store`.
+- Refused: executable/script extensions (`exe dll com bat cmd ps1 psm1 vbs vbe js jse wsf wsh msi msp scr cpl jar lnk reg hta sys drv pif application appref-ms`, trailing dots/spaces ignored); a `.zip` is listed (System.IO.Compression, nothing extracted) and refused when any entry has such an extension, an absolute path, a drive letter, `:` or a `..` segment, has more than 20000 entries or isn't a valid zip. Nested archives are not looked into.
+- Limits: `LODGE_FILES_MAX_MB` per file, `LODGE_FILES_TOTAL_MB` for all kept versions (space is reserved for running uploads and checked again at commit; the version that a new one pushes out counts as free), 200 slots, one running upload per person, 3 at once, `LODGE_FILES_UPLOADS_PER_10MIN` per person. The Kestrel body limit is raised to the larger of the two file limits only.
+- `LODGE_FILES_ENABLED=0` makes the server stop advertising `files` and answer 403; nothing is deleted.
+- Logs: who shared / deleted / rolled back and the size - never a file name, slot name, note or hash.
+
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 323 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 388 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
 python server/tests/security_integration.py                     # 150 checks against local servers (python -X utf8 on Windows)
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 41 checks

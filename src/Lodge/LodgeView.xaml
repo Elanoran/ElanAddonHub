@@ -433,6 +433,17 @@
                   <TextBlock x:Name="CalendarRowText" Text="Calendar" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
                 </DockPanel>
               </ContentControl>
+              <!-- shared files (server 2.14): a quiet row under the calendar; the page takes the chat's place -->
+              <ContentControl x:Name="FilesRow" Style="{StaticResource Side.Row}" Padding="12,0" MinHeight="36" Margin="0,2,0,0" Visibility="Collapsed"
+                              MouseLeftButtonUp="FilesRow_Click" ToolTip="Files the lodge shares" AutomationProperties.Name="Files">
+                <DockPanel>
+                  <Border x:Name="FilesBadge" DockPanel.Dock="Right" Style="{StaticResource Chip}" Padding="8,0" MinWidth="24" Visibility="Collapsed" VerticalAlignment="Center" ToolTip="Files that are new or updated">
+                    <TextBlock x:Name="FilesBadgeText" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16" VerticalAlignment="Center" />
+                  <TextBlock x:Name="FilesRowText" Text="Files" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
+                </DockPanel>
+              </ContentControl>
               <TextBlock x:Name="TextHeader" Text="Text channels" Style="{StaticResource SectionHeader}" Margin="12,8,0,4" />
               <ItemsControl x:Name="TextList">
                 <ItemsControl.ItemTemplate>
@@ -534,6 +545,7 @@
 
       <!-- ===== the calendar page: takes the chat's place while it is open ===== -->
       <local:CalendarView x:Name="CalendarPage" Grid.Column="1" Visibility="Collapsed" />
+      <local:FilesView x:Name="FilesPage" Grid.Column="1" Visibility="Collapsed" />
 
       <!-- ===== chat: a Surface1 card ===== -->
       <Border x:Name="ChatCard" Grid.Column="1" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
@@ -573,6 +585,17 @@
                         ToolTip="Dismiss" AutomationProperties.Name="Dismiss tip" />
                 <TextBlock Text="&#xE946;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <TextBlock x:Name="HintText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+              </DockPanel>
+            </Border>
+            <!-- a file changed (shared files, server 2.14): who did what, calm and dismissible; it opens the Files page -->
+            <Border x:Name="FilesBar" Visibility="Collapsed" Background="{StaticResource Brush.Surface2}" CornerRadius="{StaticResource Radius.Control}" Margin="16,8,16,0" Padding="12,4,4,4"
+                    AutomationProperties.Name="Shared files changed">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE711;" Margin="8,0,0,0" Click="FilesBarClose_Click"
+                        ToolTip="Dismiss" AutomationProperties.Name="Dismiss file notice" />
+                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Height="28" Content="Open Files" Click="FilesBarOpen_Click" Margin="8,0,0,0" VerticalAlignment="Center" />
+                <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock x:Name="FilesBarText" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
               </DockPanel>
             </Border>
             <!-- upcoming events: a strip of fixed height (64) under the header. It is 0 high and collapsed when there is nothing to show; it grows / shrinks with

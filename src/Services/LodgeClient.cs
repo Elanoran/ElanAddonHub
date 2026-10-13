@@ -318,6 +318,75 @@ namespace ElansAddonHub.Services
             }
         }
 
+        // ---- shared files (server 2.14): PUT /slots/new or /slots/{id} (headers X-Slot-Name, X-File-Name, X-Note URL-encoded, X-Sha256, Content-Length),
+        // GET /slots/{id}/{v}. The answer to an upload is the slot as JSON; a refusal carries {error, reason}, whose text is already friendly.
+        public async Task<Dictionary<string, object>> UploadSlot(string slotId, string slotName, string file, string note, string sha256, Action<double> progress = null)
+        {
+            using (var fs = File.OpenRead(file))
+            using (var req = Request(HttpMethod.Put, "/slots/" + (slotId ?? "new")))
+            {
+                req.Headers.Add("X-File-Name", Uri.EscapeDataString(SafeFile.Name(Path.GetFileName(file))));
+                req.Headers.Add("X-Sha256", sha256);
+                if (slotId == null) req.Headers.Add("X-Slot-Name", Uri.EscapeDataString(slotName ?? ""));
+                req.Headers.Add("X-Note", Uri.EscapeDataString(note ?? ""));
+                req.Content = new StreamContent(progress == null ? (Stream)fs : new ProgressStream(fs, progress));
+                req.Content.Headers.ContentLength = fs.Length;
+                using (var resp = await Net.Http.SendAsync(req))
+                {
+                    var text = await resp.Content.ReadAsStringAsync();
+                    Dictionary<string, object> body = null;
+                    try { body = Json.Obj(text); } catch { } // a proxy's error page isn't JSON
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(FilesError((int)resp.StatusCode, body?.Str("error")));
+                    return body ?? new Dictionary<string, object>();
+                }
+            }
+        }
+
+        public static string FilesError(int status, string serverText)
+        {
+            switch (status)
+            {
+                case 401: return "Your sign-in isn't valid any more - join again with a new invite link";
+                case 413: return "That file is too big for this lodge";
+                case 404: return string.IsNullOrEmpty(serverText) ? "That file isn't there any more" : serverText;
+                default: return string.IsNullOrEmpty(serverText) ? $"The lodge refused the file ({status})" : serverText;
+            }
+        }
+
+        // streams to toFile and returns the SHA-256 of what arrived (the caller compares it with the announced one)
+        public async Task<string> DownloadSlot(string slotId, int version, string toFile, long expectedSize, Action<double> progress = null)
+        {
+            if (SafeFile.Id(slotId) == null) throw new InvalidOperationException("That file can't be downloaded");
+            using (var req = Request(HttpMethod.Get, "/slots/" + slotId + "/" + version))
+            using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead))
+            {
+                if (!resp.IsSuccessStatusCode)
+                {
+                    string text = null;
+                    try { text = (Json.Obj(await resp.Content.ReadAsStringAsync()))?.Str("error"); } catch { }
+                    throw new InvalidOperationException(FilesError((int)resp.StatusCode, text));
+                }
+                long total = resp.Content.Headers.ContentLength ?? expectedSize;
+                using (var src = await resp.Content.ReadAsStreamAsync())
+                using (var dst = new FileStream(toFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    var buf = new byte[81920];
+                    long done = 0;
+                    int n;
+                    while ((n = await src.ReadAsync(buf, 0, buf.Length)) > 0)
+                    {
+                        sha.TransformBlock(buf, 0, n, null, 0);
+                        dst.Write(buf, 0, n);
+                        done += n;
+                        if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total));
+                    }
+                    sha.TransformFinalBlock(new byte[0], 0, 0);
+                    return LodgeFiles.Hex(sha.Hash);
+                }
+            }
+        }
+
         public class DownloadException : InvalidOperationException
         {
             public int Status { get; }

@@ -31,6 +31,13 @@ public class LodgeConfig
     public int MaxDevicesPerPerson { get; set; } = 10;       // device tokens per personal identity
     public int MaxDevicesTotal { get; set; } = 5000;
     public int HistoryFlushSeconds { get; set; } = 5;       // edits/reactions/deletes reach the disk after this long
+    // ---- shared files (2.14, "files" feature): named slots with up to 3 kept versions each
+    public bool FilesEnabled { get; set; } = true;          // the owner can switch the feature off (it then isn't advertised and answers 403)
+    public int FilesMaxMb { get; set; } = 50;               // per file
+    public long FilesMaxBytes => FilesMaxMb * 1024L * 1024L;
+    public int FilesTotalMb { get; set; } = 500;            // all kept versions of all slots together
+    public long FilesTotalBytes => FilesTotalMb * 1024L * 1024L;
+    public int FilesUploadsPer10Min { get; set; } = 20;     // per person
 
     static string Env(string key, string fallback)
     {
@@ -71,6 +78,10 @@ public class LodgeConfig
             MaxPendingInvites = Int("LODGE_MAX_PENDING_INVITES", 200, 1, 10000),
             MaxDevicesPerPerson = Int("LODGE_MAX_DEVICES_PER_PERSON", 10, 1, 100),
             AllowQueryCode = string.Equals(Env("LODGE_ALLOW_QUERY_CODE", "false"), "true", StringComparison.OrdinalIgnoreCase),
+            FilesEnabled = !(Env("LODGE_FILES_ENABLED", "1") is "0" or "false" or "no" or "off"),
+            FilesMaxMb = Int("LODGE_FILES_MAX_MB", 50, 1, 1024),
+            FilesTotalMb = Int("LODGE_FILES_TOTAL_MB", 500, 1, 1024 * 1024),
+            FilesUploadsPer10Min = Int("LODGE_FILES_UPLOADS_PER_10MIN", 20, 1, 1000),
         };
         Directory.CreateDirectory(c.DataDir);
         if (string.IsNullOrEmpty(c.CodesFile))

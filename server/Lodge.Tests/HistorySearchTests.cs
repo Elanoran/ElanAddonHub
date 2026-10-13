@@ -405,7 +405,7 @@ public class HistorySearchTests
         var features = ((JsonArray)w["features"]!).Select(x => (string)x!).ToList();
         Assert.Contains("lfg", features); Assert.Contains("history2", features); Assert.Contains("search", features);
         Assert.Contains("reply", features);   // the older ones are still there
-        Assert.Equal("2.13.0", (string)w["server"]!);
+        Assert.Equal("2.14.0", (string)w["server"]!);
     }
 
     // ---------------------------------------------------------------- storage

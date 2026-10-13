@@ -65,6 +65,9 @@ namespace ElansAddonHub.Lodge
             InviteSheetHost.Bind(session);
             CreateGuide.LinkAccepted += link => ShowInviteLink(link, true);
             CalendarPage.Init(session);
+            FilesPage.Init(session);
+            session.FilesChanged += UpdateFilesChrome;
+            session.FilesNotice += ShowFilesNotice;
             session.CalendarChanged += UpdateCalendarChrome;
             ChatCard.SizeChanged += (s, e) => { if (e.WidthChanged) UpdateEventsStrip(); };   // how many pills fit follows the width
             session.OlderRequested += OnOlderRequested;
@@ -112,11 +115,12 @@ namespace ElansAddonHub.Lodge
             InviteSideButton.Visibility = s.CanInvite ? Visibility.Visible : Visibility.Collapsed;   // owners and officers
 
             UpdateCalendarChrome();
+            UpdateFilesChrome();
 
             // the channel on screen
             if (s.Selected != shownChannel)
             {
-                HideCalendar();
+                HideCalendar(); HideFiles();
                 // what I was typing stays with the channel it was for
                 if (shownChannel != null && editing == null) drafts[shownChannel.Id] = Composer.Text;
                 shownChannel = s.Selected;
@@ -686,7 +690,7 @@ namespace ElansAddonHub.Lodge
 
         void Channel_Click(object sender, MouseButtonEventArgs e)
         {
-            if ((sender as FrameworkElement)?.Tag is ChannelVM ch) { HideCalendar(); Session.Select(ch); }
+            if ((sender as FrameworkElement)?.Tag is ChannelVM ch) { HideCalendar(); HideFiles(); Session.Select(ch); }
         }
 
         void Room_Click(object sender, MouseButtonEventArgs e)

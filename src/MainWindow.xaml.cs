@@ -354,6 +354,7 @@ namespace ElansAddonHub
             if (Begin("calendar")) { result += "\r\n" + await CalendarTest(dir); End(); }
             if (Begin("wowevents")) { result += "\r\n" + await WowEventsTest(dir); End(); }
             if (Begin("flightshare")) { result += "\r\n" + await FlightShareTest(dir); End(); }
+            if (Begin("lodgefiles")) { result += "\r\n" + await LodgeFilesTest(dir); End(); }
             if (Begin("hubdata")) { result += "\r\n" + await HubDataTest(dir); End(); }
             if (Begin("readers")) { result += "\r\n" + await ReadersTest(dir); End(); }
             if (Begin("characters")) { result += "\r\n" + await CharactersTest(dir); End(); }

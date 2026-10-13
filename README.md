@@ -57,6 +57,7 @@ The **Lodge** tab is a small private Discord for you and your friends:
 - **Voice** - click a room to join; mute/deafen, voice activation with a level meter or push-to-talk (any key or
   mouse button, works while WoW has focus), per-person volume, join/leave chimes. Opus codec, ~30 kbit/s.
 - **Files** - drop a file into the chat (up to 25 MB); pictures show inline, everything else downloads in one click.
+- **Shared files** (server 2.14) - the **Files** page: officers and the owner keep named files for everyone (newest 3 versions, Replace and Roll back); anyone can Save them, checked and marked as downloaded. No programs or scripts.
 - **Status** - Online, AFK, Busy, In a dungeon or Looking for group, plus a short note; AFK automatically after
   10 minutes idle.
 - **Ranks** - Guild Master, Officer, Veteran, Member and Initiate (guest), shown as WoW item-quality frames.

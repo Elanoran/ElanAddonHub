@@ -290,3 +290,15 @@ Feature `flights` (welcome `features` and `GET /features`). A client on an older
 
 - `flights.share` `{legs: {"<Horde|Alliance>|<idA>><idB>": {t: seconds (1-1800), n: samples (1-50)}}, names?: {id: name}}` - member and up, at most 500 legs (and 300 names) per message, at most one per 10 minutes per identity, frame limit 64 KB. Answer `flights.shared` `{ok, accepted, rejected, why?}`; `why` is `guest` (guests cannot contribute), `rate`, `empty` or `save`. Each identity's latest value per leg replaces its previous one.
 - `flights.get` `{}` - answer `flights.data` `{at (unix s), legs: {key: {t, n}}, names: {id: name}}`: per leg the weighted average over contributors with n summed and capped at 50, outliers (+-40 % from an aggregate with n >= 5) held back until another outlier confirms them. Guests may read. Page budget.
+
+## 2.14 additions (shared files; optional for clients)
+
+Feature `files` (welcome `features` and `GET /features`; absent when the owner set `LODGE_FILES_ENABLED=0`). Welcome also carries `canManageFiles` (officer and up) and `filesMaxMb`.
+
+A slot is `{id, name (1-60), createdBy, versions: [{v, fileName, size, sha256, uploadedBy, at (ms), note (0-200)}]}`, versions ascending, at most the newest 3 kept; version numbers are never reused.
+
+- `files.list` `{}` -> `files.data` `{maxMb, totalMb, usedBytes, keep, canManage, slots: [...]}` (everybody; Page budget).
+- `files.delete` `{slot}` and `files.rollback` `{slot, v}` (officer and up; rolling back removes the versions newer than `v`) -> `files.result` `{op, ok, slot, why?}`, `why`: `forbidden`, `missing`, `disabled`, `already-newest`, `save`.
+- Every change is announced to everyone: `files.changed` `{action: new|version|rollback|delete, slot, name, by, at, v?}`; clients refresh with `files.list`.
+- Upload (HTTP, same credential headers as `/files`, officer and up): `PUT /slots/new` (header `X-Slot-Name`) or `PUT /slots/{id}` (a new version) with headers `X-File-Name`, `X-Note` (URL-encoded), `X-Sha256` (hex of the whole body), a `Content-Length`, the raw body. Answer 200 with the slot JSON, or `{error, reason}` with 400 (`sha-mismatch`, `length`, `bad-sha`, `bad-name`, `empty`), 403 (`forbidden`, `disabled`), 404 (`missing`), 409 (`name-taken`), 411, 413 (`too-big`), 415 (`blocked-type`, `blocked-zip`), 429 (`rate`, `busy`), 507 (`full`, `too-many`).
+- Download: `GET /slots/{id}/{v}` (everybody, guests included) - the raw bytes as an attachment; the client checks size and SHA-256 against the list.

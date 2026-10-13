@@ -97,6 +97,25 @@ only to somewhere equally private.
 (kept until you delete it - it also contains codes), extracts the archive, sets owner `lodge:lodge`, folders `0750`,
 files `0640` (`codes.lock` `0660`), starts the service and checks `/health`.
 
+## Shared files (2.14): the Files page
+
+Officers and the owner keep named files for the whole lodge (a UI pack, a guide, a build): `data/slots/`, each slot with its newest 3 versions. Everybody
+can see and save them (guests too); only officers and the owner upload, replace (= a new version), roll back or delete. Programs and scripts
+(`.exe .dll .bat .cmd .ps1 .js .msi .lnk ...`) and zips that contain them are refused. An old server simply doesn't show the page.
+
+After `sudo lodge-update` (the new version arrives with it; nothing else needs to be done) the settings below can go into `/etc/lodge/lodge.env`
+(then `sudo systemctl restart lodge`); defaults in brackets, see `lodge.env.example`:
+
+| Setting | Meaning |
+|---|---|
+| `LODGE_FILES_ENABLED` (1) | `0` switches the feature off: not advertised, uploads and downloads answer 403, the files stay on disk |
+| `LODGE_FILES_MAX_MB` (50) | largest single file |
+| `LODGE_FILES_TOTAL_MB` (500) | all kept versions of all slots together; a full lodge refuses uploads until something is deleted |
+| `LODGE_FILES_UPLOADS_PER_10MIN` (20) | per person |
+
+The reverse proxy must allow request bodies of at least `LODGE_FILES_MAX_MB` (nginx: `client_max_body_size 60m;` in the lodge location) - the same place the chat
+upload limit is set. Backups include `slots/` (`LODGE_BACKUP_FILES=0` leaves it out together with `files/`).
+
 ## Tests
 
 ```bash

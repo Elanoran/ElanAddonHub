@@ -96,7 +96,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.13.0";
+    public const string Version = "2.14.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -112,6 +112,7 @@ public class LodgeHub
     public readonly VoiceModule Voice;
     public readonly CalendarModule Calendar;
     public readonly FlightModule Flight;
+    public readonly FilesModule SharedFiles;
     public readonly LodgeInfoStore Info;
     readonly IModule[] modules;
     readonly ConcurrentDictionary<int, Member> members = new();
@@ -139,8 +140,9 @@ public class LodgeHub
         Voice = new VoiceModule(this);
         Calendar = new CalendarModule(this);
         Flight = new FlightModule(this);
+        SharedFiles = new FilesModule(this);
         Info = new LodgeInfoStore(cfg.DataDir);
-        modules = new IModule[] { Chat, Calendar, Flight, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
+        modules = new IModule[] { Chat, Calendar, Flight, SharedFiles, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
     // personal codes: one budget per person; guests (shared code): one per IP, so several friends on one guest
@@ -210,6 +212,14 @@ public class LodgeHub
         }
     }
 
+    // what this server can do ("files" only while the owner leaves it on); same list in welcome and GET /features
+    public string[] FeatureList()
+    {
+        var f = new List<string> { "reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights" };
+        if (Cfg.FilesEnabled) f.Add("files");
+        return f.ToArray();
+    }
+
     // everything a client needs: who it is, the channels it may see with their history, who's here
     public JsonObject Welcome(Member me)
     {
@@ -225,7 +235,9 @@ public class LodgeHub
             ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
             ["canManage"] = Roles.Can(me.Role, Perm.ManageMembers),
             ["canPin"] = Roles.Can(me.Role, Perm.PinMessages),
-            ["features"] = new JsonArray("reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights"),
+            ["features"] = new JsonArray(FeatureList().Select(f => (JsonNode)JsonValue.Create(f)).ToArray()),
+            ["canManageFiles"] = Cfg.FilesEnabled && Roles.Can(me.Role, Perm.FilesManage),
+            ["filesMaxMb"] = Cfg.FilesMaxMb,
             ["lodge"] = Info.ToJson(),
             ["calendar"] = Calendar.WelcomeView(),
             ["canInvite"] = Roles.Can(me.Role, Perm.Invite),

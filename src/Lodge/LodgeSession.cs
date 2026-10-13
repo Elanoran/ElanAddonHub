@@ -313,6 +313,7 @@ namespace ElansAddonHub.Lodge
             channelCache.Clear();
             ResetCalendar();
             ResetFlights();
+            ResetFiles();
             ResetHistoryState();
             Pending = null;
             failedImages.Clear();
@@ -500,6 +501,7 @@ namespace ElansAddonHub.Lodge
                     break;
                 case "flights.shared": OnFlightShared(m); break;
                 case "flights.data": OnFlightData(m); break;
+                case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
             }
         }
 
@@ -524,6 +526,7 @@ namespace ElansAddonHub.Lodge
             ReadInviteFeatures(m, features);
             ReadCalendarFeatures(m, features);
             ReadFlightFeatures(features);
+            ReadFilesFeatures(m, features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
@@ -645,6 +648,7 @@ namespace ElansAddonHub.Lodge
             SendGame();
             foreach (var r in VoiceRooms) r.InvisibleHint = Invisible;
             FlightSync(connect: true);                          // shared flight times (a no-op without the server feature)
+            RequestFiles();                                     // the Files page (a no-op without the server feature)
             Changed?.Invoke();
             // a gentle, one-time nudge: without a display name everybody sees the login name
             if (SupportsDisplayName && Me != null && !Me.Guest && string.IsNullOrEmpty(Me.DisplayName) && !Settings.DisplayNameHintShown)

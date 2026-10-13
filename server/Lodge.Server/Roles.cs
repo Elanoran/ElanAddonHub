@@ -35,8 +35,10 @@ public static class Roles
         Perm.CalendarManage => AtLeast(role, "officer"),  // edit / cancel anyone's event
         Perm.RetireCodes => AtLeast(role, "owner"),       // retire a person's permanent code     // put someone's avatar back to the default (moderation)
         Perm.FlightShare => AtLeast(role, "member"),      // guests may read the shared flight times, not contribute
+        Perm.FilesRead => true,                           // 2.14: everyone who can see the lodge sees and saves the shared files
+        Perm.FilesManage => AtLeast(role, "officer"),     // 2.14: upload a slot, replace it with a new version, roll back, delete (officers and the owner only)
         _ => false,
     };
 }
 
-public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels, SeeInvisible, ResetProfiles, Invite, RetireCodes, CalendarCreate, CalendarManage, FlightShare }
+public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels, SeeInvisible, ResetProfiles, Invite, RetireCodes, CalendarCreate, CalendarManage, FlightShare, FilesRead, FilesManage }

@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.47.0
+- **Files page in the Lodge:** officers and the owner share named files with the whole lodge - a UI pack, a guide, a build. Everyone (guests too) sees them in the new **Files** row under the Calendar and can **Save...** them (a Save-as dialog that starts in Downloads); the file is checked against its SHA-256 on arrival and, if it is damaged, nothing is saved. Saved files carry the Windows "downloaded from the Internet" mark, and nothing is ever opened or run for you.
+- **Versions:** uploading to an existing file with **Replace** makes a new version; the newest 3 are kept, older ones can be saved, and officers can **Roll back** to one. A file shows **Updated** when it changed since you last saved it on this PC, or **New** when you never did. When someone changes a file a quiet line above the chat says so ("Wing updated Raid UI pack (v3)").
+- Programs and scripts (.exe, .bat, .ps1, .js, .msi, .lnk ...) and zip files that contain them can't be shared; the limit is 50 MB per file and 500 MB per lodge (the server owner can change both or switch the feature off).
+- Needs Lodge server 2.14.0 (`sudo lodge-update` on the server); on an older server the Files row simply isn't there.
+
 ## 2.46.0
 - **Addon health reads Elan's Hub first:** the Toolkit's Bug Trap hands every Elan addon's errors, the diagnostic runs and the other addons' errors to Elan's Hub, and Addon health reads them from there; an addon that doesn't do that yet (older version) is still read from its own saved file. The report looks the same, and character and guild names from the Hub are hidden in the anonymous report as well.
 - Faster and sturdier reading of the game's saved files: one folder search for all readers, and each file is parsed once per change instead of up to six times; a half-written file keeps the last good data.
