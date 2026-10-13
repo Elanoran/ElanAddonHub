@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.45.0
+- Shared flight times are read from Elan's Hub, where Elan's Toolkit now saves them; Hunter Helper's older data still counts.
+
 ## 2.44.0
 - **Inventory is now Characters:** one list of your characters on the left (portrait, name in class colour, level, realm), and on the right Overview, Bags, Bank, Guild bank, Gear, Talents and Professions. The old bag, bank and guild bank views, the search across characters and the item tooltips with counts across characters are all still there, now as tabs.
 - **Overview:** portrait, level, race and class, guild, zone, experience bar with rested, gold, free bag space, item level, talents and professions at a glance. **Gear** lists what is worn with item levels and the average. **Talents** draws your points as a grid per tree. **Professions** shows skill against maximum.

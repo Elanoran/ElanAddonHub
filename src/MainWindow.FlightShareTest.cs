@@ -80,6 +80,7 @@ namespace ElansAddonHub
                 MakeFlightFolders();
 
                 FlightParsing(check);
+                FlightHubRead(check);
                 FlightBatching(check);
                 FlightLua(check);
                 FlightWriting(check);
@@ -144,6 +145,87 @@ namespace ElansAddonHub
             FlightShare.ResetCache();
             check("read: the files were only opened for reading (content unchanged)", File.ReadAllText(HhFile("ACC1")) == FlightFixture1());
         }
+
+        // ---------------------------------------------------------------- Elan's Hub `flight` module + Hunter Helper (dual read)
+        string HubFile(string account) => Path.Combine(flightRoot, "_classic_beta_", "WTF", "Account", account, "SavedVariables", "ElansHub.lua");
+
+        static string HubLeg(string key, string t, string n, long at = FlightAt) =>
+            "[" + LuaStr(key) + "] = { t = " + t + ", n = " + n + ", at = " + at + " }, ";
+
+        static string HubLua(int v, string legs, string names = "") =>
+            "ElansHubData = { schema = 1, chars = {}, account = { mods = { flight = { v = " + v + ", at = 1, by = \"ElansToolkit\", ver = \"0.2.0\", data = { legs = { " + legs + " }, names = { " + names + " } } } } } }\n";
+
+        void WriteHubFile(string account, string lua)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(HubFile(account)));
+            File.WriteAllText(HubFile(account), lua);
+            HubData.ResetCache(); FlightShare.ResetCache();
+        }
+
+        void FlightHubRead(Action<string, bool> check)
+        {
+            check("hub: supported table lists flight at v1", HubData.Supported.TryGetValue("flight", out var fv) && fv == 1);
+            check("hub: legacy only (no ElansHub.lua) reads the 6 Hunter Helper legs", FlightShare.Read(flightRoot).Legs.Count == 6);
+
+            // Hub only: remove the legacy files for a moment
+            var keep1 = File.ReadAllText(HhFile("ACC1")); var keep2 = File.ReadAllText(HhFile("ACC2"));
+            File.Delete(HhFile("ACC1")); File.Delete(HhFile("ACC2")); FlightShare.ResetCache();
+            WriteHubFile("ACC1", HubLua(1, HubLeg("Horde|11>22", "70", "4") + HubLeg("Alliance|2>3", "99.96", "5"), "[11] = \"Orgrimmar\", [\"22\"] = \"Crossroads\", [\"2\"] = \"Ironforge\""));
+            var hubOnly = FlightShare.Read(flightRoot);
+            check("hub: Hub-only data is read (2 legs, 1 file), t rounded to 0.1 s, names kept",
+                hubOnly.Legs.Count == 2 && hubOnly.Files == 1 && hubOnly.Legs["Horde|11>22"].T == 70 && hubOnly.Legs["Horde|11>22"].N == 4 && hubOnly.Legs["Alliance|2>3"].T == 100 && hubOnly.Names["11"] == "Orgrimmar" && hubOnly.Names["22"] == "Crossroads");
+            var typed = HubData.FlightOf(HubData.Read(flightRoot));
+            check("hub: HubData.FlightOf gives the same shape as FlightShare.Parse", typed != null && typed.Legs.Count == 2 && typed.Legs["Horde|11>22"].At == FlightAt);
+
+            // both with conflicts: bigger n wins (even when older), tie -> newer at, names union with the Hub winning
+            var hh = HhLeg("Horde|11>22", "61.5", "3", FlightAt + 900)     // fewer samples than the Hub (3 < 4) but newer -> Hub wins
+                   + HhLeg("Alliance|2>3", "120", "7", FlightAt - 50)      // more samples (7 > 5) but older -> legacy wins
+                   + HhLeg("Horde|5>6", "40", "2", FlightAt + 10)          // tie on n, legacy newer -> legacy
+                   + HhLeg("Horde|8>9", "50", "2", FlightAt - 10)          // tie on n, Hub newer -> Hub
+                   + HhLeg("Alliance|3>4", "77", "1");                     // legacy only
+            File.WriteAllText(HhFile("ACC1"), HhLua(hh, "\t\t[11] = \"Legacy Orgrimmar\",\n\t\t[9] = \"Southshore\",\n")); FlightShare.ResetCache();
+            WriteHubFile("ACC1", HubLua(1, HubLeg("Horde|11>22", "70", "4") + HubLeg("Alliance|2>3", "99", "5") + HubLeg("Horde|5>6", "45", "2", FlightAt) + HubLeg("Horde|8>9", "55", "2", FlightAt)
+                + HubLeg("Horde|30>31", "33", "1"), "[11] = \"Orgrimmar\", [\"22\"] = \"Crossroads\""));
+            var both = FlightShare.Read(flightRoot);
+            check("hub: with both sources the legs are the union (6)", both.Legs.Count == 6 && both.Files == 2);
+            check("hub: the bigger sample count wins even when the other is newer", both.Legs["Horde|11>22"].T == 70 && both.Legs["Horde|11>22"].N == 4 && both.Legs["Alliance|2>3"].T == 120 && both.Legs["Alliance|2>3"].N == 7);
+            check("hub: on equal sample counts the newer 'at' wins", both.Legs["Horde|5>6"].T == 40 && both.Legs["Horde|8>9"].T == 55);
+            check("hub: legs only one side has are kept", both.Legs["Alliance|3>4"].T == 77 && both.Legs["Horde|30>31"].T == 33);
+            check("hub: names are the union and the Hub wins a conflict", both.Names["11"] == "Orgrimmar" && both.Names["9"] == "Southshore" && both.Names["22"] == "Crossroads");
+
+            // change detection: rewriting ElansHub.lua (nothing else) makes ReadCached read again
+            FlightShare.ResetCache();
+            var c1 = FlightShare.ReadCached(flightRoot, out var ch1); var c2 = FlightShare.ReadCached(flightRoot, out var ch2);
+            File.WriteAllText(HubFile("ACC1"), HubLua(1, HubLeg("Horde|11>22", "71", "6", FlightAt + 5), "[11] = \"Orgrimmar\", [\"22\"] = \"Crossroads\""));
+            File.SetLastWriteTimeUtc(HubFile("ACC1"), DateTime.UtcNow.AddMinutes(5));
+            var c3 = FlightShare.ReadCached(flightRoot, out var ch3);
+            check("hub: an unchanged pair of files is cached, a changed ElansHub.lua is read again (new data, change flagged)", ch1 && !ch2 && ch3 && c3.Legs["Horde|11>22"].T == 71 && c3.Legs["Horde|11>22"].N == 6 && ReferenceEquals(c1, c2));
+
+            // garbage in the Hub module: same validation as the legacy file
+            var junk = HubLeg("Horde|11>22", "61", "3") + HubLeg("Neutral|1>2", "60", "1") + HubLeg("Horde|3>3", "60", "1") + HubLeg("Horde|a\"b>2", "60", "1") + HubLeg("Horde|1]]os.execute('x')--[[>2", "60", "1")
+                + HubLeg("Horde|7>8", "0", "1") + HubLeg("Horde|7>9", "1801", "1") + HubLeg("Horde|7>10", "60", "0") + HubLeg("Horde|7>12", "60", "51") + HubLeg("Horde|7>13", "60", "2.5") + HubLeg("Horde|7>14", "\"61\"", "1")
+                + "[\"Horde|9>10\"] = 5, [\"Horde|9>11\"] = { t = 60 }, ";
+            File.Delete(HhFile("ACC1")); File.Delete(HhFile("ACC2"));
+            WriteHubFile("ACC1", HubLua(1, junk, "[\"bad id!\"] = \"x\", [\"6\"] = " + LuaStr("Evil\" ]] \\ name") + ", [\"5\"] = " + LuaStr(new string('N', 200)) + ", [\"99\"] = \"\", [\"7\"] = 12"));
+            var bad = FlightShare.Read(flightRoot);
+            check("hub: garbage legs are rejected by the same validation (only the 1 valid leg stays, " + bad.Dropped + " dropped)", bad.Legs.Count == 1 && bad.Legs.ContainsKey("Horde|11>22") && bad.Dropped == 12);
+            check("hub: names are cleaned (quote, backslash, brackets out, 60 characters) and a bad id / empty / non-text name is left out",
+                bad.Names["6"] == "Evil name" && bad.Names["5"].Length == 60 && !bad.Names.ContainsKey("bad id!") && !bad.Names.ContainsKey("99") && !bad.Names.ContainsKey("7"));
+
+            // too-new Hub module: legacy only, no crash
+            File.WriteAllText(HhFile("ACC1"), keep1); File.WriteAllText(HhFile("ACC2"), keep2);
+            WriteHubFile("ACC1", HubLua(2, HubLeg("Horde|11>22", "10", "50") + HubLeg("Horde|40>41", "10", "1"), "[11] = \"Future\""));
+            var tooNew = FlightShare.Read(flightRoot);
+            check("hub: a too-new flight module (v2) is ignored, the Hunter Helper data is used (6 legs, 64 s)", tooNew.Legs.Count == 6 && tooNew.Legs["Horde|11>22"].T == 64.0 && !tooNew.Legs.ContainsKey("Horde|40>41") && tooNew.Names["11"] == "Orgrimmar");
+            check("hub: a too-new module is marked TooNew and has no accessor data", HubData.Read(flightRoot).AccountModules["flight"].TooNew && HubData.FlightOf(HubData.Read(flightRoot)) == null);
+            WriteHubFile("ACC1", "ElansHubData = {{{ broken");
+            check("hub: a broken ElansHub.lua leaves the legacy data (6 legs) and never throws", FlightShare.Read(flightRoot).Legs.Count == 6);
+
+            // clean up: only the legacy fixture stays for the following sections
+            File.Delete(HubFile("ACC1")); HubData.ResetCache(); FlightShare.ResetCache();
+            check("hub: after removing ElansHub.lua the legacy fixture reads as before", FlightShare.Read(flightRoot).Legs.Count == 6 && File.ReadAllText(HhFile("ACC1")) == FlightFixture1());
+        }
+
 
         // ---------------------------------------------------------------- upload batching
         void FlightBatching(Action<string, bool> check)

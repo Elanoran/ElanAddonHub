@@ -123,7 +123,13 @@ namespace ElansAddonHub.Services
             Dictionary<string, object> db;
             try { db = LuaData.ReadGlobals(luaText ?? "").TryGetValue("ElansHunterHelperDB", out var v) ? v as Dictionary<string, object> : null; }
             catch (Exception e) { Util.Log("flights: unreadable saved variables (" + e.GetType().Name + ")"); return r; }
-            var legs = db?.Child("flightLegs");
+            return FromTables(db?.Child("flightLegs"), db?.Child("flightNodeNames"));
+        }
+
+        // the validation shared by Hunter Helper's saved variables and the Hub's `flight` module (same table shapes): legs { [key] = { t, n, at } }, names { [id] = name }
+        public static Local FromTables(Dictionary<string, object> legs, Dictionary<string, object> names)
+        {
+            var r = new Local();
             if (legs != null)
                 foreach (var kv in legs)
                 {
@@ -133,7 +139,6 @@ namespace ElansAddonHub.Services
                     long at = d.TryGetValue("at", out var av) && av is double a && a > 0 && a < 4e12 ? (long)a : 0;
                     r.Legs[kv.Key] = new Leg { T = RoundT(t), N = (int)n, At = at };
                 }
-            var names = db?.Child("flightNodeNames");
             if (names != null)
                 foreach (var kv in names)
                 {
@@ -179,6 +184,20 @@ namespace ElansAddonHub.Services
                 }
                 catch (Exception e) { Util.Log("flights: read failed (" + e.GetType().Name + ")"); }
             }
+            // Elan's Hub `flight` module (account): per leg the entry with more samples wins, a tie goes to the newer one (then the Hub's);
+            // names are the union and the Hub wins. A missing or too-new module leaves the Hunter Helper data as it is.
+            try
+            {
+                var hub = HubData.FlightOf(HubData.Read(root));
+                if (hub != null)
+                {
+                    all.Files++; all.Dropped += hub.Dropped;
+                    foreach (var kv in hub.Legs)
+                        if (!all.Legs.TryGetValue(kv.Key, out var have) || kv.Value.N > have.N || (kv.Value.N == have.N && kv.Value.At >= have.At)) all.Legs[kv.Key] = kv.Value;
+                    foreach (var kv in hub.Names) all.Names[kv.Key] = kv.Value;
+                }
+            }
+            catch (Exception e) { Util.Log("flights: hub read failed (" + e.GetType().Name + ")"); }
             return all;
         }
 
@@ -189,7 +208,7 @@ namespace ElansAddonHub.Services
         {
             if (TestSource != null) { changed = true; return Read(root); }
             string key = "";
-            try { key = string.Join("|", GamePresence.SavedVariablesFiles(root, HunterHelperFile).Select(f => f + ":" + File.GetLastWriteTimeUtc(f).Ticks + ":" + new FileInfo(f).Length)); }
+            try { key = string.Join("|", GamePresence.SavedVariablesFiles(root, HunterHelperFile).Concat(GamePresence.SavedVariablesFiles(root, HubData.FileName)).Select(f => f + ":" + File.GetLastWriteTimeUtc(f).Ticks + ":" + new FileInfo(f).Length)); }
             catch { }
             if (cached != null && key == cacheKey) { changed = false; return cached; }
             cached = Read(root); cacheKey = key; changed = true;

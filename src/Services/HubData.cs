@@ -59,7 +59,7 @@ namespace ElansAddonHub.Services
         // module -> highest schema version this app understands. A module not listed is shown as stored (never TooNew), but nothing reads it yet.
         public static readonly Dictionary<string, int> Supported = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            ["core"] = 1,
+            ["core"] = 1, ["flight"] = 1,                                                                         // flight: account module, FlightOf below
             ["bags"] = 1, ["bank"] = 1, ["guildbank"] = 1, ["gear"] = 1, ["talents"] = 1, ["professions"] = 1,     // typed readers: HubModules.cs
         };
 
@@ -117,6 +117,13 @@ namespace ElansAddonHub.Services
                 Sex = d.Int("sex"), Faction = d.Str("faction"), Level = d.Int("level"), Xp = d.Long("xp"), XpMax = d.Long("xpMax"), Rested = d.Long("rested"),
                 Money = d.Long("money"), Guild = d.Str("guild"), Zone = d.Str("zone"), Subzone = d.Str("subzone"), Updated = d.Long("updated"),
             };
+        }
+
+        // account module `flight` v1 as the same validated shape FlightShare.Parse gives for Hunter Helper's file; null when absent, too new or another version
+        public static FlightShare.Local FlightOf(HubModel model)
+        {
+            if (model == null || !model.AccountModules.TryGetValue("flight", out var m) || m == null || m.TooNew || m.V != 1 || m.Data == null) return null;
+            return FlightShare.FromTables(m.Data.Child("legs"), m.Data.Child("names"));
         }
 
         // the newest ElansHub.lua among all flavors / accounts. Parsed again only when the path, mtime or size changed; a failed read keeps the last good model.
