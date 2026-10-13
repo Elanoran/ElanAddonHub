@@ -106,7 +106,7 @@ namespace ElansAddonHub
                 Check("error page: DNS failure and offline each get their own calm text", BrowserPage.Describe(CoreWebView2WebErrorStatus.HostNameNotResolved, "nope.example").Item1 == "Can't find nope.example"
                     && BrowserPage.Describe(CoreWebView2WebErrorStatus.Disconnected, "x.com").Item1.Contains("offline")
                     && BrowserPage.Describe(CoreWebView2WebErrorStatus.CertificateExpired, "x.com").Item1.Contains("isn't secure") && BrowserPage.Describe(CoreWebView2WebErrorStatus.Timeout, "").Item1.StartsWith("This page"));
-                Check("shortcut: Ctrl+4 is the Browser page, Ctrl+5 the Atlas (1-3 unchanged)", TabForKey(Key.D4) == "browser" && TabForKey(Key.NumPad4) == "browser" && TabForKey(Key.D1) == "addons" && TabForKey(Key.D3) == "inventory" && TabForKey(Key.D5) == "atlas" && TabForKey(Key.D6) == null);
+                Check("shortcut: Ctrl+4 is the Browser page, Ctrl+5 the Atlas, Ctrl+6 Talents (1-3 unchanged)", TabForKey(Key.D4) == "browser" && TabForKey(Key.NumPad4) == "browser" && TabForKey(Key.D1) == "addons" && TabForKey(Key.D3) == "inventory" && TabForKey(Key.D5) == "atlas" && TabForKey(Key.D6) == "talents" && TabForKey(Key.D7) == null);
                 Check("engine: player and browser keep separate profiles under the data folder", WebEngine.UserDataFolder(WebProfile.Browser) == Path.Combine(WebEngine.DataFolder, "browser")
                     && WebEngine.UserDataFolder(WebProfile.Player) == WebEngine.DataFolder && WebEngine.DataFolder.StartsWith(Util.DataDir));
 

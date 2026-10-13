@@ -17,8 +17,10 @@ namespace ElansAddonHub
             LodgePage.OpenAtlas += OpenInAtlas;
             InventoryView.OpenAtlas += OpenInAtlas;
             // links on the Professions page (recipes, reagents, sources) open their Atlas page
-            ElansAddonHub.Services.Professions.ProfessionLinks.OpenRequested += id => Dispatcher.BeginInvoke(new Action(() => OpenInAtlas(id)));
+            ElansAddonHub.Services.Professions.ProfessionLinks.OpenRequested += OnProfessionLink;
         }
+
+        void OnProfessionLink(string id) => Dispatcher.BeginInvoke(new Action(() => OpenInAtlas(id)));
 
         // "Open in Atlas": an Atlas id ("item:123") or a name to search for
         public void OpenInAtlas(string idOrText)

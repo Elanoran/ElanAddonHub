@@ -47,7 +47,7 @@ namespace ElansAddonHub
                 MapRender.DirOverride = Path.Combine(rw, "maps"); MapRender.TileSourceForTest = null; MapRender.ForgetFailuresForTest();
                 MapData.Start();
                 await WaitFor(() => MapData.Status == MapData.State.Ready || MapData.Status == MapData.State.Unavailable, 120000);
-                IconStore.WowRoot = () => real;
+                IconStore.WowRoot = () => real; IconStore.ForgetMemory();   // an earlier section asked without a game folder: forget that pause
                 ClassicAtlas.Use(null);
                 AtlasQuery.Context.Lodge = () => null;
                 AtlasView.OwnedOverrideForTest = () => null;
