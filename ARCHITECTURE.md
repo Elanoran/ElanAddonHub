@@ -253,6 +253,29 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
 | E. Lodge pool | Lodge server feature `atlas`: members upload observations, the server aggregates (counts, per-member dedupe, outlier and rate limits), everyone downloads the aggregate | server `AtlasModule` + `LodgeSession.Atlas` | planned |
 | F. Atlas page | Search items / mobs / zones / instances; item page (tooltip, sources with Lodge-observed % and Classic %, vendors, quests, who in the Lodge has it); zone and instance maps with spawn and find markers | Outpost UI | planned |
 
+### `atlas.obs` v1 (Elan's Toolkit, account) — cumulative since first record
+```lua
+{ since = time,
+  kills   = { [npcId]  = { n = lootedKills, items = { [itemId] = { n = timesDropped, c = totalCount } }, z = { [uiMapId] = kills } } },
+  objects = { [objectId] = { n = opened, items = { [itemId] = { n, c } }, z = { [uiMapId] = n } } },   -- chests, herbs, ore
+  fishing = { [uiMapId] = { n = casts looted, items = { [itemId] = { n, c } } } },
+  vendors = { [npcId]  = { at, z = uiMapId, x, y, items = { [itemId] = { p = priceCopper, s = stackSize, l = limit (-1 none) } } } },
+  quests  = { [questId] = { at, rewards = { itemId, ... }, choices = { itemId, ... } } },
+  finds   = { { i = itemId, c = count, src = "npc:123" | "obj:45" | "fish" | "vendor:67" | "quest:89", z = uiMapId, x, y, at } },  -- newest 500
+  spawns  = { [npcId] = { { z = uiMapId, x, y } ... max 20 per npc } },   -- where looted mobs were (player position at loot)
+}
+```
+ids are numbers; x/y are map fractions 0..1 (3 decimals). Counters only grow; the Outpost uploads the difference since
+its last upload (like flight times). Revealed-item details are not in the addon: the Outpost reads them from
+`DBCache.bin` and shares parsed fields (name, quality, item level, slot, stats) with the Lodge.
+
+### Lodge feature `atlas` (server 2.15.0)
+`atlas.share { kills, objects, fishing, vendors, quests, finds, spawns, items }` (deltas; `items` = revealed item
+details) → the server adds counts per member (each member's totals capped and checked), keeps the newest vendor list
+per npc, the newest 2000 finds (with the member's Lodge display name — never character names), up to 50 spawn points
+per npc, and revealed items by id. `atlas.get { since }` → `atlas.data` (everything changed since). Members can switch
+sharing off; guests can read but not share. Feature can be disabled by the owner (`LODGE_ATLAS_ENABLED=0`).
+
 Rules for the Atlas: read-only access to the game folder; downloads only on the user's click (size and licence shown);
 sharing observations is on by default per Lodge member and can be switched off; observations carry no character names
 when pooled (the Lodge sees "a member", the Outpost shows names only for the user's own characters); combat-safe
