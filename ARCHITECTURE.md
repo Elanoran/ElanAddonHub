@@ -165,7 +165,25 @@ Raw positions; the Outpost groups them into trees for display. `api` says which 
 ### `professions` v1 (Hub, per character)
 `{ at, list = { { name, skill, max, ic, kind = "primary" | "secondary" } } }`
 
-_hunter.pets and flight are added when they are migrated._
+### `flight` v1 (Elan's Toolkit, account)
+`{ legs = { ["<Horde|Alliance>|<nodeIdA>><nodeIdB>"] = { t = seconds, n = samples (max 5), at } }, names = { [nodeId] = name } }`
+Same format as Hunter Helper's old `flightLegs` / `flightNodeNames`. Published by Elan's Toolkit, which owns
+the flight timer from Toolkit 0.2.0, with `by = "ElansToolkit"`. The Outpost shares it with the Lodge.
+
+_hunter.pets is added when it is migrated._
+
+## The HUD: one bar, every class adds to it
+
+Elan's Toolkit owns the movable HUD block and its general segments: the cast bar (your casts and
+channels, the flight timer) and the threat bar (who holds aggro, group tank). Class addons don't build
+their own HUD; they register into it:
+
+- `ElansToolkit.HUD.Register{ ... }` adds a segment (its own row in the block).
+- `ElansToolkit.CastBar.AddProvider{ ... }` adds something the cast bar shows when you are not casting,
+  e.g. Hunter Helper's Auto Shot reload/aim timing. Your own casts always win.
+
+So Hunter Helper adds shot timers, Quick Shots, aspect and distance; a future class addon adds its own
+(swing timer, seals). Class addons list `ElansToolkit` as a dependency.
 
 ## Migration (dual read)
 
@@ -175,7 +193,7 @@ Existing flows keep working while data moves to the Hub:
 |---|---|---|
 | Hub `ElansHubDB.chars` / `current` / `online` | `ElansHubData` `core` | done (Hub 1.11.0, Outpost 2.43.0 reads it, not shown yet) |
 | Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` (+ `gear`, `talents`, `professions` new) | done (Hub 1.12.0 collects; Outpost 2.44.0 Characters page reads it, Elan's Bags data as fallback) |
-| Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), feature itself moves to the Hub | later |
+| Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), published by Elan's Toolkit, which takes over the flight timer and the HUD | in progress (Toolkit 0.2.0, Hunter Helper 1.26.0, Outpost reads both) |
 | Health (`bugs`, `diag` in each addon's file) | stays per addon for now | later: shared helper |
 
 The Outpost reads the new layout first and falls back to the legacy keys. A legacy reader is deleted
