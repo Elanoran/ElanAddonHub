@@ -110,8 +110,38 @@ mix even though WoW saves both into the same file.
 `name, realm, class, classFile, race, raceFile, sex, faction, level, xp, xpMax, rested, money, guild,
 zone, subzone, updated`
 
-_More schemas (gear, talents, professions, bags, bank, guild bank, hunter.pets) are added here as each
-one is migrated._
+Short field names are used where a table repeats many times (items, slots, nodes).
+
+**Item** (inside containers and gear): `{ i = itemId, c = count, q = quality, ic = iconFileId }`. Full links
+are not repeated per slot; each module has one `links = { [itemId] = itemLink }` table instead.
+
+**Container**: `{ n = slots, k = kind, id = bag itemId or nil, ic = icon, s = { [slot] = Item } }`.
+`k` is `"backpack" | "bag" | "reagent" | "bank" | "bankbag" | "tab"`.
+
+### `bags` v1 (Hub, per character)
+`{ at, cont = { [containerIndex] = Container }, links }` — backpack, bags and reagent bag. Scanned out of
+combat after `BAG_UPDATE_DELAYED`, throttled to once per 2 s.
+
+### `bank` v1 (Hub, per character)
+`{ at, cont = { [containerIndex] = Container }, links }` — only rescanned while the bank is open
+(`BANKFRAME_OPENED` until closed); `at` tells how old it is.
+
+### `guildbank` v1 (Hub, account)
+`{ guilds = { ["Realm-Guild"] = { name, realm, money, at, tabs = { [tab] = { name, ic, at, s = { [slot] = Item } } } } }, links }`
+Tabs are scanned only when the player views them; tabs not viewed keep their older data. The Hub merges
+into its own stored table, so one guild's update never drops another guild.
+
+### `gear` v1 (Hub, per character)
+`{ at, ilvl = average item level or nil, slots = { [inventorySlotId] = { i, q, ic, il = itemLevel } }, links }`
+
+### `talents` v1 (Hub, per character)
+`{ at, api = "traits" | "classic", spent, unspent, nodes = { { id, r = rank, m = maxRank, x, y, s = spellId, n = name } } }`
+Raw positions; the Outpost groups them into trees for display. `api` says which client API it came from.
+
+### `professions` v1 (Hub, per character)
+`{ at, list = { { name, skill, max, ic, kind = "primary" | "secondary" } } }`
+
+_hunter.pets and flight are added when they are migrated._
 
 ## Migration (dual read)
 
@@ -120,7 +150,7 @@ Existing flows keep working while data moves to the Hub:
 | Today | Moves to | Status |
 |---|---|---|
 | Hub `ElansHubDB.chars` / `current` / `online` | `ElansHubData` `core` | done (Hub 1.11.0, Outpost 2.43.0 reads it, not shown yet) |
-| Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` | later |
+| Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` (+ `gear`, `talents`, `professions` new) | in progress (Hub 1.12.0, Outpost Characters page) |
 | Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), feature itself moves to the Hub | later |
 | Health (`bugs`, `diag` in each addon's file) | stays per addon for now | later: shared helper |
 
