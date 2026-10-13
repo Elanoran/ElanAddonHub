@@ -1,0 +1,139 @@
+# How Elan's addons and the Outpost fit together
+
+This is the contract between the in-game addons, Elan's Hub and Elan's Outpost. Read it before adding
+any data that crosses from the game to the Outpost (or back). If something new doesn't fit a role
+below, change this file first.
+
+## Roles
+
+| Part | Its job | It never |
+|---|---|---|
+| **Feature addons** (Hunter Helper, Paladin Helper, Bags, future ones) | Make the game better while you play. Hand data that is only theirs to know to Elan's Hub with one call. | Talk to the Outpost, write files for it, or collect general character data the Hub already has. |
+| **Elan's Hub** (addon, required) | The data layer and the only bridge. Collects general character data for every class, stores what feature addons hand over, versioned, in its own saved data. Owns the pixel strip and reads `SharedData.lua`. Gives feature addons read access to shared data. | Has game features of its own beyond small utilities (emote wheel, `/rl`). |
+| **Elan's Outpost** (app) | Reads Elan's Hub's saved data, shows it, shares what the user allows with the Lodge. Writes back only `SharedData.lua` in the Hub folder. | Reads feature addons' saved files (except the legacy readers below, until migrated), writes any SavedVariables or anything else in the WoW folder besides installing addons. |
+| **Lodge server** | Members, voice, chat, calendar, shared flight times. | Talks to the game or the addons directly. Only the Outpost talks to it. |
+
+One sentence version: **addons → Hub → Outpost → Lodge, and back the same way.**
+
+### Which data belongs where
+
+- **General character data** (every class has it) is collected by **Elan's Hub**: identity, level/xp,
+  money, equipped gear, talents, professions, bags, bank, guild bank, location.
+- **Feature data** (only one addon knows it) is collected by that addon and **handed to the Hub**:
+  e.g. Hunter pets and their abilities.
+- **Class-agnostic features living in a class addon** are candidates to move to the Hub. Today that is
+  the flight timer (Hunter Helper), which every class could use.
+- **Settings** stay in each addon's own SavedVariables and are never read by the Outpost.
+
+## Paths and how fast they are
+
+| Path | Direction | Speed | Use for |
+|---|---|---|---|
+| SavedVariables (`ElansHub.lua`) | game → Outpost | on `/reload` or logout | everything that can wait |
+| Pixel strip (Hub, top-left corner) | game → Outpost | ~1 s | live presence only (who, where, combat/AFK). Use sparingly: every byte added costs screen space |
+| `SharedData.lua` (Hub folder) | Outpost → game | read on `/reload` | data from the Lodge (shared flight times) |
+| Lodge messages | Outpost ↔ server | live | only what the user's sharing settings allow |
+
+## Handing data to the Hub
+
+Elan's Hub exposes one global, `ElansHub` (API level `ElansHub.API`). A feature addon never depends on it
+being installed:
+
+```lua
+local H = rawget(_G, "ElansHub")
+if H and H.Publish then
+  H.Publish("hunter.pets", 1, petsTable)                 -- this character
+  H.Publish("hunter.flight", 1, legs, { scope = "account" })
+end
+```
+
+- `ElansHub.Publish(module, version, data [, opts])`
+  - `module`: lower-case id, `owner.topic` for feature addons (`hunter.pets`), plain for the Hub's own
+    (`core`, `gear`). Pattern `^[a-z][a-z0-9_]*(%.[a-z0-9_]+)?$`.
+  - `version`: integer schema version of `data` (see Versions).
+  - `data`: a plain table: strings, numbers, booleans and tables only. It is copied, so the caller can
+    keep changing its own table.
+  - `opts.scope`: `"char"` (default, stored under the current character) or `"account"`.
+  - Returns `true`, or `false, reason` (bad module name, bad version, too big, not a plain table).
+  - In combat the call is queued (latest wins per module) and stored after combat.
+- `ElansHub.Get(module [, charKey])` returns `data, version, at` for reading shared data in-game (for
+  example Bags showing alt counts). `charKey` defaults to the current character, `"account"` for
+  account-scoped modules.
+- `ElansHub.CharKey()` returns `"Realm-Name"`, the one key format for characters everywhere.
+
+### Stored layout (`ElansHubData`, in `ElansHub.lua`)
+
+```lua
+ElansHubData = {
+  schema = 1,                                  -- layout of this table itself
+  chars = {
+    ["Realm-Name"] = {
+      at = 1760000000,
+      mods = { core = { v = 1, at = ..., by = "ElansHub", ver = "1.11.0", data = { ... } },
+               ["hunter.pets"] = { v = 1, at = ..., by = "ElansHunterHelper", ver = "1.26.0", data = { ... } } },
+    },
+  },
+  account = { mods = { ["hunter.flight"] = { ... } } },
+}
+```
+
+`ElansHubData` is separate from `ElansHubDB` (Hub settings and legacy keys), so data and settings don't
+mix even though WoW saves both into the same file.
+
+## Versions
+
+- Each module carries an integer `v`. **Adding** a field keeps `v`; **renaming, removing or changing the
+  meaning or unit** of a field bumps it.
+- The Outpost keeps a table of the highest `v` it understands per module. A newer `v` is not parsed: the
+  Outpost says "Update Elan's Outpost to show <module>" instead of guessing.
+- Readers ignore unknown fields, so an older Outpost keeps working with an addon that only added fields.
+- Every schema lives in **Schemas** below with its version history. Change the doc in the same commit.
+
+## Rules
+
+- **Never collect:** chat text, mail contents, other players' data beyond what the user's own group
+  sees, account or Battle.net names, real names, `/played` (asking for it prints to chat), anything
+  read from Blizzard UI code (taint).
+- **Combat:** no scanning in combat. Collect on events, out of combat, throttled. `Publish` in combat
+  only queues.
+- **Secret values:** every value read from the game passes the secret check before it is stored.
+- **Size:** at most 20,000 values per `Publish` call. Keep per-character data small; prefer item id +
+  count over full links.
+- **One writer per file.** The game writes `ElansHub.lua`; the Outpost writes only `SharedData.lua`,
+  atomically, data only, validated.
+- **Read-only consumers.** Feature addons may read Hub data with `ElansHub.Get`, never write another
+  addon's tables.
+
+## Schemas
+
+### `core` v1 (Hub, per character)
+`name, realm, class, classFile, race, raceFile, sex, faction, level, xp, xpMax, rested, money, guild,
+zone, subzone, updated`
+
+_More schemas (gear, talents, professions, bags, bank, guild bank, hunter.pets) are added here as each
+one is migrated._
+
+## Migration (dual read)
+
+Existing flows keep working while data moves to the Hub:
+
+| Today | Moves to | Status |
+|---|---|---|
+| Hub `ElansHubDB.chars` / `current` / `online` | `ElansHubData` `core` | groundwork |
+| Bags `ElansBagsDB.chars` / `guilds` (read by the Outpost) | Hub modules `bags`, `bank`, `guildbank` | later |
+| Hunter Helper `flightLegs` / `flightNodeNames` (read by the Outpost) | Hub `flight` (account), feature itself moves to the Hub | later |
+| Health (`bugs`, `diag` in each addon's file) | stays per addon for now | later: shared helper |
+
+The Outpost reads the new layout first and falls back to the legacy keys. A legacy reader is deleted
+only after the addon versions that wrote the old keys are no longer offered by the Outpost.
+
+## Known issues found while mapping (to fix)
+
+- Installing or updating Elan's Hub replaces `SharedData.lua` with the empty shipped file until the next
+  flight sync. The Outpost should rewrite it right after installing the Hub.
+- `ElansHub.lua` is parsed separately by four Outpost readers, and the folder walk is written four times.
+  One shared reader should parse it once per change.
+- BugTrap, Diag, Tip, Theme, Widgets and the secret helper are copied between addons. Candidate for a
+  shared, versioned library later.
+- Character race/sex are joined onto Bags characters by name, with a name-only fallback that can mix up
+  same-named characters on different realms. The `core` module removes the need for this join.
