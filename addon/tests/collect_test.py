@@ -257,6 +257,45 @@ check("gear slots with i/q/ic/il", lua("local d = ElansHub.Get('gear') local s =
 check("gear: empty slots absent, only non-empty ones", lua("local n = 0 for _ in pairs(ElansHub.Get('gear').slots) do n = n + 1 end return n == 3 and ElansHub.Get('gear').slots[2] == nil"))
 check("gear ilvl is the equipped value (2nd return)", lua("return ElansHub.Get('gear').ilvl == 28.25"))
 check("gear links table", lua("local l = ElansHub.Get('gear').links return l[100]:find('Helm') ~= nil and l[102] ~= nil"))
+check("gear stats: not there while no stat API exists", lua("return ElansHub.Get('gear').stats == nil"))
+L.execute(r'''
+function UnitHealthMax() return 1234 end
+function UnitPowerMax() return 567 end
+function UnitPowerType() return 0, "MANA" end
+function UnitStat(u, i) local t = { {50, 55, 5, 0}, {120, 130, 10, 0}, {90, 95, 5, 0}, {30, 30, 0, 0}, {40, 41, 1, 0} } return unpack(t[i]) end
+function UnitArmor() return 700, 650, 0, 0, 0 end
+function UnitAttackPower() return 100, 20, 0 end
+function UnitRangedAttackPower() return 200, 30, -10 end
+function UnitDamage() return 40.4, 61.6, 0, 0, 1 end
+function UnitAttackSpeed() return 2.6, 0 end
+function UnitRangedDamage() return 3.0, 55.2, 80.8, 0, 0, 1 end
+function GetCritChance() return 12.345 end
+function GetRangedCritChance() return 8.1 end
+function GetDodgeChance() return 5.55 end
+function GetParryChance() return 0 end
+function GetBlockChance() return 0 end
+function GetUnitSpeed() return 7, 7, 14, 4.7 end
+''')
+L.execute("CLOCK = CLOCK + 10; Fire('PLAYER_EQUIPMENT_CHANGED', 1) RunTimers()")
+check("gear stats: health, power, power type", lua("local s = ElansHub.Get('gear').stats return s.health == 1234 and s.power == 567 and s.powerType == 'MANA'"))
+check("gear stats: five primary stats (effective values)", lua("local s = ElansHub.Get('gear').stats return s.str == 55 and s.agi == 130 and s.sta == 95 and s.int == 30 and s.spi == 41"))
+check("gear stats: armor and attack power (base + buffs)", lua("local s = ElansHub.Get('gear').stats return s.armor == 650 and s.ap == 120 and s.rap == 220"))
+check("gear stats: melee and ranged damage with speed", lua("local s = ElansHub.Get('gear').stats return s.melee.min == 40 and s.melee.max == 62 and s.melee.speed == 2.6 and s.ranged.min == 55 and s.ranged.max == 81 and s.ranged.speed == 3"))
+check("gear stats: crit / dodge / parry / block rounded to 2 places, movement speed in %", lua("local s = ElansHub.Get('gear').stats return s.crit == 12.35 and s.rcrit == 8.1 and s.dodge == 5.55 and s.parry == 0 and s.block == 0 and s.speed == 100"))
+check("gear stats: still schema v1 and the slots are untouched", lua("local d, v = ElansHub.Get('gear') return v == 1 and d.slots[1].i == 100"))
+L.execute("UnitHealthMax = function() return SECRET end; UnitStat = function() error('boom') end; GetCritChance = nil; UnitRangedDamage = function() return 0, 0, 0 end; UnitPowerType = nil")
+L.execute("CLOCK = CLOCK + 10; Fire('PLAYER_EQUIPMENT_CHANGED', 1) RunTimers()")
+check("gear stats: secret health dropped, an erroring or missing API leaves that field out, the rest stays", lua("local s = ElansHub.Get('gear').stats return s.health == nil and s.str == nil and s.crit == nil and s.powerType == nil and s.ranged == nil and s.power == 567 and s.armor == 650 and s.rcrit == 8.1"))
+L.execute("UnitPowerMax = nil; UnitArmor = nil; UnitAttackPower = nil; UnitRangedAttackPower = nil; UnitDamage = nil; UnitAttackSpeed = nil; GetRangedCritChance = nil; GetDodgeChance = nil; GetParryChance = nil; GetBlockChance = nil; GetUnitSpeed = nil")
+L.execute("CLOCK = CLOCK + 10; Fire('PLAYER_EQUIPMENT_CHANGED', 1) RunTimers()")
+check("gear stats: with no stat API at all the stats table is simply absent and gear still saves", lua("local d = ElansHub.Get('gear') return d.stats == nil and d.slots[1].i == 100"))
+for i, (ev, args) in enumerate([("UNIT_STATS", "'player'"), ("UNIT_MAXHEALTH", "'player'"), ("PLAYER_LEVEL_UP", "61")]):
+    L.execute("function UnitHealthMax() return %d end; CLOCK = CLOCK + 10; Fire('%s', %s) RunTimers()" % (2000 + i, ev, args))
+    check("gear stats refresh on " + ev, lua("local s = ElansHub.Get('gear').stats return s and s.health == %d" % (2000 + i)))
+L.execute("CLOCK = CLOCK + 10; function UnitHealthMax() return 5 end; Fire('UNIT_STATS', 'party1') RunTimers()")
+check("gear stats ignore other units' UNIT_STATS", lua("return ElansHub.Get('gear').stats.health == 2002"))
+L.execute("UnitHealthMax = nil")
+check("registers the stats events", lua("local n = {} for _, e in ipairs(EVENTS) do n[e] = true end return n.UNIT_STATS and n.PLAYER_LEVEL_UP and n.UNIT_MAXHEALTH and true"))
 L.execute("CLOCK = CLOCK + 10; function GetAverageItemLevel() return SECRET, SECRET end; function GetInventoryItemQuality() return SECRET end")
 L.execute("Fire('PLAYER_EQUIPMENT_CHANGED', 1) RunTimers()")
 check("secret ilvl dropped; secret quality falls back to link colour", lua("local d = ElansHub.Get('gear') return d.ilvl == nil and d.slots[1].q == 3"))

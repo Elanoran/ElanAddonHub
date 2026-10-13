@@ -101,7 +101,7 @@ ST = { combat = false, dead = false, afk = false, rest = false, inst = false, it
 SECRET = {}
 FORBIDDEN = 0
 local function forbid() FORBIDDEN = FORBIDDEN + 1 return 1 end
-UnitHealth, UnitHealthMax, UnitPower, UnitPowerMax, UnitBuff, UnitDebuff, UnitAura, GetSpellCooldown, UnitPosition = forbid, forbid, forbid, forbid, forbid, forbid, forbid, forbid, forbid
+UnitHealth, UnitPower, UnitBuff, UnitDebuff, UnitAura, GetSpellCooldown, UnitPosition = forbid, forbid, forbid, forbid, forbid, forbid, forbid
 C_UnitAuras = { GetAuraDataByIndex = forbid, GetPlayerAuraBySpellID = forbid }
 C_Spell = { GetSpellCooldown = forbid }
 C_Map = { GetBestMapForUnit = function(u) return ST.map end, GetPlayerMapPosition = forbid }
@@ -858,7 +858,10 @@ loader('ElansHubShared = { flights = { legs = { ["Horde|11>22"] = { t = 61.5, n 
 check("generated shape loads", L.eval("ElansHubShared.flights.legs['Horde|11>22'].t") == 61.5)
 loader(open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read(), "SharedData.lua")
 check("the shipped default never wipes data already there", L.eval("ElansHubShared.flights ~= nil"))
-for api in ("UnitHealth", "UnitPower", "UnitBuff", "UnitDebuff", "UnitAura", "GetSpellCooldown", "UnitPosition", "GetPlayerMapPosition", "C_UnitAuras", "CombatLog"):
+# live health / power are never read; the character sheet's MAXIMUMS (UnitHealthMax / UnitPowerMax, gear.stats, Collect.lua only) are not live values
+import re
+check("source never reads live health / power (UnitHealth, UnitPower without Max)", not re.search(r"UnitHealth(?!Max)|UnitPower(?!Max|Type)", SRC))
+for api in ("UnitBuff", "UnitDebuff", "UnitAura", "GetSpellCooldown", "UnitPosition", "GetPlayerMapPosition", "C_UnitAuras", "CombatLog"):
     check("source never mentions " + api, api not in SRC)
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

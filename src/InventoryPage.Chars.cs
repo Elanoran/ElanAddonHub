@@ -22,11 +22,26 @@ namespace ElansAddonHub
 
         static readonly Dictionary<int, string> SlotNames = new Dictionary<int, string>
         {
-            [1] = "Head", [2] = "Neck", [3] = "Shoulders", [4] = "Shirt", [5] = "Chest", [6] = "Waist", [7] = "Legs", [8] = "Feet", [9] = "Wrists", [10] = "Hands",
+            [0] = "Ammo", [1] = "Head", [2] = "Neck", [3] = "Shoulders", [4] = "Shirt", [5] = "Chest", [6] = "Waist", [7] = "Legs", [8] = "Feet", [9] = "Wrists", [10] = "Hands",
             [11] = "Ring", [12] = "Ring", [13] = "Trinket", [14] = "Trinket", [15] = "Back", [16] = "Main hand", [17] = "Off hand", [18] = "Ranged", [19] = "Tabard",
         };
-        // like the paper doll: head to feet down the left, rings, trinkets and weapons after
-        static readonly int[] SlotOrder = { 1, 2, 3, 15, 5, 4, 19, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17, 18 };
+        // the in-game character sheet: head to wrists down the left, hands to trinkets down the right, weapons along the bottom (ammo after them when worn)
+        static readonly int[] DollLeft = { 1, 2, 3, 15, 5, 4, 19, 9 };
+        static readonly int[] DollRight = { 10, 6, 7, 8, 11, 12, 13, 14 };
+        static readonly int[] DollBottom = { 16, 17, 18, 0 };
+        const double DollSlot = 40;
+        // the game's own empty-slot pictures (Interface\PaperDoll\UI-PaperDoll-Slot-*), by FileDataID; read from the player's install like every icon
+        static readonly Dictionary<int, int> SlotArt = new Dictionary<int, int>
+        {
+            [0] = 136510, [1] = 136516, [2] = 136519, [3] = 136526, [4] = 136525, [5] = 136512, [6] = 136529, [7] = 136517, [8] = 136513, [9] = 136530, [10] = 136515,
+            [11] = 136514, [12] = 136514, [13] = 136528, [14] = 136528, [15] = 136509, [16] = 136518, [17] = 136524, [18] = 136520, [19] = 136527,
+        };
+        // what an empty slot says on its neutral tile when its picture is not (yet) available
+        static readonly Dictionary<int, string> SlotShort = new Dictionary<int, string>
+        {
+            [0] = "Ammo", [1] = "Head", [2] = "Neck", [3] = "Shldr", [4] = "Shirt", [5] = "Chest", [6] = "Waist", [7] = "Legs", [8] = "Feet", [9] = "Wrist", [10] = "Hands",
+            [11] = "Ring", [12] = "Ring", [13] = "Trinket", [14] = "Trinket", [15] = "Back", [16] = "Main", [17] = "Off", [18] = "Range", [19] = "Tabard",
+        };
 
         void RenderCharTab(InvChar c)
         {
@@ -211,47 +226,215 @@ namespace ElansAddonHub
             col.Children.Add(tiles);
         }
 
-        // ---- Gear
+        // ---- Gear: the in-game character sheet
+        readonly Dictionary<int, FrameworkElement> dollSlots = new Dictionary<int, FrameworkElement>();
+        WrapPanel gearWrap;
+        FrameworkElement gearDollCard, gearStatsCard;
+
+        static string IdentityLine(InvChar c)
+        {
+            var core = c.Core;
+            var race = !string.IsNullOrEmpty(core?.Race) ? core.Race : c.RaceFile;
+            var cls = !string.IsNullOrEmpty(core?.Class) ? core.Class : Pretty(c.Class);
+            return string.Join(" ", new[] { c.Level > 0 ? "Level " + c.Level : null, race, cls }.Where(s => !string.IsNullOrEmpty(s)));
+        }
+
+        // an empty slot: the game's own empty-slot picture when it can be read, else a neutral tile with the slot's short name
+        FrameworkElement EmptyDollSlot(int id, string slotName)
+        {
+            var bd = new Border { Width = DollSlot, Height = DollSlot, CornerRadius = new CornerRadius(4), Background = SlotBg, BorderThickness = new Thickness(1), BorderBrush = EmptyEdge, SnapsToDevicePixels = true };
+            var g = new Grid();
+            var label = new TextBlock { Text = SlotShort.TryGetValue(id, out var sh) ? sh : slotName, Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var fb = new Border { Child = label };
+            var img = new Image { Stretch = Stretch.Uniform, Opacity = 0.6, SnapsToDevicePixels = true };
+            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+            g.Children.Add(fb);
+            g.Children.Add(img);
+            if (SlotArt.TryGetValue(id, out var art)) BindIcon(art, img, fb);
+            bd.Child = g;
+            bd.ToolTip = new ToolTip { Style = (Style)FindResource("CardTip"), Content = new TextBlock { Text = slotName + " · empty", Style = TextStyle("Text.Secondary"), Foreground = Res("Brush.Text.Primary") } };
+            ToolTipService.SetInitialShowDelay(bd, 150);
+            return bd;
+        }
+
+        // one label / value line of the stats panel
+        FrameworkElement StatRow(string label, string value)
+        {
+            var g = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.Children.Add(new TextBlock { Text = label, Style = TextStyle("Text.Secondary"), TextTrimming = TextTrimming.CharacterEllipsis });
+            var v = new TextBlock { Text = value, Style = TextStyle("Text.Body"), Margin = new Thickness(12, 0, 0, 0), TextAlignment = TextAlignment.Right };
+            Grid.SetColumn(v, 1);
+            g.Children.Add(v);
+            charTabInfo.Add("gstat|" + label + "|" + value);
+            return g;
+        }
+
+        static string PowerLabel(string type)
+        {
+            switch ((type ?? "").ToUpperInvariant())
+            {
+                case "RAGE": return "Rage";
+                case "ENERGY": return "Energy";
+                case "FOCUS": return "Focus";
+                case "RUNIC_POWER": return "Runic power";
+                default: return "Mana";
+            }
+        }
+        static string Pct(double v) => v.ToString("0.##", CultureInfo.InvariantCulture) + "%";
+        static string Whole(double v) => Math.Round(v).ToString("N0");
+        static string Dmg(HubDamage d) => d == null || d.Min == null || d.Max == null ? null : Math.Round(d.Min.Value).ToString("0", CultureInfo.InvariantCulture) + " - " + Math.Round(d.Max.Value).ToString("0", CultureInfo.InvariantCulture);
+        static string Swing(HubDamage d) => d == null || d.Speed == null || d.Speed.Value <= 0 ? null : d.Speed.Value.ToString("0.00", CultureInfo.InvariantCulture);
+
+        // sections as in the game, only rows the saved data has
+        static List<KeyValuePair<string, List<KeyValuePair<string, string>>>> StatSections(HubStats s)
+        {
+            var res = new List<KeyValuePair<string, List<KeyValuePair<string, string>>>>();
+            void Sec(string title, params KeyValuePair<string, string>[] rows)
+            {
+                var have = rows.Where(r => r.Value != null).ToList();
+                if (have.Count > 0) res.Add(new KeyValuePair<string, List<KeyValuePair<string, string>>>(title, have));
+            }
+            KeyValuePair<string, string> R(string l, string v) => new KeyValuePair<string, string>(l, v);
+            string N(double? v) => v == null ? null : Whole(v.Value);
+            string P(double? v) => v == null ? null : Pct(v.Value);
+            Sec("General", R("Health", N(s.Health)), R(PowerLabel(s.PowerType), N(s.Power)), R("Movement speed", s.Speed == null ? null : Whole(s.Speed.Value) + "%"));
+            Sec("Primary attributes", R("Strength", N(s.Str)), R("Agility", N(s.Agi)), R("Stamina", N(s.Sta)), R("Intellect", N(s.Int)), R("Spirit", N(s.Spi)));
+            Sec("Weapons", R("Main hand damage", Dmg(s.Melee)), R("Main hand speed", Swing(s.Melee)), R("Ranged damage", Dmg(s.Ranged)), R("Ranged speed", Swing(s.Ranged)));
+            Sec("Attack", R("Attack power", N(s.Ap)), R("Ranged attack power", N(s.Rap)), R("Critical strike", P(s.Crit)), R("Ranged critical strike", P(s.Rcrit)));
+            Sec("Defense", R("Armor", N(s.Armor)), R("Dodge", P(s.Dodge)), R("Parry", P(s.Parry)), R("Block", P(s.Block)));
+            return res;
+        }
+
+        FrameworkElement BuildStatsCard(HubGearModule g)
+        {
+            var sp = new StackPanel();
+            var sections = g.Stats == null ? null : StatSections(g.Stats);
+            if (sections == null || sections.Count == 0)
+            {
+                sp.Children.Add(new TextBlock { Text = "Log in to update stats", Style = TextStyle("Text.Body"), TextWrapping = TextWrapping.Wrap });
+                var hint = Line("Stats are saved by Elan's Hub 1.13.0 or newer, once you log in to this character.", "Text.Secondary", null, 4);
+                hint.TextWrapping = TextWrapping.Wrap;
+                sp.Children.Add(hint);
+                charTabInfo.Add("statsnote|missing");
+            }
+            else
+            {
+                bool first = true;
+                foreach (var sec in sections)
+                {
+                    sp.Children.Add(Line(sec.Key, "Text.Caption", null, first ? 0 : 12));
+                    first = false;
+                    charTabInfo.Add("gsection|" + sec.Key);
+                    foreach (var row in sec.Value) sp.Children.Add(StatRow(row.Key, row.Value));
+                }
+            }
+            var card = CardBox(sp);
+            card.Width = 256;
+            card.VerticalAlignment = VerticalAlignment.Top;
+            card.Margin = new Thickness(0, 0, 12, 12);
+            return card;
+        }
+
         void RenderGear(InvChar c)
         {
+            dollSlots.Clear();
+            gearWrap = null; gearDollCard = gearStatsCard = null;
             if (!Gate(c, "gear", "gear", "No gear saved for " + c.Name + " yet")) return;
             var g = HubModules.GearOf(c.Hub);
             double avg = g.Ilvl > 0 ? g.Ilvl : (g.Slots.Values.Any(s => s.Il > 0) ? g.Slots.Values.Where(s => s.Il > 0).Average(s => s.Il) : 0);
             ViewInfo.Text = (avg > 0 ? "Average item level " + Fmt(avg) + " · " : "") + g.Slots.Count + (g.Slots.Count == 1 ? " item worn" : " items worn") + " · " + UpdatedLine(g.At, CharacterMerge.FromHub);
             charTabInfo.Add("gearinfo|" + (avg > 0 ? Fmt(avg) : "-") + "|" + g.Slots.Count);
             if (g.Slots.Count == 0) { ShowEmptyTab(c.Name + " wears nothing.", null); return; }
-            var col = Column(680);
-            var order = SlotOrder.Where(g.Slots.ContainsKey).Concat(g.Slots.Keys.Where(k => !SlotOrder.Contains(k))).ToList();
-            foreach (var id in order)
+
+            FrameworkElement SlotTile(int id)
             {
-                var it = g.Slots[id];
-                var name = CharacterMerge.NameFor(it, null);
                 var slotName = SlotNames.TryGetValue(id, out var sn) ? sn : "Slot " + id;
-                var row = new Grid();
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var slot = MakeSlot(new InvSlot { Slot = id, Id = it.I, Count = 1, Quality = it.Q, Icon = it.Ic, Name = name }, "Worn", slotName, id, c, false);
-                slot.Margin = new Thickness(0, 0, 12, 0);
-                row.Children.Add(slot);
-                var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-                names.Children.Add(Line(name, "Text.RowTitle", Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, it.Q))])));
-                ((TextBlock)names.Children[0]).TextTrimming = TextTrimming.CharacterEllipsis;
-                names.Children.Add(Line(slotName, "Text.Caption"));
-                Grid.SetColumn(names, 1);
-                row.Children.Add(names);
-                if (it.Il > 0)
+                FrameworkElement el;
+                if (g.Slots.TryGetValue(id, out var it))
                 {
-                    var il = Line("ilvl " + it.Il, "Text.Secondary");
-                    il.VerticalAlignment = VerticalAlignment.Center;
-                    il.Margin = new Thickness(12, 0, 0, 0);
-                    Grid.SetColumn(il, 2);
-                    row.Children.Add(il);
+                    var name = CharacterMerge.NameFor(it, null);
+                    el = MakeSlot(new InvSlot { Slot = id, Id = it.I, Count = 1, Quality = it.Q, Icon = it.Ic, Name = name }, "Worn", slotName, id, c, false, null, DollSlot, slotName + (it.Il > 0 ? " · Item level " + it.Il : ""));
+                    charTabInfo.Add("slot|" + id + "|" + slotName + "|" + name + "|" + it.Il);
                 }
-                var box = new Border { Background = Res("Brush.Surface1"), CornerRadius = (CornerRadius)FindResource("Radius.Card"), Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 4), Child = row };
-                col.Children.Add(box);
-                charTabInfo.Add("slot|" + id + "|" + slotName + "|" + name + "|" + it.Il);
+                else el = EmptyDollSlot(id, slotName);
+                el.Margin = new Thickness(0, 0, 0, 4);
+                dollSlots[id] = el;
+                return el;
             }
+
+            // the doll: name and level up top, slots left and right, the portrait between, weapons below
+            var doll = new Grid();
+            doll.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            doll.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
+            doll.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            for (int i = 0; i < DollLeft.Length + 1; i++) doll.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            for (int r = 0; r < DollLeft.Length; r++)
+            {
+                var l = SlotTile(DollLeft[r]);
+                Grid.SetColumn(l, 0); Grid.SetRow(l, r);
+                doll.Children.Add(l);
+                var rt = SlotTile(DollRight[r]);
+                Grid.SetColumn(rt, 2); Grid.SetRow(rt, r);
+                doll.Children.Add(rt);
+            }
+            var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 16, 0, 0) };
+            var portrait = Portrait(c, 80);
+            portrait.HorizontalAlignment = HorizontalAlignment.Center;
+            mid.Children.Add(portrait);
+            if (avg > 0)
+            {
+                var il = Line("Item level " + Fmt(avg), "Text.Secondary", null, 12);
+                il.HorizontalAlignment = HorizontalAlignment.Center;
+                mid.Children.Add(il);
+            }
+            var midBox = new Border { Background = Res("Brush.Surface2"), CornerRadius = (CornerRadius)FindResource("Radius.ControlLg"), Margin = new Thickness(12, 0, 12, 4), Child = mid };
+            Grid.SetColumn(midBox, 1); Grid.SetRowSpan(midBox, DollLeft.Length);
+            doll.Children.Add(midBox);
+            var bottom = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 8, 0, 0) };
+            foreach (var id in DollBottom.Where(i => i != 0 || g.Slots.ContainsKey(0)))
+            {
+                var t = SlotTile(id);
+                t.Margin = new Thickness(id == DollBottom[0] ? 0 : 8, 0, 0, 0);
+                bottom.Children.Add(t);
+            }
+            Grid.SetRow(bottom, DollLeft.Length); Grid.SetColumnSpan(bottom, 3);
+            doll.Children.Add(bottom);
+            foreach (var kv in DollPositions()) charTabInfo.Add("doll|" + kv);
+
+            var box = new StackPanel();
+            var head = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 16) };
+            head.Children.Add(new TextBlock { Text = c.Name, Style = TextStyle("Text.Section"), HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 240 });
+            var lineOne = IdentityLine(c);
+            if (lineOne.Length > 0)
+                head.Children.Add(new TextBlock { Text = lineOne, Style = TextStyle("Text.Secondary"), Foreground = ClassBrushOf(c.Class), HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 240, Margin = new Thickness(0, 2, 0, 0) });
+            charTabInfo.Add("dollhead|" + c.Name + "|" + lineOne);
+            box.Children.Add(head);
+            box.Children.Add(doll);
+            var dollCard = CardBox(box);
+            dollCard.VerticalAlignment = VerticalAlignment.Top;
+            dollCard.Margin = new Thickness(0, 0, 12, 12);
+
+            var wrap = new WrapPanel();
+            wrap.Children.Add(dollCard);
+            var statsCard = BuildStatsCard(g);
+            wrap.Children.Add(statsCard);
+            CharHost.Children.Add(wrap);
+            gearWrap = wrap; gearDollCard = dollCard; gearStatsCard = statsCard;
+        }
+
+        // "id|column|row" per slot (L, R, or B for the bottom row), read from the elements' real grid positions
+        List<string> DollPositions()
+        {
+            var res = new List<string>();
+            foreach (var kv in dollSlots.OrderBy(k => k.Key))
+            {
+                var el = kv.Value;
+                if (el.Parent is StackPanel sp) res.Add(kv.Key + "|B|" + Grid.GetRow(sp));
+                else res.Add(kv.Key + "|" + (Grid.GetColumn(el) == 0 ? "L" : "R") + "|" + Grid.GetRow(el));
+            }
+            return res;
         }
 
         // ---- Professions
@@ -466,6 +649,39 @@ namespace ElansAddonHub
         }
 
         // ---- self-test hooks
+        public List<string> DollLayoutForTest() => DollPositions();
+        // for an empty slot: "art" when its picture is on the tile, "label:<text>" when the neutral tile with its short name stands in
+        public string DollEmptyKindForTest(int id)
+        {
+            if (!dollSlots.TryGetValue(id, out var el) || !(el is Border b) || !(b.Child is Grid g) || g.Children.Count != 2) return null;
+            var fb = (Border)g.Children[0];
+            return fb.Visibility == Visibility.Collapsed ? "art" : "label:" + ((TextBlock)fb.Child).Text;
+        }
+        // the texts of a slot's tooltip, in order
+        public List<string> DollTipForTest(int id)
+        {
+            var res = new List<string>();
+            if (!dollSlots.TryGetValue(id, out var el) || !(el.ToolTip is ToolTip tip)) return res;
+            void Walk(object o)
+            {
+                if (o is TextBlock tb) res.Add(tb.Text);
+                else if (o is Panel p) foreach (var ch in p.Children) Walk(ch);
+                else if (o is Border bd) Walk(bd.Child);
+            }
+            Walk(tip.Content);
+            return res;
+        }
+        // measure the sheet at a width: are the stats beside the doll (false) or under it (true)? Restores the layout afterwards.
+        public bool GearStatsUnderDollForTest(double width)
+        {
+            if (gearWrap == null) return false;
+            gearWrap.Measure(new Size(width, double.PositiveInfinity));
+            gearWrap.Arrange(new Rect(0, 0, width, gearWrap.DesiredSize.Height));
+            var under = gearStatsCard.TranslatePoint(new Point(0, 0), gearWrap).Y >= gearDollCard.ActualHeight - 1;
+            gearWrap.InvalidateMeasure();
+            return under;
+        }
+        public FrameworkElement GearSheetForTest => gearWrap;
         public bool PetTabVisibleForTest => TabPet.Visibility == Visibility.Visible;
         public List<string> CharTabLinesForTest() => charTabInfo.ToList();
         public string TabForTest => tab;
