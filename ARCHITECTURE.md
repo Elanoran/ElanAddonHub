@@ -248,6 +248,8 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
 |---|---|---|---|
 | A. Items | Client `ItemSparse`/`Item` DB2 from CASC + revealed items in `Cache\ADB\enUS\DBCache.bin` | Outpost `Services\Db2`, `ItemData` | building |
 | A2. Spells, skills, professions | Client `SpellName`, `Spell`, `SpellEffect`, `SpellMisc`, `SkillLine`, `SkillLineAbility`, `ItemEffect`, `ItemSet` DB2 (recipes, what a skill/profession teaches, item use/equip effects) | Outpost `Services\Db2`, `SpellData` | planned |
+| A3. What the client has seen | The client's own caches of things the player met: `creaturecache.wdb` (Forever NPC names, levels, types), `gameobjectcache.wdb`, `questcache.wdb` — like revealed items, they fill the Forever-only gaps and are pooled in the Lodge | Outpost `Services\Db2` (WDB reader) | planned |
+| A4. Factions & reputation | Client `Faction` / `FactionTemplate` DB2 (which faction an NPC/vendor belongs to, reputation rewards) | Outpost `Services\Db2` | planned |
 | B. Maps & instances | Client `UiMap`, `UiMapArt*`, `UiMapAssignment`, `Map`, `AreaTable` DB2 + map tile textures (BLP) | Outpost `Services\Maps` | planned |
 | C. Classic baseline | Public cMaNGOS classic-db dump (GPL-3.0), downloaded by the user's Outpost on request, credited; creatures, spawns, creature/object loot with chances, vendors, quests | Outpost `Services\Atlas\Classic` | planned |
 | D. Observations | Elan's Toolkit records loot (incl. kills with no drop), object loot, vendor stock and prices, quest rewards, and items the client reveals; with zone + position | Toolkit → Hub module `atlas.obs` (account) | planned |
@@ -276,6 +278,21 @@ details) → the server adds counts per member (each member's totals capped and 
 per npc, the newest 2000 finds (with the member's Lodge display name — never character names), up to 50 spawn points
 per npc, and revealed items by id. `atlas.get { since }` → `atlas.data` (everything changed since). Members can switch
 sharing off; guests can read but not share. Feature can be disabled by the owner (`LODGE_ATLAS_ENABLED=0`).
+
+### Foundation the layers share
+- **One id scheme for links everywhere:** `item:123`, `npc:456`, `obj:789`, `quest:12`, `zone:1440` (uiMapID),
+  `instance:36` (map id), `spell:6150`, `skill:186`, `faction:76`. Atlas pages, searches, tooltips, map markers and Lodge
+  chat item chips all link with these, so any reference opens the right Atlas page.
+- **Every value knows where it came from:** `Forever` (client data / client cache / Lodge-observed) or
+  `Classic baseline`, plus counts behind percentages ("12% of 340 kills").
+- **Game build stamps:** every client-read layer records the game build it was read from. When the build changes, the
+  Outpost re-reads and keeps a short diff (new items, changed stats, new spells/NPCs) — the basis for a "What changed in
+  this patch" page.
+- **Local only, rebuildable:** all Atlas indexes live in the Outpost's data folder and can be deleted and rebuilt at any
+  time (the game install, the public download and the Lodge are the sources).
+- **Later on top (not part of tonight):** a Lodge wishlist ("I'm looking for …", notified when a member finds it, built on
+  finds); quest chains and who in the Lodge has done what; source lines in the in-game tooltip for tracked items (a
+  small slice through `SharedData.lua`); languages other than English (enUS only for now).
 
 Rules for the Atlas: read-only access to the game folder; downloads only on the user's click (size and licence shown);
 sharing observations is on by default per Lodge member and can be switched off; observations carry no character names
