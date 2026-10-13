@@ -226,9 +226,9 @@ only after the addon versions that wrote the old keys are no longer offered by t
 - ~~Installing or updating Elan's Hub replaces `SharedData.lua` with the empty shipped file until the next
   flight sync.~~ **Done (Outpost 2.43.0):** the Outpost rewrites it right after installing the Hub, from the last
   lodge data it received in this session (nothing is written if none arrived yet).
-- `ElansHub.lua` is parsed separately by four Outpost readers, and the folder walk is written four times.
-  One shared reader should parse it once per change. **Started (Outpost 2.43.0):** `SavedVarsFiles.For` and
-  `HubData` do this for `ElansHubData`; the existing readers are not moved over yet.
+- ~~`ElansHub.lua` is parsed separately by four Outpost readers, and the folder walk is written four times.~~
+  **Done (Outpost 2.46.0):** one folder walk (`SavedVarsFiles.For/Dirs`), one shared read, and `SavedVarsCache` parses
+  each saved file once per change for every reader.
 - BugTrap, Diag, Tip, Theme, Widgets, map pins and the secret helper are copied between addons (4 copies
   once Elan's Toolkit lands). **Planned:** ElansLib (see "Three shared layers").
 - Character race/sex are joined onto Bags characters by name, with a name-only fallback that can mix up

@@ -4,6 +4,7 @@ Newest first. `Tools/release.py` (addon repo) reads the sections newer than the 
 Keep one `## x.y.z` section per hub version.
 
 ## 2.46.0
+- Faster and sturdier reading of the game's saved files: one folder search for all readers, and each file is parsed once per change instead of up to six times; a half-written file keeps the last good data.
 - **Pet tab on the Characters page** for hunters: the pet that is with you (family icon or letter, name, level, loyalty, training points, abilities with ranks), your stabled pets below, and the abilities your hunter can teach at Beast Training. It needs Hunter Helper 1.26.5, which hands the pets to Elan's Hub; before that the tab says how to get them.
 
 ## 2.45.0
