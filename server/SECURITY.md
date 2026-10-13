@@ -211,6 +211,15 @@ longer lets a backslash into a name.
 - `LODGE_FILES_ENABLED=0` makes the server stop advertising `files` and answer 403; nothing is deleted.
 - Logs: who shared / deleted / rolled back and the size - never a file name, slot name, note or hash.
 
+## 2.15.0 (the Atlas pool)
+
+- Two messages: `atlas.share` (members and up) and `atlas.get` (anyone, guests included); answers `atlas.shared` and `atlas.data` (paged, about 200 KB). Feature `atlas` in the welcome and `/features`; `LODGE_ATLAS_ENABLED=0` stops advertising it and both messages answer `disabled`. Data is never deleted by switching it off.
+- Everything is validated server side in one place (`Atlas`): ids and counts are whole numbers in fixed ranges (a string, boolean, fraction or NaN is refused), coordinates 0..1, times after 2001 and at most one day ahead, find sources match `npc|obj|vendor|quest:N` or `fish`, names are cleaned like any text (NFKC, control characters out) and lose `" \ < > | [ ]`, cut at 80. An entry that fails is refused whole. Unknown fields are dropped; character names are never accepted or stored, finds carry the member's Lodge name.
+- Counting is cumulative and idempotent: per member and per field the server stores max(stored, received) and shows the sum over members, so repeats and replays cannot inflate anything. Plausibility bounds per member: kills per source <= 100000, all counters together <= 1000000, dropped events <= kills x 10, items per event <= 200, zones add up to <= kills, <= 6000 / 3000 / 400 sources, <= 700 finds, <= 10 points per npc. Honest limit: one member can still claim up to these bounds for himself; the pool is a convenience, not evidence.
+- Budgets: a per-identity `AtlasShare` bucket (burst 3, one token per 2 minutes) on top of the Control budget; a refused share counts towards the flood disconnect; `atlas.get` spends the Page budget. Frame limit 64 KB.
+- Storage: `<data>/atlas.json`, atomic (tmp, flush, rename; a tmp is used only if the main file is missing), 64 MB cap on load, every loaded value re-validated by the same rules, written at most every 30 s while busy, every 15 s housekeeping and at shutdown. It is inside the data folder, so `lodge-backup` includes it. Table bounds: 6000 vendors, 20000 quests, 8000 spawn npcs, 40000 revealed items, 2000 members.
+- Logs: counts only (`X shared atlas observations (N stored, M refused)`); never an id, name or number. Tested (unit tests with a captured logger).
+
 ## Tests
 
 ```bash

@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "lodgefiles", "hubdata", "readers", "characters", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "hubdata", "readers", "characters", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -53,6 +53,7 @@ namespace ElansAddonHub.Services
             ["calendar"] = "Lodge 2.11: raid / event calendar - agenda grouping, local time, month dots, form checks, sign-up buttons, 15-minute reminders, next-event line, chat card, hidden on older servers",
             ["wowevents"] = "WoW's own calendar in the Lodge calendar (companion addon data): parsing, local time, agenda 'until', month bands, switches, the strip above the chat (fixed height, no shift of the message list), nothing sent to the server",
             ["flightshare"] = "Lodge 2.13 shared flight times: Hunter Helper saved variables (validation, several accounts), upload batches (500 legs, once per 10 minutes, only what changed), merge answer, SharedData.lua (escaping, injection, structure, written only when the toc lists it, atomically), setting off, guests, older server = nothing",
+            ["atlaslodge"] = "Lodge 2.15 Atlas pool: the Hub module atlas.obs (parsing, validation of every field, too new, absent), deltas (signature per entry, batch limits and the 56 KB frame, revealed-items hook), the persisted upload record, upload batches (once per 3 minutes, only what changed), the aggregate (pages, validation of the answer, cache file, read API: drops, vendors, finds, spawns, revealed items), sharing off, guests, feature disabled, older server = nothing",
             ["lodgefiles"] = "Lodge 2.14 shared files: slots, upload (new slot, Replace = new version), the Updated badge, Save with the SHA-256 check and the Mark of the Web, damaged download, roll back and delete (with confirms), officer-only buttons (members and guests only save), blocked programs and zips holding programs, size limit, the notice above the chat, hidden on a server without the feature (HTTP goes to a fake of the server endpoints)",
             ["hubdata"] = "Elan's Hub data layer (Outpost side): ElansHubData parsing (core v1, account modules, a module newer than the app understands = TooNew without data, no ElansHubData, garbage), newest file wins, parse cache, locked file keeps the last good read, shared SavedVariables finder (links skipped)",
             ["video"] = "YouTube preview cards + in-app player",
@@ -79,7 +80,7 @@ namespace ElansAddonHub.Services
         {
             var r = new List<Tuple<Regex, string[]>>();
             void R(string rx, params string[] s) => r.Add(Tuple.Create(new Regex(rx, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), s));
-            var lodgeAll = new[] { "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "lodgefiles", "video", "viewer", "toasts", "presence", "profile", "round3" };
+            var lodgeAll = new[] { "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "video", "viewer", "toasts", "presence", "profile", "round3" };
 
             // ---- shared: everything depends on these
             R(@"^src/(App\.xaml(\.cs)?|MainWindow\.xaml(\.cs)?|MainWindow\.Others\.cs|MainWindow\.Welcome\.cs|ElansAddonHub\.csproj|Motion\.cs|Brand\.cs|SourceIcons\.cs|PillBase\.cs|WelcomeGuide\.cs)$", Star);
@@ -100,7 +101,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/(LodgeClient|AvatarArt|GamePresence|ItemLinks)\.cs$", lodgeAll);
             R(@"^src/Services/(VoiceEngine|VoiceEffects)\.cs$", "voice", "lodge");
             R(@"^src/Services/Sounds\.cs$", "toasts", "lodge", "voice");
-            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "lodgefiles");
+            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles");
             R(@"^src/MainWindow\.ProfileTest\.cs$", "profile");
             R(@"^src/MainWindow\.VideoTest\.cs$", "video");
             R(@"^src/(BrowserPage(\.xaml(\.cs)?)?|MainWindow\.BrowserTest|Services/(WebEngine|BrowserUrl|AdBlock))(\.cs)?$", "browser", "video");
@@ -116,6 +117,8 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.WowEventsTest\.cs$", "wowevents");
             R(@"^src/Services/WowCalendar\.cs$", "wowevents", "calendar", "lodge");
             R(@"^src/(MainWindow\.FlightShareTest|Services/FlightShare)\.cs$", "flightshare", "lodge");
+            R(@"^src/(MainWindow\.AtlasLodgeTest|Lodge/LodgeSession\.Atlas|Services/Atlas/AtlasObs)\.cs$", "atlaslodge", "lodge");
+            R(@"^src/Services/HubData\.cs$", "atlaslodge");
             R(@"^src/MainWindow\.FilesTest\.cs$", "lodgefiles", "lodge");
             R(@"^src/MainWindow\.DesignTest\.Calendar\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.DesignTest\.WowEvents\.cs$");   // screenshot-only design run
@@ -123,7 +126,7 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.DesignTest\.LodgeFun\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.ToastTest\.cs$", "toasts");
             R(@"^src/MainWindow\.DesignTest(\.Toasts)?\.cs$");     // screenshot-only design runs, not part of --selftest
-            R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites", "invites2", "lodgefiles");
+            R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites", "invites2", "lodgefiles", "atlaslodge");
             // ---- addons
             R(@"^src/(AddonCard|ThirdPartyCard)\.cs$", "addons", "thirdparty", "startup", "selfupdated");
             R(@"^src/(MainWindow\.SelfUpdatedTest|Services/(AddonLogo|DevVersion))\.cs$", "selfupdated", "thirdparty");
