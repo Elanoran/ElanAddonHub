@@ -85,6 +85,7 @@ namespace ElansAddonHub
             InventoryView.Init(() => settings.WowRoot);
             ElansAddonHub.Services.Db2.ItemData.WowRoot = () => settings.WowRoot;
             ElansAddonHub.Services.Db2.ItemData.Enabled = () => !settings.ItemDataOff;
+            ElansAddonHub.Services.AtlasObs.RevealedSource = new ElansAddonHub.Services.Db2.RevealedItemsSource();   // the items the game client revealed go to the Lodge through the existing Atlas sync
             if (ElansAddonHub.Services.Db2.ItemData.AutoStart) _ = Task.Delay(2500).ContinueWith(t => ElansAddonHub.Services.Db2.ItemData.Start());   // item data from the user's own game files, in the background
             ElansAddonHub.Services.SeenData.WowRoot = () => settings.WowRoot;   // what the client has seen (creature / object / quest caches), same switch as the item data
             ElansAddonHub.Services.SeenData.Enabled = () => !settings.ItemDataOff;
@@ -372,6 +373,7 @@ namespace ElansAddonHub
             if (Begin("itemdata")) { result += "\r\n" + await ItemDataTest(dir); End(); }
             if (Begin("seendata")) { result += "\r\n" + await SeenDataTest(dir); End(); }
             if (Begin("mapdata")) { result += "\r\n" + await MapDataTest(dir); End(); }
+            if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }

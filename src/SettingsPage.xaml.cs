@@ -129,6 +129,7 @@ namespace ElansAddonHub
             ElansAddonHub.Services.Db2.ItemData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Db2.ItemData.Changed += OnItemDataChanged;
             ElansAddonHub.Services.SeenData.Changed -= OnItemDataChanged; ElansAddonHub.Services.SeenData.Changed += OnItemDataChanged;
             ElansAddonHub.Services.Maps.MapData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Maps.MapData.Changed += OnItemDataChanged;
+            ElansAddonHub.Services.Db2.SpellData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Db2.SpellData.Changed += OnItemDataChanged;
             UpdateItemDataLine();
 
             ModeVa.IsChecked = !s.VoicePushToTalk;

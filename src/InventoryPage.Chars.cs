@@ -448,6 +448,7 @@ namespace ElansAddonHub
             var m = HubModules.ProfessionsOf(c.Hub);
             ViewInfo.Text = m.List.Count + (m.List.Count == 1 ? " skill" : " skills") + " · " + UpdatedLine(m.At, CharacterMerge.FromHub);
             if (m.List.Count == 0) { ShowEmptyTab(c.Name + " has no professions.", null); return; }
+            recipeLists.Clear(); recipeOpeners.Clear(); recipeData.Clear();
             var col = Column(680);
             void Group(string title, IEnumerable<HubProfession> list)
             {
@@ -479,6 +480,7 @@ namespace ElansAddonHub
                     var bar = Bar(p.Skill, 0, p.Max);
                     bar.Margin = new Thickness(0, 8, 0, 0);
                     right.Children.Add(bar);
+                    AddRecipeList(right, p);      // Atlas: the profession's recipes from the game files (only when they were read)
                     Grid.SetColumn(right, 1);
                     row.Children.Add(right);
                     col.Children.Add(new Border { Background = Res("Brush.Surface1"), CornerRadius = (CornerRadius)FindResource("Radius.Card"), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 0, 0, 4), Child = row });
