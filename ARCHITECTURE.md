@@ -158,7 +158,13 @@ Tabs are scanned only when the player views them; tabs not viewed keep their old
 into its own stored table, so one guild's update never drops another guild.
 
 ### `gear` v1 (Hub, per character)
-`{ at, ilvl = average item level or nil, slots = { [inventorySlotId] = { i, q, ic, il = itemLevel } }, links }`
+`{ at, ilvl = average item level or nil, slots = { [inventorySlotId] = { i, q, ic, il = itemLevel } }, links, stats = {...} or nil }`
+
+`stats` (additive from Hub 1.13.0, stays v1; the Outpost's paper-doll stats panel) holds only what the client returned readably out of combat,
+every field optional, secret values dropped: `health, power` (max), `powerType` ("MANA", "RAGE", ...), `str, agi, sta, int, spi` (effective),
+`armor` (effective), `ap, rap` (base + buffs), `melee = { min, max, speed }`, `ranged = { min, max, speed }`, `crit, rcrit, dodge, parry, block`
+(percent, 2 decimals), `speed` (movement, percent of base run speed). Refreshed with the gear scan, also on `UNIT_STATS`, `UNIT_MAXHEALTH`
+(player) and `PLAYER_LEVEL_UP`, through the same throttled scheduler. Only maximum health and power are read, never live values.
 
 ### `talents` v1 (Hub, per character)
 `{ at, api = "traits" | "classic", spent, unspent, nodes = { { id, r = rank, m = maxRank, x, y, s = spellId, n = name, ic = spell icon file id (optional) } } }`

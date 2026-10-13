@@ -60,10 +60,25 @@ namespace ElansAddonHub.Services
         public Dictionary<int, string> Links = new Dictionary<int, string>();
     }
 
-    // gear: { at, ilvl, slots = { [inventorySlotId] = { i, q, ic, il } }, links }
+    // damage range with swing speed (gear.stats.melee / .ranged); null fields = not saved
+    public class HubDamage
+    {
+        public double? Min, Max, Speed;
+    }
+
+    // gear.stats (additive, Hub 1.13.0): every field optional, null = the game did not return it readably
+    public class HubStats
+    {
+        public double? Health, Power, Str, Agi, Sta, Int, Spi, Armor, Ap, Rap, Crit, Rcrit, Dodge, Parry, Block, Speed;
+        public string PowerType;                       // "MANA", "RAGE", "ENERGY" ...
+        public HubDamage Melee, Ranged;
+    }
+
+    // gear: { at, ilvl, slots = { [inventorySlotId] = { i, q, ic, il } }, links, stats = { ... } }
     public class HubGearModule
     {
         public long At;
+        public HubStats Stats;                         // null for gear saved before Hub 1.13.0 (or when the game gave nothing)
         public double Ilvl;                            // 0 = not known
         public SortedDictionary<int, HubItem> Slots = new SortedDictionary<int, HubItem>();
         public Dictionary<int, string> Links = new Dictionary<int, string>();
@@ -300,7 +315,39 @@ namespace ElansAddonHub.Services
                 ItemsOf(slots, tmp, res.Links);
                 foreach (var kv in tmp) res.Slots[kv.Key] = kv.Value;
             }
+            res.Stats = StatsOf(d.Child("stats"));
             return res;
+        }
+
+        static double? Opt(Dictionary<string, object> d, string k, double lo = 0, double hi = 1e9)
+        {
+            if (d != null && d.TryGetValue(k, out var v) && v is double n && !double.IsNaN(n) && !double.IsInfinity(n)) return Math.Max(lo, Math.Min(hi, n));
+            return null;
+        }
+
+        static HubDamage DamageOf(Dictionary<string, object> d)
+        {
+            if (d == null) return null;
+            var r = new HubDamage { Min = Opt(d, "min"), Max = Opt(d, "max"), Speed = Opt(d, "speed", 0, 100) };
+            return r.Min == null && r.Max == null ? null : r;
+        }
+
+        // gear.stats; null when absent or empty
+        static HubStats StatsOf(Dictionary<string, object> s)
+        {
+            if (s == null) return null;
+            var r = new HubStats
+            {
+                Health = Opt(s, "health"), Power = Opt(s, "power"), PowerType = Short(s.Str("powerType")),
+                Str = Opt(s, "str"), Agi = Opt(s, "agi"), Sta = Opt(s, "sta"), Int = Opt(s, "int"), Spi = Opt(s, "spi"),
+                Armor = Opt(s, "armor"), Ap = Opt(s, "ap", -1e6, 1e6), Rap = Opt(s, "rap", -1e6, 1e6),
+                Crit = Opt(s, "crit", 0, 1000), Rcrit = Opt(s, "rcrit", 0, 1000), Dodge = Opt(s, "dodge", 0, 1000), Parry = Opt(s, "parry", 0, 1000), Block = Opt(s, "block", 0, 1000),
+                Speed = Opt(s, "speed", 0, 1000), Melee = DamageOf(s.Child("melee")), Ranged = DamageOf(s.Child("ranged")),
+            };
+            bool any = r.Health != null || r.Power != null || r.Str != null || r.Agi != null || r.Sta != null || r.Int != null || r.Spi != null || r.Armor != null
+                || r.Ap != null || r.Rap != null || r.Crit != null || r.Rcrit != null || r.Dodge != null || r.Parry != null || r.Block != null || r.Speed != null
+                || r.Melee != null || r.Ranged != null;
+            return any ? r : null;
         }
 
         // talents v1

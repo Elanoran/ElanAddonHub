@@ -142,10 +142,72 @@ local function scanBank()
 end
 
 -- ============================================================ gear
+-- Character sheet numbers for the Outpost's paper doll (gear.stats). Only what the client returns readably out of combat; every API is
+-- pcall'd through rd and a secret or missing value is simply left out, so stats may be partial or nil.
+local function round(v, places)
+  local m = 10 ^ (places or 0)
+  return math.floor(v * m + 0.5) / m
+end
+
+local function scanStats()
+  local s = {}
+  local function put(k, v, places)
+    v = num(v)
+    if v then s[k] = round(v, places) end
+  end
+  -- several return values at once: pcall, then clean each one
+  local function multi(fn, ...)
+    if type(fn) ~= "function" then return {} end
+    local r = { pcall(fn, ...) }
+    if not r[1] then return {} end
+    local out = {}
+    for i = 2, #r do out[i - 1] = clean(r[i]) end
+    return out
+  end
+  put("health", rd(UnitHealthMax, "player"))
+  put("power", rd(UnitPowerMax, "player"))
+  local pt = multi(UnitPowerType, "player")
+  local token = str(pt[2])
+  if token and token ~= "" then s.powerType = token end
+  local names = { "str", "agi", "sta", "int", "spi" }
+  for i, k in ipairs(names) do
+    local r = multi(UnitStat, "player", i)
+    put(k, num(r[2]) or num(r[1]))
+  end
+  local ar = multi(UnitArmor, "player")
+  put("armor", num(ar[2]) or num(ar[1]))
+  local function power(fn)
+    local r = multi(fn, "player")
+    local base, pos, neg = num(r[1]), num(r[2]) or 0, num(r[3]) or 0
+    return base and (base + pos + neg) or nil
+  end
+  put("ap", power(UnitAttackPower))
+  put("rap", power(UnitRangedAttackPower))
+  local md = multi(UnitDamage, "player")
+  local sp = multi(UnitAttackSpeed, "player")
+  if num(md[1]) and num(md[2]) then
+    s.melee = { min = round(num(md[1]), 0), max = round(num(md[2]), 0), speed = num(sp[1]) and round(num(sp[1]), 2) or nil }
+  end
+  local rd2 = multi(UnitRangedDamage, "player") -- speed, min, max
+  if num(rd2[2]) and num(rd2[3]) and num(rd2[2]) + num(rd2[3]) > 0 then
+    s.ranged = { min = round(num(rd2[2]), 0), max = round(num(rd2[3]), 0), speed = num(rd2[1]) and round(num(rd2[1]), 2) or nil }
+  end
+  put("crit", rd(GetCritChance), 2)
+  put("rcrit", rd(GetRangedCritChance), 2)
+  put("dodge", rd(GetDodgeChance), 2)
+  put("parry", rd(GetParryChance), 2)
+  put("block", rd(GetBlockChance), 2)
+  local sv = multi(GetUnitSpeed, "player")
+  local run = num(sv[2])
+  if run and run > 0 then s.speed = round(run / 7 * 100, 0) end -- % of the base run speed (7 yards a second)
+  if next(s) == nil then return nil end
+  return s
+end
+
 local function scanGear()
   local slots, links, count = {}, {}, 0
   local ilFn = (C_Item and C_Item.GetDetailedItemLevelInfo) or GetDetailedItemLevelInfo
-  for slot = 1, 19 do
+  for slot = 0, 19 do -- 0 = ammo (classic)
     local id = num(rd(GetInventoryItemID, "player", slot))
     if id then
       local link = str(rd(GetInventoryItemLink, "player", slot))
@@ -163,8 +225,9 @@ local function scanGear()
     local ok, a, b = pcall(GetAverageItemLevel)
     if ok then ilvl = num(b) or num(a) end
   end
-  if count == 0 and not ilvl then return end
-  publish("gear", { at = now(), ilvl = ilvl, slots = slots, links = links })
+  local stats = scanStats()
+  if count == 0 and not ilvl and not stats then return end
+  publish("gear", { at = now(), ilvl = ilvl, slots = slots, links = links, stats = stats })
 end
 
 -- ============================================================ talents
@@ -477,6 +540,10 @@ local HANDLERS = {
   GUILDBANK_UPDATE_MONEY = function() if guildOpen then request("guildbank") end end,
   GUILDBANK_UPDATE_TABS = function() if guildOpen then request("guildbank") end end,
   PLAYER_EQUIPMENT_CHANGED = function() request("gear") end,
+  -- unit events fire for every unit: only the player's own numbers matter (stats ride along with gear)
+  UNIT_STATS = function(unit) if unit == "player" then request("gear") end end,
+  UNIT_MAXHEALTH = function(unit) if unit == "player" then request("gear") end end,
+  PLAYER_LEVEL_UP = function() request("gear") end,
   TRAIT_CONFIG_UPDATED = function() request("talents") end,
   PLAYER_TALENT_UPDATE = function() request("talents") end,
   CHARACTER_POINTS_CHANGED = function() request("talents") end,

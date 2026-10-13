@@ -317,12 +317,12 @@ namespace ElansAddonHub
             return panel;
         }
 
-        FrameworkElement MakeSlot(InvSlot s, string where, string bagTitle, int slotNo, InvChar owner, bool guild, InvSpecial sp = null)
+        FrameworkElement MakeSlot(InvSlot s, string where, string bagTitle, int slotNo, InvChar owner, bool guild, InvSpecial sp = null, double size = SlotSize, string sub = null)
         {
             slotsDrawn++;
             var bd = new Border
             {
-                Width = SlotSize, Height = SlotSize, Margin = new Thickness(1.5), CornerRadius = new CornerRadius(4), Background = SlotBg,
+                Width = size, Height = size, Margin = new Thickness(1.5), CornerRadius = new CornerRadius(4), Background = SlotBg,
                 BorderThickness = new Thickness(s == null ? 1 : 1.5), BorderBrush = s == null ? EmptyEdge : EdgeFor(s.Quality), SnapsToDevicePixels = true,
             };
             if (sp != null)
@@ -364,7 +364,7 @@ namespace ElansAddonHub
                 foreach (var p in Outlined(text)) g.Children.Add(p);
             }
             bd.Child = g;
-            bd.ToolTip = SlotTip(s, where, bagTitle, slotNo, owner, guild);
+            bd.ToolTip = SlotTip(s, where, bagTitle, slotNo, owner, guild, sub);
             ToolTipService.SetInitialShowDelay(bd, 150);
             ToolTipService.SetShowDuration(bd, 30000);
             return bd;
@@ -395,10 +395,11 @@ namespace ElansAddonHub
         }
 
         // item tooltip: the name, what THIS character holds (bags / bank / total), the other characters, the guild bank and everything together
-        object SlotTip(InvSlot s, string where, string bagTitle, int slotNo, InvChar owner, bool guild)
+        object SlotTip(InvSlot s, string where, string bagTitle, int slotNo, InvChar owner, bool guild, string sub = null)
         {
             var sp = new StackPanel { MinWidth = 200 };
             sp.Children.Add(Line(s.Name, "Text.RowTitle", Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, s.Quality))])));
+            if (!string.IsNullOrEmpty(sub)) sp.Children.Add(Line(sub, "Text.Secondary", null, 2));
             var tip = InventoryReader.TipFor(index, s.Id, owner);
             if (tip.Me != null) sp.Children.Add(CountRow(tip.Me.Char.Name, ClassBrushOf(tip.Me.Char.Class), tip.Me.Detail, 8));
             if (tip.Others.Count > 0)

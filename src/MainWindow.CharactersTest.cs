@@ -48,6 +48,7 @@ namespace ElansAddonHub
                 + "[6]={n=8,k='bankbag',id=3001,ic=132593,s={" + It(2, 109, 1, 1, 133003) + "}}},\n"
                 + "links={" + Link(100, "Linen Cloth", "ffffff") + "," + Link(107, "Bright Gem", "1eff00") + "," + Link(109, "White Cloak", "ffffff") + "," + Link(3001, "Rare Satchel", "0070dd") + "}"));
             s.Append(Mod("gear", 1, now - 300, "at=" + (now - 300) + ",ilvl=58.5,slots={" + It(1, 200, 1, 3, 133003, 62) + "," + It(5, 201, 1, 2, 133003, 55) + "," + It(15, 109, 1, 1, 133003, 10) + "," + It(16, 202, 1, 4, 133633, 70) + "},"
+                + "stats={health=2400,power=1500,powerType='MANA',str=55,agi=130,sta=95,int=30,spi=41,armor=650,ap=120,rap=220,melee={min=40,max=62,speed=2.6},ranged={min=55,max=81,speed=3},crit=12.35,rcrit=8.1,dodge=5.55,parry=0,block=0,speed=100},"
                 + "links={" + Link(200, "Helm of Testing", "0070dd") + "," + Link(201, "Plain Chestguard", "1eff00") + "," + Link(202, "Epic Blade", "a335ee") + "," + Link(109, "White Cloak", "ffffff") + "}"));
             s.Append(Mod("talents", 1, now - 300, "at=" + (now - 300) + ",api='traits',spent=35,unspent=2,nodes={\n" + nodes + "}"));
             s.Append(Mod("professions", 1, now - 300, "at=" + (now - 300) + ",list={{name='Mining',skill=225,max=300,ic=136248,kind='primary'},{name='Herbalism',skill=300,max=300,ic=136065,kind='primary'},{name='Cooking',skill=75,max=150,ic=133971,kind='secondary'}}"));
@@ -82,6 +83,24 @@ namespace ElansAddonHub
             return s.ToString();
         }
 
+        // an element at its real size on the page background (not cut by the window)
+        void SnapshotSheet(System.Windows.FrameworkElement el, string file)
+        {
+            el.UpdateLayout();
+            int w = Math.Max(1, (int)Math.Ceiling(el.ActualWidth)), h = Math.Max(1, (int)Math.Ceiling(el.ActualHeight));
+            var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(w * 2, h * 2, 192, 192, System.Windows.Media.PixelFormats.Pbgra32);
+            var dv = new System.Windows.Media.DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                dc.DrawRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0F, 0x11, 0x13)), null, new System.Windows.Rect(0, 0, w, h));
+                dc.DrawRectangle(new System.Windows.Media.VisualBrush(el) { Stretch = System.Windows.Media.Stretch.None, AlignmentX = System.Windows.Media.AlignmentX.Left, AlignmentY = System.Windows.Media.AlignmentY.Top }, null, new System.Windows.Rect(0, 0, w, h));
+            }
+            bmp.Render(dv);
+            var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+            using (var fs = File.Create(file)) enc.Save(fs);
+        }
+
         async Task<string> CharactersTest(string dir)
         {
             var notes = new List<string>();
@@ -108,6 +127,9 @@ namespace ElansAddonHub
                 Check("bank v1: main bank (index -1) and a bank bag", bank != null && bank.Cont.Select(c => c.Index + ":" + c.K).SequenceEqual(new[] { "-1:bank", "6:bankbag" }) && bank.Cont[1].S[2].I == 109 && bank.Cont[1].BagName == "Rare Satchel");
                 var gear = HubModules.GearOf(elan);
                 Check("gear v1: average item level, 4 slots with item level, names from links", gear != null && Math.Abs(gear.Ilvl - 58.5) < 0.001 && gear.Slots.Keys.SequenceEqual(new[] { 1, 5, 15, 16 }) && gear.Slots[1].Il == 62 && gear.Slots[1].Name == "Helm of Testing" && gear.Slots[16].Q == 4);
+                var gs = gear?.Stats;
+                Check("gear stats v1 (additive): health, power, attributes, damage, percentages parsed; a gear module without stats has none", gs != null && gs.Health == 2400 && gs.PowerType == "MANA" && gs.Str == 55 && gs.Spi == 41 && gs.Armor == 650 && gs.Melee.Min == 40 && gs.Melee.Max == 62 && Math.Abs(gs.Melee.Speed.Value - 2.6) < 0.001
+                    && gs.Ranged.Max == 81 && Math.Abs(gs.Crit.Value - 12.35) < 0.001 && gs.Parry == 0 && gs.Speed == 100 && HubModules.GearOf(hub.Char("Forever-Measley")).Stats == null);
                 var tal = HubModules.TalentsOf(elan);
                 Check("talents v1: api, spent / unspent, 29 nodes (27 placed + a bogus one + one without a position)", tal != null && tal.Api == "traits" && tal.Spent == 35 && tal.Unspent == 2 && tal.Nodes.Count == 29 && tal.Nodes.Count(n => n.HasPos) == 28 && tal.Nodes[1].N == "Talent 2", tal == null ? "null" : tal.Nodes.Count.ToString());
                 Check("talents v1: ic parsed as a number (0 when missing or not a number)", tal != null && tal.Nodes[3].Ic == 135004 && tal.Nodes[7].Ic == 135008 && tal.Nodes[0].Ic == 0 && tal.Nodes[4].Ic == 0 && tal.Nodes.Count(n => n.Ic > 0) == 6, tal == null ? "null" : string.Join(",", tal.Nodes.Select(n => n.Ic)));
@@ -287,8 +309,25 @@ namespace ElansAddonHub
                 var gl = InventoryView.CharTabLinesForTest();
                 Check("gear: slots in paper-doll order (head, back, chest, main hand) with names and item levels", gl.Where(x => x.StartsWith("slot|")).SequenceEqual(new[] { "slot|1|Head|Helm of Testing|62", "slot|15|Back|White Cloak|10", "slot|5|Chest|Plain Chestguard|55", "slot|16|Main hand|Epic Blade|70" }), string.Join(" | ", gl));
                 Check("gear: average item level and slot count in the age line, with the source", gl.Contains("gearinfo|58.5|4") && InventoryView.ViewInfoForTest.StartsWith("Average item level 58.5 · 4 items worn · Updated ") && InventoryView.ViewInfoForTest.EndsWith("Elan's Hub"), InventoryView.ViewInfoForTest);
+                var dl = InventoryView.DollLayoutForTest();
+                Check("gear doll: left column head, neck, shoulders, back, chest, shirt, tabard, wrists (rows 0-7)", new[] { "1|L|0", "2|L|1", "3|L|2", "15|L|3", "5|L|4", "4|L|5", "19|L|6", "9|L|7" }.All(dl.Contains), string.Join(" ", dl));
+                Check("gear doll: right column hands, waist, legs, feet, rings, trinkets (rows 0-7)", new[] { "10|R|0", "6|R|1", "7|R|2", "8|R|3", "11|R|4", "12|R|5", "13|R|6", "14|R|7" }.All(dl.Contains), string.Join(" ", dl));
+                Check("gear doll: main hand, off hand, ranged along the bottom, no ammo tile when no ammo is worn; 19 slots in all but ammo", new[] { "16|B|8", "17|B|8", "18|B|8" }.All(dl.Contains) && !dl.Any(x => x.StartsWith("0|")) && dl.Count == 19, string.Join(" ", dl));
+                Check("gear doll: name and 'Level N Race Class' on top", gl.Contains("dollhead|Elan|Level 60 Orc Hunter"), string.Join(" | ", gl));
+                Check("gear doll: worn slots keep their names and item levels (4 filled), the other 15 are empty tiles that show the game's picture or a short label", gl.Count(x => x.StartsWith("slot|")) == 4
+                    && Enumerable.Range(1, 19).Where(i => !new[] { 1, 5, 15, 16 }.Contains(i)).All(i => { var k = InventoryView.DollEmptyKindForTest(i); return k == "art" || (k != null && k.StartsWith("label:") && k.Length > 6); }), string.Join(" ", Enumerable.Range(1, 19).Select(i => i + "=" + InventoryView.DollEmptyKindForTest(i))));
+                Check("gear stats: sections General, Primary attributes, Weapons, Attack, Defense in order", gl.Where(x => x.StartsWith("gsection|")).SequenceEqual(new[] { "gsection|General", "gsection|Primary attributes", "gsection|Weapons", "gsection|Attack", "gsection|Defense" }), string.Join(" | ", gl));
+                Check("gear stats: general and primary rows from the sample", new[] { "gstat|Health|" + 2400.ToString("N0"), "gstat|Mana|" + 1500.ToString("N0"), "gstat|Movement speed|100%", "gstat|Strength|55", "gstat|Agility|130", "gstat|Stamina|95", "gstat|Intellect|30", "gstat|Spirit|41" }.All(gl.Contains), string.Join(" | ", gl));
+                Check("gear stats: weapons, attack and defense rows (damage ranges, speeds, percentages without garbage)", new[] { "gstat|Main hand damage|40 - 62", "gstat|Main hand speed|2.60", "gstat|Ranged damage|55 - 81", "gstat|Ranged speed|3.00", "gstat|Attack power|120", "gstat|Ranged attack power|220",
+                    "gstat|Critical strike|12.35%", "gstat|Ranged critical strike|8.1%", "gstat|Armor|650", "gstat|Dodge|5.55%", "gstat|Parry|0%", "gstat|Block|0%" }.All(gl.Contains) && !gl.Any(x => x.StartsWith("gstat|") && (x.Contains("NaN") || x.EndsWith("|—") || x.EndsWith("|"))) && !gl.Contains("statsnote|missing"), string.Join(" | ", gl));
+                var tipOk = InventoryView.DollTipForTest(15);
+                Check("gear doll hover: item name, slot and item level, then this character's count line (the cloak is worn and in the bank)", tipOk.Count >= 3 && tipOk[0] == "White Cloak" && tipOk[1] == "Back · Item level 10" && tipOk.Any(t => t.Contains("Elan")), string.Join(" | ", tipOk));
+                var emptyTip = InventoryView.DollTipForTest(2);
+                Check("gear doll hover on an empty slot names the slot", emptyTip.SequenceEqual(new[] { "Neck · empty" }), string.Join(" | ", emptyTip));
+                Check("gear doll layout: wide = stats beside the doll, narrow = stats under it", !InventoryView.GearStatsUnderDollForTest(900) && InventoryView.GearStatsUnderDollForTest(400));
                 await Task.Delay(300);
-                Snapshot(P("20-characters-gear.png"));
+                Snapshot(P("20-characters-gear-window.png"));
+                SnapshotSheet(InventoryView.GearSheetForTest, P("20-characters-gear.png")); // the whole sheet, not cut by the window
 
                 InventoryView.SelectTabForTest("talents");
                 var tl = InventoryView.CharTabLinesForTest();
@@ -316,6 +355,9 @@ namespace ElansAddonHub
                 Snapshot(P("20-characters-pet.png"));
                 InventoryView.FilterForTest("Forever-Measley");
                 Check("Pet tab is hidden for a Paladin, and the page falls back to Overview", !InventoryView.PetTabVisibleForTest && InventoryView.TabForTest == "overview", InventoryView.TabForTest);
+                InventoryView.SelectTabForTest("gear");
+                var ol = InventoryView.CharTabLinesForTest();
+                Check("gear without stats (saved before Hub 1.13.0): the doll still shows, the stats panel says 'Log in to update stats'", ol.Contains("statsnote|missing") && !ol.Any(x => x.StartsWith("gstat|")) && ol.Contains("slot|1|Head|Leather Cap|20") && ol.Contains("dollhead|Measley|Level 22 Human Paladin"), string.Join(" | ", ol));
                 InventoryView.FilterForTest("Forever-Elan");
                 Check("back on the hunter the tab is there again", InventoryView.PetTabVisibleForTest);
 
