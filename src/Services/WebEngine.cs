@@ -12,7 +12,8 @@ namespace ElansAddonHub.Services
     // Which embedded WebView2 profile a control belongs to. Each has its own user-data folder (and so its own browser process group):
     //   Player  = the Lodge video player      <data>\webview2           (always InPrivate)
     //   Browser = the Browser page            <data>\webview2\browser   (InPrivate unless "Remember logins")
-    public enum WebProfile { Player, Browser }
+    //   WorldMap = the Atlas world map page   <data>\webview2\worldmap  (always InPrivate; only ever shows its own virtual host)
+    public enum WebProfile { Player, Browser, WorldMap }
 
     // Everything the two WebView2 users share: the embedded loader, the environments, creating a control into one, and the
     // hardening that applies to every page we embed. Nothing here talks to the network by itself.
@@ -20,10 +21,10 @@ namespace ElansAddonHub.Services
     {
         static readonly object gate = new object();
         static bool loaderReady;
-        static Task<CoreWebView2Environment> playerEnv, browserEnv;
+        static Task<CoreWebView2Environment> playerEnv, browserEnv, worldEnv;
 
         public static string DataFolder => Path.Combine(Util.DataDir, "webview2");   // never the exe folder
-        public static string UserDataFolder(WebProfile p) => p == WebProfile.Browser ? Path.Combine(DataFolder, "browser") : DataFolder;
+        public static string UserDataFolder(WebProfile p) => p == WebProfile.Browser ? Path.Combine(DataFolder, "browser") : p == WebProfile.WorldMap ? Path.Combine(DataFolder, "worldmap") : DataFolder;
 
         // ---------------------------------------------------------------- loader / environment
 
@@ -73,6 +74,7 @@ namespace ElansAddonHub.Services
             lock (gate)
             {
                 if (p == WebProfile.Browser) return browserEnv ?? (browserEnv = Make(p));
+                if (p == WebProfile.WorldMap) return worldEnv ?? (worldEnv = Make(p));
                 return playerEnv ?? (playerEnv = Make(p));
             }
         }
@@ -90,7 +92,7 @@ namespace ElansAddonHub.Services
             }
             catch
             {
-                lock (gate) { if (p == WebProfile.Browser) browserEnv = null; else playerEnv = null; }
+                lock (gate) { if (p == WebProfile.Browser) browserEnv = null; else if (p == WebProfile.WorldMap) worldEnv = null; else playerEnv = null; }
                 throw;
             }
         }

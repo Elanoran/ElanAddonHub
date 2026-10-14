@@ -314,6 +314,9 @@ namespace ElansAddonHub.Lodge
         public AtlasObs.Vendor Vendor(int npcId) { return vendors.TryGetValue(npcId, out var v) ? v : null; }
         public AtlasObs.Quest Quest(int questId) { return quests.TryGetValue(questId, out var q) ? q : null; }
         public IReadOnlyList<AtlasObs.Find> AllFinds => finds;
+        // every vendor / observed spawn point the lodge has (the world map's layers)
+        public IEnumerable<KeyValuePair<int, AtlasObs.Vendor>> AllVendors => vendors;
+        public IEnumerable<KeyValuePair<int, List<AtlasObs.Spot>>> AllSpawns => spawns;
     }
 
     // The Atlas pool (Lodge server 2.15, feature "atlas"). The Outpost reads Elan's Toolkit's `atlas.obs` Hub module, uploads what changed (cumulative per-entry

@@ -4,3 +4,5 @@
 server/deploy/lodge-admin text eol=lf
 addon/**/*.lua text eol=lf
 addon/**/*.toc text eol=crlf
+src/WorldMap/leaflet.js -text
+src/WorldMap/leaflet.css -text

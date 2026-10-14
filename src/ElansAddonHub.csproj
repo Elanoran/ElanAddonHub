@@ -33,6 +33,16 @@
     <Resource Include="Assets\hero.jpg" />
   </ItemGroup>
 
+  <!-- the world map page (Atlas): Leaflet 1.9.4 (BSD-2-Clause, licence file included) and the page itself ride inside the exe; they are written to the data folder (atlas/worldmap/_page) and served from a private virtual host, never from the internet -->
+  <ItemGroup>
+    <EmbeddedResource Include="WorldMap\index.html" LogicalName="WorldMap.index.html" />
+    <EmbeddedResource Include="WorldMap\worldmap.js" LogicalName="WorldMap.worldmap.js" />
+    <EmbeddedResource Include="WorldMap\worldmap.css" LogicalName="WorldMap.worldmap.css" />
+    <EmbeddedResource Include="WorldMap\leaflet.js" LogicalName="WorldMap.leaflet.js" />
+    <EmbeddedResource Include="WorldMap\leaflet.css" LogicalName="WorldMap.leaflet.css" />
+    <EmbeddedResource Include="WorldMap\LICENSE-leaflet.txt" LogicalName="WorldMap.LICENSE-leaflet.txt" />
+  </ItemGroup>
+
   <!-- voice: NAudio (mic/speakers) + Concentus (Opus codec, pure C#); Costura packs them into the exe -->
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />

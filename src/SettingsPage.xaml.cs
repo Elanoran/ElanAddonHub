@@ -128,6 +128,7 @@ namespace ElansAddonHub
             ArmoryShareBox.IsChecked = s.ArmoryShareOn;
             ClassicAutoBox.IsChecked = !s.ClassicFromLodgeOff;
             ItemDataBox.IsChecked = !s.ItemDataOff;
+            UpdateWorldMapLine();
             ElansAddonHub.Services.Db2.ItemData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Db2.ItemData.Changed += OnItemDataChanged;
             ElansAddonHub.Services.SeenData.Changed -= OnItemDataChanged; ElansAddonHub.Services.SeenData.Changed += OnItemDataChanged;
             ElansAddonHub.Services.Maps.MapData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Maps.MapData.Changed += OnItemDataChanged;
@@ -262,6 +263,7 @@ namespace ElansAddonHub
 
             FolderText.Text = settings.WowRoot ?? "Not found - press Change";
             UpdateItemDataLine();
+            UpdateWorldMapLine();
             CheckText.Text = host.CheckStatus;
             LodgeAddress.Text = string.IsNullOrEmpty(settings.LodgeUrl) ? "Not connected to a lodge" : settings.LodgeUrl;
             LodgeWho.Text = session.Me == null ? (session.Connected ? session.StatusText : "Join one from the Lodge tab")
@@ -372,6 +374,23 @@ namespace ElansAddonHub
         void ChangeFolder_Click(object sender, RoutedEventArgs e) { host.PickWowFolder(); ElansAddonHub.Services.Db2.ItemData.Start(); ElansAddonHub.Services.SeenData.Start(); ElansAddonHub.Services.Maps.MapData.Start(); RefreshSection(); }
 
         // "Item data: read from your WoW installation (N items, M revealed)" under the Game data switch
+        // "World map pictures: 2 continents, 212 MB." under the Game data switch, and the button that deletes them (they are made again on the next visit)
+        void UpdateWorldMapLine()
+        {
+            var busy = false;
+            try { busy = ElansAddonHub.Services.WorldMap.WorldMapService.StateOf(0)?.Running == true || ElansAddonHub.Services.WorldMap.WorldMapService.StateOf(1)?.Running == true; } catch (Exception) { }
+            WorldMapCacheRow.Tag = ElansAddonHub.Services.WorldMap.WorldMapCache.StatusLine() + " Made from your game files, read-only; nothing is uploaded.";
+            ClearWorldMapButton.IsEnabled = !busy && ElansAddonHub.Services.WorldMap.WorldMapCache.SizeBytes() > 0;
+        }
+
+        void ClearWorldMap_Click(object sender, RoutedEventArgs e)
+        {
+            ElansAddonHub.Services.WorldMap.WorldMapService.CancelAll();
+            ElansAddonHub.Services.WorldMap.WorldMapCache.Clear();
+            ElansAddonHub.Services.WorldMap.WorldMapService.ResetForTest();
+            UpdateWorldMapLine();
+        }
+
         void UpdateItemDataLine() => ItemDataRow.Tag = ElansAddonHub.Services.Db2.ItemData.StatusLine + ElansAddonHub.Services.Maps.MapData.StatusSuffix + ". " + ElansAddonHub.Services.SeenData.StatusLine + ". Read-only, on this PC: nothing is uploaded and nothing is written to the WoW folder.";
         void OnItemDataChanged() => Dispatcher.BeginInvoke(new Action(UpdateItemDataLine));
 

@@ -140,7 +140,7 @@ namespace ElansAddonHub
         void ReleaseMaps()
         {
             foreach (var m in maps) { try { m.ClearMarkers(); } catch { } }
-            maps.Clear(); zonePicks.Clear(); routeButtons.Clear(); routePanels.Clear();
+            maps.Clear(); zonePicks.Clear(); routeButtons.Clear(); worldMapButtons.Clear(); routePanels.Clear();
         }
 
         // ============================================================================================================================ a page
@@ -417,10 +417,28 @@ namespace ElansAddonHub
                 var pend = m.Kind == "zone" && AtlasIds.TryParse(m.Id, out _, out var zid) ? GatherNodes.TakePending(zid) : null;
                 if (pend != null) { rui.Preselect = pend.Objects; Defer(() => rui.Toggle(false)); }
             }
+            // "Show on world map": the same places on the whole continent (not for an instance or a battleground: they have no continent)
+            {
+                string WorldMapIdNow()
+                {
+                    int ui = map.UiMapId > 0 ? map.UiMapId : plan.ShowZone > 0 ? plan.ShowZone : (plan.Best ?? plan.Zones.FirstOrDefault())?.UiMapId ?? 0;
+                    var z = plan.Zones.FirstOrDefault(x => x.UiMapId == ui);
+                    return ElansAddonHub.Services.WorldMap.WorldMapIds.ShowOnMapId(MapData.Index, ui, m.Kind == "zone" ? null : z?.Markers);
+                }
+                if (AtlasCategories.Find(ElansAddonHub.Services.WorldMap.WorldMapIds.Category) != null && WorldMapIdNow() != null)
+                {
+                    head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    var wb = GhostButton("Show on world map", () => { var id = WorldMapIdNow(); if (id != null) _ = Open(id); }, "Open the world map of the continent, centred here");
+                    wb.Margin = new Thickness(8, 0, 0, 0); wb.Tag = "worldmap";
+                    Grid.SetColumn(wb, head.ColumnDefinitions.Count - 1); head.Children.Add(wb);
+                    worldMapButtons.Add(wb);
+                }
+            }
             AddMapExtras(sp, plan);
             return Card(sp);
         }
 
+        public readonly List<Button> worldMapButtons = new List<Button>();
         public readonly List<ComboBox> zonePicks = new List<ComboBox>();
         public readonly List<Button> routeButtons = new List<Button>();
 

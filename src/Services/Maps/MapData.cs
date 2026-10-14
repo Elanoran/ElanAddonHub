@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services.Maps
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 2;          // (2: explored-area overlays) bump when the parsing or the saved file changes meaning
+        public const int FormatVersion = 3;          // (3: map WDT file ids, flight tables; 2: explored-area overlays) bump when the parsing or the saved file changes meaning
 
         // ---- hooks (the same shape as ItemData's)
         public static Func<string> WowRoot = () => null;
@@ -222,7 +222,7 @@ namespace ElansAddonHub.Services.Maps
                 using (var w = new BinaryWriter(mem, Encoding.UTF8, true))
                 {
                     w.Write(Magic); w.Write(MapData.FormatVersion); w.Write(build ?? "");
-                    w.Write(set.HasArt); w.Write(set.HasAssignments); w.Write(set.HasMaps); w.Write(set.HasFloors); w.Write(set.HasAreas); w.Write(set.HasOverlays); w.Write(set.OverlayProblem ?? ""); w.Write(set.LockedMapRows);
+                    w.Write(set.HasArt); w.Write(set.HasAssignments); w.Write(set.HasMaps); w.Write(set.HasFloors); w.Write(set.HasAreas); w.Write(set.HasOverlays); w.Write(set.HasTaxi); w.Write(set.OverlayProblem ?? ""); w.Write(set.LockedMapRows);
                     w.Write(set.Notes.Count); foreach (var n in set.Notes) w.Write(n);
                     w.Write(set.UiMaps.Count);
                     foreach (var m in set.UiMaps) { w.Write(m.Id); w.Write(m.Name ?? ""); w.Write(m.ParentId); w.Write(m.Flags); w.Write(m.System); w.Write(m.Type); }
@@ -252,11 +252,17 @@ namespace ElansAddonHub.Services.Maps
                         w.Write(a.MinX); w.Write(a.MinY); w.Write(a.MinZ); w.Write(a.MaxX); w.Write(a.MaxY); w.Write(a.MaxZ);
                     }
                     w.Write(set.Maps.Count);
-                    foreach (var m in set.Maps) { w.Write(m.Id); w.Write(m.Directory ?? ""); w.Write(m.Name ?? ""); w.Write(m.InstanceType); w.Write(m.MapType); w.Write(m.Expansion); w.Write(m.MaxPlayers); w.Write(m.AreaTableId); }
+                    foreach (var m in set.Maps) { w.Write(m.Id); w.Write(m.Directory ?? ""); w.Write(m.Name ?? ""); w.Write(m.InstanceType); w.Write(m.MapType); w.Write(m.Expansion); w.Write(m.MaxPlayers); w.Write(m.AreaTableId); w.Write(m.WdtFileDataId); }
                     w.Write(set.Floors.Count);
                     foreach (var f in set.Floors) { w.Write(f.GroupId); w.Write(f.UiMapId); w.Write(f.FloorIndex); w.Write(f.RelativeHeight); w.Write(f.Name ?? ""); }
                     w.Write(set.Areas.Count);
                     foreach (var a in set.Areas) { w.Write(a.Id); w.Write(a.Name ?? ""); w.Write(a.ParentId); w.Write(a.ContinentId); }
+                    w.Write(set.TaxiNodes.Count);
+                    foreach (var n in set.TaxiNodes) { w.Write(n.Id); w.Write(n.MapId); w.Write(n.Flags); w.Write(n.MountHorde); w.Write(n.MountAlliance); w.Write(n.X); w.Write(n.Y); w.Write(n.Z); w.Write(n.Name ?? ""); }
+                    w.Write(set.TaxiPaths.Count);
+                    foreach (var p in set.TaxiPaths) { w.Write(p.Id); w.Write(p.FromNode); w.Write(p.ToNode); w.Write(p.Cost); }
+                    w.Write(set.TaxiPoints.Count);
+                    foreach (var q in set.TaxiPoints) { w.Write(q.PathId); w.Write(q.Index); w.Write(q.MapId); w.Write(q.X); w.Write(q.Y); w.Write(q.Z); }
                 }
                 using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var gz = new GZipStream(fs, CompressionMode.Compress))
@@ -285,7 +291,7 @@ namespace ElansAddonHub.Services.Maps
                     var s = new Saved { Format = r.ReadInt32(), Build = r.ReadString(), Set = new MapSet() };
                     if (s.Format != MapData.FormatVersion) return null;
                     var set = s.Set;
-                    set.HasArt = r.ReadBoolean(); set.HasAssignments = r.ReadBoolean(); set.HasMaps = r.ReadBoolean(); set.HasFloors = r.ReadBoolean(); set.HasAreas = r.ReadBoolean(); set.HasOverlays = r.ReadBoolean(); var op = r.ReadString(); set.OverlayProblem = op.Length == 0 ? null : op;
+                    set.HasArt = r.ReadBoolean(); set.HasAssignments = r.ReadBoolean(); set.HasMaps = r.ReadBoolean(); set.HasFloors = r.ReadBoolean(); set.HasAreas = r.ReadBoolean(); set.HasOverlays = r.ReadBoolean(); set.HasTaxi = r.ReadBoolean(); var op = r.ReadString(); set.OverlayProblem = op.Length == 0 ? null : op;
                     set.LockedMapRows = r.ReadInt32();
                     int n = Count(r, 1000); for (int i = 0; i < n; i++) set.Notes.Add(r.ReadString());
                     n = Count(r, 100000);
@@ -318,11 +324,17 @@ namespace ElansAddonHub.Services.Maps
                             MinX = r.ReadSingle(), MinY = r.ReadSingle(), MinZ = r.ReadSingle(), MaxX = r.ReadSingle(), MaxY = r.ReadSingle(), MaxZ = r.ReadSingle(),
                         });
                     n = Count(r, 1000000);
-                    for (int i = 0; i < n; i++) set.Maps.Add(new GameMapInfo { Id = r.ReadInt32(), Directory = r.ReadString(), Name = r.ReadString(), InstanceType = r.ReadInt32(), MapType = r.ReadInt32(), Expansion = r.ReadInt32(), MaxPlayers = r.ReadInt32(), AreaTableId = r.ReadInt32() });
+                    for (int i = 0; i < n; i++) set.Maps.Add(new GameMapInfo { Id = r.ReadInt32(), Directory = r.ReadString(), Name = r.ReadString(), InstanceType = r.ReadInt32(), MapType = r.ReadInt32(), Expansion = r.ReadInt32(), MaxPlayers = r.ReadInt32(), AreaTableId = r.ReadInt32(), WdtFileDataId = r.ReadInt32() });
                     n = Count(r, 1000000);
                     for (int i = 0; i < n; i++) set.Floors.Add(new FloorMember { GroupId = r.ReadInt32(), UiMapId = r.ReadInt32(), FloorIndex = r.ReadInt32(), RelativeHeight = r.ReadInt32(), Name = r.ReadString() });
                     n = Count(r, 2000000);
                     for (int i = 0; i < n; i++) set.Areas.Add(new AreaInfo { Id = r.ReadInt32(), Name = r.ReadString(), ParentId = r.ReadInt32(), ContinentId = r.ReadInt32() });
+                    n = Count(r, 100000);
+                    for (int i = 0; i < n; i++) set.TaxiNodes.Add(new TaxiNodeInfo { Id = r.ReadInt32(), MapId = r.ReadInt32(), Flags = r.ReadInt32(), MountHorde = r.ReadInt32(), MountAlliance = r.ReadInt32(), X = r.ReadDouble(), Y = r.ReadDouble(), Z = r.ReadDouble(), Name = r.ReadString() });
+                    n = Count(r, 100000);
+                    for (int i = 0; i < n; i++) set.TaxiPaths.Add(new TaxiPathInfo { Id = r.ReadInt32(), FromNode = r.ReadInt32(), ToNode = r.ReadInt32(), Cost = r.ReadInt32() });
+                    n = Count(r, 2000000);
+                    for (int i = 0; i < n; i++) set.TaxiPoints.Add(new TaxiPoint { PathId = r.ReadInt32(), Index = r.ReadInt32(), MapId = r.ReadInt32(), X = r.ReadDouble(), Y = r.ReadDouble(), Z = r.ReadDouble() });
                     return s;
                 }
             }

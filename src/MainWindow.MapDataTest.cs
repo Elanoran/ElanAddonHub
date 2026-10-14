@@ -264,7 +264,7 @@ namespace ElansAddonHub
                     && Math.Abs(d1.MaxY - -1962.5) < 0.01 && d1.UiMaxX == 1f, withAsg.Assignments.Count + " " + (d1 == null ? "-" : d1.MinX + " " + d1.MaxY));
                 var badAsg = MapTables.Parse(RawWith(Raw("UiMap", UiMapTable()), Raw("UiMapAssignment", AssignmentTable().Take(400).ToArray())));
                 Check("parse: a broken optional table costs only that part (no world positions), the tree stays", badAsg.Ok && badAsg.UiMaps.Count == 3 && !badAsg.HasAssignments && badAsg.Notes.Any(n => n.Contains("UiMapAssignment")), string.Join(";", badAsg.Notes));
-                Check("layout registry: eleven tables (nine + the two overlay tables), each with a FileDataID, a table hash and a layout; all different", MapTables.All.Length == 11 && MapTables.All.Select(t => t.FileDataId).Distinct().Count() == 11 && MapTables.WorldMapOverlay.Knows(0x9A196494) && MapTables.WorldMapOverlayTile.Knows(0x2C843422) && MapTables.All.All(t => t.Layouts.Length > 0 && t.TableHash != 0) && MapTables.UiMap.Knows(0xDB51D55F) && !MapTables.UiMap.Knows(0xDEADBEEF));
+                Check("layout registry: fourteen tables (nine + the two overlay tables + the three flight tables), each with a FileDataID, a table hash and a layout; all different", MapTables.All.Length == 14 && MapTables.All.Select(t => t.FileDataId).Distinct().Count() == 14 && MapTables.All.Select(t => t.TableHash).Distinct().Count() == 14 && MapTables.WorldMapOverlay.Knows(0x9A196494) && MapTables.WorldMapOverlayTile.Knows(0x2C843422) && MapTables.All.All(t => t.Layouts.Length > 0 && t.TableHash != 0) && MapTables.UiMap.Knows(0xDB51D55F) && !MapTables.UiMap.Knows(0xDEADBEEF));
 
                 // ---- the coordinate system on the invented world
                 var set = SynthMapSet();
@@ -405,8 +405,8 @@ namespace ElansAddonHub
                     MapIndexFile.TryWrite(ovIdxPath, "wow_classic_beta|1.60.1.70338|abc", ovSet);
                     var ovBack = MapIndexFile.TryRead(ovIdxPath);
                     var b100 = ovBack?.Set.Arts.FirstOrDefault(a => a.Id == 100);
-                    Check("index file: the overlays (and the reason when there are none) survive the saved copy; the format version is 2 so a copy from before is read again from the game files",
-                        b100 != null && b100.Overlays.Length == 2 && b100.Overlays[0].OffsetY == -40 && b100.Overlays[0].Tiles.Length == 2 && b100.Overlays[0].Tiles[1].FileDataId == 7002 && ovBack.Set.HasOverlays && MapData.FormatVersion == 2);
+                    Check("index file: the overlays (and the reason when there are none) survive the saved copy; the format version is 3 (flight tables, map WDT ids) so a copy from before is read again from the game files",
+                        b100 != null && b100.Overlays.Length == 2 && b100.Overlays[0].OffsetY == -40 && b100.Overlays[0].Tiles.Length == 2 && b100.Overlays[0].Tiles[1].FileDataId == 7002 && ovBack.Set.HasOverlays && MapData.FormatVersion == 3);
                     MapIndexFile.TryWrite(ovIdxPath, "wow_classic_beta|1.60.1.70338|abc", unkSet);
                     Check("index file: ... the 'no overlays' reason too", MapIndexFile.TryRead(ovIdxPath)?.Set.OverlayProblem == unkSet.OverlayProblem);
                 }

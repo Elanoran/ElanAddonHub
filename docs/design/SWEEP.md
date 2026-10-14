@@ -64,6 +64,7 @@ The app-wide check of DESIGN.md: raw hex colours, FontSize values outside the Te
 | `RecipeBands.SkillPalette` (`Services/Professions/ProfessionModel.cs`) | orange / yellow / green / grey skill-up hex | the game's own skill-up colours identify a recipe's difficulty; always written out as a word beside the colour (DESIGN 4, identity colours) |
 | `AddonIcons.xaml`, `Avatars.xaml`, `ReactionIcons.xaml`, `SplashScene.cs` | vector art colours | our own flat artwork, not UI chrome |
 | `InventoryPage.Bags.cs` | slot grid colours, 1 / 1.5 / 3 px insets, radius 3, outlined stack numbers (`Brushes.Black` / `White`) | the in-game bag look (explicitly excluded in the brief) |
+| `WorldMapLayers.cs`, `WorldMapPyramid.cs` | marker colours of the world map's layers, the sea colour #081110 | they are sent to the web page and drawn over the game's own minimap pictures (like the class and quality colours they are data, not WPF theme colours); the page's own CSS (`src/WorldMap/worldmap.css`) is not scanned |
 | `AvatarView.xaml` | font 24 / 26 / 44, radii, margins | artwork on a 100-unit `Viewbox` that scales with the avatar; the numbers are not screen pixels |
 | `OverlayWindow.xaml` | radius 16 pills, 2 px frame | the in-game overlay's rank-framed pills sit on the game, not on the app's layers |
 | `MainWindow.xaml` hero veil, `Background="#01000000"` | 5 alpha stops of `Bg`, a near-invisible window fill | the veil fades the hero art into `Bg` (alpha ramp, no token fits); the 1 % fill is what makes a transparent window clickable |

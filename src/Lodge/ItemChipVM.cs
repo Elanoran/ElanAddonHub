@@ -48,7 +48,7 @@ namespace ElansAddonHub.Lodge
             {
                 var ci = Ref.Id > 0 ? ItemData.Get(Ref.Id) : null;
                 if (ci != null && (!IsAtlas || Ref.AtlasKind == "item")) gt = new GameTooltip(Name, Quality).AddItem(ci).SetIcon(IconIdOf(ci, Info));
-                else if (IsAtlas && Ref.AtlasKind != "item" && Ref.AtlasKind != "browse" && Ref.AtlasKind != "talents" && Ref.AtlasKind != "professions")
+                else if (IsAtlas && Ref.AtlasKind != "item" && Ref.AtlasKind != "browse" && Ref.AtlasKind != "talents" && Ref.AtlasKind != "professions" && Ref.AtlasKind != "worldmap")
                 {
                     var m = AtlasQuery.Build(Ref.AtlasId);
                     if (m != null && !m.NotFound) { gt = GameTooltip.FromAtlas(m); if (m.Kind == "spell" || m.Kind == "skill") gt.SetIcon(m.IconId); }
@@ -59,7 +59,7 @@ namespace ElansAddonHub.Lodge
             {
                 gt = new GameTooltip(Name, Quality);
                 if (!IsAtlas && Info != null) gt.SetIcon(Info.Icon);       // not in the game data here, but the Bags data knows the picture
-                bool simple = IsAtlas && (Ref.AtlasKind == "browse" || Ref.AtlasKind == "talents" || Ref.AtlasKind == "professions");
+                bool simple = IsAtlas && (Ref.AtlasKind == "browse" || Ref.AtlasKind == "talents" || Ref.AtlasKind == "professions" || Ref.AtlasKind == "worldmap");
                 gt.AddText(simple ? TipLine : "Not in the game data on this PC", "grey");
                 if (!simple && Ref.Id > 0) gt.AddText(TipLine, "grey");
             }
@@ -81,7 +81,7 @@ namespace ElansAddonHub.Lodge
                 return;
             }
             TileGlyph = GlyphOf(r);
-            if (r.AtlasKind == "browse" || r.AtlasKind == "talents" || r.AtlasKind == "professions") { name = PathTitle(r, out var line); tipLine = line; }
+            if (r.AtlasKind == "browse" || r.AtlasKind == "talents" || r.AtlasKind == "professions" || r.AtlasKind == "worldmap") { name = PathTitle(r, out var line); tipLine = line; }
             else { name = !string.IsNullOrEmpty(r.Name) ? r.Name : AtlasKinds.Singular(r.AtlasKind) + " " + r.AtlasId.Substring(r.AtlasId.IndexOf(':') + 1); tipLine = AtlasKinds.Singular(r.AtlasKind) + " · not known on this PC"; Resolve(); }
         }
 
@@ -108,10 +108,10 @@ namespace ElansAddonHub.Lodge
                     if (BrowseQuery.TryParse(r.AtlasId, out var q)) { var c = AtlasCategories.Find(q.Cat); if (c != null && !string.IsNullOrEmpty(c.Glyph)) return c.Glyph; }
                     return AtlasKinds.Glyph("item");
                 }
-                if (r.AtlasKind == "talents" || r.AtlasKind == "professions")
+                if (r.AtlasKind == "talents" || r.AtlasKind == "professions" || r.AtlasKind == "worldmap")
                 {
                     var c = AtlasCategories.Find(r.AtlasKind);
-                    return c != null && !string.IsNullOrEmpty(c.Glyph) ? c.Glyph : AtlasKinds.Glyph(r.AtlasKind == "talents" ? "spell" : "skill");
+                    return c != null && !string.IsNullOrEmpty(c.Glyph) ? c.Glyph : AtlasKinds.Glyph(r.AtlasKind == "talents" ? "spell" : r.AtlasKind == "worldmap" ? "zone" : "skill");
                 }
             }
             catch (Exception) { }
@@ -138,6 +138,15 @@ namespace ElansAddonHub.Lodge
                     line = "Talent calculator";
                     var t = AtlasHosts.TalentsSubTitle(sub);
                     return t.Length == 0 ? "Talents" : t == "Build" ? "Talent build" : "Talents · " + t;
+                }
+                if (r.AtlasKind == "worldmap")
+                {
+                    line = "World map";
+                    var idx = Services.Maps.MapData.Index;
+                    var wt = Services.WorldMap.WorldMapIds.Parse(sub, idx == null ? (Func<string, int?>)null : Services.WorldMap.WorldMapIds.SlugsOf(idx));
+                    var cn = wt.Valid && wt.MapId >= 0 && idx != null ? Services.WorldMap.WorldMapService.Continent(idx, wt.MapId)?.Name : null;
+                    if (wt.Valid && wt.HasView) line = "World map · a place on the map";
+                    return string.IsNullOrEmpty(cn) ? "World map" : "World map · " + cn;
                 }
                 if (r.AtlasKind == "professions")
                 {

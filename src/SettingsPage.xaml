@@ -139,6 +139,9 @@
               <HeaderedContentControl x:Name="ItemDataRow" Style="{StaticResource Setting.Row}" Header="Read item data from my WoW installation" Tag="Item names, levels, stats and prices come from your own game files, read-only, on this PC. Nothing is uploaded and nothing is written to the WoW folder.">
                 <CheckBox x:Name="ItemDataBox" Style="{StaticResource Switch}" Click="General_Click" AutomationProperties.Name="Read item data from my WoW installation" />
               </HeaderedContentControl>
+              <HeaderedContentControl x:Name="WorldMapCacheRow" Style="{StaticResource Setting.Row}" Header="World map pictures" Tag="The Atlas world map is made from your game files the first time you open a continent and kept here until the game updates.">
+                <Button x:Name="ClearWorldMapButton" Style="{StaticResource Button.M}" Content="Clear world map cache" Click="ClearWorldMap_Click" AutomationProperties.Name="Clear world map cache" />
+              </HeaderedContentControl>
             </StackPanel></ContentControl>
             <TextBlock Text="Startup" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
@@ -859,6 +862,8 @@
                   <TextBlock Text="Voice" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://github.com/naudio/NAudio" RequestNavigate="Link_Navigate">NAudio</Hyperlink></TextBlock></Grid>
                 <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                   <TextBlock Text="" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://github.com/lostromb/concentus" RequestNavigate="Link_Navigate">Concentus (Opus)</Hyperlink></TextBlock></Grid>
+                <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="World map" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://leafletjs.com" RequestNavigate="Link_Navigate">Leaflet 1.9.4</Hyperlink> (BSD-2-Clause, kept inside the Outpost; the map never loads anything from the internet)</TextBlock></Grid>
                 <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                   <TextBlock Text="Single exe" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://github.com/Fody/Costura" RequestNavigate="Link_Navigate">Costura</Hyperlink></TextBlock></Grid>
                 <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>

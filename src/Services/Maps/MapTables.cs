@@ -39,7 +39,13 @@ namespace ElansAddonHub.Services.Maps
         public static readonly Def WorldMapOverlay = new Def { Name = "WorldMapOverlay", FileDataId = 1134579, TableHash = 0x1D740E72, Layouts = new uint[] { 0x9A196494 } };
         public static readonly Def WorldMapOverlayTile = new Def { Name = "WorldMapOverlayTile", FileDataId = 1957212, TableHash = 0xAC599725, Layouts = new uint[] { 0x2C843422 } };
 
-        public static readonly Def[] All = { UiMap, UiMapArt, UiMapArtTile, UiMapArtStyleLayer, UiMapXMapArt, UiMapAssignment, UiMapGroupMember, Map, AreaTable, WorldMapOverlay, WorldMapOverlayTile };
+        // TaxiNodes / TaxiPath / TaxiPathNode (flight masters and their routes; FileDataIDs from the community listfile, layout blocks of 1.60.1.70338 in WoWDBDefs;
+        // table and layout hashes and row counts - 100 nodes, 328 paths, 10,778 path points - verified on the real files of that build)
+        public static readonly Def TaxiNodes = new Def { Name = "TaxiNodes", FileDataId = 1068100, TableHash = 0x50D91A78, Layouts = new uint[] { 0xE7B597F0 } };
+        public static readonly Def TaxiPath = new Def { Name = "TaxiPath", FileDataId = 1067802, TableHash = 0xAB30A45C, Layouts = new uint[] { 0xA303DE51 } };
+        public static readonly Def TaxiPathNode = new Def { Name = "TaxiPathNode", FileDataId = 1000437, TableHash = 0xE5E988BC, Layouts = new uint[] { 0xFE362E70 } };
+
+        public static readonly Def[] All = { UiMap, UiMapArt, UiMapArtTile, UiMapArtStyleLayer, UiMapXMapArt, UiMapAssignment, UiMapGroupMember, Map, AreaTable, WorldMapOverlay, WorldMapOverlayTile, TaxiNodes, TaxiPath, TaxiPathNode };
 
         // field numbers (stored columns)
         // UiMap: Name_lang 0, ID 1 (stored inline), ParentUiMapID 2, Flags 3, System 4, Type 5
@@ -62,6 +68,18 @@ namespace ElansAddonHub.Services.Maps
         public const int GmName = 0, GmGroup = 1, GmUiMap = 2, GmFloor = 3, GmHeight = 4;
         // Map: Directory 0, MapName_lang 1, ... MapType 7, InstanceType 8, ExpansionID 9, AreaTableID 10, ... MaxPlayers 18
         public const int MapDirectory = 0, MapName = 1, MapMapType = 7, MapInstanceType = 8, MapExpansion = 9, MapAreaTable = 10, MapMaxPlayers = 18;
+        // (layout D43AFAC3 in order: Directory, MapName_lang, MapDescription0_lang, MapDescription1_lang, PvpShortDescription_lang, PvpLongDescription_lang, Corpse[2],
+        // MapType 7, InstanceType 8, ExpansionID 9, AreaTableID 10, LoadingScreenID, TimeOfDayOverride, ParentMapID 13, CosmeticParentMapID, TimeOffset, MinimapIconScale, CorpseMapID,
+        // MaxPlayers 18, WindSettingsID, ZmpFileDataID 20, WdtFileDataID 21, OceanLiquidTypeID, NavigationMaxDistance, PreloadFileDataID, Flags[3]);
+        // WdtFileDataID reads 775971 for Azeroth (Eastern Kingdoms) and 782779 for Kalimdor on the real file
+        public const int MapWdtFileData = 21;
+        // TaxiNodes (layout E7B597F0): Name_lang 0, Pos[3] 1, MapOffset[2] 2, FlightMapOffset[2] 3, ID 4 (inline), ContinentID 5 (inline relation), ConditionID 6, CharacterBitNumber 7,
+        // Flags 8, UiTextureKitID 9, MinimapAtlasMemberID 10, Facing 11, SpecialIconConditionID 12, VisibilityConditionID 13, MountCreatureID[2] 14 (Horde, Alliance)
+        public const int TnName = 0, TnPos = 1, TnContinent = 5, TnFlags = 8, TnMount = 14;
+        // TaxiPath (A303DE51): ID 0, FromTaxiNode 1 (inline relation), ToTaxiNode 2, Cost 3
+        public const int TpFrom = 1, TpTo = 2, TpCost = 3;
+        // TaxiPathNode (FE362E70): Loc[3] 0, ID 1, PathID 2 (inline relation), NodeIndex 3, ContinentID 4, Flags 5, Delay 6, ArrivalEventID 7, DepartureEventID 8
+        public const int TpnLoc = 0, TpnPath = 2, TpnIndex = 3, TpnContinent = 4;
         // AreaTable: ZoneName 0, AreaName_lang 1, ContinentID 2, ParentAreaID 3
         public const int AreaZoneName = 0, AreaName = 1, AreaContinent = 2, AreaParent = 3;
 
@@ -241,7 +259,7 @@ namespace ElansAddonHub.Services.Maps
                         {
                             Id = mw.IdAt(i), Directory = mw.String(i, MapDirectory), Name = mw.String(i, MapName), MapType = (int)mw.Field(i, MapMapType),
                             InstanceType = (int)mw.Field(i, MapInstanceType), Expansion = (int)mw.Field(i, MapExpansion), AreaTableId = (int)mw.Field(i, MapAreaTable),
-                            MaxPlayers = (int)mw.Field(i, MapMaxPlayers),
+                            MaxPlayers = (int)mw.Field(i, MapMaxPlayers), WdtFileDataId = (int)mw.Field(i, MapWdtFileData),
                         });
                     set.HasMaps = true;
                     set.LockedMapRows = mw.EncryptedRecords;
@@ -280,7 +298,40 @@ namespace ElansAddonHub.Services.Maps
                 }
                 catch (Exception e) { set.Notes.Add("AreaTable.db2: " + e.Message + ": no area names"); set.Areas.Clear(); }
             }
+            AddTaxi(set, raw);
             return set;
+        }
+
+        // Flight masters and routes: all three tables in a known layout or none (set.HasTaxi false, with a note). A raw set that does not mention the tables at
+        // all (a test with its own tables) is left alone silently; the game's real file list always names them (null = not in this install).
+        public static void AddTaxi(MapSet set, IDictionary<string, byte[]> raw)
+        {
+            if (!raw.ContainsKey(TaxiNodes.Name) && !raw.ContainsKey(TaxiPath.Name) && !raw.ContainsKey(TaxiPathNode.Name)) return;
+            var nw = OpenTable(set, raw, TaxiNodes, false); var pw = OpenTable(set, raw, TaxiPath, false); var qw = OpenTable(set, raw, TaxiPathNode, false);
+            if (nw == null || pw == null || qw == null) { set.Notes.Add("no flight masters or routes (a table is missing or its layout is not known)"); return; }
+            try
+            {
+                var nodes = new List<TaxiNodeInfo>(); var paths = new List<TaxiPathInfo>(); var points = new List<TaxiPoint>();
+                for (int i = 0; i < nw.Count; i++)
+                    nodes.Add(new TaxiNodeInfo
+                    {
+                        Id = nw.IdAt(i), Name = nw.String(i, TnName), MapId = (int)nw.Field(i, TnContinent), Flags = (int)nw.Field(i, TnFlags),
+                        X = Flt(nw, i, TnPos, 0, 3), Y = Flt(nw, i, TnPos, 1, 3), Z = Flt(nw, i, TnPos, 2, 3),
+                        MountHorde = (int)nw.Element(i, TnMount, 0, 2), MountAlliance = (int)nw.Element(i, TnMount, 1, 2),
+                    });
+                for (int i = 0; i < pw.Count; i++)
+                    paths.Add(new TaxiPathInfo { Id = pw.IdAt(i), FromNode = (int)pw.Field(i, TpFrom), ToNode = (int)pw.Field(i, TpTo), Cost = (int)pw.Field(i, TpCost) });
+                for (int i = 0; i < qw.Count; i++)
+                    points.Add(new TaxiPoint
+                    {
+                        PathId = (int)qw.Field(i, TpnPath), Index = (int)qw.Field(i, TpnIndex), MapId = (int)qw.Field(i, TpnContinent),
+                        X = Flt(qw, i, TpnLoc, 0, 3), Y = Flt(qw, i, TpnLoc, 1, 3), Z = Flt(qw, i, TpnLoc, 2, 3),
+                    });
+                if (nw.EncryptedRecords + pw.EncryptedRecords + qw.EncryptedRecords > 0) set.Notes.Add("some flight rows are key-locked in the game files and skipped");
+                set.TaxiNodes.AddRange(nodes); set.TaxiPaths.AddRange(paths); set.TaxiPoints.AddRange(points);
+                set.HasTaxi = nodes.Count > 0;
+            }
+            catch (Exception e) { set.Notes.Add("flight tables: " + e.Message); set.TaxiNodes.Clear(); set.TaxiPaths.Clear(); set.TaxiPoints.Clear(); set.HasTaxi = false; }
         }
     }
 }

@@ -93,10 +93,23 @@ namespace ElansAddonHub.Services.Maps
         public string Directory = "", Name = "";
         public int InstanceType;    // 0 none (open world), 1 dungeon, 2 raid, 3 battleground, 4 arena, 5 scenario
         public int MapType, Expansion, MaxPlayers, AreaTableId;
+        public int WdtFileDataId;   // the world table (WDT) of the map: which map tiles exist and their minimap files (0 = none)
     }
 
     // UiMapGroupMember: the floors of a multi-floor map
     public sealed class FloorMember { public int GroupId, UiMapId, FloorIndex, RelativeHeight; public string Name = ""; }
+
+    // TaxiNodes.db2: a flight master (or a transport stop, a quest flight ...). Position is world x (north) / y (west) / z on map MapId.
+    public sealed class TaxiNodeInfo
+    {
+        public int Id, MapId, Flags, MountHorde, MountAlliance;
+        public double X, Y, Z;
+        public string Name = "";
+    }
+
+    // TaxiPath.db2: a flight from one node to another; TaxiPathNode.db2: the points the flight passes (in order)
+    public sealed class TaxiPathInfo { public int Id, FromNode, ToNode, Cost; }
+    public sealed class TaxiPoint { public int PathId, Index, MapId; public double X, Y, Z; }
 
     public sealed class AreaInfo { public int Id, ParentId, ContinentId; public string Name = ""; }
 
@@ -110,8 +123,11 @@ namespace ElansAddonHub.Services.Maps
         public List<GameMapInfo> Maps = new List<GameMapInfo>();
         public List<FloorMember> Floors = new List<FloorMember>();
         public List<AreaInfo> Areas = new List<AreaInfo>();
+        public List<TaxiNodeInfo> TaxiNodes = new List<TaxiNodeInfo>();
+        public List<TaxiPathInfo> TaxiPaths = new List<TaxiPathInfo>();
+        public List<TaxiPoint> TaxiPoints = new List<TaxiPoint>();
         // which tables were read (a table whose layout this version does not know is simply not there)
-        public bool HasArt, HasAssignments, HasMaps, HasFloors, HasAreas, HasOverlays;
+        public bool HasArt, HasAssignments, HasMaps, HasFloors, HasAreas, HasOverlays, HasTaxi;
         public string OverlayProblem;                  // why the maps have no overlays (unknown layout ...); null = fine
         public int LockedMapRows;                      // Map rows that sit in key-locked parts of the file
         public string Problem;                         // set = unavailable (nothing else is valid)

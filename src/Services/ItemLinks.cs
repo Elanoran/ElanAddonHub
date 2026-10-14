@@ -196,7 +196,7 @@ namespace ElansAddonHub.Services
         static readonly Regex AtlasEntity = new Regex(@"(?<![\w/=?&.:@%#|\-])(item|npc|obj|object|quest|zone|instance|spell|skill|faction):(\d{1,9})(?!\w)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         static readonly char[] PathPunct = { '.', ',', ';', ':', '!', '?' };
-        static readonly Regex AtlasPath = new Regex(@"(?<![\w/=?&.:@%#|\-])(browse|talents|professions):([^\s<>""'`|\[\]()]{1,200})",
+        static readonly Regex AtlasPath = new Regex(@"(?<![\w/=?&.:@%#|\-])(browse|talents|professions|worldmap):([^\s<>""'`|\[\]()]{1,200})",
             RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         // the canonical Atlas id of a browse / talents / professions path, null when it is not one the Atlas knows
@@ -218,6 +218,11 @@ namespace ElansAddonHub.Services
                             Services.Atlas.AtlasHosts.ParseTalents(sub, out var cf, out var code);
                             if (cf.Length > 0) return Array.IndexOf(Services.Atlas.AtlasHosts.ClassFiles, cf) >= 0 ? Services.Atlas.AtlasHosts.TalentsId(cf) : null;
                             return code.Length > 0 ? Services.Atlas.AtlasHosts.TalentsBuildId(code) : null;
+                        }
+                    case "worldmap":
+                        {
+                            var c = Services.WorldMap.WorldMapIds.CanonicalSyntax(sub);
+                            return c == null ? null : "worldmap:" + c;
                         }
                     case "professions":
                         {
