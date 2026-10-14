@@ -91,7 +91,7 @@ namespace ElansAddonHub.Services.Atlas
                 foreach (var v in L.Vendors(id))
                 {
                     var key = "vendor:" + v.NpcId;
-                    var detail = (v.Price > 0 ? AtlasFormat.Money(v.Price) : "free") + (v.Stack > 1 ? " · stack of " + v.Stack : "") + (v.Limit >= 0 ? " · limit " + v.Limit : "");
+                    var detail = (v.Extended ? (v.Price > 0 ? AtlasFormat.Money(v.Price) + " + " : "") + "special cost" : v.Price > 0 ? AtlasFormat.Money(v.Price) : "free") + (v.Stack > 1 ? " · stack of " + v.Stack : "") + (v.Limit >= 0 ? " · limit " + v.Limit : "");
                     AddRow(new AtlasRow { Key = key, Link = "npc:" + v.NpcId, Label = AtlasLabel.Forever, Tier = 0, Type = "Vendor", Title = NpcName(v.NpcId), Detail = detail, Zone = v.Zone > 0 ? ZoneName(v.Zone) : "", Sort = 1e6 - v.Price });
                     AddLayer(m, "lodge");
                 }

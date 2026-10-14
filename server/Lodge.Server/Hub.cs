@@ -102,7 +102,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.20.1";
+    public const string Version = "2.21.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -235,7 +235,7 @@ public class LodgeHub
         var f = new List<string> { "reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights" };
         if (Cfg.FilesEnabled) f.Add("files");
         if (Cfg.ArmoryEnabled) { f.Add("armory"); f.Add("armory2"); }
-        if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests; atlas3: gathering node positions (nodes)
+        if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); f.Add("atlas4"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests; atlas3: gathering node positions (nodes); atlas4: fishing spots (fishspots)
         if (Badges.Enabled) f.Add("badges");                       // badges and the ladder: both the server setting and the Guild Master switch are on
         if (Cfg.RealmsConfigured) f.Add("realms");                  // realm status: only while the Blizzard API credentials are set
         foreach (var k in DatasetKinds.All) if (k.Enabled(Cfg)) f.Add(k.Feature);   // 2.17: hosted datasets ("classic")

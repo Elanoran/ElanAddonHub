@@ -287,9 +287,18 @@ namespace ElansAddonHub.Services.WorldMap
                 styles.Add(Style(colors[g], shapes[g], true, GatherNodes.GroupTitle(groups[g]) + " · " + AtlasLabel.Forever, "nodes." + groups[g]));
                 styles.Add(Style(colors[g], shapes[g], false, GatherNodes.GroupTitle(groups[g]) + " · " + AtlasLabel.Classic, "nodes." + groups[g]));
             }
+            styles.Add(Style("#38bdf8", "circle", true, "Fishing spots · " + AtlasLabel.Forever, "nodes.fishing"));
             var ps = new PointSet();
             int forever = 0, classic = 0;
             var src = new LiveNodeSource();
+            // where players stood when a catch was looted (the Lodge's merged spots and this PC's own)
+            foreach (var ui in GatherNodes.FishSpotMaps())
+                foreach (var p in GatherNodes.FishSpotsOn(ui).Take(AtlasQuery.MaxNodeMarkersPerObject))
+                {
+                    var w = idx.MapToWorld(ui, p.X, p.Y);
+                    if (w == null || w.Value.MapId != mapId) continue;
+                    ps.Add(w.Value.X, w.Value.Y, "Fishing spot", AtlasQuery.FishSpotTip(p), groups.Length * 2, null); forever++;
+                }
             var groupOf = new Dictionary<int, string>();
             string GroupOf(int id) { if (!groupOf.TryGetValue(id, out var g)) groupOf[id] = g = AtlasBrowse.ObjectGroupOf(id) ?? ""; return g; }
             // what players looted: the Lodge's merged nodes and this PC's own (positions are fractions of a zone map)

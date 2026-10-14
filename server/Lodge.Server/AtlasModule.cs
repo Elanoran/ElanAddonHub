@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 
 namespace Lodge;
 
-// Atlas pool (2.15). Client to server: atlas.share { kills, objects, fishing, vendors, quests, finds, spawns, items, seenNpcs, seenObjects, seenQuests (feature atlas2), nodes (feature atlas3) } (cumulative per-member
+// Atlas pool (2.15). Client to server: atlas.share { kills, objects, fishing, vendors, quests, finds, spawns, items, seenNpcs, seenObjects, seenQuests (feature atlas2), nodes (feature atlas3), fishspots (feature atlas4) } (cumulative per-member
 // totals of what changed; members and up; at most 3 in a burst, then one per 2 minutes per identity; frame limit 64 KB) and atlas.get { since, epoch }
 // (everybody, guests included; Page budget). Server to client: atlas.shared { ok, accepted, unchanged, rejected, rev, epoch, why? } and
 // atlas.data (see AtlasStore.Get). Feature off (LODGE_ATLAS_ENABLED=0): not advertised, share answers why "disabled", get answers an error.

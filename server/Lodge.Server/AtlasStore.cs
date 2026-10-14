@@ -22,7 +22,12 @@ public sealed partial class AtlasStore
         public int FindCount;
         public readonly Dictionary<int, Dictionary<int, List<Atlas.NodePt>>> Nodes = new();   // object -> uiMapId -> points (2.18)
         public int NodeTotal;
+        public readonly Dictionary<int, List<Atlas.FishSpot>> Fish = new();   // uiMapId -> fishing spots (2.21)
+        public int FishTotal;
     }
+
+    // the merged fishing spots of one map (most caught first)
+    public sealed class FishAgg { public List<Atlas.FishSpot> Spots = new(); public long Rev; }
 
     // the merged nodes of one object: map -> nodes (most looted first)
     public sealed class NodeAgg { public Dictionary<int, List<Atlas.NodePt>> Maps = new(); public long Rev; }
@@ -38,6 +43,7 @@ public sealed partial class AtlasStore
     readonly Dictionary<string, MemberData> members = new(StringComparer.Ordinal);
     readonly Dictionary<int, Agg>[] aggs = { new(), new(), new() };
     readonly Dictionary<int, NodeAgg> nodeAggs = new();
+    readonly Dictionary<int, FishAgg> fishAggs = new();
     readonly Dictionary<int, Atlas.Vendor> vendors = new();
     readonly Dictionary<int, Atlas.Quest> quests = new();
     readonly Dictionary<int, SpawnSet> spawns = new();
@@ -107,6 +113,7 @@ public sealed partial class AtlasStore
                     }
                 }
                 if (d["nodes"] is JsonObject no) LoadNodes(md, no);
+                if (d["fishspots"] is JsonObject fo) LoadFish(md, fo);
                 members[who] = md;
             }
         // the aggregates are derived: rebuild them, remembering the revision of the member data
@@ -130,6 +137,14 @@ public sealed partial class AtlasStore
             if (nodeRevs?[id.ToString(CultureInfo.InvariantCulture)] is JsonValue nv && nv.TryGetValue<long>(out var nl) && nl > 0) rr = nl;
             maxRev = Math.Max(maxRev, rr);
             var na = SumNodes(id); na.Rev = rr; nodeAggs[id] = na;
+        }
+        var fishRevs = root["fishRev"] as JsonObject;
+        foreach (var map in members.Values.SelectMany(m => m.Fish.Keys).Distinct().ToList())
+        {
+            long rr = 1;
+            if (fishRevs?[map.ToString(CultureInfo.InvariantCulture)] is JsonValue fv && fv.TryGetValue<long>(out var fl) && fl > 0) rr = fl;
+            maxRev = Math.Max(maxRev, rr);
+            fishAggs[map] = new FishAgg { Spots = SumFish(map), Rev = rr };
         }
         if (root["vendors"] is JsonObject vo)
             foreach (var (key, node) in vo)
@@ -182,6 +197,19 @@ public sealed partial class AtlasStore
             md.Nodes[oid] = maps; md.NodeTotal += pts;
         }
     }
+
+    static void LoadFish(MemberData md, JsonObject fo)
+    {
+        foreach (var (mk, arr) in fo)
+        {
+            if (md.Fish.Count >= Atlas.MaxFishMapsPerMember || !Atlas.Key(mk, Atlas.MaxMapId, out var map) || !Atlas.ParseFishMap(arr, out var spots)) continue;
+            if (md.FishTotal + spots.Count > Atlas.MaxFishSpotsPerMember) continue;
+            md.Fish[map] = spots; md.FishTotal += spots.Count;
+        }
+    }
+
+    List<Atlas.FishSpot> SumFish(int map) =>
+        Atlas.AggregateFish(members.Where(kv => kv.Value.Fish.ContainsKey(map)).Select(kv => (kv.Key, kv.Value.Fish[map])));
 
     // storage shape { map: [[x, y, n], ...] } -> the wire shape { map: [ { x, y, n } ] } the parser takes
     static JsonNode NodeObj(JsonNode stored)
@@ -244,7 +272,7 @@ public sealed partial class AtlasStore
         public int Total => Accepted + Unchanged + Rejected;
     }
 
-    static readonly string[] Sections = { "kills", "objects", "fishing", "vendors", "quests", "finds", "spawns", "items", "seenNpcs", "seenObjects", "seenQuests", "nodes" };
+    static readonly string[] Sections = { "kills", "objects", "fishing", "vendors", "quests", "finds", "spawns", "items", "seenNpcs", "seenObjects", "seenQuests", "nodes", "fishspots" };
 
     // True when the message carries at least one known, non-empty section
     public static bool HasContent(JsonObject m) =>
@@ -273,7 +301,8 @@ public sealed partial class AtlasStore
         Seen(r, m["seenQuests"], Atlas.MaxSeenQuestsPerShare, seenQuests, Atlas.MaxSeenQuests, (JsonNode n, out Atlas.SeenQuest v) => Atlas.ParseSeenQuest(n, out v), (a, b) => a.Fill(b), (v, rv) => v.Rev = rv);
         Finds(r, md, identity, who, m["finds"], now);
         Nodes(r, md, m["nodes"]);
-        if (md.Total == 0 && md.FindCount == 0 && md.Nodes.Count == 0 && !r.Changed && md.Src.All(s => s.Count == 0)) members.Remove(identity);   // nothing of this person was kept
+        FishSpots(r, md, m["fishspots"]);
+        if (md.Total == 0 && md.FindCount == 0 && md.Nodes.Count == 0 && md.Fish.Count == 0 && !r.Changed && md.Src.All(s => s.Count == 0)) members.Remove(identity);   // nothing of this person was kept
         if (r.Changed) { Dirty = true; NoteShare(identity, revBefore); }
         return r;
     }
@@ -444,6 +473,29 @@ public sealed partial class AtlasStore
         }
     }
 
+    void FishSpots(ShareResult r, MemberData md, JsonNode sect)
+    {
+        if (sect == null) return;
+        if (sect is not JsonObject so) { r.Rejected++; return; }
+        int seen = 0, points = 0;
+        foreach (var (key, node) in so)
+        {
+            if (++seen > Atlas.MaxFishMapsPerShare) { r.Rejected++; continue; }
+            if (!Atlas.Key(key, Atlas.MaxMapId, out var map) || !Atlas.ParseFishMap(node, out var inc) || points + inc.Count > Atlas.MaxFishSpotsPerShare) { r.Rejected++; continue; }
+            points += inc.Count;
+            bool isNew = !md.Fish.TryGetValue(map, out var mine);
+            if (isNew && md.Fish.Count >= Atlas.MaxFishMapsPerMember) { r.Rejected++; continue; }
+            var have = isNew ? new List<Atlas.FishSpot>() : mine.Select(p => p.Clone()).ToList();
+            int before = have.Count;
+            bool changed = Atlas.MergeFish(have, inc, out var full);
+            if (md.FishTotal + (have.Count - before) > Atlas.MaxFishSpotsPerMember) { r.Rejected++; continue; }
+            if (!changed) { if (full) r.Rejected++; else r.Unchanged++; continue; }
+            md.FishTotal += have.Count - before; md.Fish[map] = have;
+            fishAggs[map] = new FishAgg { Spots = SumFish(map), Rev = ++rev };
+            r.Accepted++; r.Changed = true;
+        }
+    }
+
     void Finds(ShareResult r, MemberData md, string identity, string who, JsonNode sect, long now)
     {
         if (sect == null) return;
@@ -492,10 +544,24 @@ public sealed partial class AtlasStore
         return o;
     }
 
+    static JsonArray FishJson(List<Atlas.FishSpot> spots) => new(spots.Select(p =>
+    {
+        var o = new JsonObject { ["x"] = p.X, ["y"] = p.Y, ["n"] = p.N };
+        if (p.Items.Count > 0) { var io = new JsonObject(); foreach (var (id, c) in p.Items.OrderBy(k => k.Key)) io[id.ToString(CultureInfo.InvariantCulture)] = c; o["items"] = io; }
+        return (JsonNode)o;
+    }).ToArray());
+
+    static JsonObject VendorItemJson(long[] a)
+    {
+        var o = new JsonObject { ["p"] = a[0], ["s"] = a[1], ["l"] = a[2] };
+        if (a.Length > 3 && a[3] == 1) o["x"] = 1;
+        return o;
+    }
+
     static JsonObject VendorJson(Atlas.Vendor v)
     {
         var io = new JsonObject();
-        foreach (var kv in v.Items.OrderBy(k => k.Key)) io[kv.Key.ToString(CultureInfo.InvariantCulture)] = new JsonObject { ["p"] = kv.Value[0], ["s"] = kv.Value[1], ["l"] = kv.Value[2] };
+        foreach (var kv in v.Items.OrderBy(k => k.Key)) io[kv.Key.ToString(CultureInfo.InvariantCulture)] = VendorItemJson(kv.Value);
         return new JsonObject { ["at"] = v.At, ["z"] = v.Z, ["x"] = v.X, ["y"] = v.Y, ["items"] = io };
     }
 
@@ -551,10 +617,11 @@ public sealed partial class AtlasStore
         foreach (var kv in seenObjects) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 9, kv.Key));
         foreach (var kv in seenQuests) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 10, kv.Key));
         foreach (var kv in nodeAggs) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 11, kv.Key));
+        foreach (var kv in fishAggs) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 12, kv.Key));
         cand.Sort((a, b) => a.rev.CompareTo(b.rev));
 
-        var secs = new JsonObject[12];
-        for (int i = 0; i < 12; i++) secs[i] = new JsonObject();
+        var secs = new JsonObject[13];
+        for (int i = 0; i < 13; i++) secs[i] = new JsonObject();
         var fa = new JsonArray();
         int bytes = 0, taken = 0;
         long last = since;
@@ -572,6 +639,7 @@ public sealed partial class AtlasStore
                 case 9: node = SeenObjectJson(seenObjects[c.key]); break;
                 case 10: node = SeenQuestJson(seenQuests[c.key]); break;
                 case 11: node = NodesJson(nodeAggs[c.key]); break;
+                case 12: node = FishJson(fishAggs[c.key].Spots); break;
                 default: node = FindJson(finds[c.key], nameOf(finds[c.key].Who)); break;
             }
             int size = node.ToJsonString().Length + key.Length + 6;
@@ -584,7 +652,7 @@ public sealed partial class AtlasStore
         {
             ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = more ? last : rev, ["at"] = NowSec,
             ["kills"] = secs[0], ["objects"] = secs[1], ["fishing"] = secs[2], ["vendors"] = secs[3], ["quests"] = secs[4], ["spawns"] = secs[5], ["items"] = secs[6], ["finds"] = fa,
-            ["seenNpcs"] = secs[8], ["seenObjects"] = secs[9], ["seenQuests"] = secs[10], ["nodes"] = secs[11],
+            ["seenNpcs"] = secs[8], ["seenObjects"] = secs[9], ["seenQuests"] = secs[10], ["nodes"] = secs[11], ["fishspots"] = secs[12],
         };
         if (full) res["full"] = true;
         if (more) res["more"] = true;
@@ -627,8 +695,16 @@ public sealed partial class AtlasStore
                     }
                     d["nodes"] = no;
                 }
+                if (md.Fish.Count > 0)
+                {
+                    var fo = new JsonObject();
+                    foreach (var (map, l) in md.Fish) fo[map.ToString(CultureInfo.InvariantCulture)] = FishJson(l);
+                    d["fishspots"] = fo;
+                }
                 mo[who] = d;
             }
+            var fishRev = new JsonObject();
+            foreach (var (map, a) in fishAggs) fishRev[map.ToString(CultureInfo.InvariantCulture)] = a.Rev;
             var nodeRev = new JsonObject();
             foreach (var (id, a) in nodeAggs) nodeRev[id.ToString(CultureInfo.InvariantCulture)] = a.Rev;
             for (int k = 0; k < 3; k++)
@@ -660,7 +736,7 @@ public sealed partial class AtlasStore
             foreach (var f in finds) { var j = FindJson(f, ""); j.Remove("by"); j.Remove("s"); j["b"] = f.Identity; j["w"] = f.Who; j["r"] = f.Rev; fa.Add(j); }
             var root = new JsonObject
             {
-                ["v"] = 1, ["epoch"] = Epoch, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev, ["nodeRev"] = nodeRev,
+                ["v"] = 1, ["epoch"] = Epoch, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev, ["nodeRev"] = nodeRev, ["fishRev"] = fishRev,
                 ["vendors"] = vo, ["quests"] = qo, ["spawns"] = sp, ["items"] = io, ["finds"] = fa,
                 ["seenNpcs"] = sno, ["seenObjects"] = sob, ["seenQuests"] = sqo,
             };

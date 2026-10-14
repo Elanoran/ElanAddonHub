@@ -334,6 +334,13 @@ namespace ElansAddonHub
             if (id.StartsWith("spell:", StringComparison.Ordinal) || id.StartsWith("item:", StringComparison.Ordinal)) _ = Redraw();
         }
 
+        // the Lodge pool got a page while the start page is open: its cards (pool, recent finds) are drawn again when what they show changed
+        public void PoolChanged()
+        {
+            if (!IsVisible || !started || hosted != null || !IsStart) return;
+            if (Signature() != drawnSig) DrawStart();
+        }
+
         public void DataChanged() { if (hosted != null) return; if (IsStart) DrawStart(); else _ = Redraw(); }
     }
 }

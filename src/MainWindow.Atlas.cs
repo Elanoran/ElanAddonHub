@@ -24,11 +24,13 @@ namespace ElansAddonHub
             AtlasView.Init(() => settings.WowRoot);
             AtlasView.UseRouteSettings(settings, () => ProfessionsView?.RouteChoiceChanged());
             AtlasQuery.Context.Lodge = () => Session?.AtlasData;
+            AtlasQuery.Context.OwnFishSpots = () => AtlasObs.Read(settings.WowRoot)?.FishSpots;
             AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
             AtlasView.LodgeState = LodgeAtlasState;
             // "Who in the Lodge can craft this?" (Armory, server 2.19): cached answers; an answer that arrives redraws the recipe / item page and the Professions rows
             AtlasQuery.Context.Crafters = spells => Session?.CraftersFor(spells);
             if (Session != null) Session.CraftersChanged += () => Dispatcher.BeginInvoke(new Action(() => { AtlasView.CraftersChanged(); ProfessionsView?.CraftersChanged(); }));
+            if (Session != null) Session.Changed += () => Dispatcher.BeginInvoke(new Action(() => AtlasView.PoolChanged()));
             ProfessionsView.UseCrafters(spells => Session?.CraftersFor(spells));
             AtlasView.OpenLinkOverride = url => OpenChatLink(url);
             // the Lodge can hand out the Classic data (server 2.17): fetched automatically for members, shareable by the owner and officers
