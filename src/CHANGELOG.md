@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## Unreleased
+- Fixed: the world map's node kinds (Herbs, Ore, Chests, Fishing) did nothing in the 3D view - every node was shown. They now hide their own nodes in 3D as in 2D, and a layer switched on while all its kinds are off (an older saved setting) shows all kinds instead of nothing.
+
 ## 2.54.0
 - **Atlas sharing audit.** Every Hub section is now counted (entries / kept / left out) in hub.log on each upload, with the sections the app does not read named. Vendor items keep the Toolkit 0.5.2 extended-cost flag (shown as "special cost" instead of "free"; corrected prices replace the old zero rows), and the Toolkit's fishing spots are read, shared with Lodge servers 2.21+ (feature atlas4), merged by the Lodge and shown on the zone pages and the world map Fishing layer.
 - **Atlas: the Lodge pool and the start page follow your finds.** The Outpost keeps the newest 500 finds of the Hub file (never the first ones), logs in hub.log what the Hub file holds (finds, newest time, entries left out), what each share got (accepted, unchanged, rejected), and sends finds again that were marked as sent but are missing from the Lodge pool. "Recent finds in the Lodge" redraws when the pool updates while the page is open.

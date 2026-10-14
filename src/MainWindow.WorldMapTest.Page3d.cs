@@ -144,6 +144,20 @@ namespace ElansAddonHub
                 {
                     // the page is up
                     await WaitFor(() => WorldMapView.LastStats != null, 20000);
+                    // the kind filters (Herbs, Ore ...) hide their points in 3D too, and a layer switched on with every kind off shows all kinds
+                    await WmEval("window.wm3.setOnForTest('nodes', true); window.wm3.setOnForTest('nodes.herbs', true); window.wm3.setOnForTest('nodes.ore', true)");
+                    // the app answers the layer switch with its own node data: wait for it, so the fed test layer is not replaced afterwards
+                    for (int w = 0; w < 150; w++) { var c = await WmEval("(function(){var s=JSON.parse(window.wm3.state()); return s.counts && s.counts.nodes !== undefined ? 1 : 0})()"); if (c == "1") break; await Task.Delay(200); }
+                    var feedRaw = await WmEval("(function(){try{return window.wm3.feedForTest({t:'layer', id:'nodes', kind:'points', pts:[0,0,0,-1,0,-1, 1,1,0,-1,1,-1, 2,2,0,-1,1,-1], names:['n'], styles:[{c:'#4ade80',s:'circle',f:true,l:'Herb',g:'nodes.herbs'},{c:'#d08a4e',s:'square',f:true,l:'Ore',g:'nodes.ore'}]})}catch(e){return 'ERR '+e.message}})()");
+                    var bothRaw = await WmEval("(function(){try{return String(window.wm3.shownPoints('nodes'))}catch(e){return 'ERR '+e.message}})()"); int.TryParse((bothRaw ?? "").Trim('"'), out var both);
+                    await WmEval("window.wm3.setOnForTest('nodes.ore', false)");
+                    int herbsOnly = Convert.ToInt32(await WmEval("window.wm3.shownPoints('nodes')"));
+                    await WmEval("['nodes.herbs','nodes.ore','nodes.chests','nodes.fishing'].forEach(function(k){ window.wm3.setOnForTest(k, false) }); window.wm3.setOnForTest('nodes', false); window.wm3.setOnForTest('nodes', true)");
+                    await Task.Delay(2500);   // the switch asks the app for the layer again: let that answer land, then feed the test layer once more
+                    await WmEval("window.wm3.feedForTest({t:'layer', id:'nodes', kind:'points', pts:[0,0,0,-1,0,-1, 1,1,0,-1,1,-1, 2,2,0,-1,1,-1], names:['n'], styles:[{c:'#4ade80',s:'circle',f:true,l:'Herb',g:'nodes.herbs'},{c:'#d08a4e',s:'square',f:true,l:'Ore',g:'nodes.ore'}]})");
+                    int afterReopen = Convert.ToInt32(await WmEval("window.wm3.shownPoints('nodes')"));
+                    Check("3D: the node kind filters hide their own points (3 shown, Ore off = 1 herb, all kinds off then the layer on again = all 3)", both == 3 && herbsOnly == 1 && afterReopen == 3, both + " / " + herbsOnly + " / " + afterReopen + " feed " + feedRaw + " raw " + bothRaw);
+
                     await Task.Delay(1500);
                     var s3 = await Wm3State();
                     Check("3D: the 3D page opens (the flat map's view handed over, the mode kept in the id), three.js r149 from the app's own copy renders: " + (s3?.Int("meshes") ?? 0) + " tile meshes, " + (s3?.Int("heightsLoaded") ?? 0) + "/" + (s3?.Int("tilesTotal") ?? 0) + " height grids, " + (s3?.Int("textures") ?? 0) + " textures, " + (s3?.Int("drawCalls") ?? 0) + " draw calls; no script errors",

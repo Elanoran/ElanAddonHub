@@ -491,9 +491,9 @@
   function makePointMaterial() {
     return new THREE.ShaderMaterial({
       uniforms: { uFade: { value: 12000 } },
-      vertexShader: 'attribute vec3 color; attribute float flag; varying vec3 vC; varying float vF; varying float vA; uniform float uFade;\n' +
+      vertexShader: 'attribute vec3 color; attribute float flag; attribute float show; varying vec3 vC; varying float vF; varying float vA; uniform float uFade;\n' +
         'void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; float d = -mv.z;\n' +
-        ' float s = clamp(3200.0 / max(d, 1.0), 4.5, 12.0) * (1.0 + flag * 0.35); gl_PointSize = s; vC = color; vF = flag; vA = 1.0 - smoothstep(uFade * 0.6, uFade, d); }',
+        ' float s = clamp(3200.0 / max(d, 1.0), 4.5, 12.0) * (1.0 + flag * 0.35); gl_PointSize = s * show; vC = color; vF = flag; vA = (1.0 - smoothstep(uFade * 0.6, uFade, d)) * show; }',
       fragmentShader: 'varying vec3 vC; varying float vF; varying float vA;\n' +
         'void main(){ vec2 p = gl_PointCoord - 0.5; float r = length(p); if (r > 0.5 || vA < 0.02) discard;\n' +
         ' vec3 c = mix(vC, vec3(1.0), vF * smoothstep(0.30, 0.4, r)); c = mix(c, vec3(0.02), smoothstep(0.38, 0.5, r) * 0.8); gl_FragColor = vec4(c, vA); }',
@@ -516,12 +516,18 @@
       pos[i * 3] = p[0]; pos[i * 3 + 2] = p[1];
     }
     var g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setAttribute('flag', new THREE.BufferAttribute(flag, 1));
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setAttribute('flag', new THREE.BufferAttribute(flag, 1)); g.setAttribute('show', new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
     if (!pointMat) pointMat = makePointMaterial();
     if (pointLayers[id]) { scene.remove(pointLayers[id].obj); pointLayers[id].obj.geometry.dispose(); }
     var obj = new THREE.Points(g, pointMat); obj.frustumCulled = false; scene.add(obj); L.obj = obj; L.id = id; L.group = styles.map(function (s) { return s.g || null; });
-    pointLayers[id] = L; placePoints(L);
+    pointLayers[id] = L; placePoints(L); applyGroups(L);
     return n;
+  }
+  // points whose style belongs to a switched-off child group (Herbs, Ore ...) are hidden one by one
+  function applyGroups(L) {
+    var a = L.obj.geometry.attributes.show; if (!a) return;
+    for (var i = 0; i < L.n; i++) { var gname = L.group[L.styleIdx[i]]; a.array[i] = gname && !on[gname] ? 0 : 1; }
+    a.needsUpdate = true;
   }
   function placePoints(L) {
     var p = L.obj.geometry.attributes.position, a = p.array;
@@ -730,7 +736,7 @@
   // ---------------------------------------------------------------- layer visibility
   function groupShown(id) { return !!on[id]; }
   function refresh() {
-    Object.keys(pointLayers).forEach(function (id) { pointLayers[id].obj.visible = !!on[id]; });
+    Object.keys(pointLayers).forEach(function (id) { pointLayers[id].obj.visible = !!on[id]; applyGroups(pointLayers[id]); });
     Object.keys(lineLayers).forEach(function (id) { lineLayers[id].group.visible = !!on[id]; });
     Object.keys(ringLayers).forEach(function (id) { ringLayers[id].zones.forEach(function (z) { z.obj.visible = !!on[id]; }); });
     // point styles that belong to a switched-off child group: hide through the layer object only when the whole layer is off (groups are drawn together)
@@ -742,7 +748,8 @@
     dirty = true;
   }
   function setOn(id, v) {
-    on[id] = !!v; var def = defs[id];
+    on[id] = !!v;
+    if (v && defs[id] && !defs[id].child) { var kids = Object.keys(panelRows).filter(function (k) { return panelRows[k].parent === id; }); if (kids.length && !kids.some(function (k) { return on[k]; })) kids.forEach(function (k) { on[k] = true; }); } var def = defs[id];
     if (v && def && !def.child && !layers[id] && !requested[id]) { requested[id] = true; send({ t: 'need', layer: id }); setCount(id, '...'); }
     refresh(); sendLayers();
   }
@@ -990,7 +997,9 @@
     landBounds = { minCol: cfg.minCol, maxCol: cfg.maxCol, minRow: cfg.minRow, maxRow: cfg.maxRow };
     (m.on || []).forEach(function (k) { on[k] = true; });
     buildPanel(m.layers || []);
-    (m.layers || []).forEach(function (d) { (d.children || []).forEach(function (c) { if (on[c.id] === undefined) on[c.id] = false; }); });
+    // a layer that is on with none of its kinds on (an older saved state) shows all its kinds, never an empty layer
+    (m.layers || []).forEach(function (d) { var kids = d.children || []; var any = kids.some(function (c) { return on[c.id]; });
+      kids.forEach(function (c) { if (on[d.id] && !any) on[c.id] = true; else if (on[c.id] === undefined) on[c.id] = false; }); });
     document.documentElement.style.setProperty('--sea', cfg.sea || '#081110');
     // the first view
     if (m.view) { var d = m.view.dist ? m.view.dist : zToDist(m.view.z == null ? 5 : m.view.z); setView(m.view.lat, m.view.lng, d, 0, 52, true); setPin(m.view); } else fitView(true);
@@ -1002,6 +1011,10 @@
 
   // test / diagnostics hook (read-only, except the camera)
   window.wm3 = {
+    // self-test: points of a layer currently drawn (after the kind filters), a layer fed directly, and a layer switch
+    shownPoints: function (id) { var L = pointLayers[id]; if (!L || !L.obj.visible) return 0; var a = L.obj.geometry.attributes.show.array, n = 0; for (var i = 0; i < L.n; i++) if (a[i] > 0) n++; return n; },
+    feedForTest: function (m) { layer(m); return 1; },
+    setOnForTest: function (id, v) { setOn(id, v); return 1; },
     state: function () {
       var inf = renderer ? renderer.info : { render: {}, memory: {} };
       return JSON.stringify({ ready: ready, glOk: !!renderer, renderer: glInfo, software: software, fps: fps, frames: frameN, heightsLoaded: heightsLoaded, heightsFailed: heightsFailed, tilesTotal: tileList.length,

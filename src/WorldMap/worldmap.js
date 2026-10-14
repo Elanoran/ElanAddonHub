@@ -237,6 +237,7 @@
   }
   function setOn(id, v) {
     on[id] = !!v;
+    if (v && defs[id] && !defs[id].child) { var kids = Object.keys(panelRows).filter(function (k) { return panelRows[k].parent === id; }); if (kids.length && !kids.some(function (k) { return on[k]; })) kids.forEach(function (k) { on[k] = true; }); }
     var def = defs[id];
     if (v && def && !def.child && !data[id] && !requested[id]) { requested[id] = true; send({ t: 'need', layer: id }); setCount(id, '...'); }
     refresh(); sendLayers();
@@ -340,7 +341,9 @@
     // layer panel
     (m.on || []).forEach(function (k) { on[k] = true; });
     buildPanel(m.layers || []);
-    (m.layers || []).forEach(function (d) { (d.children || []).forEach(function (c) { if (on[c.id] === undefined) on[c.id] = false; }); });
+    // a layer that is on with none of its kinds on (an older saved state) shows all its kinds, never an empty layer
+    (m.layers || []).forEach(function (d) { var kids = d.children || []; var any = kids.some(function (c) { return on[c.id]; });
+      kids.forEach(function (c) { if (on[d.id] && !any) on[c.id] = true; else if (on[c.id] === undefined) on[c.id] = false; }); });
     // coordinates + scale
     var Co = L.Control.extend({ options: { position: 'bottomleft' }, onAdd: function () { var d = el('div', 'wm-coords', '&nbsp;'); this._d = d; return d; } });
     var co = new Co(); co.addTo(map);
