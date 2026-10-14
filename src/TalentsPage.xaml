@@ -125,7 +125,7 @@
             </Popup>
             <Grid>
               <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-              <TextBox x:Name="CodeBox" Style="{StaticResource Input}" Tag="Paste a build code (ETB1-...) here" AutomationProperties.Name="Build code" KeyDown="Code_KeyDown" />
+              <TextBox x:Name="CodeBox" Style="{StaticResource Input}" Tag="Paste a build code (ETB1-...) or a build link here" AutomationProperties.Name="Build code" KeyDown="Code_KeyDown" />
               <Button x:Name="ImportButton" Grid.Column="1" Style="{StaticResource Button.M}" Content="Import" Margin="8,0,0,0" Click="Import_Click" />
             </Grid>
             <TextBlock x:Name="StatusLine" Style="{StaticResource Text.Secondary}" Margin="0,8,0,0" TextWrapping="Wrap" />

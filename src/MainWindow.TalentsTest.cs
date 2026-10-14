@@ -443,6 +443,9 @@ EHH.DefaultBuild = ""pack""
                 Snapshot(P("24-talents-fixture.png"));
                 SnapshotSheet(page.TipForTest(10), P("24-talents-tooltip.png"));
 
+                // build links from the online calculators, on the fixture tree and the page
+                TalLinkChecks(Check, set, t, page);
+
                 // the real game files, read-only, only when there is a WoW install
                 await TalRealCheck(Check, notes, P, work);
             }
@@ -529,6 +532,7 @@ EHH.DefaultBuild = ""pack""
                 var spellRaw = SpellData.ReadCasc(real, "_classic_beta_");
                 var spells = SpellParse.All(spellRaw);
                 SpellData.SetForTest(spells);
+                TalLinkReal(Check, notes, set, n => TalentData.NodeName(n));
                 var da = h?.Nodes.FirstOrDefault(n => TalentData.NodeName(n) == "Deadly Aspects");
                 Check("real game files: the Hunter tree has 'Deadly Aspects' (5 ranks, in the first row of Beast Mastery) and its rank text changes with the rank", da != null && da.MaxRanks == 5 && da.Row == 0 && da.Spec == 0, da == null ? "not found" : da.MaxRanks + " row " + da.Row);
                 if (da != null)

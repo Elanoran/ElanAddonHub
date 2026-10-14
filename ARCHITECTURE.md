@@ -272,6 +272,14 @@ Required tables unknown / missing = layer unavailable ("game updated", logged, S
   tables cannot be read, `TalentRules.StandardSources()` (one point per level from 10) stands in.
 - **Build codes** (`BuildCode`): `ETB1-<base64url>`: version, class, talents as (node id delta, rank), CRC-16. Refused with words: not a code, damaged, wrong check sum, newer version, class or node not in this
   game build, rank above the max, layout the rules do not allow. `BuildCode.Find(text)` finds a code inside a chat message (hook for a Lodge chip; the Lodge UI is not touched).
+- **Build links** (`BuildLinks`): the Talents page import box also reads a LINK pasted from an online calculator (tried after `ETB1-`; decoded from the text and our own trees, never fetched). Each site writes the
+  ranks as digits in the order of the tree's talents sorted by row, then column (verified against each site's public tree data: same talents, same positions as the game's trees). Readable: **Seemeta**
+  `/wow-forever/talent-calculator/<class>?build=<t1>-<t2>-<t3>` (trailing zeros cut), **WoW Forever Talent** `<class>/#b=1~<tree version>~<class>~<level>~<t1>-<t2>-<t3>` (every talent, nothing cut; a wrong length
+  is refused), **Talents Forever** `<class>/<level>/<t1>-<t2>-<t3>[-legacy x3][-order]-6` (only its current version 6; the order is a symbol per talent, a run length 1-4, replayed through the rules like a recommended
+  build, dropped with a note when it does not fit). The calculators other than Seemeta leave out the Hunter's leftover Improved Serpent Sting node (spell 19464, `LeftOut`), so their digits count without it. NOT readable,
+  named in the error: Zockify (its own talent ids), WoW Forever Builds (its talent lists differ from the game's for several classes), WoW Forever Talents, Icy Veins, RankedBoost, Wowhead (format unknown/unreachable).
+  The game's own loadout string (the client has `C_Traits.GenerateImportString`) is recognised and refused plainly: no real string was available to verify a decoder. After an import the save boxes are prefilled with
+  the site in the notes. Rules: a link whose digits do not line up with our tree (too long, rank above the max, not a legal layout, class not in the game data) is refused as a whole, never partly applied.
 - **Recommended builds**: Hunter reads Hunter Helper's own list from the installed addon (`<WowRoot>\<flavor>\Interface\AddOns\ElansHunterHelper\Data\Builds.lua`, read-only, 512 KB cap, parsed with `LuaData`),
   names mapped to nodes by the spell name (case and punctuation ignored), unmatched names reported, the order replayed through the rules with the level of each point. Other classes: none yet (see below).
   Saved builds (name, notes, code) live in `talentbuilds.json` in the Outpost's data folder.
