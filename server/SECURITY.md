@@ -230,10 +230,19 @@ longer lets a backslash into a name.
 - Storage: `<data>/armory.json`, atomic (tmp, flush, rename; a tmp is used only if the main file is missing), 96 MB cap on load, every loaded character re-validated by `Armory.Clean`, written at most every 10 s while busy, at once on a delete, every 15 s housekeeping and at shutdown.
 - Logs: counts only (`X shared a character with the armory`, `X took N character(s) out of the armory`); never a name, guild, item or number from a snapshot. Tested with a captured logger.
 
+## 2.17.0 (hosted datasets: the Classic baseline)
+
+- Messages: `dataset.info` (members and up, Page budget), `dataset.delete` (officers and the owner); HTTP `PUT /datasets/{name}` (officers and the owner) and `GET /datasets/{name}` (members and up), behind the same credential gate as every route (a wrong token or code counts towards the same lockout). Guests are refused everywhere.
+- The dataset name is never a path: it is looked up in a fixed list in code (`DatasetKinds`); anything else answers 404 before a byte is read. Content lives under server-generated 32-hex file names in `<data>/datasets/`, with `index.json` written by tmp + rename; startup removes `.part` / `.tmp` files and blobs nothing refers to.
+- The bundle is never executed or parsed as SQL on the server. It is streamed to disk (never held in memory) with the announced `Content-Length` enforced (shorter and longer both refused), the SHA-256 checked, a size cap (`LODGE_CLASSIC_MAX_MB`, 40), and then only the zip's entry NAMES, announced sizes and the first two bytes of the dump (the gzip magic) are looked at: only the expected file names are accepted (one `ClassicDB_*.sql.gz`, the three licence files, `source.json`, `updates/*.sql` with a safe character set), no paths, no folders other than `updates/`, no duplicates, at most 2000 entries and 400 MB announced in total. Anything else is refused with 415 and nothing is kept.
+- Replacing is atomic and a failed upload leaves the earlier content untouched. One upload per dataset at a time, 3 uploads at once, 5 uploads per person per 10 minutes (refused tries count), 6 downloads per member per dataset per hour, a 10 minute upload time limit.
+- Downloads are always `application/octet-stream` attachments, `nosniff`, `no-store`; the Outposts verify the SHA-256 and unpack with their own name allowlist (never using an entry's path), so the server being wrong or replaced can at worst make an Outpost refuse a bundle.
+- Who may replace what a whole lodge fetches is the officer rank and above (as for shared files); a malicious officer could host data that is useless but not harmful: the Outposts treat it as data (an SQL dump read by their own importer), never as something to run.
+- Logs: who shared or removed a dataset and its size; never content.
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 475 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 497 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
 python server/tests/security_integration.py                     # 150 checks against local servers (python -X utf8 on Windows)
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 41 checks

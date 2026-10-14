@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
@@ -387,6 +388,81 @@ namespace ElansAddonHub.Services
             }
         }
 
+        // ---- hosted datasets (server 2.17, feature "classic"): PUT /datasets/{name} (headers X-Version URL-encoded, X-Sha256, Content-Length), GET /datasets/{name}
+        // (answers X-Sha256 and X-Version). A refusal carries {error, reason}, whose text is already friendly.
+        public async Task<Dictionary<string, object>> UploadDataset(string dataset, string file, string version, string sha256, Action<double> progress = null)
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(dataset ?? "", "^[a-z]{1,24}$")) throw new InvalidOperationException("That can't be shared");
+            using (var fs = File.OpenRead(file))
+            using (var req = Request(HttpMethod.Put, "/datasets/" + dataset))
+            {
+                req.Headers.Add("X-Version", Uri.EscapeDataString(version ?? ""));
+                req.Headers.Add("X-Sha256", sha256);
+                req.Content = new StreamContent(progress == null ? (Stream)fs : new ProgressStream(fs, progress));
+                req.Content.Headers.ContentLength = fs.Length;
+                using (var resp = await Net.Http.SendAsync(req))
+                {
+                    var text = await resp.Content.ReadAsStringAsync();
+                    Dictionary<string, object> body = null;
+                    try { body = Json.Obj(text); } catch { }
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(DatasetError((int)resp.StatusCode, body?.Str("error")));
+                    return body ?? new Dictionary<string, object>();
+                }
+            }
+        }
+
+        public static string DatasetError(int status, string serverText)
+        {
+            switch (status)
+            {
+                case 401: return "Your sign-in isn't valid any more - join again with a new invite link";
+                case 403: return string.IsNullOrEmpty(serverText) ? "Your Lodge doesn't allow that" : serverText;
+                case 404: return "Your Lodge doesn't hold that (any more)";
+                case 413: return string.IsNullOrEmpty(serverText) ? "That is too big for this Lodge" : serverText;
+                case 429: return string.IsNullOrEmpty(serverText) ? "Your Lodge is busy - try again in a while" : serverText;
+                default: return string.IsNullOrEmpty(serverText) ? $"The Lodge refused it ({status})" : serverText;
+            }
+        }
+
+        public sealed class DatasetDownload { public string Sha256; public long Size; public string HeaderSha, HeaderVersion; }
+
+        // streams to toFile; the caller compares the SHA-256 and size with what the Lodge announced
+        public async Task<DatasetDownload> DownloadDataset(string dataset, string toFile, long expectedSize, Action<double> progress, System.Threading.CancellationToken ct)
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(dataset ?? "", "^[a-z]{1,24}$")) throw new InvalidOperationException("That can't be downloaded");
+            using (var req = Request(HttpMethod.Get, "/datasets/" + dataset))
+            using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct))
+            {
+                if (!resp.IsSuccessStatusCode)
+                {
+                    string text = null;
+                    try { text = Json.Obj(await resp.Content.ReadAsStringAsync())?.Str("error"); } catch { }
+                    throw new InvalidOperationException(DatasetError((int)resp.StatusCode, text));
+                }
+                var res = new DatasetDownload();
+                if (resp.Headers.TryGetValues("X-Sha256", out var hs)) res.HeaderSha = hs.FirstOrDefault();
+                if (resp.Headers.TryGetValues("X-Version", out var hv)) { try { res.HeaderVersion = Uri.UnescapeDataString(hv.FirstOrDefault() ?? ""); } catch { } }
+                long total = resp.Content.Headers.ContentLength ?? expectedSize;
+                using (var src = await resp.Content.ReadAsStreamAsync())
+                using (var dst = new FileStream(toFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    var buf = new byte[81920];
+                    long done = 0;
+                    int n;
+                    while ((n = await src.ReadAsync(buf, 0, buf.Length, ct)) > 0)
+                    {
+                        sha.TransformBlock(buf, 0, n, null, 0);
+                        dst.Write(buf, 0, n);
+                        done += n;
+                        if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total));
+                    }
+                    sha.TransformFinalBlock(new byte[0], 0, 0);
+                    res.Sha256 = LodgeFiles.Hex(sha.Hash); res.Size = done;
+                }
+                return res;
+            }
+        }
         public class DownloadException : InvalidOperationException
         {
             public int Status { get; }

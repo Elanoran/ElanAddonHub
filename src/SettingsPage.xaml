@@ -270,7 +270,19 @@
                 <TextBlock x:Name="ArmoryCharsNote" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="16,8,16,12" />
               </StackPanel>
             </StackPanel></ContentControl>
-            <TextBlock Text="Presence" Style="{StaticResource Head}" />
+            <TextBlock Text="Classic data" Style="{StaticResource Head}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Get Classic data from my Lodge automatically" Tag="When your Lodge hosts the Classic data (the public cMaNGOS classic-db, with its licence and credit), this PC fetches it from the Lodge by itself, so you don't have to download it. It stays labelled Classic baseline. With this off, the Atlas page still offers the download.">
+                <CheckBox x:Name="ClassicAutoBox" Style="{StaticResource Switch}" Click="ClassicAuto_Click" AutomationProperties.Name="Get Classic data from my Lodge automatically" />
+              </HeaderedContentControl>
+              <HeaderedContentControl x:Name="ClassicLodgeRow" Style="{StaticResource Setting.Row}" Header="Classic data for the Lodge" Tag="Host the Classic data you have on this PC, unchanged, so every member gets it automatically. Only officers and the owner can." Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                  <Button x:Name="ClassicShareButton" Style="{StaticResource Button.M}" Content="Share my Classic data with the Lodge" Click="ClassicShare_Click" Visibility="Collapsed" />
+                  <Button x:Name="ClassicUnshareButton" Style="{StaticResource Button.M}" Content="Stop hosting" Margin="8,0,0,0" Click="ClassicUnshare_Click" Visibility="Collapsed" />
+                </StackPanel>
+              </HeaderedContentControl>
+              <TextBlock x:Name="ClassicStatus" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="16,8,16,12" />
+            </StackPanel></ContentControl>            <TextBlock Text="Presence" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Connect when the Outpost starts" Tag="Friends see you online while the Outpost runs.">
                 <CheckBox x:Name="AutoConnectBox" Style="{StaticResource Switch}" Click="Lodge_Click" />

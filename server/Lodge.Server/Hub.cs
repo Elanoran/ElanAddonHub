@@ -100,7 +100,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.16.0";
+    public const string Version = "2.17.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -119,6 +119,7 @@ public class LodgeHub
     public readonly AtlasModule AtlasPool;
     public readonly ArmoryModule Armory;
     public readonly FilesModule SharedFiles;
+    public readonly DatasetsModule Datasets;
     public readonly LodgeInfoStore Info;
     readonly IModule[] modules;
     readonly ConcurrentDictionary<int, Member> members = new();
@@ -149,8 +150,9 @@ public class LodgeHub
         AtlasPool = new AtlasModule(this);
         Armory = new ArmoryModule(this);
         SharedFiles = new FilesModule(this);
+        Datasets = new DatasetsModule(this);
         Info = new LodgeInfoStore(cfg.DataDir);
-        modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, Armory, SharedFiles, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
+        modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, Armory, SharedFiles, Datasets, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
     // personal codes: one budget per person; guests (shared code): one per IP, so several friends on one guest
@@ -227,6 +229,7 @@ public class LodgeHub
         if (Cfg.FilesEnabled) f.Add("files");
         if (Cfg.ArmoryEnabled) f.Add("armory");
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests
+        foreach (var k in DatasetKinds.All) if (k.Enabled(Cfg)) f.Add(k.Feature);   // 2.17: hosted datasets ("classic")
         return f.ToArray();
     }
 
@@ -248,6 +251,7 @@ public class LodgeHub
             ["features"] = new JsonArray(FeatureList().Select(f => (JsonNode)JsonValue.Create(f)).ToArray()),
             ["canManageFiles"] = Cfg.FilesEnabled && Roles.Can(me.Role, Perm.FilesManage),
             ["filesMaxMb"] = Cfg.FilesMaxMb,
+            ["canShareClassic"] = Cfg.ClassicEnabled && Roles.Can(me.Role, Perm.DatasetManage),
             ["lodge"] = Info.ToJson(),
             ["calendar"] = Calendar.WelcomeView(),
             ["canInvite"] = Roles.Can(me.Role, Perm.Invite),
@@ -485,6 +489,7 @@ public class LodgeHub
                     Flight.Tick();
                     AtlasPool.Tick();
                     Armory.Tick();
+                    Datasets.Tick();
                     Auth.Strikes.Sweep();
                     SweepBudgets();
                 }

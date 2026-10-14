@@ -35,11 +35,85 @@ namespace ElansAddonHub
         public Button ClassicBannerNotNowForTest { get; private set; }
         public ProgressBar ClassicBannerProgressForTest { get; private set; }
 
-        // the same download as the card's button (asks for the size and the licence first)
+        // The Lodge (when it hosts the Classic data and the person is a member) hands it out; otherwise, and after a failed try with the Lodge, the public source
+        // (which asks for the size and the licence first). The card's button, the banner's and the notes' buttons all come here.
+        public ClassicLodgeSync LodgeSync { get; private set; }
         public void StartClassicDownload()
         {
             EnsureSetup();
+            if (LodgeSync != null && ClassicSetup.Backend.State() == ClassicState.NotDownloaded && LodgeSync.CanProvide) { _ = LodgeSync.GetNowAsync(); return; }
             _ = ClassicSetup.StartAsync();
+        }
+
+        public void UseLodgeSync(ClassicLodgeSync sync)
+        {
+            if (LodgeSync != null) LodgeSync.Changed -= LodgeSyncChanged;
+            LodgeSync = sync;
+            if (sync != null) sync.Changed += LodgeSyncChanged;
+        }
+
+        void LodgeSyncChanged() => Dispatcher.BeginInvoke(new Action(() => { FillClassic(); FillClassicBanner(); FillClassicOffer(); }));
+
+        public ClassicSetup EnsureClassicSetup() { EnsureSetup(); return ClassicSetup; }
+
+        // ---- the quiet question for an owner or officer who just downloaded the data: share it with the Lodge so members get it automatically. Once per release.
+        Border classicOffer;
+        bool offerTouched;
+        public Border ClassicOfferForTest => classicOffer;
+        public bool ClassicOfferShownForTest => classicOffer != null && classicOffer.Visibility == Visibility.Visible;
+        public Button ClassicOfferYesForTest { get; private set; }
+        public Button ClassicOfferNoForTest { get; private set; }
+        public string ClassicOfferTextForTest { get; private set; } = "";
+
+        FrameworkElement ClassicOfferView()
+        {
+            classicOffer = new Border { CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 0, 0, 12) };
+            classicOffer.SetResourceReference(Border.BackgroundProperty, "Brush.Info.Tint");
+            FillClassicOffer();
+            return classicOffer;
+        }
+
+        public void FillClassicOffer()
+        {
+            if (classicOffer == null) return;
+            ClassicOfferYesForTest = ClassicOfferNoForTest = null; ClassicOfferTextForTest = "";
+            var l = LodgeSync;
+            bool pending = l != null && l.ShareOfferPending;
+            if (pending) offerTouched = true;
+            bool show = l != null && (pending || l.Sharing || (offerTouched && l.ShareProblem.Length > 0));
+            classicOffer.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (!show) { classicOffer.Child = null; return; }
+            var sp = new StackPanel();
+            string text;
+            if (l.Sharing) text = "Sharing the Classic data with your Lodge · " + Math.Round(l.ShareFraction * 100) + " %";
+            else if (l.ShareProblem.Length > 0) text = l.ShareProblem;
+            else text = "Share the Classic data with your Lodge so members get it automatically? It is sent unchanged, with its licence and credit.";
+            ClassicOfferTextForTest = text;
+            var t = Tb(text, "Text.Body", l.ShareProblem.Length > 0 && !l.Sharing ? Res("Brush.Danger") : null); t.TextWrapping = TextWrapping.Wrap; sp.Children.Add(t);
+            if (l.Sharing)
+            {
+                sp.Children.Add(new ProgressBar { Style = (Style)FindResource("ThinProgress"), Minimum = 0, Maximum = 100, Value = Math.Round(l.ShareFraction * 100), Margin = new Thickness(0, 8, 0, 0) });
+            }
+            else
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
+                var yes = new Button { Content = l.ShareProblem.Length > 0 ? "Try again" : "Yes, share it", Style = (Style)FindResource("Button.Primary.M") };
+                yes.Click += (a, ev) => { _ = ShareClassicWithLodge(); };
+                row.Children.Add(yes); ClassicOfferYesForTest = yes;
+                var no = new Button { Content = "Not now", Style = (Style)FindResource("Button.M"), Margin = new Thickness(8, 0, 0, 0) };
+                no.Click += (a, ev) => { offerTouched = false; l.DeclineOffer(); FillClassicOffer(); };
+                row.Children.Add(no); ClassicOfferNoForTest = no;
+                sp.Children.Add(row);
+            }
+            classicOffer.Child = sp;
+        }
+
+        public async Task ShareClassicWithLodge()
+        {
+            if (LodgeSync == null) return;
+            var ok = await LodgeSync.ShareAsync();
+            if (ok) offerTouched = false;
+            FillClassicOffer();
         }
 
         FrameworkElement ClassicBannerView()
@@ -78,6 +152,10 @@ namespace ElansAddonHub
                     {
                         var failed = s.State == ClassicCardState.Failed;
                         var t = Tb(ClassicSetup.BannerText, "Text.Body"); t.TextWrapping = TextWrapping.Wrap; sp.Children.Add(t);
+                        if (LodgeSync != null && LodgeSync.CanProvide)
+                        {
+                            var lt = Tb("Your Lodge has it, so it comes from the Lodge instead of the internet.", "Text.Secondary", null, 4); lt.TextWrapping = TextWrapping.Wrap; sp.Children.Add(lt);
+                        }
                         if (failed) { var e = Tb(s.Error.Length > 0 ? s.Error : "Something went wrong.", "Text.Body", Res("Brush.Danger"), 4); e.TextWrapping = TextWrapping.Wrap; sp.Children.Add(e); }
                         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
                         var get = new Button { Content = failed ? "Try again" : s.State == ClassicCardState.Downloaded ? "Read the Classic data" : ClassicSetup.GetButtonText, Style = (Style)FindResource("Button.Primary.M") };
@@ -180,9 +258,9 @@ namespace ElansAddonHub
                 case ClassicCardState.NotDownloaded:
                     {
                         var b = new Button { Content = ClassicSetup.ButtonText, Style = (Style)FindResource("Button.Primary.M"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 12, 0, 0) };
-                        b.Click += (a, e) => { _ = s.StartAsync(); };
+                        b.Click += (a, e) => StartClassicDownload();
                         classicBody.Children.Add(b); ClassicPrimaryForTest = b;
-                        var n = Tb("You will see the exact size and the licence before anything is downloaded.", "Text.Caption", Res("Brush.Text.Tertiary"), 8);
+                        var n = Tb(LodgeSync != null && LodgeSync.CanProvide ? "Your Lodge has it, so it comes from the Lodge instead of the internet." : "You will see the exact size and the licence before anything is downloaded.", "Text.Caption", Res("Brush.Text.Tertiary"), 8);
                         classicBody.Children.Add(n);
                         break;
                     }
@@ -223,7 +301,7 @@ namespace ElansAddonHub
                         var e = Tb(s.Error.Length > 0 ? s.Error : "Something went wrong.", "Text.Body", Res("Brush.Danger"), 8); e.TextWrapping = TextWrapping.Wrap; classicBody.Children.Add(e);
                         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
                         var b = new Button { Content = "Try again", Style = (Style)FindResource("Button.Primary.M") };
-                        b.Click += (a, ev) => { _ = s.StartAsync(); };
+                        b.Click += (a, ev) => { if (s.Backend.State() == ClassicState.NotDownloaded) StartClassicDownload(); else _ = s.StartAsync(); };
                         row.Children.Add(b); ClassicPrimaryForTest = b;
                         if (s.Backend.State() != ClassicState.NotDownloaded) row.Children.Add(RemoveButton(s));
                         classicBody.Children.Add(row);
@@ -232,7 +310,7 @@ namespace ElansAddonHub
             }
 
             // credit and licence, always
-            var credit = Tb(ClassicSetup.CreditLine, "Text.Caption", Res("Brush.Text.Tertiary"), 12);
+            var credit = Tb(s.CreditText, "Text.Caption", Res("Brush.Text.Tertiary"), 12);
             credit.TextWrapping = TextWrapping.Wrap; classicBody.Children.Add(credit);
             var links = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
             var lic = s.LicensePath();
@@ -259,6 +337,7 @@ namespace ElansAddonHub
                 : Dialog.Confirm(Window.GetWindow(this), "Remove the Classic baseline?", "This deletes the downloaded data and its index from this PC. Atlas keeps working without it, and you can download it again later.", "Remove", true);
             if (!yes) return Task.CompletedTask;
             ClassicSetup.Delete();
+            LodgeSync?.NoteUserRemoved();
             return Task.CompletedTask;
         }
 

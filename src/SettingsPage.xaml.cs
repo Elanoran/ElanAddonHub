@@ -126,6 +126,7 @@ namespace ElansAddonHub
             FlightShareBox.IsChecked = !s.FlightShareOff;
             AtlasShareBox.IsChecked = !s.AtlasShareOff;
             ArmoryShareBox.IsChecked = s.ArmoryShareOn;
+            ClassicAutoBox.IsChecked = !s.ClassicFromLodgeOff;
             ItemDataBox.IsChecked = !s.ItemDataOff;
             ElansAddonHub.Services.Db2.ItemData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Db2.ItemData.Changed += OnItemDataChanged;
             ElansAddonHub.Services.SeenData.Changed -= OnItemDataChanged; ElansAddonHub.Services.SeenData.Changed += OnItemDataChanged;
@@ -186,6 +187,7 @@ namespace ElansAddonHub
             session.Error += text => { if (SecGm.Visibility == Visibility.Visible) GmStatus.Text = text; };
             InitProfile();
             InitArmory();
+            InitClassic();
         }
 
         // ================================================================ navigation
@@ -276,7 +278,7 @@ namespace ElansAddonHub
                 session.RequestInvites();
                 session.RequestAllDevices();
             }
-            if (NavLodge.IsChecked == true) { session.RequestMyDevices(); UpdateDevicesCard(); FillArmory(); }
+            if (NavLodge.IsChecked == true) { session.RequestMyDevices(); UpdateDevicesCard(); FillArmory(); FillClassicSettings(); }
             SyncPrivacy();
             if (NavAddons.IsChecked == true) UpdateCfStatus();
             var c = session.Presence.Current;

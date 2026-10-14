@@ -67,7 +67,7 @@ public sealed class FunRig : IDisposable
         var j = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(o))!.AsObject();
         var type = (string)j["t"]!;
         if (!await Hub.Chat.Handle(m, type, j) && !await Hub.Calendar.Handle(m, type, j)
-            && !await Hub.Flight.Handle(m, type, j) && !await Hub.AtlasPool.Handle(m, type, j) && !await Hub.Armory.Handle(m, type, j)) await Hub.SharedFiles.Handle(m, type, j);
+            && !await Hub.Flight.Handle(m, type, j) && !await Hub.AtlasPool.Handle(m, type, j) && !await Hub.Armory.Handle(m, type, j)) { if (!await Hub.SharedFiles.Handle(m, type, j)) await Hub.Datasets.Handle(m, type, j); }
     }
 
     public async Task<string> Say(Member m, string text, string channel = "general")

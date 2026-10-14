@@ -397,6 +397,7 @@ namespace ElansAddonHub
             if (Begin("health")) { result += "\r\n" + await HealthTest(dir); End(); }
             if (Begin("inputs")) { result += "\r\n" + await InputsTest(dir); End(); }
             if (Begin("atlasclassic")) { result += "\r\n" + await AtlasClassicTest(dir); End(); }
+            if (Begin("atlasclassiclodge")) { result += "\r\n" + await AtlasClassicLodgeTest(dir); End(); }
             if (Begin("atlaspage")) { result += "\r\n" + await AtlasPageTest(dir); End(); }
             if (Begin("atlasbrowse")) { result += "\r\n" + await AtlasBrowseTest(dir); End(); }
             if (Begin("atlashosts")) { result += "\r\n" + await AtlasHostsTest(dir); End(); }

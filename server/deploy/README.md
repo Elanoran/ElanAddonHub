@@ -122,6 +122,9 @@ upload limit is set. Backups include `slots/` (`LODGE_BACKUP_FILES=0` leaves it 
 sudo bash server/tests/lodge_ops_test.sh      # backup, rotation, restore, update, rollback (temp folders, fake systemctl/curl)
 ```
 
+## The Classic baseline, hosted once (2.17)
+
+The Outpost's Atlas can show where things drop, who sells them and what quests give them from the public cMaNGOS classic-db (GPL-3.0). Instead of every member downloading it from GitHub, the lodge can host it once: an officer or the owner clicks **Share my Classic data with the Lodge** (Outpost > Settings > Lodge > Classic data; or answers "Yes" to the quiet offer after their own download), the server stores the original upstream files unchanged in one bundle, and every member's Outpost fetches it from the lodge automatically (a setting lets them opt out). Guests download it from the public source as before. The bundle is about 15 MB and lives in `data/datasets/` (inside `data/`, so `lodge-backup` includes it); the server never opens or runs it. After `sudo lodge-update` nothing else needs to be done; the settings are below. Allow request bodies of `LODGE_CLASSIC_MAX_MB` in the reverse proxy (the default of 40 MB is below the 50 MB the shared files already need).
 ## The Armory (2.16)
 
 Members can choose characters to share with the lodge (Outpost > Settings > Lodge > Armory, off until they turn it on): what the character wears, its stats, talents, professions and hunter pets - never bags, bank, gold or mail. Everybody in the lodge can browse them on the Outpost's Characters page ("Lodge" switch). Guests (the shared code) neither share nor browse. Unticking a character removes it; a member who leaves or is removed takes theirs along. The data lives in `data/armory.json` (a few KB per character; inside `data/`, so `lodge-backup` includes it). After `sudo lodge-update` nothing else needs to be done; the only setting (in `/etc/lodge/lodge.env`, then `sudo systemctl restart lodge`) is `LODGE_ARMORY_ENABLED` (see the table below).
@@ -139,3 +142,6 @@ and shows the sum, so a member re-sending data never counts twice. Guests can re
 |---|---|
 | `LODGE_ARMORY_ENABLED` (1) | `0` switches the Armory off: not advertised, `armory.put` answers `disabled`, the other messages answer an error, the data stays on disk |
 | `LODGE_ATLAS_ENABLED` (1) | `0` switches the feature off: not advertised, `atlas.share` / `atlas.get` answer `disabled`, the data stays on disk |
+| `LODGE_CLASSIC_ENABLED` (1) | `0` switches the hosted Classic data off: not advertised, upload / download / delete answer 403 `disabled`, the stored bundle stays on disk (about 15 MB) |
+| `LODGE_CLASSIC_MAX_MB` (40) | largest bundle accepted |
+| `LODGE_CLASSIC_DOWNLOADS_PER_HOUR` (6) | per member |

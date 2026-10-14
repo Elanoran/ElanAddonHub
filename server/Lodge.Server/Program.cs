@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 var cfg = LodgeConfig.FromEnv();
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(cfg.Urls);
-builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = Math.Max(cfg.MaxFileBytes, cfg.FilesMaxBytes) + (1 << 20));
+builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = Math.Max(Math.Max(cfg.MaxFileBytes, cfg.FilesMaxBytes), cfg.ClassicMaxMb * 1024L * 1024L) + (1 << 20));
 // sockets are closed cleanly on stop (below), so a restart needn't wait the default 30 s
 builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(8));
 // ASP.NET's per-request logs contain full URLs (a 1.x client puts its code in ?code=): keep them out of the journal
@@ -260,6 +260,49 @@ app.MapGet("/slots/{id}/{v:int}", (HttpContext ctx, string id, int v) =>
     catch (FilesException e) { return FilesFail(e); }
 });
 
+// 2.17 hosted datasets (feature "classic"): the Classic baseline files, stored once for the whole lodge. Same credential headers as every route.
+// Info and delete are WebSocket messages (DatasetsModule); only the bytes travel here, streamed to disk.
+IResult DatasetFail(DatasetException e) => Results.Json(new { error = e.Message, reason = e.Reason }, statusCode: e.Status);
+
+app.MapPut("/datasets/{name}", async (HttpContext ctx, string name) =>
+{
+    var deny = GateReq(ctx, out var who);
+    if (deny != null) return deny;
+    var by = who.Name ?? Names.ForLog(ctx.Request.Headers["X-Lodge-Name"].ToString(), 24);
+    var rateKey = who.Personal ? "p:" + who.Name.ToLowerInvariant() : "g:" + IpOf(ctx);
+    try
+    {
+        var view = await lodge.Datasets.Upload(by, who.Personal ? who.Role : "guest", rateKey, name, Unesc(ctx, "X-Version"), ctx.Request.Headers["X-Sha256"].ToString(),
+            ctx.Request.ContentLength, ctx.Request.Body, ctx.RequestAborted);
+        return Results.Json(view);
+    }
+    catch (DatasetException e) { return DatasetFail(e); }
+    catch (OperationCanceledException) { return Results.StatusCode(499); }
+    catch (BadHttpRequestException) { return Results.Json(new { error = "The file is larger than " + cfg.ClassicMaxMb + " MB", reason = "too-big" }, statusCode: 413); }
+    catch (IOException e)
+    {
+        app.Logger.LogWarning("Dataset upload failed: {Error}", e.GetType().Name);
+        return Results.Json(new { error = "The server couldn't store the file", reason = "save" }, statusCode: 500);
+    }
+});
+
+app.MapGet("/datasets/{name}", (HttpContext ctx, string name) =>
+{
+    var deny = GateReq(ctx, out var who);
+    if (deny != null) return deny;
+    var rateKey = who.Personal ? "p:" + who.Name.ToLowerInvariant() : "g:" + IpOf(ctx);
+    try
+    {
+        var fs = lodge.Datasets.OpenForDownload(name, who.Personal ? who.Role : "guest", rateKey, out var meta);
+        ctx.Response.Headers["Cache-Control"] = "private, no-store";
+        ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        ctx.Response.Headers["X-Sha256"] = meta.Sha256;
+        ctx.Response.Headers["X-Version"] = Uri.EscapeDataString(meta.Version);
+        // always a download, never rendered or run
+        return Results.File(fs, "application/octet-stream", meta.Name + ".zip", enableRangeProcessing: true);
+    }
+    catch (DatasetException e) { return DatasetFail(e); }
+});
 files.StartCleanup(app.Lifetime.ApplicationStopping);
 lodge.StartRevalidation(app.Lifetime.ApplicationStopping);
 // restart/stop: say goodbye properly (clients reconnect at once, see LodgeHub.CloseAllForShutdown)
