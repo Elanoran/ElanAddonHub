@@ -4,8 +4,8 @@ using System.Linq;
 
 namespace ElansAddonHub.Services.Professions
 {
-    // One of the user's characters as the Professions page sees it: the skills the Hub saved and every item in bags + bank (the Hub does not save
-    // WHICH recipes a character has learned, so the Outpost never claims to know that).
+    // One of the user's characters as the Professions page sees it: the skills the Hub saved, every item in bags + bank and, from Hub 1.14.0, the recipes
+    // the Hub read from the profession windows (Known). A profession without a read is "unknown", never "not learned": the Outpost only claims what was read.
     public sealed class ProfChar
     {
         public string Key = "", Name = "", Class = "", Realm = "";
@@ -13,6 +13,24 @@ namespace ElansAddonHub.Services.Professions
         public bool FromHub;               // the Hub saved this character: its key is the one Elan's Hub (ElansHub.CharKey) and the game use, so a guide can be handed to the game
         public readonly Dictionary<string, KeyValuePair<int, int>> Skills = new Dictionary<string, KeyValuePair<int, int>>(StringComparer.OrdinalIgnoreCase);   // profession -> (skill, max)
         public readonly Dictionary<int, int> Items = new Dictionary<int, int>();
+        public readonly Dictionary<string, int> Lines = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);       // profession -> skill line id (Hub 1.14.0)
+        public readonly Dictionary<int, HubKnownScan> Known = new Dictionary<int, HubKnownScan>();                          // skill line id -> the recipes read from its window
+
+        // the read of this profession's window (null = never read)
+        public HubKnownScan ScanOf(string profession, int skillId)
+        {
+            if (skillId > 0 && Known.TryGetValue(skillId, out var s)) return s;
+            if (profession != null && Lines.TryGetValue(profession, out var line) && Known.TryGetValue(line, out s)) return s;
+            if (profession != null) foreach (var k in Known.Values) if (string.Equals(k.Name, profession, StringComparison.OrdinalIgnoreCase)) return k;
+            return null;
+        }
+        // true = learned, false = not in the read, null = the window was never read (unknown)
+        public bool? Knows(string profession, int skillId, int spellId)
+        {
+            var s = ScanOf(profession, skillId);
+            return s == null ? (bool?)null : s.Ids.Contains(spellId);
+        }
+        public bool KnowsSpell(int spellId) { foreach (var k in Known.Values) if (k.Ids.Contains(spellId)) return true; return false; }
 
         public bool Has(string profession) => Skills.ContainsKey(profession ?? "");
         public int SkillOf(string profession) => Skills.TryGetValue(profession ?? "", out var s) ? s.Key : 0;
@@ -35,7 +53,11 @@ namespace ElansAddonHub.Services.Professions
                 if (c.Hub != null)
                 {
                     var pm = HubModules.ProfessionsOf(c.Hub);
-                    if (pm != null) foreach (var p in pm.List) pc.Skills[p.Name] = new KeyValuePair<int, int>(p.Skill, p.Max);
+                    if (pm != null)
+                    {
+                        foreach (var p in pm.List) { pc.Skills[p.Name] = new KeyValuePair<int, int>(p.Skill, p.Max); if (p.Line > 0) pc.Lines[p.Name] = p.Line; }
+                        foreach (var kv in pm.Known) pc.Known[kv.Key] = kv.Value;
+                    }
                 }
                 foreach (var it in c.Bags ?? new List<InvItem>()) pc.Add(it.Id, it.Count);
                 foreach (var it in c.Bank ?? new List<InvItem>()) pc.Add(it.Id, it.Count);
@@ -65,6 +87,7 @@ namespace ElansAddonHub.Services.Professions
         public List<ProfChar> Crafters = new List<ProfChar>();      // characters with the profession (skill from the recipe's estimated start)
         public ProfChar Best;                          // the crafter with the highest skill
         public SkillColor Color;                       // for the best crafter's skill
+        public bool Unconfirmed;                       // the best crafter's window was never read: the recipe may not be learned
         public ProfChar SingleHolder;                  // set when ONE character has every reagent for at least one craft
         public override string ToString() => Recipe.Name + " x" + Times;
     }
@@ -103,9 +126,11 @@ namespace ElansAddonHub.Services.Professions
                     if (r.IsCamp && !includeCamp) continue;
                     int t = Times(r, stock);
                     if (t < 1) continue;
-                    var cr = crafters.Where(c => c.SkillOf(p.Name) >= r.Start).OrderByDescending(c => c.SkillOf(p.Name)).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                    // a character whose profession window was read must know the recipe; one that was never read stays on the skill estimate
+                    var cr = crafters.Where(c => c.SkillOf(p.Name) >= r.Start && c.Knows(p.Name, p.Id, r.SpellId) != false).OrderByDescending(c => c.SkillOf(p.Name)).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
                     if (requireCrafter && cr.Count == 0) continue;
                     var row = new CraftNowRow { Profession = p, Recipe = r, Times = t, Crafters = cr, Best = cr.FirstOrDefault() };
+                    row.Unconfirmed = row.Best != null && row.Best.Knows(p.Name, p.Id, r.SpellId) == null;
                     row.Color = row.Best != null ? r.ColorAt(row.Best.SkillOf(p.Name)) : SkillColor.None;
                     row.SingleHolder = (scope != null ? new[] { scope } : chars.ToArray()).FirstOrDefault(c => Times(r, c.Items) >= 1);
                     res.Add(row);

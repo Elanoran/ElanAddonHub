@@ -19,6 +19,7 @@ namespace ElansAddonHub.Services.Atlas
         public int Id;
         public int Level, Level2;                 // the range the level filter looks at (an item's required level, a creature's levels, a zone's creature levels, a recipe's skill)
         public int Quality = -1, ILvl, Cls = -1, Sub = -1, Inv, Icon, Zone, Rank, Type, Flags, Skill;
+        public int Spell, Start;                  // recipes: the recipe spell, and the skill it is learnable from (estimated from its colour band)
         public bool Client, Classic, Lodge;       // which layers know it: the player's game, the Classic baseline, the Lodge's observations
         public int Src;                           // items: bit per AtlasBrowse.Hows
         public double Chance; public bool ChanceLodge;
@@ -596,6 +597,7 @@ namespace ElansAddonHub.Services.Atlas
                 var e = Entry(r.ItemId > 0 ? "item" : "spell", r.ItemId > 0 ? r.ItemId : r.SpellId, name);
                 e.Client = true; e.Skill = r.SkillId; e.SubLabel = skill?.Name ?? "";
                 e.Level = Math.Max(1, r.MinRank); e.Level2 = e.Level;
+                e.Spell = r.SpellId; e.Start = Math.Max(e.Level, Professions.RecipeBands.EstimatedStart(r.Green, r.Gray));
                 if (r.ItemId > 0) { e.Quality = AtlasQuery.ItemQuality(r.ItemId); e.Icon = AtlasQuery.ItemIcon(r.ItemId); } else e.Icon = sp?.IconId ?? 0;
                 e.Detail = (skill?.Name ?? "Profession") + (r.MinRank > 0 ? " " + r.MinRank : "") + (r.Gray > 0 ? " · grey at " + r.Gray : "");
                 e.Extra = r.ReagentCount > 0 ? "Uses " + ReagentLine(r) : "";

@@ -412,6 +412,9 @@ namespace ElansAddonHub
                 Check("my own overview still has gold, experience and bag space", mine.Contains("gold|" + InventoryReader.Money(123456789)) && mine.Any(l => l.StartsWith("xp|")) && mine.Contains("stat|Bag space|17 free of 22"), string.Join(" | ", mine));
                 Check("my own gear tooltip still has the counts across my characters", InventoryView.DollTipForTest(15).Any(t => t.Contains("Elan")), string.Join(" | ", InventoryView.DollTipForTest(15)));
                 Check("the Outpost wrote nothing into the WoW folder", Directory.GetFiles(root, "*", SearchOption.AllDirectories).Select(f => Path.GetFileName(f)).All(n => n == "ElansHub.lua"));
+
+                // learned recipes (2.52.0, server 2.19.0 `armory2`): the snapshot, the signature, "who can craft this"
+                ArmoryKnownChecks(dir, Check, sent);
             }
             catch (Exception ex) { ok = false; notes.Add("FAIL exception: " + ex); }
             finally

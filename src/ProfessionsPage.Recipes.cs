@@ -27,8 +27,11 @@ namespace ElansAddonHub
             if (who != null)
             {
                 int skill = who.SkillOf(prof.Name);
-                if (filter == "now") q = q.Where(r => r.Start <= skill && r.ColorAt(skill) != SkillColor.Grey);
+                var scan = who.ScanOf(prof.Name, prof.Id);
+                if (filter == "now") q = q.Where(r => r.Start <= skill && r.ColorAt(skill) != SkillColor.Grey && (scan == null || scan.Ids.Contains(r.SpellId)));
                 else if (filter == "later") q = q.Where(r => r.Start > skill);
+                if (scan != null && knownFilter == "learned") q = q.Where(r => scan.Ids.Contains(r.SpellId));
+                else if (scan != null && knownFilter == "notlearned") q = q.Where(r => !scan.Ids.Contains(r.SpellId));
             }
             return q.ToList();
         }
@@ -47,7 +50,7 @@ namespace ElansAddonHub
             foreach (var c in new[] { SkillColor.Orange, SkillColor.Yellow, SkillColor.Green, SkillColor.Grey })
                 legend.Children.Add(ChipText(RecipeBands.Word(c) + (c == SkillColor.Orange ? ": every craft is a skill-up" : c == SkillColor.Yellow ? ": most crafts" : c == SkillColor.Green ? ": sometimes" : ": never"), ColorBrush(c)));
             head.Children.Add(legend);
-            var note = Line("The Outpost cannot see which recipes a character has already learned (the Hub does not save them), so \"can make now\" means the skill is high enough, not that the recipe is known. Where a recipe starts is estimated from its colour band.", "Text.Caption", null, 4);
+            var note = Line(KnownNote(), "Text.Caption", null, 4);
             note.TextWrapping = TextWrapping.Wrap;
             head.Children.Add(note);
             if (prof.Ranks.Count > 0)
@@ -62,6 +65,23 @@ namespace ElansAddonHub
             Body.Children.Add(host);
             AddRecipeRows(host, list, 0, skill);
         }
+
+        // what the page knows about the chosen character's learned recipes (the Hub reads them when a profession window is open in game)
+        string KnownNote()
+        {
+            const string tail = " Where a recipe starts is estimated from its colour band.";
+            if (who == null || prof == null) return "Pick a character to see which of these recipes it has learned (Elan's Hub 1.14.0 or newer reads them when you open a profession window in game)." + tail;
+            if (!who.FromHub) return who.Name + " has no Elan's Hub data, so the Outpost cannot tell which recipes are learned." + tail;
+            var scan = who.ScanOf(prof.Name, prof.Id);
+            if (scan == null) return "Open your " + prof.Name + " window in game once to read " + who.Name + "'s learned recipes (the game only lets an addon read them while the window is open; needs Elan's Hub 1.14.0 or newer). Until then \"can make now\" only means the skill is high enough." + tail;
+            int have = prof.Recipes.Count(r => scan.Ids.Contains(r.SpellId));
+            return "Learned " + have.ToString("N0", CultureInfo.InvariantCulture) + " of " + prof.Recipes.Count.ToString("N0", CultureInfo.InvariantCulture) + " - last read " + ScanDate(scan.At) + (scan.Partial ? ". The last read was partial (a group was collapsed or an entry unreadable), so some learned recipes may still show as not learned: open the window with every group expanded." : ".") + tail;
+        }
+
+        static string ScanDate(long at) => at > 0 ? DateTimeOffset.FromUnixTimeSeconds(at).LocalDateTime.ToString("d MMM yyyy HH:mm", CultureInfo.InvariantCulture) : "at an unknown time";
+
+        // the characters (of the user's) that have learned a recipe, from their reads
+        List<ProfChar> KnownBy(int spellId) => chars.Where(c => c.KnowsSpell(spellId)).ToList();
 
         void AddRecipeRows(StackPanel host, List<ProfRecipe> list, int from, int skill)
         {
@@ -90,6 +110,12 @@ namespace ElansAddonHub
             Grid.SetColumn(mid, 1);
             var nameRow = new WrapPanel();
             nameRow.Children.Add(LinkText(r.Name + (r.OutCount > 1 ? " x" + r.OutCount : ""), r.ItemId > 0 ? AtlasIds.Item(r.ItemId) : AtlasIds.Spell(r.SpellId), "Text.RowTitle", QualityBrush(r.Quality)));
+            var scanHere = who != null && prof != null ? who.ScanOf(prof.Name, prof.Id) : null;
+            if (scanHere != null)
+            {
+                bool learned = scanHere.Ids.Contains(r.SpellId);
+                nameRow.Children.Add(new Border { Style = Sty("Chip"), Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(8, 0, 8, 0), MinHeight = 20, Child = Line(learned ? "Known" : "Not learned", "Text.Caption", learned ? Res("Brush.Success") : null) });
+            }
             if (r.IsCamp) nameRow.Children.Add(new Border { Style = Sty("Chip"), Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(8, 0, 8, 0), MinHeight = 20, Child = Line("Camp, tier " + r.Tier, "Text.Caption") });
             mid.Children.Add(nameRow);
             mid.Children.Add(Line(LearnLine(r), "Text.Caption", null, 2));
@@ -122,6 +148,7 @@ namespace ElansAddonHub
                 }
                 mid.Children.Add(lw);
             }
+            if (crafters != null && !r.IsCamp) mid.Children.Add(CraftersLink(r.SpellId));
             grid.Children.Add(mid);
 
             // colour for the character, else the band
@@ -183,6 +210,8 @@ namespace ElansAddonHub
                     if (have.Length + price.Length > 0) sp.Children.Add(GameTooltip.Muted(NameOf(g.ItemId) + ": " + string.Join(" · ", new[] { have, price }.Where(x => x.Length > 0)), 2));
                 }
             sp.Children.Add(GameTooltip.Muted(prof?.Name + " - yellow from " + r.Yellow + ", green " + r.Green + ", grey " + r.Grey + (r.Start > 1 ? " - can be learned from about skill " + r.Start + " (estimated)" : ""), 8));
+            var kb = KnownBy(r.SpellId);
+            if (kb.Count > 0) sp.Children.Add(GameTooltip.Muted("Learned by " + string.Join(", ", kb.Select(c => c.Name)), 4));
             sp.Children.Add(GameTooltip.Muted("Spell ID " + r.SpellId + (r.ItemId > 0 ? " - Item ID " + r.ItemId : "")));
             return gt;
         }

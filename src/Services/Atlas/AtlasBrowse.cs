@@ -31,6 +31,7 @@ namespace ElansAddonHub.Services.Atlas
         public string For = "";                             // items: a character key (level and proficiency)
         public string Zone = "";                            // creatures, objects, quests: a UiMap id
         public string Rank = "";                            // creatures: elite | rare | boss
+        public string Learn = "";                           // recipes: "can" = recipes of my characters' professions that they have not learned yet and have the skill for (needs the Hub's profession-window reads)
         public string Sort = "";                            // "" = the category's own order
 
         public const string Prefix = "browse:";
@@ -65,6 +66,7 @@ namespace ElansAddonHub.Services.Atlas
                     case "for": q.For = v.Trim(); break;
                     case "zone": if (int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out n) && n > 0) q.Zone = n.ToString(CultureInfo.InvariantCulture); break;
                     case "rank": v = v.ToLowerInvariant(); if (v == "elite" || v == "rare" || v == "boss") q.Rank = v; break;
+                    case "learn": v = v.ToLowerInvariant(); if (v == "can") q.Learn = v; break;
                     case "sort": q.Sort = v.Trim().ToLowerInvariant(); break;
                 }
             }
@@ -83,13 +85,13 @@ namespace ElansAddonHub.Services.Atlas
             if (MinLevel > 0) Add("minlvl", MinLevel.ToString(CultureInfo.InvariantCulture));
             if (MaxLevel > 0) Add("maxlvl", MaxLevel.ToString(CultureInfo.InvariantCulture));
             if (Quality >= 0) Add("q", Quality.ToString(CultureInfo.InvariantCulture));
-            Add("slot", Slot); Add("src", Src); Add("how", How); Add("for", For); Add("zone", Zone); Add("rank", Rank); Add("sort", Sort);
+            Add("slot", Slot); Add("src", Src); Add("how", How); Add("for", For); Add("zone", Zone); Add("rank", Rank); Add("learn", Learn); Add("sort", Sort);
             if (qs.Count > 0) sb.Append('?').Append(string.Join("&", qs));
             return sb.ToString();
         }
 
         public BrowseQuery WithPath(params string[] slugs) { var q = Clone(); q.Path = slugs.ToList(); return q; }
-        public bool HasFilters => Name.Length > 0 || MinLevel > 0 || MaxLevel > 0 || Quality >= 0 || Slot.Length > 0 || Src.Length > 0 || How.Length > 0 || For.Length > 0 || Zone.Length > 0 || Rank.Length > 0;
+        public bool HasFilters => Name.Length > 0 || MinLevel > 0 || MaxLevel > 0 || Quality >= 0 || Slot.Length > 0 || Src.Length > 0 || How.Length > 0 || For.Length > 0 || Zone.Length > 0 || Rank.Length > 0 || Learn.Length > 0;
         public override string ToString() => ToId();
     }
 
@@ -109,7 +111,7 @@ namespace ElansAddonHub.Services.Atlas
     // which filter controls the page shows for this category, and what they offer
     public sealed class BrowseControls
     {
-        public bool Level, Quality, Slot, Src, How, For, Zone, Rank;
+        public bool Level, Quality, Slot, Src, How, For, Zone, Rank, Learn;
         public string LevelLabel = "Level";
         public List<BrowseChoice> Slots = new List<BrowseChoice>(), Zones = new List<BrowseChoice>(), Chars = new List<BrowseChoice>(), Sorts = new List<BrowseChoice>();
         public string DefaultSort = "name";
@@ -256,7 +258,7 @@ namespace ElansAddonHub.Services.Atlas
         static BrowseQuery WithFiltersOf(this BrowseQuery to, BrowseQuery from)
         {
             to.Name = from.Name; to.MinLevel = from.MinLevel; to.MaxLevel = from.MaxLevel; to.Quality = from.Quality; to.Slot = from.Slot; to.Src = from.Src; to.How = from.How;
-            to.For = from.For; to.Zone = from.Zone; to.Rank = from.Rank; to.Sort = from.Sort;
+            to.For = from.For; to.Zone = from.Zone; to.Rank = from.Rank; to.Learn = from.Learn; to.Sort = from.Sort;
             return to;
         }
 
@@ -278,9 +280,11 @@ namespace ElansAddonHub.Services.Atlas
             int zone = q.Zone.Length > 0 ? int.Parse(q.Zone, CultureInfo.InvariantCulture) : 0;
             int how = q.How.Length > 0 ? 1 << Array.IndexOf(Hows, q.How) : 0;
             var res = new List<BEntry>();
+            var canLearn = q.Learn == "can" ? LearnFilter() : null;
             foreach (var e in src)
             {
                 if (words != null && !words.All(w => e.Lower.Contains(w))) continue;
+                if (canLearn != null && !canLearn(e)) continue;
                 if (q.MinLevel > 0 || q.MaxLevel > 0)
                 {
                     if (e.Level <= 0 && e.Level2 <= 0) continue;
@@ -300,6 +304,38 @@ namespace ElansAddonHub.Services.Atlas
                 res.Add(e);
             }
             return res;
+        }
+
+        // ---- "Recipes you can learn": recipes of the professions my characters have, that a character whose profession window the Hub read has not learned yet and has the skill for
+        static bool HasLearnData()
+        {
+            foreach (var c in AtlasQuery.Characters())
+                if (c.Hub != null) { var pm = HubModules.ProfessionsOf(c.Hub); if (pm != null && pm.Known.Count > 0) return true; }
+            return false;
+        }
+
+        static Func<BEntry, bool> LearnFilter()
+        {
+            var mods = new List<HubProfessionsModule>();
+            foreach (var c in AtlasQuery.Characters())
+            {
+                if (c.Hub == null) continue;
+                var pm = HubModules.ProfessionsOf(c.Hub);
+                if (pm != null && pm.Known.Count > 0) mods.Add(pm);        // never-read characters are unknown, not "has not learned"
+            }
+            return e =>
+            {
+                if (e.Spell <= 0) return false;
+                foreach (var pm in mods)
+                {
+                    var prof = pm.List.FirstOrDefault(p => (p.Line > 0 && p.Line == e.Skill) || string.Equals(p.Name, e.SubLabel, StringComparison.OrdinalIgnoreCase));
+                    if (prof == null) continue;
+                    var scan = pm.Known.Values.FirstOrDefault(k => k.Line == e.Skill) ?? pm.Known.Values.FirstOrDefault(k => string.Equals(k.Name, e.SubLabel, StringComparison.OrdinalIgnoreCase));
+                    if (scan == null) continue;
+                    if (prof.Skill >= e.Start && !scan.Ids.Contains(e.Spell)) return true;
+                }
+                return false;
+            };
         }
 
         static bool RankMatches(BEntry e, string rank)
@@ -363,7 +399,7 @@ namespace ElansAddonHub.Services.Atlas
                     S("level", "Level"); S("name", "Name"); c.DefaultSort = "level";
                     break;
                 case "recipes":
-                    c.Level = true; c.LevelLabel = "Skill level";
+                    c.Level = true; c.LevelLabel = "Skill level"; c.Learn = HasLearnData();
                     S("level", "Skill level"); S("name", "Name"); c.DefaultSort = "level";
                     break;
                 default:
@@ -384,6 +420,10 @@ namespace ElansAddonHub.Services.Atlas
         // ---- notes: what is missing and what would add it
         static void AddNotes(BrowseResult r, BIndex ix, BrowseQuery q, InvChar chr, List<InvChar> chars)
         {
+            if (ix.Cat == "recipes" && q.Learn == "can")
+                r.Notes.Add(HasLearnData()
+                    ? "Recipes of your characters' professions that the character has not learned and has the skill for (the estimated start of the recipe). Only characters whose profession window Elan's Hub has read are counted: open each profession window in game once."
+                    : "Nothing to compare yet: open each profession window in game once (Elan's Hub 1.14.0 or newer) so the Outpost knows which recipes your characters have learned.");
             bool classic = ClassicAtlas.IsReady, lodge = AtlasQuery.LodgeHasData();
             if (ix.Cat == "items")
             {

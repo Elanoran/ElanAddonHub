@@ -15,6 +15,7 @@ public static partial class Armory
     public const int MaxSnapshotBytes = 48 * 1024;           // one character, serialized
     public const int MaxNodes = 400, MaxPets = 40, MaxAbilities = 40, MaxKnown = 100, MaxProfessions = 12, MaxSlots = 24, MaxLinks = 40;
     public const int MaxBuildLength = 600;
+    public const int MaxKnownIds = 2000, MaxCrafterSpells = 16, MaxCrafterRows = 80;       // armory2: the learned recipes of one character (all professions together)
     public static readonly TimeSpan PutEvery = TimeSpan.FromSeconds(8);
     public const int PutBurst = 30;
 
@@ -105,7 +106,12 @@ public static partial class Armory
         var pets = Pets(c["pets"] as JsonObject);
         if (pets != null) o["pets"] = pets;
         if (gear == null && tal == null && pro == null) { why = "empty"; return null; }
-        if (o.ToJsonString().Length > MaxSnapshotBytes) { why = "size"; return null; }
+        if (o.ToJsonString().Length > MaxSnapshotBytes)
+        {
+            // the learned recipes are the optional, biggest part: a character that is too big with them is still shared without them
+            if (o["professions"] is JsonObject po && po["known"] != null) po.Remove("known");
+            if (o.ToJsonString().Length > MaxSnapshotBytes) { why = "size"; return null; }
+        }
         return o;
     }
 
@@ -206,11 +212,70 @@ public static partial class Armory
                 var e = new JsonObject { ["name"] = name, ["skill"] = I(po["skill"], 0, 100000), ["max"] = I(po["max"], 0, 100000) };
                 int ic = I(po["ic"], 0, int.MaxValue);
                 if (ic > 0) e["ic"] = ic;
+                int line = I(po["line"], 0, 1_000_000);
+                if (line > 0) e["line"] = line;
                 e["kind"] = S(po["kind"], 12) == "secondary" ? "secondary" : "primary";
                 list.Add(e);
             }
         if (list.Count == 0) return null;
-        return new JsonObject { ["at"] = L(p["at"], 0, 4102444800L), ["list"] = list };
+        var res = new JsonObject { ["at"] = L(p["at"], 0, 4102444800L), ["list"] = list };
+        var known = Known(p["known"] as JsonObject);
+        if (known != null) res["known"] = known;
+        return res;
+    }
+
+    // armory2: { "<skillLineId>": { at, partial, n?, ids: [spellId, ...] } } - ids are positive integers, sorted, no duplicates, at most MaxKnownIds for the whole character
+    static JsonObject Known(JsonObject k)
+    {
+        if (k == null) return null;
+        var o = new JsonObject();
+        int total = 0;
+        foreach (var (key, v) in k.OrderBy(x => int.TryParse(x.Key, NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : int.MaxValue))
+        {
+            if (o.Count >= MaxProfessions || total >= MaxKnownIds) break;
+            if (!int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var line) || line < 1 || line > 1_000_000 || v is not JsonObject e) continue;
+            var ids = new SortedSet<int>();
+            if (e["ids"] is JsonArray ia)
+                foreach (var n in ia)
+                {
+                    if (total + ids.Count >= MaxKnownIds) break;
+                    if (!Num(n, out var d) || d < 1 || d > int.MaxValue || d != Math.Floor(d)) continue;     // a recipe id is a positive whole number
+                    ids.Add((int)d);
+                }
+            if (ids.Count == 0) continue;
+            total += ids.Count;
+            var arr = new JsonArray();
+            foreach (var id in ids) arr.Add(id);
+            var entry = new JsonObject { ["at"] = L(e["at"], 0, 4102444800L), ["partial"] = !(e["partial"] is JsonValue pv && pv.TryGetValue<bool>(out var pb) && !pb), ["ids"] = arr };
+            Set(entry, "n", Js(S(e["n"], 32)));
+            o[line.ToString(CultureInfo.InvariantCulture)] = entry;
+        }
+        return o.Count == 0 ? null : o;
+    }
+
+    // ---- "who can craft this": the shared characters of one member that have learned any of the spells. One row per (character, spell).
+    public static IEnumerable<JsonObject> CraftersOf(JsonObject c, IReadOnlySet<int> spells)
+    {
+        if (c["professions"] is not JsonObject p || p["known"] is not JsonObject known) yield break;
+        var list = (p["list"] as JsonArray)?.OfType<JsonObject>().ToList() ?? new List<JsonObject>();
+        foreach (var (key, v) in known)
+        {
+            if (v is not JsonObject e || e["ids"] is not JsonArray ids || !int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var line)) continue;
+            var prof = list.FirstOrDefault(x => x["line"] is JsonValue lv && lv.TryGetValue<int>(out var li) && li == line);
+            string name = prof != null ? (string)prof["name"]! : (e["n"] as JsonValue)?.GetValue<string>();
+            if (name == null) continue;
+            foreach (var idn in ids)
+            {
+                int id = (int)idn!;
+                if (!spells.Contains(id)) continue;
+                yield return new JsonObject
+                {
+                    ["spell"] = id, ["profession"] = name, ["skill"] = prof != null ? prof["skill"]!.DeepClone() : 0, ["max"] = prof != null ? prof["max"]!.DeepClone() : 0,
+                    ["name"] = c["name"]!.DeepClone(), ["class"] = c["class"]!.DeepClone(), ["level"] = c["level"]!.DeepClone(),
+                    ["partial"] = e["partial"]?.DeepClone() ?? true,
+                };
+            }
+        }
     }
 
     static JsonObject Pets(JsonObject p)

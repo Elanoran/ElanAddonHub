@@ -511,6 +511,7 @@ namespace ElansAddonHub.Lodge
                 case "armory.deleted": OnArmoryDeleted(m); break;
                 case "armory.chars": OnArmoryChars(m); break;
                 case "armory.char": OnArmoryChar(m); break;
+                case "armory.crafters": OnArmoryCrafters(m); break;
                 case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
                 case "badges.mine": case "badges.member": case "badges.state": case "ladder.data": OnBadgesFrame(m); break;
                 case "dataset.data": case "dataset.changed": case "dataset.result": OnDatasetFrame(m); break;

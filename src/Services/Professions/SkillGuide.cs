@@ -43,6 +43,8 @@ namespace ElansAddonHub.Services.Professions
         public List<SourceLine> LearnSources = new List<SourceLine>();
         public int LearnItemId;                         // the recipe item to buy / find (0 = trainer / starter)
         public bool Hard;                               // only reachable through a drop / quest recipe item
+        public bool Known;                              // the character's window read says the recipe is learned: no learn step
+        public bool Unlearned;                          // the read says it is not learned (yet): "Learn first"
         public bool IsMilestone => Recipe == null;
     }
 
@@ -115,7 +117,7 @@ namespace ElansAddonHub.Services.Professions
     public static class SkillGuideBuilder
     {
         // `have` = the items the user already holds (all characters or one), `start` = the character's current skill (1 for "from scratch")
-        public static SkillGuide Build(ProfessionBook book, Profession prof, int start, int target, IProfessionSources src, IDictionary<int, int> have = null, string character = null, bool allowHard = false, bool includeCamp = false)
+        public static SkillGuide Build(ProfessionBook book, Profession prof, int start, int target, IProfessionSources src, IDictionary<int, int> have = null, string character = null, bool allowHard = false, bool includeCamp = false, ProfChar learnedBy = null)
         {
             start = Math.Max(1, start);
             var g = new SkillGuide { Profession = prof, Start = start, Target = Math.Max(start, target), Character = character, Reached = start };
@@ -129,6 +131,8 @@ namespace ElansAddonHub.Services.Professions
             double CraftCost(ProfRecipe r) => r.Reagents.Sum(x => (double)Price(x.ItemId).Copper * x.Count);
             bool Approx(ProfRecipe r) => r.Reagents.Any(x => Price(x.ItemId).Kind != PriceKind.Vendor);
 
+            var scan = learnedBy?.ScanOf(prof.Name, prof.Id);      // what the character's profession window said (null = never read)
+            bool KnownR(ProfRecipe r) => scan != null && scan.Ids.Contains(r.SpellId);
             var recipes = (includeCamp ? prof.Recipes : prof.Craftable).ToList();
             // gettable: starter / trainer / special passives are free to learn; a recipe item that a vendor sells is gettable; the rest is hard
             var hard = new Dictionary<int, bool>();
@@ -136,7 +140,8 @@ namespace ElansAddonHub.Services.Professions
             foreach (var r in recipes)
             {
                 bool h = false; double x = 0;
-                if (r.Learn == LearnKind.RecipeItem)
+                if (KnownR(r)) { }                                        // already learned: nothing to get
+                else if (r.Learn == LearnKind.RecipeItem)
                 {
                     var sold = r.TeachingItems.Where(i => src.SoldByVendor(i)).ToList();
                     if (sold.Count > 0) x = sold.Min(i => (double)Price(i).Copper); else h = true;
@@ -186,9 +191,12 @@ namespace ElansAddonHub.Services.Professions
                 st.Cost = (long)Math.Round(CraftCost(r) * st.Crafts);
                 st.CostApprox = Approx(r);
                 // the recipe item is bought once with the first step that uses it
-                var learnItem = r.Learn == LearnKind.RecipeItem ? (r.TeachingItems.FirstOrDefault(x => src.SoldByVendor(x)) is int vi && vi > 0 ? vi : r.TeachingItems[0]) : 0;
+                bool isKnown = KnownR(r);
+                st.Known = isKnown; st.Unlearned = scan != null && !isKnown;
+                var learnItem = r.Learn == LearnKind.RecipeItem && !isKnown ? (r.TeachingItems.FirstOrDefault(x => src.SoldByVendor(x)) is int vi && vi > 0 ? vi : r.TeachingItems[0]) : 0;
                 st.LearnItemId = learnItem;
-                switch (r.Learn)
+                if (isKnown) st.Learn = "already learned";
+                else switch (r.Learn)
                 {
                     case LearnKind.Starter: st.Learn = "known from the start (taught with the profession)"; break;
                     case LearnKind.Trainer: st.Learn = "trainer"; break;
@@ -198,8 +206,14 @@ namespace ElansAddonHub.Services.Professions
                         break;
                     default: st.Learn = "special (no trainer or recipe item in the game data)"; break;
                 }
+                if (st.Unlearned)
+                {
+                    var src0 = st.LearnSources.FirstOrDefault();
+                    st.Learn = "Learn first: " + (r.Learn == LearnKind.RecipeItem ? g.ItemName(learnItem) + (src0 != null ? " - " + src0.Text + " (" + src0.Label + ")" : " - no source known")
+                        : r.Learn == LearnKind.Trainer ? r.Name + " - at the trainer" : r.Learn == LearnKind.Starter ? r.Name + " - taught with the profession" : r.Name + " - special");
+                }
                 st.Why = pickWhy[i2];
-                running += st.Cost + (long)extra[r.SpellId];
+                running += st.Cost + (isKnown ? 0 : (long)extra[r.SpellId]);
                 st.RunningCost = running;
                 g.Steps.Add(st);
                 i2 = j;
@@ -232,7 +246,10 @@ namespace ElansAddonHub.Services.Professions
             if (g.UnknownPrices > 0) g.TotalApprox = true;
             if (g.Reached < g.Target && g.Notes.Count == 0) g.Notes.Add("The guide reaches skill " + g.Reached + " of " + g.Target + ".");
             g.Notes.Add("A skill-up is not certain on yellow and green recipes, so the craft counts are averages: expect to make a few more or fewer. Prices are copper per item from a known vendor (Classic baseline or Lodge); ~ marks an estimate from the item's own value.");
-            g.Notes.Add("The game data holds no 'required skill' for recipes, so the earliest a recipe can be learned is estimated from its colour band; and the Outpost cannot see which recipes a character has already learned.");
+            if (scan != null)
+                g.Notes.Add("The game data holds no 'required skill' for recipes, so the earliest a recipe can be learned is estimated from its colour band. Which recipes " + learnedBy.Name + " has learned comes from the " + prof.Name + " window the Elan's Hub addon read" + (scan.At > 0 ? " on " + DateTimeOffset.FromUnixTimeSeconds(scan.At).LocalDateTime.ToString("d MMM yyyy", CultureInfo.InvariantCulture) : "") + (scan.Partial ? " (a partial read: open the window with every group expanded to read all of it)" : "") + "; steps with a recipe already learned have no learn step.");
+            else
+                g.Notes.Add("The game data holds no 'required skill' for recipes, so the earliest a recipe can be learned is estimated from its colour band. Open the profession window in game once (with Elan's Hub 1.14.0 or newer) and the guide knows which recipes are already learned.");
             return g;
         }
 

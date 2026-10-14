@@ -44,6 +44,7 @@ namespace ElansAddonHub.Services.Atlas
             Add(me == null ? "Quest rewards" : "Quest rewards for my level", "Items quests give" + who, "browse:items?how=quest&sort=level" + my);
             Add("Bags and containers", "Every bag, quiver and pouch in your game data", "browse:items/containers?sort=quality");
             Add("Recipes sold by vendors", "Recipe items a vendor sells (the patterns, plans and formulae)", "browse:items/recipes?how=vendor");
+            Add("Recipes you can learn", "Recipes of your characters' professions that they have not learned yet and have the skill for (needs the profession windows read by Elan's Hub)", "browse:recipes?learn=can");
             Add("Crafted items", "Items a profession makes, with the skill they need", "browse:items?how=crafted&sort=ilvl");
             Add("Caught by fishing", "Items from fishing holes and open water", "browse:items?how=fishing");
             Add("Best drops seen by the Lodge", "What members saw drop, best chance first", "browse:items?how=drop&src=lodge&sort=chance");

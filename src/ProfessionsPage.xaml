@@ -40,6 +40,13 @@
             <RadioButton x:Name="FilterLater" Style="{StaticResource Segment}" Content="Later" GroupName="prof-filter" Tag="later" Checked="Filter_Checked" AutomationProperties.Name="Learnable later" />
           </StackPanel>
         </Border>
+        <Border x:Name="KnownHost" Style="{StaticResource SegmentHost}" Margin="0,0,8,8" Visibility="Collapsed">
+          <StackPanel Orientation="Horizontal">
+            <RadioButton x:Name="KnownAll" Style="{StaticResource Segment}" Content="Any" GroupName="prof-known" IsChecked="True" Tag="all" Checked="Known_Checked" AutomationProperties.Name="Learned or not" />
+            <RadioButton x:Name="KnownYes" Style="{StaticResource Segment}" Content="Learned" GroupName="prof-known" Tag="learned" Checked="Known_Checked" AutomationProperties.Name="Learned recipes" />
+            <RadioButton x:Name="KnownNo" Style="{StaticResource Segment}" Content="Not learned" GroupName="prof-known" Tag="notlearned" Checked="Known_Checked" AutomationProperties.Name="Recipes not learned" />
+          </StackPanel>
+        </Border>
       </WrapPanel>
 
       <!-- the content of the chosen tab -->

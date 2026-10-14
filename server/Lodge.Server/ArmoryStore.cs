@@ -133,6 +133,23 @@ public sealed class ArmoryStore
         return arr;
     }
 
+    // "who can craft this" (the caller holds Gate): rows of every shared character that learned any of `spells`, best skill first, capped
+    public JsonArray Crafters(IReadOnlySet<int> spells, Func<string, string, string> shown, string me)
+    {
+        var rows = new List<(int skill, string name, JsonObject row)>();
+        foreach (var (id, ow) in owners.OrderBy(k => k.Key, StringComparer.Ordinal))
+            foreach (var (key, e) in ow.Chars.OrderBy(k => k.Key, StringComparer.Ordinal))
+                foreach (var r in Armory.CraftersOf(e.C, spells))
+                {
+                    r["owner"] = id; r["by"] = shown(id, ow.Name); r["key"] = key;
+                    if (id == me) r["mine"] = true;
+                    rows.Add(((int)r["skill"]!, (string)r["name"]!, r));
+                }
+        var arr = new JsonArray();
+        foreach (var x in rows.OrderByDescending(x => x.skill).ThenBy(x => x.name, StringComparer.Ordinal).Take(Armory.MaxCrafterRows)) arr.Add(x.row);
+        return arr;
+    }
+
     public bool Save()
     {
         try

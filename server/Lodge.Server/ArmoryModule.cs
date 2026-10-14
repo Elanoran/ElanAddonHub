@@ -30,6 +30,7 @@ public sealed class ArmoryModule : IModule
             case "armory.delete": await Delete(me, m); return true;
             case "armory.list": await List(me); return true;
             case "armory.get": await Get(me, m); return true;
+            case "armory.crafters": await Crafters(me, m); return true;
         }
         return false;
     }
@@ -114,6 +115,22 @@ public sealed class ArmoryModule : IModule
             if (c != null) json = new JsonObject { ["t"] = "armory.char", ["owner"] = owner, ["by"] = Shown(owner, Store.NameOf(owner)), ["key"] = key, ["char"] = c.DeepClone() }.ToJsonString();
         }
         if (json == null) { await hub.Error(me, "That character is not in the armory (any more)", "notfound"); return; }
+        await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
+    }
+
+    // armory2: who in the lodge can craft the recipe(s) - { spell } or { spells: [..] } -> armory.crafters { spells, who: [{spell, owner, by, key, name, class, level, profession, skill, max, partial, mine?}] }
+    async Task Crafters(Member me, JsonObject m)
+    {
+        if (!Enabled) { await hub.Error(me, "The Armory is switched off on this lodge", "disabled"); return; }
+        if (!Allowed(me)) { await hub.Error(me, "The Armory is for lodge members", "guest"); return; }
+        if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
+        var spells = new SortedSet<int>();
+        void Add(JsonNode n) { if (spells.Count < Armory.MaxCrafterSpells && n is JsonValue v && v.TryGetValue<double>(out var d) && d >= 1 && d <= int.MaxValue && d == Math.Floor(d)) spells.Add((int)d); }
+        if (m["spells"] is JsonArray sa) foreach (var n in sa) Add(n);
+        Add(m["spell"]);
+        if (spells.Count == 0) { await hub.Error(me, "No such recipe", "invalid"); return; }
+        string json;
+        lock (Store.Gate) json = new JsonObject { ["t"] = "armory.crafters", ["spells"] = new JsonArray(spells.Select(s => (JsonNode)JsonValue.Create(s)).ToArray()), ["who"] = Store.Crafters(spells, Shown, Identity(me)) }.ToJsonString();
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
     }
 

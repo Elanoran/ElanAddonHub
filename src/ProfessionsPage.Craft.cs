@@ -24,7 +24,7 @@ namespace ElansAddonHub
 
             var head = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
             head.Children.Add(Line(craftRows.Count + " recipe" + (craftRows.Count == 1 ? "" : "s") + " you can make now" + (scope != null ? " from " + scope.Name + "'s bags and bank" : " from all characters' bags and bank together"), "Text.Section"));
-            var n = Line("Only recipes of a profession that one of the characters has, at a skill high enough for the recipe, are listed. The Outpost cannot see which recipes a character has learned, so a recipe may still need learning first. Reagents spread over several characters count together; the row says when one character has them all.", "Text.Caption", null, 4);
+            var n = Line("Only recipes of a profession that one of the characters has, at a skill high enough for the recipe, are listed. A character whose profession window Elan's Hub has read (open it in game once) only offers recipes it has learned; for a character that was never read the recipe may still need learning first (marked not confirmed). Reagents spread over several characters count together; the row says when one character has them all.", "Text.Caption", null, 4);
             n.TextWrapping = TextWrapping.Wrap; head.Children.Add(n);
             Body.Children.Add(head);
 
@@ -67,6 +67,7 @@ namespace ElansAddonHub
             for (int i = 0; i < row.Crafters.Count && i < 4; i++)
                 who2.Children.Add(Line((i > 0 ? ", " : "") + row.Crafters[i].Name + " (" + row.Crafters[i].SkillOf(row.Profession.Name) + ")", "Text.Caption", ClassBrush(row.Crafters[i].Class)));
             if (row.Crafters.Count > 4) who2.Children.Add(Line(" +" + (row.Crafters.Count - 4), "Text.Caption"));
+            if (row.Unconfirmed) who2.Children.Add(Line(" - not confirmed: " + row.Best.Name + "'s " + row.Profession.Name + " window was never read, so the recipe may not be learned", "Text.Caption", Res("Brush.Warn")));
             mid.Children.Add(who2);
             var rw = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
             foreach (var g in r.Reagents)

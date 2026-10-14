@@ -262,7 +262,7 @@
             </StackPanel></ContentControl>
             <TextBlock Text="Armory" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share my characters with the Lodge" Tag="Off until you turn it on. Then only the characters you tick below are shared: what they wear (with enchants), their stats, talents, professions and hunter pets, so friends can look at them on the Characters page. Never your bags, bank, gold or mail. Unticking a character, or turning this off, removes it from the Lodge again.">
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share my characters with the Lodge" Tag="Off until you turn it on. Then only the characters you tick below are shared: what they wear (with enchants), their stats, talents, professions (with the recipes they have learned, on a Lodge with server 2.19 or newer) and hunter pets, so friends can look at them on the Characters page. Never your bags, bank, gold or mail. Unticking a character, or turning this off, removes it from the Lodge again.">
                 <CheckBox x:Name="ArmoryShareBox" Style="{StaticResource Switch}" Click="Armory_Click" AutomationProperties.Name="Share my characters with the Lodge" />
               </HeaderedContentControl>
               <StackPanel x:Name="ArmoryCharsPanel" Visibility="Collapsed">
