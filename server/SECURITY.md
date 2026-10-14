@@ -239,6 +239,13 @@ longer lets a backslash into a name.
 - Downloads are always `application/octet-stream` attachments, `nosniff`, `no-store`; the Outposts verify the SHA-256 and unpack with their own name allowlist (never using an entry's path), so the server being wrong or replaced can at worst make an Outpost refuse a bundle.
 - Who may replace what a whole lodge fetches is the officer rank and above (as for shared files); a malicious officer could host data that is useless but not harmful: the Outposts treat it as data (an SQL dump read by their own importer), never as something to run.
 - Logs: who shared or removed a dataset and its size; never content.
+## Realm status (feature `realms`)
+
+- The Battle.net client secret exists only in the server's environment (`LODGE_BNET_CLIENT_SECRET`, in the env file with mode 600). It is sent only to `https://oauth.battle.net/token` (HTTP Basic, over TLS); the access token only as a `Bearer` header to `https://{region}.api.blizzard.com`, never in a URL. Neither is logged, put in a message to a client, or put in an error text: failures log the kind of failure (HTTP status or exception type) and nothing else. `server/Lodge.Tests/RealmsTests.cs` checks that the secret, its Basic encoding, the client id and the token never appear in logs, messages, the welcome or the feature list.
+- Clients never ask for or send anything about realms, so there is no new request surface. The region is restricted to 2-3 lowercase letters and namespaces to `[a-z0-9-]`, so configuration cannot build another host name. The host names are fixed in code.
+- One poll per interval for the whole lodge (not per member), 15 s timeouts, response bodies capped at 2 MB, backoff on errors. The Blizzard JSON is parsed defensively: names are cut to 60 characters, at most 16 realms, unknown shapes simply find nothing.
+- The status is public information, so guests receive it too.
+- Real Blizzard calls are never made by the tests (a fake HTTP handler).
 ## Tests
 
 ```bash

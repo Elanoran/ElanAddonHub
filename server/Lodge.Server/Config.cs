@@ -47,6 +47,13 @@ public class LodgeConfig
     public int ClassicDownloadsPerHour { get; set; } = 6;   // per member
     // ---- badges and the ladder (2.18, "badges" feature)
     public bool BadgesEnabled { get; set; } = true;         // the server operator can switch it off (not advertised, requests answer "disabled", the data stays on disk); the Guild Master has a second switch
+    // ---- realm status (2.20, "realms" feature): the lodge asks the Blizzard Game Data API and tells the members. The secret never leaves this process.
+    public string BnetClientId { get; set; } = "";
+    public string BnetClientSecret { get; set; } = "";      // never logged, never sent to a client, never in an error
+    public string BnetRegion { get; set; } = "eu";
+    public int RealmsPollSeconds { get; set; } = 120;       // 60 - 900
+    public string[] RealmsNamespaces { get; set; } = Array.Empty<string>();   // optional override of the namespaces probed
+    public bool RealmsConfigured => BnetClientId.Length > 0 && BnetClientSecret.Length > 0;
 
     static string Env(string key, string fallback)
     {
@@ -56,6 +63,13 @@ public class LodgeConfig
 
     static int Int(string key, int fallback, int min, int max) =>
         int.TryParse(Env(key, ""), out var v) ? Math.Clamp(v, min, max) : fallback;
+
+    // eu / us / kr / tw (two or three lowercase letters); anything else falls back to eu so a typo can't build a strange host name
+    public static string CleanRegion(string r)
+    {
+        r = (r ?? "").Trim().ToLowerInvariant();
+        return r.Length is 2 or 3 && r.All(c => c is >= 'a' and <= 'z') ? r : "eu";
+    }
 
     public static LodgeConfig FromEnv()
     {
@@ -97,6 +111,11 @@ public class LodgeConfig
             ClassicMaxMb = Int("LODGE_CLASSIC_MAX_MB", 40, 1, 1024),
             ClassicDownloadsPerHour = Int("LODGE_CLASSIC_DOWNLOADS_PER_HOUR", 6, 1, 1000),
             BadgesEnabled = !(Env("LODGE_BADGES_ENABLED", "1") is "0" or "false" or "no" or "off"),
+            BnetClientId = Env("LODGE_BNET_CLIENT_ID", ""),
+            BnetClientSecret = Env("LODGE_BNET_CLIENT_SECRET", ""),
+            BnetRegion = CleanRegion(Env("LODGE_BNET_REGION", "eu")),
+            RealmsPollSeconds = Int("LODGE_REALMS_POLL_SECONDS", 120, 60, 900),
+            RealmsNamespaces = Env("LODGE_REALMS_NAMESPACES", "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
         };
         Directory.CreateDirectory(c.DataDir);
         if (string.IsNullOrEmpty(c.CodesFile))

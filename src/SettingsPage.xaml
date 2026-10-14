@@ -155,6 +155,15 @@
                 <CheckBox x:Name="LinkBox" Style="{StaticResource Switch}" Click="General_Click" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
+            <TextBlock Text="Realm status" Style="{StaticResource Head}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl x:Name="RealmStatusRow" Style="{StaticResource Setting.Row}" Header="Show realm status at the top" Tag="Small dots for the WoW Forever realms, green when up and red when down. They come from your Lodge, only appear while you are connected to a Lodge that offers realm status, and nothing is sent from your PC.">
+                <CheckBox x:Name="RealmStatusBox" Style="{StaticResource Switch}" Click="General_Click" AutomationProperties.Name="Show realm status at the top" />
+              </HeaderedContentControl>
+              <HeaderedContentControl x:Name="RealmsBackRow" Style="{StaticResource Setting.Row}" Header="Tell me when the realms come back up" Tag="A quiet note over the game, once, when a realm that was down is up again. Follows the in-game notifications switch; never a pop-up window.">
+                <CheckBox x:Name="RealmsBackBox" Style="{StaticResource Switch}" Click="General_Click" AutomationProperties.Name="Tell me when the realms come back up" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
           </StackPanel>
 
           <!-- ========== Addons ========== -->

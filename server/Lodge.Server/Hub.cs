@@ -102,7 +102,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.19.0";
+    public const string Version = "2.20.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -123,6 +123,7 @@ public class LodgeHub
     public readonly FilesModule SharedFiles;
     public readonly DatasetsModule Datasets;
     public readonly BadgesModule Badges;
+    public readonly RealmsModule Realms;
     public readonly LodgeInfoStore Info;
     readonly IModule[] modules;
     readonly ConcurrentDictionary<int, Member> members = new();
@@ -155,8 +156,9 @@ public class LodgeHub
         SharedFiles = new FilesModule(this);
         Datasets = new DatasetsModule(this);
         Badges = new BadgesModule(this);
+        Realms = new RealmsModule(this);
         Info = new LodgeInfoStore(cfg.DataDir);
-        modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, Armory, SharedFiles, Datasets, Badges, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
+        modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, Armory, SharedFiles, Datasets, Badges, Realms, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
     // personal codes: one budget per person; guests (shared code): one per IP, so several friends on one guest
@@ -211,6 +213,7 @@ public class LodgeHub
         try
         {
             await Send(me, Welcome(me));
+            await Realms.SendTo(me);
             await BroadcastJoin(me);
             await ReceiveLoop(me, ct);
         }
@@ -234,6 +237,7 @@ public class LodgeHub
         if (Cfg.ArmoryEnabled) { f.Add("armory"); f.Add("armory2"); }
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests; atlas3: gathering node positions (nodes)
         if (Badges.Enabled) f.Add("badges");                       // badges and the ladder: both the server setting and the Guild Master switch are on
+        if (Cfg.RealmsConfigured) f.Add("realms");                  // realm status: only while the Blizzard API credentials are set
         foreach (var k in DatasetKinds.All) if (k.Enabled(Cfg)) f.Add(k.Feature);   // 2.17: hosted datasets ("classic")
         return f.ToArray();
     }
@@ -497,6 +501,7 @@ public class LodgeHub
                     Armory.Tick();
                     Datasets.Tick();
                     Badges.Tick();
+                    Realms.Tick();
                     Auth.Strikes.Sweep();
                     SweepBudgets();
                 }

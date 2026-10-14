@@ -114,6 +114,8 @@ namespace ElansAddonHub
             BackgroundBox.IsChecked = s.RunInBackground;
             StartupBox.IsChecked = s.StartWithWindows;
             LinkBox.IsChecked = !s.NoLinkHandler;
+            RealmStatusBox.IsChecked = !s.RealmStatusOff;
+            RealmsBackBox.IsChecked = s.RealmsBackNotice;
             AutoUpdateBox.IsChecked = s.AutoUpdate;
             ChannelTest.IsChecked = UpdateChannel.IsTest(s);
             ChannelStable.IsChecked = !UpdateChannel.IsTest(s);
@@ -335,6 +337,8 @@ namespace ElansAddonHub
             settings.AutoUpdate = AutoUpdateBox.IsChecked == true;
             settings.CfAutoCheck = CfAutoBox.IsChecked == true;
             settings.NoSplash = SplashBox.IsChecked != true;
+            bool realmsChanged = settings.RealmStatusOff != (RealmStatusBox.IsChecked != true);
+            settings.RealmStatusOff = RealmStatusBox.IsChecked != true; settings.RealmsBackNotice = RealmsBackBox.IsChecked == true;
             bool itemDataOff = ItemDataBox.IsChecked != true, itemDataChanged = settings.ItemDataOff != itemDataOff;
             settings.ItemDataOff = itemDataOff;
             bool art = PaintedBox.IsChecked == true;
@@ -352,6 +356,7 @@ namespace ElansAddonHub
             }
             SettingsStore.Save(settings);
             if (artChanged) host.CardArtChanged();
+            if (realmsChanged) host.RefreshRealms();
             if (itemDataChanged) { if (itemDataOff) { ElansAddonHub.Services.Db2.ItemData.Disable(); ElansAddonHub.Services.SeenData.Disable(); ElansAddonHub.Services.Maps.MapData.Disable(); } else { ElansAddonHub.Services.Db2.ItemData.Start(); ElansAddonHub.Services.SeenData.Start(); ElansAddonHub.Services.Maps.MapData.Start(); } UpdateItemDataLine(); }
             if (sender == AutoUpdateBox && settings.AutoUpdate) host.AutoUpdateTurnedOn();
         }
@@ -908,6 +913,9 @@ namespace ElansAddonHub
         public InviteForm GmInviteForTest => GmInvite;
         public void SetLinkHandlerForTest(bool on) { LinkBox.IsChecked = on; General_Click(LinkBox, null); }
         public bool LinkBoxForTest => LinkBox.IsChecked == true;
+        public bool RealmStatusBoxForTest => RealmStatusBox.IsChecked == true;
+        public bool RealmsBackBoxForTest => RealmsBackBox.IsChecked == true;
+        public void SetRealmStatusForTest(bool on, bool backNotice) { RealmStatusBox.IsChecked = on; RealmsBackBox.IsChecked = backNotice; General_Click(RealmStatusBox, null); }
         public string InviteClickHintForTest => GmInvite.ClickHintForTest;
         public string InviteTitleForTest => GmInvite.TitleForTest;
         public string InviteNoteForTest => GmInvite.NoteForTest;

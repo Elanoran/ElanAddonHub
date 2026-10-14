@@ -51,6 +51,10 @@
 
       <!-- title bar -->
       <Grid Grid.Row="0" Grid.Column="1" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
+        <!-- realm status dots (Lodge feature "realms"): built in code, MainWindow.Realms.cs -->
+        <Border x:Name="RealmStrip" Style="{StaticResource Chip}" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,108,0" Padding="4,0" AutomationProperties.Name="Realm status">
+          <StackPanel x:Name="RealmItems" Orientation="Horizontal" />
+        </Border>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
           <Button Style="{StaticResource ChromeButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Minimize" />
           <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Close" />
