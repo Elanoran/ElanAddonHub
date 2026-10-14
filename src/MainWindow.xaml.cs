@@ -103,6 +103,8 @@ namespace ElansAddonHub
             ProfessionsView.Init(() => settings.WowRoot, () => Session?.AtlasData);
             ProfessionsView.UseSettings(settings, () => Session?.FlightData);
             InitAtlas();
+            // the game's tooltip font from the user's own install (cached after the first read); the tooltips use a system font until then
+            System.Threading.Tasks.Task.Run(() => ElansAddonHub.Services.GameFont.Start());
             LodgePage.OpenLink += OpenChatLink;
             InventoryView.GoToAddons += () => ShowTab("addons");
             InventoryView.GoToSettings += () => { ShowTab("settings"); SettingsPage.Show("general"); };
