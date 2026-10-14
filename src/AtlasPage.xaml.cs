@@ -30,6 +30,7 @@ namespace ElansAddonHub
         public AtlasPageModel Model => model;
         public string CurrentId => history.Current ?? "";
         public bool IsStart => string.IsNullOrEmpty(history.Current);
+        public bool IsData => AtlasNav.IsPage(history.Current);
 
         public AtlasPage()
         {
@@ -45,10 +46,9 @@ namespace ElansAddonHub
             {
                 if (!IsVisible || !started) return;
                 if (Signature() != drawnSig) DataChanged();
-                // the start page is for searching: the box is ready to type in
-                if (IsStart) Dispatcher.BeginInvoke(new Action(() => { if (IsVisible && IsStart && !(Keyboard.FocusedElement is TextBox)) SearchBox.Focus(); }), DispatcherPriority.Input);
             };
-            Unloaded += (s, e) => Unsubscribe();
+            Unloaded += (s, e) => { Unsubscribe(); FlushNav(); };
+            InitShell();
             UpdateNav();
         }
 
@@ -114,7 +114,7 @@ namespace ElansAddonHub
         {
             var id = AtlasQuery.NormalizeId(idOrText) ?? idOrText;
             if (AtlasCategories.IsRouted(id)) return Show(id, true);           // a browse page or a hosted category
-            if (!AtlasIds.TryParse(id, out _, out _)) { SearchBox.Text = idOrText ?? ""; return RunSearchNow(); }
+            if (!AtlasIds.TryParse(id, out _, out _)) return OpenPalette(idOrText ?? "");
             return Show(id, true);
         }
 
@@ -122,16 +122,16 @@ namespace ElansAddonHub
 
         Task Show(string id, bool record)
         {
-            CloseResults();
+            ClosePalette();
             started = true;
-            if (record) history.Go(id);
+            if (record) { history.Go(id); NavState.Visit(id); }
             UpdateNav();
             Navigated?.Invoke(id);
             return lastBuild = BuildAndDraw(id);
         }
 
-        public Task Back() { var id = history.Back(); UpdateNav(); if (id == null) return Task.CompletedTask; Navigated?.Invoke(id); return lastBuild = BuildAndDraw(id); }
-        public Task Forward() { var id = history.Forward(); UpdateNav(); if (id == null) return Task.CompletedTask; Navigated?.Invoke(id); return lastBuild = BuildAndDraw(id); }
+        public Task Back() { var id = history.Back(); if (id != null) NavState.Visit(id); UpdateNav(); if (id == null) return Task.CompletedTask; Navigated?.Invoke(id); return lastBuild = BuildAndDraw(id); }
+        public Task Forward() { var id = history.Forward(); if (id != null) NavState.Visit(id); UpdateNav(); if (id == null) return Task.CompletedTask; Navigated?.Invoke(id); return lastBuild = BuildAndDraw(id); }
         public Task WaitForTest() => lastBuild;
 
         void UpdateNav()
@@ -140,6 +140,7 @@ namespace ElansAddonHub
             ForwardButton.IsEnabled = history.CanForward;
             HomeButton.IsEnabled = !IsStart;
             UpdateLink();
+            UpdateShell();
             BackButton.Opacity = history.CanBack ? 1 : 0.4; ForwardButton.Opacity = history.CanForward ? 1 : 0.4; HomeButton.Opacity = IsStart ? 0.4 : 1;
         }
 
@@ -224,13 +225,15 @@ namespace ElansAddonHub
             _ = Open(link);
         }
 
+        public ModifierKeys? ModifiersForTest;                  // self-test: the modifier keys held (the real keyboard cannot be pressed from a test)
         void Page_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            var mods = Keyboard.Modifiers;
+            var mods = ModifiersForTest ?? Keyboard.Modifiers;
             if (mods == ModifierKeys.Alt && (e.Key == Key.Left || e.SystemKey == Key.Left)) { e.Handled = true; _ = Back(); }
             else if (mods == ModifierKeys.Alt && (e.Key == Key.Right || e.SystemKey == Key.Right)) { e.Handled = true; _ = Forward(); }
-            else if (mods == ModifierKeys.Control && (e.Key == Key.F || e.Key == Key.K)) { e.Handled = true; FocusSearch(); }
-            else if (e.Key == Key.Oem2 && mods == ModifierKeys.None && !(Keyboard.FocusedElement is TextBox)) { e.Handled = true; FocusSearch(); }   // "/" like the web
+            else if (mods == ModifierKeys.Control && (e.Key == Key.F || e.Key == Key.K)) { e.Handled = true; if (PaletteOpen) { PaletteBox.Focus(); PaletteBox.SelectAll(); } else _ = OpenPalette(); }
+            else if (e.Key == Key.Oem2 && mods == ModifierKeys.None && !(Keyboard.FocusedElement is TextBox)) { e.Handled = true; _ = OpenPalette(); }   // "/" like the web
+            else if (e.Key == Key.Escape && PaletteOpen) { e.Handled = true; ClosePalette(); }
         }
 
         void Page_PreviewMouseUp(object sender, MouseButtonEventArgs e)
@@ -239,12 +242,7 @@ namespace ElansAddonHub
             else if (e.ChangedButton == MouseButton.XButton2) { e.Handled = true; _ = Forward(); }
         }
 
-        void Page_PreviewMouseDown(object sender, MouseButtonEventArgs e)
-        {
-            if (ResultsPanel.Visibility != Visibility.Visible) return;
-            if (e.OriginalSource is DependencyObject d && (IsInside(d, ResultsPanel) || IsInside(d, SearchBox))) return;
-            CloseResults();
-        }
+        void Page_PreviewMouseDown(object sender, MouseButtonEventArgs e) { }
 
         static bool IsInside(DependencyObject d, DependencyObject root)
         {
@@ -254,7 +252,7 @@ namespace ElansAddonHub
         }
 
         public void Scroller_ScrollToForTest(FrameworkElement el) { UpdateLayout(); el?.BringIntoView(); }
-        public void FocusSearch() { SearchBox.Focus(); SearchBox.SelectAll(); }
+        public void FocusSearch() { _ = OpenPalette(); }
 
         // ---- build off the UI thread, draw on it
         async Task BuildAndDraw(string id)
@@ -262,6 +260,7 @@ namespace ElansAddonHub
             int gen = ++buildGen;
             if (hosted != null && !AtlasCategories.IsHosted(id)) LeaveHosted();
             if (string.IsNullOrEmpty(id)) { DrawStart(); return; }
+            if (AtlasNav.IsPage(id)) { DrawData(); return; }
             if (AtlasCategories.TryHosted(id, out var hostCat, out var hostSub)) { DrawHosted(hostCat, hostSub); return; }
             if (AtlasBrowse.IsBrowseId(id)) { await BuildAndDrawBrowse(id, gen); return; }
             var build = Task.Run(() => AtlasQuery.Build(id));
@@ -311,6 +310,7 @@ namespace ElansAddonHub
             refresh.Stop();
             if (!IsVisible) return;
             if (IsStart) DrawStart();
+            else if (IsData) DrawData();
             else if (browse != null) _ = Redraw();
             else if (model != null && (model.NotFound || model.Notes.Count > 0 || !model.Layers.Contains("client"))) _ = Redraw();
         }
@@ -329,7 +329,7 @@ namespace ElansAddonHub
         // an answer of "who in the Lodge can craft this" arrived: a recipe (spell) or item page is drawn again to show it
         public void CraftersChanged()
         {
-            if (!IsVisible || hosted != null || IsStart || browse != null) return;
+            if (!IsVisible || hosted != null || IsStart || IsData || browse != null) return;
             var id = history.Current ?? "";
             if (id.StartsWith("spell:", StringComparison.Ordinal) || id.StartsWith("item:", StringComparison.Ordinal)) _ = Redraw();
         }
@@ -337,10 +337,10 @@ namespace ElansAddonHub
         // the Lodge pool got a page while the start page is open: its cards (pool, recent finds) are drawn again when what they show changed
         public void PoolChanged()
         {
-            if (!IsVisible || !started || hosted != null || !IsStart) return;
-            if (Signature() != drawnSig) DrawStart();
+            if (!IsVisible || !started || hosted != null || !(IsStart || IsData)) return;
+            if (Signature() != drawnSig) { if (IsData) DrawData(); else DrawStart(); }
         }
 
-        public void DataChanged() { if (hosted != null) return; if (IsStart) DrawStart(); else _ = Redraw(); }
+        public void DataChanged() { if (hosted != null) return; if (IsStart) DrawStart(); else if (IsData) DrawData(); else _ = Redraw(); }
     }
 }

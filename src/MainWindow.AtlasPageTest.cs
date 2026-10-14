@@ -38,7 +38,7 @@ namespace ElansAddonHub
             var l = new List<string>();
             foreach (var d in AtlasWalk(root))
             {
-                if (d is TextBlock tb && tb.Visibility == Visibility.Visible && !string.IsNullOrEmpty(tb.Text)) l.Add(tb.Text);
+                if (d is TextBlock tb && tb.Visibility == Visibility.Visible && ElansAddonHub.AtlasPage.TextOf(tb).Length > 0) l.Add(ElansAddonHub.AtlasPage.TextOf(tb));
                 else if (d is Button b && b.Content is string s && s.Length > 0) l.Add(s);
             }
             return l;

@@ -24,6 +24,11 @@ namespace ElansAddonHub.Services.Atlas
         public Func<string, string> SubTitle;           // hosted: the last crumb for a sub-path ("Hunter" for "tree/hunter"), null / "" = none
         public Func<string, IEnumerable<AtlasHit>> Search;   // hosted: the pages of this category a search text names ("hunter talents", "cooking"); runs on a worker
         public Func<bool> Available = () => true;       // a category without its data hides itself
+        public string Group = "";                       // the nav group (AtlasNav.Database / World / Character / Lodge); "" = Database
+        public string NavKey = "";                      // categories with the same key share ONE nav row ("Spells and talents"); "" = the category's own id
+        public string NavTitle = "";                    // the title of that shared row; "" = this category's title
+        public bool NavPrimary;                         // in a shared nav row: this category is where the row opens (default: the first by Order)
+        public string Keywords = "";                    // extra words the Ctrl+K palette matches the page by ("herbs ore fishing")
         public bool Hosted => Host != null;
         public string OpenId => Hosted ? Id + ":" : "browse:" + Id;
     }
@@ -36,18 +41,18 @@ namespace ElansAddonHub.Services.Atlas
 
         static AtlasCategories()
         {
-            void Add(string id, string title, string kind, string glyphKind, string blurb, int order)
-                => list.Add(new AtlasCategory { Id = id, Title = title, Kind = kind, Glyph = AtlasKinds.Glyph(glyphKind), Blurb = blurb, Order = order });
-            Add("items", "Items", "item", "item", "Weapons, armor, potions, bags, recipes and more", 10);
-            Add("creatures", "Creatures", "npc", "npc", "Vendors, trainers, rares, bosses and everything that walks", 20);
-            Add("objects", "Objects", "obj", "obj", "Herbs, ore, chests, fishing holes", 30);
-            Add("quests", "Quests", "quest", "quest", "By level and zone", 40);
-            Add("zones", "Zones", "zone", "zone", "By continent, with their level range", 50);
-            Add("instances", "Dungeons and raids", "instance", "instance", "Sorted by level", 60);
-            Add("spells", "Spells", "spell", "spell", "Class abilities, weapon and armor skills, recipes", 70);
-            Add("skills", "Skills and professions", "skill", "skill", "Professions, weapon skills, languages", 80);
-            Add("recipes", "Recipes", "spell", "spell", "What each profession makes, by skill level", 90);
-            Add("factions", "Factions", "faction", "faction", "Reputations", 100);
+            void Add(string id, string title, string kind, string glyphKind, string blurb, int order, string group, string navKey = "", string navTitle = "", string keywords = "")
+                => list.Add(new AtlasCategory { Id = id, Title = title, Kind = kind, Glyph = AtlasKinds.Glyph(glyphKind), Blurb = blurb, Order = order, Group = group, NavKey = navKey, NavTitle = navTitle, Keywords = keywords });
+            Add("items", "Items", "item", "item", "Weapons, armor, potions, bags, recipes and more", 10, AtlasNav.Database, keywords: "weapons armor potions bags gear");
+            Add("creatures", "Creatures", "npc", "npc", "Vendors, trainers, rares, bosses and everything that walks", 20, AtlasNav.Database, keywords: "npc monsters mobs bosses rares vendors trainers");
+            Add("objects", "Objects", "obj", "obj", "Herbs, ore, chests, fishing holes", 30, AtlasNav.Database, keywords: "herbs ore chests fishing nodes gathering");
+            Add("quests", "Quests", "quest", "quest", "By level and zone", 40, AtlasNav.Database);
+            Add("zones", "Zones", "zone", "zone", "By continent, with their level range", 50, AtlasNav.World, keywords: "areas places");
+            Add("instances", "Dungeons and raids", "instance", "instance", "Sorted by level", 60, AtlasNav.World, keywords: "dungeons raids instances");
+            Add("spells", "Spells", "spell", "spell", "Class abilities, weapon and armor skills, recipes", 70, AtlasNav.Character, "spells", "Spells and talents", "abilities");
+            Add("skills", "Skills and professions", "skill", "skill", "Professions, weapon skills, languages", 80, AtlasNav.Character, "professions", "Professions", "weapon skills languages");
+            Add("recipes", "Recipes", "spell", "spell", "What each profession makes, by skill level", 90, AtlasNav.Character, "professions", "Professions", "crafting patterns");
+            Add("factions", "Factions", "faction", "faction", "Reputations", 100, AtlasNav.Character, keywords: "reputation");
         }
 
         public static IReadOnlyList<AtlasCategory> All { get { lock (gate) return list.OrderBy(c => c.Order).ThenBy(c => c.Title, StringComparer.OrdinalIgnoreCase).ToList(); } }
@@ -107,6 +112,6 @@ namespace ElansAddonHub.Services.Atlas
         }
 
         // an id the Atlas page opens itself instead of building an entity page: a browse page or a hosted category
-        public static bool IsRouted(string id) => AtlasBrowse.IsBrowseId(id) || IsHosted(id);
+        public static bool IsRouted(string id) => AtlasBrowse.IsBrowseId(id) || IsHosted(id) || AtlasNav.IsPage(id);
     }
 }

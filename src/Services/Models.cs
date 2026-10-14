@@ -107,6 +107,8 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "flightShareOff")] public bool FlightShareOff { get; set; }      // false (default) = my learned flight-path times are uploaded to the lodge (times only); off = nothing is uploaded, downloading still works
         [DataMember(Name = "atlasShareOff")] public bool AtlasShareOff { get; set; }        // false (default) = what Elan's Toolkit observed (loot, vendors, finds, spawn points; no character names) is shared with the lodge, guests never share; off = nothing is uploaded, the lodge's Atlas is still received
         // ---- gathering routes and the leveling guide in game (Atlas / Professions)
+        [DataMember(Name = "atlasRecents")] public List<string> AtlasRecents { get; set; }        // the Atlas pages opened last (ids only, newest first, at most 8)
+        [DataMember(Name = "atlasPins")] public List<string> AtlasPins { get; set; }              // the Atlas pages the person pinned, in their order (ids only)
         [DataMember(Name = "worldMapLayers")] public List<string> WorldMapLayers { get; set; }       // the layers switched on in the Atlas world map (null = the defaults)
         [DataMember(Name = "worldMapLast")] public string WorldMapLast { get; set; }                  // the continent shown last (its slug)
         [DataMember(Name = "worldMap3d")] public bool WorldMap3d { get; set; }                       // the world map opens in the 3D terrain view (the last mode used)

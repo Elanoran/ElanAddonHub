@@ -23,6 +23,7 @@ namespace ElansAddonHub
             RegisterAtlasHosts();
             AtlasView.Init(() => settings.WowRoot);
             AtlasView.UseRouteSettings(settings, () => ProfessionsView?.RouteChoiceChanged());
+            AtlasView.UseNavSettings(settings, () => SettingsStore.Save(settings));       // recents and pins of the Atlas shell
             AtlasQuery.Context.Lodge = () => Session?.AtlasData;
             AtlasQuery.Context.OwnFishSpots = () => AtlasObs.Read(settings.WowRoot)?.FishSpots;
             AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
@@ -49,19 +50,22 @@ namespace ElansAddonHub
             AtlasCategories.Register(new AtlasCategory
             {
                 Id = AtlasHosts.Talents, Title = "Talents", Glyph = "", Blurb = "Plan a build for any class, try recommended builds, share a build code or link", Order = 75,
+                Group = AtlasNav.Character, NavKey = "spells", NavTitle = "Spells and talents", Keywords = "class build tree",
                 Host = HostTalents, SubTitle = AtlasHosts.TalentsSubTitle, Search = AtlasHosts.TalentHits,
                 Canonical = sub => sub != null && sub.StartsWith("build/", StringComparison.OrdinalIgnoreCase) ? sub : TalentsSub(TalentsView.ClassFileNow, sub),
             });
             // the world map: a zoomable continent (WebView2 + Leaflet) with the layers of the Atlas on it
             AtlasCategories.Register(new AtlasCategory
             {
-                Id = ElansAddonHub.Services.WorldMap.WorldMapIds.Category, Title = "World map", Glyph = "", Blurb = "Kalimdor and the Eastern Kingdoms from your own game files: zone names, flight paths, nodes, vendors, trainers, quest givers and rares", Order = 55,
+                Id = ElansAddonHub.Services.WorldMap.WorldMapIds.Category, Title = "World map", Glyph = "", Blurb = "Kalimdor and the Eastern Kingdoms from your own game files: zone names, flight paths, nodes, vendors, trainers, quest givers and rares", Order = 45,
+                Group = AtlasNav.World, Keywords = "continent kalimdor eastern kingdoms flight paths 3d",
                 Host = HostWorldMap, Search = ElansAddonHub.Services.WorldMap.WorldMapIds.Hits, SubTitle = WorldMapSubTitle, Canonical = sub => { WorldMapView.Navigate(sub); return WorldMapView.CurrentSub; },
                 Available = () => MapData.Status != MapData.State.Disabled,
             });
             AtlasCategories.Register(new AtlasCategory
             {
                 Id = AtlasHosts.Professions, Title = "Professions", Glyph = AtlasKinds.Glyph("skill"), Blurb = "Recipes, leveling guides, what you can craft now, camping", Order = 95,
+                Group = AtlasNav.Character, NavKey = "professions", NavTitle = "Professions", NavPrimary = true, Keywords = "crafting leveling guide gathering",
                 Host = HostProfessions, SubTitle = AtlasHosts.ProfessionsSubTitle, Search = AtlasHosts.ProfessionHits,
                 Canonical = sub => ProfessionsSub(ProfessionsView.ProfessionNow, ProfessionsView.TabNow),
             });

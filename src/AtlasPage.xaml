@@ -86,30 +86,60 @@
     </Style>
   </UserControl.Resources>
 
-  <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art -->
+  <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art. Inside: the sub-navigation (216 px, icons only at 56 px when the window is narrow), a hairline, and the page
+       (header with breadcrumb + body). The Ctrl+K palette is a layer over the whole panel. -->
   <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
-    <Grid>
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="*" />
-      </Grid.RowDefinitions>
+    <Grid x:Name="Shell">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition x:Name="NavCol" Width="216" />
+        <ColumnDefinition Width="16" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
 
-      <!-- header: back / forward / start, the title of the page, the one search box -->
-      <Grid Grid.Row="0" Margin="0,0,0,16">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-          <Button x:Name="BackButton" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE72B;" ToolTip="Back  (Alt+Left)" Click="Back_Click" AutomationProperties.Name="Back" />
-          <Button x:Name="ForwardButton" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE72A;" ToolTip="Forward  (Alt+Right)" Click="Forward_Click" AutomationProperties.Name="Forward" />
-          <Button x:Name="HomeButton" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE80F;" ToolTip="Atlas start page" Click="Home_Click" AutomationProperties.Name="Atlas start page" />
-        </StackPanel>
-        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-          <TextBlock x:Name="TitleText" Text="Atlas" Style="{StaticResource Text.Title}" TextTrimming="CharacterEllipsis" />
-          <TextBlock x:Name="SubText" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
-          <!-- the page's own Atlas link (item:2589, browse:items/weapons, talents:tree/hunter) as a quiet chip with a copy button; hidden on the start page -->
+      <!-- sub-navigation: Home, Search, the groups of the registry, Recent, Pinned (built in AtlasPage.Nav.cs) -->
+      <Grid x:Name="NavPanel" Grid.Column="0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <ScrollViewer x:Name="NavScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+          <StackPanel x:Name="NavStack" Margin="0,0,4,0" />
+        </ScrollViewer>
+        <StackPanel x:Name="NavFooter" Grid.Row="1" Margin="0,8,4,0" />
+      </Grid>
+      <Border Grid.Column="1" Width="1" HorizontalAlignment="Center" Background="{StaticResource Brush.Divider}" />
+
+      <Grid Grid.Column="2">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- header: back / forward / start, the breadcrumb (every crumb is a link), Pin, the search box that opens the palette; below: the title, subtitle and link of the page -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+            <Button x:Name="BackButton" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE72B;" ToolTip="Back  (Alt+Left)" Click="Back_Click" AutomationProperties.Name="Back" />
+            <Button x:Name="ForwardButton" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE72A;" ToolTip="Forward  (Alt+Right)" Click="Forward_Click" AutomationProperties.Name="Forward" />
+            <Button x:Name="HomeButton" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE80F;" ToolTip="Atlas start page" Click="Home_Click" AutomationProperties.Name="Atlas start page" />
+          </StackPanel>
+          <ContentControl x:Name="CrumbHost" Grid.Column="1" VerticalAlignment="Center" Focusable="False" IsTabStop="False" />
+          <Button x:Name="PinButton" Grid.Column="2" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE718;" Margin="12,0,0,0" ToolTip="Pin this page" Click="Pin_Click" AutomationProperties.Name="Pin page" Visibility="Collapsed" />
+          <TextBox x:Name="SearchBox" Grid.Column="3" Style="{StaticResource Input}" Width="220" Margin="8,0,0,0" VerticalAlignment="Center" IsReadOnly="True" Cursor="IBeam"
+                   Tag="Search  (Ctrl K)" ToolTip="Search by name, or paste a link like item:2589 or npc:46  (Ctrl+K)" AutomationProperties.Name="Search Atlas" PreviewMouseDown="Search_Down" PreviewKeyDown="Search_KeyDown" PreviewTextInput="Search_TextInput" />
+          <StackPanel x:Name="TitleBlock" Grid.Row="1" Grid.ColumnSpan="4" Margin="0,12,0,0">
+            <TextBlock x:Name="TitleText" Text="Atlas" Style="{StaticResource Text.Title}" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="SubText" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+            <!-- the Atlas link of the page (item:2589, browse:items/weapons, talents:tree/hunter) as a quiet chip with a copy button; hidden on the start page -->
             <StackPanel x:Name="LinkRow" Orientation="Horizontal" Margin="0,4,0,0" Visibility="Collapsed" HorizontalAlignment="Left">
               <Border Style="{StaticResource Chip}" Padding="8,0" MinHeight="20" VerticalAlignment="Center">
                 <TextBlock x:Name="LinkText" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="560" />
@@ -117,31 +147,52 @@
               <Button x:Name="CopyLinkButton" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE8C8;" Margin="4,0,0,0" Click="CopyLink_Click" AutomationProperties.Name="Copy link" />
               <TextBlock x:Name="CopiedText" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Success}" Text="Link copied" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
             </StackPanel>
-        </StackPanel>
-        <TextBox x:Name="SearchBox" Grid.Column="2" Style="{StaticResource Input}" Width="260" Margin="12,0,0,0" VerticalAlignment="Center"
-                 Tag="Search, or browse the categories" ToolTip="Search by name, or paste a link like item:2589 or npc:46" AutomationProperties.Name="Search Atlas" TextChanged="Search_Changed" PreviewKeyDown="Search_KeyDown" GotKeyboardFocus="Search_Focus" />
-      </Grid>
-
-      <Grid Grid.Row="1">
-        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True" Padding="0,0,8,0">
-          <StackPanel x:Name="Body" />
-        </ScrollViewer>
-
-        <!-- a hosted category (Talents, Professions): another page with its own scrolling, under a breadcrumb; the page above scrolls only for the other pages -->
-        <Grid x:Name="HostSlot" Visibility="Collapsed">
-          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-          <ContentControl x:Name="HostCrumbs" Focusable="False" />
-          <ContentControl x:Name="HostContent" Grid.Row="1" Focusable="False" IsTabStop="False" />
+          </StackPanel>
         </Grid>
 
-        <!-- search results: an overlay under the search box (Surface3, hairline, elevation 2, radius 12); the 24 px margin holds the shadow -->
-        <Border x:Name="ResultsPanel" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Top" Width="420" MaxHeight="440" Margin="0,-36,-24,0" Padding="0">
-          <Border Margin="24" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Card}"
-                  Effect="{StaticResource Elevation.2}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
-              <StackPanel x:Name="ResultsStack" />
-            </ScrollViewer>
-          </Border>
+        <Grid Grid.Row="1">
+          <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True" Padding="0,0,8,0">
+            <StackPanel x:Name="Body" />
+          </ScrollViewer>
+
+          <!-- a hosted category (Talents, Professions, the world map): another page with its own scrolling; the page above scrolls only for the other pages -->
+          <Grid x:Name="HostSlot" Visibility="Collapsed">
+            <ContentControl x:Name="HostContent" Focusable="False" IsTabStop="False" />
+          </Grid>
+        </Grid>
+      </Grid>
+
+      <!-- the Ctrl+K palette: dims the whole panel; a card with the search box, scope chips, results and a preview (AtlasPage.Palette.cs) -->
+      <Grid x:Name="PaletteLayer" Grid.ColumnSpan="3" Visibility="Collapsed" Margin="-16" Panel.ZIndex="20">
+        <Border x:Name="PaletteDim" Background="{StaticResource Brush.Scrim.Strong}" Opacity="0.7" CornerRadius="{StaticResource Radius.Card}" MouseLeftButtonDown="PaletteDim_Down" />
+        <Border x:Name="PaletteCard" MaxWidth="760" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="24,48,24,24" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1"
+                CornerRadius="14" Effect="{StaticResource Elevation.2}">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBox x:Name="PaletteBox" Style="{StaticResource Input}" Height="48" FontSize="15" Margin="16,16,16,0" Tag="Search items, creatures, zones, quests, or paste a link"
+                     AutomationProperties.Name="Search the Atlas" TextChanged="PaletteBox_Changed" PreviewKeyDown="PaletteBox_KeyDown" />
+            <Border Grid.Row="1" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="16,12,16,0">
+              <StackPanel x:Name="PaletteScopes" Orientation="Horizontal" />
+            </Border>
+            <Grid x:Name="PaletteBody" Grid.Row="2" Height="360" Margin="0,12,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="PalettePreviewCol" Width="300" />
+              </Grid.ColumnDefinitions>
+              <ScrollViewer x:Name="PaletteScroll" VerticalScrollBarVisibility="Auto" Padding="8,0,8,0" Focusable="False">
+                <StackPanel x:Name="PaletteStack" />
+              </ScrollViewer>
+              <Border x:Name="PalettePreviewHost" Grid.Column="1" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1,0,0,0" Padding="16,0,16,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False"><StackPanel x:Name="PalettePreview" /></ScrollViewer>
+              </Border>
+            </Grid>
+            <TextBlock x:Name="PaletteHint" Grid.Row="3" Style="{StaticResource Text.Caption}" Margin="16,8,16,12" Text="Up and Down to move  ·  Enter to open  ·  Tab for the next kind  ·  Esc to close" />
+          </Grid>
         </Border>
       </Grid>
     </Grid>
