@@ -53,6 +53,8 @@ namespace ElansAddonHub.Services.Professions
         public List<int> Items = new List<int>();
         public int Count;
         public int EstSkill;
+        public int ObjectId;                              // the node's object id (0 for a creature): routes and node pins are made from it
+        public bool Forever;                              // players looted it here (Lodge or this PC), so its places are real and not only the Classic baseline's
     }
 
     public sealed class GatherZone
@@ -60,6 +62,7 @@ namespace ElansAddonHub.Services.Professions
         public ZoneInfo Zone;
         public int Score;
         public string Label = "";
+        public int ForeverHits;                           // how many of the hits come from Forever (players' own nodes / loot)
         public List<GatherFind> Finds = new List<GatherFind>();
     }
 
@@ -152,8 +155,11 @@ namespace ElansAddonHub.Services.Professions
                         var e = f.Key;
                         gz.Finds.Add(new GatherFind { Name = e.Name, Link = e.Link, Items = e.Items.Take(6).ToList(), Count = f.Sum(x => x.Item2), EstSkill = skin ? Math.Min(cap, SkinSkill(e.Level)) : NodeSkill(zone.Median, cap), Label = string.Join(" + ", f.Select(x => x.Item3).Distinct()) });
                     }
-                    gz.Finds = gz.Finds.OrderByDescending(x => x.Count).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).Take(5).ToList();
-                    gz.Score = hits.Sum(h => h.Item2);
+                    foreach (var f in gz.Finds) { var ent = hits.Select(h => h.Item1).FirstOrDefault(en => en.Link == f.Link); if (ent != null && ent.Kind == "obj") f.ObjectId = ent.Id; f.Forever = f.Label.Contains(SourceLabels.Lodge); }
+                    gz.ForeverHits = hits.Where(h => h.Item3 == SourceLabels.Lodge).Sum(h => h.Item2);
+                    gz.Finds = gz.Finds.OrderByDescending(x => x.Forever ? 1 : 0).ThenByDescending(x => x.Count).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).Take(5).ToList();
+                    // Forever places count three times: where players really looted beats the Classic baseline's positions
+                    gz.Score = hits.Sum(h => h.Item3 == SourceLabels.Lodge ? 3 * h.Item2 : h.Item2);
                     b.Zones.Add(gz);
                 }
                 b.Zones = b.Zones.OrderByDescending(z => z.Score).ThenBy(z => z.Zone.Name, StringComparer.OrdinalIgnoreCase).Take(4).ToList();

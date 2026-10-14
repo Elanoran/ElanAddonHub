@@ -106,6 +106,10 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "calHideMine")] public bool CalHideMine { get; set; }
         [DataMember(Name = "flightShareOff")] public bool FlightShareOff { get; set; }      // false (default) = my learned flight-path times are uploaded to the lodge (times only); off = nothing is uploaded, downloading still works
         [DataMember(Name = "atlasShareOff")] public bool AtlasShareOff { get; set; }        // false (default) = what Elan's Toolkit observed (loot, vendors, finds, spawn points; no character names) is shared with the lodge, guests never share; off = nothing is uploaded, the lodge's Atlas is still received
+        // ---- gathering routes and the leveling guide in game (Atlas / Professions)
+        [DataMember(Name = "savedRoutes")] public List<ElansAddonHub.Services.Atlas.SavedRoute> SavedRoutes { get; set; }              // named loops per zone (at most SavedRoute.MaxSaved)
+        [DataMember(Name = "routeForGuide")] public Dictionary<string, string> RouteForGuide { get; set; }                         // "<profession>:<zone>" -> id of the saved route the in-game guide uses (absent = the automatic loop)
+        [DataMember(Name = "followedGuides")] public List<ElansAddonHub.Services.Professions.FollowedGuide> FollowedGuides { get; set; }   // the guides written into SharedData.lua ("Follow in game")
         [DataMember(Name = "classicLodgeOff")] public bool ClassicFromLodgeOff { get; set; }   // false (default) = when the Lodge hosts the Classic data and this PC has none (or an older release), it is fetched from the Lodge automatically; on = never fetched from the Lodge (the Atlas page still offers the public download)
         [DataMember(Name = "classicLodgePaused")] public bool ClassicLodgePaused { get; set; }  // true after "Remove from this PC": no automatic fetch until the person asks for the data again or turns the switch off and on
         [DataMember(Name = "classicShareOffered")] public string ClassicShareOffered { get; set; }   // the release (version string) an owner or officer was already offered to share with the Lodge: asked once per release

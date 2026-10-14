@@ -57,7 +57,7 @@ at runtime (none today).
 |---|---|---|---|
 | SavedVariables (`ElansHub.lua`) | game → Outpost | on `/reload` or logout | everything that can wait |
 | Pixel strip (Hub, top-left corner) | game → Outpost | ~1 s | live presence only (who, where, combat/AFK). Use sparingly: every byte added costs screen space |
-| `SharedData.lua` (Hub folder) | Outpost → game | read on `/reload` | data from the Lodge (shared flight times) |
+| `SharedData.lua` (Hub folder) | Outpost → game | read on `/reload` | data from the Lodge (shared flight times) and the leveling guides the user follows in game (`profGuides`) |
 | Lodge messages | Outpost ↔ server | live | only what the user's sharing settings allow |
 
 ## Handing data to the Hub
@@ -470,8 +470,13 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
   quests  = { [questId] = { at, rewards = { itemId, ... }, choices = { itemId, ... } } },
   finds   = { { i = itemId, c = count, src = "npc:123" | "obj:45" | "fish" | "vendor:67" | "quest:89", z = uiMapId, x, y, at } },  -- newest 500
   spawns  = { [npcId] = { { z = uiMapId, x, y } ... max 20 per npc } },   -- where looted mobs were (player position at loot)
+  nodes   = { [objectId] = { [uiMapId] = { { x = 0.4123, y = 0.5531, n = 3, at = time }, ... } } },   -- additive, schema stays v1 (profguide part A)
 }
 ```
+`nodes` (herbs, ore veins, chests, fishing pools, other lootable objects): the player's map position when they looted an object the Looter attributes to an object (nothing in instances or without a position).
+x / y are fractions 0..1 rounded to 4 decimals; a loot within 0.008 (Euclidean, map fraction) of an existing node of the same object on the same map merges into it (`n` + 1, `at` = now; the Toolkit documents whether the position stays
+or is averaged). Caps: 150 nodes per object per map (least seen, oldest first dropped), 400 objects. `n` is cumulative and never goes down. The Outpost (`AtlasObs.ParseNodeObject`) reads it like the other fields: absence or garbage
+is tolerated, a bad point is dropped and counted, the same caps apply, two points of one object within 0.008 become one (the first position, the larger count).
 ids are numbers; x/y are map fractions 0..1 (3 decimals). Counters only grow; the Outpost uploads the difference since
 its last upload (like flight times). Revealed-item details are not in the addon: the Outpost reads them from
 `DBCache.bin` and shares parsed fields (name, quality, item level, slot, stats) with the Lodge.
@@ -482,6 +487,43 @@ details) → the server keeps one record set per member and stores per field max
 per npc, the newest 2000 finds (with the member's Lodge display name — never character names), up to 50 spawn points
 per npc, and revealed items by id. `atlas.get { since, epoch }` → `atlas.data` (everything changed since a server revision, in pages; the whole set again when the epoch differs). Members can switch
 sharing off; guests can read but not share. Feature can be disabled by the owner (`LODGE_ATLAS_ENABLED=0`).
+
+### Gathering nodes, routes and the guide in game (profguide, Outpost 2.50.0, Lodge server 2.18.0 sub-feature `atlas3`)
+One contract with the in-game side (Elan's Toolkit 0.4.0), four parts:
+
+- **A. Recording** (Toolkit → `atlas.obs`): `nodes`, see the schema above.
+- **B. Sharing**: with a server that advertises `atlas3` (2.18.0 and up) `atlas.share` also carries `nodes { "<objectId>": { "<uiMapId>": [ { x, y, n } ] } }` (only objects that changed, cumulative per member like `spawns`; at most 50 objects and 1000 points a
+  message; the sent keys are `n<objectId>` in the upload record). The server (`Atlas.NodePt`, `AtlasNodes.cs`) keeps them per member (at most 150 per object and map, 40 maps per object, 400 objects, 20,000 points per member) and merges for everybody:
+  nodes of one object on one map within 0.008 of each other are ONE node; per member the larger `n` of its points in that node, summed over members; at most 300 nodes per object and map, the most looted first (a deterministic greedy
+  cluster, so the same data always merges the same way). A member's own point within 0.008 of a stored one is the same node and keeps max(stored n, sent n): a resend never counts twice. Members' data stays when they leave (like every other
+  pool section). `atlas.data` returns the merged nodes per object (`nodes { object: { map: [ { x, y, n } ] } }`), replaced as a whole by its revision. The Outpost (`LodgeAtlas.Nodes(objectId, uiMapId)`, `NodesOf`) validates them again.
+  Object and zone pages show **Forever** nodes (the Lodge's merge plus this PC's own, `GatherNodes.Merge`: a node of mine on a Lodge node is the same node) above the Classic baseline's positions, labelled `Forever` and `Classic baseline`;
+  a zone page has a "Gathering nodes" section; browse "Herbs by zone" / "Ore by zone" use the Forever zone before the Classic one and list objects only players looted; the gathering guide counts Forever places three times.
+- **C. Routes** (`Services/Atlas/RouteBuilder.cs`, pure): for one zone and a set of objects (several kinds in one loop, like the classic Routes addon): nodes closer than 0.02 are one stop (looted-weighted mean), a nearest-neighbour tour from the stop
+  closest to the zone's centre, 2-opt until nothing improves (capped at 4,000,000 distance evaluations), a closed loop, at most 120 stops (the most looted kept). Forever nodes first; the Classic baseline's positions only join when fewer than 8 Forever
+  nodes are known for that set in that zone, and the result says so. The length uses the map's size in yards (`GatherNodes.YardsOf`, from the UiMap assignments) and a run speed of 7 yards a second ("N nodes, about M minutes at run speed").
+  The Atlas shows it on the zone map (`AtlasMap.SetRoute`: numbered stops and a line) from the **Routes** panel under the map (object pages: "Show route"; the gathering guide's "Show route" opens the zone with the panel built): tick the zone's gathering objects
+  (grouped herbs / ore / chests / fishing pools; the ticks default to what the followed guide's gather steps need), Build, Save (named routes per zone, `Settings.SavedRoutes`), Show, Delete, and **Use for guide**: `Settings.RouteForGuide["<profession>:<zone>"]`
+  makes the in-game guide hand that saved loop over for that profession's gather steps in that zone (default: the automatic loop). Avoid areas: not done.
+- **D. The guide hand-off** (`Services/SharedDataFile.cs`, `Services/Professions/GuideHandoff.cs`, `ProfessionsPage.Follow.cs`): `SharedData.lua` is now ONE composed file with one writer:
+```lua
+ElansHubShared = {
+  flights = { ... unchanged ... },
+  profGuides = { v = 1, at = unix,
+    chars = { ["<ElansHub.CharKey() = Realm-Name>"] = { [skillLineId] = {
+      name = "First Aid", title = "First Aid 1-300", max = 300,
+      steps = { { k = "craft", from = 1, to = 40, spell = 3275, item = 1251, n = 30, r = { { 2589, 30 } }, t = "Linen Bandage" },
+                { k = "train", from = 75, t = "Journeyman First Aid" },
+                { k = "gather", from = 1, to = 65, item = 2770, obj = { 1731 }, z = { 1411, 1412 }, t = "Copper Ore" }, { k = "note", ... } },
+      routes = { [3] = { [1411] = { src = "f", pts = { { 0.41, 0.55 }, ... } } } },   -- step index (1-based) -> zone -> closed loop; src "f" = Forever nodes only, "c" = Classic baseline positions are in it
+      nodes = { [1731] = { [1411] = { { 0.4123, 0.5531, 3 }, ... } } },                -- { x, y, n }: Forever nodes with n >= 1, Classic baseline positions with n = 0
+    } } } } }
+```
+  Caps: 6 guides per character, 60 steps, 20 reagents per step, 120 route points per zone, 300 nodes per object and zone, the file under 400 KB (nodes are cut first, then routes, then guides). Everything is built from validated numbers; every string goes through
+  `FlightShare.LuaEscape` after cleaning; with no guide the file is exactly the flights text it always was. The page's **Follow in game** (Guide tab, per character and profession; only for characters the Hub saved, because the key must equal the game's) stores the choice in
+  `Settings.FollowedGuides`, makes the guide (crafting: train / craft steps from `SkillGuide`; gathering: a train step per rank and one gather step per skill bracket from `GatherGuide` with routes and pins) and writes the file; **Stop following** takes it out again
+  (the flights in the file stay even without Lodge data in the session: the writer reads them back from the file). The guides are made again, debounced and off the UI thread, when the Lodge's or this PC's nodes change, when a followed character's skill changed
+  or when a saved route was picked. The game reads the file at login or `/reload` only; the page says so. The Talents hand-off (`TalentHandoff`) is not wired; `SharedDataFile.Compose` takes extra sections for the day it is.
 
 ### Lodge feature `armory` (server 2.16.0): the Armory
 Members can let the Lodge look at their characters, like an armory. **Opt-in, off by default** (Settings > Lodge > Armory): "Share my characters with the Lodge", then one switch per character of this PC; only ticked characters are shared. The Outpost still reads only Hub data: `ArmoryShare.Build` (`Lodge/ArmoryModels.cs`) makes a snapshot per character from the Hub modules the Characters page already reads.

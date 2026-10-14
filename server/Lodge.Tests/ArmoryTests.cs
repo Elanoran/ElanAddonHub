@@ -88,7 +88,7 @@ public class ArmoryTests
         var features = ((JsonArray)r.Hub.Welcome(elan)["features"]!).Select(x => (string)x!).ToList();
         Assert.Contains("armory", features);
         Assert.Contains("atlas", features);
-        Assert.Equal("2.17.0", LodgeHub.Version);
+        Assert.Equal("2.18.0", LodgeHub.Version);
     }
 
     [Fact]

@@ -140,7 +140,7 @@ namespace ElansAddonHub
         void ReleaseMaps()
         {
             foreach (var m in maps) { try { m.ClearMarkers(); } catch { } }
-            maps.Clear(); zonePicks.Clear();
+            maps.Clear(); zonePicks.Clear(); routeButtons.Clear(); routePanels.Clear();
         }
 
         // ============================================================================================================================ a page
@@ -438,11 +438,25 @@ namespace ElansAddonHub
             }
             sp.Children.Add(map);
             sp.Children.Add(Legend(plan));
+            // gathering routes: on an object page and a zone page, and wherever the map shows nodes
+            if (plan.Zones.Count > 0 && (m.Kind == "obj" || m.Kind == "zone" || plan.Zones.Any(z => z.Markers.Any(k => k.Kind == MarkerKind.Node))))
+            {
+                head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var panel = RoutesPanel(m, map, () => map.UiMapId > 0 ? map.UiMapId : (plan.Best ?? plan.Zones[0]).UiMapId, out var rui);
+                var rb = GhostButton(m.Kind == "obj" ? "Show route" : "Routes", () => rui.Toggle(m.Kind == "obj"), "Build a gathering loop through the nodes of this zone: pick what to gather, see its length and time, save it");
+                rb.Margin = new Thickness(8, 0, 0, 0); rb.Tag = "routes";
+                Grid.SetColumn(rb, 2); head.Children.Add(rb);
+                routeButtons.Add(rb);
+                sp.Children.Add(panel);
+                var pend = m.Kind == "zone" && AtlasIds.TryParse(m.Id, out _, out var zid) ? GatherNodes.TakePending(zid) : null;
+                if (pend != null) { rui.Preselect = pend.Objects; Defer(() => rui.Toggle(false)); }
+            }
             AddMapExtras(sp, plan);
             return Card(sp);
         }
 
         public readonly List<ComboBox> zonePicks = new List<ComboBox>();
+        public readonly List<Button> routeButtons = new List<Button>();
 
         // the map loads after the rest of the page is drawn (it decodes a picture the first time it is asked for)
         void Defer(Action a) { Dispatcher.BeginInvoke(new Action(a), System.Windows.Threading.DispatcherPriority.Background); }

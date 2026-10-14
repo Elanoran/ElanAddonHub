@@ -140,8 +140,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsFlights) return;
             var data = FlightShare.ParseServer(m);
             FlightData = data;
-            var lua = FlightShare.BuildLua(data, Clock());
-            var res = FlightShare.WriteShared(Settings?.WowRoot, lua);
+            var res = SharedDataFile.Write(Settings?.WowRoot, data, SharedDataFile.Current, Clock());
             FlightFilesWritten = res.Written.Count;
             Util.Log("flights: " + data.Legs.Count + " legs from the lodge, " + res.Written.Count + " file(s) written, " + res.Unchanged.Count + " unchanged");
             Changed?.Invoke();
@@ -153,7 +152,7 @@ namespace ElansAddonHub.Lodge
         {
             var data = FlightData;
             if (data == null) return 0;
-            var res = FlightShare.WriteShared(Settings?.WowRoot, FlightShare.BuildLua(data, Clock()));
+            var res = SharedDataFile.Write(Settings?.WowRoot, data, SharedDataFile.Current, Clock());
             Util.Log("flights: SharedData.lua restored after the Hub install, " + res.Written.Count + " file(s) written, " + res.Unchanged.Count + " unchanged");
             return res.Written.Count;
         }
