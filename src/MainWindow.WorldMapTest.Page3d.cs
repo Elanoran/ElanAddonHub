@@ -195,6 +195,45 @@ namespace ElansAddonHub
                     Check("3D: the page's detail and height buttons are remembered in the settings (high, 2.0x)", prefsSaved, settings.WorldMap3dDetail + " " + settings.WorldMapExag);
                     settings.WorldMap3dDetail = null; settings.WorldMapExag = 0;
 
+                    // the liquids: the lake (with its lava), the sea along the south edge and the ground where there is none
+                    {
+                        async Task<Dictionary<string, object>> WaterState(Func<Dictionary<string, object>, bool> until, int ms = 15000)
+                        {
+                            Dictionary<string, object> w = null; var sww = System.Diagnostics.Stopwatch.StartNew();
+                            while (sww.ElapsedMilliseconds < ms) { await Task.Delay(300); var r = await WmEval("window.wm3.water()"); w = string.IsNullOrEmpty(r) || r == "null" ? null : Json.Obj(Json.Parse(r) as string); if (w != null && until(w)) break; }
+                            return w;
+                        }
+                        // the lake: chunk (22, 22) = tile col 29 / row 31, chunk 6,6 of the tile; the cell (4, 4) is wet, the cell (0, 0) is a hole
+                        WorldMapMath.GridToWorld(29 + (6 + 4.5 / 8.0) / 16.0, 31 + (6 + 4.5 / 8.0) / 16.0, out var wx1, out var wy1);
+                        WorldMapMath.WorldToLatLng(wx1, wy1, out var wlat, out var wlng);
+                        await WmEval("window.wm3.setView(" + wlat.ToString("R", I) + "," + wlng.ToString("R", I) + ",700,25,40)");
+                        var w1 = await WaterState(w => w.Int("meshes") > 0 && w.Child("byKind") != null && w.Child("byKind").Int("1") > 0 && w.Child("byKind").Int("3") > 0);
+                        var wetAt = Json.Parse(await WmEval("window.wm3.waterAt(" + wlat.ToString("R", I) + "," + wlng.ToString("R", I) + ")")) as string;
+                        WorldMapMath.GridToWorld(29 + (6 + 0.5 / 8.0) / 16.0, 31 + (6 + 0.5 / 8.0) / 16.0, out var hx1, out var hy1);
+                        WorldMapMath.WorldToLatLng(hx1, hy1, out var hlat1, out var hlng1);
+                        var holeAt = Json.Parse(await WmEval("window.wm3.waterAt(" + hlat1.ToString("R", I) + "," + hlng1.ToString("R", I) + ")")) as string;
+                        WorldMapMath.GridToWorld(28 + 5.5 / 16.0, 30 + 5.5 / 16.0, out var dx1, out var dy1);
+                        WorldMapMath.WorldToLatLng(dx1, dy1, out var dlat, out var dlng);
+                        var dryAt = Json.Parse(await WmEval("window.wm3.waterAt(" + dlat.ToString("R", I) + "," + dlng.ToString("R", I) + ")")) as string;
+                        var lspec = WmLiquidsAt(22, 22).First(q => q.Type == 1240);
+                        double expectWet = (lspec.VertexH(4, 4) + lspec.VertexH(5, 4) + lspec.VertexH(4, 5) + lspec.VertexH(5, 5)) / 4;
+                        Check("3D liquids: looking at the invented lake the page draws " + (w1?.Int("meshes") ?? 0) + " liquid meshes (" + (w1 == null ? "?" : Json.Write(w1.Child("byKind"))) + ": water and lava) from the .wmw files; a cell of the lake has the surface the file says (" + wetAt + " expected " + expectWet.ToString("0.00", I) + "), a hole in its exists mask and a dry place far away have none",
+                            w1 != null && w1.Int("meshes") > 0 && w1.Child("byKind").Int("1") > 0 && w1.Child("byKind").Int("3") > 0 && double.TryParse(wetAt, NumberStyles.Float, I, out var wetV) && Math.Abs(wetV - expectWet) < 0.01 && holeAt == "null" && dryAt == "null", wetAt + " " + holeAt + " " + dryAt + " " + (w1 == null ? "" : Json.Write(w1)));
+                        await Task.Delay(800);
+                        var pngW = await WorldMapView.CaptureForTest(); if (pngW != null) File.WriteAllBytes(P("worldmap-3d-water-lake-synthetic.png"), pngW);
+                        // the sea along the south edge: tile row 33, chunks 8..15
+                        WorldMapMath.GridToWorld(31.5, 33 + 11.0 / 16.0, out var sx1, out var sy1);
+                        WorldMapMath.WorldToLatLng(sx1, sy1, out var slat1, out var slng1);
+                        await WmEval("window.wm3.setView(" + slat1.ToString("R", I) + "," + slng1.ToString("R", I) + ",1800,10,35)");
+                        var w2 = await WaterState(w => w.Child("byKind") != null && w.Child("byKind").Int("2") > 0);
+                        var seaAt = Json.Parse(await WmEval("window.wm3.waterAt(" + slat1.ToString("R", I) + "," + slng1.ToString("R", I) + ")")) as string;
+                        var js = File.ReadAllText(Path.Combine(WorldMapCache.Root, "_page", "view3d.js"));
+                        Check("3D liquids: the sea along the south edge is drawn as ocean meshes (" + (w2 == null ? "?" : Json.Write(w2.Child("byKind"))) + ", surface " + seaAt + " = sea level), the open sea outside the continent's tiles is one flat plane (" + (w2 != null && w2.Bool("outer")) + "), and the old global sea plane is gone from the page (no 260000-yard plane)",
+                            w2 != null && w2.Child("byKind").Int("2") > 0 && seaAt == "0" && w2.Bool("outer") && !js.Contains("260000") && !js.Contains("sea.position"), seaAt + " " + (w2 == null ? "" : Json.Write(w2)));
+                        var pngS = await WorldMapView.CaptureForTest(); if (pngS != null) File.WriteAllBytes(P("worldmap-3d-water-sea-synthetic.png"), pngS);
+                        var s5 = await Wm3State();
+                        Check("3D liquids: no script error while the liquids load and rebuild (" + (s5?.List("errs")?.Count ?? -1) + " errors)", s5 != null && (s5.List("errs") ?? new List<object>()).Count == 0, s5 == null ? "?" : Json.Write(s5.List("errs")));
+                    }
                     // the picture: a close view of the invented hills, then FPS and memory of a continuous orbit
                     WorldMapMath.WorldToLatLng(0, 1000, out var hlat, out var hlng);
                     await WmEval("window.wm3.setView(" + hlat.ToString("R", I) + "," + hlng.ToString("R", I) + ",1500,20,35)");
@@ -300,6 +339,33 @@ namespace ElansAddonHub
                     var mem = WorldMapView.ProcessMemoryMbForTest(out var det); maxMem = Math.Max(maxMem, mem); worstMeshes = Math.Max(worstMeshes, st?.Int("meshes") ?? 0);
                     summaries.Add(v.name + ": " + st?.Int("meshes") + " meshes, " + st?.Int("tris") + " tris, " + st?.Int("textures") + " textures, " + st?.Int("drawCalls") + " calls, " + mem + " MB (" + det + ")");
                 }
+                // the liquids on the real Kalimdor: Orgrimmar's canyon floor is dry, the Durotar coast has ocean
+                async Task<Dictionary<string, object>> WaterView(string name, double x, double y, double dist, double az, double tilt)
+                {
+                    WorldMapMath.WorldToLatLng(x, y, out var vlat, out var vlng);
+                    await WmEval("window.wm3.setView(" + vlat.ToString("R", I) + "," + vlng.ToString("R", I) + "," + dist.ToString("R", I) + "," + az.ToString("R", I) + "," + tilt.ToString("R", I) + ")");
+                    await Settle();
+                    for (int w = 0; w < 30; w++) { await Task.Delay(300); var q = await WmEval("window.wm3.water()"); var qs = string.IsNullOrEmpty(q) || q == "null" ? null : Json.Obj(Json.Parse(q) as string); if (qs != null && !qs.Bool("pending") && qs.Int("active") == 0) break; }
+                    await Task.Delay(800);
+                    var pw = await WorldMapView.CaptureForTest(); if (pw != null) File.WriteAllBytes(P("worldmap-3d-" + name + ".png"), pw);
+                    var r = await WmEval("window.wm3.water()");
+                    return string.IsNullOrEmpty(r) || r == "null" ? null : Json.Obj(Json.Parse(r) as string);
+                }
+                var orgNode = idx.Set.TaxiNodes.FirstOrDefault(nd => nd.Name == "Orgrimmar, Durotar");
+                if (orgNode != null)
+                {
+                    var wOrg = await WaterView("water-orgrimmar", orgNode.X, orgNode.Y, 1500, 15, 34);
+                    WorldMapMath.WorldToLatLng(orgNode.X, orgNode.Y, out var olat, out var olng);
+                    var atOrg = Json.Parse(await WmEval("window.wm3.waterAt(" + olat.ToString("R", I) + "," + olng.ToString("R", I) + ")")) as string;
+                    var gOrg = Json.Parse(await WmEval("window.wm3.ground(" + olat.ToString("R", I) + "," + olng.ToString("R", I) + ")"));
+                    var jsOrg = await WmEval("window.wm3.water()");
+                    notes.Add("note real 3D water at Orgrimmar: ground z " + gOrg + ", liquid there " + atOrg + ", state " + jsOrg);
+                    Check("real 3D liquids: Orgrimmar's centre is dry in the 3D page (no liquid over the flight master, ground z " + gOrg + ") - the city no longer sits under a flat sea plane", atOrg == "null" && wOrg != null && wOrg.Bool("outer"), atOrg + " " + gOrg);
+                }
+                var wCoast = await WaterView("water-durotar-coast", 900, -4800, 2600, 70, 30);
+                notes.Add("note real 3D water at the Durotar coast: " + (wCoast == null ? "?" : Json.Write(wCoast)));
+                var coastOcean = wCoast?.Child("byKind")?.Int("2") ?? 0;
+                Check("real 3D liquids: the Durotar coast is drawn with " + (wCoast?.Int("meshes") ?? 0) + " liquid meshes in " + (wCoast?.Int("tiles") ?? 0) + " tiles, " + coastOcean + " of them ocean", wCoast != null && wCoast.Int("meshes") > 0 && coastOcean > 0, wCoast == null ? "?" : Json.Write(wCoast));
                 // a continuous orbit over Thousand Needles
                 WorldMapMath.WorldToLatLng(-5000, -2400, out var blat, out var blng);
                 await WmEval("window.wm3.setView(" + blat.ToString("R", I) + "," + blng.ToString("R", I) + ",4200,0,30)");
@@ -323,6 +389,26 @@ namespace ElansAddonHub
                 var stE = await Settle();
                 var pe = await WorldMapView.CaptureForTest(); if (pe != null) File.WriteAllBytes(P("worldmap-3d-stormwind.png"), pe);
                 notes.Add("note real 3D (Eastern Kingdoms, Stormwind): " + stE?.Int("meshes") + " meshes, " + stE?.Int("tris") + " tris, " + WorldMapView.ProcessMemoryMbForTest(out var detS) + " MB (" + detS + ")");
+                // Eastern Kingdoms: Loch Modan's lake and the lava of Searing Gorge and the Burning Steppes, found in the water files
+                {
+                    var td0 = WorldMapCache.TerrainDir(WorldMapCache.BuildKey, 0);
+                    bool Find(LiquidKind kind, int col, int row, out double fx, out double fy)
+                    {
+                        fx = fy = 0; var wt0 = WorldMapTerrain.ReadWater(td0, col, row); if (wt0 == null) return false;
+                        var ls = wt0.Layers.Where(l => l.Kind == kind).ToList(); if (ls.Count == 0) return false;
+                        double cxs = 0, cys = 0; int n = 0;
+                        foreach (var l in ls) { WmChunkWorld(col, row, l.Chunk, out var cx0, out var cy0); cxs += cx0; cys += cy0; n++; }
+                        fx = cxs / n; fy = cys / n; return true;
+                    }
+                    var spots = new[] { new { name = "loch-modan", kind = LiquidKind.Water, col = 38, row = 42 }, new { name = "searing-gorge", kind = LiquidKind.Magma, col = 33, row = 44 }, new { name = "burning-steppes", kind = LiquidKind.Magma, col = 35, row = 47 } };
+                    foreach (var sp in spots)
+                    {
+                        if (!Find(sp.kind, sp.col, sp.row, out var fx, out var fy)) { notes.Add("note real 3D water: no " + sp.kind + " in tile " + sp.col + "," + sp.row); continue; }
+                        var wv = await WaterView("water-" + sp.name, fx, fy, 1400, 30, 32);
+                        int kcount = wv?.Child("byKind")?.Int(((int)sp.kind).ToString(I)) ?? 0;
+                        Check("real 3D liquids: " + sp.name + " shows " + sp.kind.ToString().ToLowerInvariant() + " (" + kcount + " meshes of that kind, " + (wv?.Int("meshes") ?? 0) + " in all)", wv != null && kcount > 0, wv == null ? "?" : Json.Write(wv));
+                    }
+                }
             }
             finally { settings.WorldMap3d = saved3d; settings.WorldMapLayers = savedLayers; settings.WorldMap3dDetail = savedDetail; settings.WorldMapExag = savedExag; }
         }
