@@ -10,7 +10,7 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>2.52.0</Version>
+    <Version>2.53.0</Version>
     <Product>Elan's Outpost</Product>
     <Company>Elan</Company>
     <Description>Installs and updates Elan's WoW addons</Description>
@@ -33,7 +33,7 @@
     <Resource Include="Assets\hero.jpg" />
   </ItemGroup>
 
-  <!-- the world map page (Atlas): Leaflet 1.9.4 (BSD-2-Clause, licence file included) and the page itself ride inside the exe; they are written to the data folder (atlas/worldmap/_page) and served from a private virtual host, never from the internet -->
+  <!-- the world map page (Atlas): Leaflet 1.9.4 (BSD-2-Clause) and three.js r149 (MIT), both with their licence files, and the 2D and 3D pages ride inside the exe; they are written to the data folder (atlas/worldmap/_page) and served from a private virtual host, never from the internet -->
   <ItemGroup>
     <EmbeddedResource Include="WorldMap\index.html" LogicalName="WorldMap.index.html" />
     <EmbeddedResource Include="WorldMap\worldmap.js" LogicalName="WorldMap.worldmap.js" />
@@ -41,6 +41,10 @@
     <EmbeddedResource Include="WorldMap\leaflet.js" LogicalName="WorldMap.leaflet.js" />
     <EmbeddedResource Include="WorldMap\leaflet.css" LogicalName="WorldMap.leaflet.css" />
     <EmbeddedResource Include="WorldMap\LICENSE-leaflet.txt" LogicalName="WorldMap.LICENSE-leaflet.txt" />
+    <EmbeddedResource Include="WorldMap\view3d.html" LogicalName="WorldMap.view3d.html" />
+    <EmbeddedResource Include="WorldMap\view3d.js" LogicalName="WorldMap.view3d.js" />
+    <EmbeddedResource Include="WorldMap\three.min.js" LogicalName="WorldMap.three.min.js" />
+    <EmbeddedResource Include="WorldMap\LICENSE-three.txt" LogicalName="WorldMap.LICENSE-three.txt" />
   </ItemGroup>
 
   <!-- voice: NAudio (mic/speakers) + Concentus (Opus codec, pure C#); Costura packs them into the exe -->

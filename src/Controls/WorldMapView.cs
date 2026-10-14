@@ -18,15 +18,17 @@ namespace ElansAddonHub
 {
     // ============================================================================================================================
     // The Atlas "World map": a seamless, zoomable map of a continent drawn from the player's own game files (tile pyramid: WorldMapPyramid) in a
-    // sandboxed WebView2 page with Leaflet (src\WorldMap\). This control is the host:
-    //   * the continent switch (WPF, above the page - a WebView2 cannot be overlapped) and the build progress / notes (WPF, shown INSTEAD of the page)
+    // sandboxed WebView2 page, either flat (Leaflet, src\WorldMap\index.html) or as 3D terrain (three.js, src\WorldMap\view3d.html, height grids from
+    // WorldMapTerrain). This control is the host:
+    //   * the continent switch and the 2D | 3D switch (WPF, above the page - a WebView2 cannot be overlapped) and the build progress / notes (WPF,
+    //     shown INSTEAD of the page)
     //   * the page, served from <data>\atlas\worldmap through a private virtual host (https://worldmap.outpost.local/), nothing from the internet
     //   * the message protocol (WorldMapProtocol): the page's messages are checked, the layers are built on request and posted, "Navigate here" copies
     //     a /etk way command, a click opens an Atlas id
     // Sandbox: dev tools off, no host objects, no new windows, navigation only inside the virtual host (everything else is cancelled), every request
     // to another host is answered with 403, every permission denied, an InPrivate profile of its own. Without the WebView2 runtime the control shows a
-    // calm note instead of the page.
-    // Phase 2 (a 3D terrain view) adds a second host for the same continent in this control: the tile / world math is in WorldMapMath.
+    // calm note instead of the page; if the 3D page cannot get WebGL the flat map is shown with a note. The two pages are two documents of the same
+    // origin: switching mode navigates the WebView to the other one and hands over the view (WorldMapMath: world x / y, and the zoom <-> distance rule).
     // ============================================================================================================================
     public sealed class WorldMapView : Grid
     {
@@ -43,7 +45,7 @@ namespace ElansAddonHub
         public bool PageReady { get; private set; }            // the page said its first tiles are in
         public bool PageInited { get; private set; }
         public int MapId => mapId;
-        public string CurrentSub => WorldMapIds.SubOf(mapId, slug, hasView, vx, vy, vz);
+        public string CurrentSub => WorldMapIds.SubOf(mapId, slug, hasView, vx, vy, vz, false, mode3d ? 3 : 0);
         public string Note => noteText.Text;
         public string ProgressText => overlayTitle.Text;
         public bool OverlayShown => overlay.Visibility == Visibility.Visible;
@@ -51,12 +53,25 @@ namespace ElansAddonHub
         public bool WebShown => web != null && web.Visibility == Visibility.Visible;
         public IReadOnlyList<string> Continents => segs.Select(s => (string)s.Content).ToList();
         public string SelectedContinent => segs.FirstOrDefault(s => s.IsChecked == true)?.Content as string ?? "";
+        // 3D
+        public bool Is3D => mode3d;
+        public bool GlOk { get; private set; }                 // the 3D page said WebGL works
+        public string GlRenderer { get; private set; } = "";
+        public string GlFallbackReason { get; private set; }   // set when the 3D page could not start and the flat map was shown instead
+        public WorldMapMessage LastStats { get; private set; }
+        public WorldMapMessage LastView3 { get; private set; }
+        public bool ModeSegmentsShown => modeHost.Visibility == Visibility.Visible;
+        public bool Segment3dChecked => seg3d.IsChecked == true;
+        public string LoadedPage => loadedPage;
+        public static bool ForceNoGlForTest;                   // self-test: pretend WebGL is missing (the page is told to behave as if it were)
 
         // ---- parts
         readonly StackPanel bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         readonly Border segHost = new Border();
         readonly StackPanel segPanel = new StackPanel { Orientation = Orientation.Horizontal };
         readonly List<RadioButton> segs = new List<RadioButton>();
+        readonly Border modeHost = new Border();
+        readonly RadioButton seg2d = new RadioButton { Content = "2D", GroupName = "wm-mode" }, seg3d = new RadioButton { Content = "3D", GroupName = "wm-mode" };
         readonly TextBlock noteText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         readonly Grid stage = new Grid { Background = new SolidColorBrush(Color.FromRgb(0x08, 0x11, 0x10)) };
         readonly Border overlay = new Border { Visibility = Visibility.Visible };
@@ -74,8 +89,11 @@ namespace ElansAddonHub
         WorldMapTarget target = new WorldMapTarget();
         int initGen, buildGen;
         string pendingInit;
-        bool pageHello, suppressSeg;
+        bool pageHello, suppressSeg, suppressMode;
         bool subscribed;
+        bool mode3d, modeKnown;
+        string loadedPage;                                     // "2d" | "3d": the document in the web view
+        int borderWaitMap = -1;                                // a "Zone borders" request is waiting for the terrain of this map
         Action overlayAction;
 
         public WorldMapView()
@@ -85,12 +103,23 @@ namespace ElansAddonHub
             segHost.Style = (Style)FindResource("SegmentHost");
             segHost.Child = segPanel;
             bar.Children.Add(segHost);
+            modeHost.Style = (Style)FindResource("SegmentHost");
+            modeHost.Margin = new Thickness(12, 0, 0, 0);
+            foreach (var rb in new[] { seg2d, seg3d })
+            {
+                rb.Style = (Style)FindResource("Segment");
+                System.Windows.Automation.AutomationProperties.SetName(rb, rb == seg2d ? "Flat map" : "3D terrain view");
+                rb.Checked += (s, e) => { if (!suppressMode) SetMode(s == seg3d); };
+            }
+            seg2d.IsChecked = true;
+            modeHost.Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { seg2d, seg3d } };
+            bar.Children.Add(modeHost);
             noteText.Style = (Style)FindResource("Text.Caption");
             bar.Children.Add(noteText);
             SetRow(bar, 0); Children.Add(bar);
 
             var card = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(24) };
-            overlayGlyph.Text = ""; overlayGlyph.FontFamily = new FontFamily("Segoe MDL2 Assets"); overlayGlyph.FontSize = 32; overlayGlyph.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text.Tertiary");
+            overlayGlyph.Text = ""; overlayGlyph.FontFamily = new FontFamily("Segoe MDL2 Assets"); overlayGlyph.FontSize = 32; overlayGlyph.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text.Tertiary");
             overlayTitle.Style = (Style)FindResource("Text.Section"); overlayTitle.Margin = new Thickness(0, 8, 0, 0);
             overlayHint.Style = (Style)FindResource("Text.Secondary"); overlayHint.Margin = new Thickness(0, 4, 0, 0);
             overlayBar.Style = (Style)FindResource("ThinProgress");
@@ -124,7 +153,27 @@ namespace ElansAddonHub
                 t = new WorldMapTarget();
             }
             else SetNote("");
+            if (!modeKnown) { modeKnown = true; mode3d = Settings != null && Settings.WorldMap3d; }
+            if (t.Mode == 3) mode3d = true; else if (t.Mode == 2) mode3d = false;
+            ShowModeSegments();
             target = t;
+            Resolve();
+        }
+
+        void ShowModeSegments() { suppressMode = true; seg2d.IsChecked = !mode3d; seg3d.IsChecked = mode3d; suppressMode = false; }
+
+        // the 2D | 3D switch: the view (x, y, zoom) is handed over
+        public void SetMode(bool is3d)
+        {
+            modeKnown = true;
+            if (is3d == mode3d && loadedPage == (is3d ? "3d" : "2d")) { ShowModeSegments(); return; }
+            mode3d = is3d;
+            if (Settings != null && Settings.WorldMap3d != is3d) { Settings.WorldMap3d = is3d; SaveSettings?.Invoke(); }
+            if (is3d) GlFallbackReason = null;
+            ShowModeSegments();
+            if (mapId < 0) return;
+            SetNote("");
+            target = new WorldMapTarget { MapId = mapId, HasView = hasView, X = vx, Y = vy, Z = vz };
             Resolve();
         }
 
@@ -137,15 +186,15 @@ namespace ElansAddonHub
             {
                 switch (MapData.Status)
                 {
-                    case MapData.State.Disabled: Show("", "The world map is made from your game files", "Game data is switched off. Switch \"Read item data from my WoW installation\" on in Settings > General to use the world map.", false); break;
-                    case MapData.State.Unavailable: Show("", "The world map needs your game's maps", "The map tables could not be read (" + (MapData.Reason ?? "unknown") + "). Check the WoW folder in Settings > General.", false); break;
-                    default: Show("", "Reading the maps from your game files...", "The world map starts as soon as the map tables are read.", true); break;
+                    case MapData.State.Disabled: Show("", "The world map is made from your game files", "Game data is switched off. Switch \"Read item data from my WoW installation\" on in Settings > General to use the world map.", false); break;
+                    case MapData.State.Unavailable: Show("", "The world map needs your game's maps", "The map tables could not be read (" + (MapData.Reason ?? "unknown") + "). Check the WoW folder in Settings > General.", false); break;
+                    default: Show("", "Reading the maps from your game files...", "The world map starts as soon as the map tables are read.", true); break;
                 }
                 return;
             }
             var conts = WorldMapService.Continents(idx);
             RefreshSegments(conts);
-            if (conts.Count == 0) { Show("", "This game has no world map", "Its files list no continent with a world table and minimap pictures.", false); return; }
+            if (conts.Count == 0) { Show("", "This game has no world map", "Its files list no continent with a world table and minimap pictures.", false); return; }
             WorldContinent c = target.MapId >= 0 ? conts.FirstOrDefault(x => x.MapId == target.MapId) : null;
             if (c == null && target.MapId >= 0) SetNote("The game has no world map for map " + target.MapId + "; showing " + conts[0].Name + ".");
             if (c == null && target.MapId < 0 && Settings != null && !string.IsNullOrEmpty(Settings.WorldMapLast)) c = conts.FirstOrDefault(x => x.Slug == Settings.WorldMapLast);
@@ -173,13 +222,15 @@ namespace ElansAddonHub
 
         void SwitchTo(WorldContinent c, WorldMapTarget t)
         {
-            bool same = c.MapId == mapId && PageInited;
+            string want = mode3d ? "3d" : "2d";
+            bool same = c.MapId == mapId && PageInited && loadedPage == want;
             mapId = c.MapId; slug = c.Slug;
             hasView = t.HasView; if (t.HasView) { vx = t.X; vy = t.Y; vz = t.Z; }
             if (Settings != null && Settings.WorldMapLast != c.Slug) { Settings.WorldMapLast = c.Slug; SaveSettings?.Invoke(); }
             suppressSeg = true; foreach (var s in segs) s.IsChecked = (int)s.Tag == mapId; suppressSeg = false;
+            ShowModeSegments();
             int gen = ++buildGen;
-            if (same && web != null && WorldMapCache.Built(mapId) != null)
+            if (same && web != null && WorldMapCache.Built(mapId) != null && (!mode3d || WorldMapCache.TerrainBuilt(mapId) != null))
             {
                 if (t.HasView) { WorldMapMath.WorldToLatLng(t.X, t.Y, out var lat, out var lng); Post(WorldMapProtocol.Goto(lat, lng, t.Z, t.Pin ? "" : null)); }
                 else if (t.Slug.Length > 0) Post("{\"t\":\"fit\"}");      // the continent by name: the whole continent again
@@ -187,12 +238,48 @@ namespace ElansAddonHub
                 SubChanged?.Invoke(CurrentSub);
                 return;
             }
-            if (WorldMapCache.Built(mapId) != null) { StartPage(c, t); return; }
-            ShowBuild(WorldMapService.StateOf(mapId), c.Name);
-            WorldMapService.EnsureBuilt(mapId).ContinueWith(task =>
+            EnsureAssets(c, t, gen);
+        }
+
+        // the pictures (always) and the terrain (for 3D) of the continent exist, then the page starts
+        void EnsureAssets(WorldContinent c, WorldMapTarget t, int gen)
+        {
+            if (WorldMapCache.Built(c.MapId) == null)
             {
-                try { Dispatcher.BeginInvoke(new Action(() => { if (gen != buildGen || mapId != c.MapId) return; if (task.Status == TaskStatus.RanToCompletion && task.Result) StartPage(c, t); else ShowBuildFailed(c); })); } catch (Exception) { }
-            });
+                ShowBuild(WorldMapService.StateOf(c.MapId), c.Name);
+                WorldMapService.EnsureBuilt(c.MapId).ContinueWith(task =>
+                {
+                    try { Dispatcher.BeginInvoke(new Action(() => { if (gen != buildGen || mapId != c.MapId) return; if (task.Status == TaskStatus.RanToCompletion && task.Result) EnsureAssets(c, t, gen); else ShowBuildFailed(c, false); })); } catch (Exception) { }
+                });
+                return;
+            }
+            if (mode3d && WorldMapCache.TerrainBuilt(c.MapId) == null)
+            {
+                ShowBuild(WorldMapService.TerrainStateOf(c.MapId), c.Name, true);
+                WorldMapService.EnsureTerrain(c.MapId).ContinueWith(task =>
+                {
+                    try
+                    {
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            if (gen != buildGen || mapId != c.MapId) return;
+                            if (task.Status == TaskStatus.RanToCompletion && task.Result) EnsureAssets(c, t, gen);
+                            else
+                            {
+                                // no terrain: the flat map still works
+                                var st = WorldMapService.TerrainStateOf(c.MapId);
+                                GlFallbackReason = "the terrain could not be read" + (st?.Error != null ? " (" + st.Error + ")" : "");
+                                mode3d = false; ShowModeSegments();
+                                SetNote("The 3D view needs the terrain, which could not be read from your game files; showing the flat map.");
+                                StartPage(c, t);
+                            }
+                        }));
+                    }
+                    catch (Exception) { }
+                });
+                return;
+            }
+            StartPage(c, t);
         }
 
         // ---------------------------------------------------------------- overlay (build progress, notes, no WebView2)
@@ -205,20 +292,22 @@ namespace ElansAddonHub
             overlay.Visibility = Visibility.Visible;
         }
 
-        void ShowBuild(WorldBuildState st, string name)
+        void ShowBuild(WorldBuildState st, string name, bool terrain = false)
         {
-            Show("", st != null && st.Running ? st.Text : "Building " + name + "...", "The first time you open a continent, the Outpost makes its map from your game files, in the background. This happens once per game version; later you open it at once. Nothing is uploaded and nothing is written to the WoW folder.", true);
+            Show("", st != null && st.Running ? st.Text : terrain ? "Building " + name + " terrain..." : "Building " + name + "...",
+                terrain ? "The 3D view needs the shape of the land. The first time, the Outpost reads it from your game files, in the background. This happens once per game version. Nothing is uploaded and nothing is written to the WoW folder."
+                        : "The first time you open a continent, the Outpost makes its map from your game files, in the background. This happens once per game version; later you open it at once. Nothing is uploaded and nothing is written to the WoW folder.", true);
             overlayBar.Visibility = Visibility.Visible;
             overlayBar.Value = st != null && st.Total > 0 ? Math.Min(1, st.Done / (double)st.Total) : 0;
             overlayButton.Content = "Cancel"; overlayButton.Visibility = Visibility.Visible;
-            int id = mapId; overlayAction = () => WorldMapService.Cancel(id);
+            int id = mapId; overlayAction = () => { WorldMapService.Cancel(id); };
             if (st != null && st.Running && st.Text.Length > 0) overlayTitle.Text = st.Text;
         }
 
-        void ShowBuildFailed(WorldContinent c)
+        void ShowBuildFailed(WorldContinent c, bool terrain)
         {
-            var st = WorldMapService.StateOf(c.MapId);
-            Show("", "The " + c.Name + " map could not be built", st?.Error ?? "Something went wrong while reading the game files.", false);
+            var st = terrain ? WorldMapService.TerrainStateOf(c.MapId) : WorldMapService.StateOf(c.MapId);
+            Show("", "The " + c.Name + (terrain ? " terrain" : " map") + " could not be built", st?.Error ?? "Something went wrong while reading the game files.", false);
             overlayButton.Content = "Try again"; overlayButton.Visibility = Visibility.Visible;
             overlayAction = () => { WorldMapService.ResetForTest(); Resolve(); };
         }
@@ -230,11 +319,15 @@ namespace ElansAddonHub
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     if (id != mapId) return;
-                    var st = WorldMapService.StateOf(id);
-                    if (st == null || !st.Running) return;
-                    overlayTitle.Text = st.Text;
-                    overlayBar.Visibility = Visibility.Visible;
-                    overlayBar.Value = st.Total > 0 ? Math.Min(1, st.Done / (double)st.Total) : 0;
+                    var st = WorldMapService.RunningStateOf(id);
+                    if (st == null) return;
+                    if (overlay.Visibility == Visibility.Visible)
+                    {
+                        overlayTitle.Text = st.Text;
+                        overlayBar.Visibility = Visibility.Visible;
+                        overlayBar.Value = st.Total > 0 ? Math.Min(1, st.Done / (double)st.Total) : 0;
+                    }
+                    else if (borderWaitMap == id && st.Terrain) SetNote("Zone borders: " + st.Text.Replace("Building " + st.Name + " terrain", "reading the terrain from your game files"));
                 }));
             }
             catch (Exception) { }
@@ -253,18 +346,21 @@ namespace ElansAddonHub
         async void StartPage(WorldContinent c, WorldMapTarget t)
         {
             int gen = ++initGen;
-            Show("", "Opening " + c.Name + "...", "", true);
+            Show("", "Opening " + c.Name + "...", "", true);
             bool ok;
             try { ok = await EnsureWeb(); }
             catch (Exception e) { Util.Log("world map: " + e); ok = false; }
             if (gen != initGen) return;
             if (!ok) { ShowNoWebView(); return; }
             var man = WorldMapCache.Built(c.MapId);
-            if (man == null) { ShowBuildFailed(c); return; }
-            PageReady = false; PageInited = false;
+            if (man == null) { ShowBuildFailed(c, false); return; }
+            bool is3 = mode3d;
+            var tman = is3 ? WorldMapCache.TerrainBuilt(c.MapId) : null;
+            if (is3 && tman == null) { is3 = mode3d = false; ShowModeSegments(); }
             var init = new Dictionary<string, object>
             {
                 ["t"] = "init",
+                ["mode"] = is3 ? "3d" : "2d",
                 ["map"] = new Dictionary<string, object>
                 {
                     ["id"] = c.MapId, ["name"] = c.Name, ["base"] = "https://" + WorldMapPage.Host + "/" + WorldMapCache.BuildKey + "/" + c.MapId.ToString(CultureInfo.InvariantCulture),
@@ -273,6 +369,26 @@ namespace ElansAddonHub
                 ["layers"] = WorldMapLayers.Catalog(),
                 ["on"] = (Settings?.WorldMapLayers ?? WorldMapLayers.DefaultOn.ToList()).Where(WorldMapIds.IsLayerId).Distinct().ToList(),
             };
+            if (is3)
+            {
+                var tiles = new List<int>();
+                try
+                {
+                    foreach (var f in Directory.GetFiles(WorldMapCache.TerrainDir(WorldMapCache.BuildKey, c.MapId), "*.wmt"))
+                    {
+                        var p = Path.GetFileNameWithoutExtension(f).Split('_');
+                        if (p.Length == 2 && int.TryParse(p[0], out var col) && int.TryParse(p[1], out var row) && WorldMapMath.InGrid(col, row)) { tiles.Add(col); tiles.Add(row); }
+                    }
+                }
+                catch (Exception) { }
+                init["terrain"] = new Dictionary<string, object>
+                {
+                    ["base"] = "https://" + WorldMapPage.Host + "/" + WorldMapCache.BuildKey + "/" + c.MapId.ToString(CultureInfo.InvariantCulture) + "/" + WorldMapTerrain.Folder,
+                    ["minZ"] = Math.Round(tman.MinZ, 1), ["maxZ"] = Math.Round(tman.MaxZ, 1), ["tiles"] = tiles,
+                };
+                init["prefs"] = new Dictionary<string, object> { ["detail"] = Detail(), ["exag"] = Exag(), ["userDetail"] = Settings != null && !string.IsNullOrEmpty(Settings.WorldMap3dDetail) };
+                if (ForceNoGlForTest) init["forceNoGl"] = true;
+            }
             if (t.HasView)
             {
                 WorldMapMath.WorldToLatLng(t.X, t.Y, out var lat, out var lng);
@@ -281,8 +397,19 @@ namespace ElansAddonHub
                 init["view"] = v;
             }
             var json = Json.Write(init);
-            if (pageHello) Post(json); else pendingInit = json;
+            // the right document in the web view: navigating to the other page starts that page's own hello
+            string wantPage = is3 ? "3d" : "2d";
+            PageReady = false; PageInited = false; GlOk = false;
+            if (loadedPage != wantPage)
+            {
+                pageHello = false; loadedPage = wantPage; pendingInit = json;
+                try { web.CoreWebView2.Navigate(is3 ? WorldMapPage.Page3dUrl : WorldMapPage.PageUrl); } catch (Exception e) { Util.Log("world map navigate: " + e.Message); }
+            }
+            else if (pageHello) Post(json); else pendingInit = json;
         }
+
+        public string Detail() { var d = Settings?.WorldMap3dDetail; return d == "low" || d == "high" ? d : "medium"; }
+        public double Exag() { var e = Settings?.WorldMapExag ?? 0; return e >= 1 && e <= 3 ? e : 1.5; }
 
         Task<bool> EnsureWeb()
         {
@@ -308,14 +435,15 @@ namespace ElansAddonHub
                 Directory.CreateDirectory(WorldMapCache.Root);
                 c.SetVirtualHostNameToFolderMapping(WorldMapPage.Host, WorldMapCache.Root, CoreWebView2HostResourceAccessKind.Deny);
                 c.WebMessageReceived += OnMessage;
-                c.Navigate(WorldMapPage.PageUrl);
+                loadedPage = mode3d ? "3d" : "2d";
+                c.Navigate(mode3d ? WorldMapPage.Page3dUrl : WorldMapPage.PageUrl);
                 return true;
             }
             catch (Exception e)
             {
                 Util.Log("world map web: " + e.Message);
                 try { stage.Children.Remove(wv); wv.Dispose(); } catch (Exception) { }
-                web = null; webTask = null;
+                web = null; webTask = null; loadedPage = null;
                 return false;
             }
         }
@@ -346,17 +474,18 @@ namespace ElansAddonHub
             {
                 var u = e.Request.Uri ?? "";
                 if (u.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || u.StartsWith("blob:", StringComparison.OrdinalIgnoreCase) || IsOwnUrl(u)) return;
-                BlockedForTest++;
+                BlockedForTest++; if (BlockedUrlsForTest.Count < 20) BlockedUrlsForTest.Add(u);
                 e.Response = c.Environment.CreateWebResourceResponse(null, 403, "Blocked", "");
             };
         }
         public int BlockedForTest;
+        public readonly List<string> BlockedUrlsForTest = new List<string>();
         public static bool ForceNoWebViewForTest;                 // self-test: pretend WebView2 is not installed
 
         void ShowNoWebView()
         {
             NoWebViewShown = true;
-            Show("", "The world map needs Microsoft Edge WebView2", "WebView2 is not installed on this PC, so the map cannot be shown here. The rest of the Atlas works as usual: zones, creatures, objects and routes all still have their own maps.", false);
+            Show("", "The world map needs Microsoft Edge WebView2", "WebView2 is not installed on this PC, so the map cannot be shown here. The rest of the Atlas works as usual: zones, creatures, objects and routes all still have their own maps.", false);
         }
 
         // ---------------------------------------------------------------- messages
@@ -374,6 +503,9 @@ namespace ElansAddonHub
             Handle(json);
         }
 
+        // zoom <-> viewing distance of the 3D camera: a 2D view at zoom z shows 800 * 133.33 / 2^z yards (the same rule is in view3d.js)
+        public static double DistToZoom(double dist) => Math.Max(0, Math.Min(WorldMapIds.MaxZoom, Math.Log(106666.0 / Math.Max(dist, 1)) / Math.Log(2)));
+
         // (public for the self-test: the same path as a message from the page)
         public void Handle(string json)
         {
@@ -383,6 +515,8 @@ namespace ElansAddonHub
             switch (m.Type)
             {
                 case WorldMapMessageType.Hello:
+                    // a hello from the document that was replaced is not for the new one
+                    if (!string.IsNullOrEmpty(m.Detail) && loadedPage != null && m.Detail != loadedPage) break;
                     pageHello = true;
                     if (pendingInit != null) { var j = pendingInit; pendingInit = null; Post(j); }
                     break;
@@ -401,6 +535,14 @@ namespace ElansAddonHub
                         SubChanged?.Invoke(CurrentSub);
                         break;
                     }
+                case WorldMapMessageType.View3:
+                    {
+                        LastView3 = m;
+                        WorldMapMath.LatLngToWorld(m.Lat, m.Lng, out var x, out var y);
+                        hasView = true; vx = x; vy = y; vz = Math.Round(DistToZoom(m.Dist), 2);
+                        SubChanged?.Invoke(CurrentSub);
+                        break;
+                    }
                 case WorldMapMessageType.Open:
                     OpenAtlas?.Invoke(m.Id);
                     break;
@@ -413,12 +555,60 @@ namespace ElansAddonHub
                 case WorldMapMessageType.Need:
                     NeedLayer(m.Layer);
                     break;
+                case WorldMapMessageType.Webgl:
+                    GlOk = m.Ok; GlRenderer = m.Detail;
+                    if (!m.Ok && mode3d && mapId >= 0)
+                    {
+                        // no WebGL: the flat map, with a note (the choice of 3D is kept off until the person asks again)
+                        GlFallbackReason = m.Why;
+                        mode3d = false;
+                        if (Settings != null && Settings.WorldMap3d) { Settings.WorldMap3d = false; SaveSettings?.Invoke(); }
+                        ShowModeSegments();
+                        target = new WorldMapTarget { MapId = mapId, HasView = hasView, X = vx, Y = vy, Z = vz };
+                        var why = m.Why;
+                        Dispatcher.BeginInvoke(new Action(() => { if (!mode3d) { Resolve(); SetNote("The 3D view needs WebGL, which is not available here (" + (string.IsNullOrEmpty(why) ? "no reason given" : why) + "); showing the flat map."); } }));
+                    }
+                    break;
+                case WorldMapMessageType.Stats:
+                    LastStats = m;
+                    break;
+                case WorldMapMessageType.Prefs:
+                    if (Settings != null) { Settings.WorldMap3dDetail = m.Detail; Settings.WorldMapExag = Math.Round(m.Exag, 1); SaveSettings?.Invoke(); }
+                    break;
             }
         }
+
+        void PostLayerInfo(string layer, string state, string note) => Post(Json.Write(new Dictionary<string, object> { ["t"] = "layerinfo", ["id"] = layer, ["state"] = state, ["count"] = 0, ["note"] = note ?? "" }));
 
         void NeedLayer(string layer)
         {
             int my = mapId, g = initGen;
+            // zone borders come from the terrain: read it first (once per game version), the layer arrives when it is done
+            if (layer == "borders" && !WorldMapService.TerrainBuilt(my))
+            {
+                borderWaitMap = my;
+                PostLayerInfo(layer, "loading", "Reading the terrain from your game files...");
+                WorldMapService.EnsureTerrain(my).ContinueWith(t =>
+                {
+                    try
+                    {
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            if (borderWaitMap == my) { borderWaitMap = -1; SetNote(""); }
+                            if (my != mapId || g != initGen) return;
+                            if (t.Status == TaskStatus.RanToCompletion && t.Result) BuildAndPost(layer, my, g);
+                            else PostLayerInfo(layer, "empty", WorldMapService.TerrainStateOf(my)?.Error ?? "The terrain could not be read.");
+                        }));
+                    }
+                    catch (Exception) { }
+                });
+                return;
+            }
+            BuildAndPost(layer, my, g);
+        }
+
+        void BuildAndPost(string layer, int my, int g)
+        {
             Task.Run(() => WorldMapLayers.Build(layer, my)).ContinueWith(t =>
             {
                 try
@@ -427,7 +617,7 @@ namespace ElansAddonHub
                     {
                         if (my != mapId || g != initGen) return;
                         var r = t.Status == TaskStatus.RanToCompletion ? t.Result : new LayerResult { Note = "This layer could not be built." };
-                        if (r.Json.Length == 0) Post(Json.Write(new Dictionary<string, object> { ["t"] = "layerinfo", ["id"] = layer, ["state"] = "empty", ["count"] = 0, ["note"] = r.Note }));
+                        if (r.Json.Length == 0) PostLayerInfo(layer, "empty", r.Note);
                         else Post(r.Json);
                     }));
                 }
@@ -476,6 +666,33 @@ namespace ElansAddonHub
             }
         }
 
+        // the memory of the browser processes of this web view (private bytes, MB): the renderer and GPU process of the 3D page are what counts
+        public long ProcessMemoryMbForTest(out string detail)
+        {
+            detail = "";
+            try
+            {
+                var env = web?.CoreWebView2?.Environment; if (env == null) return -1;
+                long total = 0; var parts = new List<string>();
+                foreach (var pi in env.GetProcessInfos())
+                {
+                    try
+                    {
+                        using (var p = System.Diagnostics.Process.GetProcessById(pi.ProcessId))
+                        {
+                            p.Refresh();
+                            long mb = p.PrivateMemorySize64 / 1048576;
+                            total += mb; parts.Add(pi.Kind + " " + mb);
+                        }
+                    }
+                    catch (Exception) { }
+                }
+                detail = string.Join(", ", parts);
+                return total;
+            }
+            catch (Exception e) { detail = e.Message; return -1; }
+        }
+
         public CoreWebView2 CoreForTest => web?.CoreWebView2;
         public bool HasWebForTest => web != null;
 
@@ -484,7 +701,7 @@ namespace ElansAddonHub
         {
             try { WorldMapService.BuildChanged -= OnBuildChanged; MapData.Changed -= OnMapDataChanged; subscribed = false; } catch (Exception) { }
             try { if (web != null) { stage.Children.Remove(web); web.Dispose(); web = null; webTask = null; } } catch (Exception) { }
-            pageHello = false; PageInited = false; PageReady = false; pendingInit = null; mapId = -1; initGen++; buildGen++;
+            pageHello = false; PageInited = false; PageReady = false; pendingInit = null; mapId = -1; initGen++; buildGen++; loadedPage = null; GlOk = false; borderWaitMap = -1;
         }
     }
 }

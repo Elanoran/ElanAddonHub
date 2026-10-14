@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<title>World map 3D</title>
+<link rel="stylesheet" href="worldmap.css">
+</head>
+<body class="v3">
+<canvas id="gl" tabindex="0" aria-label="World map, 3D terrain"></canvas>
+<div id="ov" aria-hidden="true"></div>
+<div id="hud"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="ctx" role="menu" hidden></div>
+<div id="tip" hidden></div>
+<script src="three.min.js"></script>
+<script src="view3d.js"></script>
+</body>
+</html>
