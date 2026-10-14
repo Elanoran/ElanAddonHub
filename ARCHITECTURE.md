@@ -521,6 +521,7 @@ a layer that is missing (no Classic download, no Lodge, game data off) only leav
 - **One id scheme for links everywhere:** `item:123`, `npc:456`, `obj:789`, `quest:12`, `zone:1440` (uiMapID),
   `instance:36` (map id), `spell:6150`, `skill:186`, `faction:76`. Atlas pages, searches, tooltips, map markers and Lodge
   chat item chips all link with these, so any reference opens the right Atlas page.
+  **Atlas links in chat**: `ItemLinks.Find` also recognises whole-token Atlas links (`item|npc|obj|quest|zone|instance|spell|skill|faction:N`, `browse:`, `talents:`, `professions:` validated by the Atlas parsers) as `ItemRefKind.Atlas` refs (`AtlasId` canonical); they share the 6-chip cap, show as the same 24 px chips (kind glyph tile, name from `AtlasQuery.Describe` / `ItemData`) and a click opens the Atlas, never Wowhead.
 - **Every value knows where it came from:** `Forever` (client data / client cache / Lodge-observed) or
   `Classic baseline`, plus counts behind percentages ("12% of 340 kills").
 - **Game build stamps:** every client-read layer records the game build it was read from. When the build changes, the

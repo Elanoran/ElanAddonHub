@@ -305,7 +305,7 @@ namespace ElansAddonHub
                 {
                     await AtlasView.Open(kid); UpdateLayout();
                     var got = AtlasClickCopy();
-                    if (AtlasView.LinkShown != kid || got != kid || AtlasView.LastCopiedForTest != kid || !AtlasView.CopiedShownForTest || AtlasView.CopyLinkButtonForTest.ToolTip.ToString() != "Copy link - paste it in the Atlas search (Ctrl+K)") bad.Add(kid + " shown=" + AtlasView.LinkShown + " copied=" + got);
+                    if (AtlasView.LinkShown != kid || got != kid || AtlasView.LastCopiedForTest != kid || !AtlasView.CopiedShownForTest || AtlasView.CopyLinkButtonForTest.ToolTip.ToString() != "Copy link - paste it in Lodge chat or the Atlas search") bad.Add(kid + " shown=" + AtlasView.LinkShown + " copied=" + got);
                 }
                 Check("link: item, creature, object, quest, zone, instance, spell, skill, faction (and a page that was not found) each show their id in the header and Copy puts exactly that id on the clipboard, with 'Link copied' beside it", bad.Count == 0, string.Join("; ", bad));
                 Check("link: the Copy link button is a 24 px IconButton with the name 'Copy link' (tooltip says where to paste it)", AtlasView.CopyLinkButtonForTest.Width == 24 && System.Windows.Automation.AutomationProperties.GetName(AtlasView.CopyLinkButtonForTest) == "Copy link" && AtlasView.CopyLinkButtonForTest.ToolTip.ToString().StartsWith("Copy link"));

@@ -1248,6 +1248,11 @@ namespace ElansAddonHub.Lodge
         {
             if (!((sender as FrameworkElement)?.Tag is ItemChipVM chip)) return;
             e.Handled = true;
+            if (chip.Ref.AtlasId != null)   // a pasted Atlas link (item:2589, npc:46, browse:...): the Atlas, never Wowhead
+            {
+                if (OpenAtlas != null) OpenAtlas(chip.Ref.AtlasId);
+                return;
+            }
             if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && chip.Ref.Id > 0 && OpenAtlas != null) { OpenAtlas(Services.Db2.AtlasIds.Item(chip.Ref.Id)); return; }
             var url = chip.Url;
             if (OpenLinkOverrideForTest != null) OpenLinkOverrideForTest(url);

@@ -111,7 +111,7 @@
               <Image Source="{Binding Icon}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" />
             </Border>
             <Border Visibility="{Binding TileVisibility}" CornerRadius="8" Background="{StaticResource Brush.Surface3}">
-              <TextBlock Text="&#xE719;" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding TileGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
           </Grid>
           <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" Style="{StaticResource Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="264" />

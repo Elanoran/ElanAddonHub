@@ -6,6 +6,7 @@ Keep one `## x.y.z` section per hub version.
 ## 2.49.0
 - **The Atlas uses the whole window.** The start page no longer sits in one narrow column: the categories get up to six tiles per row, the shortcuts run across the width, and the info cards (your game data, the Classic baseline, the Lodge pool, recent finds) go side by side in two or three columns when the window is wide and stack when it is narrow. Item, creature and the other pages put the map in a column of its own in a wide window, and browse lists use the full width.
 - **Every Atlas page shows its link with a Copy button.** Under the title: `item:2589`, `npc:46`, `browse:items/weapons`, `talents:tree/hunter` ... and a small copy button. Paste the link in the Atlas search to open the same page again.
+- **Atlas links pasted in Lodge chat become chips that open the Atlas.** Paste `item:2589`, `npc:46`, `quest:783`, `zone:1411`, `spell:133`, `browse:items/weapons` or `talents:tree/hunter` in a message and a chip with the name appears under it; a click opens that Atlas page.
 - The "Browse or search" intro card at the top of the Atlas start page is gone; the search box says the same and its tooltip tells you can paste a link.
 
 ## 2.48.2
