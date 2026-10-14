@@ -101,6 +101,7 @@ namespace ElansAddonHub
             BrowserView.Init(settings);
             BrowserView.ShortcutTab += t => ShowTab(t);
             ProfessionsView.Init(() => settings.WowRoot, () => Session?.AtlasData);
+            ProfessionsView.UseSettings(settings, () => Session?.FlightData);
             InitAtlas();
             LodgePage.OpenLink += OpenChatLink;
             InventoryView.GoToAddons += () => ShowTab("addons");
@@ -387,6 +388,7 @@ namespace ElansAddonHub
             if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }
             if (Begin("talents")) { result += "\r\n" + await TalentsTest(dir); End(); }
             if (Begin("professions")) { result += "\r\n" + await ProfessionsTest(dir); End(); }
+            if (Begin("profguide")) { result += "\r\n" + await ProfGuideTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }

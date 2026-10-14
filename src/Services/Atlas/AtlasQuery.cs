@@ -18,6 +18,7 @@ namespace ElansAddonHub.Services.Atlas
         public Func<Dictionary<int, InvItemTotals>> Owned = () => null;       // item id -> what each of the user's characters holds
         public Func<List<InvChar>> Characters = () => null;                  // the user's own characters (for "usable by my character" in the browse lists)
         public Func<DateTime> NowUtc = () => DateTime.UtcNow;
+        public Func<Dictionary<int, Dictionary<int, List<AtlasObs.NodePt>>>> OwnNodes = () => null;   // gathering nodes this PC's Hub observed: object -> uiMapId -> nodes
     }
 
     // ============================================================================================================================

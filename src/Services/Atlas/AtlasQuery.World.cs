@@ -80,6 +80,8 @@ namespace ElansAddonHub.Services.Atlas
                 }
             }
 
+            if (isZone) AddZoneNodes(plan, m, id);
+
             // quests of the zone: the client's cache and the Classic baseline, the client's first
             var quests = new Dictionary<int, AtlasRow>();
             var areaMap = new Dictionary<int, int>();

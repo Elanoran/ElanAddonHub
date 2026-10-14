@@ -138,6 +138,7 @@ namespace ElansAddonHub
             chars = Holdings.From(inv.Where(c => !c.Hidden));
             pool = Holdings.Pool(chars);
             Refresh();
+            if (opts?.FollowedGuides != null && opts.FollowedGuides.Count > 0 && FollowSignature() != followSig) ScheduleFollowRebuild();     // a followed character's skill may have changed
         }
 
         ProfessionBook EnsureBook()

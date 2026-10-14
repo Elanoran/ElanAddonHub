@@ -10,6 +10,7 @@ namespace ElansAddonHub.Services.Professions
     {
         public string Key = "", Name = "", Class = "", Realm = "";
         public int Level;
+        public bool FromHub;               // the Hub saved this character: its key is the one Elan's Hub (ElansHub.CharKey) and the game use, so a guide can be handed to the game
         public readonly Dictionary<string, KeyValuePair<int, int>> Skills = new Dictionary<string, KeyValuePair<int, int>>(StringComparer.OrdinalIgnoreCase);   // profession -> (skill, max)
         public readonly Dictionary<int, int> Items = new Dictionary<int, int>();
 
@@ -30,7 +31,7 @@ namespace ElansAddonHub.Services.Professions
             foreach (var c in chars ?? Enumerable.Empty<InvChar>())
             {
                 if (c.Hidden) continue;
-                var pc = new ProfChar { Key = c.Key ?? c.Name, Name = c.Name ?? "", Class = c.Class ?? "", Realm = c.Realm ?? "", Level = c.Level };
+                var pc = new ProfChar { Key = c.Key ?? c.Name, Name = c.Name ?? "", Class = c.Class ?? "", Realm = c.Realm ?? "", Level = c.Level, FromHub = c.Hub != null };
                 if (c.Hub != null)
                 {
                     var pm = HubModules.ProfessionsOf(c.Hub);

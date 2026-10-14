@@ -15,13 +15,17 @@ namespace ElansAddonHub.Services.Professions
     {
         readonly Func<LodgeAtlas> lodge;
         readonly Func<int, ClientItem> item;
+        readonly Services.Atlas.INodeSource nodes;
         readonly object gate = new object();
         bool prepared;
         string missing;
         readonly Dictionary<int, ZoneInfo> zones = new Dictionary<int, ZoneInfo>();
         readonly Dictionary<string, List<GatherEntity>> byProfession = new Dictionary<string, List<GatherEntity>>(StringComparer.OrdinalIgnoreCase);
 
-        public LiveGatherWorld(Func<LodgeAtlas> lodge = null, Func<int, ClientItem> item = null) { this.lodge = lodge; this.item = item ?? ItemData.Get; }
+        public LiveGatherWorld(Func<LodgeAtlas> lodge = null, Func<int, ClientItem> item = null, Services.Atlas.INodeSource nodes = null) { this.lodge = lodge; this.item = item ?? ItemData.Get; this.nodes = nodes ?? new Services.Atlas.LiveNodeSource(); }
+
+        // the nodes of players changed (the Lodge or this PC): the places are worked out again the next time they are asked for
+        public void Invalidate() { lock (gate) { prepared = false; missing = null; zones.Clear(); byProfession.Clear(); } }
 
         public bool Available { get { Prepare(); return missing == null; } }
         public string Missing { get { Prepare(); return missing; } }
@@ -98,6 +102,8 @@ namespace ElansAddonHub.Services.Professions
                     var c = lod.Loot("obj", o.Id);
                     if (c != null) foreach (var z in c.Zones) e.LodgeZones[z.Key] = (int)Math.Min(int.MaxValue, z.Value);
                 }
+                // Forever nodes (players looted at these positions): the zone counts as many places as there are nodes
+                foreach (var z in nodes.ForeverMaps(o.Id)) e.LodgeZones[z] = Math.Max(e.LodgeZones.TryGetValue(z, out var have) ? have : 0, nodes.Forever(o.Id, z).Count);
                 return e;
             }
 

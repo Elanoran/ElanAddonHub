@@ -184,6 +184,7 @@ namespace ElansAddonHub
         public void ShowMap(int uiMapId)
         {
             int my = ++gen;
+            if (route.Count > 0 && routeMap != uiMapId) ClearRoute();
             UiMapId = uiMapId;
             var idx = MapData.Index;
             ClearPicture();
@@ -432,6 +433,35 @@ namespace ElansAddonHub
 
         public void ClearMarkers() { markers.Clear(); clusters = null; hover = null; HideTip(); view.InvalidateVisual(); }
 
+        // ---- a route: numbered stops joined by a line (a closed loop), drawn over the picture and under/over the markers; belongs to the map shown when it was set
+        public sealed class RouteStop
+        {
+            public double Fx, Fy;
+            public string Label = "";
+            public bool Forever = true;                  // false = a Classic baseline position (drawn fainter)
+            public RouteStop() { }
+            public RouteStop(double fx, double fy, string label = "", bool forever = true) { Fx = fx; Fy = fy; Label = label ?? ""; Forever = forever; }
+        }
+
+        readonly List<RouteStop> route = new List<RouteStop>();
+        int routeMap;
+        public int RouteCount => route.Count;
+        public IReadOnlyList<RouteStop> RouteStops => route;
+        public int RouteMap => routeMap;
+
+        public void SetRoute(IEnumerable<RouteStop> stops)
+        {
+            route.Clear();
+            routeMap = UiMapId;
+            if (stops != null) foreach (var s in stops) if (s != null && !double.IsNaN(s.Fx) && !double.IsNaN(s.Fy)) route.Add(s);
+            view.InvalidateVisual();
+        }
+
+        public void ClearRoute() { if (route.Count == 0) return; route.Clear(); view.InvalidateVisual(); }
+
+        // where stop i (0-based) is drawn in the stage, for tests
+        public Point RouteStopPointForTest(int i) => FractionToViewport(route[i].Fx, route[i].Fy);
+
         public IReadOnlyList<MarkerCluster> Clusters
         {
             get
@@ -630,7 +660,8 @@ namespace ElansAddonHub
                 var rect = new Rect(o.ox, o.oy, o.pw * o.scale, o.ph * o.scale);
                 RenderOptions.SetBitmapScalingMode(this, o.scale < 1 ? BitmapScalingMode.HighQuality : BitmapScalingMode.Linear);
                 dc.DrawImage(o.picture, rect);
-                if (o.markers.Count == 0) return;
+                DrawRouteLine(dc);
+                if (o.markers.Count == 0) { DrawRouteStops(dc); return; }
 
                 var halo = Res<Brush>("Brush.Bg") ?? Brushes.Black;
                 var haloPen = new Pen(halo, 2); haloPen.Freeze();
@@ -658,6 +689,45 @@ namespace ElansAddonHub
                         var ft = new FormattedText(c.Count > 999 ? "999+" : c.Count.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 11, c.SameKind ? onKind : text, dpi);
                         dc.DrawText(ft, new Point(ctr.X - ft.Width / 2, ctr.Y - ft.Height / 2));
                     }
+                }
+                DrawRouteStops(dc);
+            }
+
+            void DrawRouteLine(DrawingContext dc)
+            {
+                if (o.route.Count < 2) return;
+                var accent = Res<Brush>("Brush.Accent") ?? Brushes.Orange;
+                var halo = new Pen(Res<Brush>("Brush.Bg") ?? Brushes.Black, 5) { LineJoin = PenLineJoin.Round }; halo.Freeze();
+                var pen = new Pen(accent, 2.5) { LineJoin = PenLineJoin.Round, DashStyle = DashStyles.Solid }; pen.Freeze();
+                var g = new StreamGeometry();
+                using (var ctx = g.Open())
+                {
+                    ctx.BeginFigure(o.FractionToViewport(o.route[0].Fx, o.route[0].Fy), false, o.route.Count > 2);
+                    for (int i = 1; i < o.route.Count; i++) ctx.LineTo(o.FractionToViewport(o.route[i].Fx, o.route[i].Fy), true, true);
+                }
+                g.Freeze();
+                dc.DrawGeometry(null, halo, g);
+                dc.DrawGeometry(null, pen, g);
+            }
+
+            void DrawRouteStops(DrawingContext dc)
+            {
+                if (o.route.Count == 0) return;
+                var accent = Res<Brush>("Brush.Accent") ?? Brushes.Orange;
+                var faint = Res<Brush>("Brush.Surface3") ?? Brushes.DimGray;
+                var ink = Res<Brush>("Brush.OnAccent") ?? Brushes.Black;
+                var text = Res<Brush>("Brush.Text.Primary") ?? Brushes.White;
+                var halo = new Pen(Res<Brush>("Brush.Bg") ?? Brushes.Black, 2); halo.Freeze();
+                var face = new Typeface(Res<FontFamily>("Font.Ui") ?? new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+                double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+                for (int i = 0; i < o.route.Count; i++)
+                {
+                    var p = o.FractionToViewport(o.route[i].Fx, o.route[i].Fy);
+                    if (p.X < -20 || p.Y < -20 || p.X > ActualWidth + 20 || p.Y > ActualHeight + 20) continue;
+                    bool fv = o.route[i].Forever;
+                    dc.DrawEllipse(fv ? accent : faint, halo, p, 9, 9);
+                    var ft = new FormattedText((i + 1).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, i >= 99 ? 8 : 10.5, fv ? ink : text, dpi);
+                    dc.DrawText(ft, new Point(p.X - ft.Width / 2, p.Y - ft.Height / 2));
                 }
             }
 

@@ -39,6 +39,11 @@ namespace ElansAddonHub.Services.Atlas
     {
         public string Cat = "", Noun = "", Token = "";
         public List<BEntry> All = new List<BEntry>();
+        Dictionary<int, BEntry> byId;
+        public BEntry ById(int id)
+        {
+            lock (All) { if (byId == null) { byId = new Dictionary<int, BEntry>(); foreach (var e in All) byId[e.Id] = e; } return byId.TryGetValue(id, out var x) ? x : null; }
+        }
         public BNode Root = new BNode();
         public List<string> Slots = new List<string>();
         public List<KeyValuePair<int, string>> Zones = new List<KeyValuePair<int, string>>();
@@ -63,7 +68,7 @@ namespace ElansAddonHub.Services.Atlas
         {
             string R(object o) => o == null ? "-" : RuntimeHelpers.GetHashCode(o).ToString(CultureInfo.InvariantCulture);
             var L = AtlasQuery.LodgeOrNull();
-            return string.Join("|", R(ItemData.Snapshot), R(SpellData.Data), R(SeenData.Snapshot), R(MapData.Index), R(ClassicAtlas.Current), L == null ? "-" : R(L) + "," + L.Rev + "," + L.Updated + "," + L.FindCount);
+            return string.Join("|", GatherNodes.OwnToken(), R(ItemData.Snapshot), R(SpellData.Data), R(SeenData.Snapshot), R(MapData.Index), R(ClassicAtlas.Current), L == null ? "-" : R(L) + "," + L.Rev + "," + L.Updated + "," + L.FindCount);
         }
 
         public static void ForgetForTest() { lock (cacheLock) cache.Clear(); }
@@ -383,12 +388,23 @@ namespace ElansAddonHub.Services.Atlas
             switch (c) { case Ctx.Herb: return "Herb"; case Ctx.Ore: return "Ore"; case Ctx.Chest: return "Chest or container"; case Ctx.Fishing: return "Fishing hole"; default: return "Other"; }
         }
 
+        // herbs | ore | chests | fishing | other for an object id ("" when the objects index cannot be built); builds the index the first time, so not on the UI thread
+        public static string ObjectGroupOf(int id)
+        {
+            var e = Index("objects")?.ById(id);
+            if (e == null) return "";
+            switch (e.Skill) { case Ctx.Herb: return "herbs"; case Ctx.Ore: return "ore"; case Ctx.Chest: return "chests"; case Ctx.Fishing: return "fishing"; default: return "other"; }
+        }
+
         static BIndex BuildObjects(Ctx x)
         {
             var ix = new BIndex { Noun = "object" };
             var ids = new HashSet<int>();
             if (SeenData.Snapshot != null) foreach (var k in SeenData.Snapshot.Objects.Keys) ids.Add(k);
             if (x.Classic != null) foreach (var k in x.Classic.Objects.Keys) ids.Add(k);
+            var nodeObjs = GatherNodes.ObjectsWithNodes().ToList();
+            foreach (var k in nodeObjs) ids.Add(k);                  // objects only players looted (Forever nodes) are listed too
+            var foreverZone = new LiveNodeSource();
             foreach (var id in ids.OrderBy(i => i))
             {
                 var s = SeenData.Object(id); var c = x.Classic?.ObjectInfo(id);
@@ -399,10 +415,13 @@ namespace ElansAddonHub.Services.Atlas
                 e.Type = s?.Type ?? c?.Type ?? 0;
                 e.Skill = ObjectCat(x, id);
                 e.Zone = ZoneOfSpawns(x, c?.Spawns);
+                // the Forever nodes (what players looted) say where it really is: they come before the Classic baseline's positions
+                bool forever = false;
+                if (nodeObjs.Contains(id)) { var fm = foreverZone.ForeverMaps(id); if (fm.Count > 0) { e.Zone = fm[0]; forever = true; e.Lodge = true; } }
                 e.ZoneName = e.Zone > 0 ? x.Map?.Name(e.Zone) ?? "" : "";
                 if (x.L != null && (x.L.Object(id) != null || x.L.Loot("obj", id) != null)) e.Lodge = true;
                 e.Detail = ObjCatTitle(e.Skill);
-                e.Extra = e.ZoneName;
+                e.Extra = e.ZoneName + (forever && e.ZoneName.Length > 0 ? " (" + AtlasLabel.Forever + ")" : "");
                 ix.All.Add(e);
             }
             var root = ix.Root; root.Title = "Objects";

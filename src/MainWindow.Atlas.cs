@@ -18,7 +18,9 @@ namespace ElansAddonHub
         {
             RegisterAtlasHosts();
             AtlasView.Init(() => settings.WowRoot);
+            AtlasView.UseRouteSettings(settings, () => ProfessionsView?.RouteChoiceChanged());
             AtlasQuery.Context.Lodge = () => Session?.AtlasData;
+            AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
             AtlasView.LodgeState = LodgeAtlasState;
             AtlasView.OpenLinkOverride = url => OpenChatLink(url);
             // the Lodge can hand out the Classic data (server 2.17): fetched automatically for members, shareable by the owner and officers

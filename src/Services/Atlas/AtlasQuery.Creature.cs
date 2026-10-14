@@ -216,7 +216,7 @@ namespace ElansAddonHub.Services.Atlas
             var seen = SeenData.Object(id);
             var co = ClassicAtlas.ObjectInfo(id);
             var loot = L?.Loot("obj", id);
-            if (seen == null && co == null && (loot == null || loot.N == 0))
+            if (seen == null && co == null && (loot == null || loot.N == 0) && !new LiveNodeSource().ForeverMaps(id).Any())
             {
                 var nf = NotFoundPage("obj", id, "No layer knows this object. Your game has not met it yet.");
                 LayerNotes(nf, true, false);
@@ -232,6 +232,7 @@ namespace ElansAddonHub.Services.Atlas
             m.Subtitle = string.Join(" · ", new[] { "Object " + id, kind }.Where(s => s.Length > 0));
             var plan = new PlanBuilder();
             if (co != null) plan.Classic(co.Spawns, MarkerKind.Node, m.Title, kind + " · " + C, "obj:" + id);
+            AddObjectNodes(plan, id, m.Title);                         // Forever nodes (players looted here) above the Classic baseline's positions
             m.Map = plan.Build();
             AddFoundIn(m, co?.Spawns, null);
             LootSection(m, "loot", "Loot", "obj", id, ClassicSourceKind.ObjectLoot, "No loot is known for this object.");

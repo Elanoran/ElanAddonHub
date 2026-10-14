@@ -7,6 +7,8 @@ using System.Windows;
 using System.Windows.Controls;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Db2;
+using ElansAddonHub.Services.Atlas;
+using System.Windows.Input;
 using ElansAddonHub.Services.Professions;
 
 namespace ElansAddonHub
@@ -32,6 +34,7 @@ namespace ElansAddonHub
             lastGuide = null; lastGather = null;
 
             Body.Children.Add(GuideControls(start, target, cap));
+            Body.Children.Add(FollowRow());
             if (prof.Gathering) { RenderGatherGuide(b, start, target); return; }
 
             IDictionary<int, int> have = guideScope == "none" ? new Dictionary<int, int>() : guideScope == "char" && who != null ? who.Items : pool;
@@ -267,6 +270,16 @@ namespace ElansAddonHub
                 head.Children.Add(LinkText(z.Zone.Name, z.Zone.Id > 0 ? "zone:" + z.Zone.Id : null, "Text.RowTitle"));
                 if (z.Zone.KnownLevel) head.Children.Add(Line("   level " + z.Zone.MinLevel + "-" + z.Zone.MaxLevel, "Text.Caption"));
                 head.Children.Add(Line("   " + z.Label, "Text.Caption"));
+                var routeObjs = z.Finds.Where(f => f.ObjectId > 0).Select(f => f.ObjectId).Distinct().ToList();
+                if (routeObjs.Count > 0 && z.Zone.Id > 0)
+                {
+                    var zid = z.Zone.Id;
+                    var rl = LinkText("   Show route", null, "Text.Caption", Res("Brush.Accent"));
+                    rl.Cursor = Cursors.Hand; rl.ToolTip = "Open the zone map with a gathering loop through these nodes";
+                    rl.MouseLeftButtonUp += (s, e) => { GatherNodes.Pending = new GatherNodes.RouteRequest { Zone = zid, Objects = routeObjs }; ProfessionLinks.Open("zone:" + zid); e.Handled = true; };
+                    rl.Tag = "route";
+                    head.Children.Add(rl);
+                }
                 sp.Children.Add(head);
                 foreach (var f in z.Finds)
                 {

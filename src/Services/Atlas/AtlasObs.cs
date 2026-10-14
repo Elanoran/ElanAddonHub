@@ -24,6 +24,10 @@ namespace ElansAddonHub.Services
         public const int MaxKillSources = 6000, MaxObjectSources = 3000, MaxFishingZones = 400;
         public const int MaxVendors = 6000, MaxQuests = 20000, MaxSpawnNpcs = 8000, MaxRevealed = 40000;
         public const int MaxVendorItems = 300, MaxQuestItems = 10, MaxStats = 10;
+        // gathering nodes (atlas3): per object per map, objects in total, maps per object, per share
+        public const int MaxNodesPerMap = 150, MaxNodeObjects = 400, MaxNodeMaps = 40, MaxNodeObjectsPerShare = 50, MaxNodePointsPerShare = 1000;
+        public const double NodeMerge = 0.008;
+        public const long MaxNodeCount = 100_000;
         public const int MaxFinds = 2000, MaxHubFinds = 500, MaxSpawnPoints = 50, MaxPointsPerNpcPerShare = 20;
         public const int MaxNameLength = 80;
         // per share message (the server's frame limit is 64 KB)
@@ -34,6 +38,7 @@ namespace ElansAddonHub.Services
         public const int ModuleVersion = 1;
         public static readonly TimeSpan ShareEvery = TimeSpan.FromMinutes(3);
         public static readonly Version ServerVersion = new Version(2, 15, 0);
+        public static readonly Version NodesServerVersion = new Version(2, 18, 0);   // sub-feature "atlas3": gathering node positions
         public const long MinUnix = 1_000_000_000L;
 
         // ---------------------------------------------------------------- shapes
@@ -55,6 +60,9 @@ namespace ElansAddonHub.Services
         public class Quest { public long At; public int[] Rewards = new int[0], Choices = new int[0]; }
 
         public struct Spot { public int Zone; public double X, Y; }
+
+        // a recorded gathering node: x, y = fractions of the map (4 decimals), N = times looted there
+        public struct NodePt { public double X, Y; public long N, At; }
 
         public class Find
         {
@@ -223,9 +231,10 @@ namespace ElansAddonHub.Services
             public Dictionary<int, Quest> Quests = new Dictionary<int, Quest>();
             public Dictionary<int, List<Spot>> Spawns = new Dictionary<int, List<Spot>>();
             public List<Find> Finds = new List<Find>();
+            public Dictionary<int, Dictionary<int, List<NodePt>>> Nodes = new Dictionary<int, Dictionary<int, List<NodePt>>>();   // object -> uiMapId -> nodes
             public int Dropped;                                                // entries (or parts of them) that failed validation and were left out
             public long Since;
-            public bool IsEmpty => Kills.Count + Objects.Count + Fishing.Count + Vendors.Count + Quests.Count + Spawns.Count + Finds.Count == 0;
+            public bool IsEmpty => Kills.Count + Objects.Count + Fishing.Count + Vendors.Count + Quests.Count + Spawns.Count + Finds.Count + Nodes.Count == 0;
         }
 
         // ---------------------------------------------------------------- validation helpers
@@ -402,6 +411,41 @@ namespace ElansAddonHub.Services
             return true;
         }
 
+        // a coordinate with 4 decimals (nodes)
+        public static bool Coord4(object o, out double v)
+        {
+            if (!Num(o, out v) || v < 0 || v > 1) return false;
+            v = Math.Round(v, 4, MidpointRounding.AwayFromZero); return true;
+        }
+
+        public static bool SameNode(NodePt a, double x, double y) => (a.X - x) * (a.X - x) + (a.Y - y) * (a.Y - y) <= NodeMerge * NodeMerge + 1e-12;
+
+        // one object's nodes: { [uiMapId] = { {x, y, n, at}, ... } }; a bad point is dropped and counted, a bad map key drops that map
+        public static Dictionary<int, List<NodePt>> ParseNodeObject(object node, ref int dropped, int maxPerMap = MaxNodesPerMap)
+        {
+            var res = new Dictionary<int, List<NodePt>>();
+            var mo = node as Dictionary<string, object>;
+            if (mo == null) { dropped++; return res; }
+            foreach (var kv in mo)
+            {
+                if (res.Count >= MaxNodeMaps || !Key(kv.Key, MaxMapId, out var map)) { dropped++; continue; }
+                var l = new List<NodePt>();
+                foreach (var e in ArrayValues(kv.Value))
+                {
+                    var o = e as Dictionary<string, object>;
+                    if (o == null || !o.TryGetValue("x", out var xv) || !Coord4(xv, out var x) || !o.TryGetValue("y", out var yv) || !Coord4(yv, out var y)
+                        || !o.TryGetValue("n", out var nv) || !Whole(nv, 1, MaxNodeCount, out var n)) { dropped++; continue; }
+                    long at = o.TryGetValue("at", out var av) && Whole(av, MinUnix, 4_000_000_000L, out var a) ? a : 0;
+                    int same = l.FindIndex(p => SameNode(p, x, y));
+                    if (same >= 0) { var p = l[same]; p.N = Math.Max(p.N, n); p.At = Math.Max(p.At, at); l[same] = p; continue; }
+                    if (l.Count >= maxPerMap) { dropped++; continue; }
+                    l.Add(new NodePt { X = x, Y = y, N = n, At = at });
+                }
+                if (l.Count > 0) res[map] = l;
+            }
+            return res;
+        }
+
         // a list as a Lua array (dictionary keyed "1".."n", in index order) or a JSON array
         static IEnumerable<object> ArrayValues(object o)
         {
@@ -513,6 +557,14 @@ namespace ElansAddonHub.Services
                     var pts = ParseSpots(kv.Value, MaxSpawnPoints, ref dropped);
                     if (pts.Count > 0) s.Spawns[id] = pts;
                 }
+            var no = d.Child("nodes");
+            if (no != null)
+                foreach (var kv in no)
+                {
+                    if (s.Nodes.Count >= MaxNodeObjects || !Key(kv.Key, MaxId, out var id)) { dropped++; continue; }
+                    var maps = ParseNodeObject(kv.Value, ref dropped);
+                    if (maps.Count > 0) s.Nodes[id] = maps;
+                }
             var fo = d.Child("finds");
             if (fo != null)
             {
@@ -598,6 +650,22 @@ namespace ElansAddonHub.Services
             return Hash(string.Join(";", pts.Select(p => I(p.Zone) + ":" + D(p.X) + ":" + D(p.Y)).OrderBy(x => x, StringComparer.Ordinal)));
         }
 
+        public static string Sig(Dictionary<int, List<NodePt>> maps)
+        {
+            return Hash(string.Join(";", maps.OrderBy(m => m.Key).Select(m => I(m.Key) + "=" + string.Join(",", m.Value.Select(p => D4(p.X) + ":" + D4(p.Y) + ":" + I(p.N)).OrderBy(x => x, StringComparer.Ordinal)))));
+        }
+
+        static string D4(double v) { return v.ToString("0.0000", CultureInfo.InvariantCulture); }
+
+        // the wire shape of one object's nodes: { "<uiMapId>": [ { x, y, n } ] }
+        internal static Dictionary<string, object> NodesNode(Dictionary<int, List<NodePt>> maps)
+        {
+            var o = new Dictionary<string, object>();
+            foreach (var m in maps.OrderBy(k => k.Key))
+                o[I(m.Key)] = m.Value.OrderBy(p => p.X).ThenBy(p => p.Y).Select(p => (object)new Dictionary<string, object> { ["x"] = p.X, ["y"] = p.Y, ["n"] = p.N }).ToList();
+            return o;
+        }
+
         public static string Sig(Revealed r)
         {
             return Hash(r.Name + "|" + r.Quality + "|" + r.ItemLevel + "|" + r.RequiredLevel + "|" + r.Class + "|" + r.SubClass + "|" + r.Slot + "|" + string.Join(",", r.Stats.Select(s => s[0] + ":" + s[1])));
@@ -653,7 +721,7 @@ namespace ElansAddonHub.Services
         // The entries whose signature differs from what was uploaded before, as one atlas.share frame within the per-section counts and 56 KB.
         // Null when nothing changed. `revealed` = the item details to share (validated again here); `sent` = key -> signature of what the lodge already has.
         // `includeSeen` = the lodge takes seenNpcs / seenObjects / seenQuests (feature "atlas2"): the details AtlasObs.SeenSource holds go too, only ids not sent before (sent keys N / G / W + id).
-        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent, bool includeSeen = false)
+        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent, bool includeSeen = false, bool includeNodes = false)
         {
             var cands = new List<Cand>();
             void Add(string section, string key, string sentKey, string sig, object node, long order = 0)
@@ -674,6 +742,8 @@ namespace ElansAddonHub.Services
                     });
                 foreach (var kv in s.Spawns.OrderBy(k => k.Key))
                     Add("spawns", I(kv.Key), "s" + kv.Key, Sig(kv.Value), kv.Value.Take(MaxPointsPerNpcPerShare).Select(p => (object)new Dictionary<string, object> { ["z"] = p.Zone, ["x"] = p.X, ["y"] = p.Y }).ToList());
+                if (includeNodes)
+                    foreach (var kv in s.Nodes.OrderBy(k => k.Key)) Add("nodes", I(kv.Key), "n" + kv.Key, Sig(kv.Value), NodesNode(kv.Value));
                 foreach (var f in s.Finds.OrderBy(x => x.At).ThenBy(x => FindKey(x), StringComparer.Ordinal))
                 {
                     var o = new Dictionary<string, object> { ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At };
@@ -708,7 +778,7 @@ namespace ElansAddonHub.Services
             var limits = new Dictionary<string, int>
             {
                 ["kills"] = MaxKillsPerShare, ["objects"] = MaxObjectsPerShare, ["fishing"] = MaxFishingPerShare, ["vendors"] = MaxVendorsPerShare, ["quests"] = MaxQuestsPerShare,
-                ["spawns"] = MaxSpawnNpcsPerShare, ["finds"] = MaxFindsPerShare, ["items"] = MaxRevealedPerShare,
+                ["spawns"] = MaxSpawnNpcsPerShare, ["nodes"] = MaxNodeObjectsPerShare, ["finds"] = MaxFindsPerShare, ["items"] = MaxRevealedPerShare,
                 ["seenNpcs"] = MaxSeenNpcsPerShare, ["seenObjects"] = MaxSeenObjectsPerShare, ["seenQuests"] = MaxSeenQuestsPerShare,
             };
             var b = new Batch();
@@ -716,11 +786,17 @@ namespace ElansAddonHub.Services
             var objs = new Dictionary<string, Dictionary<string, object>>();
             var finds = new List<object>();
             var counts = new Dictionary<string, int>();
-            int bytes = 64;
+            int bytes = 64, nodePoints = 0;
             foreach (var c in cands)
             {
                 counts.TryGetValue(c.Section, out var n);
                 if (n >= limits[c.Section] || bytes + c.Cost > MaxShareBytes) continue;
+                if (c.Section == "nodes")
+                {
+                    int pts = ((Dictionary<string, object>)c.Node).Values.Sum(v => ((List<object>)v).Count);
+                    if (nodePoints + pts > MaxNodePointsPerShare) continue;
+                    nodePoints += pts;
+                }
                 counts[c.Section] = n + 1; bytes += c.Cost;
                 if (c.Section == "finds") finds.Add(c.Node);
                 else
