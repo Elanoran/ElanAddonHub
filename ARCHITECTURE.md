@@ -315,6 +315,13 @@ Sources, loot and vendors cannot be read from the client (its Adventure Guide ta
 decision on where the data comes from, how it is labelled (for example "Classic baseline" versus "seen on Forever") and what its licence
 requires, before any of it enters a release. Until then Atlas answers only what the user's own installation can answer.
 
+### To check in game later
+
+- **Hunter Marksmanship, Improved Serpent Sting** (node 105003, spell 19464, 5 ranks, row 3 col 3, "position repaired"): the game data has it as a 17th
+  Marksmanship talent, Seemeta shows it, WoW Forever Talent / Talents Forever / Zockify / WoW Forever Builds show 16 without it. Check the in-game
+  Marksmanship tree: if it is not there, hide the node in the calculator (TalentSet reading) and drop the `LeftOut` special case in `BuildLinks`;
+  if it is there, the other sites are out of date and `LeftOut` stays only for reading their links.
+
 ## Schemas
 
 ### `core` v1 (Hub, per character)
