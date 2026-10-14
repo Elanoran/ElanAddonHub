@@ -316,6 +316,18 @@ Sources, loot and vendors cannot be read from the client (its Adventure Guide ta
 decision on where the data comes from, how it is labelled (for example "Classic baseline" versus "seen on Forever") and what its licence
 requires, before any of it enters a release. Until then Atlas answers only what the user's own installation can answer.
 
+### Cairn: a shared commons across Lodges (ON HOLD, owner decides when)
+
+Idea (2026-10-14): Lodges that opt in send their pooled totals (ids and counts only: kills/drops per creature, objects, fishing, vendors,
+quest rewards; no member or character names, no IPs) to one "Cairn" service; it merges them and publishes a daily open file (CC0) that every
+Outpost can read as a "Community" layer under the Lodge layer and above the Classic baseline. Not peer-to-peer (NAT, poisoning, IP exposure).
+- Contributions come from Lodge SERVERS with a per-Lodge key (invite/revoke), stored per Lodge so one Lodge can be removed and the merge rebuilt.
+- Anti-junk: cap any Lodge at ~30% of a number, publish a drop only when 2-3 independent Lodges saw it, drop outliers (flagged for review),
+  sanity checks (known ids, counts never fall, drops <= kills, daily caps).
+- Lodge server: owner switch "Contribute to the Atlas commons" (off by default). Outpost: downloads the daily file (setting, on by default).
+- Hosting: its own small VM/LXC (1 vCPU, 2 GB, 16 GB) behind Cloudflare, separate from the Lodge VM; the daily file can sit on GitHub Releases.
+- Start invite-only with 2-3 trusted Lodges before opening it. Nothing is built; the Atlas layering and labels already allow adding it.
+
 ### To check in game later
 
 - **Hunter Marksmanship, Improved Serpent Sting** (node 105003, spell 19464, 5 ranks, row 3 col 3, "position repaired"): the game data has it as a 17th
