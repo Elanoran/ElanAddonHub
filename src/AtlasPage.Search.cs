@@ -65,6 +65,8 @@ namespace ElansAddonHub
             searchDebounce.Stop();
             var text = SearchBox.Text ?? "";
             if (string.IsNullOrWhiteSpace(text)) { CloseResults(); return; }
+            var routed = AtlasQuery.NormalizeId(text);
+            if (routed != null && AtlasCategories.IsRouted(routed)) { CloseResults(); await Show(routed, true); return; }
             int gen = ++searchGen;
             AtlasSearchResult r;
             try { r = await Task.Run(() => AtlasQuery.Search(text)); }

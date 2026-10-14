@@ -23,21 +23,23 @@ namespace ElansAddonHub
 
         void DrawStart()
         {
-            model = null; drawnSig = Signature();
+            model = null; browse = null; hosted = null; browseList = null; drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear();
             cols = null; leftCol = rightCol = null;
             TitleText.Text = "Atlas"; TitleText.Foreground = Res("Brush.Text.Primary");
-            SubText.Text = "Items, creatures, quests, zones and instances of WoW Forever";
+            SubText.Text = "Browse or search the items, creatures, quests, zones and instances of WoW Forever";
             UpdateNav();
             var col = new StackPanel { MaxWidth = 680, HorizontalAlignment = HorizontalAlignment.Left };
             Body.Children.Add(col);
 
             var intro = new StackPanel();
-            intro.Children.Add(Tb("Search for anything", "Text.Section"));
-            var t = Tb("Type a name in the box above: an item, a creature, an object, a quest, a zone, an instance, a spell or a recipe. Every name you see here opens its own page, and Alt+Left goes back. You can also paste a link like item:2589 or npc:46.", "Text.Secondary", null, 4);
+            intro.Children.Add(Tb("Browse or search", "Text.Section"));
+            var t = Tb("Pick a category below to browse everything in it and narrow it down with filters, or type a name in the box above: an item, a creature, an object, a quest, a zone, an instance, a spell or a recipe. Every name you see here opens its own page, and Alt+Left goes back. You can also paste a link like item:2589 or npc:46.", "Text.Secondary", null, 4);
             t.TextWrapping = TextWrapping.Wrap; intro.Children.Add(t);
             col.Children.Add(Card(intro));
+            col.Children.Add(Card(BrowseBlock()));
+            _ = FillBrowseBlock();
 
             col.Children.Add(Card(GameDataBlock()));
             col.Children.Add(ClassicCardView());

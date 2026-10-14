@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.48.1
+- **Atlas: browse by category, and filter by how to get it.** The Atlas start page now has a tile for each kind of thing (items, creatures, objects, quests, zones, dungeons and raids, spells, skills, recipes, factions) and each opens a list with a count, so you no longer need to know a name. Items split the way the game does (weapons by type, armor by cloth / leather / mail / plate / shields, consumables, trade goods, recipes, containers ...); objects are sorted into herbs, ore, chests and fishing holes. Every list has filters (name, level range, quality, slot, zone, rank, data source, usable by one of your characters) and a sort, and for items "How to get it": drops, vendor, quest reward, crafted, fishing, containers, gathering, with the source shown on the row. One-click shortcuts answer common questions (vendor items for your level, bags, herbs and ore by zone, fishing spots, dungeons by level) and show up when the data can answer them.
+
 ## 2.48.0
 - **The Atlas** (new page, Ctrl+5): one search for items, creatures, objects, quests, zones, dungeons, spells, skills and factions, and a page for each. Everything is read from **your own WoW installation** (read-only, nothing written to the game folder) or observed by your Lodge; nothing third-party ships with the Outpost.
   - **Item pages:** the game's own tooltip (stats, armor, weapon damage, "Equip:/Use:/Chance on hit:" lines, set bonuses), which of your characters have it, and every source in one table: drop chances observed by your Lodge ("12% · 340 kills · 3 members") above the Classic baseline, vendors with prices, quests, recipes that make it and what it is used for, recent finds by Lodge members, and a map with where the creatures spawn and where things were found.

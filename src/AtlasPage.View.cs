@@ -95,7 +95,8 @@ namespace ElansAddonHub
             ReleaseMaps();
             Body.Children.Clear();
             cols = null; leftCol = rightCol = null;
-            TitleText.Text = AtlasKinds.Singular(id.Contains(":") ? id.Substring(0, id.IndexOf(':')) : "") + " " + (id.Contains(":") ? id.Substring(id.IndexOf(':') + 1) : id);
+            if (AtlasBrowse.IsBrowseId(id)) { BrowseQuery.TryParse(id, out var sq); TitleText.Text = AtlasCategories.Find(sq?.Cat)?.Title ?? "Browse"; }
+            else TitleText.Text = AtlasKinds.Singular(id.Contains(":") ? id.Substring(0, id.IndexOf(':')) : "") + " " + (id.Contains(":") ? id.Substring(id.IndexOf(':') + 1) : id);
             SubText.Text = "";
             var p = new StackPanel();
             p.Children.Add(new Skeleton { Height = 120, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 0, 12) });
@@ -112,7 +113,7 @@ namespace ElansAddonHub
         // ============================================================================================================================ a page
         void Draw(AtlasPageModel m)
         {
-            model = m; drawnSig = Signature();
+            model = m; browse = null; hosted = null; browseList = null; drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear();
             cols = null; leftCol = rightCol = null;
