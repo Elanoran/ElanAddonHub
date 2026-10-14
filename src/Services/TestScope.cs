@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "hubdata", "readers", "characters", "armory", "itemdata", "spelldata", "gametooltip", "talents", "professions", "profguide", "mapdata", "worldmap", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs", "atlasclassic", "atlasclassiclodge", "atlaspage", "atlasbrowse", "atlashosts",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "armory", "itemdata", "spelldata", "gametooltip", "talents", "professions", "profguide", "mapdata", "worldmap", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs", "atlasclassic", "atlasclassiclodge", "atlaspage", "atlasbrowse", "atlashosts",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -56,6 +56,7 @@ namespace ElansAddonHub.Services
             ["atlaslodge"] = "Lodge 2.15 Atlas pool: the Hub module atlas.obs (parsing, validation of every field, too new, absent), deltas (signature per entry, batch limits and the 56 KB frame, revealed-items hook), the persisted upload record, upload batches (once per 3 minutes, only what changed), the aggregate (pages, validation of the answer, cache file, read API: drops, vendors, finds, spawns, revealed items), sharing off, guests, feature disabled, older server = nothing",
             ["lodgefiles"] = "Lodge 2.14 shared files: slots, upload (new slot, Replace = new version), the Updated badge, Save with the SHA-256 check and the Mark of the Web, damaged download, roll back and delete (with confirms), officer-only buttons (members and guests only save), blocked programs and zips holding programs, size limit, the notice above the chat, hidden on a server without the feature (HTTP goes to a fake of the server endpoints)",
             ["badges"] = "Lodge badges and ladder (feature badges): the Ladder view (rows, your own row highlighted, this month / all time asks for the right season, empty month, hidden rows), the badges card and the Settings > Profile list (earned with date, unearned with how to earn and a progress line, secret ones as ???), the strip of the best badges on a profile card (top 5, +N), the quiet new-badge dot that goes when you look, Hide me from the ladder sending the flag, the Guild Master switch, a lodge switched off or locked, guests, a server without the feature = everything hidden and nothing sent, refusals never shown",
+            ["realms"] = "Lodge realm status (feature realms): the dots at the top of the window (one per realm, labelled by ruleset or name, green up / red down / grey unknown), tooltips (name, ruleset, status, population, queue, checked N min ago, via your Lodge), a change recolours them, hidden without a Lodge, on a server without the feature and when the Forever realms were not found, the Settings switch (on by default), the back-up note (off by default, a quiet toast, silenced by the toast switch), nothing sent to the server",
             ["hubdata"] = "Elan's Hub data layer (Outpost side): ElansHubData parsing (core v1, account modules, a module newer than the app understands = TooNew without data, no ElansHubData, garbage), newest file wins, parse cache, locked file keeps the last good read, shared SavedVariables finder (links skipped)",
             ["video"] = "YouTube preview cards + in-app player",
             ["browser"] = "Browser page: URL/search rules, scheme + ad-host lists, tabs, tiles, WebView2 hardening",
@@ -96,7 +97,7 @@ namespace ElansAddonHub.Services
         {
             var r = new List<Tuple<Regex, string[]>>();
             void R(string rx, params string[] s) => r.Add(Tuple.Create(new Regex(rx, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), s));
-            var lodgeAll = new[] { "armory", "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "atlasclassiclodge", "video", "viewer", "toasts", "presence", "profile", "round3" };
+            var lodgeAll = new[] { "armory", "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "atlasclassiclodge", "video", "viewer", "toasts", "presence", "profile", "round3" };
 
             // ---- shared: everything depends on these
             R(@"^src/(App\.xaml(\.cs)?|MainWindow\.xaml(\.cs)?|MainWindow\.Others\.cs|MainWindow\.Welcome\.cs|ElansAddonHub\.csproj|Motion\.cs|Brand\.cs|SourceIcons\.cs|PillBase\.cs|WelcomeGuide\.cs)$", Star);
@@ -134,7 +135,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/(LodgeClient|AvatarArt|GamePresence|ItemLinks)\.cs$", lodgeAll);
             R(@"^src/Services/(VoiceEngine|VoiceEffects)\.cs$", "voice", "lodge");
             R(@"^src/Services/Sounds\.cs$", "toasts", "lodge", "voice");
-            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "armory", "atlasclassiclodge");
+            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "armory", "atlasclassiclodge");
             R(@"^src/MainWindow\.ProfileTest\.cs$", "profile");
             R(@"^src/MainWindow\.VideoTest\.cs$", "video");
             R(@"^src/(BrowserPage(\.xaml(\.cs)?)?|MainWindow\.BrowserTest|Services/(WebEngine|BrowserUrl|AdBlock))(\.cs)?$", "browser", "video");
@@ -154,13 +155,14 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/HubData\.cs$", "atlaslodge");
             R(@"^src/MainWindow\.FilesTest\.cs$", "lodgefiles", "lodge");
             R(@"^src/MainWindow\.BadgesTest\.cs$", "badges", "lodge");
+            R(@"^src/(MainWindow\.RealmsTest|MainWindow\.Realms|Lodge/LodgeSession\.Realms)\.cs$", "realms", "lodge");
             R(@"^src/MainWindow\.DesignTest\.Calendar\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.DesignTest\.WowEvents\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.DesignTest\.Invites\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.DesignTest\.LodgeFun\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.ToastTest\.cs$", "toasts");
             R(@"^src/MainWindow\.DesignTest(\.Toasts)?\.cs$");     // screenshot-only design runs, not part of --selftest
-            R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites", "invites2", "lodgefiles", "badges", "atlaslodge", "atlasclassiclodge");
+            R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites", "invites2", "lodgefiles", "badges", "realms", "atlaslodge", "atlasclassiclodge");
             // ---- addons
             R(@"^src/(AddonCard|ThirdPartyCard)\.cs$", "addons", "thirdparty", "startup", "selfupdated");
             R(@"^src/(MainWindow\.SelfUpdatedTest|Services/(AddonLogo|DevVersion))\.cs$", "selfupdated", "thirdparty");

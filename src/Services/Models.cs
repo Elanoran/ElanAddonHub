@@ -134,6 +134,8 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "toastPins")] public bool ToastPins { get; set; }            // default off
         [DataMember(Name = "toastUpdateOff")] public bool ToastUpdateOff { get; set; }
         [DataMember(Name = "toastHealthOff")] public bool ToastHealthOff { get; set; }      // default on: "Elan's Bags: 2 new errors"
+        [DataMember(Name = "realmStatusOff")] public bool RealmStatusOff { get; set; }          // default on: realm dots at the top (needs a Lodge with the realms feature)
+        [DataMember(Name = "realmsBackNotice")] public bool RealmsBackNotice { get; set; }    // default off: a quiet toast when the realms are up again
         // Addon health: errors the user already looked at ("seen") and already got a toast for, per "addon|message" -> count
         [DataMember(Name = "healthSeen")] public Dictionary<string, int> HealthSeen { get; set; }
         [DataMember(Name = "healthToasted")] public Dictionary<string, int> HealthToasted { get; set; }

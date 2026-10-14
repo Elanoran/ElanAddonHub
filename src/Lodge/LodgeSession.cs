@@ -321,6 +321,7 @@ namespace ElansAddonHub.Lodge
             ResetArmory();
             ResetFiles();
             ResetBadges();
+            ResetRealms();
             ResetClassic();
             ResetHistoryState();
             Pending = null;
@@ -518,6 +519,7 @@ namespace ElansAddonHub.Lodge
                 case "armory.crafters": OnArmoryCrafters(m); break;
                 case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
                 case "badges.mine": case "badges.member": case "badges.state": case "ladder.data": OnBadgesFrame(m); break;
+                case "realms.status": case "realms.back": OnRealmsFrame(m); break;
                 case "dataset.data": case "dataset.changed": case "dataset.result": OnDatasetFrame(m); break;
             }
         }
@@ -547,6 +549,7 @@ namespace ElansAddonHub.Lodge
             ReadArmoryFeatures(features);
             ReadFilesFeatures(m, features);
             ReadBadgesFeatures(m, features);
+            ReadRealmsFeatures(features);
             ReadClassicFeatures(m, features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;

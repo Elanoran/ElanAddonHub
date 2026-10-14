@@ -314,6 +314,8 @@ app.Lifetime.ApplicationStopping.Register(() =>
     try { lodge.AtlasPool.Flush(); } catch { }             // atlas changes not yet written
     try { lodge.Badges.Flush(); } catch { }                // badge tallies not yet written
 });
+if (cfg.RealmsConfigured)
+    app.Logger.LogInformation("Realm status on: region {Region}, every {Seconds} s", lodge.Realms.Region, cfg.RealmsPollSeconds);
 app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}",
     LodgeHub.Version, cfg.Urls, cfg.PathBase, cfg.DataDir, cfg.AllowQueryCode ? "allowed" : "off");
 app.Run();

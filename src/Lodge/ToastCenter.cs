@@ -10,7 +10,7 @@ namespace ElansAddonHub.Lodge
 {
     // What a toast is about. Reminders (events with a time) come later: add a kind here, give it a setting in
     // ToastCenter.Enabled and call Push - nothing else needs to change.
-    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary, Health, Event }
+    public enum ToastKind { Mention, Reply, Reaction, Pin, Update, Summary, Health, Event, Realms }
 
     public class ToastItem
     {
@@ -103,6 +103,7 @@ namespace ElansAddonHub.Lodge
                 case ToastKind.Pin: return settings.ToastPins;             // default off
                 case ToastKind.Update: return !settings.ToastUpdateOff;
                 case ToastKind.Health: return !settings.ToastHealthOff;
+                case ToastKind.Realms: return settings.RealmsBackNotice && !settings.RealmStatusOff;   // default off
                 default: return true;
             }
         }
@@ -121,7 +122,7 @@ namespace ElansAddonHub.Lodge
         {
             var now = Clock();
             // coalesce a burst: same kind + channel still on screen
-            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health && it.Kind != ToastKind.Event);
+            var same = Visible.FirstOrDefault(v => v.Kind == it.Kind && v.ChannelId == it.ChannelId && it.Kind != ToastKind.Update && it.Kind != ToastKind.Summary && it.Kind != ToastKind.Health && it.Kind != ToastKind.Event && it.Kind != ToastKind.Realms);
             if (same != null)
             {
                 same.Count++;
@@ -133,7 +134,7 @@ namespace ElansAddonHub.Lodge
             var vm = new ToastVM
             {
                 Kind = it.Kind, KickerText = it.Kicker, Sender = it.Sender, Channel = it.Channel, ChannelId = it.ChannelId, Who = it.Who, Born = now, Expires = now + Stay,
-                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health || it.Kind == ToastKind.Event ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
+                Title = it.Kind == ToastKind.Update || it.Kind == ToastKind.Summary || it.Kind == ToastKind.Health || it.Kind == ToastKind.Event || it.Kind == ToastKind.Realms ? it.Sender : it.Sender + (it.Channel != null ? " · #" + it.Channel : ""),
                 Text = it.Text, Opacity = 0,
             };
             Visible.Add(vm);

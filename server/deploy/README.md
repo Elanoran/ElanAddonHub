@@ -116,6 +116,15 @@ After `sudo lodge-update` (the new version arrives with it; nothing else needs t
 The reverse proxy must allow request bodies of at least `LODGE_FILES_MAX_MB` (nginx: `client_max_body_size 60m;` in the lodge location) - the same place the chat
 upload limit is set. Backups include `slots/` (`LODGE_BACKUP_FILES=0` leaves it out together with `files/`).
 
+## Realm status (2.20): the Battle.net API client
+
+The Outpost can show small dots at the top, one per WoW Forever realm, green when up and red when down. The Lodge server asks the Blizzard Game Data API and pushes the answer to every connected member; the Outposts never hold a key.
+
+1. Sign in at https://develop.battle.net with the Battle.net account that should own the key, open **API Access** and **Create client** (name: your lodge; redirect URL: any, e.g. `https://localhost`; service URL and intended use: a small community tool). Copy the **Client ID** and **Client Secret**.
+2. In `/etc/lodge/lodge.env` (or wherever your env file lives, mode 600) set `LODGE_BNET_CLIENT_ID=...` and `LODGE_BNET_CLIENT_SECRET=...`, optionally `LODGE_BNET_REGION` (`eu` default), then `sudo systemctl restart lodge`.
+3. Look at the journal: `journalctl -u lodge | grep "Realm status"`. The first poll prints, per namespace, how many connected realms exist and how many look like Forever realms (names only). If none is found the feature stays quiet (`available: false`, "Forever realms not found in the Blizzard API"), is polled every 15 minutes, and the Outpost shows nothing; the namespace to use can then be forced with `LODGE_REALMS_NAMESPACES`.
+
+The feature is advertised only when both the id and the secret are set. The secret is never logged, sent to a client or put in an error text. One poll per interval (`LODGE_REALMS_POLL_SECONDS`, 60-900, default 120) for the whole lodge, with a backoff on errors and on HTTP 429.
 ## Tests
 
 ```bash
@@ -142,7 +151,10 @@ and shows the sum, so a member re-sending data never counts twice. Guests can re
 
 | Setting | Meaning |
 |---|---|
-| `LODGE_BADGES_ENABLED` (1) | `0` switches badges and the ladder off for good: not advertised, every request answers `disabled`, the Guild Master's switch in the Outpost is greyed out, the data (`data/badges.json`) stays on disk. With `1` the Guild Master can still switch it off from Outpost > Settings > Guild Master |
+| `LODGE_BNET_CLIENT_ID` / `LODGE_BNET_CLIENT_SECRET` (unset) | The Battle.net API client for realm status (see "Realm status" below). Both set = the `realms` feature is advertised; either missing = off. The secret is never logged or sent to anyone |
+| `LODGE_BNET_REGION` (eu) | `eu`, `us`, `kr` or `tw`: the API host and the namespaces probed |
+| `LODGE_REALMS_POLL_SECONDS` (120) | 60 - 900. One poll for the whole lodge, whatever the member count |
+| `LODGE_REALMS_NAMESPACES` (empty) | Comma separated; replaces the default `dynamic-<region>`, `dynamic-classic-<region>`, `dynamic-classic1x-<region>` probe || `LODGE_BADGES_ENABLED` (1) | `0` switches badges and the ladder off for good: not advertised, every request answers `disabled`, the Guild Master's switch in the Outpost is greyed out, the data (`data/badges.json`) stays on disk. With `1` the Guild Master can still switch it off from Outpost > Settings > Guild Master |
 | `LODGE_ARMORY_ENABLED` (1) | `0` switches the Armory off: not advertised, `armory.put` answers `disabled`, the other messages answer an error, the data stays on disk |
 | `LODGE_ATLAS_ENABLED` (1) | `0` switches the feature off: not advertised, `atlas.share` / `atlas.get` answer `disabled`, the data stays on disk |
 | `LODGE_CLASSIC_ENABLED` (1) | `0` switches the hosted Classic data off: not advertised, upload / download / delete answer 403 `disabled`, the stored bundle stays on disk (about 15 MB) |

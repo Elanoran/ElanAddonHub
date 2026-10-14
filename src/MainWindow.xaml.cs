@@ -81,6 +81,7 @@ namespace ElansAddonHub
             LodgePage.OpenSettings += () => { ShowTab("settings"); SettingsPage.Show("voice"); };
             LodgePage.EditProfileRequested += () => { ShowTab("settings"); SettingsPage.Show("profile"); };
             LodgePage.Init(Session);
+            InitRealms();
             SettingsPage.Init(this, settings, LodgePage);
             InventoryView.Init(() => settings.WowRoot);
             InventoryView.InitArmory(Session);
@@ -381,6 +382,7 @@ namespace ElansAddonHub
             if (Begin("atlaslodge")) { result += "\r\n" + await AtlasLodgeTest(dir); End(); }
             if (Begin("lodgefiles")) { result += "\r\n" + await LodgeFilesTest(dir); End(); }
             if (Begin("badges")) { result += "\r\n" + await BadgesTest(dir); End(); }
+            if (Begin("realms")) { result += "\r\n" + await RealmsTest(dir); End(); }
             if (Begin("hubdata")) { result += "\r\n" + await HubDataTest(dir); End(); }
             if (Begin("readers")) { result += "\r\n" + await ReadersTest(dir); End(); }
             if (Begin("characters")) { result += "\r\n" + await CharactersTest(dir); End(); }
