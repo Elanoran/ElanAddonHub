@@ -100,25 +100,27 @@ namespace ElansAddonHub.Services.WorldMap
     public sealed class TerrainResult
     {
         public int Tiles, Written, Reused, Missing, Failed, Files, Zones;
-        public long Bytes, Ms;
+        public int WaterFiles, WaterWritten, WaterLayers, WaterCells;      // liquid files (.wmw), those made this time, layers and cells in all of them
+        public long Bytes, WaterBytes, Ms;
         public float MinZ, MaxZ;
         public bool Complete;
     }
 
     public static class WorldMapTerrain
     {
-        public const int Version = 1;
+        public const int Version = 2;          // 2: the liquids (.wmw) next to the height grids
         public const string Folder = "terrain";
         public static string Dir(string mapDir) => Path.Combine(mapDir, Folder);
         public static string TileFile(string terrainDir, int col, int row) => Path.Combine(terrainDir, col + "_" + row + ".wmt");
+        public static string WaterFile(string terrainDir, int col, int row) => Path.Combine(terrainDir, col + "_" + row + ".wmw");
         public static string ManifestPath(string terrainDir) => Path.Combine(terrainDir, "manifest.json");
         public static string BordersPath(string terrainDir) => Path.Combine(terrainDir, "borders.json");
 
         public sealed class Manifest
         {
-            public int Version, MapId, Tiles, Missing, Files, Zones;
+            public int Version, MapId, Tiles, Missing, Files, Zones, WaterFiles, WaterLayers, WaterCells;
             public string BuildKey = "", Built = "";
-            public long Bytes, Ms;
+            public long Bytes, WaterBytes, Ms;
             public float MinZ, MaxZ;
             public bool Valid => Version == WorldMapTerrain.Version && Tiles > 0 && Files > 0;
         }
@@ -134,7 +136,7 @@ namespace ElansAddonHub.Services.WorldMap
                 return new Manifest
                 {
                     Version = d.Int("v"), MapId = d.Int("mapId"), BuildKey = d.Str("build") ?? "", Tiles = d.Int("tiles"), Missing = d.Int("missing"), Files = d.Int("files"), Zones = d.Int("zones"),
-                    Bytes = d.Long("bytes"), Ms = d.Long("ms"), Built = d.Str("built") ?? "",
+                    Bytes = d.Long("bytes"), Ms = d.Long("ms"), WaterFiles = d.Int("waterFiles"), WaterLayers = d.Int("waterLayers"), WaterCells = d.Int("waterCells"), WaterBytes = d.Long("waterBytes"), Built = d.Str("built") ?? "",
                     MinZ = (float)Num(d, "minZ"), MaxZ = (float)Num(d, "maxZ"),
                 };
             }
@@ -157,6 +159,18 @@ namespace ElansAddonHub.Services.WorldMap
             catch (Exception) { return null; }
         }
 
+        public static WaterTile ReadWater(string terrainDir, int col, int row)
+        {
+            try
+            {
+                var p = WaterFile(terrainDir, col, row);
+                if (!File.Exists(p)) return null;
+                var t = WaterTile.FromBytes(File.ReadAllBytes(p));
+                return t != null && t.Col == col && t.Row == row ? t : null;
+            }
+            catch (Exception) { return null; }
+        }
+
         static void WriteAtomic(string path, byte[] data)
         {
             var tmp = path + ".tmp";
@@ -170,7 +184,7 @@ namespace ElansAddonHub.Services.WorldMap
         // `zones` (may be null) turns the area ids into zones for borders.json. A cancelled or crashed build leaves its finished tile files; the next
         // one skips every tile whose file is complete (the right size), so it resumes. Files are written as .tmp and renamed; the manifest comes last.
         public static TerrainResult Build(int mapId, string buildKey, IList<WdtTile> tiles, Func<WdtTile, byte[]> load, string mapDir, ZoneResolver zones,
-            Action<PyramidProgress> progress, CancellationToken ct)
+            Action<PyramidProgress> progress, CancellationToken ct, LiquidKinds kinds = null)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var res = new TerrainResult { Tiles = tiles.Count };
@@ -185,9 +199,12 @@ namespace ElansAddonHub.Services.WorldMap
             {
                 ct.ThrowIfCancellationRequested();
                 var file = TileFile(dir, t.Col, t.Row);
-                TerrainTile tt = null;
-                if (Have(file)) { tt = ReadTile(dir, t.Col, t.Row); if (tt != null) res.Reused++; }
-                if (tt == null)
+                var wfile = WaterFile(dir, t.Col, t.Row);
+                TerrainTile tt = null; WaterTile wt = null;
+                if (Have(file)) tt = ReadTile(dir, t.Col, t.Row);
+                if (File.Exists(wfile)) wt = ReadWater(dir, t.Col, t.Row);
+                if (tt != null && wt != null) res.Reused++;
+                else
                 {
                     byte[] bytes = null; bool failedHere = false;
                     try { bytes = t.RootFdid == 0 ? null : load(t); } catch (OperationCanceledException) { throw; } catch (Exception e) { Util.Log("world map terrain: tile " + t.Col + "," + t.Row + ": " + e.Message); res.Failed++; failedHere = true; }
@@ -195,12 +212,11 @@ namespace ElansAddonHub.Services.WorldMap
                     else
                     {
                         var adt = AdtFile.Parse(bytes);
-                        if (!adt.Ok || adt.WithHeights == 0) res.Failed++;
+                        if (!adt.Ok || adt.WithHeights == 0) { res.Failed++; tt = null; }
                         else
                         {
-                            tt = TerrainTile.FromAdt(t.Col, t.Row, adt);
-                            WriteAtomic(file, tt.ToBytes());
-                            res.Written++;
+                            if (tt == null) { tt = TerrainTile.FromAdt(t.Col, t.Row, adt); WriteAtomic(file, tt.ToBytes()); res.Written++; }
+                            if (wt == null) { wt = WaterTile.FromAdt(t.Col, t.Row, adt, kinds); WriteAtomic(wfile, wt.ToBytes()); res.WaterWritten++; }
                         }
                     }
                 }
@@ -209,6 +225,12 @@ namespace ElansAddonHub.Services.WorldMap
                 if ((done & 7) == 0 || done == tiles.Count) Report("terrain");
             }
             res.Files = Directory.GetFiles(dir, "*.wmt").Length;
+            foreach (var wf in Directory.GetFiles(dir, "*.wmw"))
+            {
+                res.WaterFiles++; try { res.WaterBytes += new FileInfo(wf).Length; } catch (Exception) { }
+                var p = Path.GetFileNameWithoutExtension(wf).Split('_');
+                if (p.Length == 2 && int.TryParse(p[0], out var wc) && int.TryParse(p[1], out var wr)) { var w2 = ReadWater(dir, wc, wr); if (w2 != null) { res.WaterLayers += w2.Layers.Count; res.WaterCells += w2.Cells; } }
+            }
             if (res.Files == 0) throw new InvalidDataException("none of the " + tiles.Count + " terrain files could be read");
             ct.ThrowIfCancellationRequested();
             Report("borders");
@@ -219,7 +241,7 @@ namespace ElansAddonHub.Services.WorldMap
             var man = new StringBuilder();
             man.Append(Json.Write(new Dictionary<string, object>
             {
-                ["v"] = Version, ["mapId"] = mapId, ["build"] = buildKey, ["tiles"] = res.Tiles - res.Missing - res.Failed, ["missing"] = res.Missing + res.Failed, ["files"] = res.Files, ["zones"] = res.Zones, ["bytes"] = res.Bytes,
+                ["v"] = Version, ["mapId"] = mapId, ["build"] = buildKey, ["tiles"] = res.Tiles - res.Missing - res.Failed, ["missing"] = res.Missing + res.Failed, ["files"] = res.Files, ["zones"] = res.Zones, ["bytes"] = res.Bytes, ["waterFiles"] = res.WaterFiles, ["waterLayers"] = res.WaterLayers, ["waterCells"] = res.WaterCells, ["waterBytes"] = res.WaterBytes,
                 ["ms"] = res.Ms, ["minZ"] = Math.Round(res.MinZ, 2), ["maxZ"] = Math.Round(res.MaxZ, 2), ["samples"] = TerrainTile.Samples, ["built"] = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
             }));
             WriteAtomic(ManifestPath(dir), Encoding.UTF8.GetBytes(man.ToString()));

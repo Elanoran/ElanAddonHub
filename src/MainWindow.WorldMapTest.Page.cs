@@ -332,6 +332,7 @@ namespace ElansAddonHub
             Check("real game files: building the same region again reuses every tile (nothing decoded, nothing written)", rres2.Complete && rres2.Decoded == 0 && rres2.Reused == expectTiles && rres2.Written == 0, rres2.Decoded + " " + rres2.Reused);
             notes.Add("note real game files: region build " + regionMs + " ms for " + expectTiles + " map tiles, " + rres.Files + " files, " + (rres.Bytes / 1024) + " KB; managed memory after " + GC.GetTotalMemory(true) / 1048576 + " MB");
             await WorldMapTerrainRealChecks(idx, real, rw, notes, Check);
+            await WorldMapWaterRealChecks(idx, real, rw, notes, Check);
             WorldMapCache.RootOverride = Path.Combine(rw, "cache");
 
             if (engine)

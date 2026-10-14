@@ -390,6 +390,8 @@ namespace ElansAddonHub
             }
             try { await WorldMapTerrainTest(dir, work, notes, v => ok &= v); }
             catch (Exception e) { notes.Add("FAIL worldmap terrain test crashed [" + e + "]"); ok = false; }
+            try { await WorldMapWaterTest(dir, work, notes, v => ok &= v); }
+            catch (Exception e) { notes.Add("FAIL worldmap water test crashed [" + e + "]"); ok = false; }
             try { await WorldMapPageTest(dir, work, notes, v => ok &= v); }
             catch (Exception e) { notes.Add("FAIL worldmap page test crashed [" + e + "]"); ok = false; }
             try { WmAdtCacheDrop(); } catch (Exception) { }

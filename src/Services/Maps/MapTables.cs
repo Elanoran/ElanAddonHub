@@ -45,6 +45,12 @@ namespace ElansAddonHub.Services.Maps
         public static readonly Def TaxiPath = new Def { Name = "TaxiPath", FileDataId = 1067802, TableHash = 0xAB30A45C, Layouts = new uint[] { 0xA303DE51 } };
         public static readonly Def TaxiPathNode = new Def { Name = "TaxiPathNode", FileDataId = 1000437, TableHash = 0xE5E988BC, Layouts = new uint[] { 0xFE362E70 } };
 
+        // LiquidType (the liquid kinds of the world map's water: MH2O type id -> water / ocean / magma / slime). Kept out of `All` on purpose: it is read on its own while the
+        // terrain is built, not part of the map data cache. Table hash, layout hash and the 57 rows verified on the real file of 1.60.1.70338 (FileDataID from the community listfile).
+        public static readonly Def LiquidType = new Def { Name = "LiquidType", FileDataId = 1371380, TableHash = 0x6613BED3, Layouts = new uint[] { 0xD1ECEEC9 } };
+        // LiquidType: Name_lang 0, Texture[6] 1, Flags 2, SoundBank 3 (0 water, 1 ocean, 2 magma, 3 slime) ...
+        public const int LiquidName = 0, LiquidSoundBank = 3;
+
         public static readonly Def[] All = { UiMap, UiMapArt, UiMapArtTile, UiMapArtStyleLayer, UiMapXMapArt, UiMapAssignment, UiMapGroupMember, Map, AreaTable, WorldMapOverlay, WorldMapOverlayTile, TaxiNodes, TaxiPath, TaxiPathNode };
 
         // field numbers (stored columns)

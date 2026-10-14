@@ -40,6 +40,7 @@ namespace ElansAddonHub
             void Chunk(string tag, byte[] body) { w.Write(Encoding.ASCII.GetBytes(T(tag))); w.Write(body.Length); w.Write(body); }
             Chunk("MVER", BitConverter.GetBytes(18));
             Chunk("MHDR", new byte[64]);
+            Chunk("MH2O", WmMh2o(col, row));
             double ty = WorldMapMath.TileYards, cs = ty / 16, unit = ty / 128;
             for (int iy = 0; iy < 16; iy++)
                 for (int ix = 0; ix < 16; ix++)
@@ -324,6 +325,8 @@ namespace ElansAddonHub
                         var man = WorldMapCache.TerrainBuilt(c.MapId);
                         Check("real terrain (full): " + c.Name + " terrain is built: " + (man?.Tiles ?? 0) + " tiles, " + (man?.Files ?? 0) + " files, " + WorldMapCache.SizeText(man?.Bytes ?? 0) + ", " + (man?.Zones ?? 0) + " zones with borders, in " + s2.ElapsedMilliseconds / 1000.0 + " s", built && man != null && man.Tiles > 700 && man.Zones > 10);
                         var td = WorldMapCache.TerrainDir(WorldMapCache.BuildKey, c.MapId);
+                        Check("real water (full): " + c.Name + " has a water file for every height grid: " + (man?.WaterFiles ?? 0) + " files, " + (man?.WaterLayers ?? 0) + " layers, " + (man?.WaterCells ?? 0) + " cells, " + WorldMapCache.SizeText(man?.WaterBytes ?? 0), man != null && man.WaterFiles == man.Files && man.WaterLayers > 20000 && man.WaterBytes < 8000000, man == null ? "?" : man.WaterFiles + "/" + man.Files + " " + man.WaterBytes);
+                        notes.Add("note real water (full): " + c.Name + " " + (man?.WaterFiles ?? 0) + " water files = " + WorldMapCache.SizeText(man?.WaterBytes ?? 0) + " (" + (man?.WaterLayers ?? 0) + " layers, " + (man?.WaterCells ?? 0) + " cells) of the " + WorldMapCache.SizeText(man?.Bytes ?? 0) + " terrain folder; the whole terrain build took " + s2.ElapsedMilliseconds + " ms");
                         var b2 = WorldMapZones.ReadBorders(td);
                         notes.Add("note real terrain (full): " + c.Name + " " + (man?.Tiles ?? 0) + " tiles (missing " + man?.Missing + ") -> " + (man?.Files ?? 0) + " files, " + WorldMapCache.SizeText(man?.Bytes ?? 0) + ", " + s2.ElapsedMilliseconds + " ms (builder " + man?.Ms + " ms), z " + man?.MinZ.ToString("0", I) + " .. " + man?.MaxZ.ToString("0", I) + ", borders " + (b2?.Zones.Count ?? 0) + " zones / " + (b2?.Zones.Sum(z => z.Rings.Count) ?? 0) + " rings / " + (b2?.Zones.Sum(z => z.Rings.Sum(r => r.Length / 2)) ?? 0) + " points, borders.json " + (File.Exists(WorldMapTerrain.BordersPath(td)) ? new FileInfo(WorldMapTerrain.BordersPath(td)).Length / 1024 : 0) + " KB, managed memory +" + (GC.GetTotalMemory(true) - m0) / 1024 + " KB afterwards");
                         if (b2 != null)

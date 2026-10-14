@@ -28,7 +28,7 @@
   var prefs = { detail: 'medium', exag: 1.5 };
   function D() { return DETAIL[prefs.detail] || DETAIL.medium; }
 
-  var renderer = null, scene = null, camera = null, canvas = null, sea = null, fog = null, glInfo = '', software = false;
+  var renderer = null, scene = null, camera = null, canvas = null, fog = null, glInfo = '', software = false;
   var cfg = null, terrain = null, tileList = [], tileMap = {}, heightsLoaded = 0, heightsFailed = 0, heightGen = 0;
   var cam = { tx: 0, ty: 0, tz: 0, az: 0, tilt: 55, dist: 6000 };
   var dirty = true, ready = false, inited = false, texErrors = 0, texLoaded = 0, frameN = 0;
@@ -81,6 +81,8 @@
     return t.min + s * ((h00 * (1 - fu) + h10 * fu) * (1 - fv) + (h01 * (1 - fu) + h11 * fu) * fv);
   }
   function groundYE(x, z) { return groundY(x, z) * prefs.exag; }
+  // the height the camera stays above: the ground, or the water surface over it (the camera does not dive into the sea)
+  function surfaceYE(x, z) { var g = groundY(x, z), w = waterAtXZ(x, z); return (w !== null && w > g ? w : g) * prefs.exag; }
 
   function loadHeights() {
     var order = tileList.slice().sort(function (a, b) { return Math.hypot((a.c + .5) * TY - cam.tx, (a.r + .5) * TY - cam.tz) - Math.hypot((b.c + .5) * TY - cam.tx, (b.r + .5) * TY - cam.tz); });
@@ -212,6 +214,119 @@
     return g;
   }
 
+  // ---------------------------------------------------------------- liquids (MH2O): one small mesh per tile and kind, drawn after the terrain
+  // file <col>_<row>.wmw: "WMW1" | int col | int row | int layers | layers x { u8 chunk, u8 kind, u8 flags (1 flat), u8, u16 type, u16, u64 cell mask, f32 height | f32 height[9 x 9] }
+  // chunk = row * 16 + column in the tile, mask bit cy * 8 + cx (cy north -> south, cx west -> east), kind 1 water, 2 ocean, 3 magma, 4 slime
+  var waterMats = [null, null, null, null, null], waterBase = [null, { c: 0x3a93c4, o: 0.55 }, { c: 0x103f6e, o: 0.68 }, { c: 0xff5a12, o: 0.9 }, { c: 0x58c43a, o: 0.74 }];
+  var waterActive = 0, waterLoaded = 0, waterFailed = 0, waterMeshCount = 0, outerSea = null;
+  function parseWater(buf, c, r) {
+    if (!buf || buf.byteLength < 16) return null;
+    var dv = new DataView(buf), len = buf.byteLength;
+    if (dv.getUint8(0) !== 87 || dv.getUint8(1) !== 77 || dv.getUint8(2) !== 87 || dv.getUint8(3) !== 49) return null;
+    if (dv.getInt32(4, true) !== c || dv.getInt32(8, true) !== r) return null;
+    var n = dv.getInt32(12, true), o = 16, L = [];
+    if (n < 0 || n > 4096) return null;
+    for (var i = 0; i < n; i++) {
+      if (o + 16 > len) return null;
+      var l = { chunk: dv.getUint8(o), kind: dv.getUint8(o + 1), flat: (dv.getUint8(o + 2) & 1) !== 0, type: dv.getUint16(o + 4, true), lo: dv.getUint32(o + 8, true), hi: dv.getUint32(o + 12, true), h: 0, H: null };
+      o += 16;
+      if (l.kind < 1 || l.kind > 4) return null;
+      if (l.flat) { if (o + 4 > len) return null; l.h = dv.getFloat32(o, true); o += 4; }
+      else { if (o + 324 > len) return null; l.H = new Float32Array(81); for (var k = 0; k < 81; k++) l.H[k] = dv.getFloat32(o + k * 4, true); o += 324; }
+      L.push(l);
+    }
+    return o === len ? L : null;
+  }
+  function wbit(l, cx, cy) { var b = cy * 8 + cx; return b < 32 ? (l.lo >>> b) & 1 : (l.hi >>> (b - 32)) & 1; }
+  function loadWater(t) {
+    t.ws = 1; waterActive++;
+    fetch(terrain.base + '/' + t.c + '_' + t.r + '.wmw').then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+      var L = parseWater(buf, t.c, t.r);
+      if (L) { t.W = L; t.ws = 2; waterLoaded++; } else { t.W = []; t.ws = 3; waterFailed++; }
+      t.wgen = (t.wgen || 0) + 1; dirty = true;
+    }).catch(function () { t.W = []; t.ws = 3; waterFailed++; }).then(function () { waterActive--; });
+  }
+  // the highest liquid surface (yards, unexaggerated) over three.js x, z; null = none
+  function waterAtXZ(x, z) {
+    var col = x / TY, row = z / TY, c = Math.floor(col), r = Math.floor(row), t = tileMap[c * 64 + r];
+    if (!t || !t.W) return null;
+    var fx = (col - c) * 16, fy = (row - r) * 16, ix = Math.min(15, Math.floor(fx)), iy = Math.min(15, Math.floor(fy));
+    var cx = Math.min(7, Math.floor((fx - ix) * 8)), cy = Math.min(7, Math.floor((fy - iy) * 8)), best = null, chunk = iy * 16 + ix;
+    for (var i = 0; i < t.W.length; i++) {
+      var l = t.W[i]; if (l.chunk !== chunk || !wbit(l, cx, cy)) continue;
+      var h = l.flat ? l.h : (l.H[cy * 9 + cx] + l.H[cy * 9 + cx + 1] + l.H[(cy + 1) * 9 + cx] + l.H[(cy + 1) * 9 + cx + 1]) / 4;
+      if (best === null || h > best) best = h;
+    }
+    return best;
+  }
+  function addQuad(a, x0, z0, x1, z1, ytl, ytr, ybl, ybr) {
+    a.push(x0, ytl, z0, x0, ybl, z1, x1, ytr, z0, x1, ytr, z0, x0, ybl, z1, x1, ybr, z1);
+  }
+  function blockHas(l, bx, by, b) { for (var yy = 0; yy < b; yy++) for (var xx = 0; xx < b; xx++) if (wbit(l, bx + xx, by + yy)) return true; return false; }
+  // b = cells per quad side (1 near, 2, 4 far): a chunk that is flat and fully flooded is one quad at any distance
+  function waterArrays(t, b, ex) {
+    var out = {}, cs = TY / 128, chs = TY / 16;
+    for (var i = 0; i < t.W.length; i++) {
+      var l = t.W[i], ix = l.chunk & 15, iy = l.chunk >> 4, x0 = (t.c + ix / 16) * TY, z0 = (t.r + iy / 16) * TY, a = out[l.kind] || (out[l.kind] = []), y = l.h * ex;
+      if (l.flat && l.lo === 0xFFFFFFFF && l.hi === 0xFFFFFFFF) { addQuad(a, x0, z0, x0 + chs, z0 + chs, y, y, y, y); continue; }
+      for (var by = 0; by < 8; by += b) {
+        if (l.flat) {
+          var bx = 0;
+          while (bx < 8) {
+            if (!blockHas(l, bx, by, b)) { bx += b; continue; }
+            var s = bx; while (bx < 8 && blockHas(l, bx, by, b)) bx += b;
+            addQuad(a, x0 + s * cs, z0 + by * cs, x0 + bx * cs, z0 + (by + b) * cs, y, y, y, y);
+          }
+        } else {
+          var H = l.H;
+          for (var bx2 = 0; bx2 < 8; bx2 += b) if (blockHas(l, bx2, by, b))
+            addQuad(a, x0 + bx2 * cs, z0 + by * cs, x0 + (bx2 + b) * cs, z0 + (by + b) * cs, H[by * 9 + bx2] * ex, H[by * 9 + bx2 + b] * ex, H[(by + b) * 9 + bx2] * ex, H[(by + b) * 9 + bx2 + b] * ex);
+        }
+      }
+    }
+    return out;
+  }
+  function clearWater(m) {
+    if (!m.wm) return;
+    m.wm.forEach(function (w) { scene.remove(w); w.geometry.dispose(); waterMeshCount--; });
+    m.wm = null;
+  }
+  function rebuildWater(m, t, b, ex) {
+    clearWater(m);
+    var arrs = waterArrays(t, b, ex), list = [];
+    Object.keys(arrs).forEach(function (k) {
+      var g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(arrs[k]), 3));
+      var w = new THREE.Mesh(g, waterMats[+k]); w.renderOrder = 2; w.userData.kind = +k; scene.add(w); list.push(w); waterMeshCount++;
+    });
+    m.wm = list; m.wcls = b; m.wex = ex; m.wgen = t.wgen || 0;
+  }
+  // open sea where the world table has no tile (the tile grid outside the continent): one flat plane at sea level made of runs of missing tiles
+  function buildOuterSea() {
+    if (outerSea) { scene.remove(outerSea); outerSea.geometry.dispose(); outerSea = null; }
+    var a = [], big = 130000, N = 64 * TY;
+    addQuad(a, -big, -big, big, 0, 0, 0, 0, 0); addQuad(a, -big, N, big, big, 0, 0, 0, 0);
+    addQuad(a, -big, 0, 0, N, 0, 0, 0, 0); addQuad(a, N, 0, big, N, 0, 0, 0, 0);
+    for (var r = 0; r < 64; r++) {
+      var c = 0;
+      while (c < 64) {
+        if (tileMap[c * 64 + r]) { c++; continue; }
+        var s = c; while (c < 64 && !tileMap[c * 64 + r]) c++;
+        addQuad(a, s * TY, r * TY, c * TY, (r + 1) * TY, 0, 0, 0, 0);
+      }
+    }
+    var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(a), 3));
+    outerSea = new THREE.Mesh(g, waterMats[2]); outerSea.renderOrder = 2; outerSea.frustumCulled = false; scene.add(outerSea);
+  }
+  function shimmer(now) {
+    var p = now / 1000;
+    if (!waterMats[1]) return;
+    waterMats[1].opacity = waterBase[1].o + 0.04 * Math.sin(p * 1.7);
+    waterMats[2].opacity = waterBase[2].o + 0.03 * Math.sin(p * 1.1 + 1);
+    waterMats[3].opacity = waterBase[3].o + 0.06 * Math.sin(p * 2.3); waterMats[3].color.setRGB(1, 0.30 + 0.09 * Math.sin(p * 2.3), 0.07);
+    waterMats[4].opacity = waterBase[4].o + 0.05 * Math.sin(p * 1.9 + 2);
+  }
+
   var pendingBuilds = false, seaColor = 0x081110, selStats = { meshes: 0, tris: 0, desired: 0 }, built = 0;
   function updateTiles(now) {
     if (!renderer || !terrain) return;
@@ -221,7 +336,8 @@
     var cand = [], sph = new THREE.Sphere(new THREE.Vector3(), 1);
     for (var i = 0; i < tileList.length; i++) {
       var t = tileList[i]; if (!t.H) continue;
-      var cx = (t.c + .5) * TY, cz = (t.r + .5) * TY, cy = (t.min + t.max) / 2 * ex, rad = TY * 0.72 + (t.max - t.min) * ex / 2;
+      var cx = (t.c + .5) * TY, cz = (t.r + .5) * TY, lo = t.min * ex, hi = t.max < 0 ? 0 : t.max * ex;       // a tile wholly under sea level has its sea surface (y 0) above it: that is what shows
+      var cy = (lo + hi) / 2, rad = TY * 0.72 + (hi - lo) / 2;
       var d = Math.sqrt((eye.x - cx) * (eye.x - cx) + (eye.y - cy) * (eye.y - cy) + (eye.z - cz) * (eye.z - cz));
       if (d - rad > maxDist) continue;
       sph.center.set(cx, cy, cz); sph.radius = rad;
@@ -245,6 +361,7 @@
         m = meshes[key] = { t: ct, mesh: null, stride: 0, texLvl: 6, wantLvl: -1, texKey: '', wantKey: '', mat: null, seen: now, exag: -1 };
       }
       m.seen = now;
+      if (ct.ws === undefined && waterActive < 8) loadWater(ct);
       // the geometry: built for the picture level that is on it now (the uv scale), swapped for a new level together with its picture
       if (!m.mesh || m.stride !== stride || m.exag !== ex) {
         if (m.mesh && performance.now() > tEnd) pendingBuilds = true;
@@ -254,6 +371,14 @@
           if (!m.mesh) { m.mesh = new THREE.Mesh(g, m.mat); m.mesh.frustumCulled = false; scene.add(m.mesh); }
           else { m.mesh.geometry.dispose(); m.mesh.geometry = g; }
           m.stride = stride; m.exag = ex; m.tris = g.userData.tris; built++;
+        }
+      }
+      // the liquids of the tile (once its file is in), at the detail of the terrain
+      if (m.mesh && ct.W) {
+        var wcls = m.stride >= 4 ? 4 : m.stride;
+        if (m.wex !== ex || m.wcls !== wcls || m.wgen !== (ct.wgen || 0)) {
+          if (m.wm && performance.now() > tEnd) pendingBuilds = true;
+          else { try { rebuildWater(m, ct, wcls, ex); } catch (e) { m.wex = ex; m.wcls = wcls; m.wgen = ct.wgen || 0; errs.push('water ' + ct.c + ',' + ct.r + ': ' + String(e && e.message || e).slice(0, 160)); } }
         }
       }
       // the picture: too many 512 px ones stay at 256
@@ -277,6 +402,7 @@
       var m = meshes[k];
       if (!want[k] && now - m.seen > 2500) {
         if (m.mesh) { scene.remove(m.mesh); m.mesh.geometry.dispose(); }
+        clearWater(m);
         if (m.mat) m.mat.dispose();
         delete meshes[k]; return;
       }
@@ -290,10 +416,10 @@
   var flight = null;
   function updateCamera() {
     var t = cam.tilt * Math.PI / 180, a = cam.az * Math.PI / 180, ex = prefs.exag;
-    var gy = groundYE(cam.tx, cam.tz);
+    var gy = surfaceYE(cam.tx, cam.tz);
     cam.ty += (gy - cam.ty) * (Math.abs(gy - cam.ty) > 400 ? 1 : 0.25);
     var ex_ = cam.tx + cam.dist * Math.sin(a) * Math.cos(t), ey = cam.ty + cam.dist * Math.sin(t), ez = cam.tz + cam.dist * Math.cos(a) * Math.cos(t);
-    var eg = groundYE(ex_, ez) + 8; if (ey < eg) ey = eg;
+    var eg = surfaceYE(ex_, ez) + 8; if (ey < eg) ey = eg;
     camera.position.set(ex_, ey, ez);
     camera.lookAt(cam.tx, cam.ty, cam.tz);
     var height = Math.max(ey - eg + 8, 4);
@@ -303,8 +429,6 @@
     camera.updateMatrixWorld(true);
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
     if (scene.fog) { scene.fog.near = Math.max(cam.dist * 1.2, D().maxDist * 0.5); scene.fog.far = Math.max(cam.dist * 3.2, D().maxDist * 1.05); }
-    // the sea follows the camera so it never ends
-    if (sea) { sea.position.x = clamp(cam.tx, 0, 64 * TY); sea.position.z = clamp(cam.tz, 0, 64 * TY); }
   }
   function setView(lat, lng, dist, az, tilt, instant) {
     var p = ll2xz(lat, lng);
@@ -761,15 +885,16 @@
     if (!need) { if (now - fpsT0 > 2000) { fpsT0 = now; fpsFrames = 0; } return; }
     dirty = false; frameN++;
     updateCamera();
-    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); }
+    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); } else dirty = true;       // the tile pass is throttled: a change that arrives inside the pause (a liquid file, a texture) gets its pass on a later frame
     var shown = updateOverlays();
+    shimmer(now);
     renderer.render(scene, camera);
     fpsFrames++;
     if (now - fpsT0 >= 1000) { fps = fpsFrames * 1000 / (now - fpsT0); fpsFrames = 0; fpsT0 = now; }
     if (!ready && selStats.meshes > 0 && frameN > 8 && inFlight === 0) { ready = true; send({ t: 'ready', tiles: selStats.meshes, errors: texErrors }); }
     if (now - lastStats > 3000 && frameN > 10) { lastStats = now; sendStats(); }
     dirty = dirty || flight != null || benching != null;
-    if (inFlight > 0) dirty = true;
+    if (inFlight > 0 || pendingBuilds || waterActive > 0) dirty = true;      // builds that ran out of their time slice (terrain, liquids) and files still coming go on next frame
   }
   function sendStats() {
     var mem = (performance && performance.memory) ? performance.memory.usedJSHeapSize / 1048576 : 0, inf = renderer.info;
@@ -807,10 +932,8 @@
     scene.add(new THREE.AmbientLight(0xffffff, 0.66));
     var sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(-0.55, 0.75, -0.35); scene.add(sun);
     var hemi = new THREE.HemisphereLight(0xcfe8ff, 0x403a30, 0.18); scene.add(hemi);
-    // the sea: one big plane at sea level that follows the camera (no per-lake water yet: MH2O is not read)
-    var sg = new THREE.PlaneGeometry(260000, 260000); sg.rotateX(-Math.PI / 2);
-    sea = new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ color: 0x14404c, transparent: true, opacity: 0.58, depthWrite: false }));
-    sea.position.y = 0.4; sea.renderOrder = 2; sea.frustumCulled = false; scene.add(sea);
+    // the liquids: translucent, unlit, no depth write, drawn after the terrain (see waterArrays); no global sea plane any more, so a canyon below sea level stays dry
+    for (var wk = 1; wk <= 4; wk++) waterMats[wk] = new THREE.MeshBasicMaterial({ color: waterBase[wk].c, transparent: true, opacity: waterBase[wk].o, depthWrite: false, side: THREE.DoubleSide });
     var c = document.createElement('canvas'); c.width = c.height = 4; var g = c.getContext('2d'); g.fillStyle = '#' + ('000000' + seaColor.toString(16)).slice(-6); g.fillRect(0, 0, 4, 4);
     seaTex = new THREE.CanvasTexture(c); seaTex.encoding = THREE.sRGBEncoding;
     // the guard: a lost WebGL context is told to the app, which falls back to the flat map
@@ -854,7 +977,7 @@
     if (m.prefs) { prefs.detail = DETAIL[m.prefs.detail] ? m.prefs.detail : 'medium'; prefs.exag = clamp(+m.prefs.exag || 1.5, 1, 3); prefs.__user = !!m.prefs.userDetail; }
     if (!renderer && !startGl()) { inited = false; return; }
     // a second init (another continent): clear what the first built
-    Object.keys(meshes).forEach(function (k) { var mm = meshes[k]; if (mm.mesh) { scene.remove(mm.mesh); mm.mesh.geometry.dispose(); } if (mm.mat) mm.mat.dispose(); }); meshes = {};
+    Object.keys(meshes).forEach(function (k) { var mm = meshes[k]; if (mm.mesh) { scene.remove(mm.mesh); mm.mesh.geometry.dispose(); } clearWater(mm); if (mm.mat) mm.mat.dispose(); }); meshes = {}; waterActive = 0; waterLoaded = 0; waterFailed = 0;
     Object.keys(tex).forEach(function (k) { var e = tex[k]; if (e.tex && !e.shared) try { e.tex.dispose(); } catch (x) { } }); tex = {}; canvasTexCount = 0;
     Object.keys(pointLayers).forEach(function (k) { scene.remove(pointLayers[k].obj); pointLayers[k].obj.geometry.dispose(); }); pointLayers = {};
     Object.keys(lineLayers).forEach(function (k) { scene.remove(lineLayers[k].group); }); lineLayers = {};
@@ -863,6 +986,7 @@
     tileList = []; tileMap = {}; heightsLoaded = 0; heightsFailed = 0; heightGen = 0; ready = false; frameN = 0; built = 0;
     var tl = terrain.tiles || [];
     for (var i = 0; i + 1 < tl.length; i += 2) { var t = { c: tl[i], r: tl[i + 1], H: null, A: null, min: 0, max: 0 }; tileList.push(t); tileMap[t.c * 64 + t.r] = t; }
+    buildOuterSea();
     landBounds = { minCol: cfg.minCol, maxCol: cfg.maxCol, minRow: cfg.minRow, maxRow: cfg.maxRow };
     (m.on || []).forEach(function (k) { on[k] = true; });
     buildPanel(m.layers || []);
@@ -886,6 +1010,14 @@
         on: Object.keys(on).filter(function (k) { return on[k]; }), counts: counts, inFlight: inFlight, built: built, js: performance && performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : 0 });
     },
     setView: function (lat, lng, dist, az, tilt) { setView(lat, lng, dist, az, tilt, true); sendView(); },
+    // the liquids: meshes drawn, files read, and what covers a point (surface height in yards or 'null')
+    water: function () {
+      var byKind = {}, tiles = 0; Object.keys(meshes).forEach(function (k) { var m = meshes[k]; if (m.wm && m.wm.length) { tiles++; m.wm.forEach(function (w) { byKind[w.userData.kind] = (byKind[w.userData.kind] || 0) + 1; }); } });
+      var withFile = 0, layersN = 0; tileList.forEach(function (t) { if (t.W) { withFile++; layersN += t.W.length; } });
+      var bare = []; tileList.forEach(function (t) { if (t.W && t.W.length === 0 && t.H && t.max < 0 && bare.length < 12) bare.push(t.c + '_' + t.r); });
+      return JSON.stringify({ pending: pendingBuilds, bare: bare, meshes: waterMeshCount, tiles: tiles, files: withFile, layers: layersN, terrainMeshes: selStats.meshes, byKind: byKind, loaded: waterLoaded, none: waterFailed, active: waterActive, outer: !!outerSea, flatSea: false });
+    },
+    waterAt: function (lat, lng) { var p = ll2xz(lat, lng); var h = waterAtXZ(p[0], p[1]); return h === null ? 'null' : String(h); },
     ground: function (lat, lng) { var p = ll2xz(lat, lng); return groundY(p[0], p[1]); },
     // FPS of a continuous orbit for `ms` milliseconds (the camera keeps turning and tilting; tiles stream as it goes)
     bench: function (ms) {

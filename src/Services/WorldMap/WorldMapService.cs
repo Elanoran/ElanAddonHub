@@ -66,6 +66,7 @@ namespace ElansAddonHub.Services.WorldMap
         static readonly Dictionary<int, CancellationTokenSource> tcts = new Dictionary<int, CancellationTokenSource>();
         static readonly Dictionary<int, Task<bool>> ttasks = new Dictionary<int, Task<bool>>();
         public static Func<int, byte[]> AdtSourceForTest;          // self-test: the root ADT bytes of a FileDataID instead of the game's files
+        public static Func<byte[]> LiquidTypeSourceForTest;        // self-test: the LiquidType.db2 bytes instead of the game's file
         public static int TerrainBuildCountForTest;
         public static event Action<int> BuildChanged;       // on a worker thread: progress, done, failed
 
@@ -233,13 +234,14 @@ namespace ElansAddonHub.Services.WorldMap
             CascStorage casc = null;
             try
             {
-                List<WdtTile> tiles; Func<WdtTile, byte[]> load;
+                List<WdtTile> tiles; Func<WdtTile, byte[]> load; LiquidKinds kinds = null;
                 if (WdtSourceForTest != null)
                 {
                     var wf = WdtFile.Parse(WdtSourceForTest(mapId));
                     if (!wf.Ok) throw new InvalidDataException(wf.Problem);
                     tiles = wf.Tiles.Where(t => t.MinimapFdid != 0 && t.RootFdid != 0).ToList();
                     load = t => AdtSourceForTest?.Invoke(t.RootFdid);
+                    if (LiquidTypeSourceForTest != null) kinds = LiquidKinds.FromDb2(LiquidTypeSourceForTest());
                 }
                 else
                 {
@@ -255,12 +257,19 @@ namespace ElansAddonHub.Services.WorldMap
                     casc.ZeroFillEncrypted = false;
                     var keys = casc.ResolveFileIds(new HashSet<int>(tiles.Select(t => t.RootFdid)));
                     var c = casc;
+                    try
+                    {
+                        var lk = casc.ResolveFileIds(new HashSet<int> { MapTables.LiquidType.FileDataId });
+                        kinds = LiquidKinds.FromDb2(lk.TryGetValue(MapTables.LiquidType.FileDataId, out var lck) ? casc.ReadByContentKey(lck) : null);
+                        if (kinds.Problem != null) Util.Log("world map terrain: " + kinds.Problem + "; the well-known liquid ids are used");
+                    }
+                    catch (Exception e) { Util.Log("world map terrain: liquid types: " + e.Message); }
                     load = t => keys.TryGetValue(t.RootFdid, out var ck) ? c.ReadByContentKey(ck) : null;
                 }
                 tiles = WdtFile.WithoutStrays(tiles, 12, null);
                 if (filter != null) tiles = tiles.Where(filter).ToList();
                 if (tiles.Count == 0) throw new InvalidDataException(name + " has no terrain tiles");
-                return WorldMapTerrain.Build(mapId, key, tiles, load, mapDir, zr, progress, ct);
+                return WorldMapTerrain.Build(mapId, key, tiles, load, mapDir, zr, progress, ct, kinds);
             }
             finally { casc?.Dispose(); }
         }
