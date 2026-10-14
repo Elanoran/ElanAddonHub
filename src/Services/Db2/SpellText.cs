@@ -11,6 +11,7 @@ namespace ElansAddonHub.Services.Db2
     //   $t1                       seconds between ticks            $d    the duration ("10 sec", "2 min")
     //   $a1 radius (yards), $x1 chain targets, $q1 misc value
     //   $12345s1 / $12345d        the same, of another spell       $@spellname123  the name of spell 123
+    //   $@spelldesc123 / $@spelltooltip123 / $@spellaura123       another spell's whole description / aura text, with its own values
     //   ${$m1/1000}               arithmetic over the above (+ - * / and brackets), an optional ".1" for the decimals
     //   $l singular:plural;       by the number just before it     $g he:she;  (the first form)
     //   $?s123[yes][no]           what the character knows is not known here: the last (else) branch is shown
@@ -40,7 +41,7 @@ namespace ElansAddonHub.Services.Db2
                 if (n == '$') { sb.Append('$'); i += 2; continue; }
                 if (n == '{') { i = Arith(t, i, sb, self, lookup, depth, cx); continue; }
                 if (n == '?') { i = Conditional(t, i, sb, self, lookup, depth, cx); continue; }
-                if (n == '@') { i = Named(t, i, sb, lookup); continue; }
+                if (n == '@') { i = Named(t, i, sb, lookup, depth); continue; }
                 if (n == 'g' || n == 'G') { i = Pair(t, i, sb, false, cx); continue; }
                 if (n == 'l' || n == 'L') { i = Pair(t, i, sb, true, cx); continue; }
                 int start = i; int p = i + 1;
@@ -201,21 +202,46 @@ namespace ElansAddonHub.Services.Db2
             return p;
         }
 
-        // $@spellname123
-        static int Named(string t, int i, StringBuilder sb, Func<int, SpellInfo> lookup)
+        // $@spellname123, and the whole description of another spell: $@spelldesc123 / $@spelltooltip123 (its description), $@spellaura123 (its aura
+        // text), filled in with THAT spell's own values. A name that is not known stays a token; a description that is not known (or empty, or too deep)
+        // is left out, since the raw token reads as broken in the middle of a sentence.
+        static readonly string[] DescTokens = { "$@spelldesc", "$@spelltooltip", "$@spellaura" };
+
+        static int Named(string t, int i, StringBuilder sb, Func<int, SpellInfo> lookup, int depth)
         {
             const string name = "$@spellname";
             if (string.CompareOrdinal(t, i, name, 0, name.Length) == 0)
             {
-                int p = i + name.Length, id = 0, digits = 0;
-                while (p < t.Length && char.IsDigit(t[p]) && digits < 9) { id = id * 10 + (t[p] - '0'); p++; digits++; }
+                int p = ReadId(t, i + name.Length, out int id, out int digits);
                 var sp = digits > 0 && lookup != null ? lookup(id) : null;
                 if (sp != null && !string.IsNullOrEmpty(sp.Name)) { sb.Append(sp.Name); return p; }
                 sb.Append(t, i, p - i);
                 return p;
             }
+            foreach (var tok in DescTokens)
+            {
+                if (string.CompareOrdinal(t, i, tok, 0, tok.Length) != 0) continue;
+                int p = ReadId(t, i + tok.Length, out int id, out int digits);
+                if (digits == 0) break;
+                var sp = lookup?.Invoke(id);
+                var text = sp == null ? null : tok == "$@spellaura" ? sp.Aura : sp.Desc;
+                if (!string.IsNullOrEmpty(text) && depth < MaxDepth) sb.Append(Run(text, sp, lookup, depth + 1, new Ctx()).Trim());
+                else
+                {
+                    // left out: drop a space it leaves doubled
+                    while (sb.Length > 0 && sb[sb.Length - 1] == ' ' && p < t.Length && t[p] == ' ') sb.Length--;
+                }
+                return p;
+            }
             sb.Append(t[i]);
             return i + 1;
+        }
+
+        static int ReadId(string t, int p, out int id, out int digits)
+        {
+            id = 0; digits = 0;
+            while (p < t.Length && char.IsDigit(t[p]) && digits < 9) { id = id * 10 + (t[p] - '0'); p++; digits++; }
+            return p;
         }
 
         // "$l sec:secs;" picks by the number written just before (1 = first form); "$g he:she;" always takes the first form

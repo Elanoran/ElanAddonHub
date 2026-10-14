@@ -357,11 +357,16 @@ namespace ElansAddonHub
                         new EffectInfo { Index = 0, Points = -12.4f, PeriodMs = 1500, Radius = 8f, Chain = 3 }, new EffectInfo { Index = 1, Points = 0f, Coef = 0.3f }, new EffectInfo { Index = 2, Points = 1f, Misc = -7 },
                     },
                 };
-                string X(string t) => SpellText.Expand(t, self, id => id == 2 ? new SpellInfo { Id = 2, Name = "Other", DurationMs = 90000, Effects = new[] { new EffectInfo { Index = 0, Points = 7f } } } : null);
+                string X(string t) => SpellText.Expand(t, self, id => id == 2 ? new SpellInfo { Id = 2, Name = "Other", DurationMs = 90000, Desc = "Restores $s1 health over $d.", Aura = "Eating.", Effects = new[] { new EffectInfo { Index = 0, Points = 7f } } }
+                    : id == 3 ? new SpellInfo { Id = 3, Name = "Loop", Desc = "x $@spelldesc3" } : null);
                 Check("tokens: $s1 uses the absolute amount (12), $m1 / $M1 the same, $t1 = 1.5, $a1 = 8, $x1 = 3, $d = 1 hour, $q3 = 7", X("$s1 $m1 $M1 $t1 $a1 $x1 $d $q3") == "12 12 12 1.5 8 3 1 hour 7", X("$s1 $m1 $M1 $t1 $a1 $x1 $d $q3"));
                 Check("tokens: $o1 = 12 x 3600 s / 1.5 s = 29760; a plain $ and $$ stay readable", X("$o1") == "29760" && X("costs 5$ or $$") == "costs 5$ or $", X("$o1") + " / " + X("costs 5$ or $$"));
                 Check("tokens: $l picks by the number just written ($s3 = 1 -> 'point', $s1 = 12 -> 'points')", X("$s3 combo $lpoint:points;") == "1 combo point" && X("$s1 combo $lpoint:points;") == "12 combo points", X("$s3 combo $lpoint:points;") + " / " + X("$s1 combo $lpoint:points;"));
                 Check("tokens: another spell's values ($2s1, $2d) and its name; an unknown spell leaves the token", X("$2s1 $2d $@spellname2 $9s1 $@spellname9") == "7 90 sec Other $9s1 $@spellname9", X("$2s1 $2d $@spellname2 $9s1 $@spellname9"));
+                Check("tokens: $@spelldesc2 / $@spelltooltip2 = spell 2's own description with ITS values, $@spellaura2 its aura text; an unknown one is left out (no double space); a self-reference stops",
+                    X("Use: $@spelldesc2 Then $@spellaura2") == "Use: Restores 7 health over 90 sec. Then Eating." && X("$@spelltooltip2") == "Restores 7 health over 90 sec."
+                    && X("Use: $@spelldesc9 If you eat.") == "Use: If you eat." && X("$@spelldesc3").StartsWith("x x", StringComparison.Ordinal),
+                    X("Use: $@spelldesc2 Then $@spellaura2") + " | " + X("Use: $@spelldesc9 If you eat.") + " | " + X("$@spelldesc3"));
                 Check("tokens: nothing known = the text as it was (scaled amount, missing effect, unknown letters)", X("$s2 $s5 $w1 $<mult> $b1") == "$s2 $s5 $w1 $<mult> $b1", X("$s2 $s5 $w1 $<mult> $b1"));
                 Check("arithmetic: ${$s1*2+1} = 25, ${($s1+8)/4} = 5, ${$s1/0} stays, ${$s1/7}.2 = 1.71, ${ 2 +} stays", X("${$s1*2+1}") == "25" && X("${($s1+8)/4}") == "5" && X("${$s1/0}") == "${$s1/0}" && X("${$s1/7}.2") == "1.71" && X("${ 2 +}") == "${ 2 +}", X("${$s1*2+1}") + " " + X("${($s1+8)/4}") + " " + X("${$s1/7}.2"));
                 Check("durations: 45 sec, 2 min, 90 sec (not a whole minute), 2 hours, 1 day, until cancelled", SpellText.Duration(45000) == "45 sec" && SpellText.Duration(120000) == "2 min" && SpellText.Duration(90000) == "90 sec" && SpellText.Duration(7200000) == "2 hours" && SpellText.Duration(86400000) == "1 day" && SpellText.Duration(-1) == "until cancelled");
