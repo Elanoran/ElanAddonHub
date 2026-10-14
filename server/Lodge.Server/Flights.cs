@@ -192,6 +192,25 @@ public sealed class FlightStore
         return n;
     }
 
+    // 2.22: a member left or was removed: every leg value and name they contributed goes (the merged table is rebuilt from the others). Caller holds Gate; returns how many
+    // contributions went (the caller saves).
+    public int RemoveIdentity(string identity)
+    {
+        int n = 0;
+        foreach (var key in legs.Keys.ToList())
+        {
+            if (legs[key].Remove(identity)) n++;
+            if (legs[key].Count == 0) legs.Remove(key);
+        }
+        foreach (var id in names.Keys.ToList())
+        {
+            if (names[id].Remove(identity)) n++;
+            if (names[id].Count == 0) names.Remove(id);
+        }
+        if (n > 0) { Prune(); version++; }
+        return n;
+    }
+
     static IEnumerable<string> IdsOf(string key)
     {
         var rest = key[(key.IndexOf('|') + 1)..];

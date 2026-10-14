@@ -30,6 +30,7 @@ public sealed class FlightModule : IModule
     }
 
     static string Identity(Member me) => ProfileRules.Key(me.Name);
+    static string Identity(string login) => ProfileRules.Key(login);
 
     Task Reply(Member me, bool ok, int accepted, int rejected, string why = null)
     {
@@ -60,6 +61,18 @@ public sealed class FlightModule : IModule
         string json;
         lock (Store.Gate) json = Store.MergedJson();
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
+    }
+
+    // 2.22: a member who left / was removed: their flight times go
+    public int Purge(string login)
+    {
+        int n;
+        lock (Store.Gate)
+        {
+            n = Store.RemoveIdentity(Identity(login));
+            if (n > 0) Store.Save();
+        }
+        return n;
     }
 
     // housekeeping (every 15 s): forget contributions after 120 days

@@ -62,6 +62,16 @@ in the backups). `install.sh` creates them.
 3. when `sudo lodge-admin devices <name>` shows all of someone's PCs, retire the old code: `sudo lodge-admin retire-code <name>` (Guild Master page: "Retire code").
 Older Outposts can only use codes: don't retire a code whose owner still runs one.
 
+
+## Forgetting a person's data (2.22): `lodge-admin purge`
+
+```bash
+sudo lodge-admin purge Bob --atlas-only   # take everything Bob put into the Atlas back out (bad data); Bob stays a member
+sudo lodge-admin purge Bob                # forget everything stored about a person who is no longer a member
+sudo lodge-admin remove Bob               # removes the codes AND queues the full purge
+```
+
+The command writes a small request file into `purge.d/` next to the codes file (`/var/lib/lodge/purge.d`); the running server picks it up within 15 seconds, does the same as the Guild Master page (Settings > Guild Master > Members > Revert Atlas) or `member.leave`, and deletes the file. The server must be running; a request waits there until it is. `purge Bob` without `--atlas-only` is refused while Bob still has a code. What goes and what stays (messages stay, shown as "(former member)"; uploaded files stay without a name; events stay) is listed in `SECURITY.md` under 2.22.0. Backups keep the old data until they rotate out (`LODGE_BACKUP_KEEP`, 14 by default).
 ## Updating: `lodge-update`
 
 ```bash

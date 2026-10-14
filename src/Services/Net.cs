@@ -18,6 +18,32 @@ namespace ElansAddonHub.Services
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("ElansAddonHub/" + App.Version);
         }
 
+        // ---- where an UPDATE may come from (the Outpost's own exe, the addon zips of the manifest). Normal downloads (third-party addons,
+        // CurseForge, WoWInterface...) are not restricted here; the update paths pass trustedOnly = true.
+        // Rule: https, and a GitHub host (the release page and the CDN it redirects to). Checked on the address in the manifest AND on the
+        // address the download really came from after redirects. A developer / the self-test can switch it off (see AllowDevSources).
+        public static bool AllowDevSources = string.Equals(Environment.GetEnvironmentVariable("ELANSHUB_DEV_SOURCES"), "1", StringComparison.Ordinal);
+
+        // null = fine, otherwise a plain-language reason
+        public static string UpdateUrlProblem(string url)
+        {
+            if (AllowDevSources) return null;
+            if (string.IsNullOrWhiteSpace(url)) return "The update has no download address.";
+            if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var u)) return "The update address is not a web address.";
+            if (!string.Equals(u.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) return "The update address is not https, so it was refused.";
+            var host = u.Host.ToLowerInvariant();
+            if (host == "github.com" || host == "www.github.com" || host.EndsWith(".githubusercontent.com", StringComparison.Ordinal)) return null;
+            return "The update comes from " + host + ", which is not a GitHub address, so it was refused.";
+        }
+
+        // "dd..." exactly 64 hex characters
+        public static bool IsSha256(string s)
+        {
+            if (s == null || s.Length != 64) return false;
+            foreach (var c in s) if (!Uri.IsHexDigit(c)) return false;
+            return true;
+        }
+
         // Works with http(s) URLs and, for testing, plain file paths.
         public static async Task<string> GetText(string url)
         {
@@ -31,8 +57,9 @@ namespace ElansAddonHub.Services
             }
         }
 
-        public static async Task Download(string url, string toFile, IProgress<double> progress)
+        public static async Task Download(string url, string toFile, IProgress<double> progress, bool trustedOnly = false)
         {
+            if (trustedOnly) { var why = UpdateUrlProblem(url); if (why != null) throw new InvalidOperationException(why); }
             if (!Util.IsUrl(url))
             {
                 File.Copy(url.Replace("file:///", ""), toFile, true);
@@ -42,6 +69,7 @@ namespace ElansAddonHub.Services
             using (var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
             {
                 resp.EnsureSuccessStatusCode();
+                if (trustedOnly) { var why = UpdateUrlProblem(resp.RequestMessage?.RequestUri?.ToString()); if (why != null) throw new InvalidOperationException(why); }   // after redirects too
                 var total = resp.Content.Headers.ContentLength ?? -1;
                 using (var src = await resp.Content.ReadAsStreamAsync())
                 using (var dst = File.Create(toFile))

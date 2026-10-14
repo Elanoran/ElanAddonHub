@@ -96,6 +96,26 @@ public class FileStore
         catch { return null; }
     }
 
+    // 2.22: a member left / was removed: the files they uploaded stay (they belong to the lodge and expire on their own) but no longer name them
+    public int Anonymise(string login, string former)
+    {
+        int n = 0;
+        foreach (var f in Directory.GetFiles(dir, "*.json"))
+        {
+            try
+            {
+                var m = JsonSerializer.Deserialize<FileMeta>(File.ReadAllText(f), Json);
+                if (m == null || !Names.Same(m.By, login)) continue;
+                m.By = former;
+                File.WriteAllText(f + ".tmp", JsonSerializer.Serialize(m, Json));
+                File.Move(f + ".tmp", f, true);
+                n++;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { }
+        }
+        return n;
+    }
+
     // per person (guests: per IP) - a rolling 10 minute window
     void CheckRate(string who)
     {
@@ -112,6 +132,8 @@ public class FileStore
     public async Task<FileMeta> Save(Stream body, long? declaredLength, string name, string by, string rateKey, CancellationToken ct)
     {
         if (declaredLength > cfg.MaxFileBytes) throw new FileTooBigException();
+        // 2.22: the same program / script block as the shared Files module (a chat upload is just as easy to double-click)
+        if (FileRules.IsBlockedName(Clean(name))) throw new UploadRefusedException(415, "Programs and scripts (." + FileRules.Extension(Clean(name)) + ") can't be shared here");
         // one person (guests: one address) can't hold all the slots: at most MaxUploadsPerIdentity at once
         var who = rateKey ?? "?";
         lock (gate)

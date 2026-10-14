@@ -59,6 +59,9 @@ namespace ElansAddonHub.Services
 
         public void Start()
         {
+            // plain http:// to a host that is not this PC is never connected to (the credential would cross the internet unencrypted); the person is told why
+            var insecure = InviteLinks.InsecureReason(BaseUrl);
+            if (insecure != null) { stopped = true; SetStatus(insecure, false); return; }
             stopped = false;
             _ = Loop();
         }

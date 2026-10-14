@@ -57,9 +57,23 @@ public sealed class AtlasModule : IModule
             r = Store.Share(Identity(me), me.Name, m);
             if (r.Changed) saved = Store.SaveIfDirty(TimeSpan.FromSeconds(30));
         }
+        if (r.Full) { hub.Log.LogWarning("Atlas: a share from a member was refused - the pool is at its size cap"); await Reply(me, false, r, "full"); return; }
         if (!saved) { await Reply(me, false, r, "save"); return; }
         if (r.Changed) hub.Log.LogInformation("{Name} shared atlas observations ({Accepted} stored, {Rejected} refused)", me.Name, r.Accepted, r.Rejected);
         await Reply(me, true, r);
+    }
+
+    // 2.22: everything one member put into the pool is removed (member left / was removed / the owner reverts them). Saved at once.
+    public AtlasStore.PurgeResult Purge(string login)
+    {
+        AtlasStore.PurgeResult r;
+        lock (Store.Gate)
+        {
+            r = Store.Purge(ProfileRules.Key(login));
+            if (Store.Dirty) Store.Save();
+        }
+        if (r.Total > 0) hub.Log.LogInformation("Atlas: removed {Count} contribution(s) of one member", r.Total);
+        return r;
     }
 
     // a find shows the member's display name (never anything from the game); a member without one shows the login name
@@ -77,7 +91,7 @@ public sealed class AtlasModule : IModule
         if (m["since"] is JsonValue sv && sv.TryGetValue<long>(out var s) && s > 0) since = s;
         var epoch = J.Str(m, "epoch");
         string json;
-        lock (Store.Gate) json = Store.Get(since, epoch, Shown).ToJsonString();
+        lock (Store.Gate) json = Store.Get(since, epoch, Shown, guest: !me.Personal).ToJsonString();
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
     }
 

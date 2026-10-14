@@ -808,6 +808,8 @@
                                   SelectedItem="{Binding RoleItem, Mode=OneWay}" Tag="{Binding Name}" SelectionChanged="MemberRole_Changed" />
                         <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Retire code" Visibility="{Binding RetireVisibility}" Tag="{Binding Name}"
                                 Click="RetireCode_Click" ToolTip="Their old permanent code stops working. Their devices keep working." />
+                        <Button DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Revert Atlas" Visibility="{Binding RevertVisibility}" Tag="{Binding Name}" Margin="0,0,8,0"
+                                Click="RevertAtlas_Click" ToolTip="Take everything this member shared with the Atlas back out (for bad or wrong data). They stay a member and can share again." />
                         <TextBlock DockPanel.Dock="Right" Text="{Binding DevicesText}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" Margin="0,0,8,0" />
                         <Ellipse Width="8" Height="8" Fill="{Binding DotBrush}" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="{Binding OnlineText}" />
                         <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding RoleBrush}" VerticalAlignment="Center" />

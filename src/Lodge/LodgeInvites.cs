@@ -21,6 +21,7 @@ namespace ElansAddonHub.Lodge
         public bool IsInvite;         // Secret is a one-time invite (to be exchanged for a device token)
         public bool IsOldCode => Secret != null && !IsInvite;
         public bool MissingAddress;   // an elanshub:// link whose server part is empty, a placeholder like <your-lodge-address>, or not a real host
+        public bool Insecure;         // the address is plain http:// to a host that is not this PC: refused (Url is kept so the message can name it)
     }
 
     // A sign-in that has not been proven yet. It lives in memory only; the session writes it to the settings when the server's welcome arrives,
@@ -43,6 +44,17 @@ namespace ElansAddonHub.Lodge
         // a one-time invite: "i1." and at least 22 URL-safe characters (the server makes 32: 192 random bits)
         public static bool LooksLikeInvite(string s) =>
             s != null && s.StartsWith(Prefix, StringComparison.Ordinal) && s.Length >= Prefix.Length + 16 && Regex.IsMatch(s, @"^[A-Za-z0-9._-]+$");
+
+        public const string InsecureText = "This lodge address starts with http://, so your invite and sign-in would travel across the internet unencrypted. The Outpost refuses that. Ask the Guild Master for the https:// address (http is only accepted for localhost / 127.0.0.1, for testing).";
+
+        // null when the address may be used; the sentence for the person when it is plain http:// to anything but this PC. An address with no scheme means https.
+        public static string InsecureReason(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return null;
+            var t = url.Trim();
+            if (!t.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) return null;
+            return Uri.TryCreate(t, UriKind.Absolute, out var u) && u.IsLoopback ? null : InsecureText;
+        }
 
         // a real lodge address: no template brackets, a host that can exist (a dot, localhost, an IP, or an explicit port)
         public static bool ValidAddress(string server)
@@ -136,6 +148,7 @@ namespace ElansAddonHub.Lodge
                 r.Url = LodgeSession.NormalizeUrl(before);
             }
             r.IsInvite = LooksLikeInvite(r.Secret);
+            r.Insecure = InsecureReason(r.Url) != null;
             return r;
         }
     }
@@ -159,6 +172,8 @@ namespace ElansAddonHub.Lodge
         public static async Task<ExchangeResult> Exchange(string baseUrl, string invite, string oldCode, string deviceName, string deviceId, string name = null)
         {
             var res = new ExchangeResult();
+            var insecure = InviteLinks.InsecureReason(baseUrl);
+            if (insecure != null) { res.Status = 0; res.Message = insecure; return res; }   // nothing is sent: the invite never goes over plain http to a host that is not this PC
             try
             {
                 using (var req = new HttpRequestMessage(HttpMethod.Post, baseUrl.TrimEnd('/') + "/exchange"))

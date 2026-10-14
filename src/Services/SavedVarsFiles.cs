@@ -56,6 +56,8 @@ namespace ElansAddonHub.Services
 
         // The one shared read: the game may still hold the file while it writes, so open it shared (read/write/delete) and retry a few times.
         // Returns null when it stayed locked or the file is not there; other errors (no access) throw like File.Open would.
+        // Files over MaxFileBytes are not read (null, like a locked file): no SavedVariables file is that big, and reading one into a string could exhaust memory.
+        public const long MaxFileBytes = 96L * 1024 * 1024;
         public static string SafeRead(string path, int attempts = 4, int waitMs = 60)
         {
             for (int i = 0; i < attempts; i++)
@@ -63,7 +65,10 @@ namespace ElansAddonHub.Services
                 try
                 {
                     using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    {
+                    if (fs.Length > MaxFileBytes) { Util.Log("saved variables: " + Path.GetFileName(path) + " is over " + (MaxFileBytes >> 20) + " MB - not read"); return null; }
                     using (var sr = new StreamReader(fs, new UTF8Encoding(false), true)) return sr.ReadToEnd();
+                    }
                 }
                 catch (FileNotFoundException) { return null; }
                 catch (DirectoryNotFoundException) { return null; }

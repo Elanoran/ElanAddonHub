@@ -16,6 +16,7 @@ namespace ElansAddonHub.Lodge
         public bool SupportsTokens { get; private set; }           // server 2.10: invites, device tokens, device list
         public bool CanInvite { get; private set; }                // owner and officers: one-time invite links, everyone's devices
         public bool CanRetire { get; private set; }               // owner: retire a permanent code
+        public bool CanPurge { get; private set; }                // owner (server 2.22): revert one member's Atlas contributions
         public string DeviceId { get; private set; }               // the device I am on (tokens only)
         public string DeviceName { get; private set; }
 
@@ -25,6 +26,7 @@ namespace ElansAddonHub.Lodge
             SupportsTokens = features.Contains("tokens") && (v == null || v >= new Version(2, 10, 0));
             CanInvite = SupportsTokens && m.Bool("canInvite");
             CanRetire = SupportsTokens && m.Bool("canRetire");
+            CanPurge = SupportsTokens && m.Bool("canPurge") && (v == null || v >= new Version(2, 22, 0));
             DeviceId = m.Child("device")?.Str("id");
             DeviceName = m.Child("device")?.Str("name");
             ReadLodgeInfo(m, features);

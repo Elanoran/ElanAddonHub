@@ -240,6 +240,32 @@ public sealed class CalendarModule : IModule
         });
     }
 
+    // 2.22: a member left / was removed. Their sign-ups come off every event (the events stay: they belong to the lodge's calendar) and the events
+    // they organised show "(former member)" as organiser, so nobody inherits the name. Returns (sign-ups removed, events re-attributed).
+    public async Task<(int Signups, int Organised)> Purge(string login, string former)
+    {
+        var changed = new List<JsonObject>();
+        int signups = 0, organised = 0;
+        lock (Store.Gate)
+        {
+            foreach (var ev in Store.Events)
+            {
+                bool touched = false;
+                if (ev["signups"] is JsonArray arr)
+                    foreach (var e in arr.OfType<JsonObject>().Where(x => Names.Same(J.Str(x, "n"), login)).ToList()) { arr.Remove(e); signups++; touched = true; }
+                if (Names.Same(J.Str(ev, "by"), login)) { ev["by"] = former; organised++; touched = true; }
+                if (touched) changed.Add(ev);
+            }
+            if (changed.Count > 0 && !Store.Save()) hub.Log.LogWarning("Calendar: the removal of a member's sign-ups could not be saved");
+        }
+        if (changed.Count == 0) return (0, 0);
+        foreach (var ev in changed) await hub.Chat.RefreshEventCard(ev);
+        List<JsonObject> copy;
+        lock (Store.Gate) copy = changed.Select(e => (JsonObject)e.DeepClone()).ToList();
+        await Broadcast(copy);
+        return (signups, organised);
+    }
+
     // housekeeping (every 15 s): drop events 30 days after their end, keep open-ended weekly series 26 weeks ahead
     public async Task Tick()
     {

@@ -447,7 +447,8 @@ namespace ElansAddonHub.Lodge
         public Visibility ExtVisibility => ExtText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         public Brush ExtBrush => IsRisky ? Avatar.Res("Brush.Warn") : Avatar.Res("Brush.Text.Secondary");
         public string ExtTip => IsRisky ? "A program or script: only open it if you trust the sender" : "";
-        public bool IsImage => Mime != null && Mime.StartsWith("image/") && Size <= 8 * 1024 * 1024;
+        // the extension must be a picture type too: the MIME type comes from the server and proves nothing
+        public bool IsImage => Mime != null && Mime.StartsWith("image/") && Size <= 8 * 1024 * 1024 && LodgeFiles.IsImageName(Name);
         public string SizeText => Size < 1024 ? $"{Size} B" : Size < 1024 * 1024 ? $"{Size / 1024.0:0} KB" : $"{Size / 1048576.0:0.0} MB";
 
         ImageSource image;

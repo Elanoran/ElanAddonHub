@@ -103,6 +103,18 @@ namespace ElansAddonHub
             check("link: new format -> https address + invite", l.Url == "https://example.org/lodge" && l.Secret == InvA && l.IsInvite && !l.IsOldCode);
             l = InviteLinks.Parse("  ELANSHUB://lodge/join#http://192.168.1.5:5280/lodge|" + InvA + "  ");
             check("link: scheme is case-insensitive, an http address and surrounding spaces are kept right", l.Url == "http://192.168.1.5:5280/lodge" && l.Secret == InvA);
+            // https only (2.54+ security): plain http:// to a host that is not this PC is flagged and never used; no scheme means https
+            check("https-only: an http address to a LAN host is flagged Insecure (the address is kept so the message can say so)", l.Insecure && l.Url == "http://192.168.1.5:5280/lodge");
+            check("https-only: https and a bare address are fine", !InviteLinks.Parse("elanshub://lodge/join#https://example.org/lodge|" + InvA).Insecure && !InviteLinks.Parse("elanshub://lodge/join#example.org/lodge|" + InvA).Insecure
+                && !InviteLinks.Parse("elanshub://lodge/join#192.168.1.5:5280/lodge|" + InvA).Insecure);
+            check("https-only: http to localhost / 127.0.0.1 / [::1] stays allowed for testing", !InviteLinks.Parse("elanshub://lodge/join#http://localhost:5280/lodge|" + InvA).Insecure
+                && !InviteLinks.Parse("elanshub://lodge/join#http://127.0.0.1:5280/lodge|" + InvA).Insecure && InviteLinks.InsecureReason("http://[::1]:5280/lodge") == null && InviteLinks.InsecureReason("HTTP://LOCALHOST/lodge") == null);
+            check("https-only: other http hosts are refused, however they are spelled", InviteLinks.InsecureReason("http://example.org/lodge") != null && InviteLinks.InsecureReason("HTTP://EXAMPLE.ORG") != null
+                && InviteLinks.InsecureReason("http://127.0.0.1.example.org/lodge") != null && InviteLinks.InsecureReason("http://localhost.example.org/lodge") != null && InviteLinks.InsecureReason("http://user@example.org/lodge") != null
+                && InviteLinks.InsecureReason("http://10.0.0.2:5280/lodge") != null);
+            check("https-only: the web form and the older #invite= form are checked the same way", InviteLinks.Parse("https://site.example/lodge/#join=http://example.org/lodge|" + InvA).Insecure
+                && InviteLinks.Parse("http://example.org/lodge#invite=" + InvA).Insecure && !InviteLinks.Parse("https://example.org/lodge#invite=" + InvA).Insecure);
+            check("https-only: the refusal text explains what to do", InviteLinks.InsecureText.Contains("https://") && InviteLinks.InsecureText.Contains("Guild Master") && InviteLinks.InsecureText.Contains("localhost"));
             l = InviteLinks.Parse("elanshub://lodge/join#example.org/lodge%7C" + InvA);
             check("link: a pipe that a chat app turned into %7C still parses", l.Url == "https://example.org/lodge" && l.Secret == InvA);
             l = InviteLinks.Parse("Join us: <elanshub://lodge/join#example.org/lodge|" + InvA + ">");
@@ -224,6 +236,23 @@ namespace ElansAddonHub
             InviteExchange.Send = req => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"name\":\"x\"}") });
             res = await InviteExchange.Exchange("https://example.org/lodge", InvA, null, "PC", "id");
             check("exchange: a 200 without a token is an error, not a sign-in", !res.Ok && res.Token == null);
+            // https only: nothing is sent to an http:// lodge that is not this PC
+            int sendCalls = 0;
+            InviteExchange.Send = req => { sendCalls++; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"token\":" + Q(TokA) + "}") }); };
+            res = await InviteExchange.Exchange("http://example.org/lodge", InvA, null, "PC", "id");
+            check("https-only: an invite exchange with an http:// lodge sends nothing and says why", sendCalls == 0 && !res.Ok && res.Message == InviteLinks.InsecureText);
+            res = await InviteExchange.Exchange("http://127.0.0.1:5280/lodge", InvA, null, "PC", "id");
+            check("https-only: ...but a localhost lodge is still exchanged (testing)", sendCalls == 1 && res.Ok);
+            var insecureClient = new LodgeClient("http://example.org/lodge", "synthetic-code-123456", "Nova");
+            string insecureStatus = null; bool insecureOnline = true;
+            insecureClient.Status += (text, online) => { insecureStatus = text; insecureOnline = online; };
+            insecureClient.Start();
+            await Task.Delay(150);
+            check("https-only: the connection to an http:// lodge is never opened: stopped, offline, with the reason", !insecureClient.IsRunning && !insecureClient.Online && !insecureOnline && insecureStatus == InviteLinks.InsecureText);
+            var localClient = new LodgeClient("http://127.0.0.1:9", "synthetic-code-123456", "Nova");
+            localClient.Start(); await Task.Delay(50);
+            check("https-only: a localhost client does start", localClient.IsRunning);
+            localClient.Stop();
         }
 
         // ---------------------------------------------------------------- joining with a pasted link (the join box)
@@ -531,6 +560,29 @@ namespace ElansAddonHub
             Session.RevokeDevice("d2");
             check("devices: Sign out sends device.revoke with the id", sent.Count == 1 && sent[0].Str("t") == "device.revoke" && sent[0].Str("id") == "d2");
             check("devices: the session knows which device it is", Session.DeviceId == "d1" && Session.DeviceName == "Elan-PC" && Session.SupportsTokens);
+
+            // owner on a 2.22 server: Revert Atlas per member (undo for bad data); an owner on an older server and an officer do not get it
+            Session.Disconnect();
+            LodgePage.ShowChatForTest();
+            sent.Clear();
+            Session.FeedForTest(InvWelcome("owner", "2.21.0", true, true, true, "Elan-PC"));
+            ShowTab("settings");
+            SettingsPage.Show("gm");
+            await Task.Delay(300);
+            Session.FeedForTest("{\"t\":\"admin.members\",\"members\":[{\"name\":\"Bob\",\"role\":\"officer\",\"online\":true,\"hasCode\":true,\"devices\":1}],\"channels\":[]}");
+            check("gm: an owner on an older server has no Revert Atlas button", !Session.CanPurge && SettingsPage.MemberRowsForTest.All(m => m.RevertVisibility == Visibility.Collapsed));
+            Session.Disconnect();
+            LodgePage.ShowChatForTest();
+            Session.FeedForTest(InvWelcome("owner", "2.22.0", true, true, true, "Elan-PC").Replace("\"canRetire\":true,", "\"canRetire\":true,\"canPurge\":true,"));
+            await Task.Delay(200);
+            Session.FeedForTest("{\"t\":\"admin.members\",\"members\":[{\"name\":\"Bob\",\"role\":\"officer\",\"online\":true,\"hasCode\":true,\"devices\":1}],\"channels\":[]}");
+            check("gm: the owner of a 2.22 server gets Revert Atlas on every member", Session.CanPurge && SettingsPage.MemberRowsForTest.Count == 1 && SettingsPage.MemberRowsForTest.All(m => m.RevertVisibility == Visibility.Visible));
+            sent.Clear();
+            Session.RevertAtlas("Bob");
+            check("gm: Revert Atlas sends admin.purge for that member, Atlas only (the member stays)", sent.Count == 1 && sent[0].Str("t") == "admin.purge" && sent[0].Str("name") == "Bob" && sent[0].Bool("atlasOnly"));
+            string purgedFor = null; Session.AdminPurged += pm => purgedFor = pm.Str("name") + ":" + pm.Int("atlas");
+            Session.FeedForTest("{\"t\":\"admin.purged\",\"name\":\"Bob\",\"atlasOnly\":true,\"atlas\":12,\"total\":12}");
+            check("gm: the answer to a revert reaches the page and says how many items went", purgedFor == "Bob:12" && SettingsPage.GmStatusForTest.Contains("12") && SettingsPage.GmStatusForTest.Contains("Bob"));
 
             // an officer: invites and devices, but not ranks and channels
             Session.Disconnect();

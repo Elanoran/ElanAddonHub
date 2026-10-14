@@ -96,6 +96,20 @@ public sealed class PinStore
         }
     }
 
+    // 2.22: a member left / was removed: pins they authored keep their text (it belongs to the channel) but name `former` as the author
+    public int Anonymise(string login, string former)
+    {
+        lock (gate)
+        {
+            int n = 0;
+            foreach (var l in pins.Values)
+                foreach (var p in l)
+                    if (Names.Same((string)p["by"], login)) { p["by"] = former; n++; }
+            if (n > 0) Save();
+            return n;
+        }
+    }
+
     public void DropChannel(string channel)
     {
         lock (gate) { if (pins.Remove(channel)) Save(); }

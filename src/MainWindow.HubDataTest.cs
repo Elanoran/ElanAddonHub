@@ -103,6 +103,25 @@ ElansHubData = {
                 var bm = HubData.Parse(big.ToString());
                 check("parse: 300 characters, newest first", bm.Characters.Count == 300 && bm.Characters[0].Key == "R-C299" && bm.Characters[0].Core.Name == "C299");
 
+                // ---- limits: a hostile file must not crash the process (a stack overflow cannot be caught)
+                string Nest(int n) => "X = " + string.Concat(Enumerable.Repeat("{ a = ", n)) + "1" + string.Concat(Enumerable.Repeat(" }", n));
+                var deepOk = false; try { deepOk = LuaData.ReadGlobals(Nest(LuaData.MaxDepth)).ContainsKey("X"); } catch (Exception) { }
+                check("limits: tables nested exactly " + LuaData.MaxDepth + " deep still parse", deepOk);
+                string tooDeep = null; try { LuaData.ReadGlobals(Nest(LuaData.MaxDepth + 1)); } catch (FormatException e) { tooDeep = e.Message; } catch (Exception e) { tooDeep = "WRONG " + e.GetType().Name; }
+                check("limits: one level deeper is refused with a FormatException", tooDeep != null && tooDeep.Contains("deep"));
+                string stack = null; try { LuaData.ReadGlobals("X = " + new string('{', 200000)); } catch (FormatException e) { stack = e.Message; } catch (Exception e) { stack = "WRONG " + e.GetType().Name; }
+                check("limits: 200,000 nested tables are refused (no stack overflow, the test is still running)", stack != null && stack.Contains("deep"));
+                var deepModel = HubData.Parse("ElansHubData = " + new string('{', 150000));
+                check("limits: the Hub reader turns a too-deep file into an empty model", deepModel != null && !deepModel.Found);
+                string cut = null; try { LuaData.ReadGlobals("X = { a = { b = 1,"); } catch (FormatException e) { cut = e.Message; } catch (Exception e) { cut = "WRONG " + e.GetType().Name; }
+                check("limits: a cut-off table is a FormatException, not an IndexOutOfRange", cut != null && !cut.StartsWith("WRONG"));
+                var wide = LuaData.ReadGlobals("X = { " + string.Join(", ", Enumerable.Range(1, 5000).Select(n => "{ " + n + " }")) + " }");
+                check("limits: a wide table (5000 children) is fine", ((Dictionary<string, object>)wide["X"]).Count == 5000);
+                var hugeFile = Path.Combine(dir, "hubdata-huge.lua");
+                using (var fs = new FileStream(hugeFile, FileMode.Create)) fs.SetLength(SavedVarsFiles.MaxFileBytes + 1024);
+                check("limits: a SavedVariables file over " + (SavedVarsFiles.MaxFileBytes >> 20) + " MB is not read (null, no memory spent)", SavedVarsFiles.SafeRead(hugeFile) == null);
+                try { File.Delete(hugeFile); } catch { }
+
                 // ---- reading from the WoW folder
                 check("read: no WoW folder / no file gives an empty model", !HubData.Read(null).Found && !HubData.Read(hubRoot).Found && HubData.Read(hubRoot).Characters.Count == 0);
                 var t0 = new DateTime(2026, 10, 12, 10, 0, 0, DateTimeKind.Utc);
