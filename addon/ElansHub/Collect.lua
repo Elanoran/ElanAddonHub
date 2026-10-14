@@ -321,7 +321,7 @@ local PRIMARY = { Alchemy = 1, Blacksmithing = 1, Enchanting = 1, Engineering = 
                   Skinning = 1, Tailoring = 1, Jewelcrafting = 1, Inscription = 1 }
 local SECONDARY = { Cooking = 1, ["First Aid"] = 1, Fishing = 1, Archaeology = 1 }
 
-local function scanProfessions()
+local function readProfessionList()
   local list = {}
   if GetProfessions and GetProfessionInfo then
     local ok, p1, p2, arch, fish, cook = pcall(GetProfessions)
@@ -330,9 +330,9 @@ local function scanProfessions()
       for _, e in ipairs(idx) do
         local i = num(e[1])
         if i then
-          local okI, name, icon, skill, max = pcall(GetProfessionInfo, i)
+          local okI, name, icon, skill, max, _, _, line = pcall(GetProfessionInfo, i)
           name = okI and str(name) or nil
-          if name then list[#list + 1] = { name = name, skill = num(skill) or 0, max = num(max) or 0, ic = num(icon), kind = e[2] } end
+          if name then list[#list + 1] = { name = name, skill = num(skill) or 0, max = num(max) or 0, ic = num(icon), kind = e[2], line = num(line) } end
         end
       end
     end
@@ -347,7 +347,214 @@ local function scanProfessions()
       end
     end
   end
-  publish("professions", { at = now(), list = list })
+  return list
+end
+
+-- ------------------------------------------------------------ known recipes (additive `known` field of the professions module)
+-- known = { [skillLineId] = { at, partial, n = profession name, ids = { recipeSpellId, ... } } }. Recipe lists are only readable while
+-- the profession window is open (the game's rule): they are read when the window's events fire, from what the window lists, and the
+-- player's window is never touched (no expand/collapse, no filter or selection change, no hook).
+local MAX_IDS, MAX_LINES = 1000, 8
+local knownCache -- the last known table (loaded from the stored module once, then kept here)
+local tradeOpen = false
+
+local function copyKnown(src)
+  local out = {}
+  if type(src) ~= "table" then return out end
+  for k, e in pairs(src) do
+    k = tonumber(k)
+    if k and k > 0 and type(e) == "table" and type(e.ids) == "table" then
+      local ids, seen = {}, {}
+      for _, id in ipairs(e.ids) do
+        if type(id) == "number" and id > 0 and id == math.floor(id) and not seen[id] then seen[id] = true ids[#ids + 1] = id end
+      end
+      table.sort(ids)
+      out[k] = { at = type(e.at) == "number" and e.at or 0, partial = e.partial ~= false, n = type(e.n) == "string" and e.n or nil, ids = ids }
+    end
+  end
+  return out
+end
+
+local function loadKnown()
+  if knownCache then return knownCache end
+  local H = rawget(_G, "ElansHub")
+  local d = H and H.Get and H.Get("professions")
+  if type(d) ~= "table" then return {} end -- not stored yet (or the data layer is not loaded): ask again next time
+  knownCache = copyKnown(d.known)
+  return knownCache
+end
+
+local function publishProfessions(list)
+  local known = loadKnown()
+  local keep = {}
+  for k in pairs(known) do keep[#keep + 1] = k end
+  if #keep > MAX_LINES then -- the oldest scans go first
+    table.sort(keep, function(a, b) if known[a].at ~= known[b].at then return known[a].at > known[b].at end return a < b end)
+    local cut = {}
+    for i = 1, MAX_LINES do cut[keep[i]] = known[keep[i]] end
+    known = cut
+  end
+  knownCache = known
+  local data = { at = now(), list = list }
+  if next(known) then
+    local out = {}
+    for k, e in pairs(known) do out[k] = { at = e.at, partial = e.partial, n = e.n, ids = e.ids } end
+    data.known = out
+  end
+  publish("professions", data)
+end
+
+local function scanProfessions()
+  publishProfessions(readProfessionList())
+end
+
+local RECIPE_ALIAS = { smelting = "mining", ["herb gathering"] = "herbalism" }
+
+-- the skill line (and the profession name) of the window that is open: matched by id or name against the player's professions
+local function lineFor(list, name, id)
+  local l = name and name:lower() or nil
+  if l and RECIPE_ALIAS[l] then l = RECIPE_ALIAS[l] end
+  for _, p in ipairs(list) do
+    if p.line and ((id and p.line == id) or (l and p.name:lower() == l)) then return p.line, p.name end
+  end
+  if id then return id, name end
+  return nil
+end
+
+local function spellOfLink(link)
+  if type(link) ~= "string" then return nil end
+  local id = link:match("|Henchant:(%d+)") or link:match("|Hspell:(%d+)") or link:match("enchant:(%d+)")
+  id = tonumber(id)
+  if id and id > 0 then return id end
+  return nil
+end
+
+-- Modern client (C_TradeSkillUI). -> nil (API not usable now) | false (somebody else's window: ignore) | { name, id, ids = set, partial }
+local function readModernRecipes()
+  local T = rawget(_G, "C_TradeSkillUI")
+  if type(T) ~= "table" or not (T.GetAllRecipeIDs and T.GetRecipeInfo) then return nil end
+  if T.IsTradeSkillReady and rd(T.IsTradeSkillReady) == false then return nil end
+  if rd(T.IsTradeSkillLinked) == true or rd(T.IsTradeSkillGuild) == true or rd(T.IsNPCCrafting) == true then return false end
+  local ok, all = pcall(T.GetAllRecipeIDs)
+  all = ok and clean(all) or nil
+  if type(all) ~= "table" or #all == 0 then return nil end
+  local name, id
+  if T.GetBaseProfessionInfo then
+    local okP, info = pcall(T.GetBaseProfessionInfo)
+    info = okP and clean(info) or nil
+    if type(info) == "table" then name, id = str(info.professionName), num(info.professionID) end
+  end
+  local ids, partial = {}, false
+  for i = 1, math.min(#all, 5000) do
+    local rid = num(all[i])
+    if not rid or rid <= 0 then
+      partial = true -- a secret or odd id
+    else
+      local okI, ri = pcall(T.GetRecipeInfo, rid)
+      ri = okI and clean(ri) or nil
+      local learned = nil
+      if type(ri) == "table" then learned = clean(ri.learned) end
+      if learned == true then ids[rid] = true
+      elseif learned == nil then partial = true end -- cannot tell: neither known nor unknown
+    end
+  end
+  return { name = name, id = id, ids = ids, partial = partial }
+end
+
+-- Classic API of the trade skill window (GetNumTradeSkills ...) and of the craft window (enchanting). Collapsed headers hide their recipes
+-- (partial scan); a recipe the window lists is a learned one.
+local function readClassicList(count, info, link, titleFn)
+  local n = num(rd(count)) or 0
+  if n <= 0 then return nil end
+  local ids, partial = {}, false
+  for i = 1, math.min(n, 3000) do
+    local ok, _, rtype, _, expanded = pcall(info, i)
+    if ok then
+      rtype = str(rtype)
+      if rtype == "header" then
+        if clean(expanded) ~= true then partial = true end
+      elseif rtype then
+        local sid = spellOfLink(str(rd(link, i)))
+        if sid then ids[sid] = true else partial = true end
+      else
+        partial = true
+      end
+    else
+      partial = true
+    end
+  end
+  local name
+  if titleFn then
+    local okT, t = pcall(titleFn)
+    name = okT and str(t) or nil
+  end
+  return { name = name, ids = ids, partial = partial }
+end
+
+local function classicFiltered()
+  -- the sub-class / slot filters of the trade skill window (read only): anything but "All" hides recipes
+  for _, fn in ipairs({ rawget(_G, "GetTradeSkillSubClassFilter") or false, rawget(_G, "GetTradeSkillInvSlotFilter") or false }) do
+    if fn then
+      local f = rd(fn, 0)
+      if f ~= nil and f ~= 1 and f ~= true then return true end
+    end
+  end
+  return false
+end
+
+local function readClassicRecipes()
+  if rd(rawget(_G, "IsTradeSkillLinked")) == true or rd(rawget(_G, "IsTradeSkillGuild")) == true then return false end
+  if GetNumTradeSkills and GetTradeSkillInfo and GetTradeSkillRecipeLink then
+    local r = readClassicList(GetNumTradeSkills, GetTradeSkillInfo, GetTradeSkillRecipeLink, GetTradeSkillLine)
+    if r and next(r.ids) then
+      if classicFiltered() then r.partial = true end
+      return r
+    end
+  end
+  if GetNumCrafts and GetCraftInfo and (GetCraftRecipeLink or GetCraftItemLink) then
+    local r = readClassicList(GetNumCrafts, GetCraftInfo, GetCraftRecipeLink or GetCraftItemLink, GetCraftDisplaySkillLine)
+    if r and next(r.ids) then return r end
+  end
+  return nil
+end
+
+-- pure merge: old entry (or nil) + a read -> the entry to store. A recipe only disappears through a full scan that lacks it.
+local function mergeKnown(old, ids, partial, name)
+  local list = {}
+  for id in pairs(ids) do list[#list + 1] = id end
+  local oldCount = old and #old.ids or 0
+  if not partial and oldCount >= 4 and #list * 2 < oldCount then partial = true end -- looks filtered: do not drop what was known
+  local out
+  if partial and old then
+    local set = {}
+    for _, id in ipairs(old.ids) do set[id] = true end
+    for id in pairs(ids) do set[id] = true end
+    out = {}
+    for id in pairs(set) do out[#out + 1] = id end
+  else
+    out = list
+  end
+  table.sort(out)
+  while #out > MAX_IDS do out[#out] = nil end
+  -- an earlier full scan stays "full" when a partial one only adds to it
+  local isPartial = partial
+  if partial and old and old.partial == false then isPartial = false end
+  return { at = now(), partial = isPartial, n = name or (old and old.n) or nil, ids = out }
+end
+EHUB.MergeKnown = mergeKnown
+
+local function scanRecipes()
+  if not tradeOpen then return end
+  local res = readModernRecipes()
+  if res == nil then res = readClassicRecipes() end
+  if not res then return end
+  local list = readProfessionList()
+  local line, pname = lineFor(list, res.name, res.id)
+  if not line then return end
+  local known = loadKnown()
+  known[line] = mergeKnown(known[line], res.ids, res.partial, pname or res.name)
+  knownCache = known
+  publishProfessions(list)
 end
 
 -- ============================================================ guild bank (account scope, merged into the stored module)
@@ -452,8 +659,9 @@ local JOBS = {
   gear = { interval = 2, run = scanGear },
   talents = { interval = 2, run = scanTalents },
   professions = { interval = 2, run = scanProfessions },
+  recipes = { interval = 2, run = scanRecipes, gate = function() return tradeOpen end },
 }
-local ORDER = { "bags", "bank", "guildbank", "gear", "talents", "professions" }
+local ORDER = { "bags", "bank", "guildbank", "gear", "talents", "professions", "recipes" }
 for _, n in ipairs(ORDER) do JOBS[n].name = n JOBS[n].last = -1000 end
 
 local function execute(job)
@@ -548,7 +756,15 @@ local HANDLERS = {
   PLAYER_TALENT_UPDATE = function() request("talents") end,
   CHARACTER_POINTS_CHANGED = function() request("talents") end,
   SKILL_LINES_CHANGED = function() request("professions") end,
-  TRADE_SKILL_LIST_UPDATE = function() request("professions") end,
+  TRADE_SKILL_LIST_UPDATE = function() tradeOpen = true request("professions") request("recipes") end,
+  TRADE_SKILL_SHOW = function() tradeOpen = true request("recipes") end,
+  TRADE_SKILL_DATA_SOURCE_CHANGED = function() if tradeOpen then request("recipes") end end,
+  TRADE_SKILL_UPDATE = function() if tradeOpen then request("recipes") end end,
+  CRAFT_SHOW = function() tradeOpen = true request("recipes") end,
+  CRAFT_UPDATE = function() if tradeOpen then request("recipes") end end,
+  NEW_RECIPE_LEARNED = function() if tradeOpen then request("recipes") end end,
+  TRADE_SKILL_CLOSE = function() if tradeOpen then runNow("recipes") end tradeOpen = false end,
+  CRAFT_CLOSE = function() if tradeOpen then runNow("recipes") end tradeOpen = false end,
   PLAYER_REGEN_ENABLED = function()
     for _, n in ipairs(ORDER) do
       local job = JOBS[n]
@@ -591,7 +807,9 @@ local function countOf(module, d)
   elseif module == "talents" then
     return #(d.nodes or {}) .. " nodes, " .. (d.spent or 0) .. " spent (" .. tostring(d.api) .. ")"
   elseif module == "professions" then
-    return #(d.list or {}) .. " professions"
+    local r = 0
+    for _, e in pairs(d.known or {}) do r = r + #(type(e) == "table" and e.ids or {}) end
+    return #(d.list or {}) .. " professions" .. (r > 0 and (", " .. r .. " recipes") or "")
   end
   return "ok"
 end

@@ -129,8 +129,8 @@ local function buildAbout(page)
   v:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
   v:SetText("Elan's Hub  |cffabd473v" .. tostring(EHUB.Version and EHUB.Version() or "?") .. "|r")
   y = y - 24
-  local n = note(page, "Companion for Elan's Addon Hub: shares your character with the Lodge (class, level, zone, group), the pixel strip, the /rl shortcut, the minimap button and the emote wheel.", y)
-  y = y - 54
+  local n = note(page, "Companion for Elan's Addon Hub: shares your character with the Lodge (class, level, zone, group), the pixel strip, the /rl shortcut, the minimap button and the emote wheel. For Elan's Outpost it also saves your bags, gear, talents and professions; the recipes you know are read when you open a profession window.", y)
+  y = y - 72
   local cmd = UI.Text(page, 12, C.gold)
   cmd:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
   cmd:SetText("Commands")
