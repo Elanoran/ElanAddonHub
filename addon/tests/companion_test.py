@@ -252,12 +252,14 @@ click("Lock position (unlock to drag)") ok("lock check -> unlocked", db.wheel.lo
 click("Lock position (unlock to drag)") ok("... locked", db.wheel.locked == true)
 local slots = {}
 for _, f in ipairs(ALLF) do if f.slot and f.__parent == win.pages.wheel then slots[#slots + 1] = f end end
-ok("8 emote dropdowns in a 2-column grid", #slots == 8)
+ok("10 emote dropdowns (3 columns), the first 8 shown for the default 8 slots", #slots == 10 and slots[8].__shown and not slots[9].__shown and not slots[10].__shown)
 local ptsOk = true
-for i, d in ipairs(slots) do local pt = d.__pts[1] if pt[4] ~= ((i - 1) % 2) * 212 then ptsOk = false end end
-ok("grid columns alternate", ptsOk)
+for i, d in ipairs(slots) do local pt = d.__pts[1] if pt[4] ~= ((i - 1) % 3) * 143 then ptsOk = false end end
+ok("grid columns cycle through 3", ptsOk)
 local pv = win.pages.wheel.preview
-ok("preview shows 8 slot icons", pv and #pv.icons == 8 and pv.icons[1].tex.__tex == E.SlotIcon(1))
+ok("preview has 10 icons, 8 shown", pv and #pv.icons == 10 and pv.icons[8].__shown and not pv.icons[9].__shown and pv.icons[1].tex.__tex == E.SlotIcon(1))
+click("Show emote names next to the icons") ok("labels check -> db.wheel.labels false", db.wheel.labels == false)
+click("Show emote names next to the icons") ok("... true", db.wheel.labels == true)
 E.SetSlot(1, "FLEX") pv:Refresh() ok("preview follows slot", pv.icons[1].tex.__tex == E.SlotIcon(1) and db.wheel.emotes[1] == "FLEX")
 E.SetSlot(1, "THANK")
 do
@@ -288,53 +290,122 @@ ok("wheel locked by default", db.wheel.locked == true)
 press(mb, "RightButton") ok("right click unlocks", db.wheel.locked == false)
 press(mb, "RightButton") ok("right click locks", db.wheel.locked == true)
 
+-- Icons verified 2026-10-14 against WoW Forever 1.60.1.70374 (wow_classic_beta): FileDataID present in the CASC root AND in the local
+-- data (read-only, via the Outpost's own CascStorage), names from the community listfile. Never game art, only ids.
+local VERIFIED = {
+  THANK = { 135942, "Spell_Holy_PrayerOfHealing" },
+  CHEER = { 136012, "Spell_Nature_Bloodlust" },
+  WAVE = { 132351, "Ability_Warrior_RallyingCry" },
+  HELLO = { 134327, "INV_Misc_Note_01" },
+  BOW = { 132294, "Ability_Rogue_Feint" },
+  LAUGH = { 237554, "Spell_Misc_EmotionHappy" },
+  APPLAUD = { 132333, "Ability_Warrior_BattleShout" },
+  DANCE = { 133942, "INV_Misc_Flute_01" },
+  SALUTE = { 132482, "INV_Banner_01" },
+  FLEX = { 136101, "Spell_Nature_Strength" },
+  ROAR = { 132121, "Ability_Druid_DemoralizingRoar" },
+  KISS = { 136209, "Spell_Shadow_SoothingKiss" },
+  HUG = { 135453, "INV_ValentinesCard01" },
+  SORRY = { 135921, "Spell_Holy_HolyGuidance" },
+  BYE = { 134269, "INV_Misc_Map_01" },
+  CONGRATULATE = { 134140, "INV_Misc_Gift_01" },
+  CHARGE = { 132337, "Ability_Warrior_Charge" },
+  FOLLOW = { 132328, "Ability_Tracking" },
+  READY = { 132341, "Ability_Warrior_DefensiveStance" },
+  OOM = { 134851, "INV_Potion_71" },
+  HEALME = { 135907, "Spell_Holy_FlashHeal" },
+  INCOMING = { 135807, "Spell_Fire_Fireball" },
+  HELP = { 133706, "INV_Misc_Bell_01" },
+  OPENFIRE = { 132222, "Ability_Marksmanship" },
+  FLEE = { 132307, "Ability_Rogue_Sprint" },
+  WAIT = { 134376, "INV_Misc_PocketWatch_01" },
+  TRAIN = { 132261, "Ability_Mount_RidingHorse" },
+  YES = { 135769, "Spell_ChargePositive" },
+  NO = { 135768, "Spell_ChargeNegative" },
+  POINT = { 236188, "Ability_Hunter_MarkedForDeath" },
+  SHRUG = { 134400, "INV_Misc_QuestionMark" },
+  CRY = { 237555, "Spell_Misc_EmotionSad" },
+  CHICKEN = { 135996, "Spell_Magic_PolymorphChicken" },
+  SLEEP = { 136090, "Spell_Nature_Sleep" },
+  RUDE = { 237553, "Spell_Misc_EmotionAngry" },
+  SIT = { 135999, "Spell_Misc_Drink" },
+  BEG = { 135928, "Spell_Holy_LayOnHands" },
+  GIGGLE = { 236550, "Achievement_Halloween_Smiley_01" },
+}
 -- wheel
 local wheel, ring = _G.ElansHubWheel, _G.ElansHubWheelRing
+CURX, CURY = 100, 100
+function GetCursorPosition() return CURX, CURY end
+local function tick(dt) Fire(ring, "OnUpdate", dt or 0.2) end
+local function cursorAt(deg, d) CURX = 100 + math.sin(math.rad(deg)) * d CURY = 100 + math.cos(math.rad(deg)) * d end
+local function allClosed() tick() tick() tick() end
 ok("wheel + ring exist", wheel and ring)
 ok("wheel visible, ring collapsed", wheel.__shown and not ring.__shown)
-Fire(wheel, "OnEnter") ok("hover expands", ring.__shown)
-wheel.__over = false ring.__over = false
-Fire(wheel, "OnLeave") RunTimers() ok("mouse-out collapses", not ring.__shown)
-Fire(wheel, "OnEnter") wheel.__over = true Fire(wheel, "OnLeave") RunTimers() ok("stays open while still over", ring.__shown)
-Fire(ring, "OnMouseUp", "RightButton") ok("right-click collapses", not ring.__shown)
-Fire(wheel, "OnEnter") UISpecialFrames[#UISpecialFrames] = UISpecialFrames[#UISpecialFrames]
-_G.ElansHubWheelRing:Hide() ok("Esc (Hide) collapses", not ring.__shown)
+ok("ring is its own frame on UIParent (own frames only)", ring.__parent == UIParent)
+cursorAt(0, 0)
+Fire(wheel, "OnEnter") ok("hover opens the ring", ring.__shown)
+ok("opening starts a little smaller (zoom in)", ring.__scale < 1)
+tick(0.2) ok("open animation finished: full size", math.abs(ring.__scale - 1) < 1e-6)
+cursorAt(0, 400) wheel.__over = false
+tick(0.2) ok("mouse far away: not closed at once", ring.__shown)
+tick(0.2) tick(0.2) tick(0.2) ok("mouse stayed away: fades out and hides", not ring.__shown)
+Fire(wheel, "OnEnter") cursorAt(0, 400) wheel.__over = true
+tick(0.2) tick(0.2) tick(0.2) tick(0.2) ok("stays open while the mouse is on the trigger icon", ring.__shown)
+wheel.__over = false cursorAt(0, 0)
+Fire(ring, "OnMouseUp", "RightButton") tick(0.2) tick(0.2) ok("right-click closes (fade, then hidden)", not ring.__shown)
+Fire(wheel, "OnEnter") cursorAt(0, 0)
+_G.ElansHubWheelRing:Hide() ok("Esc (Hide) closes at once", not ring.__shown)
+ok("ring is registered for Esc", (function() for _, n in ipairs(UISpecialFrames) do if n == "ElansHubWheelRing" then return true end end end)())
 -- click mode
 db.wheel.mode = "click"
 wheel.__over = false
-Fire(wheel, "OnEnter") ok("click mode: hover does not expand", not ring.__shown)
-press(wheel) ok("click mode: click expands", ring.__shown)
-press(wheel) ok("click toggles closed", not ring.__shown)
+Fire(wheel, "OnEnter") ok("click mode: hover does not open", not ring.__shown)
+press(wheel) ok("click mode: click opens", ring.__shown)
+press(wheel) allClosed() ok("click toggles closed", not ring.__shown)
 db.wheel.mode = "hover"
--- eight buttons with default emotes
+-- slot buttons
 local kids = {}
 for _, f in ipairs(frames) do if f.__parent == ring and f.__kind == "Button" then kids[#kids + 1] = f end end
-ok("8 emote buttons", #kids == 8)
-local want = { "THANK", "CHEER", "WAVE", "HELLO", "BOW", "LAUGH", "APPLAUD", "DANCE" }
+local shownKids = 0 for _, k in ipairs(kids) do if k.__shown then shownKids = shownKids + 1 end end
+ok("10 slot buttons built, 8 shown by default", #kids == 10 and shownKids == 8)
+local want = { "THANK", "CHEER", "WAVE", "HELLO", "BOW", "LAUGH", "APPLAUD", "DANCE", "SALUTE", "FLEX" }
 local same = true
-for i = 1, 8 do if kids[i].token ~= want[i] then same = false end end
+for i = 1, 10 do if kids[i].token ~= want[i] then same = false end end
 ok("default emotes/order", same)
--- click: no target
+-- choose by direction (no need to hit the icon): 20 degrees off the top is still sector 1
 TARGET = nil
-Fire(wheel, "OnEnter")
-press(kids[1])
-ok("click calls DoEmote THANK without unit", EMOTES[1] and EMOTES[1][1] == "THANK" and EMOTES[1][2] == nil)
-ok("emote click collapses ring", not ring.__shown)
+cursorAt(0, 0) Fire(wheel, "OnEnter") tick()
+cursorAt(20, 100) tick()
+ok("pointing near slot 1 selects it (tooltip names it and its /command)", table.concat(GameTooltip.lines, "|"):find("Thank") and table.concat(GameTooltip.lines, "|"):find("/thank", 1, true))
+Fire(ring, "OnMouseDown", "LeftButton") ok("pressed state on the sector", kids[1].down == true)
+Fire(ring, "OnMouseUp", "LeftButton")
+ok("click anywhere in the sector does THANK without unit", EMOTES[1] and EMOTES[1][1] == "THANK" and EMOTES[1][2] == nil)
+ok("pressed state cleared", kids[1].down == false)
+tick() tick() ok("emote closes the ring", not ring.__shown)
 -- throttle
-press(kids[2]) ok("throttled within 1.5s", #EMOTES == 1)
+Fire(wheel, "OnEnter") cursorAt(45, 80) tick()
+Fire(ring, "OnMouseUp", "LeftButton") ok("throttled within 1.5s", #EMOTES == 1)
+allClosed()
 NOW = NOW + 2
 TARGET = "Bob"
-Fire(kids[2], "OnEnter")
-ok("tooltip names target", table.concat(GameTooltip.lines, "|"):find("Cheer Bob"))
+Fire(wheel, "OnEnter") cursorAt(45, 80) tick()
+ok("tooltip names target and command", table.concat(GameTooltip.lines, "|"):find("Cheer Bob") and table.concat(GameTooltip.lines, "|"):find("/cheer", 1, true))
 press(kids[2])
 ok("click with target aims at target", EMOTES[2] and EMOTES[2][1] == "CHEER" and EMOTES[2][2] == "target")
+allClosed()
+-- middle of the ring selects nothing
+Fire(wheel, "OnEnter") cursorAt(0, 5) tick() NOW = NOW + 2
+Fire(ring, "OnMouseUp", "LeftButton") ok("click in the dead zone does nothing", #EMOTES == 2)
+ring:Hide()
 -- blocked emote
 NOW = NOW + 2 DOEMOTE_FAIL = true
 press(kids[3]) ok("blocked emote recorded", db.emoteErrors == 1)
 ok("blocked emote friendly message", (CHAT[#CHAT] or ""):find("did not allow"))
 DOEMOTE_FAIL = false
+allClosed()
 -- custom slot
-E.SetSlot(1, "SALUTE") ok("slot change saved", db.wheel.emotes[1] == "SALUTE" and kids[1].token == "SALUTE" and db.wheel.emotes[2] == "CHEER")
+E.SetSlot(1, "SALUTE") ok("slot change saved", db.wheel.emotes[1] == "SALUTE" and kids[1].token == "SALUTE" and db.wheel.emotes[2] == "CHEER" and db.wheel.emotes[10] == "FLEX")
+E.SetSlot(1, "THANK")
 -- drag + saved position
 db.wheel.locked = false
 Fire(wheel, "OnDragStart") ok("unlocked drag moves", wheel.__moving)
@@ -343,8 +414,117 @@ db.wheel.locked = true
 Fire(wheel, "OnDragStart") ok("locked drag does nothing", not wheel.__moving)
 -- scale / enable
 db.wheel.scale = 1.3 E.ApplyWheel() ok("scale applied", wheel.__scale == 1.3)
+Fire(wheel, "OnEnter") tick() ok("ring opens at the chosen Size", math.abs(ring.__scale - 1.3) < 1e-6) ring:Hide()
+db.wheel.scale = 1 E.ApplyWheel()
 SlashCmdList.ELANSHUB("wheel off") ok("/ehub wheel off hides", not wheel.__shown)
+Fire(wheel, "OnEnter") ok("disabled: the ring does not open", not ring.__shown)
 SlashCmdList.ELANSHUB("wheel on") ok("/ehub wheel on shows", wheel.__shown)
+-- sector maths for 6, 8 and 10 slots
+do
+  local good, why = true, ""
+  for _, n in ipairs({ 6, 8, 10 }) do
+    local step = 360 / n
+    for i = 1, n do
+      local a = (i - 1) * step
+      local function sec(deg) return (E.WheelSectorOf(math.sin(math.rad(deg)) * 60, math.cos(math.rad(deg)) * 60, n, 30)) end
+      if sec(a) ~= i or sec(a + step / 2 - 0.5) ~= i or sec(a - step / 2 + 0.5) ~= i then good = false why = n .. "/" .. i end
+      if sec(a + step / 2 + 0.5) ~= (i % n) + 1 then good = false why = "next " .. n .. "/" .. i end
+      if E.WheelSlotAngle(i, n) ~= a then good = false why = "angle " .. n .. "/" .. i end
+    end
+  end
+  ok("sector math: every slot of 6/8/10 gets its own sector, edges and wrap-around right " .. why, good)
+  ok("sector math: dead zone selects nothing, returns the distance", select(1, E.WheelSectorOf(3, 4, 8, 30)) == nil and select(2, E.WheelSectorOf(3, 4, 8, 30)) == 5)
+  ok("sector math: right = slot 3 of 8 (clockwise from the top), down = 5, left = 7, just left of top wraps to 1",
+    E.WheelSectorOf(50, 0, 8, 30) == 3 and E.WheelSectorOf(0, -50, 8, 30) == 5 and E.WheelSectorOf(-50, 0, 8, 30) == 7 and E.WheelSectorOf(-1, 50, 8, 30) == 1)
+end
+-- 6 / 10 slots, labels
+E.SetWheelSlots(7) ok("7 slots is refused", db.wheel.slots == 8)
+local function shownCount() local c = 0 for _, k in ipairs(kids) do if k.__shown then c = c + 1 end end return c end
+E.SetWheelSlots(6) ok("6 slots: six buttons, 60 degrees apart", db.wheel.slots == 6 and shownCount() == 6 and kids[2].angle == 60 and E.SlotCount() == 6)
+NOW = NOW + 2
+Fire(wheel, "OnEnter") cursorAt(0, 0) tick() cursorAt(120, 80) tick() Fire(ring, "OnMouseUp", "LeftButton")
+ok("6 slots: pointing at 120 degrees picks slot 3", EMOTES[#EMOTES][1] == "WAVE")
+allClosed() NOW = NOW + 2
+E.SetWheelSlots(10) ok("10 slots: ten buttons, 36 degrees apart", shownCount() == 10 and kids[2].angle == 36 and kids[10].token == "FLEX")
+E.SetWheelSlots(8) ok("back to 8", shownCount() == 8)
+E.SetWheelLabels(false) ok("labels off", db.wheel.labels == false and kids[1].label.__shown == false)
+E.SetWheelLabels(true) ok("labels on", db.wheel.labels == true and kids[1].label.__shown == true)
+-- opening at the mouse, kept on screen
+UIParent.__w, UIParent.__h = 1920, 1080
+db.wheel.where = "cursor"
+CURX, CURY = 700, 500
+Fire(wheel, "OnEnter") tick()
+do local pt = ring.__pts[#ring.__pts] ok("open at the mouse: centred on the cursor", pt[1] == "CENTER" and pt[2] == UIParent and pt[3] == "BOTTOMLEFT" and math.abs(pt[4] - 700) < 1e-6 and math.abs(pt[5] - 500) < 1e-6) end
+ring:Hide() CURX, CURY = 5, 1075
+Fire(wheel, "OnEnter") tick()
+do local pt = ring.__pts[#ring.__pts] ok("open at the mouse near a corner: kept fully on screen", pt[4] >= 128 - 1e-6 and pt[5] <= 1080 - 128 + 1e-6) end
+ring:Hide()
+db.wheel.where = "fixed"
+Fire(wheel, "OnEnter") tick()
+do local pt = ring.__pts[#ring.__pts] ok("open at the icon: centred on the trigger (the mock trigger is near the corner, so the disc is pushed onto the screen)", math.abs(pt[4] - 128) < 1e-6) end
+ring:Hide() UIParent.__w, UIParent.__h = nil, nil
+CURX, CURY = 100, 100
+-- hold key: open at the mouse, release does the emote under it
+NOW = NOW + 2
+ok("key binding function exists", type(ElansHub_WheelKey) == "function" and BINDING_NAME_ELANSHUB_WHEEL ~= nil and BINDING_HEADER_ELANSHUB ~= nil)
+ElansHub_WheelKey(true) ok("key down opens the ring", ring.__shown)
+cursorAt(90, 70) tick() tick()
+local before = #EMOTES
+ElansHub_WheelKey(false) ok("key release does the emote under the mouse", #EMOTES == before + 1 and EMOTES[#EMOTES][1] == "WAVE")
+allClosed() ok("... and closes", not ring.__shown)
+NOW = NOW + 2 cursorAt(0, 0)
+ElansHub_WheelKey(true) tick() tick()
+before = #EMOTES
+ElansHub_WheelKey(false) ok("key release in the middle does nothing but close", #EMOTES == before)
+allClosed() ok("... closed", not ring.__shown)
+ElansHub_WheelKey(true) tick() ring:Hide() before = #EMOTES ElansHub_WheelKey(false)
+ok("Esc during the hold cancels (a later release does nothing)", #EMOTES == before and not ring.__shown)
+-- never stuck open
+ElansHub_WheelKey(true) tick() tick(11) tick() tick() ok("a key held forever still closes", not ring.__shown)
+db.wheel.mode = "click"
+press(wheel) cursorAt(0, 60) tick() tick(21) tick() tick() ok("idle 20s closes the ring", not ring.__shown)
+press(wheel) cursorAt(0, 700) tick() tick(1) tick(1.5) tick() tick() ok("mouse far away in click mode closes after a while", not ring.__shown)
+db.wheel.mode = "hover"
+do
+  press(wheel) cursorAt(0, 0)
+  for _, f in ipairs(ALLF) do if f.__kind == "Frame" and f.__parent == UIParent and not f.__name then Fire(f, "OnEvent", "PLAYER_LEAVING_WORLD") end end
+  ok("a loading screen closes the ring at once", not ring.__shown)
+end
+-- icons: every id was checked against the 1.60.1 game files
+do
+  local allOk, laughId, count = true, nil, 0
+  for _, e in ipairs(E.EMOTES) do
+    count = count + 1
+    local v = VERIFIED[e[1]]
+    if type(e[3]) ~= "number" or not v or v[1] ~= e[3] then allOk = false end
+    if e[1] == "LAUGH" then laughId = e[3] end
+  end
+  ok("every wheel icon is a verified FileDataID (" .. count .. ")", allOk and count == 38)
+  ok("Laugh has an icon (237554, Spell_Misc_EmotionHappy), not the old missing INV_Misc_Mask_01", laughId == 237554)
+  ok("fallback + trigger + circle mask are numeric ids", E.FALLBACK_ICON == 134400 and E.ICON == 132483 and E.WHEEL_MASK == 130924)
+  local defOk = true
+  for i = 1, 10 do if not VERIFIED[E.GetSlot(i)] then defOk = false end end
+  ok("default slots all verified", defOk)
+  local saved = E.EMOTES[1][3]
+  E.EMOTES[1][3] = nil E.RefreshWheel()
+  ok("a missing icon id falls back to the generic icon, never empty", kids[1].icon.__tex == E.FALLBACK_ICON and kids[1].back.__tex == E.FALLBACK_ICON)
+  E.EMOTES[1][3] = saved E.RefreshWheel()
+  ok("icon restored", kids[1].icon.__tex == saved)
+  ok("every slot has the generic icon behind it as well", kids[5].back.__tex == E.FALLBACK_ICON)
+end
+-- settings defaults + persistence
+do
+  local keep = ElansHubDB.wheel
+  ElansHubDB.wheel = nil
+  local w = E.DB().wheel
+  ok("fresh settings: 8 slots, labels on, open at the icon, hover, size 100%", w.slots == 8 and w.labels == true and w.where == "fixed" and w.mode == "hover" and w.scale == 1)
+  ElansHubDB.wheel = { slots = 9, where = "nonsense", labels = false }
+  w = E.DB().wheel
+  ok("bad saved values are repaired, labels off is kept", w.slots == 8 and w.where == "fixed" and w.labels == false)
+  ElansHubDB.wheel = keep
+  E.SetWheelWhere("cursor") ok("open-at setting saved", db.wheel.where == "cursor")
+  E.SetWheelWhere("fixed")
+end
 -- pixel + rl via commands
 SlashCmdList.ELANSHUB("pixel off") ok("pixel off", db.pixel == false and not _G.ElansHubPixelStrip.__shown)
 SlashCmdList.ELANSHUB("pixel on") ok("pixel on", db.pixel == nil and _G.ElansHubPixelStrip.__shown)
@@ -360,6 +540,7 @@ ok("diag saved", db.diag and db.diag.runs[1] and db.diag.runs[1].doEmote == "fun
 ok("diag did not emote", #EMOTES == n)
 ok("diag: no combat log", db.diag.runs[1].combatLogRegistered == false)
 -- addon health: automatic probe once per version, quiet, not in combat; one-time hint; bug entry shape
+RunTimers() -- flush timers queued earlier in the run (the old wheel did this on every collapse)
 db.diag, db.lastVersion, db.hintVersion = nil, "0.0.1", nil
 local chatN = #CHAT
 E.AutoCheck()
@@ -847,7 +1028,7 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.14.0", "## Version: 1.14.0" in toc and "1.14.0" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc version is 1.15.0", "## Version: 1.15.0" in toc and "1.15.0" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
 check("changelog says a one-time WoW restart is needed", "ONE-TIME" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.12.0")[1])
 check("Data.lua is in the toc right after ElansHub.lua and ElansHubData is a saved variable", files[:2] == ["ElansHub.lua", "Data.lua"] and "ElansHubData" in toc)
 check("Collect.lua is in the toc right after Data.lua", files[:3] == ["ElansHub.lua", "Data.lua", "Collect.lua"])
@@ -858,6 +1039,16 @@ loader('ElansHubShared = { flights = { legs = { ["Horde|11>22"] = { t = 61.5, n 
 check("generated shape loads", L.eval("ElansHubShared.flights.legs['Horde|11>22'].t") == 61.5)
 loader(open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read(), "SharedData.lua")
 check("the shipped default never wipes data already there", L.eval("ElansHubShared.flights ~= nil"))
+import re
+_wsrc = open(os.path.join(ADDON, "Wheel.lua"), encoding="utf-8").read()
+_wcode = "\n".join(l for l in _wsrc.splitlines() if not l.strip().startswith("--"))
+check("the wheel never hooks anything (no hooksecurefunc / HookScript / SecureHandler / SetAttribute)", not re.search(r"hooksecurefunc|HookScript|SecureHandler|SecureActionButton|SetAttribute|InsecureAction", _wcode))
+check("the wheel never touches Blizzard frames by name", not re.search(r"ChatFrame|PlayerFrame|TargetFrame|MainMenuBar|ActionButton|WorldFrame|UIDropDownMenu|GameMenuFrame|Minimap", _wcode))
+check("the wheel has no string icon paths (FileDataIDs only)", "Interface\\Icons" not in _wcode and "INV_" not in re.sub(r'--.*', '', _wcode))
+_bx = open(os.path.join(ADDON, "Bindings.xml"), encoding="utf-8").read() if os.path.exists(os.path.join(ADDON, "Bindings.xml")) else ""
+check("Bindings.xml: one binding, runs on key down and up, calls ElansHub_WheelKey", "ELANSHUB_WHEEL" in _bx and "runOnUp" in _bx and "ElansHub_WheelKey" in _bx and _bx.count("<Binding ") == 1)
+_cl = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read()
+check("changelog 1.15.0 mentions the Laugh fix and the restart", "1.15.0" in _cl and "Laugh" in _cl.split("1.15.0")[1] and "ONE-TIME" in _cl.split("1.15.0")[1])
 # live health / power are never read; the character sheet's MAXIMUMS (UnitHealthMax / UnitPowerMax, gear.stats, Collect.lua only) are not live values
 import re
 check("source never reads live health / power (UnitHealth, UnitPower without Max)", not re.search(r"UnitHealth(?!Max)|UnitPower(?!Max|Type)", SRC))

@@ -26,6 +26,9 @@ function EHUB.DB()
   if w.locked == nil then w.locked = true end
   w.scale = w.scale or 1
   w.mode = w.mode or "hover"
+  if w.labels == nil then w.labels = true end
+  if w.slots ~= 6 and w.slots ~= 8 and w.slots ~= 10 then w.slots = 8 end
+  if w.where ~= "cursor" then w.where = "fixed" end
   return db
 end
 

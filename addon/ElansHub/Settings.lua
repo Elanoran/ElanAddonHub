@@ -49,23 +49,45 @@ end
 local function buildWheel(page)
   local y = 0
   local h = UI.Header(page, "Emote wheel") h:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - 32
-  local function place(w, h2) w:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - (h2 or 28) track(w) end
+  local function place(w, h2) w:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y) y = y - (h2 or 24) track(w) end
   place(UI.Check(page, "Enable emote wheel",
     function() return EHUB.DB().wheel.enabled end,
     function(v) EHUB.DB().wheel.enabled = v and true or false EHUB.ApplyWheel() end))
   place(UI.Check(page, "Lock position (unlock to drag)",
     function() return EHUB.DB().wheel.locked end,
     function(v) EHUB.SetWheelLocked(v) end))
-  local modeLbl = UI.Text(page, 12, C.text)
-  modeLbl:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y - 5)
-  modeLbl:SetText("Open the wheel on")
-  local mode = UI.Dropdown(page, 100,
-    function() return { { value = "hover", text = "Hover" }, { value = "click", text = "Click" } } end,
+  place(UI.Check(page, "Show emote names next to the icons",
+    function() return EHUB.DB().wheel.labels ~= false end,
+    function(v) EHUB.SetWheelLabels(v) end))
+  y = y - 4
+  local function row(text, items, get, set)
+    local lbl = UI.Text(page, 12, C.text)
+    lbl:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y - 5)
+    lbl:SetText(text)
+    local d = UI.Dropdown(page, 130, function() return items end, get, set)
+    d:SetPoint("TOPLEFT", page, "TOPLEFT", 150, y)
+    track(d)
+    y = y - 28
+    return d
+  end
+  row("Open the wheel on", { { value = "hover", text = "Hover" }, { value = "click", text = "Click" } },
     function() return EHUB.DB().wheel.mode end,
     function(v) EHUB.DB().wheel.mode = v end)
-  mode:SetPoint("TOPLEFT", page, "TOPLEFT", 150, y)
-  track(mode)
-  y = y - 34
+  row("Opens", { { value = "fixed", text = "At the icon" }, { value = "cursor", text = "At the mouse" } },
+    function() return EHUB.DB().wheel.where end,
+    function(v) EHUB.SetWheelWhere(v) end)
+  local box -- preview, set below
+  local grid = {}
+  local function relayout()
+    local n = EHUB.SlotCount()
+    for i, d in ipairs(grid) do d:SetShown(i <= n) end
+    if box then box:Refresh() end
+  end
+  local slotItems = { { value = 6, text = "6 emotes" }, { value = 8, text = "8 emotes" }, { value = 10, text = "10 emotes" } }
+  row("Number of emotes", slotItems,
+    function() return EHUB.DB().wheel.slots end,
+    function(v) EHUB.SetWheelSlots(v) relayout() end)
+  y = y - 2
   local sl = UI.Slider(page, "Size", 0.6, 1.6, 0.1,
     function() return EHUB.DB().wheel.scale end,
     function(v) EHUB.DB().wheel.scale = v EHUB.ApplyWheel() end,
@@ -73,53 +95,63 @@ local function buildWheel(page)
   sl:SetWidth(250)
   sl:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
   track(sl)
-  y = y - 48
+  y = y - 44
 
   -- preview of the layout, top right
-  local box = CreateFrame("Frame", nil, page)
+  box = CreateFrame("Frame", nil, page)
   box:SetSize(130, 130)
   box:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, -34)
   UI.Skin(box, C.bgCard, C.border)
   local centre = UI.Icon(box, 24, EHUB.ICON)
   centre:SetPoint("CENTER", 0, 0)
   local icons = {}
-  for i = 1, 8 do
-    local a = math.rad(90 - (i - 1) * 45)
-    local ic = UI.Icon(box, 24, EHUB.SlotIcon and EHUB.SlotIcon(i))
-    ic:SetPoint("CENTER", box, "CENTER", math.cos(a) * 46, math.sin(a) * 46)
-    icons[i] = ic
+  for i = 1, EHUB.WHEEL_MAXSLOTS do
+    icons[i] = UI.Icon(box, 24, EHUB.SlotIcon and EHUB.SlotIcon(i))
   end
   local cap = UI.Text(box, 10, C.textFaint, "CENTER")
   cap:SetPoint("BOTTOM", box, "BOTTOM", 0, 3)
   cap:SetText("preview")
   function box:Refresh()
-    for i = 1, 8 do
-      local ic = EHUB.SlotIcon and EHUB.SlotIcon(i)
-      if ic then icons[i]:SetIcon(ic) end
+    local n = EHUB.SlotCount()
+    for i = 1, EHUB.WHEEL_MAXSLOTS do
+      if i <= n then
+        local a = math.rad(EHUB.WheelSlotAngle(i, n))
+        icons[i]:ClearAllPoints()
+        icons[i]:SetPoint("CENTER", box, "CENTER", math.sin(a) * 46, math.cos(a) * 46)
+        icons[i]:SetIcon(EHUB.SlotIcon(i))
+        icons[i]:Show()
+      else
+        icons[i]:Hide()
+      end
     end
   end
   box.icons = icons
   track(box)
   page.preview = box
+  local kb = note(page, "Key binding: Esc > Key Bindings > AddOns > Elan's Hub. Hold the key to open at the mouse, release to do the emote.", -172, 130)
+  kb:ClearAllPoints()
+  kb:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, -172)
+  kb:SetWidth(130)
 
   local el = UI.Text(page, 12, C.text)
   el:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
   el:SetText("Emotes, clockwise from the top")
-  y = y - 22
-  for i = 1, 8 do
-    local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
-    local d = UI.Dropdown(page, 200, EHUB.EmoteItems,
-      function() return EHUB.GetSlot(i) end,
-      function(v) EHUB.SetSlot(i, v) box:Refresh() end)
-    d:SetPoint("TOPLEFT", page, "TOPLEFT", col * 212, y - row * 28)
-    d.slot = i
-    track(d)
-  end
-  y = y - 4 * 28 - 10
-  local reset = UI.Button(page, "Reset wheel position", 160, 22)
-  reset:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
+  local reset = UI.Button(page, "Reset wheel position", 130, 20)
+  reset:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, y + 3)
   reset:SetScript("OnClick", function() EHUB.WheelCommand("reset") end)
   page.reset = reset
+  y = y - 22
+  for i = 1, EHUB.WHEEL_MAXSLOTS do
+    local col, rw = (i - 1) % 3, math.floor((i - 1) / 3)
+    local d = UI.Dropdown(page, 136, EHUB.EmoteItems,
+      function() return EHUB.GetSlot(i) end,
+      function(v) EHUB.SetSlot(i, v) box:Refresh() end)
+    d:SetPoint("TOPLEFT", page, "TOPLEFT", col * 143, y - rw * 26)
+    d.slot = i
+    grid[i] = d
+    track(d)
+  end
+  relayout()
 end
 
 local function buildAbout(page)
@@ -140,7 +172,7 @@ local function buildAbout(page)
   list:SetWidth(420)
   list:SetJustifyH("LEFT")
   if list.SetWordWrap then list:SetWordWrap(true) end
-  list:SetText("/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on|off|lock|unlock|reset\n/ehub pixel on|off\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI")
+  list:SetText("/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on|off|lock|unlock|reset|open\n/ehub pixel on|off\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI")
   y = y - 90
   local out = UI.Text(page, 12, C.gold)
   out:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)

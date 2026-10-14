@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="ELANSHUB_WHEEL" header="ELANSHUB" runOnUp="true" category="ADDONS">
+    ElansHub_WheelKey(keystate == "down")
+  </Binding>
+</Bindings>

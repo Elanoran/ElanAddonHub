@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## Unreleased
+- **Elan's Hub 1.15.0: a better emote wheel** (addon only; nothing changes in the Outpost). The wheel is now a round radial menu with framed icons, readable names and the name and command of the emote you point at in the middle; you choose by direction and click or release a key. Settings for 6, 8 or 10 emotes, names on or off, open at the icon or at the mouse, and an optional hold-and-release key binding. The Laugh icon (and two others) that did not exist in the game files is fixed: every wheel icon is now a game file id that was checked against the WoW Forever files. The Hub gains a Bindings.xml, so a one-time full WoW restart is needed.
+
 ## 2.52.3
 - **The Addons page uses the whole window.** The addon cards now sit in a grid: one column in a narrow window, two from a window about 990 px wide, three from about 1420 px, with the Other addons in the same columns. A **Grid | List** switch above the cards (remembered) gives you the single column back, wider than before but never wider than 960 px. Each card shows what you need without opening it: the status (installed version, the update it would make, or not installed), the source, when the addon was last updated and the install / update button. A card still opens in place for the version history and links, and the rest of the grid stays where it is. The placeholders you see while the list loads follow the same grid, so nothing jumps when the real cards arrive.
 
