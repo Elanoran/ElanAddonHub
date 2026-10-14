@@ -190,6 +190,7 @@ namespace ElansAddonHub
                 System.Windows.Automation.AutomationProperties.SetName(card, it.Title);
                 var link = it.Id;
                 card.MouseLeftButtonUp += (s, e) => { e.Handled = true; _ = Open(link); };
+                Keyable(card, () => _ = Open(link), false);
                 var g = new Grid();
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -230,7 +231,7 @@ namespace ElansAddonHub
             int cols = TileColumnsFor(Scroller.ActualWidth > 0 ? Scroller.ActualWidth : 760);
             foreach (var grp in groups)
             {
-                var label = Tb(grp, "Text.Secondary", null, 0); label.Margin = new Thickness(0, sp.Children.Count > 1 ? 8 : 0, 0, 8);
+                var label = Tb(grp, "Text.Secondary"); double above = sp.Children.Count > 1 ? 8 : 0; label.Margin = new Thickness(0, above, 0, 8);
                 sp.Children.Add(label);
                 var wrap = new System.Windows.Controls.Primitives.UniformGrid { Margin = new Thickness(0, 0, -8, 0), Columns = cols };
                 tileGrids.Add(wrap);
@@ -250,6 +251,7 @@ namespace ElansAddonHub
             var tile = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(12, 8, 12, 8), MinHeight = 64, Margin = new Thickness(0, 0, 8, 8), Tag = openId, Focusable = false, Cursor = Cursors.Hand, ToolTip = tip };
             tile.SetResourceReference(Control.BackgroundProperty, "Brush.Surface1");
             tile.MouseLeftButtonUp += Row_Click;
+            Keyable(tile, () => _ = Open(openId), false);
             System.Windows.Automation.AutomationProperties.SetName(tile, title);
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

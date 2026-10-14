@@ -171,6 +171,15 @@ namespace ElansAddonHub
         }
 
         // ---- the sub-navigation
+        // a row you can reach with Tab: Enter or Space does what a click does, the keyboard focus shows as the hover veil (DESIGN: every row shows where the focus is)
+        void Keyable(ContentControl row, Action activate, bool selected)
+        {
+            row.Focusable = true; row.IsTabStop = true; row.FocusVisualStyle = null;
+            row.GotKeyboardFocus += (s, e) => row.SetResourceReference(Control.BackgroundProperty, "Brush.Overlay.Hover");
+            row.LostKeyboardFocus += (s, e) => { if (selected) row.SetResourceReference(Control.BackgroundProperty, "Brush.Accent.Tint"); else row.ClearValue(Control.BackgroundProperty); };
+            row.PreviewKeyDown += (s, e) => { if (e.Key == Key.Enter || e.Key == Key.Space) { e.Handled = true; activate(); } };
+        }
+
         // the last crumb is the page itself: in the colour of its title (an item's quality)
         void ColourLastCrumb(Brush b)
         {
@@ -205,7 +214,9 @@ namespace ElansAddonHub
             }
             else row.ToolTip = title;
             row.Content = g;
-            row.MouseLeftButtonUp += (s, e) => { e.Handled = true; if (key == "search") { _ = OpenPalette(); } else if (key == "home") { _ = GoStart(); } else _ = Open(openId); };
+            Action go = () => { if (key == "search") { _ = OpenPalette(); } else if (key == "home") { _ = GoStart(); } else _ = Open(openId); };
+            row.MouseLeftButtonUp += (s, e) => { e.Handled = true; go(); };
+            Keyable(row, go, selected);
             return row;
         }
 
@@ -344,6 +355,7 @@ namespace ElansAddonHub
             }
             row.Content = g;
             row.MouseLeftButtonUp += (s, e) => { if (dragMoved) { dragMoved = false; return; } e.Handled = true; _ = Open(it.Id); };
+            Keyable(row, () => _ = Open(it.Id), on);
             if (pinned)
             {
                 row.AllowDrop = true;

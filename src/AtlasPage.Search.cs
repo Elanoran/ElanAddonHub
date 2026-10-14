@@ -103,6 +103,8 @@ namespace ElansAddonHub
             PaletteBox.PreviewMouseDown += (s, e) => { };
         }
 
+        void OnMapPaletteRequested() => Dispatcher.BeginInvoke(new Action(() => { if (IsVisible && hosted is WorldMapView) _ = OpenPalette(); }));
+
         // ---- open / close
         public Task OpenPalette(string seed = "", string scope = null) => palOpening = OpenPaletteAsync(seed ?? "", scope);
 

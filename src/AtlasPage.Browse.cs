@@ -299,6 +299,7 @@ namespace ElansAddonHub
                 return;
             }
             hosted = el; hostedCat = cat; hostedId = cat.Id + ":" + sub;
+            if (el is WorldMapView wmv) { wmv.PaletteRequested -= OnMapPaletteRequested; wmv.PaletteRequested += OnMapPaletteRequested; }
             HostContent.Content = el;
             Scroller.Visibility = Visibility.Collapsed; HostSlot.Visibility = Visibility.Visible;
             Motion.PageIn(HostSlot);
@@ -314,16 +315,6 @@ namespace ElansAddonHub
             hosted = null; hostedCat = null; hostedId = "";
             HostContent.Content = null;
             HostSlot.Visibility = Visibility.Collapsed; Scroller.Visibility = Visibility.Visible;
-        }
-
-        FrameworkElement HostedCrumbs(AtlasCategory cat, string sub)
-        {
-            var list = new List<AtlasCrumb> { new AtlasCrumb("Atlas", AtlasBrowse.HomeLink) };
-            string last = "";
-            try { last = cat.SubTitle?.Invoke(sub) ?? ""; } catch (Exception) { }
-            list.Add(new AtlasCrumb(cat.Title, ""));
-            if (last.Length > 0) list.Add(new AtlasCrumb(last, ""));
-            return CrumbRow(list);
         }
 
         // The hosted page changed what it shows by itself (another class, profession or tab): the id of the page follows without a new step in the history, like a browse filter.

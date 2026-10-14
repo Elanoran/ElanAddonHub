@@ -199,7 +199,11 @@ namespace ElansAddonHub
                 ClickRow(AtlasView.HeroSearchForTest); await Task.Delay(50);
                 Check("home: a click on the hero search opens the palette", AtlasView.PaletteOpen);
                 AtlasView.ClosePalette();
-                Snapshot(Path.Combine(dir, "atlas-shell-home.png"));
+                await Task.Delay(300); Snapshot(Path.Combine(dir, "atlas-shell-home.png"));
+                await AtlasView.Open("browse:items/weapons"); await Task.Delay(400); UpdateLayout(); Snapshot(Path.Combine(dir, "atlas-shell-browse.png"));
+                await AtlasView.Open("item:100"); await MapReady(); await Task.Delay(300); UpdateLayout(); Snapshot(Path.Combine(dir, "atlas-shell-item.png"));
+                await AtlasView.Open(AtlasNav.DataId); await Task.Delay(300); UpdateLayout(); Snapshot(Path.Combine(dir, "atlas-shell-data.png"));
+                await AtlasView.GoStart(); await AtlasView.StartFillForTest; UpdateLayout();
 
                 // ============================================================================================================ the palette
                 AtlasView.PaletteDebounceMsForTest = 30;
@@ -210,7 +214,7 @@ namespace ElansAddonHub
                 Check("palette: Ctrl+K opens it over the page - the search box has the focus, the scope chips are All, Items, Creatures, Quests, Zones, Spells, Pages, and the dimmed page stays behind", AtlasView.PaletteOpen && AtlasView.PaletteBoxForTest.IsKeyboardFocused && AtlasView.PaletteScopesForTest.SequenceEqual(new[] { "all", "items", "creatures", "quests", "zones", "spells", "pages" }) && AtlasView.PaletteChipForTest("all").IsChecked == true && AtlasView.PaletteScopeForTest == "all");
                 Check("palette: empty, it lists Pinned, Recent and Pages (no results yet), with a hint to paste a link", AtlasView.PaletteHeadingsForTest == "Pinned|Recent|Pages" && AtlasView.PaletteTextsForTest.Any(t => t.StartsWith("Paste a link such as item:2589")), AtlasView.PaletteHeadingsForTest);
                 Check("palette: the first row is selected, with its preview; the pinned page comes first", AtlasView.PaletteSelectedForTest == 0 && AtlasView.PaletteIdsForTest[0] == st.Pins[0] && AtlasView.PalettePreviewForTest.Visibility == Visibility.Visible);
-                Snapshot(Path.Combine(dir, "atlas-shell-palette-empty-early.png"));
+                await Task.Delay(350); Snapshot(Path.Combine(dir, "atlas-shell-palette-empty.png"));
                 AtlasView.PressPaletteForTest(Key.Escape);
                 Check("palette: Esc closes it and the page stays", !AtlasView.PaletteOpen && AtlasView.CurrentId == "item:100" && AtlasView.PaletteLayerForTest.Visibility == Visibility.Collapsed);
                 // the header box opens it as well
@@ -254,7 +258,7 @@ namespace ElansAddonHub
                 ClickHover(AtlasView.PaletteRowForTest(npcRow));
                 bool previewed = await WaitFor(() => !AtlasView.PalettePreviewTextsForTest.Contains("Loading..."), 5000); await Task.Delay(50); UpdateLayout();
                 Check("palette: selecting a creature shows what it is (name, kind, a few facts) after a short moment, built off the UI thread", previewed && AtlasView.PalettePreviewTextsForTest.Contains("Gnarlfang") && AtlasView.PalettePreviewTextsForTest.Contains("NPC") && AtlasView.PalettePreviewTextsForTest.Count >= 4, string.Join(" | ", AtlasView.PalettePreviewTextsForTest));
-                Snapshot(Path.Combine(dir, "atlas-shell-palette-results.png"));
+                await Task.Delay(350); Snapshot(Path.Combine(dir, "atlas-shell-palette-results.png"));
                 AtlasView.PressPaletteForTest(Key.Down); AtlasView.PressPaletteForTest(Key.Down);
                 int sel = AtlasView.PaletteSelectedForTest;
                 AtlasView.PressPaletteForTest(Key.Up);

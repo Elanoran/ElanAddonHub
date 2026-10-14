@@ -45,6 +45,7 @@ namespace ElansAddonHub
             var h0 = Height;
             // ---- the rail entry and the page opening
             Check("nav: the rail has an Atlas button with Ctrl+5 in its tooltip, and Ctrl+5 means the Atlas page", TabAtlas != null && TabAtlas.ToolTip.ToString().Contains("Ctrl+5") && TabForKey(Key.D5) == "atlas" && TabForKey(Key.NumPad5) == "atlas");
+            ResetAtlasForTest();           // (another section may have left the Atlas on one of its pages)
             ShowTab("atlas");
             await AtlasView.WaitForTest();
             await Task.Delay(200);
