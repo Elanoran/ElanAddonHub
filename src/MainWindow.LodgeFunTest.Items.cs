@@ -260,6 +260,54 @@ namespace ElansAddonHub
                     ck("atlas chips: an item the data does not know is 'Item <id>'; the Atlas item data's name wins over the Bags data's", am2.ItemChips.Count == 2 && am2.ItemChips[0].Name == "Item 999999" && am2.ItemChips[0].Ref.Id == 999999
                         && am2.ItemChips[1].Name == "Wrong Name Wins" && am2.ItemChips[1].Quality == 4);
 
+                    // ---- 2.50.2: "item:249409" showed "Item 249409" for good. The chat history's chips are built at the start, BEFORE the game data is read (a few seconds
+                    // later, in the background); nothing built them again when it arrived. They are now (ItemData.Changed), with the icon and the name from the game data.
+                    var keepSnap = ItemData.Snapshot;
+                    const int dyeIcon = 1021860;     // the real icon of the Cerulean Dye when this PC has it extracted (copied into the scratch folder for the screenshots), else a drawn one
+                    var realIcon = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ElansAddonHub", "cache", "icons", dyeIcon + ".png");
+                    try { if (System.IO.File.Exists(realIcon)) System.IO.File.Copy(realIcon, IconStore.PathFor(dyeIcon), true); else FunMakeIcon(dyeIcon, Color.FromRgb(0x30, 0x90, 0xE0)); } catch (Exception) { FunMakeIcon(dyeIcon, Color.FromRgb(0x30, 0x90, 0xE0)); }
+                    ItemData.SetForTest(null, ItemData.State.Loading);
+                    Session.FeedForTest("{\"t\":\"msg\",\"channel\":\"general\",\"id\":\"a3\",\"at\":" + now + ",\"from\":\"Bob\",\"fromId\":2,\"text\":\"item:249409\"}");
+                    var am3 = Session.MessagesOf("general").First(m => m.Id == "a3");
+                    await Task.WhenAll(am3.ItemChips.Select(c => c.Resolving));
+                    ck("item chip before the game data is read: 'Item 249409' on the quiet tile (nothing else knows it yet)", am3.ItemChips.Count == 1 && am3.ItemChips[0].Name == "Item 249409" && am3.ItemChips[0].Icon == null && am3.ItemChips[0].TileVisibility == Visibility.Visible);
+                    ItemData.SetForTest(new ItemSnapshot(new ClientItem[0], new[] { CItem(249409, "Cerulean Dye", 2, 25, 1, 0, 7, 11, 125, dyeIcon, "Crafted by alchemists.") }), ItemData.State.Ready);
+                    ItemData.RaiseChangedForTest();
+                    await Task.Delay(400);
+                    var dye = am3.ItemChips.Single();
+                    ck("item chip: when the game data arrives the chips are built again: the name in its quality colour and the icon from the game data (the Bags data has none)",
+                        dye.Name == "Cerulean Dye" && dye.Quality == 2 && ((SolidColorBrush)dye.NameBrush).Color == (Color)ColorConverter.ConvertFromString("#1EFF00") && dye.Icon != null && dye.IconVisibility == Visibility.Visible && dye.TileVisibility == Visibility.Collapsed, dye.Name + " / " + (dye.Icon != null));
+                    var tDye = dye.BuildTip();
+                    ck("chip hover: the item tooltip carries the same icon (left of the panel, outside it); an unknown item has none", tDye.Icon != null && tDye.HasIcon && tDye.IconFileId == dyeIcon && am2.ItemChips[0].BuildTip().Icon == null);
+                    var gw = GameTooltip.Wrap(tDye);
+                    gw.ApplyTemplate();
+                    var gframe = gw.Template.FindName("IconFrame", gw) as Border;
+                    ck("chip hover: the tooltip's 40 px icon frame is shown with an icon, collapsed without", gframe != null && gframe.Width == 40 && gframe.Visibility == Visibility.Visible && tDye.HasIcon, gframe == null ? "no frame" : gframe.Visibility.ToString());
+                    // screenshot: the chip as the chat draws it, and its hover
+                    try
+                    {
+                        var chipPart = new ContentPresenter { Content = dye, ContentTemplate = (DataTemplate)LodgePage.FindResource("ItemChip"), Margin = new Thickness(12, 12, 12, 8), HorizontalAlignment = HorizontalAlignment.Left };
+                        gw.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); gw.Arrange(new Rect(gw.DesiredSize));
+                        var sheet = new StackPanel { Background = (Brush)LodgePage.FindResource("Brush.Surface1") };
+                        sheet.Children.Add(new TextBlock { Text = "item:249409", Margin = new Thickness(12, 12, 12, 0), Foreground = (Brush)LodgePage.FindResource("Brush.Text.Primary") });
+                        sheet.Children.Add(chipPart);
+                        sheet.Children.Add(new Border { Child = new VisualBrushHost(gw), Margin = new Thickness(12, 0, 12, 12), HorizontalAlignment = HorizontalAlignment.Left });
+                        sheet.Measure(new Size(520, double.PositiveInfinity)); sheet.Arrange(new Rect(sheet.DesiredSize));
+                        SnapshotSheet(sheet, System.IO.Path.Combine(dir, "chip-icon-hover.png"));
+                    }
+                    catch (Exception e) { Util.Log("chip screenshot: " + e.Message); }
+                    // the same name from the other chip kinds: a pasted game link / Wowhead URL for the same id, and the icon of a Bags-only item
+                    var kinds = ItemLinks.Find("|cff1eff00|Hitem:249409::|h[Whatever it was called]|h|r https://www.wowhead.com/classic/item=249409/x");
+                    ck("item chip kinds: a game link with another name in the message still shows the game data's name and icon", kinds.Count == 1 && ItemChipVM.From(kinds[0]).Name == "Cerulean Dye" && ItemChipVM.From(kinds[0]).Icon != null);
+                    // the order the name is taken in
+                    var gi = CItem(5, "From Game", 1, 1, 1, 0, 7, 5, 0, 1000004); var bi = new ItemInfo { Id = 5, Name = "From Bags", Icon = 1000001 }; var rn = new ItemRef { Id = 5, Name = "As Written" };
+                    ck("item name order: game data, then the Bags data, then the name in the message, then nothing (Item N)", ItemChipVM.BestName(gi, bi, rn) == "From Game" && ItemChipVM.BestName(null, bi, rn) == "From Bags" && ItemChipVM.BestName(null, null, rn) == "As Written"
+                        && ItemChipVM.BestName(null, null, new ItemRef { Id = 5 }) == null && ItemChipVM.BestName(CItem(5, "  ", 1, 1, 1, 0, 7, 5), bi, rn) == "From Bags" && ItemChipVM.BestName(CItem(5, "", 1, 1, 1, 0, 7, 5), new ItemInfo { Id = 5, Name = "" }, rn) == "As Written");
+                    ck("item icon order: the Bags data's file, else the game data's, else none", ItemChipVM.IconIdOf(gi, bi) == 1000001 && ItemChipVM.IconIdOf(gi, new ItemInfo { Id = 5 }) == 1000004 && ItemChipVM.IconIdOf(null, null) == 0);
+                    ItemData.SetForTest(keepSnap, ItemData.State.Ready);
+                    ItemData.RaiseChangedForTest();
+                    await Task.Delay(400);
+
                     // a click opens the Atlas (item chips too), never Wowhead
                     var wh = new List<string>();
                     LodgePage.OpenLinkOverrideForTest = u => wh.Add(u);
@@ -282,6 +330,15 @@ namespace ElansAddonHub
                 }
             }
             finally { ItemKnowledge.WowRoot = hadRoot; ItemKnowledge.ResetForTest(); LodgePage.OpenLinkOverrideForTest = null; }
+        }
+
+        // draws another (unparented, laid out) element, for the screenshots
+        sealed class VisualBrushHost : FrameworkElement
+        {
+            readonly FrameworkElement el;
+            public VisualBrushHost(FrameworkElement el) { this.el = el; }
+            protected override Size MeasureOverride(Size a) => el.DesiredSize;
+            protected override void OnRender(DrawingContext dc) => dc.DrawRectangle(new VisualBrush(el) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, new Rect(0, 0, el.DesiredSize.Width, el.DesiredSize.Height));
         }
     }
 }

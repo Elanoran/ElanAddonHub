@@ -161,6 +161,7 @@ namespace ElansAddonHub
         GameTooltip RecipeTip(ProfRecipe r)
         {
             var gt = new GameTooltip(r.Name, r.ItemId > 0 ? r.Quality : 1);
+            if (r.ItemId > 0) gt.SetItemIcon(r.ItemId); else gt.SetSpellIcon(r.SpellId);
             if (r.ItemId > 0) AddItemFacts(gt, r.ItemId);
             else
             {

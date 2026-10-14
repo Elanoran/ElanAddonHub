@@ -697,7 +697,19 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ToolTip">
-          <ContentPresenter />
+          <!-- a GameTooltip with an Icon: the 40 px framed icon to the LEFT of the panel, outside it (the game's item link tooltip) -->
+          <StackPanel Orientation="Horizontal">
+            <Border x:Name="IconFrame" Width="40" Height="40" Margin="0,0,8,0" VerticalAlignment="Top" BorderThickness="2" ClipToBounds="True" Visibility="Collapsed"
+                    BorderBrush="{StaticResource Brush.GameTip.IconBorder}" Background="{StaticResource Brush.GameTip.Bg}">
+              <Image Source="{Binding Content.Icon, RelativeSource={RelativeSource TemplatedParent}}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" />
+            </Border>
+            <ContentPresenter />
+          </StackPanel>
+          <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding Content.HasIcon, RelativeSource={RelativeSource Self}}" Value="True">
+              <Setter TargetName="IconFrame" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>

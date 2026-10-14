@@ -119,6 +119,10 @@ namespace ElansAddonHub.Lodge
             LfgVM.Clock = () => Clock(); LfgVM.MyName = () => Me?.Name; LfgVM.IAmOfficer = () => CanModerate;
             ItemKnowledge.WowRoot = () => settings.WowRoot;
             ItemKnowledge.Changed += RefreshItemChips;
+            // The game data loads in the background a few seconds after the start, AFTER the history's chips were built: they would stay "Item 249409"
+            // for good. When it (re)arrives the chips are built again (on the UI thread, once the data is ready).
+            Action gameData = () => { if (Services.Db2.ItemData.Ready || Services.Db2.SpellData.Ready) System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(RefreshItemChips)); };
+            Services.Db2.ItemData.Changed += gameData; Services.Db2.SpellData.Changed += gameData;
             Presence = new GamePresence(() => settings.WowRoot, () => !settings.PixelOff);
             AvatarArt.Root = () => settings.WowRoot;
             if (settings.InvisibleForget) settings.LodgeInvisible = false; // "Appear offline" is not remembered across restarts
