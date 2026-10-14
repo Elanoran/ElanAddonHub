@@ -64,6 +64,7 @@ namespace ElansAddonHub
             if (scaleText.StartsWith("selfupdated")) { await SelfUpdatedShots(dir); return; }
             if (scaleText.StartsWith("skeleton")) { await SkeletonShots(dir); return; }
             if (scaleText.StartsWith("startup")) { await StartupShots(dir); return; }
+            if (scaleText.StartsWith("addonsgrid")) { await AddonsGridShots(dir); return; }
             double scale = 1;
             double.TryParse(scaleText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out scale);
             if (scale < 0.5) scale = 1;

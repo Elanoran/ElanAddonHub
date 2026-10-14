@@ -117,16 +117,87 @@ namespace ElansAddonHub
         public void SetStats(AddonStats st)
         {
             var l = new List<StatChip>();
+            UpdatedText = ""; UpdatedTip = null;
             if (st != null)
             {
-                // Segoe MDL2 Assets: E121 clock, E896 download, E1CB tag
-                if (st.Released != null) l.Add(new StatChip("\uE121", GitHubStats.ShortAgo(st.Released.Value),
-                    "Released " + GitHubStats.Ago(st.Released.Value) + ", " + st.Released.Value.ToLocalTime().ToString("d MMM yyyy", Lodge.CalendarRules.English)));
+                // Segoe MDL2 Assets: E896 download, E1CB tag. "Updated 3d ago" is a chip of its own next to the status and the source.
+                if (st.Released != null)
+                {
+                    var ago = GitHubStats.ShortAgo(st.Released.Value);
+                    UpdatedText = "Updated " + ago + (ago == "now" || ago == "never" ? "" : " ago");
+                    UpdatedTip = "Released " + GitHubStats.Ago(st.Released.Value) + ", " + st.Released.Value.ToLocalTime().ToString("d MMM yyyy", Lodge.CalendarRules.English);
+                }
                 if (st.Downloads > 0) l.Add(new StatChip("\uE896", st.Downloads.ToString(), st.Downloads + (st.Downloads == 1 ? " download" : " downloads")));
                 if (st.Releases > 0) l.Add(new StatChip("\uE1CB", st.Releases.ToString(), st.Releases + (st.Releases == 1 ? " release" : " releases")));
             }
             Stats = l;
             Notify(nameof(Stats)); Notify(nameof(StatsVisibility));
+            Notify(nameof(UpdatedText)); Notify(nameof(UpdatedTip)); Notify(nameof(UpdatedVisibility));
+        }
+        public string UpdatedText { get; private set; } = "";
+        public string UpdatedTip { get; private set; }
+        public Visibility UpdatedVisibility => string.IsNullOrEmpty(UpdatedText) ? Visibility.Collapsed : Visibility.Visible;
+
+        // the status chip on the card face: where this addon stands (installed version / update available / not installed ...)
+        public string StatusText
+        {
+            get
+            {
+                switch (State)
+                {
+                    case CardState.UpdateAvailable: return Installed + "  →  " + Latest;
+                    case CardState.UpToDate: return "Installed " + Installed;
+                    case CardState.NotInstalled: return "Not installed";
+                    case CardState.DevCopy: return "Dev copy";
+                    case CardState.NoClient: return "No client";
+                    case CardState.NoFolder: return "No WoW folder";
+                    default: return "Working...";
+                }
+            }
+        }
+        public string StatusTip
+        {
+            get
+            {
+                switch (State)
+                {
+                    case CardState.UpdateAvailable: return "Update available: you have " + Installed + ", the latest is " + Latest;
+                    case CardState.UpToDate: return "Installed " + Installed + " - the latest version";
+                    case CardState.NotInstalled: return "Not installed yet. The latest version is " + Latest;
+                    case CardState.DevCopy: return "A git checkout (a development copy): the hub never overwrites it";
+                    case CardState.NoClient: return (Info.FlavorName ?? Info.Flavor) + " wasn't found in your WoW folder";
+                    case CardState.NoFolder: return "Choose your WoW folder in Settings > General";
+                    default: return "Working on it...";
+                }
+            }
+        }
+        public Brush StatusBg
+        {
+            get
+            {
+                switch (State)
+                {
+                    case CardState.UpdateAvailable: case CardState.Busy: return Res("Brush.Accent.Tint") as Brush;
+                    case CardState.UpToDate: return Res("Brush.Success.Tint") as Brush;
+                    case CardState.DevCopy: return Res("Brush.Warn.Tint") as Brush;
+                    case CardState.NoClient: case CardState.NoFolder: return Res("Brush.Danger.Tint") as Brush;
+                    default: return Res("Brush.Overlay.Chip") as Brush;
+                }
+            }
+        }
+        public Brush StatusFg
+        {
+            get
+            {
+                switch (State)
+                {
+                    case CardState.UpdateAvailable: case CardState.Busy: return Res("Brush.Accent") as Brush;
+                    case CardState.UpToDate: return Res("Brush.Success") as Brush;
+                    case CardState.DevCopy: return Res("Brush.Warn") as Brush;
+                    case CardState.NoClient: case CardState.NoFolder: return Res("Brush.Danger") as Brush;
+                    default: return Res("Brush.Text.Secondary") as Brush;
+                }
+            }
         }
 
         // expanded = details (version history, dev-copy notes, links)
