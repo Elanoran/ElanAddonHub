@@ -187,6 +187,36 @@ namespace ElansAddonHub
         void Forward_Click(object sender, RoutedEventArgs e) { _ = Forward(); }
         void Home_Click(object sender, RoutedEventArgs e) { _ = GoStart(); }
 
+        // hovering a table row: the game tooltip of what the row links to (an item, creature, quest, spell ...), built when it opens
+        void RowTip_Opened(object sender, RoutedEventArgs e)
+        {
+            if (!(sender is ToolTip tt) || !(tt.DataContext is AtlasRow r) || string.IsNullOrEmpty(r.Link)) return;
+            tt.Content = RowTipFor(r);
+        }
+
+        public GameTooltip RowTipFor(AtlasRow r)
+        {
+            var kind = r.Link.IndexOf(':') > 0 ? r.Link.Substring(0, r.Link.IndexOf(':')) : "";
+            GameTooltip gt = null;
+            try
+            {
+                if (kind == "item" && int.TryParse(r.Link.Substring(5), out var id))
+                {
+                    var ci = ElansAddonHub.Services.Db2.ItemData.Get(id);
+                    gt = new GameTooltip(r.Title, ci?.Quality ?? r.Quality);
+                    if (ci != null) gt.AddItem(ci); else gt.AddText("Not in the game data on this PC", "grey");
+                }
+                else if (kind == "npc" || kind == "obj" || kind == "quest" || kind == "spell" || kind == "skill" || kind == "faction" || kind == "zone" || kind == "instance")
+                {
+                    var m = ElansAddonHub.Services.Atlas.AtlasQuery.Build(r.Link);
+                    if (m != null && !m.NotFound) gt = GameTooltip.FromAtlas(m);
+                }
+            }
+            catch (Exception ex) { Util.Log("atlas row tooltip: " + ex.Message); }
+            if (gt == null) { gt = new GameTooltip(r.Title, r.Quality); if (!string.IsNullOrEmpty(r.Detail)) gt.AddText(r.Detail, "grey"); }
+            return gt;
+        }
+
         void Row_Click(object sender, MouseButtonEventArgs e)
         {
             if (!(sender is FrameworkElement fe) || !(fe.Tag is string link) || string.IsNullOrEmpty(link)) return;

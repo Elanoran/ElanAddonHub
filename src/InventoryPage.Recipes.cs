@@ -89,7 +89,7 @@ namespace ElansAddonHub
             DockPanel.SetDock(need, Dock.Right);
             row.Children.Add(need);
             row.Children.Add(new TextBlock { Text = name, Style = TextStyle("Text.Body"), Foreground = Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, quality))]), TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
-            var tt = new ToolTip { Style = (Style)FindResource("CardTip") };
+            var tt = GameTooltip.Wrap(null);
             tt.Opened += (s, e) => tt.Content = RecipeTipContent(r, sk, name, quality);
             row.ToolTip = tt;
             ToolTipService.SetInitialShowDelay(row, 150);
@@ -98,34 +98,31 @@ namespace ElansAddonHub
         }
 
         // the tooltip of a recipe: the item it makes (facts as everywhere), or the spell's description for one that makes nothing (an enchant), then the skill and the reagents
-        StackPanel RecipeTipContent(Recipe r, SkillInfo sk, string name, int quality)
+        GameTooltip RecipeTipContent(Recipe r, SkillInfo sk, string name, int quality)
         {
-            var sp = new StackPanel { MinWidth = 220 };
-            sp.Children.Add(Line(name, "Text.RowTitle", Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, quality))])));
-            bool facts = r.ItemId > 0 && AddItemFacts(sp, r.ItemId);
+            var gt = new GameTooltip(name, r.ItemId > 0 ? quality : 1);
+            bool facts = r.ItemId > 0 && AddItemFacts(gt, r.ItemId);
             if (!facts)
             {
                 var spell = SpellData.Spell(r.SpellId);
                 var d = spell == null ? null : (!string.IsNullOrWhiteSpace(spell.Description) ? spell.Description : spell.AuraDescription);
-                if (!string.IsNullOrWhiteSpace(d))
-                {
-                    var t = Line(d.Trim(), "Text.Body", Res("Brush.Warn"), 6);
-                    t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = 280;
-                    sp.Children.Add(t);
-                }
+                if (!string.IsNullOrWhiteSpace(d)) gt.AddText(d.Trim(), "spelldesc");
             }
             if (r.ReagentCount > 0)
             {
-                sp.Children.Add(Line("Reagents", "Text.Caption", null, 12));
+                var parts = new List<string>();
                 for (int i = 0; i + 1 < r.Reagents.Length; i += 2)
                 {
                     var ri = ItemData.Get(r.Reagents[i]);
-                    sp.Children.Add(Line(r.Reagents[i + 1] + " x " + (ri != null && !string.IsNullOrEmpty(ri.Name) ? ri.Name : "Item " + r.Reagents[i]), "Text.Body", null, 2));
+                    parts.Add(r.Reagents[i + 1] + " x " + (ri != null && !string.IsNullOrEmpty(ri.Name) ? ri.Name : "Item " + r.Reagents[i]));
                 }
+                gt.AddText("Reagents:", "plain");
+                foreach (var p in parts) gt.AddText(p, "plain");
             }
-            sp.Children.Add(Line(sk.Name + (r.MinRank > 0 ? " · skill " + r.MinRank : "") + (r.Green > 0 ? " · green " + r.Green + " · grey " + r.Gray : ""), "Text.Caption", null, 12));
-            sp.Children.Add(Line("Spell ID " + r.SpellId + (r.ItemId > 0 ? " · Item ID " + r.ItemId : ""), "Text.Caption"));
-            return sp;
+            var sp = gt.Footer;
+            sp.Children.Add(GameTooltip.Muted(sk.Name + (r.MinRank > 0 ? " · skill " + r.MinRank : "") + (r.Green > 0 ? " · green " + r.Green + " · grey " + r.Gray : "")));
+            sp.Children.Add(GameTooltip.Muted("Spell ID " + r.SpellId + (r.ItemId > 0 ? " · Item ID " + r.ItemId : "")));
+            return gt;
         }
 
         // ---- self-test hooks
@@ -139,7 +136,7 @@ namespace ElansAddonHub
             return res;
         }
 
-        StackPanel RecipeTipFor(string profession, int index)
+        GameTooltip RecipeTipFor(string profession, int index)
         {
             if (!recipeData.TryGetValue(profession, out var recipes) || index < 0 || index >= recipes.Count) return null;
             var r = recipes[index];
@@ -163,7 +160,7 @@ namespace ElansAddonHub
         }
 
         public List<string> RecipeTipForTest(string profession, int index) => Texts(RecipeTipFor(profession, index));
-        public FrameworkElement RecipeTipSheetForTest(string profession, int index) => TipSheet(new ToolTip { Content = RecipeTipFor(profession, index) });
+        public FrameworkElement RecipeTipSheetForTest(string profession, int index) => TipSheet(GameTooltip.Wrap(RecipeTipFor(profession, index)));
         public FrameworkElement DollTipSheetForTest(int slot) => dollSlots.TryGetValue(slot, out var el) && el.ToolTip is ToolTip t ? TipSheet(t) : null;
 
         // the tile of the talent whose spell id is `spellId` (its tooltip ends in "Spell ID n")
@@ -177,7 +174,7 @@ namespace ElansAddonHub
         }
 
         ToolTip TalentTileTip(int spellId) =>
-            Descend(CharHost).OfType<Border>().Select(b => b.ToolTip as ToolTip).FirstOrDefault(t => t != null && t.Content is StackPanel sp && sp.Children.OfType<TextBlock>().Any(x => x.Text == "Spell ID " + spellId));
+            Descend(CharHost).OfType<Border>().Select(b => b.ToolTip as ToolTip).FirstOrDefault(t => t != null && t.Content is GameTooltip gt && gt.Texts().Contains("Spell ID " + spellId));
 
         public List<string> TalentTipForTest(int spellId) => Texts(TalentTileTip(spellId)?.Content);
         public FrameworkElement TalentTipSheetForTest(int spellId) { var t = TalentTileTip(spellId); return t == null ? null : TipSheet(t); }

@@ -41,7 +41,7 @@ namespace ElansAddonHub.Services.Atlas
             else if (cl != null)
             {
                 if (cl.ItemLevel > 0) m.Tooltip.Add(new TipLine { Kind = "ilvl", Text = "Item Level " + cl.ItemLevel });
-                if (cl.RequiredLevel > 1) m.Tooltip.Add(new TipLine { Kind = "req", Text = "Requires Level " + cl.RequiredLevel });
+                if (cl.RequiredLevel > 1) m.Tooltip.Add(new TipLine { Kind = "req", Text = "Requires Level " + cl.RequiredLevel, Level = cl.RequiredLevel });
                 m.TooltipSource = AtlasLabel.Classic;
                 AddLayer(m, "classic");
                 m.Subtitle = "Item " + id + " · only in the Classic baseline (your game has not shown it yet)";
@@ -268,8 +268,8 @@ namespace ElansAddonHub.Services.Atlas
             if (r.Stats != null)
                 foreach (var st in r.Stats)
                     if (st != null && st.Length >= 2 && st[1] != 0)
-                        l.Add(new TipLine { Kind = "stat", Text = (st[1] > 0 ? "+" : "-") + Math.Abs(st[1]).ToString(CultureInfo.InvariantCulture) + " " + ItemNames.Stat(st[0]) });
-            if (r.RequiredLevel > 1) l.Add(new TipLine { Kind = "req", Text = "Requires Level " + r.RequiredLevel });
+                        l.Add(new TipLine { Kind = ItemNames.IsBaseStat(st[0]) ? "stat" : "stat2", Text = (st[1] > 0 ? "+" : "-") + Math.Abs(st[1]).ToString(CultureInfo.InvariantCulture) + " " + ItemNames.Stat(st[0]) });
+            if (r.RequiredLevel > 1) l.Add(new TipLine { Kind = "req", Text = "Requires Level " + r.RequiredLevel, Level = r.RequiredLevel });
             return l;
         }
 

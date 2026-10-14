@@ -665,6 +665,44 @@
     <Setter Property="Padding" Value="10,6" />
   </Style>
 
+  <!-- ===================== game tooltip =====================
+       These colours are the GAME's, on purpose: item and spell tooltips look like the ones in World of Warcraft (DESIGN.md, "Game tooltips").
+       They do not follow the app theme or accent. Used only by Controls\GameTooltip.cs. -->
+  <SolidColorBrush x:Key="Brush.GameTip.Bg" Color="#F2070C1F" />
+  <SolidColorBrush x:Key="Brush.GameTip.Border" Color="#5A6B85" />
+  <SolidColorBrush x:Key="Brush.GameTip.IconBorder" Color="#1B2438" />
+  <SolidColorBrush x:Key="Brush.GameTip.Text" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="Brush.GameTip.Gold" Color="#FFD100" />
+  <SolidColorBrush x:Key="Brush.GameTip.Green" Color="#1EFF00" />
+  <SolidColorBrush x:Key="Brush.GameTip.Yellow" Color="#FFFF00" />
+  <SolidColorBrush x:Key="Brush.GameTip.Red" Color="#FF2020" />
+  <SolidColorBrush x:Key="Brush.GameTip.Grey" Color="#9D9D9D" />
+  <SolidColorBrush x:Key="Brush.GameTip.Muted" Color="#8C9AB5" />
+  <SolidColorBrush x:Key="Brush.GameTip.Divider" Color="#33475F" />
+  <SolidColorBrush x:Key="Brush.GameTip.Silver" Color="#C0C7D0" />
+  <SolidColorBrush x:Key="Brush.GameTip.Copper" Color="#C8764A" />
+  <SolidColorBrush x:Key="Brush.GameTip.Q0" Color="#9D9D9D" />
+  <SolidColorBrush x:Key="Brush.GameTip.Q1" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="Brush.GameTip.Q2" Color="#1EFF00" />
+  <SolidColorBrush x:Key="Brush.GameTip.Q3" Color="#0070DD" />
+  <SolidColorBrush x:Key="Brush.GameTip.Q4" Color="#A335EE" />
+  <SolidColorBrush x:Key="Brush.GameTip.Q5" Color="#FF8000" />
+  <SolidColorBrush x:Key="Brush.GameTip.Q6" Color="#E6CC80" />
+  <SolidColorBrush x:Key="Brush.GameTip.Q7" Color="#00CCFF" />
+  <CornerRadius x:Key="Radius.GameTip">4</CornerRadius>
+
+  <!-- a tooltip that holds a GameTooltip: no chrome of its own (the panel draws its own frame) -->
+  <Style x:Key="GameTip" TargetType="ToolTip">
+    <Setter Property="HasDropShadow" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToolTip">
+          <ContentPresenter />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- a compact card instead of a text tooltip (people in the Lodge) -->
   <Style x:Key="CardTip" TargetType="ToolTip">
     <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />

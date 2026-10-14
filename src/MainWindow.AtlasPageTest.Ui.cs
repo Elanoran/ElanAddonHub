@@ -227,9 +227,13 @@ namespace ElansAddonHub
             UpdateLayout();
             var tx = AtlasTexts(AtlasView);
             Check("item page: title in the header, tooltip card, 'Where it comes from', 'Your characters', 'Map', 'Found by the Lodge', the notes that apply",
-                AtlasView.CurrentId == "item:100" && tx.Contains("Gnarlfang's Claw") && tx.Contains("Item Level 14") && tx.Contains("Where it comes from") && tx.Contains("Your characters") && tx.Contains("Map") && tx.Contains("Found by the Lodge") && tx.Contains("Rare"), string.Join(" | ", tx.Take(14)));
+                AtlasView.CurrentId == "item:100" && tx.Contains("Gnarlfang's Claw") && tx.Contains("Item Level 14") && tx.Contains("Where it comes from") && tx.Contains("Your characters") && tx.Contains("Map") && tx.Contains("Found by the Lodge"), string.Join(" | ", tx.Take(14)));
             Check("item page: the sources show the Lodge's 12 % row with its figures, the baseline's figure on the second line, both labels as chips, and the folded line for the world drops",
                 tx.Contains("12% · 340 kills · 3 members") && tx.Contains("Classic baseline: 10%") && tx.Contains("Forever") && tx.Contains("Classic baseline") && tx.Contains("+ 30 world-drop sources under 0.1%"));
+            var itemTip = GtAll<GameTooltip>(AtlasView.BodyForTest).FirstOrDefault();
+            Check("item page: the main card is a GameTooltip (game order: name, Item Level, binding, slot ...), the icon in a 56 px frame to its LEFT, the source chip below it in the app style",
+                itemTip != null && itemTip.Title == "Gnarlfang's Claw" && itemTip.Parent is StackPanel ip && ip.Children[0] is Border ifr && ifr.Width == 56 && ip.Orientation == Orientation.Horizontal && itemTip.Texts().Contains("Item Level 14")
+                && itemTip.Texts().IndexOf("Item Level 14") == 1 && !itemTip.HasFooter && tx.IndexOf("Forever") > tx.IndexOf("Item Level 14"), itemTip == null ? "no GameTooltip" : string.Join(" | ", itemTip.Texts()));
             Check("item page: wide window -> two columns (the card on the left, the tables on the right)", AtlasView.WideForTest);
             Check("item page: one map with a zone picker (Greenvale first)", AtlasView.MapsForTest.Count == 1 && AtlasView.zonePicks.Count == 1 && AtlasView.zonePicks[0].SelectedIndex == 0 && AtlasView.zonePicks[0].Items.Count >= 2);
             Check("item page: the map loads after the page is drawn, shows the best zone with its markers", await MapReady() && AtlasView.MapsForTest[0].UiMapId == 11 && AtlasView.MapsForTest[0].MarkerCount == AtlasQuery.Build("item:100").Map.Best.Markers.Count && AtlasView.MapsForTest[0].MarkerCount >= 4);
@@ -284,7 +288,7 @@ namespace ElansAddonHub
             // ---- other kinds in the window
             await AtlasView.Open("zone:11"); UpdateLayout();
             tx = AtlasTexts(AtlasView);
-            Check("zone page in the window: title, map first, Creatures / Objects / Quests / Notable drops tables, the facts with sources", AtlasView.Model.Id == "zone:11" && tx.Contains("Greenvale") && tx.Contains("Creatures") && tx.Contains("Objects") && tx.Contains("Quests") && tx.Contains("Notable drops") && tx.Contains("Creature levels") && AtlasView.MapsForTest.Count == 1);
+            Check("zone page in the window: title, map first, Creatures / Objects / Quests / Notable drops tables, the facts with sources", AtlasView.Model.Id == "zone:11" && tx.Contains("Greenvale") && tx.Contains("Creatures") && tx.Contains("Objects") && tx.Contains("Quests") && tx.Contains("Notable drops") && tx.Any(t => t.StartsWith("Level ")) && AtlasView.MapsForTest.Count == 1);
             await MapReady();
             await Task.Delay(500);
             Snapshot(Path.Combine(dir, "atlas-page-zone.png"));
@@ -294,8 +298,17 @@ namespace ElansAddonHub
             Check("not found in the window: the message and a calm hint, no map card", AtlasTexts(AtlasView).Any(t => t.Contains("99999")) && AtlasView.MapsForTest.Count == 0 && AtlasView.Model.NotFound);
             await AtlasView.Open("quest:7"); UpdateLayout();
             Check("quest page in the window: text, rewards, given by, a map of the giver", AtlasTexts(AtlasView).Contains("Rewards") && AtlasTexts(AtlasView).Contains("Given by") && AtlasTexts(AtlasView).Contains("Bring four Wolf Pelts to Innkeeper Hale.") && AtlasView.MapsForTest.Count == 1);
+            Check("quest page: the main card is a GameTooltip with a gold title", GtAll<GameTooltip>(AtlasView.BodyForTest).Any(g => g.Title == AtlasView.Model.Title && GtColor(GtColored(g), g.Title) == "#FFFFD100"));
             await AtlasView.Open("spell:4000"); UpdateLayout();
             Check("spell page in the window: facts and the recipe", AtlasTexts(AtlasView).Contains("Recipe") && AtlasTexts(AtlasView).Contains("Heals the target.") && AtlasView.MapsForTest.Count == 0);
+
+            Check("spell page: the main card is a GameTooltip with the description in gold", GtAll<GameTooltip>(AtlasView.BodyForTest).Any(g => g.Title == AtlasView.Model.Title && GtColor(GtColored(g), "Heals the target.") == "#FFFFD100"));
+            Snapshot(Path.Combine(dir, "atlas-page-spell-gt.png"));
+            await AtlasView.Open("item:100"); UpdateLayout(); await Task.Delay(300);
+            Snapshot(Path.Combine(dir, "atlas-page-item-gt.png"));
+            var rowTip = AtlasView.RowTipFor(new AtlasRow { Link = "item:100", Title = "Gnarlfang's Claw", Quality = 3 });
+            Check("a table row's hover tooltip is the item's GameTooltip; a row of an unknown id says it is not in the game data", rowTip.Title == "Gnarlfang's Claw" && rowTip.Texts().Contains("Item Level 14") && AtlasView.RowTipFor(new AtlasRow { Link = "item:424242", Title = "Ghost" }).Texts().Contains("Not in the game data on this PC"));
+            Check("a row of a creature shows the creature's GameTooltip", AtlasView.RowTipFor(new AtlasRow { Link = "quest:7", Title = "Quest" }).Title.Length > 0);
 
             // ---- every page shows its link, with a Copy button that puts exactly that id on the clipboard
             {

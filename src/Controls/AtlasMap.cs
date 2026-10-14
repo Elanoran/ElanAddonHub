@@ -121,9 +121,11 @@ namespace ElansAddonHub
             stateHint.Margin = new Thickness(0, 4, 0, 0); stateTitle.Margin = new Thickness(0, 8, 0, 0);
             stateBox.Children.Add(stateGlyph); stateBox.Children.Add(stateTitle); stateBox.Children.Add(stateHint);
             stage.Children.Add(stateBox);
-            tipBox.Background = Res<Brush>("Brush.Surface3") ?? Brushes.DimGray;
-            tipBox.BorderBrush = Res<Brush>("Brush.Divider"); tipBox.BorderThickness = new Thickness(1);
-            tipBox.CornerRadius = new CornerRadius(8); tipBox.Padding = new Thickness(12, 8, 12, 8);
+            // the hover text is a game tooltip too (the same panel colours and font as GameTooltip)
+            tipBox.Background = GameTooltip.Brush("Brush.GameTip.Bg");
+            tipBox.BorderBrush = GameTooltip.Brush("Brush.GameTip.Border"); tipBox.BorderThickness = new Thickness(1);
+            tipBox.CornerRadius = TryFindResource("Radius.GameTip") is CornerRadius gtr ? gtr : default(CornerRadius); tipBox.Padding = new Thickness(12, 8, 12, 8);
+            System.Windows.Documents.TextElement.SetFontFamily(tipBox, ElansAddonHub.Services.GameFont.Family);
             tipBox.Child = tipStack;
             tipLayer.Children.Add(tipBox);
             stage.Children.Add(tipLayer);
@@ -503,22 +505,24 @@ namespace ElansAddonHub
         }
 
         // ---- hover text
+        static TextBlock GameLine(string text, double size, string brushKey) => new TextBlock { Text = text, FontSize = size, Foreground = GameTooltip.Brush(brushKey), TextWrapping = TextWrapping.Wrap };
+
         void ShowTip(MarkerCluster c)
         {
             tipStack.Children.Clear();
             if (c.Single)
             {
                 var m = c.Members[0];
-                tipStack.Children.Add(Text(string.IsNullOrEmpty(m.Label) ? KindName(m.Kind) : m.Label, "Text.RowTitle"));
-                if (!string.IsNullOrEmpty(m.Tooltip)) { var t = Text(m.Tooltip, "Text.Secondary"); t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = 280; tipStack.Children.Add(t); }
-                else tipStack.Children.Add(Text(KindName(m.Kind), "Text.Secondary"));
+                tipStack.Children.Add(GameLine(string.IsNullOrEmpty(m.Label) ? KindName(m.Kind) : m.Label, 15, "Brush.GameTip.Text"));
+                if (!string.IsNullOrEmpty(m.Tooltip)) { var t = GameLine(m.Tooltip, 13, "Brush.GameTip.Text"); t.MaxWidth = 280; tipStack.Children.Add(t); }
+                else tipStack.Children.Add(GameLine(KindName(m.Kind), 13, "Brush.GameTip.Text"));
             }
             else
             {
-                tipStack.Children.Add(Text(c.Count + " places here", "Text.RowTitle"));
-                foreach (var m in c.Members.Take(6)) tipStack.Children.Add(Text(string.IsNullOrEmpty(m.Label) ? KindName(m.Kind) : m.Label, "Text.Secondary"));
-                if (c.Count > 6) tipStack.Children.Add(Text("and " + (c.Count - 6) + " more", "Text.Caption"));
-                tipStack.Children.Add(Text("Click to zoom in", "Text.Caption"));
+                tipStack.Children.Add(GameLine(c.Count + " places here", 15, "Brush.GameTip.Text"));
+                foreach (var m in c.Members.Take(6)) tipStack.Children.Add(GameLine(string.IsNullOrEmpty(m.Label) ? KindName(m.Kind) : m.Label, 13, "Brush.GameTip.Text"));
+                if (c.Count > 6) tipStack.Children.Add(GameLine("and " + (c.Count - 6) + " more", 12, "Brush.GameTip.Muted"));
+                tipStack.Children.Add(GameLine("Click to zoom in", 12, "Brush.GameTip.Muted"));
             }
             tipBox.Visibility = Visibility.Visible;
             tipBox.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));

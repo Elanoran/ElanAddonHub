@@ -96,15 +96,7 @@
     <DataTemplate x:Key="ItemChip">
       <Border x:Name="chip" Style="{StaticResource Chip}" Padding="4,0,8,0" Margin="0,0,4,4" Cursor="Hand"
               Tag="{Binding}" MouseLeftButtonUp="ItemChip_Click">
-        <Border.ToolTip>
-          <ToolTip>
-            <StackPanel MaxWidth="264">
-              <TextBlock Text="{Binding TipTitle}" Foreground="{Binding NameBrush}" Style="{StaticResource Text.RowTitle}" TextWrapping="Wrap" />
-              <TextBlock Text="{Binding TipLine}" Style="{StaticResource Text.Caption}" Margin="0,2,0,0" />
-              <TextBlock Text="{Binding TipHint}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" />
-            </StackPanel>
-          </ToolTip>
-        </Border.ToolTip>
+        <Border.ToolTip><ToolTip Style="{StaticResource GameTip}" Opened="ItemChipTip_Opened" /></Border.ToolTip>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Grid Width="16" Height="16">
             <Border Visibility="{Binding IconVisibility}" CornerRadius="8" ClipToBounds="True">

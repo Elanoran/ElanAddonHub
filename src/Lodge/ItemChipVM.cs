@@ -40,6 +40,32 @@ namespace ElansAddonHub.Lodge
         string DefaultTipLine => (Quality >= 0 && Quality < ItemLinks.QualityNames.Length ? ItemLinks.QualityNames[Quality] + " · " : "") + (Ref.Id > 0 ? "Item #" + Ref.Id : "Item name not known here");
         public string TipHint => IsAtlas ? "Click to open in the Atlas" : Ref.Id > 0 ? "Click to open on Wowhead Classic · Ctrl+click for Atlas" : "Click to search Wowhead Classic";
 
+        // the hover tooltip: the game's own for an item or an Atlas thing, the chip's lines in the footer
+        public GameTooltip BuildTip()
+        {
+            GameTooltip gt = null;
+            try
+            {
+                var ci = Ref.Id > 0 ? ItemData.Get(Ref.Id) : null;
+                if (ci != null && (!IsAtlas || Ref.AtlasKind == "item")) gt = new GameTooltip(Name, Quality).AddItem(ci);
+                else if (IsAtlas && Ref.AtlasKind != "item" && Ref.AtlasKind != "browse" && Ref.AtlasKind != "talents" && Ref.AtlasKind != "professions")
+                {
+                    var m = AtlasQuery.Build(Ref.AtlasId);
+                    if (m != null && !m.NotFound) gt = GameTooltip.FromAtlas(m);
+                }
+            }
+            catch (Exception e) { Util.Log("chip tooltip: " + e.Message); }
+            if (gt == null)
+            {
+                gt = new GameTooltip(Name, Quality);
+                bool simple = IsAtlas && (Ref.AtlasKind == "browse" || Ref.AtlasKind == "talents" || Ref.AtlasKind == "professions");
+                gt.AddText(simple ? TipLine : "Not in the game data on this PC", "grey");
+                if (!simple && Ref.Id > 0) gt.AddText(TipLine, "grey");
+            }
+            gt.Footer.Children.Add(GameTooltip.Muted(TipHint));
+            return gt;
+        }
+
         public ItemChipVM(ItemRef r, ItemInfo info, ClientItem atlasItem = null)
         {
             Ref = r; Info = info;
@@ -55,7 +81,7 @@ namespace ElansAddonHub.Lodge
             }
             TileGlyph = GlyphOf(r);
             if (r.AtlasKind == "browse" || r.AtlasKind == "talents" || r.AtlasKind == "professions") { name = PathTitle(r, out var line); tipLine = line; }
-            else { name = AtlasKinds.Singular(r.AtlasKind) + " " + r.AtlasId.Substring(r.AtlasId.IndexOf(':') + 1); tipLine = AtlasKinds.Singular(r.AtlasKind) + " · not known on this PC"; Resolve(); }
+            else { name = !string.IsNullOrEmpty(r.Name) ? r.Name : AtlasKinds.Singular(r.AtlasKind) + " " + r.AtlasId.Substring(r.AtlasId.IndexOf(':') + 1); tipLine = AtlasKinds.Singular(r.AtlasKind) + " · not known on this PC"; Resolve(); }
         }
 
         static string GlyphOf(ItemRef r)

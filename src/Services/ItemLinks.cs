@@ -119,6 +119,47 @@ namespace ElansAddonHub.Services
             @"(?<![\w/=?&.:@%#-])https?://(?:www\.|classic\.|tbc\.|wotlk\.|cata\.|mop-classic\.)?wowhead\.com/(?:[a-z]{2}/)?(?:(?:classic|tbc|wotlk|cata|mop-classic|classic-ptr)/)?item=(\d{1,7})(?:/([a-z0-9][a-z0-9\-]{0,80}))?(?=$|[\s/?#&<>""'),.;:!\]])[^\s<>""']*",
             RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+        // the other pasted game links: |Hspell:ID|h[Name]|h, |Henchant:ID|h, |Hquest:ID:level|h, |Htalent:SPELLID:rank|h, |Htrade:SPELLID:..|h[Profession]|h, |Hnpc:ID|h, |Hunit:Creature-0-...-ID-...:Name|h
+        static readonly Regex OtherChatLink = new Regex(@"(?:\|c[0-9a-fA-F]{8})?\|H(spell|enchant|quest|talent|trade|npc|unit):([^|
+]{1,120})\|h\[([^\[\]|
+]{1,80})\]\|h(?:\|r)?",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        // the same hosts and path rules as the item URL, for the other kinds
+        static readonly Regex WowheadOther = new Regex(
+            @"(?<![\w/=?&.:@%#-])https?://(?:www\.|classic\.|tbc\.|wotlk\.|cata\.|mop-classic\.)?wowhead\.com/(?:[a-z]{2}/)?(?:(?:classic|tbc|wotlk|cata|mop-classic|classic-ptr)/)?(spell|quest|npc|object|zone|faction)=(\d{1,7})(?:/([a-z0-9][a-z0-9\-]{0,80}))?(?=$|[\s/?#&<>""'),.;:!\]])[^\s<>""']*",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        // the Atlas id a pasted game link stands for, null when it is not one we turn into a chip
+        public static string AtlasIdOfGameLink(string type, string payload, string name)
+        {
+            var f = payload.Split(':');
+            int N(string x) => int.TryParse(x, NumberStyles.None, CultureInfo.InvariantCulture, out var v) && v > 0 ? v : 0;
+            switch (type)
+            {
+                case "spell": case "enchant": { int id = N(f[0]); return id > 0 ? "spell:" + id.ToString(CultureInfo.InvariantCulture) : null; }
+                case "quest": { int id = N(f[0]); return id > 0 ? "quest:" + id.ToString(CultureInfo.InvariantCulture) : null; }
+                case "npc": { int id = N(f[0]); return id > 0 ? "npc:" + id.ToString(CultureInfo.InvariantCulture) : null; }
+                case "unit":
+                    {
+                        var g = f[0].Split('-');
+                        if (g.Length >= 6 && (g[0] == "Creature" || g[0] == "Vehicle")) { int id = N(g[5]); return id > 0 ? "npc:" + id.ToString(CultureInfo.InvariantCulture) : null; }
+                        return null;
+                    }
+                case "talent":
+                    {
+                        int id = N(f[0]);
+                        try { return id > 0 && Services.Db2.SpellData.Spell(id) != null ? "spell:" + id.ToString(CultureInfo.InvariantCulture) : null; } catch (Exception) { return null; }
+                    }
+                case "trade":
+                    {
+                        var slug = Services.Atlas.AtlasHosts.Slug(name ?? "");
+                        return slug.Length == 0 ? null : PathId("professions", slug);
+                    }
+            }
+            return null;
+        }
+
         // [Name]: not part of [[nested]], not a Markdown link [text](url), 3-48 plain characters
         static readonly Regex Bracket = new Regex(@"(?<![\[\w])\[([^\[\]\r\n|]{3,48})\](?!\(|\])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         static readonly Regex NameChars = new Regex(@"^[\p{L}\p{N}][\p{L}\p{N} '\-,.:!()]*[\p{L}\p{N})!.]$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -205,6 +246,19 @@ namespace ElansAddonHub.Services
                 if (!int.TryParse(m.Groups[2].Value, out var id) || id <= 0) continue;
                 Add(new ItemRef { Kind = ItemRefKind.ChatLink, Start = m.Index, Length = m.Length, Id = id, Name = m.Groups[3].Value.Trim(), Quality = QualityOfColor(m.Groups[1].Value) });
             }
+            foreach (Match m in OtherChatLink.Matches(text))
+            {
+                if (!Free(m.Index, m.Length)) continue;
+                var aid = AtlasIdOfGameLink(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value.Trim());
+                if (aid == null) continue;
+                Add(new ItemRef { Kind = ItemRefKind.ChatLink, Start = m.Index, Length = m.Length, AtlasId = aid, AtlasKind = aid.Substring(0, aid.IndexOf(':')), Name = m.Groups[3].Value.Trim() });
+            }
+            foreach (Match m in WowheadOther.Matches(text))
+            {
+                if (!Free(m.Index, m.Length) || !int.TryParse(m.Groups[2].Value, out var oid) || oid <= 0) continue;
+                var k = m.Groups[1].Value.ToLowerInvariant(); if (k == "object") k = "obj";
+                Add(new ItemRef { Kind = ItemRefKind.Wowhead, Start = m.Index, Length = m.Length, AtlasKind = k, AtlasId = k + ":" + oid.ToString(CultureInfo.InvariantCulture), Name = SlugName(m.Groups[3].Value) });
+            }
             foreach (Match m in WowheadUrl.Matches(text))
             {
                 if (!Free(m.Index, m.Length) || !int.TryParse(m.Groups[1].Value, out var id) || id <= 0) continue;
@@ -259,7 +313,8 @@ namespace ElansAddonHub.Services
         public static string Display(string text)
         {
             if (string.IsNullOrEmpty(text) || text.IndexOf("|H", StringComparison.Ordinal) < 0) return text;
-            return ChatLink.Replace(text, m => "[" + m.Groups[3].Value.Trim() + "]");
+            var t = ChatLink.Replace(text, m => "[" + m.Groups[3].Value.Trim() + "]");
+            return OtherChatLink.Replace(t, m => AtlasIdOfGameLink(m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value.Trim()) == null ? m.Value : "[" + m.Groups[3].Value.Trim() + "]");
         }
 
         // where a chip leads: the item on Wowhead Classic; for a name we could not resolve, Wowhead's search. The URL is built here (never the pasted one).
