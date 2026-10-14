@@ -166,9 +166,9 @@ public static partial class Atlas
     public sealed class Vendor
     {
         public long At, Rev; public int Z; public double X, Y; public string By;
-        public Dictionary<int, long[]> Items = new();   // item -> { price (copper), stack size, limit (-1 none) }
+        public Dictionary<int, long[]> Items = new();   // item -> { price (copper), stack size, limit (-1 none), extended cost 0 / 1 }
         public bool SameContent(Vendor o) => o != null && At == o.At && Z == o.Z && X == o.X && Y == o.Y && Items.Count == o.Items.Count
-            && Items.All(kv => o.Items.TryGetValue(kv.Key, out var x) && x[0] == kv.Value[0] && x[1] == kv.Value[1] && x[2] == kv.Value[2]);
+            && Items.All(kv => o.Items.TryGetValue(kv.Key, out var x) && x[0] == kv.Value[0] && x[1] == kv.Value[1] && x[2] == kv.Value[2] && x[3] == kv.Value[3]);
     }
 
     public static bool ParseVendor(JsonNode node, long now, out Vendor v)
@@ -181,7 +181,9 @@ public static partial class Atlas
         {
             if (!Key(k, MaxItemId, out var id) || e is not JsonObject it) return false;
             if (!Whole(it["p"], 0, 100_000_000, out var p) || !Whole(it["s"], 1, 1000, out var s) || !Whole(it["l"], -1, 1000, out var l)) return false;
-            r.Items[id] = new[] { p, s, l };
+            long xc = 0;                                  // additive `x` (Toolkit 0.5.2): 1 = extended cost (currency / item cost), absent = 0
+            if (it["x"] != null && !Whole(it["x"], 0, 1, out xc)) return false;
+            r.Items[id] = new[] { p, s, l, xc };
         }
         v = r;
         return true;

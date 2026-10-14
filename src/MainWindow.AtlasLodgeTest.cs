@@ -85,6 +85,8 @@ namespace ElansAddonHub
 
                 AtlasModuleRead(check);
                 AtlasBatching(check);
+                AtlasFindsRegression(check);
+                AtlasSectionsRegression(check);
                 await AtlasSession(check, sent, () => now, t => now = t);
                 await AtlasSeenTest(check, sent, () => now, t => now = t);
             }
@@ -207,6 +209,139 @@ namespace ElansAddonHub
             check("revealed: sent details are not sent again", AtlasObs.MakeBatch(null, rev, rb.Sigs) == null);
         }
 
+        // ---------------------------------------------------------------- finds: a long list shaped like a real one (regression: new finds must reach the pool)
+        static string FindsLua(int count, long first, int start = 0)
+        {
+            var sb = new StringBuilder("finds = { ");
+            for (int n = 0; n < count; n++)
+            {
+                int k = start + n; long at = first + k * 37;
+                switch (k % 9)
+                {
+                    case 0: case 1: case 2: sb.Append("{ i = " + (1000 + k) + ", c = 1, src = \"fish\", z = 1456, x = 0.416, y = 0.594, at = " + at + " }, "); break;
+                    case 3: case 4: case 5: sb.Append("{ i = " + (2000 + k) + ", c = " + (1 + k % 3) + ", src = \"npc:" + (3100 + k % 40) + "\", z = 1411, x = 0." + (100 + k % 800) + ", y = 0." + (100 + k % 700) + ", at = " + at + " }, "); break;
+                    case 6: sb.Append("{ i = " + (3000 + k) + ", c = 1, src = \"obj:" + (1731 + k % 5) + "\", z = 1411, x = 0.5, y = 0.5, at = " + at + " }, "); break;
+                    case 7: sb.Append("{ i = " + (4000 + k) + ", c = 1, src = \"quest:" + (500 + k) + "\", at = " + at + " }, "); break;          // no position (instance)
+                    default: sb.Append("{ i = " + (5000 + k) + ", c = 1, src = \"npc:" + (7000 + k % 9) + "\", at = " + at + " }, "); break;        // no position (instance)
+                }
+            }
+            return sb.Append("}").ToString();
+        }
+
+        void AtlasFindsRegression(Action<string, bool> check)
+        {
+            long t0 = AtlasAt + 100000;
+            WriteAtlasHub("ACC1", AtlasLua(FindsLua(344, t0)));
+            var s = AtlasObs.Read(atlasRoot);
+            check("finds: 344 mixed finds (fish, npc, obj, quest, with and without a position) are all read, none left out", s != null && s.Finds.Count == 344 && s.Dropped == 0 && s.FindsOverCap == 0);
+            check("finds: the newest find is among them", s.Finds.Max(f => f.At) == t0 + 343 * 37 && s.Finds.Count(f => f.Zone == 0) > 60);
+            var sent = new Dictionary<string, string>();
+            var b = AtlasObs.MakeBatch(s, null, sent);
+            check("finds: all 344 go out in one share (cap 500), oldest first", b != null && b.Finds == 344 && b.Frame.List("finds").Count == 344 && b.Remaining == 0 && ((Dictionary<string, object>)b.Frame.List("finds")[343]).NLong("at") == t0 + 343 * 37);
+            // 12 new finds appended later (the Toolkit appends at the end): exactly those go out next
+            WriteAtlasHub("ACC1", AtlasLua(FindsLua(356, t0)));
+            var s2 = AtlasObs.Read(atlasRoot);
+            var d = AtlasObs.MakeBatch(s2, null, b.Sigs);
+            check("finds: 12 finds recorded later are the only entries of the next share", s2.Finds.Count == 356 && d != null && d.Finds == 12 && d.Entries == 12);
+            // the Toolkit drops its oldest at 500; a longer list than that keeps the newest 500
+            WriteAtlasHub("ACC1", AtlasLua(FindsLua(620, t0)));
+            var s3 = AtlasObs.Read(atlasRoot);
+            check("finds: a list of 620 keeps the NEWEST 500 and counts the 120 oldest as left out", s3.Finds.Count == AtlasObs.MaxHubFinds && s3.FindsOverCap == 120 && s3.Dropped == 120 && s3.Finds.Max(f => f.At) == t0 + 619 * 37 && s3.Finds.Min(f => f.At) == t0 + 120 * 37);
+            // a find the validation refuses is counted, the rest stay
+            WriteAtlasHub("ACC1", AtlasLua("finds = { { i = 5, c = 1, src = \"fishspot\", at = " + t0 + " }, { i = 6, c = 1, src = \"fish\", z = 1456, at = " + t0 + " }, { i = 7, c = 1, src = \"fish\", at = " + (t0 + 1) + " } }"));
+            var s4 = AtlasObs.Read(atlasRoot);
+            check("finds: an unknown source and a half position are counted as left out, a find without position stays", s4.Finds.Count == 1 && s4.Dropped == 2 && s4.Finds[0].Item == 7);
+
+            // finds marked as sent that the Lodge pool does not hold are sent again (once), the ones it holds are not
+            Session.AtlasResetForTest();
+            var local = new AtlasObs.Snapshot();
+            for (int i = 0; i < 5; i++) local.Finds.Add(new AtlasObs.Find { Item = 10 + i, Count = 1, Src = "npc:1", Zone = 11, X = 0.5, Y = 0.5, At = AtNow + i });
+            var sentRec = Session.AtlasSentForTest;
+            foreach (var f in local.Finds) sentRec[AtlasObs.FindKey(f)] = "1";
+            Session.AtlasData.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"ex\",\"rev\":3,\"at\":" + AtNow + ",\"full\":true,\"finds\":["
+                + "{\"i\":10,\"c\":1,\"at\":" + AtNow + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.5,\"y\":0.5,\"by\":\"Me\",\"s\":1},{\"i\":12,\"c\":1,\"at\":" + (AtNow + 2) + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.5,\"y\":0.5,\"by\":\"Me\",\"s\":2}]}"));
+            int again = Session.AtlasResendMissingForTest(local);
+            check("resend: 3 of 5 finds were marked as sent but are not in the pool -> forgotten (sent again), the 2 stored ones stay", again == 3 && Session.AtlasBacklogForTest && sentRec.Count == 2);
+            var re = AtlasObs.MakeBatch(local, null, sentRec);
+            check("resend: the next share holds exactly those 3 finds", re != null && re.Finds == 3);
+            check("resend: asked only once per find (nothing again when the pool still lacks them)", Session.AtlasResendMissingForTest(local) == 0);
+            Session.AtlasResetForTest();
+            WriteAtlasHub("ACC1", AtlasLua(AtlasFixture()));
+        }
+
+        // ---------------------------------------------------------------- every section, shaped like the Toolkit writes it (regression: what is read, what is shared, what is counted as left out)
+        void AtlasSectionsRegression(Action<string, bool> check)
+        {
+            long A = AtlasAt + 5000;
+            string data =
+                "kills = { [3100] = { n = 79, items = { [769] = { n = 67, c = 67 }, [771] = { n = 18, c = 18 } }, z = { [1411] = 79 } }, [3101] = { n = 2, items = { [5] = { n = 9, c = 9 } } } },\n"
+                + "objects = { [1731] = { n = 16, items = { [2770] = { n = 12, c = 14 } }, z = { [1411] = 16 } } },\n"
+                + "fishing = { [1456] = { n = 115, items = { [6289] = { n = 64, c = 64 } } } },\n"
+                + "vendors = { [7683] = { at = " + A + ", z = 1458, x = 0.582, y = 0.55, items = { [8523] = { p = 0, s = 1, l = -1 }, [8524] = { p = 25000, s = 1, l = -1 }, [8525] = { p = 0, s = 1, l = -1, x = 1 }, [8526] = { p = 5, s = 1, l = -1, x = 7 } } },"
+                + " [7684] = { at = " + A + ", items = { [1] = { p = 1, s = 1, l = -1 } } } },\n"
+                + "quests = { [1144] = { at = " + A + ", rewards = { }, choices = { 6748, 6750, 6749, 274078 } } },\n"
+                + "spawns = { [3100] = { { z = 1411, x = 0.5, y = 0.5 }, { z = 1411, x = 0.6, y = 0.6 } } },\n"
+                + "nodes = { [1731] = { [1411] = { { x = 0.4123, y = 0.5531, n = 3, at = " + A + " }, { x = 0.4125, y = 0.5533, n = 5, at = " + A + " }, { x = 2, y = 0.5, n = 1 } } } },\n"
+                + "fishspots = { [1456] = { { x = 0.4161, y = 0.5942, n = 12, at = " + A + ", items = { [6289] = 7, [6291] = 5, [0] = 1 } }, { x = 0.4163, y = 0.5944, n = 20, items = { [6289] = 9 } }, { x = 0.9, y = 0.9, n = 0 } }, [0] = { { x = 0.1, y = 0.1, n = 1 } } },\n"
+                + FindsLua(40, A) + ",\n"
+                + "mystery = { 1, 2 }";
+            WriteAtlasHub("ACC1", AtlasLua(data));
+            var s = AtlasObs.Read(atlasRoot);
+            int[] St(string k) => s.Stats[k];
+            check("sections: kills / objects / fishing: all entries read, nothing left out", St("kills")[0] == 2 && St("kills")[1] == 2 && St("kills")[2] == 0 && St("objects")[1] == 1 && St("fishing")[1] == 1 && St("fishing")[2] == 0);
+            check("sections: vendors: the one without a position is left out (1 entry + the x = 7 item), the other is read", St("vendors")[0] == 2 && St("vendors")[1] == 1 && St("vendors")[2] == 2);
+            check("sections: vendor item flag x = 1 is read as extended cost, absent is 0, price 0 is kept", s.Vendors[7683].Items[8525][3] == 1 && s.Vendors[7683].Items[8524][3] == 0 && s.Vendors[7683].Items[8524][0] == 25000 && s.Vendors[7683].Items[8523][0] == 0 && !s.Vendors[7683].Items.ContainsKey(8526));
+            check("sections: quests with empty rewards and 4 choices, spawns", St("quests")[1] == 1 && s.Quests[1144].Choices.Length == 4 && St("spawns")[1] == 1 && s.Spawns[3100].Count == 2);
+            check("sections: nodes: two points inside the merge radius are one, an x of 2 is left out", St("nodes")[1] == 1 && s.Nodes[1731][1411].Count == 1 && s.Nodes[1731][1411][0].N == 5 && St("nodes")[2] == 1);
+            check("sections: fishspots: read (4 decimals), two spots within 0.01 are one with the larger n and both items, a bad item / n = 0 / map 0 are left out",
+                St("fishspots")[0] == 2 && St("fishspots")[1] == 1 && s.FishSpots[1456].Count == 1 && s.FishSpots[1456][0].N == 20 && s.FishSpots[1456][0].Items[6289] == 9 && s.FishSpots[1456][0].Items[6291] == 5 && !s.FishSpots[1456][0].Items.ContainsKey(0)
+                && St("fishspots")[2] == 3);
+            check("sections: finds 40 read, and a section this app does not read is named", St("finds")[1] == 40 && s.UnknownSections.SequenceEqual(new[] { "mystery" }));
+
+            // what is shared: fishspots only to a server that takes them; the x flag and the corrected price are in the frame
+            var withFish = AtlasObs.MakeBatch(s, null, new Dictionary<string, string>(), false, true, true);
+            var noFish = AtlasObs.MakeBatch(s, null, new Dictionary<string, string>(), false, true, false);
+            check("share: fishspots go out only when the server has atlas4", withFish.Frame.ContainsKey("fishspots") && withFish.Counts["fishspots"] == 1 && !noFish.Frame.ContainsKey("fishspots"));
+            var vend = withFish.Frame.Child("vendors").Child("7683").Child("items");
+            check("share: the vendor items carry x only when 1, and price 0 stays 0", vend.Child("8525").NLong("x") == 1 && !vend.Child("8524").ContainsKey("x") && vend.Child("8524").NLong("p") == 25000);
+            var fs = withFish.Frame.Child("fishspots").List("1456");
+            check("share: a fishing spot is { x, y, n, items }", fs.Count == 1 && ((Dictionary<string, object>)fs[0]).NLong("n") == 20 && ((Dictionary<string, object>)fs[0]).Child("items").NLong("6289") == 9);
+            check("share: the upload round-trips through the server's rules (same parser) and is not sent twice", AtlasObs.MakeBatch(s, null, withFish.Sigs, false, true, true) == null);
+
+            // Toolkit 0.5.1 wrote every price as 0; 0.5.2 writes the real price (newer scan): the vendor is an entry that changed -> sent again
+            string fixedData = data.Replace("[8523] = { p = 0, s = 1, l = -1 }", "[8523] = { p = 4400, s = 1, l = -1 }").Replace("at = " + A + ", z = 1458", "at = " + (A + 600) + ", z = 1458");
+            WriteAtlasHub("ACC1", AtlasLua(fixedData));
+            var d = AtlasObs.MakeBatch(AtlasObs.Read(atlasRoot), null, withFish.Sigs, false, true, true);
+            check("share: corrected vendor prices (newer scan) are sent again as the only entry", d != null && d.Entries == 1 && d.Frame.Child("vendors").Child("7683").Child("items").Child("8523").NLong("p") == 4400);
+            // the record from before the x flag existed (hash without x) still matches an unchanged vendor: no resend storm
+            var oldVendor = AtlasObs.Sig(new AtlasObs.Vendor { At = A, Zone = 1, X = 0.1, Y = 0.1, Items = { [1] = new long[] { 5, 1, -1 } } });
+            var newVendor = AtlasObs.Sig(new AtlasObs.Vendor { At = A, Zone = 1, X = 0.1, Y = 0.1, Items = { [1] = new long[] { 5, 1, -1, 0 } } });
+            check("share: a vendor without any extended-cost item has the same signature as before the flag (the upload record stays valid)", oldVendor == newVendor);
+            // the pool: the server's merged fishing spots are read, kept in the cache and handed to the maps
+            var lodge = new ElansAddonHub.Lodge.LodgeAtlas();
+            lodge.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"e9\",\"rev\":5,\"at\":" + (AtlasAt + 9) + ",\"full\":true,\"fishspots\":{\"1456\":[{\"x\":0.4161,\"y\":0.5942,\"n\":32,\"items\":{\"6289\":16}},{\"x\":5,\"y\":0.1,\"n\":1}],\"0\":[{\"x\":0.1,\"y\":0.1,\"n\":1}]},"
+                + "\"vendors\":{\"7683\":{\"at\":" + AtlasAt + ",\"z\":1458,\"x\":0.5,\"y\":0.5,\"items\":{\"8525\":{\"p\":0,\"s\":1,\"l\":-1,\"x\":1},\"8524\":{\"p\":7,\"s\":1,\"l\":-1}}}}}"));
+            check("pool: fishing spots of an answer are read (a bad spot and map 0 left out, 2 dropped), also after the cache round trip",
+                lodge.FishSpotsOn(1456).Count == 1 && lodge.FishSpotsOn(1456)[0].N == 32 && lodge.FishSpotsOn(1456)[0].Items[6289] == 16 && lodge.Dropped == 2
+                && Json.Write(lodge.ToCache()).Contains("\"fishspots\":{\"1456\":[{\"x\":0.416"));
+            check("pool: the extended-cost flag of a vendor item is kept and offered by the item rows", lodge.Vendors(8525).Count == 1 && lodge.Vendors(8525)[0].Extended && !lodge.Vendors(8524)[0].Extended && lodge.Vendors(8524)[0].Price == 7);
+            // the maps: the Lodge's spots plus this PC's own that no Lodge spot covers
+            var hadLodge = ElansAddonHub.Services.Atlas.AtlasQuery.Context.Lodge; var hadOwnFish = ElansAddonHub.Services.Atlas.AtlasQuery.Context.OwnFishSpots;
+            try
+            {
+                ElansAddonHub.Services.Atlas.AtlasQuery.Context.Lodge = () => lodge;
+                ElansAddonHub.Services.Atlas.AtlasQuery.Context.OwnFishSpots = () => new Dictionary<int, List<AtlasObs.FishSpot>>
+                {
+                    [1456] = new List<AtlasObs.FishSpot> { new AtlasObs.FishSpot { X = 0.4165, Y = 0.5945, N = 3 }, new AtlasObs.FishSpot { X = 0.7, Y = 0.7, N = 2, Items = { [6291] = 2 } } },
+                };
+                var on = ElansAddonHub.Services.Atlas.GatherNodes.FishSpotsOn(1456);
+                check("maps: fishing spots = the Lodge's merged spot + this PC's own spot that the Lodge's does not cover (the one next to it is the same spot)", on.Count == 2 && on[0].N == 32 && on[1].N == 2 && ElansAddonHub.Services.Atlas.GatherNodes.FishSpotMaps().SequenceEqual(new[] { 1456 }));
+                check("maps: the tip names the catches and the most caught items", ElansAddonHub.Services.Atlas.AtlasQuery.FishSpotTip(on[0]).StartsWith("32 catches") && ElansAddonHub.Services.Atlas.AtlasQuery.FishSpotTip(on[1]).Contains("×2"));
+            }
+            finally { ElansAddonHub.Services.Atlas.AtlasQuery.Context.Lodge = hadLodge; ElansAddonHub.Services.Atlas.AtlasQuery.Context.OwnFishSpots = hadOwnFish; }
+            WriteAtlasHub("ACC1", AtlasLua(AtlasFixture()));
+        }
+
         // ---------------------------------------------------------------- the session
         static List<Dictionary<string, object>> AFrames(List<Dictionary<string, object>> sent, string t) => sent.Where(o => o.Str("t") == t).ToList();
 
@@ -242,7 +377,7 @@ namespace ElansAddonHub
             var page2 = AtlasPage("ep1", 41, "\"vendors\":{\"300\":{\"at\":" + AtlasAt + ",\"z\":1429,\"x\":0.4,\"y\":0.6,\"items\":{\"4540\":{\"p\":30,\"s\":1,\"l\":-1},\"4541\":{\"p\":80,\"s\":5,\"l\":10}}},\"301\":{\"at\":" + AtlasAt + ",\"z\":1429,\"x\":0.1,\"y\":0.1,\"items\":{\"4540\":{\"p\":20,\"s\":1,\"l\":-1}}}},"
                 + "\"quests\":{\"900\":{\"at\":" + AtlasAt + ",\"rewards\":[1,2],\"choices\":[3]}},\"spawns\":{\"100\":[{\"z\":1429,\"x\":0.5,\"y\":0.5},{\"z\":1429,\"x\":0.7,\"y\":0.7},{\"z\":0,\"x\":1,\"y\":1}]},"
                 + "\"items\":{\"2589\":{\"n\":\"Linen Cloth\",\"q\":1,\"il\":5,\"rl\":0,\"cls\":7,\"sub\":5,\"slot\":0,\"st\":[[3,5]]},\"2590\":{\"n\":\"x\",\"q\":9}},"
-                + "\"finds\":[{\"s\":38,\"i\":7,\"c\":1,\"src\":\"npc:100\",\"at\":" + AtlasAt + ",\"by\":\"Amy the Bold\",\"z\":1429,\"x\":0.5,\"y\":0.5},{\"s\":40,\"i\":7,\"c\":2,\"src\":\"fish\",\"at\":" + (AtlasAt + 9) + ",\"by\":\"Bob\"},{\"s\":41,\"i\":8,\"c\":1,\"src\":\"bad\",\"at\":" + AtlasAt + ",\"by\":\"x\"}]");
+                + "\"finds\":[{\"s\":38,\"i\":7,\"c\":1,\"src\":\"npc:100\",\"at\":" + AtlasAt + ",\"by\":\"Amy the Bold\",\"z\":1429,\"x\":0.5,\"y\":0.5},{\"s\":40,\"i\":7,\"c\":2,\"src\":\"fish\",\"at\":" + (AtlasAt + 9) + ",\"by\":\"Bob\"},{\"s\":41,\"i\":8,\"c\":1,\"src\":\"bad\",\"at\":" + AtlasAt + ",\"by\":\"x\"},{\"s\":42,\"i\":8,\"c\":2,\"src\":\"fish\",\"at\":" + (AtlasAt + 1) + ",\"by\":\"Amy the Bold\"}]");
             Session.FeedForTest(page2);
             check("download: the last page asks for nothing more and the revision is kept", AFrames(sent, "atlas.get").Count == 0 && Session.AtlasData.Rev == 41 && Session.AtlasData.Epoch == "ep1");
             var a = Session.AtlasData;
@@ -255,7 +390,7 @@ namespace ElansAddonHub
             var vs = a.Vendors(4540);
             check("read API: Vendors(item) lists the vendors cheapest first", vs.Count == 2 && vs[0].NpcId == 301 && vs[0].Price == 20 && vs[1].NpcId == 300 && vs[1].Price == 30 && a.Vendors(4541)[0].Stack == 5 && a.Vendors(4541)[0].Limit == 10);
             var fs = a.Finds(7);
-            check("read API: Finds(item) is newest first with the member's display name", fs.Count == 2 && fs[0].By == "Bob" && fs[0].Count == 2 && fs[1].By == "Amy the Bold" && fs[1].Zone == 1429 && a.FindCount == 2);
+            check("read API: Finds(item) is newest first with the member's display name", fs.Count == 2 && fs[0].By == "Bob" && fs[0].Count == 2 && fs[1].By == "Amy the Bold" && fs[1].Zone == 1429 && a.FindCount == 3);
             check("read API: Spawns(npc) -> the valid points", a.Spawns(100).Count == 2 && a.Spawns(5).Count == 0);
             var rv = a.Revealed(2589);
             check("read API: Revealed(item) -> the validated details, invalid ones are left out", rv != null && rv.Name == "Linen Cloth" && rv.Quality == 1 && rv.ItemLevel == 5 && rv.Stats.Length == 1 && rv.Stats[0][1] == 5 && a.Revealed(2590) == null);

@@ -91,7 +91,7 @@ namespace ElansAddonHub.Services.Professions
             if (prices.TryGetValue(itemId, out var p)) return p;
             long best = 0;
             var l = Lodge;
-            if (l != null) foreach (var v in l.Vendors(itemId)) if (v.Price > 0) { long unit = v.Price / Math.Max(1, v.Stack); if (unit > 0 && (best == 0 || unit < best)) best = unit; }
+            if (l != null) foreach (var v in l.Vendors(itemId)) if (v.Price > 0 && !v.Extended) { long unit = v.Price / Math.Max(1, v.Stack); if (unit > 0 && (best == 0 || unit < best)) best = unit; }
             var it = item(itemId);
             if (best > 0) p = new ItemPrice(best, PriceKind.Vendor);
             else if (it != null && SoldByVendor(itemId) && it.BuyPrice > 0) p = new ItemPrice(it.BuyPrice, PriceKind.Vendor);
@@ -135,7 +135,7 @@ namespace ElansAddonHub.Services.Professions
             if (l != null)
             {
                 foreach (var v in l.Vendors(itemId))
-                    res.Add(new SourceLine { Kind = "vendor", Text = "Sold by " + NpcName(v.NpcId) + " for " + Money(v.Price / Math.Max(1, v.Stack)), Link = "npc:" + v.NpcId, Label = SourceLabels.Lodge, UnitPrice = v.Price / Math.Max(1, v.Stack) });
+                    res.Add(new SourceLine { Kind = "vendor", Text = v.Extended ? "Sold by " + NpcName(v.NpcId) + " (special cost)" : "Sold by " + NpcName(v.NpcId) + " for " + Money(v.Price / Math.Max(1, v.Stack)), Link = "npc:" + v.NpcId, Label = SourceLabels.Lodge, UnitPrice = v.Extended ? 0 : v.Price / Math.Max(1, v.Stack) });
                 foreach (var d in l.Drops(itemId))
                 {
                     string who = d.Kind == "npc" ? "Dropped by " + NpcName(d.Id) : d.Kind == "obj" ? "Found in " + ObjName(d.Id) : "Fished in zone " + d.Id;

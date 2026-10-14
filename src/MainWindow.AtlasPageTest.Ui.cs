@@ -67,6 +67,20 @@ namespace ElansAddonHub
                 && st.Contains("Connected · sharing your observations and receiving the Lodge's") && st.Any(t => t.Contains("4 finds by 2 members") && t.Contains("Last update 10 min ago")), string.Join(" | ", st.Where(t => t.Contains("finds"))));
             Check("start page: recent finds are rows with the item, member and age; newest first (Ruby Ring 10 min ago)", st.Contains("Ruby Ring") && st.Contains("10 min ago") && RowFor("item:105") != null);
             Check("start page: the pool summary - sources, vendors, finds, members, the last update", AtlasView.Pool().Has && AtlasView.Pool().Finds == 4 && AtlasView.Pool().FindMembers == 2 && AtlasView.Pool().Vendors == 1 && AtlasView.Pool().Sources == 3 && AtlasView.Pool().Updated == AtNow - 600);
+            // the Lodge pool gets a page while the start page is open: the recent finds are drawn again (no tab switch needed)
+            {
+                var origLodge = AtlasQuery.Context.Lodge; var live = AtlasTestLodge(); AtlasQuery.Context.Lodge = () => live;
+                try
+                {
+                    AtlasView.DataChanged(); UpdateLayout();
+                    var poolBefore = AtlasTexts(AtlasView);
+                    live.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":8,\"at\":" + (AtNow - 5) + ",\"finds\":[{\"i\":104,\"c\":1,\"at\":" + (AtNow - 60) + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.3,\"y\":0.3,\"by\":\"Tess\",\"s\":9}]}"));
+                    AtlasView.PoolChanged(); UpdateLayout();
+                    var poolAfter = AtlasTexts(AtlasView);
+                    Check("start page: a pool update while the page is open redraws it (new find 'Crypt Blade' on top, 5 finds)", !poolBefore.Contains("Crypt Blade") && poolAfter.Contains("Crypt Blade") && poolAfter.Any(t => t.Contains("5 finds by 2 members")), string.Join(" | ", poolAfter.Where(t => t.Contains("finds"))));
+                }
+                finally { AtlasQuery.Context.Lodge = origLodge; AtlasView.DataChanged(); UpdateLayout(); }
+            }
 
             // ---- the Classic baseline card with a fake downloader
             Check("classic card: not downloaded -> the button says what it gets (size, source, licence), the credit line and the GitHub link are there, no licence file link yet",

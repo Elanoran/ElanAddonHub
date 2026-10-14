@@ -26,7 +26,7 @@ namespace ElansAddonHub.Lodge
             public List<KeyValuePair<int, long>> Zones = new List<KeyValuePair<int, long>>();   // uiMapId -> kills there (most first)
         }
 
-        public class VendorRow { public int NpcId, Zone, Stack, Limit; public long Price, At; public double X, Y; }
+        public class VendorRow { public int NpcId, Zone, Stack, Limit; public long Price, At; public double X, Y; public bool Extended; }
         public class QuestRow { public int QuestId; public bool Choice; public long At; }
 
         public string Epoch = "";
@@ -43,6 +43,8 @@ namespace ElansAddonHub.Lodge
         readonly List<AtlasObs.Find> finds = new List<AtlasObs.Find>();     // ascending by Seq
         readonly Dictionary<int, Dictionary<int, List<AtlasObs.NodePt>>> nodes = new Dictionary<int, Dictionary<int, List<AtlasObs.NodePt>>>();   // gathering nodes the lodge merged (server 2.18, atlas3): object -> uiMapId -> nodes
         public long NodesChanged;                          // counts every answer that changed the nodes (the followed guides are rewritten when it moves)
+        readonly Dictionary<int, List<AtlasObs.FishSpot>> fishSpots = new Dictionary<int, List<AtlasObs.FishSpot>>();   // fishing spots the lodge merged (server 2.21, atlas4): uiMapId -> spots
+        public long FishSpotsChanged;                      // counts every answer that changed the fishing spots
         public int Dropped { get; private set; }           // entries of the last answers that failed validation
 
         // index by item, built on first use after a change
@@ -53,7 +55,7 @@ namespace ElansAddonHub.Lodge
         static readonly IReadOnlyList<AtlasObs.Find> NoFinds = new AtlasObs.Find[0];
         static readonly IReadOnlyList<AtlasObs.Spot> NoSpots = new AtlasObs.Spot[0];
 
-        public bool HasData => kills.Count + objects.Count + fishing.Count + vendors.Count + quests.Count + spawns.Count + revealed.Count + finds.Count + seenNpcs.Count + seenObjects.Count + seenQuests.Count + nodes.Count > 0;
+        public bool HasData => kills.Count + objects.Count + fishing.Count + vendors.Count + quests.Count + spawns.Count + revealed.Count + finds.Count + seenNpcs.Count + seenObjects.Count + seenQuests.Count + nodes.Count + fishSpots.Count > 0;
         public int NodeObjectCount => nodes.Count;
         public int KillSources => kills.Count;
         public int ObjectSources => objects.Count;
@@ -69,7 +71,7 @@ namespace ElansAddonHub.Lodge
         public void Clear()
         {
             kills.Clear(); objects.Clear(); fishing.Clear(); vendors.Clear(); quests.Clear(); spawns.Clear(); revealed.Clear(); finds.Clear();
-            seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear();
+            seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear(); fishSpots.Clear();
             Epoch = ""; Rev = 0; Dropped = 0; Invalidate();
         }
 
@@ -160,6 +162,13 @@ namespace ElansAddonHub.Lodge
                 }
                 if (any) NodesChanged++;
             }
+            var fsd = m.Child("fishspots");
+            if (fsd != null)
+            {
+                var maps = AtlasObs.ParseFishSpotMaps(fsd, ref dropped, MaxLodgeNodesPerMap, AtlasObs.MaxFishMaps * 50);
+                foreach (var kv in maps) fishSpots[kv.Key] = kv.Value;
+                if (maps.Count > 0) FishSpotsChanged++;
+            }
             var fl = m.List("finds");
             if (fl.Count > 0)
             {
@@ -223,6 +232,8 @@ namespace ElansAddonHub.Lodge
             foreach (var kv in seenQuests.OrderBy(k => k.Key)) swo[kv.Key.ToString()] = AtlasObs.SeenQuestNode(kv.Value);
             var nco = new Dictionary<string, object>();
             foreach (var kv in nodes.OrderBy(k => k.Key)) nco[kv.Key.ToString()] = AtlasObs.NodesNode(kv.Value);
+            var fso = new Dictionary<string, object>();
+            foreach (var kv in fishSpots.OrderBy(k => k.Key)) fso[kv.Key.ToString()] = AtlasObs.FishSpotsNode(kv.Value);
             var fl = finds.Select(f =>
             {
                 var o = new Dictionary<string, object> { ["s"] = f.Seq, ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At, ["by"] = f.By ?? "" };
@@ -233,7 +244,7 @@ namespace ElansAddonHub.Lodge
             {
                 ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = Rev, ["at"] = Updated, ["full"] = true,
                 ["kills"] = Counters(kills), ["objects"] = Counters(objects), ["fishing"] = Counters(fishing), ["vendors"] = vo, ["quests"] = qo, ["spawns"] = so, ["items"] = io, ["finds"] = fl,
-                ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco,
+                ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso,
             };
         }
 
@@ -267,7 +278,7 @@ namespace ElansAddonHub.Lodge
                 foreach (var it in v.Value.Items)
                 {
                     if (!vendorIdx.TryGetValue(it.Key, out var l)) vendorIdx[it.Key] = l = new List<VendorRow>();
-                    l.Add(new VendorRow { NpcId = v.Key, Price = it.Value[0], Stack = (int)it.Value[1], Limit = (int)it.Value[2], Zone = v.Value.Zone, X = v.Value.X, Y = v.Value.Y, At = v.Value.At });
+                    l.Add(new VendorRow { NpcId = v.Key, Price = it.Value[0], Stack = (int)it.Value[1], Limit = (int)it.Value[2], Extended = it.Value.Length > 3 && it.Value[3] == 1, Zone = v.Value.Zone, X = v.Value.X, Y = v.Value.Y, At = v.Value.At });
                 }
             foreach (var q in quests)
             {
@@ -299,6 +310,10 @@ namespace ElansAddonHub.Lodge
         static readonly Dictionary<int, List<AtlasObs.NodePt>> NoNodes = new Dictionary<int, List<AtlasObs.NodePt>>();
         static readonly IReadOnlyList<AtlasObs.NodePt> NoNodePts = new AtlasObs.NodePt[0];
         public const int MaxLodgeNodesPerMap = 300;
+        // the fishing spots the lodge merged on one map (most caught first); empty when nobody shared any
+        public IReadOnlyList<AtlasObs.FishSpot> FishSpotsOn(int uiMapId) { return fishSpots.TryGetValue(uiMapId, out var l) ? l : NoFishSpots; }
+        public IEnumerable<int> FishSpotMaps => fishSpots.Keys;
+        static readonly IReadOnlyList<AtlasObs.FishSpot> NoFishSpots = new AtlasObs.FishSpot[0];
         // item details a member's client revealed (null: nobody has)
         public AtlasObs.Revealed Revealed(int itemId) { return revealed.TryGetValue(itemId, out var r) ? r : null; }
         // what one npc / object / fishing zone dropped overall (null: nothing observed)
@@ -328,6 +343,7 @@ namespace ElansAddonHub.Lodge
         public static readonly Version AtlasServer = AtlasObs.ServerVersion;
         public bool SupportsAtlas { get; private set; }
         public bool SupportsAtlasNodes { get; private set; }                  // the server also takes `nodes` (feature "atlas3", server 2.18)
+        public bool SupportsAtlasFish { get; private set; }                   // the server also takes `fishspots` (feature "atlas4", server 2.21)
         public bool SupportsAtlasSeen { get; private set; }                   // the server also takes seenNpcs / seenObjects / seenQuests (feature "atlas2")
         public readonly LodgeAtlas AtlasData = new LodgeAtlas();
 
@@ -364,13 +380,14 @@ namespace ElansAddonHub.Lodge
             SupportsAtlas = features.Contains("atlas") && (v == null || v >= AtlasServer);
             SupportsAtlasSeen = SupportsAtlas && features.Contains("atlas2");
             SupportsAtlasNodes = SupportsAtlas && features.Contains("atlas3") && (v == null || v >= AtlasObs.NodesServerVersion);
+            SupportsAtlasFish = SupportsAtlas && features.Contains("atlas4") && (v == null || v >= AtlasObs.FishSpotsServerVersion);
             atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasFetching = false;
         }
 
         void ResetAtlas()
         {
             SaveAtlasCache(true);
-            SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
+            SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; SupportsAtlasFish = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
             atlasLocal = null; atlasSent = null; atlasNextShare = DateTime.MinValue; atlasLastGet = DateTime.MinValue;
         }
 
@@ -456,6 +473,7 @@ namespace ElansAddonHub.Lodge
             {
                 try { atlasLocal = AtlasObs.TestSource != null ? AtlasObs.TestSource() : AtlasObs.Read(Settings?.WowRoot); }
                 catch (Exception e) { Util.Log("atlas: " + e.GetType().Name); atlasLocal = null; }
+                LogAtlasLocal();
                 shared = SendAtlasBatch();
             }
             if (!shared && !atlasDisabled && (connect || Clock() - atlasLastGet > TimeSpan.FromMinutes(5))) RequestAtlas();
@@ -467,11 +485,12 @@ namespace ElansAddonHub.Lodge
             IEnumerable<AtlasObs.Revealed> rev;
             try { rev = AtlasObs.RevealedSource?.Items()?.ToList() ?? new List<AtlasObs.Revealed>(); }
             catch (Exception e) { Util.Log("atlas: revealed items: " + e.GetType().Name); rev = new List<AtlasObs.Revealed>(); }
-            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes);
+            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes, SupportsAtlasFish);
             atlasBacklog = batch != null;
             if (batch == null) return false;
             if (Clock() < atlasNextShare) return false;                                // the next slot is not here yet
             atlasInflight = batch;
+            LogAtlasUpload(batch);
             atlasNextShare = Clock() + AtlasObs.ShareEvery + TimeSpan.FromSeconds(5);
             _ = Send(batch.Frame);
             return true;
@@ -498,6 +517,7 @@ namespace ElansAddonHub.Lodge
                 foreach (var kv in batch.Sigs) sent[kv.Key] = kv.Value;                // refused entries are not retried forever either
                 SaveAtlasSent();
                 atlasBacklog = batch.Remaining > 0;
+                Util.Log("atlas: shared " + batch.Entries + " entries (" + batch.Finds + " finds): accepted " + m.Long("accepted") + ", unchanged " + m.Long("unchanged") + ", rejected " + m.Long("rejected") + (batch.Remaining > 0 ? ", " + batch.Remaining + " more waiting" : ""));
             }
             else
             {
@@ -516,7 +536,7 @@ namespace ElansAddonHub.Lodge
             if (!AtlasData.Apply(m)) { atlasFetching = false; return; }
             atlasCacheDirty = true;
             if (m.Bool("more")) RequestAtlas();                                        // the next page
-            else { atlasFetching = false; SaveAtlasCache(false); }
+            else { atlasFetching = false; SaveAtlasCache(false); try { AtlasResendMissing(); } catch (Exception) { } }
             Util.Log("atlas: " + AtlasData.KillSources + " mobs, " + AtlasData.VendorCount + " vendors, " + AtlasData.FindCount + " finds from the lodge (rev " + AtlasData.Rev + ")");
             Changed?.Invoke();
         }
@@ -535,12 +555,67 @@ namespace ElansAddonHub.Lodge
             if (SupportsAtlas) AtlasSync();
         }
 
+        // hub.log, counts only: what this upload carries per section, and per section what the Hub file held / what validation left out
+        void LogAtlasUpload(AtlasObs.Batch batch)
+        {
+            try
+            {
+                var sb = new StringBuilder("atlas: upload " + batch.Entries + " entries: ");
+                sb.Append(string.Join(", ", batch.Counts.OrderBy(k => k.Key, StringComparer.Ordinal).Select(k => k.Key + " " + k.Value)));
+                if (batch.Remaining > 0) sb.Append("; ").Append(batch.Remaining).Append(" more waiting");
+                var s = atlasLocal;
+                if (s != null && s.Stats.Count > 0)
+                {
+                    sb.Append("; Hub file (entries/kept/left out): ").Append(string.Join(", ", s.Stats.Where(k => k.Value[0] > 0 || k.Value[2] > 0).Select(k => k.Key + " " + k.Value[0] + "/" + k.Value[1] + "/" + k.Value[2])));
+                    if (s.UnknownSections.Count > 0) sb.Append("; not read: ").Append(string.Join(",", s.UnknownSections.Take(8)));
+                }
+                Util.Log(sb.ToString());
+            }
+            catch (Exception) { }
+        }
+
+        // hub.log: what the Hub module holds (so a missing find can be traced to the game side or to the upload), only when it changed
+        string atlasLocalLogged = "";
+        void LogAtlasLocal()
+        {
+            var s = atlasLocal;
+            if (s == null) return;
+            long newest = s.Finds.Count == 0 ? 0 : s.Finds.Max(f => f.At);
+            var line = "atlas: Hub data: " + s.Finds.Count + " finds" + (newest > 0 ? " (newest " + DateTimeOffset.FromUnixTimeSeconds(newest).LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + ")" : "")
+                + ", " + s.Vendors.Count + " vendors, " + s.Kills.Count + " mobs, " + s.Dropped + " entries left out by validation" + (s.FindsOverCap > 0 ? " (" + s.FindsOverCap + " oldest finds over the " + AtlasObs.MaxHubFinds + " cap)" : "");
+            if (line == atlasLocalLogged) return;
+            atlasLocalLogged = line;
+            Util.Log(line);
+        }
+
+        readonly HashSet<string> atlasResent = new HashSet<string>(StringComparer.Ordinal);   // find keys already asked for again this session (once each)
+
+        // Finds marked as sent that the Lodge's pool does not hold (never stored: a refused or lost share) are forgotten, so the next batch sends them again - once per find and session.
+        // Only finds newer than the pool's oldest find count (older ones may have been dropped by the server's own caps). The server drops duplicates by the same key.
+        internal int AtlasResendMissing()
+        {
+            var s = atlasLocal; var pool = AtlasData.AllFinds;
+            if (s == null || s.Finds.Count == 0 || pool.Count == 0) return 0;
+            long oldest = pool.Min(f => f.At);
+            var have = new HashSet<string>(pool.Select(AtlasObs.FindKey), StringComparer.Ordinal);
+            var sent = AtlasSent(); int n = 0;
+            foreach (var f in s.Finds)
+            {
+                var k = AtlasObs.FindKey(f);
+                if (f.At < oldest || have.Contains(k) || !sent.ContainsKey(k) || !atlasResent.Add(k)) continue;
+                sent.Remove(k); n++;
+            }
+            if (n > 0) { SaveAtlasSent(); atlasBacklog = true; Util.Log("atlas: " + n + " finds were marked as sent but are not in the Lodge pool - sending them again"); }
+            return n;
+        }
+
         // test hooks
         public bool AtlasBacklogForTest => atlasBacklog;
         public bool AtlasInflightForTest => atlasInflight != null;
         public bool AtlasGuestForTest => atlasGuest;
         public Dictionary<string, string> AtlasSentForTest => AtlasSent();
         public string AtlasSentPathForTest => AtlasSentPath;
+        public int AtlasResendMissingForTest(AtlasObs.Snapshot local) { atlasLocal = local; return AtlasResendMissing(); }
         public string AtlasCachePathForTest => AtlasCachePath;
         public void AtlasSaveCacheForTest() { SaveAtlasCache(true); }
         public void AtlasResetForTest()

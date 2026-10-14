@@ -13,6 +13,13 @@ namespace ElansAddonHub.Services.Atlas
         // the text under a Forever node: "Looted 12 times · Forever"
         public static string NodeTip(long n) => (n <= 1 ? "Looted once" : "Looted " + n.ToString("N0", CultureInfo.InvariantCulture) + " times") + " · " + AtlasLabel.Forever;
 
+        // "12 catches · Raw Brilliant Smallfish ×7, Oily Blackmouth ×3 · Forever"
+        public static string FishSpotTip(AtlasObs.FishSpot p)
+        {
+            var items = string.Join(", ", p.Items.OrderByDescending(i => i.Value).ThenBy(i => i.Key).Take(3).Select(i => ItemName(i.Key) + " ×" + i.Value.ToString("N0", CultureInfo.InvariantCulture)));
+            return (p.N <= 1 ? "1 catch" : p.N.ToString("N0", CultureInfo.InvariantCulture) + " catches") + (items.Length > 0 ? " · " + items : "") + " · " + AtlasLabel.Forever;
+        }
+
         // Forever nodes of one object on every map they were recorded on (the Lodge's merged nodes and this PC's own), most looted first, as markers above the
         // Classic baseline's. Added after the Classic spawns so the Forever ones are drawn on top and the zone with the most of them comes first.
         static int AddObjectNodes(PlanBuilder plan, int objectId, string title)
@@ -33,10 +40,16 @@ namespace ElansAddonHub.Services.Atlas
         {
             var src = new LiveNodeSource();
             var objs = GatherNodes.ObjectsOnMap(uiMapId);
-            if (objs.Count == 0) return 0;
+            var spots = GatherNodes.FishSpotsOn(uiMapId);
+            if (objs.Count == 0 && spots.Count == 0) return 0;
             var s = Section(m, "nodes", "Gathering nodes");
             s.Note = "Where players looted herbs, veins, chests and pools on this map. " + AtlasLabel.Forever + " positions come first; the Classic baseline's are listed under each object's page.";
             int total = 0;
+            if (spots.Count > 0)
+            {
+                s.Rows.Add(new AtlasRow { Key = "fishspots", Title = "Fishing spots", Label = AtlasLabel.Forever, Tier = 0, Type = "Fishing", Detail = AtlasFormat.Count(spots.Count, "spot", "spots") + " where players stood and caught something" });
+                foreach (var p in spots.Take(MaxNodeMarkersPerObject)) { plan.Spot(uiMapId, p.X, p.Y, MarkerKind.Node, "Fishing spot", FishSpotTip(p), null); total++; }
+            }
             foreach (var kv in objs.Take(MaxZoneRows))
             {
                 string name = ObjectName(kv.Key);

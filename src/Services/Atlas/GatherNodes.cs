@@ -83,6 +83,31 @@ namespace ElansAddonHub.Services.Atlas
             try { return AtlasQuery.Context.OwnNodes?.Invoke(); } catch (Exception) { return null; }
         }
 
+        public static Dictionary<int, List<AtlasObs.FishSpot>> OwnFish()
+        {
+            try { return AtlasQuery.Context.OwnFishSpots?.Invoke(); } catch (Exception) { return null; }
+        }
+
+        // the fishing spots of one map: the Lodge's merged ones, plus this PC's own that no Lodge spot covers yet (the Lodge's already include the PC's own once shared)
+        public static List<AtlasObs.FishSpot> FishSpotsOn(int uiMapId)
+        {
+            var res = new List<AtlasObs.FishSpot>();
+            var l = AtlasQuery.LodgeOrNull()?.FishSpotsOn(uiMapId);
+            if (l != null) res.AddRange(l);
+            var own = OwnFish();
+            if (own != null && own.TryGetValue(uiMapId, out var mine))
+                foreach (var p in mine) if (!res.Any(q => AtlasObs.SameFishSpot(q, p.X, p.Y))) res.Add(p);
+            return res.OrderByDescending(p => p.N).ToList();
+        }
+
+        public static List<int> FishSpotMaps()
+        {
+            var ids = new HashSet<int>();
+            var own = OwnFish(); if (own != null) foreach (var k in own.Keys) ids.Add(k);
+            var l = AtlasQuery.LodgeOrNull(); if (l != null) foreach (var k in l.FishSpotMaps) ids.Add(k);
+            return ids.OrderBy(i => i).ToList();
+        }
+
         // object ids that have Forever nodes anywhere (own or Lodge)
         public static IEnumerable<int> ObjectsWithNodes()
         {
