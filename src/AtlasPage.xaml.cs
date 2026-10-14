@@ -56,6 +56,7 @@ namespace ElansAddonHub
         {
             wowRoot = root ?? (() => null);
             AtlasQuery.Context.Owned = OwnedItems;
+            AtlasQuery.Context.Characters = Characters;
         }
 
         // ---- the user's own characters (item id -> holdings), read off the UI thread when an item page asks, kept for half a minute
@@ -81,7 +82,28 @@ namespace ElansAddonHub
                 catch (Exception e) { Util.Log("atlas: own characters: " + e.Message); return null; }
             }
         }
-        public void ForgetOwned() { lock (ownedGate) { ownedCache = null; } }
+        public void ForgetOwned() { lock (ownedGate) { ownedCache = null; charsCache = null; } }
+
+        // the user's characters (for the browse lists' "usable by"), read with the holdings and kept as long as they are
+        List<InvChar> charsCache;
+        public Func<List<InvChar>> CharsOverrideForTest;
+        List<InvChar> Characters()
+        {
+            if (CharsOverrideForTest != null) return CharsOverrideForTest();
+            lock (ownedGate)
+            {
+                if (charsCache != null && (DateTime.UtcNow - ownedAt).TotalSeconds < 30) return charsCache;
+                try
+                {
+                    var root = wowRoot();
+                    if (string.IsNullOrEmpty(root)) return null;
+                    var data = CharacterMerge.Merge(HubData.Read(root), InventoryReader.ReadData(root));
+                    charsCache = data.Chars.Where(c => !c.Hidden).ToList();
+                    return charsCache;
+                }
+                catch (Exception e) { Util.Log("atlas: characters: " + e.Message); return null; }
+            }
+        }
 
         // ---- navigation
         public event Action<string> Navigated;         // the id now shown ("" = the start page)
@@ -90,6 +112,7 @@ namespace ElansAddonHub
         public Task Open(string idOrText)
         {
             var id = AtlasQuery.NormalizeId(idOrText) ?? idOrText;
+            if (AtlasCategories.IsRouted(id)) return Show(id, true);           // a browse page or a hosted category
             if (!AtlasIds.TryParse(id, out _, out _)) { SearchBox.Text = idOrText ?? ""; return RunSearchNow(); }
             return Show(id, true);
         }
@@ -165,6 +188,8 @@ namespace ElansAddonHub
         {
             int gen = ++buildGen;
             if (string.IsNullOrEmpty(id)) { DrawStart(); return; }
+            if (AtlasCategories.TryHosted(id, out var hostCat, out var hostSub)) { DrawHosted(hostCat, hostSub); return; }
+            if (AtlasBrowse.IsBrowseId(id)) { await BuildAndDrawBrowse(id, gen); return; }
             var build = Task.Run(() => AtlasQuery.Build(id));
             var first = await Task.WhenAny(build, Task.Delay(150));
             if (gen != buildGen) return;
@@ -174,6 +199,19 @@ namespace ElansAddonHub
             catch (Exception e) { Util.Log("atlas build " + id + ": " + e); m = new AtlasPageModel { Id = id, NotFound = true, Title = id, Message = "This page could not be built." }; }
             if (gen != buildGen) return;
             Draw(m);
+        }
+
+        async Task BuildAndDrawBrowse(string id, int gen)
+        {
+            var build = Task.Run(() => AtlasBrowse.Run(id));
+            var first = await Task.WhenAny(build, Task.Delay(150));
+            if (gen != buildGen) return;
+            if (first != build) ShowSkeleton(id);
+            BrowseResult r;
+            try { r = await build; }
+            catch (Exception e) { Util.Log("atlas browse " + id + ": " + e); r = new BrowseResult { Id = id, NotFound = true, Title = "Browse", Message = "This list could not be built." }; }
+            if (gen != buildGen) return;
+            DrawBrowse(r);
         }
 
         // ---- layers that change while the page is open: the start page and the page shown are redrawn (debounced)
@@ -199,6 +237,7 @@ namespace ElansAddonHub
             refresh.Stop();
             if (!IsVisible) return;
             if (IsStart) DrawStart();
+            else if (browse != null) _ = Redraw();
             else if (model != null && (model.NotFound || model.Notes.Count > 0 || !model.Layers.Contains("client"))) _ = Redraw();
         }
         public Task Redraw() => lastBuild = BuildAndDraw(history.Current ?? "");

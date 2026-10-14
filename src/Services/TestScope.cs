@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "hubdata", "readers", "characters", "itemdata", "spelldata", "talents", "professions", "mapdata", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs", "atlasclassic", "atlaspage",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "hubdata", "readers", "characters", "itemdata", "spelldata", "talents", "professions", "mapdata", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs", "atlasclassic", "atlaspage", "atlasbrowse",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -75,6 +75,7 @@ namespace ElansAddonHub.Services
             ["inputs"] = "text inputs: Input / SecretInput / Dropdown draw g j p q y without clipping at 100 % and 125 % (pixel check)",
             ["round3"] = "settings round 3 (WoW watch, lodge update, welcome, ...)",
             ["atlaspage"] = "Atlas layer F, the Atlas page: search (grouping by kind, ranking, Forever above Classic baseline, id links, one-letter and blank), the item page (the game's tooltip, your characters, the sources table with Lodge-observed rows above the Classic baseline's, merged rows, world drops under 0.1 % folded, labels on every row, recipes and reagents, found by the Lodge with member names), markers from Classic world coordinates on the right zone map (most specific zone, instance floors, instances without a map), NPC / object / zone / instance / quest / spell / skill / faction pages with every layer, without Classic, without a Lodge, with game data off and with nothing at all, the Classic baseline card with a fake downloader (size question, progress, cancel, failure and retry, ready with the dump date, remove, credit and licence links), links and history, the page in the window (keyboard search, zone picker, folded rows, virtualised lists, narrow layout, never blocking the UI, stale answers dropped), screenshots",
+            ["atlasbrowse"] = "Atlas browse by category: the category registry (built-in list categories, a hosted category with an id prefix and a sub-path, replace / unregister), browse ids (parse, canonical text, history replace), every category listing with rows, the item sub-categories from the client's class names, name / level / quality / slot / data source filters, how to get it (drops, vendor, quest, crafted, fishing, containers, gathered), usable by a character (class proficiency and level), the sorts, creatures / objects / quests / zones / dungeons / spells / skills / recipes / factions, the start page tiles and presets, history through browse ids, missing layers (no Classic baseline, no Lodge, no game data) with their notes, the page in the window (typing narrows the list without a redraw, back / forward restore the filters), 24 000 items (index off the UI thread, virtualised list), the player's own game files, screenshots",
             ["atlasclassic"] = "Atlas layer C, Classic baseline (cMaNGOS classic-db): SQL statement reader and value parser (escapes, NULL, negative / decimal, multi-row INSERT, REPLACE, UPDATE / DELETE with WHERE, @variables), loot chances (groups, references, quest-only, loops), update scripts above the dump's version, downloader against a fake GitHub (size shown first, progress, cancel, damaged / truncated / non-SQL dump refused, earlier set untouched, https only, safe names), index round trip, queries and the Classic baseline label",
         };
 
@@ -109,8 +110,9 @@ namespace ElansAddonHub.Services
             R(@"^src/(MainWindow\.HubDataTest|Services/(HubData|SavedVarsFiles|LuaData))\.cs$", "hubdata", "characters");
             R(@"^src/(MainWindow\.ReadersTest|Services/(SavedVarsFiles|GamePresence|InventoryData|WowCalendar|FlightShare|AddonHealth|HealthMonitor|HubData|LuaData))\.cs$", "readers");
             R(@"^src/(MainWindow.AtlasClassicTest.cs|Services/Atlas/Classic/)", "atlasclassic", "atlaspage");
-            R(@"^src/(AtlasPage(\.\w+)?\.(xaml|cs)|MainWindow\.(AtlasPageTest(\.\w+)?|Atlas)\.cs|Services/Atlas/(AtlasModel|AtlasQuery(\.\w+)?|AtlasDerived|ClassicSetup)\.cs)$", "atlaspage");
-            R(@"^src/(Services/(Maps/|Db2/|Atlas/(SeenData|AtlasObs))|Controls/AtlasMap|Lodge/LodgeSession\.Atlas)", "atlaspage");   // the layers the page combines
+            R(@"^src/(AtlasPage(\.\w+)?\.(xaml|cs)|MainWindow\.(AtlasPageTest(\.\w+)?|Atlas)\.cs|Services/Atlas/(AtlasModel|AtlasQuery(\.\w+)?|AtlasDerived|ClassicSetup)\.cs)$", "atlaspage", "atlasbrowse");
+            R(@"^src/(MainWindow\.AtlasBrowseTest\.cs|Services/Atlas/(AtlasBrowse(\.\w+)?|AtlasCategories)\.cs)$", "atlasbrowse", "atlaspage");
+            R(@"^src/(Services/(Maps/|Db2/|Atlas/(SeenData|AtlasObs))|Controls/AtlasMap|Lodge/LodgeSession\.Atlas)", "atlaspage", "atlasbrowse");   // the layers the page combines
             R(@"^src/(MainWindow\.CharactersTest|Services/(HubModules|CharacterMerge))\.cs$", "characters", "inventory");
             R(@"^src/Services/Blp\.cs$", "selfupdated");
             R(@"^src/MainWindow\.(InventoryTest|DesignTest\.Inventory)\.cs$", "inventory");

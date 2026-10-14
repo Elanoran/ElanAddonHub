@@ -398,6 +398,7 @@ namespace ElansAddonHub
             if (Begin("inputs")) { result += "\r\n" + await InputsTest(dir); End(); }
             if (Begin("atlasclassic")) { result += "\r\n" + await AtlasClassicTest(dir); End(); }
             if (Begin("atlaspage")) { result += "\r\n" + await AtlasPageTest(dir); End(); }
+            if (Begin("atlasbrowse")) { result += "\r\n" + await AtlasBrowseTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
             result += "\r\n" + string.Join("\r\n", skipped);
             result += "\r\n" + string.Join("\r\n", timings) + $"\r\ntotal: {Sec(total.Elapsed.TotalSeconds)} s";

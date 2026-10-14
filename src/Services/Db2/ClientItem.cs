@@ -72,6 +72,30 @@ namespace ElansAddonHub.Services.Db2
             return null;
         }
 
+        // the subclass names of the classes the tooltip does not name (potions, trade goods, recipes, bags ...), for the Atlas category lists; weapons and armor use Subclass
+        static readonly string[][] OtherSubs =
+        {
+            new[] { "Explosives and devices", "Potion", "Elixir", "Flask", "Scroll", "Food and drink", "Item enhancement", "Bandage", "Other" },                                   // 0 consumable
+            new[] { "Bag", "Soul bag", "Herb bag", "Enchanting bag", "Engineering bag", "Gem bag", "Mining bag", "Leatherworking bag", "Inscription bag", "Tackle box", "Cooking bag" },   // 1 container
+            null, null, null, null,
+            new[] { "Wand", "Bolt", "Arrow", "Bullet", "Thrown" },                                                                                                               // 6 projectile
+            new[] { "Trade goods", "Parts", "Explosives", "Devices", "Jewelcrafting", "Cloth", "Leather", "Metal and stone", "Meat", "Herb", "Elemental", "Other", "Enchanting", "Materials" },   // 7 trade goods
+            null,
+            new[] { "Books", "Leatherworking", "Tailoring", "Engineering", "Blacksmithing", "Cooking", "Alchemy", "First Aid", "Enchanting", "Fishing", "Jewelcrafting", "Inscription" },       // 9 recipe
+            null,
+            new[] { "Quiver", "Ammo pouch" },                                                                                                                                    // 11 quiver
+            null, null, null,
+            new[] { "Junk", "Reagent", "Companion pet", "Holiday", "Other", "Mount" },                                                                                           // 15 miscellaneous
+        };
+
+        public static string BrowseSubclass(int classId, int subclassId)
+        {
+            if (classId == 2 || classId == 4) return Subclass(classId, subclassId);
+            if (classId == 11 && subclassId >= 2 && subclassId < 4) return OtherSubs[11][subclassId - 2];
+            if (classId < 0 || classId >= OtherSubs.Length || OtherSubs[classId] == null || subclassId < 0 || subclassId >= OtherSubs[classId].Length) return null;
+            return OtherSubs[classId][subclassId];
+        }
+
         public static string Bonding(int b)
         {
             switch (b)

@@ -261,6 +261,8 @@ namespace ElansAddonHub.Services.Atlas
             pos = items.Count - 1;
             return true;
         }
+        // the page now shown becomes another id without a new step in the history (filters changing on a browse page)
+        public void Replace(string id) { if (pos >= 0 && pos < items.Count) items[pos] = id ?? ""; }
         public string Back() { if (!CanBack) return null; pos--; return items[pos]; }
         public string Forward() { if (!CanForward) return null; pos++; return items[pos]; }
         public void Clear() { items.Clear(); pos = -1; }

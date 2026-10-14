@@ -205,6 +205,21 @@ ItemArmorQuality 2935AA9D, ItemArmorShield 7E6C94F9, ArmorLocation FB67352F, Ite
   item's tooltip and the reagents), Characters > Talents (the spell's rank and description in the tile's tooltip), the Settings line, and the Lodge hook
   (`RevealedItemsSource` hands the DBCache-revealed items to `AtlasObs.RevealedSource`; armor and damage stay local, the wire format has no field for them).
 
+### Browse by category (Atlas, `AtlasBrowse`, `AtlasCategories`)
+
+- **Registry** (`Services\Atlas\AtlasCategories.cs`): the start page tiles and the roots of browse ids are data, not code. `AtlasCategories.Register(new AtlasCategory { Id, Title, Glyph, Blurb, Order, Host, Available })` adds or replaces one;
+  `Unregister(id)` removes it. A list category (the ten built in: items, creatures, objects, quests, zones, instances, spells, skills, recipes, factions) opens a browse page.
+  A **hosted** category (`Host` set: `sub-path -> FrameworkElement`, called on the UI thread each time it is shown) opens that control inside the Atlas page instead; its ids are `<id>:` + a sub-path
+  (`talents:`, `talents:tree/hunter`), they go through `Open(id)`, the history, Back / Forward and `NormalizeId` like any other id (`AtlasCategories.IsRouted`). The Talents and Professions pages are meant to move in this way.
+- **Ids**: `browse:items/weapons/one-handed-swords?name=..&minlvl=20&maxlvl=30&q=3&slot=Head&src=game|classic|lodge&how=drop|vendor|quest|crafted|fishing|container|gathered&for=<character key>&zone=<uiMapId>&rank=elite|rare|boss&sort=name|level|quality|ilvl|chance|zone|continent`.
+  `BrowseQuery.TryParse/ToId` give one canonical text per query (that text is the history entry; typing in a filter box `History.Replace`s it instead of adding a step).
+- **Indexes** (`AtlasBrowse.Index.cs`): one `BIndex` per category (entries with everything the filters and sorts need, plus a tree of `BNode`s with absolute predicates), built lazily on the worker thread that runs
+  `AtlasBrowse.Run(id)`, cached, and rebuilt when any layer underneath is another object or the Lodge pool moved on (`Token()`). Item sub-categories are made from the client's class and subclass names
+  (`ItemNames`); only classes that have items appear. "How to get it" per item is worked out at index time from the Lodge (`Drops/Vendors/QuestsRewarding`), the Classic baseline (`SourcesOf`; herb / ore / chest / fishing
+  objects are told apart by what they give), and `SpellData.RecipesProducing`. Usable-by-character is `ItemProficiency` (classic class tables, mail / plate at 40) plus the required level.
+- **Page** (`AtlasPage.Browse.cs`): breadcrumb, sub-category chips with counts, the filter bar (only the controls the category has), a virtualised `AtlasList`; a filter change runs `Run` again on a worker and swaps the list.
+  Without the Classic baseline or a Lodge the lists still work and a quiet note says what to download. `AtlasBrowse.Presets()` are the start page shortcuts; a preset whose list would be empty is not shown.
+
 ### A3: what the client has seen (`SeenData`)
 
 - Reads `Cache\WDB\<locale>\creaturecache.wdb`, `gameobjectcache.wdb`, `questcache.wdb` (read-only, shared) in the background; saved index

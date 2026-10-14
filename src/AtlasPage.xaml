@@ -110,7 +110,7 @@
           <TextBlock x:Name="SubText" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
         </StackPanel>
         <TextBox x:Name="SearchBox" Grid.Column="2" Style="{StaticResource Input}" Width="260" Margin="12,0,0,0" VerticalAlignment="Center"
-                 Tag="Search items, NPCs, zones, quests" AutomationProperties.Name="Search Atlas" TextChanged="Search_Changed" PreviewKeyDown="Search_KeyDown" GotKeyboardFocus="Search_Focus" />
+                 Tag="Search, or browse the categories" AutomationProperties.Name="Search Atlas" TextChanged="Search_Changed" PreviewKeyDown="Search_KeyDown" GotKeyboardFocus="Search_Focus" />
       </Grid>
 
       <Grid Grid.Row="1">

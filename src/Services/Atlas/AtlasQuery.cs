@@ -16,6 +16,7 @@ namespace ElansAddonHub.Services.Atlas
     {
         public Func<LodgeAtlas> Lodge = () => null;
         public Func<Dictionary<int, InvItemTotals>> Owned = () => null;       // item id -> what each of the user's characters holds
+        public Func<List<InvChar>> Characters = () => null;                  // the user's own characters (for "usable by my character" in the browse lists)
         public Func<DateTime> NowUtc = () => DateTime.UtcNow;
     }
 
@@ -34,12 +35,21 @@ namespace ElansAddonHub.Services.Atlas
 
         static LodgeAtlas Lodge() { try { return Context.Lodge?.Invoke(); } catch (Exception) { return null; } }
         static bool LodgeHas(LodgeAtlas l) => l != null && l.HasData;
+        public static LodgeAtlas LodgeOrNull() => Lodge();
+        public static bool LodgeHasData() => LodgeHas(Lodge());
+        public static List<InvChar> Characters()
+        {
+            try { return (Context.Characters?.Invoke() ?? new List<InvChar>()).Where(c => c != null && !c.Hidden && !string.IsNullOrEmpty(c.Key)).OrderByDescending(c => c.Level).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList(); }
+            catch (Exception) { return new List<InvChar>(); }
+        }
         static readonly Regex IdText = new Regex(@"^\s*(item|npc|obj|object|quest|zone|instance|spell|skill|faction)\s*[:=# ]\s*(\d{1,9})\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         // "item:123", also "Item 123" / "npc=5" -> the canonical id; null when the text is not an id
         public static string NormalizeId(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return null;
+            if (AtlasBrowse.IsBrowseId(text)) return BrowseQuery.TryParse(text, out var bq) ? bq.ToId() : null;
+            if (AtlasCategories.TryHosted(text.Trim(), out var hc, out var hsub)) return hc.Id + ":" + hsub;
             var m = IdText.Match(text);
             if (!m.Success) return null;
             var kind = m.Groups[1].Value.ToLowerInvariant();
@@ -137,6 +147,7 @@ namespace ElansAddonHub.Services.Atlas
             var res = new AtlasSearchResult { Query = (text ?? "").Trim() };
             if (res.Query.Length == 0) return res;
             var idText = NormalizeId(res.Query);
+            if (idText != null && AtlasCategories.IsRouted(idText)) return res;       // the page opens browse and hosted ids itself
             if (idText != null)
             {
                 res.ById = true;
