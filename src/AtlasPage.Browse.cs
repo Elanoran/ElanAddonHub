@@ -50,98 +50,13 @@ namespace ElansAddonHub
             for (int i = 0; i < n; i++) foreach (var c in AtlasWalk(VisualTreeHelper.GetChild(d, i))) yield return c;
         }
 
-        // ============================================================================================================================ the start page: tiles and presets
-        readonly Dictionary<string, TextBlock> tileCaptions = new Dictionary<string, TextBlock>();
-        int startGen;
-        Task startFill = Task.CompletedTask;
-        public Task StartFillForTest => startFill;
-        StackPanel presetHost;
-        System.Windows.Controls.Primitives.UniformGrid tileGrid;
-
-        FrameworkElement BrowseBlock()
-        {
-            tileCaptions.Clear();
-            var sp = new StackPanel();
-            sp.Children.Add(Tb("Browse by category", "Text.Section"));
-            var n = Tb("Pick a category to see everything in it, then narrow it down with the filters. No need to know a name.", "Text.Secondary", null, 2); n.TextWrapping = TextWrapping.Wrap; sp.Children.Add(n);
-            var wrap = new System.Windows.Controls.Primitives.UniformGrid { Margin = new Thickness(0, 12, -8, 0), Columns = TileColumnsFor(Scroller.ActualWidth > 0 ? Scroller.ActualWidth : 760) }; tileGrid = wrap;
-            foreach (var c in AtlasCategories.Visible)
-            {
-                var tile = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(12, 8, 12, 8), MinHeight = 56, Margin = new Thickness(0, 0, 8, 8), Tag = c.OpenId, Focusable = false, Cursor = Cursors.Hand, ToolTip = c.Blurb };
-                tile.MouseLeftButtonUp += Row_Click;
-                System.Windows.Automation.AutomationProperties.SetName(tile, c.Title);
-                var g = new Grid();
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                g.Children.Add(new TextBlock { Text = c.Glyph, FontFamily = (FontFamily)FindResource("Font.Icons"), FontSize = 16, Foreground = Res("Brush.Text.Tertiary"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) });
-                var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-                col.Children.Add(Tb(c.Title, "Text.RowTitle"));
-                var cap = Tb(c.Hosted ? c.Blurb : "", "Text.Caption"); cap.TextTrimming = TextTrimming.CharacterEllipsis;
-                col.Children.Add(cap);
-                if (!c.Hosted) tileCaptions[c.Id] = cap;
-                Grid.SetColumn(col, 1); g.Children.Add(col);
-                tile.Content = g;
-                wrap.Children.Add(tile);
-            }
-            sp.Children.Add(wrap);
-            presetHost = new StackPanel();
-            sp.Children.Add(presetHost);
-            return sp;
-        }
-
-        // counts on the tiles and the presets that the data can answer, worked out off the UI thread (the first time they build the category indexes)
-        Task FillBrowseBlock()
-        {
-            int gen = ++startGen;
-            var host = presetHost;
-            var caps = new Dictionary<string, TextBlock>(tileCaptions);
-            var cats = AtlasCategories.Visible.Where(c => !c.Hosted).ToList();
-            return startFill = Task.Run(async () =>
-            {
-                foreach (var c in cats)
-                {
-                    int n = AtlasBrowse.Count(c);
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        if (gen != startGen || !caps.TryGetValue(c.Id, out var cap)) return;
-                        cap.Text = n > 0 ? n.ToString("N0", Lodge.CalendarRules.English) : "Nothing yet";
-                    });
-                    if (gen != startGen) return;
-                }
-                var presets = AtlasBrowse.Presets();
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    if (gen != startGen || host != presetHost) return;
-                    host.Children.Clear();
-                    if (presets.Count == 0)
-                    {
-                        host.Children.Add(Tb(ClassicBaselineText(), "Text.Caption", Res("Brush.Text.Tertiary"), 4));
-                        return;
-                    }
-                    host.Children.Add(Tb("Where to get things", "Text.Secondary", null, 8));
-                    var w = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-                    foreach (var p in presets)
-                    {
-                        var id = p.Id;
-                        var b = GhostButton(p.Title, () => { _ = Open(id); }, p.Tip + " (" + AtlasFormat.Count(p.Count, "match", "matches") + ")");
-                        b.Margin = new Thickness(0, 0, 8, 8);
-                        w.Children.Add(b);
-                    }
-                    host.Children.Add(w);
-                    if (!Services.Atlas.Classic.ClassicAtlas.IsReady) host.Children.Add(Tb(ClassicBaselineText(), "Text.Caption", Res("Brush.Text.Tertiary"), 0));
-                });
-            });
-        }
-
-        static string ClassicBaselineText() => Services.Atlas.Classic.ClassicAtlas.IsReady ? "" : "Download the Classic baseline (above or below) for drop, vendor and spawn sources: more shortcuts appear when the data can answer them.";
-
         // ============================================================================================================================ a browse page
         void DrawBrowse(BrowseResult r)
         {
             model = null; hosted = null; browse = r; bq = r.Query.Clone(); drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear(); bctl.Clear();
-            cols = null; leftCol = rightCol = null; startInfo = null; tileGrid = null; mapCol = null; mapCardEl = null;
+            ResetPageState();
             TitleText.Text = r.Title; TitleText.Foreground = Res("Brush.Text.Primary");
             SubText.Text = r.NotFound ? "Browse" : r.Subtitle;
             UpdateNav();
@@ -154,7 +69,6 @@ namespace ElansAddonHub
             }
             var col = new StackPanel();
             Body.Children.Add(col);
-            col.Children.Add(Crumbs(r));
             if (r.Children.Count > 0) col.Children.Add(ChildChips(r));
             col.Children.Add(FilterBar(r));
             browseCount = Tb(r.CountText, "Text.Caption", Res("Brush.Text.Tertiary"), 4);
@@ -192,11 +106,9 @@ namespace ElansAddonHub
             catch (InvalidOperationException) { }
         }
 
-        FrameworkElement Crumbs(BrowseResult r) => CrumbRow(r.Crumbs);
-
-        FrameworkElement CrumbRow(IList<AtlasCrumb> crumbs)
+        FrameworkElement CrumbRow(IList<AtlasCrumb> crumbs, double bottom = 8)
         {
-            var w = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+            var w = new WrapPanel { Margin = new Thickness(0, 0, 0, bottom) };
             for (int i = 0; i < crumbs.Count; i++)
             {
                 var c = crumbs[i];
@@ -355,7 +267,7 @@ namespace ElansAddonHub
             FillNotes(r);
             browseClear.Visibility = r.Query.HasFilters ? Visibility.Visible : Visibility.Collapsed;
             if (browseList.Items.Count > 0) browseList.ScrollIntoView(browseList.Items[0]);
-            history.Replace(r.Id);
+            { var old = history.Current; history.Replace(r.Id); NavState.Follow(old, r.Id); }
             Navigated?.Invoke(r.Id);
             UpdateNav();
             SizeBrowseList();
@@ -372,7 +284,7 @@ namespace ElansAddonHub
             drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear(); bctl.Clear();
-            cols = null; leftCol = rightCol = null; startInfo = null; tileGrid = null; mapCol = null; mapCardEl = null;
+            ResetPageState();
             TitleText.Text = cat.Title; TitleText.Foreground = Res("Brush.Text.Primary");
             SubText.Text = cat.Blurb;
             UpdateNav();
@@ -387,8 +299,8 @@ namespace ElansAddonHub
                 return;
             }
             hosted = el; hostedCat = cat; hostedId = cat.Id + ":" + sub;
+            if (el is WorldMapView wmv) { wmv.PaletteRequested -= OnMapPaletteRequested; wmv.PaletteRequested += OnMapPaletteRequested; }
             HostContent.Content = el;
-            HostCrumbs.Content = HostedCrumbs(cat, sub);
             Scroller.Visibility = Visibility.Collapsed; HostSlot.Visibility = Visibility.Visible;
             Motion.PageIn(HostSlot);
             // the page shows what it shows (the class last used for a bare 'talents:'): the id says so too
@@ -401,18 +313,8 @@ namespace ElansAddonHub
         void LeaveHosted()
         {
             hosted = null; hostedCat = null; hostedId = "";
-            HostContent.Content = null; HostCrumbs.Content = null;
+            HostContent.Content = null;
             HostSlot.Visibility = Visibility.Collapsed; Scroller.Visibility = Visibility.Visible;
-        }
-
-        FrameworkElement HostedCrumbs(AtlasCategory cat, string sub)
-        {
-            var list = new List<AtlasCrumb> { new AtlasCrumb("Atlas", AtlasBrowse.HomeLink) };
-            string last = "";
-            try { last = cat.SubTitle?.Invoke(sub) ?? ""; } catch (Exception) { }
-            list.Add(new AtlasCrumb(cat.Title, ""));
-            if (last.Length > 0) list.Add(new AtlasCrumb(last, ""));
-            return CrumbRow(list);
         }
 
         // The hosted page changed what it shows by itself (another class, profession or tab): the id of the page follows without a new step in the history, like a browse filter.
@@ -422,13 +324,12 @@ namespace ElansAddonHub
             var id = hostedCat.Id + ":" + (sub ?? "").Trim('/');
             if (id == hostedId) return;
             hostedId = id;
-            history.Replace(id);
-            HostCrumbs.Content = HostedCrumbs(hostedCat, (sub ?? "").Trim('/'));
+            { var old = history.Current; history.Replace(id); NavState.Follow(old, id); }
             Navigated?.Invoke(id);
             UpdateNav();
         }
 
-        public string HostedCrumbsForTest => HostCrumbs.Content is DependencyObject d ? string.Join(" > ", AtlasWalk(d).OfType<TextBlock>().Where(t => t.Text != "›").Select(t => t.Text)) : "";
+        public string HostedCrumbsForTest => hosted != null ? CrumbsForTest : "";
         public bool HostSlotVisibleForTest => HostSlot.Visibility == Visibility.Visible;
     }
 }

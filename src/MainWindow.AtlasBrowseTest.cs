@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
@@ -272,32 +273,45 @@ namespace ElansAddonHub
                 await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout();
                 FrameworkElement Tile(string openId) => AtlasWalk(AtlasView).OfType<ContentControl>().FirstOrDefault(c => c.Tag is string s && s == openId && c.IsVisible);
                 var tx = AtlasTexts(AtlasView);
-                Check("start page: a tile for each category ('Items', 'Creatures', ... 'Factions', and the hosted 'Labs' after them) with a count from the data, above the data cards; no intro card (the header and the search box already say it)",
-                    cats.Where(c => Tile(c.OpenId) != null).Count() == 10 && Tile("labs:") != null && tx.Contains("Browse by category") && !tx.Contains("Browse or search") && !tx.Any(t => t.Contains("Alt+Left goes back")) && tx.Contains("28") && tx.IndexOf("Browse by category") < tx.IndexOf("Your game data"), string.Join(" | ", tx.Take(20)));
-                Check("start page: the shortcuts under the tiles - 'Where to get things' with Vendor items for my level, Herbs by zone, Dungeons by level ... as buttons, none for Rare creatures", tx.Contains("Where to get things") && tx.Contains("Vendor items for my level") && tx.Contains("Herbs by zone") && tx.Contains("Dungeons by level") && !tx.Contains("Rare creatures"));
-                Check("start page: the search box says you can browse too and its tooltip says you can paste a link", AtlasView.SearchBoxForTest.Tag.ToString().Contains("browse") && AtlasView.SearchBoxForTest.ToolTip.ToString().Contains("item:2589"), AtlasView.SearchBoxForTest.Tag.ToString());
+                Check("start page: a card for each category ('Items', 'Creatures', ... 'Factions', and the hosted 'Labs') under the group it belongs to (Database, World, Character), with a count from the data; no intro card (the header and the search box already say it)",
+                    cats.Where(c => Tile(c.OpenId) != null).Count() == 10 && Tile("labs:") != null && tx.Contains("Browse") && tx.Contains("Database") && tx.Contains("World") && tx.Contains("Character") && !tx.Contains("Browse or search") && !tx.Any(t => t.Contains("Alt+Left goes back")) && tx.Contains("28"), string.Join(" | ", tx.Take(30)));
+                Check("start page: the shortcuts under the cards - 'For <character>' (or 'Where to get things') with Vendor items for my level, Herbs by zone, Dungeons by level ... as buttons, none for Rare creatures", (tx.Contains("Where to get things") || tx.Any(t => t.StartsWith("For "))) && tx.Contains("Vendor items for my level") && tx.Contains("Herbs by zone") && tx.Contains("Dungeons by level") && !tx.Contains("Rare creatures"));
+                Check("start page: the hero search says what to type and the header box's tooltip says you can paste a link", tx.Any(t => t.StartsWith("Search items, creatures")) && AtlasView.SearchBoxForTest.Tag.ToString().Contains("Search") && AtlasView.SearchBoxForTest.ToolTip.ToString().Contains("item:2589"), AtlasView.SearchBoxForTest.Tag.ToString());
+                Check("start page: one status line for the data (game data, Classic baseline, Lodge, world map) and no data cards on the page itself", AtlasView.StatusLineForTest != null && AtlasTexts(AtlasView.StatusLineForTest).Count >= 5 && !tx.Contains("Your game data") && !tx.Contains("Lodge pool") && AtlasView.SourceStates().Count == 4, string.Join(" | ", AtlasTexts(AtlasView.StatusLineForTest)));
                 {
-                    // the start page uses the width: more tiles per row and the info cards side by side when the window is wide, stacked when it is narrow
+                    // the start page uses the width: more cards per row when the window is wide, the nav is a strip of icons when it is narrow
                     var wStart = Width;
-                    int RowsOfTiles() => AtlasWalk(AtlasView).OfType<ContentControl>().Where(c => c.Tag is string s && (s.StartsWith("browse:") && !s.Contains("/") || s == "talents:" || s == "professions:" || s == "labs:") && c.IsVisible && c.MinHeight == 56).Select(c => (int)Math.Round(c.TranslatePoint(new Point(0, 0), AtlasView.BodyForTest).Y)).Distinct().Count();
+                    int RowsOfTiles() => AtlasWalk(AtlasView).OfType<ContentControl>().Where(c => c.Tag is string s && (s.StartsWith("browse:") && !s.Contains("/") && !s.Contains("?") || s == "talents:" || s == "professions:" || s == "labs:") && c.IsVisible && c.MinHeight == 64).Select(c => (int)Math.Round(c.TranslatePoint(new Point(0, 0), AtlasView.BodyForTest).Y)).Distinct().Count();
+                    Width = 760; await Task.Delay(300); UpdateLayout();
+                    int tilesNarrow = AtlasView.TileColumnsForTest; bool stripNarrow = AtlasView.NavCollapsedForTest; double navNarrow = AtlasView.NavWidthForTest;
+                    Check("start page, narrow (760): the nav is the 56 px strip of icons and there are at least 2 cards per row", stripNarrow && Math.Abs(navNarrow - 56) < 1 && tilesNarrow >= 2, tilesNarrow + " nav " + navNarrow);
+                    Width = 1300; await Task.Delay(300); UpdateLayout();
+                    int tilesMid = AtlasView.TileColumnsForTest;
+                    Check("start page, 1300: the 216 px nav with names, and more cards per row than narrow", !AtlasView.NavCollapsedForTest && Math.Abs(AtlasView.NavWidthForTest - 216) < 1 && tilesMid > tilesNarrow, tilesMid + " vs " + tilesNarrow + " nav " + AtlasView.NavWidthForTest);
+                    Width = 1700; Height = 1000; await Task.Delay(300); UpdateLayout();
+                    int tilesWide = AtlasView.TileColumnsForTest;
+                    Check("start page, wide (1700): up to 6 cards per row, at most four rows of cards", tilesWide >= 4 && tilesWide >= tilesMid && RowsOfTiles() <= 4, tilesWide + " rows " + RowsOfTiles());
+                    Snapshot(Path.Combine(dir, "atlas-start-wide.png"));
+                    Width = 760; await Task.Delay(300); UpdateLayout();
+                    Check("start page: shrinking again takes the cards back to the narrow count, with the same page (no redraw)", AtlasView.TileColumnsForTest == tilesNarrow);
+                    Snapshot(Path.Combine(dir, "atlas-start-narrow.png"));
+                    Check("start page: no link chip on the start page", AtlasView.LinkShown == "");
+
+                    // the Data sources page: the info cards side by side when the window is wide, stacked when it is narrow
+                    await AtlasView.Open(AtlasNav.DataId); await Task.Delay(150); UpdateLayout();
                     FrameworkElement CardOf(string title) => AtlasWalk(AtlasView.BodyForTest).OfType<Border>().FirstOrDefault(b => b.CornerRadius.TopLeft == 12 && AtlasWalk(b).OfType<TextBlock>().Any(t => t.Text == title));
                     double CardX(string title) { var c = CardOf(title); return c == null ? -1 : c.TranslatePoint(new Point(0, 0), AtlasView.BodyForTest).X; }
                     double CardY(string title) { var c = CardOf(title); return c == null ? -1 : c.TranslatePoint(new Point(0, 0), AtlasView.BodyForTest).Y; }
-                    Width = 760; await Task.Delay(300); UpdateLayout();
-                    int tilesNarrow = AtlasView.TileColumnsForTest, infoNarrow = AtlasView.InfoColumnsForTest; double gameXn = CardX("Your game data"), lodgeXn = CardX("Lodge pool"), lodgeYn = CardY("Lodge pool"), gameYn = CardY("Your game data");
-                    Check("start page, narrow (760): 3 tiles per row at least, one column of info cards stacked (Lodge pool under Your game data)", tilesNarrow >= 3 && infoNarrow == 1 && Math.Abs(gameXn - lodgeXn) < 1 && lodgeYn > gameYn, tilesNarrow + " / " + infoNarrow);
+                    int infoNarrow = AtlasView.InfoColumnsForTest; double gameXn = CardX("Your game data"), lodgeXn = CardX("Lodge pool"), lodgeYn = CardY("Lodge pool"), gameYn = CardY("Your game data");
+                    Check("data sources, narrow (760): the four cards (game data, Classic baseline, Lodge pool, world map cache) in one stacked column", infoNarrow == 1 && gameXn >= 0 && Math.Abs(gameXn - lodgeXn) < 1 && lodgeYn > gameYn && CardOf("Classic baseline") != null && CardOf("World map cache") != null, infoNarrow + " " + gameXn + " " + lodgeXn);
                     Width = 1300; await Task.Delay(300); UpdateLayout();
-                    int tilesMid = AtlasView.TileColumnsForTest, infoMid = AtlasView.InfoColumnsForTest; double gameXm = CardX("Your game data"), lodgeXm = CardX("Lodge pool");
-                    Check("start page, 1300: more tiles per row than narrow and two info columns side by side (Lodge pool to the right of Your game data)", tilesMid > tilesNarrow && infoMid == 2 && lodgeXm > gameXm + 100, tilesMid + " / " + infoMid + " " + gameXm + " " + lodgeXm);
-                    Width = 1700; Height = 1000; await Task.Delay(300); UpdateLayout();
-                    int tilesWide = AtlasView.TileColumnsForTest, infoWide = AtlasView.InfoColumnsForTest;
-                    Check("start page, wide (1700): up to 6 tiles per row (two rows for the 11 tiles) and three info columns", tilesWide >= 5 && tilesWide >= tilesMid && infoWide == 3 && RowsOfTiles() <= 3, tilesWide + " / " + infoWide + " rows " + RowsOfTiles());
-                    Snapshot(Path.Combine(dir, "atlas-start-wide.png"));
-                    Width = 760; await Task.Delay(300); UpdateLayout();
-                    Check("start page: shrinking again stacks the cards and takes the tiles back to the narrow count, with the same page (no redraw)", AtlasView.TileColumnsForTest == tilesNarrow && AtlasView.InfoColumnsForTest == 1);
-                    Snapshot(Path.Combine(dir, "atlas-start-narrow.png"));
+                    int infoMid = AtlasView.InfoColumnsForTest; double gameXm = CardX("Your game data"), lodgeXm = CardX("Lodge pool");
+                    Check("data sources, 1300: two info columns side by side (Lodge pool to the right of Your game data)", infoMid == 2 && lodgeXm > gameXm + 100, infoMid + " " + gameXm + " " + lodgeXm);
+                    Width = 1900; Height = 1000; await Task.Delay(300); UpdateLayout();
+                    Check("data sources, very wide (1900): three info columns", AtlasView.InfoColumnsForTest == 3, AtlasView.InfoColumnsForTest.ToString());
+                    Snapshot(Path.Combine(dir, "atlas-data-wide.png"));
                     Width = wStart; Height = h0; await Task.Delay(300); UpdateLayout();
-                    Check("start page: no link chip on the start page", AtlasView.LinkShown == "");
+                    AtlasView.History.Clear(); await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout();
                 }
                 Snapshot(Path.Combine(dir, "atlas-browse-start.png"));
                 ClickRow(Tile("browse:items"));
@@ -346,10 +360,10 @@ namespace ElansAddonHub
                 Check("page: Back to the list shows the browse page again", AtlasView.IsBrowse && AtlasView.CurrentId == "browse:items/weapons");
                 await AtlasView.Open("browse:nothing"); UpdateLayout();
                 Check("page: a browse id with no such category says so calmly (no list, a hint)", AtlasView.BrowseModel.NotFound && AtlasTexts(AtlasView).Any(t => t.Contains("nothing")) && AtlasView.BrowseListForTest == null);
-                AtlasView.SearchTextForTest = "browse:zones";
+                await AtlasView.OpenPalette("browse:zones");
+                AtlasView.PressPaletteForTest(Key.Enter);
                 await WaitFor(() => AtlasView.CurrentId == "browse:zones", 5000); await AtlasView.WaitForTest();
-                Check("page: typing a browse id in the search box opens it (instead of searching)", AtlasView.CurrentId == "browse:zones" && !AtlasView.ResultsOpen);
-                AtlasView.SearchTextForTest = ""; AtlasView.CloseResults();
+                Check("page: typing a browse id in the palette opens it (instead of searching)", AtlasView.CurrentId == "browse:zones" && !AtlasView.PaletteOpen);
 
                 // a hosted category: the control inside the page, through the same history
                 await AtlasView.Open("labs:tree/hunter"); await Task.Delay(100); UpdateLayout();

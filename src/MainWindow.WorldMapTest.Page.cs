@@ -113,6 +113,47 @@ namespace ElansAddonHub
                     Check("page: Leaflet 1.9.4 from the app's own copy is running, the tiles of the continent loaded (some 404 for the sea), nothing was fetched from the internet",
                         st != null && st.Bool("ready") && st.Str("version") == "1.9.4" && st.Int("tiles") > 3 && WorldMapView.BlockedForTest == 0, st == null ? "no state" : Json.Write(st));
                     Check("page: the map is shown instead of the overlay once ready (the overlay is hidden, the web view visible), and the Atlas id follows the view", WorldMapView.WebShown && !WorldMapView.OverlayShown && AtlasView.CurrentId.StartsWith("worldmap:"), AtlasView.CurrentId);
+                    Check("palette over the map: Ctrl+K pressed while the web page has the keyboard is caught (the WebView2 reports keys first), because the page is another window and WPF never sees them", WorldMapView.KeyHookForTest);
+                    // ---- the Ctrl+K palette over the map. A WebView2 is a window of its own, drawn above every WPF element (airspace), so a WPF palette would be hidden behind it:
+                    // while the palette is open over the map the live view is swapped for a snapshot of it (an Image WPF can cover) and swapped back when it closes.
+                    {
+                        var navBefore = AtlasView.CurrentId;
+                        var swFreeze = System.Diagnostics.Stopwatch.StartNew();
+                        await AtlasView.OpenPalette("north");
+                        swFreeze.Stop();
+                        await AtlasView.PaletteWaitForTest(); await Task.Delay(150); UpdateLayout();
+                        var snap = WorldMapView.FrozenSnapshotForTest;
+                        bool varied = false;
+                        if (snap != null && snap.PixelWidth > 100 && snap.PixelHeight > 100)
+                        {
+                            var src = new System.Windows.Media.Imaging.FormatConvertedBitmap(snap, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                            var px = new byte[4 * 40 * 40]; var colours = new HashSet<int>();
+                            for (int gy = 0; gy < 5; gy++) for (int gx = 0; gx < 5; gx++)
+                            {
+                                src.CopyPixels(new Int32Rect(gx * (snap.PixelWidth - 40) / 4, gy * (snap.PixelHeight - 40) / 4, 40, 40), px, 160, 0);
+                                for (int i = 0; i < px.Length; i += 4 * 37) colours.Add((px[i] >> 4) | ((px[i + 1] >> 4) << 4) | ((px[i + 2] >> 4) << 8));
+                            }
+                            varied = colours.Count >= 3;
+                        }
+                        Check("palette over the map: the live web view is swapped for a snapshot of the map (web view hidden, a real picture of " + (snap?.PixelWidth ?? 0) + " x " + (snap?.PixelHeight ?? 0) + " not a blank) in " + swFreeze.ElapsedMilliseconds + " ms, so the palette draws on top of it",
+                            AtlasView.PaletteOpen && WorldMapView.FrozenForTest && !WorldMapView.WebShown && WorldMapView.FrozenImageShownForTest && varied && AtlasView.PaletteCardForTest.IsVisible && AtlasView.PaletteCardForTest.ActualWidth > 300, "frozen=" + WorldMapView.FrozenForTest + " web=" + WorldMapView.WebShown + " snap=" + (snap == null ? "none" : snap.PixelWidth + "x" + snap.PixelHeight) + " varied=" + varied);
+                        Check("palette over the map: the palette works as everywhere - search results (the zone Northland for 'north'), the first selected, with a preview", await WaitFor(() => AtlasView.PaletteResultForTest != null && AtlasView.PaletteResultForTest.Query == "north" && AtlasView.PaletteResultForTest.Total > 0, 5000) && AtlasView.PaletteIdsForTest.Any(i => i.StartsWith("zone:")) && AtlasView.PaletteSelectedForTest == 0, string.Join(",", AtlasView.PaletteIdsForTest));
+                        Snapshot(P("worldmap-palette-window.png"));
+                        AtlasView.PressPaletteForTest(System.Windows.Input.Key.Escape);
+                        await Task.Delay(150);
+                        var stBack = await WmState();
+                        Check("palette over the map: Esc closes it and the live map is back as it was - shown, the same page, still ready (it stays the Atlas world map page)", !AtlasView.PaletteOpen && !WorldMapView.FrozenForTest && WorldMapView.WebShown && !WorldMapView.FrozenImageShownForTest && WorldMapView.PageReady && stBack != null && stBack.Bool("ready") && AtlasView.CurrentId.StartsWith("worldmap:") && AtlasView.IsHosted, AtlasView.CurrentId + " vs " + navBefore);
+                        await AtlasView.OpenPalette(); await Task.Delay(100);
+                        AtlasView.PaletteDimForTest.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonDownEvent, Source = AtlasView.PaletteDimForTest });
+                        await Task.Delay(100);
+                        Check("palette over the map: opened and closed again (a click on the dim) twice in a row - the map is live each time", !AtlasView.PaletteOpen && WorldMapView.WebShown && !WorldMapView.FrozenForTest);
+                        var swHead = System.Diagnostics.Stopwatch.StartNew();
+                        AtlasView.SearchBoxForTest.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Left) { RoutedEvent = UIElement.PreviewMouseDownEvent, Source = AtlasView.SearchBoxForTest });
+                        await AtlasView.PaletteOpenWaitForTest();
+                        Check("palette over the map: the header search box opens it here too, over the snapshot", AtlasView.PaletteOpen && WorldMapView.FrozenForTest && !WorldMapView.WebShown);
+                        AtlasView.ClosePalette(); await Task.Delay(100);
+                        Check("palette over the map: closed from code (a page change does the same) the live map returns", WorldMapView.WebShown && !WorldMapView.FrozenForTest);
+                    }
                     var key = WorldMapCache.BuildKey;
                     Check("page: the pictures are in <data>\\atlas\\worldmap\\<build key>\\<map id>\\ with a manifest, the page's own files in _page (Leaflet, its licence)",
                         File.Exists(Path.Combine(WorldMapCache.Root, key, "0", "manifest.json")) && File.Exists(Path.Combine(WorldMapCache.Root, "_page", "leaflet.js")) && File.Exists(Path.Combine(WorldMapCache.Root, "_page", "LICENSE-leaflet.txt")) && File.Exists(Path.Combine(WorldMapCache.Root, "_page", "index.html")));

@@ -244,13 +244,12 @@ namespace ElansAddonHub
                 Check("search: 'camping' offers the Camping tab (professions:camp)", s_camp.Groups.Count > 0 && s_camp.Groups[0].Kind == "page" && s_camp.Groups[0].Hits.Any(h => h.Id == "professions:camp"));
                 Check("search: 'professions' and 'first aid' find their pages; a text no page names adds no group", AtlasQuery.Search("professions").Groups[0].Hits[0].Id == "professions:" && AtlasQuery.Search("first aid").Groups[0].Hits.Any(h => h.Id == "professions:first-aid/recipes") && !AtlasQuery.Search("linen cloth").Groups.Any(g => g.Kind == "page"));
                 await AtlasView.GoStart(); await Task.Delay(100); UpdateLayout();
-                AtlasView.SearchTextForTest = "cooking";
-                await WaitFor(() => AtlasView.ResultsOpen && AtlasView.HitsForTest.Count > 0, 5000); await AtlasView.SearchWaitForTest(); UpdateLayout();
-                Check("search: in the overlay the first group is 'Atlas pages' with the Cooking row selected", AtlasView.ResultsOpen && AtlasView.ResultsForTest.Groups[0].Title == "Atlas pages" && AtlasView.HitsForTest[0].Id == "professions:cooking/recipes" && AtlasView.SelectedHitForTest == 0 && AtlasTexts(AtlasView).Contains("Atlas pages"));
+                await AtlasView.OpenPalette("cooking");
+                await WaitFor(() => AtlasView.PaletteResultForTest != null && AtlasView.PaletteResultForTest.Query == "cooking" && AtlasView.PaletteResultForTest.Total > 0, 5000); await AtlasView.PaletteWaitForTest(); UpdateLayout();
+                Check("search: in the palette the first group is 'Pages' with the Cooking row selected", AtlasView.PaletteOpen && AtlasView.PaletteResultForTest.Groups[0].Title == "Pages" && AtlasView.PaletteIdsForTest[0] == "professions:cooking/recipes" && AtlasView.PaletteSelectedForTest == 0 && AtlasView.PaletteTextsForTest.Contains("Pages"), string.Join(" | ", AtlasView.PaletteIdsForTest));
                 Snapshot(Path.Combine(dir, "atlas-hosts-search.png"));
-                AtlasView.PressForTest(Key.Enter); await Task.Delay(300); await AtlasView.WaitForTest(); UpdateLayout();
-                Check("search: Enter opens the Cooking page of Professions inside the Atlas", AtlasView.IsHosted && ReferenceEquals(AtlasView.HostedForTest, pp) && pp.ProfessionNow == "Cooking" && AtlasView.CurrentId == "professions:cooking/recipes" && !AtlasView.ResultsOpen, AtlasView.CurrentId);
-
+                AtlasView.PressPaletteForTest(Key.Enter); await Task.Delay(300); await AtlasView.WaitForTest(); UpdateLayout();
+                Check("search: Enter opens the Cooking page of Professions inside the Atlas", AtlasView.IsHosted && ReferenceEquals(AtlasView.HostedForTest, pp) && pp.ProfessionNow == "Cooking" && AtlasView.CurrentId == "professions:cooking/recipes" && !AtlasView.PaletteOpen, AtlasView.CurrentId);
                 // ============================================================================================================ without game data the pages still open
                 TalentData.SetForTest(null, TalentData.State.Disabled);
                 await AtlasView.Open("talents:tree/hunter"); await Task.Delay(150);
@@ -267,7 +266,7 @@ namespace ElansAddonHub
                     ProfessionLinks.OpenRequested -= OnProfessionLink; ProfessionLinks.OpenRequested += OnProfessionLink;
                     TalentData.ResetForTest(); SpellData.ResetForTest(); ItemData.ResetForTest(); SeenData.ResetForTest(); ClassicAtlas.Use(null); AtlasBrowse.ForgetForTest();
                     ProfessionsView.ResetForTest(); TalentsView.ResetPageForTest();
-                    AtlasView.CloseResults(); AtlasView.SearchTextForTest = "";
+                    AtlasView.ClosePalette();
                     Width = savedWidth; Height = h0;
                     ShowTab("addons"); ResetAtlasForTest();
                 }

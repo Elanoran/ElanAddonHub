@@ -45,6 +45,7 @@ namespace ElansAddonHub
             var h0 = Height;
             // ---- the rail entry and the page opening
             Check("nav: the rail has an Atlas button with Ctrl+5 in its tooltip, and Ctrl+5 means the Atlas page", TabAtlas != null && TabAtlas.ToolTip.ToString().Contains("Ctrl+5") && TabForKey(Key.D5) == "atlas" && TabForKey(Key.NumPad5) == "atlas");
+            ResetAtlasForTest();           // (another section may have left the Atlas on one of its pages)
             ShowTab("atlas");
             await AtlasView.WaitForTest();
             await Task.Delay(200);
@@ -52,7 +53,7 @@ namespace ElansAddonHub
             Check("nav: the Atlas page opens and the others close", AtlasView.Visibility == Visibility.Visible && AddonsPage.Visibility == Visibility.Collapsed && LodgePage.Visibility == Visibility.Collapsed && SettingsPage.Visibility == Visibility.Collapsed
                 && InventoryView.Visibility == Visibility.Collapsed && BrowserView.Visibility == Visibility.Collapsed && RefreshBar.Visibility == Visibility.Collapsed);
             ShowTab("inventory"); ShowTab("atlas");
-            Check("nav: going away and coming back keeps the page", AtlasView.Visibility == Visibility.Visible && AtlasView.IsStart);
+            Check("nav: going away and coming back keeps the page", AtlasView.Visibility == Visibility.Visible && AtlasView.IsStart, "id=" + AtlasView.CurrentId + " vis=" + AtlasView.Visibility);
 
             // ---- the start page: game data, Classic baseline, Lodge pool, recent finds
             var fake = new FakeClassic { Dir = Path.Combine(work, "classicdl"), Idx = classic };
@@ -62,12 +63,16 @@ namespace ElansAddonHub
             await AtlasView.GoStart();
             UpdateLayout();
             var st = AtlasTexts(AtlasView);
-            Check("start page: title Atlas; cards for your game data, the Classic baseline, the Lodge pool and the Lodge's recent finds", st.Contains("Atlas") && st.Contains("Your game data") && st.Contains("Classic baseline") && st.Contains("Lodge pool") && st.Contains("Recent finds in the Lodge"));
-            Check("start page: game data lines (items, spells and recipes, maps, seen) and the Lodge line from the session", st.Any(t => t.StartsWith("Items")) && st.Any(t => t.StartsWith("Spells and recipes")) && st.Any(t => t.StartsWith("Maps")) && st.Any(t => t.StartsWith("Seen by your game"))
-                && st.Contains("Connected · sharing your observations and receiving the Lodge's") && st.Any(t => t.Contains("4 finds by 2 members") && t.Contains("Last update 10 min ago")), string.Join(" | ", st.Where(t => t.Contains("finds"))));
+            Check("start page: the hero search, the Browse cards, the Lodge's recent finds and the one status line (no data cards on it)", st.Any(t => t.StartsWith("Search items, creatures")) && st.Contains("Browse") && st.Contains("Recent finds in the Lodge") && AtlasView.StatusLineForTest != null && !st.Contains("Your game data") && !st.Contains("Lodge pool"));
             Check("start page: recent finds are rows with the item, member and age; newest first (Ruby Ring 10 min ago)", st.Contains("Ruby Ring") && st.Contains("10 min ago") && RowFor("item:105") != null);
-            Check("start page: the pool summary - sources, vendors, finds, members, the last update", AtlasView.Pool().Has && AtlasView.Pool().Finds == 4 && AtlasView.Pool().FindMembers == 2 && AtlasView.Pool().Vendors == 1 && AtlasView.Pool().Sources == 3 && AtlasView.Pool().Updated == AtNow - 600);
-            // the Lodge pool gets a page while the start page is open: the recent finds are drawn again (no tab switch needed)
+            await AtlasView.Open(AtlasNav.DataId);
+            UpdateLayout();
+            st = AtlasTexts(AtlasView);
+            Check("data sources page: title 'Data sources'; cards for your game data, the Classic baseline, the Lodge pool and the world map cache", st.Contains("Data sources") && st.Contains("Your game data") && st.Contains("Classic baseline") && st.Contains("Lodge pool") && st.Contains("World map cache") && AtlasView.CurrentId == AtlasNav.DataId);
+            Check("data sources page: game data lines (items, spells and recipes, maps, seen) and the Lodge line from the session", st.Any(t => t.StartsWith("Items")) && st.Any(t => t.StartsWith("Spells and recipes")) && st.Any(t => t.StartsWith("Maps")) && st.Any(t => t.StartsWith("Seen by your game"))
+                && st.Contains("Connected · sharing your observations and receiving the Lodge's") && st.Any(t => t.Contains("4 finds by 2 members") && t.Contains("Last update 10 min ago")), string.Join(" | ", st.Where(t => t.Contains("finds"))));
+            Check("data sources page: the pool summary - sources, vendors, finds, members, the last update", AtlasView.Pool().Has && AtlasView.Pool().Finds == 4 && AtlasView.Pool().FindMembers == 2 && AtlasView.Pool().Vendors == 1 && AtlasView.Pool().Sources == 3 && AtlasView.Pool().Updated == AtNow - 600);
+            // the Lodge pool gets a page while the data page is open: its card is drawn again (no tab switch needed); the start page shows the new find
             {
                 var origLodge = AtlasQuery.Context.Lodge; var live = AtlasTestLodge(); AtlasQuery.Context.Lodge = () => live;
                 try
@@ -77,11 +82,14 @@ namespace ElansAddonHub
                     live.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":8,\"at\":" + (AtNow - 5) + ",\"finds\":[{\"i\":104,\"c\":1,\"at\":" + (AtNow - 60) + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.3,\"y\":0.3,\"by\":\"Tess\",\"s\":9}]}"));
                     AtlasView.PoolChanged(); UpdateLayout();
                     var poolAfter = AtlasTexts(AtlasView);
-                    Check("start page: a pool update while the page is open redraws it (new find 'Crypt Blade' on top, 5 finds)", !poolBefore.Contains("Crypt Blade") && poolAfter.Contains("Crypt Blade") && poolAfter.Any(t => t.Contains("5 finds by 2 members")), string.Join(" | ", poolAfter.Where(t => t.Contains("finds"))));
+                    Check("data sources page: a pool update while the page is open redraws it (5 finds by 2 members)", !poolBefore.Any(t => t.Contains("5 finds by 2 members")) && poolAfter.Any(t => t.Contains("5 finds by 2 members")), string.Join(" | ", poolAfter.Where(t => t.Contains("finds"))));
+                    await AtlasView.GoStart(); UpdateLayout();
+                    Check("start page: ... and the new find 'Crypt Blade' is on top of the recent finds", AtlasTexts(AtlasView).Contains("Crypt Blade"));
+                    AtlasView.PoolChanged(); UpdateLayout();
+                    await AtlasView.Open(AtlasNav.DataId); UpdateLayout();
                 }
                 finally { AtlasQuery.Context.Lodge = origLodge; AtlasView.DataChanged(); UpdateLayout(); }
             }
-
             // ---- the Classic baseline card with a fake downloader
             Check("classic card: not downloaded -> the button says what it gets (size, source, licence), the credit line and the GitHub link are there, no licence file link yet",
                 setup.State == ClassicCardState.NotDownloaded && AtlasView.ClassicPrimaryForTest != null && AtlasView.ClassicPrimaryForTest.Content.ToString() == "Get Classic data (about 19 MB, cMaNGOS, GPL-3.0)"
@@ -92,6 +100,7 @@ namespace ElansAddonHub
             await WaitFor(() => fake.Queries == 1 && !setup.Busy, 5000);
             Check("classic card: the user says no to the question -> nothing is downloaded (1 query, 0 downloads), the card is as it was", fake.Queries == 1 && fake.Downloads == 0 && fake.Builds == 0 && setup.State == ClassicCardState.NotDownloaded && setup.Remote == null);
             // ---- the "Get Classic data" banner at the top of the start page
+            await AtlasView.GoStart(); UpdateLayout();
             Check("banner: while the baseline is not installed the start page opens with a banner (the first thing on it) that says what it adds, with a primary 'Get Classic data' button and 'Not now'",
                 AtlasView.ClassicBannerShownForTest && ((Panel)AtlasView.ClassicBannerForTest.Parent).Children[0] == AtlasView.ClassicBannerForTest && AtlasTexts(AtlasView.ClassicBannerForTest).Contains(ClassicSetup.BannerText)
                 && ClassicSetup.BannerText.StartsWith("Drop chances, vendors, spawns and quests from the Classic database: about 19 MB, downloaded from its public source and credited")
@@ -103,13 +112,14 @@ namespace ElansAddonHub
             Check("banner: its button starts the same download as the card (the question is asked first: 'no' = one query, nothing downloaded) and the banner stays", fake.Queries == q0 + 1 && fake.Downloads == 0 && setup.State == ClassicCardState.NotDownloaded && AtlasView.ClassicBannerShownForTest);
             ClickButton(AtlasView.ClassicBannerNotNowForTest);
             await Task.Delay(100); UpdateLayout();
-            Check("banner: 'Not now' hides it (the card below stays)", !AtlasView.ClassicBannerShownForTest && AtlasView.ClassicPrimaryForTest != null);
+            Check("banner: 'Not now' hides it", !AtlasView.ClassicBannerShownForTest);
             await AtlasView.GoStart(); await Task.Delay(100); UpdateLayout();
             Check("banner: ... and it stays hidden when the start page is drawn again in this session", !AtlasView.ClassicBannerShownForTest);
             ElansAddonHub.AtlasPage.ResetClassicBannerForTest();      // (a new session: nothing is saved)
             await AtlasView.GoStart(); await Task.Delay(100); UpdateLayout();
             Check("banner: a new session shows it again", AtlasView.ClassicBannerShownForTest && AtlasView.ClassicBannerGetForTest != null);
             Snapshot(Path.Combine(dir, "atlas-page-classic-banner.png"));
+            await AtlasView.Open(AtlasNav.DataId); UpdateLayout();
 
             var calls = new List<DialogCall>();
             AtlasView.ConfirmOverrideForTest = null;
@@ -131,7 +141,9 @@ namespace ElansAddonHub
             Check("classic card: download progress rises to 100 % (fraction of bytes), import progress rises to 100 % too", dl.Count >= 4 && dl.Zip(dl.Skip(1), (a, b) => b >= a).All(x => x) && Math.Abs(dl.Max() - 1) < 1e-9 && im.Count >= 3 && im.Zip(im.Skip(1), (a, b) => b >= a).All(x => x) && Math.Abs(im.Max() - 1) < 1e-9);
             var ready = AtlasTexts(AtlasView.ClassicCardForTest);
             string wantReady = "Ready · dump of 2 May 2024 · " + classic.Npcs.Count + " creatures, " + classic.Items.Count + " items, " + classic.Quests.Count + " quests";
+            await AtlasView.GoStart(); UpdateLayout();
             Check("banner: once the baseline is ready the banner is gone", !AtlasView.ClassicBannerShownForTest && AtlasView.ClassicBannerGetForTest == null);
+            await AtlasView.Open(AtlasNav.DataId); UpdateLayout();
             Check("classic card: ready shows the dump date and what is in it, a Remove button, the credit line and a link to the licence file next to the data", ready.Contains(wantReady) && ready.Contains("Ready") && ready.Contains("Remove from this PC") && ready.Contains("Licence (file on this PC)") && AtlasView.ClassicRemoveForTest != null && AtlasView.ClassicPrimaryForTest == null, string.Join(" | ", ready.Take(8)));
             string opened = null, openedUrl = null;
             AtlasView.OpenFileOverrideForTest = p => { opened = p; return true; }; AtlasView.OpenLinkOverride = u => openedUrl = u;
@@ -151,8 +163,10 @@ namespace ElansAddonHub
             await WaitFor(() => setup.State == ClassicCardState.Downloading && setup.Fraction >= 0.5, 5000);
             await Task.Delay(250); UpdateLayout();
             var progTexts = AtlasTexts(AtlasView.ClassicCardForTest);
+            await AtlasView.GoStart(); await Task.Delay(100); UpdateLayout();
             Check("banner: while it downloads the banner shows the progress (bar, 'Downloading the dump · ... · 50 %') instead of the buttons", AtlasView.ClassicBannerShownForTest && AtlasView.ClassicBannerGetForTest == null && AtlasView.ClassicBannerProgressForTest != null && Math.Abs(AtlasView.ClassicBannerProgressForTest.Value - 50) < 1
                 && AtlasTexts(AtlasView.ClassicBannerForTest).Any(t => t.StartsWith("Downloading the dump") && t.EndsWith("50 %")), string.Join(" | ", AtlasTexts(AtlasView.ClassicBannerForTest)));
+            await AtlasView.Open(AtlasNav.DataId); await Task.Delay(100); UpdateLayout();
             Check("classic card: while downloading it shows a progress bar, 'Downloading the dump · the file · 50 %' and a Cancel button (and no Get button)", progTexts.Any(t => t.StartsWith("Downloading the dump · ClassicDB_test.sql.gz") && t.EndsWith("50 %")) && progTexts.Contains("Cancel") && AtlasView.ClassicCancelForTest != null && AtlasView.ClassicPrimaryForTest == null
                 && AtlasWalk(AtlasView.ClassicCardForTest).OfType<ProgressBar>().Any(b => Math.Abs(b.Value - 50) < 1), string.Join(" | ", progTexts));
             Height = 1000; await Task.Delay(300); UpdateLayout();
@@ -205,36 +219,38 @@ namespace ElansAddonHub
             AtlasView.ConfirmOverrideForTest = null;
             AtlasView.UseClassicSetup(new ClassicSetup(new FakeClassic { Dir = fake.Dir, Idx = classic, St = ClassicState.Ready }));
 
-            // ---- search in the window
-            AtlasView.DebounceMsForTest = 30;
+            // ---- search in the window: the Ctrl+K palette (the header box is its launcher)
+            AtlasView.PaletteDebounceMsForTest = 30;
             await AtlasView.GoStart();
-            AtlasView.SearchBoxForTest.Focus();
-            AtlasView.SearchTextForTest = "wolf";
-            Check("search box: typing opens the results under the box after a short pause", await WaitFor(() => AtlasView.ResultsOpen && AtlasView.HitsForTest.Count > 0, 5000));
-            await AtlasView.SearchWaitForTest();
+            await AtlasView.OpenPalette();
+            Check("palette: opens over the page, with the search box ready and the palette's empty state", AtlasView.PaletteOpen && AtlasView.PaletteBoxForTest.IsKeyboardFocused && AtlasView.PaletteTextForTest == "");
+            AtlasView.PaletteTextForTest = "wolf";
+            Check("palette: typing shows the results after a short pause", await WaitFor(() => AtlasView.PaletteResultForTest != null && AtlasView.PaletteResultForTest.Query == "wolf" && AtlasView.PaletteResultForTest.Total > 0, 5000));
+            await AtlasView.PaletteWaitForTest();
             UpdateLayout();
-            var rt = AtlasTexts(AtlasView);
-            Check("search box: results are grouped (Items, NPCs) with the best hit selected first, each hit with its name and where it comes from", rt.Contains("Items") && rt.Contains("NPCs") && AtlasView.HitsForTest[0].Name == "Wolf Pelt" && AtlasView.SelectedHitForTest == 0 && rt.Contains("Wolf Pelt") && rt.Contains("Plains Wolf") && rt.Contains("Classic baseline"), string.Join(" | ", AtlasView.HitsForTest));
-            AtlasView.PressForTest(Key.Down);
-            int afterDown = AtlasView.SelectedHitForTest;
-            AtlasView.PressForTest(Key.Up);
-            Check("search box: Down and Up move the selection", afterDown == 1 && AtlasView.SelectedHitForTest == 0);
+            var rt = AtlasView.PaletteTextsForTest;
+            var phits = AtlasView.PaletteResultForTest.All.ToList();
+            Check("palette: results are grouped (Items, NPCs) with the best hit selected first, each hit with its name and where it comes from", rt.Contains("Items") && rt.Contains("NPCs") && phits[0].Name == "Wolf Pelt" && AtlasView.PaletteSelectedForTest == 0 && rt.Contains("Wolf Pelt") && rt.Contains("Plains Wolf") && rt.Contains("Classic baseline"), string.Join(" | ", rt) + " SEL=" + AtlasView.PaletteSelectedForTest);
+            AtlasView.PressPaletteForTest(Key.Down);
+            int afterDown = AtlasView.PaletteSelectedForTest;
+            AtlasView.PressPaletteForTest(Key.Up);
+            Check("palette: Down and Up move the selection", afterDown == 1 && AtlasView.PaletteSelectedForTest == 0);
             Snapshot(Path.Combine(dir, "atlas-page-search.png"));
-            AtlasView.PressForTest(Key.Down);
-            var chosen = AtlasView.HitsForTest[AtlasView.SelectedHitForTest];
-            AtlasView.PressForTest(Key.Enter);
+            AtlasView.PressPaletteForTest(Key.Down);
+            var chosenId = AtlasView.PaletteIdsForTest[AtlasView.PaletteSelectedForTest];
+            AtlasView.PressPaletteForTest(Key.Enter);
             await AtlasView.WaitForTest(); UpdateLayout();
-            Check("search box: Enter opens the selected hit, closes the results and clears the box", AtlasView.CurrentId == chosen.Id && !AtlasView.ResultsOpen && AtlasView.SearchTextForTest == "" && AtlasView.Model.Id == chosen.Id, AtlasView.CurrentId + " vs " + chosen.Id);
-            AtlasView.SearchTextForTest = "gnarlfang";
-            AtlasView.PressForTest(Key.Enter);          // before the results came: it searches now and opens the best hit
-            Check("search box: Enter before the answer arrived still opens the best hit (Gnarlfang the creature)", await WaitFor(() => AtlasView.CurrentId == "npc:1", 5000));
-            AtlasView.SearchTextForTest = "item:105";
-            AtlasView.PressForTest(Key.Enter);
-            Check("search box: an id typed in opens that page (item:105)", await WaitFor(() => AtlasView.CurrentId == "item:105", 5000));
-            AtlasView.SearchTextForTest = "qqqzzz";
-            Check("search box: nothing matching says so and what to try", await WaitFor(() => AtlasView.ResultsOpen, 5000) && AtlasTexts(AtlasView).Any(t => t.StartsWith("Nothing matches \"qqqzzz\"")) && AtlasTexts(AtlasView).Any(t => t.StartsWith("Try fewer letters")));
-            AtlasView.PressForTest(Key.Escape);
-            Check("search box: Esc closes the results and clears the box", !AtlasView.ResultsOpen && AtlasView.SearchTextForTest == "");
+            Check("palette: Enter opens the selected hit and closes the palette", await WaitFor(() => AtlasView.CurrentId == chosenId && !AtlasView.PaletteOpen, 5000) && AtlasView.Model.Id == chosenId, AtlasView.CurrentId + " vs " + chosenId);
+            await AtlasView.OpenPalette("gnarlfang");
+            AtlasView.PressPaletteForTest(Key.Enter);          // before the results came: it searches now and opens the best hit
+            Check("palette: Enter before the answer arrived still opens the best hit (Gnarlfang the creature)", await WaitFor(() => AtlasView.CurrentId == "npc:1", 5000));
+            await AtlasView.OpenPalette("item:105");
+            AtlasView.PressPaletteForTest(Key.Enter);
+            Check("palette: an id typed in opens that page (item:105)", await WaitFor(() => AtlasView.CurrentId == "item:105", 5000));
+            await AtlasView.OpenPalette("qqqzzz");
+            Check("palette: nothing matching says so and what to try", await WaitFor(() => AtlasView.PaletteResultForTest != null && AtlasView.PaletteResultForTest.Query == "qqqzzz", 5000) && AtlasView.PaletteTextsForTest.Any(t => t.StartsWith("Nothing matches \"qqqzzz\"")) && AtlasView.PaletteTextsForTest.Any(t => t.StartsWith("Try fewer letters")));
+            AtlasView.PressPaletteForTest(Key.Escape);
+            Check("palette: Esc closes it", !AtlasView.PaletteOpen);
 
             // ---- the item page in the window
             await AtlasView.Open("item:100");
@@ -248,7 +264,7 @@ namespace ElansAddonHub
             Check("item page: the main card is a GameTooltip (game order: name, Item Level, binding, slot ...), the icon in a 56 px frame to its LEFT, the source chip below it in the app style",
                 itemTip != null && itemTip.Title == "Gnarlfang's Claw" && itemTip.Parent is StackPanel ip && ip.Children[0] is Border ifr && ifr.Width == 56 && ip.Orientation == Orientation.Horizontal && itemTip.Texts().Contains("Item Level 14")
                 && itemTip.Texts().IndexOf("Item Level 14") == 1 && !itemTip.HasFooter && tx.IndexOf("Forever") > tx.IndexOf("Item Level 14"), itemTip == null ? "no GameTooltip" : string.Join(" | ", itemTip.Texts()));
-            Check("item page: wide window -> two columns (the card on the left, the tables on the right)", AtlasView.WideForTest);
+            Check("item page: wide window -> two columns (the card on the left, the tables on the right)", AtlasView.WideForTest, "scroller " + AtlasView.ScrollerWidthForTest + " page " + AtlasView.ActualWidth + " window " + Width);
             Check("item page: one map with a zone picker (Greenvale first)", AtlasView.MapsForTest.Count == 1 && AtlasView.zonePicks.Count == 1 && AtlasView.zonePicks[0].SelectedIndex == 0 && AtlasView.zonePicks[0].Items.Count >= 2);
             Check("item page: the map loads after the page is drawn, shows the best zone with its markers", await MapReady() && AtlasView.MapsForTest[0].UiMapId == 11 && AtlasView.MapsForTest[0].MarkerCount == AtlasQuery.Build("item:100").Map.Best.Markers.Count && AtlasView.MapsForTest[0].MarkerCount >= 4);
             var picker = AtlasView.zonePicks[0];
@@ -407,8 +423,8 @@ namespace ElansAddonHub
             OpenInAtlas("item:105"); await AtlasView.WaitForTest();
             Check("open in Atlas: from elsewhere in the app (chat item chips, the Characters page) the rail switches to the Atlas and the page opens", TabAtlas.IsChecked == true && AtlasView.Visibility == Visibility.Visible && AtlasView.CurrentId == "item:105");
             OpenInAtlas("wolf");
-            Check("open in Atlas: a name searches", await WaitFor(() => AtlasView.ResultsOpen && AtlasView.SearchTextForTest == "wolf", 5000));
-            AtlasView.SearchTextForTest = ""; AtlasView.CloseResults();
+            Check("open in Atlas: a name opens the palette with it", await WaitFor(() => AtlasView.PaletteOpen && AtlasView.PaletteTextForTest == "wolf", 5000));
+            AtlasView.ClosePalette();
 
             // ---- coming back to the tab does not redraw a page that has not changed
             await AtlasView.Open("item:100"); UpdateLayout();
@@ -419,6 +435,9 @@ namespace ElansAddonHub
             ShowTab("inventory"); ShowTab("atlas"); await AtlasView.WaitForTest(); UpdateLayout();
             Check("tab: when the Lodge pool changed meanwhile the page is drawn again", !ReferenceEquals(AtlasView.Model, modelBefore) && AtlasView.Model.Id == "item:100");
 
+            // ---- the Atlas shell: sub-navigation, recents and pins, breadcrumb, Home, palette
+            await AtlasShellChecks(dir, Check);
+
             // ---- screenshots of the start page: with data, and with nothing at all
             Height = 1000; await AtlasView.GoStart(); await Task.Delay(400); UpdateLayout();
             Snapshot(Path.Combine(dir, "atlas-page-start.png"));
@@ -428,9 +447,13 @@ namespace ElansAddonHub
             AtlasView.UseClassicSetup(new ClassicSetup(new FakeClassic { Dir = fake.Dir }));
             AtlasView.LodgeState = () => "Not connected to a Lodge";
             await AtlasView.GoStart(); await Task.Delay(300); UpdateLayout();
-            var bare = AtlasTexts(AtlasView);
-            Check("start page: with no game data, no baseline and no Lodge the page still opens, says each layer is off / missing and offers the download", bare.Contains("Not connected to a Lodge") && bare.Contains("Classic baseline") && bare.Any(t => t.Contains("switched off") || t.Contains("off")) && !bare.Contains("Recent finds in the Lodge") && AtlasView.ClassicPrimaryForTest != null);
+            var bareHome = AtlasTexts(AtlasView);
+            Check("start page: with no game data, no baseline and no Lodge the page still opens, its status line says each source is off / missing, there is no finds block and the Classic banner offers the download", bareHome.Contains("Game data off") && bareHome.Contains("Classic baseline not on this PC") && bareHome.Contains("No Lodge") && !bareHome.Contains("Recent finds in the Lodge") && AtlasView.ClassicBannerGetForTest != null, string.Join(" | ", bareHome.Where(t => t.Contains("Game") || t.Contains("Lodge"))));
             Snapshot(Path.Combine(dir, "atlas-page-start-empty.png"));
+            await AtlasView.Open(AtlasNav.DataId); await Task.Delay(200); UpdateLayout();
+            var bare = AtlasTexts(AtlasView);
+            Check("data sources page: with no game data, no baseline and no Lodge it still opens, says each layer is off / missing and offers the download", bare.Contains("Not connected to a Lodge") && bare.Contains("Classic baseline") && bare.Any(t => t.Contains("switched off") || t.Contains("off")) && AtlasView.ClassicPrimaryForTest != null);
+            Snapshot(Path.Combine(dir, "atlas-data-empty.png"));
             await AtlasView.Open("item:100"); UpdateLayout();
             Check("item page with no layer but the baseline's name missing too: a calm page, not an error", AtlasView.Model.NotFound && AtlasTexts(AtlasView).Any(t => t.Contains("Item")));
 

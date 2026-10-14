@@ -51,6 +51,7 @@ namespace ElansAddonHub.Services.Atlas
         public static string NormalizeId(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return null;
+            if (AtlasNav.IsPage(text)) return AtlasNav.DataId;
             if (AtlasBrowse.IsBrowseId(text)) return BrowseQuery.TryParse(text, out var bq) ? bq.ToId() : null;
             if (AtlasCategories.TryHosted(text.Trim(), out var hc, out var hsub)) return hc.Id + ":" + hsub;
             var m = IdText.Match(text);
@@ -145,7 +146,7 @@ namespace ElansAddonHub.Services.Atlas
             return p == ' ' || p == '-' || p == '\'' || p == ':' || p == '(' ? 2 : 3;
         }
 
-        public static AtlasSearchResult Search(string text, int perGroup = 6)
+        public static AtlasSearchResult Search(string text, int perGroup = 6, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken))
         {
             var res = new AtlasSearchResult { Query = (text ?? "").Trim() };
             if (res.Query.Length == 0) return res;
@@ -166,6 +167,7 @@ namespace ElansAddonHub.Services.Atlas
             var groups = new List<AtlasGroup>();
             void Add(string kind, List<AtlasHit> hits)
             {
+                ct.ThrowIfCancellationRequested();
                 if (hits.Count == 0) return;
                 hits.Sort(CompareHits);
                 var g = new AtlasGroup { Kind = kind, Title = AtlasKinds.Plural(kind), Total = hits.Count };

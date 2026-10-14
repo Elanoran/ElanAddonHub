@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Maps;
@@ -63,6 +65,11 @@ namespace ElansAddonHub
         public bool ModeSegmentsShown => modeHost.Visibility == Visibility.Visible;
         public bool Segment3dChecked => seg3d.IsChecked == true;
         public string LoadedPage => loadedPage;
+        public bool FrozenForTest => frozen;
+        public bool KeyHookForTest { get; private set; }
+        public event Action PaletteRequested;                  // Ctrl+K was pressed while the web page had the keyboard (the page is another window: WPF never sees the key)
+        public bool FrozenImageShownForTest => freezeImg != null && freezeImg.Source != null;
+        public BitmapSource FrozenSnapshotForTest => freezeImg?.Source as BitmapSource;
         public static bool ForceNoGlForTest;                   // self-test: pretend WebGL is missing (the page is told to behave as if it were)
 
         // ---- parts
@@ -282,13 +289,82 @@ namespace ElansAddonHub
             StartPage(c, t);
         }
 
+        [DllImport("user32.dll")] static extern short GetKeyState(int vk);
+
+        // The keyboard focus inside the web page belongs to the WebView2 window, so Ctrl+K never reaches the Atlas page. The WebView2 control reports every key first
+        // (AcceleratorKeyPressed on its controller, which the WPF wrapper keeps private: found by reflection); Ctrl+K is taken from there. If the hook can not be made the shortcut simply does not work over the map.
+        void HookKeys(WebView2 wv)
+        {
+            try
+            {
+                var inst = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                var baseObj = typeof(WebView2).GetField("m_webview2Base", inst)?.GetValue(wv);
+                var ctl = baseObj?.GetType().GetField("<CoreWebView2Controller>k__BackingField", inst)?.GetValue(baseObj) as CoreWebView2Controller;
+                if (ctl == null) return;
+                ctl.AcceleratorKeyPressed += (s, e) =>
+                {
+                    try
+                    {
+                        if (e.KeyEventKind != CoreWebView2KeyEventKind.KeyDown && e.KeyEventKind != CoreWebView2KeyEventKind.SystemKeyDown) return;
+                        if (e.VirtualKey == 0x4B && (GetKeyState(0x11) & 0x8000) != 0 && (GetKeyState(0x12) & 0x8000) == 0) { e.Handled = true; PaletteRequested?.Invoke(); }
+                    }
+                    catch (Exception) { }
+                };
+                KeyHookForTest = true;
+            }
+            catch (Exception ex) { Util.Log("world map: key hook: " + ex.Message); }
+        }
+
+        // ---------------------------------------------------------------- airspace: a WebView2 is a window of its own and is drawn above every WPF element, so a WPF layer (the Atlas palette)
+        // can not cover it. While one is open the live view is swapped for a snapshot of it (CapturePreviewAsync into an Image, which WPF can cover) and swapped back on Thaw.
+        // The snapshot is the last frame, nothing moves under the layer; if the capture fails the stage colour stands in and the layer still works.
+        bool frozen, webWanted;
+        Image freezeImg;
+
+        void ApplyWebVisibility() { if (web != null) web.Visibility = webWanted && !frozen ? Visibility.Visible : Visibility.Hidden; }
+
+        public async Task<bool> FreezeAsync()
+        {
+            if (frozen) return true;
+            if (web == null || web.CoreWebView2 == null || web.Visibility != Visibility.Visible) return false;      // nothing in the way: no web view on screen
+            BitmapImage bmp = null;
+            try
+            {
+                using (var ms = new MemoryStream())
+                {
+                    var cap = web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, ms);
+                    if (await Task.WhenAny(cap, Task.Delay(1500)) == cap)
+                    {
+                        await cap;
+                        ms.Position = 0;
+                        bmp = new BitmapImage();
+                        bmp.BeginInit(); bmp.CacheOption = BitmapCacheOption.OnLoad; bmp.StreamSource = ms; bmp.EndInit(); bmp.Freeze();
+                    }
+                }
+            }
+            catch (Exception e) { Util.Log("world map snapshot: " + e.Message); bmp = null; }
+            freezeImg = new Image { Source = bmp, Stretch = Stretch.Fill, IsHitTestVisible = false };
+            stage.Children.Add(freezeImg);
+            frozen = true;
+            ApplyWebVisibility();
+            return true;
+        }
+
+        public void Thaw()
+        {
+            if (!frozen) return;
+            frozen = false;
+            if (freezeImg != null) { stage.Children.Remove(freezeImg); freezeImg = null; }
+            ApplyWebVisibility();
+        }
+
         // ---------------------------------------------------------------- overlay (build progress, notes, no WebView2)
         void Show(string glyph, string title, string hint, bool busy)
         {
             overlayGlyph.Text = glyph; overlayTitle.Text = title; overlayHint.Text = hint;
             overlayHint.Visibility = hint.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             overlayBar.Visibility = Visibility.Collapsed; overlayButton.Visibility = Visibility.Collapsed;
-            if (web != null) web.Visibility = Visibility.Hidden;
+            webWanted = false; ApplyWebVisibility();
             overlay.Visibility = Visibility.Visible;
         }
 
@@ -339,7 +415,7 @@ namespace ElansAddonHub
         {
             if (web == null || !PageInited) return;
             overlay.Visibility = Visibility.Collapsed;
-            web.Visibility = Visibility.Visible;
+            webWanted = true; ApplyWebVisibility();
         }
 
         // ---------------------------------------------------------------- the page
@@ -432,6 +508,7 @@ namespace ElansAddonHub
                 var dir = await Task.Run(() => WorldMapPage.Ensure());
                 var c = wv.CoreWebView2;
                 Harden(c);
+                HookKeys(wv);
                 Directory.CreateDirectory(WorldMapCache.Root);
                 c.SetVirtualHostNameToFolderMapping(WorldMapPage.Host, WorldMapCache.Root, CoreWebView2HostResourceAccessKind.Deny);
                 c.WebMessageReceived += OnMessage;
@@ -700,7 +777,7 @@ namespace ElansAddonHub
         public void Dispose()
         {
             try { WorldMapService.BuildChanged -= OnBuildChanged; MapData.Changed -= OnMapDataChanged; subscribed = false; } catch (Exception) { }
-            try { if (web != null) { stage.Children.Remove(web); web.Dispose(); web = null; webTask = null; } } catch (Exception) { }
+            try { Thaw(); if (web != null) { stage.Children.Remove(web); web.Dispose(); web = null; webTask = null; } } catch (Exception) { }
             pageHello = false; PageInited = false; PageReady = false; pendingInit = null; mapId = -1; initGen++; buildGen++; loadedPage = null; GlOk = false; borderWaitMap = -1;
         }
     }

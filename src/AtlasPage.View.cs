@@ -65,7 +65,7 @@ namespace ElansAddonHub
         // ---- layout: one column when narrow, two above 700 px, three (identity | tables | map) above 1500 px when the page has a map. Only a change of mode places the elements again.
         Grid cols; StackPanel leftCol, rightCol, mapCol;
         FrameworkElement mapCardEl; int mapIndex;
-        public const double TwoColumnWidth = 700, ThreeColumnWidth = 1500, LeftWidth = 300, LeftWidthWide = 340;
+        public const double TwoColumnWidth = 680, ThreeColumnWidth = 1300, LeftWidth = 300, LeftWidthWide = 340;
         bool wide; int columnMode = -1;
         public int ColumnsForTest => columnMode < 0 ? 0 : columnMode + 1;
 
@@ -73,7 +73,7 @@ namespace ElansAddonHub
 
         void Layout()
         {
-            if (startInfo != null) { LayoutStart(); return; }
+            if (startInfo != null || tileGrids.Count > 0) { LayoutStart(); return; }
             if (cols == null || leftCol == null || rightCol == null) return;
             int m = ColumnModeFor(Scroller.ActualWidth, mapCardEl != null);
             if (m == columnMode && cols.ColumnDefinitions.Count > 0) return;
@@ -119,6 +119,7 @@ namespace ElansAddonHub
         }
 
         public bool WideForTest => wide;
+        public double ScrollerWidthForTest => Scroller.ActualWidth;
         public FrameworkElement BodyForTest => Body;
         public IReadOnlyList<AtlasMap> MapsForTest => maps;
         readonly List<AtlasMap> maps = new List<AtlasMap>();
@@ -127,7 +128,7 @@ namespace ElansAddonHub
         {
             ReleaseMaps();
             Body.Children.Clear();
-            cols = null; leftCol = rightCol = null; startInfo = null; tileGrid = null; mapCol = null; mapCardEl = null;
+            ResetPageState();
             if (AtlasBrowse.IsBrowseId(id)) { BrowseQuery.TryParse(id, out var sq); TitleText.Text = AtlasCategories.Find(sq?.Cat)?.Title ?? "Browse"; }
             else TitleText.Text = AtlasKinds.Singular(id.Contains(":") ? id.Substring(0, id.IndexOf(':')) : "") + " " + (id.Contains(":") ? id.Substring(id.IndexOf(':') + 1) : id);
             SubText.Text = "";
@@ -149,11 +150,12 @@ namespace ElansAddonHub
             model = m; browse = null; hosted = null; browseList = null; drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear();
-            cols = null; leftCol = rightCol = null; startInfo = null; tileGrid = null; mapCol = null; mapCardEl = null;
+            ResetPageState();
             TitleText.Text = string.IsNullOrEmpty(m.Title) ? "Atlas" : m.Title;
             TitleText.Foreground = m.Kind == "item" && m.Quality >= 0 && m.Quality < ItemLinks.QualityHex.Length ? Lodge.Avatar.Frozen(ItemLinks.QualityHex[m.Quality]) : Res("Brush.Text.Primary");
             SubText.Text = m.NotFound ? AtlasKinds.Singular(m.Kind) : m.Subtitle;
             UpdateNav();
+            ColourLastCrumb(TitleText.Foreground);
 
             if (m.NotFound)
             {

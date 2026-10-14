@@ -314,6 +314,7 @@ namespace ElansAddonHub
                     && Directory.GetFiles(Path.Combine(be2.Dir, "updates")).Length == 2 && ClassicDownloader.ReadSource(be2.Dir)?.Str("via") == "lodge" && ClassicDownloader.ReadSource(be2.Dir)?.Str("commit") == "aaa111");
                 Check("member: the dump is byte for byte the original (the Lodge changes nothing)", File.ReadAllBytes(Path.Combine(be2.Dir, "ClassicDB_a.sql.gz")).SequenceEqual(File.ReadAllBytes(Path.Combine(setA, "ClassicDB_a.sql.gz"))));
                 Check("member: no staging files are left behind", !Directory.Exists(Path.Combine(be2.Dir, ".lodge-staging")));
+                await AtlasView.Open(AtlasNav.DataId); await Task.Delay(100); UpdateLayout();       // the card lives on the Data sources page
                 Check("member: the card says Ready, the source line says 'via your Lodge' and the credit says it came unchanged from the Lodge, labelled Classic baseline",
                     setup2.ViaLodge && setup2.ReadyText.StartsWith("Ready") && setup2.ReadyText.Contains("via your Lodge") && setup2.CreditText.Contains("from your Lodge") && setup2.CreditText.Contains("Classic baseline") && ClassicLabel.Source == "Classic baseline"
                     && AtlasTexts(AtlasView.ClassicCardForTest).Any(t => t.Contains("via your Lodge")) && AtlasTexts(AtlasView.ClassicCardForTest).Any(t => t.Contains("received unchanged from your Lodge")) && AtlasTexts(AtlasView.ClassicCardForTest).Contains("Licence (file on this PC)"),
@@ -593,6 +594,7 @@ namespace ElansAddonHub
                     Session.FeedForTest(AclWelcome("member", "2.17.0", true, false));
                     Session.FeedForTest(AclData("dataset.data", fake, false));
                     await Task.Delay(300);
+                    await AtlasView.Open(AtlasNav.DataId); UpdateLayout();
                     Check("the card's own button also comes from the Lodge when the Lodge has it", AtlasView.ClassicCardForTest != null && sync.CanProvide);
                     settings.ClassicFromLodgeOff = false;
                     Session.Disconnect();
