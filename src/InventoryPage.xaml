@@ -232,7 +232,12 @@
                         <ColumnDefinition Width="*" />
                       </Grid.ColumnDefinitions>
                       <Border Width="40" Height="40" CornerRadius="{StaticResource Radius.Control}" Background="{Binding TileFill}" BorderBrush="{Binding QualityBrush}" BorderThickness="2" VerticalAlignment="Top" Margin="0,0,12,0">
-                        <TextBlock Text="{Binding Initial}" Foreground="{Binding QualityBrush}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Grid>
+                          <TextBlock Text="{Binding Initial}" Foreground="{Binding QualityBrush}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                          <Border CornerRadius="{StaticResource Radius.Control}" ClipToBounds="True" Visibility="{Binding IconVisibility}">
+                            <Image Source="{Binding Icon}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" />
+                          </Border>
+                        </Grid>
                       </Border>
                       <StackPanel Grid.Column="1">
                         <DockPanel>

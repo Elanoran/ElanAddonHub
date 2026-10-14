@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## Unreleased
+- **Characters page: item icons instead of letters.** The item list (and bag slots of characters whose Elan's Bags data has no icon) now show the item's own icon from your game files; the letter only shows while the icon loads or when the item is unknown.
+
 ## 2.52.0
 - **The Outpost knows which recipes your characters have learned** (needs Elan's Hub 1.14.0 or newer; **open each profession window in game once**). The game only lets an addon read a recipe list while the profession window is open, so the Hub reads it then (never expanding, collapsing or filtering anything in your window; a window with collapsed groups is saved as a partial read that only adds recipes) and again whenever the window updates. Until a profession was opened the Outpost says "open your profession window in game once" and keeps using the skill estimate; it never claims a recipe is learned or not learned without a read.
 - **Professions > Recipes**: every recipe shows **Known** or **Not learned** for the chosen character, a **Any / Learned / Not learned** filter, and the page says when the window was last read ("last read 14 Oct 2026 21:03") and whether that read was partial. **Can make now** only offers learned recipes. The recipe tooltip names which of your characters know it.

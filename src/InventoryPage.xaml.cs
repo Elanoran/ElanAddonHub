@@ -146,8 +146,11 @@ namespace ElansAddonHub
             public string Where { get; set; }
         }
 
-        public class ResultRow
+        public class ResultRow : ElansAddonHub.Lodge.Bindable
         {
+            ImageSource icon;
+            public ImageSource Icon { get => icon; set { if (Set(ref icon, value)) Raise(nameof(IconVisibility)); } }      // the item's own icon; the letter shows until it is there
+            public Visibility IconVisibility => icon != null ? Visibility.Visible : Visibility.Collapsed;
             public string Name { get; set; }
             public int Id { get; set; }
             public Brush QualityBrush { get; set; }
@@ -397,6 +400,7 @@ namespace ElansAddonHub
                 }).ToList(),
             }).ToList();
             if (shown.Count < MaxRows) shown.AddRange(extra.Take(MaxRows - shown.Count));
+            foreach (var row in shown) FillIcon(row);
             Results.ItemsSource = shown;
             ResultCaption.Visibility = Visibility.Visible;
             var scope = only != null ? "on " + only.Name : "across all characters";
@@ -418,6 +422,18 @@ namespace ElansAddonHub
                 if (g != null && !res.Contains(g)) res.Add(g);
             }
             return res;
+        }
+
+        // the icon from the game data (or the Bags data), from disk when it is already extracted, otherwise filled in when it arrives
+        void FillIcon(ResultRow row)
+        {
+            int id = ElansAddonHub.Services.Db2.ItemData.Get(row.Id)?.IconId ?? 0;
+            if (id <= 0) id = ItemKnowledge.Get(row.Id)?.Icon ?? 0;
+            if (id <= 0) return;
+            var have = IconStore.TryGet(id);
+            if (have != null) { row.Icon = have; return; }
+            var disp = Dispatcher;
+            IconStore.Request(id, src => disp.BeginInvoke(new Action(() => row.Icon = src)));
         }
 
         static Brush TileFillFor(int q)

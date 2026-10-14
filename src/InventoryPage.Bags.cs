@@ -352,12 +352,13 @@ namespace ElansAddonHub
             fb.Child = new TextBlock { Text = Initial(s.Name), Foreground = q, FontSize = 16, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(fb);
             g.Children.Add(img);
-            var src = s.Icon > 0 ? IconStore.TryGet(s.Icon) : null;
+            int iconId = s.Icon > 0 ? s.Icon : ElansAddonHub.Services.Db2.ItemData.Get(s.Id)?.IconId ?? 0;      // older Bags data has no icon: the game data knows it
+            var src = iconId > 0 ? IconStore.TryGet(iconId) : null;
             if (src != null) { img.Source = src; fb.Visibility = Visibility.Collapsed; slotsWithImage++; }
             else
             {
                 slotsPlaceholder++;
-                if (s.Icon > 0) BindIcon(s.Icon, img, fb);
+                if (iconId > 0) BindIcon(iconId, img, fb);
             }
             if (s.Count > 1)
             {
