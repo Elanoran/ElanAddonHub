@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services.Maps
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 1;          // bump when the parsing or the saved file changes meaning
+        public const int FormatVersion = 2;          // (2: explored-area overlays) bump when the parsing or the saved file changes meaning
 
         // ---- hooks (the same shape as ItemData's)
         public static Func<string> WowRoot = () => null;
@@ -59,6 +59,7 @@ namespace ElansAddonHub.Services.Maps
             return s;
         }
 
+        public static string OverlayProblem => index?.Set.OverlayProblem;
         public static int MapCount => index?.MapsWithArt ?? 0;
         public static int InstanceCount => index?.Instances.Count(i => !i.Placeholder) ?? 0;
 
@@ -221,7 +222,7 @@ namespace ElansAddonHub.Services.Maps
                 using (var w = new BinaryWriter(mem, Encoding.UTF8, true))
                 {
                     w.Write(Magic); w.Write(MapData.FormatVersion); w.Write(build ?? "");
-                    w.Write(set.HasArt); w.Write(set.HasAssignments); w.Write(set.HasMaps); w.Write(set.HasFloors); w.Write(set.HasAreas); w.Write(set.LockedMapRows);
+                    w.Write(set.HasArt); w.Write(set.HasAssignments); w.Write(set.HasMaps); w.Write(set.HasFloors); w.Write(set.HasAreas); w.Write(set.HasOverlays); w.Write(set.OverlayProblem ?? ""); w.Write(set.LockedMapRows);
                     w.Write(set.Notes.Count); foreach (var n in set.Notes) w.Write(n);
                     w.Write(set.UiMaps.Count);
                     foreach (var m in set.UiMaps) { w.Write(m.Id); w.Write(m.Name ?? ""); w.Write(m.ParentId); w.Write(m.Flags); w.Write(m.System); w.Write(m.Type); }
@@ -233,6 +234,13 @@ namespace ElansAddonHub.Services.Maps
                         foreach (var l in a.Layers) { w.Write(l.Index); w.Write(l.Width); w.Write(l.Height); w.Write(l.TileWidth); w.Write(l.TileHeight); }
                         w.Write(a.Tiles.Length);
                         foreach (var t in a.Tiles) { w.Write((byte)t.Row); w.Write((byte)t.Col); w.Write((byte)t.Layer); w.Write(t.FileDataId); }
+                        w.Write(a.Overlays.Length);
+                        foreach (var o in a.Overlays)
+                        {
+                            w.Write(o.Id); w.Write(o.Width); w.Write(o.Height); w.Write(o.OffsetX); w.Write(o.OffsetY);
+                            w.Write(o.Tiles.Length);
+                            foreach (var t in o.Tiles) { w.Write((byte)t.Row); w.Write((byte)t.Col); w.Write((byte)t.Layer); w.Write(t.FileDataId); }
+                        }
                     }
                     w.Write(set.ArtLinks.Count);
                     foreach (var l in set.ArtLinks) { w.Write(l.UiMapId); w.Write(l.ArtId); w.Write(l.Phase); }
@@ -277,7 +285,7 @@ namespace ElansAddonHub.Services.Maps
                     var s = new Saved { Format = r.ReadInt32(), Build = r.ReadString(), Set = new MapSet() };
                     if (s.Format != MapData.FormatVersion) return null;
                     var set = s.Set;
-                    set.HasArt = r.ReadBoolean(); set.HasAssignments = r.ReadBoolean(); set.HasMaps = r.ReadBoolean(); set.HasFloors = r.ReadBoolean(); set.HasAreas = r.ReadBoolean();
+                    set.HasArt = r.ReadBoolean(); set.HasAssignments = r.ReadBoolean(); set.HasMaps = r.ReadBoolean(); set.HasFloors = r.ReadBoolean(); set.HasAreas = r.ReadBoolean(); set.HasOverlays = r.ReadBoolean(); var op = r.ReadString(); set.OverlayProblem = op.Length == 0 ? null : op;
                     set.LockedMapRows = r.ReadInt32();
                     int n = Count(r, 1000); for (int i = 0; i < n; i++) set.Notes.Add(r.ReadString());
                     n = Count(r, 100000);
@@ -290,6 +298,14 @@ namespace ElansAddonHub.Services.Maps
                         for (int k = 0; k < lc; k++) a.Layers[k] = new ArtLayerInfo { Index = r.ReadInt32(), Width = r.ReadInt32(), Height = r.ReadInt32(), TileWidth = r.ReadInt32(), TileHeight = r.ReadInt32() };
                         int tc = Count(r, 1000000); a.Tiles = new ArtTile[tc];
                         for (int k = 0; k < tc; k++) a.Tiles[k] = new ArtTile { Row = r.ReadByte(), Col = r.ReadByte(), Layer = r.ReadByte(), FileDataId = r.ReadInt32() };
+                        int oc = Count(r, 10000); a.Overlays = new ArtOverlay[oc];
+                        for (int k = 0; k < oc; k++)
+                        {
+                            var o = new ArtOverlay { Id = r.ReadInt32(), Width = r.ReadInt32(), Height = r.ReadInt32(), OffsetX = r.ReadInt32(), OffsetY = r.ReadInt32() };
+                            int ot = Count(r, 10000); o.Tiles = new ArtTile[ot];
+                            for (int m = 0; m < ot; m++) o.Tiles[m] = new ArtTile { Row = r.ReadByte(), Col = r.ReadByte(), Layer = r.ReadByte(), FileDataId = r.ReadInt32() };
+                            a.Overlays[k] = o;
+                        }
                         set.Arts.Add(a);
                     }
                     n = Count(r, 1000000); for (int i = 0; i < n; i++) set.ArtLinks.Add(new MapArtLink { UiMapId = r.ReadInt32(), ArtId = r.ReadInt32(), Phase = r.ReadInt32() });

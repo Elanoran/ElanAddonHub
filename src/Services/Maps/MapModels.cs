@@ -47,12 +47,21 @@ namespace ElansAddonHub.Services.Maps
     // one BLP picture of a map's art (FileDataID) and where it goes in the grid
     public sealed class ArtTile { public int Row, Col, Layer, FileDataId; }
 
+    // WorldMapOverlay + its WorldMapOverlayTile rows: one explored-area picture (TextureWidth x TextureHeight, cut into 256 px tiles) that the game draws
+    // on top of the base art at (OffsetX, OffsetY) of the art layer
+    public sealed class ArtOverlay
+    {
+        public int Id, Width, Height, OffsetX, OffsetY;
+        public ArtTile[] Tiles = new ArtTile[0];
+    }
+
     // UiMapArt + its style layers + its tiles
     public sealed class MapArtInfo
     {
         public int Id, StyleId;
         public ArtLayerInfo[] Layers = new ArtLayerInfo[0];
         public ArtTile[] Tiles = new ArtTile[0];
+        public ArtOverlay[] Overlays = new ArtOverlay[0];
 
         public ArtLayerInfo BaseLayer
         {
@@ -102,7 +111,8 @@ namespace ElansAddonHub.Services.Maps
         public List<FloorMember> Floors = new List<FloorMember>();
         public List<AreaInfo> Areas = new List<AreaInfo>();
         // which tables were read (a table whose layout this version does not know is simply not there)
-        public bool HasArt, HasAssignments, HasMaps, HasFloors, HasAreas;
+        public bool HasArt, HasAssignments, HasMaps, HasFloors, HasAreas, HasOverlays;
+        public string OverlayProblem;                  // why the maps have no overlays (unknown layout ...); null = fine
         public int LockedMapRows;                      // Map rows that sit in key-locked parts of the file
         public string Problem;                         // set = unavailable (nothing else is valid)
         public List<string> Notes = new List<string>();   // partial results

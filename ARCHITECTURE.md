@@ -239,7 +239,7 @@ ItemArmorQuality 2935AA9D, ItemArmorShield 7E6C94F9, ArmorLocation FB67352F, Ite
 ### Map layer (Atlas layer B: world, zone and instance maps + one coordinate system)
 
 Same rules as the item layer (own game files, read-only, layout-checked, background, off with the same "Game data" switch). The index lives in `cache\mapdata.bin`
-(keyed by the game build); map pictures are PNGs in `atlas\maps\<version>-<buildkey8>_<uiMapId>.png` that are made on first use.
+(keyed by the game build); map pictures are PNGs in `atlas\maps\<version>-<buildkey8>_v<render version>_<uiMapId>.png` that are made on first use (the render version, `MapRender.RenderVersion`, is bumped when the picture itself changes, so older pictures are made again and removed).
 
 | Table (CASC FileDataID) | Layout (1.60.1.70338) | Gives |
 |---|---|---|
@@ -247,6 +247,7 @@ Same rules as the item layer (own game files, read-only, layout-checked, backgro
 | `UiMapXMapArt` (1957217), `UiMapArt` (1957202), `UiMapArtStyleLayer` (1957208), `UiMapArtTile` (1957210) | `EAE7DA2A`, `3AE7D144`, `3F597F5A`, `2DA5B77B` | which BLP tiles make a map's picture: layer size, tile size, (row, col, FileDataID). The links (`UiMapID`, `UiMapArtID`, `UiMapArtStyleID`) are "noninline relation" columns: they come from the WDC5 relationship section (`Wdc5.ParentOf`). All four or no art. |
 | `UiMapAssignment` (1957219) | `C9CC8DFB` | the world rectangle (map id, x / y) each UiMap shows, and which part of the picture it fills (`UiMin` / `UiMax`): the whole coordinate system. |
 | `Map` (1349477) | `D43AFAC3` | map ids, names, instance type (1 dungeon, 2 raid, 3 battleground, 4 arena), max players. Some rows are key-locked and skipped. |
+| `WorldMapOverlay` (1134579), `WorldMapOverlayTile` (1957212) | `9A196494`, `2C843422` (table hashes `1D740E72`, `AC599725`) | the explored-area pictures: per UiMapArt a list of overlays (TextureWidth / TextureHeight, OffsetX / OffsetY in the art layer's pixels) and their tiles (RowIndex, ColIndex, LayerIndex, FileDataID; `WorldMapOverlayID` is the relationship column). Layouts checked against the build's real files (1,081 overlays, 1,739 tiles, 84 of 144 arts have overlays). Optional: a missing or unknown overlay table leaves the base art alone and keeps the reason (`MapSet.OverlayProblem`). |
 | `UiMapGroupMember` (1957204) | `0FF75B01` | floors of multi-floor maps (this client's table is empty). |
 | `AreaTable` (1353545) | `9995B797` | area names and parents (`UiMapForArea`). |
 
@@ -258,7 +259,7 @@ Same rules as the item layer (own game files, read-only, layout-checked, backgro
 - **This client's data**: 60 UiMaps (the world, 4 continent maps of which 2 are alternative copies, about 50 zones and cities, 4 battlegrounds / islands), all with art (1002 x 668, 12 tiles each; the 3,840 x 2,560 style in the table is used by none of them),
   71 Map rows of which 54 are named instances. **Dungeons and raids have no UiMap and no picture in the game files**, so only the battlegrounds (Alterac Valley, Warsong Gulch,
   Arathi Basin, Darkspear Islands) have a map; the others are listed with no floors (the control says "no map in the game files"). An instance map would need another source.
-- **Pictures**: `MapRender` decodes the tiles one at a time (existing `Blp` decoder) straight into the picture, writes the PNG next to the index and forgets the bitmap; a failed map is not retried
+- **Pictures**: the base art tiles are the *unexplored* (fogged) look of a zone; the game draws the explored parts on top from the overlay tables, so `MapRender.Compose` draws every overlay of the art over the base: tile (row, col) at `(OffsetX + col x 256, OffsetY + row x 256)` in the same pixel space as the base layer (no scaling), cut at the overlay's texture size, alpha-blended, so the whole zone looks explored. Continents and cities have no overlays and stay as they were. `MapRender` decodes the tiles one at a time (existing `Blp` decoder) straight into the picture, writes the PNG next to the index and forgets the bitmap; a failed map is not retried
   for 90 s. The `AtlasMap` control loads only the map it shows and lets go of it when it leaves the screen.
 - **Control** (`Controls/AtlasMap.cs`): `ShowMap(uiMapId)`, `ShowInstance(mapId)`, `AddMarkers(...)`, `ClearMarkers()`, `LinkClicked(id)`, `MapChanged(uiMapId)`; wheel / drag / keyboard, breadcrumb up the tree,
   floor selector, markers that overlap on the screen merge into one numbered marker.

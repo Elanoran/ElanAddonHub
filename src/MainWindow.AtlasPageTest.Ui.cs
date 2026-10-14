@@ -69,6 +69,26 @@ namespace ElansAddonHub
             ClickButton(AtlasView.ClassicPrimaryForTest);
             await WaitFor(() => fake.Queries == 1 && !setup.Busy, 5000);
             Check("classic card: the user says no to the question -> nothing is downloaded (1 query, 0 downloads), the card is as it was", fake.Queries == 1 && fake.Downloads == 0 && fake.Builds == 0 && setup.State == ClassicCardState.NotDownloaded && setup.Remote == null);
+            // ---- the "Get Classic data" banner at the top of the start page
+            Check("banner: while the baseline is not installed the start page opens with a banner (the first thing on it) that says what it adds, with a primary 'Get Classic data' button and 'Not now'",
+                AtlasView.ClassicBannerShownForTest && ((Panel)AtlasView.ClassicBannerForTest.Parent).Children[0] == AtlasView.ClassicBannerForTest && AtlasTexts(AtlasView.ClassicBannerForTest).Contains(ClassicSetup.BannerText)
+                && ClassicSetup.BannerText.StartsWith("Drop chances, vendors, spawns and quests from the Classic database: about 19 MB, downloaded from its public source and credited")
+                && AtlasView.ClassicBannerGetForTest != null && AtlasView.ClassicBannerGetForTest.Content.ToString() == "Get Classic data" && AtlasView.ClassicBannerNotNowForTest != null && AtlasView.ClassicBannerNotNowForTest.Content.ToString() == "Not now",
+                string.Join(" | ", AtlasTexts(AtlasView.ClassicBannerForTest)));
+            int q0 = fake.Queries;
+            ClickButton(AtlasView.ClassicBannerGetForTest);
+            await WaitFor(() => fake.Queries == q0 + 1 && !setup.Busy, 5000);
+            Check("banner: its button starts the same download as the card (the question is asked first: 'no' = one query, nothing downloaded) and the banner stays", fake.Queries == q0 + 1 && fake.Downloads == 0 && setup.State == ClassicCardState.NotDownloaded && AtlasView.ClassicBannerShownForTest);
+            ClickButton(AtlasView.ClassicBannerNotNowForTest);
+            await Task.Delay(100); UpdateLayout();
+            Check("banner: 'Not now' hides it (the card below stays)", !AtlasView.ClassicBannerShownForTest && AtlasView.ClassicPrimaryForTest != null);
+            await AtlasView.GoStart(); await Task.Delay(100); UpdateLayout();
+            Check("banner: ... and it stays hidden when the start page is drawn again in this session", !AtlasView.ClassicBannerShownForTest);
+            ElansAddonHub.AtlasPage.ResetClassicBannerForTest();      // (a new session: nothing is saved)
+            await AtlasView.GoStart(); await Task.Delay(100); UpdateLayout();
+            Check("banner: a new session shows it again", AtlasView.ClassicBannerShownForTest && AtlasView.ClassicBannerGetForTest != null);
+            Snapshot(Path.Combine(dir, "atlas-page-classic-banner.png"));
+
             var calls = new List<DialogCall>();
             AtlasView.ConfirmOverrideForTest = null;
             Dialog.TestHook = c => { lock (calls) calls.Add(c); return true; };
@@ -89,6 +109,7 @@ namespace ElansAddonHub
             Check("classic card: download progress rises to 100 % (fraction of bytes), import progress rises to 100 % too", dl.Count >= 4 && dl.Zip(dl.Skip(1), (a, b) => b >= a).All(x => x) && Math.Abs(dl.Max() - 1) < 1e-9 && im.Count >= 3 && im.Zip(im.Skip(1), (a, b) => b >= a).All(x => x) && Math.Abs(im.Max() - 1) < 1e-9);
             var ready = AtlasTexts(AtlasView.ClassicCardForTest);
             string wantReady = "Ready · dump of 2 May 2024 · " + classic.Npcs.Count + " creatures, " + classic.Items.Count + " items, " + classic.Quests.Count + " quests";
+            Check("banner: once the baseline is ready the banner is gone", !AtlasView.ClassicBannerShownForTest && AtlasView.ClassicBannerGetForTest == null);
             Check("classic card: ready shows the dump date and what is in it, a Remove button, the credit line and a link to the licence file next to the data", ready.Contains(wantReady) && ready.Contains("Ready") && ready.Contains("Remove from this PC") && ready.Contains("Licence (file on this PC)") && AtlasView.ClassicRemoveForTest != null && AtlasView.ClassicPrimaryForTest == null, string.Join(" | ", ready.Take(8)));
             string opened = null, openedUrl = null;
             AtlasView.OpenFileOverrideForTest = p => { opened = p; return true; }; AtlasView.OpenLinkOverride = u => openedUrl = u;
@@ -108,6 +129,8 @@ namespace ElansAddonHub
             await WaitFor(() => setup.State == ClassicCardState.Downloading && setup.Fraction >= 0.5, 5000);
             await Task.Delay(250); UpdateLayout();
             var progTexts = AtlasTexts(AtlasView.ClassicCardForTest);
+            Check("banner: while it downloads the banner shows the progress (bar, 'Downloading the dump · ... · 50 %') instead of the buttons", AtlasView.ClassicBannerShownForTest && AtlasView.ClassicBannerGetForTest == null && AtlasView.ClassicBannerProgressForTest != null && Math.Abs(AtlasView.ClassicBannerProgressForTest.Value - 50) < 1
+                && AtlasTexts(AtlasView.ClassicBannerForTest).Any(t => t.StartsWith("Downloading the dump") && t.EndsWith("50 %")), string.Join(" | ", AtlasTexts(AtlasView.ClassicBannerForTest)));
             Check("classic card: while downloading it shows a progress bar, 'Downloading the dump · the file · 50 %' and a Cancel button (and no Get button)", progTexts.Any(t => t.StartsWith("Downloading the dump · ClassicDB_test.sql.gz") && t.EndsWith("50 %")) && progTexts.Contains("Cancel") && AtlasView.ClassicCancelForTest != null && AtlasView.ClassicPrimaryForTest == null
                 && AtlasWalk(AtlasView.ClassicCardForTest).OfType<ProgressBar>().Any(b => Math.Abs(b.Value - 50) < 1), string.Join(" | ", progTexts));
             Height = 1000; await Task.Delay(300); UpdateLayout();

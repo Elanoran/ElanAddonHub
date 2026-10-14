@@ -33,6 +33,7 @@ namespace ElansAddonHub
             var col = new StackPanel { MaxWidth = 680, HorizontalAlignment = HorizontalAlignment.Left };
             Body.Children.Add(col);
 
+            col.Children.Add(ClassicBannerView());
             var intro = new StackPanel();
             intro.Children.Add(Tb("Browse or search", "Text.Section"));
             var t = Tb("Pick a category below to browse everything in it and narrow it down with filters, or type a name in the box above: an item, a creature, an object, a quest, a zone, an instance, a spell or a recipe. Every name you see here opens its own page, and Alt+Left goes back. You can also paste a link like item:2589 or npc:46.", "Text.Secondary", null, 4);

@@ -188,6 +188,27 @@ namespace ElansAddonHub
             return new MapRender.TileImage { Bgra = px, Width = w, Height = h };
         }
 
+        // WorldMapOverlay (13 fields: ID, UiMapArtID, TextureWidth, TextureHeight, OffsetX, OffsetY, 4 hit-rect numbers, PlayerConditionID, Flags, AreaID) and
+        // WorldMapOverlayTile (RowIndex, ColIndex, LayerIndex, FileDataID + the relationship to the overlay), written in the layouts of build 70338.
+        // Overlay 5001 (300 x 200 at 50,-40; two tiles) and 5002 (100 x 100 at 400,150; one tile) belong to `art`, 5009 to an art that does not exist.
+        static Tuple<byte[], byte[]> OverlayTables(int art, uint overlayLayout = 0x9A196494, uint tileLayout = 0x2C843422)
+        {
+            var of = Enumerable.Range(0, 13).Select(F32).ToArray();
+            byte[] ORec(int a, int w, int h, int x, int y) { var r = new byte[52]; void P(int i, int v) => Array.Copy(BitConverter.GetBytes(v), 0, r, i * 4, 4); P(1, a); P(2, w); P(3, h); P(4, x); P(5, y); return r; }
+            var os = new W5Section { Records = new[] { ORec(art, 300, 200, 50, -40), ORec(art, 100, 100, 400, 150), ORec(art + 999, 64, 64, 0, 0) }, Ids = new[] { 5001, 5002, 5009 } };
+            var ovTable = BuildWdc5(MapTables.WorldMapOverlay.TableHash, overlayLayout, false, 52, of, new[] { os });
+            var tf = Enumerable.Range(0, 4).Select(F32).ToArray();
+            byte[] TRec(int row, int col, int layer, int fdid) { var r = new byte[16]; void P(int i, int v) => Array.Copy(BitConverter.GetBytes(v), 0, r, i * 4, 4); P(0, row); P(1, col); P(2, layer); P(3, fdid); return r; }
+            var ts = new W5Section { Records = new[] { TRec(0, 1, 0, 7002), TRec(0, 0, 0, 7001), TRec(0, 0, 0, 7003), TRec(0, 0, 0, 7009) }, Ids = new[] { 16901, 16902, 16903, 16904 } };
+            var tileBytes = BuildWdc5(MapTables.WorldMapOverlayTile.TableHash, tileLayout, false, 16, tf, new[] { ts });
+            var rel = new MemoryStream(); var w = new BinaryWriter(rel);
+            w.Write(4); w.Write(5001); w.Write(5009);                                  // entries, min, max
+            w.Write(5001); w.Write(0); w.Write(5001); w.Write(1); w.Write(5002); w.Write(2); w.Write(5009); w.Write(3);      // record 0 (col 1) and 1 (col 0) -> overlay 5001, 2 -> 5002, 3 -> 5009
+            var all = tileBytes.Concat(rel.ToArray()).ToArray();
+            Array.Copy(BitConverter.GetBytes((int)rel.Length), 0, all, 204 + 28, 4);
+            return Tuple.Create(ovTable, all);
+        }
+
         static byte[] PixelAt(byte[] bgra, int width, int x, int y) => new[] { bgra[(y * width + x) * 4], bgra[(y * width + x) * 4 + 1], bgra[(y * width + x) * 4 + 2], bgra[(y * width + x) * 4 + 3] };
 
         async Task<string> MapDataTest(string dir)
@@ -243,7 +264,7 @@ namespace ElansAddonHub
                     && Math.Abs(d1.MaxY - -1962.5) < 0.01 && d1.UiMaxX == 1f, withAsg.Assignments.Count + " " + (d1 == null ? "-" : d1.MinX + " " + d1.MaxY));
                 var badAsg = MapTables.Parse(RawWith(Raw("UiMap", UiMapTable()), Raw("UiMapAssignment", AssignmentTable().Take(400).ToArray())));
                 Check("parse: a broken optional table costs only that part (no world positions), the tree stays", badAsg.Ok && badAsg.UiMaps.Count == 3 && !badAsg.HasAssignments && badAsg.Notes.Any(n => n.Contains("UiMapAssignment")), string.Join(";", badAsg.Notes));
-                Check("layout registry: nine tables, each with a FileDataID, a table hash and a layout; all different", MapTables.All.Length == 9 && MapTables.All.Select(t => t.FileDataId).Distinct().Count() == 9 && MapTables.All.All(t => t.Layouts.Length > 0 && t.TableHash != 0) && MapTables.UiMap.Knows(0xDB51D55F) && !MapTables.UiMap.Knows(0xDEADBEEF));
+                Check("layout registry: eleven tables (nine + the two overlay tables), each with a FileDataID, a table hash and a layout; all different", MapTables.All.Length == 11 && MapTables.All.Select(t => t.FileDataId).Distinct().Count() == 11 && MapTables.WorldMapOverlay.Knows(0x9A196494) && MapTables.WorldMapOverlayTile.Knows(0x2C843422) && MapTables.All.All(t => t.Layouts.Length > 0 && t.TableHash != 0) && MapTables.UiMap.Knows(0xDB51D55F) && !MapTables.UiMap.Knows(0xDEADBEEF));
 
                 // ---- the coordinate system on the invented world
                 var set = SynthMapSet();
@@ -329,6 +350,67 @@ namespace ElansAddonHub
                 try { MapRender.Compose(new MapArtInfo { Layers = new[] { new ArtLayerInfo { Width = 100000, Height = 100000, TileWidth = 256, TileHeight = 256 } } }, f => null, out _, out _, out _); } catch (InvalidDataException) { tooBig = true; }
                 Check("compose: an absurd layer size is refused (no 40 GB allocation)", tooBig);
 
+                // ---- the explored-area overlays: drawn over the base art at their offsets, blended by alpha
+                var ovArt = new MapArtInfo { Id = art.Id, StyleId = art.StyleId, Layers = art.Layers, Tiles = art.Tiles, Overlays = new[]
+                {
+                    new ArtOverlay { Id = 5001, Width = 300, Height = 200, OffsetX = 50, OffsetY = 40, Tiles = new[] { new ArtTile { Row = 0, Col = 0, FileDataId = 7001 }, new ArtTile { Row = 0, Col = 1, FileDataId = 7002 } } },
+                    new ArtOverlay { Id = 5002, Width = 100, Height = 100, OffsetX = 400, OffsetY = 150, Tiles = new[] { new ArtTile { Row = 0, Col = 0, FileDataId = 7003 } } },
+                    new ArtOverlay { Id = 5003, Width = 256, Height = 256, OffsetX = 1000, OffsetY = 1000, Tiles = new[] { new ArtTile { Row = 0, Col = 0, FileDataId = 7004 } } },      // outside the picture
+                } };
+                MapRender.TileImage OvTile(int f) => f == 7001 ? Solid(256, 256, 0, 0, 255) : f == 7002 ? Solid(256, 256, 0, 255, 0) : f == 7003 ? Solid(256, 256, 255, 0, 0, 128) : f == 7004 ? Solid(256, 256, 9, 9, 9) : TileFor(f);
+                var withOv = MapRender.Compose(ovArt, OvTile, out int ow0, out int oh0, out int om0, out int ovMiss);
+                Check("overlays: the picture keeps the art's size (600 x 300) and nothing is missing", ow0 == 600 && oh0 == 300 && om0 == 0 && ovMiss == 0 && withOv.Length == 600 * 300 * 4);
+                Check("overlays: an overlay tile goes to (OffsetX + column x 256, OffsetY + row x 256): the first tile's corner pixel (50,40) is red and (49,40) / (50,39) are still the base art",
+                    PixelAt(withOv, 600, 50, 40).SequenceEqual(new byte[] { 0, 0, 255, 255 }) && PixelAt(withOv, 600, 49, 40).SequenceEqual(PixelAt(px, 600, 49, 40)) && PixelAt(withOv, 600, 50, 39).SequenceEqual(PixelAt(px, 600, 50, 39)), string.Join(",", PixelAt(withOv, 600, 50, 40)));
+                Check("overlays: the second column starts at 50 + 256 = 306 (green) and is cut at the overlay's TextureWidth 300: x 349 is green, x 350 is the base art again; the texture height 200 cuts at y 239 / 240",
+                    PixelAt(withOv, 600, 305, 100).SequenceEqual(new byte[] { 0, 0, 255, 255 }) && PixelAt(withOv, 600, 306, 100).SequenceEqual(new byte[] { 0, 255, 0, 255 }) && PixelAt(withOv, 600, 349, 100).SequenceEqual(new byte[] { 0, 255, 0, 255 })
+                    && PixelAt(withOv, 600, 350, 100).SequenceEqual(PixelAt(px, 600, 350, 100)) && PixelAt(withOv, 600, 100, 239)[2] == 255 && PixelAt(withOv, 600, 100, 240).SequenceEqual(PixelAt(px, 600, 100, 240)));
+                var bg = PixelAt(px, 600, 450, 200); var bl = PixelAt(withOv, 600, 450, 200);
+                Check("overlays: a half-transparent overlay tile is blended with what is under it (blue 255 at alpha 128 over the base: " + string.Join(",", bg) + " -> " + string.Join(",", bl) + "); the cut at 100 x 100 holds",
+                    Math.Abs(bl[0] - (255 * 128 + bg[0] * 127) / 255.0) <= 1.5 && Math.Abs(bl[1] - bg[1] * 127 / 255.0) <= 1.5 && Math.Abs(bl[2] - bg[2] * 127 / 255.0) <= 1.5 && bl[3] == 255 && PixelAt(withOv, 600, 500, 200).SequenceEqual(PixelAt(px, 600, 500, 200)) && PixelAt(withOv, 600, 450, 250).SequenceEqual(PixelAt(px, 600, 450, 250)));
+                Check("overlays: an overlay that lies outside the picture draws nothing and does not crash", !PixelAt(withOv, 600, 599, 299).SequenceEqual(new byte[] { 9, 9, 9, 255 }));
+                var ovHoles = MapRender.Compose(ovArt, f => f == 7002 ? null : OvTile(f), out _, out _, out int baseMiss2, out int ovMiss2);
+                Check("overlays: an overlay tile the game does not have is skipped and counted apart from the base tiles; the rest is drawn", baseMiss2 == 0 && ovMiss2 == 1 && PixelAt(ovHoles, 600, 60, 50)[2] == 255 && PixelAt(ovHoles, 600, 320, 100).SequenceEqual(PixelAt(px, 600, 320, 100)));
+                var ovPng = MapRender.RenderPng(ovArt, OvTile, out _, out _, out _, out _);
+                var basePng = MapRender.RenderPng(art, OvTile, out _, out _, out _);
+                Check("overlays: the PNG with overlays differs from the base-only one; art without overlays composes exactly as before", ovPng != null && basePng != null && !ovPng.SequenceEqual(basePng) && PixelAt(MapRender.Compose(art, OvTile, out _, out _, out _), 600, 60, 50).SequenceEqual(PixelAt(px, 600, 60, 50)));
+
+                // ---- the overlay tables: layouts verified, nothing guessed
+                {
+                    var ovTables = OverlayTables(100);
+                    var ovSet = SynthMapSet();
+                    MapTables.AddOverlays(ovSet, RawWith(Raw("WorldMapOverlay", ovTables.Item1), Raw("WorldMapOverlayTile", ovTables.Item2)));
+                    var a100 = ovSet.Arts.First(a => a.Id == 100);
+                    Check("overlay tables: read in the layouts of build 70338: art 100 gets 2 overlays (an overlay of an unknown art is dropped) with size, offset and tiles in row / column order",
+                        ovSet.HasOverlays && ovSet.OverlayProblem == null && a100.Overlays.Length == 2 && a100.Overlays[0].Id == 5001 && a100.Overlays[0].Width == 300 && a100.Overlays[0].Height == 200 && a100.Overlays[0].OffsetX == 50 && a100.Overlays[0].OffsetY == -40
+                        && a100.Overlays[0].Tiles.Select(t => t.FileDataId).SequenceEqual(new[] { 7001, 7002 }) && a100.Overlays[0].Tiles[1].Col == 1 && a100.Overlays[1].Id == 5002 && a100.Overlays[1].Tiles.Length == 1 && ovSet.Arts.Where(a => a.Id != 100).All(a => a.Overlays.Length == 0),
+                        string.Join(";", ovSet.Notes) + " " + a100.Overlays.Length);
+                    var unkSet = SynthMapSet();
+                    MapTables.AddOverlays(unkSet, RawWith(Raw("WorldMapOverlay", OverlayTables(100, overlayLayout: 0xDEADBEEF).Item1), Raw("WorldMapOverlayTile", ovTables.Item2)));
+                    Check("overlay tables: an overlay layout this Outpost does not know = no overlays at all, the base maps stay, and the reason (game updated, the hash) is kept and noted",
+                        !unkSet.HasOverlays && unkSet.OverlayProblem != null && unkSet.OverlayProblem.Contains("game updated") && unkSet.OverlayProblem.Contains("DEADBEEF") && unkSet.Arts.All(a => a.Overlays.Length == 0) && unkSet.Notes.Any(n => n.StartsWith("map overlays:")) && unkSet.Ok, unkSet.OverlayProblem);
+                    var unk2 = SynthMapSet();
+                    MapTables.AddOverlays(unk2, RawWith(Raw("WorldMapOverlay", ovTables.Item1), Raw("WorldMapOverlayTile", OverlayTables(100, tileLayout: 0x0BADF00D).Item2)));
+                    var gone = SynthMapSet();
+                    MapTables.AddOverlays(gone, RawWith());
+                    var brokenSet = SynthMapSet();
+                    MapTables.AddOverlays(brokenSet, RawWith(Raw("WorldMapOverlay", new byte[] { 1, 2, 3 }), Raw("WorldMapOverlayTile", ovTables.Item2)));
+                    Check("overlay tables: an unknown tile layout, missing tables or a broken file all fall back to the base maps with a reason (never an exception)",
+                        unk2.OverlayProblem != null && unk2.OverlayProblem.Contains("0BADF00D") && gone.OverlayProblem != null && gone.OverlayProblem.Contains("not found") && brokenSet.OverlayProblem != null && brokenSet.Ok && unk2.Arts.All(a => a.Overlays.Length == 0) && gone.Arts.All(a => a.Overlays.Length == 0),
+                        unk2.OverlayProblem + " / " + gone.OverlayProblem + " / " + brokenSet.OverlayProblem);
+                    var noArt = new MapSet();
+                    MapTables.AddOverlays(noArt, RawWith(Raw("WorldMapOverlay", ovTables.Item1), Raw("WorldMapOverlayTile", ovTables.Item2)));
+                    Check("overlay tables: without the base art nothing is read", !noArt.HasOverlays && noArt.OverlayProblem == null && noArt.Notes.Count == 0);
+                    var ovIdxPath = Path.Combine(work, "idx", "mapdata-ov.bin");
+                    MapIndexFile.TryWrite(ovIdxPath, "wow_classic_beta|1.60.1.70338|abc", ovSet);
+                    var ovBack = MapIndexFile.TryRead(ovIdxPath);
+                    var b100 = ovBack?.Set.Arts.FirstOrDefault(a => a.Id == 100);
+                    Check("index file: the overlays (and the reason when there are none) survive the saved copy; the format version is 2 so a copy from before is read again from the game files",
+                        b100 != null && b100.Overlays.Length == 2 && b100.Overlays[0].OffsetY == -40 && b100.Overlays[0].Tiles.Length == 2 && b100.Overlays[0].Tiles[1].FileDataId == 7002 && ovBack.Set.HasOverlays && MapData.FormatVersion == 2);
+                    MapIndexFile.TryWrite(ovIdxPath, "wow_classic_beta|1.60.1.70338|abc", unkSet);
+                    Check("index file: ... the 'no overlays' reason too", MapIndexFile.TryRead(ovIdxPath)?.Set.OverlayProblem == unkSet.OverlayProblem);
+                }
+
                 // ---- the saved index
                 var idxPath = Path.Combine(work, "idx", "mapdata.bin");
                 Check("index file: written, no .tmp left", MapIndexFile.TryWrite(idxPath, "wow_classic_beta|1.60.1.70338|abc", set) && File.Exists(idxPath) && !File.Exists(idxPath + ".tmp"));
@@ -376,11 +458,16 @@ namespace ElansAddonHub
                 MapData.SetForTest(idx, "wow_classic_beta|1.60.1.70338|0123456789abcdef");
                 MapRender.TileSourceForTest = fdid => Solid(256, 256, (byte)(fdid % 200), 90, 30);
                 int renders0 = MapRender.RenderCountForTest;
+                Directory.CreateDirectory(MapRender.Dir);
+                var oldFogged = Path.Combine(MapRender.Dir, "1.60.1.70338-01234567_11.png");      // the name before render version 2: a picture without the explored-area overlays
+                File.WriteAllBytes(oldFogged, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
+                Check("render cache: a picture made before the render version (the old fogged name) is not used", MapRender.TryGet(11) == null);
                 var gotPath = await RequestPath(11);
-                var expectPath = Path.Combine(work, "maps", "1.60.1.70338-01234567_11.png");
+                var expectPath = Path.Combine(work, "maps", "1.60.1.70338-01234567_v" + MapRender.RenderVersion + "_11.png");
                 var img = gotPath == null ? null : MapRender.Load(gotPath) as BitmapSource;
                 Check("render cache: Greenvale is made in the background into the maps folder as <build>_<uiMapId>.png, 600 x 300", gotPath == expectPath && File.Exists(expectPath) && img != null && img.PixelWidth == 600 && img.PixelHeight == 300 && MapRender.RenderCountForTest == renders0 + 1, gotPath);
                 var again = await RequestPath(11);
+                Check("render cache: the old fogged picture is removed and replaced by one with the render version in its name (made again, not reused)", !File.Exists(oldFogged) && gotPath != null && Path.GetFileName(gotPath).Contains("_v" + MapRender.RenderVersion + "_"), gotPath);
                 Check("render cache: asking again is served from the folder (nothing is composed twice)", again == expectPath && MapRender.RenderCountForTest == renders0 + 1 && MapRender.TryGet(11) == expectPath);
                 Check("render cache: a map with no art, art without tiles and an unknown map answer null at once", await RequestPath(50) == null && await RequestPath(12) == null && await RequestPath(9999) == null && MapRender.RenderCountForTest == renders0 + 1);
                 Directory.CreateDirectory(MapRender.Dir);

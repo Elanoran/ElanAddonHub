@@ -25,6 +25,74 @@ namespace ElansAddonHub
         public Button ClassicCancelForTest { get; private set; }
         public Button ClassicRemoveForTest { get; private set; }
 
+        // ---- the banner at the top of the start page: shown while the baseline is not installed (progress while it is built), "Not now" hides it for this session
+        static bool classicBannerDismissed;                          // session only: a restart asks again (nothing is saved)
+        public static void ResetClassicBannerForTest() { classicBannerDismissed = false; }
+        Border classicBanner;
+        public Border ClassicBannerForTest => classicBanner;
+        public bool ClassicBannerShownForTest => classicBanner != null && classicBanner.Visibility == Visibility.Visible;
+        public Button ClassicBannerGetForTest { get; private set; }
+        public Button ClassicBannerNotNowForTest { get; private set; }
+        public ProgressBar ClassicBannerProgressForTest { get; private set; }
+
+        // the same download as the card's button (asks for the size and the licence first)
+        public void StartClassicDownload()
+        {
+            EnsureSetup();
+            _ = ClassicSetup.StartAsync();
+        }
+
+        FrameworkElement ClassicBannerView()
+        {
+            EnsureSetup();
+            classicBanner = new Border { CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 0, 0, 12) };
+            classicBanner.SetResourceReference(Border.BackgroundProperty, "Brush.Info.Tint");
+            FillClassicBanner();
+            return classicBanner;
+        }
+
+        public void FillClassicBanner()
+        {
+            if (classicBanner == null || ClassicSetup == null) return;
+            var s = ClassicSetup;
+            ClassicBannerGetForTest = ClassicBannerNotNowForTest = null; ClassicBannerProgressForTest = null;
+            bool show = !classicBannerDismissed && s.State != ClassicCardState.Ready;
+            classicBanner.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (!show) { classicBanner.Child = null; return; }
+
+            var sp = new StackPanel();
+            switch (s.State)
+            {
+                case ClassicCardState.Asking:
+                case ClassicCardState.Downloading:
+                case ClassicCardState.Importing:
+                    {
+                        sp.Children.Add(Tb("Classic data", "Text.RowTitle"));
+                        var bar = new ProgressBar { Style = (Style)FindResource("ThinProgress"), Minimum = 0, Maximum = 100, Value = Math.Round(s.Fraction * 100), Margin = new Thickness(0, 8, 0, 0), IsIndeterminate = s.State == ClassicCardState.Asking };
+                        sp.Children.Add(bar); ClassicBannerProgressForTest = bar;
+                        var ph = Tb((s.State == ClassicCardState.Importing ? "Reading · " : "") + s.Phase + (s.State == ClassicCardState.Asking ? "" : " · " + Math.Round(s.Fraction * 100) + " %"), "Text.Secondary", null, 8);
+                        ph.TextTrimming = TextTrimming.CharacterEllipsis; sp.Children.Add(ph);
+                        break;
+                    }
+                default:
+                    {
+                        var failed = s.State == ClassicCardState.Failed;
+                        var t = Tb(ClassicSetup.BannerText, "Text.Body"); t.TextWrapping = TextWrapping.Wrap; sp.Children.Add(t);
+                        if (failed) { var e = Tb(s.Error.Length > 0 ? s.Error : "Something went wrong.", "Text.Body", Res("Brush.Danger"), 4); e.TextWrapping = TextWrapping.Wrap; sp.Children.Add(e); }
+                        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
+                        var get = new Button { Content = failed ? "Try again" : s.State == ClassicCardState.Downloaded ? "Read the Classic data" : ClassicSetup.GetButtonText, Style = (Style)FindResource("Button.Primary.M") };
+                        get.Click += (a, ev) => StartClassicDownload();
+                        row.Children.Add(get); ClassicBannerGetForTest = get;
+                        var no = new Button { Content = "Not now", Style = (Style)FindResource("Button.M"), Margin = new Thickness(8, 0, 0, 0) };
+                        no.Click += (a, ev) => { classicBannerDismissed = true; FillClassicBanner(); };
+                        row.Children.Add(no); ClassicBannerNotNowForTest = no;
+                        sp.Children.Add(row);
+                        break;
+                    }
+            }
+            classicBanner.Child = sp;
+        }
+
         public void UseClassicSetup(ClassicSetup s)
         {
             if (ClassicSetup != null) ClassicSetup.Changed -= ClassicChanged;
@@ -42,7 +110,7 @@ namespace ElansAddonHub
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                FillClassic();
+                FillClassic(); FillClassicBanner();
                 // the layers that read the Classic baseline show their rows once it is ready: redraw the page that is open
                 if (ClassicSetup.State == ClassicCardState.Ready || ClassicSetup.State == ClassicCardState.NotDownloaded) { if (!IsStart) _ = Redraw(); }
             }));

@@ -132,7 +132,7 @@ namespace ElansAddonHub
             });
         }
 
-        static string ClassicBaselineText() => Services.Atlas.Classic.ClassicAtlas.IsReady ? "" : "Download the Classic baseline (below) for drop, vendor and spawn sources: more shortcuts appear when the data can answer them.";
+        static string ClassicBaselineText() => Services.Atlas.Classic.ClassicAtlas.IsReady ? "" : "Download the Classic baseline (above or below) for drop, vendor and spawn sources: more shortcuts appear when the data can answer them.";
 
         // ============================================================================================================================ a browse page
         void DrawBrowse(BrowseResult r)
