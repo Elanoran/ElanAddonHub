@@ -17,6 +17,7 @@ namespace ElansAddonHub.Lodge
         public void ShowFiles()
         {
             if (Session == null || !Session.SupportsFiles) return;
+            if (ladderShown) { ladderShown = false; LadderPage.Visibility = Visibility.Collapsed; }   // the ladder gives the place up quietly
             if (calendarShown)       // the calendar gives the place up quietly; the files page takes it
             {
                 calendarShown = false;
@@ -40,7 +41,7 @@ namespace ElansAddonHub.Lodge
             ChannelVM.CalendarShown = calendarShown;
             if (Session != null) foreach (var c in Session.TextChannels) c.RaiseRow();
             FilesPage.Visibility = Visibility.Collapsed;
-            if (!calendarShown) ChatCard.Visibility = Visibility.Visible;
+            if (!calendarShown && !ladderShown) ChatCard.Visibility = Visibility.Visible;
             UpdateFilesChrome();
         }
 

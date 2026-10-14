@@ -444,6 +444,14 @@
                   <TextBlock x:Name="FilesRowText" Text="Files" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
                 </DockPanel>
               </ContentControl>
+              <!-- the ladder (server feature "badges"): a quiet row under Files; the page takes the chat's place -->
+              <ContentControl x:Name="LadderRow" Style="{StaticResource Side.Row}" Padding="12,0" MinHeight="36" Margin="0,2,0,0" Visibility="Collapsed"
+                              MouseLeftButtonUp="LadderRow_Click" ToolTip="Who shares the most with the lodge, and their badges" AutomationProperties.Name="Ladder">
+                <DockPanel>
+                  <TextBlock Text="&#xE734;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16" VerticalAlignment="Center" />
+                  <TextBlock x:Name="LadderRowText" Text="Ladder" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
+                </DockPanel>
+              </ContentControl>
               <TextBlock x:Name="TextHeader" Text="Text channels" Style="{StaticResource SectionHeader}" Margin="12,8,0,4" />
               <ItemsControl x:Name="TextList">
                 <ItemsControl.ItemTemplate>
@@ -546,6 +554,7 @@
       <!-- ===== the calendar page: takes the chat's place while it is open ===== -->
       <local:CalendarView x:Name="CalendarPage" Grid.Column="1" Visibility="Collapsed" />
       <local:FilesView x:Name="FilesPage" Grid.Column="1" Visibility="Collapsed" />
+      <local:LadderView x:Name="LadderPage" Grid.Column="1" Visibility="Collapsed" />
 
       <!-- ===== chat: a Surface1 card ===== -->
       <Border x:Name="ChatCard" Grid.Column="1" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
@@ -1117,6 +1126,7 @@
             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
               <Button x:Name="PopMention" Style="{StaticResource Button.S}" Content="Mention" Click="PopMention_Click" ToolTip="Put @name in your message" />
               <Button x:Name="PopJoin" Style="{StaticResource Button.S}" Content="Join their voice room" Margin="8,0,0,0" Click="PopJoin_Click" />
+              <Button x:Name="PopBadges" Style="{StaticResource Button.S}" Content="Badges" Margin="8,0,0,0" Click="PopBadges_Click" ToolTip="Everything this person has earned" Visibility="Collapsed" />
             </StackPanel>
             <StackPanel x:Name="PopVolumeArea" Margin="0,12,0,0">
               <DockPanel>
@@ -1149,5 +1159,24 @@
     <local:VideoViewer x:Name="VideoPlayer" Grid.RowSpan="9" Grid.ColumnSpan="9" />
     <local:InviteSheet x:Name="InviteSheetHost" Grid.RowSpan="9" Grid.ColumnSpan="9" />
     <local:CreateLodgeGuide x:Name="CreateGuide" Grid.RowSpan="9" Grid.ColumnSpan="9" />
+    <!-- a person's badges (server feature "badges"): the Ladder's "Your badges" and the profile card's Badges button. Everything earned, and for you how to earn the rest. -->
+    <Border x:Name="BadgesOverlay" Grid.RowSpan="9" Grid.ColumnSpan="9" Visibility="Collapsed" Background="{StaticResource Brush.Scrim}" MouseLeftButtonDown="BadgesScrim_Down">
+      <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Window}"
+              Width="520" MaxHeight="640" HorizontalAlignment="Center" VerticalAlignment="Center" Effect="{StaticResource Elevation.2}" MouseLeftButtonDown="BadgesBox_Down">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,24,24,0">
+            <StackPanel>
+              <TextBlock x:Name="BadgesHeading" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="BadgesSub" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,16" />
+              <local:BadgesPanel x:Name="BadgesList" />
+            </StackPanel>
+          </ScrollViewer>
+          <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,12,24,24">
+            <Button Content="Done" Style="{StaticResource Button.M}" Click="BadgesClose_Click" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Border>
   </Grid>
 </UserControl>

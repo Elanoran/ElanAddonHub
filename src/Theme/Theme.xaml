@@ -136,6 +136,16 @@
   <!-- media + game surfaces (viewers, in-game overlay): never used on regular pages -->
   <Color x:Key="Color.Dungeon">#B48CE0</Color>
   <SolidColorBrush x:Key="Brush.Dungeon" Color="{StaticResource Color.Dungeon}" />
+
+  <!-- badge tiers (Lodge badges and ladder): the disc of a badge. Dark glyph (Brush.OnAccent) on the metal; unearned badges are a Surface3 disc with a Tertiary glyph. -->
+  <SolidColorBrush x:Key="Brush.Badge.Bronze" Color="#D09A6A" />
+  <SolidColorBrush x:Key="Brush.Badge.Silver" Color="#C3CAD3" />
+  <SolidColorBrush x:Key="Brush.Badge.Gold" Color="#E8C16A" />
+  <SolidColorBrush x:Key="Brush.Badge.Legendary" Color="#C79BF2" />
+  <SolidColorBrush x:Key="Brush.Badge.Bronze.Tint" Color="#26D09A6A" />
+  <SolidColorBrush x:Key="Brush.Badge.Silver.Tint" Color="#26C3CAD3" />
+  <SolidColorBrush x:Key="Brush.Badge.Gold.Tint" Color="#26E8C16A" />
+  <SolidColorBrush x:Key="Brush.Badge.Legendary.Tint" Color="#26C79BF2" />
   <SolidColorBrush x:Key="Brush.Scrim.Strong" Color="#D9000000" />
   <Color x:Key="Color.Scrim.Glass">#40000000</Color>
   <SolidColorBrush x:Key="Brush.Scrim.Glass" Color="{StaticResource Color.Scrim.Glass}" />

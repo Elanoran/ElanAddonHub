@@ -233,6 +233,7 @@ public partial class ChatModule : IModule
         var s = Store(ch.Id);
         bool saved;
         lock (s) saved = s.Append(msg);
+        hub.Badges.OnChat(me, lfg != null);       // a day active in chat (and a group post): quiet tallies for the badges
         await hub.Broadcast(msg, Viewers(ch));
         if (!saved) await hub.Error(me, "The server couldn't save that message - it was delivered but may be gone after a restart");
     }

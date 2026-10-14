@@ -20,6 +20,7 @@ public sealed class Budget
     public readonly TokenBucket FlightShare;   // flights.share: one per 10 minutes (a burst of 1)
     public readonly TokenBucket ArmoryPut;     // armory.put: a burst of 30, then one per 8 seconds
     public readonly TokenBucket AtlasShare;    // atlas.share: a burst of 3, then one per 2 minutes
+    public readonly TokenBucket Badges;        // badges.* / ladder.get: a burst of 10, then one per 2 seconds
     public DateTime LastUsed;
 
     public Budget(IClock clock)
@@ -33,6 +34,7 @@ public sealed class Budget
         FlightShare = new TokenBucket(1, 1.0 / Flights.ShareEvery.TotalSeconds, clock);
         ArmoryPut = new TokenBucket(Lodge.Armory.PutBurst, 1.0 / Lodge.Armory.PutEvery.TotalSeconds, clock);
         AtlasShare = new TokenBucket(Atlas.ShareBurst, 1.0 / Atlas.ShareEvery.TotalSeconds, clock);
+        Badges = new TokenBucket(10, 0.5, clock);
         VoicePackets = new TokenBucket(150, 60, clock);
         VoiceBytes = new TokenBucket(128 * 1024, 24 * 1024, clock);
         LastUsed = clock.UtcNow;
@@ -120,6 +122,7 @@ public class LodgeHub
     public readonly ArmoryModule Armory;
     public readonly FilesModule SharedFiles;
     public readonly DatasetsModule Datasets;
+    public readonly BadgesModule Badges;
     public readonly LodgeInfoStore Info;
     readonly IModule[] modules;
     readonly ConcurrentDictionary<int, Member> members = new();
@@ -151,8 +154,9 @@ public class LodgeHub
         Armory = new ArmoryModule(this);
         SharedFiles = new FilesModule(this);
         Datasets = new DatasetsModule(this);
+        Badges = new BadgesModule(this);
         Info = new LodgeInfoStore(cfg.DataDir);
-        modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, Armory, SharedFiles, Datasets, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
+        modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, Armory, SharedFiles, Datasets, Badges, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
     // personal codes: one budget per person; guests (shared code): one per IP, so several friends on one guest
@@ -229,6 +233,7 @@ public class LodgeHub
         if (Cfg.FilesEnabled) f.Add("files");
         if (Cfg.ArmoryEnabled) f.Add("armory");
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests
+        if (Badges.Enabled) f.Add("badges");                       // badges and the ladder: both the server setting and the Guild Master switch are on
         foreach (var k in DatasetKinds.All) if (k.Enabled(Cfg)) f.Add(k.Feature);   // 2.17: hosted datasets ("classic")
         return f.ToArray();
     }
@@ -252,6 +257,7 @@ public class LodgeHub
             ["canManageFiles"] = Cfg.FilesEnabled && Roles.Can(me.Role, Perm.FilesManage),
             ["filesMaxMb"] = Cfg.FilesMaxMb,
             ["canShareClassic"] = Cfg.ClassicEnabled && Roles.Can(me.Role, Perm.DatasetManage),
+            ["badges"] = new JsonObject { ["enabled"] = Badges.Enabled, ["locked"] = Badges.Locked },
             ["lodge"] = Info.ToJson(),
             ["calendar"] = Calendar.WelcomeView(),
             ["canInvite"] = Roles.Can(me.Role, Perm.Invite),
@@ -490,6 +496,7 @@ public class LodgeHub
                     AtlasPool.Tick();
                     Armory.Tick();
                     Datasets.Tick();
+                    Badges.Tick();
                     Auth.Strikes.Sweep();
                     SweepBudgets();
                 }

@@ -20,6 +20,7 @@ namespace ElansAddonHub.Lodge
         {
             if (Session == null || !Session.SupportsCalendar) return;
             if (filesShown) { filesShown = false; FilesPage.Visibility = Visibility.Collapsed; }   // the files page gives the place up quietly
+            if (ladderShown) { ladderShown = false; LadderPage.Visibility = Visibility.Collapsed; }   // so does the ladder
             calendarShown = true;   // (ChatCard stays hidden when it came from the files page)
             ChannelVM.CalendarShown = true;
             foreach (var c in Session.TextChannels) c.RaiseRow();

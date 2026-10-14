@@ -85,6 +85,7 @@ namespace ElansAddonHub.Lodge
                 Swatches.Add(new SwatchTile { Id = a, Name = AvatarCatalog.AccentName(a), Fill = b });
             }
             Card = new ProfileCardVM(Preview);
+            if (session.SupportsBadges && me != null) Card.SetBadges(session.BadgesOf(me.Name));
             RefreshChoices();
             Update();
             init = true;

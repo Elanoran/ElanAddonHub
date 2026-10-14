@@ -9,7 +9,7 @@ namespace Lodge;
 // validators as a share. `rev` counts changes: every stored/changed record carries the revision it last changed at, atlas.get {since} returns the records
 // with a newer one. `epoch` names this data set: a client holding another epoch (data restored from a backup, deleted) gets everything again.
 // Never logs any of its content.
-public sealed class AtlasStore
+public sealed partial class AtlasStore
 {
     public const int Kills = 0, Objects = 1, Fishing = 2;
     const long MaxFileBytes = 64L * 1024 * 1024;
@@ -196,7 +196,7 @@ public sealed class AtlasStore
     public ShareResult Share(string identity, string who, JsonObject m)
     {
         var r = new ShareResult();
-        long now = NowSec;
+        long now = NowSec, revBefore = rev;
         if (!members.TryGetValue(identity, out var md))
         {
             if (members.Count >= MaxMembers) { r.Rejected++; return r; }
@@ -215,7 +215,7 @@ public sealed class AtlasStore
         Seen(r, m["seenQuests"], Atlas.MaxSeenQuestsPerShare, seenQuests, Atlas.MaxSeenQuests, (JsonNode n, out Atlas.SeenQuest v) => Atlas.ParseSeenQuest(n, out v), (a, b) => a.Fill(b), (v, rv) => v.Rev = rv);
         Finds(r, md, identity, who, m["finds"], now);
         if (md.Total == 0 && md.FindCount == 0 && !r.Changed && md.Src.All(s => s.Count == 0)) members.Remove(identity);   // nothing of this person was kept
-        if (r.Changed) Dirty = true;
+        if (r.Changed) { Dirty = true; NoteShare(identity, revBefore); }
         return r;
     }
 

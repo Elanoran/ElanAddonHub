@@ -1,0 +1,15 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- A badge as a disc (a BadgeVM): the family's icon glyph on a tier-coloured metal disc (bronze / silver / gold / legendary, Brush.Badge.*); an unearned badge is a
+       Surface3 disc with a Tertiary glyph. Two sizes on the 4-pt scale: S 24 (the strip beside a name, glyph 12) and M 40 (the badge lists, glyph 20). No game art. -->
+  <DataTemplate x:Key="BadgeDisc.S">
+    <Border Width="24" Height="24" CornerRadius="12" Background="{Binding DiscBrush}" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}">
+      <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Font.Icons}" FontSize="12" Foreground="{Binding GlyphBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Border>
+  </DataTemplate>
+  <DataTemplate x:Key="BadgeDisc.M">
+    <Border Width="40" Height="40" CornerRadius="20" Background="{Binding DiscBrush}">
+      <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Font.Icons}" FontSize="20" Foreground="{Binding GlyphBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Border>
+  </DataTemplate>
+</ResourceDictionary>

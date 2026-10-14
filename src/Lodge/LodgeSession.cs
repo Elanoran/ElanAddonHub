@@ -316,6 +316,7 @@ namespace ElansAddonHub.Lodge
             ResetAtlas();
             ResetArmory();
             ResetFiles();
+            ResetBadges();
             ResetClassic();
             ResetHistoryState();
             Pending = null;
@@ -511,6 +512,7 @@ namespace ElansAddonHub.Lodge
                 case "armory.chars": OnArmoryChars(m); break;
                 case "armory.char": OnArmoryChar(m); break;
                 case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
+                case "badges.mine": case "badges.member": case "badges.state": case "ladder.data": OnBadgesFrame(m); break;
                 case "dataset.data": case "dataset.changed": case "dataset.result": OnDatasetFrame(m); break;
             }
         }
@@ -539,6 +541,7 @@ namespace ElansAddonHub.Lodge
             ReadAtlasFeatures(features);
             ReadArmoryFeatures(features);
             ReadFilesFeatures(m, features);
+            ReadBadgesFeatures(m, features);
             ReadClassicFeatures(m, features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
@@ -571,6 +574,7 @@ namespace ElansAddonHub.Lodge
                 Remember(have);
             }
             Me = Members.FirstOrDefault(x => x.IsMe);
+            AfterWelcomeBadges();
             if (Me != null) Me.Invisible = Invisible;
             LoadWelcomeCalendar(m);
             if (m.Child("profile") != null) { MyProfile = ProfileData.Parse(m.Child("profile")); MyProfileChanged?.Invoke(); }
@@ -1206,6 +1210,7 @@ namespace ElansAddonHub.Lodge
                 FailPending(text);
                 return;
             }
+            if (OnBadgesError(text, code)) return;      // this feature stays quiet
             Error?.Invoke(text);
         }
 

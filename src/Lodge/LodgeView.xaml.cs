@@ -66,6 +66,10 @@ namespace ElansAddonHub.Lodge
             CreateGuide.LinkAccepted += link => ShowInviteLink(link, true);
             CalendarPage.Init(session);
             FilesPage.Init(session);
+            LadderPage.Init(session);
+            LadderPage.OpenBadges = () => ShowBadges(session.Me?.Name);
+            session.BadgesChanged += OnBadgesChanged;
+            session.MemberBadgesLoaded += OnMemberBadges;
             session.FilesChanged += UpdateFilesChrome;
             session.FilesNotice += ShowFilesNotice;
             session.CalendarChanged += UpdateCalendarChrome;
@@ -116,11 +120,12 @@ namespace ElansAddonHub.Lodge
 
             UpdateCalendarChrome();
             UpdateFilesChrome();
+            UpdateLadderChrome();
 
             // the channel on screen
             if (s.Selected != shownChannel)
             {
-                HideCalendar(); HideFiles();
+                HideCalendar(); HideFiles(); HideLadder();
                 // what I was typing stays with the channel it was for
                 if (shownChannel != null && editing == null) drafts[shownChannel.Id] = Composer.Text;
                 shownChannel = s.Selected;
@@ -691,7 +696,7 @@ namespace ElansAddonHub.Lodge
 
         void Channel_Click(object sender, MouseButtonEventArgs e)
         {
-            if ((sender as FrameworkElement)?.Tag is ChannelVM ch) { HideCalendar(); HideFiles(); Session.Select(ch); }
+            if ((sender as FrameworkElement)?.Tag is ChannelVM ch) { HideCalendar(); HideFiles(); HideLadder(); Session.Select(ch); }
         }
 
         void Room_Click(object sender, MouseButtonEventArgs e)
@@ -792,6 +797,8 @@ namespace ElansAddonHub.Lodge
             if (!Session.SupportsProfile) popCard.Data = new ProfileData { Name = m.Name, Found = true };
             popCard.RaiseAll();
             PopCard.Content = popCard;
+            if (Session.SupportsBadges && !m.Guest) { popCard.SetBadges(Session.BadgesOf(m.Name)); Session.RequestMemberBadges(m.Name); }
+            UpdateLadderChrome();
             PopVolume.Value = Session.PeerVolumeFor(m.Name);
             PopVolumeText.Text = $"{PopVolume.Value * 100:0}%";
             popLoading = false;
