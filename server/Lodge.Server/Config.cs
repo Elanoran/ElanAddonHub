@@ -45,6 +45,8 @@ public class LodgeConfig
     public bool ClassicEnabled { get; set; } = true;        // the owner can switch it off (not advertised; upload / download / delete answer 403; the stored bundle stays on disk)
     public int ClassicMaxMb { get; set; } = 40;             // the bundle (the real one is about 15 MB)
     public int ClassicDownloadsPerHour { get; set; } = 6;   // per member
+    // ---- badges and the ladder (2.18, "badges" feature)
+    public bool BadgesEnabled { get; set; } = true;         // the server operator can switch it off (not advertised, requests answer "disabled", the data stays on disk); the Guild Master has a second switch
 
     static string Env(string key, string fallback)
     {
@@ -94,6 +96,7 @@ public class LodgeConfig
             ClassicEnabled = !(Env("LODGE_CLASSIC_ENABLED", "1") is "0" or "false" or "no" or "off"),
             ClassicMaxMb = Int("LODGE_CLASSIC_MAX_MB", 40, 1, 1024),
             ClassicDownloadsPerHour = Int("LODGE_CLASSIC_DOWNLOADS_PER_HOUR", 6, 1, 1000),
+            BadgesEnabled = !(Env("LODGE_BADGES_ENABLED", "1") is "0" or "false" or "no" or "off"),
         };
         Directory.CreateDirectory(c.DataDir);
         if (string.IsNullOrEmpty(c.CodesFile))

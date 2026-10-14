@@ -33,6 +33,17 @@
         <TextBlock Text="{Binding Member.CardClassLine}" Visibility="{Binding Member.CardClassVisibility}" Style="{StaticResource Text.Secondary}"
                    Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
 
+        <!-- badges (server feature "badges"): the best few earned ones as small discs; nothing shows for someone without any -->
+        <StackPanel Orientation="Horizontal" Visibility="{Binding BadgesVisibility}" Margin="0,8,0,0">
+          <ItemsControl ItemsSource="{Binding Badges}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate><ContentControl Content="{Binding}" ContentTemplate="{StaticResource BadgeDisc.S}" Margin="0,0,4,0" /></DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{Binding BadgesMoreText}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" Margin="4,0,0,0" />
+        </StackPanel>
+
         <!-- while the server is asked for the rest -->
         <StackPanel Visibility="{Binding LoadingVisibility}" Margin="0,12,0,0">
           <app:Skeleton Height="12" CornerRadius="6" />

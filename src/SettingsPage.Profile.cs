@@ -45,6 +45,7 @@ namespace ElansAddonHub
             ProfileBar.DataContext = pvm;
             ProfileForm.Visibility = ready ? Visibility.Visible : Visibility.Collapsed;
             ProfileEmpty.Visibility = ready ? Visibility.Collapsed : Visibility.Visible;
+            FillBadgesSettings();
             UpdateProfileBar();
             if (ready) return;
             bool connected = session.Me != null && (session.Connected || session.TestFed);

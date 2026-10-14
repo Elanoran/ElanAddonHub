@@ -164,6 +164,8 @@ public sealed class FlightStore
     public long NowMs => new DateTimeOffset(clock.UtcNow).ToUnixTimeMilliseconds();
     public int LegCount { get { lock (Gate) return legs.Count; } }
     public int ContributionCount { get { lock (Gate) return legs.Values.Sum(d => d.Count); } }
+    public int CountOf(string identity) { lock (Gate) return legs.Values.Count(d => d.ContainsKey(identity)); }
+    public Dictionary<string, int> CountsByIdentity() { lock (Gate) { var r = new Dictionary<string, int>(StringComparer.Ordinal); foreach (var d in legs.Values) foreach (var k in d.Keys) r[k] = r.GetValueOrDefault(k) + 1; return r; } }
 
     // Drops contributions older than 120 days (and legs / names left empty). Caller holds Gate. Returns how many contributions went.
     public int Prune()

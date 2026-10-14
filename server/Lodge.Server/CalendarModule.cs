@@ -87,6 +87,7 @@ public sealed class CalendarModule : IModule
         if (made == null) { await hub.Error(me, why, "cal"); return; }
 
         hub.Log.LogInformation("{Name} created calendar event {Id} ({Count} date(s))", me.Name, J.Str(made[0], "id"), made.Count);
+        hub.Badges.Note(me.Name, "events");
         if (ch != null)
         {
             var id = await hub.Chat.PostEventCard(me, ch, made[0]);
@@ -201,6 +202,7 @@ public sealed class CalendarModule : IModule
             case Cal.Result.Denied: await hub.Error(me, "Pick Going, Maybe or Can't with a role", "cal"); return;
             case Cal.Result.Unchanged: return;
         }
+        if (status is "going" or "maybe") hub.Badges.OnSignup(me, J.Str(m, "id"));   // counted once per event
         await Finish(copy);
     }
 

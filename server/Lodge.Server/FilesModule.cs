@@ -368,6 +368,7 @@ public sealed class FilesModule : IModule
             }
             foreach (var p in pruned) TryDelete(BlobPath(p));
             hub.Log.LogInformation("{Name} shared a file ({Action}, {Size} bytes)", by, action, size);
+            hub.Badges.Note(by, "files");
             _ = Announce(action, id, slotNameOut, ver, by);
             return view;
         }

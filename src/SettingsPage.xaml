@@ -282,7 +282,16 @@
                 </StackPanel>
               </HeaderedContentControl>
               <TextBlock x:Name="ClassicStatus" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="16,8,16,12" />
-            </StackPanel></ContentControl>            <TextBlock Text="Presence" Style="{StaticResource Head}" />
+            </StackPanel></ContentControl>
+            <StackPanel x:Name="LadderSettings" Visibility="Collapsed">
+            <TextBlock Text="Ladder" Style="{StaticResource Head}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Hide me from the ladder" Tag="You still earn badges and they still show on your profile; your name just is not listed on the Lodge's ladder. Off by default.">
+                <CheckBox x:Name="HideLadderBox" Style="{StaticResource Switch}" Click="HideLadder_Click" AutomationProperties.Name="Hide me from the ladder" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
+            </StackPanel>
+            <TextBlock Text="Presence" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Connect when the Outpost starts" Tag="Friends see you online while the Outpost runs.">
                 <CheckBox x:Name="AutoConnectBox" Style="{StaticResource Switch}" Click="Lodge_Click" />
@@ -458,6 +467,19 @@
                     </StackPanel>
                   </Border>
                 </HeaderedContentControl>
+              </StackPanel></ContentControl>
+
+              <TextBlock x:Name="BadgesHead" Text="Badges" Style="{StaticResource Head}" Visibility="Collapsed" />
+              <ContentControl x:Name="BadgesCard" Style="{StaticResource Card.Rows}" Visibility="Collapsed"><StackPanel>
+                <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Your badges" Tag="Earned just by taking part, never asked of you. Everything you have earned, and how to earn the rest.">
+                  <StackPanel Orientation="Horizontal">
+                    <Ellipse x:Name="BadgesDot" Width="8" Height="8" Fill="{StaticResource Brush.Accent}" VerticalAlignment="Center" Margin="0,0,8,0" Visibility="Collapsed" ToolTip="New badges since you last looked" />
+                    <Button x:Name="BadgesToggle" Style="{StaticResource Button.M}" Content="Show my badges" Click="BadgesToggle_Click" AutomationProperties.Name="Show my badges" />
+                  </StackPanel>
+                </HeaderedContentControl>
+                <StackPanel x:Name="BadgesBody" Margin="16,0,16,16" Visibility="Collapsed">
+                  <local:BadgesPanel x:Name="BadgesPanelHost" />
+                </StackPanel>
               </StackPanel></ContentControl>
             </StackPanel>
           </StackPanel>
@@ -739,6 +761,13 @@
                 <Button x:Name="LodgeInfoSave" Style="{StaticResource Button.Primary.M}" Content="Save" HorizontalAlignment="Right" Margin="0,12,0,0" Click="LodgeInfoSave_Click" />
               </StackPanel>
             </ContentControl>
+            <TextBlock x:Name="BadgesLodgeHead" Text="Badges and ladder" Style="{StaticResource Head}" Margin="4,12,0,8" />
+            <ContentControl x:Name="BadgesLodgeCard" Style="{StaticResource Card.Rows}" Margin="0,0,0,12"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Badges and the ladder" Tag="Fun milestones for what members share with the lodge, and a monthly ladder. Worked out from the lodge's own records (nothing new is collected). Members can hide themselves from the ladder. Switching it off hides everything; badges already earned are kept.">
+                <CheckBox x:Name="BadgesLodgeBox" Style="{StaticResource Switch}" Click="BadgesLodge_Click" AutomationProperties.Name="Badges and the ladder" />
+              </HeaderedContentControl>
+              <TextBlock x:Name="BadgesLodgeNote" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="16,0,16,12" Visibility="Collapsed" />
+            </StackPanel></ContentControl>
             <TextBlock Text="Members" Style="{StaticResource Head}" Margin="4,12,0,8" />
             <ContentControl Style="{StaticResource Card.Rows}">
               <ItemsControl x:Name="MemberRows">

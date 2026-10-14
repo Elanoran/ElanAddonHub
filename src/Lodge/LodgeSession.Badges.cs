@@ -1,0 +1,190 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using ElansAddonHub.Services;
+
+namespace ElansAddonHub.Lodge
+{
+    // Badges and the ladder (Lodge server feature "badges"). Everything comes from the server (the lodge's own records: nothing is collected from the game for this):
+    // badges.mine (all badges with progress), badges.member (someone's earned badges), ladder.data, badges.state (the Guild Master's switch). On a server without the
+    // feature nothing is asked and nothing is shown. Quiet by design: no toast, no sound, no chat line - a new badge is a small dot on the profile's Badges area until
+    // the member has looked at it. Refusals ("switched off", "guests have no badges", "slow down") are swallowed, never shown.
+    public partial class LodgeSession
+    {
+        public bool SupportsBadges { get; private set; }              // the server lists "badges" (and neither the server operator nor the Guild Master switched it off)
+        public bool BadgesLocked { get; private set; }                // switched off in the server's own settings: the Guild Master can't turn it on
+        public bool BadgesStateKnown { get; private set; }            // the welcome / badges.state said whether the Guild Master's switch is on
+        public bool BadgesOwnerOn { get; private set; }               // that switch
+        public bool HideFromLadder { get; private set; }
+        public int NewBadges { get; private set; }
+        public bool MyBadgesLoaded { get; private set; }
+        public int EarnedCount { get; private set; }
+        public int TotalBadges { get; private set; }
+        public long MyPoints { get; private set; }
+        public long MySeasonPoints { get; private set; }
+        public int MyRank { get; private set; }
+        public int MySeasonRank { get; private set; }
+        public string BadgeSeason { get; private set; } = "";
+        public List<BadgeVM> MyBadges { get; private set; } = new List<BadgeVM>();
+
+        public bool LadderLoaded { get; private set; }
+        public string LadderSeason { get; private set; } = "";        // the season the rows belong to ("all" or "2026-10")
+        public string LadderCurrent { get; private set; } = "";
+        public List<string> LadderSeasons { get; private set; } = new List<string>();
+        public List<LadderRowVM> LadderRows { get; private set; } = new List<LadderRowVM>();
+
+        public event Action BadgesChanged;                            // my badges or the feature's state changed
+        public event Action LadderChanged;
+        public event Action<string> MemberBadgesLoaded;               // login
+
+        readonly Dictionary<string, List<BadgeVM>> memberBadges = new Dictionary<string, List<BadgeVM>>(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string, DateTime> memberBadgesAsked = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        DateTime badgesLastAsk = DateTime.MinValue;
+
+        public bool CanSwitchBadges => MyRole == "owner" && !BadgesLocked;
+
+        void ReadBadgesFeatures(Dictionary<string, object> m, List<string> features)
+        {
+            ResetBadges();
+            SupportsBadges = features.Contains("badges");
+            var st = m.Child("badges");
+            if (st != null) { BadgesStateKnown = true; BadgesOwnerOn = st.Bool("enabled"); BadgesLocked = st.Bool("locked"); }
+        }
+
+        void ResetBadges()
+        {
+            SupportsBadges = false; BadgesLocked = false; BadgesStateKnown = false; BadgesOwnerOn = false; HideFromLadder = false; NewBadges = 0; MyBadgesLoaded = false;
+            EarnedCount = 0; TotalBadges = 0; MyPoints = 0; MySeasonPoints = 0; MyRank = 0; MySeasonRank = 0; BadgeSeason = "";
+            MyBadges = new List<BadgeVM>();
+            LadderLoaded = false; LadderSeason = ""; LadderCurrent = ""; LadderSeasons = new List<string>(); LadderRows = new List<LadderRowVM>();
+            memberBadges.Clear(); memberBadgesAsked.Clear(); badgesLastAsk = DateTime.MinValue;
+        }
+
+        // the welcome has set Me: ask for my badges once (a guest has none)
+        void AfterWelcomeBadges()
+        {
+            if (SupportsBadges && Me != null && !Me.Guest) RequestMyBadges();
+        }
+
+        public void RequestMyBadges()
+        {
+            if (!SupportsBadges || (Me != null && Me.Guest)) return;
+            badgesLastAsk = Clock();
+            _ = Send(new Dictionary<string, object> { ["t"] = "badges.mine" });
+        }
+
+        // I looked at my badges: the dot goes (locally at once, and on the server so it stays gone)
+        public void MarkBadgesSeen()
+        {
+            if (!SupportsBadges || NewBadges == 0) return;
+            NewBadges = 0;
+            BadgesChanged?.Invoke();
+            _ = Send(new Dictionary<string, object> { ["t"] = "badges.seen" });
+        }
+
+        public void SetHideFromLadder(bool hide)
+        {
+            if (!SupportsBadges) return;
+            HideFromLadder = hide;
+            badgesLastAsk = Clock();
+            _ = Send(new Dictionary<string, object> { ["t"] = "badges.hide", ["hide"] = hide });
+            BadgesChanged?.Invoke();
+        }
+
+        public void RequestLadder(string season)
+        {
+            if (!SupportsBadges) return;
+            badgesLastAsk = Clock();
+            _ = Send(new Dictionary<string, object> { ["t"] = "ladder.get", ["season"] = string.IsNullOrEmpty(season) ? "all" : season });
+        }
+
+        // someone's earned badges (a profile card); asked again at most once a minute
+        public void RequestMemberBadges(string login)
+        {
+            if (!SupportsBadges || string.IsNullOrEmpty(login)) return;
+            if (memberBadgesAsked.TryGetValue(login, out var at) && Clock() - at < TimeSpan.FromMinutes(1)) return;
+            memberBadgesAsked[login] = Clock();
+            badgesLastAsk = Clock();
+            _ = Send(new Dictionary<string, object> { ["t"] = "badges.member", ["name"] = login });
+        }
+
+        public List<BadgeVM> BadgesOf(string login) =>
+            Me != null && string.Equals(login, Me.Name, StringComparison.OrdinalIgnoreCase) ? MyBadges.Where(b => b.Earned).ToList()
+            : login != null && memberBadges.TryGetValue(login, out var l) ? l : null;
+
+        // Guild Master: the whole feature on / off for the lodge
+        public void SetBadgesForLodge(bool on)
+        {
+            if (!CanSwitchBadges) return;
+            _ = Send(new Dictionary<string, object> { ["t"] = "admin.badges", ["on"] = on });
+        }
+
+        // the badges shown beside a name: highest tier first, then the newest
+        public static List<BadgeVM> Top(IEnumerable<BadgeVM> badges, int n) =>
+            (badges ?? Enumerable.Empty<BadgeVM>()).Where(b => b.Earned).OrderByDescending(b => b.Tier).ThenByDescending(b => b.At).ThenBy(b => b.Id, StringComparer.Ordinal).Take(n).ToList();
+
+        public static List<BadgeGroupVM> BadgeGroups(IEnumerable<BadgeVM> badges)
+        {
+            var res = new List<BadgeGroupVM>();
+            foreach (var b in badges ?? Enumerable.Empty<BadgeVM>())
+            {
+                var g = res.FirstOrDefault(x => x.Name == b.FamilyName);
+                if (g == null) res.Add(g = new BadgeGroupVM { Name = b.FamilyName });
+                g.Items.Add(b);
+            }
+            return res;
+        }
+
+        bool OnBadgesFrame(Dictionary<string, object> m)
+        {
+            switch (m.Str("t"))
+            {
+                case "badges.state":
+                    BadgesStateKnown = true; BadgesOwnerOn = m.Bool("enabled"); BadgesLocked = m.Bool("locked");
+                    SupportsBadges = BadgesOwnerOn && !BadgesLocked;
+                    if (SupportsBadges) AfterWelcomeBadges(); else { var keep = BadgesStateKnown; var l = BadgesLocked; var o = BadgesOwnerOn; ResetBadges(); BadgesStateKnown = keep; BadgesLocked = l; BadgesOwnerOn = o; }
+                    BadgesChanged?.Invoke(); LadderChanged?.Invoke();
+                    return true;
+                case "badges.mine":
+                    if (!SupportsBadges || !m.Bool("ok")) return true;
+                    HideFromLadder = m.Bool("hide"); NewBadges = m.Int("new");
+                    MyPoints = m.Long("points"); MyRank = m.Int("rank"); MySeasonPoints = m.Long("seasonPoints"); MySeasonRank = m.Int("seasonRank");
+                    BadgeSeason = m.Str("season") ?? ""; EarnedCount = m.Int("earned"); TotalBadges = m.Int("total");
+                    MyBadges = (m.List("badges") ?? new List<object>()).OfType<Dictionary<string, object>>().Select(BadgeVM.Parse).Where(b => b.Id != null).ToList();
+                    MyBadgesLoaded = true;
+                    BadgesChanged?.Invoke();
+                    return true;
+                case "badges.member":
+                    if (!SupportsBadges || !m.Bool("ok")) return true;
+                    var who = m.Str("name");
+                    if (string.IsNullOrEmpty(who)) return true;
+                    memberBadges[who] = (m.List("badges") ?? new List<object>()).OfType<Dictionary<string, object>>().Select(BadgeVM.Parse).Where(b => b.Id != null).ToList();
+                    MemberBadgesLoaded?.Invoke(who);
+                    return true;
+                case "ladder.data":
+                    if (!SupportsBadges || !m.Bool("ok")) return true;
+                    LadderSeason = m.Str("season") ?? "all"; LadderCurrent = m.Str("current") ?? "";
+                    LadderSeasons = (m.List("seasons") ?? new List<object>()).OfType<string>().ToList();
+                    LadderRows = (m.List("rows") ?? new List<object>()).OfType<Dictionary<string, object>>().Select(LadderRowVM.Parse).ToList();
+                    LadderLoaded = true;
+                    LadderChanged?.Invoke();
+                    return true;
+            }
+            return false;
+        }
+
+        // errors that belong to this feature are never shown: a lodge without badges is just a lodge without badges
+        bool OnBadgesError(string text, string code)
+        {
+            text = text ?? "";
+            if (text.StartsWith("Badges are switched off", StringComparison.Ordinal) || text.StartsWith("Guests have no badges", StringComparison.Ordinal)
+                || text.StartsWith("Nothing to change yet", StringComparison.Ordinal)) return true;
+            if (code == "locked") return true;
+            if (code == "rate" && Clock() - badgesLastAsk < TimeSpan.FromSeconds(5)) return true;
+            return false;
+        }
+
+        // ---- test hooks
+        public void ForgetMemberBadgesForTest() { memberBadges.Clear(); memberBadgesAsked.Clear(); }
+    }
+}

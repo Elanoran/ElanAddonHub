@@ -150,7 +150,24 @@ namespace ElansAddonHub.Lodge
         ProfileData data;
         public bool Loading { get; set; }
 
+        public ObservableCollection<BadgeVM> Badges { get; } = new ObservableCollection<BadgeVM>();   // the best few (highest tier first), drawn as a strip
+        int badgeTotal;
+
         public ProfileCardVM(MemberVM member) { Member = member; }
+
+        // the strip under the name: up to 5 earned badges; nothing at all (no empty box) for someone without any, or on a lodge without the feature
+        public void SetBadges(IEnumerable<BadgeVM> all)
+        {
+            var list = (all ?? Enumerable.Empty<BadgeVM>()).Where(b => b.Earned).ToList();
+            Badges.Clear();
+            foreach (var b in LodgeSession.Top(list, MaxStrip)) Badges.Add(b);
+            badgeTotal = list.Count;
+            Raise(nameof(BadgesVisibility)); Raise(nameof(BadgesMoreText));
+        }
+
+        public const int MaxStrip = 5;
+        public Visibility BadgesVisibility => Badges.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        public string BadgesMoreText => badgeTotal > Badges.Count ? "+" + (badgeTotal - Badges.Count) : "";
 
         public ProfileData Data
         {

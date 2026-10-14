@@ -188,6 +188,7 @@ namespace ElansAddonHub
             InitProfile();
             InitArmory();
             InitClassic();
+            InitBadges();
         }
 
         // ================================================================ navigation
@@ -279,6 +280,7 @@ namespace ElansAddonHub
                 session.RequestAllDevices();
             }
             if (NavLodge.IsChecked == true) { session.RequestMyDevices(); UpdateDevicesCard(); FillArmory(); FillClassicSettings(); }
+            FillBadgesSettings();
             SyncPrivacy();
             if (NavAddons.IsChecked == true) UpdateCfStatus();
             var c = session.Presence.Current;

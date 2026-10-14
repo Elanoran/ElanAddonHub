@@ -1,0 +1,67 @@
+<UserControl x:Class="ElansAddonHub.Lodge.LadderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:ElansAddonHub.Lodge"
+             xmlns:app="clr-namespace:ElansAddonHub">
+  <UserControl.Resources>
+    <!-- one place on the ladder: rank, name, up to three badges, points. Your own row sits on the accent tint. -->
+    <DataTemplate x:Key="LadderRow">
+      <Border Background="{Binding RowBrush}" CornerRadius="{StaticResource Radius.Control}" Padding="12,8" Margin="0,0,0,4" AutomationProperties.Name="{Binding NameText}">
+        <DockPanel MinHeight="32">
+          <TextBlock DockPanel.Dock="Right" Text="{Binding PointsText}" Style="{StaticResource Text.RowTitle}" VerticalAlignment="Center" Margin="12,0,0,0" MinWidth="48" TextAlignment="Right" />
+          <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Top}" VerticalAlignment="Center">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate><ContentControl Content="{Binding}" ContentTemplate="{StaticResource BadgeDisc.S}" Margin="4,0,0,0" /></DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{Binding RankText}" Style="{StaticResource Text.RowTitle}" Foreground="{StaticResource Brush.Text.Secondary}" Width="32" VerticalAlignment="Center" />
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="{Binding NameText}" Style="{StaticResource Text.RowTitle}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding HiddenNote}" Visibility="{Binding HiddenNoteVisibility}" Style="{StaticResource Text.Caption}" />
+          </StackPanel>
+        </DockPanel>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Border Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
+    <Grid>
+      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+
+      <!-- header: title, this month | all time, your badges -->
+      <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,0,1" Padding="16,8">
+        <DockPanel MinHeight="32">
+          <Button x:Name="BadgesButton" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Click="Badges_Click" Margin="8,0,0,0" ToolTip="Every badge, with how to earn the ones you do not have yet" AutomationProperties.Name="Your badges">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="Your badges" VerticalAlignment="Center" />
+              <Ellipse x:Name="NewDot" Width="8" Height="8" Fill="{StaticResource Brush.Accent}" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="New badges since you last looked" />
+            </StackPanel>
+          </Button>
+          <Border DockPanel.Dock="Right" Style="{StaticResource SegmentHost}">
+            <StackPanel Orientation="Horizontal">
+              <RadioButton x:Name="ModeMonth" Style="{StaticResource Segment}" Content="This month" GroupName="laddermode" IsChecked="True" Checked="Mode_Changed" />
+              <RadioButton x:Name="ModeAll" Style="{StaticResource Segment}" Content="All time" GroupName="laddermode" Checked="Mode_Changed" />
+            </StackPanel>
+          </Border>
+          <TextBlock Text="&#xE734;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <TextBlock Text="Ladder" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+        </DockPanel>
+      </Border>
+
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
+        <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
+          <TextBlock x:Name="YouLine" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,0,0,12" />
+          <ItemsControl x:Name="RowList" ItemTemplate="{StaticResource LadderRow}" />
+          <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
+            <TextBlock Text="&#xE734;" FontFamily="{StaticResource Font.Icons}" FontSize="32" Foreground="{StaticResource Brush.Text.Tertiary}" HorizontalAlignment="Center" />
+            <TextBlock x:Name="EmptyTitle" Style="{StaticResource Text.Body}" HorizontalAlignment="Center" Margin="0,12,0,0" />
+            <TextBlock x:Name="EmptyHint" Style="{StaticResource Text.Secondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,4,0,0" />
+          </StackPanel>
+          <TextBlock x:Name="Footer" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,16,0,0"
+                     Text="Points come from what you share with the lodge, with diminishing returns, plus a few for every badge. The month starts over on the 1st (UTC). You can leave the ladder in Settings, Lodge; your badges stay." />
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </Border>
+</UserControl>

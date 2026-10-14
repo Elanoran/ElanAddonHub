@@ -321,6 +321,7 @@ public sealed class DatasetsModule : IModule
             }
             if (old != null) TryDelete(BlobPath(old));
             hub.Log.LogInformation("{Name} shared the {Dataset} dataset with the lodge ({Size} bytes, {Action})", by, kind.Name, size, replaced ? "replaced" : "new");
+            hub.Badges.Note(by, "host");
             _ = Announce(kind, fresh, replaced ? "replace" : "new");
             return View(kind, fresh);
         }

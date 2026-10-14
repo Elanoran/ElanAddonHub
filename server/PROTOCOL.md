@@ -347,3 +347,35 @@ The content is a single file (for `classic`: a zip holding the ORIGINAL upstream
 - `dataset.delete` `{name}` (officers and the owner) -> `dataset.result` `{op: "delete", name, ok, why?}`; `why`: `forbidden`, `missing`, `disabled`, `unknown`, `save`.
 - `dataset.changed` `{name, action: new|replace|delete, available, version?, sha256?, size?, uploadedBy?, at?}` goes to every member (not to guests) when it changes.
 - Outposts compare `version` strings (`<commit date>|<dump name>|<commit>` for `classic`) to decide whether to fetch, and check the downloaded bytes against `sha256` before unpacking.
+
+## Badges and the ladder (feature `badges`; the server version is set at merge; optional for clients)
+
+Fun milestones for what a member shares, and a monthly ladder. **Nothing new is collected from the game**: every number is derived from what the lodge already holds. Feature `badges` in the welcome `features` and a welcome field `badges: { enabled, locked }` (`enabled` = the Guild Master's switch, `locked` = `LODGE_BADGES_ENABLED=0` on the server; the feature is advertised only while both allow it). A client on an older server sends nothing and shows nothing. Quiet by design: no push of any kind when a badge is earned.
+
+- Who: members and up (a personal code with a rank above guest). **Guests have no badges** and never appear; they may read the ladder.
+- The definitions live in ONE table on the server (`Badges.Table`): `id` (`<family>.<tier>`, hidden ones a plain word), `family`, `tier` (1 bronze, 2 silver, 3 gold, 4 legendary), `name`, `flavour`, a metric with a threshold, `hidden`. Clients render whatever `badges.mine` sends, so a new badge needs no client update; an unknown family just gets a default icon. Earned badges are kept by id and never taken back (not when the data they were earned from is pruned), and go only with the member (leaving or being removed).
+- `badges.mine {}` -> `badges.mine { ok, you, hide, new, points, rank, season, seasonPoints, seasonRank, earned, total, badges: [ { id, family, familyName, tier, name, flavour, how, hidden, earned, at? (unix s), value?, target? } ] }`. Every badge is listed; an unearned secret has `name` and `how` `"???"`, an empty `flavour` and no `value` / `target`. `value` / `target` (progress, `value` is capped at `target`) are present when the badge is earned from a number. `new` = badges earned since the member last said `badges.seen`.
+- `badges.seen {}`: the member has looked at their badges (the "new" dot goes). No answer.
+- `badges.hide { hide: bool }`: "Hide me from the ladder" (off by default). Hidden members are left out of everybody else's ladder (they see their own row marked `hidden`); their badges still show on their profile. Answers `badges.mine`.
+- `badges.member { name }` -> `badges.member { ok, name, count, badges: [ { id, family, tier, name, at } ] }`: that member's EARNED badges (highest tier first), nothing about progress.
+- `ladder.get { season: "2026-10" | "all" }` (an unknown or malformed value means the current month) -> `ladder.data { ok, season, current, seasons: [ "2026-10", "2026-09", ... ], rows: [ { rank, name (the Lodge login; clients show display names as usual), points, top: [ up to 3 earned badges ], you?, hidden? } ], you: { rank, points, hidden } | null }`. At most 100 rows; equal points share a rank; only members with points are listed. Past seasons are the final standings kept for 12 months.
+- `admin.badges { on: bool }`: the Guild Master switches the whole feature on or off (persisted). Everybody receives `badges.state { enabled, locked }`. Refused with code `locked` when the server setting is off.
+- Errors (never shown by the Outpost): code `disabled` ("Badges are switched off on this lodge"), `guest`, `rate`.
+- Limits: `badges.*` and `ladder.get` share one budget per person (a burst of 10, then one per 2 seconds). The numbers are computed on a timer (every 10 minutes) and when a member asks (at most every 30 seconds).
+
+**Data sources** (per member; a counter that no store keeps per member is a small tally in `data/badges.json`, counted from the day the feature went live):
+
+| Number | From |
+|---|---|
+| kills, nodes and chests, catches, finds | Atlas pool counters per member (`atlas.json`) |
+| vendors, item details revealed | records in the Atlas pool that carry their author |
+| zones covered | zones in the member's kill, fishing and spawn records |
+| quest rewards, creatures / objects / quests seen | tally of the records a share added (Atlas tables carry no author) |
+| rare drops recorded first | drops under 1 % (source with 200+ kills) that only this member recorded |
+| flight legs | the member's current flight contributions (`flights.json`) |
+| characters shared | the Armory |
+| files shared, events created, event sign-ups (once per event), group posts, hosting the Classic data | tally |
+| days active in chat (days with a message, not messages), late nights (00:00-05:00 UTC) | tally |
+| days in the lodge | the member's oldest device, else the first time the server noticed them |
+
+**Points**: each category is `Weight * log2(1 + value / Unit)`, at most 120 per category (the table is `Badges.Metrics`), plus 10 / 25 / 50 / 100 for every bronze / silver / gold / legendary badge. The season is the calendar month (UTC): it counts the growth since the first of the month (the numbers at the start of the month are its baseline) and the badges earned in it; all-time counts everything.
