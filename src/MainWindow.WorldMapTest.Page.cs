@@ -212,6 +212,8 @@ namespace ElansAddonHub
                     if (png != null) File.WriteAllBytes(P("worldmap-synthetic.png"), png);
                     Check("screenshot: the page was captured", png != null && png.Length > 5000, (png?.Length ?? 0) + "");
 
+                    await WorldMapPage3dTest(dir, notes, Check, P, taxi, lidx);
+                    ShowTab("atlas"); AtlasView.History.Clear();
                     // a new game build: the pictures of the old build are removed, the new build is made on the next visit
                     WorldMapView.Dispose();
                     var oldDir = Path.Combine(WorldMapCache.Root, WorldMapCache.BuildKey);
@@ -329,6 +331,8 @@ namespace ElansAddonHub
             var rres2 = WorldMapService.Build(1, kal.Name, kal.WdtFileDataId, regionKey, regionDir, t => t.Col >= 38 && t.Col <= 42 && t.Row >= 28 && t.Row <= 33, CancellationToken.None, null);
             Check("real game files: building the same region again reuses every tile (nothing decoded, nothing written)", rres2.Complete && rres2.Decoded == 0 && rres2.Reused == expectTiles && rres2.Written == 0, rres2.Decoded + " " + rres2.Reused);
             notes.Add("note real game files: region build " + regionMs + " ms for " + expectTiles + " map tiles, " + rres.Files + " files, " + (rres.Bytes / 1024) + " KB; managed memory after " + GC.GetTotalMemory(true) / 1048576 + " MB");
+            await WorldMapTerrainRealChecks(idx, real, rw, notes, Check);
+            WorldMapCache.RootOverride = Path.Combine(rw, "cache");
 
             if (engine)
             {
@@ -409,6 +413,7 @@ namespace ElansAddonHub
                         await AtlasView.Open("worldmap:1?x=-4500&y=-1200&z=3.25");
                         await Task.Delay(3000);
                         var pc = await WorldMapView.CaptureForTest(); if (pc != null) File.WriteAllBytes(P("worldmap-kalimdor-mid.png"), pc);
+                        await WorldMapReal3d(idx, notes, Check, P);
                     }
                     finally { if (ci2 != null) ClassicAtlas.Use(null); ResetAtlasForTest(); }
                 }

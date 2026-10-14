@@ -139,8 +139,23 @@
               <HeaderedContentControl x:Name="ItemDataRow" Style="{StaticResource Setting.Row}" Header="Read item data from my WoW installation" Tag="Item names, levels, stats and prices come from your own game files, read-only, on this PC. Nothing is uploaded and nothing is written to the WoW folder.">
                 <CheckBox x:Name="ItemDataBox" Style="{StaticResource Switch}" Click="General_Click" AutomationProperties.Name="Read item data from my WoW installation" />
               </HeaderedContentControl>
-              <HeaderedContentControl x:Name="WorldMapCacheRow" Style="{StaticResource Setting.Row}" Header="World map pictures" Tag="The Atlas world map is made from your game files the first time you open a continent and kept here until the game updates.">
+              <HeaderedContentControl x:Name="WorldMapCacheRow" Style="{StaticResource Setting.Row}" Header="World map pictures and terrain" Tag="The Atlas world map is made from your game files the first time you open a continent (the 3D terrain and zone borders the first time you ask for them) and kept here until the game updates.">
                 <Button x:Name="ClearWorldMapButton" Style="{StaticResource Button.M}" Content="Clear world map cache" Click="ClearWorldMap_Click" AutomationProperties.Name="Clear world map cache" />
+              </HeaderedContentControl>
+              <HeaderedContentControl x:Name="WorldMap3dRow" Style="{StaticResource Setting.Row}" Header="World map 3D detail" Tag="How much terrain and texture detail the 3D view draws. Low is easiest on the graphics card.">
+                <Border Style="{StaticResource SegmentHost}">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="Detail3dLow" Style="{StaticResource Segment}" Content="Low" GroupName="wm3d-detail" Click="WorldMap3d_Click" AutomationProperties.Name="3D detail low" />
+                    <RadioButton x:Name="Detail3dMedium" Style="{StaticResource Segment}" Content="Medium" GroupName="wm3d-detail" Click="WorldMap3d_Click" AutomationProperties.Name="3D detail medium" />
+                    <RadioButton x:Name="Detail3dHigh" Style="{StaticResource Segment}" Content="High" GroupName="wm3d-detail" Click="WorldMap3d_Click" AutomationProperties.Name="3D detail high" />
+                  </StackPanel>
+                </Border>
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="World map 3D height" Tag="Exaggerates the mountains in the 3D view (1x is true to the game, 3x is dramatic).">
+                <StackPanel Orientation="Horizontal">
+                  <Slider x:Name="Exag3dSlider" Minimum="1" Maximum="3" Width="180" VerticalAlignment="Center" ValueChanged="Exag3d_Changed" AutomationProperties.Name="3D height exaggeration" />
+                  <TextBlock x:Name="Exag3dText" Style="{StaticResource Text.Secondary}" Width="44" TextAlignment="Right" VerticalAlignment="Center" />
+                </StackPanel>
               </HeaderedContentControl>
             </StackPanel></ContentControl>
             <TextBlock Text="Startup" Style="{StaticResource Head}" />
@@ -873,6 +888,8 @@
                   <TextBlock Text="" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://github.com/lostromb/concentus" RequestNavigate="Link_Navigate">Concentus (Opus)</Hyperlink></TextBlock></Grid>
                 <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                   <TextBlock Text="World map" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://leafletjs.com" RequestNavigate="Link_Navigate">Leaflet 1.9.4</Hyperlink> (BSD-2-Clause, kept inside the Outpost; the map never loads anything from the internet)</TextBlock></Grid>
+                <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="World map 3D" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://threejs.org" RequestNavigate="Link_Navigate">three.js r149</Hyperlink> (MIT, kept inside the Outpost, no internet needed)</TextBlock></Grid>
                 <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                   <TextBlock Text="Single exe" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://github.com/Fody/Costura" RequestNavigate="Link_Navigate">Costura</Hyperlink></TextBlock></Grid>
                 <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>

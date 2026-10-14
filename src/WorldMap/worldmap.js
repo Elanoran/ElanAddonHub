@@ -180,6 +180,22 @@
     });
   }
 
+  // zone borders: one polygon per zone (all its rings: the even-odd fill leaves holes out), a thin line that tints the zone under the cursor
+  function buildRings(id, d) {
+    clearGroup(id); var g = ensureGroup(id);
+    var base = { color: '#7dd3fc', weight: 1.4, opacity: .8, fill: true, fillColor: '#7dd3fc', fillOpacity: 0, interactive: true, smoothFactor: 0.6 };
+    (d.items || []).forEach(function (it) {
+      var rings = (it.rings || []).map(function (r) { var ll = []; for (var i = 0; i + 1 < r.length; i += 2) ll.push([r[i], r[i + 1]]); return ll; });
+      if (!rings.length) return;
+      var pg = L.polygon(rings, base);
+      pg.on('mouseover', function () { pg.setStyle({ fillOpacity: .17, weight: 2.4, opacity: 1 }); });
+      pg.on('mousemove', function (e) { var oe = e.originalEvent; showTip(oe.clientX, oe.clientY, it.name, '', it.link ? 'Click to open its Atlas page' : ''); });
+      pg.on('mouseout', function () { pg.setStyle({ fillOpacity: 0, weight: 1.4, opacity: .8 }); hideTip(); });
+      if (it.link) pg.on('click', function (e) { L.DomEvent.stopPropagation(e); hideTip(); openLink(it.link); });
+      g.addLayer(pg);
+    });
+  }
+
   function buildLines(id, d) {
     clearGroup(id); var g = ensureGroup(id);
     (d.items || []).forEach(function (it) {
@@ -285,6 +301,7 @@
     } else if (m.kind === 'labels') { data[id] = d; buildLabels(id, m); counts[id] = (m.items || []).length; }
     else if (m.kind === 'markers') { data[id] = d; buildMarkers(id, m); counts[id] = (m.items || []).length; }
     else if (m.kind === 'lines') { data[id] = d; buildLines(id, m); counts[id] = (m.items || []).length; }
+    else if (m.kind === 'rings') { data[id] = d; buildRings(id, m); counts[id] = (m.items || []).length; }
     requested[id] = true;
     setCount(id, counts[id] === 0 ? 'none' : String(counts[id]));
     if (m.note && panelRows[id]) panelRows[id].row.title = m.note;
@@ -382,10 +399,17 @@
   // test / diagnostics hook (read-only)
   window.wm = {
     w2ll: w2ll, ll2w: ll2w,
+    // the zone borders layer (test): how many polygons, and what pointing at one does to its fill
+    borders: function (hoverIndex) {
+      var g = groups.borders, polys = []; if (g) g.eachLayer(function (l) { if (l.getLatLngs) polys.push(l); });
+      var r = { n: polys.length, rings: polys.reduce(function (a, p) { return a + p.getLatLngs().length; }, 0), onMap: !!(g && map.hasLayer(g)) };
+      if (hoverIndex != null && polys[hoverIndex]) { var p = polys[hoverIndex]; r.before = p.options.fillOpacity; p.fire('mouseover'); r.hover = p.options.fillOpacity; p.fire('mouseout'); r.after = p.options.fillOpacity; }
+      return JSON.stringify(r);
+    },
     state: function () {
-      return JSON.stringify({ ready: ready, zoom: map ? map.getZoom() : null, center: map ? [map.getCenter().lat, map.getCenter().lng] : null, tiles: tilesLoaded, tileErrors: tileErrors,
+      return JSON.stringify({ mode: '2d', ready: ready, zoom: map ? map.getZoom() : null, center: map ? [map.getCenter().lat, map.getCenter().lng] : null, tiles: tilesLoaded, tileErrors: tileErrors,
         on: Object.keys(on).filter(function (k) { return on[k]; }), counts: counts, drawn: drawn, version: L.version });
     }
   };
-  send({ t: 'hello' });
+  send({ t: 'hello', p: '2d' });
 })();

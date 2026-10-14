@@ -29,6 +29,14 @@ namespace ElansAddonHub.Services.WorldMap
             return m != null && m.Valid && m.MapId == mapId ? m : null;
         }
 
+        public static string TerrainDir(string key, int mapId) => WorldMapTerrain.Dir(MapDir(key, mapId));
+        // the finished height grids + borders of this build, or null
+        public static WorldMapTerrain.Manifest TerrainBuilt(int mapId, string key = null)
+        {
+            var m = WorldMapTerrain.ReadManifest(TerrainDir(key ?? BuildKey, mapId));
+            return m != null && m.Valid && m.MapId == mapId ? m : null;
+        }
+
         // folders of other game builds are of no use any more
         public static int RemoveOtherBuilds(string key)
         {
@@ -93,15 +101,15 @@ namespace ElansAddonHub.Services.WorldMap
         public static string StatusLine()
         {
             long b = SizeBytes();
-            int maps = 0;
+            int maps = 0, tmaps = 0;
             try
             {
                 var key = BuildKey; var dir = Path.Combine(Root, key);
-                if (Directory.Exists(dir)) maps = Directory.GetDirectories(dir).Count(d => File.Exists(WorldMapPyramid.ManifestPath(d)));
+                if (Directory.Exists(dir)) { maps = Directory.GetDirectories(dir).Count(d => File.Exists(WorldMapPyramid.ManifestPath(d))); tmaps = Directory.GetDirectories(dir).Count(d => File.Exists(WorldMapTerrain.ManifestPath(WorldMapTerrain.Dir(d)))); }
             }
             catch (Exception) { }
-            if (b <= 0) return "World map pictures: none made yet (they are made from your game files the first time you open a continent).";
-            return "World map pictures: " + maps + (maps == 1 ? " continent, " : " continents, ") + SizeText(b) + ".";
+            if (b <= 0) return "World map pictures: none made yet (they are made from your game files the first time you open a continent; the 3D terrain is read the first time you use the 3D view or the zone borders).";
+            return "World map pictures: " + maps + (maps == 1 ? " continent, " : " continents, ") + SizeText(b) + (tmaps > 0 ? " (with the terrain of " + tmaps + (tmaps == 1 ? " continent" : " continents") + " for the 3D view and the zone borders)" : "") + ".";
         }
     }
 }

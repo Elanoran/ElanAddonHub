@@ -68,3 +68,22 @@ html, body { margin: 0; height: 100%; background: var(--sea); overflow: hidden; 
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 #toast.bad { border-color: #ff6b5e; }
 @media (prefers-reduced-motion: reduce) { #toast { transition: none; } .pin { animation: none; } }
+
+/* ---- the 3D page (view3d.html) */
+body.v3 #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; background: var(--sea); }
+body.v3 #ov { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+body.v3 #hud { position: absolute; top: 10px; right: 10px; z-index: 5; }
+.l3, .m3 { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: auto; will-change: transform; }
+.l3 .zli { pointer-events: auto; }
+.l3.sm .zli b { font-size: 12px; }
+.m3 .fm, .m3 .pin { pointer-events: auto; }
+.v3set { border-top: 1px solid var(--panel-line); margin: 8px 6px 0; padding-top: 6px; }
+.v3set .v3h { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
+.v3r { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.v3r > span:first-child { width: 50px; color: var(--text-dim); }
+.v3r b { width: 34px; text-align: right; font-weight: 600; color: var(--text); }
+.v3r input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
+.v3r button { background: rgba(255, 255, 255, .08); color: var(--text); border: 1px solid var(--panel-line); border-radius: 6px; padding: 3px 8px; font: inherit; cursor: pointer; }
+.v3r button:hover { background: rgba(255, 255, 255, .16); }
+.v3r .seg { display: inline-flex; gap: 2px; }
+.v3r .seg button.on { background: var(--accent); color: #1b1300; border-color: transparent; font-weight: 600; }

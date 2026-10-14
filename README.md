@@ -96,6 +96,7 @@ The addon stands on the work of others - thank you!
 - **[NAudio](https://github.com/naudio/NAudio)** (MIT) - microphone and speaker audio for the Lodge voice chat.
 - **[Concentus](https://github.com/lostromb/concentus)** (BSD) - the Opus voice codec in pure C#.
 - **[Leaflet](https://leafletjs.com)** 1.9.4 (BSD-2-Clause, Copyright (c) 2010-2023 Volodymyr Agafonkin, 2010-2011 CloudMade; licence text in `src/WorldMap/LICENSE-leaflet.txt`) - the zoomable map engine of the Atlas World map. One pinned copy rides inside the Outpost's exe; the map page never loads anything from the internet.
+- **[three.js](https://threejs.org)** r149 (MIT, Copyright 2010-2023 three.js authors; licence text in `src/WorldMap/LICENSE-three.txt`) - the 3D engine of the Atlas World map's terrain view. One pinned copy (the classic non-module build) rides inside the Outpost's exe; the 3D page never loads anything from the internet.
 - **Item icons (Inventory page)** - read at runtime, read-only, from the user's own WoW install by a small CASC/BLTE/BLP reader
   written for this project from the public format notes on [wowdev.wiki](https://wowdev.wiki). No library or game file is
   bundled or downloaded; icons are cached as PNG in the hub's data folder only.

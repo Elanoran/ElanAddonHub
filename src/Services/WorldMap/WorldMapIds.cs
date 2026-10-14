@@ -19,6 +19,7 @@ namespace ElansAddonHub.Services.WorldMap
         public string Slug = "";           // set when the text named the continent by slug
         public bool HasView;
         public bool Pin;                   // mark the position with a ring ("Show on world map"); dropped from the id once the view moves
+        public int Mode;                   // 0 = as last used, 2 = the flat map, 3 = the 3D terrain view (&m=2 / &m=3)
         public double X, Y, Z = 4;
         public string Problem;             // set = the text is not a valid world map id
         public bool Valid => Problem == null;
@@ -31,7 +32,7 @@ namespace ElansAddonHub.Services.WorldMap
         public const double MaxZoom = 9;
 
         // the layer ids the page and the app agree on (messages naming any other are refused)
-        public static readonly string[] LayerIds = { "zones", "fm", "routes", "nodes", "saved", "vendors", "trainers", "quests", "rares", "finds" };
+        public static readonly string[] LayerIds = { "zones", "borders", "fm", "routes", "nodes", "saved", "vendors", "trainers", "quests", "rares", "finds" };
         public static readonly string[] NodeGroups = { "herbs", "ore", "chests", "fishing" };
         public static bool IsLayerId(string id) => id != null && (LayerIds.Contains(id) || (id.StartsWith("nodes.", StringComparison.Ordinal) && NodeGroups.Contains(id.Substring(6))));
         public static bool IsTopLayer(string id) => id != null && LayerIds.Contains(id);
@@ -79,6 +80,7 @@ namespace ElansAddonHub.Services.WorldMap
                     case "x": if (Math.Abs(d) > MaxCoord) { t.Problem = "x is outside the world"; return t; } t.X = d; hx = true; break;
                     case "y": if (Math.Abs(d) > MaxCoord) { t.Problem = "y is outside the world"; return t; } t.Y = d; hy = true; break;
                     case "p": t.Pin = d == 1; break;
+                    case "m": if (d != 2 && d != 3) { t.Problem = "m is 2 or 3"; return t; } t.Mode = (int)d; break;
                     case "z": if (d < 0 || d > MaxZoom) { t.Problem = "zoom is outside 0-9"; return t; } t.Z = Math.Round(d, 2); break;
                 }
             }
@@ -88,14 +90,14 @@ namespace ElansAddonHub.Services.WorldMap
             return t;
         }
 
-        public static string SubOf(int mapId, string slug, bool hasView, double x, double y, double z, bool pin = false)
+        public static string SubOf(int mapId, string slug, bool hasView, double x, double y, double z, bool pin = false, int mode = 0)
         {
             if (mapId < 0) return "";
-            if (!hasView) return string.IsNullOrEmpty(slug) ? mapId.ToString(CultureInfo.InvariantCulture) : slug;
-            return mapId.ToString(CultureInfo.InvariantCulture) + "?x=" + Inv(Math.Round(x), "0") + "&y=" + Inv(Math.Round(y), "0") + "&z=" + Inv(Math.Round(z, 2), "0.##") + (pin ? "&p=1" : "");
+            if (!hasView) return (string.IsNullOrEmpty(slug) ? mapId.ToString(CultureInfo.InvariantCulture) : slug) + (mode == 3 ? "?m=3" : mode == 2 ? "?m=2" : "");
+            return mapId.ToString(CultureInfo.InvariantCulture) + "?x=" + Inv(Math.Round(x), "0") + "&y=" + Inv(Math.Round(y), "0") + "&z=" + Inv(Math.Round(z, 2), "0.##") + (pin ? "&p=1" : "") + (mode == 3 ? "&m=3" : mode == 2 ? "&m=2" : "");
         }
 
-        public static string Id(int mapId, string slug, bool hasView, double x, double y, double z, bool pin = false) => Category + ":" + SubOf(mapId, slug, hasView, x, y, z, pin);
+        public static string Id(int mapId, string slug, bool hasView, double x, double y, double z, bool pin = false, int mode = 0) => Category + ":" + SubOf(mapId, slug, hasView, x, y, z, pin, mode);
 
         // the Atlas id that opens the map centred on a world position
         public static string IdAt(int mapId, double x, double y, double z = 5, bool pin = true) => Id(mapId, null, true, x, y, z, pin);
@@ -105,7 +107,7 @@ namespace ElansAddonHub.Services.WorldMap
         {
             var t = Parse(sub, s => s.Length >= 3 ? 0 : (int?)null);
             if (!t.Valid || (t.MapId < 0)) return null;
-            return t.HasView ? SubOf(t.MapId, null, true, t.X, t.Y, t.Z, t.Pin) : (t.Slug.Length > 0 ? t.Slug : t.MapId.ToString(CultureInfo.InvariantCulture));
+            return t.HasView ? SubOf(t.MapId, null, true, t.X, t.Y, t.Z, t.Pin, t.Mode) : SubOf(t.MapId, t.Slug, false, 0, 0, 0, false, t.Mode);
         }
 
         public static Func<string, int?> SlugsOf(MapIndex idx)

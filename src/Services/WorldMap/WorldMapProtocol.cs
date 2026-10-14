@@ -20,9 +20,13 @@ namespace ElansAddonHub.Services.WorldMap
     //                 nav {lat, lng}                      "Navigate here" on a spot of the plane
     //                 layers {on:[ids]}                   the toggles changed (saved in the settings)
     //                 need {layer}                        a layer was switched on and has no data yet
+    //                 webgl {ok, why, renderer}           (3D page) WebGL is there, or why not: the app falls back to the flat map
+    //                 view3 {lat, lng, dist, az, tilt}    (3D page) the camera moved: its target on the plane, distance in yards, bearing and tilt in degrees
+    //                 stats {fps, mem, tris, tiles, tex}  (3D page) a frame-rate / memory sample every few seconds (diagnostics)
+    //                 prefs {detail, exag}                (3D page) the detail (low|medium|high) and height exaggeration (1-3) the person chose
     //   app -> page   init | goto | layer | layerinfo | toast | on     (built by WorldMapView, see worldmap.js for the shapes)
     // ============================================================================================================================
-    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need }
+    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs }
 
     public sealed class WorldMapMessage
     {
@@ -31,6 +35,12 @@ namespace ElansAddonHub.Services.WorldMap
         public string Id = "", Layer = "";
         public List<string> On = new List<string>();
         public int Tiles, Errors;
+        // the 3D page: webgl {ok, why, renderer}, view3 {lat, lng, dist, az, tilt}, stats {fps, mem, tris, tiles, tex}, prefs {detail, exag}
+        public bool Ok;
+        public string Why = "", Detail = "";
+        public double Dist, Az, Tilt, Fps, MemMb, Exag;
+        public long Tris;
+        public int Textures;
     }
 
     public static class WorldMapProtocol
@@ -58,7 +68,7 @@ namespace ElansAddonHub.Services.WorldMap
             var m = new WorldMapMessage();
             switch (t)
             {
-                case "hello": m.Type = WorldMapMessageType.Hello; return m;
+                case "hello": m.Type = WorldMapMessageType.Hello; m.Detail = Clean(d.Str("p"), 4); return m;
                 case "inited": m.Type = WorldMapMessageType.Inited; return m;
                 case "ready":
                     m.Type = WorldMapMessageType.Ready; m.Tiles = Math.Max(0, Math.Min(100000, d.Int("tiles"))); m.Errors = Math.Max(0, Math.Min(1000000, d.Int("errors"))); return m;
@@ -99,8 +109,41 @@ namespace ElansAddonHub.Services.WorldMap
                         if (!WorldMapIds.IsTopLayer(s)) { refusal = "unknown layer"; return null; }
                         m.Type = WorldMapMessageType.Need; m.Layer = s; return m;
                     }
+                case "webgl":
+                    {
+                        if (!d.TryGetValue("ok", out var okv) || !(okv is bool okb)) { refusal = "webgl needs ok true or false"; return null; }
+                        m.Type = WorldMapMessageType.Webgl; m.Ok = okb; m.Why = Clean(d.Str("why"), 160); m.Detail = Clean(d.Str("renderer"), 100); return m;
+                    }
+                case "view3":
+                    {
+                        if (!(Num(d, "lat", out m.Lat) && Num(d, "lng", out m.Lng) && Num(d, "dist", out m.Dist) && Num(d, "az", out m.Az) && Num(d, "tilt", out m.Tilt))) { refusal = "a 3D view needs lat, lng, dist, az and tilt numbers"; return null; }
+                        if (!InPlane(m.Lat, m.Lng)) { refusal = "position outside the map"; return null; }
+                        if (m.Dist < 5 || m.Dist > 200000 || Math.Abs(m.Az) > 720 || m.Tilt < -1 || m.Tilt > 91) { refusal = "camera outside its limits"; return null; }
+                        m.Type = WorldMapMessageType.View3; return m;
+                    }
+                case "stats":
+                    {
+                        if (!(Num(d, "fps", out m.Fps) && Num(d, "mem", out m.MemMb)) || m.Fps < 0 || m.Fps > 2000 || m.MemMb < 0 || m.MemMb > 1000000) { refusal = "stats out of range"; return null; }
+                        m.Tris = (long)Math.Max(0, Math.Min(2000000000, d.Long("tris"))); m.Tiles = Math.Max(0, Math.Min(100000, d.Int("tiles"))); m.Textures = Math.Max(0, Math.Min(100000, d.Int("tex")));
+                        m.Type = WorldMapMessageType.Stats; return m;
+                    }
+                case "prefs":
+                    {
+                        var det = d.Str("detail");
+                        if (!(det == "low" || det == "medium" || det == "high") || !Num(d, "exag", out m.Exag) || m.Exag < 1 || m.Exag > 3) { refusal = "prefs: detail low, medium or high and exag 1 to 3"; return null; }
+                        m.Type = WorldMapMessageType.Prefs; m.Detail = det; return m;
+                    }
                 default: refusal = "unknown action"; return null;
             }
+        }
+
+        // a text from the page made safe to keep in a log or show: control characters out, at most `max` characters
+        public static string Clean(string s, int max)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            var sb = new StringBuilder();
+            foreach (var ch in s) { if (char.IsControl(ch)) continue; sb.Append(ch); if (sb.Length >= max) break; }
+            return sb.ToString();
         }
 
         static bool Num(Dictionary<string, object> d, string k, out double v)
@@ -136,6 +179,17 @@ namespace ElansAddonHub.Services.WorldMap
             problem = null;
             if (idx == null) { problem = "The maps are not ready yet."; return null; }
             var p = idx.WorldToMap(mapId, x, y);
+            // the zone rectangles of the map tables are boxes that overlap along borders; the terrain's own area ids are exact per 33-yard chunk: when this
+            // continent's terrain has been read, the zone the spot is really in decides which zone map the command names
+            try
+            {
+                if (WorldMapCache.TerrainBuilt(mapId) != null)
+                {
+                    var hit = WorldMapZones.ZoneAt(WorldMapCache.TerrainDir(WorldMapCache.BuildKey, mapId), x, y, ZoneResolver.FromIndex(idx));
+                    if (hit != null && hit.UiMapId > 0) { var q = idx.WorldToMap(mapId, x, y, hit.UiMapId); if (q != null) p = q; }
+                }
+            }
+            catch (Exception) { }
             if (p == null) { problem = "No zone map shows that spot."; return null; }
             double px = Math.Max(0, Math.Min(100, p.Value.Fx * 100)), py = Math.Max(0, Math.Min(100, p.Value.Fy * 100));
             var title = SafeTitle(idx.Name(p.Value.UiMapId));

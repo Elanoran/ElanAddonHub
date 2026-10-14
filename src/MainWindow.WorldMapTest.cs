@@ -300,7 +300,7 @@ namespace ElansAddonHub
                 };
                 var notRefused = bad.Where(b => Refused(b) == null).ToList();
                 Check("protocol: " + bad.Length + " bad messages are all refused with a reason (empty, not JSON, wrong types, unknown actions, eval, positions outside the plane, zoom outside 0-9, a link that is not an entity id, unknown layers, too long)", notRefused.Count == 0, string.Join(" | ", notRefused.Take(3)));
-                Check("protocol: only entity links may be opened and the layer names are a fixed list", WorldMapProtocol.IsOpenId("item:2589") && WorldMapProtocol.IsOpenId("zone:1411") && WorldMapProtocol.IsOpenId("instance:36") && !WorldMapProtocol.IsOpenId("browse:items") && !WorldMapProtocol.IsOpenId("worldmap:1") && WorldMapIds.IsLayerId("nodes.fishing") && !WorldMapIds.IsLayerId("nodes.") && WorldMapIds.LayerIds.Length == 10);
+                Check("protocol: only entity links may be opened and the layer names are a fixed list", WorldMapProtocol.IsOpenId("item:2589") && WorldMapProtocol.IsOpenId("zone:1411") && WorldMapProtocol.IsOpenId("instance:36") && !WorldMapProtocol.IsOpenId("browse:items") && !WorldMapProtocol.IsOpenId("worldmap:1") && WorldMapIds.IsLayerId("nodes.fishing") && !WorldMapIds.IsLayerId("nodes.") && WorldMapIds.LayerIds.Length == 11 && WorldMapIds.IsLayerId("borders"));
                 Check("protocol: the app's own messages are plain JSON (toast, goto with a pin)", WorldMapProtocol.Toast("Copied", true) == "{\"t\":\"toast\",\"text\":\"Copied\",\"ok\":true}" && WorldMapProtocol.Goto(-115.8, 160.8, 5, "x").Contains("\"pin\""));
 
                 // ---------------------------------------------------------------- ids
@@ -388,8 +388,12 @@ namespace ElansAddonHub
                 WorldMapLayers.SavedRoutes = () => settings.SavedRoutes;
                 WorldMapLayers.FlightTimes = FlightTimesForMap;
             }
+            try { await WorldMapTerrainTest(dir, work, notes, v => ok &= v); }
+            catch (Exception e) { notes.Add("FAIL worldmap terrain test crashed [" + e + "]"); ok = false; }
             try { await WorldMapPageTest(dir, work, notes, v => ok &= v); }
             catch (Exception e) { notes.Add("FAIL worldmap page test crashed [" + e + "]"); ok = false; }
+            try { WmAdtCacheDrop(); } catch (Exception) { }
+            try { var pr = System.Diagnostics.Process.GetCurrentProcess(); notes.Add("note worldmap: at the end of the section the test process holds " + GC.GetTotalMemory(true) / 1048576 + " MB of managed memory, " + pr.PrivateMemorySize64 / 1048576 + " MB private, peak working set " + pr.PeakWorkingSet64 / 1048576 + " MB (" + (Environment.Is64BitProcess ? "64" : "32") + "-bit process)"); } catch (Exception) { }
             return (ok ? "worldmap: ok" : "worldmap: FAILED") + "\r\n" + string.Join("\r\n", notes);
         }
 

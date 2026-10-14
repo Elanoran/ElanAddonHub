@@ -130,6 +130,12 @@ namespace ElansAddonHub
             ArmoryShareBox.IsChecked = s.ArmoryShareOn;
             ClassicAutoBox.IsChecked = !s.ClassicFromLodgeOff;
             ItemDataBox.IsChecked = !s.ItemDataOff;
+            {
+                var det = s.WorldMap3dDetail;
+                Detail3dLow.IsChecked = det == "low"; Detail3dHigh.IsChecked = det == "high"; Detail3dMedium.IsChecked = det != "low" && det != "high";
+                Exag3dSlider.Value = s.WorldMapExag >= 1 && s.WorldMapExag <= 3 ? s.WorldMapExag : 1.5;
+                Exag3dText.Text = Exag3dSlider.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "x";
+            }
             UpdateWorldMapLine();
             ElansAddonHub.Services.Db2.ItemData.Changed -= OnItemDataChanged; ElansAddonHub.Services.Db2.ItemData.Changed += OnItemDataChanged;
             ElansAddonHub.Services.SeenData.Changed -= OnItemDataChanged; ElansAddonHub.Services.SeenData.Changed += OnItemDataChanged;
@@ -386,6 +392,23 @@ namespace ElansAddonHub
             try { busy = ElansAddonHub.Services.WorldMap.WorldMapService.StateOf(0)?.Running == true || ElansAddonHub.Services.WorldMap.WorldMapService.StateOf(1)?.Running == true; } catch (Exception) { }
             WorldMapCacheRow.Tag = ElansAddonHub.Services.WorldMap.WorldMapCache.StatusLine() + " Made from your game files, read-only; nothing is uploaded.";
             ClearWorldMapButton.IsEnabled = !busy && ElansAddonHub.Services.WorldMap.WorldMapCache.SizeBytes() > 0;
+        }
+
+        // 3D detail (low / medium / high) and height exaggeration of the Atlas world map: read by the 3D page when it starts, so the next time it opens
+        void WorldMap3d_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading || settings == null) return;
+            settings.WorldMap3dDetail = Detail3dLow.IsChecked == true ? "low" : Detail3dHigh.IsChecked == true ? "high" : "medium";
+            SettingsStore.Save(settings);
+        }
+
+        void Exag3d_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (Exag3dText == null) return;
+            Exag3dText.Text = e.NewValue.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "x";
+            if (loading || settings == null) return;
+            settings.WorldMapExag = Math.Round(e.NewValue, 1);
+            SettingsStore.Save(settings);
         }
 
         void ClearWorldMap_Click(object sender, RoutedEventArgs e)

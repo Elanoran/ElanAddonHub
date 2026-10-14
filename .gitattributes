@@ -6,3 +6,5 @@ addon/**/*.lua text eol=lf
 addon/**/*.toc text eol=crlf
 src/WorldMap/leaflet.js -text
 src/WorldMap/leaflet.css -text
+src/WorldMap/three.min.js -text
+src/WorldMap/LICENSE-three.txt -text

@@ -47,6 +47,7 @@ namespace ElansAddonHub.Services.WorldMap
             return new List<Dictionary<string, object>>
             {
                 L("zones", "Zone names", "#f5d97a", "Zone names with the level range of the creatures that live there"),
+                L("borders", "Zone borders", "#7dd3fc", "Outlines of the zones, from the game's terrain data (the first time it is switched on the terrain is read from your game files, once per game version); point at a zone to tint it"),
                 L("fm", "Flight masters", "#5aa9ff", "Flight masters of the Alliance (blue), the Horde (red) and both (gold)"),
                 L("routes", "Flight routes", "#ff9f43", "Flight paths between flight masters; the flight time is shown when you or the Lodge have flown it"),
                 L("nodes", "Gathering nodes", "#4ade80", "Herbs, ore, chests and fishing holes: what players looted (Forever) and the Classic baseline's spawn points",
@@ -72,6 +73,7 @@ namespace ElansAddonHub.Services.WorldMap
                 switch (id)
                 {
                     case "zones": return Zones(mapId);
+                    case "borders": return Borders(mapId);
                     case "fm": return FlightMasters(mapId);
                     case "routes": return Routes(mapId);
                     case "nodes": return Nodes(mapId);
@@ -121,6 +123,34 @@ namespace ElansAddonHub.Services.WorldMap
             }
             var note = dv == null ? "Level ranges come from the Classic baseline (Atlas start page)." : "";
             return Message("zones", "labels", new Dictionary<string, object> { ["items"] = items }, items.Count, items.Count == 0 ? "The game's map tables list no zones on this continent." : note);
+        }
+
+        // -------------------------------------------------------------- zone borders (rings on the plane, from the terrain's per-chunk area ids)
+        // null Note + empty Json when the terrain of the continent is not built yet (the host builds it, then asks again)
+        public static LayerResult Borders(int mapId)
+        {
+            var idx = MapData.Index;
+            var dir = WorldMapCache.TerrainDir(WorldMapCache.BuildKey, mapId);
+            if (WorldMapCache.TerrainBuilt(mapId) == null) return new LayerResult { Note = "The terrain of this continent is not read yet." };
+            var set = WorldMapZones.ReadBorders(dir);
+            if (set == null || set.Zones.Count == 0) return new LayerResult { Note = "The game's terrain has no zone areas on this continent." };
+            var zr = idx == null ? null : ZoneResolver.FromIndex(idx);
+            var items = new List<object>();
+            foreach (var z in set.Zones)
+            {
+                int ui = zr == null ? 0 : zr.UiMapOf(z.Id);
+                var rings = new List<object>();
+                foreach (var r in z.Rings)
+                {
+                    var a = new double[r.Length];
+                    for (int i = 0; i < r.Length; i += 2) { a[i] = -r[i + 1] / 4.0; a[i + 1] = r[i] / 4.0; }       // lattice (x east, y south, 16 per tile) -> plane (lat = -row * 4, lng = col * 4)
+                    rings.Add(a);
+                }
+                var item = new Dictionary<string, object> { ["name"] = z.Name, ["id"] = z.Id, ["rings"] = rings, ["chunks"] = z.Chunks };
+                if (ui > 0 && idx != null && idx.Get(ui) != null) item["link"] = "zone:" + ui;
+                items.Add(item);
+            }
+            return Message("borders", "rings", new Dictionary<string, object> { ["items"] = items }, items.Count, "");
         }
 
         // ---------------------------------------------------------------- flight masters and routes
