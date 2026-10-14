@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.48.1
+- **Talents: paste a build link from Seemeta, WoW Forever Talent or Talents Forever to open it in the calculator** (the same box as the ETB1- build code). The link is read on your PC from the pasted text and the trees of your own game, nothing is fetched. A Talents Forever link also brings its leveling order, shown like a recommended build; the other two hold the final talents only. Afterwards the save boxes are filled in (the site is named in the notes), so one click on Save build keeps it. Links from other sites are named and explained instead of guessed, and a link made for different talent trees is refused with words.
+
 ## 2.48.0
 - **The Atlas** (new page, Ctrl+5): one search for items, creatures, objects, quests, zones, dungeons, spells, skills and factions, and a page for each. Everything is read from **your own WoW installation** (read-only, nothing written to the game folder) or observed by your Lodge; nothing third-party ships with the Outpost.
   - **Item pages:** the game's own tooltip (stats, armor, weapon damage, "Equip:/Use:/Chance on hit:" lines, set bonuses), which of your characters have it, and every source in one table: drop chances observed by your Lodge ("12% · 340 kills · 3 members") above the Classic baseline, vendors with prices, quests, recipes that make it and what it is used for, recent finds by Lodge members, and a map with where the creatures spawn and where things were found.

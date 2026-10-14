@@ -462,11 +462,28 @@ namespace ElansAddonHub
         {
             if (set == null) { SetStatus("The talent trees are not loaded yet.", true); return false; }
             var d = BuildCode.Decode(text, id => set.ForClass(id));
-            if (!d.Ok) { SetStatus(d.Error, true); return false; }
-            if (!string.Equals(d.Tree.ClassFile, classFile, StringComparison.OrdinalIgnoreCase)) SelectClass(d.Tree.ClassFile);
-            session.Load(d.State); FitLevel(); openBuild = null; DetailBox.Visibility = Visibility.Collapsed;
+            if (d.Ok)
+            {
+                if (!string.Equals(d.Tree.ClassFile, classFile, StringComparison.OrdinalIgnoreCase)) SelectClass(d.Tree.ClassFile);
+                session.Load(d.State); FitLevel(); openBuild = null; DetailBox.Visibility = Visibility.Collapsed;
+                RefreshStates();
+                SetStatus("Loaded a " + tree.ClassName + " build with " + d.State.Total + " points.", false);
+                return true;
+            }
+            // not one of our codes: a link from a talent calculator, or the words of the code's own error when it was meant as a code
+            BuildCode.Find(text ?? "", out int codeVersion);
+            if (BuildCode.Find(text ?? "", out _) != null || codeVersion > 0 || d.TooNew) { SetStatus(d.Error, true); return false; }
+            var l = BuildLinks.Decode(text, set, NameOf, session?.LegacyRanks ?? 0);
+            if (!l.Ok) { SetStatus(l.Error, true); return false; }
+            if (!string.Equals(l.Tree.ClassFile, classFile, StringComparison.OrdinalIgnoreCase)) SelectClass(l.Tree.ClassFile);
+            session.Load(l.Order != null ? l.Order.State : l.State); FitLevel();
+            var lb = new LinkBuild { Site = l.Site, ClassFile = l.Tree.ClassFile, Name = tree.ClassName + " build from " + l.Site, Order = l.Order, OrderNote = l.OrderNote };
+            openBuild = lb; openApplication = l.Order;
             RefreshStates();
-            SetStatus("Loaded a " + tree.ClassName + " build with " + d.State.Total + " points.", false);
+            ShowDetail(lb, true);
+            // offered to keep: the save boxes are filled in, one click on "Save build" keeps it (the site is named in the notes)
+            SaveName.Text = SavedBuilds.CleanName(lb.Name); SaveNotes.Text = "From a " + l.Site + " link.";
+            SetStatus("Loaded a " + tree.ClassName + " build with " + session.State.Total + " points from a " + l.Site + " link." + (l.Order != null ? " Its leveling order is below." : "") + " Press Save build to keep it.", false, l.OrderNote != null);
             return true;
         }
 
@@ -641,8 +658,19 @@ namespace ElansAddonHub
                 var code = new TextBox { Text = sb.Code, IsReadOnly = true, Style = (Style)FindResource("Input"), Margin = new Thickness(0, 8, 0, 0) };
                 DetailPanel.Children.Add(code);
             }
+            else if (build is LinkBuild lk)
+            {
+                DetailPanel.Children.Add(Line(lk.Name, "Text.Section"));
+                DetailPanel.Children.Add(Line("Opened from a " + lk.Site + " link. Press Save build below to keep it.", "Text.Secondary", null, 4));
+                if (lk.Order != null)
+                {
+                    DetailPanel.Children.Add(Line("Leveling order (one point per level)", "Text.Caption", null, 12));
+                    foreach (var l in BuildsRecommended.StepLines(lk.Order)) DetailPanel.Children.Add(Line(l, "Text.Secondary", null, 2));
+                }
+                else DetailPanel.Children.Add(Line(lk.OrderNote ?? "This link holds the final talents only, not the order the points were spent in.", "Text.Secondary", lk.OrderNote != null ? Res("Brush.Warn") : null, 8));
+            }
             DetailBox.Visibility = Visibility.Visible;
-            info.Add("detail|" + (build is RecBuild r2 ? r2.Name : (build as SavedBuild)?.Name));
+            info.Add("detail|" + (build is RecBuild r2 ? r2.Name : build is LinkBuild lb2 ? lb2.Name : (build as SavedBuild)?.Name));
         }
 
         void Save_Click(object sender, RoutedEventArgs e)
@@ -694,6 +722,8 @@ namespace ElansAddonHub
         public void ShowSavedForTest(bool on) { (on ? SegSaved : SegRec).IsChecked = true; RenderBuilds(); }
         public List<RecBuild> RecBuildsForTest => recBuilds;
         public SavedBuilds SavedForTest => saved;
+        public string SaveNameForTest => SaveName.Text;
+        public string SaveNotesForTest => SaveNotes.Text;
         public void SaveForTest(string name, string notes) { SaveName.Text = name; SaveNotes.Text = notes; Save_Click(null, null); }
         public void SetLevelForTest(int level) { LevelBox.SelectedItem = level; }
         public void SetLegacyForTest(int r) { LegacyBox.SelectedItem = r; }
