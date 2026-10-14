@@ -124,7 +124,7 @@ namespace ElansAddonHub
                             if (gg.Unavailable != null) { missing.Add(p.Name + ": " + gg.Unavailable); continue; }
                             g = GuideHandoff.FromGatherGuide(p, gg, nodes, choice, routes);
                         }
-                        else g = GuideHandoff.FromSkillGuide(p, SkillGuideBuilder.Build(b, p, start, cap, src, new Dictionary<int, int>(c.Items), c.Name, false, f.Camp));
+                        else g = GuideHandoff.FromSkillGuide(p, SkillGuideBuilder.Build(b, p, start, cap, src, new Dictionary<int, int>(c.Items), c.Name, false, f.Camp, c));
                         if (!o.Chars.TryGetValue(f.CharKey, out var l)) o.Chars[f.CharKey] = l = new List<GuideOut>();
                         l.Add(g);
                     }

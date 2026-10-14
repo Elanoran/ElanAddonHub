@@ -30,7 +30,7 @@ namespace ElansAddonHub
         object bookFor;
         IProfessionSources sources;
         IGatherWorld world;
-        string tab = "recipes", filter = "all";
+        string tab = "recipes", filter = "all", knownFilter = "all";
         Profession prof;
         ProfChar who;
         bool building;                 // pickers are being filled: their events are ignored
@@ -236,6 +236,9 @@ namespace ElansAddonHub
             CharPicker.Visibility = tab == "camp" ? Visibility.Collapsed : Visibility.Visible;
             SearchBox.Visibility = tab == "recipes" || tab == "craft" ? Visibility.Visible : Visibility.Collapsed;
             FilterHost.Visibility = tab == "recipes" ? Visibility.Visible : Visibility.Collapsed;
+            bool scanned = tab == "recipes" && who != null && prof != null && who.ScanOf(prof.Name, prof.Id) != null;
+            KnownHost.Visibility = scanned ? Visibility.Visible : Visibility.Collapsed;
+            if (!scanned && knownFilter != "all") { knownFilter = "all"; var was = building; building = true; try { KnownAll.IsChecked = true; } finally { building = was; } }
         }
 
         void Prof_Changed(object sender, SelectionChangedEventArgs e)
@@ -259,6 +262,13 @@ namespace ElansAddonHub
         }
 
         void Search_Changed(object sender, TextChangedEventArgs e) { searchDebounce.Stop(); searchDebounce.Start(); }
+
+        void Known_Checked(object sender, RoutedEventArgs e)
+        {
+            if (!(sender is RadioButton rb) || Body == null) return;
+            knownFilter = (string)rb.Tag;
+            if (!building) RenderBody();
+        }
 
         void Filter_Checked(object sender, RoutedEventArgs e)
         {
@@ -390,7 +400,7 @@ namespace ElansAddonHub
         public void SetSourcesForTest(IProfessionSources s, IGatherWorld w) { sources = s; world = w; }
         public IReadOnlyList<ProfChar> CharsForTest => chars;
         public ProfessionBook BookForTest => EnsureBook();
-        public void ResetForTest() { fixedChars = false; book = null; bookFor = null; prof = null; who = null; userNoChar = false; guideStart = null; guideTarget = null; guideScope = "all"; guideCamp = false; lastGuide = null; lastGather = null; filter = "all"; SearchBox.Text = ""; FilterAll.IsChecked = true; TabRecipes.IsChecked = true; tab = "recipes"; }
+        public void ResetForTest() { fixedChars = false; book = null; bookFor = null; prof = null; who = null; userNoChar = false; guideStart = null; guideTarget = null; guideScope = "all"; guideCamp = false; lastGuide = null; lastGather = null; filter = "all"; knownFilter = "all"; KnownAll.IsChecked = true; SearchBox.Text = ""; FilterAll.IsChecked = true; TabRecipes.IsChecked = true; tab = "recipes"; }
 
         public void ShowForTest(string tabName, string profession = null, string character = null)
         {
@@ -419,6 +429,9 @@ namespace ElansAddonHub
                 if (((ComboBoxItem)ProfPicker.Items[i]).Tag is Profession p && p.Name == name) { ProfPicker.SelectedIndex = i; return; }
         }
         public bool TitleHiddenForTest => TitleBlock.Visibility != Visibility.Visible;
+
+        public void KnownFilterForTest(string f) { knownFilter = f; building = true; try { (f == "learned" ? KnownYes : f == "notlearned" ? KnownNo : KnownAll).IsChecked = true; } finally { building = false; } RenderBody(); }
+        public bool KnownFilterVisibleForTest => KnownHost.Visibility == Visibility.Visible;
 
         public void SearchForTest(string text) { SearchBox.Text = text; searchDebounce.Stop(); RenderBody(); }
         public void FilterForTest(string f) { filter = f; building = true; try { (f == "now" ? FilterNow : f == "later" ? FilterLater : FilterAll).IsChecked = true; } finally { building = false; } RenderBody(); }

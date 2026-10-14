@@ -51,10 +51,47 @@ namespace ElansAddonHub.Lodge
         public int Skill, Max;
     }
 
+    // One row of "Who in the Lodge can craft this?" (armory.crafters, server 2.19): a shared character of a member that has learned the recipe.
+    public sealed class LodgeCrafter
+    {
+        public int Spell, Level, Skill, Max;
+        public string Owner, By, Key, Name, Class, Profession;
+        public bool Partial, Mine;
+
+        // every field is checked again here, whatever the server sent
+        public static LodgeCrafter From(Dictionary<string, object> d)
+        {
+            if (d == null) return null;
+            string S(string k, int max) { var s = d.Str(k); return string.IsNullOrWhiteSpace(s) ? null : (s.Length > max ? s.Substring(0, max) : s.Trim()); }
+            var c = new LodgeCrafter
+            {
+                Spell = d.Int("spell"), Owner = S("owner", 64), By = S("by", 64), Key = S("key", 80), Name = S("name", 24), Class = S("class", 20), Profession = S("profession", 32),
+                Level = Math.Max(0, Math.Min(100, d.Int("level"))), Skill = Math.Max(0, Math.Min(100000, d.Int("skill"))), Max = Math.Max(0, Math.Min(100000, d.Int("max"))),
+                Partial = d.Bool("partial"), Mine = d.Bool("mine"),
+            };
+            if (c.Spell < 1 || c.Owner == null || c.Key == null || c.Name == null || c.Profession == null) return null;
+            if (c.By == null) c.By = c.Owner;
+            return c;
+        }
+
+        public string Detail => Profession + (Skill > 0 ? " " + Skill + (Max > 0 ? "/" + Max : "") : "") + (Level > 0 ? " · level " + Level : "") + (Mine ? " · yours" : "");
+        public string ClassName => string.IsNullOrEmpty(Class) ? "" : char.ToUpperInvariant(Class[0]) + Class.Substring(1).ToLowerInvariant();
+    }
+
+    // What the Atlas and the Professions page get back when they ask the Lodge who can craft something
+    public sealed class LodgeCrafters
+    {
+        public bool Available;                         // the server and the member allow the question (armory2, member, armory on)
+        public bool Pending;                           // asked, no answer yet
+        public readonly List<LodgeCrafter> Rows = new List<LodgeCrafter>();
+        public string Problem;                         // why not, in plain words (null when Available)
+    }
+
     // What of a character goes to the Lodge, and how a shared one is turned back into the model the Characters page already draws.
     // SHARED: name, realm, class, race, level, faction, guild, what is worn (item ids, quality, icon, item level, the item links with their enchant / suffix), the stats summary,
     // talents (points spent, the nodes with points, our build code when the game data allows), professions with their skill, hunter pets.
-    // NEVER: bags, bank, guild bank, gold, mail, experience, the zone, recipes (the Hub does not record them), anything about the account.
+    // Learned recipes (spell ids, per profession) only with a server that has armory2 and only for characters the member ticked, like everything else here.
+    // NEVER: bags, bank, guild bank, gold, mail, experience, the zone, anything about the account.
     public static class ArmoryShare
     {
         public const int MaxChars = 30;
@@ -83,7 +120,7 @@ namespace ElansAddonHub.Lodge
         }
 
         // the snapshot of one character, or null when there is nothing to show (no gear, talents or professions). `withTimes` = false for the signature.
-        public static Dictionary<string, object> Build(InvChar c, bool withTimes = true)
+        public static Dictionary<string, object> Build(InvChar c, bool withTimes = true, bool recipes = false)
         {
             if (c == null || c.Hub == null || c.Level < 1) return null;
             var core = c.Core;
@@ -112,7 +149,7 @@ namespace ElansAddonHub.Lodge
             var tal = HubModules.TalentsOf(c.Hub);
             if (tal != null && (tal.Nodes.Count > 0)) o["talents"] = TalentsOf(tal, cls, c.Level, withTimes);
             var pro = HubModules.ProfessionsOf(c.Hub);
-            if (pro != null && pro.List.Count > 0) o["professions"] = ProfessionsOf(pro, withTimes);
+            if (pro != null && pro.List.Count > 0) o["professions"] = ProfessionsOf(pro, withTimes, recipes);
             var pets = HubModules.PetsOf(c.Hub);
             if (pets != null && pets.Pets.Count > 0) o["pets"] = PetsOf(pets, withTimes);
             if (!o.ContainsKey("gear") && !o.ContainsKey("talents") && !o.ContainsKey("professions")) return null;
@@ -212,7 +249,10 @@ namespace ElansAddonHub.Lodge
             catch (Exception) { return null; }
         }
 
-        static Dictionary<string, object> ProfessionsOf(HubProfessionsModule p, bool withTimes)
+        public const int MaxKnownIds = 2000;
+
+        // `recipes` (a server with armory2): the skill line ids and the recipes the Hub read from the profession windows, at most 2000 ids per character
+        static Dictionary<string, object> ProfessionsOf(HubProfessionsModule p, bool withTimes, bool recipes)
         {
             var o = Obj();
             if (withTimes) o["at"] = p.At;
@@ -222,9 +262,29 @@ namespace ElansAddonHub.Lodge
                 var e = Obj();
                 e["name"] = x.Name; e["skill"] = x.Skill; e["max"] = x.Max; e["kind"] = x.Kind == "secondary" ? "secondary" : "primary";
                 if (x.Ic > 0) e["ic"] = x.Ic;
+                if (recipes && x.Line > 0) e["line"] = x.Line;
                 list.Add(e);
             }
             o["list"] = list;
+            if (recipes && p.Known.Count > 0)
+            {
+                var known = Obj();
+                int total = 0;
+                foreach (var kv in p.Known.OrderBy(k => k.Key))
+                {
+                    if (known.Count >= 12 || total >= MaxKnownIds) break;
+                    var ids = kv.Value.Ids.Where(i => i > 0).OrderBy(i => i).Take(MaxKnownIds - total).ToList();
+                    if (ids.Count == 0) continue;
+                    total += ids.Count;
+                    var e = Obj();
+                    if (withTimes) e["at"] = kv.Value.At;
+                    e["partial"] = kv.Value.Partial;
+                    if (!string.IsNullOrEmpty(kv.Value.Name)) e["n"] = kv.Value.Name.Length > 32 ? kv.Value.Name.Substring(0, 32) : kv.Value.Name;
+                    e["ids"] = ids.Cast<object>().ToList();
+                    known[kv.Key.ToString(CultureInfo.InvariantCulture)] = e;
+                }
+                if (known.Count > 0) o["known"] = known;
+            }
             return o;
         }
 

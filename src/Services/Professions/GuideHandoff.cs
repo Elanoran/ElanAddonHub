@@ -33,7 +33,8 @@ namespace ElansAddonHub.Services.Professions
                 var r = s.Recipe;
                 var st = new GuideStepOut { K = "craft", From = s.From, To = s.To, Spell = r.SpellId, Item = r.ItemId, N = Math.Max(1, s.Crafts), Text = r.Name };
                 st.Reagents = s.Materials.Where(m => m.ItemId > 0 && m.Count > 0).Take(SharedDataFile.MaxReagents).Select(m => new[] { m.ItemId, m.Count }).ToList();
-                if (s.LearnItemId > 0 && g.ItemName != null) st.Text = r.Name + " (learn: " + g.ItemName(s.LearnItemId) + ")";
+                if (s.LearnItemId > 0 && g.ItemName != null) st.Text = r.Name + (s.Unlearned ? " (learn first: " : " (learn: ") + g.ItemName(s.LearnItemId) + ")";
+                else if (s.Unlearned) st.Text = r.Name + " (learn first)";
                 o.Steps.Add(st);
             }
             return o;

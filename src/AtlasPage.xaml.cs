@@ -326,6 +326,14 @@ namespace ElansAddonHub
         }
 
         // the page itself asks to be shown again after the Lodge pool or the Classic data changed
+        // an answer of "who in the Lodge can craft this" arrived: a recipe (spell) or item page is drawn again to show it
+        public void CraftersChanged()
+        {
+            if (!IsVisible || hosted != null || IsStart || browse != null) return;
+            var id = history.Current ?? "";
+            if (id.StartsWith("spell:", StringComparison.Ordinal) || id.StartsWith("item:", StringComparison.Ordinal)) _ = Redraw();
+        }
+
         public void DataChanged() { if (hosted != null) return; if (IsStart) DrawStart(); else _ = Redraw(); }
     }
 }

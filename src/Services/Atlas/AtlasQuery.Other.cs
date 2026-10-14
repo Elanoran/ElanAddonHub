@@ -135,6 +135,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (skill != null) s.Rows.Add(new AtlasRow { Key = "skill:" + skill.Id, Link = AtlasIds.Skill(skill.Id), Title = skill.Name, IconId = skill.IconId, Label = F, Tier = 1, Type = "Skill", Detail = "The profession that teaches it" });
                 var recLink = AtlasHosts.RecipesLink(skill?.Name);
                 if (recLink != null) m.Facts.Add(new AtlasFact("Profession", skill.Name, F, recLink));
+                AddRecipeKnowledge(m, new[] { rec });
                 if (rec.ItemId > 0) { var r = ItemRow(rec.ItemId, "Makes", F); r.Type = "Creates"; r.Tier = 1; s.Rows.Add(r); }
                 for (int i = 0; i + 1 < rec.Reagents.Length; i += 2)
                     if (rec.Reagents[i] > 0) { var r = ItemRow(rec.Reagents[i], "Needs ×" + rec.Reagents[i + 1], F); r.Type = "Reagent"; r.Tier = 1; s.Rows.Add(r); }

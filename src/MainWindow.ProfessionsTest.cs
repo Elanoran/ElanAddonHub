@@ -233,6 +233,9 @@ namespace ElansAddonHub
                     txt.StartsWith("Tailoring 1–100") && txt.Contains("Shopping list") && txt.Contains("Total about ~7g 29s") && txt.Contains("1–30: Bolt of Linen x32") && txt.Contains("75: Skill 75 is the cap: train Journeyman Tailoring") && txt.Contains("Why: cheapest of") && txt.Contains("Learn: recipe item Pattern: Robe of Testing"), txt.Substring(0, Math.Min(400, txt.Length)));
                 Check("guide for a gathering profession is a note, not a recipe path", SkillGuideBuilder.Build(book, book.ByName("Herbalism"), 1, 100, src, null).Steps.Count == 0);
 
+                // ---- learned recipes (Hub 1.14.0): the Hub module, craft now, the guide
+                ProfKnownModel(book, tail, src, Check);
+
                 // ---- the gathering guide
                 var world = new FixedGatherWorld();
                 world.Zones[1] = new ZoneInfo { Id = 1, Name = "Elwynn Forest", Median = 7, MinLevel = 1, MaxLevel = 10 };
@@ -318,7 +321,7 @@ namespace ElansAddonHub
             Check("recipes tab: all 8 recipes of Tailoring in skill order, the one without a band last", names.Count == 8 && names.First() == "Faction Banner" && names.Last() == "Plain Thing", string.Join(",", names));
             var texts = page.BodyTextsForTest();
             Check("recipes tab: coloured for Bob at skill 80 (Bolt of Linen Grey, Heavy Cloak Green), the learn line says trainer / recipe item with its vendor and label, the 'cannot see learned recipes' note",
-                texts.Contains("Grey") && texts.Contains("Green") && texts.Any(t => t.Contains("Trainer (no recipe item")) && texts.Any(t => t.Contains("Sold by Tess the Weaver")) && texts.Contains(" (" + SourceLabels.Lodge + ")") && texts.Any(t => t.Contains("cannot see which recipes a character has already learned")));
+                texts.Contains("Grey") && texts.Contains("Green") && texts.Any(t => t.Contains("Trainer (no recipe item")) && texts.Any(t => t.Contains("Sold by Tess the Weaver")) && texts.Contains(" (" + SourceLabels.Lodge + ")") && texts.Any(t => t.Contains("cannot tell which recipes are learned")));
             Check("recipes tab: the header says whose colours these are", texts.Any(t => t.Contains("colours for Bob at skill 80/150")));
             Check("recipes tab: ranks line from the data (Apprentice to 75, Journeyman to 150)", texts.Any(t => t.StartsWith("Ranks: Apprentice (to 75), Journeyman (to 150)")));
             page.SearchForTest("cape");
@@ -375,6 +378,9 @@ namespace ElansAddonHub
             var ct = page.BodyTextsForTest();
             Check("camp tab: who can make what: Alice (Tailoring 20, cloth and thread in her bags) can make the Faction Banner now; Bob (80) lacks the thread; neither reaches the Spinning Wheel's skill 140",
                 ct.Contains(" 20 - can make it now") && ct.Contains(" 80 - needs reagents") && ct.Count(t => t == " 80 - needs skill 140") == 1 && ct.Contains(" 20 - needs skill 140"), string.Join(" | ", ct.Where(t => t.Contains(" - "))));
+            // learned recipes on the page, in the Atlas pages and in the browse lists
+            await ProfKnownPage(page, Check);
+            ProfKnownAtlas(Check);
             // the page when there is no game data
             SpellData.SetForTest(null, SpellData.State.Unavailable, "off");
             page.ShowForTest("recipes");

@@ -15,6 +15,8 @@ namespace ElansAddonHub.Lodge
     public partial class LodgeSession
     {
         public static readonly Version ArmoryServer = new Version(2, 16, 0);
+        public static readonly Version Armory2Server = new Version(2, 19, 0);       // learned recipes in the snapshot and "who can craft this"
+        public bool SupportsArmory2 { get; private set; }
         public const int ArmoryDebounceSeconds = 20;
         public bool SupportsArmory { get; private set; }
         public bool ArmoryDisabledByServer { get; private set; }            // the owner switched the feature off on the server
@@ -39,6 +41,8 @@ namespace ElansAddonHub.Lodge
         {
             var v = ParseVersion(ServerVersion);
             SupportsArmory = features.Contains("armory") && (v == null || v >= ArmoryServer);
+            SupportsArmory2 = SupportsArmory && features.Contains("armory2") && (v == null || v >= Armory2Server);
+            craftersAnswers.Clear();
             ArmoryDisabledByServer = false; armoryGuest = false;
             armoryInflight.Clear(); armoryAsked.Clear();
             ArmoryProblem = null; ArmoryListed = false;
@@ -46,7 +50,7 @@ namespace ElansAddonHub.Lodge
 
         void ResetArmory()
         {
-            SupportsArmory = false; ArmoryDisabledByServer = false; armoryGuest = false; armoryBacklog = false; armoryDeleteAll = false;
+            SupportsArmory = false; SupportsArmory2 = false; craftersAnswers.Clear(); ArmoryDisabledByServer = false; armoryGuest = false; armoryBacklog = false; armoryDeleteAll = false;
             ArmoryEntries = new List<ArmoryEntry>(); ArmoryListed = false; ArmoryProblem = null;
             armoryChars.Clear(); armoryAsked.Clear(); armoryInflight.Clear(); armoryRefused.Clear(); armoryQuiet.Clear();
             armorySent = null; armoryNextPut = DateTime.MinValue; armoryLastList = DateTime.MinValue;
@@ -148,7 +152,7 @@ namespace ElansAddonHub.Lodge
             bool backlog = false;
             foreach (var c in local.Where(c => wanted.Contains(c.Key)))
             {
-                var plain = ArmoryShare.Build(c, false);
+                var plain = ArmoryShare.Build(c, false, SupportsArmory2);
                 if (plain == null) continue;
                 var sig = ArmoryShare.Signature(plain);
                 if (sent.TryGetValue(c.Key, out var have) && have == sig) { armoryQuiet.Remove(c.Key); continue; }
@@ -161,7 +165,7 @@ namespace ElansAddonHub.Lodge
                     if (clock - q.Value < TimeSpan.FromSeconds(ArmoryDebounceSeconds)) { backlog = true; continue; }
                 }
                 if (clock < armoryNextPut) { backlog = true; continue; }
-                var full = ArmoryShare.Build(c, true);
+                var full = ArmoryShare.Build(c, true, SupportsArmory2);
                 var frame = new Dictionary<string, object> { ["t"] = "armory.put", ["key"] = c.Key, ["char"] = full };
                 if (Json.Write(frame).Length > 60 * 1024) { armoryRefused[c.Key] = sig; ArmoryProblem = c.Name + " has too much to share."; continue; }
                 armoryInflight[c.Key] = sig;
@@ -259,6 +263,60 @@ namespace ElansAddonHub.Lodge
             ArmoryChanged?.Invoke();
         }
 
+        // ---- "Who in the Lodge can craft this?" (server 2.19, armory2). Answers are kept for two minutes per set of spells.
+        sealed class CraftersAnswer { public DateTime Asked, Answered; public List<LodgeCrafter> Rows = new List<LodgeCrafter>(); }
+        readonly Dictionary<string, CraftersAnswer> craftersAnswers = new Dictionary<string, CraftersAnswer>(StringComparer.Ordinal);
+        public event Action CraftersChanged;
+        public static readonly TimeSpan CraftersKeep = TimeSpan.FromMinutes(2), CraftersRetry = TimeSpan.FromSeconds(10);
+
+        static string CraftersKey(IEnumerable<int> spells) => string.Join(",", spells.Where(s => s > 0).Distinct().OrderBy(s => s).Take(16));
+
+        public bool CraftersAvailable => SupportsArmory2 && ArmoryAvailable;
+
+        // The cached answer, or Pending after the question was sent. Never blocks; ArmoryChanged-style: CraftersChanged fires when an answer arrives.
+        public LodgeCrafters CraftersFor(IEnumerable<int> spells)
+        {
+            var res = new LodgeCrafters();
+            var key = CraftersKey(spells ?? Enumerable.Empty<int>());
+            if (key.Length == 0) { res.Problem = "No recipe."; return res; }
+            if (!SupportsArmory2) { res.Problem = SupportsArmory ? "This Lodge's server is older than 2.19: it cannot say who can craft something." : ArmoryOfflineLine; return res; }
+            var off = ArmoryOfflineLine;
+            if (off != null) { res.Problem = off; return res; }
+            res.Available = true;
+            var now = Clock();
+            craftersAnswers.TryGetValue(key, out var a);
+            bool fresh = a != null && a.Answered != default(DateTime) && now - a.Answered < CraftersKeep;
+            if (a != null && a.Answered != default(DateTime)) res.Rows.AddRange(a.Rows);
+            if (!fresh && (a == null || a.Asked == default(DateTime) || now - a.Asked > CraftersRetry))
+            {
+                if (a == null) craftersAnswers[key] = a = new CraftersAnswer();
+                a.Asked = now;
+                var ids = key.Split(',').Select(s => (object)int.Parse(s, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+                _ = Send(new Dictionary<string, object> { ["t"] = "armory.crafters", ["spells"] = ids });
+            }
+            res.Pending = !fresh && a != null && a.Answered == default(DateTime);
+            return res;
+        }
+
+        void OnArmoryCrafters(Dictionary<string, object> m)
+        {
+            if (!SupportsArmory2) return;
+            var asked = new List<int>();
+            foreach (var o in m.List("spells")) if (o is double d && d >= 1 && d <= int.MaxValue && asked.Count < 16) asked.Add((int)d);
+            var key = CraftersKey(asked);
+            if (!craftersAnswers.TryGetValue(key, out var a)) return;              // only what was asked for
+            var set = new HashSet<int>(asked);
+            var rows = new List<LodgeCrafter>();
+            foreach (var o in m.List("who"))
+            {
+                if (rows.Count >= 80) break;
+                var c = LodgeCrafter.From(o as Dictionary<string, object>);
+                if (c != null && set.Contains(c.Spell)) rows.Add(c);
+            }
+            a.Rows = rows; a.Answered = Clock();
+            CraftersChanged?.Invoke();
+        }
+
         // the server's refusals of a read (a code on the generic error frame)
         void OnArmoryError(string code)
         {
@@ -290,6 +348,7 @@ namespace ElansAddonHub.Lodge
         public int ArmoryInflightForTest => armoryInflight.Count;
         public bool ArmoryBacklogForTest => armoryBacklog;
         public void ArmoryTickForTest() => ArmoryTick();
+        public void ForgetCraftersForTest() => craftersAnswers.Clear();
         public void ArmoryResetForTest() { armorySent = null; armoryInflight.Clear(); armoryRefused.Clear(); armoryQuiet.Clear(); armoryNextPut = DateTime.MinValue; armoryLastList = DateTime.MinValue; armoryGuest = false; ArmoryProblem = null; }
     }
 }

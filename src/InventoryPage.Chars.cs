@@ -499,10 +499,13 @@ namespace ElansAddonHub
             Group("Secondary skills", m.List.Where(p => p.Kind == "secondary"));
             if (lodgeView)
             {
-                var note = Line("Elan's Hub records the skill of each profession, not the recipes a character has learned. So the Armory can tell you who has a profession and how high, not who can make one particular item.", "Text.Caption", null, 8);
+                int learned = m.Known.Values.Sum(k => k.Ids.Count);
+                var note = Line(learned > 0
+                    ? "This character has " + learned.ToString("N0", CultureInfo.InvariantCulture) + " learned recipes on record (read by Elan's Hub when the profession windows were opened). To see who in the Lodge can make an item, open its recipe or the item in the Atlas."
+                    : "No learned recipes on record for this character: it needs Elan's Hub 1.14.0 or newer and the profession windows opened once in game, and the Lodge to be on server 2.19. Until then the Armory can tell you who has a profession and how high, not who can make one particular item.", "Text.Caption", null, 8);
                 note.TextWrapping = TextWrapping.Wrap;
                 col.Children.Add(note);
-                charTabInfo.Add("profnote|recipes unknown");
+                charTabInfo.Add(learned > 0 ? "profnote|recipes known|" + learned : "profnote|recipes unknown");
             }
         }
 

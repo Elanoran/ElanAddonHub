@@ -105,13 +105,26 @@ namespace ElansAddonHub.Services
     {
         public string Name, Kind;
         public int Skill, Max, Ic;
+        public int Line;                               // skill line id (Hub 1.14.0+), 0 = not saved
     }
 
-    // professions: { at, list = { { name, skill, max, ic, kind = "primary" | "secondary" } } }
+    // one profession's learned recipes as the Hub read them from the profession window (Hub 1.14.0): the spell ids, when, and whether the read was partial
+    public class HubKnownScan
+    {
+        public int Line;                               // skill line id
+        public string Name;                            // profession name as the Hub saw it, may be null
+        public long At;
+        public bool Partial;                           // collapsed headers / unreadable entries: the ids are a lower bound
+        public HashSet<int> Ids = new HashSet<int>();
+        public const int MaxIds = 2000;
+    }
+
+    // professions: { at, list = { { name, skill, max, ic, line, kind = "primary" | "secondary" } }, known = { [skillLineId] = { at, partial, n, ids = { spellId, ... } } } }
     public class HubProfessionsModule
     {
         public long At;
         public List<HubProfession> List = new List<HubProfession>();
+        public Dictionary<int, HubKnownScan> Known = new Dictionary<int, HubKnownScan>();     // empty before the Hub 1.14.0 or before a profession window was opened
     }
 
     public class HubPetAbility
@@ -437,7 +450,24 @@ namespace ElansAddonHub.Services
                     if (!(kv.Value is Dictionary<string, object> p)) continue;
                     var name = p.Str("name");
                     if (string.IsNullOrEmpty(name)) continue;
-                    res.List.Add(new HubProfession { Name = name, Skill = Math.Max(0, (int)Math.Min(100000, Num(p, "skill"))), Max = Math.Max(0, (int)Math.Min(100000, Num(p, "max"))), Ic = (int)Math.Max(0, Math.Min(int.MaxValue, Num(p, "ic"))), Kind = p.Str("kind") ?? "primary" });
+                    res.List.Add(new HubProfession { Name = name, Skill = Math.Max(0, (int)Math.Min(100000, Num(p, "skill"))), Max = Math.Max(0, (int)Math.Min(100000, Num(p, "max"))), Ic = (int)Math.Max(0, Math.Min(int.MaxValue, Num(p, "ic"))), Kind = p.Str("kind") ?? "primary", Line = (int)Math.Max(0, Math.Min(1000000, Num(p, "line"))) });
+                }
+            var known = d.Child("known");
+            if (known != null)
+                foreach (var kv in known)
+                {
+                    if (res.Known.Count >= 16) break;
+                    if (!int.TryParse(kv.Key, NumberStyles.None, CultureInfo.InvariantCulture, out var line) || line < 1 || line > 1000000) continue;
+                    if (!(kv.Value is Dictionary<string, object> e)) continue;
+                    var ks = new HubKnownScan { Line = line, Name = e.Str("n"), At = e.Long("at"), Partial = !(e.TryGetValue("partial", out var pv) && pv is bool pb && !pb) };
+                    var ids = e.Child("ids");
+                    if (ids != null)
+                        foreach (var iv in ids.Values)
+                        {
+                            if (ks.Ids.Count >= HubKnownScan.MaxIds) break;
+                            if (iv is double dn && !double.IsNaN(dn) && dn >= 1 && dn <= int.MaxValue && dn == Math.Floor(dn)) ks.Ids.Add((int)dn);
+                        }
+                    res.Known[line] = ks;
                 }
             return res;
         }

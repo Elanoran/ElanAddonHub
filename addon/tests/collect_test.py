@@ -364,6 +364,225 @@ check("professions via the classic skill-line fallback (weapon skills and header
 L.execute("CLOCK = CLOCK + 10; GetNumSkillLines = nil; Fire('SKILL_LINES_CHANGED') RunTimers()")
 check("no profession API at all: empty list, no error", lua("return #ElansHub.Get('professions').list == 0"))
 
+# ---------------------------------------------------------------- known recipes
+L.execute(r'''
+CLOCK = CLOCK + 10
+function GetProfessions() return 1, 2 end
+PINFO = { [1] = { 'Alchemy', 136240, 150, 300, 0, 0, 171 }, [2] = { 'Mining', 136248, 100, 300, 0, 0, 186 } }
+function GetProfessionInfo(i) local p = PINFO[i] return p[1], p[2], p[3], p[4], p[5], p[6], p[7] end
+Fire('SKILL_LINES_CHANGED') RunTimers()
+''')
+check("professions list carries the skill line id", lua("local l = ElansHub.Get('professions').list return l[1].line == 171 and l[2].line == 186"))
+check("no known field before any profession window was read", lua("return ElansHub.Get('professions').known == nil"))
+check("recipe events registered", lua("local n = {} for _, e in ipairs(EVENTS) do n[e] = true end return n.TRADE_SKILL_SHOW and n.TRADE_SKILL_LIST_UPDATE and n.CRAFT_SHOW and n.TRADE_SKILL_CLOSE and n.CRAFT_CLOSE and true"))
+
+# modern C_TradeSkillUI
+L.execute(r'''
+RECIPES = { 100, 101, 102, 103 }
+RINFO = { [100] = { learned = true }, [101] = { learned = false }, [102] = { learned = true }, [103] = { learned = true } }
+LINKED, GUILD, NPC, READY = false, false, false, true
+C_TradeSkillUI = {
+  GetAllRecipeIDs = function() return RECIPES end,
+  GetRecipeInfo = function(id) local r = RINFO[id] if r and r.err then error('boom') end return r end,
+  GetBaseProfessionInfo = function() return { professionName = 'Alchemy', professionID = 171 } end,
+  IsTradeSkillLinked = function() return LINKED end,
+  IsTradeSkillGuild = function() return GUILD end,
+  IsNPCCrafting = function() return NPC end,
+  IsTradeSkillReady = function() return READY end,
+}
+CLOCK = CLOCK + 10
+Fire('SKILL_LINES_CHANGED') RunTimers()
+''')
+check("a recipe scan needs an open profession window (nothing before)", lua("return ElansHub.Get('professions').known == nil"))
+L.execute("CLOCK = CLOCK + 10; Fire('TRADE_SKILL_SHOW') RunTimers()")
+check("modern: learned recipes only, keyed by skill line, sorted", lua("local k = ElansHub.Get('professions').known[171] return k ~= nil and #k.ids == 3 and k.ids[1] == 100 and k.ids[2] == 102 and k.ids[3] == 103 and k.partial == false and k.at == NOWT and k.n == 'Alchemy'"))
+check("modern: the profession list is still published with the scan", lua("return #ElansHub.Get('professions').list == 2"))
+
+L.execute("CLOCK = CLOCK + 10; Fire('SKILL_LINES_CHANGED') RunTimers()")
+check("a plain professions refresh keeps the known recipes", lua("return #ElansHub.Get('professions').known[171].ids == 3"))
+
+# secret learned flag / secret id -> partial, skipped; merge adds, never removes
+L.execute(r'''
+RINFO[101] = { learned = SECRET }
+RINFO[104] = { learned = true }
+RECIPES = { 100, 101, 104, SECRET }
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_LIST_UPDATE') RunTimers()
+''')
+check("secret flag/id: skipped, scan is partial, nothing is lost, new recipe added", lua("local k = ElansHub.Get('professions').known[171] local s = {} for _, i in ipairs(k.ids) do s[i] = true end return #k.ids == 4 and s[100] and s[102] and s[103] and s[104] and not s[101]"))
+check("an earlier full scan stays full when a partial one adds to it", lua("return ElansHub.Get('professions').known[171].partial == false"))
+L.execute(r'''
+RECIPES = { 100, 101, 104 }
+RINFO[101] = { learned = false }
+RINFO[102] = { learned = false }
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_LIST_UPDATE') RunTimers()
+''')
+check("a full scan that lacks a recipe removes it (102 and 103 are gone)", lua("local k = ElansHub.Get('professions').known[171] return #k.ids == 2 and k.ids[1] == 100 and k.ids[2] == 104 and k.partial == false"))
+
+# GetRecipeInfo error / nil info -> partial
+L.execute(r'''
+RECIPES = { 100, 104, 105, 106 }
+RINFO[105] = { err = true }
+RINFO[106] = nil
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_LIST_UPDATE') RunTimers()
+''')
+check("GetRecipeInfo errors / nil: partial, known kept", lua("local k = ElansHub.Get('professions').known[171] return #k.ids == 2 and k.partial == false"))
+
+# someone else's window
+L.execute(r'''
+LINKED = true
+RECIPES = { 900, 901 }
+RINFO[900] = { learned = true } RINFO[901] = { learned = true }
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_LIST_UPDATE') RunTimers()
+''')
+check("a linked window is never recorded", lua("local k = ElansHub.Get('professions').known[171] return #k.ids == 2"))
+L.execute("LINKED = false; GUILD = true; CLOCK = CLOCK + 10; Fire('TRADE_SKILL_LIST_UPDATE') RunTimers()")
+check("guild window ignored", lua("return #ElansHub.Get('professions').known[171].ids == 2"))
+L.execute("GUILD = false; NPC = true; CLOCK = CLOCK + 10; Fire('TRADE_SKILL_LIST_UPDATE') RunTimers()")
+check("NPC crafting window ignored", lua("return #ElansHub.Get('professions').known[171].ids == 2"))
+L.execute("NPC = false; READY = false; CLOCK = CLOCK + 10; Fire('TRADE_SKILL_LIST_UPDATE') RunTimers()")
+check("a trade skill window that is not ready is ignored", lua("return #ElansHub.Get('professions').known[171].ids == 2"))
+L.execute("READY = true")
+
+# a looks-filtered scan (much smaller than before) does not drop what was known
+L.execute(r'''
+RECIPES = {}
+for i = 1, 20 do RECIPES[i] = 2000 + i RINFO[2000 + i] = { learned = true } end
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_LIST_UPDATE') RunTimers()
+RECIPES = { 2001 }
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_LIST_UPDATE') RunTimers()
+''')
+check("a full-looking scan with under half of the known recipes is treated as partial (filters)", lua("return #ElansHub.Get('professions').known[171].ids >= 20"))
+
+# window closes: the gate stops scanning
+L.execute("Fire('TRADE_SKILL_CLOSE') RunTimers() RECIPES = { 3001 } RINFO[3001] = { learned = true } CLOCK = CLOCK + 10 EHUB.CollectRequest('recipes') RunTimers()")
+check("after TRADE_SKILL_CLOSE nothing is read until the window opens again", lua("local s = {} for _, i in ipairs(ElansHub.Get('professions').known[171].ids) do s[i] = true end return not s[3001]"))
+
+# second profession: keyed by its own line
+L.execute(r'''
+C_TradeSkillUI.GetBaseProfessionInfo = function() return { professionName = 'Mining', professionID = 186 } end
+RECIPES = { 500, 501 } RINFO[500] = { learned = true } RINFO[501] = { learned = true }
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_SHOW') RunTimers()
+''')
+check("a second profession gets its own entry", lua("local K = ElansHub.Get('professions').known return #K[186].ids == 2 and K[186].n == 'Mining' and #K[171].ids >= 20"))
+
+# window title alias without an id
+L.execute(r'''
+C_TradeSkillUI.GetBaseProfessionInfo = function() return { professionName = 'Smelting' } end
+RECIPES = { 600 } RINFO[600] = { learned = true }
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_SHOW') RunTimers()
+''')
+check("window title alias (Smelting = Mining) maps to the player's Mining line", lua("local K = ElansHub.Get('professions').known return K[186] ~= nil and K[186].ids[1] == 600"))
+
+# cap: ids per profession
+L.execute(r'''
+C_TradeSkillUI.GetBaseProfessionInfo = function() return { professionName = 'Alchemy', professionID = 171 } end
+RECIPES = {}
+for i = 1, 1500 do RECIPES[i] = 10000 + i RINFO[10000 + i] = { learned = true } end
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_SHOW') RunTimers()
+''')
+check("ids are capped at 1000 per profession and still publish", lua("local k = ElansHub.Get('professions').known[171] return #k.ids == 1000"))
+
+# line cap: at most 8 professions kept (oldest dropped)
+L.execute(r'''
+for n = 1, 10 do
+  PINFO[10 + n] = { 'P' .. n, 1, 1, 1, 0, 0, 9000 + n }
+end
+local cur = 1
+GetProfessions = function() return 1 + 10 * 0 + (cur - 1) * 0 end
+for n = 1, 10 do
+  local line = 9000 + n
+  GetProfessions = function() return 10 + n end
+  C_TradeSkillUI.GetBaseProfessionInfo = function() return { professionName = 'P' .. n, professionID = line } end
+  RECIPES = { 70000 + n } RINFO[70000 + n] = { learned = true }
+  CLOCK = CLOCK + 10 NOWT = NOWT + 10
+  Fire('TRADE_SKILL_SHOW') RunTimers()
+end
+''')
+check("at most 8 professions are kept (oldest scans dropped)", lua("local K = ElansHub.Get('professions').known local n = 0 for _ in pairs(K) do n = n + 1 end return n == 8 and K[9010] ~= nil and K[9001] == nil"))
+check("known ids are plain positive integers", lua("for _, e in pairs(ElansHub.Get('professions').known) do for _, i in ipairs(e.ids) do if type(i) ~= 'number' or i <= 0 or i ~= math.floor(i) then return false end end end return true"))
+
+# classic trade skill API
+L.execute(r'''
+C_TradeSkillUI = nil
+NOWT = NOWT + 100
+GetProfessions = function() return 1, 2 end
+TS = { { 'Elixirs', 'header', nil, true }, { 'Minor Healing Potion', 'optimal', 3, nil }, { 'Lesser Healing Potion', 'easy', 1, nil }, { 'Flasks', 'header', nil, true }, { 'Flask of X', 'medium', 0, nil } }
+TSLINK = { [2] = '|cffffd000|Henchant:2330|h[Minor Healing Potion]|h|r', [3] = '|cffffd000|Henchant:2337|h[Lesser Healing Potion]|h|r', [5] = '|cffffd000|Henchant:17000|h[Flask of X]|h|r' }
+function GetNumTradeSkills() return #TS end
+function GetTradeSkillInfo(i) local t = TS[i] return t[1], t[2], t[3], t[4] end
+function GetTradeSkillRecipeLink(i) return TSLINK[i] end
+function GetTradeSkillLine() return 'Alchemy', 150, 300 end
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_SHOW') RunTimers()
+''')
+check("classic API: recipe spell ids from the recipe links, full scan replaces", lua("local k = ElansHub.Get('professions').known[171] return #k.ids == 3 and k.ids[1] == 2330 and k.ids[2] == 2337 and k.ids[3] == 17000 and k.partial == false"))
+L.execute(r'''
+TS[4][4] = false -- a collapsed header
+TS[5] = nil
+TSLINK[5] = nil
+TSLINK[3] = SECRET
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_UPDATE') RunTimers()
+''')
+check("classic API: collapsed header + secret link = partial scan that adds only, nothing removed", lua("local k = ElansHub.Get('professions').known[171] return #k.ids == 3 and k.partial == false"))
+L.execute(r'''
+-- a never-scanned profession seen partially stays partial
+GetTradeSkillLine = function() return 'Mining', 100, 300 end
+TSLINK[3] = '|cffffd000|Henchant:2337|h[x]|h|r'
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_UPDATE') RunTimers()
+''')
+check("a first-ever partial scan is stored as partial", lua("local k = ElansHub.Get('professions').known[186] return k ~= nil and k.partial == true and k.n == 'Mining'"))
+L.execute(r'''
+GetTradeSkillSubClassFilter = function(i) return 0 end
+GetTradeSkillLine = function() return 'Alchemy', 150, 300 end
+TS[4][4] = true
+TS[5] = { 'Flask of X', 'medium', 0, nil }
+TSLINK[5] = '|cffffd000|Henchant:17000|h[Flask of X]|h|r'
+TS[3] = { 'Lesser Healing Potion', 'easy', 1, nil }
+TS[2] = nil
+CLOCK = CLOCK + 10
+Fire('TRADE_SKILL_UPDATE') RunTimers()
+''')
+check("classic: an active sub-class filter makes the scan partial (nothing removed)", lua("local k = ElansHub.Get('professions').known[171] return #k.ids == 3 and k.ids[1] == 2330"))
+L.execute("GetTradeSkillSubClassFilter = nil; function IsTradeSkillLinked() return true end TS[2] = { 'Minor Healing Potion', 'optimal', 3, nil } TSLINK[2] = '|Henchant:1|h' CLOCK = CLOCK + 10 Fire('TRADE_SKILL_UPDATE') RunTimers() IsTradeSkillLinked = nil")
+check("classic: a linked trade skill window is ignored", lua("local k = ElansHub.Get('professions').known[171] for _, i in ipairs(k.ids) do if i == 1 then return false end end return true"))
+
+# classic craft window (enchanting)
+L.execute(r'''
+GetNumTradeSkills = nil
+PINFO[3] = { 'Enchanting', 1, 100, 300, 0, 0, 333 }
+GetProfessions = function() return 1, 3 end
+CR = { { 'Enchant Bracer - Minor Health', '', 'optimal' } }
+function GetNumCrafts() return 1 end
+function GetCraftInfo(i) local c = CR[i] return c[1], c[2], c[3], 0, true end
+function GetCraftItemLink(i) return '|cffffd000|Henchant:7418|h[Enchant Bracer - Minor Health]|h|r' end
+function GetCraftDisplaySkillLine() return 'Enchanting' end
+CLOCK = CLOCK + 10
+Fire('CRAFT_SHOW') RunTimers()
+''')
+check("classic craft window (enchanting): recipe from GetCraftItemLink", lua("local k = ElansHub.Get('professions').known[333] return k ~= nil and #k.ids == 1 and k.ids[1] == 7418 and k.partial == false"))
+
+check("MergeKnown: partial scan unions, full replaces", lua("""
+  local m = EHUB.MergeKnown
+  local old = { ids = { 1, 2, 3 }, partial = false }
+  local a = m(old, { [3] = true, [4] = true }, true)
+  local b = m(old, { [3] = true, [4] = true }, false)
+  local c = m(nil, { [9] = true }, true)
+  return #a.ids == 4 and a.partial == false and #b.ids == 2 and b.ids[1] == 3 and c.partial == true"""))
+L.execute("CHAT = {}; EHUB.DataCommand()")
+check("/ehub data professions line shows the recipe count", any("professions v1" in L.eval("CHAT[%d]" % (i + 1)) and "recipes" in L.eval("CHAT[%d]" % (i + 1)) for i in range(int(L.eval("#CHAT")))))
+check("recipe code never expands, collapses, selects or filters the window", all(w not in code for w in ["ExpandTradeSkill", "CollapseTradeSkill", "SelectTradeSkill", "SetTradeSkill", "ExpandCraft", "CollapseCraft", "SetRecipeFavorite", "OpenTradeSkill", "CloseTradeSkill", "CraftFrame", "TradeSkillFrame"]))
+
 # ---------------------------------------------------------------- /ehub data
 L.execute("CHAT = {}; EHUB.DataCommand()")
 chat = [L.eval("CHAT[%d]" % (i + 1)) for i in range(int(L.eval("#CHAT")))]

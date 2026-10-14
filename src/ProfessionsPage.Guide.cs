@@ -38,7 +38,7 @@ namespace ElansAddonHub
             if (prof.Gathering) { RenderGatherGuide(b, start, target); return; }
 
             IDictionary<int, int> have = guideScope == "none" ? new Dictionary<int, int>() : guideScope == "char" && who != null ? who.Items : pool;
-            var g = SkillGuideBuilder.Build(b, prof, start, target, sources, new Dictionary<int, int>(have), who?.Name, false, guideCamp);
+            var g = SkillGuideBuilder.Build(b, prof, start, target, sources, new Dictionary<int, int>(have), who?.Name, false, guideCamp, who);
             lastGuide = g;
             Body.Children.Add(GuideSummary(g));
             Body.Children.Add(ShoppingList(g));
@@ -198,14 +198,15 @@ namespace ElansAddonHub
             sp.Children.Add(title);
 
             var learn = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-            learn.Children.Add(Line("Learn: ", "Text.Caption"));
+            learn.Children.Add(Line(s.Known ? "Recipe: " : s.Unlearned ? "" : "Learn: ", "Text.Caption", s.Unlearned ? Res("Brush.Warn") : null));
+            if (s.Unlearned) learn.Children.Add(Line("Learn first: ", "Text.Caption", Res("Brush.Warn")));
             if (s.LearnItemId > 0)
             {
                 learn.Children.Add(LinkText(NameOf(s.LearnItemId), AtlasIds.Item(s.LearnItemId), "Text.Secondary", QualityBrush(2)));
                 if (s.LearnSources.Count == 0) learn.Children.Add(Line(" - no source known", "Text.Caption"));
                 foreach (var src in s.LearnSources.Take(1)) { learn.Children.Add(Line(" - ", "Text.Caption")); learn.Children.Add(LinkText(src.Text, src.Link, "Text.Caption")); learn.Children.Add(Line(" (" + src.Label + ")", "Text.Caption")); }
             }
-            else learn.Children.Add(Line(s.Learn, "Text.Secondary"));
+            else learn.Children.Add(Line(s.Unlearned ? s.Learn.Replace("Learn first: ", "") : s.Learn, "Text.Secondary", s.Known ? Res("Brush.Success") : null));
             sp.Children.Add(learn);
 
             var mats = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };

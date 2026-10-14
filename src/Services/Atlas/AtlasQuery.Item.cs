@@ -184,6 +184,9 @@ namespace ElansAddonHub.Services.Atlas
                     m.Facts.Add(new AtlasFact("Crafted by", (skill?.Name ?? "") + (r.MinRank > 0 ? " " + r.MinRank : ""), AtlasLabel.Forever, craftLink));
             }
 
+            // which of my characters know the recipe, and who in the Lodge can craft it
+            { var made = SpellData.RecipesProducing(id); if (made.Count > 0) AddRecipeKnowledge(m, made); }
+
             // the table: Lodge-observed rows, then the client's, then the Classic baseline; tiny chances folded
             FoldTiny(src, rows, tiny);
 
