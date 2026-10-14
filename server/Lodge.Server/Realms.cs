@@ -116,8 +116,15 @@ public static class RealmsParse
         return null;
     }
 
-    public static bool IsForever(RealmInfo r) =>
-        Regex.IsMatch(r.Name + " " + r.Slug + " " + r.Category, "forever", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    // a realm counts when its name, slug or category contains one of the match words (LODGE_REALMS_MATCH, default "forever")
+    public static string[] Match = { "forever" };
+    public static bool IsForever(RealmInfo r)
+    {
+        var text = r.Name + " " + r.Slug + " " + r.Category;
+        foreach (var m in Match ?? Array.Empty<string>())
+            if (!string.IsNullOrWhiteSpace(m) && text.IndexOf(m.Trim(), StringComparison.OrdinalIgnoreCase) >= 0) return true;
+        return false;
+    }
 
     // the ruleset from what the realm says: hints in its name / slug / category win over the API's realm type
     public static string Ruleset(RealmInfo r)
@@ -308,6 +315,7 @@ public sealed class RealmsModule : IModule
     // probe the namespaces in order and keep the Forever realms from all of them
     async Task<List<RealmEntry>> Discover(string tok, CancellationToken ct)
     {
+        if (hub.Cfg.RealmsMatch is { Length: > 0 } match) RealmsParse.Match = match;
         var found = new List<RealmEntry>();
         var keep = new List<(string, int)>();
         var summary = new List<string>();
@@ -317,13 +325,14 @@ public sealed class RealmsModule : IModule
             try { index = await Api(ns, "connected-realm/index", tok, ct); }
             catch (RealmsHttpException e) when (e.Status is 400 or 403 or 404) { summary.Add($"{ns}: not available (HTTP {e.Status})"); continue; }
             var ids = RealmsParse.ConnectedIndex(index).Take(MaxConnectedPerNamespace).ToList();
-            int forever = 0; var names = new List<string>();
+            int forever = 0; var names = new List<string>(); var seen = new List<string>();
             foreach (var id in ids)
             {
                 RealmsParse.Connected c;
                 try { c = RealmsParse.ConnectedRealm(await Api(ns, "connected-realm/" + id, tok, ct)); }
                 catch (RealmsHttpException e) when (e.Status is 404 or 400) { continue; }   // one odd realm must not stop the probe; 401 / 429 / 5xx do
                 if (c == null) continue;
+                foreach (var r in c.Realms) if (seen.Count < 80) seen.Add(r.Name + (r.Category.Length > 0 ? " [" + r.Category + "]" : ""));
                 var hits = c.Realms.Where(RealmsParse.IsForever).ToList();
                 if (hits.Count == 0) continue;
                 forever += hits.Count;
@@ -331,6 +340,7 @@ public sealed class RealmsModule : IModule
                 foreach (var r in hits) { found.Add(ToEntry(ns, c, r)); names.Add(r.Name); }
             }
             summary.Add($"{ns}: {ids.Count} connected realms, {forever} Forever" + (names.Count > 0 ? " (" + string.Join(", ", names.Take(8)) + ")" : ""));
+            if (forever == 0 && seen.Count > 0) hub.Log.LogInformation("Realm status: realms in {Ns} (set LODGE_REALMS_MATCH to the Forever ones): {Names}", ns, string.Join(", ", seen));
         }
         hub.Log.LogInformation("Realm status discovery in region {Region}: {Summary}", Region, string.Join("; ", summary));
         lock (gate) known = keep;

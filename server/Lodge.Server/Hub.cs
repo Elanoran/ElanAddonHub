@@ -102,7 +102,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public class LodgeHub
 {
-    public const string Version = "2.20.0";
+    public const string Version = "2.20.1";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 

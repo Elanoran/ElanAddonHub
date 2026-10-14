@@ -53,6 +53,7 @@ public class LodgeConfig
     public string BnetRegion { get; set; } = "eu";
     public int RealmsPollSeconds { get; set; } = 120;       // 60 - 900
     public string[] RealmsNamespaces { get; set; } = Array.Empty<string>();   // optional override of the namespaces probed
+    public string[] RealmsMatch { get; set; } = new[] { "forever" };          // words / realm names / slugs that mark a WoW Forever realm (LODGE_REALMS_MATCH)
     public bool RealmsConfigured => BnetClientId.Length > 0 && BnetClientSecret.Length > 0;
 
     static string Env(string key, string fallback)
@@ -116,6 +117,7 @@ public class LodgeConfig
             BnetRegion = CleanRegion(Env("LODGE_BNET_REGION", "eu")),
             RealmsPollSeconds = Int("LODGE_REALMS_POLL_SECONDS", 120, 60, 900),
             RealmsNamespaces = Env("LODGE_REALMS_NAMESPACES", "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            RealmsMatch = Env("LODGE_REALMS_MATCH", "forever").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is { Length: > 0 } rm ? rm : new[] { "forever" },
         };
         Directory.CreateDirectory(c.DataDir);
         if (string.IsNullOrEmpty(c.CodesFile))

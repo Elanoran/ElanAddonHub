@@ -190,6 +190,23 @@ public sealed class RealmsTests
     }
 
     [Fact]
+    public void Match_words_pick_the_realms()
+    {
+        var old = RealmsParse.Match;
+        try
+        {
+            var r = new RealmsParse.RealmInfo { Name = "Skyborne", Slug = "skyborne", Category = "Europe" };
+            RealmsParse.Match = new[] { "forever" };
+            Assert.False(RealmsParse.IsForever(r));
+            RealmsParse.Match = new[] { "nothing", " SKYborne " };
+            Assert.True(RealmsParse.IsForever(r));
+            RealmsParse.Match = new[] { "", "  " };
+            Assert.False(RealmsParse.IsForever(r));
+        }
+        finally { RealmsParse.Match = old; }
+    }
+
+    [Fact]
     public async Task Parses_the_documented_shapes()
     {
         var c = RealmsParse.ConnectedRealm(FakeBlizzard.Connected(1305, "UP", "WoW Forever", "PVP", "PvP", "Forever", "FULL", true));
@@ -422,7 +439,7 @@ public sealed class RealmsTests
         Assert.Contains("realms", on.R.Hub.FeatureList());
         var (m, _) = (on.R.Join("Mia", "member"), 0);
         Assert.Contains("realms", ((JsonArray)on.R.Hub.Welcome(m)["features"]!).Select(x => (string)x!));
-        Assert.Equal("2.20.0", LodgeHub.Version);
+        Assert.Equal("2.20.1", LodgeHub.Version);
     }
 
     [Fact]
