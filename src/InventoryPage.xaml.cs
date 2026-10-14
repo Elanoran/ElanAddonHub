@@ -170,9 +170,10 @@ namespace ElansAddonHub
         public event Action GoToAddons;
         public event Action GoToSettings;
         public event Action<string> OpenAtlas;      // Ctrl+click on an item: its page in the Atlas
+        bool forceCtrl;       // self-test: a click counts as Ctrl+click
         bool CtrlAtlas(int itemId, MouseButtonEventArgs e)
         {
-            if (itemId <= 0 || (Keyboard.Modifiers & ModifierKeys.Control) == 0 || OpenAtlas == null) return false;
+            if (itemId <= 0 || ((Keyboard.Modifiers & ModifierKeys.Control) == 0 && !forceCtrl) || OpenAtlas == null) return false;
             e.Handled = true; OpenAtlas(ElansAddonHub.Services.Db2.AtlasIds.Item(itemId));
             return true;
         }
@@ -242,7 +243,7 @@ namespace ElansAddonHub
         {
             var gen = ++loadGen;
             var root = wowRoot();
-            if (!loadedOnce) ShowCharSkeleton(true);
+            if (!loadedOnce && !armoryMode) ShowCharSkeleton(true);
             var read = await Task.Run(() => ReadSafe(root));
             if (gen != loadGen) return;
             Apply(root, read);
@@ -251,7 +252,7 @@ namespace ElansAddonHub
         void ShowCharSkeleton(bool on)
         {
             CharSkeleton.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-            var rest = on ? Visibility.Collapsed : Visibility.Visible;
+            var rest = on || armoryMode ? Visibility.Collapsed : Visibility.Visible;
             AllCard.Visibility = CharList.Visibility = SaveHint.Visibility = rest;
         }
         public bool CharSkeletonForTest => CharSkeleton.Visibility == Visibility.Visible;
@@ -278,6 +279,7 @@ namespace ElansAddonHub
             data = read;
             chars = read.Chars;
             index = InventoryReader.BuildIndex(chars.Where(c => !c.Hidden), read.Guilds);
+            if (armoryMode) return;                 // the Lodge view is on screen: my own list is drawn again when the person switches back
             if (filterKey != null && !chars.Any(c => c.Key == filterKey && !c.Hidden)) filterKey = null;
             // first look: the character that was saved last (usually the one you just played)
             if (filterKey == null && !userAll)
@@ -430,7 +432,11 @@ namespace ElansAddonHub
             return "?";
         }
 
-        void Search_Changed(object sender, TextChangedEventArgs e) { if (IsInitialized && Body != null && Body.Visibility == Visibility.Visible) RenderView(); }
+        void Search_Changed(object sender, TextChangedEventArgs e)
+        {
+            if (armoryMode) { if (!suppressSearch) RefreshArmory(false); return; }
+            if (IsInitialized && Body != null && Body.Visibility == Visibility.Visible) RenderView();
+        }
 
         void Char_Click(object sender, RoutedEventArgs e)
         {

@@ -205,6 +205,7 @@ public class AdminModule : IModule
         var name = J.Str(m, "name");
         if (LodgeHub.Same(name, me.Name)) throw new InvalidOperationException("You can't remove yourself");
         hub.Auth.Remove(name);
+        hub.Armory.RemoveMember(name);                  // their shared characters go with them
         hub.Log.LogInformation("{By} removed {Name}", me.Name, name);
         await hub.ApplyCodeChanges();
         await SendMembers(me);
@@ -232,6 +233,7 @@ public class AdminModule : IModule
                 return true;
             }
             var devices = hub.Auth.Leave(me.Name);
+            hub.Armory.RemoveMember(me.Name);               // their shared characters go with them
             hub.Log.LogInformation("{Name} left the lodge ({Count} devices signed out)", Names.ForLog(me.Name), devices.Count);
             await hub.Send(me, new JsonObject { ["t"] = "member.left" });
             foreach (var d in devices) await hub.DisconnectDevice(d.Id, "You left the lodge");

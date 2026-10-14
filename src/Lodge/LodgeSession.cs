@@ -314,6 +314,7 @@ namespace ElansAddonHub.Lodge
             ResetCalendar();
             ResetFlights();
             ResetAtlas();
+            ResetArmory();
             ResetFiles();
             ResetHistoryState();
             Pending = null;
@@ -504,6 +505,10 @@ namespace ElansAddonHub.Lodge
                 case "flights.data": OnFlightData(m); break;
                 case "atlas.shared": OnAtlasShared(m); break;
                 case "atlas.data": OnAtlasData(m); break;
+                case "armory.saved": OnArmorySaved(m); break;
+                case "armory.deleted": OnArmoryDeleted(m); break;
+                case "armory.chars": OnArmoryChars(m); break;
+                case "armory.char": OnArmoryChar(m); break;
                 case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
             }
         }
@@ -530,6 +535,7 @@ namespace ElansAddonHub.Lodge
             ReadCalendarFeatures(m, features);
             ReadFlightFeatures(features);
             ReadAtlasFeatures(features);
+            ReadArmoryFeatures(features);
             ReadFilesFeatures(m, features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
@@ -653,6 +659,7 @@ namespace ElansAddonHub.Lodge
             foreach (var r in VoiceRooms) r.InvisibleHint = Invisible;
             FlightSync(connect: true);                          // shared flight times (a no-op without the server feature)
             AtlasSync(connect: true);                          // the Lodge's Atlas pool (a no-op without the server feature)
+            ArmorySync(true);                                   // the characters I chose to share (a no-op without the server feature)
             RequestFiles();                                     // the Files page (a no-op without the server feature)
             Changed?.Invoke();
             // a gentle, one-time nudge: without a display name everybody sees the login name
@@ -1181,6 +1188,7 @@ namespace ElansAddonHub.Lodge
             text = text ?? "";
             if (code == "last-owner") { LeaveRefused?.Invoke(text); return; }   // the last Guild Master tried to leave
             if (HistoryRateError(text)) return;
+            if (code == "notfound" || (code == "disabled" && text.IndexOf("Armory", StringComparison.OrdinalIgnoreCase) >= 0) || (code == "guest" && text.IndexOf("Armory", StringComparison.OrdinalIgnoreCase) >= 0)) { OnArmoryError(code); return; }
             if (pendingRoom != null && (code == "room-full" || text.IndexOf("is full (", StringComparison.OrdinalIgnoreCase) >= 0 || text.StartsWith("You can't join", StringComparison.OrdinalIgnoreCase)))
             {
                 // the server said no: never connected, no mic opened
@@ -1445,7 +1453,7 @@ namespace ElansAddonHub.Lodge
             if (Pending != null && Clock() - Pending.At > TimeSpan.FromSeconds(15)) Pending = null;   // surely out by now
             if (pendingRoom != null && Clock() - pendingSince > TimeSpan.FromSeconds(6)) { pendingRoom = null; Error?.Invoke("Couldn't join the voice room - no answer from the lodge"); Changed?.Invoke(); }
             AutoStatusTick();
-            if (tickCount % 20 == 0) { LfgTick(); CalendarTick(); FlightTick(); AtlasTick(); }
+            if (tickCount % 20 == 0) { LfgTick(); CalendarTick(); FlightTick(); AtlasTick(); ArmoryTick(); }
             if (Toasts.NeedsTick) Toasts.Tick();
         }
 

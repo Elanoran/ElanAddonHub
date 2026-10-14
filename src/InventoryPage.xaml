@@ -40,11 +40,20 @@
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
+    <!-- the two views of this page: my own characters, or the characters the Lodge shares (the Armory) -->
+    <Border x:Name="ModeStrip" Grid.Row="0" Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" Margin="0,0,0,12">
+      <StackPanel Orientation="Horizontal">
+        <RadioButton x:Name="ModeMine" Style="{StaticResource Segment}" Content="My characters" GroupName="inv-mode" IsChecked="True" Tag="mine" Checked="Mode_Checked" AutomationProperties.Name="My characters" />
+        <RadioButton x:Name="ModeLodge" Style="{StaticResource Segment}" Content="Lodge" GroupName="inv-mode" Tag="lodge" Checked="Mode_Checked" AutomationProperties.Name="Lodge armory" />
+      </StackPanel>
+    </Border>
+
     <!-- title + search -->
-    <Grid Grid.Row="0" Margin="0,0,0,16">
+    <Grid Grid.Row="1" Margin="0,0,0,16">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -58,7 +67,7 @@
     </Grid>
 
     <!-- empty state -->
-    <Border x:Name="EmptyBox" Grid.Row="1" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}"
+    <Border x:Name="EmptyBox" Grid.Row="2" Visibility="Collapsed" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}"
             Padding="32" VerticalAlignment="Top" Margin="0,4,4,0">
       <StackPanel HorizontalAlignment="Center" MaxWidth="460">
         <Image x:Name="EmptyIcon" Width="80" Height="80" RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,12" />
@@ -69,13 +78,42 @@
     </Border>
 
     <!-- characters on the left, items on the right -->
-    <Grid x:Name="Body" Grid.Row="1">
+    <Grid x:Name="Body" Grid.Row="2">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="240" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
       <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
         <StackPanel>
+          <!-- the Lodge view: filters, then the characters the Lodge shares (same rows as my own) -->
+          <StackPanel x:Name="ArmoryLeft" Visibility="Collapsed">
+            <ComboBox x:Name="ArmoryClass" Style="{StaticResource Dropdown}" Margin="8,0,12,8" SelectionChanged="ArmoryFilter_Changed" AutomationProperties.Name="Filter by class" />
+            <ComboBox x:Name="ArmoryLevel" Style="{StaticResource Dropdown}" Margin="8,0,12,8" SelectionChanged="ArmoryFilter_Changed" AutomationProperties.Name="Filter by level" />
+            <ComboBox x:Name="ArmoryProf" Style="{StaticResource Dropdown}" Margin="8,0,12,8" SelectionChanged="ArmoryFilter_Changed" AutomationProperties.Name="Filter by profession" />
+            <TextBlock x:Name="ArmoryCount" Style="{StaticResource Text.Caption}" Margin="8,0,12,8" TextWrapping="Wrap" Visibility="Collapsed" />
+            <ItemsControl x:Name="ArmoryList" Focusable="False">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <RadioButton Style="{StaticResource SideRow}" GroupName="inv-armory" IsChecked="{Binding Selected, Mode=OneWay}" Tag="{Binding Id}" Click="ArmoryRow_Click" ToolTip="{Binding Tip}"
+                               AutomationProperties.Name="{Binding Name}">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                      <Grid Width="32" Height="32">
+                        <Ellipse Fill="{Binding ClassTint}" />
+                        <TextBlock Text="{Binding Initial}" Foreground="{Binding ClassBrush}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Ellipse Fill="{Binding PortraitBrush}" />
+                      </Grid>
+                      <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding ClassBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Line2}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                    </Grid>
+                  </RadioButton>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock x:Name="ArmoryNoMatch" Text="No shared character matches." Style="{StaticResource Text.Secondary}" Margin="8,4,12,0" TextWrapping="Wrap" Visibility="Collapsed" />
+          </StackPanel>
           <!-- skeleton rows while the first read of the saved bags is on its way -->
           <StackPanel x:Name="CharSkeleton" Visibility="Collapsed">
             <Grid Height="48" Margin="8,0,12,4">

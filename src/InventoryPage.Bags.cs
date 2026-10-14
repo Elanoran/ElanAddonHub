@@ -49,6 +49,7 @@ namespace ElansAddonHub
         {
             if (suppressTab || !IsInitialized || Body == null) return;
             tab = (sender as FrameworkElement)?.Tag as string ?? "bags";
+            if (armoryMode) { RefreshArmory(false); return; }
             var only = filterKey == null ? null : Visible.FirstOrDefault(c => c.Key == filterKey);
             if (only != null && string.IsNullOrWhiteSpace(SearchBox.Text)) RenderBags(only);
         }
@@ -536,7 +537,7 @@ namespace ElansAddonHub
             ICollection<int> worn = where == "Worn" && owner != null && owner.Hub != null && HubModules.StateOf(owner.Hub, "gear") == HubModState.Ok ? HubModules.GearOf(owner.Hub).Slots.Values.Select(x => x.I).ToList() : null;
             AddItemFacts(sp, s.Id, worn);
             var tip = InventoryReader.TipFor(index, s.Id, owner);
-            AddCountRows(sp, tip);
+            if (!lodgeView) AddCountRows(sp, tip);       // the counts are of MY characters: not for somebody else's
             var loc = where == "Worn" ? (owner != null ? owner.Name + " · " : "") + bagTitle
                 : guild ? where + " · " + bagTitle + " · slot " + slotNo
                 : (owner != null ? owner.Name + " · " : "") + where + (where == "Bags" || where == "Bank" ? " · " + bagTitle : "") + " · slot " + slotNo;

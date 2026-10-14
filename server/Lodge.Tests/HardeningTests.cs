@@ -527,7 +527,7 @@ public class HardeningTests
         var w = elan.Of("welcome")[0];
         Assert.Equal("Starlight", (string)w["names"]!["Mia"]!);
         Assert.Equal(LodgeHub.Version, (string)w["server"]!);
-        Assert.Equal("2.15.0", LodgeHub.Version);
+        Assert.Equal("2.16.0", LodgeHub.Version);
     }
 
     // ---------------------------------------------------------------- downloads / config

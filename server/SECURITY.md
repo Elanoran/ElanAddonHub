@@ -220,10 +220,20 @@ longer lets a backslash into a name.
 - Storage: `<data>/atlas.json`, atomic (tmp, flush, rename; a tmp is used only if the main file is missing), 64 MB cap on load, every loaded value re-validated by the same rules, written at most every 30 s while busy, every 15 s housekeeping and at shutdown. It is inside the data folder, so `lodge-backup` includes it. Table bounds: 6000 vendors, 20000 quests, 8000 spawn npcs, 40000 revealed items, 2000 members.
 - Logs: counts only (`X shared atlas observations (N stored, M refused)`); never an id, name or number. Tested (unit tests with a captured logger).
 
+## 2.16.0 (the Armory)
+
+- Four messages: `armory.put` (members and up), `armory.delete` (members and up), `armory.list` and `armory.get` (members and up; guests get an error with code `guest`); answers `armory.saved`, `armory.deleted`, `armory.chars`, `armory.char`. Feature `armory` in the welcome and `/features`; `LODGE_ARMORY_ENABLED=0` stops advertising it, `armory.put` answers why `disabled` and the rest answer an error.
+- Opt-in by design: the server only holds what a member explicitly uploaded for a character they chose; it asks for nothing. A snapshot is rebuilt field by field in one place (`Armory.Clean`): unknown fields (bags, bank, gold, mail, zone ...) are dropped, text is cleaned like names, every number is clamped, ids and counts are whole numbers in fixed ranges, an item link must be the exact `|cAARRGGBB|Hitem:..|h[Name]|h|r` shape and belong to a worn item, a build code must match `ETB<n>-<base64url>`, lists are capped (400 talent nodes, 12 professions, 40 pets, 40 abilities, 100 known abilities, 24 slots, 40 links). A character is refused above 48 KB serialized (why `size`), with a key that is not `Realm-Name` shaped (why `invalid`) or with nothing to show (why `empty`).
+- Ownership: the owner of a character is the identity of the connection (`ProfileRules.Key(name)`), never a field of the frame. A put with another member's key creates the caller's own character; `armory.delete` can only ever remove the caller's own (`key` or `all`); no rank (officer, owner) can read less or delete more. At most 30 characters per member (why `full`), 1500 per lodge.
+- A member who leaves (`member.leave`) or is removed (`admin.remove`) loses their characters at once; the 15 s housekeeping also drops characters of identities that are no longer in the codes (skipped when the codes file lists nobody, so an unreadable file can never wipe the armory).
+- Budgets: a per-identity `ArmoryPut` bucket (burst 30, one token per 8 s) on top of the Control budget, `armory.delete` spends Control, `armory.list` / `armory.get` spend the Page budget; refusals count towards the flood disconnect. Frame limit 64 KB.
+- Storage: `<data>/armory.json`, atomic (tmp, flush, rename; a tmp is used only if the main file is missing), 96 MB cap on load, every loaded character re-validated by `Armory.Clean`, written at most every 10 s while busy, at once on a delete, every 15 s housekeeping and at shutdown.
+- Logs: counts only (`X shared a character with the armory`, `X took N character(s) out of the armory`); never a name, guild, item or number from a snapshot. Tested with a captured logger.
+
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 388 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 475 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
 python server/tests/security_integration.py                     # 150 checks against local servers (python -X utf8 on Windows)
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 41 checks

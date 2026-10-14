@@ -267,6 +267,7 @@ app.Lifetime.ApplicationStopping.Register(() =>
 {
     try { lodge.CloseAllForShutdown(TimeSpan.FromSeconds(3)).Wait(TimeSpan.FromSeconds(4)); } catch { }
     try { lodge.Chat.FlushAll(); } catch { }          // edits/reactions still waiting for their debounced write
+    try { lodge.Armory.Flush(); } catch { }                // armory changes not yet written
     try { lodge.AtlasPool.Flush(); } catch { }             // atlas changes not yet written
 });
 app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}",

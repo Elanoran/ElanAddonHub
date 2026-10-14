@@ -39,6 +39,7 @@ public class LodgeConfig
     public long FilesTotalBytes => FilesTotalMb * 1024L * 1024L;
     public int FilesUploadsPer10Min { get; set; } = 20;     // per person
     // ---- Atlas pool (2.15, "atlas" feature)
+    public bool ArmoryEnabled { get; set; } = true;         // 2.16 "armory" feature: members may share characters; off = not advertised, put answers why "disabled", stored data stays on disk
     public bool AtlasEnabled { get; set; } = true;          // the owner can switch the feature off (it then isn't advertised; share/get answer "disabled"; stored data stays on disk)
 
     static string Env(string key, string fallback)
@@ -84,6 +85,7 @@ public class LodgeConfig
             FilesMaxMb = Int("LODGE_FILES_MAX_MB", 50, 1, 1024),
             FilesTotalMb = Int("LODGE_FILES_TOTAL_MB", 500, 1, 1024 * 1024),
             FilesUploadsPer10Min = Int("LODGE_FILES_UPLOADS_PER_10MIN", 20, 1, 1000),
+            ArmoryEnabled = !(Env("LODGE_ARMORY_ENABLED", "1") is "0" or "false" or "no" or "off"),
             AtlasEnabled = !(Env("LODGE_ATLAS_ENABLED", "1") is "0" or "false" or "no" or "off"),
         };
         Directory.CreateDirectory(c.DataDir);

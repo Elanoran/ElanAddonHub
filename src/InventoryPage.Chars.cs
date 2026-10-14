@@ -90,6 +90,7 @@ namespace ElansAddonHub
         {
             var st = HubModules.StateOf(c.Hub, module);
             if (st == HubModState.Ok) return true;
+            if (lodgeView && st == HubModState.Missing) { ShowEmptyTab(c.Name + " did not share " + what + ".", "Only what a member's Elan's Hub has saved can be shared."); return false; }
             if (st == HubModState.TooNew) ShowEmptyTab(UpdateOutpost(what), tooNewHint ?? "This was saved by a newer Elan's Hub than this Outpost understands.");
             else ShowEmptyTab(missingLine, missingHint ?? "Log in to this character with Elan's Hub 1.12.0 or newer, then /reload or log out.");
             return false;
@@ -154,7 +155,7 @@ namespace ElansAddonHub
         {
             var core = c.Core;
             var col = Column(680);
-            var from = core != null ? CharacterMerge.FromHub : (c.BagsFrom ?? c.BankFrom);
+            var from = lodgeView ? SrcLabel : core != null ? CharacterMerge.FromHub : (c.BagsFrom ?? c.BankFrom);
             ViewInfo.Text = UpdatedLine(c.Updated, from);
 
             var race = !string.IsNullOrEmpty(core?.Race) ? core.Race : c.RaceFile;
@@ -165,12 +166,13 @@ namespace ElansAddonHub
             var where = string.Join(" · ", new[] { c.Realm, c.Faction }.Where(s => !string.IsNullOrEmpty(s)));
             if (where.Length > 0) info.Children.Add(Line(where, "Text.Secondary", null, 2));
             if (!string.IsNullOrEmpty(c.Guild)) info.Children.Add(Line("<" + c.Guild + ">", "Text.Secondary", null, 2));
-            var zone = string.Join(" · ", new[] { core?.Zone, core?.Subzone }.Where(s => !string.IsNullOrEmpty(s)));
+            var zone = lodgeView ? "" : string.Join(" · ", new[] { core?.Zone, core?.Subzone }.Where(s => !string.IsNullOrEmpty(s)));
+            if (lodgeView && !string.IsNullOrEmpty(lodgeBy)) info.Children.Add(Line("Shared by " + lodgeBy, "Text.Caption", null, 2));
             if (zone.Length > 0) info.Children.Add(Line(zone, "Text.Caption", null, 2));
             charTabInfo.Add("identity|" + lineOne);
             charTabInfo.Add("where|" + where + "|" + (c.Guild ?? "") + "|" + zone);
 
-            if (core != null && core.XpMax > 0 && c.Level > 0)
+            if (!lodgeView && core != null && core.XpMax > 0 && c.Level > 0)
             {
                 var pct = (int)Math.Min(100, core.Xp * 100 / core.XpMax);
                 var xp = "Experience " + core.Xp.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " / " + core.XpMax.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " (" + pct + " %)" + (core.Rested > 0 ? " · Rested " + core.Rested.ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) : "");
@@ -180,11 +182,14 @@ namespace ElansAddonHub
                 info.Children.Add(bar);
                 charTabInfo.Add("xp|" + xp);
             }
-            var gold = new Border { Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, Child = CoinLine(c.Money) };
-            info.Children.Add(gold);
-            charTabInfo.Add("gold|" + InventoryReader.Money(c.Money));
+            if (!lodgeView)
+            {
+                var gold = new Border { Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, Child = CoinLine(c.Money) };
+                info.Children.Add(gold);
+                charTabInfo.Add("gold|" + InventoryReader.Money(c.Money));
+            }
 
-            if (core == null)
+            if (!lodgeView && core == null)
             {
                 var st = HubModules.StateOf(c.Hub, "core");
                 var noteText = Line(st == HubModState.TooNew ? UpdateOutpost("more about this character")
@@ -213,8 +218,11 @@ namespace ElansAddonHub
                 bagText = (total - used) + " free of " + total;
             }
             else if (c.Bags.Count > 0) bagText = c.Bags.Sum(i => i.Count).ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " items";
-            tiles.Children.Add(Tile("Bag space", bagText));
-            tiles.Children.Add(Tile("Bank", c.Bank == null ? "not seen yet" : c.Bank.Sum(i => i.Count).ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " items"));
+            if (!lodgeView)
+            {
+                tiles.Children.Add(Tile("Bag space", bagText));
+                tiles.Children.Add(Tile("Bank", c.Bank == null ? "not seen yet" : c.Bank.Sum(i => i.Count).ToString("N0", ElansAddonHub.Lodge.CalendarRules.English) + " items"));
+            }
             var gear = HubModules.GearOf(c.Hub);
             double avg = gear == null ? 0 : AvgIl(gear);
             tiles.Children.Add(Tile("Item level", avg > 0 ? Fmt(avg) : "—"));
@@ -348,7 +356,7 @@ namespace ElansAddonHub
             if (!Gate(c, "gear", "gear", "No gear saved for " + c.Name + " yet")) return;
             var g = HubModules.GearOf(c.Hub);
             double avg = AvgIl(g);
-            ViewInfo.Text = (avg > 0 ? "Average item level " + Fmt(avg) + " · " : "") + g.Slots.Count + (g.Slots.Count == 1 ? " item worn" : " items worn") + " · " + UpdatedLine(g.At, CharacterMerge.FromHub);
+            ViewInfo.Text = (avg > 0 ? "Average item level " + Fmt(avg) + " · " : "") + g.Slots.Count + (g.Slots.Count == 1 ? " item worn" : " items worn") + " · " + UpdatedLine(g.At, SrcLabel);
             charTabInfo.Add("gearinfo|" + (avg > 0 ? Fmt(avg) : "-") + "|" + g.Slots.Count);
             if (g.Slots.Count == 0) { ShowEmptyTab(c.Name + " wears nothing.", null); return; }
 
@@ -446,7 +454,7 @@ namespace ElansAddonHub
         {
             if (!Gate(c, "professions", "professions", "No professions saved for " + c.Name + " yet")) return;
             var m = HubModules.ProfessionsOf(c.Hub);
-            ViewInfo.Text = m.List.Count + (m.List.Count == 1 ? " skill" : " skills") + " · " + UpdatedLine(m.At, CharacterMerge.FromHub);
+            ViewInfo.Text = m.List.Count + (m.List.Count == 1 ? " skill" : " skills") + " · " + UpdatedLine(m.At, SrcLabel);
             if (m.List.Count == 0) { ShowEmptyTab(c.Name + " has no professions.", null); return; }
             recipeLists.Clear(); recipeOpeners.Clear(); recipeData.Clear();
             var col = Column(680);
@@ -480,7 +488,7 @@ namespace ElansAddonHub
                     var bar = Bar(p.Skill, 0, p.Max);
                     bar.Margin = new Thickness(0, 8, 0, 0);
                     right.Children.Add(bar);
-                    AddRecipeList(right, p);      // Atlas: the profession's recipes from the game files (only when they were read)
+                    if (!lodgeView) AddRecipeList(right, p);      // Atlas: the profession's recipes from the game files (only when they were read)
                     Grid.SetColumn(right, 1);
                     row.Children.Add(right);
                     col.Children.Add(new Border { Background = Res("Brush.Surface1"), CornerRadius = (CornerRadius)FindResource("Radius.Card"), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 0, 0, 4), Child = row });
@@ -489,6 +497,13 @@ namespace ElansAddonHub
             }
             Group("Professions", m.List.Where(p => p.Kind != "secondary"));
             Group("Secondary skills", m.List.Where(p => p.Kind == "secondary"));
+            if (lodgeView)
+            {
+                var note = Line("Elan's Hub records the skill of each profession, not the recipes a character has learned. So the Armory can tell you who has a profession and how high, not who can make one particular item.", "Text.Caption", null, 8);
+                note.TextWrapping = TextWrapping.Wrap;
+                col.Children.Add(note);
+                charTabInfo.Add("profnote|recipes unknown");
+            }
         }
 
         // ---- Talents
@@ -497,7 +512,8 @@ namespace ElansAddonHub
             if (!Gate(c, "talents", "talents", "No talents saved for " + c.Name + " yet")) return;
             var m = HubModules.TalentsOf(c.Hub);
             int spent = m.Spent > 0 ? m.Spent : m.Nodes.Sum(n => n.R);
-            ViewInfo.Text = spent + " points spent" + (m.Unspent > 0 ? " · " + m.Unspent + " unspent" : "") + " · " + UpdatedLine(m.At, CharacterMerge.FromHub);
+            ViewInfo.Text = spent + " points spent" + (m.Unspent > 0 ? " · " + m.Unspent + " unspent" : "") + " · " + UpdatedLine(m.At, SrcLabel);
+            if (lodgeView && !string.IsNullOrEmpty(lodgeBuild)) CharHost.Children.Add(BuildCodeCard(lodgeBuild));
             if (m.Nodes.Count == 0) { ShowEmptyTab(c.Name + " has no talents to show yet.", null); return; }
             var layout = TalentGrid.Group(m.Nodes);
             charTabInfo.Add("talentinfo|" + spent + "|" + m.Unspent + "|" + layout.Trees.Count + "|" + layout.Loose.Count);
@@ -625,7 +641,7 @@ namespace ElansAddonHub
             var m = HubModules.PetsOf(c.Hub);
             var withYou = m.WithYou.ToList();
             var stabled = m.Stabled.ToList();
-            ViewInfo.Text = m.Pets.Count + (m.Pets.Count == 1 ? " pet" : " pets") + " · " + UpdatedLine(m.At, "Hunter Helper");
+            ViewInfo.Text = m.Pets.Count + (m.Pets.Count == 1 ? " pet" : " pets") + " · " + UpdatedLine(m.At, lodgeView ? SrcLabel : "Hunter Helper");
             charTabInfo.Add("petinfo|" + withYou.Count + "|" + stabled.Count + "|" + m.Known.Count);
             if (m.Pets.Count == 0 && m.Known.Count == 0) { ShowEmptyTab(c.Name + " has no pets saved yet.", "Call a pet or visit a stable master with Hunter Helper, then /reload or log out."); return; }
             var col = Column(680);
