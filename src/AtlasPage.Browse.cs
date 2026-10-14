@@ -56,6 +56,7 @@ namespace ElansAddonHub
         Task startFill = Task.CompletedTask;
         public Task StartFillForTest => startFill;
         StackPanel presetHost;
+        System.Windows.Controls.Primitives.UniformGrid tileGrid;
 
         FrameworkElement BrowseBlock()
         {
@@ -63,10 +64,10 @@ namespace ElansAddonHub
             var sp = new StackPanel();
             sp.Children.Add(Tb("Browse by category", "Text.Section"));
             var n = Tb("Pick a category to see everything in it, then narrow it down with the filters. No need to know a name.", "Text.Secondary", null, 2); n.TextWrapping = TextWrapping.Wrap; sp.Children.Add(n);
-            var wrap = new WrapPanel { Margin = new Thickness(0, 12, -8, 0) };
+            var wrap = new System.Windows.Controls.Primitives.UniformGrid { Margin = new Thickness(0, 12, -8, 0), Columns = TileColumnsFor(Scroller.ActualWidth > 0 ? Scroller.ActualWidth : 760) }; tileGrid = wrap;
             foreach (var c in AtlasCategories.Visible)
             {
-                var tile = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(12, 8, 12, 8), Width = 208, MinHeight = 56, Margin = new Thickness(0, 0, 8, 8), Tag = c.OpenId, Focusable = false, Cursor = Cursors.Hand, ToolTip = c.Blurb };
+                var tile = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(12, 8, 12, 8), MinHeight = 56, Margin = new Thickness(0, 0, 8, 8), Tag = c.OpenId, Focusable = false, Cursor = Cursors.Hand, ToolTip = c.Blurb };
                 tile.MouseLeftButtonUp += Row_Click;
                 System.Windows.Automation.AutomationProperties.SetName(tile, c.Title);
                 var g = new Grid();
@@ -140,7 +141,7 @@ namespace ElansAddonHub
             model = null; hosted = null; browse = r; bq = r.Query.Clone(); drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear(); bctl.Clear();
-            cols = null; leftCol = rightCol = null;
+            cols = null; leftCol = rightCol = null; startInfo = null; tileGrid = null; mapCol = null; mapCardEl = null;
             TitleText.Text = r.Title; TitleText.Foreground = Res("Brush.Text.Primary");
             SubText.Text = r.NotFound ? "Browse" : r.Subtitle;
             UpdateNav();
@@ -370,7 +371,7 @@ namespace ElansAddonHub
             drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear(); bctl.Clear();
-            cols = null; leftCol = rightCol = null;
+            cols = null; leftCol = rightCol = null; startInfo = null; tileGrid = null; mapCol = null; mapCardEl = null;
             TitleText.Text = cat.Title; TitleText.Foreground = Res("Brush.Text.Primary");
             SubText.Text = cat.Blurb;
             UpdateNav();

@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.49.0
+- **The Atlas uses the whole window.** The start page no longer sits in one narrow column: the categories get up to six tiles per row, the shortcuts run across the width, and the info cards (your game data, the Classic baseline, the Lodge pool, recent finds) go side by side in two or three columns when the window is wide and stack when it is narrow. Item, creature and the other pages put the map in a column of its own in a wide window, and browse lists use the full width.
+- **Every Atlas page shows its link with a Copy button.** Under the title: `item:2589`, `npc:46`, `browse:items/weapons`, `talents:tree/hunter` ... and a small copy button. Paste the link in the Atlas search to open the same page again.
+- The "Browse or search" intro card at the top of the Atlas start page is gone; the search box says the same and its tooltip tells you can paste a link.
+
 ## 2.48.2
 - **Maps show the whole zone.** Zone maps in the Atlas were drawn from the game's base art only, which is the unexplored look with the towns, roads and names fogged out. The Outpost now also draws the game's explored-area pictures over it, read from your own WoW installation like the rest of the map, so every zone looks fully explored. Maps made by earlier versions are made again once.
 - **A clear "Get Classic data" prompt in the Atlas.** Until the optional Classic baseline is on this PC, the Atlas start page opens with a calm banner saying what it adds (drop chances, vendors, spawns and quests, about 19 MB, from its public source, credited), a **Get Classic data** button that starts the same download (the exact size and licence are still shown first) and **Not now** to hide it for this session. While it downloads the banner shows the progress. The notes on browse and zone pages that say the Classic baseline is missing have the same button.

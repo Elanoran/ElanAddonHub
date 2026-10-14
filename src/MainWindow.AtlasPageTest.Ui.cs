@@ -23,6 +23,14 @@ namespace ElansAddonHub
     {
         static void ClickButton(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
+        // clicks Copy link in the Atlas header and returns what went to the clipboard (null when nothing did)
+        string AtlasClickCopy()
+        {
+            string got = null; AtlasView.ClipboardSeamForTest = s => got = s;
+            try { if (AtlasView.CopyLinkButtonForTest.IsVisible) ClickButton(AtlasView.CopyLinkButtonForTest); } finally { AtlasView.ClipboardSeamForTest = null; }
+            return got;
+        }
+
         static void ClickRow(FrameworkElement row)
             => row.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent, Source = row });
 
@@ -288,6 +296,43 @@ namespace ElansAddonHub
             Check("quest page in the window: text, rewards, given by, a map of the giver", AtlasTexts(AtlasView).Contains("Rewards") && AtlasTexts(AtlasView).Contains("Given by") && AtlasTexts(AtlasView).Contains("Bring four Wolf Pelts to Innkeeper Hale.") && AtlasView.MapsForTest.Count == 1);
             await AtlasView.Open("spell:4000"); UpdateLayout();
             Check("spell page in the window: facts and the recipe", AtlasTexts(AtlasView).Contains("Recipe") && AtlasTexts(AtlasView).Contains("Heals the target.") && AtlasView.MapsForTest.Count == 0);
+
+            // ---- every page shows its link, with a Copy button that puts exactly that id on the clipboard
+            {
+                var kinds = new[] { "item:100", "npc:1", "obj:50", "quest:7", "zone:11", "instance:98", "spell:4000", "skill:129", "faction:72", "item:99999" };
+                var bad = new List<string>();
+                foreach (var kid in kinds)
+                {
+                    await AtlasView.Open(kid); UpdateLayout();
+                    var got = AtlasClickCopy();
+                    if (AtlasView.LinkShown != kid || got != kid || AtlasView.LastCopiedForTest != kid || !AtlasView.CopiedShownForTest || AtlasView.CopyLinkButtonForTest.ToolTip.ToString() != "Copy link - paste it in the Atlas search (Ctrl+K)") bad.Add(kid + " shown=" + AtlasView.LinkShown + " copied=" + got);
+                }
+                Check("link: item, creature, object, quest, zone, instance, spell, skill, faction (and a page that was not found) each show their id in the header and Copy puts exactly that id on the clipboard, with 'Link copied' beside it", bad.Count == 0, string.Join("; ", bad));
+                Check("link: the Copy link button is a 24 px IconButton with the name 'Copy link' (tooltip says where to paste it)", AtlasView.CopyLinkButtonForTest.Width == 24 && System.Windows.Automation.AutomationProperties.GetName(AtlasView.CopyLinkButtonForTest) == "Copy link" && AtlasView.CopyLinkButtonForTest.ToolTip.ToString().StartsWith("Copy link"));
+                await AtlasView.Open("item:100"); UpdateLayout();
+                await AtlasView.GoStart(); UpdateLayout();
+                Check("link: the start page has no link; coming back to a page shows it again", AtlasView.LinkShown == "" && AtlasClickCopy() == null);
+                await AtlasView.Back(); UpdateLayout();
+                Check("link: Back restores the link of that page and hides the old confirmation", AtlasView.LinkShown == "item:100" && !AtlasView.CopiedShownForTest);
+            }
+
+            // ---- wide windows: three columns (identity | tables | map) when the page has a map, two otherwise
+            {
+                await AtlasView.Open("item:100"); UpdateLayout();
+                var w0 = Width;
+                Width = 1800; Height = 1000; await Task.Delay(300); UpdateLayout();
+                await MapReady();
+                int colsWide = AtlasView.ColumnsForTest;
+                var mapEl = AtlasView.MapsForTest.Count > 0 ? AtlasView.MapsForTest[0] : null;
+                Check("layout: a wide window (1800) puts the identity card, the tables and the map in three columns", colsWide == 3 && mapEl != null && AtlasView.WideForTest, colsWide + " maps " + AtlasView.MapsForTest.Count);
+                Snapshot(Path.Combine(dir, "atlas-page-item-wide.png"));
+                await AtlasView.Open("zone:11"); UpdateLayout(); await MapReady();
+                Snapshot(Path.Combine(dir, "atlas-page-zone-wide.png"));
+                await AtlasView.Open("item:100"); UpdateLayout();
+                Width = 1100; await Task.Delay(300); UpdateLayout();
+                Check("layout: at 1100 it is two columns again and the map is back in the right column", AtlasView.ColumnsForTest == 2 && AtlasView.WideForTest);
+                Width = w0; Height = h0; await Task.Delay(250); UpdateLayout();
+            }
 
             // ---- narrow window: one column
             await AtlasView.Open("item:100"); UpdateLayout();

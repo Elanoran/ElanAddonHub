@@ -35,7 +35,7 @@ namespace ElansAddonHub
 
         Border Note(string text)
         {
-            var t = Tb(text, "Text.Secondary"); t.TextWrapping = TextWrapping.Wrap;
+            var t = Tb(text, "Text.Secondary"); t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = ReadWidth;
             UIElement child = t;
             if (Services.Atlas.ClassicSetup.IsGetPrompt(text) && !Services.Atlas.Classic.ClassicAtlas.IsReady)
             {
@@ -60,30 +60,51 @@ namespace ElansAddonHub
             return b;
         }
 
-        // ---- layout: two columns when there is room
-        Grid cols; StackPanel leftCol, rightCol;
-        const double TwoColumnWidth = 700, LeftWidth = 300;
-        bool wide;
+        public const double ReadWidth = 760;   // the longest line of a paragraph
+
+        // ---- layout: one column when narrow, two above 700 px, three (identity | tables | map) above 1500 px when the page has a map. Only a change of mode places the elements again.
+        Grid cols; StackPanel leftCol, rightCol, mapCol;
+        FrameworkElement mapCardEl; int mapIndex;
+        public const double TwoColumnWidth = 700, ThreeColumnWidth = 1500, LeftWidth = 300, LeftWidthWide = 340;
+        bool wide; int columnMode = -1;
+        public int ColumnsForTest => columnMode < 0 ? 0 : columnMode + 1;
+
+        public static int ColumnModeFor(double scrollerWidth, bool hasMap) => scrollerWidth >= ThreeColumnWidth && hasMap ? 2 : scrollerWidth >= TwoColumnWidth ? 1 : 0;
 
         void Layout()
         {
+            if (startInfo != null) { LayoutStart(); return; }
             if (cols == null || leftCol == null || rightCol == null) return;
-            bool w = Scroller.ActualWidth >= TwoColumnWidth;
-            if (w == wide && cols.ColumnDefinitions.Count > 0) return;
-            ApplyLayout(w);
+            int m = ColumnModeFor(Scroller.ActualWidth, mapCardEl != null);
+            if (m == columnMode && cols.ColumnDefinitions.Count > 0) return;
+            ApplyLayout(m);
         }
 
-        void ApplyLayout(bool w)
+        void ApplyLayout(int mode)
         {
-            wide = w;
+            columnMode = mode; wide = mode > 0;
             cols.ColumnDefinitions.Clear(); cols.RowDefinitions.Clear();
-            if (w)
+            // the map card lives in the right column, or in a column of its own when there are three
+            if (mapCardEl != null && mapCol != null)
             {
-                cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LeftWidth) });
+                var from = mapCardEl.Parent as Panel;
+                if (mode == 2 && from != mapCol) { from?.Children.Remove(mapCardEl); mapCol.Children.Add(mapCardEl); }
+                else if (mode != 2 && from == mapCol) { mapCol.Children.Remove(mapCardEl); rightCol.Children.Insert(Math.Min(mapIndex, rightCol.Children.Count), mapCardEl); }
+            }
+            if (mode >= 1)
+            {
+                double lw = Scroller.ActualWidth >= 1000 ? LeftWidthWide : LeftWidth;
+                cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(lw) });
                 cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
-                cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
                 Grid.SetColumn(leftCol, 0); Grid.SetRow(leftCol, 0);
                 Grid.SetColumn(rightCol, 2); Grid.SetRow(rightCol, 0);
+                if (mode == 2)
+                {
+                    cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+                    cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+                    Grid.SetColumn(mapCol, 4); Grid.SetRow(mapCol, 0);
+                }
             }
             else
             {
@@ -94,6 +115,7 @@ namespace ElansAddonHub
                 Grid.SetColumn(rightCol, 0); Grid.SetRow(rightCol, 1);
             }
             leftCol.Visibility = leftCol.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            if (mapCol != null) mapCol.Visibility = mode == 2 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         public bool WideForTest => wide;
@@ -105,7 +127,7 @@ namespace ElansAddonHub
         {
             ReleaseMaps();
             Body.Children.Clear();
-            cols = null; leftCol = rightCol = null;
+            cols = null; leftCol = rightCol = null; startInfo = null; tileGrid = null; mapCol = null; mapCardEl = null;
             if (AtlasBrowse.IsBrowseId(id)) { BrowseQuery.TryParse(id, out var sq); TitleText.Text = AtlasCategories.Find(sq?.Cat)?.Title ?? "Browse"; }
             else TitleText.Text = AtlasKinds.Singular(id.Contains(":") ? id.Substring(0, id.IndexOf(':')) : "") + " " + (id.Contains(":") ? id.Substring(id.IndexOf(':') + 1) : id);
             SubText.Text = "";
@@ -127,7 +149,7 @@ namespace ElansAddonHub
             model = m; browse = null; hosted = null; browseList = null; drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear();
-            cols = null; leftCol = rightCol = null;
+            cols = null; leftCol = rightCol = null; startInfo = null; tileGrid = null; mapCol = null; mapCardEl = null;
             TitleText.Text = string.IsNullOrEmpty(m.Title) ? "Atlas" : m.Title;
             TitleText.Foreground = m.Kind == "item" && m.Quality >= 0 && m.Quality < ItemLinks.QualityHex.Length ? Lodge.Avatar.Frozen(ItemLinks.QualityHex[m.Quality]) : Res("Brush.Text.Primary");
             SubText.Text = m.NotFound ? AtlasKinds.Singular(m.Kind) : m.Subtitle;
@@ -142,8 +164,8 @@ namespace ElansAddonHub
                 return;
             }
 
-            cols = new Grid(); leftCol = new StackPanel(); rightCol = new StackPanel();
-            cols.Children.Add(leftCol); cols.Children.Add(rightCol);
+            cols = new Grid(); leftCol = new StackPanel(); rightCol = new StackPanel(); mapCol = new StackPanel(); columnMode = -1;
+            cols.Children.Add(leftCol); cols.Children.Add(rightCol); cols.Children.Add(mapCol);
             Body.Children.Add(cols);
 
             // left: who it is
@@ -165,7 +187,8 @@ namespace ElansAddonHub
             }
             if (!mapPlaced && mapCard != null) rightCol.Children.Insert(0, mapCard);
             foreach (var n in m.Notes) rightCol.Children.Add(Note(n));
-            ApplyLayout(Scroller.ActualWidth >= TwoColumnWidth);
+            mapCardEl = m.Map.Any ? mapCard : null; mapIndex = mapCardEl == null ? 0 : rightCol.Children.IndexOf(mapCardEl);
+            ApplyLayout(ColumnModeFor(Scroller.ActualWidth, mapCardEl != null));
             Scroller.ScrollToTop();
             Motion.PageIn(Body);
         }
@@ -299,7 +322,7 @@ namespace ElansAddonHub
             }
             head.Children.Add(Tb(s.Title, "Text.Section"));
             sp.Children.Add(head);
-            if (!string.IsNullOrEmpty(s.Note)) { var n = Tb(s.Note, "Text.Secondary", null, 2); n.TextWrapping = TextWrapping.Wrap; sp.Children.Add(n); }
+            if (!string.IsNullOrEmpty(s.Note)) { var n = Tb(s.Note, "Text.Secondary", null, 2); n.TextWrapping = TextWrapping.Wrap; n.MaxWidth = ReadWidth; n.HorizontalAlignment = HorizontalAlignment.Left; sp.Children.Add(n); }
             if (s.Rows.Count == 0 && s.Hidden.Count == 0)
             {
                 var e = Tb(s.Empty, "Text.Secondary", null, 8); e.TextWrapping = TextWrapping.Wrap; sp.Children.Add(e);

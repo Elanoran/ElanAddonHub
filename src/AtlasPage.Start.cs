@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
@@ -26,29 +27,69 @@ namespace ElansAddonHub
             model = null; browse = null; hosted = null; browseList = null; drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear();
-            cols = null; leftCol = rightCol = null;
+            cols = null; leftCol = rightCol = null; startInfo = null; tileGrid = null; mapCol = null; mapCardEl = null;
             TitleText.Text = "Atlas"; TitleText.Foreground = Res("Brush.Text.Primary");
             SubText.Text = "Browse or search the items, creatures, quests, zones and instances of WoW Forever";
             UpdateNav();
-            var col = new StackPanel { MaxWidth = 680, HorizontalAlignment = HorizontalAlignment.Left };
+            var col = new StackPanel();
             Body.Children.Add(col);
 
             col.Children.Add(ClassicBannerView());
-            var intro = new StackPanel();
-            intro.Children.Add(Tb("Browse or search", "Text.Section"));
-            var t = Tb("Pick a category below to browse everything in it and narrow it down with filters, or type a name in the box above: an item, a creature, an object, a quest, a zone, an instance, a spell or a recipe. Every name you see here opens its own page, and Alt+Left goes back. You can also paste a link like item:2589 or npc:46.", "Text.Secondary", null, 4);
-            t.TextWrapping = TextWrapping.Wrap; intro.Children.Add(t);
-            col.Children.Add(Card(intro));
             col.Children.Add(Card(BrowseBlock()));
             _ = FillBrowseBlock();
 
-            col.Children.Add(Card(GameDataBlock()));
-            col.Children.Add(ClassicCardView());
-            col.Children.Add(Card(LodgeBlock()));
+            // the info cards sit side by side when the window is wide (see LayoutStart) and stack when it is narrow
+            startCards.Clear();
+            startCards.Add(Card(GameDataBlock()));
+            startCards.Add(ClassicCardView());
+            startCards.Add(Card(LodgeBlock()));
             var finds = FindsBlock();
-            if (finds != null) col.Children.Add(Card(finds));
+            if (finds != null) startCards.Add(Card(finds));
+            startInfo = new Grid();
+            col.Children.Add(startInfo);
+            startInfoCols = 0; startTileCols = 0;
+            LayoutStart();
             Scroller.ScrollToTop();
             Motion.PageIn(Body);
+        }
+
+        // ---- start page layout: tiles per row and info columns follow the width; nothing is drawn again, the same elements are placed anew only when the count changes
+        public const double InfoTwoColumns = 900, InfoThreeColumns = 1400, TileMinWidth = 170;
+        readonly List<FrameworkElement> startCards = new List<FrameworkElement>();
+        Grid startInfo; int startInfoCols, startTileCols;
+        public int TileColumnsForTest => startTileCols;
+        public int InfoColumnsForTest => startInfoCols;
+
+        public static int TileColumnsFor(double scrollerWidth) => (int)Math.Max(2, Math.Min(6, Math.Floor((scrollerWidth - 8 - 32 + 8) / (TileMinWidth + 8))));
+        public static int InfoColumnsFor(double scrollerWidth) => scrollerWidth >= InfoThreeColumns ? 3 : scrollerWidth >= InfoTwoColumns ? 2 : 1;
+
+        void LayoutStart()
+        {
+            if (startInfo == null) return;
+            double w = Scroller.ActualWidth > 0 ? Scroller.ActualWidth : 760;
+            int tiles = TileColumnsFor(w), info = InfoColumnsFor(w);
+            if (tileGrid != null && tiles != startTileCols) { tileGrid.Columns = tiles; }
+            startTileCols = tiles;
+            if (info == startInfoCols) return;
+            startInfoCols = info;
+            foreach (var c in startCards) (VisualTreeHelper.GetParent(c) as Panel)?.Children.Remove(c);
+            startInfo.Children.Clear(); startInfo.ColumnDefinitions.Clear();
+            var lists = new List<List<FrameworkElement>>();
+            for (int i = 0; i < info; i++) lists.Add(new List<FrameworkElement>());
+            for (int i = 0; i < startCards.Count; i++)
+            {
+                int to = info == 1 ? 0 : info == 2 ? (i < (startCards.Count + 1) / 2 ? 0 : 1) : (startCards.Count == 4 ? new[] { 0, 1, 0, 2 }[i] : i % 3);
+                lists[to].Add(startCards[i]);
+            }
+            for (int i = 0; i < info; i++)
+            {
+                if (i > 0) startInfo.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+                startInfo.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                var sp = new StackPanel();
+                foreach (var c in lists[i]) sp.Children.Add(c);
+                Grid.SetColumn(sp, i * 2);
+                startInfo.Children.Add(sp);
+            }
         }
 
         // ---- game data: one line per layer, as the Settings "Game data" line says it
