@@ -194,7 +194,7 @@ public sealed class RealmsModule : IModule
         var over = hub.Cfg.RealmsNamespaces?.Where(n => Regex.IsMatch(n, "^[a-z0-9-]{3,40}$")).ToArray() ?? Array.Empty<string>();
         if (over.Length > 0) return over;
         var r = Region;
-        return new[] { "dynamic-" + r, "dynamic-classic-" + r, "dynamic-classic1x-" + r };
+        return new[] { "dynamic-" + r, "dynamic-classic-" + r, "dynamic-classic1x-" + r, "dynamic-classicann-" + r };
     }
 
     // ---------------------------------------------------------------- what clients get

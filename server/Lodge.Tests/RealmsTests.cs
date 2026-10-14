@@ -127,7 +127,7 @@ public sealed class RealmsTests
         t.Forever();
         await t.Poll();
         var idx = t.Net.Requests.Where(r => r.Contains("connected-realm/index")).ToList();
-        Assert.Equal(new[] { "dynamic-eu", "dynamic-classic-eu", "dynamic-classic1x-eu" }, idx.Select(r => r[(r.IndexOf("ns=") + 3)..]).ToArray());
+        Assert.Equal(new[] { "dynamic-eu", "dynamic-classic-eu", "dynamic-classic1x-eu", "dynamic-classicann-eu" }, idx.Select(r => r[(r.IndexOf("ns=") + 3)..]).ToArray());
         Assert.All(idx, r => Assert.Contains("eu.api.blizzard.com", r));
         Assert.True(t.M.Available);
         var rs = t.M.Current;

@@ -154,7 +154,7 @@ and shows the sum, so a member re-sending data never counts twice. Guests can re
 | `LODGE_BNET_CLIENT_ID` / `LODGE_BNET_CLIENT_SECRET` (unset) | The Battle.net API client for realm status (see "Realm status" below). Both set = the `realms` feature is advertised; either missing = off. The secret is never logged or sent to anyone |
 | `LODGE_BNET_REGION` (eu) | `eu`, `us`, `kr` or `tw`: the API host and the namespaces probed |
 | `LODGE_REALMS_POLL_SECONDS` (120) | 60 - 900. One poll for the whole lodge, whatever the member count |
-| `LODGE_REALMS_NAMESPACES` (empty) | Comma separated; replaces the default `dynamic-<region>`, `dynamic-classic-<region>`, `dynamic-classic1x-<region>` probe |
+| `LODGE_REALMS_NAMESPACES` (empty) | Comma separated; replaces the default `dynamic-<region>`, `dynamic-classic-<region>`, `dynamic-classic1x-<region>`, `dynamic-classicann-<region>` probe |
 | `LODGE_REALMS_MATCH` (forever) | Comma separated words, realm names or slugs; a realm whose name, slug or category contains one of them is shown. When nothing matches, the journal lists the realm names Blizzard returned so you can pick them |
 | `LODGE_BADGES_ENABLED` (1) | `0` switches badges and the ladder off for good: not advertised, every request answers `disabled`, the Guild Master's switch in the Outpost is greyed out, the data (`data/badges.json`) stays on disk. With `1` the Guild Master can still switch it off from Outpost > Settings > Guild Master |
 | `LODGE_ARMORY_ENABLED` (1) | `0` switches the Armory off: not advertised, `armory.put` answers `disabled`, the other messages answer an error, the data stays on disk |
