@@ -3,9 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## Unreleased
+- **The Addons page uses the whole window.** The addon cards now sit in a grid: one column in a narrow window, two from a window about 990 px wide, three from about 1420 px, with the Other addons in the same columns. A **Grid | List** switch above the cards (remembered) gives you the single column back, wider than before but never wider than 960 px. Each card shows what you need without opening it: the status (installed version, the update it would make, or not installed), the source, when the addon was last updated and the install / update button. A card still opens in place for the version history and links, and the rest of the grid stays where it is. The placeholders you see while the list loads follow the same grid, so nothing jumps when the real cards arrive.
+
 ## 2.52.2
 - **Realm status at the top of the Outpost** (needs Lodge server 2.20.0): small dots in the title bar, one per WoW Forever realm (Normal, PvP, RP, Hardcore), green when the realm is up and red when it is down, grey when unknown. Hover a dot for the realm, its ruleset, population and queue when known, "checked 1 min ago" and "via your Lodge". They are visible on every page, but only while you are connected to a Lodge whose server offers it and has found the Forever realms; otherwise nothing is shown. The status comes from your Lodge server (which asks Blizzard with its own key); your PC sends nothing and holds no key.
 - **Settings > General > Realm status**: "Show realm status at the top" (on by default) and "Tell me when the realms come back up" (off by default; a quiet note over the game, never a pop-up window, follows the in-game notifications switch).
+
 
 ## 2.52.1
 - **Characters page: item icons instead of letters.** The item list (and bag slots of characters whose Elan's Bags data has no icon) now show the item's own icon from your game files; the letter only shows while the icon loads or when the item is unknown.

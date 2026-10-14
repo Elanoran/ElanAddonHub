@@ -137,10 +137,17 @@
       <local:BrowserPage x:Name="BrowserView" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <local:AtlasPage x:Name="AtlasView" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <ScrollViewer x:Name="AddonsPage" Grid.Row="3" Grid.Column="1" VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True">
-       <StackPanel x:Name="AddonsRoot" MaxWidth="680" Margin="{StaticResource Pad.Page}">
+       <StackPanel x:Name="AddonsRoot" Margin="{StaticResource Pad.Page}">
         <!-- one-click "check everything", right above the cards (same column as the cards) -->
         <Grid Margin="0,0,0,12" Height="32">
           <StackPanel x:Name="RefreshBar" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <!-- Grid | List: cards side by side as the width allows, or one column (remembered in the settings) -->
+            <Border x:Name="AddonsViewStrip" Style="{StaticResource SegmentHost}" Margin="0,0,12,0" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="AddonsViewGrid" Style="{StaticResource Segment}" Content="Grid" GroupName="addons-view" IsChecked="True" Tag="grid" Checked="AddonsView_Checked" AutomationProperties.Name="Grid view" />
+                <RadioButton x:Name="AddonsViewList" Style="{StaticResource Segment}" Content="List" GroupName="addons-view" Tag="list" Checked="AddonsView_Checked" AutomationProperties.Name="List view" />
+              </StackPanel>
+            </Border>
             <Border x:Name="HealthChip" Style="{StaticResource Chip}" Margin="0,0,12,0" Cursor="Hand" VerticalAlignment="Center"
                     MouseLeftButtonUp="HealthChip_Click" ToolTipService.InitialShowDelay="300" AutomationProperties.Name="Addon health">
               <TextBlock x:Name="HealthChipText" FontSize="12" Foreground="{StaticResource Brush.Text.Secondary}" />
@@ -161,13 +168,17 @@
         <!-- the list: skeleton cards (built in code from the remembered count, MainWindow.Startup.cs) and the real cards share one cell, so a real card
              replaces its skeleton in place and nothing below moves -->
         <Grid>
-        <StackPanel x:Name="CardsSkeleton" IsHitTestVisible="False" VerticalAlignment="Top" />
+        <local:CardGrid x:Name="CardsSkeleton" IsHitTestVisible="False" VerticalAlignment="Top" />
         <ItemsControl x:Name="Cards" Focusable="False" VerticalAlignment="Top">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><local:CardGrid /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.ItemContainerStyle>
+            <Style TargetType="ContentPresenter"><Setter Property="local:CardGrid.Open" Value="{Binding Expanded}" /></Style>
+          </ItemsControl.ItemContainerStyle>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <ContentControl Style="{StaticResource Card.Raised}" MinHeight="{StaticResource Size.Card.Addon}">
                 <StackPanel>
-                  <!-- big artwork on the left, spanning the title and the stats -->
+                  <!-- big artwork on the left; on the right the name, the status / source / last-updated chips and the primary action, all visible without expanding -->
                   <Grid Margin="16">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="Auto" />
@@ -177,39 +188,49 @@
                             Background="Transparent" Tag="{Binding}" MouseLeftButtonUp="Card_Toggle">
                       <Image Source="{Binding Logo}" RenderOptions.BitmapScalingMode="HighQuality" />
                     </Border>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
                       <!-- header: click anywhere on it to expand / collapse -->
                       <Border x:Name="Header" Background="Transparent" Cursor="Hand"
                               Tag="{Binding}" MouseLeftButtonUp="Card_Toggle" ToolTip="Show / hide details">
                         <DockPanel>
-                          <TextBlock DockPanel.Dock="Right" Style="{StaticResource Text.Chevron}" local:Motion.Turn="{Binding Expanded}" Margin="12,0,0,0" />
-                          <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Click="Action_Click" />
-                          <Border DockPanel.Dock="Right" VerticalAlignment="Center" Margin="0,0,12,0" Background="Transparent"
-                                  ToolTip="{x:Static local:Brand.SourceTip}" AutomationProperties.Name="{x:Static local:Brand.SourceTip}">
-                            <Image Source="{Binding ChipArt}" Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
-                          </Border>
-                          <StackPanel Margin="0,0,8,0" VerticalAlignment="Center">
+                          <TextBlock DockPanel.Dock="Right" Style="{StaticResource Text.Chevron}" local:Motion.Turn="{Binding Expanded}" Margin="12,0,0,0" VerticalAlignment="Top" />
+                          <StackPanel Margin="0,0,8,0">
                             <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Section}" TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0"
                                        TextTrimming="CharacterEllipsis" ToolTip="{Binding InstallPath}" ToolTipService.InitialShowDelay="300" />
                           </StackPanel>
                         </DockPanel>
                       </Border>
-                      <!-- versions + stats -->
-                      <StackPanel Margin="0,12,0,0">
-                        <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" />
-                        <ItemsControl ItemsSource="{Binding Stats}" MinHeight="14" Margin="0,4,0,0" Focusable="False">
+                      <!-- chips: where this addon stands, where it comes from, when it last changed -->
+                      <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Height="24">
+                        <Border Style="{StaticResource Chip}" Background="{Binding StatusBg}" ToolTip="{Binding StatusTip}" AutomationProperties.Name="{Binding StatusTip}" Margin="0,0,8,0">
+                          <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="{Binding StatusFg}" VerticalAlignment="Center" />
+                        </Border>
+                        <Border Style="{StaticResource Chip}" Padding="8,4" Margin="0,0,8,0"
+                                ToolTip="{x:Static local:Brand.SourceTip}" AutomationProperties.Name="{x:Static local:Brand.SourceTip}">
+                          <Image Source="{Binding ChipArt}" Width="16" Height="16" RenderOptions.BitmapScalingMode="HighQuality" SnapsToDevicePixels="True" />
+                        </Border>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding UpdatedVisibility}" Background="Transparent"
+                                    ToolTip="{Binding UpdatedTip}" AutomationProperties.Name="{Binding UpdatedTip}">
+                          <TextBlock Text="&#xE121;" FontFamily="{StaticResource Font.Icons}" FontSize="11" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                          <TextBlock Text="{Binding UpdatedText}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </StackPanel>
+                      <!-- the primary action, with the download / release counts beside it -->
+                      <DockPanel Margin="0,8,0,0" Height="28">
+                        <Button DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource StatusPill}" Click="Action_Click" />
+                        <ItemsControl ItemsSource="{Binding Stats}" Focusable="False" VerticalAlignment="Center">
                           <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                           <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                              <StackPanel Orientation="Horizontal" Margin="0,0,16,0" Background="Transparent" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}">
+                              <StackPanel Orientation="Horizontal" Margin="0,0,12,0" Background="Transparent" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding Tip}">
                                 <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Font.Icons}" FontSize="11" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,4,0" />
                                 <TextBlock Text="{Binding Text}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
                               </StackPanel>
                             </DataTemplate>
                           </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                      </StackPanel>
+                      </DockPanel>
                     </StackPanel>
                   </Grid>
 
@@ -222,6 +243,7 @@
                   <Border Visibility="Collapsed" local:Motion.Expand="{Binding Expanded}" Padding="16,0,16,16">
                     <StackPanel>
                       <Border Height="1" Background="{StaticResource Brush.Divider}" Margin="0,0,0,16" />
+                      <TextBlock Text="{Binding VersionLine}" Style="{StaticResource Text.Body}" TextTrimming="CharacterEllipsis" Margin="0,0,0,12" />
                       <StackPanel Visibility="{Binding DevNoteVisibility}" Margin="0,0,0,16">
                         <TextBlock Text="{Binding DevNote}" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" />
                         <Button Style="{StaticResource GhostButton}" Content="Replace the git copy with the release..." FontSize="12"
@@ -289,8 +311,12 @@
             </Border>
           </DockPanel>
           <Grid>
-          <StackPanel x:Name="OtherSkeleton" IsHitTestVisible="False" VerticalAlignment="Top" />
+          <local:CardGrid x:Name="OtherSkeleton" IsHitTestVisible="False" VerticalAlignment="Top" />
           <ItemsControl x:Name="OtherCards" Focusable="False" VerticalAlignment="Top">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><local:CardGrid /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemContainerStyle>
+              <Style TargetType="ContentPresenter"><Setter Property="local:CardGrid.Open" Value="{Binding Expanded}" /></Style>
+            </ItemsControl.ItemContainerStyle>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <ContentControl Style="{StaticResource Card.Raised}" MinHeight="{StaticResource Size.Row.Other}">

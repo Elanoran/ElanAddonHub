@@ -54,7 +54,7 @@
   <Thickness x:Key="Pad.Page">24,8,24,24</Thickness>
   <sys:Double x:Key="Gap.Card">12</sys:Double>
   <!-- height of one addon card (our own list) and of one collapsed row of the Other addons list: the real cards have them as MinHeight, the start-up skeletons as Height, so a card replaces its placeholder without moving anything -->
-  <sys:Double x:Key="Size.Card.Addon">118</sys:Double>
+  <sys:Double x:Key="Size.Card.Addon">140</sys:Double>
   <sys:Double x:Key="Size.Row.Other">60</sys:Double>
   <sys:Double x:Key="Gap.Section">24</sys:Double>
 

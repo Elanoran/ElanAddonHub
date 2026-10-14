@@ -50,16 +50,25 @@ namespace ElansAddonHub
 
         static readonly double[] TitleW = { 168, 136, 152, 120, 144, 160 }, SubW = { 240, 208, 224, 192, 232, 216 }, LineW = { 136, 120, 128, 104, 144, 112 };
 
-        // same height as a real addon card: 80 px art, title / subtitle / version / stats lines centred beside it
+        // same height as a real addon card: 80 px art, then name / subtitle / chips / action lines beside it (the grid places them like the real cards)
         FrameworkElement AddonSkeletonCard(int i)
         {
             var card = new ContentControl { Style = (Style)FindResource("Card.Raised"), Height = (double)FindResource("Size.Card.Addon") };
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(16) };
+            var row = new Grid { Margin = new Thickness(16) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.Children.Add(new Skeleton { Width = 80, Height = 80, CornerRadius = (CornerRadius)FindResource("Radius.ControlLg"), VerticalAlignment = VerticalAlignment.Top });
-            var col = new StackPanel { Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            col.Children.Add(new Skeleton { Height = 16, Width = TitleW[i % TitleW.Length], CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 2) });
-            col.Children.Add(new Skeleton { Height = 12, Width = SubW[i % SubW.Length], CornerRadius = new CornerRadius(6), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 2) });
-            col.Children.Add(new Skeleton { Height = 12, Width = LineW[i % LineW.Length], CornerRadius = new CornerRadius(6), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 16, 0, 2) });
+            var col = new StackPanel { Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top };
+            Grid.SetColumn(col, 1);
+            col.Children.Add(new Skeleton { Height = 16, Width = TitleW[i % TitleW.Length], CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 4) });
+            col.Children.Add(new Skeleton { Height = 12, Width = SubW[i % SubW.Length], CornerRadius = new CornerRadius(6), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 2) });
+            var chips = new StackPanel { Orientation = Orientation.Horizontal, Height = 24, Margin = new Thickness(0, 8, 0, 0) };
+            chips.Children.Add(new Skeleton { Width = 104, Height = 24, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 8, 0) });
+            chips.Children.Add(new Skeleton { Width = 32, Height = 24, CornerRadius = new CornerRadius(12) });
+            col.Children.Add(chips);
+            var action = new Grid { Height = 28, Margin = new Thickness(0, 8, 0, 0) };
+            action.Children.Add(new Skeleton { Width = 112, Height = 28, CornerRadius = new CornerRadius(14), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center });
+            col.Children.Add(action);
             row.Children.Add(col);
             card.Content = row;
             return card;

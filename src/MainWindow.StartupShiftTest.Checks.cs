@@ -19,7 +19,9 @@ namespace ElansAddonHub
         {
             var bad = new List<string>();
             int oursKeep = Math.Min(r.OursFirst, r.OursFinal), othersKeep = Math.Min(r.OthersFirst, r.OthersFinal);
-            double oursShift = (r.OursFinal - r.OursFirst) * 130;   // 118 card + 12 gap per row more or fewer; the section below moves as one block
+            // a row of the grid more or fewer = one card + the gap; the section below moves as one block
+            int gridCols = Math.Max(1, CardColumnsForTest);
+            double oursShift = ((r.OursFinal + gridCols - 1) / gridCols - (r.OursFirst + gridCols - 1) / gridCols) * ((double)FindResource("Size.Card.Addon") + 12);
             double Delta(string k) => r.Settled[k][0] - r.First[k][0];
             if (r.TimedOut) bad.Add("the run timed out");
             if (r.OursFirst == 0 || r.OthersFirst == 0) bad.Add($"no placeholders in the first frame (ours {r.OursFirst}, others {r.OthersFirst})");

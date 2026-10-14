@@ -31,6 +31,7 @@ namespace ElansAddonHub
             InitializeComponent();
             Cards.ItemsSource = cards;
             InitOthers();
+            InitAddonsView();
             RailLogo.ToolTip = Brand.Name + " v" + App.Version + "\nClick for About";
             SelfUpdater.CleanupOld();
             SetupTray();
@@ -298,6 +299,7 @@ namespace ElansAddonHub
             }
             if (Begin("thirdparty")) { result += "\r\n" + await ThirdPartyTest(dir); End(); }
             if (Begin("startup")) { result += "\r\n" + await StartupShiftTest(dir); End(); }
+            if (Begin("addonsgrid")) { result += "\r\n" + await AddonsGridTest(dir); End(); }
             if (Begin("selfupdated")) { result += "\r\n" + await SelfUpdatedTest(dir); End(); }
             if (Begin("viewer")) { result += "\r\n" + await ViewerTest(dir); End(); }
             if (Begin("voice")) { result += "\r\n" + VoiceEffects.SelfTest(dir) + Environment.NewLine + VoiceSelfTest.Run(); End(); }

@@ -20,7 +20,7 @@ namespace ElansAddonHub.Services
         // execution order == order of the full run
         public static readonly string[] All =
         {
-            "addons", "thirdparty", "startup", "selfupdated", "viewer", "voice", "update", "strip",
+            "addons", "thirdparty", "startup", "addonsgrid", "selfupdated", "viewer", "voice", "update", "strip",
             "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "armory", "itemdata", "spelldata", "gametooltip", "talents", "professions", "profguide", "mapdata", "worldmap", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs", "atlasclassic", "atlasclassiclodge", "atlaspage", "atlasbrowse", "atlashosts",
         };
 
@@ -38,6 +38,7 @@ namespace ElansAddonHub.Services
             ["addons"] = "install + check-all + pills + settings tour (Hunter Helper cards)",
             ["thirdparty"] = "other addons: scan, suggest, CurseForge, zip install/rollback, real GitHub/WoWI lookups",
             ["startup"] = "Addons page start-up: placeholders match the cards, nothing above the bottom of a list moves while the check and the scan run (cold start, slow update server, counts equal / different / first run), counts remembered",
+            ["addonsgrid"] = "Addons page grid: columns at 760 / 1300 / 1700 (1 / 2 / 3), equal card heights, status / source / updated chips and the button on the face, a card opening in place without reshuffling, placeholders exactly where the real cards land, the Grid | List switch and its setting, the other addons in the same columns, every button reachable",
             ["selfupdated"] = "addons that update themselves: the Self source (CurseForge / Wago id but not managed by the CurseForge app), git-describe dev builds (label, comparisons), the addon's own logo as the row icon (IconTexture, heuristic, depth / size / path limits, decode cache, no network)",
             ["viewer"] = "in-app picture viewer",
             ["voice"] = "voice effects",
@@ -102,6 +103,7 @@ namespace ElansAddonHub.Services
             // ---- shared: everything depends on these
             R(@"^src/(App\.xaml(\.cs)?|MainWindow\.xaml(\.cs)?|MainWindow\.Others\.cs|MainWindow\.Welcome\.cs|ElansAddonHub\.csproj|Motion\.cs|Brand\.cs|SourceIcons\.cs|PillBase\.cs|WelcomeGuide\.cs)$", Star);
             R(@"^src/Theme/", Star);
+            R(@"^src/(Controls/CardGrid|MainWindow\.(AddonsGrid|AddonsGridTest)|AddonCard)\.cs$", "addonsgrid", "addons", "startup", "selfupdated", "thirdparty");
             R(@"^src/MainWindow\.(InputsTest|DesignTest\.Inputs)\.cs$", "inputs");
             R(@"^src/Services/(Util|SettingsStore|Models|Json|Net|SelfTestFixture|FakeUpdateServer|TestScope|WowLocator|Splash|SplashScene)\.cs$", Star);
             R(@"^src/Assets/", Star);

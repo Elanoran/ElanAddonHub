@@ -167,5 +167,7 @@ namespace ElansAddonHub.Services
         // how many cards the Addons page had after the last good load (our list, the Other addons list): the next start shows that many placeholders
         [DataMember(Name = "lastAddonCount")] public int? LastAddonCount { get; set; }
         [DataMember(Name = "lastOtherCount")] public int? LastOtherCount { get; set; }
+        // the Addons page as a "grid" (cards side by side as the width allows, the default) or a "list" (one column)
+        [DataMember(Name = "addonsView")] public string AddonsView { get; set; }
     }
 }
