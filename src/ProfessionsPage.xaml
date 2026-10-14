@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:ElansAddonHub">
   <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art -->
-  <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
+  <Border x:Name="Panel" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
@@ -14,7 +14,7 @@
 
       <!-- title -->
       <StackPanel Grid.Row="0" Margin="0,0,0,16">
-        <TextBlock Text="Professions" Style="{StaticResource Text.Title}" />
+        <TextBlock x:Name="TitleBlock" Text="Professions" Style="{StaticResource Text.Title}" />
         <TextBlock x:Name="Summary" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
       </StackPanel>
 

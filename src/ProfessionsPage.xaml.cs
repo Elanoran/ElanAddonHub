@@ -34,6 +34,9 @@ namespace ElansAddonHub
         Profession prof;
         ProfChar who;
         bool building;                 // pickers are being filled: their events are ignored
+        string pendingSlug;            // a profession asked for (from an Atlas id) before the recipe tables were read
+        string raisedKey = "";
+        public event Action<string, string> ViewChanged;       // (profession name, tab): the user picked another profession or tab, or the first profession appeared (the Atlas keeps its id in step)
         bool fixedChars;                // the self-test hands the characters in
         int loadGen;
         readonly System.Windows.Threading.DispatcherTimer searchDebounce = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
@@ -56,6 +59,51 @@ namespace ElansAddonHub
         void OnDataChanged()
         {
             try { Dispatcher.BeginInvoke(new Action(() => { if (IsVisible) { Refresh(); } })); } catch { }
+        }
+
+        // The page lives inside the Atlas (hosted category "professions"): no title and no panel of its own, the Atlas draws both.
+        public void Embed()
+        {
+            Panel.Background = null; Panel.Margin = new Thickness(0); Panel.Padding = new Thickness(0);
+            TitleBlock.Visibility = Visibility.Collapsed;
+        }
+
+        public string ProfessionNow => prof?.Name;
+        public string TabNow => tab;
+
+        void RaiseView()
+        {
+            raisedKey = (prof?.Name ?? "") + "|" + tab;
+            ViewChanged?.Invoke(prof?.Name, tab);
+        }
+
+        // Shows a profession (its slug, "" = the one on screen) on a tab ("" = the tab on screen). The page is left as it is when that is what it shows already.
+        public void Navigate(string slug, string tabName)
+        {
+            bool changed = false;
+            building = true;
+            try
+            {
+                if (!string.IsNullOrEmpty(tabName) && tabName != tab)
+                {
+                    tab = tabName; changed = true;
+                    switch (tabName) { case "guide": TabGuide.IsChecked = true; break; case "craft": TabCraft.IsChecked = true; break; case "camp": TabCamp.IsChecked = true; break; default: TabRecipes.IsChecked = true; break; }
+                }
+                if (!string.IsNullOrEmpty(slug))
+                {
+                    var b = EnsureBook();
+                    var p = b?.Professions.FirstOrDefault(x => ElansAddonHub.Services.Atlas.AtlasHosts.Slug(x.Name) == slug);
+                    if (p == null) pendingSlug = b == null ? slug : null;
+                    else if (!ReferenceEquals(p, prof) && p.Name != prof?.Name)
+                    {
+                        prof = p; changed = true; guideStart = null; guideTarget = null;
+                        ProfPicker.SelectedIndex = b.Professions.IndexOf(p);
+                    }
+                }
+                if (changed) { ApplyTabChrome(); FillChars(); }
+            }
+            finally { building = false; }
+            if (changed) { RenderBody(); BodyScroll.ScrollToTop(); }
         }
 
         public void Init(Func<string> root, Func<LodgeAtlas> lodgeAtlas)
@@ -111,6 +159,12 @@ namespace ElansAddonHub
             {
                 // professions
                 string keep = prof?.Name;
+                if (pendingSlug != null && b != null)
+                {
+                    var pm = b.Professions.FirstOrDefault(x => ElansAddonHub.Services.Atlas.AtlasHosts.Slug(x.Name) == pendingSlug);
+                    if (pm != null) keep = pm.Name;
+                    pendingSlug = null;
+                }
                 ProfPicker.Items.Clear();
                 if (b != null)
                     foreach (var p in b.Professions)
@@ -126,6 +180,7 @@ namespace ElansAddonHub
             finally { building = false; }
             Summary.Text = SummaryText(b);
             RenderBody();
+            if (((prof?.Name ?? "") + "|" + tab) != raisedKey) RaiseView();
         }
 
         string SummaryText(ProfessionBook b)
@@ -171,6 +226,7 @@ namespace ElansAddonHub
             building = true; try { FillChars(); } finally { building = false; }
             RenderBody();
             BodyScroll.ScrollToTop();
+            RaiseView();
         }
 
         void ApplyTabChrome()
@@ -189,6 +245,7 @@ namespace ElansAddonHub
             guideStart = null; guideTarget = null;
             RenderBody();
             BodyScroll.ScrollToTop();
+            RaiseView();
         }
 
         void Char_Changed(object sender, SelectionChangedEventArgs e)
@@ -373,6 +430,15 @@ namespace ElansAddonHub
             RenderBody();
             BodyScroll.ScrollToTop();
         }
+
+        // what the user does: pick a tab / a profession (raises ViewChanged, unlike ShowForTest)
+        public void PickTabForTest(string tabName) { (tabName == "guide" ? TabGuide : tabName == "craft" ? TabCraft : tabName == "camp" ? TabCamp : TabRecipes).IsChecked = true; }
+        public void PickProfessionForTest(string name)
+        {
+            for (int i = 0; i < ProfPicker.Items.Count; i++)
+                if (((ComboBoxItem)ProfPicker.Items[i]).Tag is Profession p && p.Name == name) { ProfPicker.SelectedIndex = i; return; }
+        }
+        public bool TitleHiddenForTest => TitleBlock.Visibility != Visibility.Visible;
 
         public void SearchForTest(string text) { SearchBox.Text = text; searchDebounce.Stop(); RenderBody(); }
         public void FilterForTest(string f) { filter = f; building = true; try { (f == "now" ? FilterNow : f == "later" ? FilterLater : FilterAll).IsChecked = true; } finally { building = false; } RenderBody(); }

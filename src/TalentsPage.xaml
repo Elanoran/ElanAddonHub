@@ -60,11 +60,11 @@
   </UserControl.Resources>
 
   <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art -->
-  <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
+  <Border x:Name="Panel" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
     <ScrollViewer VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True" x:Name="PageScroll">
       <StackPanel Margin="0,0,8,0">
         <StackPanel Margin="0,0,0,16">
-          <TextBlock Text="Talents" Style="{StaticResource Text.Title}" />
+          <TextBlock x:Name="TitleBlock" Text="Talents" Style="{StaticResource Text.Title}" />
           <TextBlock x:Name="Summary" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextWrapping="Wrap"
                      Text="Plan a build for any class from the talent trees in your game, try recommended builds, and share it as a code." />
         </StackPanel>

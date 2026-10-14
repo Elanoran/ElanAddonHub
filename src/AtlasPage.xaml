@@ -118,6 +118,13 @@
           <StackPanel x:Name="Body" />
         </ScrollViewer>
 
+        <!-- a hosted category (Talents, Professions): another page with its own scrolling, under a breadcrumb; the page above scrolls only for the other pages -->
+        <Grid x:Name="HostSlot" Visibility="Collapsed">
+          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+          <ContentControl x:Name="HostCrumbs" Focusable="False" />
+          <ContentControl x:Name="HostContent" Grid.Row="1" Focusable="False" IsTabStop="False" />
+        </Grid>
+
         <!-- search results: an overlay under the search box (Surface3, hairline, elevation 2, radius 12); the 24 px margin holds the shadow -->
         <Border x:Name="ResultsPanel" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Top" Width="420" MaxHeight="440" Margin="0,-36,-24,0" Padding="0">
           <Border Margin="24" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.Card}"

@@ -363,7 +363,7 @@ EHH.DefaultBuild = ""pack""
                 Check("page: Alpha 5/5 (rank badge), points line '5 of 51 points spent (5/0/0) · 46 left · needs level 14'", page.NodeRankTextForTest(10) == "5/5" && page.PointsLineForTest == "5 of 51 points spent (5/0/0) · 46 left · needs level 14", page.PointsLineForTest);
                 Check("page: right-click gives a point back; Undo takes the last click back", page.Click(10, true) == Why.Ok && page.NodeRankTextForTest(10) == "4/5");
                 var tipTexts = page.TipTextsForTest(10);
-                Check("tooltip: name, 'Rank 4 of 5', the description at rank 4 with the curve's amount (12), then the next rank (15), spell id", tipTexts.Contains("Alpha") && tipTexts.Contains("Rank 4 of 5") && tipTexts.Contains("Increases your agility by 12.") && tipTexts.Contains("Next rank: Increases your agility by 15.") && tipTexts.Contains("Spell ID 100"), string.Join(" | ", tipTexts));
+                Check("tooltip: name, 'Rank 4 of 5', the description at rank 4 with the curve's amount (12), then the next rank (15), spell id", tipTexts.Contains("Alpha") && tipTexts.Contains("Rank 4 of 5") && tipTexts.Contains("Increases your agility by 12.") && tipTexts.Contains("Next rank: Increases your agility by 15.") && tipTexts.Any(t => t.StartsWith("Spell ID 100") && t.Contains("Ctrl+click")), string.Join(" | ", tipTexts));
                 var tipLocked = page.TipTextsForTest(13);
                 Check("tooltip: a locked talent says what it needs, by name ('Delta's Own Name' shows its own name); a rank 0 talent shows rank 1's text", tipLocked.Contains("Delta") && tipLocked.Any(x => x.StartsWith("Locked: ")) && page.TipTextsForTest(12).Contains("Rank 1: Gamma raises your crit by 2%."), string.Join(" | ", tipLocked));
                 page.Click(10, false);
@@ -456,7 +456,7 @@ EHH.DefaultBuild = ""pack""
                 TalentData.ResetForTest(); SpellData.ResetForTest();
                 TalentData.AutoStart = false;
                 ItemData.Enabled = () => true;
-                ShowTab("addons");
+                ShowTab("addons"); ResetAtlasForTest();
             }
             notes.Insert(0, "talents (Atlas layer G, talent calculator): " + (ok ? "all ok" : "FAILURES"));
             return string.Join("\r\n", notes);

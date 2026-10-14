@@ -191,12 +191,14 @@ namespace ElansAddonHub
             catch (InvalidOperationException) { }
         }
 
-        FrameworkElement Crumbs(BrowseResult r)
+        FrameworkElement Crumbs(BrowseResult r) => CrumbRow(r.Crumbs);
+
+        FrameworkElement CrumbRow(IList<AtlasCrumb> crumbs)
         {
             var w = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-            for (int i = 0; i < r.Crumbs.Count; i++)
+            for (int i = 0; i < crumbs.Count; i++)
             {
-                var c = r.Crumbs[i];
+                var c = crumbs[i];
                 if (i > 0) w.Children.Add(Tb("›", "Text.Secondary", Res("Brush.Text.Tertiary")));
                 var t = Tb(c.Title, string.IsNullOrEmpty(c.Link) ? "Text.Body" : "Text.Secondary");
                 t.Margin = new Thickness(i > 0 ? 4 : 0, 0, 4, 0);
@@ -358,6 +360,10 @@ namespace ElansAddonHub
         }
 
         // ============================================================================================================================ a hosted category
+        // The hosted control sits in HostSlot (its own scrolling, under a breadcrumb "Atlas > Talents > Hunter") instead of the page's Body. The control is built once by its
+        // category and handed back for every visit, so what the user was doing in it survives navigating away and back.
+        AtlasCategory hostedCat;
+
         void DrawHosted(AtlasCategory cat, string sub)
         {
             model = null; browse = null; browseList = null;
@@ -371,11 +377,56 @@ namespace ElansAddonHub
             FrameworkElement el = null;
             try { el = cat.Host(sub); }
             catch (Exception e) { Util.Log("atlas hosted " + cat.Id + ": " + e); }
-            if (el == null) { hosted = null; Body.Children.Add(EmptyCard("", cat.Title + " could not be opened.", "Open the start page to see what data Atlas has.")); Motion.PageIn(Body); return; }
-            hosted = el; hostedId = cat.Id + ":" + sub;
-            Body.Children.Add(el);
-            Scroller.ScrollToTop();
-            Motion.PageIn(Body);
+            if (el == null)
+            {
+                LeaveHosted();
+                Body.Children.Add(EmptyCard("", cat.Title + " could not be opened.", "Open the start page to see what data Atlas has."));
+                Motion.PageIn(Body);
+                return;
+            }
+            hosted = el; hostedCat = cat; hostedId = cat.Id + ":" + sub;
+            HostContent.Content = el;
+            HostCrumbs.Content = HostedCrumbs(cat, sub);
+            Scroller.Visibility = Visibility.Collapsed; HostSlot.Visibility = Visibility.Visible;
+            Motion.PageIn(HostSlot);
+            // the page shows what it shows (the class last used for a bare 'talents:'): the id says so too
+            string canon = null;
+            try { canon = cat.Canonical?.Invoke(sub); } catch (Exception) { }
+            if (canon != null) HostedChanged(cat.Id, canon);
         }
+
+        // the page is not a hosted one any more (or the host failed): the page's own scroller is back and the hosted control is let go (the category keeps it)
+        void LeaveHosted()
+        {
+            hosted = null; hostedCat = null; hostedId = "";
+            HostContent.Content = null; HostCrumbs.Content = null;
+            HostSlot.Visibility = Visibility.Collapsed; Scroller.Visibility = Visibility.Visible;
+        }
+
+        FrameworkElement HostedCrumbs(AtlasCategory cat, string sub)
+        {
+            var list = new List<AtlasCrumb> { new AtlasCrumb("Atlas", AtlasBrowse.HomeLink) };
+            string last = "";
+            try { last = cat.SubTitle?.Invoke(sub) ?? ""; } catch (Exception) { }
+            list.Add(new AtlasCrumb(cat.Title, ""));
+            if (last.Length > 0) list.Add(new AtlasCrumb(last, ""));
+            return CrumbRow(list);
+        }
+
+        // The hosted page changed what it shows by itself (another class, profession or tab): the id of the page follows without a new step in the history, like a browse filter.
+        public void HostedChanged(string catId, string sub)
+        {
+            if (hosted == null || hostedCat == null || !string.Equals(hostedCat.Id, catId, StringComparison.OrdinalIgnoreCase)) return;
+            var id = hostedCat.Id + ":" + (sub ?? "").Trim('/');
+            if (id == hostedId) return;
+            hostedId = id;
+            history.Replace(id);
+            HostCrumbs.Content = HostedCrumbs(hostedCat, (sub ?? "").Trim('/'));
+            Navigated?.Invoke(id);
+            UpdateNav();
+        }
+
+        public string HostedCrumbsForTest => HostCrumbs.Content is DependencyObject d ? string.Join(" > ", AtlasWalk(d).OfType<TextBlock>().Where(t => t.Text != "›").Select(t => t.Text)) : "";
+        public bool HostSlotVisibleForTest => HostSlot.Visibility == Visibility.Visible;
     }
 }
