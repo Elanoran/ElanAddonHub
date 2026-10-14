@@ -40,6 +40,16 @@ namespace ElansAddonHub.Services.Atlas
         public static string ButtonText => "Get Classic data (about 19 MB, cMaNGOS, GPL-3.0)";
         public const string CreditLine = "Classic baseline: cMaNGOS classic-db (GPL-3.0), downloaded to this PC on request and labelled \"Classic baseline\" wherever it is shown.";
         public const string RepoUrl = "https://github.com/cmangos/classic-db";
+        public const string BannerText = "Drop chances, vendors, spawns and quests from the Classic database: about 19 MB, downloaded from its public source and credited.";
+        public const string GetButtonText = "Get Classic data";
+
+        // a note of a page that says the Classic baseline is missing and where to get it (gets a "Get Classic data" button of its own)
+        public static bool IsGetPrompt(string note)
+        {
+            if (string.IsNullOrEmpty(note) || note.IndexOf("Classic baseline", StringComparison.Ordinal) < 0) return false;
+            return note.IndexOf("not on this PC", StringComparison.Ordinal) >= 0 || note.IndexOf("Download the Classic baseline", StringComparison.Ordinal) >= 0
+                || note.IndexOf("Download it from", StringComparison.Ordinal) >= 0 || note.IndexOf("Get it from", StringComparison.Ordinal) >= 0;
+        }
 
         public IClassicBackend Backend;
         public ClassicSetup(IClassicBackend backend = null) { Backend = backend ?? new RealClassicBackend(); State = FromBackend(); }

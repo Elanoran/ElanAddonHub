@@ -36,7 +36,18 @@ namespace ElansAddonHub
         Border Note(string text)
         {
             var t = Tb(text, "Text.Secondary"); t.TextWrapping = TextWrapping.Wrap;
-            var b = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 8), Child = t };
+            UIElement child = t;
+            if (Services.Atlas.ClassicSetup.IsGetPrompt(text) && !Services.Atlas.Classic.ClassicAtlas.IsReady)
+            {
+                // the note says the Classic baseline is missing: the way to get it is right there
+                var row = new DockPanel();
+                var get = new Button { Content = Services.Atlas.ClassicSetup.GetButtonText, Style = (Style)FindResource("Button.S"), Tag = "classic-get", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+                get.Click += (s, e) => StartClassicDownload();
+                DockPanel.SetDock(get, Dock.Right);
+                row.Children.Add(get); row.Children.Add(t);
+                child = row;
+            }
+            var b = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 8), Child = child };
             b.SetResourceReference(Border.BackgroundProperty, "Brush.Surface2");
             return b;
         }

@@ -344,6 +344,26 @@ namespace ElansAddonHub
                 Check("hosted category: a host that throws gives a calm page, not an exception", !AtlasView.IsHosted && AtlasTexts(AtlasView).Any(t => t.Contains("could not be opened")));
                 AtlasCategories.Unregister("labs");
 
+                // the notes that say the Classic baseline is missing carry their own "Get Classic data" button
+                {
+                    var fakeC = new FakeClassic { Dir = Path.Combine(work, "classicdl"), Idx = classic };
+                    Directory.CreateDirectory(fakeC.Dir);
+                    var setupC = new ClassicSetup(fakeC);
+                    AtlasView.UseClassicSetup(setupC); AtlasView.ConfirmOverrideForTest = r => false;
+                    ClassicAtlas.Use(null); AtlasBrowse.ForgetForTest();
+                    await AtlasView.Open("browse:items?how=vendor"); await Task.Delay(300); UpdateLayout();
+                    var gets = AtlasWalk(AtlasView).OfType<Button>().Where(b => b.Tag as string == "classic-get").ToList();
+                    Check("browse notes: without the Classic baseline the note that says so has a 'Get Classic data' button of its own", AtlasView.BrowseNotesForTest.Any(n => n.Contains("Download the Classic baseline for drop and vendor sources")) && gets.Count == 1 && gets[0].Content.ToString() == "Get Classic data", gets.Count + " " + string.Join(" | ", AtlasView.BrowseNotesForTest));
+                    if (gets.Count == 1) ClickButton(gets[0]);
+                    await WaitFor(() => fakeC.Queries == 1 && !setupC.Busy, 5000);
+                    Check("browse notes: the button starts the download (the question is asked first; 'no' downloads nothing)", fakeC.Queries == 1 && fakeC.Downloads == 0 && setupC.State == ClassicCardState.NotDownloaded);
+                    await AtlasView.Open("browse:creatures"); await Task.Delay(300); UpdateLayout();
+                    Check("browse notes: the creature page's note (levels, zones and spawn data are missing) has the button too", AtlasWalk(AtlasView).OfType<Button>().Count(b => b.Tag as string == "classic-get") == 1);
+                    ClassicAtlas.Use(classic); AtlasBrowse.ForgetForTest(); AtlasView.ConfirmOverrideForTest = null;
+                    await AtlasView.Open("browse:items?how=vendor"); await Task.Delay(300); UpdateLayout();
+                    Check("browse notes: with the baseline installed there is no such note and no button", !AtlasWalk(AtlasView).OfType<Button>().Any(b => b.Tag as string == "classic-get"));
+                }
+
                 // screenshots of the lists
                 Height = 1000; Width = 1100; await Task.Delay(200);
                 await AtlasView.Open("browse:items/armor?minlvl=8&maxlvl=45&sort=ilvl"); await Task.Delay(300); UpdateLayout();

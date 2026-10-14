@@ -35,7 +35,11 @@ namespace ElansAddonHub.Services.Maps
         public static readonly Def Map = new Def { Name = "Map", FileDataId = 1349477, TableHash = 0xBD84CD62, Layouts = new uint[] { 0xD43AFAC3 } };
         public static readonly Def AreaTable = new Def { Name = "AreaTable", FileDataId = 1353545, TableHash = 0x7253EB43, Layouts = new uint[] { 0x9995B797 } };
 
-        public static readonly Def[] All = { UiMap, UiMapArt, UiMapArtTile, UiMapArtStyleLayer, UiMapXMapArt, UiMapAssignment, UiMapGroupMember, Map, AreaTable };
+        // WorldMapOverlay / WorldMapOverlayTile (WoWDBDefs, layout blocks listing 1.60.1.70338; table hash, layout hash, row counts verified on the real files of that build)
+        public static readonly Def WorldMapOverlay = new Def { Name = "WorldMapOverlay", FileDataId = 1134579, TableHash = 0x1D740E72, Layouts = new uint[] { 0x9A196494 } };
+        public static readonly Def WorldMapOverlayTile = new Def { Name = "WorldMapOverlayTile", FileDataId = 1957212, TableHash = 0xAC599725, Layouts = new uint[] { 0x2C843422 } };
+
+        public static readonly Def[] All = { UiMap, UiMapArt, UiMapArtTile, UiMapArtStyleLayer, UiMapXMapArt, UiMapAssignment, UiMapGroupMember, Map, AreaTable, WorldMapOverlay, WorldMapOverlayTile };
 
         // field numbers (stored columns)
         // UiMap: Name_lang 0, ID 1 (stored inline), ParentUiMapID 2, Flags 3, System 4, Type 5
@@ -46,6 +50,10 @@ namespace ElansAddonHub.Services.Maps
         public const int TileRow = 0, TileCol = 1, TileLayer = 2, TileFileData = 3;
         // UiMapArtStyleLayer: LayerIndex 0, LayerWidth 1, LayerHeight 2, TileWidth 3, TileHeight 4, MinScale 5, MaxScale 6, AdditionalZoomSteps 7; UiMapArtStyleID = relationship section
         public const int LayerIndex = 0, LayerWidth = 1, LayerHeight = 2, LayerTileWidth = 3, LayerTileHeight = 4;
+        // WorldMapOverlay: ID 0 (stored inline), UiMapArtID 1, TextureWidth 2, TextureHeight 3, OffsetX 4, OffsetY 5, HitRect* 6-9, PlayerConditionID 10, Flags 11, AreaID[4] 12
+        public const int OvArt = 1, OvWidth = 2, OvHeight = 3, OvOffsetX = 4, OvOffsetY = 5;
+        // WorldMapOverlayTile: RowIndex 0, ColIndex 1, LayerIndex 2, FileDataID 3; WorldMapOverlayID = relationship section
+        public const int OtRow = 0, OtCol = 1, OtLayer = 2, OtFileData = 3;
         // UiMapXMapArt: PhaseID 0, UiMapArtID 1; UiMapID = relationship section
         public const int XPhase = 0, XArt = 1;
         // UiMapAssignment: UiMin[2] 0, UiMax[2] 1, Region[6] 2 (minX minY minZ maxX maxY maxZ), ID 3 (inline), UiMapID 4, OrderIndex 5, MapID 6, AreaID 7
@@ -59,38 +67,81 @@ namespace ElansAddonHub.Services.Maps
 
         static float Flt(Wdc5 w, int i, int field, int element, int count) => BitConverter.ToSingle(BitConverter.GetBytes((int)w.Element(i, field, element, count)), 0);
 
+        static Wdc5 OpenTable(MapSet set, IDictionary<string, byte[]> raw, Def d, bool required)
+        {
+            if (!raw.TryGetValue(d.Name, out var bytes) || bytes == null)
+            {
+                if (required) set.Problem = d.Name + ".db2 is not in this game install"; else set.Notes.Add(d.Name + ".db2 not found");
+                return null;
+            }
+            Wdc5 w;
+            try { w = Wdc5.Parse(bytes); }
+            catch (Exception e)
+            {
+                if (required) set.Problem = d.Name + ".db2 could not be read: " + e.Message; else set.Notes.Add(d.Name + ".db2: " + e.Message);
+                return null;
+            }
+            if (w.TableHash != d.TableHash || w.Sparse)
+            {
+                if (required) set.Problem = "the " + d.Name + " table is not the one this version expects"; else set.Notes.Add(d.Name + " is not the table this version expects");
+                return null;
+            }
+            if (!d.Knows(w.LayoutHash))
+            {
+                var why = "game updated: " + d.Name + " layout " + w.LayoutHash.ToString("X8", CultureInfo.InvariantCulture) + " is not known to this Outpost yet";
+                if (required) set.Problem = why; else set.Notes.Add(why);
+                return null;
+            }
+            return w;
+        }
+
+        // The explored-area overlays that sit on top of the base art: WorldMapOverlay + WorldMapOverlayTile, both in a layout this version knows or none
+        // (the maps are then drawn as the base art alone and set.OverlayProblem says why). Needs set.Arts (read before); never throws.
+        public static void AddOverlays(MapSet set, IDictionary<string, byte[]> raw)
+        {
+            int notes0 = set.Notes.Count;
+            if (set.HasArt)
+            {
+                var ow = OpenTable(set, raw, WorldMapOverlay, false); var ot = OpenTable(set, raw, WorldMapOverlayTile, false);
+                if (ow != null && ot != null)
+                {
+                    try
+                    {
+                        var byOverlay = new Dictionary<int, List<ArtTile>>();
+                        for (int i = 0; i < ot.Count; i++)
+                        {
+                            int ov = ot.ParentOf(i);
+                            if (!byOverlay.TryGetValue(ov, out var l)) byOverlay[ov] = l = new List<ArtTile>();
+                            l.Add(new ArtTile { Row = (int)ot.Field(i, OtRow), Col = (int)ot.Field(i, OtCol), Layer = (int)ot.Field(i, OtLayer), FileDataId = (int)ot.Field(i, OtFileData) });
+                        }
+                        var artById = set.Arts.ToDictionary(a => a.Id);
+                        var perArt = new Dictionary<int, List<ArtOverlay>>();
+                        int n = 0;
+                        for (int i = 0; i < ow.Count; i++)
+                        {
+                            int id = ow.IdAt(i), art = (int)ow.Field(i, OvArt);
+                            if (!artById.ContainsKey(art) || !byOverlay.TryGetValue(id, out var tl)) continue;
+                            if (!perArt.TryGetValue(art, out var l)) perArt[art] = l = new List<ArtOverlay>();
+                            l.Add(new ArtOverlay { Id = id, Width = (int)ow.Field(i, OvWidth), Height = (int)ow.Field(i, OvHeight), OffsetX = (int)ow.Field(i, OvOffsetX), OffsetY = (int)ow.Field(i, OvOffsetY), Tiles = tl.OrderBy(t => t.Layer).ThenBy(t => t.Row).ThenBy(t => t.Col).ToArray() });
+                            n++;
+                        }
+                        foreach (var kv in perArt) artById[kv.Key].Overlays = kv.Value.OrderBy(o => o.Id).ToArray();
+                        set.HasOverlays = n > 0;
+                        if (n == 0) set.OverlayProblem = "the game has no explored-area overlays for these maps";
+                    }
+                    catch (Exception e) { set.OverlayProblem = "WorldMapOverlay tables: " + e.Message; foreach (var a in set.Arts) a.Overlays = new ArtOverlay[0]; set.HasOverlays = false; }
+                }
+                else set.OverlayProblem = set.Notes.Count > notes0 ? set.Notes[set.Notes.Count - 1] : "the overlay tables are not available";
+                if (set.OverlayProblem != null) set.Notes.Add("map overlays: " + set.OverlayProblem + ": maps are drawn without the explored-area layer");
+            }
+        }
+
         // The raw files -> rows. A table that is missing, not WDC5, another table or in a layout this version does not know is left out (with a note).
         // UiMap is the one the others hang on: without it everything is unavailable.
         public static MapSet Parse(IDictionary<string, byte[]> raw)
         {
             var set = new MapSet();
-            Wdc5 Open(Def d, bool required)
-            {
-                if (!raw.TryGetValue(d.Name, out var bytes) || bytes == null)
-                {
-                    if (required) set.Problem = d.Name + ".db2 is not in this game install"; else set.Notes.Add(d.Name + ".db2 not found");
-                    return null;
-                }
-                Wdc5 w;
-                try { w = Wdc5.Parse(bytes); }
-                catch (Exception e)
-                {
-                    if (required) set.Problem = d.Name + ".db2 could not be read: " + e.Message; else set.Notes.Add(d.Name + ".db2: " + e.Message);
-                    return null;
-                }
-                if (w.TableHash != d.TableHash || w.Sparse)
-                {
-                    if (required) set.Problem = "the " + d.Name + " table is not the one this version expects"; else set.Notes.Add(d.Name + " is not the table this version expects");
-                    return null;
-                }
-                if (!d.Knows(w.LayoutHash))
-                {
-                    var why = "game updated: " + d.Name + " layout " + w.LayoutHash.ToString("X8", CultureInfo.InvariantCulture) + " is not known to this Outpost yet";
-                    if (required) set.Problem = why; else set.Notes.Add(why);
-                    return null;
-                }
-                return w;
-            }
+            Wdc5 Open(Def d, bool required) => OpenTable(set, raw, d, required);
 
             // ---- UiMap (required)
             var um = Open(UiMap, true);
@@ -151,6 +202,8 @@ namespace ElansAddonHub.Services.Maps
                 catch (Exception e) { set.Notes.Add("map art tables: " + e.Message); set.Arts.Clear(); set.ArtLinks.Clear(); set.HasArt = false; }
             }
             else set.Notes.Add("no map art (a table is missing or its layout is not known)");
+
+            AddOverlays(set, raw);
 
             // ---- UiMapAssignment: world rectangle <-> map
             var sw = Open(UiMapAssignment, false);

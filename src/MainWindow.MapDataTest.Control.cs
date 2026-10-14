@@ -407,6 +407,27 @@ namespace ElansAddonHub
                 }
                 Check("real game files: Durotar's art renders: a 1002 x 668 PNG in the cache folder, the whole picture covered, neither black nor white (" + stat + ")", img != null && img.PixelWidth == 1002 && img.PixelHeight == 668 && sensible && path.EndsWith("_1411.png"), path + " " + stat);
                 notes.Add("note real game files: Durotar rendered in " + durMs + " ms (CASC opened, 12 BLP tiles decoded, PNG " + (path != null && File.Exists(path) ? new FileInfo(path).Length / 1024 : 0) + " KB), composed bitmap " + MapRender.LastPeakBytes / 1024 + " KB, managed memory +" + (GC.GetTotalMemory(true) - mb) / 1024 + " KB afterwards");
+                // the explored-area overlays on the real files: Durotar has them, and its picture is not the base art alone
+                var durArt = idx.ArtFor(1411);
+                Check("real game files: the overlay tables are read in the verified layouts (" + (MapData.OverlayProblem ?? "no problem") + "): Durotar's art has overlays with tiles, and so do most arts",
+                    MapData.OverlayProblem == null && idx.Set.HasOverlays && durArt.Overlays.Length >= 5 && durArt.Overlays.All(o => o.Tiles.Length > 0 && o.Width > 0 && o.Height > 0) && idx.Set.Arts.Count(a => a.Overlays.Length > 0) >= 20, durArt.Overlays.Length + " overlays");
+                if (img != null && durArt.Overlays.Length > 0)
+                {
+                    using (var casc = CascStorage.Open(real, MapData.Flavor() ?? "_classic_beta_"))
+                    {
+                        var want = new HashSet<int>(durArt.Tiles.Select(t => t.FileDataId)); foreach (var o in durArt.Overlays) foreach (var t in o.Tiles) want.Add(t.FileDataId);
+                        var keys = casc.ResolveFileIds(want);
+                        MapRender.TileImage Real(int fid) { if (!keys.TryGetValue(fid, out var ck)) return null; var b = casc.ReadByContentKey(ck); if (b == null) return null; var q = Blp.Decode(b, out int tw, out int th); return new MapRender.TileImage { Bgra = q, Width = tw, Height = th }; }
+                        var baseOnly = MapRender.Compose(new MapArtInfo { Id = durArt.Id, Layers = durArt.Layers, Tiles = durArt.Tiles }, Real, out int bw1, out int bh1, out _);
+                        var full = MapRender.Compose(durArt, Real, out _, out _, out _, out int ovMissing);
+                        long diff = 0; for (int i = 0; i < baseOnly.Length; i += 4) if (Math.Abs(baseOnly[i] - full[i]) + Math.Abs(baseOnly[i + 1] - full[i + 1]) + Math.Abs(baseOnly[i + 2] - full[i + 2]) > 12) diff++;
+                        double share = diff / (double)(bw1 * bh1);
+                        var cached = new byte[img.PixelWidth * img.PixelHeight * 4]; img.CopyPixels(cached, img.PixelWidth * 4, 0);
+                        long same = 0; for (int i = 0; i < cached.Length; i += 4) if (cached[i] == full[i] && cached[i + 1] == full[i + 1] && cached[i + 2] == full[i + 2]) same++;
+                        Check("real game files: Durotar's composed picture is not the base art alone (" + (share * 100).ToString("0", CultureInfo.InvariantCulture) + " % of its pixels change: the explored areas), no overlay tile missing, and the picture in the cache folder is that composition",
+                            share > 0.10 && ovMissing == 0 && same > 0.99 * (img.PixelWidth * img.PixelHeight), share.ToString("0.00", CultureInfo.InvariantCulture) + " missing " + ovMissing + " same " + same);
+                    }
+                }
                 var biggest = idx.UiMaps.Where(m => idx.HasArt(m.Id)).OrderByDescending(m => { idx.PictureSize(m.Id, out int a, out int b); return (long)a * b; }).First();
                 idx.PictureSize(biggest.Id, out int bw, out int bh);
                 var swb = System.Diagnostics.Stopwatch.StartNew();

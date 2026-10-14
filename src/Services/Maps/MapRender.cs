@@ -9,7 +9,9 @@ using System.Windows.Media.Imaging;
 
 namespace ElansAddonHub.Services.Maps
 {
-    // Map pictures: the BLP tiles of a map's art composed into one bitmap, kept as a PNG in <data>\atlas\maps\<build stamp>_<uiMapId>.png.
+    // Map pictures: the BLP tiles of a map's art composed into one bitmap, kept as a PNG in <data>\atlas\maps\<build stamp>_v<render version>_<uiMapId>.png.
+    // The base tiles are the "unexplored" art; the game draws the explored parts (WorldMapOverlay / WorldMapOverlayTile) on top, so those are drawn
+    // over the base at their offsets as well and the whole zone looks explored.
     // Made lazily, one request batch at a time on a background thread (never on the UI thread); nothing is held in memory afterwards (the caller
     // loads the PNG it needs and lets go of it). Tiles are decoded one at a time straight into the picture, so a 3840 x 2560 continent needs
     // about 40 MB while it is being made and nothing after.
@@ -22,7 +24,11 @@ namespace ElansAddonHub.Services.Maps
         public static string DirOverride;                 // self-test: a scratch folder
 
         public static string Dir => DirOverride ?? Path.Combine(Util.DataDir, "atlas", "maps");
-        public static string PathFor(string stamp, int uiMapId) => Path.Combine(Dir, stamp + "_" + uiMapId + ".png");
+        // bump when the picture itself changes (2: explored-area overlays drawn over the base art): the old pictures are then made again
+        public const int RenderVersion = 2;
+        public const int OverlayTile = 256;               // the overlay textures are cut into 256 px tiles
+        static string Prefix(string stamp) => stamp + "_v" + RenderVersion + "_";
+        public static string PathFor(string stamp, int uiMapId) => Path.Combine(Dir, Prefix(stamp) + uiMapId + ".png");
         public static string PathFor(int uiMapId) => PathFor(MapData.BuildStamp, uiMapId);
 
         public sealed class TileImage { public byte[] Bgra; public int Width, Height; }
@@ -125,7 +131,7 @@ namespace ElansAddonHub.Services.Maps
                     if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) throw new IOException("the WoW folder is not set");
                     casc = CascStorage.Open(root, Flavor() ?? "_classic_beta_");
                     var want = new HashSet<int>();
-                    foreach (var id in todo) { var layer = idx.ArtFor(id).BaseLayer; foreach (var t in idx.ArtFor(id).Tiles) if (t.Layer == layer.Index) want.Add(t.FileDataId); }
+                    foreach (var id in todo) { var layer = idx.ArtFor(id).BaseLayer; foreach (var t in idx.ArtFor(id).Tiles) if (t.Layer == layer.Index) want.Add(t.FileDataId); foreach (var o in idx.ArtFor(id).Overlays) foreach (var t in o.Tiles) want.Add(t.FileDataId); }
                     var keys = casc.ResolveFileIds(want);
                     var c = casc;
                     source = fid =>
@@ -143,7 +149,7 @@ namespace ElansAddonHub.Services.Maps
                     try
                     {
                         var art = idx.ArtFor(id);
-                        var png = RenderPng(art, source, out int missing, out int w, out int h);
+                        var png = RenderPng(art, source, out int missing, out int w, out int h, out int ovMissing);
                         if (png == null) continue;
                         var path = PathFor(stamp, id);
                         var tmp = path + ".tmp";
@@ -153,7 +159,7 @@ namespace ElansAddonHub.Services.Maps
                         results[id] = path;
                         LastRenderMs = sw.ElapsedMilliseconds; LastPeakBytes = (long)w * h * 4;
                         Interlocked.Increment(ref RenderCountForTest);
-                        if (missing > 0) Util.Log("map render: ui map " + id + ": " + missing + " tile(s) not in the game files");
+                        if (missing > 0 || ovMissing > 0) Util.Log("map render: ui map " + id + ": " + missing + " tile(s) and " + ovMissing + " overlay tile(s) not in the game files");
                     }
                     catch (Exception e) { Util.Log("map render: ui map " + id + ": " + e.Message); }
                 }
@@ -161,13 +167,13 @@ namespace ElansAddonHub.Services.Maps
             finally { casc?.Dispose(); }
         }
 
-        // pictures of other game builds are of no use any more
+        // pictures of other game builds (and of older render versions) are of no use any more
         static void RemoveOtherBuilds(string stamp)
         {
             try
             {
                 foreach (var f in Directory.GetFiles(Dir, "*.png"))
-                    if (!Path.GetFileName(f).StartsWith(stamp + "_", StringComparison.Ordinal)) { try { File.Delete(f); } catch { } }
+                    if (!Path.GetFileName(f).StartsWith(Prefix(stamp), StringComparison.Ordinal)) { try { File.Delete(f); } catch { } }
             }
             catch { }
         }
@@ -177,6 +183,12 @@ namespace ElansAddonHub.Services.Maps
         // BGRA pixels of the base layer of an art: tile (row, col) goes to (col * tileWidth, row * tileHeight), cut off at the layer's size.
         // A tile the source does not have (null) is left transparent and counted in `missing`.
         public static byte[] Compose(MapArtInfo art, Func<int, TileImage> tile, out int width, out int height, out int missing)
+            => Compose(art, tile, out width, out height, out missing, out _);
+
+        // ... then every overlay of the art over it: overlay tile (row, col) goes to (OffsetX + col * 256, OffsetY + row * 256) of the same pixel space
+        // (the art layer's), cut off at the overlay's TextureWidth x TextureHeight and at the picture, blended by its alpha. Overlay tiles the source
+        // does not have are skipped and counted in `overlayMissing`.
+        public static byte[] Compose(MapArtInfo art, Func<int, TileImage> tile, out int width, out int height, out int missing, out int overlayMissing)
         {
             var layer = art.BaseLayer;
             if (layer == null || layer.Width <= 0 || layer.Height <= 0 || layer.Width > 8192 || layer.Height > 8192) throw new InvalidDataException("the art has no usable layer");
@@ -192,12 +204,52 @@ namespace ElansAddonHub.Services.Maps
                 int w = Math.Min(img.Width, width - x0), h = Math.Min(img.Height, height - y0);
                 for (int y = 0; y < h; y++) Buffer.BlockCopy(img.Bgra, y * img.Width * 4, px, ((y0 + y) * width + x0) * 4, w * 4);
             }
+            overlayMissing = 0;
+            foreach (var o in art.Overlays)
+            {
+                if (o.Width <= 0 || o.Height <= 0) continue;
+                int first = o.Tiles.Length == 0 ? 0 : o.Tiles.Min(x => x.Layer);
+                foreach (var t in o.Tiles)
+                {
+                    if (t.Layer != first) continue;     // the lowest layer is the picture
+                    int ox = o.OffsetX + t.Col * OverlayTile, oy = o.OffsetY + t.Row * OverlayTile;
+                    int cw = Math.Min(OverlayTile, o.Width - t.Col * OverlayTile), ch = Math.Min(OverlayTile, o.Height - t.Row * OverlayTile);
+                    if (cw <= 0 || ch <= 0 || ox >= width || oy >= height || ox + cw <= 0 || oy + ch <= 0) continue;
+                    var img = tile(t.FileDataId);
+                    if (img == null || img.Bgra == null) { overlayMissing++; continue; }
+                    Blend(px, width, height, img, ox, oy, Math.Min(cw, img.Width), Math.Min(ch, img.Height));
+                }
+            }
             return px;
         }
 
-        public static byte[] RenderPng(MapArtInfo art, Func<int, TileImage> tile, out int missing, out int width, out int height)
+        // src-over of the top-left w x h part of `img` onto the picture at (x0, y0) (BGRA, straight alpha)
+        static void Blend(byte[] px, int width, int height, TileImage img, int x0, int y0, int w, int h)
         {
-            var px = Compose(art, tile, out width, out height, out missing);
+            for (int y = 0; y < h; y++)
+            {
+                int dy = y0 + y; if (dy < 0 || dy >= height) continue;
+                for (int x = 0; x < w; x++)
+                {
+                    int dx = x0 + x; if (dx < 0 || dx >= width) continue;
+                    int s = (y * img.Width + x) * 4, d = (dy * width + dx) * 4;
+                    int sa = img.Bgra[s + 3];
+                    if (sa == 0) continue;
+                    if (sa == 255) { px[d] = img.Bgra[s]; px[d + 1] = img.Bgra[s + 1]; px[d + 2] = img.Bgra[s + 2]; px[d + 3] = 255; continue; }
+                    int da = px[d + 3], outA = sa * 255 + da * (255 - sa);       // x 255
+                    if (outA == 0) continue;
+                    for (int c = 0; c < 3; c++) px[d + c] = (byte)((img.Bgra[s + c] * sa * 255 + px[d + c] * da * (255 - sa) + outA / 2) / outA);
+                    px[d + 3] = (byte)((outA + 127) / 255);
+                }
+            }
+        }
+
+        public static byte[] RenderPng(MapArtInfo art, Func<int, TileImage> tile, out int missing, out int width, out int height)
+            => RenderPng(art, tile, out missing, out width, out height, out _);
+
+        public static byte[] RenderPng(MapArtInfo art, Func<int, TileImage> tile, out int missing, out int width, out int height, out int overlayMissing)
+        {
+            var px = Compose(art, tile, out width, out height, out missing, out overlayMissing);
             if (missing >= art.Tiles.Count(t => t.Layer == art.BaseLayer.Index)) return null;     // nothing of it exists
             return ToPng(px, width, height);
         }
