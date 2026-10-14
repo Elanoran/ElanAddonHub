@@ -128,6 +128,7 @@ namespace ElansAddonHub.Services.Atlas
             get
             {
                 if (!string.IsNullOrEmpty(Link) && AtlasIds.TryParse(Link, out var k, out _)) return AtlasKinds.Glyph(k);
+                if (!string.IsNullOrEmpty(Link) && AtlasCategories.TryHosted(Link, out var hc, out _)) return hc.Glyph;
                 return Type == "Guild" ? AtlasKinds.Glyph("faction") : Type == "Character" ? AtlasKinds.Glyph("npc") : "";
             }
         }

@@ -178,6 +178,10 @@ namespace ElansAddonHub.Services.Atlas
                     Detail = (skill?.Name ?? "Profession") + (r.MinRank > 0 ? " " + r.MinRank : "") + (r.ReagentCount > 0 ? " · " + ReagentText(r) : ""), Sort = -r.MinRank,
                 });
                 AddLayer(m, "client");
+                // "Crafted by Tailoring 125": the Professions page on that profession's recipes (the first recipe of each profession)
+                var craftLink = AtlasHosts.RecipesLink(skill?.Name);
+                if (craftLink != null && !m.Facts.Any(f => f.Link == craftLink))
+                    m.Facts.Add(new AtlasFact("Crafted by", (skill?.Name ?? "") + (r.MinRank > 0 ? " " + r.MinRank : ""), AtlasLabel.Forever, craftLink));
             }
 
             // the table: Lodge-observed rows, then the client's, then the Classic baseline; tiny chances folded

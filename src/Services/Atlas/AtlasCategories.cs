@@ -20,6 +20,9 @@ namespace ElansAddonHub.Services.Atlas
         public string Kind = "";               // list categories: the AtlasKinds kind the rows open ("item", "npc" ...)
         public int Order = 100;                // start page order (built-in categories use 10, 20 ...)
         public Func<string, FrameworkElement> Host;     // hosted: builds the control for a sub-path ("" = the root); runs on the UI thread
+        public Func<string, string> Canonical;          // hosted: the sub-path the control really shows after Host(sub) ran (the id then follows it), null = as asked
+        public Func<string, string> SubTitle;           // hosted: the last crumb for a sub-path ("Hunter" for "tree/hunter"), null / "" = none
+        public Func<string, IEnumerable<AtlasHit>> Search;   // hosted: the pages of this category a search text names ("hunter talents", "cooking"); runs on a worker
         public Func<bool> Available = () => true;       // a category without its data hides itself
         public bool Hosted => Host != null;
         public string OpenId => Hosted ? Id + ":" : "browse:" + Id;
@@ -87,6 +90,21 @@ namespace ElansAddonHub.Services.Atlas
         }
 
         public static bool IsHosted(string id) => TryHosted(id, out _, out _);
+
+        // the pages of the hosted categories a search text names: the top group of the search overlay
+        public static List<AtlasHit> SearchHits(string text)
+        {
+            var hits = new List<AtlasHit>();
+            if (string.IsNullOrWhiteSpace(text)) return hits;
+            List<AtlasCategory> cats;
+            lock (gate) cats = list.Where(c => c.Hosted && c.Search != null).ToList();
+            foreach (var c in cats)
+            {
+                try { hits.AddRange(c.Search(text.Trim()) ?? Enumerable.Empty<AtlasHit>()); }
+                catch (Exception) { }
+            }
+            return hits;
+        }
 
         // an id the Atlas page opens itself instead of building an entity page: a browse page or a hosted category
         public static bool IsRouted(string id) => AtlasBrowse.IsBrowseId(id) || IsHosted(id);

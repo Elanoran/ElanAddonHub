@@ -292,7 +292,7 @@ namespace ElansAddonHub
                 ProfessionLinks.OpenRequested -= OnProfessionLink; ProfessionLinks.OpenRequested += OnProfessionLink;
                 ProfessionsView.ResetForTest();
                 ProfessionLinks.Last = savedLink;
-                ShowTab("addons");
+                ShowTab("addons"); ResetAtlasForTest();
             }
             notes.Insert(0, "professions (Atlas layer H): " + (ok ? "all ok" : "FAILURES"));
             return string.Join("\r\n", notes);
@@ -311,7 +311,7 @@ namespace ElansAddonHub
             page.SetSourcesForTest(PSources(), new FixedGatherWorld());
             ShowTab("professions");
             await Task.Delay(100);
-            Check("page: the rail item opens it; the book has the 4 professions and 2 characters", TabProfessions.IsChecked == true && page.BookForTest.Professions.Count == 4 && page.CharsForTest.Count == 2);
+            Check("page: ShowTab opens it inside the Atlas (hosted category); the book has the 4 professions and 2 characters", TabAtlas.IsChecked == true && AtlasView.IsHosted && AtlasView.CurrentId.StartsWith("professions:") && page.IsVisible && page.BookForTest.Professions.Count == 4 && page.CharsForTest.Count == 2);
 
             page.ShowForTest("recipes", "Tailoring", "Bob");
             var names = page.RecipeRowNamesForTest();

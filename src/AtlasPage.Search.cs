@@ -130,8 +130,10 @@ namespace ElansAddonHub
             tile.SetResourceReference(Border.BackgroundProperty, "Brush.Surface2");
             var ar = new AtlasRow { Link = h.Id, Title = h.Name, Quality = h.Quality, IconId = h.IconId };
             var tg = new Grid();
-            var letter = new TextBlock { Text = ar.ShowGlyph ? ar.Glyph : ar.Initial, FontSize = 16, Foreground = ar.ShowGlyph ? Res("Brush.Text.Tertiary") : ar.TileBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            if (ar.ShowGlyph) letter.FontFamily = (FontFamily)FindResource("Font.Icons"); else letter.FontWeight = FontWeights.SemiBold;
+            bool glyph = ar.ShowGlyph; string glyphText = ar.Glyph;
+            if (h.Kind == "page" && AtlasCategories.TryHosted(h.Id, out var pageCat, out _)) { glyph = true; glyphText = pageCat.Glyph; }      // a page of a hosted category: the category's glyph
+            var letter = new TextBlock { Text = glyph ? glyphText : ar.Initial, FontSize = 16, Foreground = glyph ? Res("Brush.Text.Tertiary") : ar.TileBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            if (glyph) letter.FontFamily = (FontFamily)FindResource("Font.Icons"); else letter.FontWeight = FontWeights.SemiBold;
             tg.Children.Add(letter);
             if (h.IconId > 0)
             {

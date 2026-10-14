@@ -103,7 +103,7 @@ namespace ElansAddonHub
                 BrowseResult Run(string id) => AtlasBrowse.Run(id);
 
                 // ============================================================================================================ registry and ids
-                var cats = AtlasCategories.All;
+                var cats = AtlasCategories.All.Where(c => !c.Hosted).ToList();      // the window registers Talents and Professions as hosted categories too (atlashosts checks them)
                 Check("registry: the ten built-in categories in start page order, each with a title, a glyph and the id of its browse page",
                     cats.Select(c => c.Id).SequenceEqual(new[] { "items", "creatures", "objects", "quests", "zones", "instances", "spells", "skills", "recipes", "factions" }) && cats.All(c => c.Title.Length > 0 && c.Glyph.Length > 0 && c.OpenId == "browse:" + c.Id && !c.Hosted), string.Join(",", cats.Select(c => c.Id)));
                 var labs = new AtlasCategory { Id = "labs", Title = "Labs", Glyph = AtlasKinds.Glyph("skill"), Blurb = "A hosted page", Order = 200, Host = sub => new TextBlock { Text = "hosted labs: " + sub } };

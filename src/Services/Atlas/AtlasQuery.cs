@@ -180,6 +180,15 @@ namespace ElansAddonHub.Services.Atlas
             Add("faction", SearchFactions(q));
             // the group with the best match first (an exact name beats a prefix beats a word...), the fixed order of kinds breaks ties
             res.Groups = groups.OrderBy(g => g.Hits[0].Rank).ThenBy(g => Array.IndexOf(AtlasKinds.Order, g.Kind)).ToList();
+            // the hosted categories (Talents, Professions) by name: their pages are the first group, before any entity of the same name
+            var pages = AtlasCategories.SearchHits(res.Query);
+            if (pages.Count > 0)
+            {
+                pages.Sort(CompareHits);
+                var pg = new AtlasGroup { Kind = "page", Title = "Atlas pages", Total = pages.Count };
+                pg.Hits.AddRange(pages.Take(perGroup));
+                res.Groups.Insert(0, pg);
+            }
             return res;
         }
 

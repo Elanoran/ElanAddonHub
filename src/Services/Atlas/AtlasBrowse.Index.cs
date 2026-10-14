@@ -15,6 +15,7 @@ namespace ElansAddonHub.Services.Atlas
     public sealed class BEntry
     {
         public string Kind = "", Name = "", Lower = "", Detail = "", Extra = "", Group = "", SlotName = "", ZoneName = "", SubLabel = "";
+        public string Link = "";                  // where a row opens when it is not the page of the entry itself (a profession opens the Professions page)
         public int Id;
         public int Level, Level2;                 // the range the level filter looks at (an item's required level, a creature's levels, a zone's creature levels, a recipe's skill)
         public int Quality = -1, ILvl, Cls = -1, Sub = -1, Inv, Icon, Zone, Rank, Type, Flags, Skill;
@@ -555,6 +556,7 @@ namespace ElansAddonHub.Services.Atlas
                 var e = Entry("skill", s.Id, s.Name);
                 e.Client = true; e.Icon = s.IconId; e.SubLabel = SkillGroup(s.Category);
                 e.Detail = AtlasQuery.SkillCategory(s.Category);
+                if (s.IsProfession) e.Link = AtlasHosts.RecipesLink(s.Name) ?? "";       // the professions open the Professions page
                 ix.All.Add(e);
             }
             ix.Root.Title = "Skills and professions";
@@ -615,7 +617,7 @@ namespace ElansAddonHub.Services.Atlas
         {
             var r = new AtlasRow
             {
-                Key = e.Kind + ":" + e.Id, Link = e.Kind + ":" + e.Id, Title = e.Name, Detail = e.Detail, Extra = e.Extra, IconId = e.Icon, Quality = e.Quality, Tier = e.Tier,
+                Key = e.Kind + ":" + e.Id, Link = e.Link.Length > 0 ? e.Link : e.Kind + ":" + e.Id, Title = e.Name, Detail = e.Detail, Extra = e.Extra, IconId = e.Icon, Quality = e.Quality, Tier = e.Tier,
                 Label = e.Client || (e.Lodge && !e.Classic) ? AtlasLabel.Forever : AtlasLabel.Classic, Zone = e.ZoneName, Sort = e.Chance,
             };
             if (e.Kind == "item" && e.SrcParts != null && ix.Cat == "items")

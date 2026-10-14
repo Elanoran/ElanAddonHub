@@ -122,6 +122,7 @@ namespace ElansAddonHub
         Task Show(string id, bool record)
         {
             CloseResults();
+            started = true;
             if (record) history.Go(id);
             UpdateNav();
             Navigated?.Invoke(id);
@@ -187,6 +188,7 @@ namespace ElansAddonHub
         async Task BuildAndDraw(string id)
         {
             int gen = ++buildGen;
+            if (hosted != null && !AtlasCategories.IsHosted(id)) LeaveHosted();
             if (string.IsNullOrEmpty(id)) { DrawStart(); return; }
             if (AtlasCategories.TryHosted(id, out var hostCat, out var hostSub)) { DrawHosted(hostCat, hostSub); return; }
             if (AtlasBrowse.IsBrowseId(id)) { await BuildAndDrawBrowse(id, gen); return; }
@@ -252,6 +254,6 @@ namespace ElansAddonHub
         }
 
         // the page itself asks to be shown again after the Lodge pool or the Classic data changed
-        public void DataChanged() { if (IsStart) DrawStart(); else _ = Redraw(); }
+        public void DataChanged() { if (hosted != null) return; if (IsStart) DrawStart(); else _ = Redraw(); }
     }
 }

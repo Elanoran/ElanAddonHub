@@ -28,6 +28,8 @@ namespace ElansAddonHub
         public Func<string> HunterBuildsFile = null;           // null = <WoW folder>\<flavor>\Interface\AddOns\ElansHunterHelper\Data\Builds.lua
         public string SavedFile = SavedBuilds.File;
 
+        public event Action<string> ClassChanged;              // the class file now shown: picked, imported with a build, or restored (the Atlas keeps its id in step)
+
         Func<string> wowRoot = () => null;
         TalentSet set;
         TalentTreeDef tree;
@@ -76,13 +78,32 @@ namespace ElansAddonHub
             TalentData.Hook();
         }
 
+        // The page lives inside the Atlas (hosted category "talents"): no title and no panel of its own, the Atlas draws both.
+        bool embedded;
+        public void Embed()
+        {
+            embedded = true;
+            Panel.Background = null; Panel.Margin = new Thickness(0); Panel.Padding = new Thickness(0);
+            TitleBlock.Visibility = Visibility.Collapsed;
+        }
+
+        public string ClassFileNow => classFile;
+
+        // asks for a class: now when the trees are read, as soon as they are otherwise. The class on screen is left alone (the points spent stay) when it is the one asked for.
+        public void ShowClass(string file)
+        {
+            if (string.IsNullOrEmpty(file)) return;
+            if (set == null) { classFile = file; return; }
+            if (!string.Equals(classFile, file, StringComparison.OrdinalIgnoreCase)) SelectClass(file);
+        }
+
         // the page was opened
         public void Shown()
         {
             if (!loadedOnce) { saved = SavedBuilds.Load(SavedFile); loadedOnce = true; }
             if (TalentData.Status == TalentData.State.NotStarted || TalentData.Status == TalentData.State.Disabled) TalentData.Start();
             Refresh();
-            Motion.PageIn(this);
+            if (!embedded) Motion.PageIn(this);
         }
 
         void OnDataChanged() { try { Dispatcher.BeginInvoke(new Action(() => { if (IsLoaded || set != null) Refresh(); })); } catch { } }
@@ -170,6 +191,7 @@ namespace ElansAddonHub
             BuildTree();
             LoadBuildLists();
             PageScroll.ScrollToTop();
+            ClassChanged?.Invoke(classFile);
         }
 
         // ------------------------------------------------------------------------------------------------------------------------------ the trees
@@ -340,7 +362,19 @@ namespace ElansAddonHub
         }
 
         // ------------------------------------------------------------------------------------------------------------------------------ clicks
-        void NodeLeft(object sender, MouseButtonEventArgs e) { var b = (Border)sender; b.Focus(); Click((int)b.Tag, false); e.Handled = true; }
+        void NodeLeft(object sender, MouseButtonEventArgs e)
+        {
+            var b = (Border)sender; b.Focus(); e.Handled = true;
+            if (Keyboard.Modifiers == ModifierKeys.Control) { OpenSpell((int)b.Tag); return; }      // Ctrl+click: the talent's spell page in the Atlas, no point spent
+            Click((int)b.Tag, false);
+        }
+
+        // the talent's spell page (spell:<id>); the Atlas page opens it in place, with history
+        public void OpenSpell(int nodeId)
+        {
+            int id = tree?.Node(nodeId)?.SpellId ?? 0;
+            if (id > 0) ElansAddonHub.Services.Professions.ProfessionLinks.Open(AtlasIds.Spell(id));
+        }
         void NodeRight(object sender, MouseButtonEventArgs e) { var b = (Border)sender; b.Focus(); Click((int)b.Tag, true); e.Handled = true; }
 
         public Why Click(int nodeId, bool right)
@@ -438,7 +472,7 @@ namespace ElansAddonHub
             else if (rank >= n.MaxRanks) sp.Children.Add(Line("Full rank. Right-click to give a point back.", "Text.Caption", null, 8));
             else if (session.Left < tree.CostPerRank) sp.Children.Add(Line("No points left at this level.", "Text.Caption", null, 8));
             else sp.Children.Add(Line("Click to spend a point.", "Text.Caption", null, 8));
-            if (e != null && e.SpellId > 0) sp.Children.Add(Line("Spell ID " + e.SpellId, "Text.Caption", null, 4));
+            if (e != null && e.SpellId > 0) sp.Children.Add(Line("Spell ID " + e.SpellId + "  ·  Ctrl+click opens it in the Atlas", "Text.Caption", null, 4));
             return sp;
         }
 
@@ -691,6 +725,7 @@ namespace ElansAddonHub
         // ------------------------------------------------------------------------------------------------------------------------------ self-test hooks
         public TalentSession SessionForTest => session;
         public TalentTreeDef TreeForTest => tree;
+        public bool TitleHiddenForTest => TitleBlock.Visibility != Visibility.Visible;
         public string StatusForTest => StatusLine.Visibility == Visibility.Visible ? StatusLine.Text : "";
         public bool StatusIsErrorForTest => StatusLine.Visibility == Visibility.Visible && StatusLine.Foreground == Res("Brush.Danger");
         public bool StatusIsWarnForTest => StatusLine.Visibility == Visibility.Visible && StatusLine.Foreground == Res("Brush.Warn");
