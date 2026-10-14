@@ -79,7 +79,7 @@ namespace ElansAddonHub
                 string[] wowheads = { "https://classic.wowhead.com/item=2589", "http://wowhead.com/classic/item=2589", "https://www.wowhead.com/tbc/item=2589/linen-cloth#comments", "https://www.wowhead.com/es/classic/item=2589",
                     "(https://www.wowhead.com/item=2589)", "https://www.wowhead.com/classic/item=2589?x=1&y=2", "https://www.wowhead.com/item=2589." };
                 check("parse: other Wowhead forms (subdomain, locale, flavour, query, fragment, brackets and a trailing dot around it)", wowheads.All(t => { var f = ItemLinks.Find(t); return f.Count == 1 && f[0].Id == 2589; }));
-                string[] fakeUrls = { "https://wowhead.com.evil.example/item=2589", "https://notwowhead.com/classic/item=2589", "https://www.wowhead.com/classic/spell=2589", "https://www.wowhead.com/classic/item=abc",
+                string[] fakeUrls = { "https://wowhead.com.evil.example/item=2589", "https://notwowhead.com/classic/item=2589", "https://www.wowhead.com/classic/spell=abc", "https://wowhead.com.evil.example/spell=133", "https://notwowhead.com/npc=46", "https://www.wowhead.com/classic/item=abc",
                     "https://www.wowhead.com/classic/items/armor", "https://example.com/?u=https://www.wowhead.com/item=1", "https://wowhead.com@evil.example/item=1", "https://www.wowhead.com:8080/item=1",
                     "https://evil.example/wowhead.com/item=1", "https://www.wowhead.com/classic/item=0", "ftp://www.wowhead.com/item=1", "https://www.wowhead.com/item=12345678901" };
                 check("parse: look-alike URLs are not item links (" + string.Join(" ", fakeUrls.Where(t => ItemLinks.Find(t).Count > 0)) + ")", fakeUrls.All(t => ItemLinks.Find(t).Count == 0));
@@ -89,8 +89,27 @@ namespace ElansAddonHub
                 check("parse: a pasted game link gives the id, the name and the quality colour (epic)", cl.Count == 1 && cl[0].Kind == ItemRefKind.ChatLink && cl[0].Id == 19019 && cl[0].Quality == 4 && cl[0].Name.StartsWith("Thunderfury"));
                 var cl2 = ItemLinks.Find("|Hitem:2589:0:0:0|h[Linen Cloth]|h");
                 check("parse: a game link without colour codes works; its quality is unknown", cl2.Count == 1 && cl2[0].Id == 2589 && cl2[0].Quality == -1);
-                check("parse: other game links (spells) and broken item links are not items", ItemLinks.Find("|cff71d5ff|Hspell:133|h[Fireball]|h|r").Count == 0 && ItemLinks.Find("|Hitem:abc|h[Linen Cloth]|h").Count == 0
+                check("parse: broken item links and unknown link types are not items", ItemLinks.Find("|Hachievement:6|h[Level 10]|h").Count == 0 && ItemLinks.Find("|Hitem:abc|h[Linen Cloth]|h").Count == 0
                     && ItemLinks.Find("|Hitem:2589|h[Linen Cloth]").Count == 0);
+                // ---- the other kinds of pasted game links and Wowhead URLs: Atlas chips
+                var sp1 = ItemLinks.Find("|cff71d5ff|Hspell:133:0|h[Fireball]|h|r");
+                check("parse: a pasted spell link is a spell chip (spell:133) with the written name", sp1.Count == 1 && sp1[0].AtlasId == "spell:133" && sp1[0].AtlasKind == "spell" && sp1[0].Name == "Fireball" && sp1[0].Id == 0);
+                var en1 = ItemLinks.Find("|cffffd000|Henchant:7418|h[Enchant Bracer - Minor Health]|h|r");
+                check("parse: an enchant link is a spell chip", en1.Count == 1 && en1[0].AtlasId == "spell:7418");
+                var q1 = ItemLinks.Find("|cffffff00|Hquest:783:5|h[A Troubled Spirit]|h|r");
+                check("parse: a quest link is a quest chip (quest:783)", q1.Count == 1 && q1[0].AtlasId == "quest:783" && q1[0].AtlasKind == "quest" && q1[0].Name == "A Troubled Spirit");
+                var n1 = ItemLinks.Find("|Hnpc:46|h[Murloc]|h and |Hunit:Creature-0-1465-0-11-1234-000012AB:Boar|h[Boar]|h");
+                check("parse: npc and unit links are npc chips (npc:46, npc:1234 from the creature guid)", n1.Count == 2 && n1[0].AtlasId == "npc:46" && n1[1].AtlasId == "npc:1234");
+                var tr1 = ItemLinks.Find("|cffffd000|Htrade:2575:300:300:0:0|h[Mining]|h|r");
+                check("parse: a profession link opens the Professions page (professions:mining)", tr1.Count == 1 && tr1[0].AtlasId == "professions:mining" && tr1[0].AtlasKind == "professions");
+                check("parse: malformed or look-alike game links are text (no id, a player link, an unknown profession, a missing |h, a spell id of 0)",
+                    ItemLinks.Find("|Hspell:abc|h[Fireball]|h").Count == 0 && ItemLinks.Find("|Hplayer:Elan|h[Elan]|h").Count == 0 && ItemLinks.Find("|Htrade:1:1:1|h[Underwater Basket Weaving]|h").Count == 0
+                    && ItemLinks.Find("|Hspell:133|h[Fireball]").Count == 0 && ItemLinks.Find("|Hspell:0|h[Fireball]|h").Count == 0 && ItemLinks.Find("|Hunit:Player-1-2:Elan|h[Elan]|h").Count == 0 && ItemLinks.Find("x|Hspell:133|h[Fire|ball]|h").Count == 0);
+                var whO = ItemLinks.Find("https://www.wowhead.com/classic/spell=133/fireball https://www.wowhead.com/classic/quest=783/a-troubled-spirit https://classic.wowhead.com/npc=46 https://www.wowhead.com/object=2040 https://www.wowhead.com/zone=12 https://www.wowhead.com/faction=72");
+                check("parse: Wowhead spell / quest / npc / object / zone / faction URLs are Atlas chips of that kind", string.Join(",", whO.Select(x => x.AtlasId)) == "spell:133,quest:783,npc:46,obj:2040,zone:12,faction:72" && whO[0].Name == "Fireball");
+                check("parse: the same spell twice (game link + URL) is one chip; the per-message cap still applies",
+                    ItemLinks.Find("|Hspell:133|h[Fireball]|h https://www.wowhead.com/spell=133").Count == 1 && ItemLinks.Find(string.Join(" ", Enumerable.Range(1, 12).Select(i => "|Hspell:" + i + "|h[Spell Number " + i + "]|h"))).Count == ItemLinks.MaxPerMessage);
+                check("display: other game links read [Name] too; an unusable one is left as written", ItemLinks.Display("a |Hspell:133|h[Fireball]|h b") == "a [Fireball] b" && ItemLinks.Display("|Hplayer:Elan|h[Elan]|h") == "|Hplayer:Elan|h[Elan]|h");
                 check("display: a game link reads [Name]; ordinary text is untouched", ItemLinks.Display("x |cffa335ee|Hitem:19019::|h[Thunderfury]|h|r y") == "x [Thunderfury] y" && ItemLinks.Display("plain [Linen Cloth]") == "plain [Linen Cloth]" && ItemLinks.Display(null) == null);
 
                 // ---- one chip per item, in order, capped
@@ -218,6 +237,20 @@ namespace ElansAddonHub
                     ck("atlas chips: a kind glyph tile (the Atlas rows' glyph) when there is no icon; an NPC this PC does not know still shows '<Kind> <id>'", ac[1].TileGlyph == AtlasKinds.Glyph("spell") && ac[2].TileGlyph == AtlasKinds.Glyph("faction")
                         && ac[3].Name == "NPC 4646" && ac[3].TileGlyph == AtlasKinds.Glyph("npc") && ac[3].TipLine.Contains("NPC") && ac[3].TipHint.Contains("Atlas"));
                     ck("atlas chips: browse and talents links read as their Atlas titles", ac[4].Name == "Items › Weapons" && ac[4].TipLine.StartsWith("Atlas list") && ac[4].TileGlyph == AtlasCategories.Find("items").Glyph && ac[5].Name.StartsWith("Talents") && ac[5].Name.EndsWith("Hunter"), ac[4].Name + " / " + ac[5].Name);
+                    // ---- hover: every chip kind shows a GameTooltip
+                    var tItem = ac[0].BuildTip(); var tSpell = ac[1].BuildTip(); var tFac = ac[2].BuildTip(); var tNpc = ac[3].BuildTip(); var tBrowse = ac[4].BuildTip();
+                    ck("chip hover: an item the game data knows is its GameTooltip (quality-coloured name, Item Level) with the hint in the muted footer", tItem.Title == "Atlas Linen" && tItem.Texts().Contains("Trade Goods") && tItem.Texts().Last() == ac[0].TipHint && GtColor(GtColored(tItem), "Atlas Linen") == "#FF1EFF00", string.Join(" | ", tItem.Texts()));
+                    ck("chip hover: spell and faction chips show their per-kind GameTooltip (Atlas page of that id)", tSpell.Title == "Fireball" && tSpell.Texts().Last() == ac[1].TipHint && tFac.Title == "Stormwind" && GtColor(GtColored(tFac), "Stormwind") == "#FFFFD100", string.Join(" | ", tSpell.Texts()) + " // " + string.Join(" | ", tFac.Texts()));
+                    ck("chip hover: an NPC this PC does not know shows a minimal tooltip ('Not in the game data on this PC'); browse links keep a simple title tooltip", tNpc.Title == "NPC 4646" && tNpc.Texts().Contains("Not in the game data on this PC") && tBrowse.Title == "Items › Weapons" && !tBrowse.Texts().Contains("Not in the game data on this PC"), string.Join(" | ", tNpc.Texts()));
+                    var tThunder = chips[1].BuildTip(); var tMystery = chips[3].BuildTip();
+                    ck("chip hover: a pasted game link or [Name] the item data does not know shows the name as written and 'Not in the game data on this PC', with the click hint below",
+                        tThunder.Title.StartsWith("Thunderfury") && tThunder.Texts().Contains("Not in the game data on this PC") && tMystery.Title == "Mystery Thing" && tMystery.Texts().Contains("Not in the game data on this PC") && tMystery.Texts().Last() == chips[3].TipHint, string.Join(" | ", tThunder.Texts()));
+                    SnapshotSheet(Gt(tItem), System.IO.Path.Combine(dir, "gt-chip-item.png"));
+                    SnapshotSheet(Gt(tSpell), System.IO.Path.Combine(dir, "gt-chip-spell.png"));
+                    var opts = ItemLinks.Find("|cff71d5ff|Hspell:133|h[Fireball]|h|r |Hquest:783:5|h[A Troubled Spirit]|h and https://www.wowhead.com/classic/npc=46/murloc");
+                    var optChips = opts.Select(r => ItemChipVM.From(r)).ToList();
+                    ck("chat: spell / quest game links and a Wowhead npc URL become Atlas chips (click opens the Atlas, the hover is the per-kind GameTooltip, the name as written)", optChips.Count == 3 && optChips.All(c => c.IsAtlas) && optChips[0].Name == "Fireball" && optChips[1].Name == "A Troubled Spirit" && optChips[2].Ref.AtlasId == "npc:46"
+                        && optChips[0].BuildTip().Title.Length > 0 && optChips[1].BuildTip().Texts().Count > 0 && ItemLinks.Display("x |Hspell:133|h[Fireball]|h y") == "x [Fireball] y");
                     ck("atlas chips: the message text keeps the link as written", am.ShownText.Contains("item:102 spell:133") && am.ShownText.Contains("talents:tree/hunter"));
 
                     // an unknown item: the fallback chip still opens the Atlas

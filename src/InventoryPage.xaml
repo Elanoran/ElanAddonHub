@@ -225,7 +225,7 @@
                 <DataTemplate>
                   <Border Margin="0,0,0,8" Padding="{StaticResource Pad.Row}" CornerRadius="{StaticResource Radius.Card}" Background="{StaticResource Brush.Surface1}"
                           ToolTipService.InitialShowDelay="150" ToolTipService.ShowDuration="30000" MouseLeftButtonUp="Result_Click">
-                    <Border.ToolTip><ToolTip Style="{StaticResource CardTip}" Opened="ResultTip_Opened" /></Border.ToolTip>
+                    <Border.ToolTip><ToolTip Style="{StaticResource GameTip}" Opened="ResultTip_Opened" /></Border.ToolTip>
                     <Grid>
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />

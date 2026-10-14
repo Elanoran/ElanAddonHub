@@ -334,7 +334,7 @@ namespace ElansAddonHub
             page.FilterForTest("all");
             var tip = page.RecipeTipSheetForTest(1004);
             Check("recipe tooltip: the made item, the reagents with 'you have' across characters and prices, bands, the estimated start, spell and item id",
-                tip != null && Flatten(tip).Any(t => t == "Robe of Testing") && Flatten(tip).Any(t => t.Contains("2 x Linen Cloth") && t.Contains("you have 35 across characters")) && Flatten(tip).Any(t => t.Contains("yellow from 60, green 75, grey 90")) && Flatten(tip).Any(t => t == "Spell ID 1004 - Item ID 2004"));
+                tip != null && Flatten(tip).Any(t => t == "Robe of Testing") && Flatten(tip).Any(t => t == "2 x Linen Cloth") && Flatten(tip).Any(t => t.Contains("Linen Cloth") && t.Contains("you have 35 across characters")) && Flatten(tip).Any(t => t.Contains("yellow from 60, green 75, grey 90")) && Flatten(tip).Any(t => t == "Spell ID 1004 - Item ID 2004"));
 
             // a clickable link raises the Atlas hook
             string opened = null; Action<string> hook = id => opened = id;

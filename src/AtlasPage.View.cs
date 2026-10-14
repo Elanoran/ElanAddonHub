@@ -169,8 +169,8 @@ namespace ElansAddonHub
             Body.Children.Add(cols);
 
             // left: who it is
-            if (m.Kind == "item") leftCol.Children.Add(ItemCard(m));
-            if (m.Facts.Count > 0 || m.Texts.Count > 0) leftCol.Children.Add(FactsCard(m));
+            leftCol.Children.Add(ItemCard(m));       // every kind: the game tooltip is the page's main card
+            if (m.Kind != "item" && m.Facts.Any(f => f.Link != null)) leftCol.Children.Add(FactsCard(m, true));     // what links somewhere stays clickable, in the app style
             if (m.Kind == "item" && m.Section("owned") != null) leftCol.Children.Add(SectionCard(m.Section("owned")));
 
             // right: tables and the map
@@ -202,66 +202,32 @@ namespace ElansAddonHub
             return Card(sp);
         }
 
-        // ---- the item card: icon, name and the game's own tooltip
+        // ---- the main card of a page: the game's own tooltip (item, creature, quest ...), the icon outside it on the left; the Outpost's own bits below in the app style
         FrameworkElement ItemCard(AtlasPageModel m)
         {
+            var gt = GameTooltip.FromAtlas(m);
             var sp = new StackPanel();
-            var head = new Grid();
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            FrameworkElement icon = null;
+            if (m.Kind == "item" || m.IconId > 0) icon = IconBox(m);
+            sp.Children.Add(icon != null ? GameTooltip.WithIcon(icon, gt) : gt);
+            if (m.TooltipSource.Length > 0) sp.Children.Add(SourceChip(m.TooltipSource, 12));
+            return Card(sp);
+        }
+
+        // the 56 px icon: the picture when it is read, else the quality-coloured letter
+        FrameworkElement IconBox(AtlasPageModel m)
+        {
             var row = new AtlasRow { Title = m.Title, Quality = m.Quality, IconId = m.IconId, Link = m.Id };
-            var tile = new Border { Width = 48, Height = 48, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Top };
-            tile.SetResourceReference(Border.BackgroundProperty, "Brush.Surface2");
             var tg = new Grid();
-            tg.Children.Add(new TextBlock { Text = row.Initial, FontSize = 20, FontWeight = FontWeights.SemiBold, Foreground = row.TileBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            tg.Children.Add(new TextBlock { Text = row.Initial, FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = row.TileBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
             if (m.IconId > 0)
             {
                 var img = new Image { Stretch = Stretch.UniformToFill };
                 RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
                 img.SetBinding(Image.SourceProperty, new System.Windows.Data.Binding("Icon") { Source = row });
-                tg.Children.Add(new Border { CornerRadius = new CornerRadius(10), ClipToBounds = true, Child = img });
+                tg.Children.Add(img);
             }
-            tile.Child = tg;
-            head.Children.Add(tile);
-            var name = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            var nt = Tb(m.Title, "Text.RowTitle", row.TitleBrush); nt.TextWrapping = TextWrapping.Wrap; name.Children.Add(nt);
-            var qn = m.Quality >= 0 && m.Quality < ItemLinks.QualityNames.Length ? ItemLinks.QualityNames[m.Quality] : "";
-            if (qn.Length > 0) name.Children.Add(Tb(qn, "Text.Caption", null, 2));
-            Grid.SetColumn(name, 1); head.Children.Add(name);
-            sp.Children.Add(head);
-
-            bool first = true;
-            foreach (var l in m.Tooltip)
-            {
-                double top = first ? 12 : 2; first = false;
-                switch (l.Kind)
-                {
-                    case "slot":
-                        {
-                            var g = new Grid { Margin = new Thickness(0, top, 0, 0) };
-                            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                            g.Children.Add(Tb(l.Text, "Text.Body"));
-                            if (!string.IsNullOrEmpty(l.Right)) { var r = Tb(l.Right, "Text.Body"); r.Margin = new Thickness(16, 0, 0, 0); Grid.SetColumn(r, 1); g.Children.Add(r); }
-                            sp.Children.Add(g);
-                            break;
-                        }
-                    case "stat": sp.Children.Add(Tb(l.Text, "Text.Body", Res("Brush.Success"), top)); break;
-                    case "desc": case "effect": case "setbonus-on": case "setbonus":
-                        {
-                            var t = Tb(l.Text, l.Kind == "setbonus" ? "Text.Secondary" : "Text.Body", l.Kind == "desc" ? Res("Brush.Warn") : l.Kind == "setbonus" ? null : Res("Brush.Success"), top + 2);
-                            t.TextWrapping = TextWrapping.Wrap; sp.Children.Add(t);
-                            break;
-                        }
-                    case "price": sp.Children.Add(Tb(l.Text + " " + AtlasFormat.Money(l.Copper), "Text.Secondary", Res("Brush.Text.Primary"), top + 2)); break;
-                    case "setname": sp.Children.Add(Tb(l.Text, "Text.Body", Res("Brush.Warn"), top + 8)); break;
-                    case "setitem": case "setitem-worn": { var t = Tb(l.Text, "Text.Secondary", l.Kind == "setitem-worn" ? Res("Brush.Text.Primary") : null, top); t.Margin = new Thickness(8, top, 0, 0); sp.Children.Add(t); break; }
-                    case "unrevealed": sp.Children.Add(Tb(l.Text, "Text.Secondary", Res("Brush.Warn"), top)); break;
-                    default: sp.Children.Add(Tb(l.Text, "Text.Body", null, top)); break;
-                }
-            }
-            if (m.TooltipSource.Length > 0) sp.Children.Add(SourceChip(m.TooltipSource, 12));
-            return Card(sp);
+            return tg;
         }
 
         FrameworkElement SourceChip(string label, double top = 0)
@@ -272,10 +238,10 @@ namespace ElansAddonHub
         }
 
         // ---- facts (label, value, where it comes from) and the longer texts
-        FrameworkElement FactsCard(AtlasPageModel m)
+        FrameworkElement FactsCard(AtlasPageModel m, bool linksOnly = false)
         {
             var sp = new StackPanel();
-            foreach (var f in m.Facts)
+            foreach (var f in m.Facts.Where(f => !linksOnly || f.Link != null))
             {
                 var g = new Grid { Margin = new Thickness(0, sp.Children.Count == 0 ? 0 : 8, 0, 0) };
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
@@ -298,7 +264,7 @@ namespace ElansAddonHub
                 Grid.SetColumn(col, 1); g.Children.Add(col);
                 sp.Children.Add(g);
             }
-            foreach (var t in m.Texts)
+            foreach (var t in linksOnly ? Enumerable.Empty<AtlasText>() : m.Texts)
             {
                 sp.Children.Add(Tb(t.Title, "Text.Secondary", null, sp.Children.Count == 0 ? 0 : 16));
                 var b = Tb(t.Body, "Text.Body", null, 2); b.TextWrapping = TextWrapping.Wrap; sp.Children.Add(b);

@@ -151,6 +151,7 @@ namespace ElansAddonHub
             public string Name { get; set; }
             public int Id { get; set; }
             public Brush QualityBrush { get; set; }
+            public int Quality { get; set; }
             public Brush TileFill { get; set; }
             public string Initial { get; set; }
             public string TotalText { get; set; }
@@ -373,7 +374,7 @@ namespace ElansAddonHub
                     int q = Math.Max(0, Math.Min(QualityHex.Length - 1, it.Quality));
                     extra.Add(new ResultRow
                     {
-                        Name = it.Name, Id = it.Id, QualityBrush = Frozen(QualityHex[q]), TileFill = TileFillFor(q), Initial = Initial(it.Name), TotalText = "", NotOwned = true,
+                        Name = it.Name, Id = it.Id, Quality = q, QualityBrush = Frozen(QualityHex[q]), TileFill = TileFillFor(q), Initial = Initial(it.Name), TotalText = "", NotOwned = true,
                         Holdings = new List<HoldingRow> { new HoldingRow { Name = "Not on your characters", ClassBrush = Res("Brush.Text.Secondary"), Where = "" } },
                     });
                 }
@@ -382,6 +383,7 @@ namespace ElansAddonHub
             {
                 Name = r.Name,
                 Id = r.Id,
+                Quality = r.Quality,
                 QualityBrush = Frozen(QualityHex[Math.Max(0, Math.Min(QualityHex.Length - 1, r.Quality))]),
                 TileFill = TileFillFor(r.Quality),
                 Initial = Initial(r.Name),

@@ -363,38 +363,17 @@ namespace ElansAddonHub
 
         // ------------------------------------------------------------------------------------------------------------ item tooltips
         // the item's facts as the client's table gives them (the same lines as the Characters page), then what the caller adds
-        void AddItemFacts(StackPanel sp, int id)
+        void AddItemFacts(GameTooltip gt, int id)
         {
             var it = ItemData.Get(id);
-            if (it == null) { sp.Children.Add(Line(ItemData.Ready ? ItemText.NotRevealed : "Item data is not read yet.", "Text.Secondary", Res("Brush.Warn"), 4)); return; }
-            bool first = true;
-            foreach (var l in ItemText.Lines(it))
-            {
-                double top = first ? 4 : 2; first = false;
-                switch (l.Kind)
-                {
-                    case "slot":
-                        {
-                            var g = new Grid { Margin = new Thickness(0, top, 0, 0) };
-                            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                            g.Children.Add(Line(l.Text, "Text.Body"));
-                            var r = Line(l.Right ?? "", "Text.Secondary", Res("Brush.Text.Primary")); r.Margin = new Thickness(24, 0, 0, 0); Grid.SetColumn(r, 1); g.Children.Add(r);
-                            sp.Children.Add(g);
-                            break;
-                        }
-                    case "stat": case "effect": case "setbonus-on": { var t = Line(l.Text, "Text.Body", Res("Brush.Success"), top); t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = 280; sp.Children.Add(t); break; }
-                    case "desc": { var t = Line(l.Text, "Text.Secondary", Res("Brush.Warn"), top + 2); t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = 280; sp.Children.Add(t); break; }
-                    case "price": sp.Children.Add(Line(l.Text + (l.Copper > 0 ? " " + ProfMoney.Format(l.Copper) : ""), "Text.Secondary", null, top + 2)); break;
-                    default: { var t = Line(l.Text, l.Kind == "req" ? "Text.Secondary" : "Text.Body", null, top); t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = 280; sp.Children.Add(t); break; }
-                }
-            }
+            if (it == null) { gt.AddText(ItemData.Ready ? ItemText.NotRevealed : "Item data is not read yet.", "unrevealed"); return; }
+            gt.AddItem(it);
         }
 
-        ToolTip LazyTip(Func<StackPanel> build)
+        ToolTip LazyTip(Func<GameTooltip> build)
         {
-            var tt = new ToolTip { Style = Sty("CardTip") };
-            tt.Opened += (s, e) => { try { tt.Content = build(); } catch (Exception ex) { tt.Content = Line("Could not build the tooltip: " + ex.Message, "Text.Secondary"); } };
+            var tt = GameTooltip.Wrap(null);
+            tt.Opened += (s, e) => { try { tt.Content = build(); } catch (Exception ex) { var g = new GameTooltip("Could not build the tooltip"); g.AddText(ex.Message, "plain"); tt.Content = g; } };
             return tt;
         }
 

@@ -108,6 +108,9 @@ namespace ElansAddonHub.Services.Db2
             }
         }
 
+        // strength, agility, stamina, intellect, spirit and the resistances read as plain white "+5 Stamina" in the game; everything else is a green bonus line
+        public static bool IsBaseStat(int type) => (type >= 3 && type <= 7) || (type >= 51 && type <= 56) || type == 0 || type == 1;
+
         // the ITEM_MOD_* numbers of the item tables. Resistances and the like included; unknown numbers are shown as such, never guessed.
         public static string Stat(int type)
         {
@@ -160,10 +163,12 @@ namespace ElansAddonHub.Services.Db2
     // The lines of an item tooltip, built from the client data. Pure text so the self-test can check them; the Characters page draws them.
     public sealed class TipLine
     {
-        public string Kind;          // ilvl | slot | speed | bag | bind | stat | req | desc | price | unrevealed
+        public string Kind;          // ilvl | bind | slot | armor | damage | speed | dps | bag | stat (base stats, white) | stat2 (other stats, green) | req | effect | desc | set* | price | unrevealed
         public string Text;          // the line (left part)
         public string Right;         // right-hand part of a "slot" line
         public long Copper;          // price lines
+        public int Level;            // req lines: the level asked for (the tooltip turns red when the shown character is below it)
+        public int Quality = -1;     // "item" lines (a quest reward): the name takes the quality colour
         public override string ToString() => Kind + ": " + Text + (Right != null ? " | " + Right : "") + (Kind == "price" ? " | " + Copper : "");
     }
 
@@ -176,8 +181,11 @@ namespace ElansAddonHub.Services.Db2
         {
             var l = new List<TipLine>();
             if (it == null) return l;
+            // the game's own order: level, binding, slot + type, armor / damage + speed, bag size, stats, requirement, effects, flavour text, set, price
             if (it.ItemLevel > 0 && (it.Equippable || it.ClassId == 2 || it.ClassId == 4))
                 l.Add(new TipLine { Kind = "ilvl", Text = "Item Level " + it.ItemLevel });
+            var bind = ItemNames.Bonding(it.Bonding);
+            if (bind != null) l.Add(new TipLine { Kind = "bind", Text = bind });
             var slot = ItemNames.Slot(it.InventoryType);
             var sub = ItemNames.Subclass(it.ClassId, it.SubclassId);
             if (it.Equippable && slot != null)
@@ -199,16 +207,14 @@ namespace ElansAddonHub.Services.Db2
                 l.Add(new TipLine { Kind = "dps", Text = it.ClassId == 2 ? "(" + dps.ToString("0.0", inv) + " damage per second)" : "Adds " + dps.ToString("0.0", inv) + " damage per second to ranged attacks" });
             if (it.ContainerSlots > 0)
                 l.Add(new TipLine { Kind = "bag", Text = it.ContainerSlots + " Slot " + (it.ClassId == 11 ? "Quiver" : "Bag") });
-            var bind = ItemNames.Bonding(it.Bonding);
-            if (bind != null) l.Add(new TipLine { Kind = "bind", Text = bind });
             if (it.Stats != null)
                 for (int i = 0; i + 1 < it.Stats.Length; i += 2)
                 {
                     int v = it.Stats[i + 1];
                     if (v == 0) continue;
-                    l.Add(new TipLine { Kind = "stat", Text = (v > 0 ? "+" : "-") + Math.Abs(v).ToString(System.Globalization.CultureInfo.InvariantCulture) + " " + ItemNames.Stat(it.Stats[i]) });
+                    l.Add(new TipLine { Kind = ItemNames.IsBaseStat(it.Stats[i]) ? "stat" : "stat2", Text = (v > 0 ? "+" : "-") + Math.Abs(v).ToString(inv) + " " + ItemNames.Stat(it.Stats[i]) });
                 }
-            if (it.RequiredLevel > 1) l.Add(new TipLine { Kind = "req", Text = "Requires Level " + it.RequiredLevel });
+            if (it.RequiredLevel > 1) l.Add(new TipLine { Kind = "req", Text = "Requires Level " + it.RequiredLevel, Level = it.RequiredLevel });
             foreach (var e in ItemDetails.EffectsOf(it.Id))     // "Equip: ...", "Use: ...", "Chance on hit: ..." (the spell's own description)
             {
                 var sp = SpellData.Spell(e.Value);

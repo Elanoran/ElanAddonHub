@@ -323,8 +323,8 @@ namespace ElansAddonHub
 
                 // ---- tooltip lines
                 var lines = ItemText.Lines(snap.Get(1004)).Select(l => l.ToString()).ToList();
-                Check("tooltip lines of the sword: level, slot + type, speed, binding, stats, requirement, flavour text, price",
-                    lines.SequenceEqual(new[] { "ilvl: Item Level 20", "slot: One-Hand | Sword", "speed: Speed 2.60", "bind: Binds when picked up", "stat: +3 Agility", "stat: +2 Stamina", "req: Requires Level 10", "desc: \"It cuts.\"", "price: Sell Price: | 12345" }), Join(lines));
+                Check("tooltip lines of the sword (the game's order): level, binding, slot + type, speed, stats, requirement, flavour text, price",
+                    lines.SequenceEqual(new[] { "ilvl: Item Level 20", "bind: Binds when picked up", "slot: One-Hand | Sword", "speed: Speed 2.60", "stat: +3 Agility", "stat: +2 Stamina", "req: Requires Level 10", "desc: \"It cuts.\"", "price: Sell Price: | 12345" }), Join(lines));
                 var axeLines = ItemText.Lines(axe).Select(l => l.ToString()).ToList();
                 Check("tooltip lines of an item with unknown stat amounts: no stat lines at all", axeLines.All(l => !l.StartsWith("stat:")) && axeLines.Contains("req: Requires Level 30") && axeLines.Contains("bind: Binds when equipped"), Join(axeLines));
                 var scrap = ItemText.Lines(snap.Get(1002)).Select(l => l.ToString()).ToList();
@@ -489,7 +489,7 @@ namespace ElansAddonHub
             InventoryView.SelectTabForTest("bags");
             var tip = InventoryView.SlotTipLinesForTest(102, "Forever-Elan");
             Check("slot tooltip: name, Item Level, slot + type, binding, stats (+4 Agility, +6 Stamina), requirement, sell price, then the character counts and the item id",
-                tip.Take(11).SequenceEqual(new[] { "Iron Sword", "Item Level 28", "One-Hand", "Sword", "Binds when equipped", "+4 Agility", "+6 Stamina", "Requires Level 20", "Sell Price:", "40", "25" }), Join(tip));
+                tip.Take(11).SequenceEqual(new[] { "Iron Sword", "Item Level 28", "Binds when equipped", "One-Hand", "Sword", "+4 Agility", "+6 Stamina", "Requires Level 20", "Sell Price:", "40", "25" }), Join(tip));
             Check("slot tooltip: the counts and the item id follow the facts (the existing lines are all still there)", tip.Contains("Elan") && tip.Last() == "Item ID 102" && tip.Any(l => l.StartsWith("Bags ") || l.Contains("Backpack")), Join(tip));
             var unknown = InventoryView.SlotTipLinesForTest(101, "Forever-Elan");
             Check("slot tooltip of an item the game data does not know (still hidden): 'Not revealed yet on WoW Forever' + what the link told (name, id, counts)",
@@ -501,7 +501,7 @@ namespace ElansAddonHub
             Check("gear tab: worn item levels from the game data when the Hub has none (Head 62, Chest 55, Back 10, Main hand 70), average 49.3 shown", gl.Contains("slot|1|Head|Helm of Testing|62") && gl.Contains("slot|5|Chest|Plain Chestguard|55") && gl.Contains("slot|16|Main hand|Epic Blade|70") && gl.Any(x => x.StartsWith("gearinfo|49.")) && InventoryView.ViewInfoForTest.StartsWith("Average item level 49."), Join(gl.Where(x => x.StartsWith("slot|") || x.StartsWith("gearinfo"))));
             var gearTip = InventoryView.DollTipForTest(1);
             Check("gear slot tooltip: name, 'Head · Item level 62' from the game data, then Item Level, Head + Leather, binding, +11 Stamina, requirement, price",
-                gearTip.Count > 8 && gearTip[0] == "Helm of Testing" && gearTip[1] == "Head · Item level 62" && gearTip.Contains("Item Level 62") && gearTip.Contains("Leather") && gearTip.Contains("+11 Stamina") && gearTip.Contains("Requires Level 55"), Join(gearTip));
+                gearTip.Count > 8 && gearTip[0] == "Helm of Testing" && gearTip.Contains("Head · Item level 62") && gearTip.Contains("Item Level 62") && gearTip.Contains("Leather") && gearTip.Contains("+11 Stamina") && gearTip.Contains("Requires Level 55"), Join(gearTip));
             ItemData.SetForTest(null, ItemData.State.Unavailable, "off for the test");
             InventoryView.SelectTabForTest("overview"); InventoryView.SelectTabForTest("gear");
             gl = InventoryView.CharTabLinesForTest();
@@ -519,7 +519,7 @@ namespace ElansAddonHub
             Check("search: the game data does not list again what you own (Iron Sword once)", res.Count(r => r.StartsWith("Iron Sword")) == 1);
             var tipIdx = res.FindIndex(r => r.StartsWith("Swordbreaker"));
             var rt = InventoryView.ResultTipForTest(tipIdx);
-            Check("search result tooltip of an item you do not own: facts from the game data, 'Not on your characters', the id", rt.SequenceEqual(new[] { "Swordbreaker's Bulwark", "Item Level 40", "Off Hand", "Shield", "Binds when equipped", "Requires Level 35", "Sell Price:", "77", "77", "Not on your characters", "Item ID 5002" }), Join(rt));
+            Check("search result tooltip of an item you do not own: facts from the game data, 'Not on your characters', the id", rt.SequenceEqual(new[] { "Swordbreaker's Bulwark", "Item Level 40", "Binds when equipped", "Off Hand", "Shield", "Requires Level 35", "Sell Price:", "77", "77", "Not on your characters", "Item ID 5002" }), Join(rt));
             var ownedIdx = res.FindIndex(r => r.StartsWith("Iron Sword"));
             var ot = InventoryView.ResultTipForTest(ownedIdx);
             Check("search result tooltip of an item you own: the same facts, then who has how many", ot[0] == "Iron Sword" && ot.Contains("Item Level 28") && ot.Any(l => l == "Elan" || l.StartsWith("Elan")) && !ot.Contains("Not on your characters"), Join(ot));

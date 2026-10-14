@@ -277,7 +277,7 @@ namespace ElansAddonHub
                 box.MouseLeftButtonDown += NodeLeft;
                 box.MouseRightButtonDown += NodeRight;
                 box.KeyDown += (s, e) => { int id = (int)((Border)s).Tag; if (e.Key == Key.Enter || e.Key == Key.Space || e.Key == Key.Add) { Click(id, false); e.Handled = true; } else if (e.Key == Key.Delete || e.Key == Key.Back || e.Key == Key.Subtract) { Click(id, true); e.Handled = true; } };
-                var tip = new ToolTip { Style = (Style)FindResource("CardTip") };
+                var tip = GameTooltip.Wrap(null);
                 int nodeId = n.Id;
                 tip.Opened += (s, e) => tip.Content = TipFor(nodeId);
                 box.ToolTip = tip;
@@ -449,31 +449,31 @@ namespace ElansAddonHub
 
         static string DescOf(SpellView v) => v == null ? null : !string.IsNullOrWhiteSpace(v.Description) ? v.Description.Trim() : !string.IsNullOrWhiteSpace(v.AuraDescription) ? v.AuraDescription.Trim() : null;
 
-        StackPanel TipFor(int nodeId)
+        GameTooltip TipFor(int nodeId)
         {
-            var sp = new StackPanel { MinWidth = 200 };
             var n = tree?.Node(nodeId);
-            if (n == null) return sp;
+            if (n == null) return new GameTooltip("");
             int rank = session.State.Rank(nodeId);
             var e = n.Entry;
-            var name = NameOf(n) ?? ("Talent " + n.Id);
-            sp.Children.Add(Line(name, "Text.RowTitle"));
-            sp.Children.Add(Line("Rank " + rank + " of " + n.MaxRanks, "Text.Secondary", null, 2));
+            var gt = new GameTooltip(NameOf(n) ?? ("Talent " + n.Id), 1);
+            gt.AddText("Rank " + rank + " of " + n.MaxRanks);
             info.Add("tip|" + nodeId);
             if (e != null && e.SpellId > 0)
             {
                 string cur = rank > 0 ? DescOf(TalentData.SpellAtRank(e, rank)) : null;
                 string next = rank < n.MaxRanks ? DescOf(TalentData.SpellAtRank(e, rank + 1)) : null;
                 if (!string.IsNullOrEmpty(e.DescriptionOverride)) { cur = rank > 0 ? e.DescriptionOverride : null; next = rank < n.MaxRanks ? e.DescriptionOverride : null; }
-                if (rank > 0 && cur != null) sp.Children.Add(Line(cur, "Text.Body", Res("Brush.Warn"), 8));
-                if (rank < n.MaxRanks && next != null) sp.Children.Add(Line((rank > 0 ? "Next rank: " : "Rank 1: ") + next, "Text.Body", rank > 0 ? Res("Brush.Text.Secondary") : Res("Brush.Warn"), 8));
+                if (rank > 0 && cur != null) gt.AddText(cur, "spelldesc");
+                if (rank < n.MaxRanks && next != null) gt.AddText((rank > 0 ? "Next rank: " : "Rank 1: ") + next, rank > 0 ? "desc" : "spelldesc");
             }
-            if (rank < n.MaxRanks && !TalentRules.Available(tree, session.State, n)) sp.Children.Add(Line("Locked: " + WhyBlocked(n), "Text.Secondary", Res("Brush.Danger"), 8));
-            else if (rank >= n.MaxRanks) sp.Children.Add(Line("Full rank. Right-click to give a point back.", "Text.Caption", null, 8));
-            else if (session.Left < tree.CostPerRank) sp.Children.Add(Line("No points left at this level.", "Text.Caption", null, 8));
-            else sp.Children.Add(Line("Click to spend a point.", "Text.Caption", null, 8));
-            if (e != null && e.SpellId > 0) sp.Children.Add(Line("Spell ID " + e.SpellId + "  ·  Ctrl+click opens it in the Atlas", "Text.Caption", null, 4));
-            return sp;
+            if (rank < n.MaxRanks && !TalentRules.Available(tree, session.State, n)) gt.AddText("Locked: " + WhyBlocked(n), "bad");
+            var foot = new List<string>();
+            if (rank >= n.MaxRanks) foot.Add("Full rank. Right-click to give a point back.");
+            else if (session.Left < tree.CostPerRank) foot.Add("No points left at this level.");
+            else if (TalentRules.Available(tree, session.State, n)) foot.Add("Click to spend a point.");
+            if (e != null && e.SpellId > 0) foot.Add("Spell ID " + e.SpellId + "  ·  Ctrl+click opens it in the Atlas");
+            for (int i = 0; i < foot.Count; i++) gt.Footer.Children.Add(GameTooltip.Muted(foot[i], i == 0 ? 0 : 4));
+            return gt;
         }
 
         // ------------------------------------------------------------------------------------------------------------------------------ build code
@@ -746,7 +746,7 @@ namespace ElansAddonHub
         public FrameworkElement NodeBoxForTest(int id) => views.TryGetValue(id, out var v) ? v.Box : null;
         public FrameworkElement TipForTest(int id)
         {
-            var frame = new Border { Background = Res("Brush.Surface3"), BorderBrush = Res("Brush.Divider"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 8), Child = TipFor(id) };
+            var frame = TipFor(id);
             frame.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             frame.Arrange(new Rect(frame.DesiredSize));
             return frame;

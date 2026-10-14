@@ -1251,6 +1251,12 @@ namespace ElansAddonHub.Lodge
 
         // an item chip: the item on Wowhead Classic, through the same path as every chat link (Settings > Privacy > Outpost browser decides where)
         public event Action<string> OpenAtlas;   // Ctrl+click on an item chip: the item's page in the Atlas
+        // the chip's hover tooltip is built when it opens (the game tooltip of the item or Atlas thing)
+        void ItemChipTip_Opened(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ToolTip tt && tt.DataContext is ItemChipVM chip) tt.Content = chip.BuildTip();
+        }
+
         void ItemChip_Click(object sender, MouseButtonEventArgs e)
         {
             if (!((sender as FrameworkElement)?.Tag is ItemChipVM chip)) return;

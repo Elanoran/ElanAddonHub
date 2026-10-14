@@ -158,29 +158,33 @@ namespace ElansAddonHub
             }
         }
 
-        StackPanel RecipeTip(ProfRecipe r)
+        GameTooltip RecipeTip(ProfRecipe r)
         {
-            var sp = new StackPanel { MinWidth = 240 };
-            sp.Children.Add(Line(r.Name, "Text.RowTitle", QualityBrush(r.Quality)));
-            if (r.ItemId > 0) AddItemFacts(sp, r.ItemId);
+            var gt = new GameTooltip(r.Name, r.ItemId > 0 ? r.Quality : 1);
+            if (r.ItemId > 0) AddItemFacts(gt, r.ItemId);
             else
             {
                 var spell = SpellData.Spell(r.SpellId);
                 var d = spell == null ? null : (!string.IsNullOrWhiteSpace(spell.Description) ? spell.Description : spell.AuraDescription);
-                if (!string.IsNullOrWhiteSpace(d)) { var t = Line(d.Trim(), "Text.Body", Res("Brush.Warn"), 6); t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = 280; sp.Children.Add(t); }
+                if (!string.IsNullOrWhiteSpace(d)) gt.AddText(d.Trim(), "spelldesc");
             }
             if (r.Reagents.Length > 0)
             {
-                sp.Children.Add(Line("Reagents", "Text.Caption", null, 12));
+                gt.AddText("Reagents:", "plain");
+                foreach (var g in r.Reagents) gt.AddText(g.Count + " x " + NameOf(g.ItemId), "plain");
+            }
+            var sp = gt.Footer;       // what the Outpost adds: what you have, prices, the skill bands
+            if (r.Reagents.Length > 0)
                 foreach (var g in r.Reagents)
                 {
                     var p = sources?.PriceOf(g.ItemId) ?? default(ItemPrice);
-                    sp.Children.Add(Line(g.Count + " x " + NameOf(g.ItemId) + (chars.Count > 0 ? "  (you have " + Have(g.ItemId) + " across characters)" : "") + (p.Known ? "  " + (p.Kind == PriceKind.Estimated ? "~" : "") + ProfMoney.Format(p.Copper) + " each" : ""), "Text.Body", null, 2));
+                    var have = chars.Count > 0 ? "you have " + Have(g.ItemId) + " across characters" : "";
+                    var price = p.Known ? (p.Kind == PriceKind.Estimated ? "~" : "") + ProfMoney.Format(p.Copper) + " each" : "";
+                    if (have.Length + price.Length > 0) sp.Children.Add(GameTooltip.Muted(NameOf(g.ItemId) + ": " + string.Join(" · ", new[] { have, price }.Where(x => x.Length > 0)), 2));
                 }
-            }
-            sp.Children.Add(Line(prof?.Name + " - yellow from " + r.Yellow + ", green " + r.Green + ", grey " + r.Grey + (r.Start > 1 ? " - can be learned from about skill " + r.Start + " (estimated)" : ""), "Text.Caption", null, 12));
-            sp.Children.Add(Line("Spell ID " + r.SpellId + (r.ItemId > 0 ? " - Item ID " + r.ItemId : ""), "Text.Caption"));
-            return sp;
+            sp.Children.Add(GameTooltip.Muted(prof?.Name + " - yellow from " + r.Yellow + ", green " + r.Green + ", grey " + r.Grey + (r.Start > 1 ? " - can be learned from about skill " + r.Start + " (estimated)" : ""), 8));
+            sp.Children.Add(GameTooltip.Muted("Spell ID " + r.SpellId + (r.ItemId > 0 ? " - Item ID " + r.ItemId : "")));
+            return gt;
         }
 
         // ---- test hooks
@@ -200,12 +204,11 @@ namespace ElansAddonHub
             return TipSheet(RecipeTip(r));
         }
 
-        FrameworkElement TipSheet(StackPanel content)
+        FrameworkElement TipSheet(GameTooltip content)
         {
-            var frame = new Border { Background = Res("Brush.Surface3"), BorderBrush = Res("Brush.Divider"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 8), Child = content };
-            frame.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            frame.Arrange(new Rect(frame.DesiredSize));
-            return frame;
+            content.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            content.Arrange(new Rect(content.DesiredSize));
+            return content;
         }
     }
 }

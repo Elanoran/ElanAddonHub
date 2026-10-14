@@ -7,6 +7,7 @@
          a Secondary detail line, a Caption extra line, and on the right a figure and the source label as a quiet chip. Rows without a link are not hit-testable (no hover veil). -->
     <DataTemplate x:Key="AtlasRowTemplate">
       <ContentControl x:Name="row" Style="{StaticResource Side.Row}" Padding="8,4" MinHeight="48" Tag="{Binding Link}" MouseLeftButtonUp="Row_Click" Focusable="False">
+        <ContentControl.ToolTip><ToolTip Style="{StaticResource GameTip}" Opened="RowTip_Opened" /></ContentControl.ToolTip>
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
