@@ -122,6 +122,10 @@ upload limit is set. Backups include `slots/` (`LODGE_BACKUP_FILES=0` leaves it 
 sudo bash server/tests/lodge_ops_test.sh      # backup, rotation, restore, update, rollback (temp folders, fake systemctl/curl)
 ```
 
+## The Armory (2.16)
+
+Members can choose characters to share with the lodge (Outpost > Settings > Lodge > Armory, off until they turn it on): what the character wears, its stats, talents, professions and hunter pets - never bags, bank, gold or mail. Everybody in the lodge can browse them on the Outpost's Characters page ("Lodge" switch). Guests (the shared code) neither share nor browse. Unticking a character removes it; a member who leaves or is removed takes theirs along. The data lives in `data/armory.json` (a few KB per character; inside `data/`, so `lodge-backup` includes it). After `sudo lodge-update` nothing else needs to be done; the only setting (in `/etc/lodge/lodge.env`, then `sudo systemctl restart lodge`) is `LODGE_ARMORY_ENABLED` (see the table below).
+
 ## The Atlas pool (2.15)
 
 Members who run Elan's Toolkit pool what it saw in game - which mobs dropped what (and how often), vendor stock, who found which item and where, mob spawn
@@ -133,4 +137,5 @@ and shows the sum, so a member re-sending data never counts twice. Guests can re
 
 | Setting | Meaning |
 |---|---|
+| `LODGE_ARMORY_ENABLED` (1) | `0` switches the Armory off: not advertised, `armory.put` answers `disabled`, the other messages answer an error, the data stays on disk |
 | `LODGE_ATLAS_ENABLED` (1) | `0` switches the feature off: not advertised, `atlas.share` / `atlas.get` answer `disabled`, the data stays on disk |

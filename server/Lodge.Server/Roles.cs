@@ -37,10 +37,12 @@ public static class Roles
         Perm.FlightShare => AtLeast(role, "member"),      // guests may read the shared flight times, not contribute
         Perm.AtlasShare => AtLeast(role, "member"),       // 2.15: guests may read the shared Atlas, not contribute
         Perm.AtlasRead => true,                           // 2.15: everyone who can see the lodge
+        Perm.ArmoryShare => AtLeast(role, "member"),      // 2.16: guests neither share characters nor browse the Armory
+        Perm.ArmoryRead => AtLeast(role, "member"),
         Perm.FilesRead => true,                           // 2.14: everyone who can see the lodge sees and saves the shared files
         Perm.FilesManage => AtLeast(role, "officer"),     // 2.14: upload a slot, replace it with a new version, roll back, delete (officers and the owner only)
         _ => false,
     };
 }
 
-public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels, SeeInvisible, ResetProfiles, Invite, RetireCodes, CalendarCreate, CalendarManage, FlightShare, FilesRead, FilesManage, AtlasShare, AtlasRead }
+public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels, SeeInvisible, ResetProfiles, Invite, RetireCodes, CalendarCreate, CalendarManage, FlightShare, FilesRead, FilesManage, AtlasShare, AtlasRead, ArmoryShare, ArmoryRead }

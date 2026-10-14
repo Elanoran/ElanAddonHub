@@ -83,6 +83,7 @@ namespace ElansAddonHub
             LodgePage.Init(Session);
             SettingsPage.Init(this, settings, LodgePage);
             InventoryView.Init(() => settings.WowRoot);
+            InventoryView.InitArmory(Session);
             ElansAddonHub.Services.Db2.ItemData.WowRoot = () => settings.WowRoot;
             ElansAddonHub.Services.Db2.ItemData.Enabled = () => !settings.ItemDataOff;
             ElansAddonHub.Services.AtlasObs.RevealedSource = new ElansAddonHub.Services.Db2.RevealedItemsSource();   // the items the game client revealed go to the Lodge through the existing Atlas sync
@@ -381,6 +382,7 @@ namespace ElansAddonHub
             if (Begin("hubdata")) { result += "\r\n" + await HubDataTest(dir); End(); }
             if (Begin("readers")) { result += "\r\n" + await ReadersTest(dir); End(); }
             if (Begin("characters")) { result += "\r\n" + await CharactersTest(dir); End(); }
+            if (Begin("armory")) { result += "\r\n" + await ArmoryTest(dir); End(); }
             if (Begin("itemdata")) { result += "\r\n" + await ItemDataTest(dir); End(); }
             if (Begin("seendata")) { result += "\r\n" + await SeenDataTest(dir); End(); }
             if (Begin("mapdata")) { result += "\r\n" + await MapDataTest(dir); End(); }
