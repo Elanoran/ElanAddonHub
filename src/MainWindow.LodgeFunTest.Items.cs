@@ -8,6 +8,8 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
+using ElansAddonHub.Services.Atlas;
+using ElansAddonHub.Services.Db2;
 
 namespace ElansAddonHub
 {
@@ -167,6 +169,84 @@ namespace ElansAddonHub
                 Session.FeedForTest(FunLfgMsg("i4", "Bob", 2, now, FunLfgJson("[Linen Cloth] run", now + 3600000, false, "", "open", "Bob", 1, 1, 3, ""), "[Looking for group] [Linen Cloth] run - ..."));
                 check("lfg: a sign-up card has no item chips (its fallback text is not shown)", Session.MessagesOf("general").First(m => m.Id == "i4").ItemChips.Count == 0);
                 check("2.8 server: item chips are purely client side, so they work on any server", Session.MessagesOf("general").First(m => m.Id == "i1").ItemChips.Count == 4);
+
+                // ---- Atlas links (the Copy button of every Atlas page): parsing
+                void ck(string n, bool ok, string why = null) => check(ok ? n : n + " [" + why + "]", ok);
+                var al = ItemLinks.Find("ids: item:2589 npc:46 obj:5 object:6 quest:783 zone:1411 instance:36 spell:133 skill:171");
+                ck("atlas parse: every entity kind is found (object: reads obj:), in reading order, with the canonical id", al.Count == ItemLinks.MaxPerMessage && al.All(x => x.Kind == ItemRefKind.Atlas)
+                    && string.Join(" ", al.Select(x => x.AtlasId)) == "item:2589 npc:46 obj:5 obj:6 quest:783 zone:1411");
+                var alB = ItemLinks.Find("instance:36 spell:133 skill:171 faction:72 Quest:12");
+                ck("atlas parse: instance, spell, skill, faction and a capitalised Quest:12", string.Join(" ", alB.Select(x => x.AtlasId)) == "instance:36 spell:133 skill:171 faction:72 quest:12" && alB.All(x => x.AtlasKind == x.AtlasId.Split(':')[0]));
+                var alI = ItemLinks.Find("item:2589");
+                ck("atlas parse: item:N carries the item id (so the item data names it) and the text range", alI.Count == 1 && alI[0].Id == 2589 && alI[0].AtlasKind == "item" && alI[0].Start == 0 && alI[0].Length == 9 && ItemLinks.Find("npc:46")[0].Id == 0);
+                var alP = ItemLinks.Find("try browse:items/weapons/one-handed-swords?minlvl=20 and talents:tree/hunter, professions:cooking/guide.");
+                ck("atlas parse: browse / talents / professions links (a trailing comma or dot is not part of them)", alP.Count == 3 && alP[0].AtlasId == "browse:items/weapons/one-handed-swords?minlvl=20" && alP[1].AtlasId == "talents:tree/hunter"
+                    && alP[2].AtlasId == "professions:cooking/guide" && alP.All(x => x.Kind == ItemRefKind.Atlas), string.Join(" | ", alP.Select(x => x.AtlasId)));
+                var alT = "x talents:tree/hunter, y";
+                var alTr = ItemLinks.Find(alT)[0];
+                ck("atlas parse: the range covers the token only", alT.Substring(alTr.Start, alTr.Length) == "talents:tree/hunter" && ItemLinks.Find("(npc:46)")[0].Start == 1 && ItemLinks.Find("see npc:46.").Count == 1);
+                ck("atlas parse: browse ids are normalised (the same text the Atlas history uses); a build link is a talents link",
+                    ItemLinks.Find("browse:ITEMS/Weapons?sort=ilvl&minlvl=20")[0].AtlasId == "browse:items/weapons?minlvl=20&sort=ilvl" && ItemLinks.Find("talents:build/abc123")[0].AtlasId == "talents:build/abc123");
+                string[] noAtlas = { "meet at 10:30", "note: x", "item: 5", "http://x/item:5", "xitem:5", "item:abc", "item:99999999999", "ratio 3:2", "http://example.com", "item:0", "item:", "npc:-4", "a:item:5", "foo/item:5", "?item:5",
+                    "item:5x", "item:5a", "my-item:5", "item=5", "items:5", "|Hitem:5:0|h", "quest: 783", "browse: items", "browse:", "talents:", "talents: tree/hunter", "talents:tree/dragon", "talents:foo", "professions:", "professions:nothing/guide",
+                    "browse:nothing/at/all", "browse:talents", "zone:12345678901" };
+                var badOnes = noAtlas.Where(t => ItemLinks.Find(t).Any(x => x.Kind == ItemRefKind.Atlas)).ToList();
+                ck("atlas parse: look-alikes are not links (" + string.Join(" | ", badOnes) + ")", badOnes.Count == 0);
+                ck("atlas parse: a bracketed, quoted or sentence-ending link still counts", ItemLinks.Find("[item:5]").Count == 1 && ItemLinks.Find("it was spell:133.").Count == 1 && ItemLinks.Find("\"npc:46\"").Count == 1);
+                var alM = ItemLinks.Find("item:2589 https://www.wowhead.com/classic/item=2589 |cff1eff00|Hitem:2589::|h[Linen Cloth]|h|r [Wool Cloth] npc:46 npc:46 https://www.wowhead.com/classic/item=2592", idOf);
+                ck("atlas parse: mixed with Wowhead / game links: the same item is one chip (the first mention wins), the same Atlas id twice is one chip", alM.Count == 4 && alM[0].Kind == ItemRefKind.Atlas && alM[0].Id == 2589
+                    && alM[1].Name == "Wool Cloth" && alM[2].AtlasId == "npc:46" && alM[3].Id == 2592 && alM[3].Kind == ItemRefKind.Wowhead, string.Join(" | ", alM.Select(x => x.Kind + " " + x.AtlasId + " " + x.Id + " " + x.Name)));
+                var alC = ItemLinks.Find("npc:1 npc:2 npc:3 [Thing One] [Thing Two] https://www.wowhead.com/item=7 npc:4 npc:5");
+                ck("atlas parse: Atlas links share the cap of 6 chips with the other kinds", alC.Count == ItemLinks.MaxPerMessage && alC.Count(x => x.Kind == ItemRefKind.Atlas) == 3, string.Join(" | ", alC.Select(x => x.Kind + " " + x.AtlasId)));
+
+                // ---- Atlas links: chips (names come from the Atlas data)
+                ItemData.SetForTest(new ItemSnapshot(new[] { CItem(102, "Atlas Linen", 2, 5, 1, 0, 7, 5, 13, 1000004), CItem(2589, "Wrong Name Wins", 4, 5, 1, 0, 7, 5, 13) }, new ClientItem[0]), ItemData.State.Ready);
+                SpellData.SetForTest(AtlasTestSpells());
+                var openedAtlas = new List<string>();
+                Action<string> onAtlas = aid => openedAtlas.Add(aid);
+                try
+                {
+                    Session.FeedForTest("{\"t\":\"msg\",\"channel\":\"general\",\"id\":\"a1\",\"at\":" + now + ",\"from\":\"Bob\",\"fromId\":2,\"text\":\"look: item:102 spell:133 faction:72 npc:4646 browse:items/weapons?minlvl=20 talents:tree/hunter\"}");
+                    var am = Session.MessagesOf("general").First(m => m.Id == "a1");
+                    await Task.WhenAll(am.ItemChips.Select(c => c.Resolving));
+                    await Task.Delay(300);
+                    var ac = am.ItemChips.ToList();
+                    ck("atlas chips: one per link in reading order", ac.Count == 6 && ac.All(c => c.IsAtlas) && string.Join(" ", ac.Select(c => c.Ref.AtlasId)) == "item:102 spell:133 faction:72 npc:4646 browse:items/weapons?minlvl=20 talents:tree/hunter");
+                    ck("atlas chips: item:N takes the name, quality colour and icon from the Atlas item data", ac[0].Name == "Atlas Linen" && ac[0].Quality == 2 && ((SolidColorBrush)ac[0].NameBrush).Color == (Color)ColorConverter.ConvertFromString("#1EFF00")
+                        && ac[0].TipLine.StartsWith("Uncommon") && ac[0].TipHint == "Click to open in the Atlas");
+                    ck("atlas chips: spells and factions are named by the Atlas, the tooltip says '<Kind> · <detail>'", ac[1].Name == "Fireball" && ac[1].TipLine == "Spell · Rank 1" && ac[2].Name == "Stormwind" && ac[2].TipLine.StartsWith("Faction"), ac[1].Name + " / " + ac[1].TipLine + " / " + ac[2].Name);
+                    ck("atlas chips: a kind glyph tile (the Atlas rows' glyph) when there is no icon; an NPC this PC does not know still shows '<Kind> <id>'", ac[1].TileGlyph == AtlasKinds.Glyph("spell") && ac[2].TileGlyph == AtlasKinds.Glyph("faction")
+                        && ac[3].Name == "NPC 4646" && ac[3].TileGlyph == AtlasKinds.Glyph("npc") && ac[3].TipLine.Contains("NPC") && ac[3].TipHint.Contains("Atlas"));
+                    ck("atlas chips: browse and talents links read as their Atlas titles", ac[4].Name == "Items › Weapons" && ac[4].TipLine.StartsWith("Atlas list") && ac[4].TileGlyph == AtlasCategories.Find("items").Glyph && ac[5].Name.StartsWith("Talents") && ac[5].Name.EndsWith("Hunter"), ac[4].Name + " / " + ac[5].Name);
+                    ck("atlas chips: the message text keeps the link as written", am.ShownText.Contains("item:102 spell:133") && am.ShownText.Contains("talents:tree/hunter"));
+
+                    // an unknown item: the fallback chip still opens the Atlas
+                    Session.FeedForTest("{\"t\":\"msg\",\"channel\":\"general\",\"id\":\"a2\",\"at\":" + now + ",\"from\":\"Bob\",\"fromId\":2,\"text\":\"item:999999 item:2589\"}");
+                    var am2 = Session.MessagesOf("general").First(m => m.Id == "a2");
+                    await Task.WhenAll(am2.ItemChips.Select(c => c.Resolving));
+                    ck("atlas chips: an item the data does not know is 'Item <id>'; the Atlas item data's name wins over the Bags data's", am2.ItemChips.Count == 2 && am2.ItemChips[0].Name == "Item 999999" && am2.ItemChips[0].Ref.Id == 999999
+                        && am2.ItemChips[1].Name == "Wrong Name Wins" && am2.ItemChips[1].Quality == 4);
+
+                    // a click opens the Atlas (item chips too), never Wowhead
+                    var wh = new List<string>();
+                    LodgePage.OpenLinkOverrideForTest = u => wh.Add(u);
+                    LodgePage.OpenAtlas -= OpenInAtlas; LodgePage.OpenAtlas += onAtlas;   // the window's own handler would switch the page
+                    foreach (var c in ac) LodgePage.ItemChipClickForTest(c);
+                    LodgePage.ItemChipClickForTest(am2.ItemChips[0]);
+                    ck("atlas chips: a click opens the Atlas page with the link's id and never Wowhead", wh.Count == 0 && string.Join(" ", openedAtlas) == "item:102 spell:133 faction:72 npc:4646 browse:items/weapons?minlvl=20 talents:tree/hunter item:999999", string.Join(" ", openedAtlas));
+                    openedAtlas.Clear();
+                    LodgePage.ItemChipClickForTest(chips[0]);
+                    ck("atlas chips: existing chips keep their behaviour (a plain click goes to Wowhead, not the Atlas)", wh.Count == 1 && wh[0] == "https://www.wowhead.com/classic/item=2589" && openedAtlas.Count == 0 && chips[0].TipHint.Contains("Ctrl+click"));
+                    await Task.Delay(300);
+                    LodgePage.UpdateLayout();
+                    var shownA = VisualsOf<TextBlock>(LodgePage.ChatListForTest).Select(t => t.Text).ToList();
+                    ck("atlas chips: they are drawn under the message", shownA.Contains("Atlas Linen") && shownA.Contains("Fireball") && shownA.Contains("Items › Weapons"), string.Join(",", shownA.Take(30)));
+                }
+                finally
+                {
+                    LodgePage.OpenAtlas -= onAtlas; LodgePage.OpenAtlas -= OpenInAtlas; LodgePage.OpenAtlas += OpenInAtlas; LodgePage.OpenLinkOverrideForTest = null;
+                    ItemData.ResetForTest(); SpellData.ResetForTest();
+                }
             }
             finally { ItemKnowledge.WowRoot = hadRoot; ItemKnowledge.ResetForTest(); LodgePage.OpenLinkOverrideForTest = null; }
         }

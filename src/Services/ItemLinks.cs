@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace ElansAddonHub.Services
 {
-    public enum ItemRefKind { Bracket, Wowhead, ChatLink }
+    public enum ItemRefKind { Bracket, Wowhead, ChatLink, Atlas }
 
     // one item mentioned in a chat message
     public class ItemRef
@@ -18,6 +18,8 @@ namespace ElansAddonHub.Services
         public int Id;               // 0 = not known (a [Name] that is not unambiguous in the data we have)
         public string Name;          // as written / from the link / from the URL's slug; null when nothing readable
         public int Quality = -1;     // from a pasted chat link's colour code, else -1 (the item data may know better)
+        public string AtlasId;       // Atlas links only: the canonical Atlas id ("item:2589", "npc:46", "browse:items/weapons", "talents:tree/hunter"); Id is also set for item:N
+        public string AtlasKind;     // Atlas links only: "item" | "npc" | ... | "browse" | "talents" | "professions"
     }
 
     // What this PC knows about items: the names, qualities and icons the Bags addon saved (the same data the Bags page shows).
@@ -148,6 +150,48 @@ namespace ElansAddonHub.Services
             "Looking for group", "edited", "deleted", "image", "picture", "screenshot", "video", "link", "url", "todo", "sic", "note", "spoiler", "citation needed",
         };
 
+        // Atlas links (the Copy button on every Atlas page): "<kind>:<number>" for the entity kinds, "browse:" / "talents:" / "professions:" + a path.
+        // Whole tokens only: not after a letter, digit or one of / = ? & . : @ % # - | (so "xitem:5", "http://x/item:5" and "|Hitem:5" do not count)
+        static readonly Regex AtlasEntity = new Regex(@"(?<![\w/=?&.:@%#|\-])(item|npc|obj|object|quest|zone|instance|spell|skill|faction):(\d{1,9})(?!\w)",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        static readonly char[] PathPunct = { '.', ',', ';', ':', '!', '?' };
+        static readonly Regex AtlasPath = new Regex(@"(?<![\w/=?&.:@%#|\-])(browse|talents|professions):([^\s<>""'`|\[\]()]{1,200})",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        // the canonical Atlas id of a browse / talents / professions path, null when it is not one the Atlas knows
+        static string PathId(string kind, string sub)
+        {
+            if (string.IsNullOrEmpty(sub)) return null;
+            try
+            {
+                switch (kind)
+                {
+                    case "browse":
+                        {
+                            if (!Services.Atlas.BrowseQuery.TryParse("browse:" + sub, out var q)) return null;
+                            var cat = Services.Atlas.AtlasCategories.Find(q.Cat);
+                            return cat != null && !cat.Hosted ? q.ToId() : null;
+                        }
+                    case "talents":
+                        {
+                            Services.Atlas.AtlasHosts.ParseTalents(sub, out var cf, out var code);
+                            if (cf.Length > 0) return Array.IndexOf(Services.Atlas.AtlasHosts.ClassFiles, cf) >= 0 ? Services.Atlas.AtlasHosts.TalentsId(cf) : null;
+                            return code.Length > 0 ? Services.Atlas.AtlasHosts.TalentsBuildId(code) : null;
+                        }
+                    case "professions":
+                        {
+                            Services.Atlas.AtlasHosts.ParseProfessions(sub, out var slug, out var tab);
+                            if (slug.Length == 0 && tab.Length == 0) return null;
+                            if (slug.Length > 0 && !Services.Atlas.AtlasHosts.ProfessionNames.Any(n => Services.Atlas.AtlasHosts.Slug(n) == slug)
+                                && !Services.Atlas.AtlasHosts.ProfessionList().Any(n => Services.Atlas.AtlasHosts.Slug(n) == slug)) return null;
+                            return "professions:" + sub.ToLowerInvariant();
+                        }
+                }
+            }
+            catch (Exception) { }
+            return null;
+        }
+
         public static List<ItemRef> Find(string text, Func<string, int> idOfName = null)
         {
             var found = new List<ItemRef>();
@@ -166,6 +210,22 @@ namespace ElansAddonHub.Services
                 if (!Free(m.Index, m.Length) || !int.TryParse(m.Groups[1].Value, out var id) || id <= 0) continue;
                 Add(new ItemRef { Kind = ItemRefKind.Wowhead, Start = m.Index, Length = m.Length, Id = id, Name = SlugName(m.Groups[2].Value) });
             }
+            foreach (Match m in AtlasEntity.Matches(text))
+            {
+                if (!Free(m.Index, m.Length) || !int.TryParse(m.Groups[2].Value, out var id) || id <= 0) continue;
+                var kind = m.Groups[1].Value.ToLowerInvariant();
+                if (kind == "object") kind = "obj";
+                Add(new ItemRef { Kind = ItemRefKind.Atlas, Start = m.Index, Length = m.Length, AtlasKind = kind, AtlasId = kind + ":" + id.ToString(CultureInfo.InvariantCulture), Id = kind == "item" ? id : 0 });
+            }
+            foreach (Match m in AtlasPath.Matches(text))
+            {
+                if (!Free(m.Index, m.Length)) continue;
+                var kind = m.Groups[1].Value.ToLowerInvariant();
+                var sub = m.Groups[2].Value.TrimEnd(PathPunct).Trim('/');
+                var aid = PathId(kind, sub);
+                if (aid == null) continue;
+                Add(new ItemRef { Kind = ItemRefKind.Atlas, Start = m.Index, Length = kind.Length + 1 + m.Groups[2].Value.TrimEnd(PathPunct).Length, AtlasKind = kind, AtlasId = aid });
+            }
             foreach (Match m in Bracket.Matches(text))
             {
                 if (!Free(m.Index, m.Length)) continue;
@@ -179,7 +239,7 @@ namespace ElansAddonHub.Services
             var res = new List<ItemRef>();
             foreach (var r in found)
             {
-                var key = r.Id > 0 ? "#" + r.Id : "n:" + r.Name;
+                var key = r.Id > 0 ? "#" + r.Id : r.AtlasId != null ? "a:" + r.AtlasId : "n:" + r.Name;
                 if (!seen.Add(key)) continue;
                 res.Add(r);
                 if (res.Count >= MaxPerMessage) break;

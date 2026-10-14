@@ -158,7 +158,7 @@ namespace ElansAddonHub
             LinkRow.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
             if (LinkText.Text != id) CopiedText.Visibility = Visibility.Collapsed;
             LinkText.Text = id; LinkText.ToolTip = id;
-            CopyLinkButton.ToolTip = "Copy link - paste it in the Atlas search (Ctrl+K)";
+            CopyLinkButton.ToolTip = "Copy link - paste it in Lodge chat or the Atlas search";
         }
 
         void CopyLink_Click(object sender, RoutedEventArgs e) => CopyLink();
