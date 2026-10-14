@@ -1,0 +1,108 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace ElansAddonHub.Services.WorldMap
+{
+    // A world table (WDT) of a continent: which of the 64 x 64 map tiles exist and the FileDataIDs of their files. Written from wowdev.wiki/WDT:
+    // a sequence of chunks (4-byte tag, 4-byte size, data). The tags are stored reversed on disk ("DIAM" for MAID). The chunk that matters is
+    //   MAID  = 4096 x MapFileDataIDs { rootADT, obj0ADT, obj1ADT, tex0ADT, lodADT, mapTexture, mapTextureN, minimapTexture } (8 x uint32, 32 bytes),
+    //           entry index = row * 64 + col (a tile without files has all zeros)
+    // MAIN (flags, 8 bytes x 4096) is read for the "has an ADT" bit only as a cross-check. Verified on the real Eastern Kingdoms (736 tiles) and
+    // Kalimdor (988 tiles) tables of build 1.60.1.70338.
+    public sealed class WdtTile { public int Col, Row; public int RootFdid, MinimapFdid; }
+
+    public sealed class WdtFile
+    {
+        public const int MaidEntry = 32, Entries = 4096;
+        public List<WdtTile> Tiles = new List<WdtTile>();
+        public int MainTiles = -1;             // tiles MAIN says have an ADT (-1 = no MAIN)
+        public string Problem;                 // set = nothing usable
+        public bool Ok => Problem == null;
+        public int WithMinimap => Tiles.Count(t => t.MinimapFdid != 0);
+
+        static string Tag(byte[] d, int p)
+        {
+            var a = new[] { (char)d[p], (char)d[p + 1], (char)d[p + 2], (char)d[p + 3] };
+            var s = new string(a);
+            if (s == "MAID" || s == "MAIN") return s;
+            return new string(a.Reverse().ToArray());
+        }
+
+        public static WdtFile Parse(byte[] d)
+        {
+            var w = new WdtFile();
+            if (d == null || d.Length < 16) { w.Problem = "the world table is empty or cut off"; return w; }
+            int maid = -1, main = -1, maidSize = 0, mainSize = 0;
+            string cut = null;
+            for (int p = 0; p + 8 <= d.Length;)
+            {
+                int size = BitConverter.ToInt32(d, p + 4);
+                if (size < 0 || (long)p + 8 + size > d.Length) { cut = "the world table is cut off"; break; }
+                var tag = Tag(d, p);
+                if (tag == "MAID") { maid = p + 8; maidSize = size; }
+                else if (tag == "MAIN") { main = p + 8; mainSize = size; }
+                p += 8 + size;
+            }
+            if (maid < 0) { w.Problem = cut ?? "this world table has no MAID chunk (the file ids of its tiles)"; return w; }
+            if (maidSize != Entries * MaidEntry) { w.Problem = "MAID has an unexpected size (" + maidSize + " bytes)"; return w; }
+            if (main >= 0 && mainSize == Entries * 8)
+            {
+                int n = 0;
+                for (int i = 0; i < Entries; i++) if ((BitConverter.ToUInt32(d, main + i * 8) & 1) != 0) n++;
+                w.MainTiles = n;
+            }
+            for (int i = 0; i < Entries; i++)
+            {
+                int o = maid + i * MaidEntry;
+                uint root = BitConverter.ToUInt32(d, o), mm = BitConverter.ToUInt32(d, o + 28);
+                if (root == 0 && mm == 0) continue;
+                if (mm > int.MaxValue || root > int.MaxValue) continue;
+                w.Tiles.Add(new WdtTile { Col = i % 64, Row = i / 64, RootFdid = (int)root, MinimapFdid = (int)mm });
+            }
+            return w;
+        }
+
+        // Strays: a small group of tiles (fewer than `minCluster`, 8-connected) far (more than `farTiles` tiles) from the biggest land mass. Some continents
+        // carry test leftovers like that in a far corner (Kalimdor has a 3 x 3 block at the top-left corner of the grid); they would stretch the map's
+        // bounds over empty sea. Small islands NEAR the main land (Darkspear Isles ...) are kept.
+        public static List<WdtTile> WithoutStrays(IList<WdtTile> tiles, int minCluster = 12, List<WdtTile> removed = null, int farTiles = 6)
+        {
+            var key = new Dictionary<int, WdtTile>();
+            foreach (var t in tiles) key[t.Row * 64 + t.Col] = t;
+            var seen = new HashSet<int>();
+            var comps = new List<List<WdtTile>>();
+            foreach (var t in tiles.OrderBy(t => t.Row).ThenBy(t => t.Col))
+            {
+                int k0 = t.Row * 64 + t.Col;
+                if (seen.Contains(k0)) continue;
+                var comp = new List<WdtTile>(); var q = new Queue<int>();
+                q.Enqueue(k0); seen.Add(k0);
+                while (q.Count > 0)
+                {
+                    int k = q.Dequeue(); comp.Add(key[k]);
+                    int c = k % 64, r = k / 64;
+                    for (int dr = -1; dr <= 1; dr++)
+                        for (int dc = -1; dc <= 1; dc++)
+                        {
+                            int nc = c + dc, nr = r + dr;
+                            if ((dc == 0 && dr == 0) || nc < 0 || nc > 63 || nr < 0 || nr > 63) continue;
+                            int nk = nr * 64 + nc;
+                            if (key.ContainsKey(nk) && seen.Add(nk)) q.Enqueue(nk);
+                        }
+                }
+                comps.Add(comp);
+            }
+            if (comps.Count <= 1) return tiles.OrderBy(t => t.Row).ThenBy(t => t.Col).ToList();
+            var main = comps.OrderByDescending(c => c.Count).First();
+            var keep = new List<WdtTile>();
+            foreach (var comp in comps)
+            {
+                bool stray = comp.Count < minCluster && !ReferenceEquals(comp, main)
+                    && comp.All(t => main.All(m => Math.Max(Math.Abs(m.Col - t.Col), Math.Abs(m.Row - t.Row)) > farTiles));
+                if (stray) removed?.AddRange(comp); else keep.AddRange(comp);
+            }
+            return keep.OrderBy(t => t.Row).ThenBy(t => t.Col).ToList();
+        }
+    }
+}

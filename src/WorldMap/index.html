@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<title>World map</title>
+<link rel="stylesheet" href="leaflet.css">
+<link rel="stylesheet" href="worldmap.css">
+</head>
+<body>
+<div id="map" aria-label="World map"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="ctx" role="menu" hidden></div>
+<div id="tip" hidden></div>
+<script src="leaflet.js"></script>
+<script src="worldmap.js"></script>
+</body>
+</html>

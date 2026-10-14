@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
+using ElansAddonHub.Services.Maps;
 
 namespace ElansAddonHub
 {
@@ -11,6 +13,8 @@ namespace ElansAddonHub
         // Talents and Professions are hosted categories of the Atlas (tiles on its start page, ids "talents:..." and "professions:..."): one page each, built once
         public TalentsPage TalentsView;
         public ProfessionsPage ProfessionsView;
+        WorldMapView worldMapView;
+        public WorldMapView WorldMapView => worldMapView ?? (worldMapView = MakeWorldMap());
         bool talentsWired, professionsWired;
         public ClassicLodgeSync ClassicSync;
 
@@ -42,6 +46,13 @@ namespace ElansAddonHub
                 Host = HostTalents, SubTitle = AtlasHosts.TalentsSubTitle, Search = AtlasHosts.TalentHits,
                 Canonical = sub => sub != null && sub.StartsWith("build/", StringComparison.OrdinalIgnoreCase) ? sub : TalentsSub(TalentsView.ClassFileNow, sub),
             });
+            // the world map: a zoomable continent (WebView2 + Leaflet) with the layers of the Atlas on it
+            AtlasCategories.Register(new AtlasCategory
+            {
+                Id = ElansAddonHub.Services.WorldMap.WorldMapIds.Category, Title = "World map", Glyph = "", Blurb = "Kalimdor and the Eastern Kingdoms from your own game files: zone names, flight paths, nodes, vendors, trainers, quest givers and rares", Order = 55,
+                Host = HostWorldMap, Search = ElansAddonHub.Services.WorldMap.WorldMapIds.Hits, SubTitle = WorldMapSubTitle, Canonical = sub => { WorldMapView.Navigate(sub); return WorldMapView.CurrentSub; },
+                Available = () => MapData.Status != MapData.State.Disabled,
+            });
             AtlasCategories.Register(new AtlasCategory
             {
                 Id = AtlasHosts.Professions, Title = "Professions", Glyph = AtlasKinds.Glyph("skill"), Blurb = "Recipes, leveling guides, what you can craft now, camping", Order = 95,
@@ -66,6 +77,39 @@ namespace ElansAddonHub
             TalentsView.Shown();
             if (code.Length > 0) TalentsView.Import(code);
             return TalentsView;
+        }
+
+        WorldMapView MakeWorldMap()
+        {
+            var v = new WorldMapView { Settings = settings, SaveSettings = () => SettingsStore.Save(settings) };
+            v.OpenAtlas += id => Dispatcher.BeginInvoke(new Action(() => { _ = AtlasView.Open(id); }));
+            v.SubChanged += sub => AtlasView.HostedChanged(ElansAddonHub.Services.WorldMap.WorldMapIds.Category, sub);
+            ElansAddonHub.Services.WorldMap.WorldMapLayers.SavedRoutes = () => settings.SavedRoutes;
+            ElansAddonHub.Services.WorldMap.WorldMapLayers.FlightTimes = FlightTimesForMap;
+            return v;
+        }
+
+        // "Horde|11>22" -> seconds: what the Lodge's members measured, then what this PC's Hunter Helper learned
+        IDictionary<string, double> FlightTimesForMap()
+        {
+            var d = new Dictionary<string, double>(StringComparer.Ordinal);
+            try { var m = Session?.FlightData; if (m != null) foreach (var kv in m.Legs) d[kv.Key] = kv.Value.T; } catch (Exception) { }
+            try { var l = FlightShare.ReadCached(settings.WowRoot, out _); if (l != null) foreach (var kv in l.Legs) if (!d.ContainsKey(kv.Key)) d[kv.Key] = kv.Value.T; } catch (Exception) { }
+            return d;
+        }
+
+        FrameworkElement HostWorldMap(string sub)
+        {
+            WorldMapView.Navigate(sub);
+            return WorldMapView;
+        }
+
+        string WorldMapSubTitle(string sub)
+        {
+            var idx = MapData.Index;
+            var t = ElansAddonHub.Services.WorldMap.WorldMapIds.Parse(sub, idx == null ? (Func<string, int?>)null : ElansAddonHub.Services.WorldMap.WorldMapIds.SlugsOf(idx));
+            if (!t.Valid || t.MapId < 0 || idx == null) return "";
+            return ElansAddonHub.Services.WorldMap.WorldMapService.Continent(idx, t.MapId)?.Name ?? "";
         }
 
         FrameworkElement HostProfessions(string sub)
