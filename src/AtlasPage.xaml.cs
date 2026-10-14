@@ -35,6 +35,7 @@ namespace ElansAddonHub
         {
             InitializeComponent();
             SizeChanged += (s, e) => Layout();
+            copiedTimer.Tick += (s, e) => { copiedTimer.Stop(); CopiedText.Visibility = Visibility.Collapsed; };
             Scroller.SizeChanged += (s, e) => Layout();
             PreviewKeyDown += Page_PreviewKeyDown;
             PreviewMouseUp += Page_PreviewMouseUp;
@@ -138,8 +139,49 @@ namespace ElansAddonHub
             BackButton.IsEnabled = history.CanBack;
             ForwardButton.IsEnabled = history.CanForward;
             HomeButton.IsEnabled = !IsStart;
+            UpdateLink();
             BackButton.Opacity = history.CanBack ? 1 : 0.4; ForwardButton.Opacity = history.CanForward ? 1 : 0.4; HomeButton.Opacity = IsStart ? 0.4 : 1;
         }
+
+        // ---- the page's own link: shown in the header with a Copy button; the id is what the search box and the Lodge accept (item:2589, browse:items/weapons?q=3, talents:tree/hunter)
+        public Action<string> ClipboardSeamForTest;
+        public string LastCopiedForTest { get; private set; }
+        public string LinkShown => LinkRow.Visibility == Visibility.Visible ? LinkText.Text : "";
+        public Button CopyLinkButtonForTest => CopyLinkButton;
+        public bool CopiedShownForTest => CopiedText.Visibility == Visibility.Visible;
+        readonly DispatcherTimer copiedTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+
+        void UpdateLink()
+        {
+            var id = history.Current ?? "";
+            bool has = id.Length > 0;
+            LinkRow.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+            if (LinkText.Text != id) CopiedText.Visibility = Visibility.Collapsed;
+            LinkText.Text = id; LinkText.ToolTip = id;
+            CopyLinkButton.ToolTip = "Copy link - paste it in the Atlas search (Ctrl+K)";
+        }
+
+        void CopyLink_Click(object sender, RoutedEventArgs e) => CopyLink();
+
+        public bool CopyLink()
+        {
+            var id = history.Current ?? "";
+            if (id.Length == 0) return false;
+            bool ok = true;
+            try { if (ClipboardSeamForTest != null) ClipboardSeamForTest(id); else Clipboard.SetText(id); }
+            catch (Exception)
+            {
+                try { System.Threading.Thread.Sleep(80); if (ClipboardSeamForTest != null) ClipboardSeamForTest(id); else Clipboard.SetText(id); }
+                catch (Exception) { ok = false; }
+            }
+            CopiedText.Text = ok ? "Link copied" : "Could not reach the clipboard";
+            CopiedText.SetResourceReference(TextBlock.ForegroundProperty, ok ? "Brush.Success" : "Brush.Danger");
+            CopiedText.Visibility = Visibility.Visible;
+            copiedTimer.Stop(); copiedTimer.Start();
+            if (ok) LastCopiedForTest = id;
+            return ok;
+        }
+
 
         void Back_Click(object sender, RoutedEventArgs e) { _ = Back(); }
         void Forward_Click(object sender, RoutedEventArgs e) { _ = Forward(); }

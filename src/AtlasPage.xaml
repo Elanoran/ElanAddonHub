@@ -108,9 +108,17 @@
         <StackPanel Grid.Column="1" VerticalAlignment="Center">
           <TextBlock x:Name="TitleText" Text="Atlas" Style="{StaticResource Text.Title}" TextTrimming="CharacterEllipsis" />
           <TextBlock x:Name="SubText" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+          <!-- the page's own Atlas link (item:2589, browse:items/weapons, talents:tree/hunter) as a quiet chip with a copy button; hidden on the start page -->
+            <StackPanel x:Name="LinkRow" Orientation="Horizontal" Margin="0,4,0,0" Visibility="Collapsed" HorizontalAlignment="Left">
+              <Border Style="{StaticResource Chip}" Padding="8,0" MinHeight="20" VerticalAlignment="Center">
+                <TextBlock x:Name="LinkText" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="560" />
+              </Border>
+              <Button x:Name="CopyLinkButton" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE8C8;" Margin="4,0,0,0" Click="CopyLink_Click" AutomationProperties.Name="Copy link" />
+              <TextBlock x:Name="CopiedText" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Success}" Text="Link copied" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
+            </StackPanel>
         </StackPanel>
         <TextBox x:Name="SearchBox" Grid.Column="2" Style="{StaticResource Input}" Width="260" Margin="12,0,0,0" VerticalAlignment="Center"
-                 Tag="Search, or browse the categories" AutomationProperties.Name="Search Atlas" TextChanged="Search_Changed" PreviewKeyDown="Search_KeyDown" GotKeyboardFocus="Search_Focus" />
+                 Tag="Search, or browse the categories" ToolTip="Search by name, or paste a link like item:2589 or npc:46" AutomationProperties.Name="Search Atlas" TextChanged="Search_Changed" PreviewKeyDown="Search_KeyDown" GotKeyboardFocus="Search_Focus" />
       </Grid>
 
       <Grid Grid.Row="1">

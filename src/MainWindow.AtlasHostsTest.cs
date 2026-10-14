@@ -128,6 +128,7 @@ namespace ElansAddonHub
 
                 await AtlasView.Open("talents:tree/mage"); await Task.Delay(100); UpdateLayout();
                 Check("talents: talents:tree/mage selects the Mage (the id is a step in the history), the breadcrumb follows", tp.ClassFileNow == "MAGE" && tp.ClassTitleForTest == "Mage" && AtlasView.CurrentId == "talents:tree/mage" && AtlasView.HostedCrumbsForTest == "Atlas > Talents > Mage" && AtlasView.History.Count == 3);
+                { var got = AtlasClickCopy(); Check("link: a hosted page shows its id (talents:tree/mage) in the header and Copy puts it on the clipboard", AtlasView.LinkShown == "talents:tree/mage" && got == "talents:tree/mage", AtlasView.LinkShown + " / " + got); }
                 tp.SelectClass("HUNTER");
                 Check("talents: picking a class in the page changes the Atlas id without a new history step (like a browse filter) and the breadcrumb", AtlasView.CurrentId == "talents:tree/hunter" && AtlasView.History.Count == 3 && AtlasView.History.Current == "talents:tree/hunter" && AtlasView.HostedCrumbsForTest == "Atlas > Talents > Hunter", AtlasView.CurrentId);
                 tp.Click(10, false);
@@ -144,6 +145,7 @@ namespace ElansAddonHub
                 Check("professions: the recipe list of First Aid is drawn (Heavy Linen Bandage)", pp.RecipeRowNamesForTest().Contains("Heavy Linen Bandage"), string.Join(",", pp.RecipeRowNamesForTest()));
                 await AtlasView.Open("professions:cooking/guide"); await Task.Delay(300); UpdateLayout();
                 Check("professions: professions:cooking/guide - Cooking on the Leveling guide tab", pp.ProfessionNow == "Cooking" && pp.TabNow == "guide" && AtlasView.CurrentId == "professions:cooking/guide", pp.ProfessionNow + "/" + pp.TabNow);
+                { var got = AtlasClickCopy(); Check("link: Professions shows its id too, following the profession and tab picked in it (professions:cooking/guide)", AtlasView.LinkShown == AtlasView.CurrentId && AtlasView.CurrentId.StartsWith("professions:cooking") && got == AtlasView.CurrentId, AtlasView.LinkShown + " / " + got); }
                 await AtlasView.Open("professions:camp"); await Task.Delay(200);
                 Check("professions: professions:camp is the Camping tab", pp.TabNow == "camp" && AtlasView.CurrentId == "professions:camp");
                 await AtlasView.Open("professions:alchemy/craft"); await Task.Delay(200);
