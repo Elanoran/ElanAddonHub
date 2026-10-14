@@ -155,6 +155,17 @@ bash "$ADMIN" role Mia officer --force >/dev/null 2>&1 && ok "--force overrides 
 export LODGE_CODES_FILE="$orig_codes"; INV="$T/invites"; DEV="$T/devices"
 rm -rf "$T2"
 
+# ================================================================ 2.22: purge requests for the running server
+T3="$(mktemp -d)"; export LODGE_CODES_FILE="$T3/codes"
+bash "$ADMIN" add Keeper owner >/dev/null; bash "$ADMIN" add Poisoner >/dev/null; bash "$ADMIN" add Leaver >/dev/null
+bash "$ADMIN" purge Poisoner --atlas-only >/dev/null && [ "$(grep -c . "$T3/purge.d/"*.req)" -ge 1 ] && grep -q "^atlas	Poisoner$" "$T3/purge.d/"*.req && ok "purge --atlas-only queues one atlas request and keeps the member" || bad "purge atlas"
+grep -q '^Poisoner:' "$LODGE_CODES_FILE" && ok "purge --atlas-only leaves the codes entry" || bad "purge removed the member"
+bash "$ADMIN" purge Poisoner >/dev/null 2>&1 && bad "full purge of a current member accepted" || ok "purge: refuses a full purge of someone who is still a member"
+bash "$ADMIN" remove Leaver >/dev/null && grep -q "^all	Leaver$" "$T3/purge.d/"*.req && ok "remove queues a full purge" || bad "remove did not queue a purge"
+bash "$ADMIN" purge "../etc" --atlas-only >/dev/null 2>&1 && bad "bad name accepted" || ok "purge: bad names are refused"
+[ -z "$(ls -A "$T3/purge.d" | grep '^\.req\.')" ] && [ "$(stat -c '%a' "$T3/purge.d")" = "770" ] && ok "purge.d: 0770, no temp files left" || bad "purge.d mode/temp"
+export LODGE_CODES_FILE="$orig_codes"; rm -rf "$T3"
+
 rm -rf "$T" "$watch_log"
 echo "lodge-admin: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

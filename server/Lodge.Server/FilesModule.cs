@@ -184,6 +184,22 @@ public sealed class FilesModule : IModule
         }
     }
 
+    // 2.22: a member left / was removed: shared files stay (they belong to the lodge) but no longer name them as the uploader / creator
+    public int Anonymise(string login, string former)
+    {
+        int n = 0;
+        lock (gate)
+        {
+            foreach (var s in slots)
+            {
+                if (Names.Same(s.CreatedBy, login)) { s.CreatedBy = former; n++; }
+                foreach (var v in s.Versions) if (Names.Same(v.UploadedBy, login)) { v.UploadedBy = former; n++; }
+            }
+            if (n > 0) SaveIndexLocked();
+        }
+        return n;
+    }
+
     static void TryDelete(string f) { try { if (File.Exists(f)) File.Delete(f); } catch { } }
 
     static string NewId() => Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();

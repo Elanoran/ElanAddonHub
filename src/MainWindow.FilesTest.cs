@@ -175,6 +175,17 @@ namespace ElansAddonHub
                 Session.SentForTest = o => sent.Add(o);
                 settings.LodgeUrl = "http://files.test/lodge";
                 check("fixture: the work folder is under the scratch folder", Path.GetFullPath(work).StartsWith(Path.GetFullPath(dir), StringComparison.OrdinalIgnoreCase));
+
+                // ---- opening a downloaded chat file: by its real extension, never by the MIME type the server claims
+                check("open: pictures, text and PDF may be opened", new[] { "a.png", "A.PNG", "a.jpg", "a.jpeg", "a.gif", "a.webp", "a.bmp", "notes.txt", "paper.pdf", "a.png " }.All(LodgeFiles.CanOpenDirectly));
+                check("open: a zip is never opened from the chat", !LodgeFiles.CanOpenDirectly("pack.zip") && !LodgeFiles.CanOpenDirectly("PACK.ZIP"));
+                check("open: programs, scripts, shortcuts and unknown types are not opened", new[] { "a.exe", "a.EXE", "a.bat", "a.ps1", "a.lnk", "a.msi", "a.js", "a.vbs", "a.hta", "a.scr", "a.jar", "a.docm", "a.html", "a.svg", "a.url", "a.cpl", "noext", "", ".png.exe", "a.png.exe", "a.exe.", "a.exe. ", "a.pdf.lnk" }.All(n => !LodgeFiles.CanOpenDirectly(n)));
+                check("open: a null path is refused", !LodgeFiles.CanOpenDirectly(null));
+                var evilExe = Path.Combine(work, "patch.exe"); File.WriteAllText(evilExe, "not a program");
+                check("open: TryOpen refuses a program without starting anything", !LodgeFiles.TryOpen(evilExe));
+                check("image: the MIME type alone does not make a picture (a program called image/png)", !new FileVM { Name = "patch.exe", Mime = "image/png", Size = 100 }.IsImage && !new FileVM { Name = "pack.zip", Mime = "image/png", Size = 100 }.IsImage && !new FileVM { Name = "noext", Mime = "image/png", Size = 100 }.IsImage);
+                check("image: a picture name with an image type is one; a picture name with a text type is not; too big is not", new FileVM { Name = "shot.png", Mime = "image/png", Size = 100 }.IsImage && new FileVM { Name = "shot.JPG", Mime = "image/jpeg", Size = 100 }.IsImage
+                    && !new FileVM { Name = "shot.png", Mime = "text/plain", Size = 100 }.IsImage && !new FileVM { Name = "shot.png", Mime = "image/png", Size = 9 * 1024 * 1024 }.IsImage);
                 fake = new FakeFilesServer();
 
                 // ---- a server without the feature: the page is hidden and nothing is asked

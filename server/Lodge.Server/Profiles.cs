@@ -245,6 +245,17 @@ public sealed class ProfileStore
         }
     }
 
+    // 2.22: a member left / was removed: their profile (about, play times, characters, display name) is deleted. True when there was one.
+    public bool Remove(string name)
+    {
+        lock (gate)
+        {
+            if (!profiles.Remove(ProfileRules.Key(name))) return false;
+            SaveAll();
+            return true;
+        }
+    }
+
     // flush everything (shutdown, tests)
     public bool Flush() { lock (gate) return SaveAll(); }
 

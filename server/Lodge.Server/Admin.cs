@@ -36,6 +36,7 @@ public class AdminModule : IModule
                 case "admin.invite": await Invite(me, m); break;
                 case "admin.role": await SetRole(me, m); break;
                 case "admin.remove": await Remove(me, m); break;
+                case "admin.purge": await Purge(me, m); break;
                 case "admin.channel.add": await AddChannel(me, m); break;
                 case "admin.channel.remove": await RemoveChannel(me, m); break;
                 case "mod.kick": await Kick(me, m); break;
@@ -205,11 +206,26 @@ public class AdminModule : IModule
         var name = J.Str(m, "name");
         if (LodgeHub.Same(name, me.Name)) throw new InvalidOperationException("You can't remove yourself");
         hub.Auth.Remove(name);
-        hub.Armory.RemoveMember(name);                  // their shared characters go with them
-        hub.Badges.RemoveMember(name);                  // and their badges
-        hub.Log.LogInformation("{By} removed {Name}", me.Name, name);
+        var gone = await hub.PurgeMember(name);         // everything they authored goes with them (see LodgeHub.PurgeMember)
+        hub.Log.LogInformation("{By} removed {Name} ({Count} stored item(s) forgotten)", me.Name, name, gone.Total);
         await hub.ApplyCodeChanges();
         await SendMembers(me);
+    }
+
+    // owner: "revert member". atlasOnly (the default) takes one member's Atlas contributions out of the pool and leaves them a member - the undo for
+    // poisoned data. atlasOnly = false forgets everything stored about a person who is NO LONGER a member (leftovers from before 2.22, or a console removal).
+    async Task Purge(Member me, JsonObject m)
+    {
+        var name = (J.Str(m, "name") ?? "").Trim();
+        if (name.Length == 0) throw new InvalidOperationException("Pick a member");
+        bool atlasOnly = !(m["atlasOnly"] is JsonValue v && v.TryGetValue<bool>(out var b) && !b);
+        if (!atlasOnly && hub.Auth.ListPersonal().Any(p => Names.Same(p.Name, name)))
+            throw new InvalidOperationException("They are still a member - revert their Atlas contributions, or remove them first");
+        var r = await hub.PurgeMember(name, atlasOnly);
+        hub.Log.LogInformation("{By} {What} {Name}: {Count} item(s)", me.Name, atlasOnly ? "reverted the Atlas contributions of" : "purged the stored data of", Names.ForLog(name), r.Total);
+        var o = r.ToJson();
+        o["t"] = "admin.purged";
+        await hub.Send(me, o);
     }
 
     // owner: the lodge's display name and welcome text (validated and length-capped by LodgeInfoStore)
@@ -234,9 +250,8 @@ public class AdminModule : IModule
                 return true;
             }
             var devices = hub.Auth.Leave(me.Name);
-            hub.Armory.RemoveMember(me.Name);               // their shared characters go with them
-            hub.Badges.RemoveMember(me.Name);               // and their badges
-            hub.Log.LogInformation("{Name} left the lodge ({Count} devices signed out)", Names.ForLog(me.Name), devices.Count);
+            var gone = await hub.PurgeMember(me.Name);      // everything they authored goes (see LodgeHub.PurgeMember)
+            hub.Log.LogInformation("{Name} left the lodge ({Count} devices signed out, {Items} stored item(s) forgotten)", Names.ForLog(me.Name), devices.Count, gone.Total);
             await hub.Send(me, new JsonObject { ["t"] = "member.left" });
             foreach (var d in devices) await hub.DisconnectDevice(d.Id, "You left the lodge");
             await hub.ApplyCodeChanges();   // sessions on a permanent code, and anything left over

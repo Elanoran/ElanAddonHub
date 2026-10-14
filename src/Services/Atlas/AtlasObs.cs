@@ -44,6 +44,9 @@ namespace ElansAddonHub.Services
         public static readonly Version NodesServerVersion = new Version(2, 18, 0);   // sub-feature "atlas3": gathering node positions
         public static readonly Version FishSpotsServerVersion = new Version(2, 21, 0);   // sub-feature "atlas4": fishing spots
         public const long MinUnix = 1_000_000_000L;
+        // the Lodge server (2.22) refuses a time more than 5 minutes ahead: such an entry is dropped here instead of being sent to be refused (and cannot pin a vendor or quest)
+        public const long FutureSlackSeconds = 300;
+        public static long MaxAt => DateTimeOffset.UtcNow.ToUnixTimeSeconds() + FutureSlackSeconds;
 
         // ---------------------------------------------------------------- shapes
 
@@ -343,7 +346,7 @@ namespace ElansAddonHub.Services
                     if (o == null || !o.TryGetValue("x", out var xv) || !Coord4(xv, out var x) || !o.TryGetValue("y", out var yv) || !Coord4(yv, out var y)
                         || !o.TryGetValue("n", out var nv) || !Whole(nv, 1, MaxNodeCount, out var n)) { dropped++; continue; }
                     var sp = new FishSpot { X = x, Y = y, N = n };
-                    if (o.TryGetValue("at", out var av) && Whole(av, MinUnix, 4_000_000_000L, out var a)) sp.At = a;
+                    if (o.TryGetValue("at", out var av) && Whole(av, MinUnix, MaxAt, out var a)) sp.At = a;
                     if (o.TryGetValue("items", out var iv))
                     {
                         var io = iv as Dictionary<string, object>;
@@ -435,7 +438,7 @@ namespace ElansAddonHub.Services
         public static Vendor ParseVendor(object node, ref int dropped)
         {
             var o = node as Dictionary<string, object>;
-            if (o == null || !o.TryGetValue("at", out var at) || !Whole(at, MinUnix, 4_000_000_000L, out var a)
+            if (o == null || !o.TryGetValue("at", out var at) || !Whole(at, MinUnix, MaxAt, out var a)
                 || !o.TryGetValue("z", out var zv) || !Whole(zv, 1, MaxMapId, out var z) || !o.TryGetValue("x", out var xv) || !Coord(xv, out var x)
                 || !o.TryGetValue("y", out var yv) || !Coord(yv, out var y)) { dropped++; return null; }
             var v = new Vendor { At = a, Zone = (int)z, X = x, Y = y };
@@ -471,7 +474,7 @@ namespace ElansAddonHub.Services
         public static Quest ParseQuest(object node, ref int dropped)
         {
             var o = node as Dictionary<string, object>;
-            if (o == null || !o.TryGetValue("at", out var at) || !Whole(at, MinUnix, 4_000_000_000L, out var a)) { dropped++; return null; }
+            if (o == null || !o.TryGetValue("at", out var at) || !Whole(at, MinUnix, MaxAt, out var a)) { dropped++; return null; }
             var q = new Quest { At = a };
             if (o.TryGetValue("rewards", out var rw)) q.Rewards = ItemList(rw, ref dropped);
             if (o.TryGetValue("choices", out var ch)) q.Choices = ItemList(ch, ref dropped);
@@ -512,7 +515,7 @@ namespace ElansAddonHub.Services
                     var o = e as Dictionary<string, object>;
                     if (o == null || !o.TryGetValue("x", out var xv) || !Coord4(xv, out var x) || !o.TryGetValue("y", out var yv) || !Coord4(yv, out var y)
                         || !o.TryGetValue("n", out var nv) || !Whole(nv, 1, MaxNodeCount, out var n)) { dropped++; continue; }
-                    long at = o.TryGetValue("at", out var av) && Whole(av, MinUnix, 4_000_000_000L, out var a) ? a : 0;
+                    long at = o.TryGetValue("at", out var av) && Whole(av, MinUnix, MaxAt, out var a) ? a : 0;
                     int same = l.FindIndex(p => SameNode(p, x, y));
                     if (same >= 0) { var p = l[same]; p.N = Math.Max(p.N, n); p.At = Math.Max(p.At, at); l[same] = p; continue; }
                     if (l.Count >= maxPerMap) { dropped++; continue; }
@@ -546,7 +549,7 @@ namespace ElansAddonHub.Services
         {
             var o = node as Dictionary<string, object>;
             if (o == null || !o.TryGetValue("i", out var iv) || !Whole(iv, 1, MaxItemId, out var i) || !o.TryGetValue("c", out var cv) || !Whole(cv, 1, 1000, out var c)
-                || !o.TryGetValue("at", out var av) || !Whole(av, MinUnix, 4_000_000_000L, out var at) || !(o.TryGetValue("src", out var sv) && sv is string src && ValidSrc(src))) { dropped++; return null; }
+                || !o.TryGetValue("at", out var av) || !Whole(av, MinUnix, MaxAt, out var at) || !(o.TryGetValue("src", out var sv) && sv is string src && ValidSrc(src))) { dropped++; return null; }
             var f = new Find { Item = (int)i, Count = (int)c, At = at, Src = src };
             if (o.ContainsKey("z") || o.ContainsKey("x") || o.ContainsKey("y"))
             {

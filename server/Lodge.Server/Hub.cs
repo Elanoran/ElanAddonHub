@@ -100,9 +100,9 @@ public interface IModule
 }
 
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
-public class LodgeHub
+public partial class LodgeHub
 {
-    public const string Version = "2.21.0";
+    public const string Version = "2.22.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -266,6 +266,7 @@ public class LodgeHub
             ["calendar"] = Calendar.WelcomeView(),
             ["canInvite"] = Roles.Can(me.Role, Perm.Invite),
             ["canRetire"] = Roles.Can(me.Role, Perm.RetireCodes),
+            ["canPurge"] = Roles.Can(me.Role, Perm.ManageMembers),   // 2.22: the owner can revert a member's Atlas contributions
             ["device"] = DeviceView(me),
             ["reactions"] = new JsonArray(ChatModule.ReactionSet.Select(e => (JsonNode)JsonValue.Create(e)).ToArray()), // canonical ids (2.4)
             ["pins"] = pins,
@@ -502,6 +503,7 @@ public class LodgeHub
                     Datasets.Tick();
                     Badges.Tick();
                     Realms.Tick();
+                    await ProcessPurgeRequests();
                     Auth.Strikes.Sweep();
                     SweepBudgets();
                 }

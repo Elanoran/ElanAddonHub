@@ -58,6 +58,12 @@ public sealed partial class AtlasStore
     public bool Dirty { get; private set; }
     public string Epoch { get; private set; }
 
+    // 2.22: the store refuses to grow once the file on disk is this big (the file is only loaded up to MaxFileBytes; growing past it would silently lose data after a restart)
+    public long WriteCapBytes { get; set; } = MaxFileBytes - 2L * 1024 * 1024;
+    long storedBytes;
+    bool capLogged;
+    public long StoredBytes { get { lock (Gate) return storedBytes; } }
+
     public AtlasStore(string dataDir, ILogger log, IClock clock)
     {
         this.log = log; this.clock = clock;
@@ -68,6 +74,7 @@ public sealed partial class AtlasStore
         try
         {
             if (File.Exists(tmp)) { if (!File.Exists(path)) File.Move(tmp, path); else File.Delete(tmp); }
+            if (File.Exists(path)) storedBytes = new FileInfo(path).Length;
             if (File.Exists(path) && new FileInfo(path).Length <= MaxFileBytes) Load(JsonNode.Parse(File.ReadAllText(path))?.AsObject());
         }
         catch (Exception e) { log?.LogWarning("Atlas: load failed: {Error}", e.GetType().Name); }
@@ -151,7 +158,7 @@ public sealed partial class AtlasStore
                 if (vendors.Count < Atlas.MaxVendors && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseVendor(node, now, out var v)) { v.By = By(node); v.Rev = R(node); vendors[id] = v; }
         if (root["quests"] is JsonObject qo)
             foreach (var (key, node) in qo)
-                if (quests.Count < Atlas.MaxQuests && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseQuest(node, now, out var q)) { q.Rev = R(node); quests[id] = q; }
+                if (quests.Count < Atlas.MaxQuests && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseQuest(node, now, out var q)) { q.By = By(node); q.Rev = R(node); quests[id] = q; }
         if (root["spawns"] is JsonObject sp)
             foreach (var (key, node) in sp)
             {
@@ -166,13 +173,13 @@ public sealed partial class AtlasStore
                 if (revealed.Count < Atlas.MaxRevealed && Atlas.Key(key, Atlas.MaxItemId, out var id) && Atlas.ParseRevealed(node, out var x)) { x.By = By(node); x.Rev = R(node); revealed[id] = x; }
         if (root["seenNpcs"] is JsonObject sno)
             foreach (var (key, node) in sno)
-                if (seenNpcs.Count < Atlas.MaxSeenNpcs && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenNpc(node, out var x)) { x.Rev = R(node); seenNpcs[id] = x; }
+                if (seenNpcs.Count < Atlas.MaxSeenNpcs && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenNpc(node, out var x)) { x.By = By(node); x.Rev = R(node); seenNpcs[id] = x; }
         if (root["seenObjects"] is JsonObject sob)
             foreach (var (key, node) in sob)
-                if (seenObjects.Count < Atlas.MaxSeenObjects && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenObject(node, out var x)) { x.Rev = R(node); seenObjects[id] = x; }
+                if (seenObjects.Count < Atlas.MaxSeenObjects && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenObject(node, out var x)) { x.By = By(node); x.Rev = R(node); seenObjects[id] = x; }
         if (root["seenQuests"] is JsonObject sqo)
             foreach (var (key, node) in sqo)
-                if (seenQuests.Count < Atlas.MaxSeenQuests && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenQuest(node, out var x)) { x.Rev = R(node); seenQuests[id] = x; }
+                if (seenQuests.Count < Atlas.MaxSeenQuests && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenQuest(node, out var x)) { x.By = By(node); x.Rev = R(node); seenQuests[id] = x; }
         if (root["finds"] is JsonArray fa)
             foreach (var node in fa)
             {
@@ -269,6 +276,7 @@ public sealed partial class AtlasStore
     {
         public int Accepted, Unchanged, Rejected;
         public bool Changed;
+        public bool Full;   // 2.22: refused because the store reached its size cap
         public int Total => Accepted + Unchanged + Rejected;
     }
 
@@ -283,6 +291,13 @@ public sealed partial class AtlasStore
     {
         var r = new ShareResult();
         long now = NowSec, revBefore = rev;
+        if (storedBytes >= WriteCapBytes)
+        {
+            // 2.22 write cap: a full pool does not grow (it would become unloadable after a restart); the owner can revert a member to make room
+            r.Rejected++; r.Full = true;
+            if (!capLogged) { capLogged = true; log?.LogWarning("Atlas: the store is at its size cap ({Bytes} bytes) - new contributions are refused", storedBytes); }
+            return r;
+        }
         if (!members.TryGetValue(identity, out var md))
         {
             if (members.Count >= MaxMembers) { r.Rejected++; return r; }
@@ -293,12 +308,12 @@ public sealed partial class AtlasStore
         Counters(r, md, identity, Objects, m["objects"], Atlas.MaxObjectsPerShare);
         Counters(r, md, identity, Fishing, m["fishing"], Atlas.MaxFishingPerShare);
         Vendors(r, identity, m["vendors"], now);
-        Quests(r, m["quests"], now);
+        Quests(r, identity, m["quests"], now);
         Spawns(r, identity, m["spawns"]);
         Revealed(r, identity, m["items"]);
-        Seen(r, m["seenNpcs"], Atlas.MaxSeenNpcsPerShare, seenNpcs, Atlas.MaxSeenNpcs, (JsonNode n, out Atlas.SeenNpc v) => Atlas.ParseSeenNpc(n, out v), (a, b) => a.Fill(b), (v, rv) => v.Rev = rv);
-        Seen(r, m["seenObjects"], Atlas.MaxSeenObjectsPerShare, seenObjects, Atlas.MaxSeenObjects, (JsonNode n, out Atlas.SeenObject v) => Atlas.ParseSeenObject(n, out v), (a, b) => a.Fill(b), (v, rv) => v.Rev = rv);
-        Seen(r, m["seenQuests"], Atlas.MaxSeenQuestsPerShare, seenQuests, Atlas.MaxSeenQuests, (JsonNode n, out Atlas.SeenQuest v) => Atlas.ParseSeenQuest(n, out v), (a, b) => a.Fill(b), (v, rv) => v.Rev = rv);
+        Seen(r, identity, m["seenNpcs"], Atlas.MaxSeenNpcsPerShare, seenNpcs, Atlas.MaxSeenNpcs, (JsonNode n, out Atlas.SeenNpc v) => Atlas.ParseSeenNpc(n, out v), (a, b) => a.Fill(b), (v, rv, by) => { v.Rev = rv; if (by != null) v.By = by; });
+        Seen(r, identity, m["seenObjects"], Atlas.MaxSeenObjectsPerShare, seenObjects, Atlas.MaxSeenObjects, (JsonNode n, out Atlas.SeenObject v) => Atlas.ParseSeenObject(n, out v), (a, b) => a.Fill(b), (v, rv, by) => { v.Rev = rv; if (by != null) v.By = by; });
+        Seen(r, identity, m["seenQuests"], Atlas.MaxSeenQuestsPerShare, seenQuests, Atlas.MaxSeenQuests, (JsonNode n, out Atlas.SeenQuest v) => Atlas.ParseSeenQuest(n, out v), (a, b) => a.Fill(b), (v, rv, by) => { v.Rev = rv; if (by != null) v.By = by; });
         Finds(r, md, identity, who, m["finds"], now);
         Nodes(r, md, m["nodes"]);
         FishSpots(r, md, m["fishspots"]);
@@ -347,7 +362,7 @@ public sealed partial class AtlasStore
         }
     }
 
-    void Quests(ShareResult r, JsonNode sect, long now)
+    void Quests(ShareResult r, string identity, JsonNode sect, long now)
     {
         if (sect == null) return;
         if (sect is not JsonObject so) { r.Rejected++; return; }
@@ -359,7 +374,7 @@ public sealed partial class AtlasStore
             quests.TryGetValue(id, out var old);
             if (old == null && quests.Count >= Atlas.MaxQuests) { r.Rejected++; continue; }
             if (old != null && q.At <= old.At) { r.Unchanged++; continue; }
-            q.Rev = ++rev; quests[id] = q;
+            q.By = identity; q.Rev = ++rev; quests[id] = q;
             r.Accepted++; r.Changed = true;
         }
     }
@@ -410,7 +425,7 @@ public sealed partial class AtlasStore
     delegate bool SeenParse<T>(JsonNode n, out T v);
 
     // npc / object / quest details the clients have seen: the first good description of an id stays, a later one may fill fields that are still empty
-    void Seen<T>(ShareResult r, JsonNode sect, int maxPerShare, Dictionary<int, T> table, int cap, SeenParse<T> parse, Func<T, T, bool> fill, Action<T, long> setRev)
+    void Seen<T>(ShareResult r, string identity, JsonNode sect, int maxPerShare, Dictionary<int, T> table, int cap, SeenParse<T> parse, Func<T, T, bool> fill, Action<T, long, string> setRev)
     {
         if (sect == null) return;
         if (sect is not JsonObject so) { r.Rejected++; return; }
@@ -422,12 +437,12 @@ public sealed partial class AtlasStore
             if (table.TryGetValue(id, out var old))
             {
                 if (!fill(old, v)) { r.Unchanged++; continue; }
-                setRev(old, ++rev);
+                setRev(old, ++rev, null);
             }
             else
             {
                 if (table.Count >= cap) { r.Rejected++; continue; }
-                setRev(v, ++rev); table[id] = v;
+                setRev(v, ++rev, identity); table[id] = v;
             }
             r.Accepted++; r.Changed = true;
         }
@@ -591,9 +606,12 @@ public sealed partial class AtlasStore
         return o;
     }
 
-    static JsonObject FindJson(Atlas.Find f, string by)
+    // 2.22 guests: a find shows only the day it happened and "a member", never who found it or at what time
+    public const string GuestFindName = "a member";
+
+    static JsonObject FindJson(Atlas.Find f, string by, bool dayOnly = false)
     {
-        var o = new JsonObject { ["s"] = f.Rev, ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At, ["by"] = by };
+        var o = new JsonObject { ["s"] = f.Rev, ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = dayOnly ? f.At - f.At % 86_400 : f.At, ["by"] = by };
         if (f.Z > 0) { o["z"] = f.Z; o["x"] = f.X; o["y"] = f.Y; }
         return o;
     }
@@ -602,7 +620,7 @@ public sealed partial class AtlasStore
     // Records changed after `since`, in revision order, cut into pages of about Atlas.PageBytes: with more = true ask again with since = rev.
     // full = the client's state cannot be continued (since 0, another epoch, or a revision this store never reached): it replaces everything it had.
     // The aggregate record of a source is replaced as a whole. nameOf turns a find's login into the name shown (display name). Caller holds Gate.
-    public JsonObject Get(long since, string epoch, Func<string, string> nameOf)
+    public JsonObject Get(long since, string epoch, Func<string, string> nameOf, bool guest = false)
     {
         bool full = since <= 0 || since > rev || epoch != Epoch;
         if (full) since = 0;
@@ -640,7 +658,7 @@ public sealed partial class AtlasStore
                 case 10: node = SeenQuestJson(seenQuests[c.key]); break;
                 case 11: node = NodesJson(nodeAggs[c.key]); break;
                 case 12: node = FishJson(fishAggs[c.key].Spots); break;
-                default: node = FindJson(finds[c.key], nameOf(finds[c.key].Who)); break;
+                default: node = guest ? FindJson(finds[c.key], GuestFindName, true) : FindJson(finds[c.key], nameOf(finds[c.key].Who)); break;
             }
             int size = node.ToJsonString().Length + key.Length + 6;
             if (taken > 0 && bytes + size > Atlas.PageBytes) break;
@@ -716,7 +734,7 @@ public sealed partial class AtlasStore
             var vo = new JsonObject();
             foreach (var (id, v) in vendors) { var j = VendorJson(v); j["b"] = v.By; j["r"] = v.Rev; vo[id.ToString(CultureInfo.InvariantCulture)] = j; }
             var qo = new JsonObject();
-            foreach (var (id, q) in quests) { var j = QuestJson(q); j["r"] = q.Rev; qo[id.ToString(CultureInfo.InvariantCulture)] = j; }
+            foreach (var (id, q) in quests) { var j = QuestJson(q); j["b"] = q.By; j["r"] = q.Rev; qo[id.ToString(CultureInfo.InvariantCulture)] = j; }
             var sp = new JsonObject();
             foreach (var (id, s) in spawns)
                 sp[id.ToString(CultureInfo.InvariantCulture)] = new JsonObject
@@ -727,11 +745,11 @@ public sealed partial class AtlasStore
             var io = new JsonObject();
             foreach (var (id, x) in revealed) { var j = RevealedJson(x); j["b"] = x.By; j["r"] = x.Rev; io[id.ToString(CultureInfo.InvariantCulture)] = j; }
             var sno = new JsonObject();
-            foreach (var (id, x) in seenNpcs) { var j = SeenNpcJson(x); j["r"] = x.Rev; sno[id.ToString(CultureInfo.InvariantCulture)] = j; }
+            foreach (var (id, x) in seenNpcs) { var j = SeenNpcJson(x); j["b"] = x.By; j["r"] = x.Rev; sno[id.ToString(CultureInfo.InvariantCulture)] = j; }
             var sob = new JsonObject();
-            foreach (var (id, x) in seenObjects) { var j = SeenObjectJson(x); j["r"] = x.Rev; sob[id.ToString(CultureInfo.InvariantCulture)] = j; }
+            foreach (var (id, x) in seenObjects) { var j = SeenObjectJson(x); j["b"] = x.By; j["r"] = x.Rev; sob[id.ToString(CultureInfo.InvariantCulture)] = j; }
             var sqo = new JsonObject();
-            foreach (var (id, x) in seenQuests) { var j = SeenQuestJson(x); j["r"] = x.Rev; sqo[id.ToString(CultureInfo.InvariantCulture)] = j; }
+            foreach (var (id, x) in seenQuests) { var j = SeenQuestJson(x); j["b"] = x.By; j["r"] = x.Rev; sqo[id.ToString(CultureInfo.InvariantCulture)] = j; }
             var fa = new JsonArray();
             foreach (var f in finds) { var j = FindJson(f, ""); j.Remove("by"); j.Remove("s"); j["b"] = f.Identity; j["w"] = f.Who; j["r"] = f.Rev; fa.Add(j); }
             var root = new JsonObject
@@ -741,6 +759,13 @@ public sealed partial class AtlasStore
                 ["seenNpcs"] = sno, ["seenObjects"] = sob, ["seenQuests"] = sqo,
             };
             var bytes = Encoding.UTF8.GetBytes(root.ToJsonString());
+            if (bytes.Length > MaxFileBytes)
+            {
+                // never replace a good file with one the next start cannot load
+                storedBytes = Math.Max(storedBytes, bytes.Length);
+                log?.LogWarning("Atlas: not saved - the data ({Bytes} bytes) is over the {Cap} byte limit; revert a member's contributions to make room", bytes.Length, MaxFileBytes);
+                return false;
+            }
             using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 fs.Write(bytes);
@@ -748,6 +773,7 @@ public sealed partial class AtlasStore
             }
             File.Move(tmp, path, overwrite: true);
             Dirty = false; lastSave = clock.UtcNow;
+            storedBytes = bytes.Length; if (storedBytes < WriteCapBytes) capLogged = false;
             return true;
         }
         catch (Exception e)

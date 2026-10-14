@@ -42,7 +42,7 @@ public static partial class Atlas
     public const int ShareBurst = 3;
 
     public const long MinUnix = 1_000_000_000L;  // 2001: an observation older than that is no observation
-    public const long FutureSlackSeconds = 86_400;
+    public const long FutureSlackSeconds = 300;   // 2.22: at most 5 minutes ahead (clock skew); a far-future time would pin a vendor / quest / find against real updates
 
     [GeneratedRegex(@"^(npc:[1-9][0-9]{0,6}|obj:[1-9][0-9]{0,6}|vendor:[1-9][0-9]{0,6}|quest:[1-9][0-9]{0,6}|fish)\z", RegexOptions.CultureInvariant)]
     private static partial Regex SrcRx();
@@ -191,7 +191,7 @@ public static partial class Atlas
 
     public sealed class Quest
     {
-        public long At, Rev; public int[] Rewards = Array.Empty<int>(), Choices = Array.Empty<int>();
+        public long At, Rev; public string By = ""; public int[] Rewards = Array.Empty<int>(), Choices = Array.Empty<int>();
         public bool SameContent(Quest o) => o != null && At == o.At && Rewards.SequenceEqual(o.Rewards) && Choices.SequenceEqual(o.Choices);
     }
 

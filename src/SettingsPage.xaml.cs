@@ -41,6 +41,8 @@ namespace ElansAddonHub
             public bool HasCode { get; set; } = true;
             public int Devices { get; set; } = -1;
             public bool CanRetire { get; set; }
+            public bool CanPurge { get; set; }
+            public Visibility RevertVisibility => CanPurge ? Visibility.Visible : Visibility.Collapsed;
             public string DevicesText => Devices < 0 ? "" : Devices == 1 ? "1 device" : Devices + " devices";
             public Visibility RetireVisibility => CanRetire && HasCode && Devices > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -192,6 +194,7 @@ namespace ElansAddonHub
             FillLodgeInfo();
             session.Changed += () => { NavGm.Visibility = session.CanManage || session.CanInvite ? Visibility.Visible : Visibility.Collapsed; UpdateInviteMode(); UpdateDevicesCard(); };
             session.AdminMembers += FillAdmin;
+            session.AdminPurged += m => GmStatus.Text = m.Int("atlas") > 0 ? $"Took {m.Int("atlas")} Atlas item(s) shared by {m.Str("name")} back out. They stay a member." : $"{m.Str("name")} had nothing in the Atlas.";
             session.DevicesChanged += FillDevices;
             session.Error += text => { if (SecGm.Visibility == Visibility.Visible) GmStatus.Text = text; };
             InitProfile();
@@ -788,7 +791,7 @@ namespace ElansAddonHub
             MemberRows.ItemsSource = members.Select(m => new MemberRow
                 {
                     Name = m.Str("name"), Role = m.Str("role"), Online = m.Bool("online"),
-                    HasCode = !m.ContainsKey("hasCode") || m.Bool("hasCode"), Devices = m.ContainsKey("devices") ? m.Int("devices") : -1, CanRetire = session.CanRetire,
+                    HasCode = !m.ContainsKey("hasCode") || m.Bool("hasCode"), Devices = m.ContainsKey("devices") ? m.Int("devices") : -1, CanRetire = session.CanRetire, CanPurge = session.CanPurge,
                 })
                 .OrderByDescending(m => MemberVM.RoleLevel(m.Role)).ThenBy(m => m.Name).ToList();
             ChannelRows.ItemsSource = channels.Select(c =>
@@ -874,6 +877,15 @@ namespace ElansAddonHub
                 $"Their old permanent code stops working for good. Their devices keep working. Only do this when all of {name}'s PCs have joined with an invite or been upgraded.",
                 "Retire code", danger: true))
                 session.RetireCode(name);
+        }
+
+        void RevertAtlas_Click(object sender, RoutedEventArgs e)
+        {
+            if (!((sender as FrameworkElement)?.Tag is string name)) return;
+            if (Dialog.Confirm(Window.GetWindow(this), $"Revert {name}'s Atlas contributions?",
+                $"Everything {name} shared with the lodge's Atlas (kill counts, drops, vendors, quests, finds, gathering spots) is taken out for everybody. {name} stays a member, and the Atlas fills in again from the next shares. This cannot be undone.",
+                "Revert", danger: true))
+                session.RevertAtlas(name);
         }
 
         void MemberRole_Changed(object sender, SelectionChangedEventArgs e)

@@ -15,21 +15,25 @@ public partial class ChatModule
         return (ch, s, msg);
     }
 
+    // Every read and write of a card's JSON happens under the store lock: JsonObject is not safe to read while another thread sets a property
+    // (two people tapping Join at the same moment used to be able to throw "Collection was modified" from Lfg.Is).
     async Task LfgJoin(Member me, JsonObject m, string role)
     {
         var (ch, s, msg) = FindCard(me, m);
-        if (msg == null || !Lfg.Is(msg)) return;
-        Lfg.Result r;
-        lock (s) r = Lfg.Join((JsonObject)msg["lfg"], me.Name, role);
+        if (msg == null) return;
+        Lfg.Result r; bool card;
+        lock (s) { card = Lfg.Is(msg); r = card ? Lfg.Join((JsonObject)msg["lfg"], me.Name, role) : Lfg.Result.Unchanged; }
+        if (!card) return;
         await Finish(me, ch, s, msg, r, "That role is full");
     }
 
     async Task LfgLeave(Member me, JsonObject m)
     {
         var (ch, s, msg) = FindCard(me, m);
-        if (msg == null || !Lfg.Is(msg)) return;
-        Lfg.Result r;
-        lock (s) r = Lfg.Leave((JsonObject)msg["lfg"], me.Name);
+        if (msg == null) return;
+        Lfg.Result r; bool card;
+        lock (s) { card = Lfg.Is(msg); r = card ? Lfg.Leave((JsonObject)msg["lfg"], me.Name) : Lfg.Result.Unchanged; }
+        if (!card) return;
         await Finish(me, ch, s, msg, r, null);
     }
 
@@ -37,10 +41,19 @@ public partial class ChatModule
     async Task LfgEnd(Member me, JsonObject m, string status)
     {
         var (ch, s, msg) = FindCard(me, m);
-        if (msg == null || !Lfg.Is(msg)) return;
-        if (!IsAuthor(me, msg) && !Roles.Can(me.Role, Perm.Moderate)) { await hub.Error(me, "Only the organiser or an officer can do that", "lfg"); return; }
-        Lfg.Result r;
-        lock (s) r = Lfg.SetStatus((JsonObject)msg["lfg"], status);
+        if (msg == null) return;
+        Lfg.Result r = Lfg.Result.Unchanged; bool card, allowed = true;
+        lock (s)
+        {
+            card = Lfg.Is(msg);
+            if (card)
+            {
+                allowed = IsAuthor(me, msg) || Roles.Can(me.Role, Perm.Moderate);
+                if (allowed) r = Lfg.SetStatus((JsonObject)msg["lfg"], status);
+            }
+        }
+        if (!card) return;
+        if (!allowed) { await hub.Error(me, "Only the organiser or an officer can do that", "lfg"); return; }
         await Finish(me, ch, s, msg, r, null);
     }
 
@@ -53,16 +66,17 @@ public partial class ChatModule
             case Lfg.Result.Denied: await hub.Error(me, "Pick Tank, Healer, DPS or Maybe", "lfg"); return;
             case Lfg.Result.Unchanged: return;
         }
-        JsonObject lfg; string text;
+        JsonObject lfg; string text, id;
         lock (s)
         {
             var live = (JsonObject)msg["lfg"];
             text = Lfg.Fallback(live);
             msg["text"] = text; // older clients and search see the current state after a reload
+            id = (string)msg["id"];
             lfg = live.DeepClone().AsObject();
             s.MarkDirty();
         }
         QueueFlush(s);
-        await hub.Broadcast(new JsonObject { ["t"] = "lfg", ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["lfg"] = lfg, ["text"] = text }, Viewers(ch));
+        await hub.Broadcast(new JsonObject { ["t"] = "lfg", ["channel"] = ch.Id, ["id"] = id, ["lfg"] = lfg, ["text"] = text }, Viewers(ch));
     }
 }

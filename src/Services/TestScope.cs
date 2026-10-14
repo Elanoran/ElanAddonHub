@@ -171,7 +171,7 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.DesignTest\.SelfUpdated\.cs$");   // screenshot-only design run
             R(@"^src/(MainWindow\.Startup(ShiftTest(\.Checks)?)?\.cs|Skeleton\.cs)$", "startup", "addons");
             R(@"^src/Services/(AddonScanner|AddonSuggest|AddonSources|CurseForgeLocal|GitHubStats)\.cs$", "thirdparty", "addons", "selfupdated");
-            R(@"^src/Services/(Installer|SelfUpdater)\.cs$", "update", "addons");
+            R(@"^src/Services/(Installer|SelfUpdater|PathSafety)\.cs$", "update", "addons");
             R(@"^src/Services/UpdateChannel\.cs$", "update", "round3");
             R(@"^addon/", "addons");
             // ---- health, dialogs, strip

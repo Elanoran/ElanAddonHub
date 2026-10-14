@@ -214,7 +214,7 @@ longer lets a backslash into a name.
 ## 2.15.0 (the Atlas pool)
 
 - Two messages: `atlas.share` (members and up) and `atlas.get` (anyone, guests included); answers `atlas.shared` and `atlas.data` (paged, about 200 KB). Feature `atlas` in the welcome and `/features`; `LODGE_ATLAS_ENABLED=0` stops advertising it and both messages answer `disabled`. Data is never deleted by switching it off.
-- Everything is validated server side in one place (`Atlas`): ids and counts are whole numbers in fixed ranges (a string, boolean, fraction or NaN is refused), coordinates 0..1, times after 2001 and at most one day ahead, find sources match `npc|obj|vendor|quest:N` or `fish`, names are cleaned like any text (NFKC, control characters out) and lose `" \ < > | [ ]`, cut at 80. An entry that fails is refused whole. Unknown fields are dropped; character names are never accepted or stored, finds carry the member's Lodge name.
+- Everything is validated server side in one place (`Atlas`): ids and counts are whole numbers in fixed ranges (a string, boolean, fraction or NaN is refused), coordinates 0..1, times after 2001 and at most five minutes ahead (2.22; was one day), find sources match `npc|obj|vendor|quest:N` or `fish`, names are cleaned like any text (NFKC, control characters out) and lose `" \ < > | [ ]`, cut at 80. An entry that fails is refused whole. Unknown fields are dropped; character names are never accepted or stored, finds carry the member's Lodge name.
 - Counting is cumulative and idempotent: per member and per field the server stores max(stored, received) and shows the sum over members, so repeats and replays cannot inflate anything. Plausibility bounds per member: kills per source <= 100000, all counters together <= 1000000, dropped events <= kills x 10, items per event <= 200, zones add up to <= kills, <= 6000 / 3000 / 400 sources, <= 700 finds, <= 10 points per npc. Honest limit: one member can still claim up to these bounds for himself; the pool is a convenience, not evidence.
 - Budgets: a per-identity `AtlasShare` bucket (burst 3, one token per 2 minutes) on top of the Control budget; a refused share counts towards the flood disconnect; `atlas.get` spends the Page budget. Frame limit 64 KB.
 - Storage: `<data>/atlas.json`, atomic (tmp, flush, rename; a tmp is used only if the main file is missing), 64 MB cap on load, every loaded value re-validated by the same rules, written at most every 30 s while busy, every 15 s housekeeping and at shutdown. It is inside the data folder, so `lodge-backup` includes it. Table bounds: 6000 vendors, 20000 quests, 8000 spawn npcs, 40000 revealed items, 2000 members.
@@ -246,13 +246,35 @@ longer lets a backslash into a name.
 - One poll per interval for the whole lodge (not per member), 15 s timeouts, response bodies capped at 2 MB, backoff on errors. The Blizzard JSON is parsed defensively: names are cut to 60 characters, at most 16 realms, unknown shapes simply find nothing.
 - The status is public information, so guests receive it too.
 - Real Blizzard calls are never made by the tests (a fake HTTP handler).
+## 2.22.0 (security: forgetting members, a trust model for the Atlas, caps)
+
+From the sharing and security review. What changed, and the choices made:
+
+- **One fan-out forgets a member** (`LodgeHub.PurgeMember`), called by `member.leave`, `admin.remove`, the owner's `admin.purge` and the console (`lodge-admin purge`, and `remove`, which queues one). Per store:
+  - *Atlas pool*: **removed** - the member's kill / object / fishing counters, gathering nodes and fishing spots (the merged totals are rebuilt from everybody else), finds (the name and the time go with them), spawn points, and every vendor, quest, revealed-item and seen npc / object / quest row they authored.
+  - *Flights*: **removed** - their leg values and names; the merged table is rebuilt.
+  - *Calendar*: their **sign-ups are removed**; the **events they organised stay** (they belong to the lodge's calendar) and show `(former member)` as organiser. Chat event cards follow.
+  - *Profile, Armory, Badges*: **deleted**.
+  - *Chat history*: the **messages stay with their text** - a conversation with one side cut out makes no sense - but the **author becomes `(former member)`** (parentheses are not allowed in a login name, so nobody can ever take it). Their connection id, reactions and places on sign-up (LFG) cards are removed; quotes of their messages and pins show `(former member)`. Clients that are connected keep what they already show until they reload the history.
+  - *Files*: uploaded files (chat and shared Files) **stay** - they belong to the lodge and expire on their own - but no longer name the uploader.
+  - *Backups* keep what they held when they were taken until they rotate out (`LODGE_BACKUP_KEEP`).
+- **Revert member (owner only).** `admin.purge { name, atlasOnly }`: `atlasOnly` (the default) takes one member's Atlas contributions out and leaves them a member - the undo for poisoned data. `atlasOnly: false` forgets everything about someone who is **no longer** a member (refused for a current member). The Atlas epoch changes, so every client fetches the whole pool again (a delta cannot express a removal). Console: `lodge-admin purge <name> [--atlas-only]` writes a request file into `<codes folder>/purge.d/` (atomic: private temp file, then rename; mode 0660; the server reads at most 20 per 15 s tick, ignores files over 512 bytes and names that are not plain names, and deletes every request it reads). Outpost: Settings > Guild Master > Members > **Revert Atlas**.
+- **Authorship on every Atlas row.** Quests and seen npcs / objects / quests now record who sent them (`b` in `atlas.json`; rows saved before 2.22 have no author and cannot be reverted by member). Revealed items and seen rows stay **first-writer-wins**; a revert simply removes the author's rows and the next contributor's version goes in on their next share. A field that a later member filled in on a seen row goes with the row.
+- **Times are clamped to now + 5 minutes** (was a day) for vendors, quests and finds, on the server and in the Outpost's parser (`AtlasObs`): a time far in the future could pin a vendor or quest against every real update. Nodes and fishing spots carry no time on the server.
+- **The Atlas does not grow past its file limit.** `atlas.json` is only loaded up to 64 MB. A share is refused with `why: "full"` (logged, once per fill) once the file on disk is within 2 MB of that; a save that would exceed the limit is not written (the last good file stays). Revert a member to make room.
+- **Guests get a coarser Atlas.** In `atlas.data`, finds show `by: "a member"` and the day only (`at` rounded down to 00:00 UTC). Members see what they saw before.
+- **Chat uploads block programs and scripts** like the Files module (`exe dll bat cmd ps1 ... lnk jar`, checked on the real last extension, trailing dots and spaces ignored): HTTP 415 "Programs and scripts (.exe) can't be shared here". A zip is accepted (its content is not looked at in chat).
+- **The flaky test**: `LfgTests.Many_simultaneous_joins_never_exceed_the_slots_or_double_up_a_person` failed about one run in six with "Collection was modified". A real race, not a test problem: the LFG join / leave / close handlers read the card's JSON (`Lfg.Is`, `IsAuthor`, the id for the broadcast) outside the store lock while another request was setting the card's text. All reads are under the lock now, and `Concurrent_joins_leaves_and_closes_never_throw` hammers it (it failed 1 run in 3 before the fix). Edit / delete / react still read a message outside the lock (not seen failing; same fix if they ever do).
+
+The Outpost side (same release train): manifest folders, ids and game versions must be plain names that resolve inside AddOns / the backup folder, updates only from https GitHub hosts and the self-update needs a SHA-256, downloaded chat files open only by a picture / text / PDF extension, SavedVariables parsing is depth- and size-limited, and an `http://` lodge address (other than localhost / 127.0.0.1) is refused. See `src/CHANGELOG.md`.
+
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 497 unit tests (fake clock, temp folders)
+dotnet test server/Lodge.Tests                                   # 591 unit tests (fake clock, temp folders)
 dotnet build -c Release server/Lodge.Server
 python server/tests/security_integration.py                     # 150 checks against local servers (python -X utf8 on Windows)
-sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 41 checks
+sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 70 checks
 sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, 41 checks
 ```
 

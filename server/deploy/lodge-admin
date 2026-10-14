@@ -26,6 +26,12 @@
 #   sudo lodge-admin remove Bob        Bob's code and devices stop working, he's disconnected within 15 seconds
 #   sudo lodge-admin show Bob          print Bob's code again
 #   sudo lodge-admin list              who is in, with their rank
+#
+# Forgetting a person's data (2.22) - the server runs these within 15 seconds (it must be running):
+#   sudo lodge-admin purge Bob --atlas-only   revert: take everything Bob put into the Atlas pool back out; Bob stays a member
+#   sudo lodge-admin purge Bob                forget everything stored about a person who is NO LONGER a member (Atlas, flights, sign-ups,
+#                                             profile, armory, badges; chat messages stay with "(former member)" as the author).
+#                                             `remove` queues this by itself; use `purge` for people removed before 2.22.
 # The server re-reads the files by itself; no restart needed. The hub's Guild Master panel edits the same files.
 #
 # Safety: umask 077; every change holds an flock on <codes>.lock (the server takes the same lock); the new file is
@@ -58,7 +64,7 @@ cmd="${1:-list}"
 shift || true
 
 # --- argument parsing: flags anywhere, the rest is the name (and a rank as its last word for add/role/invite)
-days=""; hours=""; uses=""; force=0; guest=0; recover=0; ifneeded=0
+days=""; hours=""; uses=""; force=0; guest=0; recover=0; ifneeded=0; atlasonly=0
 rest=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -69,6 +75,7 @@ while [ "$#" -gt 0 ]; do
     --guest) guest=1; shift ;;
     --force) force=1; shift ;;
     --recover) recover=1; shift ;;
+    --atlas-only) atlasonly=1; shift ;;
     --if-needed) ifneeded=1; shift ;;
     *) rest+=("$1"); shift ;;
   esac
@@ -160,6 +167,21 @@ revoke_pending_invites() {
   awk -F'\t' -v OFS='\t' -v n="$name" -v t="$(now)" 'BEGIN{n=tolower(n)} $0 !~ /^#/ && $3=="person" && tolower($4)==n && $11!="1" && $8>t && $10<$9 { $11="1" } { print }' "$INV" | write_to "$INV"
 }
 
+# ask the running server to forget a person's stored data (2.22): one small request file per call in <codes folder>/purge.d, written
+# atomically (private temp file, then rename) - the server's 15 second housekeeping runs and deletes it. $1 = all | atlas, $2 = name.
+PURGE="$DIR/purge.d"
+queue_purge() {
+  mkdir -p "$PURGE"
+  chown "$OWNER" "$PURGE" 2>/dev/null || true
+  chmod 0770 "$PURGE"
+  tmp="$(mktemp "$PURGE/.req.XXXXXXXXXX")"
+  printf '%s\t%s\n' "$1" "$2" > "$tmp"
+  chown "$OWNER" "$tmp" 2>/dev/null || true
+  chmod 0660 "$tmp"
+  mv -f -- "$tmp" "$PURGE/$(date +%s)-$(openssl rand -hex 4).req"
+  tmp=""
+}
+
 # one OWNER LINK: kind owner-claim, 1 hour, single use. $1 = "-" (claim a lodge with no owner), "*" (recovery, the person types
 # which owner they are) or the owner's name (recovery for that owner). Prints the link to stdout, the warning to stderr.
 make_claim() {
@@ -243,7 +265,23 @@ case "$cmd" in
     if [ -f "$DEV" ]; then   # their devices go with them
       awk -F'\t' -v n="$name" 'BEGIN{n=tolower(n)} /^#/ { print; next } tolower($3)==n { next } { print }' "$DEV" | write_to "$DEV"
     fi
-    echo "Removed $name - disconnected within 15 seconds"
+    queue_purge all "$name"   # and the server forgets what they stored (2.22)
+    echo "Removed $name - disconnected within 15 seconds; their stored data is forgotten by the server within 15 seconds"
+    ;;
+  purge)
+    need_name
+    if [ "$atlasonly" -eq 1 ]; then
+      queue_purge atlas "$name"
+      echo "Queued: $name's Atlas contributions come out of the pool within 15 seconds (they stay a member). The server must be running."
+    else
+      if [ -f "$FILE" ] && has_code && [ "$force" -ne 1 ]; then
+        echo "$name is still a member. To undo bad Atlas data only: sudo lodge-admin purge $name --atlas-only"
+        echo "To remove them and everything they stored: sudo lodge-admin remove $name"
+        exit 1
+      fi
+      queue_purge all "$name"
+      echo "Queued: everything stored about $name is forgotten within 15 seconds (chat messages stay, shown as a former member). The server must be running."
+    fi
     ;;
   show)
     need_name
@@ -355,6 +393,7 @@ case "$cmd" in
     echo "                       | invite NAME [role] [--days N] | invite --guest [--uses N] | invites | revoke-invite ID"
     echo "                       | devices [NAME] | revoke-device ID | retire-code NAME"
     echo "                       | add NAME [role] | role NAME ROLE | remove NAME | show NAME | list"
+    echo "                       | purge NAME [--atlas-only]"
     exit 1
     ;;
 esac

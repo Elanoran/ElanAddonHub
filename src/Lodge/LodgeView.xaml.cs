@@ -437,6 +437,8 @@ namespace ElansAddonHub.Lodge
         void UrlBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             var link = InviteLinks.Parse(EffectiveLinkText);
+            if (link.Insecure) JoinFail(InviteLinks.InsecureText);
+            else if (JoinStatus.Text == InviteLinks.InsecureText) JoinStatus.Text = "";   // the address was fixed: the warning goes
             CodeFromLink.Text = link.IsInvite ? "One-time invite found in the link" : "Invite code found in the link";
             CodeFromLink.Visibility = link.Secret != null ? Visibility.Visible : Visibility.Collapsed;
             CodeArea.Visibility = link.Secret != null ? Visibility.Collapsed : Visibility.Visible;
@@ -465,6 +467,7 @@ namespace ElansAddonHub.Lodge
             if (InviteLinks.LooksLikeLink(typed)) { ClearIncoming(); UrlBox.Text = typed; CodeBox.Password = ""; }
             var link = InviteLinks.Parse(EffectiveLinkText);
             if (link.MissingAddress) { JoinFail(MissingAddressText); return; }
+            if (link.Insecure) { JoinFail(InviteLinks.InsecureText); return; }   // https only (localhost / 127.0.0.1 excepted for testing)
             var url = link.Url;
             var secret = link.Secret ?? CodeBox.Password.Trim();
             var bad = !Uri.TryCreate(url ?? "", UriKind.Absolute, out var u) || (u.Scheme != "https" && u.Scheme != "http");
@@ -1221,7 +1224,7 @@ namespace ElansAddonHub.Lodge
             var list = Session?.MessagesOf(Session.Selected?.Id);
             var msg = list?.FirstOrDefault(m => m.File == f);
             if (msg != null) Viewer.Open(list, msg);
-            else try { Process.Start(new ProcessStartInfo(f.LocalPath) { UseShellExecute = true }); } catch { }
+            else if (!LodgeFiles.TryOpen(f.LocalPath)) { SetNote("Not opened: only pictures, text and PDF files open from here.", true); noteUntil = DateTime.UtcNow.AddSeconds(6); }
         }
 
         // ---- YouTube: the preview card plays in the overlay; a click on the URL text itself does the same (or opens the browser when previews are off)

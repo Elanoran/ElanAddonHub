@@ -94,6 +94,7 @@ namespace ElansAddonHub.Lodge
             string problem = null;
             if (string.IsNullOrWhiteSpace(LinkBox.Text)) problem = "Paste the owner link the installer printed.";
             else if (link.MissingAddress) problem = "This link has no lodge address (it shows a placeholder). Set LODGE_PUBLIC_URL on the server and run: sudo lodge-admin claim-owner";
+            else if (link.Insecure) problem = InviteLinks.InsecureText;
             else if (!link.IsInvite || link.Url == null) problem = "That does not look like the owner link. It starts with elanshub://lodge/join# and holds a code starting with i1.";
             if (problem != null) { LinkProblem.Text = problem; LinkProblem.Visibility = Visibility.Visible; return; }
             LinkProblem.Visibility = Visibility.Collapsed;

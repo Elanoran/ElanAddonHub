@@ -151,7 +151,7 @@ public class LfgTests
     [Fact]
     public async Task Two_people_taking_the_last_slot_at_the_same_moment_get_one_slot()
     {
-        for (int round = 0; round < 25; round++)
+        for (int round = 0; round < 300; round++)
         {
             using var r = new FunRig();
             var elan = r.Join("Elan", "owner");
@@ -184,6 +184,29 @@ public class LfgTests
         Assert.True(s.Count(x => (string)x!["r"]! == "healer") <= 1);
         Assert.True(s.Count(x => (string)x!["r"]! == "dps") <= 3);
         Assert.Equal(s.Count, s.Select(x => (string)x!["n"]!).Distinct().Count());
+    }
+
+    // regression for the flaky "Collection was modified" (2.22): the handlers read the card JSON while another join was setting its text
+    [Fact]
+    public async Task Concurrent_joins_leaves_and_closes_never_throw()
+    {
+        using var r = new FunRig();
+        var elan = r.Join("Elan", "owner");
+        var people = Enumerable.Range(0, 16).Select(i => r.Join("Q" + i, "member")).ToList();
+        for (int round = 0; round < 300; round++)
+        {
+            var id = await Post(r, elan, Card(slots: new { tank = 2, healer = 2, dps = 8 }));
+            var go = new TaskCompletionSource();
+            var tasks = people.SelectMany(p => new[] { "join", "leave", "maybe" }.Select(kind => Task.Run(async () =>
+            {
+                await go.Task;
+                if (kind == "join") await r.Do(p, new { t = "lfg:join", id, role = "dps" });
+                else if (kind == "maybe") await r.Do(p, new { t = "lfg:maybe", id });
+                else await r.Do(p, new { t = "lfg:leave", id });
+            }))).Append(Task.Run(async () => { await go.Task; await r.Do(elan, new { t = "lfg:close", id }); })).ToList();
+            go.SetResult();
+            await Task.WhenAll(tasks);   // an exception in any handler fails the test here
+        }
     }
 
     [Fact]

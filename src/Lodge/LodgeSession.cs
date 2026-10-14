@@ -94,6 +94,7 @@ namespace ElansAddonHub.Lodge
         public Func<bool> ToastWillShow;                   // a toast would be on screen right now (then no tray balloon for the same message)
         public event Action<List<Dictionary<string, object>>, List<Dictionary<string, object>>> AdminMembers; // members, channels
         public event Action<string, string, string> AdminInvited; // name, role, code
+        public event Action<Dictionary<string, object>> AdminPurged; // the owner's "revert member" answer: name, atlas (items removed)
         public Func<bool> IsShownToUser;                   // the Lodge tab is visible and the window active
 
         // ---- profiles (server 2.6): my own profile, avatars we have seen (so history keeps its pictures), answers to profile:get
@@ -495,6 +496,9 @@ namespace ElansAddonHub.Lodge
                 case "admin.members":
                     AdminMembers?.Invoke(m.List("members").OfType<Dictionary<string, object>>().ToList(),
                                          m.List("channels").OfType<Dictionary<string, object>>().ToList());
+                    break;
+                case "admin.purged":
+                    AdminPurged?.Invoke(m);
                     break;
                 case "admin.invited":
                     AdminInvited?.Invoke(m.Str("name"), m.Str("role"), m.Str("code"));
@@ -1576,6 +1580,8 @@ namespace ElansAddonHub.Lodge
         public void Invite(string name, string role) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.invite", ["name"] = name, ["role"] = role });
         public void SetRole(string name, string role) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.role", ["name"] = name, ["role"] = role });
         public void RemoveMember(string name) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.remove", ["name"] = name });
+        // owner (server 2.22): take everything this member shared with the Atlas back out; they stay a member
+        public void RevertAtlas(string name) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.purge", ["name"] = name, ["atlasOnly"] = true });
         public void AddChannel(string name, string type, string minRole, int max) =>
             _ = Send(new Dictionary<string, object> { ["t"] = "admin.channel.add", ["name"] = name, ["type"] = type, ["minRole"] = minRole, ["max"] = max });
         public void RemoveChannel(string id) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.channel.remove", ["id"] = id });

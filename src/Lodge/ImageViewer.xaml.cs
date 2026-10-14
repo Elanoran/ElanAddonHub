@@ -221,7 +221,7 @@ namespace ElansAddonHub.Lodge
         {
             var f = Current?.File;
             if (f?.LocalPath != null)
-                try { Process.Start(new ProcessStartInfo(f.LocalPath) { UseShellExecute = true }); } catch { }
+                if (!LodgeFiles.TryOpen(f.LocalPath)) { ErrorText.Text = "Not opened: only pictures, text and PDF files open from here. Use Save as."; ErrorText.Visibility = Visibility.Visible; }
         }
 
         void SaveAs_Click(object sender, RoutedEventArgs e)

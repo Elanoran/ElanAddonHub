@@ -126,9 +126,9 @@ public class HardeningTests
         using var d = new TempDir();
         var cfg = LodgeConfig.ForTests(d.Path);
         var s = new FileStore(cfg, new FakeClock());
-        var meta = await s.Save(new T.SlowStream(10), 10, "..\\..\\Startup\\run|me.bat", "Elan", "p:elan", CancellationToken.None);
-        Assert.Equal("run_me.bat", meta.Name);
-        Assert.Equal("run_me.bat", s.Get(meta.Id)!.Name);
+        var meta = await s.Save(new T.SlowStream(10), 10, "..\\..\\Startup\\run|me.png", "Elan", "p:elan", CancellationToken.None);
+        Assert.Equal("run_me.png", meta.Name);
+        Assert.Equal("run_me.png", s.Get(meta.Id)!.Name);
     }
 
     [Fact]
@@ -527,7 +527,7 @@ public class HardeningTests
         var w = elan.Of("welcome")[0];
         Assert.Equal("Starlight", (string)w["names"]!["Mia"]!);
         Assert.Equal(LodgeHub.Version, (string)w["server"]!);
-        Assert.Equal("2.21.0", LodgeHub.Version);
+        Assert.Equal("2.22.0", LodgeHub.Version);
     }
 
     // ---------------------------------------------------------------- downloads / config

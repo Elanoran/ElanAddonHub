@@ -27,7 +27,7 @@ public static partial class Atlas
 
     public sealed class SeenNpc
     {
-        public long Rev; public string Name = "", Title = ""; public int Type, Family, Rank;
+        public long Rev; public string By = ""; public string Name = "", Title = ""; public int Type, Family, Rank;
         // later descriptions only fill what is empty (0 = unknown / none); true when something was filled
         public bool Fill(SeenNpc o)
         {
@@ -42,7 +42,7 @@ public static partial class Atlas
 
     public sealed class SeenObject
     {
-        public long Rev; public string Name = ""; public int Type;
+        public long Rev; public string By = ""; public string Name = ""; public int Type;
         public bool Fill(SeenObject o)
         {
             if (Type == 0 && o.Type != 0) { Type = o.Type; return true; }
@@ -52,7 +52,7 @@ public static partial class Atlas
 
     public sealed class SeenQuest
     {
-        public long Rev; public string Title = "", Objectives = ""; public int Level, MinLevel;
+        public long Rev; public string By = ""; public string Title = "", Objectives = ""; public int Level, MinLevel;
         public bool Fill(SeenQuest o)
         {
             bool ch = false;

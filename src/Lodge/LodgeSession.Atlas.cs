@@ -525,6 +525,7 @@ namespace ElansAddonHub.Lodge
                 if (why == "guest") atlasGuest = true;
                 else if (why == "disabled") atlasDisabled = true;
                 else if (why == "rate") atlasNextShare = Clock() + AtlasObs.ShareEvery;
+                else if (why == "full") { atlasNextShare = Clock() + TimeSpan.FromMinutes(30); Util.Log("atlas: the lodge's Atlas is full - new contributions are refused until the Guild Master makes room"); }
                 else atlasNextShare = Clock() + TimeSpan.FromMinutes(2);
             }
             RequestAtlas();

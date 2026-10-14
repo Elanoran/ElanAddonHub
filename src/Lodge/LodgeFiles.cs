@@ -36,6 +36,22 @@ namespace ElansAddonHub.Lodge
 
         public static bool IsBlockedName(string name) => Blocked.Contains(Extension(name));
 
+        // ---- opening a file the lodge sent: by its REAL extension, never by the MIME type the server claims (a hostile server can call a program "image/png").
+        // Only pictures, text and PDF open from the chat; a zip, a program, a script, a shortcut or anything unknown is never handed to the shell.
+        public static readonly HashSet<string> ImageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "png", "jpg", "jpeg", "gif", "webp", "bmp" };
+        public static readonly HashSet<string> OpenExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "png", "jpg", "jpeg", "gif", "webp", "bmp", "txt", "pdf" };
+
+        public static bool IsImageName(string name) => ImageExtensions.Contains(Extension(name));
+        public static bool CanOpenDirectly(string pathOrName) => !string.IsNullOrEmpty(pathOrName) && !IsBlockedName(pathOrName) && OpenExtensions.Contains(Extension(pathOrName));
+
+        // true = handed to the shell. False when the extension is not on the list (nothing is started) or Windows could not open it.
+        public static bool TryOpen(string path)
+        {
+            if (!CanOpenDirectly(path)) { Util.Log("files: not opening a file with extension ." + Extension(path) + " from the chat"); return false; }
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); return true; }
+            catch (Exception) { return false; }
+        }
+
         public static bool UnsafeEntryPath(string path)
         {
             if (string.IsNullOrEmpty(path) || path.IndexOf('\0') >= 0 || path.IndexOf(':') >= 0) return true;

@@ -416,13 +416,15 @@ public sealed class BadgesModule : IModule
     }
 
     // a member who left or was removed: badges, tallies and ladder rows go (also done by the run, for anyone no longer a member)
-    public void RemoveMember(string name)
+    public bool RemoveMember(string name)
     {
         lock (Store.Gate)
         {
             var key = Key(name);
             metricsOf.Remove(key);
-            if (Store.Remove(key)) Store.Save();
+            if (!Store.Remove(key)) return false;
+            Store.Save();
+            return true;
         }
     }
 }

@@ -393,3 +393,12 @@ Fun milestones for what a member shares, and a monthly ladder. **Nothing new is 
 | days in the lodge | the member's oldest device, else the first time the server noticed them |
 
 **Points**: each category is `Weight * log2(1 + value / Unit)`, at most 120 per category (the table is `Badges.Metrics`), plus 10 / 25 / 50 / 100 for every bronze / silver / gold / legendary badge. The season is the calendar month (UTC): it counts the growth since the first of the month (the numbers at the start of the month are its baseline) and the badges earned in it; all-time counts everything.
+
+## 2.22 additions (forgetting members; optional for clients)
+
+- Welcome: `canPurge` (bool) - the owner may use `admin.purge`.
+- `admin.purge { name, atlasOnly? }` (owner only; `atlasOnly` defaults to true) -> `admin.purged { name, atlasOnly, atlas, flights, signups, organised, profile, armory, badges, messages, reactions, uploads, total }` (counts of what was removed). `atlasOnly: true` takes one member's Atlas contributions out and leaves them a member; `false` forgets all stored data of someone who is no longer a member (an error for a current member: "They are still a member ..."). Everybody's next `atlas.get` returns `full: true` with a new `epoch`.
+- `member.leave` and `admin.remove` now do the same fan-out for the person who leaves / is removed: Atlas, flights, calendar sign-ups (events stay, organiser becomes `(former member)`), profile, armory, badges are removed; chat messages stay with `from: "(former member)"`; uploaded files stay without an uploader name.
+- `atlas.shared`: a new `why: "full"` (ok false) when the Atlas file reached its size cap; nothing was stored. Times (`at`) in vendors, quests and finds may be at most 5 minutes ahead (was one day).
+- `atlas.data` for a guest: finds carry `by: "a member"` and `at` rounded down to the UTC day.
+- `POST /files` (chat uploads) answers 415 `{ error }` for programs and scripts (the Files module's list), like the shared Files module.
