@@ -3,7 +3,7 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
-## Unreleased
+## 2.52.1
 - **Characters page: item icons instead of letters.** The item list (and bag slots of characters whose Elan's Bags data has no icon) now show the item's own icon from your game files; the letter only shows while the icon loads or when the item is unknown.
 
 ## 2.52.0
