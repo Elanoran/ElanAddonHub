@@ -47,17 +47,18 @@ namespace ElansAddonHub.Lodge
             try
             {
                 var ci = Ref.Id > 0 ? ItemData.Get(Ref.Id) : null;
-                if (ci != null && (!IsAtlas || Ref.AtlasKind == "item")) gt = new GameTooltip(Name, Quality).AddItem(ci);
+                if (ci != null && (!IsAtlas || Ref.AtlasKind == "item")) gt = new GameTooltip(Name, Quality).AddItem(ci).SetIcon(IconIdOf(ci, Info));
                 else if (IsAtlas && Ref.AtlasKind != "item" && Ref.AtlasKind != "browse" && Ref.AtlasKind != "talents" && Ref.AtlasKind != "professions")
                 {
                     var m = AtlasQuery.Build(Ref.AtlasId);
-                    if (m != null && !m.NotFound) gt = GameTooltip.FromAtlas(m);
+                    if (m != null && !m.NotFound) { gt = GameTooltip.FromAtlas(m); if (m.Kind == "spell" || m.Kind == "skill") gt.SetIcon(m.IconId); }
                 }
             }
             catch (Exception e) { Util.Log("chip tooltip: " + e.Message); }
             if (gt == null)
             {
                 gt = new GameTooltip(Name, Quality);
+                if (!IsAtlas && Info != null) gt.SetIcon(Info.Icon);       // not in the game data here, but the Bags data knows the picture
                 bool simple = IsAtlas && (Ref.AtlasKind == "browse" || Ref.AtlasKind == "talents" || Ref.AtlasKind == "professions");
                 gt.AddText(simple ? TipLine : "Not in the game data on this PC", "grey");
                 if (!simple && Ref.Id > 0) gt.AddText(TipLine, "grey");
@@ -69,20 +70,34 @@ namespace ElansAddonHub.Lodge
         public ItemChipVM(ItemRef r, ItemInfo info, ClientItem atlasItem = null)
         {
             Ref = r; Info = info;
-            name = atlasItem?.Name ?? info?.Name ?? r.Name ?? (r.Id > 0 ? "Item #" + r.Id : "Item");
+            name = BestName(atlasItem, info, r) ?? (r.Id > 0 ? "Item #" + r.Id : "Item");
             quality = r.Quality >= 0 ? r.Quality : atlasItem != null ? atlasItem.Quality : info != null ? info.Quality : -1;
-            var iconId = info != null && info.Icon > 0 ? info.Icon : atlasItem?.IconId ?? 0;
+            var iconId = IconIdOf(atlasItem, info);
             if (iconId > 0) LoadIcon(iconId);
             if (!IsAtlas) return;
             if (r.AtlasKind == "item")
             {
-                if (atlasItem == null && info == null) { name = "Item " + r.Id; Resolve(); }   // not in the game data here: the Lodge / Classic layers may still know it
+                if (BestName(atlasItem, info, null) == null) { if (string.IsNullOrWhiteSpace(r.Name)) name = "Item " + r.Id; Resolve(); }   // not in the game data here: the Lodge / Classic layers may still know it
                 return;
             }
             TileGlyph = GlyphOf(r);
             if (r.AtlasKind == "browse" || r.AtlasKind == "talents" || r.AtlasKind == "professions") { name = PathTitle(r, out var line); tipLine = line; }
             else { name = !string.IsNullOrEmpty(r.Name) ? r.Name : AtlasKinds.Singular(r.AtlasKind) + " " + r.AtlasId.Substring(r.AtlasId.IndexOf(':') + 1); tipLine = AtlasKinds.Singular(r.AtlasKind) + " · not known on this PC"; Resolve(); }
         }
+
+        // The name of an item chip, first one that has text: the game data (the shipped table, else the hotfix rows the server pushed: ItemData), what the
+        // Bags addon saved (ItemKnowledge), the name written in the message (a game link's [Name], a Wowhead slug). Null = nobody here knows it; the Atlas
+        // layers that need a lookup (the Lodge's revealed items, the Classic data) answer later through Resolve.
+        public static string BestName(ClientItem game, ItemInfo bags, ItemRef r)
+        {
+            if (game != null && !string.IsNullOrWhiteSpace(game.Name)) return game.Name;
+            if (bags != null && !string.IsNullOrWhiteSpace(bags.Name)) return bags.Name;
+            if (r != null && !string.IsNullOrWhiteSpace(r.Name)) return r.Name;
+            return null;
+        }
+
+        // the icon file: the Bags data's when it has one, else the game data's
+        public static int IconIdOf(ClientItem game, ItemInfo bags) => bags != null && bags.Icon > 0 ? bags.Icon : game != null ? game.IconId : 0;
 
         static string GlyphOf(ItemRef r)
         {

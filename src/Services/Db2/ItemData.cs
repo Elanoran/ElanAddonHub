@@ -212,6 +212,7 @@ namespace ElansAddonHub.Services.Db2
 
         // test hook: use this snapshot as the loaded data
         public static void SetForTest(ItemSnapshot s, State st = State.Ready, string why = null) { lock (gate) { snap = s; state = st; reason = why; } }
+        public static void RaiseChangedForTest() { try { Changed?.Invoke(); } catch { } }
         public static void ResetForTest() { StopWatching(); lock (gate) { snap = null; state = State.NotStarted; reason = null; running = false; again = false; } }
 
         // ---------------------------------------------------------------------------------------------------------------------

@@ -23,6 +23,28 @@ namespace ElansAddonHub
         public int PlayerLevel;                      // > 0 = the shown character's level: a requirement above it turns red
 
         public StackPanel Body => body;
+
+        // The optional icon, shown to the LEFT of the panel and outside it, the way the game's item link tooltip shows it (the GameTip style of ToolTip
+        // draws the 40 px frame from this property). Unset = no frame. Not drawn when the tooltip is placed on a page by hand (WithIcon does that there).
+        public static readonly DependencyProperty IconProperty = DependencyProperty.Register(nameof(Icon), typeof(ImageSource), typeof(GameTooltip), new PropertyMetadata(null, (d, e) => d.SetValue(HasIconProperty, e.NewValue != null)));
+        public static readonly DependencyProperty HasIconProperty = DependencyProperty.Register(nameof(HasIcon), typeof(bool), typeof(GameTooltip), new PropertyMetadata(false));
+        public bool HasIcon => (bool)GetValue(HasIconProperty);
+        public ImageSource Icon { get => (ImageSource)GetValue(IconProperty); set => SetValue(IconProperty, value); }
+        public int IconFileId { get; private set; }      // the icon file asked for (self-test), 0 = none
+
+        // the icon of a game file id: from disk when extracted already, else filled in when it arrives (read-only from the player's own game files)
+        public GameTooltip SetIcon(int fileId)
+        {
+            if (fileId <= 0) return this;
+            IconFileId = fileId;
+            var have = IconStore.TryGet(fileId);
+            if (have != null) { Icon = have; return this; }
+            var disp = Application.Current?.Dispatcher;
+            IconStore.Request(fileId, img => { if (img != null) disp?.BeginInvoke(new Action(() => Icon = img)); });
+            return this;
+        }
+        public GameTooltip SetItemIcon(int itemId) { try { var ci = itemId > 0 ? ItemData.Get(itemId) : null; if (ci != null) SetIcon(ci.IconId); } catch (Exception) { } return this; }
+        public GameTooltip SetSpellIcon(int spellId) { try { var sp = spellId > 0 ? SpellData.Spell(spellId) : null; if (sp != null) SetIcon(sp.IconId); } catch (Exception) { } return this; }
         public string Title => title;
 
         public GameTooltip(string title, int quality = -1, string rank = null, int playerLevel = 0)

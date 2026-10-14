@@ -158,6 +158,19 @@ namespace ElansAddonHub
                 Check("footer: a hairline, then the muted text, after every game line", sepIdx == kids.Count - 2 && kids.Last() == withFooter.Footer && withFooter.Footer.Children[0] is TextBlock ft && ((SolidColorBrush)ft.Foreground).Color.ToString() == "#FF8C9AB5");
                 Check("icon outside: WithIcon puts a 56 px framed icon to the LEFT of the panel", GameTooltip.WithIcon(new Border(), weapon) is StackPanel sp && sp.Orientation == Orientation.Horizontal && sp.Children[0] is Border fr && fr.Width == 56 && fr.Height == 56 && sp.Children[1] == weapon);
 
+                // ---- the hover icon (2.50.2): left of the panel, outside it, drawn by the ToolTip style; none unless asked for
+                var plainTip = new GameTooltip("Plain", 1);
+                var iconTip = new GameTooltip("With Icon", 2);
+                iconTip.Icon = new System.Windows.Media.Imaging.WriteableBitmap(4, 4, 96, 96, PixelFormats.Bgra32, null);
+                Check("hover icon: none by default (no frame), present after Icon is set; the panel itself stays the same size either way", !plainTip.HasIcon && plainTip.Icon == null && plainTip.IconFileId == 0 && iconTip.HasIcon && iconTip.Icon != null && iconTip.MaxWidth == 320);
+                Check("hover icon: SetIcon with no file id (0) changes nothing", new GameTooltip("x", 1).SetIcon(0).Icon == null && new GameTooltip("x", 1).SetItemIcon(0).IconFileId == 0 && new GameTooltip("x", 1).SetSpellIcon(-5).IconFileId == 0);
+                FrameworkElement FrameOf(GameTooltip g) { var tt = GameTooltip.Wrap(g); tt.ApplyTemplate(); return tt.Template.FindName("IconFrame", tt) as FrameworkElement; }
+                var withF = FrameOf(iconTip); var withoutF = FrameOf(plainTip);
+                Check("hover icon: the ToolTip style draws a 40 px frame left of the panel (game dark border) with an icon, and nothing without",
+                    withF != null && withF.Visibility == Visibility.Visible && withF.Width == 40 && withF.Height == 40 && ((Border)withF).BorderBrush is SolidColorBrush ib && ib.Color.ToString() == "#FF1B2438" && withoutF != null && withoutF.Visibility == Visibility.Collapsed);
+                var hostTT = GameTooltip.Wrap(iconTip); hostTT.ApplyTemplate();
+                Check("hover icon: the frame and the panel sit in one horizontal row, the frame first", hostTT.Template.FindName("IconFrame", hostTT) is Border fb && VisualTreeHelper.GetParent(fb) is StackPanel hp && hp.Orientation == Orientation.Horizontal && hp.Children.IndexOf(fb) == 0 && hp.Children.Count == 2);
+
                 // ---- the Atlas kinds
                 AtlasPageModel M(string kind, string title, params AtlasFact[] facts) { var m = new AtlasPageModel { Id = kind + ":1", Kind = kind, Title = title }; m.Facts.AddRange(facts); return m; }
                 var wolf = M("npc", "Rampaging Wolf", new AtlasFact("Level", "23", "x"), new AtlasFact("Rank", "Elite", "x"), new AtlasFact("Type", "Beast", "x"), new AtlasFact("Faction", "Wolves (hostile to the Alliance, hostile to the Horde)", "x"), new AtlasFact("Family", "Wolf", "x"), new AtlasFact("Found in", "Greenvale", "x", "zone:11"));

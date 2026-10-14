@@ -436,7 +436,7 @@ namespace ElansAddonHub
         // the tooltip of a search result: the same facts and counts as a slot, or "Not on your characters" for an item that only the game data knows
         ToolTip ResultTip(ResultRow r)
         {
-            var gt = new GameTooltip(r.Name, r.Quality);
+            var gt = new GameTooltip(r.Name, r.Quality).SetItemIcon(r.Id);      // a search result is a text row: the tooltip carries the picture (a bag slot does not: the slot IS the icon)
             AddItemFacts(gt, r.Id);
             var sp = gt.Footer;
             if (r.NotOwned) sp.Children.Add(GameTooltip.Muted("Not on your characters"));
