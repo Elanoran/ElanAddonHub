@@ -12,6 +12,7 @@ namespace ElansAddonHub
         public TalentsPage TalentsView;
         public ProfessionsPage ProfessionsView;
         bool talentsWired, professionsWired;
+        public ClassicLodgeSync ClassicSync;
 
         void InitAtlas()
         {
@@ -20,6 +21,10 @@ namespace ElansAddonHub
             AtlasQuery.Context.Lodge = () => Session?.AtlasData;
             AtlasView.LodgeState = LodgeAtlasState;
             AtlasView.OpenLinkOverride = url => OpenChatLink(url);
+            // the Lodge can hand out the Classic data (server 2.17): fetched automatically for members, shareable by the owner and officers
+            ClassicSync = new ClassicLodgeSync(Session, () => Dispatcher.CheckAccess() ? AtlasView.EnsureClassicSetup() : Dispatcher.Invoke(() => AtlasView.EnsureClassicSetup()), settings);
+            AtlasView.UseLodgeSync(ClassicSync);
+            SettingsPage.UseClassicSync(ClassicSync);
             LodgePage.OpenAtlas += OpenInAtlas;
             InventoryView.OpenAtlas += OpenInAtlas;
             // links on the Professions page (recipes, reagents, sources) open their Atlas page

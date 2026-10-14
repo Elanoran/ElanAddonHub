@@ -41,6 +41,10 @@ public class LodgeConfig
     // ---- Atlas pool (2.15, "atlas" feature)
     public bool ArmoryEnabled { get; set; } = true;         // 2.16 "armory" feature: members may share characters; off = not advertised, put answers why "disabled", stored data stays on disk
     public bool AtlasEnabled { get; set; } = true;          // the owner can switch the feature off (it then isn't advertised; share/get answer "disabled"; stored data stays on disk)
+    // ---- hosted datasets (2.17, "classic" feature): the Classic baseline files, stored once for the whole lodge
+    public bool ClassicEnabled { get; set; } = true;        // the owner can switch it off (not advertised; upload / download / delete answer 403; the stored bundle stays on disk)
+    public int ClassicMaxMb { get; set; } = 40;             // the bundle (the real one is about 15 MB)
+    public int ClassicDownloadsPerHour { get; set; } = 6;   // per member
 
     static string Env(string key, string fallback)
     {
@@ -87,6 +91,9 @@ public class LodgeConfig
             FilesUploadsPer10Min = Int("LODGE_FILES_UPLOADS_PER_10MIN", 20, 1, 1000),
             ArmoryEnabled = !(Env("LODGE_ARMORY_ENABLED", "1") is "0" or "false" or "no" or "off"),
             AtlasEnabled = !(Env("LODGE_ATLAS_ENABLED", "1") is "0" or "false" or "no" or "off"),
+            ClassicEnabled = !(Env("LODGE_CLASSIC_ENABLED", "1") is "0" or "false" or "no" or "off"),
+            ClassicMaxMb = Int("LODGE_CLASSIC_MAX_MB", 40, 1, 1024),
+            ClassicDownloadsPerHour = Int("LODGE_CLASSIC_DOWNLOADS_PER_HOUR", 6, 1, 1000),
         };
         Directory.CreateDirectory(c.DataDir);
         if (string.IsNullOrEmpty(c.CodesFile))

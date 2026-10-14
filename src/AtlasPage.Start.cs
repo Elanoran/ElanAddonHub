@@ -35,6 +35,7 @@ namespace ElansAddonHub
             Body.Children.Add(col);
 
             col.Children.Add(ClassicBannerView());
+            col.Children.Add(ClassicOfferView());
             col.Children.Add(Card(BrowseBlock()));
             _ = FillBrowseBlock();
 

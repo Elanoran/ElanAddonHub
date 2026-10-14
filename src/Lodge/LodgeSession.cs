@@ -316,6 +316,7 @@ namespace ElansAddonHub.Lodge
             ResetAtlas();
             ResetArmory();
             ResetFiles();
+            ResetClassic();
             ResetHistoryState();
             Pending = null;
             failedImages.Clear();
@@ -510,6 +511,7 @@ namespace ElansAddonHub.Lodge
                 case "armory.chars": OnArmoryChars(m); break;
                 case "armory.char": OnArmoryChar(m); break;
                 case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
+                case "dataset.data": case "dataset.changed": case "dataset.result": OnDatasetFrame(m); break;
             }
         }
 
@@ -537,6 +539,7 @@ namespace ElansAddonHub.Lodge
             ReadAtlasFeatures(features);
             ReadArmoryFeatures(features);
             ReadFilesFeatures(m, features);
+            ReadClassicFeatures(m, features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 

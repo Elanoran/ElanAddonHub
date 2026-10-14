@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "hubdata", "readers", "characters", "armory", "itemdata", "spelldata", "talents", "professions", "mapdata", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs", "atlasclassic", "atlaspage", "atlasbrowse", "atlashosts",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "hubdata", "readers", "characters", "armory", "itemdata", "spelldata", "talents", "professions", "mapdata", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "round3", "inputs", "atlasclassic", "atlasclassiclodge", "atlaspage", "atlasbrowse", "atlashosts",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -75,6 +75,7 @@ namespace ElansAddonHub.Services
             ["health"] = "addon health",
             ["inputs"] = "text inputs: Input / SecretInput / Dropdown draw g j p q y without clipping at 100 % and 125 % (pixel check)",
             ["round3"] = "settings round 3 (WoW watch, lodge update, welcome, ...)",
+            ["atlasclassiclodge"] = "Classic baseline from the Lodge (server 2.17, Outpost 2.49): the bundle of the original upstream files (pack, unpack with safe names, the version string and which release is newer), a fake Lodge with the dataset endpoints; a member without Classic data gets it automatically (SHA-256 checked, unpacked, read, labelled \"via your Lodge\"), nothing is downloaded when the same release is installed, a newer release at the Lodge replaces an older one, a damaged download is refused with the banner as fallback and not retried in a loop, the switch off or a removal by the person = no automatic fetch, the owner / officer share button in Settings and in the Atlas (with the quiet offer after their own download, asked once per release), a member sees no share button, a guest is not offered anything, a server older than 2.17 = the banner only, the Settings lines, screenshots",
             ["atlaspage"] = "Atlas layer F, the Atlas page: search (grouping by kind, ranking, Forever above Classic baseline, id links, one-letter and blank), the item page (the game's tooltip, your characters, the sources table with Lodge-observed rows above the Classic baseline's, merged rows, world drops under 0.1 % folded, labels on every row, recipes and reagents, found by the Lodge with member names), markers from Classic world coordinates on the right zone map (most specific zone, instance floors, instances without a map), NPC / object / zone / instance / quest / spell / skill / faction pages with every layer, without Classic, without a Lodge, with game data off and with nothing at all, the Classic baseline card with a fake downloader (size question, progress, cancel, failure and retry, ready with the dump date, remove, credit and licence links), links and history, the page in the window (keyboard search, zone picker, folded rows, virtualised lists, narrow layout, never blocking the UI, stale answers dropped), screenshots",
             ["atlasbrowse"] = "Atlas browse by category: the category registry (built-in list categories, a hosted category with an id prefix and a sub-path, replace / unregister), browse ids (parse, canonical text, history replace), every category listing with rows, the item sub-categories from the client's class names, name / level / quality / slot / data source filters, how to get it (drops, vendor, quest, crafted, fishing, containers, gathered), usable by a character (class proficiency and level), the sorts, creatures / objects / quests / zones / dungeons / spells / skills / recipes / factions, the start page tiles and presets, history through browse ids, missing layers (no Classic baseline, no Lodge, no game data) with their notes, the page in the window (typing narrows the list without a redraw, back / forward restore the filters), 24 000 items (index off the UI thread, virtualised list), the player's own game files, screenshots",
             ["atlashosts"] = "Atlas hosted categories Talents and Professions: the tiles on the start page, ids and sub-paths (talents:tree/<class>, talents:build/<code>, professions:<profession>/<tab>, professions:camp), the pages kept alive and the id following the class / profession / tab picked in them (no new history step), breadcrumb Atlas > Talents > Hunter, history item page -> Talents -> Professions and back, Ctrl+6 and ShowTab landing in the Atlas, the rail without the two buttons, the links the entity pages give (crafted by, recipe profession, talent of, skills list, Ctrl+click on a talent), a recipe link inside Professions and Back, the search offering the pages by name, no game data, screenshots",
@@ -91,7 +92,7 @@ namespace ElansAddonHub.Services
         {
             var r = new List<Tuple<Regex, string[]>>();
             void R(string rx, params string[] s) => r.Add(Tuple.Create(new Regex(rx, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), s));
-            var lodgeAll = new[] { "armory", "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "video", "viewer", "toasts", "presence", "profile", "round3" };
+            var lodgeAll = new[] { "armory", "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "atlasclassiclodge", "video", "viewer", "toasts", "presence", "profile", "round3" };
 
             // ---- shared: everything depends on these
             R(@"^src/(App\.xaml(\.cs)?|MainWindow\.xaml(\.cs)?|MainWindow\.Others\.cs|MainWindow\.Welcome\.cs|ElansAddonHub\.csproj|Motion\.cs|Brand\.cs|SourceIcons\.cs|PillBase\.cs|WelcomeGuide\.cs)$", Star);
@@ -112,8 +113,9 @@ namespace ElansAddonHub.Services
             R(@"^src/(ProfessionsPage[\w.]*|MainWindow\.ProfessionsTest[\w.]*|Services/Professions/.*)$", "professions", "atlashosts");
             R(@"^src/(MainWindow\.HubDataTest|Services/(HubData|SavedVarsFiles|LuaData))\.cs$", "hubdata", "characters");
             R(@"^src/(MainWindow\.ReadersTest|Services/(SavedVarsFiles|GamePresence|InventoryData|WowCalendar|FlightShare|AddonHealth|HealthMonitor|HubData|LuaData))\.cs$", "readers");
-            R(@"^src/(MainWindow.AtlasClassicTest.cs|Services/Atlas/Classic/)", "atlasclassic", "atlaspage");
-            R(@"^src/(AtlasPage(\.\w+)?\.(xaml|cs)|MainWindow\.(AtlasPageTest(\.\w+)?|Atlas)\.cs|Services/Atlas/(AtlasModel|AtlasQuery(\.\w+)?|AtlasDerived|ClassicSetup)\.cs)$", "atlaspage", "atlasbrowse", "atlashosts");
+            R(@"^src/(MainWindow.AtlasClassicTest.cs|Services/Atlas/Classic/)", "atlasclassic", "atlasclassiclodge", "atlaspage");
+            R(@"^src/(MainWindow\.AtlasClassicLodgeTest\.cs|Services/Atlas/ClassicLodge\.cs|SettingsPage\.Classic\.cs)$", "atlasclassiclodge", "atlaspage");
+            R(@"^src/(AtlasPage(\.\w+)?\.(xaml|cs)|MainWindow\.(AtlasPageTest(\.\w+)?|Atlas)\.cs|Services/Atlas/(AtlasModel|AtlasQuery(\.\w+)?|AtlasDerived|ClassicSetup)\.cs)$", "atlaspage", "atlasbrowse", "atlashosts", "atlasclassiclodge");
             R(@"^src/(MainWindow\.AtlasBrowseTest\.cs|Services/Atlas/(AtlasBrowse(\.\w+)?|AtlasCategories)\.cs)$", "atlasbrowse", "atlaspage");
             R(@"^src/(MainWindow\.AtlasHostsTest\.cs|Services/Atlas/AtlasHosts\.cs)$", "atlashosts", "atlaspage");
             R(@"^src/(Services/(Maps/|Db2/|Atlas/(SeenData|AtlasObs))|Controls/AtlasMap|Lodge/LodgeSession\.Atlas)", "atlaspage", "atlasbrowse");   // the layers the page combines
@@ -125,7 +127,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/(LodgeClient|AvatarArt|GamePresence|ItemLinks)\.cs$", lodgeAll);
             R(@"^src/Services/(VoiceEngine|VoiceEffects)\.cs$", "voice", "lodge");
             R(@"^src/Services/Sounds\.cs$", "toasts", "lodge", "voice");
-            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "armory");
+            R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "armory", "atlasclassiclodge");
             R(@"^src/MainWindow\.ProfileTest\.cs$", "profile");
             R(@"^src/MainWindow\.VideoTest\.cs$", "video");
             R(@"^src/(BrowserPage(\.xaml(\.cs)?)?|MainWindow\.BrowserTest|Services/(WebEngine|BrowserUrl|AdBlock))(\.cs)?$", "browser", "video");
@@ -150,7 +152,7 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.DesignTest\.LodgeFun\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.ToastTest\.cs$", "toasts");
             R(@"^src/MainWindow\.DesignTest(\.Toasts)?\.cs$");     // screenshot-only design runs, not part of --selftest
-            R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites", "invites2", "lodgefiles", "atlaslodge");
+            R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites", "invites2", "lodgefiles", "atlaslodge", "atlasclassiclodge");
             // ---- addons
             R(@"^src/(AddonCard|ThirdPartyCard)\.cs$", "addons", "thirdparty", "startup", "selfupdated");
             R(@"^src/(MainWindow\.SelfUpdatedTest|Services/(AddonLogo|DevVersion))\.cs$", "selfupdated", "thirdparty");
