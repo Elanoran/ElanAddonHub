@@ -62,78 +62,27 @@ namespace ElansAddonHub
 
         public const double ReadWidth = 760;   // the longest line of a paragraph
 
-        // ---- layout: one column when narrow, two above 700 px, three (identity | tables | map) above 1500 px when the page has a map. Only a change of mode places the elements again.
-        Grid cols; StackPanel leftCol, rightCol, mapCol;
-        FrameworkElement mapCardEl; int mapIndex;
-        public const double TwoColumnWidth = 680, ThreeColumnWidth = 1300, LeftWidth = 300, LeftWidthWide = 340;
-        bool wide; int columnMode = -1;
-        public int ColumnsForTest => columnMode < 0 ? 0 : columnMode + 1;
-
-        public static int ColumnModeFor(double scrollerWidth, bool hasMap) => scrollerWidth >= ThreeColumnWidth && hasMap ? 2 : scrollerWidth >= TwoColumnWidth ? 1 : 0;
-
-        void Layout()
-        {
-            if (startInfo != null || tileGrids.Count > 0) { LayoutStart(); return; }
-            if (cols == null || leftCol == null || rightCol == null) return;
-            int m = ColumnModeFor(Scroller.ActualWidth, mapCardEl != null);
-            if (m == columnMode && cols.ColumnDefinitions.Count > 0) return;
-            ApplyLayout(m);
-        }
-
-        void ApplyLayout(int mode)
-        {
-            columnMode = mode; wide = mode > 0;
-            cols.ColumnDefinitions.Clear(); cols.RowDefinitions.Clear();
-            // the map card lives in the right column, or in a column of its own when there are three
-            if (mapCardEl != null && mapCol != null)
-            {
-                var from = mapCardEl.Parent as Panel;
-                if (mode == 2 && from != mapCol) { from?.Children.Remove(mapCardEl); mapCol.Children.Add(mapCardEl); }
-                else if (mode != 2 && from == mapCol) { mapCol.Children.Remove(mapCardEl); rightCol.Children.Insert(Math.Min(mapIndex, rightCol.Children.Count), mapCardEl); }
-            }
-            if (mode >= 1)
-            {
-                double lw = Scroller.ActualWidth >= 1000 ? LeftWidthWide : LeftWidth;
-                cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(lw) });
-                cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
-                cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
-                Grid.SetColumn(leftCol, 0); Grid.SetRow(leftCol, 0);
-                Grid.SetColumn(rightCol, 2); Grid.SetRow(rightCol, 0);
-                if (mode == 2)
-                {
-                    cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
-                    cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-                    Grid.SetColumn(mapCol, 4); Grid.SetRow(mapCol, 0);
-                }
-            }
-            else
-            {
-                cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                cols.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                cols.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                Grid.SetColumn(leftCol, 0); Grid.SetRow(leftCol, 0);
-                Grid.SetColumn(rightCol, 0); Grid.SetRow(rightCol, 1);
-            }
-            leftCol.Visibility = leftCol.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-            if (mapCol != null) mapCol.Visibility = mode == 2 ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        public bool WideForTest => wide;
-        public double ScrollerWidthForTest => Scroller.ActualWidth;
-        public FrameworkElement BodyForTest => Body;
-        public IReadOnlyList<AtlasMap> MapsForTest => maps;
         readonly List<AtlasMap> maps = new List<AtlasMap>();
 
+        // the page is being built (a slow one): the shape of what is coming - the hero (a tile and two lines) and a few blocks
         void ShowSkeleton(string id)
         {
             ReleaseMaps();
             Body.Children.Clear();
             ResetPageState();
-            if (AtlasBrowse.IsBrowseId(id)) { BrowseQuery.TryParse(id, out var sq); TitleText.Text = AtlasCategories.Find(sq?.Cat)?.Title ?? "Browse"; }
-            else TitleText.Text = AtlasKinds.Singular(id.Contains(":") ? id.Substring(0, id.IndexOf(':')) : "") + " " + (id.Contains(":") ? id.Substring(id.IndexOf(':') + 1) : id);
-            SubText.Text = "";
+            if (AtlasBrowse.IsBrowseId(id)) { BrowseQuery.TryParse(id, out var sq); pageTitle = AtlasCategories.Find(sq?.Cat)?.Title ?? "Browse"; }
+            else { var bid = AtlasTabs.BaseId(id); pageTitle = AtlasKinds.Singular(bid.Contains(":") ? bid.Substring(0, bid.IndexOf(':')) : "") + " " + (bid.Contains(":") ? bid.Substring(bid.IndexOf(':') + 1) : bid); }
+            heroBrush = null;
             var p = new StackPanel();
-            p.Children.Add(new Skeleton { Height = 120, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 0, 12) });
+            var hero = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            hero.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            hero.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            hero.Children.Add(new Skeleton { Width = 72, Height = 72, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 16, 0) });
+            var bars = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            bars.Children.Add(new Skeleton { Height = 24, Width = 280, HorizontalAlignment = HorizontalAlignment.Left });
+            bars.Children.Add(new Skeleton { Height = 12, Width = 180, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0) });
+            Grid.SetColumn(bars, 1); hero.Children.Add(bars);
+            p.Children.Add(hero);
             for (int i = 0; i < 3; i++) p.Children.Add(new Skeleton { Height = 48, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 0, 8) });
             Body.Children.Add(p);
         }
@@ -144,58 +93,6 @@ namespace ElansAddonHub
             maps.Clear(); ClearEntrance(); zonePicks.Clear(); routeButtons.Clear(); worldMapButtons.Clear(); routePanels.Clear();
         }
 
-        // ============================================================================================================================ a page
-        void Draw(AtlasPageModel m)
-        {
-            model = m; browse = null; hosted = null; browseList = null; drawnSig = Signature();
-            ReleaseMaps();
-            Body.Children.Clear();
-            ResetPageState();
-            TitleText.Text = string.IsNullOrEmpty(m.Title) ? "Atlas" : m.Title;
-            TitleText.Foreground = m.Kind == "item" && m.Quality >= 0 && m.Quality < ItemLinks.QualityHex.Length ? Lodge.Avatar.Frozen(ItemLinks.QualityHex[m.Quality]) : Res("Brush.Text.Primary");
-            SubText.Text = m.NotFound ? AtlasKinds.Singular(m.Kind) : m.Subtitle;
-            UpdateNav();
-            ColourLastCrumb(TitleText.Foreground);
-
-            if (m.NotFound)
-            {
-                Body.Children.Add(EmptyCard("", m.Message.Length > 0 ? m.Message : "Nothing is known about this.", "Search for a name above, or open the start page to see what data Atlas has."));
-                foreach (var n in m.Notes) Body.Children.Add(Note(n));
-                foreach (var s in m.Sections.Where(s => s.Open)) Body.Children.Add(SectionCard(s));
-                Motion.PageIn(Body);
-                return;
-            }
-
-            cols = new Grid(); leftCol = new StackPanel(); rightCol = new StackPanel(); mapCol = new StackPanel(); columnMode = -1;
-            cols.Children.Add(leftCol); cols.Children.Add(rightCol); cols.Children.Add(mapCol);
-            Body.Children.Add(cols);
-
-            // left: who it is
-            leftCol.Children.Add(ItemCard(m));       // every kind: the game tooltip is the page's main card
-            if (m.Kind != "item" && m.Facts.Any(f => f.Link != null)) leftCol.Children.Add(FactsCard(m, true));     // what links somewhere stays clickable, in the app style
-            if (m.Kind == "item" && m.Section("owned") != null) leftCol.Children.Add(SectionCard(m.Section("owned")));
-
-            // right: tables and the map (a class page starts with its spells by level, an instance with its entrance)
-            if (m.Custom is ClassSpellBook classSpells) rightCol.Children.Add(ClassSpellsCard(classSpells));
-            if (m.Entrance != null) rightCol.Children.Add(EntranceCard(m));
-            var mapCard = m.Map.Any || m.Kind == "item" || m.Kind == "npc" || m.Kind == "obj" || m.Kind == "quest" ? MapCard(m) : null;
-            if (m.MapFirst && mapCard != null) rightCol.Children.Add(mapCard);
-            bool mapPlaced = m.MapFirst;
-            foreach (var s in m.Sections)
-            {
-                if (m.Kind == "item" && s.Key == "owned") continue;
-                if (!s.Open && s.Empty.Length == 0) continue;
-                rightCol.Children.Add(SectionCard(s));
-                // an item's map comes right after the sources table
-                if (!mapPlaced && s.Key == "sources" && mapCard != null) { rightCol.Children.Add(mapCard); mapPlaced = true; }
-            }
-            if (!mapPlaced && mapCard != null) rightCol.Children.Insert(0, mapCard);
-            foreach (var n in m.Notes) rightCol.Children.Add(Note(n));
-            mapCardEl = m.Map.Any ? mapCard : null; mapIndex = mapCardEl == null ? 0 : rightCol.Children.IndexOf(mapCardEl);
-            ApplyLayout(ColumnModeFor(Scroller.ActualWidth, mapCardEl != null));
-            Scroller.ScrollToTop();
-            Motion.PageIn(Body);
-        }
 
         FrameworkElement EmptyCard(string glyph, string line, string hint)
         {
@@ -206,24 +103,27 @@ namespace ElansAddonHub
             return Card(sp);
         }
 
-        // ---- the main card of a page: the game's own tooltip (item, creature, quest ...), the icon outside it on the left; the Outpost's own bits below in the app style
+
+        // ---- the main card of the Overview: the game's own tooltip (item, creature, quest ...), the icon outside it on the left; the Outpost's own bits below in the app style
         FrameworkElement ItemCard(AtlasPageModel m)
         {
             var gt = GameTooltip.FromAtlas(m);
             var sp = new StackPanel();
             FrameworkElement icon = null;
             if (m.Kind == "item" || m.IconId > 0) icon = IconBox(m);
-            // the tooltip is at most 320 wide, but the identity column is narrower than that next to the icon (340 or 300 less the card's padding): it wraps instead of being cut off
+            // the tooltip is at most 320 wide, but the column can be narrower than that next to the icon (the card's padding too): it wraps instead of being cut off
             double w = Scroller.ActualWidth;
             if (w > 0)
             {
-                double col = w >= TwoColumnWidth ? (w >= 1000 ? LeftWidthWide : LeftWidth) : w - 32;
+                double col = railOn ? w - RailWidth - 12 : w;
                 double avail = col - 32 - (icon != null ? 64 : 0);
                 if (avail >= 200 && avail < gt.MaxWidth) gt.MaxWidth = avail;
             }
             sp.Children.Add(icon != null ? GameTooltip.WithIcon(icon, gt) : gt);
             if (m.TooltipSource.Length > 0) sp.Children.Add(SourceChip(m.TooltipSource, 12));
-            return Card(sp);
+            var card = Card(sp);
+            card.HorizontalAlignment = HorizontalAlignment.Left;     // as wide as the tooltip, not stretched over the column
+            return card;
         }
 
         // the 56 px icon: the picture when it is read, else the quality-coloured letter
@@ -366,7 +266,7 @@ namespace ElansAddonHub
         }
 
         // ============================================================================================================================ the map
-        FrameworkElement MapCard(AtlasPageModel m)
+        FrameworkElement MapCard(AtlasPageModel m, double mapHeight = 360)
         {
             var plan = m.Map;
             var sp = new StackPanel();
@@ -384,7 +284,7 @@ namespace ElansAddonHub
                 return Card(sp);
             }
 
-            var map = new AtlasMap { Height = 360, Margin = new Thickness(0, 12, 0, 0) };
+            var map = new AtlasMap { Height = mapHeight, Margin = new Thickness(0, 12, 0, 0) };
             maps.Add(map);
             map.LinkClicked += id => { _ = Open(id); };
             AtlasMapZone current = null;

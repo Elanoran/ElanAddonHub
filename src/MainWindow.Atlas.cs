@@ -22,6 +22,7 @@ namespace ElansAddonHub
         {
             RegisterAtlasHosts();
             AtlasView.Init(() => settings.WowRoot);
+            InitGlobalSearch();            // Ctrl+K and the title bar box: the Atlas palette over any page
             AtlasView.UseRouteSettings(settings, () => ProfessionsView?.RouteChoiceChanged());
             AtlasView.UseNavSettings(settings, () => SettingsStore.Save(settings));       // recents and pins of the Atlas shell
             AtlasQuery.Context.Lodge = () => Session?.AtlasData;

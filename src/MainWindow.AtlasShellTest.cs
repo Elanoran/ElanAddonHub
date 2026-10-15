@@ -140,9 +140,9 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ the breadcrumb header
                 await AtlasView.Open("item:100"); UpdateLayout();
-                Check("breadcrumb: an item page reads Atlas > Items > Gnarlfang's Claw; the last crumb is the page itself (not a link) in the item's quality colour, the title below it stays readable in the same colour",
+                Check("breadcrumb: an item page reads Atlas > Items > Gnarlfang's Claw; the last crumb is the page itself (not a link) in the item's quality colour, the hero's name below it is in the same colour",
                     AtlasView.CrumbsForTest == "Atlas > Items > Gnarlfang's Claw" && CrumbNamed(AtlasView, "Gnarlfang's Claw").Cursor != Cursors.Hand && CrumbNamed(AtlasView, "Items").Cursor == Cursors.Hand && CrumbNamed(AtlasView, "Atlas").Cursor == Cursors.Hand
-                    && AtlasView.TitleShownForTest && AtlasView.TitleTextForTest == "Gnarlfang's Claw" && ((SolidColorBrush)AtlasView.TitleBrushForTest).Color == ((SolidColorBrush)CrumbNamed(AtlasView, "Gnarlfang's Claw").Foreground).Color && ((SolidColorBrush)AtlasView.TitleBrushForTest).Color != ((SolidColorBrush)Application.Current.FindResource("Brush.Text.Primary")).Color,
+                    && AtlasView.HeroNameForTest == "Gnarlfang's Claw" && AtlasView.PageTitleForTest == "Gnarlfang's Claw" && ((SolidColorBrush)AtlasView.TitleBrushForTest).Color == ((SolidColorBrush)CrumbNamed(AtlasView, "Gnarlfang's Claw").Foreground).Color && ((SolidColorBrush)AtlasView.TitleBrushForTest).Color != ((SolidColorBrush)Application.Current.FindResource("Brush.Text.Primary")).Color,
                     AtlasView.CrumbsForTest);
                 ClickRow(CrumbNamed(AtlasView, "Items")); await AtlasView.WaitForTest(); await Task.Delay(100);
                 Check("breadcrumb: clicking 'Items' opens the item list (browse:items); the page's crumbs now read Atlas > Items", AtlasView.CurrentId == "browse:items" && AtlasView.CrumbsForTest == "Atlas > Items", AtlasView.CurrentId + " " + AtlasView.CrumbsForTest);
@@ -156,9 +156,9 @@ namespace ElansAddonHub
                 ClickRow(CrumbNamed(AtlasView, zm.Crumbs[0].Title)); await AtlasView.WaitForTest();
                 Check("breadcrumb: the continent crumb opens the continent's page", AtlasView.CurrentId == zm.Crumbs[0].Link, AtlasView.CurrentId);
                 ClickRow(CrumbNamed(AtlasView, "Atlas")); await AtlasView.WaitForTest();
-                Check("breadcrumb: 'Atlas' goes to the start page, where the header shows just 'Atlas' and no page title; back / forward / start and the Copy link chip keep working", AtlasView.IsStart && AtlasView.CrumbsForTest == "Atlas" && !AtlasView.TitleShownForTest && AtlasView.LinkShown == "" && !AtlasView.PinShownForTest);
+                Check("breadcrumb: 'Atlas' goes to the start page, where the header shows just 'Atlas' and there is no hero; back / forward / start and the Copy link chip keep working", AtlasView.IsStart && AtlasView.CrumbsForTest == "Atlas" && AtlasView.HeroForTest == null && AtlasView.LinkShown == "" && !AtlasView.PinShownForTest);
                 await AtlasView.Back(); UpdateLayout();
-                Check("breadcrumb: Back returns to the page before, with its crumbs and the title back", AtlasView.CurrentId == zm.Crumbs[0].Link && AtlasView.CrumbsForTest.StartsWith("Atlas > Zones") && AtlasView.TitleShownForTest && AtlasView.LinkShown == zm.Crumbs[0].Link);
+                Check("breadcrumb: Back returns to the page before, with its crumbs and the hero back", AtlasView.CurrentId == zm.Crumbs[0].Link && AtlasView.CrumbsForTest.StartsWith("Atlas > Zones") && AtlasView.HeroForTest != null && AtlasView.LinkShown == zm.Crumbs[0].Link);
                 await AtlasView.Open(AtlasNav.DataId); UpdateLayout();
                 Check("breadcrumb: the data sources read Atlas > Data sources", AtlasView.CrumbsForTest == "Atlas > Data sources");
                 await AtlasView.Open("item:99999"); UpdateLayout();
@@ -218,11 +218,11 @@ namespace ElansAddonHub
                 AtlasView.PressPaletteForTest(Key.Escape);
                 Check("palette: Esc closes it and the page stays", !AtlasView.PaletteOpen && AtlasView.CurrentId == "item:100" && AtlasView.PaletteLayerForTest.Visibility == Visibility.Collapsed);
                 // the header box opens it as well
-                AtlasView.SearchBoxForTest.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) { RoutedEvent = UIElement.PreviewMouseDownEvent, Source = AtlasView.SearchBoxForTest });
+                TitleSearchForTest.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) { RoutedEvent = UIElement.PreviewMouseDownEvent, Source = TitleSearchForTest });
                 await AtlasView.PaletteOpenWaitForTest();
                 Check("palette: a click in the header search box opens it too (the box is its launcher)", AtlasView.PaletteOpen);
                 AtlasView.ClosePalette();
-                AtlasView.SearchBoxForTest.RaiseEvent(new TextCompositionEventArgs(Keyboard.PrimaryDevice, new TextComposition(InputManager.Current, AtlasView.SearchBoxForTest, "w")) { RoutedEvent = UIElement.PreviewTextInputEvent, Source = AtlasView.SearchBoxForTest });
+                TitleSearchForTest.RaiseEvent(new TextCompositionEventArgs(Keyboard.PrimaryDevice, new TextComposition(InputManager.Current, TitleSearchForTest, "w")) { RoutedEvent = UIElement.PreviewTextInputEvent, Source = TitleSearchForTest });
                 await AtlasView.PaletteOpenWaitForTest(); await AtlasView.PaletteWaitForTest();
                 Check("palette: typing a letter in the header box opens it with that letter already in the search box", AtlasView.PaletteOpen && AtlasView.PaletteTextForTest == "w");
                 AtlasView.ClosePalette();

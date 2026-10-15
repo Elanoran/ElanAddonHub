@@ -93,9 +93,6 @@ namespace ElansAddonHub
         public bool PinnedNowForTest => IsPinnedNow;
         public string CrumbsForTest => CrumbHost.Content is DependencyObject d ? string.Join(" > ", AtlasWalk(d).OfType<TextBlock>().Where(t => t.Text != "›").Select(t => t.Text)) : "";
         public FrameworkElement CrumbHostForTest => CrumbHost;
-        public bool TitleShownForTest => TitleBlock.Visibility == Visibility.Visible;
-        public string TitleTextForTest => TitleText.Text;
-        public Brush TitleBrushForTest => TitleText.Foreground;
 
         bool IsPinnedNow => !string.IsNullOrEmpty(history.Current) && NavState.IsPinned(history.Current);
 
@@ -134,8 +131,7 @@ namespace ElansAddonHub
         {
             var id = history.Current ?? "";
             CrumbHost.Content = CrumbRow(CrumbsFor(id), 0);
-            bool start = id.Length == 0;
-            TitleBlock.Visibility = start ? Visibility.Collapsed : Visibility.Visible;
+            if (heroBrush != null && model != null && id.Length > 0 && AtlasTabs.SamePage(model.Id, id)) ColourLastCrumb(heroBrush);      // the page itself, in the colour of its name (an item's quality), whenever the crumbs are built
         }
 
         List<AtlasCrumb> CrumbsFor(string id)
@@ -162,21 +158,20 @@ namespace ElansAddonHub
             {
                 var cc = AtlasNav.CategoryCrumb(kind);
                 if (cc != null) l.Add(cc);
-                bool mine = model != null && model.Id == id;
-                if (mine) foreach (var c in model.Crumbs) if (c.Link != id) l.Add(c);
-                string title = mine && !string.IsNullOrEmpty(model.Title) ? model.Title : AtlasNav.Describe(id)?.Title ?? id;
+                var bid = AtlasTabs.BaseId(id);             // the tab is not part of the page's identity: item:1?tab=sources is the crumbs of item:1
+                bool mine = model != null && model.Id == bid;
+                if (mine) foreach (var c in model.Crumbs) if (c.Link != bid) l.Add(c);
+                string title = mine && !string.IsNullOrEmpty(model.Title) ? model.Title : AtlasNav.Describe(bid)?.Title ?? bid;
                 l.Add(new AtlasCrumb(title, ""));
             }
             return l;
         }
 
         // ---- the sub-navigation
-        // a row you can reach with Tab: Enter or Space does what a click does, the keyboard focus shows as the hover veil (DESIGN: every row shows where the focus is)
+        // a row you can reach with Tab: Enter or Space does what a click does; the keyboard focus is the Side.Row's own 2 px focus ring (DESIGN: every row shows where the focus is)
         void Keyable(ContentControl row, Action activate, bool selected)
         {
             row.Focusable = true; row.IsTabStop = true; row.FocusVisualStyle = null;
-            row.GotKeyboardFocus += (s, e) => row.SetResourceReference(Control.BackgroundProperty, "Brush.Overlay.Hover");
-            row.LostKeyboardFocus += (s, e) => { if (selected) row.SetResourceReference(Control.BackgroundProperty, "Brush.Accent.Tint"); else row.ClearValue(Control.BackgroundProperty); };
             row.PreviewKeyDown += (s, e) => { if (e.Key == Key.Enter || e.Key == Key.Space) { e.Handled = true; activate(); } };
         }
 
@@ -239,7 +234,7 @@ namespace ElansAddonHub
             var id = history.Current ?? "";
             var key = AtlasNav.KeyFor(id);
             NavKeyNow = key;
-            var sig = NavSignature(key) + "|" + id;
+            var sig = NavSignature(key) + "|" + AtlasTabs.BaseId(id);
             if (sig == navSig) return;
             navSig = sig;
             NavStack.Children.Clear(); navRows.Clear();
@@ -323,7 +318,7 @@ namespace ElansAddonHub
         // a Recent or Pinned page: icon tile, title; pinned rows have an unpin button on hover and can be dragged to reorder
         FrameworkElement ListedRow(AtlasNavItem it, bool pinned, string currentId)
         {
-            bool on = it.Id == currentId;
+            bool on = AtlasTabs.SamePage(it.Id, currentId);
             var row = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(8, 4, 8, 4), MinHeight = 32, Margin = new Thickness(0, 0, 0, 2), Focusable = false, Cursor = Cursors.Hand };
             row.Tag = (pinned ? "pin|" : "recent|") + it.Id;
             System.Windows.Automation.AutomationProperties.SetName(row, it.Title);

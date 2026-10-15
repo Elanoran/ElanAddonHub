@@ -25,6 +25,7 @@ namespace ElansAddonHub.Services.Db2
         {
             kind = null; id = 0;
             if (string.IsNullOrEmpty(s)) return false;
+            if (s.IndexOf('?') > 0) s = Services.Atlas.AtlasTabs.BaseId(s);      // "item:1?tab=sources" is the page item:1 (see AtlasTabs)
             int c = s.IndexOf(':');
             if (c <= 0 || c == s.Length - 1) return false;
             kind = s.Substring(0, c);

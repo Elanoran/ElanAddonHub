@@ -380,13 +380,18 @@ namespace ElansAddonHub
             catch (Exception e) { Util.Log("browser favicon: " + e.Message); }
         }
 
+        // the Ctrl+K palette is open over this page: a web view is a window of its own and would be drawn above it, so it steps aside (hidden, not closed: the page is as it was) while the layer is there
+        bool overlayHold;
+        public void HoldForOverlay(bool on) { overlayHold = on; ApplyView(); }
+        public bool HeldForOverlayForTest => overlayHold;
+
         // ================================================================ view state
 
         // which of web view / new-tab page / error page is on screen, plus the bar around it
         void ApplyView()
         {
             if (unavailable || cur == null) return;
-            foreach (var t in tabs) if (t.Web != null) t.Web.Visibility = t == cur && !t.Blank && !t.HasError && t.Web.CoreWebView2 != null ? Visibility.Visible : Visibility.Hidden;
+            foreach (var t in tabs) if (t.Web != null) t.Web.Visibility = t == cur && !t.Blank && !t.HasError && t.Web.CoreWebView2 != null && !overlayHold ? Visibility.Visible : Visibility.Hidden;
             NewTabPanel.Visibility = cur.Blank ? Visibility.Visible : Visibility.Collapsed;
             ErrorPanel.Visibility = !cur.Blank && cur.HasError ? Visibility.Visible : Visibility.Collapsed;
             if (cur.HasError) { ErrTitle.Text = cur.ErrorTitle; ErrText.Text = cur.ErrorText; ErrUrl.Text = cur.ErrorUrl ?? ""; }
