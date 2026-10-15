@@ -696,15 +696,33 @@ namespace ElansAddonHub.Services.Atlas
         public static bool CanUse(string cls, int level, BEntry e)
         {
             if (level > 0 && e.Level > level) return false;
-            if (!Known(cls) || e.Cls < 0) return true;
-            if (e.Cls == 4 && e.Sub > 0 && e.Sub != 5)
+            return CanUse(cls, level, e.Cls, e.Sub);
+        }
+
+        // the armor / weapon rules alone (no required level): itemClass 4 = armor, 2 = weapon, anything else is usable by anyone
+        public static bool CanUse(string cls, int level, int itemClass, int sub)
+        {
+            if (!Known(cls) || itemClass < 0) return true;
+            if (itemClass == 4 && sub > 0 && sub != 5)
             {
                 var a = Armor[cls];
-                for (int i = 0; i + 1 < a.Length; i += 2) if (a[i] == e.Sub) return level <= 0 || level >= a[i + 1];
+                for (int i = 0; i + 1 < a.Length; i += 2) if (a[i] == sub) return level <= 0 || level >= a[i + 1];
                 return false;
             }
-            if (e.Cls == 2) return Array.IndexOf(Weapons[cls], e.Sub) >= 0;
+            if (itemClass == 2) return Array.IndexOf(Weapons[cls], sub) >= 0;
             return true;
+        }
+
+        // the level a class can wield a second one-hand weapon at (0 = never): warrior 20, hunter 20, rogue 10, shaman 40
+        public static int DualWieldLevel(string cls)
+        {
+            switch ((cls ?? "").ToUpperInvariant())
+            {
+                case "WARRIOR": case "HUNTER": return 20;
+                case "ROGUE": return 10;
+                case "SHAMAN": return 40;
+                default: return 0;
+            }
         }
     }
 }
