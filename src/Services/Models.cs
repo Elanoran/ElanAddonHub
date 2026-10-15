@@ -123,6 +123,8 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "classicShareOffered")] public string ClassicShareOffered { get; set; }   // the release (version string) an owner or officer was already offered to share with the Lodge: asked once per release
         [DataMember(Name = "armoryShare")] public bool ArmoryShareOn { get; set; }            // false (default) = no character is shared; on = the characters in ArmoryChars are shared with the lodge (gear, talents, professions, pets - never bags, bank or gold)
         [DataMember(Name = "armoryChars")] public List<string> ArmoryChars { get; set; }       // "Realm-Name" keys of the characters to share (null / empty = none)
+        [DataMember(Name = "upgradeWeights")] public Dictionary<string, string> UpgradeWeights { get; set; }   // Characters > Gear > Upgrades: the stat weights the person changed, "CLASS/spec" -> "agi=1.2;sta=0.4" (only what differs from the defaults)
+        [DataMember(Name = "upgradeFilter")] public string UpgradeFilter { get; set; }                         // the filters of that panel, as UpgradeFilters.Serialize writes them (null = the defaults)
         [DataMember(Name = "wowEventsOff")] public bool WowEventsOff { get; set; }          // false (default) = WoW's own calendar (from the companion addon) is listed in the Calendar
         [DataMember(Name = "itemDataOff")] public bool ItemDataOff { get; set; }            // false (default) = item names, stats and levels are read from the user's own WoW installation (Atlas); true = not read
         // ---- Outpost browser (Browser page)

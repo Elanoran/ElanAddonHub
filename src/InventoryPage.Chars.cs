@@ -398,6 +398,7 @@ namespace ElansAddonHub
                 }
                 else el = EmptyDollSlot(id, slotName);
                 el.Margin = new Thickness(0, 0, 0, 4);
+                el.MouseLeftButtonUp += (o, ev) => { if (!ev.Handled) FocusUpgradeSlot(id); };
                 dollSlots[id] = el;
                 return el;
             }
@@ -460,6 +461,7 @@ namespace ElansAddonHub
             wrap.Children.Add(statsCard);
             CharHost.Children.Add(wrap);
             gearWrap = wrap; gearDollCard = dollCard; gearStatsCard = statsCard;
+            CharHost.Children.Add(BuildUpgradesCard(c));
         }
 
         // "id|column|row" per slot (L, R, or B for the bottom row), read from the elements' real grid positions

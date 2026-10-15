@@ -60,6 +60,7 @@ namespace ElansAddonHub.Services.Atlas
                 s.Note = "Counted in bags, bank, worn gear and guild banks from the last time each was saved.";
             }
             else if (owned != null) { var s = Section(m, "owned", "Your characters", "None of your characters has this item."); }
+            AddUpgradeFact(m, ci);
 
             // ---- sources
             var src = Section(m, "sources", "Where it comes from", "Nothing is known yet about where this item comes from.");

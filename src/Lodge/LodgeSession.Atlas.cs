@@ -316,6 +316,7 @@ namespace ElansAddonHub.Lodge
         static readonly IReadOnlyList<AtlasObs.FishSpot> NoFishSpots = new AtlasObs.FishSpot[0];
         // item details a member's client revealed (null: nobody has)
         public AtlasObs.Revealed Revealed(int itemId) { return revealed.TryGetValue(itemId, out var r) ? r : null; }
+        public IEnumerable<AtlasObs.Revealed> AllRevealed => revealed.Values;
         // what one npc / object / fishing zone dropped overall (null: nothing observed)
         public AtlasObs.Counter Loot(string kind, int id)
         {

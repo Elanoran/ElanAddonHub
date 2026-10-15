@@ -68,7 +68,7 @@ namespace ElansAddonHub.Services.Atlas
         }
 
         // the zone most of an npc's spawn points are in, for a table row ("Elwynn Forest"); "" when unknown or inside an instance
-        static string ZoneOfSpawns(IReadOnlyList<ClassicSpawn> spawns)
+        internal static string ZoneOfSpawns(IReadOnlyList<ClassicSpawn> spawns)
         {
             var idx = MapData.Index;
             if (idx == null || spawns == null || spawns.Count == 0) return "";
