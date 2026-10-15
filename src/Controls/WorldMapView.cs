@@ -66,6 +66,8 @@ namespace ElansAddonHub
         public bool Segment3dChecked => seg3d.IsChecked == true;
         public string LoadedPage => loadedPage;
         public bool FrozenForTest => frozen;
+        public int StaleViewsForTest { get; private set; }     // view reports dropped as older than the app's last goto
+        public int ViewSeqForTest => viewSeq;
         public bool KeyHookForTest { get; private set; }
         public event Action PaletteRequested;                  // Ctrl+K was pressed while the web page had the keyboard (the page is another window: WPF never sees the key)
         public bool FrozenImageShownForTest => freezeImg != null && freezeImg.Source != null;
@@ -93,6 +95,7 @@ namespace ElansAddonHub
         // ---- state
         int mapId = -1; string slug = "";
         bool hasView; double vx, vy, vz;
+        int viewSeq;                                           // counts the places the app sent the page to (init/goto/fit "s"); a view report from before the last one is stale
         WorldMapTarget target = new WorldMapTarget();
         int initGen, buildGen;
         string pendingInit;
@@ -242,8 +245,8 @@ namespace ElansAddonHub
             int gen = ++buildGen;
             if (same && web != null && WorldMapCache.Built(mapId) != null && (!mode3d || WorldMapCache.TerrainBuilt(mapId) != null))
             {
-                if (t.HasView) { WorldMapMath.WorldToLatLng(t.X, t.Y, out var lat, out var lng); Post(WorldMapProtocol.Goto(lat, lng, t.Z, t.Pin ? "" : null)); }
-                else if (t.Slug.Length > 0) Post("{\"t\":\"fit\"}");      // the continent by name: the whole continent again
+                if (t.HasView) { WorldMapMath.WorldToLatLng(t.X, t.Y, out var lat, out var lng); Post(WorldMapProtocol.Goto(lat, lng, t.Z, t.Pin ? "" : null, null, ++viewSeq)); }
+                else if (t.Slug.Length > 0) Post("{\"t\":\"fit\",\"s\":" + (++viewSeq).ToString(CultureInfo.InvariantCulture) + "}");      // the continent by name: the whole continent again
                 Present();
                 SubChanged?.Invoke(CurrentSub);
                 return;
@@ -439,6 +442,7 @@ namespace ElansAddonHub
             var init = new Dictionary<string, object>
             {
                 ["t"] = "init",
+                ["s"] = ++viewSeq,
                 ["mode"] = is3 ? "3d" : "2d",
                 ["map"] = new Dictionary<string, object>
                 {
@@ -612,6 +616,8 @@ namespace ElansAddonHub
                     break;
                 case WorldMapMessageType.View:
                     {
+                        // a report the page sent before it had the app's last goto/fit/init (in flight, or its debounce timer) is not where the map is going: kept out of the id
+                        if (m.Seq >= 0 && m.Seq < viewSeq) { StaleViewsForTest++; break; }
                         WorldMapMath.LatLngToWorld(m.Lat, m.Lng, out var x, out var y);
                         hasView = true; vx = x; vy = y; vz = m.Z;
                         SubChanged?.Invoke(CurrentSub);
@@ -619,6 +625,7 @@ namespace ElansAddonHub
                     }
                 case WorldMapMessageType.View3:
                     {
+                        if (m.Seq >= 0 && m.Seq < viewSeq) { StaleViewsForTest++; break; }
                         LastView3 = m;
                         bld.Focus(m.Lat, m.Lng, mapId);
                         WorldMapMath.LatLngToWorld(m.Lat, m.Lng, out var x, out var y);

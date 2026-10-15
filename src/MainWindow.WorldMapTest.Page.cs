@@ -324,6 +324,24 @@ namespace ElansAddonHub
                     // the live page reports its view while it moves back; under load (a full run) the last report can lag a moment
                     await WaitFor(() => AtlasView.CurrentId.StartsWith("worldmap:0?x=250&y=500&z=6"), 5000);
                     Check("page: item page -> Back is the map again at the id it had (history works for the hosted map)", AtlasView.CurrentId.StartsWith("worldmap:0?x=250&y=500&z=6") && WorldMapView.MapId == 0, AtlasView.CurrentId);
+                    // a view report the page sent before the app's last goto (in flight, or from its 500 ms debounce) must not become the id: it is the old place, and
+                    // Back would return there (seen as worldmap:0?x=-1&y=-1&z=7, the place an earlier step had left the map at)
+                    {
+                        await AtlasView.Open("worldmap:0?x=250&y=500&z=6&p=1");
+                        int seq = WorldMapView.ViewSeqForTest, stale0 = WorldMapView.StaleViewsForTest;
+                        string idAt = AtlasView.CurrentId;
+                        WorldMapView.Handle("{\"t\":\"view\",\"lat\":-128.0084,\"lng\":128.0084,\"z\":7,\"s\":" + (seq - 1) + "}");
+                        WorldMapView.Handle("{\"t\":\"view3\",\"lat\":-128.0084,\"lng\":128.0084,\"dist\":800,\"az\":0,\"tilt\":45,\"s\":" + (seq - 1) + "}");
+                        string idAfterStale = AtlasView.CurrentId;
+                        await AtlasView.Open("item:2589"); await AtlasView.Back();
+                        await WaitFor(() => AtlasView.CurrentId.StartsWith("worldmap:0?x=250&y=500&z=6"), 5000);
+                        string idBack = AtlasView.CurrentId;
+                        Check("page: a view report older than the app's last goto (a late one from the previous place) is dropped: the id stays and item page -> Back returns to it",
+                            seq > 0 && idAt.StartsWith("worldmap:0?x=250&y=500&z=6") && idAfterStale == idAt && WorldMapView.StaleViewsForTest - stale0 == 2 && idBack.StartsWith("worldmap:0?x=250&y=500&z=6"), idAt + " | " + idAfterStale + " | " + idBack + " | dropped " + (WorldMapView.StaleViewsForTest - stale0));
+                        // a report that names the newest goto still moves the id (the person moved the map after it)
+                        WorldMapView.Handle("{\"t\":\"view\",\"lat\":-123.4,\"lng\":130.5,\"z\":5.5,\"s\":" + WorldMapView.ViewSeqForTest + "}");
+                        Check("page: a view report that names the app's newest goto still moves the id", AtlasView.CurrentId == expectId, AtlasView.CurrentId + " vs " + expectId);
+                    }
                     // the Atlas start page lists the category; a search finds it
                     await AtlasView.GoStart();
                     var hits = WorldMapIds.Hits("northland");

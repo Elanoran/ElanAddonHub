@@ -44,6 +44,7 @@ namespace ElansAddonHub.Services.WorldMap
         public long Tris;
         public int Buildings;                                  // stats: building instances drawn
         public int Textures;
+        public int Seq = -1;                                   // view / view3: the last place the app sent the page to ("s" of init/goto/fit), -1 when the page names none
     }
 
     public static class WorldMapProtocol
@@ -83,7 +84,7 @@ namespace ElansAddonHub.Services.WorldMap
                         if (t == "view")
                         {
                             if (!Num(d, "z", out m.Z) || m.Z < 0 || m.Z > WorldMapIds.MaxZoom) { refusal = "zoom outside 0-9"; return null; }
-                            m.Type = WorldMapMessageType.View;
+                            m.Type = WorldMapMessageType.View; m.Seq = SeqOf(d);
                         }
                         else m.Type = WorldMapMessageType.Nav;
                         return m;
@@ -122,7 +123,7 @@ namespace ElansAddonHub.Services.WorldMap
                         if (!(Num(d, "lat", out m.Lat) && Num(d, "lng", out m.Lng) && Num(d, "dist", out m.Dist) && Num(d, "az", out m.Az) && Num(d, "tilt", out m.Tilt))) { refusal = "a 3D view needs lat, lng, dist, az and tilt numbers"; return null; }
                         if (!InPlane(m.Lat, m.Lng)) { refusal = "position outside the map"; return null; }
                         if (m.Dist < 5 || m.Dist > 200000 || Math.Abs(m.Az) > 720 || m.Tilt < -1 || m.Tilt > 91) { refusal = "camera outside its limits"; return null; }
-                        m.Type = WorldMapMessageType.View3; return m;
+                        m.Type = WorldMapMessageType.View3; m.Seq = SeqOf(d); return m;
                     }
                 case "stats":
                     {
@@ -159,6 +160,8 @@ namespace ElansAddonHub.Services.WorldMap
             return sb.ToString();
         }
 
+        static int SeqOf(Dictionary<string, object> d) => d.TryGetValue("s", out var o) && o is double x && x >= 0 && x <= int.MaxValue && x == Math.Floor(x) ? (int)x : -1;
+
         static bool Num(Dictionary<string, object> d, string k, out double v)
         {
             v = 0;
@@ -169,9 +172,10 @@ namespace ElansAddonHub.Services.WorldMap
 
         // ---- app -> page: the shapes of the messages are built by plain dictionaries (Json.Write)
         public static string Toast(string text, bool ok) => Json.Write(new Dictionary<string, object> { ["t"] = "toast", ["text"] = text ?? "", ["ok"] = ok });
-        public static string Goto(double lat, double lng, double z, string pinName = null, string pinTip = null)
+        public static string Goto(double lat, double lng, double z, string pinName = null, string pinTip = null, int seq = -1)
         {
             var d = new Dictionary<string, object> { ["t"] = "goto", ["lat"] = lat, ["lng"] = lng, ["z"] = z };
+            if (seq >= 0) d["s"] = seq;
             if (pinName != null) d["pin"] = new Dictionary<string, object> { ["name"] = pinName, ["tip"] = pinTip ?? "" };
             return Json.Write(d);
         }

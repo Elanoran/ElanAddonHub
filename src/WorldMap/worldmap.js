@@ -307,8 +307,11 @@
   }
 
   // ---------------------------------------------------------------- the messages from the app
+  // vseq: the last place the app sent the map to; every view report names it, so the app can drop a report that was on its way before that goto
+  var vseq = -1;
   function handle(m) {
     if (!m || typeof m.t !== 'string') return;
+    if ((m.t === 'init' || m.t === 'goto' || m.t === 'fit') && typeof m.s === 'number') vseq = m.s;
     switch (m.t) {
       case 'init': init(m); break;
       case 'goto': go(m); break;
@@ -414,7 +417,7 @@
     var vt = 0;
     map.on('moveend', function () {
       queueDraw(); applyLabelZoom();
-      clearTimeout(vt); vt = setTimeout(function () { var c = map.getCenter(); send({ t: 'view', lat: c.lat, lng: c.lng, z: map.getZoom() }); }, 500);
+      clearTimeout(vt); vt = setTimeout(function () { var c = map.getCenter(); send({ t: 'view', lat: c.lat, lng: c.lng, z: map.getZoom(), s: vseq }); }, 500);
     });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideMenu(); });
     window.addEventListener('blur', hideMenu);
