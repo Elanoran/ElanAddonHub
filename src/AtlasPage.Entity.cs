@@ -234,13 +234,11 @@ namespace ElansAddonHub
         }
 
         // ============================================================================================================================ the tabs
-        class TabPlan { public string Key; public int Count; }
-        readonly List<TabPlan> tabPlans = new List<TabPlan>();
 
         // which tabs the page has: Overview always; Sources / Related / Lodge when a table of theirs has rows; Map when there is a map to show
         void PlanTabs(AtlasPageModel m)
         {
-            tabsShown.Clear(); tabPlans.Clear();
+            tabsShown.Clear();
             tabsShown.Add(AtlasTabs.Overview);
             foreach (var t in new[] { AtlasTabs.Sources, AtlasTabs.Map, AtlasTabs.Related, AtlasTabs.Lodge })
             {
@@ -470,7 +468,7 @@ namespace ElansAddonHub
                 var plan = model.Map;
                 var sp = new StackPanel();
                 sp.Children.Add(Tb("Where", "Text.Section"));
-                railMap = new AtlasMap { Height = 220, Margin = new Thickness(0, 12, 0, 0) };
+                railMap = new AtlasMap { Height = 180, Margin = new Thickness(0, 12, 0, 0), Compact = true };
                 var z = plan.ShowZone > 0 ? plan.Zones.FirstOrDefault(x => x.UiMapId == plan.ShowZone) ?? new AtlasMapZone { UiMapId = plan.ShowZone, Name = AtlasQuery.ZoneName(plan.ShowZone) } : plan.Best ?? plan.Zones.FirstOrDefault();
                 var mp = railMap;
                 if (z != null) Defer(() => { mp.ShowMap(z.UiMapId); mp.AddMarkers(z.Markers); });
