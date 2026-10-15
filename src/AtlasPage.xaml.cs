@@ -124,6 +124,21 @@ namespace ElansAddonHub
         {
             ClosePalette();
             started = true;
+            // the page already shown, asked for on another tab (a link with ?tab=): the same page - only the tab changes, nothing is built again and the history has no new step
+            var cur = history.Current ?? "";
+            if (record && id.Length > 0 && cur != id && AtlasTabs.SamePage(cur, id))
+            {
+                var tab = AtlasTabs.TabOf(id);
+                if (model != null && !model.NotFound && model.Id == AtlasTabs.BaseId(id) && entityGrid != null && hosted == null && browse == null)
+                {
+                    if (tab.Length == 0) tab = tabDefault;
+                    if (!SelectTab(tab, true)) { history.Replace(id); NavState.Follow(cur, id); UpdateNav(); SyncIdToTab(false); }
+                    return lastBuild;
+                }
+                history.Replace(id); NavState.Follow(cur, id);          // still being built: it opens on the tab asked for
+                UpdateNav(); Navigated?.Invoke(id);
+                return lastBuild = BuildAndDraw(id);
+            }
             if (record) { history.Go(id); NavState.Visit(id); }
             UpdateNav();
             Navigated?.Invoke(id);

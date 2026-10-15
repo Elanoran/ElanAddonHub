@@ -90,7 +90,7 @@ namespace ElansAddonHub
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             // ---- toolbar (36 high): breadcrumb, floors, zoom
-            var bar = new Grid { Margin = new Thickness(0, 0, 0, 8), MinHeight = 32 };
+            var bar = new Grid { Margin = new Thickness(0, 0, 0, 8), MinHeight = 32 }; toolbar = bar;
             bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -154,6 +154,9 @@ namespace ElansAddonHub
         }
 
         readonly Border focusRing = new Border();
+        Grid toolbar;
+        // a thumbnail: no breadcrumb, floors or zoom buttons above the picture (the entity page's rail; a click on it opens the real map)
+        public bool Compact { get => toolbar != null && toolbar.Visibility == Visibility.Collapsed; set { if (toolbar != null) toolbar.Visibility = value ? Visibility.Collapsed : Visibility.Visible; } }
         bool fromFiles, released;
         public bool PictureHeldForTest => picture != null;
         public bool ReleasedForTest => released;

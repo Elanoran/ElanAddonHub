@@ -638,7 +638,7 @@ namespace ElansAddonHub
             // ---- the page in the window: the Routes panel
             var nodeSrc = new LiveNodeSource();
             Height = 1000; ShowTab("atlas");
-            await AtlasView.Open("obj:50"); UpdateLayout();
+            await AtlasView.Open("obj:50"); UpdateLayout(); await SwitchTab("map");
             Check("window: the object page has a 'Show route' button on the map card", await MapReady() && AtlasView.routeButtons.Count == 1 && (string)AtlasView.routeButtons[0].Content == "Show route");
             AtlasView.routeButtons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var ui = AtlasView.LastRoutesForTest;

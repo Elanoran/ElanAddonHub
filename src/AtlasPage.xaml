@@ -115,12 +115,9 @@
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- header: back / forward / start, the breadcrumb (every crumb is a link), Pin, the search box that opens the palette; below: the title, subtitle and link of the page -->
+        <!-- header: back / forward / start, the breadcrumb (every crumb but the last is a link), the page's link (a quiet chip with Copy) and Pin. There is no title row under it: the page names itself
+             (an entity page in its hero; a list, Home and Data sources in the last crumb). Search is the box in the window's title bar (Ctrl+K, MainWindow). -->
         <Grid Grid.Row="0" Margin="0,0,0,16">
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-          </Grid.RowDefinitions>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
@@ -133,21 +130,15 @@
             <Button x:Name="HomeButton" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE80F;" ToolTip="Atlas start page" Click="Home_Click" AutomationProperties.Name="Atlas start page" />
           </StackPanel>
           <ContentControl x:Name="CrumbHost" Grid.Column="1" VerticalAlignment="Center" Focusable="False" IsTabStop="False" />
-          <Button x:Name="PinButton" Grid.Column="2" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE718;" Margin="12,0,0,0" ToolTip="Pin this page" Click="Pin_Click" AutomationProperties.Name="Pin page" Visibility="Collapsed" />
-          <TextBox x:Name="SearchBox" Grid.Column="3" Style="{StaticResource Input}" Width="220" Margin="8,0,0,0" VerticalAlignment="Center" IsReadOnly="True" Cursor="IBeam"
-                   Tag="Search  (Ctrl K)" ToolTip="Search by name, or paste a link like item:2589 or npc:46  (Ctrl+K)" AutomationProperties.Name="Search Atlas" PreviewMouseDown="Search_Down" PreviewKeyDown="Search_KeyDown" PreviewTextInput="Search_TextInput" />
-          <StackPanel x:Name="TitleBlock" Grid.Row="1" Grid.ColumnSpan="4" Margin="0,12,0,0">
-            <TextBlock x:Name="TitleText" Text="Atlas" Style="{StaticResource Text.Title}" TextTrimming="CharacterEllipsis" />
-            <TextBlock x:Name="SubText" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
-            <!-- the Atlas link of the page (item:2589, browse:items/weapons, talents:tree/hunter) as a quiet chip with a copy button; hidden on the start page -->
-            <StackPanel x:Name="LinkRow" Orientation="Horizontal" Margin="0,4,0,0" Visibility="Collapsed" HorizontalAlignment="Left">
-              <Border Style="{StaticResource Chip}" Padding="8,0" MinHeight="20" VerticalAlignment="Center">
-                <TextBlock x:Name="LinkText" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="560" />
-              </Border>
-              <Button x:Name="CopyLinkButton" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE8C8;" Margin="4,0,0,0" Click="CopyLink_Click" AutomationProperties.Name="Copy link" />
-              <TextBlock x:Name="CopiedText" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Success}" Text="Link copied" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
-            </StackPanel>
+          <!-- the Atlas link of the page (item:2589, item:2589?tab=sources, browse:items/weapons, talents:tree/hunter) as a quiet chip with a copy button; hidden on the start page -->
+          <StackPanel x:Name="LinkRow" Grid.Column="2" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+            <Border x:Name="LinkChip" Style="{StaticResource Chip}" Padding="8,0" MinHeight="20" VerticalAlignment="Center">
+              <TextBlock x:Name="LinkText" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="240" />
+            </Border>
+            <Button x:Name="CopyLinkButton" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE8C8;" Margin="4,0,0,0" Click="CopyLink_Click" AutomationProperties.Name="Copy link" />
+            <TextBlock x:Name="CopiedText" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Success}" Text="Link copied" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
           </StackPanel>
+          <Button x:Name="PinButton" Grid.Column="3" Style="{StaticResource IconButton}" Width="32" Height="32" FontSize="16" Content="&#xE718;" Margin="8,0,0,0" ToolTip="Pin this page" Click="Pin_Click" AutomationProperties.Name="Pin page" Visibility="Collapsed" />
         </Grid>
 
         <Grid Grid.Row="1">
