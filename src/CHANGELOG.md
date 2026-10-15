@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.66.2
+- **Atlas: latest finds strip.** The Finds page now starts with a row of the newest finds in the Lodge (up to 40) as item icons with a quality-coloured frame and a number when more than one was found. Hover an icon (or tab to it and use Left / Right) to see the item's tooltip and who found it, how many, from where, in which zone and how long ago. Click opens the item. Scroll sideways with the mouse wheel, by dragging, by swiping on a touch screen, or with the small arrows at the ends. New finds slide in at the front without moving the strip if you have scrolled away from the start. Guests see "a member" instead of names.
+
 ## 2.66.1
 - **Atlas: start zones for Forever's new races.** Skyborne's first quests are open to every race, so the quest rule could not tell where Skyborne start. Now a character of yours of that race seen at level 1-2 shows it ("Starts in: Thendal Village, Zephras Isle", labelled Your characters), and the Outpost remembers it after the character has levelled away.
 

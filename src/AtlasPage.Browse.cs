@@ -68,6 +68,8 @@ namespace ElansAddonHub
             }
             var col = new StackPanel();
             Body.Children.Add(col);
+            findsStrip = null; findsStripBox = null;
+            if (IsFindsPage) { var fsb = FindsStripBlock(); if (fsb != null) col.Children.Add(fsb); }
             if (r.Children.Count > 0) col.Children.Add(ChildChips(r));
             col.Children.Add(FilterBar(r));
             browseCount = Tb(r.CountText, "Text.Caption", Res("Brush.Text.Tertiary"), 4);

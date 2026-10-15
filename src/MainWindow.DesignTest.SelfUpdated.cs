@@ -48,7 +48,7 @@ namespace ElansAddonHub
         }
 
         // a tooltip popup can't be captured: draw one with the same style under the anchor, on top of the window
-        void SnapshotWithTip(FrameworkElement anchor, string text, string file)
+        void SnapshotWithTip(FrameworkElement anchor, object text, string file)
         {
             UpdateLayout();
             var shell = new ToolTip { Content = text };
