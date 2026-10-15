@@ -30,6 +30,7 @@ namespace ElansAddonHub
             {
                 Session.Disconnect(); Session.AtlasResetForTest(); try { File.Delete(sentFile); } catch { }
                 SharedDataFile.FieldNotesText = "";
+                AtlasObs.SeenSource = new FakeSeen();                         // the seen-creatures test left its source behind: nothing of it in these frames
                 AtlasQuery.Context.NowUtc = () => now;
 
                 // ---- the Hub module
