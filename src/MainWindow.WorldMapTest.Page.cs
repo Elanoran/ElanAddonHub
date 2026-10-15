@@ -152,7 +152,7 @@ namespace ElansAddonHub
                         await Task.Delay(100);
                         Check("palette over the map: opened and closed again (a click on the dim) twice in a row - the map is live each time", !AtlasView.PaletteOpen && WorldMapView.WebShown && !WorldMapView.FrozenForTest);
                         var swHead = System.Diagnostics.Stopwatch.StartNew();
-                        AtlasView.SearchBoxForTest.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Left) { RoutedEvent = UIElement.PreviewMouseDownEvent, Source = AtlasView.SearchBoxForTest });
+                        TitleSearchForTest.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Left) { RoutedEvent = UIElement.PreviewMouseDownEvent, Source = TitleSearchForTest });
                         await AtlasView.PaletteOpenWaitForTest();
                         Check("palette over the map: the header search box opens it here too, over the snapshot", AtlasView.PaletteOpen && WorldMapView.FrozenForTest && !WorldMapView.WebShown);
                         AtlasView.ClosePalette(); await Task.Delay(100);

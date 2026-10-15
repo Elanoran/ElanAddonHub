@@ -866,7 +866,8 @@
   </Style>
 
   <!-- a calm sidebar row that is not a radio button (Lodge channels, voice rooms, people): transparent, white veil on hover (120 ms), the fill the
-       caller sets (Background) is the selected tint (Brush.Accent.Tint). Put the click handler on it; Padding is the inner padding, MinHeight the row height. -->
+       caller sets (Background) is the selected tint (Brush.Accent.Tint). Put the click handler on it; Padding is the inner padding, MinHeight the row height.
+       A row you can reach with Tab (Focusable + IsTabStop) shows a 2 px Brush.Focus ring inside its edge while the keyboard focus is on it. -->
   <Style x:Key="Side.Row" TargetType="ContentControl">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Cursor" Value="Hand" />
@@ -879,12 +880,14 @@
             <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="{StaticResource Radius.Control}" />
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
             <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+            <Border x:Name="ring" CornerRadius="{StaticResource Radius.Control}" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
               <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
               <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
             </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
@@ -1023,6 +1026,38 @@
             <Trigger Property="IsMouseOver" Value="True">
               <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
             </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- the tabs of an entity page (Overview | Sources | Map | Related | Lodge): 36 high, the name and a Tertiary count, a 2 px accent underline on the chosen one (selection is the accent's job),
+       a keyboard focus ring. Put them in one RadioButton group; Left / Right move between them. -->
+  <Style x:Key="EntityTab" TargetType="RadioButton">
+    <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Margin" Value="0,0,16,0" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Grid Background="Transparent" Height="36">
+            <ContentPresenter VerticalAlignment="Center" Margin="4,0,4,2" />
+            <Border x:Name="bar" Height="2" VerticalAlignment="Bottom" CornerRadius="1" Background="{StaticResource Brush.Accent}" Visibility="Hidden" />
+            <Border x:Name="ring" Margin="0,2,0,4" CornerRadius="8" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="bar" Property="Visibility" Value="Visible" />
+              <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>

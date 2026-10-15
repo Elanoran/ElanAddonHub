@@ -186,6 +186,8 @@ namespace ElansAddonHub.Services.Atlas
     // ============================================================================================================================
     // Recents and pins: ids only (names and icons are looked up again when shown). The two lists belong to the settings (Settings.AtlasRecents /
     // AtlasPins); this class edits them in place and tells the owner after every change so the owner can save (debounced).
+    // An entity id may carry a tab ("item:1?tab=sources", see AtlasTabs): for the lists it is the same page as "item:1" - one entry, one pin - and the entry keeps the form
+    // it was last seen in, so opening it again lands on the tab you left it on. A pin is a bookmark: it keeps the form it was pinned in (changing tab on the page does not move it).
     // ============================================================================================================================
     public sealed class AtlasNavState
     {
@@ -202,10 +204,13 @@ namespace ElansAddonHub.Services.Atlas
         public IReadOnlyList<string> Recents => recents;
         public IReadOnlyList<string> Pins => pins;
 
+        static string B(string id) => AtlasTabs.BaseId(id);
+        static int IndexOf(List<string> l, string id) { var b = B(id); return l.FindIndex(s => B(s) == b); }
+
         static void Clean(List<string> l, int max)
         {
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            l.RemoveAll(s => !Recordable(s) || !seen.Add(s));
+            l.RemoveAll(s => !Recordable(s) || !seen.Add(B(s)));
             if (l.Count > max) l.RemoveRange(max, l.Count - max);
         }
 
@@ -214,60 +219,64 @@ namespace ElansAddonHub.Services.Atlas
 
         void Changed() { try { changed?.Invoke(); } catch (Exception) { } }
 
-        // a page was opened: it goes to the front
+        // a page was opened: it goes to the front (the same page on another tab is the same entry)
         public void Visit(string id)
         {
             if (!Recordable(id)) return;
-            if (recents.Count > 0 && recents[0] == id) return;
-            recents.Remove(id);
+            int at = IndexOf(recents, id);
+            if (at == 0) { if (recents[0] != id) { recents[0] = id; Changed(); } return; }
+            if (at > 0) recents.RemoveAt(at);
             recents.Insert(0, id);
             if (recents.Count > MaxRecents) recents.RemoveRange(MaxRecents, recents.Count - MaxRecents);
             Changed();
         }
 
-        // the page shown became another id by itself (a filter changed): the newest recent follows, no second entry
+        // the page shown became another id by itself (a filter changed, a tab was picked): the newest recent follows, no second entry
         public void Follow(string oldId, string newId)
         {
             if (!Recordable(newId) || oldId == newId) return;
-            int at = recents.IndexOf(oldId);
+            int at = IndexOf(recents, oldId);
             if (at < 0) { Visit(newId); return; }
-            recents.RemoveAll(s => s == newId);
-            at = recents.IndexOf(oldId);
+            var keep = recents[at];
+            recents.RemoveAll(s => !ReferenceEquals(s, keep) && B(s) == B(newId));
+            at = recents.IndexOf(keep);
             recents[at] = newId;
             Changed();
         }
 
-        public void RemoveRecent(string id) { if (recents.Remove(id)) Changed(); }
+        public void RemoveRecent(string id) { var b = B(id); if (recents.RemoveAll(s => B(s) == b) > 0) Changed(); }
         public void ClearRecents() { if (recents.Count == 0) return; recents.Clear(); Changed(); }
 
-        public bool IsPinned(string id) => pins.Contains(id ?? "");
+        public bool IsPinned(string id) => IndexOf(pins, id ?? "") >= 0;
 
         public bool Pin(string id)
         {
-            if (!Recordable(id) || pins.Contains(id)) return false;
+            if (!Recordable(id) || IsPinned(id)) return false;
             if (pins.Count >= MaxPins) return false;
             pins.Add(id); Changed();
             return true;
         }
 
-        public bool Unpin(string id) { if (!pins.Remove(id ?? "")) return false; Changed(); return true; }
+        public bool Unpin(string id) { var b = B(id ?? ""); if (pins.RemoveAll(s => B(s) == b) == 0) return false; Changed(); return true; }
         public bool TogglePin(string id) { if (IsPinned(id)) { Unpin(id); return false; } return Pin(id); }
+
 
         // moves a pinned page up (-1) or down (+1) in the list
         public bool MovePin(string id, int delta)
         {
-            int at = pins.IndexOf(id ?? "");
+            int at = IndexOf(pins, id ?? "");
             if (at < 0) return false;
             return MovePinTo(id, at + delta);
         }
 
         public bool MovePinTo(string id, int index)
         {
-            int at = pins.IndexOf(id ?? "");
+            int at = IndexOf(pins, id ?? "");
             if (at < 0) return false;
             index = Math.Max(0, Math.Min(pins.Count - 1, index));
             if (index == at) return false;
-            pins.RemoveAt(at); pins.Insert(index, id);
+            var stored = pins[at];
+            pins.RemoveAt(at); pins.Insert(index, stored);
             Changed();
             return true;
         }

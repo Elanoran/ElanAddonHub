@@ -57,8 +57,7 @@ namespace ElansAddonHub
             ReleaseMaps();
             Body.Children.Clear(); bctl.Clear();
             ResetPageState();
-            TitleText.Text = r.Title; TitleText.Foreground = Res("Brush.Text.Primary");
-            SubText.Text = r.NotFound ? "Browse" : r.Subtitle;
+            pageTitle = r.Title; heroBrush = null;
             UpdateNav();
             if (r.NotFound)
             {
@@ -263,7 +262,7 @@ namespace ElansAddonHub
             browseList.ItemsSource = r.Rows;
             browseList.Visibility = r.Rows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
             browseEmpty.Visibility = r.Rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            browseCount.Text = r.CountText; SubText.Text = r.Subtitle;
+            browseCount.Text = r.CountText;
             FillNotes(r);
             browseClear.Visibility = r.Query.HasFilters ? Visibility.Visible : Visibility.Collapsed;
             if (browseList.Items.Count > 0) browseList.ScrollIntoView(browseList.Items[0]);
@@ -285,8 +284,7 @@ namespace ElansAddonHub
             ReleaseMaps();
             Body.Children.Clear(); bctl.Clear();
             ResetPageState();
-            TitleText.Text = cat.Title; TitleText.Foreground = Res("Brush.Text.Primary");
-            SubText.Text = cat.Blurb;
+            pageTitle = cat.Title; heroBrush = null;
             UpdateNav();
             FrameworkElement el = null;
             try { el = cat.Host(sub); }

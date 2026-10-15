@@ -82,7 +82,7 @@ namespace ElansAddonHub.Lodge
             }
             TileGlyph = GlyphOf(r);
             if (r.AtlasKind == "browse" || r.AtlasKind == "talents" || r.AtlasKind == "professions" || r.AtlasKind == "worldmap") { name = PathTitle(r, out var line); tipLine = line; }
-            else { name = !string.IsNullOrEmpty(r.Name) ? r.Name : AtlasKinds.Singular(r.AtlasKind) + " " + r.AtlasId.Substring(r.AtlasId.IndexOf(':') + 1); tipLine = AtlasKinds.Singular(r.AtlasKind) + " · not known on this PC"; Resolve(); }
+            else { name = !string.IsNullOrEmpty(r.Name) ? r.Name : AtlasKinds.Singular(r.AtlasKind) + " " + AtlasTabs.BaseId(r.AtlasId).Substring(r.AtlasId.IndexOf(':') + 1); tipLine = AtlasKinds.Singular(r.AtlasKind) + " · not known on this PC"; Resolve(); }
         }
 
         // The name of an item chip, first one that has text: the game data (the shipped table, else the hotfix rows the server pushed: ItemData), what the

@@ -28,7 +28,7 @@ namespace ElansAddonHub
         // the pieces of a page that belong to one kind of page are let go when another is drawn
         void ResetPageState()
         {
-            cols = null; leftCol = rightCol = null; startInfo = null; mapCol = null; mapCardEl = null;
+            ResetEntity(); startInfo = null;
             classBook = null; classGroups = null; classShown.Clear();
             tileGrids.Clear(); tileCaptions.Clear(); presetHost = null; presetLabel = null;
             classicBanner = null; classicOffer = null; classicCard = null; classicBody = null;
@@ -45,8 +45,7 @@ namespace ElansAddonHub
             ReleaseMaps();
             Body.Children.Clear();
             ResetPageState();
-            TitleText.Text = "Atlas"; TitleText.Foreground = Res("Brush.Text.Primary");
-            SubText.Text = "";
+            pageTitle = "Atlas"; heroBrush = null;
             UpdateNav();
             var col = new StackPanel();
             Body.Children.Add(col);
@@ -75,11 +74,12 @@ namespace ElansAddonHub
             ReleaseMaps();
             Body.Children.Clear();
             ResetPageState();
-            TitleText.Text = "Data sources"; TitleText.Foreground = Res("Brush.Text.Primary");
-            SubText.Text = "Where the Atlas gets what it knows. Everything is read on this PC; nothing is uploaded without your say.";
+            pageTitle = "Data sources"; heroBrush = null;
             UpdateNav();
             var col = new StackPanel();
             Body.Children.Add(col);
+            var intro = Tb("Where the Atlas gets what it knows. Everything is read on this PC; nothing is uploaded without your say.", "Text.Secondary"); intro.TextWrapping = TextWrapping.Wrap; intro.MaxWidth = ReadWidth; intro.HorizontalAlignment = HorizontalAlignment.Left; intro.Margin = new Thickness(0, 0, 0, 12);
+            col.Children.Add(intro);
             col.Children.Add(ClassicOfferView());
             // the cards sit side by side when the window is wide (see LayoutStart) and stack when it is narrow
             startCards.Clear();

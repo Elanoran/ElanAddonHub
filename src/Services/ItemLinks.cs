@@ -193,7 +193,7 @@ namespace ElansAddonHub.Services
 
         // Atlas links (the Copy button on every Atlas page): "<kind>:<number>" for the entity kinds, "browse:" / "talents:" / "professions:" + a path.
         // Whole tokens only: not after a letter, digit or one of / = ? & . : @ % # - | (so "xitem:5", "http://x/item:5" and "|Hitem:5" do not count)
-        static readonly Regex AtlasEntity = new Regex(@"(?<![\w/=?&.:@%#|\-])(item|npc|obj|object|quest|zone|instance|spell|skill|faction):(\d{1,9})(?!\w)",
+        static readonly Regex AtlasEntity = new Regex(@"(?<![\w/=?&.:@%#|\-])(item|npc|obj|object|quest|zone|instance|spell|skill|faction):(\d{1,9})(?:\?tab=(overview|sources|map|related|lodge))?(?!\w)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         static readonly char[] PathPunct = { '.', ',', ';', ':', '!', '?' };
         static readonly Regex AtlasPath = new Regex(@"(?<![\w/=?&.:@%#|\-])(browse|talents|professions|worldmap):([^\s<>""'`|\[\]()]{1,200})",
@@ -274,7 +274,9 @@ namespace ElansAddonHub.Services
                 if (!Free(m.Index, m.Length) || !int.TryParse(m.Groups[2].Value, out var id) || id <= 0) continue;
                 var kind = m.Groups[1].Value.ToLowerInvariant();
                 if (kind == "object") kind = "obj";
-                Add(new ItemRef { Kind = ItemRefKind.Atlas, Start = m.Index, Length = m.Length, AtlasKind = kind, AtlasId = kind + ":" + id.ToString(CultureInfo.InvariantCulture), Id = kind == "item" ? id : 0 });
+                var aid2 = kind + ":" + id.ToString(CultureInfo.InvariantCulture);
+                if (m.Groups[3].Success) aid2 += "?tab=" + m.Groups[3].Value.ToLowerInvariant();          // "item:2589?tab=sources": the chip opens that tab
+                Add(new ItemRef { Kind = ItemRefKind.Atlas, Start = m.Index, Length = m.Length, AtlasKind = kind, AtlasId = aid2, Id = kind == "item" ? id : 0 });
             }
             foreach (Match m in AtlasPath.Matches(text))
             {

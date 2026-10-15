@@ -43,7 +43,7 @@ namespace ElansAddonHub
         public AtlasPaletteSearch.Result PaletteResultForTest => palResult;
         public string PaletteTextForTest { get => PaletteBox.Text; set => PaletteBox.Text = value; }
         public TextBox PaletteBoxForTest => PaletteBox;
-        public TextBox SearchBoxForTest => SearchBox;
+
         public IReadOnlyList<string> PaletteIdsForTest => pal.Select(p => p.Id).ToList();
         public IReadOnlyList<string> PaletteScopesForTest => palChips.Keys.ToList();
         public RadioButton PaletteChipForTest(string scope) => palChips.TryGetValue(scope, out var c) ? c : null;
@@ -77,19 +77,24 @@ namespace ElansAddonHub
             return l;
         }
 
-        // ---- the header search box is a launcher: a click, Enter, Down or typing opens the palette (typing starts the search with the typed letters)
-        void Search_Down(object sender, MouseButtonEventArgs e) { e.Handled = true; _ = OpenPalette(); }
+        // ---- the palette is a layer over the CONTENT of the window, not over the Atlas page: the main window gives it a host (UseOverlayHost), so Ctrl+K and the search box in the
+        // title bar open it over any page (Addons, Lodge, Characters, Settings, the Atlas). Choosing a result switches to the Atlas page (ShowAtlas) and opens it there.
+        Panel overlayHost;
+        IInputElement palPrevFocus;
+        public event Action PaletteOpened, PaletteClosed;
+        public Action ShowAtlas;                                  // the main window: switch the rail to the Atlas page
+        public Panel OverlayHostForTest => overlayHost;
 
-        void Search_KeyDown(object sender, KeyEventArgs e)
+        public void UseOverlayHost(Panel host)
         {
-            if (e.Key == Key.Enter || e.Key == Key.Down || e.Key == Key.Space) { e.Handled = true; _ = OpenPalette(); }
-        }
-
-        void Search_TextInput(object sender, TextCompositionEventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(e.Text)) return;
-            e.Handled = true;
-            _ = OpenPalette(e.Text);
+            if (host == null || overlayHost == host) return;
+            overlayHost = host;
+            (PaletteLayer.Parent as Panel)?.Children.Remove(PaletteLayer);
+            PaletteLayer.Margin = new Thickness(0);
+            Grid.SetColumnSpan(PaletteLayer, 1);
+            PaletteDim.CornerRadius = new CornerRadius(0, 0, 12, 0);
+            host.Children.Add(PaletteLayer);
+            host.SizeChanged += (s, e) => { if (palOpen) ApplyPaletteSize(); };
         }
 
         void WirePalette()
@@ -97,6 +102,7 @@ namespace ElansAddonHub
             if (palWired) return;
             palWired = true;
             palDebounce.Tick += (s, e) => { palDebounce.Stop(); palSearch = RunPaletteNow(); };
+            PaletteLayer.PreviewKeyDown += (s, e) => { if (e.Key == Key.Escape && palOpen) { e.Handled = true; ClosePalette(); } };
             palPreviewTimer.Tick += (s, e) => { palPreviewTimer.Stop(); _ = PreviewBuildAsync(palPreviewFor, palPreviewGen); };
             PaletteCard.SizeChanged += (s, e) => ApplyPaletteSize();
             SizeChanged += (s, e) => { if (palOpen) ApplyPaletteSize(); };
@@ -119,14 +125,17 @@ namespace ElansAddonHub
             }
             palOpen = true;
             palScope = "all";                // a fresh open starts with every kind (the scope is not remembered)
+            palPrevFocus = Keyboard.FocusedElement;
+            try { PaletteOpened?.Invoke(); } catch (Exception e) { Util.Log("atlas palette: opened: " + e.Message); }       // the page behind may hold a web view (the Browser): it steps aside
             // over the world map: swap the live web view for its snapshot first, or the palette would be hidden behind it
-            if (hosted is WorldMapView wm)
+            if (IsVisible && hosted is WorldMapView wm)
             {
                 frozenMap = wm;
                 try { await wm.FreezeAsync(); } catch (Exception e) { Util.Log("atlas palette: map snapshot: " + e.Message); }
             }
             if (!palOpen) { frozenMap?.Thaw(); frozenMap = null; return; }      // closed while the snapshot was taken
             BuildChips();
+            if (overlayHost != null) overlayHost.Visibility = Visibility.Visible;
             PaletteLayer.Visibility = Visibility.Visible;
             ApplyPaletteSize();
             if (Motion.Enabled)
@@ -139,26 +148,35 @@ namespace ElansAddonHub
             PaletteBox.CaretIndex = PaletteBox.Text.Length;
         }
 
-        public void ClosePalette()
+        public void ClosePalette() => ClosePalette(true);
+
+        public void ClosePalette(bool restoreFocus)
         {
             if (!palOpen) return;
             palOpen = false;
             palCts?.Cancel(); palDebounce.Stop(); palPreviewTimer.Stop(); palGen++; palPreviewGen++;
             PaletteLayer.Visibility = Visibility.Collapsed;
+            if (overlayHost != null) overlayHost.Visibility = Visibility.Collapsed;
             if (frozenMap != null) { frozenMap.Thaw(); frozenMap = null; }
-            // the focus goes back to the page (not to the header box: it would open the palette again)
-            if (hosted != null) HostContent.Focus(); else Scroller.Focus();
+            try { PaletteClosed?.Invoke(); } catch (Exception e) { Util.Log("atlas palette: closed: " + e.Message); }
+            if (!restoreFocus) return;
+            // the focus goes back to where it was (not to the title bar box: it would open the palette again); on the Atlas page that is the page
+            if (IsVisible) { if (hosted != null) HostContent.Focus(); else Scroller.Focus(); }
+            else if (palPrevFocus is UIElement pf && pf.IsVisible && pf.Focusable && !(pf is TextBox tb && tb.IsReadOnly && tb.Tag as string == "Search  (Ctrl K)")) pf.Focus();
+            palPrevFocus = null;
         }
 
         void PaletteDim_Down(object sender, MouseButtonEventArgs e) { e.Handled = true; ClosePalette(); }
 
         void ApplyPaletteSize()
         {
-            double w = PaletteCard.ActualWidth > 0 ? PaletteCard.ActualWidth : ActualWidth;
+            double pageW = overlayHost != null && overlayHost.ActualWidth > 0 ? overlayHost.ActualWidth : ActualWidth;
+            double pageH = overlayHost != null && overlayHost.ActualHeight > 0 ? overlayHost.ActualHeight : ActualHeight;
+            double w = PaletteCard.ActualWidth > 0 ? PaletteCard.ActualWidth : pageW;
             bool preview = w >= 620;
             PalettePreviewCol.Width = new GridLength(preview ? 300 : 0);
             PalettePreviewHost.Visibility = preview ? Visibility.Visible : Visibility.Collapsed;
-            double h = Math.Max(160, Math.Min(360, ActualHeight - 260));
+            double h = Math.Max(160, Math.Min(360, pageH - 260));
             PaletteBody.Height = h;
         }
 
@@ -256,7 +274,8 @@ namespace ElansAddonHub
         {
             if (p == null) return;
             var id = p.Id;
-            ClosePalette();
+            ClosePalette(false);
+            try { ShowAtlas?.Invoke(); } catch (Exception e) { Util.Log("atlas palette: show: " + e.Message); }          // chosen over another page: the Atlas page comes first
             _ = Open(id);
         }
 

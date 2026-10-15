@@ -252,28 +252,33 @@ namespace ElansAddonHub
             AtlasView.PressPaletteForTest(Key.Escape);
             Check("palette: Esc closes it", !AtlasView.PaletteOpen);
 
-            // ---- the item page in the window
+            // ---- the item page in the window: the hero, the tabs, the Overview
             await AtlasView.Open("item:100");
             UpdateLayout();
             var tx = AtlasTexts(AtlasView);
-            Check("item page: title in the header, tooltip card, 'Where it comes from', 'Your characters', 'Map', 'Found by the Lodge', the notes that apply",
-                AtlasView.CurrentId == "item:100" && tx.Contains("Gnarlfang's Claw") && tx.Contains("Item Level 14") && tx.Contains("Where it comes from") && tx.Contains("Your characters") && tx.Contains("Map") && tx.Contains("Found by the Lodge"), string.Join(" | ", tx.Take(14)));
-            Check("item page: the sources show the Lodge's 12 % row with its figures, the baseline's figure on the second line, both labels as chips, and the folded line for the world drops",
-                tx.Contains("12% · 340 kills · 3 members") && tx.Contains("Classic baseline: 10%") && tx.Contains("Forever") && tx.Contains("Classic baseline") && tx.Contains("+ 30 world-drop sources under 0.1%"));
+            var chips = AtlasView.HeroChipsForTest;
+            Check("item page: the hero names the page - the name in the quality colour, the subtitle, chips (Rare, Item Level 14, the slot, Requires Level 10, binding, the sell price) - and there is no title row under the breadcrumb",
+                AtlasView.CurrentId == "item:100" && AtlasView.HeroNameForTest == "Gnarlfang's Claw" && chips.Contains("Rare") && chips.Contains("Item Level 14") && chips.Contains("Requires Level 10") && chips.Contains("Binds when picked up")
+                && chips.Any(c => c.StartsWith("One-Hand")) && chips.Any(c => c.StartsWith("Sells for 1g 20s 50c")) && tx.Contains("Item 100 · from your game data") && AtlasView.TitleRowGoneForTest, string.Join(" | ", chips));
+            var tabsNow = AtlasView.TabsForTest;
+            Check("item page: tabs Overview | Sources | Map | Related? | Lodge, in that order, each only when it has something (Sources 'Where it comes from', Map with places, Lodge 'Found by the Lodge'); it opens on Overview",
+                AtlasView.TabStripShownForTest && new[] { "overview", "sources", "map", "lodge" }.All(tabsNow.Contains) && tabsNow.SequenceEqual(tabsNow.OrderBy(t => Array.IndexOf(AtlasTabs.Order, t))) && AtlasView.TabNowForTest == "overview" && AtlasView.TabDefaultForTest == "overview", string.Join(",", tabsNow));
+            Check("item page: the Overview is the tooltip card, 'Your characters' and 'Best ways to get it' (the first three sources and 'All N sources'); the tables live on their tabs",
+                AtlasView.CurrentId == "item:100" && tx.Contains("Gnarlfang's Claw") && tx.Contains("Item Level 14") && tx.Contains("Your characters") && tx.Contains("Best ways to get it") && tx.Any(t => t.StartsWith("All ")) && !tx.Contains("Where it comes from") && !tx.Contains("Found by the Lodge") && !AtlasView.TabBuiltForTest("sources") && !AtlasView.TabBuiltForTest("map"),
+                string.Join(" | ", tx.Take(30)));
+            Check("item page: the tab buttons count what is on them (Sources 4 + 30 folded = 34 rows; Overview and Map show no count) and the names for assistive tools say so",
+                AtlasView.TabCountForTest("sources") == 34 && AtlasView.TabCountForTest("overview") == 0 && System.Windows.Automation.AutomationProperties.GetName(AtlasView.TabButtonForTest("sources")) == "Sources 34" && System.Windows.Automation.AutomationProperties.GetName(AtlasView.TabButtonForTest("overview")) == "Overview", AtlasView.TabCountForTest("sources").ToString());
             var itemTip = GtAll<GameTooltip>(AtlasView.BodyForTest).FirstOrDefault();
-            Check("item page: the main card is a GameTooltip (game order: name, Item Level, binding, slot ...), the icon in a 56 px frame to its LEFT, the source chip below it in the app style",
+            Check("item page: the main card of the Overview is a GameTooltip (game order: name, Item Level, binding, slot ...), the icon in a 56 px frame to its LEFT, the source chip below it in the app style",
                 itemTip != null && itemTip.Title == "Gnarlfang's Claw" && itemTip.Parent is StackPanel ip && ip.Children[0] is Border ifr && ifr.Width == 56 && ip.Orientation == Orientation.Horizontal && itemTip.Texts().Contains("Item Level 14")
-                && itemTip.Texts().IndexOf("Item Level 14") == 1 && !itemTip.HasFooter && tx.IndexOf("Forever") > tx.IndexOf("Item Level 14"), itemTip == null ? "no GameTooltip" : string.Join(" | ", itemTip.Texts()));
-            Check("item page: wide window -> two columns (the card on the left, the tables on the right)", AtlasView.WideForTest, "scroller " + AtlasView.ScrollerWidthForTest + " page " + AtlasView.ActualWidth + " window " + Width);
-            Check("item page: one map with a zone picker (Greenvale first)", AtlasView.MapsForTest.Count == 1 && AtlasView.zonePicks.Count == 1 && AtlasView.zonePicks[0].SelectedIndex == 0 && AtlasView.zonePicks[0].Items.Count >= 2);
-            Check("item page: the map loads after the page is drawn, shows the best zone with its markers", await MapReady() && AtlasView.MapsForTest[0].UiMapId == 11 && AtlasView.MapsForTest[0].MarkerCount == AtlasQuery.Build("item:100").Map.Best.Markers.Count && AtlasView.MapsForTest[0].MarkerCount >= 4);
-            var picker = AtlasView.zonePicks[0];
-            int hk = picker.Items.Cast<ComboBoxItem>().ToList().FindIndex(i => ((AtlasMapZone)i.Tag).UiMapId == 13);
-            picker.SelectedIndex = hk;
-            await WaitFor(() => AtlasView.MapsForTest[0].UiMapId == 13 && (AtlasView.MapsForTest[0].State == AtlasMap.ViewState.Ready || AtlasView.MapsForTest[0].State == AtlasMap.ViewState.NoArt), 15000);
-            Check("item page: picking Highkeep in the picker shows that zone's map and its markers", AtlasView.MapsForTest[0].UiMapId == 13 && AtlasView.MapsForTest[0].MarkerCount == ((AtlasMapZone)((ComboBoxItem)picker.SelectedItem).Tag).Markers.Count);
-            picker.SelectedIndex = 0;
-            await WaitFor(() => AtlasView.MapsForTest[0].UiMapId == 11 && AtlasView.MapsForTest[0].State == AtlasMap.ViewState.Ready, 15000);
+                && itemTip.Texts().IndexOf("Item Level 14") == 1 && !itemTip.HasFooter && tx.LastIndexOf("Forever") > tx.IndexOf("Item Level 14"), itemTip == null ? "no GameTooltip" : string.Join(" | ", itemTip.Texts()));
+            Check("item page: the default window is one column - the tabs under the hero, no rail", !AtlasView.WideForTest && AtlasView.ColumnsForTest == 1 && !AtlasView.RailShownForTest, "scroller " + AtlasView.ScrollerWidthForTest + " page " + AtlasView.ActualWidth + " window " + Width);
+            // Sources
+            Check("item page: the Sources tab lists where it comes from; the same page, no new history step, the id names the tab (item:100?tab=sources)",
+                await SwitchTab("sources") && AtlasView.TabNowForTest == "sources" && AtlasView.CurrentId == "item:100?tab=sources" && AtlasView.LinkShown == "item:100?tab=sources" && AtlasView.Model.Id == "item:100");
+            tx = AtlasTexts(AtlasView);
+            Check("item page: the sources show the Lodge's 12 % row with its figures, the baseline's figure on the second line, both labels as chips, and the folded line for the world drops",
+                tx.Contains("Where it comes from") && tx.Contains("12% · 340 kills · 3 members") && tx.Contains("Classic baseline: 10%") && tx.Contains("Forever") && tx.Contains("Classic baseline") && tx.Contains("+ 30 world-drop sources under 0.1%") && !tx.Contains("Best ways to get it"));
             // the fold
             int before = AtlasWalk(AtlasView).OfType<ContentControl>().Count(c => c.Tag is string s && s.StartsWith("npc:"));
             var fold = AtlasWalk(AtlasView).OfType<Button>().First(b => b.Tag as string == "fold");
@@ -283,7 +288,23 @@ namespace ElansAddonHub
             Check("item page: the folded line opens in place (30 more rows) and 'Hide those 30' closes it again", afterOpen == before + 30 && AtlasTexts(fold).Contains("Hide those 30"), before + " -> " + afterOpen);
             ClickButton(fold); UpdateLayout();
             Check("item page: ... and closes", AtlasWalk(AtlasView).OfType<ContentControl>().Count(c => c.Tag is string s && s.StartsWith("npc:")) == before);
+            // Map
+            Check("item page: the Map tab has the one map with a zone picker (Greenvale first); the id is item:100?tab=map", await SwitchTab("map") && AtlasView.CurrentId == "item:100?tab=map" && AtlasView.MapsForTest.Count == 1 && AtlasView.zonePicks.Count == 1 && AtlasView.zonePicks[0].SelectedIndex == 0 && AtlasView.zonePicks[0].Items.Count >= 2);
+            Check("item page: the map loads after the tab is shown, shows the best zone with its markers", await MapReady() && AtlasView.MapsForTest[0].UiMapId == 11 && AtlasView.MapsForTest[0].MarkerCount == AtlasQuery.Build("item:100").Map.Best.Markers.Count && AtlasView.MapsForTest[0].MarkerCount >= 4);
+            var picker = AtlasView.zonePicks[0];
+            int hk = picker.Items.Cast<ComboBoxItem>().ToList().FindIndex(i => ((AtlasMapZone)i.Tag).UiMapId == 13);
+            picker.SelectedIndex = hk;
+            await WaitFor(() => AtlasView.MapsForTest[0].UiMapId == 13 && (AtlasView.MapsForTest[0].State == AtlasMap.ViewState.Ready || AtlasView.MapsForTest[0].State == AtlasMap.ViewState.NoArt), 15000);
+            Check("item page: picking Highkeep in the picker shows that zone's map and its markers", AtlasView.MapsForTest[0].UiMapId == 13 && AtlasView.MapsForTest[0].MarkerCount == ((AtlasMapZone)((ComboBoxItem)picker.SelectedItem).Tag).Markers.Count);
+            picker.SelectedIndex = 0;
+            await WaitFor(() => AtlasView.MapsForTest[0].UiMapId == 11 && AtlasView.MapsForTest[0].State == AtlasMap.ViewState.Ready, 15000);
             Height = 900; await Task.Delay(300); UpdateLayout(); await MapReady(); await Task.Delay(300);
+            Snapshot(Path.Combine(dir, "atlas-page-item-map.png"));
+            Height = h0; await Task.Delay(200);
+            // Lodge
+            Check("item page: the Lodge tab holds 'Found by the Lodge' with the members' names", await SwitchTab("lodge") && AtlasTexts(AtlasView).Contains("Found by the Lodge") && AtlasView.CurrentId == "item:100?tab=lodge");
+            await SwitchTab("overview"); await Task.Delay(100); UpdateLayout();
+            Height = 900; await Task.Delay(300); UpdateLayout();
             Snapshot(Path.Combine(dir, "atlas-page-item.png"));
             Height = h0; await Task.Delay(200);
 
@@ -292,10 +313,10 @@ namespace ElansAddonHub
             Check("links: a row of a source is a link to its page (the NPC Gnarlfang)", row != null);
             ClickRow(row);
             await AtlasView.WaitForTest(); UpdateLayout();
-            Check("links: clicking it opens the NPC page and makes it the current page", AtlasView.CurrentId == "npc:1" && AtlasView.Model.Id == "npc:1" && AtlasTexts(AtlasView).Contains("Loot") && AtlasView.History.CanBack);
-            Check("links: the NPC page shows its facts with their sources and its loot with the Lodge's 12 %", AtlasTexts(AtlasView).Contains("<Fanglord>") && AtlasTexts(AtlasView).Any(t => t.StartsWith("12% · 41 of 340 kills")));
+            Check("links: clicking it opens the NPC page and makes it the current page", AtlasView.CurrentId == "npc:1" && AtlasView.Model.Id == "npc:1" && AtlasView.TabsForTest.Contains("related") && AtlasView.History.CanBack);
+            Check("links: the NPC page shows its facts on the Overview and its loot, with the Lodge's 12 %, on Related", AtlasTexts(AtlasView).Contains("<Fanglord>") && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Loot") && AtlasTexts(AtlasView).Any(t => t.StartsWith("12% · 41 of 340 kills")) && await SwitchTab("overview"));
             Check("links: a fact is a link too (Faction: Stormwind opens the faction)", RowFor("zone:11") == null && AtlasWalk(AtlasView).OfType<TextBlock>().Any(t => t.Tag as string == "faction:72"));
-            await MapReady(); await Task.Delay(500);
+            await SwitchTab("map"); await MapReady(); await SwitchTab("overview"); await Task.Delay(500);
             Snapshot(Path.Combine(dir, "atlas-page-npc.png"));
             await AtlasView.Back();
             Check("history: Back returns to the item with its page drawn again", AtlasView.CurrentId == "item:100" && AtlasView.Model.Id == "item:100" && AtlasView.History.CanForward && AtlasView.BackEnabledForTest);
@@ -309,6 +330,7 @@ namespace ElansAddonHub
             await AtlasView.Open("quest:7");
             // a marker on the map is a link, too
             await AtlasView.Open("item:105"); UpdateLayout();
+            await SwitchTab("map");
             await MapReady();
             var map = AtlasView.MapsForTest[0];
             string clicked = null; AtlasView.Navigated += id => clicked = id;
@@ -318,19 +340,21 @@ namespace ElansAddonHub
             // ---- other kinds in the window
             await AtlasView.Open("zone:11"); UpdateLayout();
             tx = AtlasTexts(AtlasView);
-            Check("zone page in the window: title, map first, Creatures / Objects / Quests / Notable drops tables, the facts with sources", AtlasView.Model.Id == "zone:11" && tx.Contains("Greenvale") && tx.Contains("Creatures") && tx.Contains("Objects") && tx.Contains("Quests") && tx.Contains("Notable drops") && tx.Any(t => t.StartsWith("Level ")) && AtlasView.MapsForTest.Count == 1);
+            Check("zone page in the window: the hero names it, the map comes first (a zone opens on its Map tab), the tabs are Overview | Sources | Map | Related", AtlasView.Model.Id == "zone:11" && tx.Contains("Greenvale") && AtlasView.TabNowForTest == "map" && AtlasView.TabDefaultForTest == "map" && AtlasView.MapsForTest.Count == 1 && new[] { "overview", "sources", "map", "related" }.All(AtlasView.TabsForTest.Contains), string.Join(",", AtlasView.TabsForTest));
             await MapReady();
             await Task.Delay(500);
             Snapshot(Path.Combine(dir, "atlas-page-zone.png"));
+            await SwitchTab("related"); tx = AtlasTexts(AtlasView);
+            Check("zone page: Related holds the Creatures / Objects / Quests tables; Sources the notable drops; the Overview the facts", tx.Contains("Creatures") && tx.Contains("Objects") && tx.Contains("Quests") && await SwitchTab("sources") && AtlasTexts(AtlasView).Contains("Notable drops") && await SwitchTab("overview") && AtlasView.TabNowForTest == "overview", string.Join(" | ", tx.Take(12)));
             await AtlasView.Open("instance:98"); UpdateLayout();
             Check("instance page in the window: a raid with no map says so in the map card's own words", await WaitFor(() => AtlasView.MapsForTest.Count == 1 && AtlasView.MapsForTest[0].State == AtlasMap.ViewState.NoArt, 5000) && AtlasView.MapsForTest[0].StateText.Contains("no map in the game files"), AtlasView.MapsForTest.Count > 0 ? AtlasView.MapsForTest[0].State + " " + AtlasView.MapsForTest[0].StateText : "no map control");
             await AtlasView.Open("item:99999"); UpdateLayout();
             Check("not found in the window: the message and a calm hint, no map card", AtlasTexts(AtlasView).Any(t => t.Contains("99999")) && AtlasView.MapsForTest.Count == 0 && AtlasView.Model.NotFound);
             await AtlasView.Open("quest:7"); UpdateLayout();
-            Check("quest page in the window: text, rewards, given by, a map of the giver", AtlasTexts(AtlasView).Contains("Rewards") && AtlasTexts(AtlasView).Contains("Given by") && AtlasTexts(AtlasView).Contains("Bring four Wolf Pelts to Innkeeper Hale.") && AtlasView.MapsForTest.Count == 1);
+            Check("quest page in the window: the Overview has the text and the rewards, Sources 'Given by', the Map tab a map of the giver", AtlasTexts(AtlasView).Contains("Rewards") && AtlasTexts(AtlasView).Contains("Bring four Wolf Pelts to Innkeeper Hale.") && AtlasView.MapsForTest.Count == 0 && await SwitchTab("sources") && AtlasTexts(AtlasView).Contains("Given by") && await SwitchTab("map") && AtlasView.MapsForTest.Count == 1 && await SwitchTab("overview"));
             Check("quest page: the main card is a GameTooltip with a gold title", GtAll<GameTooltip>(AtlasView.BodyForTest).Any(g => g.Title == AtlasView.Model.Title && GtColor(GtColored(g), g.Title) == "#FFFFD100"));
             await AtlasView.Open("spell:4000"); UpdateLayout();
-            Check("spell page in the window: facts and the recipe", AtlasTexts(AtlasView).Contains("Recipe") && AtlasTexts(AtlasView).Contains("Heals the target.") && AtlasView.MapsForTest.Count == 0);
+            Check("spell page in the window: the tooltip on the Overview, the recipe on Related, no map", AtlasTexts(AtlasView).Contains("Heals the target.") && AtlasView.MapsForTest.Count == 0 && !AtlasView.TabsForTest.Contains("map") && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Recipe") && await SwitchTab("overview"));
 
             Check("spell page: the main card is a GameTooltip with the description in gold", GtAll<GameTooltip>(AtlasView.BodyForTest).Any(g => g.Title == AtlasView.Model.Title && GtColor(GtColored(g), "Heals the target.") == "#FFFFD100"));
             Snapshot(Path.Combine(dir, "atlas-page-spell-gt.png"));
@@ -359,31 +383,34 @@ namespace ElansAddonHub
                 Check("link: Back restores the link of that page and hides the old confirmation", AtlasView.LinkShown == "item:100" && !AtlasView.CopiedShownForTest);
             }
 
-            // ---- wide windows: three columns (identity | tables | map) when the page has a map, two otherwise
+            // ---- wide windows: the rail (the map thumbnail and the quick facts) beside the tab; narrow ones stack it
             {
                 await AtlasView.Open("item:100"); UpdateLayout();
                 var w0 = Width;
                 Width = 1800; Height = 1000; await Task.Delay(300); UpdateLayout();
-                await MapReady();
-                int colsWide = AtlasView.ColumnsForTest;
-                var mapEl = AtlasView.MapsForTest.Count > 0 ? AtlasView.MapsForTest[0] : null;
-                Check("layout: a wide window (1800) puts the identity card, the tables and the map in three columns", colsWide == 3 && mapEl != null && AtlasView.WideForTest, colsWide + " maps " + AtlasView.MapsForTest.Count);
-                Snapshot(Path.Combine(dir, "atlas-page-item-wide.png"));
+                await Task.Delay(300);
+                var railMapEl = AtlasView.RailMapForTest;
+                Check("layout: a wide window (1800) puts the rail (340 px) beside the tab - a thumbnail of the map and the quick facts - and the Overview keeps the rest", AtlasView.ColumnsForTest == 2 && AtlasView.WideForTest && AtlasView.RailShownForTest && railMapEl != null && Math.Abs(AtlasView.RailForTest.ActualWidth - 340) < 1 && AtlasView.RailForTest.ActualHeight > 100, AtlasView.ColumnsForTest + " rail " + AtlasView.RailForTest?.ActualWidth + " scroller " + AtlasView.ScrollerWidthForTest);
+                await Task.Delay(700); Snapshot(Path.Combine(dir, "atlas-page-item-wide.png"));
+                Check("layout: the thumbnail is a second, quiet map (not one of the page's maps), and a click on it opens the Map tab with the real one",
+                    AtlasView.MapsForTest.Count == 0 && AtlasWalk(AtlasView.RailForTest).OfType<Border>().Any(b => b.Tag as string == "rail-map-open") && ClickRailMap() && AtlasView.TabNowForTest == "map" && AtlasView.MapsForTest.Count == 1 && !AtlasView.RailMapHostVisibleForTest);
+                Snapshot(Path.Combine(dir, "atlas-page-item-wide-map.png"));
+                await SwitchTab("overview"); await Task.Delay(200);
                 await AtlasView.Open("zone:11"); UpdateLayout(); await MapReady();
                 Snapshot(Path.Combine(dir, "atlas-page-zone-wide.png"));
                 await AtlasView.Open("item:100"); UpdateLayout();
                 Width = 1100; await Task.Delay(300); UpdateLayout();
-                Check("layout: at 1100 it is two columns again and the map is back in the right column", AtlasView.ColumnsForTest == 2 && AtlasView.WideForTest);
+                Check("layout: at 1100 (the page area is narrower than 880 px beside the nav) it is one column again, the rail is gone", AtlasView.ColumnsForTest == 1 && !AtlasView.WideForTest && !AtlasView.RailShownForTest, AtlasView.ScrollerWidthForTest.ToString());
                 Width = w0; Height = h0; await Task.Delay(250); UpdateLayout();
             }
 
             // ---- narrow window: one column
             await AtlasView.Open("item:100"); UpdateLayout();
             Width = 760; await Task.Delay(250); UpdateLayout();
-            Check("layout: a narrow window stacks the columns (the tooltip card above the tables)", !AtlasView.WideForTest, AtlasView.WideForTest + " " + AtlasView.ActualWidth);
+            Check("layout: a narrow window stacks everything (the hero, the tab strip, then the tab)", !AtlasView.WideForTest && AtlasView.TabStripShownForTest, AtlasView.WideForTest + " " + AtlasView.ActualWidth);
             Snapshot(Path.Combine(dir, "atlas-page-item-narrow.png"));
             Width = 920; await Task.Delay(250); UpdateLayout();
-            Check("layout: and back to two columns when there is room", AtlasView.WideForTest);
+            Check("layout: and the same at the default width", !AtlasView.WideForTest);
 
             // ---- never blocks the UI; a slow page does not overwrite a newer one
             int ticks = 0; var uiThread = Thread.CurrentThread.ManagedThreadId; int buildThread = -1;
@@ -412,7 +439,7 @@ namespace ElansAddonHub
             var bigZone = await Task.Run(() => AtlasQuery.Build("zone:11"));
             sw.Stop();
             Check("virtualised: a zone with 500 creature kinds builds on the worker in under 3 s and its table is capped at 400 rows (+ a line for the rest)", bigZone.Section("creatures").Rows.Count == 400 && bigZone.Section("creatures").HiddenText.StartsWith("100 more") && sw.ElapsedMilliseconds < 3000, sw.ElapsedMilliseconds + " ms, " + bigZone.Section("creatures").Rows.Count);
-            await AtlasView.Open("zone:10"); await AtlasView.Open("zone:11"); UpdateLayout(); await Task.Delay(300); UpdateLayout();
+            await AtlasView.Open("zone:10"); await AtlasView.Open("zone:11"); UpdateLayout(); await SwitchTab("related"); await Task.Delay(300); UpdateLayout();
             var lb = AtlasWalk(AtlasView).OfType<ListBox>().FirstOrDefault();
             int realized = lb == null ? -1 : AtlasWalk(lb).OfType<ListBoxItem>().Count();
             Check("virtualised: the 400 rows are a virtualising list - only the rows in view are real controls (" + realized + " of 400)", lb != null && lb.Items.Count == 400 && VirtualizingPanel.GetIsVirtualizing(lb) && realized > 0 && realized < 60, "realized " + realized);
@@ -437,6 +464,7 @@ namespace ElansAddonHub
 
             // ---- the Atlas shell: sub-navigation, recents and pins, breadcrumb, Home, palette
             await AtlasShellChecks(dir, Check);
+            await AtlasRefresh2Checks(dir, Check);
 
             // ---- screenshots of the start page: with data, and with nothing at all
             Height = 1000; await AtlasView.GoStart(); await Task.Delay(400); UpdateLayout();
