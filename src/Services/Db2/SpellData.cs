@@ -22,14 +22,16 @@ namespace ElansAddonHub.Services.Db2
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 2;          // bump when the parsing, the table layouts or the cache file change meaning (2: + WorldLookups)
+        public const int FormatVersion = 3;          // bump when the parsing, the table layouts or the cache file change meaning (2: + WorldLookups, 3: + SpellLookups for the hotfix overlay)
 
         public static bool AutoStart = true;         // off in the self-test (it must not read the real game)
         public static string CacheFile = Path.Combine(Util.DataDir, "cache", "spelldata.bin");
         public static event Action Changed;          // on a worker thread, whenever the data or the state changed
 
         static readonly object gate = new object();
-        static volatile AtlasSet data;
+        static volatile AtlasSet data;               // what the Atlas uses: the shipped tables with the server's hotfix rows laid over them
+        static volatile AtlasSet shipped;            // the shipped tables alone (what the index file keeps); DBCache.bin changes only re-lay the hotfixes
+        static string hotfixStamp;                   // DBCache.bin's size and time when the hotfixes were last read
         static volatile State state = State.NotStarted;
         static string reason, builtFor;
         static bool running, again;
@@ -46,6 +48,7 @@ namespace ElansAddonHub.Services.Db2
         public static FactionSnapshot Factions => data?.Factions;
         public static ItemDetails Details => data?.Details;
         public static WorldLookups World => data?.World;
+        public static HotfixInfo Hotfixes => data?.Hotfixes ?? HotfixInfo.Empty;
 
         public static int SpellCount => Spells?.SpellCount ?? 0;
         public static int RecipeCount => Spells?.RecipeCount ?? 0;
@@ -62,7 +65,7 @@ namespace ElansAddonHub.Services.Db2
             {
                 Id = s.Id, Name = s.Name, Rank = s.Rank, IconId = s.IconId, CastMs = s.CastMs, DurationMs = s.DurationMs, RangeMax = s.RangeMax,
                 Description = SpellText.Expand(s.Desc, s, look), AuraDescription = SpellText.Expand(s.Aura, s, look),
-                CostText = ClassData.CostText(s.Id), CooldownMs = ClassData.CooldownMs(s.Id),
+                CostText = ClassData.CostText(s.Id), CooldownMs = ClassData.CooldownMs(s.Id), Hotfix = Hotfixes.Spell(s.Id),
             };
         }
 
@@ -87,7 +90,7 @@ namespace ElansAddonHub.Services.Db2
             {
                 Id = copy.Id, Name = copy.Name, Rank = copy.Rank, IconId = copy.IconId, CastMs = copy.CastMs, DurationMs = copy.DurationMs, RangeMax = copy.RangeMax,
                 Description = SpellText.Expand(copy.Desc, copy, look), AuraDescription = SpellText.Expand(copy.Aura, copy, look),
-                CostText = ClassData.CostText(copy.Id), CooldownMs = ClassData.CooldownMs(copy.Id),
+                CostText = ClassData.CostText(copy.Id), CooldownMs = ClassData.CooldownMs(copy.Id), Hotfix = Hotfixes.Spell(copy.Id),
             };
         }
 
@@ -134,6 +137,7 @@ namespace ElansAddonHub.Services.Db2
                         if (d.Spells != null) parts.Add(d.Spells.SpellCount.ToString("N0", CultureInfo.InvariantCulture) + " spells");
                         if (d.Spells != null && d.Spells.RecipeCount > 0) parts.Add(d.Spells.RecipeCount.ToString("N0", CultureInfo.InvariantCulture) + " recipes");
                         if (d.Factions != null) parts.Add(d.Factions.Factions.Count.ToString("N0", CultureInfo.InvariantCulture) + " factions");
+                        if (d.Hotfixes != null && d.Hotfixes.Rows > 0) parts.Add(d.Hotfixes.Rows.ToString("N0", CultureInfo.InvariantCulture) + " server hotfix rows");
                         var s = parts.Count == 0 ? "" : ", " + string.Join(", ", parts);
                         if (d.Spells == null && d.Problems.TryGetValue("spells", out var why)) s += ", spells unavailable (" + why + ")";
                         return s;
@@ -163,7 +167,7 @@ namespace ElansAddonHub.Services.Db2
 
         public static void Disable()
         {
-            data = null; ItemDetails.Current = null; Build = null; builtFor = null;
+            data = null; shipped = null; hotfixStamp = null; ItemDetails.Current = null; Build = null; builtFor = null;
             SetState(State.Disabled, null);
         }
 
@@ -210,7 +214,7 @@ namespace ElansAddonHub.Services.Db2
 
         public static void ResetForTest()
         {
-            lock (gate) { data = null; state = State.NotStarted; reason = null; running = false; again = false; Build = null; builtFor = null; }
+            lock (gate) { data = null; shipped = null; hotfixStamp = null; state = State.NotStarted; reason = null; running = false; again = false; Build = null; builtFor = null; }
             ItemDetails.Current = null;
         }
 
@@ -221,8 +225,17 @@ namespace ElansAddonHub.Services.Db2
             var flavor = ItemData.Flavor() ?? "_classic_beta_";
             var build = ItemData.GameBuild(root, flavor);
             if (build == null) { Publish(null, State.Unavailable, "no .build.info in the WoW folder", null); return; }
-            // a refresh that came because DBCache.bin changed: the tables of this build are already here
-            if (state == State.Ready && data != null && builtFor == build) return;
+            // a refresh that came because DBCache.bin changed: the tables of this build are already here, only the server's hotfix rows are read again
+            var adb = ItemData.AdbFile(root, flavor);
+            var stamp = HotfixStamp(adb);
+            var have = shipped;
+            if (state == State.Ready && data != null && have != null && builtFor == build)
+            {
+                if (stamp == hotfixStamp) return;
+                hotfixStamp = stamp;
+                Publish(Overlay(have, adb, build), State.Ready, null, build);
+                return;
+            }
             var set = Obtain(SpellIndexFile.TryRead(CacheFile), build, CacheFile, () =>
             {
                 SpellRaw raw;
@@ -235,7 +248,36 @@ namespace ElansAddonHub.Services.Db2
             foreach (var n in set.Notes) Util.Log("spell data: " + n);
             if (set.Spells == null && set.Factions == null && (set.Details == null)) { Publish(null, State.Unavailable, set.Problems.Values.FirstOrDefault() ?? "no table could be read", null); return; }
             LastLoadFrom = from;
-            Publish(set, State.Ready, null, build);
+            shipped = set; hotfixStamp = stamp;
+            Publish(Overlay(set, adb, build), State.Ready, null, build);
+        }
+
+        static string HotfixStamp(string adbFile)
+        {
+            try { if (adbFile == null || !File.Exists(adbFile)) return ""; var fi = new FileInfo(adbFile); return fi.Length + "|" + fi.LastWriteTimeUtc.Ticks; }
+            catch { return ""; }
+        }
+
+        // the shipped tables with the server's hotfix rows of DBCache.bin laid over them (ServerHotfixes); without a readable cache they stay as shipped
+        public static AtlasSet Overlay(AtlasSet set, string adbFile, string build)
+        {
+            if (set == null) return null;
+            if (string.IsNullOrEmpty(adbFile) || !File.Exists(adbFile)) return ServerHotfixes.Apply(set, null);
+            try
+            {
+                var d = ServerHotfixes.Decode(DbCache.ReadAllShared(adbFile), set.LayoutsSeen, ServerHotfixes.BuildNumber(build));
+                var o = ServerHotfixes.Apply(set, d);
+                foreach (var n in d.Notes) Util.Log("spell data: " + n);
+                if (d.Rows > 0) Util.Log("spell data: " + d.Rows + " server hotfix rows laid over the game files (" + o.Hotfixes.Spells.Count + " spells, " + o.Hotfixes.NewQuests.Count + " new quests, " + o.Hotfixes.Locks.Count + " locks, " + o.Hotfixes.Templates.Count + " faction templates)");
+                return o;
+            }
+            catch (Exception e)
+            {
+                Util.Log("spell data: DBCache.bin: " + e.Message);
+                var o = ServerHotfixes.Apply(set, null);
+                o.Hotfixes.Notes.Add("DBCache.bin: " + e.Message);
+                return o;
+            }
         }
 
         // The decision: the saved index when it is of this game build (the shipped tables cannot have changed), otherwise the game files, which are saved.
@@ -362,6 +404,11 @@ namespace ElansAddonHub.Services.Db2
             foreach (var a in s.Abilities) { w.Write(a.Id); w.Write(a.Skill); w.Write(a.Spell); w.Write(a.MinRank); w.Write(a.Green); w.Write(a.Gray); w.Write(a.Acquire); w.Write(a.Flags); w.Write(a.ClassMask); w.Write(a.Supersedes); }
             w.Write(s.Reagents.Count);
             foreach (var kv in s.Reagents) { w.Write(kv.Key); w.Write((byte)kv.Value.Length); foreach (var v in kv.Value) w.Write(v); }
+            var lk = s.Lookups;
+            void Ints(Dictionary<int, int> d) { w.Write(d.Count); foreach (var kv in d) { w.Write(kv.Key); w.Write(kv.Value); } }
+            void Floats(Dictionary<int, float> d) { w.Write(d.Count); foreach (var kv in d) { w.Write(kv.Key); w.Write(kv.Value); } }
+            Ints(lk.CastMs); Ints(lk.DurationMs); Floats(lk.RangeMax); Floats(lk.Radius); Ints(lk.MiscRows);
+            w.Write(lk.EffectRows.Count); foreach (var kv in lk.EffectRows) { w.Write(kv.Key); w.Write(kv.Value); }
         }
 
         static SpellSnapshot ReadSpells(BinaryReader r)
@@ -395,7 +442,13 @@ namespace ElansAddonHub.Services.Db2
             n = r.ReadInt32(); Count(n, 5000000);
             var rg = new Dictionary<int, int[]>(n);
             for (int i = 0; i < n; i++) { int id = r.ReadInt32(); int c = r.ReadByte(); var a = new int[c]; for (int k = 0; k < c; k++) a[k] = r.ReadInt32(); rg[id] = a; }
-            return new SpellSnapshot(spells, skills, abil, rg);
+            var lk = new SpellLookups();
+            void Ints(Dictionary<int, int> d) { int m = r.ReadInt32(); Count(m, 5000000); for (int i = 0; i < m; i++) d[r.ReadInt32()] = r.ReadInt32(); }
+            void Floats(Dictionary<int, float> d) { int m = r.ReadInt32(); Count(m, 5000000); for (int i = 0; i < m; i++) d[r.ReadInt32()] = r.ReadSingle(); }
+            Ints(lk.CastMs); Ints(lk.DurationMs); Floats(lk.RangeMax); Floats(lk.Radius); Ints(lk.MiscRows);
+            n = r.ReadInt32(); Count(n, 5000000);
+            for (int i = 0; i < n; i++) lk.EffectRows[r.ReadInt32()] = r.ReadInt64();
+            return new SpellSnapshot(spells, skills, abil, rg, lk);
         }
 
         // ---- factions

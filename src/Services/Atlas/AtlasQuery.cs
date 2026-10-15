@@ -358,6 +358,7 @@ namespace ElansAddonHub.Services.Atlas
             var res = new List<AtlasHit>();
             var sn = SpellData.Spells;
             if (sn == null) return res;
+            var hf = SpellData.Hotfixes;
             foreach (var s in sn.Spells.Values)
             {
                 if (string.IsNullOrEmpty(s.Name)) continue;
@@ -366,7 +367,7 @@ namespace ElansAddonHub.Services.Atlas
                 bool recipe = sn.RecipeOf(s.Id) != null;
                 res.Add(new AtlasHit
                 {
-                    Id = "spell:" + s.Id, Kind = "spell", Name = s.Name, IconId = s.IconId, Label = AtlasLabel.Forever, Rank = r, Tier = recipe ? 0 : 1 - 1,
+                    Id = "spell:" + s.Id, Kind = "spell", Name = s.Name, IconId = s.IconId, Label = (hf.Spell(s.Id) & HotfixParts.New) != 0 ? AtlasLabel.Hotfix : AtlasLabel.Forever, Rank = r, Tier = recipe ? 0 : 1 - 1,
                     Detail = string.Join(" · ", new[] { s.Rank, recipe ? "recipe" : "" }.Where(x => !string.IsNullOrEmpty(x))),
                 });
                 if (res.Count > 4000) break;
@@ -467,7 +468,7 @@ namespace ElansAddonHub.Services.Atlas
                 case "spell":
                     {
                         var s = SpellData.Spell(n);
-                        return s == null ? null : new AtlasHit { Id = id, Kind = kind, Name = s.Name, IconId = s.IconId, Detail = s.Rank ?? "", Label = AtlasLabel.Forever };
+                        return s == null ? null : new AtlasHit { Id = id, Kind = kind, Name = s.Name, IconId = s.IconId, Detail = s.Rank ?? "", Label = (s.Hotfix & HotfixParts.New) != 0 ? AtlasLabel.Hotfix : AtlasLabel.Forever };
                     }
                 case "skill":
                     {

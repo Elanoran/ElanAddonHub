@@ -134,7 +134,7 @@ namespace ElansAddonHub.Services
             R(@"^src/(MainWindow\.ArmoryTest|SettingsPage\.Armory|Lodge/(ArmoryModels|LodgeSession\.Armory))\.cs$", "armory");
             R(@"^src/(Services/(Db2/|Casc\.cs)|MainWindow\.ItemDataTest\.cs)", "itemdata", "spelldata", "atlasclasses");
             R(@"^src/(Services/(Db2/Class\w*|Atlas/(AtlasClasses|AtlasQuery\.Classes|AtlasBrowse\.Classes))|AtlasPage\.Classes|MainWindow\.AtlasClassesTest(\.\w+)?)\.cs$", "atlasclasses", "atlaspage", "atlasbrowse", "gametooltip");
-            R(@"^src/MainWindow\.SpellDataTest\.cs$", "spelldata");
+            R(@"^src/MainWindow\.SpellDataTest(\.\w+)?\.cs$", "spelldata");
             R(@"^src/(Controls/GameTooltip(\.Atlas)?\.cs|Services/(GameFont|Atlas/AtlasTip)\.cs|MainWindow\.GameTooltipTest\.cs)$", "gametooltip", "itemdata", "spelldata", "inventory", "atlaspage", "professions", "lodgefun", "talents", "atlasclasses");
             R(@"^src/(Services/(Talents/|Db2/(Talent|Wdc5|Spell)|Casc\.cs|HubModules\.cs)|TalentsPage|MainWindow\.TalentsTest)", "talents", "atlashosts");
             R(@"^src/(ProfessionsPage[\w.]*|MainWindow\.ProfessionsTest[\w.]*|Services/Professions/.*)$", "professions", "profguide", "atlashosts");

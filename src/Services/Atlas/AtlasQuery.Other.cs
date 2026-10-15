@@ -68,7 +68,9 @@ namespace ElansAddonHub.Services.Atlas
             if (seen == null && cq == null && lq == null)
             {
                 bool exists = SpellData.World != null && SpellData.World.QuestIds.Contains(id);
-                var nf = NotFoundPage("quest", id, exists ? "Your game knows this quest exists, but nobody's game in your Lodge has been shown it yet." : "No layer knows this quest. Your game has not shown it to you yet.");
+                bool fromHotfix = SpellData.Hotfixes.NewQuests.Contains(id);
+                var nf = NotFoundPage("quest", id, fromHotfix ? "Your game knows this quest exists from a server hotfix (it is not in the game files), but nobody's game in your Lodge has been shown it yet."
+                    : exists ? "Your game knows this quest exists, but nobody's game in your Lodge has been shown it yet." : "No layer knows this quest. Your game has not shown it to you yet.");
                 LayerNotes(nf, true, false);
                 return nf;
             }
@@ -82,6 +84,7 @@ namespace ElansAddonHub.Services.Atlas
             int min = seen != null && seen.MinLevel > 0 ? seen.MinLevel : cq?.MinLevel ?? 0;
             if (level > 0) m.Facts.Add(new AtlasFact("Level", level.ToString(CultureInfo.InvariantCulture), seen != null && seen.Level > 0 ? F : C));
             if (min > 0) m.Facts.Add(new AtlasFact("Requires level", min.ToString(CultureInfo.InvariantCulture), seen != null && seen.MinLevel > 0 ? F : C));
+            if (SpellData.Hotfixes.NewQuests.Contains(id)) m.Facts.Add(new AtlasFact("Source", "A quest the server added (not in the game files)", AtlasLabel.Hotfix));
             int sort = seen != null && seen.Sort != 0 ? seen.Sort : cq?.ZoneOrSort ?? 0;
             var idx = MapData.Index;
             var world = SpellData.World;
@@ -206,19 +209,24 @@ namespace ElansAddonHub.Services.Atlas
         {
             var sp = SpellData.Spell(id);
             if (sp == null) return NotFoundPage("spell", id, SpellData.Ready ? "Your game has no spell with this id." : "Spell data is read from your game files and is not ready yet.");
-            string F = AtlasLabel.Forever;
+            string F = AtlasLabel.Forever, H = AtlasLabel.Hotfix;
             var m = new AtlasPageModel { Id = "spell:" + id, Kind = "spell", Title = sp.Name, IconId = sp.IconId };
             AddLayer(m, "client");
+            // what the server's hotfix rows changed is labelled "Server hotfix" (a new spell: everything), the rest is the game files' own
+            var hf = sp.Hotfix;
+            bool hNew = (hf & HotfixParts.New) != 0;
+            string Src(HotfixParts part) => hNew || (hf & part) != 0 ? H : F;
             m.Subtitle = string.Join(" · ", new[] { "Spell " + id, sp.Rank ?? "" }.Where(s => s.Length > 0));
-            if (!string.IsNullOrEmpty(sp.Rank)) m.Facts.Add(new AtlasFact("Rank", sp.Rank, F));
+            if (hf != HotfixParts.None) m.Facts.Add(new AtlasFact("Source", ServerHotfixes.Describe(hf), H));
+            if (!string.IsNullOrEmpty(sp.Rank)) m.Facts.Add(new AtlasFact("Rank", sp.Rank, Src(HotfixParts.Text)));
             if (!string.IsNullOrEmpty(sp.CostText)) m.Facts.Add(new AtlasFact("Cost", sp.CostText, F));
-            m.Facts.Add(new AtlasFact("Cast time", Seconds(sp.CastMs), F));
+            m.Facts.Add(new AtlasFact("Cast time", Seconds(sp.CastMs), Src(HotfixParts.Numbers)));
             if (sp.CooldownMs > 0) m.Facts.Add(new AtlasFact("Cooldown", ClassSnapshot.CooldownText(sp.CooldownMs).Replace(" cooldown", ""), F));
-            if (sp.RangeMax > 0) m.Facts.Add(new AtlasFact("Range", sp.RangeMax.ToString("0.##", CultureInfo.InvariantCulture) + " yards", F));
-            if (sp.DurationMs > 0) m.Facts.Add(new AtlasFact("Duration", Seconds(sp.DurationMs), F));
-            else if (sp.DurationMs < 0) m.Facts.Add(new AtlasFact("Duration", "Until cancelled", F));
-            if (!string.IsNullOrWhiteSpace(sp.Description)) m.Texts.Add(new AtlasText("Description", sp.Description.Trim(), F));
-            if (!string.IsNullOrWhiteSpace(sp.AuraDescription)) m.Texts.Add(new AtlasText("While it lasts", sp.AuraDescription.Trim(), F));
+            if (sp.RangeMax > 0) m.Facts.Add(new AtlasFact("Range", sp.RangeMax.ToString("0.##", CultureInfo.InvariantCulture) + " yards", Src(HotfixParts.Numbers)));
+            if (sp.DurationMs > 0) m.Facts.Add(new AtlasFact("Duration", Seconds(sp.DurationMs), Src(HotfixParts.Numbers)));
+            else if (sp.DurationMs < 0) m.Facts.Add(new AtlasFact("Duration", "Until cancelled", Src(HotfixParts.Numbers)));
+            if (!string.IsNullOrWhiteSpace(sp.Description)) m.Texts.Add(new AtlasText("Description", sp.Description.Trim(), Src(HotfixParts.Text | HotfixParts.Effects)));
+            if (!string.IsNullOrWhiteSpace(sp.AuraDescription)) m.Texts.Add(new AtlasText("While it lasts", sp.AuraDescription.Trim(), Src(HotfixParts.Text | HotfixParts.Effects)));
             AddSpellOrigins(m, id);
             var talentLink = AtlasHosts.TalentTreeLink(id, out var talentClass);
             if (talentLink != null) m.Facts.Add(new AtlasFact("Talent of", talentClass, F, talentLink));
