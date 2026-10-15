@@ -215,6 +215,13 @@ namespace ElansAddonHub
                 var gap = WorldMapPyramid.Build(5, "Testland", "keyA", withGap, Load, pdir2, null, CancellationToken.None);
                 Check("pyramid: a map tile the source does not have (ocean) is counted as missing, has no files, and its place in the tile above is the sea colour",
                     gap.Complete && gap.Missing == 1 && gap.Decoded == 3 && Directory.GetFiles(Path.Combine(pdir2, "z7")).Length == 12 && !File.Exists(WorldMapPyramid.TileFile(pdir2, 6, 11, 21)) && WmNear(WmPixel(WorldMapPyramid.TileFile(pdir2, 5, 5, 10), 192, 192), WorldMapPyramid.SeaR, WorldMapPyramid.SeaG, WorldMapPyramid.SeaB, 4), gap.Missing + " " + gap.Decoded);
+                // a minimap the install lists but cannot give (a game still downloading in the background: "not a BLTE block"): left out like a missing one, the build goes on
+                var pdir2b = Path.Combine(work, "pyr2b");
+                var broken = WorldMapPyramid.Build(5, "Testland", "keyA", four, t => t == four[1] ? throw new IOException("not a BLTE block") : Load(t), pdir2b, null, CancellationToken.None);
+                Check("pyramid: a minimap that cannot be read (not a BLTE block) is left out and counted, the rest of the continent is built",
+                    broken.Complete && broken.Missing == 1 && broken.Unreadable == 1 && broken.Decoded == 3 && WorldMapPyramid.ReadManifest(pdir2b) != null, broken.Missing + " " + broken.Unreadable + " " + broken.Decoded);
+                Check("pyramid: the page's reason for an unreadable game file says what to do (let Battle.net finish, or Scan and Repair)",
+                    WorldMapService.Why(new IOException("not a BLTE block")).Contains("Scan and Repair") && WorldMapService.Why(new IOException("disk full")) == "disk full");
                 var none = Assert(() => WorldMapPyramid.Build(5, "Testland", "keyA", new[] { new WdtTile { Col = 1, Row = 1, MinimapFdid = 99 } }, Load, Path.Combine(work, "pyr3"), null, CancellationToken.None));
                 Check("pyramid: when none of the minimaps can be read the build fails with a reason and no manifest", none != null && none.Contains("none of the") && !File.Exists(WorldMapPyramid.ManifestPath(Path.Combine(work, "pyr3"))), none);
 

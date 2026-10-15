@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.62.1
+- Fixed: the 2D / 3D world map could fail for a whole continent with "could not be built: not a BLTE block" when a few of the game's map files were not fully on disk (the Battle.net app still downloading the game in the background, or a damaged install). Those map tiles are now left out and the rest of the continent is built; when the game files themselves cannot be read, the map says to let Battle.net finish or to use Scan and Repair.
+
 ## 2.62.0
 - **Upgrades: items you cannot use are greyed out.** Characters > Gear > Upgrades used to list a better item even when your character could not use it. It now checks what the item itself asks for: a class list (Rogue only), a race or side (Horde only), a profession and skill (Needs Engineering 245, checked against the professions Elan's Hub saved), a reputation (Needs Revered with Argent Dawn) and a PvP rank. An item you cannot use is still listed, but dimmed, with the reason in the row and in its tooltip, below the ones you can use, and it is never counted as the best upgrade for a slot (nor offered on the Atlas item page). A limit the Outpost cannot check, for example a reputation (Elan's Hub does not save them yet) or a profession when the Hub has not saved yours, is shown as a quiet note and does not grey the item. A new switch, Show items I can't use (on by default), hides them again.
 

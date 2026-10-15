@@ -109,7 +109,7 @@ namespace ElansAddonHub.Services.WorldMap
                 catch (Exception e)
                 {
                     Util.Log("world map buildings " + j.Name + ": " + e);
-                    j.State.Error = "The buildings of " + j.Name + " could not be counted: " + e.Message; j.State.Phase = "error";
+                    j.State.Error = "The buildings of " + j.Name + " could not be counted: " + WorldMapService.Why(e); j.State.Phase = "error";
                 }
                 Fire(mapId);
             });
@@ -324,7 +324,7 @@ namespace ElansAddonHub.Services.WorldMap
             catch (Exception e)
             {
                 Util.Log("world map buildings " + j.Name + ": " + e);
-                j.State.Error = "The buildings of " + j.Name + " could not be built: " + e.Message; j.State.Phase = "error";
+                j.State.Error = "The buildings of " + j.Name + " could not be built: " + WorldMapService.Why(e); j.State.Phase = "error";
             }
             finally { lock (gate) { j.Running = false; j.Paused = false; } j.Gate.Set(); Fire(j.MapId); }
         }
