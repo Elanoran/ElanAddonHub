@@ -382,6 +382,15 @@ Outpost can read as a "Community" layer under the Lodge layer and above the Clas
 - Hosting: its own small VM/LXC (1 vCPU, 2 GB, 16 GB) behind Cloudflare, separate from the Lodge VM; the daily file can sit on GitHub Releases.
 - Start invite-only with 2-3 trusted Lodges before opening it. Nothing is built; the Atlas layering and labels already allow adding it.
 
+### Release and update trust (decided 2026-10-15)
+
+Considered after the sharing review and set aside for now by the owner (low hassle preferred; GitHub account has two-factor login):
+signed releases (Ed25519 manifest signature pinned in the Outpost), Authenticode code signing, signed git tags verified by lodge-update,
+publishing from GitHub Actions, a hardware security key, expiring fine-grained tokens, and encrypted off-site backups. Remaining risk: a
+stolen GitHub token on the release PC (the gh CLI OAuth token and Git Credential Manager token have broad, non-expiring scope) could publish
+a release. In place: two-factor login, downloads only from github.com over https, mandatory SHA-256 for the self-update, install paths
+confined to AddOns. Cheapest next steps if revisited: protect release tags; a hardware key; or move publishing to GitHub Actions.
+
 ### To check in game later
 
 - **Hunter Marksmanship, Improved Serpent Sting** (node 105003, spell 19464, 5 ranks, row 3 col 3, "position repaired"): the game data has it as a 17th
