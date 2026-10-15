@@ -148,7 +148,7 @@ EHH.DefaultBuild = ""pack""
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             var work = Path.Combine(dir, "talents");
             var savedCache = TalentData.CacheFile; var savedNames = TalentsPage.NameOf; var savedFlavor = IconStore.Flavor;

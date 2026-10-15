@@ -107,7 +107,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; Util.Log("instances test " + (cond ? "ok " : "FAIL ") + what.Substring(0, Math.Min(80, what.Length))); }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; Util.Log("instances test " + (cond ? "ok " : "FAIL ") + what.Substring(0, Math.Min(80, what.Length))); }
             string P(string n) => Path.Combine(dir, n);
             var work = Path.Combine(dir, "instances");
             var savedCache = MapData.CacheFile; var savedRoot = MapData.WowRoot; var savedEnabled = MapData.Enabled; var savedLodge = AtlasQuery.Context.Lodge;
@@ -307,8 +307,7 @@ namespace ElansAddonHub
                 Snapshot(P("instances-page-synthetic.png"));
                 AtlasView.ClipboardSeamForTest = null;
 
-                // ---------------------------------------------------------------- the real game files (read-only), when this PC has them
-                await InstancesRealChecks(dir, work, Check, P, notes);
+                // the real game files run in their own section: "instancesreal" (MainWindow.InstancesTest.Real.cs)
             }
             catch (Exception e) { Check("instances test crashed", false, e.ToString()); }
             finally

@@ -65,7 +65,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond) { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
+            void Check(string what, bool cond) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
             string P(string name) => System.IO.Path.Combine(dir, name);
             try
             {
@@ -172,7 +172,7 @@ namespace ElansAddonHub
                 foreach (var who in new[] { "Bob", "Dax", "Mira" })
                 {
                     var tip = LodgePage.ShowCardForTest(by[who], LodgePage.SidebarForTest);
-                    await Task.Delay(250);
+                    await ShotWait(250);
                     SnapshotElement(tip, P("14-hovercard-" + who.ToLowerInvariant() + ".png"));
                     tip.IsOpen = false;
                 }
@@ -260,15 +260,15 @@ namespace ElansAddonHub
                 vm.ServerError("That display name is taken");
                 Check("... the server says taken: shown under the box, nothing saved", vm.DisplayHint == "That display name is taken" && vm.StatusText == "Not saved." && vm.CanSave);
                 SettingsPage.ScrollForTest(430);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("15-settings-profile-taken.png"));
                 vm.DisplayName = "Hunter Elan 2"; vm.DisplayName = "Hunter Elan";
                 SettingsPage.ScrollForTest(2000);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("14-edit-profile-bottom.png"));
                 SettingsPage.ScrollForTest(0);
                 vm.DisplayName = "Hunter Elan";
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("15-settings-profile-form.png"));
                 // a "profile" answer from the server with the saved name
                 vm.BeginSave();
@@ -282,7 +282,7 @@ namespace ElansAddonHub
                 Snapshot(P("16-profile-dirty.png"));
                 // the Lodge sub-entry in Settings is gone
                 SettingsPage.Show("lodge");
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("14-settings-profile.png"));
                 ShowTab("lodge");
 
@@ -314,13 +314,13 @@ namespace ElansAddonHub
                 by = Session.Members.ToDictionary(m => m.Name);
                 Check("... a join entry without displayName keeps it gone (server said none), a 2.6 server entry shows the login name", by["Tess"].Display == "Tess");
                 Session.FeedForTest("{\"t\":\"profile\",\"id\":3,\"name\":\"Tess\",\"avatarId\":\"av.staff\",\"accent\":\"violet\",\"displayName\":\"Tessa Frostweaver\"}");
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("15-lodge-displaynames.png"));
                 SnapshotElement(LodgePage.SidebarForTest, P("15-sidebar-displaynames.png"));
                 foreach (var who in new[] { "Bob", "Dax" })
                 {
                     var tip = LodgePage.ShowCardForTest(by[who], LodgePage.SidebarForTest);
-                    await Task.Delay(250);
+                    await ShotWait(250);
                     SnapshotElement(tip, P("15-hovercard-" + who.ToLowerInvariant() + ".png"));
                     tip.IsOpen = false;
                 }

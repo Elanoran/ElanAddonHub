@@ -6,8 +6,15 @@
   Tools\selftest.ps1                          # --changed origin/main (what this branch touched)
   Tools\selftest.ps1 -Only inventory,toasts   # just those sections
   Tools\selftest.ps1 -Changed v2.33.0         # everything since a tag
-  Tools\selftest.ps1 -Full                    # every section (slow, ~11 min): only when something shared changed
+  Tools\selftest.ps1 -Full                    # every section, the real-game-file ones included (about 5 min): only when something shared changed
+  Tools\selftest.ps1 -Only worldmapreal      # one real-game-file section (worldmapreal, mapdatareal, instancesreal, buildingsreal, dungeonmapsreal, atlaspagereal)
+  Tools\selftest.ps1 -NoCache                # never skip a real-game-file section because it passed before
   Tools\selftest.ps1 -List                    # section names
+
+  The *real sections read the player's WoW install and are slow. Changed mode runs them only when game-data readers (Casc, Blp, Wdc5, Maps/,
+  WorldMap/, DungeonMaps/ ...) or their own test files changed, and skips one that already passed with the same game build + the same
+  reader / test files (cache: %LOCALAPPDATA%\ElansAddonHub-selftest-cache, never the app's data folder). -Full and -Only always run them
+  (add -UseCache to let them skip too); a FAIL is never cached; a new game patch re-runs them.
 
   Exit code: 0 = no new failures, 1 = new FAIL lines (or the run did not finish), 2 = could not start.
   The self-test always runs in its own data folder under $env:TEMP, never in %LOCALAPPDATA%\ElansAddonHub
@@ -19,6 +26,8 @@ param(
     [switch]$Full,
     [switch]$List,
     [switch]$NoBuild,
+    [switch]$UseCache,  # let -Full / -Only skip a real-game-file section that passed before with the same game build and sources (changed mode always does)
+    [switch]$NoCache,   # never skip a real-game-file section
     [switch]$Visible,   # run on the real desktop (watch it); default is a hidden desktop that never steals focus
     [int]$TimeoutMinutes = 15
 )
@@ -41,16 +50,21 @@ if (-not (Test-Path $exe)) { Write-Host "No exe at $exe"; exit 2 }
 
 if ($List) { & $exe --list | Out-String | Write-Host; exit 0 }
 
-$argv = @()
+$argv = @('--repo', $root)
+$useCache = [bool]$UseCache
 if ($Full) { $mode = 'FULL (all sections)' }
 elseif ($Only) { $argv += @('--only', ($Only -join ',')); $mode = '--only ' + ($Only -join ',') }
 else {
+    $useCache = $true
     if (-not $Changed) {
         & git -C $root rev-parse --verify --quiet origin/main 2>$null | Out-Null
         $Changed = if ($LASTEXITCODE -eq 0) { 'origin/main' } else { 'main' }
     }
-    $argv += @('--changed', $Changed, '--repo', $root); $mode = "--changed $Changed"
+    $argv += @('--changed', $Changed); $mode = "--changed $Changed"
 }
+
+if ($useCache -and -not $NoCache) { $argv += '--use-cache' }
+if ($NoCache) { $argv += '--no-cache' }
 
 # fresh scratch dir; refuse anything that is, or sits inside, the real data folder
 $scratch = Join-Path $env:TEMP ('elans-selftest-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
@@ -87,6 +101,9 @@ Write-Host ''
 $skipped = @($lines | Where-Object { $_ -match '^skipped ' })
 if ($skipped) { Write-Host ('Skipped: ' + (($skipped | ForEach-Object { $_ -replace '^skipped ', '' }) -join ', ')) }
 
+$cached = @($lines | Where-Object { $_ -match '^\w+real: skipped \(game ' })
+$cached | ForEach-Object { Write-Host $_ }
+
 $bad = @($lines | Where-Object { $_ -cmatch 'FAIL|crashed|NOT REFUSED' })
 # the "passed" summary lines contain no FAIL; per-check "FAIL " / "FAILED" / "crashed" lines do
 $new = @($bad | Where-Object { $l = $_; -not ($known | Where-Object { $l.Contains($_) }) })
@@ -98,6 +115,8 @@ Write-Host ''
 Write-Host 'Timing (slowest first):'
 $lines | ForEach-Object { if ($_ -match '^section (\S+): ([\d.]+) s\s*$') { [pscustomobject]@{ Name = $Matches[1]; Sec = [double]$Matches[2] } } } |
     Sort-Object Sec -Descending | ForEach-Object { Write-Host ('  {0,-15}{1,7:0.0} s' -f $_.Name, $_.Sec) }
+$slow = @($lines | Where-Object { $_ -match '^slow ' })
+if ($slow) { Write-Host ''; Write-Host 'Slowest stretches between checks (work before the named check):'; $slow | Select-Object -First 25 | ForEach-Object { Write-Host ('  ' + $_) }; Write-Host '' }
 $tot = $lines | Where-Object { $_ -match '^total: ' }
 Write-Host "  $tot   (wall clock incl. start/exit: $([math]::Round($wall,1)) s)"
 Write-Host "Result: $resultFile"

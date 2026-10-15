@@ -109,7 +109,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             var work = Path.Combine(dir, "seendata");
             var savedCacheFile = SeenData.CacheFile; var savedRoot = SeenData.WowRoot; var savedEnabled = SeenData.Enabled; var savedDebounce = SeenData.DebounceMs; var savedFlavor = SeenData.Flavor;
             try

@@ -35,7 +35,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             var work = Path.Combine(dir, "profguide");
             var hadRoot = settings.WowRoot; var hadOff = settings.AtlasShareOff; var hadClock = Session.Clock;
             var hadFollowed = settings.FollowedGuides; var hadSaved = settings.SavedRoutes; var hadChoice = settings.RouteForGuide;

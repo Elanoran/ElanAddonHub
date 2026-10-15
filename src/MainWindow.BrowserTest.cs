@@ -21,7 +21,7 @@ namespace ElansAddonHub
             if (!string.IsNullOrEmpty(shots)) return await BrowserShots(shots);
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond) { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
+            void Check(string what, bool cond) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
             string R(string input, string engine = null) => BrowserUrl.Resolve(input, engine);
             var oldTiles = settings.BrowserTiles; var oldRemember = settings.BrowserRemember; var oldAdsOff = settings.BrowserAdsOff;
             var oldChat = settings.BrowserFromChat; var oldSearch = settings.BrowserSearch;
@@ -210,7 +210,7 @@ namespace ElansAddonHub
 
                 // ---- Settings > Privacy > Outpost browser
                 ShowTab("settings"); SettingsPage.Show("privacy");
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(Path.Combine(dir, "20-browser-privacy.png"));
                 bool On(string n) => ((System.Windows.Controls.CheckBox)SettingsPage.FindName(n)).IsChecked == true;
                 Check("settings page: private browsing on, ad blocking on, chat links off, DuckDuckGo shown", On("PvBrPrivate") && On("PvBrAds") && !On("PvBrChat")
@@ -268,7 +268,7 @@ namespace ElansAddonHub
                 if (png != null) PastePage(shot, png, pr);
                 var info = $"title='{BrowserView.Current?.Title}' url='{BrowserView.Current?.Url}' blocked={BrowserView.Current?.Blocked} tip='{BrowserView.AddressTipForTest}' glyph={BrowserView.LockGlyphForTest}";
                 BrowserView.NewTabForTest();
-                await Task.Delay(1200);
+                await ShotWait(1200);
                 Snapshot(Path.Combine(outDir, "browser-newtab.png"));
                 settings.BrowserTiles = oldTiles;
                 return "browser shots: " + info;

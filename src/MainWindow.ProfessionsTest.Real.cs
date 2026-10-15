@@ -86,19 +86,19 @@ namespace ElansAddonHub
                 page.SetSourcesForTest(fs, new FixedGatherWorld());
                 ShowTab("professions");
                 page.ShowForTest("recipes", "Cooking", "Elanoran");
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(Path.Combine(dir, "professions-recipes.png"));
                 Check("real page: Cooking recipes for Elanoran at 112/150 (133 recipes in the data, kits among them)", page.RecipeRowNamesForTest().Count > 100, page.RecipeRowNamesForTest().Count + "");
                 page.ShowForTest("craft");
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(Path.Combine(dir, "professions-craft-now.png"));
                 Check("real page: craft now lists recipes from the characters' bags (skill-ups first)", page.CraftRowsForTest().Count >= 5, page.CraftRowsForTest().Count + "");
                 page.ShowForTest("guide", "Cooking", "Elanoran");
                 page.GuideRangeForTest(1, 300, "all");
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(Path.Combine(dir, "professions-guide-top.png"));
                 page.ScrollForTest(page.GuideShoppingBottomForTest());
-                await Task.Delay(150);
+                await ShotWait(150);
                 Snapshot(Path.Combine(dir, "professions-guide-steps.png"));
                 Check("real page: the Cooking guide on the page has the text for the clipboard with the 1-300 steps", page.GuideTextForTest().Contains("Cooking 1–300") && page.GuideTextForTest().Contains("train Journeyman Cooking"));
 
@@ -127,10 +127,10 @@ namespace ElansAddonHub
                 Snapshot(Path.Combine(dir, "professions-guide-gathering.png"));
 
                 page.ShowForTest("camp");
-                await Task.Delay(250);
+                await ShotWait(250);
                 Snapshot(Path.Combine(dir, "professions-camping.png"));
                 page.ScrollForTest(900);
-                await Task.Delay(150);
+                await ShotWait(150);
                 Snapshot(Path.Combine(dir, "professions-camping-objects.png"));
                 Check("real page: the Camping tab shows 3 kits and 30+ objects", page.CampCardsForTest().Count >= 33, page.CampCardsForTest().Count + "");
                 notes.Add("note real game files: read " + read + " ms, professions built " + built + " ms, " + book.BySpell.Count + " recipes, " + taught + " taught by an item, " + camp.Kits.Count + " kits, " + camp.Objects.Count + " camp objects");

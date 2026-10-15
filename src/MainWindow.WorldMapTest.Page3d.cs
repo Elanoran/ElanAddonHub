@@ -18,6 +18,17 @@ namespace ElansAddonHub
     // real WebView2 on the invented continent (WebGL when the machine has it, the fallback to the flat map when it has not), and the new messages of the protocol.
     public partial class MainWindow
     {
+        async Task<bool> Wm3WaitState(Func<Dictionary<string, object>, bool> cond, int ms = 20000)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < ms)
+            {
+                try { var st = await Wm3State(); if (st != null && cond(st)) return true; } catch (Exception) { }
+                await Task.Delay(120);
+            }
+            return false;
+        }
+
         async Task<Dictionary<string, object>> Wm3State()
         {
             var r = await WorldMapView.EvalForTest("window.wm3 ? window.wm3.state() : null");
@@ -256,7 +267,8 @@ namespace ElansAddonHub
                     Check("3D: the zone borders layer arrived in the 3D page too (" + s3b.Child("counts").Int("borders") + " zones), the zone under a ground point is found (" + zone + ") and the area id read from the tile's grid is " + area + " (the invented landscape says " + expectArea + ")",
                         s3b.Child("counts").Int("borders") == 3 && zone == "Westmark" && Convert.ToInt32(area) == expectArea, zone + " " + area + " " + expectArea);
                     // the other layers reach the 3D page: flight masters, zone names, routes
-                    await WmWaitState(st => { var c = st.Child("counts"); return c != null && c.Int("zones") >= 3 && c.Int("fm") >= 3 && c.Int("routes") >= 1; }, 20000);
+                    // (waits on the 3D page's own state: the flat map's state does not exist here, so this used to run out its whole 20 s)
+                    await Wm3WaitState(st => { var c = st.Child("counts"); return c != null && c.Int("zones") >= 3 && c.Int("fm") >= 3 && c.Int("routes") >= 1; }, 20000);
                     var c3 = (await Wm3State())?.Child("counts");
                     Check("3D: the counts of the layers are the same as in the flat map: 3 zone names, 3 flight masters, the routes (2 pairs), 3 zones with borders", c3 != null && c3.Int("zones") == 3 && c3.Int("fm") >= 3 && c3.Int("routes") >= 1 && c3.Int("borders") == 3, c3 == null ? "?" : Json.Write(c3));
 

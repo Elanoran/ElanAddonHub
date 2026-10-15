@@ -233,6 +233,7 @@ namespace ElansAddonHub
             }
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "scope.txt"), scopeNote + "\r\n");
             var total = System.Diagnostics.Stopwatch.StartNew();
+            SelfTestClock.Full = TestScope.ArgValue(args, "--only") == null && TestScope.ArgValue(args, "--changed") == null;
             var secWatch = new System.Diagnostics.Stopwatch();
             var timings = new System.Collections.Generic.List<string>();
             var skipped = new System.Collections.Generic.List<string>();
@@ -241,7 +242,7 @@ namespace ElansAddonHub
             bool Begin(string name)
             {
                 if (!scope.Contains(name)) { skipped.Add("skipped " + name); return false; }
-                current = name; secWatch.Restart(); return true;
+                current = name; secWatch.Restart(); SelfTestClock.Section(name); return true;
             }
             string Sec(double x) => x.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
             void End() { timings.Add($"section {current}: {Sec(secWatch.Elapsed.TotalSeconds)} s"); }
@@ -258,6 +259,18 @@ namespace ElansAddonHub
             Snapshot(System.IO.Path.Combine(dir, "1-before.png"));
             timings.Add($"section setup: {Sec(total.Elapsed.TotalSeconds)} s");
             string result = scopeNote;
+            // the real-game-file sections: skipped when the game build, the readers and the test files are unchanged since a passing run (SelfTestCache); only with --use-cache
+            var realGate = SelfTestCache.Open(args);
+            async Task RealSec(string name, Func<string, Task<string>> run)
+            {
+                if (!Begin(name)) return;
+                var skip = realGate.SkipLine(name);
+                if (skip != null) { result += "\r\n" + skip; End(); return; }
+                var o = await run(dir);
+                result += "\r\n" + o;
+                realGate.After(name, o);
+                End();
+            }
             if (Begin("addons"))
             {
                 var card = cards.FirstOrDefault(c => c.ButtonEnabled);
@@ -270,7 +283,7 @@ namespace ElansAddonHub
                 var offlineLine = $"check-all offline: {(CheckAllButton.IsEnabled && CheckResult.Text == "Couldn't reach the update server" ? "ok" : "FAIL")} (result='{CheckResult.Text}')";
                 FakeUpdateServer.Start();
                 await CheckNow();
-                await Task.Delay(400);
+                await ShotWait(400);
                 Snapshot(System.IO.Path.Combine(dir, "2-after.png"));
                 if (cards.Count >= 3 && others.Count >= 4)
                 {
@@ -283,13 +296,13 @@ namespace ElansAddonHub
                     others[3].SetPillForTest("Dev copy", PillKind.Quiet, "x", false);
                     RefreshRailBadges();
                     UpdateBadge.Visibility = Visibility.Visible; UpdateBadgeText.Text = "4";
-                    await Task.Delay(400);
+                    await ShotWait(400);
                     Snapshot(System.IO.Path.Combine(dir, "16-pills.png"));
                     ShowTab("addons");
                 }
                 ShowTab("settings");
                 SettingsPage.Show("general");
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(System.IO.Path.Combine(dir, "3-settings.png"));
                 foreach (var sec in new[] { "addons", "lodge", "voice", "overlay", "about" })
                 {
@@ -312,6 +325,7 @@ namespace ElansAddonHub
             result += "\r\n" + (dataInside ? "ok   " : "FAIL ") + "isolation: data folder is inside the test dir (" + Util.DataDir + ")";
             result += "\r\n" + (Services.Sounds.Muted ? "ok   " : "FAIL ") + "isolation: sound is muted (a hidden test must not be heard)";
             result += "\r\n" + TestScope.SelfTest();
+            result += "\r\n" + SelfTestCache.SelfTest(dir);
             if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
             if (Begin("strip")) { result += "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live(); End(); }
 
@@ -324,7 +338,7 @@ namespace ElansAddonHub
             {
                 var p = lodgeTest.Split('|');
                 TabLodge.IsChecked = true;
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(System.IO.Path.Combine(dir, "4-join.png"));
                 LodgePage.FillJoinForTest(p[0], p[1], p.Length > 2 ? p[2] : "Tester");
                 for (int i = 0; i < 50 && !Session.Online; i++) await Task.Delay(200);
@@ -350,18 +364,18 @@ namespace ElansAddonHub
                 Session.SetMyStatus("dungeon", "Wailing Caverns");
                 VoiceEngine.TestTone = true;
                 Session.JoinRoom(Session.VoiceRooms.FirstOrDefault()?.Id);
-                await Task.Delay(2500);
+                await ShotWait(2500);
                 Snapshot(System.IO.Path.Combine(dir, "5-lodge.png"));
                 ShowTab("settings");
                 SettingsPage.Show("voice");
-                await Task.Delay(400);
+                await ShotWait(400);
                 Snapshot(System.IO.Path.Combine(dir, "6-voice-settings.png"));
                 if (Session.CanManage)
                 {
                     SettingsPage.Show("gm");
                     await Task.Delay(600);
                     SettingsPage.InviteForTest("Testfriend", "member");
-                    await Task.Delay(800);
+                    await ShotWait(800);
                     Snapshot(System.IO.Path.Combine(dir, "8-guild-master.png"));
                 }
                 ShowTab("lodge");
@@ -397,10 +411,15 @@ namespace ElansAddonHub
             if (Begin("itemdata")) { result += "\r\n" + await ItemDataTest(dir); End(); }
             if (Begin("seendata")) { result += "\r\n" + await SeenDataTest(dir); End(); }
             if (Begin("mapdata")) { result += "\r\n" + await MapDataTest(dir); End(); }
+            await RealSec("mapdatareal", MapDataRealTest);
             if (Begin("worldmap")) { result += "\r\n" + await WorldMapTest(dir); End(); }
+            await RealSec("worldmapreal", WorldMapRealTest);
             if (Begin("instances")) { result += "\r\n" + await InstancesTest(dir); End(); }
+            await RealSec("instancesreal", InstancesRealTest);
             if (Begin("buildings")) { result += "\r\n" + await BuildingsTest(dir); End(); }
+            await RealSec("buildingsreal", BuildingsRealTest);
             if (Begin("dungeonmaps")) { result += "\r\n" + await DungeonMapsTest(dir); End(); }
+            await RealSec("dungeonmapsreal", DungeonMapsRealTest);
             if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }
             if (Begin("gametooltip")) { result += "\r\n" + await GameTooltipTest(dir); End(); }
             if (Begin("talents")) { result += "\r\n" + await TalentsTest(dir); End(); }
@@ -418,12 +437,14 @@ namespace ElansAddonHub
             if (Begin("atlasclassic")) { result += "\r\n" + await AtlasClassicTest(dir); End(); }
             if (Begin("atlasclassiclodge")) { result += "\r\n" + await AtlasClassicLodgeTest(dir); End(); }
             if (Begin("atlaspage")) { result += "\r\n" + await AtlasPageTest(dir); End(); }
+            await RealSec("atlaspagereal", AtlasPageRealTest);
             if (Begin("atlasbrowse")) { result += "\r\n" + await AtlasBrowseTest(dir); End(); }
             if (Begin("atlashosts")) { result += "\r\n" + await AtlasHostsTest(dir); End(); }
             if (Begin("atlasclasses")) { result += "\r\n" + await AtlasClassesTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
+            if (Begin("idlecpu")) { result += "\r\n" + await IdleCpuTest(dir); End(); }
             result += "\r\n" + string.Join("\r\n", skipped);
-            result += "\r\n" + string.Join("\r\n", timings) + $"\r\ntotal: {Sec(total.Elapsed.TotalSeconds)} s";
+            result += "\r\n" + string.Join("\r\n", timings) + "\r\n" + SelfTestClock.Report() + $"\r\ntotal: {Sec(total.Elapsed.TotalSeconds)} s";
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);
             Quit();
         }
@@ -436,7 +457,7 @@ namespace ElansAddonHub
         {
             var notes = new System.Collections.Generic.List<string>();
             bool ok = true;
-            void Check(string what, bool cond) { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
+            void Check(string what, bool cond) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
             try
             {
                 Session.Disconnect(); // BaseUrl null: the read marks key on "local|channel"
@@ -491,24 +512,24 @@ namespace ElansAddonHub
                 Check("read when the list is at the bottom (nothing left unread in general)", !g.Unread && g.UnreadCount == 0);
                 m7.ForceTools = true;
                 gm.First(m => m.Id == "m5").Flash = false;
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(System.IO.Path.Combine(dir, "10-lodge-features.png"));
                 m7.ForceTools = false;
                 LodgePage.OpenPinsForTest();
-                await Task.Delay(500);
+                await ShotWait(500);
                 SnapshotElement(LodgePage.PinBoxForTest, System.IO.Path.Combine(dir, "10-pins.png"));
                 LodgePage.ClosePopupsForTest();
                 LodgePage.OpenReactForTest(m7);
-                await Task.Delay(400);
+                await ShotWait(400);
                 SnapshotElement(LodgePage.PickerForTest, System.IO.Path.Combine(dir, "10-picker.png"));
                 Check("picker offers the 8 icons", Session.ReactionSet.Length == 8 && Session.ReactionSet.All(i => ReactionArt.Icon(i) != null));
                 LodgePage.ClosePopupsForTest();
                 LodgePage.OpenMenuForTest(gm.First(m => m.Id == "m6"));
-                await Task.Delay(400);
+                await ShotWait(400);
                 SnapshotElement(LodgePage.MenuForTest, System.IO.Path.Combine(dir, "10-menu.png"));
                 LodgePage.ClosePopupsForTest();
                 LodgePage.ShowDropForTest(true);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(System.IO.Path.Combine(dir, "10-drop.png"));
                 LodgePage.HideDropForTest();
 
@@ -536,7 +557,7 @@ namespace ElansAddonHub
                 var m7b = Session.MessagesOf("general").First(m => m.Id == "m7");
                 Check("2.3 server: emoji pills stay text, picker has six", m7b.Reactions.Any(r => r.Emoji == oThumbs && r.Icon == null) && Session.ReactionSet.Length == 6);
                 LodgePage.OpenReactForTest(m7b);
-                await Task.Delay(400);
+                await ShotWait(400);
                 SnapshotElement(LodgePage.PickerForTest, System.IO.Path.Combine(dir, "10-picker-2.3.png"));
                 LodgePage.ClosePopupsForTest();
 
@@ -558,7 +579,7 @@ namespace ElansAddonHub
         {
             var notes = new System.Collections.Generic.List<string>();
             bool ok = true;
-            void Check(string what, bool cond) { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
+            void Check(string what, bool cond) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
             try
             {
                 var del = ThemedDialog.Create(DialogKind.Danger, "Delete message?", "Delete Verification A's message? This can't be undone.", "Delete", "Cancel");
@@ -571,7 +592,7 @@ namespace ElansAddonHub
                 var err = ThemedDialog.Create(DialogKind.Error, "Something went wrong", "Couldn't reach the lodge: the connection was closed.\n\nIt was written to the Outpost's log; the hub keeps running.", "OK", null);
                 err.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                 err.Show();
-                await Task.Delay(500);
+                await ShotWait(500);
                 SnapshotElement(err.RootForTest, System.IO.Path.Combine(dir, "11-dialog-error.png"));
                 err.Close();
                 var info = ThemedDialog.Create(DialogKind.Question, "Roll back?", "Put the previous version of Questie back?\n\nYour settings (WTF folder) are not touched.", "Roll back", "Cancel");
@@ -598,6 +619,8 @@ namespace ElansAddonHub
         void SnapshotElementCore(FrameworkElement el, string file)
         {
             el.UpdateLayout();
+            if (!SelfTestClock.ShotsOn) { SelfTestClock.ShotsSkipped++; return; }
+            var shotClock = System.Diagnostics.Stopwatch.StartNew();
             var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(el);
             var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(
                 Math.Max(1, (int)(el.ActualWidth * dpi.DpiScaleX)), Math.Max(1, (int)(el.ActualHeight * dpi.DpiScaleY)),
@@ -606,6 +629,7 @@ namespace ElansAddonHub
             var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
             enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
             using (var fs = System.IO.File.Create(file)) enc.Save(fs);
+            SelfTestClock.ShotsTaken++; SelfTestClock.ShotSeconds += shotClock.Elapsed.TotalSeconds;
         }
 
         // in-app picture viewer on synthetic local PNGs (no lodge connection)
@@ -660,9 +684,14 @@ namespace ElansAddonHub
             catch (Exception e) { return "viewer selftest crashed: " + e; }
         }
 
+        // the wait that lets a window settle for a design picture: only when pictures are taken (ELANSHUB_SHOTS=1 / -Full), otherwise nothing reads them
+        static Task ShotWait(int ms) => SelfTestClock.ShotsOn ? Task.Delay(ms) : Task.CompletedTask;
+
         void Snapshot(string file)
         {
             UpdateLayout();
+            if (!SelfTestClock.ShotsOn) { SelfTestClock.ShotsSkipped++; return; }   // design pictures only: nothing reads them back
+            var shotClock = System.Diagnostics.Stopwatch.StartNew();
             var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
             var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(
                 (int)(ActualWidth * dpi.DpiScaleX), (int)(ActualHeight * dpi.DpiScaleY),
@@ -671,6 +700,7 @@ namespace ElansAddonHub
             var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
             enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
             using (var fs = System.IO.File.Create(file)) enc.Save(fs);
+            SelfTestClock.ShotsTaken++; SelfTestClock.ShotSeconds += shotClock.Elapsed.TotalSeconds;
         }
 
         // --test-selfupdate: check, then update to the manifest's hub version like the banner button (for testing)

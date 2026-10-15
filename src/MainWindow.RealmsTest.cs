@@ -28,7 +28,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             var sent = new List<Dictionary<string, object>>();
             var hadOff = settings.RealmStatusOff; var hadBack = settings.RealmsBackNotice; var hadToastsOff = settings.ToastsOff;
             var hadClock = Session.Clock;
@@ -71,14 +71,14 @@ namespace ElansAddonHub
                 now = now.AddHours(3);
                 Check("tooltip: hours later it says so", RealmChipsForTest[0].Tip.Contains("Checked 3 h ago"), RealmChipsForTest[0].Tip);
                 now = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(Path.Combine(dir, "realms-topbar.png"));
 
                 // ---- a change
                 Session.FeedForTest(RealmsFrame(unix(now), RealmJ(1, "WoW Forever", "Normal", "DOWN", "Full", false), RealmJ(2, "Forever PvP", "PvP", "UP"), RealmJ(3, "Forever RP", "RP", "UP"), RealmJ(4, "Forever Hardcore", "Hardcore", "UP")));
                 chips = RealmChipsForTest;
                 Check("change: the first dot turned red and the others green", chips.Select(c => c.Status).SequenceEqual(new[] { "DOWN", "UP", "UP", "UP" }), string.Join(",", chips.Select(c => c.Status)));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(Path.Combine(dir, "realms-topbar-down.png"));
 
                 // ---- the same ruleset twice: the names tell them apart

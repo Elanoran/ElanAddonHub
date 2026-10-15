@@ -138,7 +138,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             var savedSpell = SpellData.CacheFile; var savedAuto = SpellData.AutoStart; var savedLink = ProfessionLinks.Last;
             ProfessionLinks.OpenRequested -= OnProfessionLink;   // the app opens links in the Atlas; this section checks the event itself
             try

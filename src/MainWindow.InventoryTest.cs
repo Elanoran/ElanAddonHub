@@ -98,7 +98,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             try
             {
@@ -121,7 +121,7 @@ namespace ElansAddonHub
                 File.WriteAllText(file, BagsLua(3), new UTF8Encoding(false));
                 for (int i = 0; i < 30 && InventoryView.CharCountForTest != 2; i++) await Task.Delay(200);
                 Check("page re-reads when the file appears (2 visible characters, hidden one left out)", InventoryView.CharCountForTest == 2);
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("17-inventory.png"));
 
                 // ---- the in-game look: one character, Bags / Bank / Guild bank tabs
@@ -135,7 +135,7 @@ namespace ElansAddonHub
                 // the fake WoW folder has no game data: icons cannot be read, the page says so and shows coloured tiles
                 for (int i = 0; i < 40 && InventoryView.IconNoteForTest == null; i++) await Task.Delay(100);
                 Check("no icons available: placeholders for every item + a note", InventoryView.SlotsWithImageForTest == 0 && InventoryView.SlotsPlaceholderForTest == 6 && (InventoryView.IconNoteForTest ?? "").Contains("not available"));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("17-inventory-bags-placeholders.png"));
                 // icons that are already cached on disk are used at once
                 Directory.CreateDirectory(IconStore.Dir);
@@ -143,18 +143,18 @@ namespace ElansAddonHub
                 IconStore.ForgetMemory();
                 InventoryView.RefreshIconsForTest();
                 Check("cached icons show as images (all 6; the slot saved without an icon id takes it from the summed list)", InventoryView.SlotsWithImageForTest == 6 && InventoryView.SlotsPlaceholderForTest == 0, InventoryView.SlotsWithImageForTest + "/" + InventoryView.SlotsPlaceholderForTest);
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("17-inventory-bags.png"));
                 InventoryView.SelectTabForTest("bank");
                 panels = InventoryView.PanelsForTest();
                 Check("bank tab: main bank 2 of 28 + Rare Satchel 1 of 8", panels.SequenceEqual(new[] { "Bank|2|28", "Rare Satchel|1|8" }), string.Join(",", panels));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("17-inventory-bank.png"));
                 Check("guild bank tab appears for a character whose guild bank was saved", InventoryView.GuildTabVisibleForTest);
                 InventoryView.SelectTabForTest("guild");
                 panels = InventoryView.PanelsForTest();
                 Check("guild tab: Consumables, 2 of 98", panels.SequenceEqual(new[] { "Consumables|2|98" }));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("17-inventory-guild.png"));
                 var gtabs = InventoryView.GuildTabsForTest();
                 Check("guild tab strip: 3 tabs with names (2 seen, the third only known by name and icon)", gtabs.Count == 3 && gtabs[0].StartsWith("1|Consumables|seen|") && gtabs[1].StartsWith("2|Mats|seen|") && gtabs[2].StartsWith("3|Officers|unseen|"), string.Join(" ; ", gtabs));
@@ -163,11 +163,11 @@ namespace ElansAddonHub
                 InventoryView.SelectGuildTabForTest(2);
                 panels = InventoryView.PanelsForTest();
                 Check("guild tab 2 'Mats': 2 of 98, 14 columns like the game (7 rows)", panels.SequenceEqual(new[] { "Mats|2|98" }) && InventoryView.SlotsDrawnForTest == 98);
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("17-inventory-g-guild-tab2.png"));
                 InventoryView.SelectGuildTabForTest(3);
                 Check("a tab never looked at says so", (InventoryView.BagsMessageForTest ?? "").Contains("not looked at") || (InventoryView.BagsMessageForTest ?? "").Contains("have not looked at"), InventoryView.BagsMessageForTest);
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("17-inventory-g-guild-unseen.png"));
                 InventoryView.SelectGuildTabForTest(1);
                 // a character saved by the older addon: one pile, bank never seen, no guild tab
@@ -175,7 +175,7 @@ namespace ElansAddonHub
                 Check("old data: guild tab hidden, falls back to the Bags tab", !InventoryView.GuildTabVisibleForTest);
                 panels = InventoryView.PanelsForTest();
                 Check("old data without layout: shown as one pile with a note to update", panels.Count == 1 && panels[0].StartsWith("Items|2|") && (InventoryView.IconNoteForTest ?? "").Contains("0.2.0"));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("17-inventory-oldaddon.png"));
                 InventoryView.SelectTabForTest("bank");
                 Check("bank never opened: says so", (InventoryView.BagsMessageForTest ?? "").Contains("has not been opened"));
@@ -218,7 +218,7 @@ namespace ElansAddonHub
                 InventoryView.Reload();
                 crow = InventoryView.CharRowsForTest();
                 Check("cached portrait icons are on the rows at once", crow.Count == 2 && crow.All(x => x.Split('|')[4] == "True"), string.Join(" ; ", crow));
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("17-inventory-characters.png"));
                 foreach (var ic in new[] { 236452, 236457 }) { try { File.Delete(IconStore.PathFor(ic)); } catch { } }
                 IconStore.ForgetMemory();
@@ -256,10 +256,10 @@ namespace ElansAddonHub
                     InventoryView.SelectTabForTest("bags");
                     for (int i = 0; i < 80 && InventoryView.SlotsWithImageForTest < 6; i++) await Task.Delay(250);
                     Check("real icons: extracted from the local game data and cached as PNG", InventoryView.SlotsWithImageForTest == 6 && File.Exists(IconStore.PathFor(134400)) && IconStore.Problem == null, InventoryView.SlotsWithImageForTest + " " + IconStore.Problem);
-                    await Task.Delay(300);
+                    await ShotWait(300);
                     Snapshot(P("17-inventory-realicons.png"));
                     InventoryView.SelectTabForTest("bank");
-                    await Task.Delay(1200);
+                    await ShotWait(1200);
                     Snapshot(P("17-inventory-realicons-bank.png"));
                     Check("real icons: second read comes from the disk cache", IconStore.TryGet(134400) != null);
                     InventoryView.SelectTabForTest("bags");
@@ -286,7 +286,7 @@ namespace ElansAddonHub
                 InventoryView.SetSearchForTest("banner");
                 r = InventoryView.ResultTextsForTest();
                 Check("search finds guild bank items, labelled with guild and tab", r.Count == 1 && r[0].Contains("Guild Banner") && r[0].Contains("Guild: Test Guild - Tab 2") && r[0].Contains("guild bank 1"), string.Join(" | ", r));
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("17-inventory-g-search-guild.png"));
                 InventoryView.SetSearchForTest("cloak");
                 r = InventoryView.ResultTextsForTest();
@@ -298,7 +298,7 @@ namespace ElansAddonHub
                 Check("a character's search results are limited to it", InventoryView.ResultCountForTest == 3);
                 InventoryView.FilterForTest(null);
                 InventoryView.SetSearchForTest("linen");
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("17-inventory-search.png"));
 
                 // the file changes while the page is open (WoW writes on /reload): the numbers follow
@@ -341,13 +341,13 @@ namespace ElansAddonHub
                 Check("tooltip counts include bank bags (main bank 2 + herb pouch 6 = 8) and the reagent bag (2 + 3 = 5)", tsp.SequenceEqual(new[] { "This: Elan Bags 5 · Bank 8 · Total 13" }), string.Join(" | ", tsp));
                 Check("empty special slots are tinted + have a tooltip (4 quiver + 6 reagent)", InventoryView.SpecialEmptySlotsForTest == 10, InventoryView.SpecialEmptySlotsForTest.ToString());
                 Check("footer info: general space apart, specials after", InventoryView.ViewInfoForTest.StartsWith("12 free of 16 slots · Quiver 4 free · Reagents 6 free"), InventoryView.ViewInfoForTest);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("19-inventory-special-bags.png"));
                 InventoryView.SelectTabForTest("bank");
                 panels = InventoryView.PanelsForTest();
                 Check("bank (0.3.0 numbering 6-12): main bank, satchel, herb pouch", panels.SequenceEqual(new[] { "Bank|2|28", "Rare Satchel|1|8", "Herb Pouch|1|10" }), string.Join(",", panels));
                 Check("bank: only the herb pouch is special ('Herbs only'); no reagent bag in the bank", InventoryView.ChipsForTest().SequenceEqual(new[] { "Herb Pouch|Herbs only" }), string.Join(",", InventoryView.ChipsForTest()));
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("19-inventory-special-bank.png"));
                 var parsedSp = InventoryReader.ParseText(BagsLua(3, true)).First(c => c.Name == "Elan");
                 Check("parser: family 32 -> herb bag kind, reagent bag by index 5, plain bags none", parsedSp.BankCont.First(b => b.BagId == 7).Special?.Key == "herbs" && parsedSp.BagsCont.First(b => b.BagId == 5).Special?.Key == "reagent" && parsedSp.BagsCont.First(b => b.BagId == 0).Special == null);
@@ -385,7 +385,7 @@ namespace ElansAddonHub
                 Check("card offers Install", bagsCard != null && bagsCard.ButtonEnabled && bagsCard.State == CardState.NotInstalled);
                 if (bagsCard != null) bagsCard.Expanded = true;
                 ShowTab("addons");
-                await Task.Delay(500);
+                await ShotWait(500);
                 Snapshot(P("18-card-bags.png"));
                 if (bagsCard != null) bagsCard.Expanded = false;
                 cards.Clear();

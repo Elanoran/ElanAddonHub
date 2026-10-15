@@ -540,12 +540,12 @@ namespace ElansAddonHub
             ShowTab("addons");
             await Task.Delay(300);
             AddonsPage.ScrollToEnd();
-            await Task.Delay(500);
+            await ShotWait(500);
             Snapshot(Path.Combine(dir, "9-addons.png"));
             AddonsPage.ScrollToVerticalOffset(AddonsPage.VerticalOffset - 300);
             await Task.Delay(300);
             AddonsPage.ScrollToVerticalOffset(AddonsPage.VerticalOffset - 470);
-            await Task.Delay(400);
+            await ShotWait(400);
             Snapshot(Path.Combine(dir, "10-suggest.png"));
             return sb.ToString();
         }

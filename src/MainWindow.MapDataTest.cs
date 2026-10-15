@@ -215,7 +215,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             var work = Path.Combine(dir, "mapdata");
             var savedCache = MapData.CacheFile; var savedRoot = MapData.WowRoot; var savedEnabled = MapData.Enabled; var savedDir = MapRender.DirOverride; var savedTiles = MapRender.TileSourceForTest;
@@ -510,7 +510,7 @@ namespace ElansAddonHub
 
                 // ---- the control + the real game files
                 await MapControlChecks(dir, work, idx, Check, notes, P);
-                await RealMapChecks(dir, work, Check, notes, P);
+                // the real game files run in their own section: "mapdatareal" (MainWindow.MapDataTest.Real.cs)
             }
             catch (Exception ex) { ok = false; notes.Add("FAIL exception: " + ex); }
             finally

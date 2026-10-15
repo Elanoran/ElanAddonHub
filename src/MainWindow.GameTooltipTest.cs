@@ -68,7 +68,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             try
             {
@@ -104,7 +104,7 @@ namespace ElansAddonHub
                 var coins = price.Children.OfType<Ellipse>().Select(e => ((SolidColorBrush)e.Fill).Color.ToString()).ToList();
                 Check("price: 'Sell Price:' with 1g 23s 45c as three coin glyphs (gold, silver, copper)", coins.Count == 3 && coins[0] == "#FFFFD100" && coins[1] == "#FFC0C7D0" && coins[2] == "#FFC8764A");
                 Check("no app accent inside: every colour of the tooltip is one of the game's tokens", wc.All(x => new[] { "#FFFFFFFF", "#FFFFD100", "#FF1EFF00", "#FFA335EE", "#FF9D9D9D", "#FFFF2020" }.Contains(x.Value)), string.Join(",", wc.Select(x => x.Value).Distinct()));
-                await Task.Delay(100);
+                await ShotWait(100);
                 SnapshotSheet(Gt(weapon), P("gt-weapon.png"));
 
                 // ---- armor with a set

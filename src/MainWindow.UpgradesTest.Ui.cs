@@ -68,7 +68,7 @@ namespace ElansAddonHub
                     && lines.IndexOf(lines.First(l => l.StartsWith("up|1|105|"))) < lines.IndexOf(lines.First(l => l.StartsWith("up|1|101|"))), string.Join(" ; ", lines.Where(l => l.StartsWith("up|1|"))));
                 Check("panel: an empty slot says 'new' and 'empty slot' with the item's stats; a craft says who can make it", lines.Contains("up|5|111|Studded Leather Vest|new|+8 Agility, +5 Stamina, +40 armor (empty slot)|Crafted · Leatherworking 110 · You can make it"), string.Join(" ; ", lines.Where(l => l.StartsWith("up|5|"))));
                 Check("filters: dungeons on, raids off, Classic baseline on, only tradeable off, coming soon off - as the defaults say", InventoryView.UpgradeSwitchForTest("dungeons") && !InventoryView.UpgradeSwitchForTest("raids") && InventoryView.UpgradeSwitchForTest("classic") && !InventoryView.UpgradeSwitchForTest("tradeable") && !InventoryView.UpgradeSwitchForTest("soon"));
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(Shot("gear-window"));
                 SnapshotSheet(InventoryView.UpgradeCardForTest, Shot("panel"));
 
@@ -104,7 +104,7 @@ try                {                    var tgt = InventoryView.UpgradeTipContro
                     string.Join(" ; ", lines.Where(l => l.StartsWith("upfood")).Take(4)));
                 var ftip = InventoryView.UpgradeExtraTipForTest("f:Well fed:301");
                 Check("food tooltip: the item as the game shows it, how the Cooking recipe is learned (a recipe item), the reagents with what I own, where to get it", ftip.Contains("Spiced Wolf Ribs") && ftip.Contains("Taught by Recipe: Spiced Wolf Ribs") && ftip.Contains("Linen Cloth x2 (you have 6)") && ftip.Contains("Where to get it"), string.Join(" | ", ftip));
-                await Task.Delay(200);
+                await ShotWait(200);
                 SnapshotSheet(InventoryView.UpgradeCardForTest, Shot("panel-enchants-food"));
                 InventoryView.UpgradeClickSwitchForTest("applicable"); await Task.Delay(100);
                 lines = InventoryView.UpgradeLinesForTest();
@@ -150,7 +150,7 @@ try                {                    var tgt = InventoryView.UpgradeTipContro
                 InventoryView.UpgradeClickSwitchForTest("soon"); await Task.Delay(100);
                 lines = InventoryView.UpgradeLinesForTest();
                 Check("filter: coming soon lists the Cap of the Coming Day (level 32) apart under 'Coming soon', marked 'at level 32'; saved as L3", lines.Contains("upslot|1|Head|Frayed Cap|2|1") && lines.Any(l => l.StartsWith("up|1|107|Cap of the Coming Day|") && l.EndsWith("|soon")) && stored == "D1R0C1T0L3N1A0F1", stored);
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(Shot("filters-soon"));
                 InventoryView.UpgradeClickSwitchForTest("soon");
                 Check("filter: the choices were remembered in the settings text and the page default is back after switching everything again", stored == "D1R0C1T0L0N1A0F1", stored);
@@ -159,7 +159,7 @@ try                {                    var tgt = InventoryView.UpgradeTipContro
                 InventoryView.UpgradeClickSlotForTest(11); await Task.Delay(100);
                 lines = InventoryView.UpgradeLinesForTest();
                 Check("slot click: clicking Ring 1 on the paper doll highlights that slot's upgrades (accent border on its block and on the doll tile) and brings them into view", InventoryView.UpgradeFocusForTest == 11 && lines.Contains("upslot|11|Ring 1|Copper Band|2|0|focus") && lines.Contains("focus|11") && InventoryView.UpgradeDollEdgeForTest(11) && !InventoryView.UpgradeDollEdgeForTest(1), string.Join(" ; ", lines.Where(l => l.StartsWith("upslot|11") || l.StartsWith("focus"))));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(Shot("slot-click"));
                 InventoryView.UpgradeClickSlotForTest(10); await Task.Delay(100);
                 lines = InventoryView.UpgradeLinesForTest();
@@ -170,7 +170,7 @@ try                {                    var tgt = InventoryView.UpgradeTipContro
                 // ---- the weights editor
                 InventoryView.UpgradeToggleWeightsForTest();
                 Check("weights: the editor opens with the weights of Aela's build (Hunter, Marksmanship): Agility 1, Critical strike 1.4, Ranged weapon DPS 14", InventoryView.UpgradeWeightsOpenForTest && InventoryView.UpgradeWeightForTest("agi") == "1" && InventoryView.UpgradeWeightForTest("crit") == "1.4" && InventoryView.UpgradeWeightForTest("rdps") == "14", InventoryView.UpgradeWeightForTest("crit"));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(Shot("weights"));
                 InventoryView.UpgradeSetWeightForTest("sta", "5");
                 InventoryView.UpgradeApplyWeightsForTest();
@@ -220,7 +220,7 @@ try                {                    var tgt = InventoryView.UpgradeTipContro
                 lines = InventoryView.UpgradeLinesForTest();
                 Check("missing data: gear the Hub saved 20 days ago says so - 'Your Elan's Hub data for Aela is 20 days old (older than 7 days): log in with this character ...'", lines.Any(l => l.StartsWith("upnote|data|Your Elan's Hub data for Aela is 20 days old (older than 7 days)")), string.Join(" ; ", lines.Where(l => l.StartsWith("upnote"))));
                 await Ready();
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(Shot("notes"));
 
                 // ---- the narrow window: the card follows the page, nothing runs off

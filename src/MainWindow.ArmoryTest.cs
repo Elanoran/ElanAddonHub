@@ -42,7 +42,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             var root = Path.Combine(dir, "armorywow");
@@ -256,7 +256,7 @@ namespace ElansAddonHub
                 SettingsPage.ArmoryTickForTest("Elan", true);
                 Check("settings: ticking Elan is saved and uploads Elan", settings.ArmoryChars != null && settings.ArmoryChars.Contains("Forever-Elan") && AryFrames(sent, "armory.put").Count >= 1 && (SettingsPage.ArmoryNoteForTest ?? "").StartsWith("1 character is shared"), SettingsPage.ArmoryNoteForTest);
                 SettingsPage.ArmoryScrollForTest();
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("armory-settings.png"));
                 SettingsPage.ArmorySwitchForTest(false);
                 Check("settings: switching off hides the list and asks the Lodge to delete everything", !settings.ArmoryShareOn && !SettingsPage.ArmoryPanelVisibleForTest && AryFrames(sent, "armory.delete").Any(d => d.Bool("all")));
@@ -321,7 +321,7 @@ namespace ElansAddonHub
                 Check("filter by profession (who has Alchemy): the highest skill first, and the second line shows the skill instead of the member", alch.Count == 2 && alch[0].StartsWith("Zorn|Lv 60 Priest · Alchemy 300|") && alch[1].StartsWith("Bina|Lv 25 Mage · Alchemy 40|"), string.Join(";", alch));
                 InventoryView.ArmoryFilterForTest("class", "Priest");
                 Check("filters combine (Alchemy + Priest)", InventoryView.ArmoryRowsForTest().Select(r => r.Split('|')[0]).SequenceEqual(new[] { "Zorn" }));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("armory-list-filtered.png"));
                 InventoryView.ArmoryFilterForTest("class", null); InventoryView.ArmoryFilterForTest("profession", null);
                 InventoryView.ArmorySearchForTest("bob");
@@ -343,7 +343,7 @@ namespace ElansAddonHub
                 Check("overview: NO gold, experience, zone, bag space or bank", !ov.Any(l => l.StartsWith("gold|") || l.StartsWith("xp|") || l.StartsWith("stat|Bag space") || l.StartsWith("stat|Bank") || l.Contains("Orgrimmar")) && ov.Contains("where|Forever · Horde|Test Guild|"), string.Join(" | ", ov));
                 Check("overview: item level 58.5, talents and professions summary", ov.Contains("stat|Item level|58.5") && ov.Contains("stat|Talents|35 spent · 2 unspent") && ov.Contains("stat|Professions|Mining, Herbalism, Cooking"), string.Join(" | ", ov));
                 Check("overview: the age line says who shared it", InventoryView.ViewInfoForTest.StartsWith("Updated ") && InventoryView.ViewInfoForTest.EndsWith("shared by Mia the Bold"), InventoryView.ViewInfoForTest);
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("armory-overview.png"));
 
                 InventoryView.ArmoryTabForTest("gear");
@@ -356,7 +356,7 @@ namespace ElansAddonHub
                 Check("gear: same doll layout as my own characters (19 slots, left / right columns, weapons along the bottom)", dl.Count == 19 && dl.Contains("1|L|0") && dl.Contains("10|R|0") && dl.Contains("16|B|8"), string.Join(" ", dl));
                 var tipOk = InventoryView.DollTipForTest(15);
                 Check("gear hover: item name, slot and item level - and none of MY counts ('Other characters', 'All together')", tipOk.Count >= 3 && tipOk[0] == "White Cloak" && tipOk[1] == "Back · Item level 10" && !tipOk.Any(t => t == "Other characters" || t == "Characters" || t == "All together"), string.Join(" | ", tipOk));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("armory-gear.png"));
                 Check("gear: Ctrl+click on a worn item opens it in the Atlas (the same hook as my own gear)", InventoryView.AtlasClickForTest(15));
 
@@ -370,7 +370,7 @@ namespace ElansAddonHub
                 await Task.Delay(200);
                 InventoryView.ArmoryRefreshForTest();
                 Check("talents: a shared build code is shown with a Copy button", InventoryView.CharTabLinesForTest().Contains("build|ETB1-AbCdEf123456"), string.Join(" | ", InventoryView.CharTabLinesForTest()));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("armory-talents.png"));
 
                 InventoryView.ArmoryTabForTest("professions");
@@ -378,7 +378,7 @@ namespace ElansAddonHub
                 var pl = InventoryView.CharTabLinesForTest();
                 Check("professions: Mining 225 / 300, Herbalism 300 / 300, Cooking 75 / 150 (secondary)", pl.Where(x => x.StartsWith("prof|")).SequenceEqual(new[] { "prof|Mining|225|300|primary", "prof|Herbalism|300|300|primary", "prof|Cooking|75|150|secondary" }), string.Join(" | ", pl));
                 Check("professions: the page says plainly that learned recipes are not recorded (so no 'who can make X'), and shows no recipe list of its own", pl.Contains("profnote|recipes unknown") && !pl.Any(x => x.StartsWith("recipes|")));
-                await Task.Delay(200);
+                await ShotWait(200);
                 Snapshot(P("armory-professions.png"));
 
                 InventoryView.ArmoryTabForTest("pet");

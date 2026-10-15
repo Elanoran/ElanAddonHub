@@ -13,7 +13,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond) { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
+            void Check(string what, bool cond) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
             var s = settings;
             bool o1 = s.ToastsOff, o2 = s.ToastReactions, o3 = s.ToastPins, o4 = s.ToastMentionsOff; var corner = s.ToastCorner;
             try
