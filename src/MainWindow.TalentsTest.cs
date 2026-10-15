@@ -369,6 +369,29 @@ EHH.DefaultBuild = ""pack""
                 page.Click(10, false);
                 for (int i = 0; i < 3; i++) page.Click(12, false);
                 Check("page: Gamma opens once Alpha is full; its rank text 3/3", page.NodeRankTextForTest(12) == "3/3");
+                {
+                    // the shared renderer (TalentTreePanel): headers, arrows, art, the game's grid
+                    UpdateLayout();
+                    var ps = page.PanelsForTest;
+                    TalentArrowModel Arrow(int from, int to) => ps.SelectMany(p => p.Model.Arrows).FirstOrDefault(a => a.From == from && a.To == to);
+                    Check("renderer: one panel per tree, headers 'Beast Mastery 8 / 51', 'Marksmanship 0 / 51', 'Survival 0 / 51' (spent / the class' 51 points)",
+                        ps.Count == 3 && ps.Select(p => p.Model.HeaderText).SequenceEqual(new[] { "Beast Mastery 8 / 51", "Marksmanship 0 / 51", "Survival 0 / 51" }) && ps[0].PointsBlock.Text == "8 / 51" && ps[0].TitleText.Text == "Beast Mastery",
+                        string.Join(", ", ps.Select(p => p.Model.HeaderText)));
+                    Check("renderer: an arrow for each prerequisite pair (Alpha > Beta across, Gamma > Delta down, Epsilon > Eta down; the left-out duplicate's edge is gone)",
+                        Arrow(10, 11) != null && Arrow(12, 13) != null && Arrow(14, 15) != null && ps.Sum(p => p.Model.Arrows.Count) == 3 && ps[2].Model.Arrows.Count == 0);
+                    Check("renderer: arrows light up as their prerequisite fills (Alpha 5/5 and Gamma 3/3: lit; Epsilon 0/1: dim)", Arrow(10, 11).Lit && Arrow(12, 13).Lit && !Arrow(14, 15).Lit);
+                    page.Click(14, false);
+                    Check("renderer: spending Epsilon's point lights its arrow and the Marksmanship header shows it", Arrow(14, 15).Lit && ps[1].Model.HeaderText == "Marksmanship 1 / 51", ps[1].Model.HeaderText);
+                    page.Click(14, true);
+                    Check("renderer: giving it back dims the arrow again", !Arrow(14, 15).Lit);
+                    var h = Arrow(10, 11); var hp = ps[0].Grid.ArrowPoints(h); var v = ps[0].Grid.ArrowPoints(Arrow(12, 13));
+                    Check("renderer: the arrow across a row is level (same y) and the one down a column is upright (same x), each from the edge of one icon to the next",
+                        hp != null && v != null && Math.Abs(hp[0].Y - hp[hp.Count - 1].Y) < 0.01 && hp[0].X < hp[hp.Count - 1].X && Math.Abs(v[0].X - v[v.Count - 1].X) < 0.01 && v[0].Y < v[v.Count - 1].Y
+                        && v[0].Y >= ps[0].Grid.NodeRect(12).Bottom && v[v.Count - 1].Y <= ps[0].Grid.NodeRect(13).Top);
+                    Check("renderer: the hunter's spec art behind its three planner trees (the Characters treatment)", ps.All(p => p.Painted) && page.InfoForTest.Contains("treeart|0|talent-hunter-bm.jpg"));
+                    Check("renderer: the row gates sit in the gutter (lock until open): Gamma's row open, Eta's row closed", ps[0].GateOpen(1) && !ps[1].GateOpen(1) && page.GateCountForTest >= 2);
+                    Check("renderer: every talent on its cell of the game's grid, evenly spread", GridMatches(ps, set.ForClassFile("HUNTER"), out var gwhy), gwhy);
+                }
                 page.Click(10, true);
                 Check("page: the refund that would close Gamma is refused with a reason ('Other talents depend on this point')", page.StatusForTest == "Other talents depend on this point" || page.SessionForTest.State.Rank(10) == 4, page.StatusForTest);
                 page.Click(12, true); page.Click(12, true); page.Click(12, true);
@@ -491,7 +514,7 @@ EHH.DefaultBuild = ""pack""
             for (int i = 0; i < a.Trees.Count; i++)
             {
                 var x = a.Trees[i]; var y = b.Trees[i];
-                if (x.Id != y.Id || x.ClassId != y.ClassId || x.ClassFile != y.ClassFile || x.CurrencyId != y.CurrencyId || x.MaxPoints != y.MaxPoints || !x.SpecNames.SequenceEqual(y.SpecNames)) return false;
+                if (x.Id != y.Id || x.ClassId != y.ClassId || x.ClassFile != y.ClassFile || x.CurrencyId != y.CurrencyId || x.MaxPoints != y.MaxPoints || !x.SpecNames.SequenceEqual(y.SpecNames) || !x.SpecIcons.SequenceEqual(y.SpecIcons) || x.SpecIcons.Length != x.SpecNames.Length) return false;
                 if (x.Nodes.Count != y.Nodes.Count || x.Edges.Count != y.Edges.Count || x.Groups.Count != y.Groups.Count || x.Sources.Count != y.Sources.Count || x.Aliases.Count != y.Aliases.Count) return false;
                 for (int k = 0; k < x.Nodes.Count; k++)
                 {

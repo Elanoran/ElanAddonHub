@@ -567,18 +567,22 @@ namespace ElansAddonHub
             var rank = n.M > 0 ? n.R + "/" + n.M : n.R.ToString(CultureInfo.InvariantCulture);
             foreach (var p in Outlined(rank)) g.Children.Add(p);
             bd.Child = g;
+            bd.ToolTip = GameTooltip.Wrap(TalentTip(n));
+            ToolTipService.SetInitialShowDelay(bd, 150);
+            return bd;
+        }
+
+        // a character's talent in a game tooltip: name, rank, the spell's text (the trees' tooltips and the talents listed apart)
+        GameTooltip TalentTip(HubTalentNode n)
+        {
+            if (n == null) return null;
+            var rank = n.M > 0 ? n.R + "/" + n.M : n.R.ToString(CultureInfo.InvariantCulture);
             var spell = n.S > 0 ? ElansAddonHub.Services.Db2.SpellData.Spell(n.S) : null;
             var tip = new GameTooltip(string.IsNullOrEmpty(n.N) ? "Talent " + n.Id : n.N, 1, spell != null && !string.IsNullOrEmpty(spell.Rank) ? spell.Rank : null);
             tip.AddText("Rank " + rank.Replace("/", " of "));
-            if (spell != null)
-            {
-                tip.AddSpell(spell, false);
-                charTabInfo.Add("talentspell|" + n.S + "|" + spell.Name);
-            }
+            if (spell != null) tip.AddSpell(spell, false);
             if (n.S > 0) tip.Footer.Children.Add(GameTooltip.Muted("Spell ID " + n.S));
-            bd.ToolTip = GameTooltip.Wrap(tip);
-            ToolTipService.SetInitialShowDelay(bd, 150);
-            return bd;
+            return tip;
         }
 
         // ---- self-test hooks

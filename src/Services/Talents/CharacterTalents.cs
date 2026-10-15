@@ -16,6 +16,21 @@ namespace ElansAddonHub.Services.Talents
             public bool Valid;                    // the layout follows the rules (a character in the middle of a respec may not)
             public int Level, LegacyRanks;
             public int Points => Placed;
+            public List<HubTalentNode> UnplacedNodes = new List<HubTalentNode>();     // talents with ranks this class' trees do not have
+        }
+
+        // the tree's node for a talent of the Hub's list: by its id (a duplicate that was left out counts as the node that stays), else by spell id, else by name
+        public static TalentNode Find(TalentTreeDef tree, HubTalentNode hn, ref Dictionary<string, TalentNode> byName, Func<TalentNode, string> nameOf)
+        {
+            if (tree == null || hn == null) return null;
+            var node = tree.Node(tree.Resolve(hn.Id));
+            if (node == null && hn.S > 0) node = tree.Nodes.FirstOrDefault(n => n.SpellId == hn.S);
+            if (node == null && !string.IsNullOrEmpty(hn.N))
+            {
+                if (byName == null) byName = BuildsRecommended.NameIndex(tree, nameOf ?? (n => null));
+                byName.TryGetValue(BuildsRecommended.Key(hn.N), out node);
+            }
+            return node;
         }
 
         // a node is found by its id (a duplicate that was left out counts as the node that stays), else by spell id, else by name
@@ -27,14 +42,8 @@ namespace ElansAddonHub.Services.Talents
             foreach (var hn in mod.Nodes)
             {
                 if (hn.R <= 0) continue;
-                var node = tree.Node(tree.Resolve(hn.Id));
-                if (node == null && hn.S > 0) node = tree.Nodes.FirstOrDefault(n => n.SpellId == hn.S);
-                if (node == null && !string.IsNullOrEmpty(hn.N))
-                {
-                    if (byName == null) byName = BuildsRecommended.NameIndex(tree, nameOf ?? (n => null));
-                    byName.TryGetValue(BuildsRecommended.Key(hn.N), out node);
-                }
-                if (node == null) { res.Unplaced += hn.R; continue; }
+                var node = Find(tree, hn, ref byName, nameOf);
+                if (node == null) { res.Unplaced += hn.R; res.UnplacedNodes.Add(hn); continue; }
                 int rank = Math.Min(hn.R, node.MaxRanks);
                 res.State.Set(node.Id, Math.Max(res.State.Rank(node.Id), rank));
                 res.Placed += rank; res.Unplaced += hn.R - rank;

@@ -58,6 +58,7 @@ namespace ElansAddonHub.Services.Talents
         public string ClassName = "", ClassFile = "";
         public int ClassIconId;
         public string[] SpecNames = new string[0];
+        public int[] SpecIcons = new int[0];                                     // the icon of each tree's class skill line (SkillLine.SpellIconFileID), 0 = none
         public List<TalentNode> Nodes = new List<TalentNode>();
         public List<TalentEdge> Edges = new List<TalentEdge>();
         public Dictionary<int, int[]> Groups = new Dictionary<int, int[]>();      // group id -> node ids

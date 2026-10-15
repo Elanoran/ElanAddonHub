@@ -492,6 +492,7 @@ namespace ElansAddonHub.Services
     {
         public List<TalentTree> Trees = new List<TalentTree>();
         public List<HubTalentNode> Loose = new List<HubTalentNode>();       // no usable position
+        public List<HubTalentNode> Copies = new List<HubTalentNode>();      // a second node of a talent already in the tree (left out)
     }
 
     public static class TalentGrid
@@ -503,16 +504,30 @@ namespace ElansAddonHub.Services
         {
             var res = new TalentLayout();
             var good = new List<HubTalentNode>();
+            // the game's own positions have a few with an extra digit (102800 for 10280, 39300 for 3930): divided back like the talent data does
+            // (TalentNormalise.Divide), so those talents land on their real cell instead of "nowhere"
+            var px = new Dictionary<HubTalentNode, double>(); var py = new Dictionary<HubTalentNode, double>();
+            var repaired = new HashSet<HubTalentNode>();
             foreach (var n in nodes ?? Enumerable.Empty<HubTalentNode>())
             {
                 if (n == null) continue;
-                if (!n.HasPos || double.IsNaN(n.X) || double.IsNaN(n.Y) || Math.Abs(n.X) > MaxCoord || Math.Abs(n.Y) > MaxCoord) res.Loose.Add(n);
-                else good.Add(n);
+                double x = n.HasPos ? Talents.TalentNormalise.Divide(n.X) : double.NaN, y = n.HasPos ? Talents.TalentNormalise.Divide(n.Y) : double.NaN;
+                if (!n.HasPos || double.IsNaN(x) || double.IsNaN(y) || Math.Abs(x) > MaxCoord || Math.Abs(y) > MaxCoord) { res.Loose.Add(n); continue; }
+                px[n] = x; py[n] = y;
+                if (x != n.X || y != n.Y) repaired.Add(n);
+                good.Add(n);
+            }
+            // the same talent (spell) twice: the game keeps a hidden copy of a few (Lightning Reflexes 104982 next to 110859). One stays: the one with
+            // ranks, else the one whose position needed no repair, else the lower id; the copy is left out (res.Copies), never shown as a talent of its own
+            foreach (var g in good.Where(n => n.S > 0).GroupBy(n => n.S).Where(g => g.Count() > 1).ToList())
+            {
+                var keep = g.OrderByDescending(n => n.R).ThenBy(n => repaired.Contains(n) ? 1 : 0).ThenBy(n => n.Id).First();
+                foreach (var n in g.Where(n => n != keep)) { good.Remove(n); res.Copies.Add(n); }
             }
             if (good.Count == 0) return res;
 
             // trees: split the sorted x values where a gap is much wider than the usual one
-            var xs = good.Select(n => n.X).Distinct().OrderBy(v => v).ToList();
+            var xs = good.Select(n => px[n]).Distinct().OrderBy(v => v).ToList();
             var cuts = new List<double>();                  // x values that start a new tree
             if (xs.Count >= 4)
             {
@@ -525,19 +540,19 @@ namespace ElansAddonHub.Services
                 foreach (var t in big) cuts.Add(xs[t.i + 1]);
             }
             int TreeOf(double x) { int t = 0; foreach (var c in cuts) if (x >= c) t++; return t; }
-            var groups = good.GroupBy(n => TreeOf(n.X)).OrderBy(g => g.Key).ToList();
+            var groups = good.GroupBy(n => TreeOf(px[n])).OrderBy(g => g.Key).ToList();
             int idx = 1;
             foreach (var g in groups)
             {
                 var list = g.ToList();
                 var tree = new TalentTree { Index = idx++, Points = list.Sum(n => n.R) };
-                var colOf = Bucket(list.Select(n => n.X), MaxCols, out var cols);
-                var rowOf = Bucket(list.Select(n => n.Y), MaxRows, out var rows);
+                var colOf = Bucket(list.Select(n => px[n]), MaxCols, out var cols);
+                var rowOf = Bucket(list.Select(n => py[n]), MaxRows, out var rows);
                 tree.Cols = cols; tree.Rows = rows;
                 var cells = new Dictionary<long, TalentCell>();
                 foreach (var n in list)
                 {
-                    int c = colOf(n.X), r = rowOf(n.Y);
+                    int c = colOf(px[n]), r = rowOf(py[n]);
                     long key = (long)r * 1000 + c;
                     if (!cells.TryGetValue(key, out var cell)) cells[key] = cell = new TalentCell { Col = c, Row = r };
                     cell.Nodes.Add(n);

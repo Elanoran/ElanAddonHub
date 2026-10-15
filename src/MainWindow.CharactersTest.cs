@@ -19,7 +19,7 @@ namespace ElansAddonHub
         // WoW-style Lua of ElansHubData: Elan (every module, bags newer than the Bags addon's save unless elanBagsAt says otherwise), Measley (bags too new,
         // gear), Other-Measley (another realm, same name as a Bags character), Newbie (core only), Future (every module newer than this app), Other-Elan (same
         // name as Elan on another realm, core only); the guild bank of "Forever-Test Guild" as an account module.
-        static string HubCharsLua(long now, long elanBagsAt, string elanLevel = "60")
+        static string HubCharsLua(long now, long elanBagsAt, string elanLevel = "60", string elanTalents = null)
         {
             string Link(int id, string name, string hex) => "[" + id + "]='|cff" + hex + "|Hitem:" + id + "::::::::|h[" + name + "]|h|r'";
             string It(int slot, int id, int c, int q, int ic, int il = 0) => "[" + slot + "]={i=" + id + ",c=" + c + ",q=" + q + ",ic=" + ic + (il > 0 ? ",il=" + il : "") + "}";
@@ -34,7 +34,7 @@ namespace ElansAddonHub
                 for (int col = 0; col < 3; col++)
                     for (int row = 0; row < 3; row++, nid++)
                         nodes.Append("[" + nid + "]={id=" + nid + ",r=" + (nid % 3) + ",m=3,x=" + (x0 + col * 600) + ",y=" + (600 + row * 600) + ",s=" + (1000 + nid) + (nid % 2 == 0 ? ",n='Talent " + nid + "'" : "") + (nid % 4 == 0 ? ",ic=" + (135000 + nid) : nid == 5 ? ",ic='junk'" : "") + "},\n");
-            nodes.Append("[" + nid++ + "]={id=900,r=1,m=1,x=102800,y=600,s=5,n='Bogus'},\n");
+            nodes.Append("[" + nid++ + "]={id=900,r=1,m=1,x=108000,y=24000,s=5,n='Bogus'},\n");      // the game's extra digit: 10800 / 2400, a 4th column and row of tree 3
             nodes.Append("[" + nid++ + "]={id=901,r=1,m=1,s=6,n='Nowhere'},\n");
             var s = new StringBuilder("ElansHubData = {\n['schema']=1,\n['chars']={\n");
             s.Append("['Forever-Elan']={at=" + (now - 10) + ",mods={\n");
@@ -50,7 +50,7 @@ namespace ElansAddonHub
             s.Append(Mod("gear", 1, now - 300, "at=" + (now - 300) + ",ilvl=58.5,slots={" + It(1, 200, 1, 3, 133003, 62) + "," + It(5, 201, 1, 2, 133003, 55) + "," + It(15, 109, 1, 1, 133003, 10) + "," + It(16, 202, 1, 4, 133633, 70) + "},"
                 + "stats={health=2400,power=1500,powerType='MANA',str=55,agi=130,sta=95,int=30,spi=41,armor=650,ap=120,rap=220,melee={min=40,max=62,speed=2.6},ranged={min=55,max=81,speed=3},crit=12.35,rcrit=8.1,dodge=5.55,parry=0,block=0,speed=100},"
                 + "links={" + Link(200, "Helm of Testing", "0070dd") + "," + Link(201, "Plain Chestguard", "1eff00") + "," + Link(202, "Epic Blade", "a335ee") + "," + Link(109, "White Cloak", "ffffff") + "}"));
-            s.Append(Mod("talents", 1, now - 300, "at=" + (now - 300) + ",api='traits',spent=35,unspent=2,nodes={\n" + nodes + "}"));
+            s.Append(Mod("talents", 1, now - 300, elanTalents ?? "at=" + (now - 300) + ",api='traits',spent=35,unspent=2,nodes={\n" + nodes + "}"));
             s.Append(Mod("professions", 1, now - 300, "at=" + (now - 300) + ",list={{name='Mining',skill=225,max=300,ic=136248,kind='primary'},{name='Herbalism',skill=300,max=300,ic=136065,kind='primary'},{name='Cooking',skill=75,max=150,ic=133971,kind='secondary'}}"));
             // hunter.pets v1 as Hunter Helper 1.26.5 writes it, plus odd entries a reader must skip (a bare ability id, a number where a table goes, a text junk pet)
             s.Append(Mod("hunter.pets", 1, now - 200, "at=" + (now - 200) + ",active='Rex:Bear',pets={['Rex:Bear']={name='Rex',family='Bear',familyId='bear',level=40,loyalty=5,ic=132127,tpTotal=80,tpSpent=30,happiness=3,"
@@ -258,10 +258,17 @@ namespace ElansAddonHub
 
                 // ---- talents grouping
                 var lay = TalentGrid.Group(tal.Nodes);
-                Check("talents: 3 trees side by side by the big gaps in x, 3 columns x 3 rows each, 9 nodes each", lay.Trees.Count == 3 && lay.Trees.All(t => t.Cols == 3 && t.Rows == 3 && t.Cells.Sum(c => c.Nodes.Count) == 9), string.Join(";", lay.Trees.Select(t => t.Cols + "x" + t.Rows + "/" + t.Cells.Sum(c => c.Nodes.Count))));
-                Check("talents: the bogus 102800 position and the node without one are loose, not drawn in a tree and not lost", lay.Loose.Count == 2 && lay.Loose.Any(n => n.Id == 900) && lay.Loose.Any(n => n.Id == 901) && lay.Trees.Sum(t => t.Cells.Sum(c => c.Nodes.Count)) + lay.Loose.Count == tal.Nodes.Count);
-                Check("talents: trees run left to right (first tree has the x=1800 nodes), cells are ordered top-left to bottom-right", lay.Trees[0].Cells[0].Nodes.Any(n => n.X == 1800 && n.Y == 600) && lay.Trees[2].Cells.Last().Nodes.Any(n => n.X == 10200 && n.Y == 1800) && lay.Trees.Select(t => t.Index).SequenceEqual(new[] { 1, 2, 3 }));
-                Check("talents: points per tree are the sum of ranks", lay.Trees.Sum(t => t.Points) == tal.Nodes.Where(n => n.HasPos && n.X < 40000).Sum(n => n.R));
+                Check("talents: 3 trees side by side by the big gaps in x: 3 x 3 with 9 nodes, 3 x 3 with 9, and the third 4 x 4 with 10 (the extra-digit node added a column and a row)",
+                    lay.Trees.Count == 3 && lay.Trees.Take(2).All(t => t.Cols == 3 && t.Rows == 3 && t.Cells.Sum(c => c.Nodes.Count) == 9) && lay.Trees[2].Cols == 4 && lay.Trees[2].Rows == 4 && lay.Trees[2].Cells.Sum(c => c.Nodes.Count) == 10,
+                    string.Join(";", lay.Trees.Select(t => t.Cols + "x" + t.Rows + "/" + t.Cells.Sum(c => c.Nodes.Count))));
+                Check("talents: the game's extra-digit position (108000 / 24000) is divided back and placed; only the node without a position is loose, nothing is lost",
+                    lay.Loose.Count == 1 && lay.Loose[0].Id == 901 && lay.Trees.Sum(t => t.Cells.Sum(c => c.Nodes.Count)) + lay.Loose.Count == tal.Nodes.Count);
+                Check("talents: trees run left to right (first tree has the x=1800 nodes), cells are ordered top-left to bottom-right", lay.Trees[0].Cells[0].Nodes.Any(n => n.X == 1800 && n.Y == 600) && lay.Trees[2].Cells.Last().Nodes.Any(n => n.Id == 900) && lay.Trees.Select(t => t.Index).SequenceEqual(new[] { 1, 2, 3 }));
+                Check("talents: points per tree are the sum of ranks", lay.Trees.Sum(t => t.Points) == tal.Nodes.Where(n => n.HasPos).Sum(n => n.R));
+                HubTalentNode Sp(int id, double x, double y, int s, int r = 0) => new HubTalentNode { Id = id, R = r, M = 5, X = x, Y = y, S = s, HasPos = true };
+                var copy = TalentGrid.Group(new[] { Sp(1, 1020, 2130, 7), Sp(2, 1620, 2130, 8), Sp(3, 1020, 2730, 9), Sp(104982, 102800, 2730, 19168), Sp(110859, 1620, 2730, 19168, 2) });
+                Check("talents: a hidden copy of a talent (same spell twice, one at an extra-digit position) is left out as a copy, the one with ranks stays in its cell",
+                    copy.Copies.Count == 1 && copy.Copies[0].Id == 104982 && copy.Loose.Count == 0 && copy.Trees.Count == 1 && copy.Trees[0].Cells.SelectMany(c => c.Nodes).Any(n => n.Id == 110859), string.Join(",", copy.Copies.Select(c => c.Id)));
                 HubTalentNode N(double x, double y, int r = 1) => new HubTalentNode { Id = 1, R = r, M = 3, X = x, Y = y, HasPos = true };
                 bool threw = false; TalentLayout l1 = null, l2 = null, l3 = null, l4 = null, l5 = null;
                 try
@@ -334,8 +341,9 @@ namespace ElansAddonHub
 
                 InventoryView.SelectTabForTest("talents");
                 var tl = InventoryView.CharTabLinesForTest();
-                Check("talents: 35 spent, 2 unspent, 3 trees, 2 loose nodes", tl.Contains("talentinfo|35|2|3|2") && InventoryView.ViewInfoForTest.StartsWith("35 points spent · 2 unspent"), string.Join(" | ", tl));
-                Check("talents: three 3x3 trees of 9 nodes each, the bogus and the position-less node drawn apart", tl.Count(x => x.StartsWith("tree|")) == 3 && tl.All(x => !x.StartsWith("tree|") || x.Contains("|3x3|")) && tl.Contains("loose|2"), string.Join(" | ", tl));
+                Check("talents: 35 spent, 2 unspent, 3 trees, 1 talent apart (no game talent data here: the Hub's positions)", tl.Contains("talentinfo|35|2|3|1") && tl.Contains("talentsource|positions") && InventoryView.ViewInfoForTest.StartsWith("35 points spent · 2 unspent"), string.Join(" | ", tl));
+                Check("talents: trees 3x3, 3x3 and 4x4 (the extra-digit node placed), only the position-less node listed apart and labelled", tl.Contains("tree|1|3x3|9|9") && tl.Contains("tree|2|3x3|9|9") && tl.Count(x => x.StartsWith("tree|3|4x4|")) == 1
+                    && tl.Contains("loose|1|Talents without a place in the trees") && tl.Contains("treepoints|1|9 points"), string.Join(" | ", tl));
                 await Task.Delay(300);
                 Check("talents: a node with an icon id draws an icon image (letter tile underneath until it loads), the others keep the letter tile", InventoryView.TalentIconsForTest == 6 && InventoryView.TalentNodesForTest == 29, InventoryView.TalentIconsForTest + " icons of " + InventoryView.TalentNodesForTest);
                 Snapshot(P("20-characters-talents.png"));

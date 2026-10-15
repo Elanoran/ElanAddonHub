@@ -103,10 +103,8 @@
               </StackPanel>
             </Grid>
 
-            <!-- the trees (scaled down to fit a narrow window) -->
-            <Viewbox x:Name="TreeBox" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-              <Canvas x:Name="TreeCanvas" />
-            </Viewbox>
+            <!-- the trees (TalentTreePanel, the renderer Characters > Talents uses too): side by side, one under the other in a narrow window -->
+            <ContentControl x:Name="TreeHost" HorizontalContentAlignment="Stretch" Focusable="False" />
 
             <TextBlock x:Name="HintLine" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" TextWrapping="Wrap"
                        Text="Click a talent for +1, right-click for -1. A row opens when enough points are spent in the rows above it." />
