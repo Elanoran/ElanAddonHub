@@ -9,8 +9,8 @@ public sealed partial class AtlasStore
 {
     public sealed class PurgeResult
     {
-        public int Counters, Nodes, FishSpots, Vendors, Quests, Revealed, Seen, Spawns, Finds;
-        public int Total => Counters + Nodes + FishSpots + Vendors + Quests + Revealed + Seen + Spawns + Finds;
+        public int Counters, Nodes, FishSpots, FieldNotes, Vendors, Quests, Revealed, Seen, Spawns, Finds;
+        public int Total => Counters + Nodes + FishSpots + FieldNotes + Vendors + Quests + Revealed + Seen + Spawns + Finds;
     }
 
     // Caller holds Gate and saves afterwards (Dirty is set). The epoch changes, so every client fetches the whole pool again (a delta cannot express a removal).
@@ -30,6 +30,7 @@ public sealed partial class AtlasStore
             r.Nodes = md.NodeTotal;
             foreach (var m in md.Fish.Keys) maps.Add(m);
             r.FishSpots = md.FishTotal;
+            r.FieldNotes = PurgeNotes(md);
         }
         foreach (var (k, id) in srcs)
         {

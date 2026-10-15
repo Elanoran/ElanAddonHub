@@ -268,6 +268,13 @@ From the sharing and security review. What changed, and the choices made:
 
 The Outpost side (same release train): manifest folders, ids and game versions must be plain names that resolve inside AddOns / the backup folder, updates only from https GitHub hosts and the self-update needs a SHA-256, downloaded chat files open only by a picture / text / PDF extension, SavedVariables parsing is depth- and size-limited, and an `http://` lodge address (other than localhost / 127.0.0.1) is refused. See `src/CHANGELOG.md`.
 
+## 2.23.0 (hunter field notes, feature `atlas5`)
+
+- A new Atlas section, `fieldnotes`, validated in one place (`Atlas.ParseFieldNote`): whole numbers in fixed ranges, levels 1..80, a class from a fixed list, ability tokens that match `letters + rank`, coordinates 0..1, times after 2001 and at most five minutes ahead, names cleaned like every other name (control and `" \ < > | [ ]` characters out). An entry that fails is refused whole; unknown fields (the game's own hist / dead / data values) are dropped. No character names are accepted or stored.
+- Caps: 60 npcs and 600 points per share, 600 npcs and 8000 points per member, 24 points / 10 maps / 24 taught tokens per npc and member, 20000 npcs in the pool, 40 points per npc in the merge. The share goes through the same rate bucket and the same size cap as the rest of the Atlas.
+- Per member, the stored note only grows, so a resend or an old upload can never count twice. The merge is rebuilt from the members' notes, so a revert / leave (2.22) removes a member's part exactly (`PurgeResult.FieldNotes`).
+- Privacy: the merge shows how many members saw a beast; members and up also get up to five Lodge display names (never the login when a display name is set, never a character name); guests get the counts, levels and positions, no names, and a time rounded down to the UTC day.
+
 ## Tests
 
 ```bash
