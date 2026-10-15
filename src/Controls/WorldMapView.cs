@@ -102,9 +102,11 @@ namespace ElansAddonHub
         string loadedPage;                                     // "2d" | "3d": the document in the web view
         int borderWaitMap = -1;                                // a "Zone borders" request is waiting for the terrain of this map
         Action overlayAction;
+        readonly WorldMapBuildingsHost bld;                    // the page's Buildings switch (3D buildings): see WorldMapBuildingsHost
 
         public WorldMapView()
         {
+            bld = new WorldMapBuildingsHost(Post, a => { try { Dispatcher.BeginInvoke(a); return true; } catch (Exception) { return false; } }, () => mapId, () => Settings, () => SaveSettings?.Invoke());
             RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             segHost.Style = (Style)FindResource("SegmentHost");
@@ -144,6 +146,7 @@ namespace ElansAddonHub
             if (subscribed) return;
             subscribed = true;
             WorldMapService.BuildChanged += OnBuildChanged;
+            bld.Attach();
             MapData.Changed += OnMapDataChanged;
         }
 
@@ -462,6 +465,7 @@ namespace ElansAddonHub
                     ["base"] = "https://" + WorldMapPage.Host + "/" + WorldMapCache.BuildKey + "/" + c.MapId.ToString(CultureInfo.InvariantCulture) + "/" + WorldMapTerrain.Folder,
                     ["minZ"] = Math.Round(tman.MinZ, 1), ["maxZ"] = Math.Round(tman.MaxZ, 1), ["tiles"] = tiles,
                 };
+                init["buildings"] = bld.InitInfo(c.MapId, "https://" + WorldMapPage.Host + "/" + WorldMapCache.BuildKey + "/" + c.MapId.ToString(CultureInfo.InvariantCulture));
                 init["prefs"] = new Dictionary<string, object> { ["detail"] = Detail(), ["exag"] = Exag(), ["userDetail"] = Settings != null && !string.IsNullOrEmpty(Settings.WorldMap3dDetail) };
                 if (ForceNoGlForTest) init["forceNoGl"] = true;
             }
@@ -599,6 +603,7 @@ namespace ElansAddonHub
                     break;
                 case WorldMapMessageType.Inited:
                     PageInited = true;
+                    if (mode3d && mapId >= 0) bld.OnInited(mapId);
                     break;
                 case WorldMapMessageType.Ready:
                     PageReady = true; PageInited = true;
@@ -615,6 +620,7 @@ namespace ElansAddonHub
                 case WorldMapMessageType.View3:
                     {
                         LastView3 = m;
+                        bld.Focus(m.Lat, m.Lng, mapId);
                         WorldMapMath.LatLngToWorld(m.Lat, m.Lng, out var x, out var y);
                         hasView = true; vx = x; vy = y; vz = Math.Round(DistToZoom(m.Dist), 2);
                         SubChanged?.Invoke(CurrentSub);
@@ -648,6 +654,9 @@ namespace ElansAddonHub
                     break;
                 case WorldMapMessageType.Stats:
                     LastStats = m;
+                    break;
+                case WorldMapMessageType.Buildings: case WorldMapMessageType.BBuild: case WorldMapMessageType.BPause: case WorldMapMessageType.BResume: case WorldMapMessageType.BCancel:
+                    if (mode3d) bld.Handle(m, mapId);
                     break;
                 case WorldMapMessageType.Prefs:
                     if (Settings != null) { Settings.WorldMap3dDetail = m.Detail; Settings.WorldMapExag = Math.Round(m.Exag, 1); SaveSettings?.Invoke(); }
@@ -788,7 +797,7 @@ namespace ElansAddonHub
         // The Atlas leaves the page (another page is shown): nothing to stop, the page keeps what it had
         public void Dispose()
         {
-            try { WorldMapService.BuildChanged -= OnBuildChanged; MapData.Changed -= OnMapDataChanged; subscribed = false; } catch (Exception) { }
+            try { bld.Detach(); WorldMapService.BuildChanged -= OnBuildChanged; MapData.Changed -= OnMapDataChanged; subscribed = false; } catch (Exception) { }
             try { Thaw(); if (web != null) { stage.Children.Remove(web); web.Dispose(); web = null; webTask = null; } } catch (Exception) { }
             pageHello = false; PageInited = false; PageReady = false; pendingInit = null; mapId = -1; initGen++; buildGen++; loadedPage = null; GlOk = false; borderWaitMap = -1;
         }

@@ -122,7 +122,7 @@ namespace ElansAddonHub
                 Check("talents: the tile opens the calculator inside the Atlas - hosted, the page shown and its own title hidden, Hunter (the default class), the id says tree/hunter, one step in the history",
                     AtlasView.IsHosted && ReferenceEquals(AtlasView.HostedForTest, tp) && tp.IsVisible && tp.TitleHiddenForTest && tp.ClassFileNow == "HUNTER" && tp.ClassTitleForTest == "Hunter" && AtlasView.CurrentId == "talents:tree/hunter"
                     && AtlasView.History.Count == 2 && AtlasView.HostSlotVisibleForTest, AtlasView.CurrentId + " " + AtlasView.IsHosted);
-                Check("talents: the breadcrumb reads Atlas > Talents > Hunter, the title is Talents, the Atlas page's own scroller is out of the way", AtlasView.HostedCrumbsForTest == "Atlas > Talents > Hunter" && AtlasTexts(AtlasView).Contains("Talents"), AtlasView.HostedCrumbsForTest);
+                Check("talents: the breadcrumb reads Atlas > Talents > Hunter (the Atlas header has no title row of its own and no hero: the hosted page names itself), the Atlas page's own scroller is out of the way", AtlasView.HostedCrumbsForTest == "Atlas > Talents > Hunter" && AtlasTexts(AtlasView).Contains("Talents") && AtlasView.TitleRowGoneForTest && AtlasView.HeroForTest == null && AtlasView.PageTitleForTest == "Talents", AtlasView.HostedCrumbsForTest);
                 Check("talents: the calculator works as before inside the Atlas - nodes drawn, a click spends a point", tp.NodeCountForTest == 7 && tp.Click(10, false) == Why.Ok && tp.SessionForTest.State.Total == 1, tp.NodeCountForTest + "");
                 Snapshot(Path.Combine(dir, "atlas-hosts-talents.png"));
 

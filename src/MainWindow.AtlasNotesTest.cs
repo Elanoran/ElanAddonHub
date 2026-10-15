@@ -113,9 +113,10 @@ namespace ElansAddonHub
                 var fLodge = page.Facts.FirstOrDefault(f => f.Label == "Seen by Lodge hunters");
                 var fOwn = page.Facts.FirstOrDefault(f => f.Label == "Seen by you");
                 check("atlas: the creature page says 'Seen by Lodge hunters: level 35, last seen 2 h ago, 3 members' and 'Seen by you' with the sightings", !page.NotFound && fLodge != null && fLodge.Value == "level 35, last seen 2 h ago, 3 members" && fOwn != null && fOwn.Value == "level 35, last seen 10 min ago, 7 sightings");
-                var fBy = page.Facts.FirstOrDefault(f => f.Label == "Seen by");
-                var fTaught = page.Facts.FirstOrDefault(f => f.Label == "Taught when tamed");
-                check("atlas: the page names the members (display names) and the abilities taught, with how many of the hunters saw each", fBy != null && fBy.Value == "Amy the Bold, Bob and 1 more" && fTaught != null && fTaught.Value == "Bite 4 (3/3), Claw 3 (1/3)");
+                var secN = page.Section("lodgenotes");
+                var rBy = secN?.Rows.FirstOrDefault(r => r.Key == "notes:by");
+                var rTaught = secN?.Rows.FirstOrDefault(r => r.Key == "notes:taught");
+                check("atlas: the Lodge tab names the members (display names) and the abilities taught, with how many of the hunters saw each", rBy != null && rBy.Title == "Amy the Bold, Bob" && rBy.Detail == "and 1 more" && rTaught != null && rTaught.Title == "Bite 4 (3/3), Claw 3 (1/3)" && AtlasTabs.OfSection("lodgenotes") == AtlasTabs.Lodge);
                 check("atlas: a creature only the notes know is not 'not found'", !AtlasQuery.Build("npc:3106").NotFound);
 
                 // ---- the session

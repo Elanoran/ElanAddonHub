@@ -46,7 +46,7 @@ namespace ElansAddonHub.Services.Atlas
             try { return (Context.Characters?.Invoke() ?? new List<InvChar>()).Where(c => c != null && !c.Hidden && !string.IsNullOrEmpty(c.Key)).OrderByDescending(c => c.Level).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList(); }
             catch (Exception) { return new List<InvChar>(); }
         }
-        static readonly Regex IdText = new Regex(@"^\s*(item|npc|obj|object|quest|zone|instance|spell|skill|faction|class|race)\s*[:=# ]\s*(\d{1,9})\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        static readonly Regex IdText = new Regex(@"^\s*(item|npc|obj|object|quest|zone|instance|spell|skill|faction|class|race)\s*[:=# ]\s*(\d{1,9})(?:\s*\?\s*tab\s*=\s*([a-z]+))?\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         // "item:123", also "Item 123" / "npc=5" -> the canonical id; null when the text is not an id
         public static string NormalizeId(string text)
@@ -61,7 +61,8 @@ namespace ElansAddonHub.Services.Atlas
             if (kind == "object") kind = "obj";
             var id = kind + ":" + m.Groups[2].Value.TrimStart('0');
             if (id.EndsWith(":")) return null;
-            return AtlasIds.TryParse(id, out _, out _) ? id : null;
+            if (!AtlasIds.TryParse(id, out _, out _)) return null;
+            return m.Groups[3].Success ? AtlasTabs.WithTab(id, m.Groups[3].Value.ToLowerInvariant()) : id;       // "item:1?tab=sources": the same page on its Sources tab (an unknown tab word is dropped)
         }
 
         public static bool TryParse(string id, out string kind, out int n) => AtlasIds.TryParse(id, out kind, out n);
@@ -158,7 +159,9 @@ namespace ElansAddonHub.Services.Atlas
                 res.ById = true;
                 AtlasIds.TryParse(idText, out var k, out var n);
                 var g = new AtlasGroup { Kind = k, Title = AtlasKinds.Plural(k) };
-                g.Hits.Add(Describe(idText) ?? new AtlasHit { Id = idText, Kind = k, Name = AtlasKinds.Singular(k) + " " + n, Detail = "not in the data on this PC", Rank = 4 });
+                var byId = Describe(idText) ?? new AtlasHit { Id = idText, Kind = k, Name = AtlasKinds.Singular(k) + " " + n, Detail = "not in the data on this PC", Rank = 4 };
+                byId.Id = idText;                                  // a pasted "item:1?tab=sources" opens on that tab
+                g.Hits.Add(byId);
                 g.Total = 1;
                 res.Groups.Add(g);
                 return res;
@@ -419,6 +422,7 @@ namespace ElansAddonHub.Services.Atlas
         public static AtlasHit Describe(string id)
         {
             if (!AtlasIds.TryParse(id, out var kind, out var n)) return null;
+            id = AtlasTabs.BaseId(id);
             switch (kind)
             {
                 case "item":
@@ -487,6 +491,7 @@ namespace ElansAddonHub.Services.Atlas
             BuildHookForTest?.Invoke(id);
             if (!AtlasIds.TryParse(id, out var kind, out var n))
                 return new AtlasPageModel { Id = id ?? "", NotFound = true, Title = "Not an Atlas link", Message = "\"" + (id ?? "") + "\" is not something Atlas can open. Try a name, or a link like item:2589." };
+            id = AtlasTabs.BaseId(id);
             // the Lodge pool is filled on another thread: a page built while a frame lands can trip over it once, so it is built again
             for (int attempt = 1; ; attempt++)
             {
@@ -519,7 +524,7 @@ namespace ElansAddonHub.Services.Atlas
                     case "race": m = BuildRace(n); break;
                     default: m = new AtlasPageModel { NotFound = true, Title = id, Message = "Atlas cannot open " + kind + " links yet." }; break;
                 }
-                m.Id = id; m.Kind = kind;
+                m.Id = AtlasTabs.BaseId(id); m.Kind = kind;       // the page's identity has no tab; the tab is the page's own state
                 return m;
             }
         }

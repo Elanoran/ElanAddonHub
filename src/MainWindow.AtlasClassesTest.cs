@@ -236,6 +236,9 @@ namespace ElansAddonHub
                     AtlasView.ClassControlForTest("tab:0") != null && AtlasView.ClassControlForTest("tab:50") != null && AtlasView.ClassControlForTest("tab:261") != null && AtlasView.ClassControlForTest("tab:51") == null && AtlasTexts(AtlasView).Contains("Beast Training (pet)")
                     && AtlasView.ClassCountTextForTest.Contains("spells at 11 levels"), AtlasView.ClassCountTextForTest);
                 Snapshot(Path.Combine(dir, "atlas-classes-hunter.png"));
+                Check("window: the Hunter hero - the name in the class colour (#AAD372), the class icon in the 72 px tile, the chips Damage and Mana, Focus; the tabs are Overview (the spells by level) and Related (the races)",
+                    AtlasView.HeroNameForTest == "Hunter" && ((System.Windows.Media.SolidColorBrush)AtlasView.HeroBrushForTest).Color == (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#AAD372") && AtlasView.HeroTileForTest != null && AtlasView.HeroTileForTest.Width == 72 && AtlasWalk(AtlasView.HeroTileForTest).OfType<Image>().Any()
+                    && AtlasView.HeroChipsForTest.Contains("Damage") && AtlasView.HeroChipsForTest.Contains("Mana, Focus") && AtlasView.TabsForTest.SequenceEqual(new[] { "overview", "related" }) && AtlasView.TabNowForTest == "overview", string.Join(" | ", AtlasView.HeroChipsForTest) + " tabs " + string.Join(",", AtlasView.TabsForTest));
 
                 void ClickTab(string key) { var b = (Button)AtlasView.ClassControlForTest(key); b.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); }
                 ClickTab("tab:163"); await Task.Delay(100); UpdateLayout();
@@ -260,7 +263,7 @@ namespace ElansAddonHub
                 Check("window: hovering a spell row gives the game tooltip with the cost and cooldown", rowTip.Texts().Contains("25 Mana") && rowTip.Texts().Contains("6 sec cooldown"), string.Join(" | ", rowTip.Texts()));
                 var classLinks = AtlasWalk(AtlasView).OfType<TextBlock>().Where(t => t.Tag is string s && s.StartsWith("race:")).ToList();
                 var racesCard = AtlasView.Model.Section("races");
-                Check("window: the Races table of the class page is on the page with a row per race", racesCard != null && AtlasTexts(AtlasView).Contains("Races") && AtlasTexts(AtlasView).Contains("Night Elf"));
+                Check("window: the Races table of the class page is on its Related tab with a row per race (the Overview keeps the spells by level)", racesCard != null && AtlasView.TabsForTest.Contains("related") && AtlasView.ClassRowsForTest.Count > 0 && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Races") && AtlasTexts(AtlasView).Contains("Night Elf") && await SwitchTab("overview"));
                 await AtlasView.Open("spell:14281"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
                 var learned = AtlasWalk(AtlasView).OfType<TextBlock>().FirstOrDefault(t => t.Tag is string s && s == "class:3");
                 Check("window: the spell page shows 'Learned by' as a link; clicking it opens the Hunter page (and Back returns to the spell)", learned != null && learned.Text.StartsWith("Hunter, level 12"), learned?.Text);
@@ -273,8 +276,8 @@ namespace ElansAddonHub
                 Check("window: a class page can be pinned like any other page (the pin button's state follows the id)", pinned && AtlasView.NavState.IsPinned("class:3") && AtlasNav.Describe("class:3").Title == "Hunter");
                 AtlasView.NavState.Unpin("class:3");
                 await AtlasView.Open("race:2"); await AtlasView.WaitForTest(); await Task.Delay(200); UpdateLayout();
-                Check("window: the Orc page is drawn - breadcrumb Atlas > Races > Orc, the Racial abilities and Classes tables, the facts on the identity card", AtlasView.CrumbsForTest == "Atlas > Races > Orc" && AtlasTexts(AtlasView).Contains("Racial abilities") && AtlasTexts(AtlasView).Contains("Blood Fury") && AtlasTexts(AtlasView).Contains("Classes") && AtlasTexts(AtlasView).Contains("Warrior"), AtlasView.CrumbsForTest);
                 Snapshot(Path.Combine(dir, "atlas-classes-race.png"));
+                Check("window: the Orc page is drawn - breadcrumb Atlas > Races > Orc, the hero (Orc, Horde), the Racial abilities and Classes tables on Related, the facts on the identity card", AtlasView.CrumbsForTest == "Atlas > Races > Orc" && AtlasView.HeroNameForTest == "Orc" && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Racial abilities") && AtlasTexts(AtlasView).Contains("Blood Fury") && AtlasTexts(AtlasView).Contains("Classes") && AtlasTexts(AtlasView).Contains("Warrior") && await SwitchTab("overview"), AtlasView.CrumbsForTest);
                 await AtlasView.Open("class:8"); await AtlasView.WaitForTest(); await Task.Delay(250); UpdateLayout();
                 Check("window: another class resets the card (Mage: its own tab Arcane, level 1 first, no Hunter spells)", AtlasView.ClassFilterForTest.SkillId == 0 && AtlasView.ClassControlForTest("tab:237") != null && AtlasView.ClassControlForTest("tab:163") == null && AtlasView.ClassRowsForTest.Any(r => r.Title == "Fireball") && !AtlasView.ClassRowsForTest.Any(r => r.Title == "Arcane Shot"));
 

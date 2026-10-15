@@ -10,7 +10,7 @@ namespace ElansAddonHub.Services.WorldMap
     //           entry index = row * 64 + col (a tile without files has all zeros)
     // MAIN (flags, 8 bytes x 4096) is read for the "has an ADT" bit only as a cross-check. Verified on the real Eastern Kingdoms (736 tiles) and
     // Kalimdor (988 tiles) tables of build 1.60.1.70338.
-    public sealed class WdtTile { public int Col, Row; public int RootFdid, MinimapFdid; }
+    public sealed class WdtTile { public int Col, Row; public int RootFdid, MinimapFdid, Obj0Fdid; }
 
     public sealed class WdtFile
     {
@@ -55,10 +55,10 @@ namespace ElansAddonHub.Services.WorldMap
             for (int i = 0; i < Entries; i++)
             {
                 int o = maid + i * MaidEntry;
-                uint root = BitConverter.ToUInt32(d, o), mm = BitConverter.ToUInt32(d, o + 28);
+                uint root = BitConverter.ToUInt32(d, o), obj0 = BitConverter.ToUInt32(d, o + 4), mm = BitConverter.ToUInt32(d, o + 28);
                 if (root == 0 && mm == 0) continue;
                 if (mm > int.MaxValue || root > int.MaxValue) continue;
-                w.Tiles.Add(new WdtTile { Col = i % 64, Row = i / 64, RootFdid = (int)root, MinimapFdid = (int)mm });
+                w.Tiles.Add(new WdtTile { Col = i % 64, Row = i / 64, RootFdid = (int)root, MinimapFdid = (int)mm, Obj0Fdid = obj0 > int.MaxValue ? 0 : (int)obj0 });
             }
             return w;
         }

@@ -55,6 +55,22 @@ namespace ElansAddonHub.Services.WorldMap
             return n;
         }
 
+        // the 3D buildings (<map folder>\buildings) are counted and removed on their own (Settings > General > "3D buildings"), not with the pictures and terrain
+        static bool InBuildings(string path) => path.IndexOf(System.IO.Path.DirectorySeparatorChar + WorldMapBuildings.Folder + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        // a build folder without the buildings of its maps: everything else goes; the folder itself goes when nothing is left
+        static void DeleteExceptBuildings(string buildDir)
+        {
+            foreach (var f in Directory.GetFiles(buildDir)) { try { File.Delete(f); } catch (Exception) { } }
+            foreach (var m in Directory.GetDirectories(buildDir))
+            {
+                foreach (var f in Directory.GetFiles(m)) { try { File.Delete(f); } catch (Exception) { } }
+                foreach (var s in Directory.GetDirectories(m)) { if (string.Equals(Path.GetFileName(s), WorldMapBuildings.Folder, StringComparison.OrdinalIgnoreCase)) continue; try { Util.DeleteDir(s); } catch (Exception) { } }
+                try { if (Directory.GetFileSystemEntries(m).Length == 0) Directory.Delete(m); } catch (Exception) { }
+            }
+            try { if (Directory.GetFileSystemEntries(buildDir).Length == 0) Directory.Delete(buildDir); } catch (Exception) { }
+        }
+
         // bytes of the pictures (the viewer's own files are not counted)
         public static long SizeBytes()
         {
@@ -65,7 +81,7 @@ namespace ElansAddonHub.Services.WorldMap
                 foreach (var d in Directory.GetDirectories(Root))
                 {
                     if (string.Equals(Path.GetFileName(d), PageFolder, StringComparison.OrdinalIgnoreCase)) continue;
-                    foreach (var f in Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories)) { try { total += new FileInfo(f).Length; } catch (Exception) { } }
+                    foreach (var f in Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories)) { if (InBuildings(f)) continue; try { total += new FileInfo(f).Length; } catch (Exception) { } }
                 }
             }
             catch (Exception) { }
@@ -82,7 +98,7 @@ namespace ElansAddonHub.Services.WorldMap
                     foreach (var d in Directory.GetDirectories(Root))
                     {
                         if (string.Equals(Path.GetFileName(d), PageFolder, StringComparison.OrdinalIgnoreCase)) continue;
-                        try { Util.DeleteDir(d); } catch (Exception e) { Util.Log("world map cache: " + e.Message); }
+                        try { DeleteExceptBuildings(d); } catch (Exception e) { Util.Log("world map cache: " + e.Message); }
                     }
             }
             catch (Exception) { }

@@ -40,8 +40,11 @@ namespace ElansAddonHub.Services.Atlas
             {
                 var d = AtlasObs.NoteDetail(ln, now, true);
                 if (d.Length > 0) { m.Facts.Add(new AtlasFact(AtlasObs.LodgeSeenLabel, d, AtlasLabel.Forever)); any = true; }
-                if (ln.By.Count > 0) m.Facts.Add(new AtlasFact("Seen by", string.Join(", ", ln.By) + (ln.Members > ln.By.Count ? " and " + (ln.Members - ln.By.Count) + " more" : ""), AtlasLabel.Forever));
-                if (ln.Taught.Count > 0) m.Facts.Add(new AtlasFact("Taught when tamed", string.Join(", ", ln.Taught.OrderBy(t => t.Key, StringComparer.Ordinal).Select(t => TokenLabel(t.Key) + (ln.Members > 1 ? " (" + t.Value + "/" + ln.Members + ")" : ""))), AtlasLabel.Forever));
+                // the details live on the Lodge tab; the one-line summary above stays in the facts
+                var sec = Section(m, "lodgenotes", AtlasObs.LodgeSeenLabel);
+                if (ln.By.Count > 0) sec.Rows.Add(new AtlasRow { Key = "notes:by", Label = AtlasLabel.Forever, Tier = 0, Type = "Seen by", Title = string.Join(", ", ln.By), Detail = ln.Members > ln.By.Count ? "and " + (ln.Members - ln.By.Count) + " more" : "" });
+                if (ln.Taught.Count > 0) sec.Rows.Add(new AtlasRow { Key = "notes:taught", Label = AtlasLabel.Forever, Tier = 0, Type = "Taught", Title = string.Join(", ", ln.Taught.OrderBy(t => t.Key, StringComparer.Ordinal).Select(t => TokenLabel(t.Key) + (ln.Members > 1 ? " (" + t.Value + "/" + ln.Members + ")" : ""))), Detail = "when tamed" });
+                if (ln.N > 0) sec.Rows.Add(new AtlasRow { Key = "notes:n", Label = AtlasLabel.Forever, Tier = 0, Type = "Sightings", Title = AtlasFormat.Count(ln.N, "sighting", "sightings"), Detail = AtlasFormat.Count(ln.Members, "hunter", "hunters") });
                 foreach (var kv in ln.Pts.OrderBy(k => k.Key))
                     foreach (var p in kv.Value) plan?.Spot(kv.Key, p.X, p.Y, MarkerKind.Spawn, m.Title, AtlasObs.LodgeSeenLabel + " · " + AtlasLabel.Forever, "npc:" + id);
                 AddLayer(m, "lodge");

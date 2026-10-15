@@ -295,6 +295,21 @@ namespace ElansAddonHub.Services
             }
         }
 
+        // a part of the decoded file (only the blocks that hold it are decoded): the header and a small mip level of a texture, say. Null = not in the local storage.
+        public byte[] ReadRangeByContentKey(byte[] ckey, long offset, int count)
+        {
+            var ek = EncodingKeyFor(ckey);
+            if (ek == null || !TryFind(ek, out _)) return null;
+            using (var f = OpenEKey(ek))
+            {
+                if (offset < 0 || offset >= f.Length) return null;
+                int n = (int)Math.Min((long)count, f.Length - offset);
+                var buf = new byte[n];
+                f.ReadAt(offset, buf, 0, n);
+                return buf;
+            }
+        }
+
         internal static void ReadFull(Stream s, byte[] buf, int off, int count)
         {
             while (count > 0)
