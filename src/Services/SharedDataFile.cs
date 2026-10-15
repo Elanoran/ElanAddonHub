@@ -14,6 +14,7 @@ namespace ElansAddonHub.Services
     //   ElansHubShared = {
     //     flights    = { ... }          the Lodge's merged flight times (FlightShare.BuildLua writes them, unchanged)
     //     profGuides = { ... }          the leveling guides the user chose to follow in game (this file, contract "profguide" part D)
+    //     fieldNotes = { ... }          what the Lodge's hunters noted about tameable beasts, for Hunter Helper's Beast Finder (BuildFieldNotes below)
     //   }
     //
     // More sections can follow: Compose takes extra, already validated fragments (the Talents hand-off in CharacterTalents.cs is deliberately not wired yet).
@@ -57,6 +58,11 @@ namespace ElansAddonHub.Services
         // the guides the user follows, as the Professions page last made them; the Lodge session writes them next to the flights (null / empty = none)
         public static ProfGuidesOut Current;
 
+        // the `fieldNotes = { ... },` section (BuildFieldNotes) of the Lodge's hunter notes; the Lodge session sets it when they change and every write of the file carries it ("" = none)
+        public static string FieldNotesText = "";
+        public const int MaxFieldNoteNpcs = 500, MaxFieldNotePoints = 30;
+        public const long MaxFieldNotesBytes = 150L * 1024;
+
         public const int Version = 1;
         public const int MaxGuidesPerChar = 6, MaxSteps = 60, MaxReagents = 20, MaxRoutePoints = 120, MaxNodesPerObjectMap = 300, MaxObjectsPerStep = 12, MaxZonesPerStep = 8;
         public const int MaxChars = 40, MaxCharKey = 80, MaxText = 120, MaxId = 9_999_999;
@@ -68,6 +74,8 @@ namespace ElansAddonHub.Services
         public static string Compose(FlightShare.Merged flights, DateTime nowUtc, ProfGuidesOut guides, IEnumerable<string> extraSections = null)
         {
             var extras = (extraSections ?? Enumerable.Empty<string>()).Where(s => !string.IsNullOrEmpty(s)).ToList();
+            var notes = FieldNotesText;
+            if (!string.IsNullOrEmpty(notes) && !extras.Contains(notes)) extras.Add(notes);
             if ((guides == null || guides.IsEmpty) && extras.Count == 0) return FlightShare.BuildLua(flights, nowUtc);
             string lua = null;
             // under the size cap: the nodes are cut first, then the routes, then whole guides from the end
@@ -208,6 +216,51 @@ namespace ElansAddonHub.Services
             sb.Append(ind).Append("},\n");
         }
 
+        // The `fieldNotes = { ... },` text (one tab deep, newline last); "" when there are no notes. The Lodge's merge of the hunters' notes, at most MaxFieldNoteNpcs beasts
+        // (the best supported and the newest first) and about MaxFieldNotesBytes. Built from numbers and whitelisted words only; every name goes through Text() (cleaned, escaped).
+        //   fieldNotes = { v = 1, at = <newest sighting>, npcs = { [<npcId>] = { name, min, max, n, m, last, class, fam, taught = { ["bite4"] = <members> }, pts = { [<uiMapId>] = { { x, y }, ... } } } } }
+        // x, y are fractions of the map; n = sightings in the Lodge, m = hunters.
+        public static string BuildFieldNotes(IEnumerable<AtlasObs.FieldNote> notes)
+        {
+            if (notes == null) return "";
+            var inv = CultureInfo.InvariantCulture;
+            var list = notes.Where(n => n != null && Id(n.Id) && (n.N > 0 || n.Min > 0 || n.Taught.Count > 0 || n.Pts.Count > 0))
+                .OrderByDescending(n => n.Members).ThenByDescending(n => n.Last).ThenBy(n => n.Id).Take(MaxFieldNoteNpcs).OrderBy(n => n.Id).ToList();
+            if (list.Count == 0) return "";
+            var body = new StringBuilder();
+            long newest = 0;
+            foreach (var n in list)
+            {
+                if (body.Length > MaxFieldNotesBytes) break;
+                newest = Math.Max(newest, n.Last);
+                body.Append("\t\t\t[").Append(I(n.Id)).Append("] = { ");
+                if (n.Name.Length > 0) body.Append("name = \"").Append(Text(n.Name, 80)).Append("\", ");
+                if (n.Min > 0 && n.Min <= 100) body.Append("min = ").Append(I(n.Min)).Append(", max = ").Append(I(Math.Max(n.Min, Math.Min(100, n.Max)))).Append(", ");
+                body.Append("n = ").Append(I(Math.Max(0, Math.Min(2_000_000_000L, n.N)))).Append(", m = ").Append(I(Math.Max(0, Math.Min(100_000, n.Members))));
+                if (n.Last > 0) body.Append(", last = ").Append(I(n.Last));
+                if (Array.IndexOf(AtlasObs.NoteClasses, n.Class) >= 0) body.Append(", class = \"").Append(n.Class).Append('"');
+                if (n.Fam.Length > 0) body.Append(", fam = \"").Append(Text(n.Fam, 32)).Append('"');
+                var taught = n.Taught.Where(t => t.Key.Length > 0 && t.Key.Length <= 26 && t.Key.All(ch => (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'))).OrderBy(t => t.Key, StringComparer.Ordinal).Take(AtlasObs.MaxNoteTaught).ToList();
+                if (taught.Count > 0) body.Append(", taught = { ").Append(string.Join(", ", taught.Select(t => "[\"" + t.Key + "\"] = " + I(Math.Max(1, Math.Min(100_000, t.Value)))))).Append(" }");
+                int left = MaxFieldNotePoints;
+                var maps = new List<string>();
+                foreach (var m in n.Pts.Where(m => m.Key >= 1 && m.Key <= 99_999).OrderBy(m => m.Key))
+                {
+                    if (left <= 0) break;
+                    var pts = m.Value.Where(p => Frac(p.X) && Frac(p.Y)).Take(left).ToList();
+                    if (pts.Count == 0) continue;
+                    left -= pts.Count;
+                    maps.Add("[" + I(m.Key) + "] = { " + string.Join(", ", pts.Select(p => "{ " + F(p.X) + ", " + F(p.Y) + " }")) + " }");
+                }
+                if (maps.Count > 0) body.Append(", pts = { ").Append(string.Join(", ", maps)).Append(" }");
+                body.Append(" },\n");
+            }
+            var sb = new StringBuilder();
+            sb.Append("\tfieldNotes = {\n\t\tv = ").Append(Version.ToString(inv)).Append(", at = ").Append(I(Math.Max(0, newest))).Append(",\n\t\tnpcs = {\n");
+            sb.Append(body).Append("\t\t},\n\t},\n");
+            return sb.ToString();
+        }
+
         // ---------------------------------------------------------------- reading the file that is there (to keep the flights when only the guides change)
 
         // The flight times a SharedData.lua of this WoW folder holds (the first flavor that has the file), re-validated like a download. null: no such file.
@@ -236,7 +289,7 @@ namespace ElansAddonHub.Services
         public static FlightShare.WriteResult Write(string root, FlightShare.Merged flights, ProfGuidesOut guides, DateTime nowUtc, IEnumerable<string> extraSections = null)
         {
             bool haveGuides = guides != null && !guides.IsEmpty;
-            if (flights == null && !haveGuides && !(extraSections ?? Enumerable.Empty<string>()).Any(s => !string.IsNullOrEmpty(s)) && !FileHasGuides(root)) return null;
+            if (flights == null && !haveGuides && !(extraSections ?? Enumerable.Empty<string>()).Any(s => !string.IsNullOrEmpty(s)) && string.IsNullOrEmpty(FieldNotesText) && !FileHasGuides(root) && !FileHasText(root, "fieldNotes")) return null;
             // guides removed ("Stop following") while no Lodge data is in this session: the guides leave the file, the flights in it stay
             var keep = flights ?? ReadFlights(root);
             var lua = Compose(keep, nowUtc, guides, extraSections);
@@ -244,7 +297,10 @@ namespace ElansAddonHub.Services
         }
 
         // true when SharedData.lua of any flavor under the WoW folder holds a profGuides section (so "Stop following" knows whether it has something to remove)
-        public static bool FileHasGuides(string root)
+        public static bool FileHasGuides(string root) { return FileHasText(root, "profGuides"); }
+
+        // true when SharedData.lua of any flavor under the WoW folder mentions `text` (a section name)
+        public static bool FileHasText(string root, string text)
         {
             try
             {
@@ -252,7 +308,7 @@ namespace ElansAddonHub.Services
                 foreach (var flavor in Directory.GetDirectories(root, "_*_"))
                 {
                     var f = Path.Combine(flavor, "Interface", "AddOns", "ElansHub", FlightShare.SharedFileName);
-                    if (File.Exists(f) && (SavedVarsFiles.SafeRead(f) ?? "").Contains("profGuides")) return true;
+                    if (File.Exists(f) && (SavedVarsFiles.SafeRead(f) ?? "").Contains(text)) return true;
                 }
             }
             catch (Exception) { }

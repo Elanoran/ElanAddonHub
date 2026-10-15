@@ -116,7 +116,7 @@ namespace ElansAddonHub.Services.Atlas
             var cn = ClassicAtlas.NpcInfo(id);
             var loot = L?.Loot("npc", id);
             var spots = L?.Spawns(id);
-            bool lodgeKnows = (loot != null && loot.N > 0) || (spots != null && spots.Count > 0) || L?.Vendor(id) != null;
+            bool lodgeKnows = (loot != null && loot.N > 0) || (spots != null && spots.Count > 0) || L?.Vendor(id) != null || L?.Note(id) != null;
             if (seen == null && cn == null && !lodgeKnows)
             {
                 var nf = NotFoundPage("npc", id, SeenData.Ready || ClassicAtlas.IsReady ? "No layer knows this NPC. Your game has not met it yet." : "Nothing is read yet that could know this NPC (the game's creature cache and the Classic baseline are both missing).");
@@ -152,6 +152,7 @@ namespace ElansAddonHub.Services.Atlas
             string tip = (cn != null ? "Level " + AtlasFormat.Levels(cn.MinLevel, cn.MaxLevel) + " · " : "");
             if (spots != null) foreach (var sp in spots) plan.Spot(sp.Zone, sp.X, sp.Y, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, "Seen by the Lodge · " + F, "npc:" + id);
             if (cn != null) plan.Classic(cn.Spawns, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, tip + C, "npc:" + id);
+            NoteFacts(m, id, L, plan);                                  // hunter field notes: Seen by Lodge hunters / by you, abilities taught, places seen
             m.Map = plan.Build();
             AddFoundIn(m, cn?.Spawns, spots);
 

@@ -89,6 +89,7 @@ namespace ElansAddonHub
                 AtlasSectionsRegression(check);
                 await AtlasSession(check, sent, () => now, t => now = t);
                 await AtlasSeenTest(check, sent, () => now, t => now = t);
+                await AtlasNotesTest(check, sent, () => now, t => now = t);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally

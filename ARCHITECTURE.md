@@ -485,6 +485,10 @@ Raw positions; the Outpost groups them into trees for display. `api` says which 
 Same format as Hunter Helper's old `flightLegs` / `flightNodeNames`. Published by Elan's Toolkit, which owns
 the flight timer from Toolkit 0.2.0, with `by = "ElansToolkit"`. The Outpost shares it with the Lodge.
 
+### `hunter.fieldnotes` v1 (Hunter Helper 1.26.11, account scope)
+
+`{ at, notes = { ["<npcId>"] = { name, min, max, n, first, last, hist, map, x, y, pts = { { map, p = { x, y, ... } } }, class, fam, dead, taught = { "bite4", ... }, dmin, dmax, dclass, dfam } } }`; only `n` is always there, positions are percent. The Outpost reads it with the `atlas.obs` rules (`AtlasObs.Notes.cs`), shares `n, name, min, max, last, class, fam, taught, pts` (map fractions) as the `fieldnotes` section of `atlas.share` (Lodge 2.23, feature `atlas5`) and writes the Lodge's merge back to `SharedData.lua` as `fieldNotes = { v = 1, at, npcs = { [id] = { name, min, max, n, m, last, class, fam, taught = { token = hunters }, pts = { [uiMapId] = { { x, y } } } } } }` (500 beasts at most) for Hunter Helper's Beast Finder.
+
 ### `hunter.pets` v1 (Hunter Helper, per character)
 ```
 { at,

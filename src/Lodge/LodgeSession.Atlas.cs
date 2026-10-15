@@ -45,6 +45,8 @@ namespace ElansAddonHub.Lodge
         public long NodesChanged;                          // counts every answer that changed the nodes (the followed guides are rewritten when it moves)
         readonly Dictionary<int, List<AtlasObs.FishSpot>> fishSpots = new Dictionary<int, List<AtlasObs.FishSpot>>();   // fishing spots the lodge merged (server 2.21, atlas4): uiMapId -> spots
         public long FishSpotsChanged;                      // counts every answer that changed the fishing spots
+        readonly Dictionary<int, AtlasObs.FieldNote> fieldNotes = new Dictionary<int, AtlasObs.FieldNote>();   // hunter field notes the lodge merged (server 2.23, atlas5): npc -> note
+        public long NotesChanged;                          // counts every answer that changed the field notes (SharedData.lua is rewritten when it moves)
         public int Dropped { get; private set; }           // entries of the last answers that failed validation
 
         // index by item, built on first use after a change
@@ -55,7 +57,8 @@ namespace ElansAddonHub.Lodge
         static readonly IReadOnlyList<AtlasObs.Find> NoFinds = new AtlasObs.Find[0];
         static readonly IReadOnlyList<AtlasObs.Spot> NoSpots = new AtlasObs.Spot[0];
 
-        public bool HasData => kills.Count + objects.Count + fishing.Count + vendors.Count + quests.Count + spawns.Count + revealed.Count + finds.Count + seenNpcs.Count + seenObjects.Count + seenQuests.Count + nodes.Count + fishSpots.Count > 0;
+        public bool HasData => kills.Count + objects.Count + fishing.Count + vendors.Count + quests.Count + spawns.Count + revealed.Count + finds.Count + seenNpcs.Count + seenObjects.Count + seenQuests.Count + nodes.Count + fishSpots.Count + fieldNotes.Count > 0;
+        public int FieldNoteCount => fieldNotes.Count;
         public int NodeObjectCount => nodes.Count;
         public int KillSources => kills.Count;
         public int ObjectSources => objects.Count;
@@ -70,8 +73,9 @@ namespace ElansAddonHub.Lodge
 
         public void Clear()
         {
+            if (fieldNotes.Count > 0) NotesChanged++;
             kills.Clear(); objects.Clear(); fishing.Clear(); vendors.Clear(); quests.Clear(); spawns.Clear(); revealed.Clear(); finds.Clear();
-            seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear(); fishSpots.Clear();
+            seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear(); fishSpots.Clear(); fieldNotes.Clear();
             Epoch = ""; Rev = 0; Dropped = 0; Invalidate();
         }
 
@@ -169,6 +173,18 @@ namespace ElansAddonHub.Lodge
                 foreach (var kv in maps) fishSpots[kv.Key] = kv.Value;
                 if (maps.Count > 0) FishSpotsChanged++;
             }
+            var fno = m.Child("fieldnotes");
+            if (fno != null)
+            {
+                bool any = false;
+                foreach (var kv in fno)
+                {
+                    if (!AtlasObs.Key(kv.Key, AtlasObs.MaxId, out var id) || (!fieldNotes.ContainsKey(id) && fieldNotes.Count >= AtlasObs.MaxLodgeNotes)) { dropped++; continue; }
+                    var note = AtlasObs.ParseLodgeNote(id, kv.Value, ref dropped);
+                    if (note != null) { fieldNotes[id] = note; any = true; }
+                }
+                if (any) NotesChanged++;
+            }
             var fl = m.List("finds");
             if (fl.Count > 0)
             {
@@ -234,6 +250,8 @@ namespace ElansAddonHub.Lodge
             foreach (var kv in nodes.OrderBy(k => k.Key)) nco[kv.Key.ToString()] = AtlasObs.NodesNode(kv.Value);
             var fso = new Dictionary<string, object>();
             foreach (var kv in fishSpots.OrderBy(k => k.Key)) fso[kv.Key.ToString()] = AtlasObs.FishSpotsNode(kv.Value);
+            var fnc = new Dictionary<string, object>();
+            foreach (var kv in fieldNotes.OrderBy(k => k.Key)) fnc[kv.Key.ToString()] = AtlasObs.NoteLodgeNode(kv.Value);
             var fl = finds.Select(f =>
             {
                 var o = new Dictionary<string, object> { ["s"] = f.Seq, ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At, ["by"] = f.By ?? "" };
@@ -244,7 +262,7 @@ namespace ElansAddonHub.Lodge
             {
                 ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = Rev, ["at"] = Updated, ["full"] = true,
                 ["kills"] = Counters(kills), ["objects"] = Counters(objects), ["fishing"] = Counters(fishing), ["vendors"] = vo, ["quests"] = qo, ["spawns"] = so, ["items"] = io, ["finds"] = fl,
-                ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso,
+                ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso, ["fieldnotes"] = fnc,
             };
         }
 
@@ -314,6 +332,9 @@ namespace ElansAddonHub.Lodge
         public IReadOnlyList<AtlasObs.FishSpot> FishSpotsOn(int uiMapId) { return fishSpots.TryGetValue(uiMapId, out var l) ? l : NoFishSpots; }
         public IEnumerable<int> FishSpotMaps => fishSpots.Keys;
         static readonly IReadOnlyList<AtlasObs.FishSpot> NoFishSpots = new AtlasObs.FishSpot[0];
+        // what the lodge's hunters noted about a beast (null: nobody has shared a note on it), and every note (the world map's rare creatures, SharedData.lua)
+        public AtlasObs.FieldNote Note(int npcId) { return fieldNotes.TryGetValue(npcId, out var n) ? n : null; }
+        public IEnumerable<AtlasObs.FieldNote> AllNotes => fieldNotes.Values;
         // item details a member's client revealed (null: nobody has)
         public AtlasObs.Revealed Revealed(int itemId) { return revealed.TryGetValue(itemId, out var r) ? r : null; }
         public IEnumerable<AtlasObs.Revealed> AllRevealed => revealed.Values;
@@ -345,6 +366,7 @@ namespace ElansAddonHub.Lodge
         public bool SupportsAtlas { get; private set; }
         public bool SupportsAtlasNodes { get; private set; }                  // the server also takes `nodes` (feature "atlas3", server 2.18)
         public bool SupportsAtlasFish { get; private set; }                   // the server also takes `fishspots` (feature "atlas4", server 2.21)
+        public bool SupportsAtlasNotes { get; private set; }                  // the server also takes `fieldnotes` (feature "atlas5", server 2.23)
         public bool SupportsAtlasSeen { get; private set; }                   // the server also takes seenNpcs / seenObjects / seenQuests (feature "atlas2")
         public readonly LodgeAtlas AtlasData = new LodgeAtlas();
 
@@ -382,13 +404,14 @@ namespace ElansAddonHub.Lodge
             SupportsAtlasSeen = SupportsAtlas && features.Contains("atlas2");
             SupportsAtlasNodes = SupportsAtlas && features.Contains("atlas3") && (v == null || v >= AtlasObs.NodesServerVersion);
             SupportsAtlasFish = SupportsAtlas && features.Contains("atlas4") && (v == null || v >= AtlasObs.FishSpotsServerVersion);
+            SupportsAtlasNotes = SupportsAtlas && features.Contains("atlas5") && (v == null || v >= AtlasObs.NotesServerVersion);
             atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasFetching = false;
         }
 
         void ResetAtlas()
         {
             SaveAtlasCache(true);
-            SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; SupportsAtlasFish = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
+            SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; SupportsAtlasFish = false; SupportsAtlasNotes = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
             atlasLocal = null; atlasSent = null; atlasNextShare = DateTime.MinValue; atlasLastGet = DateTime.MinValue;
         }
 
@@ -486,7 +509,7 @@ namespace ElansAddonHub.Lodge
             IEnumerable<AtlasObs.Revealed> rev;
             try { rev = AtlasObs.RevealedSource?.Items()?.ToList() ?? new List<AtlasObs.Revealed>(); }
             catch (Exception e) { Util.Log("atlas: revealed items: " + e.GetType().Name); rev = new List<AtlasObs.Revealed>(); }
-            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes, SupportsAtlasFish);
+            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes, SupportsAtlasFish, SupportsAtlasNotes);
             atlasBacklog = batch != null;
             if (batch == null) return false;
             if (Clock() < atlasNextShare) return false;                                // the next slot is not here yet
@@ -538,9 +561,26 @@ namespace ElansAddonHub.Lodge
             if (!AtlasData.Apply(m)) { atlasFetching = false; return; }
             atlasCacheDirty = true;
             if (m.Bool("more")) RequestAtlas();                                        // the next page
-            else { atlasFetching = false; SaveAtlasCache(false); try { AtlasResendMissing(); } catch (Exception) { } }
+            else { atlasFetching = false; SaveAtlasCache(false); try { AtlasResendMissing(); } catch (Exception) { } RefreshFieldNotesFile(); }
             Util.Log("atlas: " + AtlasData.KillSources + " mobs, " + AtlasData.VendorCount + " vendors, " + AtlasData.FindCount + " finds from the lodge (rev " + AtlasData.Rev + ")");
             Changed?.Invoke();
+        }
+
+        // The Lodge's hunter notes go into the game's SharedData.lua (section fieldNotes, read by Hunter Helper's Beast Finder) when they changed. Downloading works with sharing off.
+        long atlasNotesWritten = -1;
+        void RefreshFieldNotesFile()
+        {
+            if (AtlasData.NotesChanged == atlasNotesWritten) return;
+            atlasNotesWritten = AtlasData.NotesChanged;
+            try
+            {
+                var text = SharedDataFile.BuildFieldNotes(AtlasData.AllNotes);
+                if (text == SharedDataFile.FieldNotesText) return;
+                SharedDataFile.FieldNotesText = text;
+                var res = SharedDataFile.Write(Settings?.WowRoot, FlightData, SharedDataFile.Current, Clock());
+                Util.Log("atlas: hunter field notes: " + AtlasData.FieldNoteCount + " beasts from the lodge, " + (res?.Written.Count ?? 0) + " file(s) written");
+            }
+            catch (Exception e) { Util.Log("atlas: hunter field notes: " + e.GetType().Name); }
         }
 
         // every 2 s with the other ticks: look at the Hub file about every 30 s; send a waiting batch when its slot comes; refresh the aggregate every 5 minutes
@@ -612,6 +652,7 @@ namespace ElansAddonHub.Lodge
         }
 
         // test hooks
+        public long AtlasNotesWrittenForTest => atlasNotesWritten;
         public bool AtlasBacklogForTest => atlasBacklog;
         public bool AtlasInflightForTest => atlasInflight != null;
         public bool AtlasGuestForTest => atlasGuest;

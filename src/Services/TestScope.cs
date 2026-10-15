@@ -125,7 +125,7 @@ namespace ElansAddonHub.Services
             R(@"^src/(Controls/GameTooltip(\.Atlas)?\.cs|Services/(GameFont|Atlas/AtlasTip)\.cs|MainWindow\.GameTooltipTest\.cs)$", "gametooltip", "itemdata", "spelldata", "inventory", "atlaspage", "professions", "lodgefun", "talents", "atlasclasses");
             R(@"^src/(Services/(Talents/|Db2/(Talent|Wdc5|Spell)|Casc\.cs|HubModules\.cs)|TalentsPage|MainWindow\.TalentsTest)", "talents", "atlashosts");
             R(@"^src/(ProfessionsPage[\w.]*|MainWindow\.ProfessionsTest[\w.]*|Services/Professions/.*)$", "professions", "profguide", "atlashosts");
-            R(@"^src/(MainWindow\.ProfGuideTest\.cs|Services/(SharedDataFile|Atlas/(RouteBuilder|GatherNodes|AtlasQuery\.Nodes))\.cs|AtlasPage\.Routes\.cs|ProfessionsPage\.Follow\.cs)$", "profguide", "flightshare", "atlaspage");
+            R(@"^src/(MainWindow\.ProfGuideTest\.cs|Services/(SharedDataFile|Atlas/(RouteBuilder|GatherNodes|AtlasQuery\.Nodes))\.cs|AtlasPage\.Routes\.cs|ProfessionsPage\.Follow\.cs)$", "profguide", "flightshare", "atlaspage", "atlaslodge");
             R(@"^src/(MainWindow\.HubDataTest|Services/(HubData|SavedVarsFiles|LuaData))\.cs$", "hubdata", "characters");
             R(@"^src/(MainWindow\.ReadersTest|Services/(SavedVarsFiles|GamePresence|InventoryData|WowCalendar|FlightShare|AddonHealth|HealthMonitor|HubData|LuaData))\.cs$", "readers");
             R(@"^src/(MainWindow.AtlasClassicTest.cs|Services/Atlas/Classic/)", "atlasclassic", "atlasclassiclodge", "atlaspage");
@@ -160,7 +160,7 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.WowEventsTest\.cs$", "wowevents");
             R(@"^src/Services/WowCalendar\.cs$", "wowevents", "calendar", "lodge");
             R(@"^src/(MainWindow\.FlightShareTest|Services/FlightShare)\.cs$", "flightshare", "lodge");
-            R(@"^src/(MainWindow\.AtlasLodgeTest|Lodge/LodgeSession\.Atlas|Services/Atlas/AtlasObs)\.cs$", "atlaslodge", "lodge");
+            R(@"^src/(MainWindow\.Atlas(Lodge|Notes)Test|Lodge/LodgeSession\.Atlas|Services/Atlas/(AtlasObs(\.Notes)?|AtlasQuery\.Notes))\.cs$", "atlaslodge", "lodge");
             R(@"^src/Services/HubData\.cs$", "atlaslodge");
             R(@"^src/MainWindow\.FilesTest\.cs$", "lodgefiles", "lodge");
             R(@"^src/MainWindow\.BadgesTest\.cs$", "badges", "lodge");

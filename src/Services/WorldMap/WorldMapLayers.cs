@@ -458,8 +458,21 @@ namespace ElansAddonHub.Services.WorldMap
                         {
                             var w = idx.MapToWorld(sp.Zone, sp.X, sp.Y);
                             if (w == null || w.Value.MapId != mapId) continue;
-                            ps.Add(w.Value.X, w.Value.Y, AtlasQuery.NpcName(kv.Key), (rank == 2 ? "Rare elite" : "Rare"), 0, "npc:" + kv.Key); have.Add(kv.Key);
+                            ps.Add(w.Value.X, w.Value.Y, AtlasQuery.NpcName(kv.Key), JoinTip(rank == 2 ? "Rare elite" : "Rare", AtlasQuery.NoteTip(kv.Key)), 0, "npc:" + kv.Key); have.Add(kv.Key);
                         }
+                    }
+                if (kind == "rares")
+                    foreach (var nt in AtlasQuery.RareNotes())          // Hunter Helper's field notes: rares and where hunters saw them
+                    {
+                        if (have.Contains(nt.Id)) continue;
+                        var ntip = JoinTip(nt.Class == "rareelite" ? "Rare elite" : "Rare", AtlasQuery.NoteTip(nt.Id));
+                        foreach (var kv in nt.Pts)
+                            foreach (var p in kv.Value)
+                            {
+                                var w = idx.MapToWorld(kv.Key, p.X, p.Y);
+                                if (w == null || w.Value.MapId != mapId) continue;
+                                ps.Add(w.Value.X, w.Value.Y, AtlasQuery.NpcName(nt.Id), ntip, 0, "npc:" + nt.Id); have.Add(nt.Id);
+                            }
                     }
             }
             if (cl != null)
@@ -477,7 +490,7 @@ namespace ElansAddonHub.Services.WorldMap
                     }
                     if (!match || have.Contains(n.Id)) continue;
                     var lv = AtlasFormat.Levels(n.MinLevel, n.MaxLevel);
-                    var tip = string.Join(" · ", new[] { lv.Length > 0 ? "Level " + lv : "", kind == "rares" ? n.RankName : (n.SubName ?? "") }.Where(x => x.Length > 0));
+                    var tip = string.Join(" · ", new[] { lv.Length > 0 ? "Level " + lv : "", kind == "rares" ? n.RankName : (n.SubName ?? ""), kind == "rares" ? AtlasQuery.NoteTip(n.Id) : "" }.Where(x => x.Length > 0));
                     foreach (var s in n.Spawns) if (s.Map == mapId) ps.Add(s.X, s.Y, n.Name, tip.Length > 0 ? tip : label, 1, "npc:" + n.Id);
                 }
             string note = ps.Full ? "Showing the first " + MaxPointsPerLayer.ToString("N0", CultureInfo.InvariantCulture) + " places." : "";
@@ -485,6 +498,8 @@ namespace ElansAddonHub.Services.WorldMap
             else if (cl == null) note = "Only what the Lodge saw; the rest needs the Classic baseline (Atlas start page).";
             return PointMessage(kind, ps, styles, note);
         }
+
+        static string JoinTip(string a, string b) => string.IsNullOrEmpty(b) ? a : a + " · " + b;
 
         // ---------------------------------------------------------------- Lodge finds
         public static LayerResult Finds(int mapId)

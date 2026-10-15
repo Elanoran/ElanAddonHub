@@ -26,6 +26,7 @@ namespace ElansAddonHub
             AtlasView.UseNavSettings(settings, () => SettingsStore.Save(settings));       // recents and pins of the Atlas shell
             AtlasQuery.Context.Lodge = () => Session?.AtlasData;
             AtlasQuery.Context.OwnFishSpots = () => AtlasObs.Read(settings.WowRoot)?.FishSpots;
+            AtlasQuery.Context.OwnFieldNotes = () => AtlasObs.Read(settings.WowRoot)?.FieldNotes;   // Hunter Helper's field notes on this PC
             AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
             AtlasView.LodgeState = LodgeAtlasState;
             // "Who in the Lodge can craft this?" (Armory, server 2.19): cached answers; an answer that arrives redraws the recipe / item page and the Professions rows

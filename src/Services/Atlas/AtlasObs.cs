@@ -13,7 +13,7 @@ namespace ElansAddonHub.Services
     // (a signature per entry, kept per Lodge server) and builds the `atlas.share` batches, (3) holds the validated shapes the Lodge's answer is parsed into
     // (LodgeAtlas). Counters are CUMULATIVE totals: the server stores max(stored, sent) per field, so a resend can never count twice. Nothing here writes
     // to the game folder, and nothing but numbers, ids, item details and coordinates ever leaves: no character names.
-    public static class AtlasObs
+    public static partial class AtlasObs
     {
         // ---- limits (mirror the server)
         public const int MaxId = 9_999_999, MaxItemId = 999_999, MaxMapId = 99_999;
@@ -243,9 +243,10 @@ namespace ElansAddonHub.Services
             public Dictionary<string, int[]> Stats = new Dictionary<string, int[]>();                   // section -> { entries in the Hub table, entries kept, parts left out }
             public List<string> UnknownSections = new List<string>();                                  // keys of the module data this app does not read
             public Dictionary<int, Dictionary<int, List<NodePt>>> Nodes = new Dictionary<int, Dictionary<int, List<NodePt>>>();   // object -> uiMapId -> nodes
+            public Dictionary<int, FieldNote> FieldNotes = new Dictionary<int, FieldNote>();             // npc -> Hunter Helper's field note (module hunter.fieldnotes)
             public int Dropped;                                                // entries (or parts of them) that failed validation and were left out
             public long Since;
-            public bool IsEmpty => Kills.Count + Objects.Count + Fishing.Count + Vendors.Count + Quests.Count + Spawns.Count + Finds.Count + Nodes.Count + FishSpots.Count == 0;
+            public bool IsEmpty => Kills.Count + Objects.Count + Fishing.Count + Vendors.Count + Quests.Count + Spawns.Count + Finds.Count + Nodes.Count + FishSpots.Count + FieldNotes.Count == 0;
         }
 
         // ---------------------------------------------------------------- validation helpers
@@ -598,9 +599,19 @@ namespace ElansAddonHub.Services
         // The `atlas.obs` v1 account module as validated shapes; null when the module is absent, too new or another version.
         public static Snapshot Of(HubModel model)
         {
-            if (model == null || !model.AccountModules.TryGetValue(ModuleName, out var m) || m == null || m.TooNew || m.V != ModuleVersion || m.Data == null) return null;
-            var s = FromTables(m.Data);
-            s.Since = m.Data.Long("since");
+            Snapshot s = null;
+            if (model != null && model.AccountModules.TryGetValue(ModuleName, out var m) && m != null && !m.TooNew && m.V == ModuleVersion && m.Data != null)
+            {
+                s = FromTables(m.Data);
+                s.Since = m.Data.Long("since");
+            }
+            var notes = NotesOf(model);                                        // Hunter Helper's field notes ride along: they need no Toolkit
+            if (notes != null)
+            {
+                if (s == null) s = new Snapshot();
+                s.FieldNotes = notes;
+                s.Stats["fieldnotes"] = new[] { notes.Count, notes.Count, 0 };
+            }
             return s;
         }
 
@@ -830,7 +841,7 @@ namespace ElansAddonHub.Services
         // The entries whose signature differs from what was uploaded before, as one atlas.share frame within the per-section counts and 56 KB.
         // Null when nothing changed. `revealed` = the item details to share (validated again here); `sent` = key -> signature of what the lodge already has.
         // `includeSeen` = the lodge takes seenNpcs / seenObjects / seenQuests (feature "atlas2"): the details AtlasObs.SeenSource holds go too, only ids not sent before (sent keys N / G / W + id).
-        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent, bool includeSeen = false, bool includeNodes = false, bool includeFish = false)
+        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent, bool includeSeen = false, bool includeNodes = false, bool includeFish = false, bool includeNotes = false)
         {
             var cands = new List<Cand>();
             void Add(string section, string key, string sentKey, string sig, object node, long order = 0)
@@ -855,6 +866,8 @@ namespace ElansAddonHub.Services
                     foreach (var kv in s.Nodes.OrderBy(k => k.Key)) Add("nodes", I(kv.Key), "n" + kv.Key, Sig(kv.Value), NodesNode(kv.Value));
                     if (includeFish)
                         foreach (var kv in s.FishSpots.OrderBy(k => k.Key)) Add("fishspots", I(kv.Key), "f" + kv.Key, Sig(kv.Value), FishSpotsNode(kv.Value));
+                if (includeNotes)
+                    foreach (var kv in s.FieldNotes.OrderBy(k => k.Key)) Add("fieldnotes", I(kv.Key), "b" + kv.Key, Sig(kv.Value), NoteWire(kv.Value));
                 foreach (var f in s.Finds.OrderBy(x => x.At).ThenBy(x => FindKey(x), StringComparer.Ordinal))
                 {
                     var o = new Dictionary<string, object> { ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At };
@@ -889,7 +902,7 @@ namespace ElansAddonHub.Services
             var limits = new Dictionary<string, int>
             {
                 ["kills"] = MaxKillsPerShare, ["objects"] = MaxObjectsPerShare, ["fishing"] = MaxFishingPerShare, ["vendors"] = MaxVendorsPerShare, ["quests"] = MaxQuestsPerShare,
-                ["spawns"] = MaxSpawnNpcsPerShare, ["nodes"] = MaxNodeObjectsPerShare, ["fishspots"] = MaxFishMapsPerShare, ["finds"] = MaxFindsPerShare, ["items"] = MaxRevealedPerShare,
+                ["spawns"] = MaxSpawnNpcsPerShare, ["nodes"] = MaxNodeObjectsPerShare, ["fishspots"] = MaxFishMapsPerShare, ["fieldnotes"] = MaxNotesPerShare, ["finds"] = MaxFindsPerShare, ["items"] = MaxRevealedPerShare,
                 ["seenNpcs"] = MaxSeenNpcsPerShare, ["seenObjects"] = MaxSeenObjectsPerShare, ["seenQuests"] = MaxSeenQuestsPerShare,
             };
             var b = new Batch();
@@ -897,7 +910,7 @@ namespace ElansAddonHub.Services
             var objs = new Dictionary<string, Dictionary<string, object>>();
             var finds = new List<object>();
             var counts = new Dictionary<string, int>();
-            int bytes = 64, nodePoints = 0, fishPoints = 0;
+            int bytes = 64, nodePoints = 0, fishPoints = 0, notePoints = 0;
             foreach (var c in cands)
             {
                 counts.TryGetValue(c.Section, out var n);
@@ -913,6 +926,13 @@ namespace ElansAddonHub.Services
                     int pts = ((List<object>)c.Node).Count;
                     if (fishPoints + pts > MaxFishSpotsPerShare) continue;
                     fishPoints += pts;
+                }
+                if (c.Section == "fieldnotes")
+                {
+                    var po = ((Dictionary<string, object>)c.Node).TryGetValue("pts", out var pn) ? (Dictionary<string, object>)pn : null;
+                    int pts = po == null ? 0 : po.Values.Sum(v => ((List<object>)v).Count);
+                    if (notePoints + pts > MaxNotePointsPerShare) continue;
+                    notePoints += pts;
                 }
                 counts[c.Section] = n + 1; bytes += c.Cost;
                 if (c.Section == "finds") { finds.Add(c.Node); b.Finds++; }
