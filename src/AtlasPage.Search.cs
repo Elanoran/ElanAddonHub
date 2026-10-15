@@ -15,7 +15,7 @@ using ElansAddonHub.Services.Db2;
 
 namespace ElansAddonHub
 {
-    // The Ctrl+K palette (also opened by the header search box, the Home hero, "/" and a name given to Open): a card over the whole Atlas page with the search box, scope chips
+    // The Ctrl+K palette (also opened by the title bar search box (MainWindow.Search.cs), the Home hero, "/" and a name given to Open): a card over the page area of the window - any page, see UseOverlayHost - with the search box, scope chips
     // (All, Items, Creatures, Quests, Zones, Spells, Pages), grouped results, and a preview of the selected one. Empty, it lists Pinned, Recent and the Pages. The search runs on a
     // worker (AtlasPaletteSearch) with a cancellation token: a newer keystroke cancels the older search, and a late answer is dropped.
     // A WebView2 (the world map) is always drawn above every WPF element, so while the palette is open over the map the live view is swapped for a snapshot of it
