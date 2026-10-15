@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.63.2
+- **Atlas: races show where they start.** A race page now has a "Starts in" fact (Shadowglen, Teldrassil for Night Elves; Coldridge Valley, Dun Morogh for Dwarves and Gnomes; the Valley of Trials, Durotar for Orcs and Trolls ...), linking to the zone. Neither the game files nor the Classic baseline store start positions, so it is worked out from the Classic baseline's first quests: the ones meant for that race only are given where it starts. Races the baseline has no quests for say so instead.
+
 ## 2.63.1
 - **World map: Back returns to the right place.** Leaving the world map for another Atlas page and coming back with Back could now and then put the map somewhere you had been before (the id read `worldmap:0?x=-1&y=-1&z=7` instead of the place you left). A position report the map had sent just before you moved it could arrive after the move and overwrite it. The map now says which move each report belongs to, and the Outpost ignores reports from before the latest one (flat map and 3D).
 

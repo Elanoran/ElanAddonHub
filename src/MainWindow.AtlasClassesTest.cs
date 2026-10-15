@@ -198,8 +198,18 @@ namespace ElansAddonHub
                 var racial = rp.Section("racial");
                 Check("race page: the racial abilities are the spells of the race's racial skill line (Blood Fury, Hardiness), each a link to its spell page; the Human's are not on the Orc's page",
                     racial != null && racial.Rows.Select(r => r.Title).OrderBy(x => x).SequenceEqual(new[] { "Blood Fury", "Hardiness" }) && racial.Rows.All(r => r.Link.StartsWith("spell:") && r.IconId > 0 && r.Extra.Length > 0) && racial.Note.Contains("Orc Racial"), racial?.Note);
-                Check("race page: the classes the race can be (Warrior, Hunter) are links to the class pages with icons; the page says where it starts is not in the game files",
-                    rp.Section("classes").Rows.Select(r => r.Title).SequenceEqual(new[] { "Warrior", "Hunter" }) && rp.Section("classes").Rows.All(r => r.Link.StartsWith("class:") && r.IconId > 0) && rp.Notes.Any(n => n.Contains("starts") && n.Contains("not in your game files")), string.Join(" | ", rp.Notes));
+                Check("race page: the classes the race can be (Warrior, Hunter) are links to the class pages with icons; the page says why there is no starting zone when it cannot work one out",
+                    rp.Section("classes").Rows.Select(r => r.Title).SequenceEqual(new[] { "Warrior", "Hunter" }) && rp.Section("classes").Rows.All(r => r.Link.StartsWith("class:") && r.IconId > 0) && (rp.Facts.Any(f => f.Label == "Starts in") || rp.Notes.Any(n => n.Contains("starting zone"))), string.Join(" | ", rp.Notes));
+                // the starting zone: the narrowest race mask among the first quests decides (faction-wide quests elsewhere do not outvote it)
+                {
+                    ClassicQuest Q(int area, int races, int min = 1, int lvl = 1) => new ClassicQuest { ZoneOrSort = area, RequiredRaces = races, MinLevel = min, QuestLevel = lvl };
+                    var qs = new[] { Q(9, 77), Q(9, 77, 1, 2), Q(9, 77), Q(24, 1), Q(188, 8), Q(132, 68), Q(132, 68, 1, 2), Q(363, 130), Q(363, 178), Q(500, 8, 10, 12), Q(-101, 8), Q(700, 0) };
+                    int Area(int race) => AtlasQuery.StartArea(qs, 1UL << (race - 1), 1, out _);
+                    AtlasQuery.StartArea(qs, 1UL << 6, 1, out int gnomeQuests);
+                    Check("race page: starting zone from the first quests - the race-only quest beats three faction-wide ones (Night Elf -> 188, Human -> 24), a shared mask is still the narrowest (Dwarf and Gnome -> 132, 2 quests; Troll -> 363), later quests, quest sorts and quests for everyone are ignored, no quest -> 0",
+                        Area(4) == 188 && Area(1) == 24 && Area(3) == 132 && Area(7) == 132 && gnomeQuests == 2 && Area(8) == 363 && Area(10) == 0,
+                        Area(4) + " " + Area(1) + " " + Area(3) + " " + Area(7) + " " + gnomeQuests + " " + Area(8) + " " + Area(10));
+                }
                 Check("race page: the description of the race is a text on the page", rp.Texts.Any(t => t.Title == "About" && t.Body.StartsWith("The orc race")));
 
                 // ============================================================================================================ the spell pages

@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using ElansAddonHub.Services.Atlas.Classic;
 using ElansAddonHub.Services.Db2;
+using ElansAddonHub.Services.Maps;
 
 namespace ElansAddonHub.Services.Atlas
 {
@@ -191,8 +193,56 @@ namespace ElansAddonHub.Services.Atlas
                 if (s.Rows.Count > 0) s.Note = AtlasFormat.Count(s.Rows.Count, "ability", "abilities") + " from " + string.Join(", ", racial.Where(x => spells.Skills.ContainsKey(x)).Select(x => spells.Skills[x].Name)) + ".";
             }
             else m.Notes.Add(SpellData.Spells == null ? "Spell data is read from your game files and is not ready yet, so the racial abilities are not listed." : "The skill lines of the races are not in the game data this Outpost can read, so the racial abilities are not listed.");
-            m.Notes.Add("Where this race starts is not in your game files, and the Classic baseline in this version carries no player start positions, so no starting zone is shown.");
+            AddStartZone(m, r);
             return m;
+        }
+
+        // Where a race starts. Neither the client nor the Classic baseline stores start positions, but the baseline's quests carry the
+        // races that may take them. Most first quests are open to a whole faction; each starting area also has a few for its own races
+        // only (the "Welcome!" quests: Shadowglen for Night Elves, Coldridge Valley for Dwarves and Gnomes, the Valley of Trials for Orcs
+        // and Trolls ...). So among the race's first quests (up to its starting level + 1) the ones with the NARROWEST race mask decide,
+        // and their most common area is the start.
+        static void AddStartZone(AtlasPageModel m, RaceInfo r)
+        {
+            var ci = ClassicAtlas.Current;
+            var idx = MapData.Index;
+            if (ci == null || idx == null || r.BitMask == 0)
+            {
+                m.Notes.Add(ci == null
+                    ? "The starting zone is worked out from the Classic baseline's first quests, and the baseline is not loaded, so it is not shown."
+                    : "The game's zone tables are not read yet, so the starting zone is not shown.");
+                return;
+            }
+            int start = Math.Max(1, r.StartingLevel);
+            int area = StartArea(ci.Quests.Values, r.BitMask, start, out int quests);
+            if (area == 0) { m.Notes.Add("The Classic baseline has no first quests for this race, so its starting zone is not shown."); return; }
+            int ui = idx.UiMapForArea(area);
+            string zone = ui > 0 ? ZoneName(ui) : null, place = idx.AreaName(area);
+            string text = !string.IsNullOrEmpty(place) && !string.IsNullOrEmpty(zone) && !string.Equals(place, zone, StringComparison.OrdinalIgnoreCase) ? place + ", " + zone : zone ?? place;
+            if (string.IsNullOrEmpty(text)) { m.Notes.Add("The area of this race's first quests is not in your game's zone tables, so the starting zone is not shown."); return; }
+            m.Facts.Add(new AtlasFact("Starts in", text, AtlasLabel.Classic, ui > 0 ? "zone:" + ui.ToString(CultureInfo.InvariantCulture) : null));
+            m.Notes.Add("Starting zone: where the first quests meant for this race only are given (" + AtlasFormat.Count(quests, "quest", "quests") + " up to level " + (start + 1) + " in the Classic baseline).");
+        }
+
+        // the area id of a race's first quests (0 = none): the quests open to it up to startLevel + 1, narrowed to those with the fewest races
+        // in their mask, then their most common area; `quests` = how many of those are in that area
+        public static int StartArea(IEnumerable<ClassicQuest> all, ulong raceMask, int startLevel, out int quests)
+        {
+            int Pop(ulong v) { int n = 0; while (v != 0) { v &= v - 1; n++; } return n; }
+            var first = new List<KeyValuePair<int, int>>();   // area, races in the mask
+            foreach (var q in all)
+            {
+                ulong mask = (ulong)(uint)q.RequiredRaces;
+                if (q.ZoneOrSort <= 0 || mask == 0 || (mask & raceMask) == 0) continue;
+                if (q.MinLevel > startLevel || q.QuestLevel > startLevel + 1) continue;
+                first.Add(new KeyValuePair<int, int>(q.ZoneOrSort, Pop(mask)));
+            }
+            quests = 0;
+            if (first.Count == 0) return 0;
+            int narrowest = first.Min(x => x.Value);
+            var best = first.Where(x => x.Value == narrowest).GroupBy(x => x.Key).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First();
+            quests = best.Count();
+            return best.Key;
         }
 
         static bool StartsWithVowel(string s) => !string.IsNullOrEmpty(s) && "AEIOUaeiou".IndexOf(s[0]) >= 0;
