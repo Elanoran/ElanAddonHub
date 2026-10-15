@@ -102,6 +102,11 @@ namespace ElansAddonHub
                 var events = idx.Instances.Where(i => i.Event).Select(i => i.Name).OrderBy(n => n).ToList();
                 Check("real instances: CashTest is a leftover, Demon Fall Canyon and Hyjal Crater are events / unreleased, the Deadmines and Alterac Valley are not",
                     cash != null && cash.Placeholder && dfc != null && dfc.Event && hyjal != null && hyjal.Event && dead != null && !dead.Event && !dead.Placeholder && av != null && !av.Event, string.Join(", ", events));
+                var dfcE = dfc?.Entrance; var cvE = idx.Instance(2804)?.Entrance; var thanes = idx.Instance(3065);
+                Check("real entrances: with no ghost spot, Demon Fall Canyon is placed near its map point in Ashenvale (AreaPOI) and The Crystal Vale in the middle of its area in Silithus (approximate, labelled so); The Hall of Thanes (level 13) stays a dungeon",
+                    dfcE != null && dfcE.Approximate && dfcE.ZoneName == "Ashenvale" && dfcE.Source == MapIndex.PoiSourceName && cvE != null && cvE.Approximate && cvE.ZoneName == "Silithus" && thanes != null && !thanes.Event && thanes.NoGhostSpot,
+                    dfcE?.ZoneName + " " + dfcE?.Source + " | " + cvE?.ZoneName + " | " + thanes?.Event);
+                notes.Add("note real approximate entrances: " + string.Join("; ", idx.Instances.Where(i => i.Entrance != null && i.Entrance.Approximate).Select(i => i.Name + " near " + i.Entrance.ZoneName + " " + AtlasInstances.Pct(i.Entrance.Fx) + " / " + AtlasInstances.Pct(i.Entrance.Fy))) + "; no entrance in the game data at all: " + string.Join(", ", idx.Instances.Where(i => i.NoGhostSpot && i.Entrance == null).Select(i => i.Name)));
                 notes.Add("note real instances labelled event or unreleased: " + string.Join(", ", events) + "; placeholders: " + string.Join(", ", idx.Instances.Where(i => i.Placeholder).Select(i => i.Name)));
 
                 if (Environment.GetEnvironmentVariable("ELANSHUB_DUNGEONMAPS_ALL") == "1")

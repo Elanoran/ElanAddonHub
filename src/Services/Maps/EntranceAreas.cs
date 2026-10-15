@@ -15,7 +15,7 @@ namespace ElansAddonHub.Services.Maps
         {
             try
             {
-                var want = set.Maps.Where(m => MapIndex.EntranceOf(m) != null).ToList();
+                var want = set.Maps.Where(m => MapIndex.CorpseEntrance(m) != null).ToList();
                 foreach (var cont in want.GroupBy(m => m.CorpseMapId))
                 {
                     var cm = set.Maps.FirstOrDefault(m => m.Id == cont.Key);

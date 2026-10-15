@@ -110,7 +110,9 @@ namespace ElansAddonHub.Services.Maps
                 }
                 inst.Floors = floors;
                 // data, not names: a dungeon or raid the game puts no ghost of on a continent has no way in from the world; a battleground or arena with no map
-                inst.Event = corpseData && !inst.Placeholder && ((m.InstanceType == 1 || m.InstanceType == 2) ? m.CorpseMapId < 0 : floors.Count == 0);
+                // a dungeon with a level the game suggests is likely live, only its door is not in the files: listed as a dungeon, labelled NoEntranceData instead
+                inst.Event = corpseData && !inst.Placeholder && ((m.InstanceType == 1 || m.InstanceType == 2) ? m.CorpseMapId < 0 && inst.MinLevel <= 0 : floors.Count == 0);
+                inst.NoGhostSpot = corpseData && !inst.Placeholder && (m.InstanceType == 1 || m.InstanceType == 2) && m.CorpseMapId < 0;
                 Instances.Add(inst);
             }
         }
@@ -122,7 +124,21 @@ namespace ElansAddonHub.Services.Maps
         // The way into an instance: Map.db2 names, for every instance, the continent and the spot where a ghost that dies inside is put - the spirit healer / corpse run target,
         // which is the instance portal's door (verified on the real files: Deadmines in Westfall, Wailing Caverns in the Barrens, Ragefire Chasm in Orgrimmar, Molten Core at
         // Blackrock Mountain). A row with no continent (-1), no spot (0, 0) or a spot outside the world has no entrance - nothing is guessed.
+        public const string PoiSourceName = "Game data: a map point named like the instance (AreaPOI) - near the way in, not the door itself";
+        public const string AreaSourceName = "Game data: the middle of the area named like the instance (AreaTable and the terrain) - the area, not the door itself";
+
+        // the ghost spot, else the approximate way in NamedEntrances found (a map point or an area of the instance's name)
         public static InstanceEntrance EntranceOf(GameMapInfo m)
+        {
+            var e = CorpseEntrance(m);
+            if (e != null || m == null || m.AltEntranceMapId < 0) return e;
+            if (!Valid(m.AltX, m.AltY)) return null;
+            return new InstanceEntrance { MapId = m.AltEntranceMapId, X = m.AltX, Y = m.AltY, AreaId = m.AltAreaId, Approximate = true, Source = m.AltKind == NamedEntrances.KindPoi ? PoiSourceName : AreaSourceName };
+        }
+
+        static bool Valid(double x, double y) => !double.IsNaN(x) && !double.IsNaN(y) && !double.IsInfinity(x) && !double.IsInfinity(y) && Math.Abs(x) <= MaxWorld && Math.Abs(y) <= MaxWorld && Math.Abs(x) + Math.Abs(y) >= 1;
+
+        public static InstanceEntrance CorpseEntrance(GameMapInfo m)
         {
             if (m == null || m.CorpseMapId < 0) return null;
             double x = m.CorpseX, y = m.CorpseY;
@@ -140,7 +156,7 @@ namespace ElansAddonHub.Services.Maps
             {
                 int ui = UiMapForArea(e.AreaId);
                 if (ui > 0) p = WorldToMap(e.MapId, e.X, e.Y, ui);
-                if (p != null) e.Source = EntranceSourceName + "; the zone is the terrain's own area at that spot";
+                if (p != null && !e.Approximate) e.Source = EntranceSourceName + "; the zone is the terrain's own area at that spot";
             }
             if (p == null) p = WorldToMap(e.MapId, e.X, e.Y);
             // a continent shown only on the world map (or the cosmic map) is no zone: say nothing rather than "World"

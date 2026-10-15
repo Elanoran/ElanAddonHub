@@ -97,6 +97,11 @@ namespace ElansAddonHub.Services.Maps
         public int CorpseMapId = -1;    // where the game puts a ghost that dies in the instance: the continent (-1 = none)
         public double CorpseX, CorpseY; // ... and the spot on it (world x north / y west): for an instance this is the entrance
         public int CorpseAreaId;        // the AreaTable id of the terrain chunk at that spot (read from the continent's ADT once per game build; 0 = not read)
+        // an approximate way in when there is no ghost spot (NamedEntrances): a map point of the instance's name ("poi") or the middle of the continent area of its name
+        // ("area"); -1 = none
+        public int AltEntranceMapId = -1, AltAreaId;
+        public double AltX, AltY;
+        public string AltKind = "";
     }
 
     // LFGDungeons.db2 joined with its ContentTuning row: the name and the level the game suggests for a dungeon or raid (the wings of Dire Maul are rows of their own)
@@ -171,6 +176,7 @@ namespace ElansAddonHub.Services.Maps
         public string Name = "", Kind = "";
         public int InstanceType, MaxPlayers;
         public bool Placeholder;                       // a test or unused leftover ("<unused>...", "Scott Test", "CashTest")
+        public bool NoGhostSpot;                       // the game data has no way in for it (no ghost spot); its entrance, if any, is approximate (NamedEntrances) or learned in game
         public bool Event;                             // not a dungeon of the world: a dungeon or raid with no way in from the world (Map.db2 names no continent for
                                                        // its ghost: the event and unreleased maps - Demon Fall Canyon, Storm Cliffs, City of Dalaran ...), or a
                                                        // battleground / arena the game has no map of (Hyjal Crater)
@@ -187,6 +193,9 @@ namespace ElansAddonHub.Services.Maps
         public int MapId;                              // the continent (Map id) the entrance stands on
         public double X, Y;
         public string Source = "";                     // where the position comes from (a label for the page)
+        public bool Approximate;                       // not the door itself: a map point or an area of the instance's name (NamedEntrances)
+        public bool Learned;                           // seen in the game: where the Lodge's members (Members > 0) or you entered from (Elan's Toolkit, AtlasInstances.Entrance)
+        public int Members;
         public int AreaId;                             // the terrain's area at the spot (0 = not read): the exact zone, where the map rectangles (loose boxes) can be wrong near a border
         public int UiMapId;                            // the most specific map that shows it (a zone or a city); 0 = none does
         public double Fx, Fy;                          // the spot on that map (0..1 from the left / top)

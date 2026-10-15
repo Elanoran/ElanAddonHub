@@ -27,6 +27,7 @@ namespace ElansAddonHub
             AtlasView.UseNavSettings(settings, () => SettingsStore.Save(settings));       // recents and pins of the Atlas shell
             AtlasQuery.Context.Lodge = () => Session?.AtlasData;
             AtlasQuery.Context.OwnFishSpots = () => AtlasObs.Read(settings.WowRoot)?.FishSpots;
+            AtlasQuery.Context.OwnEntrances = () => AtlasObs.Read(settings.WowRoot)?.Entrances;
             AtlasQuery.Context.OwnFieldNotes = () => AtlasObs.Read(settings.WowRoot)?.FieldNotes;   // Hunter Helper's field notes on this PC
             AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
             AtlasView.LodgeState = LodgeAtlasState;

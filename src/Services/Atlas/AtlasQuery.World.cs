@@ -87,11 +87,13 @@ namespace ElansAddonHub.Services.Atlas
             if (here.Count > 0)
             {
                 var s = Section(m, "instances", "Dungeons and raids");
-                s.Note = "Their entrances are in " + z.Name + " (the spot where the game puts your ghost).";
+                s.Note = "Their entrances are in " + z.Name + " (the spot where the game puts your ghost; for the newer instances where Lodge members or you entered from, or the game data's approximate spot).";
                 foreach (var i in here)
                 {
-                    s.Rows.Add(new AtlasRow { Key = "instance:" + i.MapId, Link = "instance:" + i.MapId, Title = i.Name, Detail = AtlasInstances.Summary(i), Extra = "Entrance " + AtlasInstances.Pct(i.Entrance.Fx) + " / " + AtlasInstances.Pct(i.Entrance.Fy), Label = F, Tier = 0, Type = i.Kind, Sort = i.MinLevel });
-                    plan.Spot(id, i.Entrance.Fx, i.Entrance.Fy, MarkerKind.Entrance, i.Name, AtlasInstances.Summary(i) + " · " + F, "instance:" + i.MapId);
+                    var en = AtlasInstances.Entrance(idx, i);
+                    var lab = AtlasInstances.LabelOf(en);
+                    s.Rows.Add(new AtlasRow { Key = "instance:" + i.MapId, Link = "instance:" + i.MapId, Title = i.Name, Detail = AtlasInstances.Summary(i), Extra = (en.Approximate ? "Near " : "Entrance ") + AtlasInstances.Pct(en.Fx) + " / " + AtlasInstances.Pct(en.Fy), Label = lab, Tier = en.Learned ? 1 : 0, Type = i.Kind, Sort = i.MinLevel });
+                    plan.Spot(id, en.Fx, en.Fy, MarkerKind.Entrance, i.Name, AtlasInstances.Summary(i) + " · " + lab + (en.Approximate ? " (approximate)" : ""), "instance:" + i.MapId);
                 }
             }
 
@@ -183,7 +185,7 @@ namespace ElansAddonHub.Services.Atlas
             if (inst.Parts.Count > 1) m.Facts.Add(new AtlasFact("Wings", string.Join(", ", inst.Parts), F));
             m.Entrance = AtlasInstances.EntranceFor(idx, inst);
             if (m.Entrance != null)
-                m.Facts.Add(new AtlasFact("Entrance", m.Entrance.UiMapId > 0 ? m.Entrance.ZoneName + " · " + m.Entrance.Coords : "continent " + m.Entrance.MapId + ", x " + Math.Round(m.Entrance.X) + ", y " + Math.Round(m.Entrance.Y), F, m.Entrance.UiMapId > 0 ? "zone:" + m.Entrance.UiMapId : null));
+                m.Facts.Add(new AtlasFact("Entrance", m.Entrance.UiMapId > 0 ? (m.Entrance.Approximate ? "near " : "") + m.Entrance.ZoneName + " · " + m.Entrance.Coords : "continent " + m.Entrance.MapId + ", x " + Math.Round(m.Entrance.X) + ", y " + Math.Round(m.Entrance.Y), m.Entrance.Label, m.Entrance.UiMapId > 0 ? "zone:" + m.Entrance.UiMapId : null));
             m.Map.InstanceId = mapId; m.Map.InstanceName = inst.Name;
             var L = Lodge();
             var dv = AtlasDerived.For(ClassicAtlas.Current);

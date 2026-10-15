@@ -405,8 +405,8 @@ namespace ElansAddonHub
                     MapIndexFile.TryWrite(ovIdxPath, "wow_classic_beta|1.60.1.70338|abc", ovSet);
                     var ovBack = MapIndexFile.TryRead(ovIdxPath);
                     var b100 = ovBack?.Set.Arts.FirstOrDefault(a => a.Id == 100);
-                    Check("index file: the overlays (and the reason when there are none) survive the saved copy; the format version is 4 (instance entrances and dungeon levels, flight tables, map WDT ids) so a copy from before is read again from the game files",
-                        b100 != null && b100.Overlays.Length == 2 && b100.Overlays[0].OffsetY == -40 && b100.Overlays[0].Tiles.Length == 2 && b100.Overlays[0].Tiles[1].FileDataId == 7002 && ovBack.Set.HasOverlays && MapData.FormatVersion == 4);
+                    Check("index file: the overlays (and the reason when there are none) survive the saved copy; the format version is 5 (approximate entrances, instance entrances and dungeon levels, flight tables, map WDT ids) so a copy from before is read again from the game files",
+                        b100 != null && b100.Overlays.Length == 2 && b100.Overlays[0].OffsetY == -40 && b100.Overlays[0].Tiles.Length == 2 && b100.Overlays[0].Tiles[1].FileDataId == 7002 && ovBack.Set.HasOverlays && MapData.FormatVersion == 5);
                     MapIndexFile.TryWrite(ovIdxPath, "wow_classic_beta|1.60.1.70338|abc", unkSet);
                     Check("index file: ... the 'no overlays' reason too", MapIndexFile.TryRead(ovIdxPath)?.Set.OverlayProblem == unkSet.OverlayProblem);
                 }

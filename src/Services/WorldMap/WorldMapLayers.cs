@@ -287,10 +287,10 @@ namespace ElansAddonHub.Services.WorldMap
             var idx = MapData.Index;
             if (idx == null) return new LayerResult { Note = "The maps are not ready yet." };
             var items = new List<object>();
-            foreach (var i in idx.Instances.Where(i => !i.Placeholder && i.Entrance != null && i.Entrance.MapId == mapId && (i.InstanceType == 1 || i.InstanceType == 2))
+            foreach (var i in idx.Instances.Where(i => !i.Placeholder && (i.InstanceType == 1 || i.InstanceType == 2) && AtlasInstances.Entrance(idx, i)?.MapId == mapId)
                 .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.MapId))
             {
-                var e = i.Entrance;
+                var e = AtlasInstances.Entrance(idx, i);
                 if (!WorldMapMath.InWorld(e.X, e.Y)) continue;
                 LL(e.X, e.Y, out var lat, out var lng);
                 bool raid = i.InstanceType == 2;
@@ -300,7 +300,7 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     ["lat"] = lat, ["lng"] = lng, ["name"] = i.Name, ["ic"] = raid ? "raid" : "dun", ["g"] = raid ? "instances.raids" : "instances.dungeons",
                     ["lab"] = lv.Length > 0 ? i.Name + " · " + lv : i.Name,
-                    ["tip"] = AtlasInstances.Summary(i), ["extra"] = (where.Length > 0 ? where + " · " : "") + "click to open its page",
+                    ["tip"] = AtlasInstances.Summary(i), ["extra"] = (where.Length > 0 ? where + " · " : "") + (e.Learned ? (e.Members > 0 ? "seen by Lodge members · " : "seen by you · ") : e.Approximate ? "approximate (game data) · " : "") + "click to open its page",
                     ["link"] = "instance:" + i.MapId,
                 });
             }

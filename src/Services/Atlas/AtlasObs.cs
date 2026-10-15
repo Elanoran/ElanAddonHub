@@ -244,9 +244,10 @@ namespace ElansAddonHub.Services
             public List<string> UnknownSections = new List<string>();                                  // keys of the module data this app does not read
             public Dictionary<int, Dictionary<int, List<NodePt>>> Nodes = new Dictionary<int, Dictionary<int, List<NodePt>>>();   // object -> uiMapId -> nodes
             public Dictionary<int, FieldNote> FieldNotes = new Dictionary<int, FieldNote>();             // npc -> Hunter Helper's field note (module hunter.fieldnotes)
+            public Dictionary<int, List<EntranceSpot>> Entrances = new Dictionary<int, List<EntranceSpot>>();   // instance map id -> the spots it was entered from (Toolkit 0.5.7)
             public int Dropped;                                                // entries (or parts of them) that failed validation and were left out
             public long Since;
-            public bool IsEmpty => Kills.Count + Objects.Count + Fishing.Count + Vendors.Count + Quests.Count + Spawns.Count + Finds.Count + Nodes.Count + FishSpots.Count + FieldNotes.Count == 0;
+            public bool IsEmpty => Kills.Count + Objects.Count + Fishing.Count + Vendors.Count + Quests.Count + Spawns.Count + Finds.Count + Nodes.Count + FishSpots.Count + FieldNotes.Count + Entrances.Count == 0;
         }
 
         // ---------------------------------------------------------------- validation helpers
@@ -615,7 +616,7 @@ namespace ElansAddonHub.Services
             return s;
         }
 
-        public static readonly string[] KnownSections = { "since", "kills", "objects", "fishing", "vendors", "quests", "spawns", "nodes", "fishspots", "finds" };
+        public static readonly string[] KnownSections = { "since", "kills", "objects", "fishing", "vendors", "quests", "spawns", "nodes", "fishspots", "finds", "entrances" };
 
         // the validation itself, on the module's data table. Per section: entries in the table, entries kept, parts left out (Snapshot.Stats)
         public static Snapshot FromTables(Dictionary<string, object> d)
@@ -667,6 +668,9 @@ namespace ElansAddonHub.Services
             var fso = d.Child("fishspots");
             if (fso != null) s.FishSpots = ParseFishSpotMaps(fso, ref dropped);
             Done("fishspots", Count(fso), s.FishSpots.Count);
+            var eno = d.Child("entrances");
+            if (eno != null) s.Entrances = ParseEntrances(eno, ref dropped);
+            Done("entrances", Count(eno), s.Entrances.Count);
             var fo = d.Child("finds");
             if (fo != null)
             {
@@ -841,7 +845,7 @@ namespace ElansAddonHub.Services
         // The entries whose signature differs from what was uploaded before, as one atlas.share frame within the per-section counts and 56 KB.
         // Null when nothing changed. `revealed` = the item details to share (validated again here); `sent` = key -> signature of what the lodge already has.
         // `includeSeen` = the lodge takes seenNpcs / seenObjects / seenQuests (feature "atlas2"): the details AtlasObs.SeenSource holds go too, only ids not sent before (sent keys N / G / W + id).
-        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent, bool includeSeen = false, bool includeNodes = false, bool includeFish = false, bool includeNotes = false)
+        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent, bool includeSeen = false, bool includeNodes = false, bool includeFish = false, bool includeNotes = false, bool includeEntrances = false)
         {
             var cands = new List<Cand>();
             void Add(string section, string key, string sentKey, string sig, object node, long order = 0)
@@ -868,6 +872,8 @@ namespace ElansAddonHub.Services
                         foreach (var kv in s.FishSpots.OrderBy(k => k.Key)) Add("fishspots", I(kv.Key), "f" + kv.Key, Sig(kv.Value), FishSpotsNode(kv.Value));
                 if (includeNotes)
                     foreach (var kv in s.FieldNotes.OrderBy(k => k.Key)) Add("fieldnotes", I(kv.Key), "b" + kv.Key, Sig(kv.Value), NoteWire(kv.Value));
+                if (includeEntrances)
+                    foreach (var kv in s.Entrances.OrderBy(k => k.Key)) Add("entrances", I(kv.Key), "e" + kv.Key, Sig(kv.Value), EntrancesNode(kv.Value));
                 foreach (var f in s.Finds.OrderBy(x => x.At).ThenBy(x => FindKey(x), StringComparer.Ordinal))
                 {
                     var o = new Dictionary<string, object> { ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At };
@@ -902,7 +908,7 @@ namespace ElansAddonHub.Services
             var limits = new Dictionary<string, int>
             {
                 ["kills"] = MaxKillsPerShare, ["objects"] = MaxObjectsPerShare, ["fishing"] = MaxFishingPerShare, ["vendors"] = MaxVendorsPerShare, ["quests"] = MaxQuestsPerShare,
-                ["spawns"] = MaxSpawnNpcsPerShare, ["nodes"] = MaxNodeObjectsPerShare, ["fishspots"] = MaxFishMapsPerShare, ["fieldnotes"] = MaxNotesPerShare, ["finds"] = MaxFindsPerShare, ["items"] = MaxRevealedPerShare,
+                ["spawns"] = MaxSpawnNpcsPerShare, ["nodes"] = MaxNodeObjectsPerShare, ["fishspots"] = MaxFishMapsPerShare, ["fieldnotes"] = MaxNotesPerShare, ["entrances"] = MaxEntrancesPerShare, ["finds"] = MaxFindsPerShare, ["items"] = MaxRevealedPerShare,
                 ["seenNpcs"] = MaxSeenNpcsPerShare, ["seenObjects"] = MaxSeenObjectsPerShare, ["seenQuests"] = MaxSeenQuestsPerShare,
             };
             var b = new Batch();
@@ -910,7 +916,7 @@ namespace ElansAddonHub.Services
             var objs = new Dictionary<string, Dictionary<string, object>>();
             var finds = new List<object>();
             var counts = new Dictionary<string, int>();
-            int bytes = 64, nodePoints = 0, fishPoints = 0, notePoints = 0;
+            int bytes = 64, nodePoints = 0, fishPoints = 0, notePoints = 0, doorPoints = 0;
             foreach (var c in cands)
             {
                 counts.TryGetValue(c.Section, out var n);
@@ -926,6 +932,12 @@ namespace ElansAddonHub.Services
                     int pts = ((List<object>)c.Node).Count;
                     if (fishPoints + pts > MaxFishSpotsPerShare) continue;
                     fishPoints += pts;
+                }
+                if (c.Section == "entrances")
+                {
+                    int pts = ((List<object>)c.Node).Count;
+                    if (doorPoints + pts > MaxEntranceSpotsPerShare) continue;
+                    doorPoints += pts;
                 }
                 if (c.Section == "fieldnotes")
                 {

@@ -20,6 +20,7 @@ namespace ElansAddonHub.Services.Atlas
         public Func<List<InvChar>> Characters = () => null;                  // the user's own characters (for "usable by my character" in the browse lists)
         public Func<DateTime> NowUtc = () => DateTime.UtcNow;
         public Func<Dictionary<int, List<AtlasObs.FishSpot>>> OwnFishSpots = () => null;   // fishing spots this PC's Hub observed: uiMapId -> spots
+        public Func<Dictionary<int, List<AtlasObs.EntranceSpot>>> OwnEntrances = () => null;   // instance entrances this PC's Toolkit noted: instance map id -> spots
         public Func<IReadOnlyDictionary<int, AtlasObs.FieldNote>> OwnFieldNotes = () => null;   // Hunter Helper's field notes on this PC: npc -> note
         public Func<Dictionary<int, Dictionary<int, List<AtlasObs.NodePt>>>> OwnNodes = () => null;   // gathering nodes this PC's Hub observed: object -> uiMapId -> nodes
     }

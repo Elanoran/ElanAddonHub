@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services.Maps
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 4;          // (4: instance entrances + dungeon levels; 3: map WDT file ids, flight tables; 2: explored-area overlays) bump when the parsing or the saved file changes meaning
+        public const int FormatVersion = 5;          // (5: approximate entrances from AreaPOI / AreaTable names; 4: instance entrances + dungeon levels; 3: map WDT file ids, flight tables; 2: explored-area overlays) bump when the parsing or the saved file changes meaning
 
         // ---- hooks (the same shape as ItemData's)
         public static Func<string> WowRoot = () => null;
@@ -192,7 +192,7 @@ namespace ElansAddonHub.Services.Maps
             {
                 casc.ZeroFillEncrypted = true;     // key-locked parts read as zeros; the table reader skips those sections
                 var set = MapTables.Parse(ReadTables(casc));
-                if (set.Ok && set.HasMaps) EntranceAreas.Resolve(casc, set);
+                if (set.Ok && set.HasMaps) { EntranceAreas.Resolve(casc, set); NamedEntrances.Resolve(casc, set); }
                 return set;
             }
         }
@@ -275,7 +275,7 @@ namespace ElansAddonHub.Services.Maps
                         w.Write(a.MinX); w.Write(a.MinY); w.Write(a.MinZ); w.Write(a.MaxX); w.Write(a.MaxY); w.Write(a.MaxZ);
                     }
                     w.Write(set.Maps.Count);
-                    foreach (var m in set.Maps) { w.Write(m.Id); w.Write(m.Directory ?? ""); w.Write(m.Name ?? ""); w.Write(m.InstanceType); w.Write(m.MapType); w.Write(m.Expansion); w.Write(m.MaxPlayers); w.Write(m.AreaTableId); w.Write(m.WdtFileDataId); w.Write(m.CorpseMapId); w.Write(m.CorpseX); w.Write(m.CorpseY); w.Write(m.CorpseAreaId); }
+                    foreach (var m in set.Maps) { w.Write(m.Id); w.Write(m.Directory ?? ""); w.Write(m.Name ?? ""); w.Write(m.InstanceType); w.Write(m.MapType); w.Write(m.Expansion); w.Write(m.MaxPlayers); w.Write(m.AreaTableId); w.Write(m.WdtFileDataId); w.Write(m.CorpseMapId); w.Write(m.CorpseX); w.Write(m.CorpseY); w.Write(m.CorpseAreaId); w.Write(m.AltEntranceMapId); w.Write(m.AltX); w.Write(m.AltY); w.Write(m.AltAreaId); w.Write(m.AltKind ?? ""); }
                     w.Write(set.Floors.Count);
                     foreach (var f in set.Floors) { w.Write(f.GroupId); w.Write(f.UiMapId); w.Write(f.FloorIndex); w.Write(f.RelativeHeight); w.Write(f.Name ?? ""); }
                     w.Write(set.Areas.Count);
@@ -349,7 +349,7 @@ namespace ElansAddonHub.Services.Maps
                             MinX = r.ReadSingle(), MinY = r.ReadSingle(), MinZ = r.ReadSingle(), MaxX = r.ReadSingle(), MaxY = r.ReadSingle(), MaxZ = r.ReadSingle(),
                         });
                     n = Count(r, 1000000);
-                    for (int i = 0; i < n; i++) set.Maps.Add(new GameMapInfo { Id = r.ReadInt32(), Directory = r.ReadString(), Name = r.ReadString(), InstanceType = r.ReadInt32(), MapType = r.ReadInt32(), Expansion = r.ReadInt32(), MaxPlayers = r.ReadInt32(), AreaTableId = r.ReadInt32(), WdtFileDataId = r.ReadInt32(), CorpseMapId = r.ReadInt32(), CorpseX = r.ReadDouble(), CorpseY = r.ReadDouble(), CorpseAreaId = r.ReadInt32() });
+                    for (int i = 0; i < n; i++) set.Maps.Add(new GameMapInfo { Id = r.ReadInt32(), Directory = r.ReadString(), Name = r.ReadString(), InstanceType = r.ReadInt32(), MapType = r.ReadInt32(), Expansion = r.ReadInt32(), MaxPlayers = r.ReadInt32(), AreaTableId = r.ReadInt32(), WdtFileDataId = r.ReadInt32(), CorpseMapId = r.ReadInt32(), CorpseX = r.ReadDouble(), CorpseY = r.ReadDouble(), CorpseAreaId = r.ReadInt32(), AltEntranceMapId = r.ReadInt32(), AltX = r.ReadDouble(), AltY = r.ReadDouble(), AltAreaId = r.ReadInt32(), AltKind = r.ReadString() });
                     n = Count(r, 1000000);
                     for (int i = 0; i < n; i++) set.Floors.Add(new FloorMember { GroupId = r.ReadInt32(), UiMapId = r.ReadInt32(), FloorIndex = r.ReadInt32(), RelativeHeight = r.ReadInt32(), Name = r.ReadString() });
                     n = Count(r, 2000000);

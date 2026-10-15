@@ -511,7 +511,8 @@ namespace ElansAddonHub.Services.Atlas
                 if (i.MinLevel > 0) { e.Level = i.MinLevel; e.Level2 = Math.Max(i.MinLevel, i.MaxLevel); }
                 else if (x.Derived != null && x.Derived.InstanceCreatureLevels(i.MapId, out var clo, out var chi)) { e.Level = clo; e.Level2 = chi; e.Classic = true; }
                 // where the way in is: the zone of its entrance (sort and filter by it)
-                if (i.Entrance != null && i.Entrance.UiMapId > 0) { e.Zone = i.Entrance.UiMapId; e.ZoneName = i.Entrance.ZoneName; e.Extra = e.ZoneName; }
+                var en = AtlasInstances.Entrance(x.Map, i);
+                if (en != null && en.UiMapId > 0) { e.Zone = en.UiMapId; e.ZoneName = en.ZoneName; e.Extra = e.ZoneName; }
                 e.Detail = string.Join(" · ", new[] { AtlasQuery.InstanceDetail(i), e.Level > 0 ? "Levels " + AtlasFormat.Levels(e.Level, e.Level2) : "", e.ZoneName.Length > 0 ? "entrance in " + e.ZoneName : "" }.Where(t => t.Length > 0));
                 ix.All.Add(e);
             }

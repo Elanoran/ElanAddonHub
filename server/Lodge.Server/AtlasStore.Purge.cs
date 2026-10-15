@@ -1,7 +1,7 @@
 namespace Lodge;
 
 // Take one member's contributions out of the pool (2.22): used when a member leaves or is removed, and by the owner's "revert member" action
-// (a member who sent bad data stays a member). Everything the member authored goes: their counters, nodes and fishing spots (the merged totals are
+// (a member who sent bad data stays a member). Everything the member authored goes: their counters, nodes, fishing spots and entrance spots (the merged totals are
 // rebuilt from the other members), the vendors, quests, revealed items, seen npc / object / quest rows and spawn points that carry their name, and
 // their finds. First-writer-wins rows are simply removed, so the next member to share the same id puts their version in.
 // Rows saved before 2.22 carry no author for quests and seen rows; those cannot be attributed and stay.
@@ -9,8 +9,8 @@ public sealed partial class AtlasStore
 {
     public sealed class PurgeResult
     {
-        public int Counters, Nodes, FishSpots, FieldNotes, Vendors, Quests, Revealed, Seen, Spawns, Finds;
-        public int Total => Counters + Nodes + FishSpots + FieldNotes + Vendors + Quests + Revealed + Seen + Spawns + Finds;
+        public int Counters, Nodes, FishSpots, FieldNotes, Entrances, Vendors, Quests, Revealed, Seen, Spawns, Finds;
+        public int Total => Counters + Nodes + FishSpots + FieldNotes + Entrances + Vendors + Quests + Revealed + Seen + Spawns + Finds;
     }
 
     // Caller holds Gate and saves afterwards (Dirty is set). The epoch changes, so every client fetches the whole pool again (a delta cannot express a removal).
@@ -31,6 +31,7 @@ public sealed partial class AtlasStore
             foreach (var m in md.Fish.Keys) maps.Add(m);
             r.FishSpots = md.FishTotal;
             r.FieldNotes = PurgeNotes(md);
+            r.Entrances = PurgeEntrances(md);
         }
         foreach (var (k, id) in srcs)
         {
