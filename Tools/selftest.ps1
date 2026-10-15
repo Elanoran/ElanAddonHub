@@ -6,7 +6,7 @@
   Tools\selftest.ps1                          # --changed origin/main (what this branch touched)
   Tools\selftest.ps1 -Only inventory,toasts   # just those sections
   Tools\selftest.ps1 -Changed v2.33.0         # everything since a tag
-  Tools\selftest.ps1 -Full                    # every section: do this before a release
+  Tools\selftest.ps1 -Full                    # every section (slow, ~11 min): only when something shared changed
   Tools\selftest.ps1 -List                    # section names
 
   Exit code: 0 = no new failures, 1 = new FAIL lines (or the run did not finish), 2 = could not start.

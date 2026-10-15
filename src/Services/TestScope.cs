@@ -194,7 +194,10 @@ namespace ElansAddonHub.Services
             R(@"^src/ThemedDialog", "dialogs", "invites2");
             R(@"^src/Services/(StripSelfTest|PixelStrip)\.cs$", "strip");
             // ---- not exercised by the self-test
-            R(@"^(docs/|README\.md$|DESIGN\.md$|\.gitignore$|\.gitattributes$|src/CHANGELOG\.md$|Tools/)");
+            R(@"^(docs/|README\.md$|DESIGN\.md$|ARCHITECTURE\.md$|\.gitignore$|\.gitattributes$|src/CHANGELOG\.md$|Tools/)");
+            // the release bumps: a project file whose only change is <Version>, and the newest Lodge server constant (it only feeds the owner's update notice)
+            R(@"^src/ElansAddonHub\.csproj#version$");
+            R(@"^src/Brand\.cs#lodgeserver$", "lodge", "lodgefeatures");
             return r;
         }
 
@@ -302,8 +305,45 @@ namespace ElansAddonHub.Services
                 if (o == null) return null;
                 all.AddRange(o);
             }
-            return all.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
+            var files = all.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
+            // a release bump alone must not make it a full run: the file is listed by the one line that changed in it
+            for (int i = 0; i < files.Count; i++)
+            {
+                var tag = BumpOnly(files[i], bs[0] != hd[0] ? baseRef : null, repo);
+                if (tag != null) files[i] = files[i] + "#" + tag;
+            }
+            return files;
         }
+
+        // the lines a release bumps, per file; any other changed line in the file keeps it a normal (shared) change
+        static readonly Dictionary<string, Tuple<string, Regex>> Bumps = new Dictionary<string, Tuple<string, Regex>>
+        {
+            ["src/ElansAddonHub.csproj"] = Tuple.Create("version", new Regex(@"^\s*<Version>[0-9.]+</Version>\s*$")),
+            ["src/Brand.cs"] = Tuple.Create("lodgeserver", new Regex(@"^\s*public const string LatestLodgeServer = ""[0-9.]+"";\s*$")),
+        };
+
+        static string BumpOnly(string file, string baseRef, string repo)
+        {
+            if (!Bumps.TryGetValue(file, out var b)) return null;
+            var diffs = new List<string>();
+            if (baseRef != null) diffs.Add("diff -U0 " + baseRef + "...HEAD -- \"" + file + "\"");
+            diffs.Add("diff -U0 HEAD -- \"" + file + "\"");
+            int changed = 0;
+            foreach (var d in diffs)
+            {
+                var o = Git(d, repo, out _);
+                if (o == null) return null;
+                foreach (var l in o)
+                {
+                    if (l.StartsWith("+++") || l.StartsWith("---") || !(l.StartsWith("+") || l.StartsWith("-"))) continue;
+                    if (!BumpLine(b.Item2, l.Substring(1))) return null;
+                    changed++;
+                }
+            }
+            return changed > 0 ? b.Item1 : null;
+        }
+
+        static bool BumpLine(Regex r, string line) => r.IsMatch(line.TrimEnd('\r'));
 
         static List<string> Git(string args, string repo, out string error)
         {
@@ -338,7 +378,12 @@ namespace ElansAddonHub.Services
             Ck("shared files -> ALL", new[] { "src/App.xaml.cs", "src/MainWindow.xaml.cs", "src/ElansAddonHub.csproj", "src/Services/Util.cs", "src/Services/SettingsStore.cs" }.All(f => Map(f).Count == All.Length));
             Ck("unknown file -> ALL", Map("src/Brand_new_file.cs").Count == All.Length && Map("somewhere/else.bin").Count == All.Length);
             Ck("one shared file among specific ones -> ALL", Map("src/InventoryPage.xaml", "src/Motion.cs").Count == All.Length);
-            Ck("docs only -> nothing", Map("README.md", "docs/design/x.png", "src/CHANGELOG.md").Count == 0);
+            Ck("docs only -> nothing", Map("README.md", "docs/design/x.png", "src/CHANGELOG.md", "ARCHITECTURE.md").Count == 0);
+            Ck("a release bump (project <Version> only) -> nothing; the newest Lodge server constant -> the Lodge sections only; any other project change -> ALL",
+                Map("src/ElansAddonHub.csproj#version").Count == 0 && Same(Map("src/Brand.cs#lodgeserver"), "lodge", "lodgefeatures") && Map("src/ElansAddonHub.csproj").Count == All.Length && Map("src/Brand.cs").Count == All.Length);
+            Ck("bump lines: a version line and the Lodge server line are bumps, anything else is not",
+                BumpLine(Bumps["src/ElansAddonHub.csproj"].Item2, "    <Version>2.63.1</Version>\r") && !BumpLine(Bumps["src/ElansAddonHub.csproj"].Item2, "    <PlatformTarget>AnyCPU</PlatformTarget>")
+                && BumpLine(Bumps["src/Brand.cs"].Item2, "        public const string LatestLodgeServer = \"2.24.0\";") && !BumpLine(Bumps["src/Brand.cs"].Item2, "        public const string Name = \"Elan's Outpost\";"));
             Ck("no changes -> nothing", Map().Count == 0);
             Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "invites2" || a == "characters" || a == "upgrades" || a == "armory" || a == "itemdata" || a == "spelldata" || a == "inventory" || a == "health")));
             Ck("every rule section is a real section", Rules.SelectMany(r => r.Item2).All(s => s == Star || All.Contains(s)));
