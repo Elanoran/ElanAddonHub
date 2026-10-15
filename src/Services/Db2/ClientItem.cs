@@ -27,6 +27,13 @@ namespace ElansAddonHub.Services.Db2
         public int Flags2;                            // ItemSparse.Flags[1]; 0x200 = a caster weapon (uses the caster damage tables)
         public int ItemSetId;                         // ItemSparse.ItemSet, 0 = none
 
+        // who may use it (ItemSparse; all 0 / -1 = anyone, also for a revealed item, whose record the Lodge has not sent)
+        public int AllowableClass = -1;               // class bit mask (bit = class id - 1); -1 or 32767 = every class
+        public long AllowableRace;                    // race bit mask (bit = race id - 1); 0 or -1 = every race
+        public int RequiredSkill, RequiredSkillRank;  // SkillLine id and the rank in it (0 = none)
+        public int MinFactionId, MinReputation;       // faction id and the standing index (3 Neutral .. 7 Exalted); only counts with a faction id
+        public int RequiredPvpRank;                   // 0 = none
+
         // armor and weapon damage from the game's item-level tables; 0 / false while those tables are not read (or not known to this version)
         public int Armor => ItemDetails.ArmorOf(this);
         public bool TryDamage(out int min, out int max, out double dps) => ItemDetails.DamageOf(this, out min, out max, out dps);

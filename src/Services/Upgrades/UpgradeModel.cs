@@ -14,6 +14,28 @@ namespace ElansAddonHub.Services.Upgrades
         public int Spec;                                                              // 0 = not known (the class's levelling weights), 1..3 = the talent tree
         public Dictionary<int, int> Worn = new Dictionary<int, int>();                // paper-doll slot (1..18) -> item id
         public bool WornKnown = true;                                                 // false = no gear module: nothing is known about what is worn
+        // what the Hub saved about professions: skill line id -> rank. SkillsKnown = the professions module was read (a profession missing from it is then really not learned)
+        public bool SkillsKnown, SkillsUnlined;                                       // SkillsUnlined: an entry without a skill line id (older Hub) that is told apart by its name only
+        public Dictionary<int, int> Skills = new Dictionary<int, int>();
+        public Dictionary<string, int> SkillsByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // reputations: faction id -> standing index (3 Neutral .. 7 Exalted). No Hub module saves them yet, so this stays unknown (then a reputation limit is only a note)
+        public bool ReputationKnown;
+        public Dictionary<int, int> Reputation = new Dictionary<int, int>();
+        public int PvpRank = -1;                                                      // -1 = not known
+        public const int SkillUnknown = -2;
+        ulong raceBit = ulong.MaxValue; int classMask = -1;
+        public ulong RaceBit { get { if (raceBit == ulong.MaxValue) raceBit = UpgradeWorld.RaceBitOf(Race); return raceBit; } }
+        public int ClassMask { get { if (classMask < 0) classMask = UpgradeWorld.ClassMaskOf(ClassFile); return classMask; } }
+
+        // the character's rank in a profession; SkillUnknown when the professions are not known or the skill is not one the Hub lists
+        public int SkillRank(int line, string name, bool isProfession)
+        {
+            if (!SkillsKnown || !isProfession) return SkillUnknown;
+            if (Skills.TryGetValue(line, out var r)) return r;
+            if (name != null && SkillsByName.TryGetValue(name, out r)) return r;
+            return SkillsUnlined ? SkillUnknown : 0;
+        }
+
         public Dictionary<int, int> Enchants = new Dictionary<int, int>();           // paper-doll slot -> enchant id read from the item link the Hub saved (0 / missing = none)
 
         public string Side
@@ -35,7 +57,7 @@ namespace ElansAddonHub.Services.Upgrades
         public static string Pretty(string cls) => string.IsNullOrEmpty(cls) ? "" : char.ToUpperInvariant(cls[0]) + cls.Substring(1).ToLowerInvariant();
 
         // the stable part of the cache key
-        public string Fingerprint => Key + "|" + ClassFile + "|" + Race + "|" + Side + "|" + Level + "|" + Spec + "|" + string.Join(",", Worn.OrderBy(k => k.Key).Select(k => k.Key + ":" + k.Value)) + "|" + string.Join(",", Enchants.OrderBy(k => k.Key).Select(k => k.Key + "e" + k.Value));
+        public string Fingerprint => Key + "|" + ClassFile + "|" + Race + "|" + Side + "|" + Level + "|" + Spec + "|" + string.Join(",", Worn.OrderBy(k => k.Key).Select(k => k.Key + ":" + k.Value)) + "|" + string.Join(",", Enchants.OrderBy(k => k.Key).Select(k => k.Key + "e" + k.Value)) + "|" + (SkillsKnown ? "s" + string.Join(",", Skills.OrderBy(k => k.Key).Select(k => k.Key + "=" + k.Value)) + string.Join(",", SkillsByName.OrderBy(k => k.Key, StringComparer.Ordinal).Select(k => k.Key + "=" + k.Value)) : "-") + "|" + (ReputationKnown ? string.Join(",", Reputation.OrderBy(k => k.Key).Select(k => k.Key + "r" + k.Value)) : "-") + "|" + PvpRank;
 
         // the enchant id of an item link: "|Hitem:<id>:<enchant>:<gem1> ..." (0 = none or not a link)
         public static int EnchantOfLink(string link)
@@ -66,6 +88,16 @@ namespace ElansAddonHub.Services.Upgrades
                         }
             }
             else u.WornKnown = false;
+            var prof = c.Hub != null ? HubModules.ProfessionsOf(c.Hub) : null;
+            if (prof != null)
+            {
+                u.SkillsKnown = true;
+                foreach (var p in prof.List)
+                {
+                    if (p.Line > 0) u.Skills[p.Line] = Math.Max(u.Skills.TryGetValue(p.Line, out var o) ? o : 0, p.Skill);
+                    else if (!string.IsNullOrEmpty(p.Name)) { u.SkillsByName[p.Name] = Math.Max(u.SkillsByName.TryGetValue(p.Name, out var o2) ? o2 : 0, p.Skill); u.SkillsUnlined = true; }
+                }
+            }
             if (c.Hub != null && HubModules.StateOf(c.Hub, "talents") == HubModState.Ok) u.Spec = UpgradeWeights.DetectSpec(HubModules.TalentsOf(c.Hub));
             return u;
         }
@@ -75,19 +107,19 @@ namespace ElansAddonHub.Services.Upgrades
     public sealed class UpgradeFilters
     {
         public bool Dungeons = true, Raids, Classic = true, TradeableOnly;
-        public bool Enchants = true, OnlyApplicable, Food = true;      // the Enchant rows, "only enchants I or my Lodge can apply", the Food & drink section
+        public bool Enchants = true, OnlyApplicable, Food = true, ShowBlocked = true;      // the Enchant rows, "only enchants I or my Lodge can apply", the Food & drink section
         public int LevelOffset;                    // 0 = only what can be worn now; 3 = also what is a few levels away (listed apart)
         public int PerSlot = 3;
         public double RareChance = 2;              // a drop under this many percent counts as rare: ranked low
 
-        public string Serialize() => "D" + (Dungeons ? 1 : 0) + "R" + (Raids ? 1 : 0) + "C" + (Classic ? 1 : 0) + "T" + (TradeableOnly ? 1 : 0) + "L" + LevelOffset + "N" + (Enchants ? 1 : 0) + "A" + (OnlyApplicable ? 1 : 0) + "F" + (Food ? 1 : 0) + (HiddenGroups.Count > 0 ? "H" + string.Join("+", HiddenGroups.OrderBy(g => g, StringComparer.Ordinal)) : "");
+        public string Serialize() => "D" + (Dungeons ? 1 : 0) + "R" + (Raids ? 1 : 0) + "C" + (Classic ? 1 : 0) + "T" + (TradeableOnly ? 1 : 0) + "L" + LevelOffset + "N" + (Enchants ? 1 : 0) + "A" + (OnlyApplicable ? 1 : 0) + "F" + (Food ? 1 : 0) + (ShowBlocked ? "" : "U0") + (HiddenGroups.Count > 0 ? "H" + string.Join("+", HiddenGroups.OrderBy(g => g, StringComparer.Ordinal)) : "");
         public static UpgradeFilters Parse(string s)
         {
             var f = new UpgradeFilters();
             if (string.IsNullOrEmpty(s)) return f;
             bool B(char key, bool def) { int i = s.IndexOf(key); return i >= 0 && i + 1 < s.Length && (s[i + 1] == '0' || s[i + 1] == '1') ? s[i + 1] == '1' : def; }
             f.Dungeons = B('D', true); f.Raids = B('R', false); f.Classic = B('C', true); f.TradeableOnly = B('T', false);
-            f.Enchants = B('N', true); f.OnlyApplicable = B('A', false); f.Food = B('F', true);
+            f.Enchants = B('N', true); f.OnlyApplicable = B('A', false); f.Food = B('F', true); f.ShowBlocked = B('U', true);
             int h = s.IndexOf('H');
             if (h >= 0) foreach (var g in s.Substring(h + 1).Split('+')) if (Array.IndexOf(UpgradeExtras.Groups, g) >= 0) f.HiddenGroups.Add(g);
             int l = s.IndexOf('L');
@@ -193,6 +225,9 @@ namespace ElansAddonHub.Services.Upgrades
         public int NeedsLevel;                      // the level it needs (Soon items)
         public bool ReplacesOffhand;                // a two-hand weapon takes the off hand slot too
         public bool Revealed;                       // known only from a Lodge member's game
+        public bool Blocked;                        // the character cannot use it (wrong class or race, a profession, a reputation ...): listed greyed, never a "best upgrade"
+        public string BlockReason = "";             // "Rogue only", "Needs Engineering 245"
+        public string Requirement = "";             // a limit that could not be checked ("Needs Revered with Argent Dawn"): a note, the item is not greyed
         public List<UpgradeSource> Sources = new List<UpgradeSource>();
         public double Metric;                       // the gain in percent (a share of the slot's best item for an empty slot)
         public double Reach;                        // the best source's reach
@@ -210,6 +245,8 @@ namespace ElansAddonHub.Services.Upgrades
         public int WornId;
         public List<UpgradeCandidate> Upgrades = new List<UpgradeCandidate>();    // top ones, usable now
         public List<UpgradeCandidate> Soon = new List<UpgradeCandidate>();        // a few levels away (only when asked for)
+        public List<UpgradeCandidate> Blocked = new List<UpgradeCandidate>();     // better, but this character cannot use them: greyed, after the usable ones
+        public int BlockedHidden;                                                  // the same, left out because "Show items I can't use" is off
         public int Hidden;                                                         // better items that the filters hide
         public string Note = "";                                                   // "You wield a two-hand weapon."
         public string EnchantCurrent = "";                                         // "No enchant" / "Enchanted: +3 Strength"; "" = nothing can be enchanted there

@@ -41,7 +41,7 @@ namespace ElansAddonHub.Services.Upgrades
         }
 
         // classic race / class bits (race id - 1, class id - 1); the client's own tables win when they are read
-        static ulong RaceBitOf(string race)
+        public static ulong RaceBitOf(string race)
         {
             if (string.IsNullOrEmpty(race)) return 0;
             var spaced = System.Text.RegularExpressions.Regex.Replace(race, "(?<=[a-z])(?=[A-Z])", " ");
@@ -55,7 +55,7 @@ namespace ElansAddonHub.Services.Upgrades
             }
         }
 
-        static int ClassMaskOf(string file)
+        public static int ClassMaskOf(string file)
         {
             if (string.IsNullOrEmpty(file)) return 0;
             var c = ClassData.Data?.ClassByFile(file);

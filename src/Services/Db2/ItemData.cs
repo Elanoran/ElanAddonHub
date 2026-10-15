@@ -103,7 +103,7 @@ namespace ElansAddonHub.Services.Db2
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 2;          // bump when the parsing or the cache file changes meaning (2: weapon damage spread, flags and item set id)
+        public const int FormatVersion = 3;          // bump when the parsing or the cache file changes meaning (2: weapon damage spread, flags and item set id; 3: class, race, skill, reputation and PvP rank limits)
 
         // ---- hooks
         public static Func<string> WowRoot = () => null;
@@ -517,6 +517,7 @@ namespace ElansAddonHub.Services.Db2
                 w.Write((short)i.ClassId); w.Write((short)i.SubclassId); w.Write(i.IconId); w.Write((byte)i.Bonding); w.Write(i.Stackable);
                 w.Write(i.DelayMs); w.Write((byte)i.ContainerSlots); w.Write(i.SellPrice); w.Write(i.BuyPrice);
                 w.Write(i.DmgVariance); w.Write(i.Flags2); w.Write((ushort)i.ItemSetId);
+                w.Write((short)i.AllowableClass); w.Write(i.AllowableRace); w.Write((ushort)i.RequiredSkill); w.Write((ushort)i.RequiredSkillRank); w.Write((ushort)i.MinFactionId); w.Write(i.MinReputation); w.Write((byte)i.RequiredPvpRank);
                 if (i.Stats == null) w.Write(-1);
                 else { w.Write(i.Stats.Length); foreach (var s in i.Stats) w.Write(s); }
             }
@@ -568,6 +569,7 @@ namespace ElansAddonHub.Services.Db2
                 i.ClassId = r.ReadInt16(); i.SubclassId = r.ReadInt16(); i.IconId = r.ReadInt32(); i.Bonding = r.ReadByte(); i.Stackable = r.ReadInt32();
                 i.DelayMs = r.ReadInt32(); i.ContainerSlots = r.ReadByte(); i.SellPrice = r.ReadInt64(); i.BuyPrice = r.ReadInt64();
                 i.DmgVariance = r.ReadSingle(); i.Flags2 = r.ReadInt32(); i.ItemSetId = r.ReadUInt16();
+                i.AllowableClass = r.ReadInt16(); i.AllowableRace = r.ReadInt64(); i.RequiredSkill = r.ReadUInt16(); i.RequiredSkillRank = r.ReadUInt16(); i.MinFactionId = r.ReadUInt16(); i.MinReputation = r.ReadInt32(); i.RequiredPvpRank = r.ReadByte();
                 int sc = r.ReadInt32();
                 if (sc < 0) i.Stats = null;
                 else if (sc == 0) i.Stats = ClientItem.NoStats;

@@ -33,6 +33,8 @@ namespace ElansAddonHub.Services.Db2
             public int StatValue, StatType, StatSlots;                 // StatPercentEditor[], StatModifier_bonusStat[]
             public int Stackable, SellPrice, BuyPrice, ItemDelay, ItemLevel, Bonding, ContainerSlots, RequiredLevel, InventoryType, Quality;
             public int DmgVariance = -1, Flags2 = -1, ItemSet = -1;   // float damage spread, Flags[1] (0x200 = caster weapon), item set id (optional: -1 = this layout does not say)
+            // who may use the item (optional like the three above): MinReputation int32, AllowableRace int64, MinFactionID u16, RequiredSkillRank u16, RequiredSkill u16, AllowableClass int16, RequiredPVPRank u8
+            public int MinReputation = -1, AllowableRace = -1, MinFaction = -1, RequiredSkillRank = -1, RequiredSkill = -1, AllowableClass = -1, RequiredPvpRank = -1;
         }
 
         public static readonly SparseLayout[] SparseLayouts =
@@ -43,6 +45,7 @@ namespace ElansAddonHub.Services.Db2
                 StatValue = 76, StatType = 116, StatSlots = 10, Stackable = 156, SellPrice = 180, BuyPrice = 184, ItemDelay = 272, ItemLevel = 280,
                 Bonding = 293, ContainerSlots = 295, RequiredLevel = 298, InventoryType = 299, Quality = 300,
                 DmgVariance = 4, Flags2 = 204, ItemSet = 266,
+                MinReputation = 164, AllowableRace = 172, MinFaction = 274, RequiredSkillRank = 276, RequiredSkill = 278, AllowableClass = 282, RequiredPvpRank = 297,
             },
         };
 
@@ -136,6 +139,13 @@ namespace ElansAddonHub.Services.Db2
             if (L.DmgVariance >= 0) it.DmgVariance = BitConverter.ToSingle(a, f + L.DmgVariance);
             if (L.Flags2 >= 0) it.Flags2 = BitConverter.ToInt32(a, f + L.Flags2);
             if (L.ItemSet >= 0) it.ItemSetId = BitConverter.ToUInt16(a, f + L.ItemSet);
+            if (L.AllowableClass >= 0) it.AllowableClass = BitConverter.ToInt16(a, f + L.AllowableClass);
+            if (L.AllowableRace >= 0) it.AllowableRace = BitConverter.ToInt64(a, f + L.AllowableRace);
+            if (L.RequiredSkill >= 0) it.RequiredSkill = BitConverter.ToUInt16(a, f + L.RequiredSkill);
+            if (L.RequiredSkillRank >= 0) it.RequiredSkillRank = BitConverter.ToUInt16(a, f + L.RequiredSkillRank);
+            if (L.MinFaction >= 0) it.MinFactionId = BitConverter.ToUInt16(a, f + L.MinFaction);
+            if (L.MinReputation >= 0) it.MinReputation = BitConverter.ToInt32(a, f + L.MinReputation);
+            if (L.RequiredPvpRank >= 0) it.RequiredPvpRank = a[f + L.RequiredPvpRank];
             var raw = new List<int>();
             for (int i = 0; i < L.StatSlots; i++)
             {

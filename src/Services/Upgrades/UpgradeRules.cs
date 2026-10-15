@@ -8,7 +8,7 @@ using ElansAddonHub.Services.Db2;
 namespace ElansAddonHub.Services.Upgrades
 {
     // Which item may go in which slot, and what the character can use. Pure rules: no window, no files.
-    public static class UpgradeRules
+    public static partial class UpgradeRules
     {
         // the paper doll's ids (InventorySlot numbers of the Hub's gear module), in the order the panel lists them
         public static readonly int[] Slots = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17, 18 };
