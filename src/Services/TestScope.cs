@@ -178,6 +178,7 @@ namespace ElansAddonHub.Services
             R(@"^src/(MainWindow\.Atlas(Lodge|Notes)Test|Lodge/LodgeSession\.Atlas|Services/Atlas/(AtlasObs(\.Notes)?|AtlasQuery\.Notes))\.cs$", "atlaslodge", "lodge");
             R(@"^src/Services/HubData\.cs$", "atlaslodge");
             R(@"^src/(MainWindow\.NpcSpotsTest|Services/Atlas/(AtlasObs|AtlasQuery)\.NpcSpots)\.cs$", "atlaslodge", "worldmap", "atlaspage");   // where NPCs really stand (npcspots, atlas8)
+            R(@"^src/(MainWindow\.FindsAccuracyTest|Services/Atlas/AtlasObs\.Extras)\.cs$", "atlaslodge", "atlaspage");   // more accurate loot (counter extras, atlas9)
             R(@"^src/MainWindow\.FilesTest\.cs$", "lodgefiles", "lodge");
             R(@"^src/MainWindow\.BadgesTest\.cs$", "badges", "lodge");
             R(@"^src/(MainWindow\.RealmsTest|MainWindow\.Realms|Lodge/LodgeSession\.Realms)\.cs$", "realms", "lodge");

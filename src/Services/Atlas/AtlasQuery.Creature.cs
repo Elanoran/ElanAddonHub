@@ -35,29 +35,63 @@ namespace ElansAddonHub.Services.Atlas
 
         // ---- loot of one source (an npc, an object): what the Lodge saw drop with the chance from kills, merged with the Classic baseline's table
         // Lodge rows come first; a Classic figure for the same item rides on the same row; Classic chances under TinyChance are folded.
-        static void LootSection(AtlasPageModel m, string key, string title, string lodgeKind, int id, ClassicSourceKind ck, string empty)
+        // the word a source's count is in: "kill", "open", "pickpocket", "corpse" (gathered), "opening" (a clam, a lockbox)
+        internal static string LootWord(string lodgeKind) => lodgeKind == "obj" ? "open" : lodgeKind == "pick" ? "pickpocket" : lodgeKind == "item" ? "opening" : lodgeKind == "fish" ? "cast"
+            : lodgeKind == "skin" || lodgeKind == "mine" || lodgeKind == "herb" || lodgeKind == "salvage" ? "corpse" : "kill";
+        internal static string LootTypeOf(string lodgeKind) => lodgeKind == "obj" ? "Object" : lodgeKind == "fish" ? "Fishing" : lodgeKind == "pick" ? "Pickpocketing" : lodgeKind == "skin" ? "Skinning"
+            : lodgeKind == "mine" ? "Mining" : lodgeKind == "herb" ? "Herbalism" : lodgeKind == "salvage" ? "Salvage" : lodgeKind == "item" ? "Contained in" : "Drop";
+
+        // one observed item of a source, in words: "4 of 37 kills (10.8 %)" (each corpse once; a quest item over the kills while its quest wanted it; under
+        // AtlasObs.LowSampleKills kills no rate is claimed), plus its random suffixes and the rate since the last patch when the source spans builds
+        internal static void ObservedRate(AtlasObs.Counter c, int itemId, string what, out string detail, out string extra, out double chance, out bool low)
+        {
+            var it = c.Items[itemId];
+            var ix = c.X != null && c.X.It.TryGetValue(itemId, out var xx) ? xx : null;
+            long kills = AtlasObs.UniqueKills(c), drops = AtlasObs.UniqueDrops(c, it[0]);
+            bool quest = ix != null && ix.Q > 0 && c.X.Q.TryGetValue(ix.Q, out var qk) && qk > 0;
+            if (quest) { kills = c.X.Q[ix.Q]; drops = Math.Min(it[0], kills * AtlasObs.MaxDropsPerKill); }   // the quest kills are not deduplicated: neither are their drops
+            string w = quest ? what + " while on the quest" : what, ws = quest ? what + "s while on the quest" : what + "s";
+            chance = kills > 0 ? Math.Min(100, drops * 100.0 / kills) : 0;
+            low = AtlasObs.LowSample(kills);
+            detail = AtlasObs.RateText(drops, kills, w, ws) + (it[1] > it[0] ? " · " + it[1] + " items" : "");
+            var parts = new List<string>();
+            var sx = AtlasObs.SuffixText(ix);
+            if (sx.Length > 0) parts.Add(sx);
+            int build = c.X?.LatestBuild ?? 0;
+            if (build > 0 && c.X.B.Count > 1 && c.X.B.TryGetValue(build, out var kb) && kb > 0)
+            {
+                long db = ix != null && ix.B.TryGetValue(build, out var d) ? d : 0;
+                parts.Add("Since the last patch: " + AtlasObs.RateText(db, kb, what, what + "s"));
+            }
+            extra = string.Join(" · ", parts);
+        }
+
+        static void LootSection(AtlasPageModel m, string key, string title, string lodgeKind, int id, ClassicSourceKind? ck, string empty)
         {
             var s = Section(m, key, title, empty);
             var L = Lodge();
             var rows = new List<AtlasRow>(); var tiny = new List<AtlasRow>(); var by = new Dictionary<int, AtlasRow>();
             var counter = lodgeKind != null ? L?.Loot(lodgeKind, id) : null;
-            string what = lodgeKind == "obj" ? "open" : "kill";
+            string what = LootWord(lodgeKind);
             if (counter != null && counter.N > 0)
             {
                 foreach (var kv in counter.Items)
                 {
-                    double chance = Math.Min(100, kv.Value[0] * 100.0 / counter.N);
-                    var r = ItemRow(kv.Key, AtlasFormat.Percent(chance) + " · " + kv.Value[0] + " of " + AtlasFormat.Count(counter.N, what, what + "s") + (kv.Value[1] > kv.Value[0] ? " · " + kv.Value[1] + " items" : ""), AtlasLabel.Forever);
-                    r.Type = "Drop"; r.Tier = 0; r.Sort = chance;
+                    ObservedRate(counter, kv.Key, what, out var detail, out var extra, out var chance, out var low);
+                    var r = ItemRow(kv.Key, detail, AtlasLabel.Forever);
+                    r.Type = LootTypeOf(lodgeKind); r.Tier = 0; r.Sort = low ? chance / 1000 : chance; r.Extra = extra;
                     rows.Add(r); by[kv.Key] = r;
                 }
-                s.Note = AtlasFormat.Count(counter.N, "looted " + what, "looted " + what + "s") + " seen by " + AtlasFormat.Count(Math.Max(1, counter.Members), "member", "members") + " of the Lodge.";
+                long unique = AtlasObs.UniqueKills(counter), dup = counter.X?.Dup ?? 0;
+                s.Note = AtlasFormat.Count(unique, "looted " + what, "looted " + what + "s") + " seen by " + AtlasFormat.Count(Math.Max(1, counter.Members), "member", "members") + " of the Lodge"
+                    + (dup > 0 ? " (" + AtlasFormat.Count(dup, "corpse", "corpses") + " that several members looted counted once)" : "") + "."
+                    + (AtlasObs.LowSample(unique) ? " Fewer than " + AtlasObs.LowSampleKills + " so far: these are counts, not drop rates yet." : "");
                 AddLayer(m, "lodge");
             }
-            var dv = AtlasDerived.For(ClassicAtlas.Current);
+            var dv = ck != null ? AtlasDerived.For(ClassicAtlas.Current) : null;
             if (dv != null)
             {
-                foreach (var e in dv.LootOf(ck, id))
+                foreach (var e in dv.LootOf(ck.Value, id))
                 {
                     var src = e.Source;
                     var txt = AtlasFormat.Percent(src.Chance) + (src.QuestOnly ? " · only while on the quest" : "") + CountText(src);
@@ -133,6 +167,9 @@ namespace ElansAddonHub.Services.Atlas
             if (cn != null) { var lv = AtlasFormat.Levels(cn.MinLevel, cn.MaxLevel); if (lv.Length > 0) m.Facts.Add(new AtlasFact("Level", lv, C)); }
             int rank = seen != null ? seen.Rank : cn?.Rank ?? 0;
             m.Facts.Add(new AtlasFact("Rank", rank > 0 ? AtlasFormat.RankName(rank) : "Normal", seen != null ? F : C));
+            // what Lodge members' games showed when they looted it (Toolkit 0.5.10): the level range and elite / rare class
+            var lx = loot?.X;
+            if (lx != null && lx.Lo > 0) m.Facts.Add(new AtlasFact("Level seen", AtlasFormat.Levels(lx.Lo, lx.Hi) + (lx.Cl.Count > 0 ? " · " + AtlasObs.ClassText(lx) : ""), F));
             int type = seen != null && seen.Type > 0 ? seen.Type : cn?.Type ?? 0;
             if (AtlasFormat.CreatureType(type).Length > 0) m.Facts.Add(new AtlasFact("Type", AtlasFormat.CreatureType(type), seen != null && seen.Type > 0 ? F : C));
             int family = seen != null && seen.Family > 0 ? seen.Family : cn?.Family ?? 0;
@@ -176,10 +213,13 @@ namespace ElansAddonHub.Services.Atlas
             NpcSpotSection(m, seenAt, classicDropped);
 
             LootSection(m, "loot", "Loot", "npc", id, ClassicSourceKind.NpcDrop, "No loot is known for this NPC.");
-            var sk = ClassicAtlas.Current != null ? AtlasDerived.For(ClassicAtlas.Current).LootOf(ClassicSourceKind.NpcSkin, id) : null;
-            if (sk != null && sk.Count > 0) AddSimpleLoot(m, "skin", "Skinning", sk);
-            var pk = ClassicAtlas.Current != null ? AtlasDerived.For(ClassicAtlas.Current).LootOf(ClassicSourceKind.NpcPickpocket, id) : null;
-            if (pk != null && pk.Count > 0) AddSimpleLoot(m, "pick", "Pickpocketing", pk);
+            // what members got from it beyond the kill (Toolkit 0.5.10: pickpocketing, gathering the corpse), beside the Classic baseline's tables
+            var dvc = ClassicAtlas.Current != null ? AtlasDerived.For(ClassicAtlas.Current) : null;
+            foreach (var (gk, gt, gc) in new (string, string, ClassicSourceKind?)[] { ("skin", "Skinning", ClassicSourceKind.NpcSkin), ("pick", "Pickpocketing", ClassicSourceKind.NpcPickpocket), ("mine", "Mining", null), ("herb", "Herbalism", null), ("salvage", "Salvage", null) })
+            {
+                bool lodgeHas = (L?.Loot(gk, id)?.N ?? 0) > 0, classicHas = gc != null && dvc != null && dvc.LootOf(gc.Value, id).Count > 0;
+                if (lodgeHas || classicHas) LootSection(m, gk, gt, gk, id, gc, "");
+            }
             if (vendor) VendorSection(m, id);
             var dv = AtlasDerived.For(ClassicAtlas.Current);
             if (dv != null)

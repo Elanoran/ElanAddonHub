@@ -92,6 +92,7 @@ namespace ElansAddonHub
                 await AtlasSeenDetailsTest(check, sent);
                 await AtlasNotesTest(check, sent, () => now, t => now = t);
                 AtlasNpcSpotsTest(check, sent);
+                AtlasFindsAccuracyTest(check);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally

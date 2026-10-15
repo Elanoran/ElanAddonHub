@@ -24,7 +24,7 @@ public sealed partial class AtlasStore
         bool wasMember = false;
         if (members.Remove(identity, out var md))
         {
-            for (int k = 0; k < 3; k++) foreach (var id in md.Src[k].Keys) { srcs.Add((k, id)); r.Counters++; }
+            for (int k = 0; k < KindCount; k++) foreach (var id in md.Src[k].Keys) { srcs.Add((k, id)); r.Counters++; }
             foreach (var id in md.Nodes.Keys) objs.Add(id);
             wasMember = true;
             r.Nodes = md.NodeTotal;

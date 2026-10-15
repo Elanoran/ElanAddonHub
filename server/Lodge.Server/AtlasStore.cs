@@ -12,12 +12,15 @@ namespace Lodge;
 public sealed partial class AtlasStore
 {
     public const int Kills = 0, Objects = 1, Fishing = 2;
+    // 2.26 (atlas9): pickpocketing, gathering a corpse per kind, and what was inside opened items (clams, lockboxes) are counters of their own
+    public const int Pickpocket = 3, Skinning = 4, Mining = 5, Herbalism = 6, Salvage = 7, Contained = 8, KindCount = 9;
+    static readonly int[] KindSec = { 0, 1, 2, 16, 17, 18, 19, 20, 21 };   // the kinds' places in Get's sections
     const long MaxFileBytes = 64L * 1024 * 1024;
     const int MaxMembers = 2000;
 
     sealed class MemberData
     {
-        public readonly Dictionary<int, Atlas.Ctr>[] Src = { new(), new(), new() };
+        public readonly Dictionary<int, Atlas.Ctr>[] Src = Enumerable.Range(0, KindCount).Select(_ => new Dictionary<int, Atlas.Ctr>()).ToArray();
         public long Total;
         public int FindCount;
         public readonly Dictionary<int, Dictionary<int, List<Atlas.NodePt>>> Nodes = new();   // object -> uiMapId -> points (2.18)
@@ -37,7 +40,7 @@ public sealed partial class AtlasStore
     // the merged nodes of one object: map -> nodes (most looted first)
     public sealed class NodeAgg { public Dictionary<int, List<Atlas.NodePt>> Maps = new(); public long Rev; }
 
-    public sealed class Agg { public Atlas.Ctr Sum = new(); public int Members; public long Rev; }
+    public sealed class Agg { public Atlas.Ctr Sum = new(); public int Members; public long Rev; public long Dup; }   // Dup: kills that were a corpse another member counted too (2.26)
 
     sealed class SpawnSet { public List<Atlas.Spawn> Pts = new(); public long Rev; }
 
@@ -46,7 +49,7 @@ public sealed partial class AtlasStore
     readonly IClock clock;
     public readonly object Gate = new();
     readonly Dictionary<string, MemberData> members = new(StringComparer.Ordinal);
-    readonly Dictionary<int, Agg>[] aggs = { new(), new(), new() };
+    readonly Dictionary<int, Agg>[] aggs = Enumerable.Range(0, KindCount).Select(_ => new Dictionary<int, Agg>()).ToArray();
     readonly Dictionary<int, NodeAgg> nodeAggs = new();
     readonly Dictionary<int, FishAgg> fishAggs = new();
     readonly Dictionary<int, Atlas.Vendor> vendors = new();
@@ -117,12 +120,12 @@ public sealed partial class AtlasStore
                 if (who.Length == 0 || who.Length > 64 || v is not JsonObject d) continue;
                 var md = new MemberData();
                 if (d["w"] is JsonValue wv && wv.TryGetValue<string>(out var wn)) md.Who = Names.Cut(Names.Normalize(wn), Names.Max);
-                for (int k = 0; k < 3; k++)
+                for (int k = 0; k < KindCount; k++)
                 {
                     if (d[KindName(k)] is not JsonObject so) continue;
                     foreach (var (key, node) in so)
                     {
-                        if (md.Src[k].Count >= MaxFor(k) || !Atlas.Key(key, k == Fishing ? Atlas.MaxMapId : Atlas.MaxId, out var id) || !Atlas.ParseCtr(node, k != Fishing, out var c)) continue;
+                        if (md.Src[k].Count >= MaxFor(k) || !Atlas.Key(key, KeyMax(k), out var id) || !Atlas.ParseCtr(node, k != Fishing && k != Contained, out var c)) continue;
                         if (md.Total + c.N > Atlas.MaxMemberTotal) continue;
                         md.Src[k][id] = c; md.Total += c.N;
                     }
@@ -136,7 +139,7 @@ public sealed partial class AtlasStore
             }
         // the aggregates are derived: rebuild them, remembering the revision of the member data
         var revs = root["srcRev"] as JsonObject;
-        for (int k = 0; k < 3; k++)
+        for (int k = 0; k < KindCount; k++)
         {
             var ids = members.Values.SelectMany(m => m.Src[k].Keys).Distinct().ToList();
             foreach (var id in ids)
@@ -267,16 +270,21 @@ public sealed partial class AtlasStore
         return a;
     }
 
-    static string KindName(int k) => k switch { Kills => "kills", Objects => "objects", _ => "fishing" };
-    static int MaxFor(int k) => k switch { Kills => Atlas.MaxKillSources, Objects => Atlas.MaxObjectSources, _ => Atlas.MaxFishingZones };
+    static readonly string[] KindNames = { "kills", "objects", "fishing", "pickpocket", "skinning", "mining", "herbalism", "salvage", "contained" };
+    static string KindName(int k) => KindNames[k];
+    static int MaxFor(int k) => k switch { Kills => Atlas.MaxKillSources, Objects => Atlas.MaxObjectSources, Fishing => Atlas.MaxFishingZones, Contained => Atlas.MaxContainedSources, _ => Atlas.MaxGatherSources };
+    static int KeyMax(int k) => k == Fishing ? Atlas.MaxMapId : k == Contained ? Atlas.MaxItemId : Atlas.MaxId;
+    static int PerShare(int k) => k switch { Kills => Atlas.MaxKillsPerShare, Objects => Atlas.MaxObjectsPerShare, Fishing => Atlas.MaxFishingPerShare, _ => Atlas.MaxGatherPerShare };
 
     Agg Sum(int k, int id)
     {
         var a = new Agg();
+        var fpSeen = new Dictionary<long, int>();
         foreach (var m in members.Values)
         {
             if (!m.Src[k].TryGetValue(id, out var c)) continue;
             a.Members++; a.Sum.N += c.N;
+            Atlas.AddX(ref a.Sum.X, c.X, fpSeen);
             foreach (var kv in c.I)
             {
                 if (a.Sum.I.TryGetValue(kv.Key, out var x)) { x[0] += kv.Value[0]; x[1] += kv.Value[1]; }
@@ -284,6 +292,7 @@ public sealed partial class AtlasStore
             }
             foreach (var kv in c.Z) a.Sum.Z[kv.Key] = a.Sum.Z.TryGetValue(kv.Key, out var z) ? z + kv.Value : kv.Value;
         }
+        a.Dup = Math.Min(a.Sum.N, fpSeen.Values.Sum(v => (long)(v - 1)));
         return a;
     }
 
@@ -297,7 +306,8 @@ public sealed partial class AtlasStore
         public int Total => Accepted + Unchanged + Rejected;
     }
 
-    static readonly string[] Sections = { "kills", "objects", "fishing", "vendors", "quests", "finds", "spawns", "items", "seenNpcs", "seenObjects", "seenQuests", "nodes", "fishspots", "fieldnotes", "entrances", "npcspots" };
+    static readonly string[] Sections = { "kills", "objects", "fishing", "vendors", "quests", "finds", "spawns", "items", "seenNpcs", "seenObjects", "seenQuests", "nodes", "fishspots", "fieldnotes", "entrances", "npcspots",
+        "pickpocket", "skinning", "mining", "herbalism", "salvage", "contained" };
 
     // True when the message carries at least one known, non-empty section
     public static bool HasContent(JsonObject m) =>
@@ -322,9 +332,7 @@ public sealed partial class AtlasStore
             members[identity] = md;
         }
         md.Who = who;
-        Counters(r, md, identity, Kills, m["kills"], Atlas.MaxKillsPerShare);
-        Counters(r, md, identity, Objects, m["objects"], Atlas.MaxObjectsPerShare);
-        Counters(r, md, identity, Fishing, m["fishing"], Atlas.MaxFishingPerShare);
+        for (int k = 0; k < KindCount; k++) Counters(r, md, identity, k, m[KindName(k)], PerShare(k));
         Vendors(r, identity, m["vendors"], now);
         Quests(r, identity, m["quests"], now);
         Spawns(r, identity, m["spawns"]);
@@ -351,7 +359,7 @@ public sealed partial class AtlasStore
         foreach (var (key, node) in so)
         {
             if (++seen > maxPerShare) { r.Rejected++; continue; }
-            if (!Atlas.Key(key, k == Fishing ? Atlas.MaxMapId : Atlas.MaxId, out var id) || !Atlas.ParseCtr(node, k != Fishing, out var nw)) { r.Rejected++; continue; }
+            if (!Atlas.Key(key, KeyMax(k), out var id) || !Atlas.ParseCtr(node, k != Fishing && k != Contained, out var nw)) { r.Rejected++; continue; }
             md.Src[k].TryGetValue(id, out var old);
             if (old == null && (md.Src[k].Count >= MaxFor(k) || nw.N < 1)) { r.Rejected++; continue; }
             var merged = Atlas.Merge(old, nw);
@@ -564,7 +572,14 @@ public sealed partial class AtlasStore
 
     // ---------------------------------------------------------------- reading
 
-    static JsonObject CtrJson(Atlas.Ctr c, int members, bool withMembers)
+    static JsonObject CtrJson(Atlas.Ctr c, int members, bool withMembers, long dup = 0)
+    {
+        var o = CtrJsonPlain(c, members, withMembers);
+        Atlas.WriteX(o, c.X, !withMembers, withMembers ? dup : 0);
+        return o;
+    }
+
+    static JsonObject CtrJsonPlain(Atlas.Ctr c, int members, bool withMembers)
     {
         var o = new JsonObject { ["n"] = c.N };
         if (withMembers) o["m"] = members;
@@ -649,7 +664,7 @@ public sealed partial class AtlasStore
         bool full = since <= 0 || since > rev || epoch != Epoch;
         if (full) since = 0;
         var cand = new List<(long rev, int sec, int key)>();
-        for (int k = 0; k < 3; k++) foreach (var kv in aggs[k]) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, k, kv.Key));
+        for (int k = 0; k < KindCount; k++) foreach (var kv in aggs[k]) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, KindSec[k], kv.Key));
         foreach (var kv in vendors) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 3, kv.Key));
         foreach (var kv in quests) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 4, kv.Key));
         foreach (var kv in spawns) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 5, kv.Key));
@@ -665,8 +680,8 @@ public sealed partial class AtlasStore
         foreach (var kv in npcSpotAggs) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 15, kv.Key));
         cand.Sort((a, b) => a.rev.CompareTo(b.rev));
 
-        var secs = new JsonObject[16];
-        for (int i = 0; i < 16; i++) secs[i] = new JsonObject();
+        var secs = new JsonObject[22];
+        for (int i = 0; i < 22; i++) secs[i] = new JsonObject();
         var fa = new JsonArray();
         int bytes = 0, taken = 0;
         long last = since;
@@ -675,7 +690,7 @@ public sealed partial class AtlasStore
             JsonNode node; string key = c.key.ToString(CultureInfo.InvariantCulture);
             switch (c.sec)
             {
-                case 0: case 1: case 2: { var a = aggs[c.sec][c.key]; node = CtrJson(a.Sum, a.Members, true); break; }
+                case 0: case 1: case 2: case 16: case 17: case 18: case 19: case 20: case 21: { var a = aggs[Array.IndexOf(KindSec, c.sec)][c.key]; node = CtrJson(a.Sum, a.Members, true, a.Dup); break; }
                 case 3: node = VendorJson(vendors[c.key]); break;
                 case 4: node = QuestJson(quests[c.key]); break;
                 case 5: node = new JsonArray(spawns[c.key].Pts.Select(p => (JsonNode)new JsonObject { ["z"] = p.Z, ["x"] = p.X, ["y"] = p.Y }).ToArray()); break;
@@ -701,6 +716,7 @@ public sealed partial class AtlasStore
             ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = more ? last : rev, ["at"] = NowSec,
             ["kills"] = secs[0], ["objects"] = secs[1], ["fishing"] = secs[2], ["vendors"] = secs[3], ["quests"] = secs[4], ["spawns"] = secs[5], ["items"] = secs[6], ["finds"] = fa,
             ["seenNpcs"] = secs[8], ["seenObjects"] = secs[9], ["seenQuests"] = secs[10], ["nodes"] = secs[11], ["fishspots"] = secs[12], ["fieldnotes"] = secs[13], ["entrances"] = secs[14], ["npcspots"] = secs[15],
+            ["pickpocket"] = secs[16], ["skinning"] = secs[17], ["mining"] = secs[18], ["herbalism"] = secs[19], ["salvage"] = secs[20], ["contained"] = secs[21],
             ["seenMembers"] = seenMembers.Count,   // 2.25: how many members' game caches the seen tables come from (a count, never who)
         };
         if (full) res["full"] = true;
@@ -727,7 +743,7 @@ public sealed partial class AtlasStore
             {
                 var d = new JsonObject();
                 if (md.Who.Length > 0) d["w"] = md.Who;
-                for (int k = 0; k < 3; k++)
+                for (int k = 0; k < KindCount; k++)
                 {
                     if (md.Src[k].Count == 0) continue;
                     var so = new JsonObject();
@@ -767,7 +783,7 @@ public sealed partial class AtlasStore
             foreach (var (id, a) in noteAggs) noteRev[id.ToString(CultureInfo.InvariantCulture)] = a.Rev;
             var nodeRev = new JsonObject();
             foreach (var (id, a) in nodeAggs) nodeRev[id.ToString(CultureInfo.InvariantCulture)] = a.Rev;
-            for (int k = 0; k < 3; k++)
+            for (int k = 0; k < KindCount; k++)
             {
                 var ro = new JsonObject();
                 foreach (var (id, a) in aggs[k]) ro[id.ToString(CultureInfo.InvariantCulture)] = a.Rev;

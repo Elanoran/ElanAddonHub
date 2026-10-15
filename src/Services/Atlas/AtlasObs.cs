@@ -56,6 +56,7 @@ namespace ElansAddonHub.Services
             public Dictionary<int, long[]> Items = new Dictionary<int, long[]>();   // item -> { times dropped, total count }
             public Dictionary<int, long> Zones = new Dictionary<int, long>();       // uiMapId -> n there
             public int Members;                                                // (lodge aggregate) how many members contributed
+            public CounterX X;                                                 // 2.26 extras (AtlasObs.Extras.cs), null = none
         }
 
         public class Vendor
@@ -108,9 +109,11 @@ namespace ElansAddonHub.Services
             public Dictionary<int, FieldNote> FieldNotes = new Dictionary<int, FieldNote>();             // npc -> Hunter Helper's field note (module hunter.fieldnotes)
             public Dictionary<int, List<EntranceSpot>> Entrances = new Dictionary<int, List<EntranceSpot>>();   // instance map id -> the spots it was entered from (Toolkit 0.5.7)
             public Dictionary<int, List<NpcSpot>> NpcSpots = new Dictionary<int, List<NpcSpot>>();   // npc id -> where it was met, killed, seen as a rare (Toolkit 0.5.10)
+            public Dictionary<string, Dictionary<int, Counter>> Gather = new Dictionary<string, Dictionary<int, Counter>>();   // pickpocket / skinning / ... / contained (Toolkit 0.5.10)
+            public int Build;                                                                    // the game build the Toolkit last saw (0 = unknown)
             public int Dropped;                                                // entries (or parts of them) that failed validation and were left out
             public long Since;
-            public bool IsEmpty => Kills.Count + Objects.Count + Fishing.Count + Vendors.Count + Quests.Count + Spawns.Count + Finds.Count + Nodes.Count + FishSpots.Count + FieldNotes.Count + Entrances.Count + NpcSpots.Count == 0;
+            public bool IsEmpty => Kills.Count + Objects.Count + Fishing.Count + Vendors.Count + Quests.Count + Spawns.Count + Finds.Count + Nodes.Count + FishSpots.Count + FieldNotes.Count + Entrances.Count + NpcSpots.Count + Gather.Values.Sum(g => g.Count) == 0;
         }
 
         // ---------------------------------------------------------------- validation helpers
@@ -152,7 +155,7 @@ namespace ElansAddonHub.Services
             int c = s.IndexOf(':');
             if (c < 0) return false;
             var kind = s.Substring(0, c);
-            if (kind != "npc" && kind != "obj" && kind != "vendor" && kind != "quest") return false;
+            if (kind != "npc" && kind != "obj" && kind != "vendor" && kind != "quest" && kind != "item") return false;   // item: found inside an opened item (2.26)
             return Key(s.Substring(c + 1), MaxId, out _);
         }
 
@@ -297,6 +300,7 @@ namespace ElansAddonHub.Services
                     c.Zones = z;
                 }
             }
+            c.X = ParseExtras(o, c, maxN > MaxCount);
             return c;
         }
 
@@ -479,7 +483,8 @@ namespace ElansAddonHub.Services
             return s;
         }
 
-        public static readonly string[] KnownSections = { "since", "kills", "objects", "fishing", "vendors", "quests", "spawns", "nodes", "fishspots", "finds", "entrances", "npcspots" };
+        public static readonly string[] KnownSections = { "since", "kills", "objects", "fishing", "vendors", "quests", "spawns", "nodes", "fishspots", "finds", "entrances", "npcspots",
+            "pickpocket", "skinning", "mining", "herbalism", "salvage", "contained", "build" };
 
         // the validation itself, on the module's data table. Per section: entries in the table, entries kept, parts left out (Snapshot.Stats)
         public static Snapshot FromTables(Dictionary<string, object> d)
@@ -534,6 +539,16 @@ namespace ElansAddonHub.Services
             var eno = d.Child("entrances");
             if (eno != null) s.Entrances = ParseEntrances(eno, ref dropped);
             Done("entrances", Count(eno), s.Entrances.Count);
+            foreach (var gs in GatherSections)
+            {
+                var go = d.Child(gs);
+                var gd = new Dictionary<int, Counter>();
+                bool cont = gs == "contained";
+                Sources(go, gd, cont ? MaxContainedSources : MaxGatherSources, !cont, ref dropped, cont ? MaxItemId : MaxId);
+                if (gd.Count > 0) s.Gather[gs] = gd;
+                Done(gs, Count(go), gd.Count);
+            }
+            if (d.TryGetValue("build", out var bv) && Whole(bv, 1, 9_999_999, out var bn)) s.Build = (int)bn;
             var npo = d.Child("npcspots");
             if (npo != null) s.NpcSpots = ParseNpcSpots(npo, ref dropped);
             Done("npcspots", Count(npo), s.NpcSpots.Count);
@@ -606,6 +621,12 @@ namespace ElansAddonHub.Services
         static string I(long v) { return v.ToString(CultureInfo.InvariantCulture); }
         static string D(double v) { return v.ToString("0.000", CultureInfo.InvariantCulture); }
 
+        public static string Sig(Counter c, bool extended)
+        {
+            var plain = Sig(c);
+            return extended && c.X != null ? Hash(plain + ExtrasSig(c.X)) : plain;
+        }
+
         public static string Sig(Counter c)
         {
             var sb = new StringBuilder();
@@ -655,6 +676,13 @@ namespace ElansAddonHub.Services
         public static string FindKey(Find f)
         {
             return "F" + I(f.At) + ":" + I(f.Item) + ":" + f.Src + ":" + I(f.Zone) + ":" + D(f.X) + ":" + D(f.Y);
+        }
+
+        internal static Dictionary<string, object> CounterNode(Counter c, bool extended)
+        {
+            var o = CounterNode(c);
+            if (extended) ExtrasNode(o, c.X);
+            return o;
         }
 
         internal static Dictionary<string, object> CounterNode(Counter c)
@@ -712,7 +740,7 @@ namespace ElansAddonHub.Services
         // Null when nothing changed. `revealed` = the item details to share (validated again here); `sent` = key -> signature of what the lodge already has.
         // `includeSeen` = the lodge takes seenNpcs / seenObjects / seenQuests (feature "atlas2"): the details AtlasObs.SeenSource holds go too, only ids not sent before (sent keys N / G / W + id).
         // `seenDetails` = it also takes their verified details and the game build (feature "atlas7", AtlasObs.Seen.cs); a changed detail or a new game build sends the id again.
-        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent, bool includeSeen = false, bool includeNodes = false, bool includeFish = false, bool includeNotes = false, bool includeEntrances = false, bool seenDetails = false, bool includeNpcSpots = false)
+        public static Batch MakeBatch(Snapshot s, IEnumerable<Revealed> revealed, IDictionary<string, string> sent, bool includeSeen = false, bool includeNodes = false, bool includeFish = false, bool includeNotes = false, bool includeEntrances = false, bool seenDetails = false, bool includeNpcSpots = false, bool includeExtras = false)
         {
             var cands = new List<Cand>();
             void Add(string section, string key, string sentKey, string sig, object node, long order = 0)
@@ -722,9 +750,14 @@ namespace ElansAddonHub.Services
             }
             if (s != null)
             {
-                foreach (var kv in s.Kills.OrderBy(k => k.Key)) Add("kills", I(kv.Key), "k" + kv.Key, Sig(kv.Value), CounterNode(kv.Value));
-                foreach (var kv in s.Objects.OrderBy(k => k.Key)) Add("objects", I(kv.Key), "o" + kv.Key, Sig(kv.Value), CounterNode(kv.Value));
-                foreach (var kv in s.Fishing.OrderBy(k => k.Key)) Add("fishing", I(kv.Key), "h" + kv.Key, Sig(kv.Value), CounterNode(kv.Value));
+                bool ex = includeExtras;
+                foreach (var kv in s.Kills.OrderBy(k => k.Key)) Add("kills", I(kv.Key), "k" + kv.Key, Sig(kv.Value, ex), CounterNode(kv.Value, ex));
+                foreach (var kv in s.Objects.OrderBy(k => k.Key)) Add("objects", I(kv.Key), "o" + kv.Key, Sig(kv.Value, ex), CounterNode(kv.Value, ex));
+                foreach (var kv in s.Fishing.OrderBy(k => k.Key)) Add("fishing", I(kv.Key), "h" + kv.Key, Sig(kv.Value, ex), CounterNode(kv.Value, ex));
+                if (ex)
+                    for (int g = 0; g < GatherSections.Length; g++)
+                        if (s.Gather.TryGetValue(GatherSections[g], out var gd))
+                            foreach (var kv in gd.OrderBy(k => k.Key)) Add(GatherSections[g], I(kv.Key), "x" + g + ":" + kv.Key, Sig(kv.Value, true), CounterNode(kv.Value, true));
                 foreach (var kv in s.Vendors.OrderBy(k => k.Key)) Add("vendors", I(kv.Key), "v" + kv.Key, Sig(kv.Value), VendorNode(kv.Value));
                 foreach (var kv in s.Quests.OrderBy(k => k.Key))
                     Add("quests", I(kv.Key), "q" + kv.Key, Sig(kv.Value), new Dictionary<string, object>
@@ -745,6 +778,7 @@ namespace ElansAddonHub.Services
                     foreach (var kv in s.NpcSpots.OrderBy(k => k.Key)) Add("npcspots", I(kv.Key), "p" + kv.Key, Sig(kv.Value), NpcSpotsNode(kv.Value));
                 foreach (var f in s.Finds.OrderBy(x => x.At).ThenBy(x => FindKey(x), StringComparer.Ordinal))
                 {
+                    if (!includeExtras && f.Src.StartsWith("item:", StringComparison.Ordinal)) continue;   // an older lodge does not know "found inside an item"
                     var o = new Dictionary<string, object> { ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At };
                     if (f.Zone > 0) { o["z"] = f.Zone; o["x"] = f.X; o["y"] = f.Y; }
                     Add("finds", "", FindKey(f), "1", o);
@@ -777,7 +811,8 @@ namespace ElansAddonHub.Services
             var limits = new Dictionary<string, int>
             {
                 ["kills"] = MaxKillsPerShare, ["objects"] = MaxObjectsPerShare, ["fishing"] = MaxFishingPerShare, ["vendors"] = MaxVendorsPerShare, ["quests"] = MaxQuestsPerShare,
-                ["spawns"] = MaxSpawnNpcsPerShare, ["nodes"] = MaxNodeObjectsPerShare, ["fishspots"] = MaxFishMapsPerShare, ["fieldnotes"] = MaxNotesPerShare, ["entrances"] = MaxEntrancesPerShare, ["npcspots"] = MaxNpcSpotNpcsPerShare, ["finds"] = MaxFindsPerShare, ["items"] = MaxRevealedPerShare,
+                ["spawns"] = MaxSpawnNpcsPerShare, ["nodes"] = MaxNodeObjectsPerShare, ["fishspots"] = MaxFishMapsPerShare, ["fieldnotes"] = MaxNotesPerShare, ["entrances"] = MaxEntrancesPerShare, ["npcspots"] = MaxNpcSpotNpcsPerShare, ["pickpocket"] = MaxGatherPerShare, ["skinning"] = MaxGatherPerShare, ["mining"] = MaxGatherPerShare,
+                ["herbalism"] = MaxGatherPerShare, ["salvage"] = MaxGatherPerShare, ["contained"] = MaxGatherPerShare, ["finds"] = MaxFindsPerShare, ["items"] = MaxRevealedPerShare,
                 ["seenNpcs"] = MaxSeenNpcsPerShare, ["seenObjects"] = MaxSeenObjectsPerShare, ["seenQuests"] = MaxSeenQuestsPerShare,
             };
             var b = new Batch();

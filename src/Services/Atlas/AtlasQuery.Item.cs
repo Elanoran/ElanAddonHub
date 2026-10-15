@@ -62,6 +62,9 @@ namespace ElansAddonHub.Services.Atlas
             else if (owned != null) { var s = Section(m, "owned", "Your characters", "None of your characters has this item."); }
             AddUpgradeFact(m, ci);
 
+            // ---- what Lodge members found inside it (a clam, a lockbox, a bag; Toolkit 0.5.10)
+            if ((Lodge()?.Loot("item", id)?.N ?? 0) > 0) LootSection(m, "contains", "Contains", "item", id, null, "");
+
             // ---- sources
             var src = Section(m, "sources", "Where it comes from", "Nothing is known yet about where this item comes from.");
             var rows = new List<AtlasRow>();
@@ -76,14 +79,20 @@ namespace ElansAddonHub.Services.Atlas
             {
                 foreach (var d in L.Drops(id))
                 {
-                    bool fish = d.Kind == "fish", obj = d.Kind == "obj";
+                    bool fish = d.Kind == "fish", obj = d.Kind == "obj", inItem = d.Kind == "item";
                     var key = d.Kind + ":" + d.Id;
+                    string w = LootWord(d.Kind) + (d.QuestId > 0 ? " while on the quest" : "");
+                    var parts = new List<string>();
+                    var sx = AtlasObs.SuffixText(d.Extra);
+                    if (sx.Length > 0) parts.Add(sx);
                     var r = new AtlasRow
                     {
-                        Key = key, Link = fish ? "zone:" + d.Id : key, Label = AtlasLabel.Forever, Tier = 0, Sort = d.Chance + Math.Min(d.Kills, 100000) / 1e7,
-                        Type = fish ? "Fishing" : obj ? "Object" : "Drop",
-                        Title = fish ? "Fishing in " + ZoneName(d.Id) : obj ? ObjectName(d.Id) : NpcName(d.Id),
-                        Detail = AtlasFormat.Percent(d.Chance) + " · " + AtlasFormat.Count(d.Kills, fish ? "cast" : obj ? "open" : "kill", fish ? "casts" : obj ? "opens" : "kills") + " · " + AtlasFormat.Count(d.Members, "member", "members"),
+                        Key = key, Link = fish ? "zone:" + d.Id : inItem ? "item:" + d.Id : d.Kind == "obj" ? key : "npc:" + d.Id, Label = AtlasLabel.Forever, Tier = 0,
+                        Sort = (AtlasObs.LowSample(d.Kills) ? d.Chance / 1000 : d.Chance) + Math.Min(d.Kills, 100000) / 1e7,
+                        Type = LootTypeOf(d.Kind),
+                        Title = fish ? "Fishing in " + ZoneName(d.Id) : obj ? ObjectName(d.Id) : inItem ? ItemName(d.Id) : NpcName(d.Id),
+                        Detail = AtlasObs.RateText(d.Drops, d.Kills, w, LootWord(d.Kind) + "s" + (d.QuestId > 0 ? " while on the quest" : "")) + " · " + AtlasFormat.Count(d.Members, "member", "members"),
+                        Extra = string.Join(" · ", parts),
                         Zone = d.Zones.Count > 0 ? ZoneName(d.Zones[0].Key) : "",
                     };
                     AddRow(r);

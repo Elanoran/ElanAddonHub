@@ -123,8 +123,8 @@ namespace ElansAddonHub
                 var tiers = src.Rows.Select(r => r.Tier).ToList();
                 Check("sources: Lodge-observed rows first, then the Classic baseline's (tiers never go down)", tiers.Count >= 4 && tiers.SequenceEqual(tiers.OrderBy(x => x)) && src.Rows[0].Tier == 0 && src.Rows.Last().Tier == 2, string.Join(",", tiers));
                 var drop = RowOf(it, "sources", "npc:1");
-                Check("sources: the Lodge's drop row says '12% · 340 kills · 3 members', is labelled Forever, links to the NPC and carries the Classic baseline's own figure on the same row (no second row)",
-                    drop != null && drop.Detail == "12% · 340 kills · 3 members" && drop.Label == AtlasLabel.Forever && drop.Link == "npc:1" && drop.Type == "Drop" && drop.Extra == AtlasLabel.Classic + ": 10%" && src.Rows.Count(r => r.Key == "npc:1") == 1, drop?.ToString());
+                Check("sources: the Lodge's drop row says '41 of 340 kills (12.1 %) · 3 members', is labelled Forever, links to the NPC and carries the Classic baseline's own figure on the same row (no second row)",
+                    drop != null && drop.Detail == "41 of 340 kills (12.1 %) · 3 members" && drop.Label == AtlasLabel.Forever && drop.Link == "npc:1" && drop.Type == "Drop" && drop.Extra == AtlasLabel.Classic + ": 10%" && src.Rows.Count(r => r.Key == "npc:1") == 1, drop?.ToString());
                 Check("sources: the best Forever drop is the very first row (Lodge drops before vendors before quests)", src.Rows[0].Key == "npc:1" && src.Rows.Select(r => r.Type).SkipWhile(t => t == "Drop").First() == "Vendor", string.Join(",", src.Rows.Select(r => r.Key)));
                 var ven = RowOf(it, "sources", "vendor:2");
                 Check("sources: the vendor row has the Lodge's price ('1g 20s 50c'), the zone, and is Forever", ven != null && ven.Detail == "1g 20s 50c" && ven.Zone == "Highkeep" && ven.Label == AtlasLabel.Forever && ven.Tier == 0, ven?.ToString());
@@ -165,12 +165,12 @@ namespace ElansAddonHub
                 Check("map: a boss inside an instance that has a map (Crypt of Bones, floor 'Crypt cellar') is placed on it", lord != null && Math.Abs(lord.Fx - 0.5) < 1e-9 && Math.Abs(lord.Fy - 0.5) < 1e-9, string.Join("|", ring.Map.Zones.Select(z => z.ToString())));
                 Check("map: spawn points inside an instance with no map (Deep Hall) are counted, not drawn, and offered as a link to the instance", ring.Map.InInstances.Count == 1 && ring.Map.InInstances[0].Key == 98 && ring.Map.InInstances[0].Value == 1);
                 var ringSrc = ring.Section("sources");
-                Check("sources: the Lodge-opened chest (10 % of 50 opens, 2 members) is a Forever row 'Object'; the baseline's 15 % rides along", RowOf(ring, "sources", "obj:50")?.Detail == "10% · 50 opens · 2 members" && RowOf(ring, "sources", "obj:50").Extra == AtlasLabel.Classic + ": 15%" && ringSrc.Rows[0].Key == "obj:50");
+                Check("sources: the Lodge-opened chest (10 % of 50 opens, 2 members) is a Forever row 'Object'; the baseline's 15 % rides along", RowOf(ring, "sources", "obj:50")?.Detail == "5 of 50 opens (10.0 %) · 2 members" && RowOf(ring, "sources", "obj:50").Extra == AtlasLabel.Classic + ": 15%" && ringSrc.Rows[0].Key == "obj:50");
                 var cloak = AtlasQuery.Build("item:103").Section("sources");
                 Check("sources: an item with nothing but tiny sources still shows its 6 best and folds the rest ('+ 2 more world-drop sources under 0.1%')", cloak.Rows.Count == 6 && cloak.Hidden.Count == 2 && cloak.HiddenText == "+ 2 more world-drop sources under 0.1%" && cloak.Rows[0].Sort >= cloak.Rows[5].Sort);
                 var cloth = AtlasQuery.Build("item:102");
                 var clothVendor = RowOf(cloth, "sources", "vendor:2");
-                Check("sources: a vendor both the Lodge and the baseline know is one row (Lodge price, baseline stock on its second line); the Lodge's 5.9 % drop is listed", clothVendor != null && clothVendor.Detail.StartsWith("25c") && clothVendor.Detail.Contains("stack of 20") && clothVendor.Extra == AtlasLabel.Classic + ": unlimited stock" && RowOf(cloth, "sources", "npc:1")?.Detail.StartsWith("5.9%") == true, clothVendor?.ToString());
+                Check("sources: a vendor both the Lodge and the baseline know is one row (Lodge price, baseline stock on its second line); the Lodge's 5.9 % drop is listed", clothVendor != null && clothVendor.Detail.StartsWith("25c") && clothVendor.Detail.Contains("stack of 20") && clothVendor.Extra == AtlasLabel.Classic + ": unlimited stock" && RowOf(cloth, "sources", "npc:1")?.Detail.StartsWith("20 of 340 kills (5.9 %)") == true, clothVendor?.ToString());
                 Check("used as a reagent: Linen Cloth is used by the Heavy Linen Bandage recipe (First Aid 40, uses 2)", cloth.Section("reagent")?.Rows.Count == 1 && cloth.Section("reagent").Rows[0].Title == "Heavy Linen Bandage" && cloth.Section("reagent").Rows[0].Detail == "First Aid 40 · uses 2" && cloth.Section("reagent").Rows[0].Link == "item:108");
                 var bandage = AtlasQuery.Build("item:108");
                 var rec = RowOf(bandage, "sources", "recipe:4000");
@@ -188,7 +188,7 @@ namespace ElansAddonHub
                     npc.Title == "Gnarlfang" && npc.Facts.Any(f => f.Label == "Title" && f.Value == "<Fanglord>" && f.Source == AtlasLabel.Forever) && npc.Facts.Any(f => f.Label == "Level" && f.Value == "12" && f.Source == AtlasLabel.Classic)
                     && npc.Facts.Any(f => f.Label == "Rank" && f.Value == "Boss" && f.Source == AtlasLabel.Forever) && npc.Facts.Any(f => f.Label == "Type" && f.Value == "Beast") && npc.Facts.Any(f => f.Label == "Faction" && f.Value == "Stormwind" && f.Link == "faction:72"), string.Join("; ", npc.Facts));
                 var loot = npc.Section("loot");
-                Check("NPC page: its loot table - the Lodge's observed rows first (12 %, 5.9 %), then the baseline's; merged where both know", loot.Rows.Count == 3 && loot.Rows[0].Key == "item:100" && loot.Rows[0].Detail.StartsWith("12% · 41 of 340 kills") && loot.Rows[0].Extra == AtlasLabel.Classic + ": 10%" && loot.Rows[1].Key == "item:102" && loot.Rows[1].Detail.StartsWith("5.9%")
+                Check("NPC page: its loot table - the Lodge's observed rows first (12 %, 5.9 %), then the baseline's; merged where both know", loot.Rows.Count == 3 && loot.Rows[0].Key == "item:100" && loot.Rows[0].Detail.StartsWith("41 of 340 kills (12.1 %)") && loot.Rows[0].Extra == AtlasLabel.Classic + ": 10%" && loot.Rows[1].Key == "item:102" && loot.Rows[1].Detail.StartsWith("20 of 340 kills (5.9 %)")
                     && loot.Rows[2].Key == "item:101" && loot.Rows[2].Tier == 2 && loot.Rows[2].Label == AtlasLabel.Classic && loot.Rows[2].Detail == "45%", string.Join(" | ", loot.Rows));
                 Check("NPC page: where it stands - Found in Greenvale (a link), the map has its Lodge spawn points and its Classic spawn", npc.MapFirst && npc.Facts.Any(f => f.Label == "Found in" && f.Value == "Greenvale" && f.Link == "zone:11") && npc.Map.Zones.Any(z => z.UiMapId == 11 && z.Markers.Count == 3));
                 var innk = AtlasQuery.Build("npc:2");
@@ -201,7 +201,7 @@ namespace ElansAddonHub
                 Check("NPC page: a creature only the client has seen (not in the baseline) still has a page, no loot, no map, a note saying what is missing", !seenOnly.NotFound && seenOnly.Title == "Forever Only Boar" && !seenOnly.Map.Any && seenOnly.Facts.All(f => f.Source == AtlasLabel.Forever) && seenOnly.Section("loot").Rows.Count == 0);
                 Check("NPC page: an unknown id is NotFound with a message", AtlasQuery.Build("npc:77777").NotFound);
                 var obj = AtlasQuery.Build("obj:50");
-                Check("object page: name and kind (Forever), its loot (Lodge 10 %, baseline 15 % on the same row), its position on the map (Node marker)", obj.Title == "Ancient Chest" && obj.Facts.Any(f => f.Label == "Kind" && f.Value == "chest or node") && obj.Section("loot").Rows.Count == 1 && obj.Section("loot").Rows[0].Detail.StartsWith("10% · 5 of 50 opens")
+                Check("object page: name and kind (Forever), its loot (Lodge 10 %, baseline 15 % on the same row), its position on the map (Node marker)", obj.Title == "Ancient Chest" && obj.Facts.Any(f => f.Label == "Kind" && f.Value == "chest or node") && obj.Section("loot").Rows.Count == 1 && obj.Section("loot").Rows[0].Detail.StartsWith("5 of 50 opens (10.0 %)")
                     && obj.Map.Zones.Any(z => z.UiMapId == 11 && z.Markers.Any(m => m.Kind == MarkerKind.Node && m.LinkId == "obj:50")));
 
                 var zone = AtlasQuery.Build("zone:11");

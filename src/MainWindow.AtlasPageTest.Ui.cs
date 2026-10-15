@@ -278,7 +278,7 @@ namespace ElansAddonHub
                 await SwitchTab("sources") && AtlasView.TabNowForTest == "sources" && AtlasView.CurrentId == "item:100?tab=sources" && AtlasView.LinkShown == "item:100?tab=sources" && AtlasView.Model.Id == "item:100");
             tx = AtlasTexts(AtlasView);
             Check("item page: the sources show the Lodge's 12 % row with its figures, the baseline's figure on the second line, both labels as chips, and the folded line for the world drops",
-                tx.Contains("Where it comes from") && tx.Contains("12% · 340 kills · 3 members") && tx.Contains("Classic baseline: 10%") && tx.Contains("Forever") && tx.Contains("Classic baseline") && tx.Contains("+ 30 world-drop sources under 0.1%") && !tx.Contains("Best ways to get it"));
+                tx.Contains("Where it comes from") && tx.Contains("41 of 340 kills (12.1 %) · 3 members") && tx.Contains("Classic baseline: 10%") && tx.Contains("Forever") && tx.Contains("Classic baseline") && tx.Contains("+ 30 world-drop sources under 0.1%") && !tx.Contains("Best ways to get it"));
             // the fold
             int before = AtlasWalk(AtlasView).OfType<ContentControl>().Count(c => c.Tag is string s && s.StartsWith("npc:"));
             var fold = AtlasWalk(AtlasView).OfType<Button>().First(b => b.Tag as string == "fold");
@@ -314,7 +314,7 @@ namespace ElansAddonHub
             ClickRow(row);
             await AtlasView.WaitForTest(); UpdateLayout();
             Check("links: clicking it opens the NPC page and makes it the current page", AtlasView.CurrentId == "npc:1" && AtlasView.Model.Id == "npc:1" && AtlasView.TabsForTest.Contains("related") && AtlasView.History.CanBack);
-            Check("links: the NPC page shows its facts on the Overview and its loot, with the Lodge's 12 %, on Related", AtlasTexts(AtlasView).Contains("<Fanglord>") && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Loot") && AtlasTexts(AtlasView).Any(t => t.StartsWith("12% · 41 of 340 kills")) && await SwitchTab("overview"));
+            Check("links: the NPC page shows its facts on the Overview and its loot, with the Lodge's 12 %, on Related", AtlasTexts(AtlasView).Contains("<Fanglord>") && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Loot") && AtlasTexts(AtlasView).Any(t => t.StartsWith("41 of 340 kills (12.1 %)")) && await SwitchTab("overview"));
             Check("links: a fact is a link too (Faction: Stormwind opens the faction)", RowFor("zone:11") == null && AtlasWalk(AtlasView).OfType<TextBlock>().Any(t => t.Tag as string == "faction:72"));
             await SwitchTab("map"); await MapReady(); await SwitchTab("overview"); await Task.Delay(500);
             Snapshot(Path.Combine(dir, "atlas-page-npc.png"));

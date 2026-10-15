@@ -23,6 +23,9 @@ namespace ElansAddonHub.Lodge
             public long Count;                             // items in those drops (stacks)
             public double Chance;                          // Drops / Kills in percent (2 decimals)
             public int Members;                            // members who contributed
+            public int QuestId;                            // a quest item: Kills are the kills while this quest still wanted it (2.26)
+            public AtlasObs.ItemX Extra;                   // its suffixes and builds (2.26), null = none
+            public AtlasObs.Counter Counter;               // the whole source (its builds, level, class)
             public List<KeyValuePair<int, long>> Zones = new List<KeyValuePair<int, long>>();   // uiMapId -> kills there (most first)
         }
 
@@ -51,6 +54,7 @@ namespace ElansAddonHub.Lodge
         readonly Dictionary<int, List<AtlasObs.EntranceSpot>> entrances = new Dictionary<int, List<AtlasObs.EntranceSpot>>();   // instance entrances the lodge merged (server 2.24, atlas6): instance -> spots
         readonly Dictionary<int, List<AtlasObs.NpcSpot>> npcSpots = new Dictionary<int, List<AtlasObs.NpcSpot>>();   // where members met, killed or saw npcs (server 2.26, atlas8): npc -> spots
         public long NpcSpotsChanged;                       // counts every answer that changed the npc spots
+        readonly Dictionary<string, Dictionary<int, AtlasObs.Counter>> gather = AtlasObs.GatherSections.ToDictionary(s => s, s => new Dictionary<int, AtlasObs.Counter>());   // pickpocket / skinning / ... / contained (server 2.26, atlas9)
         public int Dropped { get; private set; }           // entries of the last answers that failed validation
         public int SeenMembers { get; private set; }       // how many members' game caches the seen tables come from (server 2.25, atlas7; a count only)
 
@@ -62,7 +66,7 @@ namespace ElansAddonHub.Lodge
         static readonly IReadOnlyList<AtlasObs.Find> NoFinds = new AtlasObs.Find[0];
         static readonly IReadOnlyList<AtlasObs.Spot> NoSpots = new AtlasObs.Spot[0];
 
-        public bool HasData => kills.Count + objects.Count + fishing.Count + vendors.Count + quests.Count + spawns.Count + revealed.Count + finds.Count + seenNpcs.Count + seenObjects.Count + seenQuests.Count + nodes.Count + fishSpots.Count + fieldNotes.Count + entrances.Count + npcSpots.Count > 0;
+        public bool HasData => kills.Count + objects.Count + fishing.Count + vendors.Count + quests.Count + spawns.Count + revealed.Count + finds.Count + seenNpcs.Count + seenObjects.Count + seenQuests.Count + nodes.Count + fishSpots.Count + fieldNotes.Count + entrances.Count + npcSpots.Count + gather.Values.Sum(g => g.Count) > 0;
         public int FieldNoteCount => fieldNotes.Count;
         public int NodeObjectCount => nodes.Count;
         public int KillSources => kills.Count;
@@ -82,7 +86,7 @@ namespace ElansAddonHub.Lodge
             if (fieldNotes.Count > 0) NotesChanged++;
             if (seenNpcs.Count > 0) SeenNpcsChanged++;
             kills.Clear(); objects.Clear(); fishing.Clear(); vendors.Clear(); quests.Clear(); spawns.Clear(); revealed.Clear(); finds.Clear();
-            seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear(); fishSpots.Clear(); fieldNotes.Clear(); entrances.Clear(); if (npcSpots.Count > 0) NpcSpotsChanged++; npcSpots.Clear();
+            seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear(); fishSpots.Clear(); fieldNotes.Clear(); entrances.Clear(); if (npcSpots.Count > 0) NpcSpotsChanged++; npcSpots.Clear(); foreach (var g in gather.Values) g.Clear();
             Epoch = ""; Rev = 0; Dropped = 0; SeenMembers = 0; Invalidate();
         }
 
@@ -105,6 +109,8 @@ namespace ElansAddonHub.Lodge
             Sources(m.Child("kills"), kills, AtlasObs.MaxKillSources * 2000, true, AtlasObs.MaxId, ref dropped);
             Sources(m.Child("objects"), objects, AtlasObs.MaxObjectSources * 2000, true, AtlasObs.MaxId, ref dropped);
             Sources(m.Child("fishing"), fishing, AtlasObs.MaxFishingZones * 2000, false, AtlasObs.MaxMapId, ref dropped);
+            foreach (var gs in AtlasObs.GatherSections)
+                Sources(m.Child(gs), gather[gs], (gs == "contained" ? AtlasObs.MaxContainedSources : AtlasObs.MaxGatherSources) * 2000, gs != "contained", gs == "contained" ? AtlasObs.MaxItemId : AtlasObs.MaxId, ref dropped);
             var vo = m.Child("vendors");
             if (vo != null)
                 foreach (var kv in vo)
@@ -245,7 +251,7 @@ namespace ElansAddonHub.Lodge
             Dictionary<string, object> Counters(Dictionary<int, AtlasObs.Counter> d)
             {
                 var o = new Dictionary<string, object>();
-                foreach (var kv in d.OrderBy(k => k.Key)) { var n = AtlasObs.CounterNode(kv.Value); n["m"] = kv.Value.Members; o[kv.Key.ToString()] = n; }
+                foreach (var kv in d.OrderBy(k => k.Key)) { var n = AtlasObs.CounterNode(kv.Value); AtlasObs.ExtrasNode(n, kv.Value.X, true); n["m"] = kv.Value.Members; o[kv.Key.ToString()] = n; }
                 return o;
             }
             var vo = new Dictionary<string, object>();
@@ -287,6 +293,8 @@ namespace ElansAddonHub.Lodge
                 ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = Rev, ["at"] = Updated, ["full"] = true, ["seenMembers"] = SeenMembers,
                 ["kills"] = Counters(kills), ["objects"] = Counters(objects), ["fishing"] = Counters(fishing), ["vendors"] = vo, ["quests"] = qo, ["spawns"] = so, ["items"] = io, ["finds"] = fl,
                 ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso, ["fieldnotes"] = fnc, ["entrances"] = eco, ["npcspots"] = npc,
+                ["pickpocket"] = Counters(gather["pickpocket"]), ["skinning"] = Counters(gather["skinning"]), ["mining"] = Counters(gather["mining"]),
+                ["herbalism"] = Counters(gather["herbalism"]), ["salvage"] = Counters(gather["salvage"]), ["contained"] = Counters(gather["contained"]),
             };
         }
 
@@ -303,10 +311,15 @@ namespace ElansAddonHub.Lodge
                     var c = src.Value;
                     foreach (var it in c.Items)
                     {
+                        // each corpse once; a quest item counts only the kills while its quest still wanted it (when the Toolkit knew)
+                        long kn = AtlasObs.UniqueKills(c), dn = AtlasObs.UniqueDrops(c, it.Value[0]);
+                        var ix = c.X != null && c.X.It.TryGetValue(it.Key, out var xx) ? xx : null;
+                        bool quest = ix != null && ix.Q > 0 && c.X.Q.TryGetValue(ix.Q, out var qk) && qk > 0;
+                        if (quest) { kn = c.X.Q[ix.Q]; dn = Math.Min(it.Value[0], kn * AtlasObs.MaxDropsPerKill); }
                         var row = new DropRow
                         {
-                            Kind = kind, Id = src.Key, Source = kind + ":" + src.Key, Kills = c.N, Drops = it.Value[0], Count = it.Value[1], Members = c.Members,
-                            Chance = c.N > 0 ? Math.Round(it.Value[0] * 100.0 / c.N, 2) : 0,
+                            Kind = kind, Id = src.Key, Source = kind + ":" + src.Key, Kills = kn, Drops = dn, Count = it.Value[1], Members = c.Members, QuestId = quest ? ix.Q : 0, Extra = ix, Counter = c,
+                            Chance = kn > 0 ? Math.Round(Math.Min(100, dn * 100.0 / kn), 2) : 0,
                             Zones = kind == "fish" ? new List<KeyValuePair<int, long>> { new KeyValuePair<int, long>(src.Key, c.N) } : c.Zones.OrderByDescending(z => z.Value).ThenBy(z => z.Key).ToList(),
                         };
                         if (!dropIdx.TryGetValue(it.Key, out var l)) dropIdx[it.Key] = l = new List<DropRow>();
@@ -315,6 +328,7 @@ namespace ElansAddonHub.Lodge
                 }
             }
             Drops("npc", kills); Drops("obj", objects); Drops("fish", fishing);
+            foreach (var gk in GatherKinds) Drops(gk, gather[GatherSectionOf(gk)]);
             foreach (var l in dropIdx.Values) l.Sort((a, b) => { int c = b.Chance.CompareTo(a.Chance); return c != 0 ? c : b.Kills.CompareTo(a.Kills); });
             foreach (var v in vendors)
                 foreach (var it in v.Value.Items)
@@ -373,9 +387,15 @@ namespace ElansAddonHub.Lodge
         // what one npc / object / fishing zone dropped overall (null: nothing observed)
         public AtlasObs.Counter Loot(string kind, int id)
         {
-            var d = kind == "npc" ? kills : kind == "obj" ? objects : kind == "fish" ? fishing : null;
+            var d = kind == "npc" ? kills : kind == "obj" ? objects : kind == "fish" ? fishing : GatherOf(kind);
             return d != null && d.TryGetValue(id, out var c) ? c : null;
         }
+        // pickpocketing, gathering a corpse and what was inside an opened item (server 2.26, atlas9): the kinds a drop row / Loot() take
+        public static readonly string[] GatherKinds = { "pick", "skin", "mine", "herb", "salvage", "item" };
+        public static string GatherSectionOf(string kind) => kind == "pick" ? "pickpocket" : kind == "skin" ? "skinning" : kind == "mine" ? "mining" : kind == "herb" ? "herbalism" : kind == "salvage" ? "salvage" : kind == "item" ? "contained" : null;
+        Dictionary<int, AtlasObs.Counter> GatherOf(string kind) { var s = GatherSectionOf(kind); return s != null ? gather[s] : null; }
+        public int GatherCount(string kind) => GatherOf(kind)?.Count ?? 0;
+
         // what the lodge's clients have seen of an npc / object / quest (null: nobody has shared it)
         public AtlasObs.SeenNpc Npc(int id) { return seenNpcs.TryGetValue(id, out var x) ? x : null; }
         public AtlasObs.SeenObject Object(int id) { return seenObjects.TryGetValue(id, out var x) ? x : null; }
@@ -403,6 +423,7 @@ namespace ElansAddonHub.Lodge
         public bool SupportsAtlasNotes { get; private set; }                  // the server also takes `fieldnotes` (feature "atlas5", server 2.23)
         public bool SupportsAtlasEntrances { get; private set; }              // the server also takes `entrances` (feature "atlas6", server 2.24)
         public bool SupportsAtlasNpcSpots { get; private set; }               // the server also takes `npcspots` (feature "atlas8", server 2.26)
+        public bool SupportsAtlasExtras { get; private set; }                 // ... counter extras and pickpocket / gathering / contained counters (feature "atlas9", server 2.26)
         public bool SupportsAtlasSeen { get; private set; }                   // the server also takes seenNpcs / seenObjects / seenQuests (feature "atlas2")
         public bool SupportsAtlasSeenDetails { get; private set; }            // ... with their verified details and the game build (feature "atlas7", server 2.25)
         public readonly LodgeAtlas AtlasData = new LodgeAtlas();
@@ -445,13 +466,14 @@ namespace ElansAddonHub.Lodge
             SupportsAtlasNotes = SupportsAtlas && features.Contains("atlas5") && (v == null || v >= AtlasObs.NotesServerVersion);
             SupportsAtlasEntrances = SupportsAtlas && features.Contains("atlas6") && (v == null || v >= AtlasObs.EntrancesServerVersion);
             SupportsAtlasNpcSpots = SupportsAtlas && features.Contains("atlas8") && (v == null || v >= AtlasObs.NpcSpotsServerVersion);
+            SupportsAtlasExtras = SupportsAtlas && features.Contains("atlas9") && (v == null || v >= AtlasObs.CounterExtrasServerVersion);
             atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasFetching = false;
         }
 
         void ResetAtlas()
         {
             SaveAtlasCache(true);
-            SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; SupportsAtlasFish = false; SupportsAtlasNotes = false; SupportsAtlasEntrances = false; SupportsAtlasNpcSpots = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
+            SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; SupportsAtlasFish = false; SupportsAtlasNotes = false; SupportsAtlasEntrances = false; SupportsAtlasNpcSpots = false; SupportsAtlasExtras = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
             atlasLocal = null; atlasSent = null; atlasNextShare = DateTime.MinValue; atlasLastGet = DateTime.MinValue;
         }
 
@@ -549,7 +571,7 @@ namespace ElansAddonHub.Lodge
             IEnumerable<AtlasObs.Revealed> rev;
             try { rev = AtlasObs.RevealedSource?.Items()?.ToList() ?? new List<AtlasObs.Revealed>(); }
             catch (Exception e) { Util.Log("atlas: revealed items: " + e.GetType().Name); rev = new List<AtlasObs.Revealed>(); }
-            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes, SupportsAtlasFish, SupportsAtlasNotes, SupportsAtlasEntrances, SupportsAtlasSeenDetails, SupportsAtlasNpcSpots);
+            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes, SupportsAtlasFish, SupportsAtlasNotes, SupportsAtlasEntrances, SupportsAtlasSeenDetails, SupportsAtlasNpcSpots, SupportsAtlasExtras);
             atlasBacklog = batch != null;
             if (batch == null) return false;
             if (Clock() < atlasNextShare) return false;                                // the next slot is not here yet
