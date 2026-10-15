@@ -85,6 +85,7 @@ namespace ElansAddonHub
                     var someNpc = seen.Npcs.FirstOrDefault(n => n.Name.Length > 0);
                     if (someNpc != null) Check("real game files: a creature the client has seen has a page with its name, rank and type, labelled Forever (" + someNpc.Name + ")", AtlasQuery.Build("npc:" + someNpc.Id).Title == someNpc.Name && AtlasQuery.Build("npc:" + someNpc.Id).Facts.Any(f => f.Label == "Rank" && f.Source == AtlasLabel.Forever));
                 }
+                HotfixRealChecks(real, sset, Check);
 
                 // in the window, with the real pictures
                 ShowTab("atlas");
@@ -106,6 +107,46 @@ namespace ElansAddonHub
             }
             catch (Exception e) { Check("real game files: the Atlas page ran to the end", false, e.ToString()); }
             finally { IconStore.WowRoot = savedIconRoot; }
+        }
+
+        // the server's hotfix rows of the real client (Cache\ADB\enUS\DBCache.bin, read-only) laid over the real tables. What the cache holds depends on what
+        // the server sent this PC, so the checks hold for any content: every row of the read tables has its layout's exact length, every new spell / quest
+        // shows and is labelled; the rows of build 70374 that were checked by hand are checked again when they are there.
+        void HotfixRealChecks(string real, AtlasSet sset, CheckFn Check)
+        {
+            var adb = ItemData.AdbFile(real, "_classic_beta_");
+            if (adb == null) { Check("real hotfixes: skipped (the client has no DBCache.bin)", true); return; }
+            var build = ItemData.GameBuild(real, "_classic_beta_");
+            var d = ServerHotfixes.Decode(DbCache.ReadAllShared(adb), sset.LayoutsSeen, ServerHotfixes.BuildNumber(build));
+            if (d.Notes.Any(n => n.Contains("not the one this Outpost verified") || n.Contains(": its hotfixes are not used")))
+            {
+                Check("real hotfixes: skipped (" + string.Join("; ", d.Notes) + ": the game was updated, nothing guessed)", true);
+                return;
+            }
+            Check("real hotfixes: every row of the seven tables has its layout's exact length (" + d.Rows + " rows: " + d.Names.Count + " spell names, " + d.Misc.Count + " SpellMisc, " + d.Effects.Count + " SpellEffect, " + d.Quests.Count + " quests, " + d.Locks.Count + " locks, " + d.Templates.Count + " faction templates)",
+                d.Dropped == 0, string.Join(" | ", d.Notes));
+            var hs = ServerHotfixes.Apply(sset, d);
+            SpellData.SetForTest(hs);
+            try
+            {
+                var hi = hs.Hotfixes;
+                var newSpells = hi.Spells.Where(kv => (kv.Value & HotfixParts.New) != 0).Select(kv => kv.Key).ToList();
+                Check("real hotfixes: every spell the server added has a page labelled Server hotfix (" + newSpells.Count + " new; changed: " + string.Join(", ", hi.Spells.Where(kv => (kv.Value & HotfixParts.New) == 0).Select(kv => kv.Key + " " + kv.Value)) + ")",
+                    newSpells.All(id => SpellData.Spell(id) != null && AtlasQuery.Build("spell:" + id).Facts.Any(f => f.Label == "Source" && f.Source == AtlasLabel.Hotfix)));
+                Check("real hotfixes: every quest the server added is in the client's quest list and its page says so (" + hi.NewQuests.Count + ")",
+                    hi.NewQuests.All(q => hs.World.QuestIds.Contains(q) && !sset.World.QuestIds.Contains(q) && AtlasQuery.Build("quest:" + q) is AtlasPageModel p && (p.NotFound ? p.Message.Contains("server hotfix") : p.Facts.Any(f => f.Source == AtlasLabel.Hotfix))));
+                Check("real hotfixes: the shipped tables are not changed by the overlay", sset.Hotfixes == null && sset.Spells.SpellCount + newSpells.Count - hi.Spells.Count(kv => kv.Value == HotfixParts.Removed) == hs.Spells.SpellCount);
+                if (d.Texts.ContainsKey(8913))
+                    Check("real hotfixes: spell 8913 Sacred Cleansing - the hotfix Spell row repeats the game files' description (text not marked as changed); its SpellEffect rows only move the radius index to the second slot (10, 0 -> 0, 10), which reads as the same radius, so the effects are not marked as changed either",
+                        SpellData.Spell(8913)?.Description.Contains("Morbent Fel") == true && (hi.Spell(8913) & HotfixParts.Text) == 0 && (hi.Spell(8913) & HotfixParts.Effects) == 0, SpellData.Spell(8913)?.Description + " " + hi.Spell(8913));
+                if (d.Names.ContainsKey(1325994))
+                    Check("real hotfixes: spell 1325994 (not in the game files) is '[DNT] Teleport to Hall of Thanes' with its icon from the hotfix SpellMisc row", SpellData.Spell(1325994)?.Name == "[DNT] Teleport to Hall of Thanes" && SpellData.Spell(1325994).IconId == 136235 && sset.Spells.Get(1325994) == null);
+                if (d.Quests.Contains(92841))
+                    Check("real hotfixes: quest 92841's hotfix row repeats the game files' row - in the quest list, not counted as new", hs.World.QuestIds.Contains(92841) && sset.World.QuestIds.Contains(92841) && !hi.NewQuests.Contains(92841));
+                if (d.Templates.TryGetValue(3561, out var t3561))
+                    Check("real hotfixes: faction template 3561's enemy group is the hotfix's (1; the game files say 9)", hs.Factions.Template(3561)?.EnemyGroup == t3561.EnemyGroup && t3561.EnemyGroup == 1 && sset.Factions.Template(3561)?.EnemyGroup == 9);
+            }
+            finally { SpellData.SetForTest(sset); }
         }
     }
 }

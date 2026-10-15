@@ -63,5 +63,59 @@ namespace ElansAddonHub.Services.Db2
             }
             return r;
         }
+
+        // ---- several tables at once, with the removals kept (the item reader above only needs the rows)
+        // Status, as the client treats it: 1 = the row (it replaces the shipped row of the same id), 2 = "record removed" (the shipped row is gone too),
+        // 3 = invalid and 4 = not public (no data: an earlier hotfix row of that id no longer counts, the shipped row stands). The last entry of an id wins.
+        public const byte StatusValid = 1, StatusRemoved = 2;
+
+        public sealed class TableRows
+        {
+            public readonly Dictionary<int, byte[]> Rows = new Dictionary<int, byte[]>();
+            public readonly HashSet<int> Removed = new HashSet<int>();
+            public int Entries;
+        }
+
+        public sealed class Tables
+        {
+            public int Version, Build, Entries;
+            public bool Truncated;
+            public readonly Dictionary<uint, TableRows> ByHash = new Dictionary<uint, TableRows>();
+            public TableRows Get(uint hash) => ByHash.TryGetValue(hash, out var t) ? t : null;
+        }
+
+        public static Tables ReadTables(byte[] file, ICollection<uint> hashes)
+        {
+            if (file == null || file.Length < HeaderSize) throw new Db2Exception("DBCache.bin is too short");
+            if (BitConverter.ToUInt32(file, 0) != 0x48544658) throw new Db2Exception("DBCache.bin: not an XFTH file");
+            var r = new Tables { Version = BitConverter.ToInt32(file, 4), Build = BitConverter.ToInt32(file, 8) };
+            if (r.Version != SupportedVersion) throw new Db2Exception("DBCache.bin version " + r.Version + " (this reader knows " + SupportedVersion + ")");
+            long p = HeaderSize;
+            while (p + EntryHeader <= file.Length)
+            {
+                if (BitConverter.ToUInt32(file, (int)p) != 0x48544658) { r.Truncated = true; break; }
+                uint table = BitConverter.ToUInt32(file, (int)p + 16);
+                int id = BitConverter.ToInt32(file, (int)p + 20);
+                uint size = BitConverter.ToUInt32(file, (int)p + 24);
+                byte status = file[p + 28];
+                if (size > 1 << 20 || p + EntryHeader + size > file.Length) { r.Truncated = true; break; }
+                r.Entries++;
+                if (hashes.Contains(table))
+                {
+                    if (!r.ByHash.TryGetValue(table, out var t)) r.ByHash[table] = t = new TableRows();
+                    t.Entries++;
+                    t.Rows.Remove(id); t.Removed.Remove(id);
+                    if (status == StatusValid && size > 0)
+                    {
+                        var row = new byte[size];
+                        Buffer.BlockCopy(file, (int)p + EntryHeader, row, 0, (int)size);
+                        t.Rows[id] = row;
+                    }
+                    else if (status == StatusRemoved) t.Removed.Add(id);
+                }
+                p += EntryHeader + size;
+            }
+            return r;
+        }
     }
 }

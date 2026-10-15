@@ -140,7 +140,8 @@ namespace ElansAddonHub.Services.Atlas
             {
                 var tpl = FactionData.Template(cn.FactionId);
                 var desc = FactionData.Describe(cn.FactionId);
-                m.Facts.Add(new AtlasFact("Faction", desc ?? "Faction template " + cn.FactionId, C, tpl != null && FactionData.Name(tpl.FactionId) != null ? AtlasIds.Faction(tpl.FactionId) : null));
+                // the template id is the baseline's; when the server's hotfix rows changed that template, its standing is the hotfix's
+                m.Facts.Add(new AtlasFact("Faction", desc ?? "Faction template " + cn.FactionId, SpellData.Hotfixes.Templates.Contains(cn.FactionId) ? AtlasLabel.Hotfix : C, tpl != null && FactionData.Name(tpl.FactionId) != null ? AtlasIds.Faction(tpl.FactionId) : null));
             }
             // the client cache holds the creature's TYPE flags, not its npc flags (WdbCreature): services come from the Classic baseline only
             var svc = Services((uint)(cn?.NpcFlags ?? 0));

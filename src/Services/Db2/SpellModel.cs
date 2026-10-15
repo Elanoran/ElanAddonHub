@@ -69,6 +69,7 @@ namespace ElansAddonHub.Services.Db2
         public float RangeMax;
         public string CostText;                // "50 Mana" / "4% of base mana" (the class layer's SpellPower), null = none or not read
         public int CooldownMs;                 // the spell's own cooldown (the class layer's SpellCooldowns), 0 = none or not read
+        public HotfixParts Hotfix;             // what the server's hotfix rows changed (None = the game files as shipped)
         public override string ToString() => Id + " " + Name + (string.IsNullOrEmpty(Rank) ? "" : " (" + Rank + ")");
     }
 
@@ -94,8 +95,20 @@ namespace ElansAddonHub.Services.Db2
         public int ReagentCount => Reagents.Length / 2;
     }
 
+    // the small tables a spell's numbers come from and which table row gave which spell its numbers: kept with the snapshot so the server's hotfix
+    // rows (ServerHotfixes) can be laid over it later without the game files - a SpellMisc / SpellEffect hotfix row names its own row id and spell
+    public sealed class SpellLookups
+    {
+        public readonly Dictionary<int, int> CastMs = new Dictionary<int, int>(), DurationMs = new Dictionary<int, int>();
+        public readonly Dictionary<int, float> RangeMax = new Dictionary<int, float>(), Radius = new Dictionary<int, float>();
+        public readonly Dictionary<int, int> MiscRows = new Dictionary<int, int>();            // SpellMisc row id -> spell (the default-difficulty rows that were used)
+        public readonly Dictionary<int, long> EffectRows = new Dictionary<int, long>();        // SpellEffect row id -> spell << 8 | effect index (the same)
+        public static long EffectKey(int spell, int index) => ((long)spell << 8) | (uint)(index & 0xFF);
+    }
+
     public sealed class SpellSnapshot
     {
+        public readonly SpellLookups Lookups;
         public readonly Dictionary<int, SpellInfo> Spells;
         public readonly Dictionary<int, SkillInfo> Skills;
         public readonly List<SkillAbility> Abilities;
@@ -109,8 +122,9 @@ namespace ElansAddonHub.Services.Db2
         public int SpellCount => Spells.Count;
         public IEnumerable<Recipe> Recipes => recipeBySpell.Values;
 
-        public SpellSnapshot(IEnumerable<SpellInfo> spells, IEnumerable<SkillInfo> skills, IEnumerable<SkillAbility> abilities, Dictionary<int, int[]> reagents)
+        public SpellSnapshot(IEnumerable<SpellInfo> spells, IEnumerable<SkillInfo> skills, IEnumerable<SkillAbility> abilities, Dictionary<int, int[]> reagents, SpellLookups lookups = null)
         {
+            Lookups = lookups ?? new SpellLookups();
             Spells = new Dictionary<int, SpellInfo>();
             foreach (var s in spells ?? Enumerable.Empty<SpellInfo>()) Spells[s.Id] = s;
             Skills = new Dictionary<int, SkillInfo>();
@@ -215,6 +229,7 @@ namespace ElansAddonHub.Services.Db2
         public FactionSnapshot Factions;
         public ItemDetails Details;
         public WorldLookups World;                                  // locks, quest sorts / kinds / lines, the client's quest list (WorldLookups.cs)
+        public HotfixInfo Hotfixes;                                 // what the server's hotfix rows (DBCache.bin) changed; null = not laid over (the shipped tables as they are)
         public readonly Dictionary<string, string> Problems = new Dictionary<string, string>();      // group or table -> why it is unavailable
         public readonly List<string> Notes = new List<string>();
         public readonly Dictionary<string, uint> LayoutsSeen = new Dictionary<string, uint>();      // table -> layout hash that was read (for the saved index)
@@ -283,6 +298,7 @@ namespace ElansAddonHub.Services.Db2
             }
             else if (sp.Ok) { set.Problems[SpellTables.Spell.Name] = "Spell.db2 is not the sparse table this version expects"; }
 
+            var lk = new SpellLookups();
             // small lookup tables (cast time, duration, range, radius) by id
             Dictionary<int, int> castMs = Simple(set, raw, SpellTables.SpellCastTimes, (t, i) => SpellTables.Int(t, i, 0));
             Dictionary<int, int> durMs = Simple(set, raw, SpellTables.SpellDuration, (t, i) => SpellTables.Int(t, i, 0));
@@ -291,6 +307,8 @@ namespace ElansAddonHub.Services.Db2
             if (rg.Ok) { rangeMax = new Dictionary<int, float>(); for (int i = 0; i < rg.Table.Count; i++) rangeMax[rg.Table.IdAt(i)] = SpellTables.FltArr(rg.Table, i, 4, 0, 2); }
             var rd = Take(set, raw, SpellTables.SpellRadius);
             if (rd.Ok) { radius = new Dictionary<int, float>(); for (int i = 0; i < rd.Table.Count; i++) radius[rd.Table.IdAt(i)] = SpellTables.Flt(rd.Table, i, 0); }
+            void Keep<T>(Dictionary<int, T> from, Dictionary<int, T> into) { if (from != null) foreach (var kv in from) into[kv.Key] = kv.Value; }
+            Keep(castMs, lk.CastMs); Keep(durMs, lk.DurationMs); Keep(rangeMax, lk.RangeMax); Keep(radius, lk.Radius);
 
             // SpellMisc: icon and the ids above (the spell is the relationship column; the default difficulty only)
             var misc = Take(set, raw, SpellTables.SpellMisc);
@@ -302,6 +320,7 @@ namespace ElansAddonHub.Services.Db2
                     int spellId = t.Foreign(i);
                     if (spellId <= 0 || !spells.TryGetValue(spellId, out var s)) continue;
                     if (SpellTables.Int(t, i, SpellTables.MiscDifficulty) != 0) continue;
+                    lk.MiscRows[t.IdAt(i)] = spellId;
                     s.IconId = SpellTables.Int(t, i, SpellTables.MiscIcon);
                     int ci = SpellTables.Int(t, i, SpellTables.MiscCastTime), di = SpellTables.Int(t, i, SpellTables.MiscDuration), ri = SpellTables.Int(t, i, SpellTables.MiscRange);
                     if (castMs != null && castMs.TryGetValue(ci, out var cm)) s.CastMs = cm;
@@ -329,10 +348,11 @@ namespace ElansAddonHub.Services.Db2
                         Points = SpellTables.Flt(t, i, SpellTables.EffPoints), Coef = SpellTables.Flt(t, i, SpellTables.EffCoefficient),
                     };
                     int rad = SpellTables.IntArr(t, i, SpellTables.EffRadius, 0, 2);
+                    if (rad <= 0) rad = SpellTables.IntArr(t, i, SpellTables.EffRadius, 1, 2);   // EffectRadiusIndex[2]: some rows (Forever hotfixes) use only the second
                     if (radius != null && rad > 0 && radius.TryGetValue(rad, out var rr)) e.Radius = rr;
                     if (e.Index < 0 || e.Index > 31) continue;
                     if (!lists.TryGetValue(spellId, out var l)) lists[spellId] = l = new List<EffectInfo>();
-                    if (l.All(x => x.Index != e.Index)) l.Add(e);
+                    if (l.All(x => x.Index != e.Index)) { l.Add(e); lk.EffectRows[t.IdAt(i)] = SpellLookups.EffectKey(spellId, e.Index); }
                 }
                 foreach (var kv in lists) spells[kv.Key].Effects = kv.Value.OrderBy(x => x.Index).ToArray();
             }
@@ -382,7 +402,7 @@ namespace ElansAddonHub.Services.Db2
                     if (l.Count > 0) reagents[spellId] = l.ToArray();
                 }
             }
-            return new SpellSnapshot(spells.Values, skills, abilities, reagents);
+            return new SpellSnapshot(spells.Values, skills, abilities, reagents, lk);
         }
 
         // id -> one number, for the small lookup tables

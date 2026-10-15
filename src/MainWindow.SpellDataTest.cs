@@ -571,6 +571,9 @@ namespace ElansAddonHub
                 Check("revealed source on ItemData: it reads the snapshot's revealed items (2001, 2002); with no item data it reveals nothing", viaData.Select(r => r.Id).SequenceEqual(new[] { 2001, 2002 }) && !new RevealedItemsSource().Items().Any());
                 Check("the app hands the source to the Lodge sync at startup", AtlasObs.RevealedSource is RevealedItemsSource);
 
+                // ---- the server's hotfixes beyond items (MainWindow.SpellDataTest.Hotfix.cs)
+                SdHotfixChecks(work, set, Check);
+
                 // ---- the Characters page
                 await SdPageChecks(dir, work, set, Check, P);
 

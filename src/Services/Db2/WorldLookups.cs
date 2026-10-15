@@ -55,6 +55,30 @@ namespace ElansAddonHub.Services.Db2
 
         public const int LockTypeLockpicking = 1, LockTypeHerbalism = 2, LockTypeMining = 3;
 
+        public WorldLookups() { }
+
+        // a copy whose lock needs and quest list can be changed (the server's hotfixes, ServerHotfixes.Apply); the name tables and quest lines are shared
+        public WorldLookups CopyForOverlay()
+        {
+            var w = new WorldLookups(LockTypes, QuestSorts, QuestInfos, QuestLines, LineOfQuest);
+            foreach (var kv in Locks) w.Locks[kv.Key] = kv.Value;
+            w.QuestIds.UnionWith(QuestIds);
+            return w;
+        }
+
+        WorldLookups(Dictionary<int, string> lockTypes, Dictionary<int, string> sorts, Dictionary<int, string> infos, Dictionary<int, QuestLineInfo> lines, Dictionary<int, int> lineOf)
+        {
+            LockTypes = lockTypes; QuestSorts = sorts; QuestInfos = infos; QuestLines = lines; LineOfQuest = lineOf;
+        }
+
+        // the skill needs of one Lock row (Type 2 entries with a LockType); the same rule for the shipped table and a hotfix row
+        public static LockNeed[] NeedsOf(int[] index, int[] skill, int[] type)
+        {
+            var needs = new List<LockNeed>();
+            for (int e = 0; e < type.Length; e++) if (type[e] == 2 && index[e] > 0) needs.Add(new LockNeed { LockType = index[e], Skill = skill[e] });
+            return needs.ToArray();
+        }
+
         // the skill a lock needs: (lock type, level) - the first need with a skill level (herbs and veins have exactly one; a chest's "Open" / "Close"
         // entries have level 0 and need no skill); null = none / unknown lock
         public LockNeed? SkillNeed(int lockId)
@@ -82,15 +106,14 @@ namespace ElansAddonHub.Services.Db2
                 var t = lk.Table;
                 for (int i = 0; i < t.Count; i++)
                 {
-                    var needs = new List<LockNeed>();
+                    int[] idx = new int[8], skill = new int[8], type = new int[8];
                     for (int e = 0; e < 8; e++)
                     {
-                        int type = (int)t.FieldArr(i, WorldTables.LkType, e, 8);
-                        if (type != 2) continue;
-                        int idx = (int)t.FieldArr(i, WorldTables.LkIndex, e, 8), skill = (int)t.FieldArr(i, WorldTables.LkSkill, e, 8);
-                        if (idx > 0) needs.Add(new LockNeed { LockType = idx, Skill = skill });
+                        type[e] = (int)t.FieldArr(i, WorldTables.LkType, e, 8);
+                        idx[e] = (int)t.FieldArr(i, WorldTables.LkIndex, e, 8); skill[e] = (int)t.FieldArr(i, WorldTables.LkSkill, e, 8);
                     }
-                    if (needs.Count > 0) w.Locks[t.IdAt(i)] = needs.ToArray();
+                    var needs = NeedsOf(idx, skill, type);
+                    if (needs.Length > 0) w.Locks[t.IdAt(i)] = needs;
                 }
             }
             void Names(SpellTables.Def def, Dictionary<int, string> into)
