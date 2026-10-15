@@ -25,22 +25,57 @@ namespace ElansAddonHub.Services.Atlas
             return string.Join(", ", map.Where(k => (mask & k.Key) != 0).Select(k => k.Value));
         }
 
+        // the races a seen quest's mask names (ChrRaces.PlayableRaceBit bits): "Horde" / "Alliance" when it is exactly one side's playable races, else the names
+        public static string SeenRaces(ulong mask)
+        {
+            var cd = ClassData.Data;
+            if (cd == null || mask == WdbQuest.AllRaces || mask == 0) return "";
+            var playable = cd.PlayableRaces().Where(r => r.BitMask != 0).ToList();
+            var hit = playable.Where(r => (mask & r.BitMask) != 0).ToList();
+            if (hit.Count == 0 || hit.Count == playable.Count) return "";
+            foreach (var side in new[] { RaceInfo.Alliance, RaceInfo.Horde })
+            {
+                var all = playable.Where(r => r.Side == side).ToList();
+                if (all.Count > 0 && hit.Count == all.Count && hit.All(r => r.Side == side)) return side == RaceInfo.Alliance ? "Alliance" : "Horde";
+            }
+            return string.Join(", ", hit.Select(r => r.Name).Distinct());
+        }
+
+        static string GoalText(WdbObjective g, out string link)
+        {
+            link = null;
+            string n = g.Amount > 1 ? " ×" + g.Amount.ToString(CultureInfo.InvariantCulture) : "";
+            switch (g.Type)
+            {
+                case 0: link = "npc:" + g.ObjectId; return (g.Text.Length > 0 ? g.Text : "Kill or talk to " + NpcName(g.ObjectId)) + n;
+                case 1: link = AtlasIds.Item(g.ObjectId); return (g.Text.Length > 0 ? g.Text : "Bring " + ItemName(g.ObjectId)) + n;
+                case 2: link = "obj:" + g.ObjectId; return (g.Text.Length > 0 ? g.Text : "Use " + ObjectName(g.ObjectId)) + n;
+                case 6:
+                    var fn = FactionData.Name(g.ObjectId);
+                    if (fn != null) link = AtlasIds.Faction(g.ObjectId);
+                    return g.Text.Length > 0 ? g.Text : "Reputation with " + (fn ?? "faction " + g.ObjectId) + " (" + g.Amount.ToString("N0", CultureInfo.InvariantCulture) + ")";
+                case 10: return g.Text.Length > 0 ? g.Text : "Explore an area";
+                default: return g.Text;
+            }
+        }
+
         static AtlasPageModel BuildQuest(int id)
         {
-            var seen = SeenData.Quest(id);
+            var seen = SeenView.Quest(id, out bool seenFromLodge);
             var cq = ClassicAtlas.QuestInfo(id);
             var L = Lodge();
             var lq = L?.Quest(id);
             if (seen == null && cq == null && lq == null)
             {
-                var nf = NotFoundPage("quest", id, "No layer knows this quest. Your game has not shown it to you yet.");
+                bool exists = SpellData.World != null && SpellData.World.QuestIds.Contains(id);
+                var nf = NotFoundPage("quest", id, exists ? "Your game knows this quest exists, but nobody's game in your Lodge has been shown it yet." : "No layer knows this quest. Your game has not shown it to you yet.");
                 LayerNotes(nf, true, false);
                 return nf;
             }
             string F = AtlasLabel.Forever, C = AtlasLabel.Classic;
             var m = new AtlasPageModel { Id = "quest:" + id, Kind = "quest", MapFirst = false };
             m.Title = seen != null && seen.Title.Length > 0 ? seen.Title : cq?.Title ?? "Quest " + id;
-            if (seen != null) AddLayer(m, "seen");
+            if (seen != null) AddLayer(m, seenFromLodge ? "lodge" : "seen");
             if (cq != null) AddLayer(m, "classic");
             if (lq != null) AddLayer(m, "lodge");
             int level = seen != null && seen.Level > 0 ? seen.Level : cq?.QuestLevel ?? 0;
@@ -49,6 +84,7 @@ namespace ElansAddonHub.Services.Atlas
             if (min > 0) m.Facts.Add(new AtlasFact("Requires level", min.ToString(CultureInfo.InvariantCulture), seen != null && seen.MinLevel > 0 ? F : C));
             int sort = seen != null && seen.Sort != 0 ? seen.Sort : cq?.ZoneOrSort ?? 0;
             var idx = MapData.Index;
+            var world = SpellData.World;
             if (sort > 0 && idx != null)
             {
                 int ui = idx.UiMapForArea(sort);
@@ -56,18 +92,74 @@ namespace ElansAddonHub.Services.Atlas
                 if (ui > 0) m.Facts.Add(new AtlasFact("Zone", ZoneName(ui), seen != null && seen.Sort != 0 ? F : C, "zone:" + ui));
                 else if (!string.IsNullOrEmpty(area)) m.Facts.Add(new AtlasFact("Zone", area, seen != null && seen.Sort != 0 ? F : C));
             }
-            if (cq != null && cq.RequiredRaces != 0 && Races(cq.RequiredRaces).Length > 0) m.Facts.Add(new AtlasFact("Races", Races(cq.RequiredRaces), C));
+            else if (sort < 0 && world?.SortName(sort) is string sortName)
+            {
+                var skill = SpellData.SkillByName(sortName);
+                var cls = ClassData.Data?.Classes.Values.FirstOrDefault(c => string.Equals(c.Name, sortName, StringComparison.OrdinalIgnoreCase));
+                m.Facts.Add(new AtlasFact("Category", sortName, F, cls != null ? AtlasIds.Class(cls.Id) : skill != null ? AtlasIds.Skill(skill.Id) : null));
+            }
+            bool seenFull = seen != null && seen.Full;
+            if (seenFull)
+            {
+                var kind = new List<string>();
+                if (world?.InfoName(seen.InfoId) is string info) kind.Add(info);
+                if (seen.SuggestedGroup > 1) kind.Add("group of " + seen.SuggestedGroup.ToString(CultureInfo.InvariantCulture));
+                if (kind.Count > 0) m.Facts.Add(new AtlasFact("Kind", string.Join(", ", kind), F));
+                var races = SeenRaces(seen.Races);
+                if (races.Length > 0) m.Facts.Add(new AtlasFact("Races", races, F));
+                else if (cq != null && cq.RequiredRaces != 0 && Races(cq.RequiredRaces).Length > 0) m.Facts.Add(new AtlasFact("Races", Races(cq.RequiredRaces), C));   // Forever names no races: the baseline's, labelled
+                if ((seen.Flags & 0x8) != 0) m.Facts.Add(new AtlasFact("Shareable", "Yes, with your group", F));
+                if (seen.StartItem > 0) m.Facts.Add(new AtlasFact("Starts from", ItemName(seen.StartItem), F, AtlasIds.Item(seen.StartItem)));
+                if (seen.Money > 0) m.Facts.Add(new AtlasFact("Money", AtlasFormat.Money(seen.Money), F));
+                if (seen.RewardSpell > 0) m.Facts.Add(new AtlasFact("Reward spell", SpellName(seen.RewardSpell), F, AtlasIds.Spell(seen.RewardSpell)));
+                foreach (var f in seen.RepFactions)
+                    m.Facts.Add(new AtlasFact("Reputation", FactionData.Name(f) ?? "Faction " + f, F, FactionData.Name(f) != null ? AtlasIds.Faction(f) : null));
+                if (seen.NextQuest > 0) m.Facts.Add(new AtlasFact("Leads to", QuestTitle(seen.NextQuest), F, "quest:" + seen.NextQuest));
+            }
+            else
+            {
+                if (cq != null && cq.RequiredRaces != 0 && Races(cq.RequiredRaces).Length > 0) m.Facts.Add(new AtlasFact("Races", Races(cq.RequiredRaces), C));
+            }
             if (cq != null && cq.RequiredClasses != 0 && Classes(cq.RequiredClasses).Length > 0) m.Facts.Add(new AtlasFact("Classes", Classes(cq.RequiredClasses), C));
+            var line = world?.LineOf(id);
+            if (line != null && line.Name.Length > 0)
+            {
+                int pos = Array.IndexOf(line.Quests, id) + 1;
+                m.Facts.Add(new AtlasFact("Quest line", line.Name + (pos > 0 ? " (" + pos + " of " + line.Quests.Length + ")" : ""), F));
+            }
             m.Subtitle = string.Join(" · ", new[] { "Quest " + id, level > 0 ? "Level " + level : "" }.Where(s => s.Length > 0));
             if (seen != null && !string.IsNullOrWhiteSpace(seen.Objectives)) m.Texts.Add(new AtlasText("Objectives", seen.Objectives.Trim(), F));
             if (seen != null && !string.IsNullOrWhiteSpace(seen.Description)) m.Texts.Add(new AtlasText("Description", seen.Description.Trim(), F));
+            if (seenFull && !string.IsNullOrWhiteSpace(seen.CompletionLog)) m.Texts.Add(new AtlasText("When it is done", seen.CompletionLog.Trim(), F));
+            if (seenFromLodge) m.Notes.Add("This quest's details come from a Lodge member's game (your own game has not shown it to you" + (SeenData.Quest(id) != null ? " in this version" : "") + ").");
 
-            // reward items: what the Lodge saw, then the Classic baseline's table on the same rows
-            void ItemList(string key, string title, IEnumerable<int> lodgeItems, int[] classicItems, int[] classicCounts, string note = "")
+            // what it asks for (the server's own objective list)
+            if (seenFull && seen.Goals.Length > 0)
+            {
+                var s = Section(m, "goals", "Goals");
+                foreach (var g in seen.Goals)
+                {
+                    var text = GoalText(g, out var link);
+                    if (string.IsNullOrWhiteSpace(text)) continue;
+                    var row = g.Type == 1 ? ItemRow(g.ObjectId, g.Amount > 1 ? "×" + g.Amount : "", F) : new AtlasRow { Title = text, Link = link, Key = "goal:" + g.Type + ":" + g.ObjectId, Label = F, Tier = 1 };
+                    if (g.Type == 1 && g.Text.Length > 0) row.Detail = g.Text + (g.Amount > 1 ? " ×" + g.Amount : "");
+                    row.Type = g.Type == 0 ? "NPC" : g.Type == 1 ? "Item" : g.Type == 2 ? "Object" : g.Type == 6 ? "Reputation" : "Goal";
+                    s.Rows.Add(row);
+                }
+                if (s.Rows.Count == 0) m.Sections.Remove(s);
+            }
+
+            // reward items: what the server says (seen), what the Lodge saw handed out, then the Classic baseline's table on the same rows
+            void ItemList(string key, string title, IEnumerable<WdbItemCount> seenItems, IEnumerable<int> lodgeItems, int[] classicItems, int[] classicCounts, string note = "")
             {
                 var s = Section(m, key, title);
                 s.Note = note;
                 var by = new Dictionary<int, AtlasRow>();
+                foreach (var it in seenItems ?? Enumerable.Empty<WdbItemCount>())
+                {
+                    if (by.ContainsKey(it.Id)) continue;
+                    var r = ItemRow(it.Id, it.Count > 1 ? "×" + it.Count : "", F); r.Type = "Reward"; r.Tier = 0; by[it.Id] = r; s.Rows.Add(r);
+                }
                 foreach (var i in lodgeItems ?? Enumerable.Empty<int>())
                 {
                     if (by.ContainsKey(i)) continue;
@@ -83,9 +175,10 @@ namespace ElansAddonHub.Services.Atlas
                 }
                 if (s.Rows.Count == 0) m.Sections.Remove(s);
             }
-            ItemList("rewards", "Rewards", lq?.Rewards, cq?.RewardItems, cq?.RewardCounts);
-            ItemList("choices", "Choose one of", lq?.Choices, cq?.ChoiceItems, cq?.ChoiceCounts);
-            ItemList("objectives", "Needs", null, cq?.ObjectiveItems, cq?.ObjectiveCounts, "Items the quest asks for.");
+            ItemList("rewards", "Rewards", seenFull ? seen.Rewards : null, lq?.Rewards, cq?.RewardItems, cq?.RewardCounts);
+            ItemList("choices", "Choose one of", seenFull ? seen.Choices : null, lq?.Choices, cq?.ChoiceItems, cq?.ChoiceCounts);
+            if (seenFull && seen.Provided.Length > 0) ItemList("provided", "You are given", seen.Provided, null, null, null, "Items the quest hands you for its goals.");
+            if (!(seenFull && seen.Goals.Any(g => g.Type == 1))) ItemList("objectives", "Needs", null, null, cq?.ObjectiveItems, cq?.ObjectiveCounts, "Items the quest asks for.");
 
             // given by
             var plan = new PlanBuilder();

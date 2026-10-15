@@ -443,6 +443,7 @@ namespace ElansAddonHub
         public sealed class PoolSummary
         {
             public bool Has; public int Finds, FindMembers, Sources, Vendors, Quests; public long Updated; public string State = "";
+            public int SeenQuests, SeenNpcs, SeenObjects, SeenMembers, GameQuests;   // the seen pool (server 2.25 counts the members; GameQuests = the quests the game files list)
         }
 
         public PoolSummary Pool()
@@ -453,7 +454,19 @@ namespace ElansAddonHub
             p.Has = L.HasData;
             p.Finds = L.FindCount; p.FindMembers = L.AllFinds.Select(f => f.By ?? "a member").Distinct().Count();
             p.Sources = L.KillSources + L.ObjectSources + L.FishingZones; p.Vendors = L.VendorCount; p.Updated = L.Updated;
+            p.SeenQuests = L.SeenQuestCount; p.SeenNpcs = L.SeenNpcCount; p.SeenObjects = L.SeenObjectCount; p.SeenMembers = L.SeenMembers;
+            p.GameQuests = SpellData.World?.QuestIds.Count ?? 0;
             return p;
+        }
+
+        // "Quests known to the Lodge: 1,240 of 6,610 in the game files, from 4 members' game caches; also 3,100 creatures and 1,900 objects." ("" = nothing seen yet)
+        public static string SeenCoverage(PoolSummary p)
+        {
+            if (p == null || p.SeenQuests + p.SeenNpcs + p.SeenObjects == 0) return "";
+            var inv = CalendarRules.English;
+            var s = "Quests known to the Lodge: " + p.SeenQuests.ToString("N0", inv) + (p.GameQuests > 0 ? " of " + p.GameQuests.ToString("N0", inv) + " in the game files" : "");
+            if (p.SeenMembers > 0) s += ", from " + AtlasFormat.Count(p.SeenMembers, "member's", "members'") + " game " + (p.SeenMembers == 1 ? "cache" : "caches");
+            return s + "; also " + AtlasFormat.Count(p.SeenNpcs, "creature", "creatures") + " and " + AtlasFormat.Count(p.SeenObjects, "object", "objects") + ".";
         }
 
         FrameworkElement LodgeBlock()
@@ -467,6 +480,8 @@ namespace ElansAddonHub
                 var d = Tb(AtlasFormat.Count(p.Sources, "source", "sources") + " with observed loot, " + AtlasFormat.Count(p.Vendors, "vendor", "vendors") + ", " + AtlasFormat.Count(p.Finds, "find", "finds") + " by "
                     + AtlasFormat.Count(p.FindMembers, "member", "members") + (p.Updated > 0 ? ". Last update " + AtlasFormat.Ago(p.Updated, AtlasQuery.Context.NowUtc()) + "." : "."), "Text.Secondary", null, 4);
                 d.TextWrapping = TextWrapping.Wrap; sp.Children.Add(d);
+                var cov = SeenCoverage(p);
+                if (cov.Length > 0) { var c = Tb(cov, "Text.Secondary", null, 4); c.TextWrapping = TextWrapping.Wrap; sp.Children.Add(c); }
             }
             else
             {

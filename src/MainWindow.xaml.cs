@@ -96,6 +96,7 @@ namespace ElansAddonHub
             ElansAddonHub.Services.SeenData.WowRoot = () => settings.WowRoot;   // what the client has seen (creature / object / quest caches), same switch as the item data
             ElansAddonHub.Services.SeenData.Enabled = () => !settings.ItemDataOff;
             ElansAddonHub.Services.AtlasObs.SeenSource = ElansAddonHub.Services.SeenData.AsSource;
+            ElansAddonHub.Services.AtlasObs.SeenBuild = () => ElansAddonHub.Services.SeenData.LastBuild;
             if (ElansAddonHub.Services.SeenData.AutoStart) _ = Task.Delay(3500).ContinueWith(t => ElansAddonHub.Services.SeenData.Start());
             ElansAddonHub.Services.Maps.MapData.WowRoot = () => settings.WowRoot;   // Atlas maps: the same "Game data" switch and WoW folder as the item data
             ElansAddonHub.Services.Maps.MapData.Enabled = () => !settings.ItemDataOff;

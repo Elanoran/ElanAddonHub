@@ -22,7 +22,7 @@ namespace ElansAddonHub.Services.Db2
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 1;          // bump when the parsing, the table layouts or the cache file change meaning
+        public const int FormatVersion = 2;          // bump when the parsing, the table layouts or the cache file change meaning (2: + WorldLookups)
 
         public static bool AutoStart = true;         // off in the self-test (it must not read the real game)
         public static string CacheFile = Path.Combine(Util.DataDir, "cache", "spelldata.bin");
@@ -45,6 +45,7 @@ namespace ElansAddonHub.Services.Db2
         public static SpellSnapshot Spells => data?.Spells;
         public static FactionSnapshot Factions => data?.Factions;
         public static ItemDetails Details => data?.Details;
+        public static WorldLookups World => data?.World;
 
         public static int SpellCount => Spells?.SpellCount ?? 0;
         public static int RecipeCount => Spells?.RecipeCount ?? 0;
@@ -253,8 +254,9 @@ namespace ElansAddonHub.Services.Db2
             using (var casc = CascStorage.Open(root, flavor))
             {
                 casc.ZeroFillEncrypted = true;     // key-locked parts read as zeros; the table reader skips those sections
-                var keys = casc.ResolveFileIds(new HashSet<int>(SpellTables.All.Select(d => d.FileId)));
-                foreach (var def in SpellTables.All)
+                var all = SpellTables.All.Concat(WorldTables.All).ToArray();
+                var keys = casc.ResolveFileIds(new HashSet<int>(all.Select(d => d.FileId)));
+                foreach (var def in all)
                 {
                     try { if (keys.TryGetValue(def.FileId, out var ck)) raw.Tables[def.Name] = casc.ReadByContentKey(ck); }
                     catch (Exception e) { Util.Log("spell data: " + def.Name + ".db2: " + e.Message); }
@@ -291,6 +293,7 @@ namespace ElansAddonHub.Services.Db2
                     WriteSpells(w, set.Spells);
                     WriteFactions(w, set.Factions);
                     WriteDetails(w, set.Details);
+                    WorldLookups.Write(w, set.World);
                 }
                 using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var gz = new GZipStream(fs, CompressionMode.Compress))
@@ -327,6 +330,7 @@ namespace ElansAddonHub.Services.Db2
                     s.Set.Spells = ReadSpells(r);
                     s.Set.Factions = ReadFactions(r);
                     s.Set.Details = ReadDetails(r);
+                    s.Set.World = WorldLookups.Read(r);
                     return s;
                 }
             }

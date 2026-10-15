@@ -256,6 +256,28 @@ namespace ElansAddonHub
                 new[] { new object[] { 0, 7001, 0, 2 }, new object[] { 0, 7002, 0, 3 | 0x140000 }, new object[] { 0, 7001, 0, 2 } },      // thresholds carry junk above the low byte, like the real table
                 new[] { 1, 2, 3 }, foreign: new[] { 700, 700, 999 });
 
+        // ---- the lock / quest lookup tables (WorldLookups) in the layouts of build 1.60.1.70374
+        static byte[] SdLock(uint layout = 0xDA418152) => SdBuild(WorldTables.Lock.TableHash, layout, new[] { SdI(), SdI(8), SdI(8, 16), SdI(8, 8), SdI(8, 8) },
+            new[]
+            {
+                new object[] { 0, new[] { 2 }, new[] { 70 }, new[] { 2 }, new int[0] },                       // 31: Briarthorn, Herbalism 70
+                new object[] { 0, new[] { 3, 872 }, new[] { 65, 0 }, new[] { 2, 1 }, new int[0] },              // 39: Tin Vein, Mining 65 (and an item entry)
+                new object[] { 1, new[] { 1, 5, 6 }, new[] { 25, 0, 0 }, new[] { 2, 2, 2 }, new[] { 1 } },      // 2: Lockpicking 25, then Open / Close without a level
+                new object[] { 0, new[] { 0, 5, 6 }, new[] { 0, 0, 0 }, new[] { 0, 2, 2 }, new int[0] },        // 57: a plain chest, no skill
+            }, new[] { 31, 39, 2, 57 });
+        static byte[] SdLockType(uint layout = 0xAF114F71) => SdBuild(WorldTables.LockType.TableHash, layout, new[] { SdS(), SdS(), SdS(), SdS(), SdI(), SdI() },
+            new[] { new object[] { "Pick Lock", "Locked Items", "Pick", "", 0, 0 }, new object[] { "Herbalism", "Herbs", "Gather", "", 1, 0 }, new object[] { "Mining", "Ore Deposits", "Mine", "", 2, 0 }, new object[] { "Open", "Unlocked Items", "Open", "", 4, 0 } }, new[] { 1, 2, 3, 5 });
+        static byte[] SdQuestSort(uint layout = 0x9B92BE63) => SdBuild(WorldTables.QuestSort.TableHash, layout, new[] { SdS(), SdI(1, 8), SdI() },
+            new[] { new object[] { "Cooking", 0, 0 }, new object[] { "Paladin", 0, 0 }, new object[] { "The High Order", 0, 0 } }, new[] { 304, 141, 660 });
+        static byte[] SdQuestInfo(uint layout = 0xE505C927) => SdBuild(WorldTables.QuestInfo.TableHash, layout, new[] { SdS(), SdI(1, 8), SdI(), SdI(1, 16) },
+            new[] { new object[] { "Elite", 0, 2, 0 }, new object[] { "Dungeon", 0, 0, 0 } }, new[] { 1, 81 });
+        static byte[] SdQuestLine(uint layout = 0x27C5AD69) => SdBuild(WorldTables.QuestLine.TableHash, layout, new[] { SdS(), SdS(), SdI(), SdI(), SdI(), SdI(), SdI() },
+            new[] { new object[] { "Toxic Soil", "", 0, 0, 0, 0, 0 } }, new[] { 6026 });
+        static byte[] SdQuestLineX(uint layout = 0x8552F722) => SdBuild(WorldTables.QuestLineXQuest.TableHash, layout, new[] { SdI(), SdI(), SdI(), SdI(), SdI() },
+            new[] { new object[] { 6026, 92744, 1, 0, 0 }, new object[] { 6026, 92742, 0, 0, 0 }, new object[] { 9999, 1, 0, 0, 0 } }, new[] { 49381, 49380, 49999 });
+        static byte[] SdQuestV2(uint layout = 0x1854BDB9) => SdBuild(WorldTables.QuestV2.TableHash, layout, new[] { SdI(), SdI(), SdI() },
+            new[] { new object[] { 25, 0, 0 }, new object[] { 498, 0, 0 }, new object[] { 92742, 0, 0 } }, new[] { 25, 498, 92742 }, idIndex: 0, idList: false);
+
         static SpellRaw SdRaw(Action<SpellRaw> tweak = null)
         {
             var raw = new SpellRaw();
@@ -285,6 +307,13 @@ namespace ElansAddonHub
             raw.Tables[SpellTables.ItemXItemEffect.Name] = SdItemXItemEffect();
             raw.Tables[SpellTables.ItemSet.Name] = SdItemSet();
             raw.Tables[SpellTables.ItemSetSpell.Name] = SdItemSetSpell();
+            raw.Tables[WorldTables.Lock.Name] = SdLock();
+            raw.Tables[WorldTables.LockType.Name] = SdLockType();
+            raw.Tables[WorldTables.QuestSort.Name] = SdQuestSort();
+            raw.Tables[WorldTables.QuestInfo.Name] = SdQuestInfo();
+            raw.Tables[WorldTables.QuestLine.Name] = SdQuestLine();
+            raw.Tables[WorldTables.QuestLineXQuest.Name] = SdQuestLineX();
+            raw.Tables[WorldTables.QuestV2.Name] = SdQuestV2();
             tweak?.Invoke(raw);
             return raw;
         }
@@ -320,6 +349,18 @@ namespace ElansAddonHub
                 var set = SpellParse.All(SdRaw());
                 Check("parse: spells, factions and item details all available; the only problems are the three damage tables this fixture leaves out (two-hand caster, thrown, wand)", set.Spells != null && set.Factions != null && set.Details != null
                     && set.Problems.Keys.OrderBy(k => k, StringComparer.Ordinal).SequenceEqual(new[] { "ItemDamageThrown", "ItemDamageTwoHandCaster", "ItemDamageWand" }), string.Join("; ", set.Problems.Select(p => p.Key + "=" + p.Value)));
+                var wl = set.World;
+                Check("world lookups: Lock 31 = Herbalism 70, 39 = Mining 65 (the item entry of the same lock is not a skill), 2 = Lockpicking 25 (Open / Close without a level are skipped), 57 = no skill, unknown lock = none",
+                    wl != null && wl.SkillNeed(31)?.LockType == 2 && wl.SkillNeed(31)?.Skill == 70 && wl.SkillNeed(39)?.LockType == 3 && wl.SkillNeed(39)?.Skill == 65 && wl.SkillNeed(2)?.LockType == 1 && wl.SkillNeed(2)?.Skill == 25
+                    && wl.SkillNeed(57) == null && wl.SkillNeed(12345) == null && wl.LockTypeName(2) == "Herbalism" && wl.LockTypeName(3) == "Mining", wl == null ? "no world" : string.Join(",", wl.Locks.Keys));
+                Check("world lookups: quest sorts by their negative sort (-304 Cooking, -141 Paladin, -660 The High Order), quest kinds (81 Dungeon, 1 Elite), a positive sort or 0 has no name",
+                    wl.SortName(-304) == "Cooking" && wl.SortName(-141) == "Paladin" && wl.SortName(-660) == "The High Order" && wl.SortName(304) == null && wl.InfoName(81) == "Dungeon" && wl.InfoName(1) == "Elite" && wl.InfoName(0) == null && wl.InfoName(7) == null);
+                Check("world lookups: the quest line 'Toxic Soil' lists its quests in their order (92742 then 92744); a row of an unknown line is ignored; the client's quest list (inline ids)",
+                    wl.LineOf(92744)?.Name == "Toxic Soil" && wl.LineOf(92744).Quests.SequenceEqual(new[] { 92742, 92744 }) && wl.LineOf(1) == null && wl.QuestIds.SetEquals(new[] { 25, 498, 92742 }), wl.QuestIds.Count + "");
+                var unkLock = SpellParse.All(SdRaw(r => r.Tables[WorldTables.Lock.Name] = SdLock(0x12345678)));
+                Check("an unknown Lock layout: no lock needs (nothing guessed), the quest names still there, spells unaffected", unkLock.World != null && unkLock.World.Locks.Count == 0 && unkLock.World.SortName(-304) == "Cooking" && unkLock.Problems.ContainsKey("Lock") && unkLock.Spells != null);
+                var noWorld = SpellParse.All(SdRaw(r => { foreach (var d0 in WorldTables.All) r.Tables.Remove(d0.Name); }));
+                Check("none of the lock / quest tables: World is null with a reason, the rest unaffected", noWorld.World == null && noWorld.Problems.ContainsKey("world") && noWorld.Spells != null && noWorld.Factions != null);
                 Check("parse: 11 spells (the locked names are not there), key-locked rows noted", set.Spells.SpellCount == 11 && set.Notes.Any(n => n.StartsWith("SpellName") && n.Contains("key-locked")), set.Spells.SpellCount + "");
                 var fb = set.Spells.Get(133);
                 Check("spell 133: name, rank text, icon, cast 1.5 s, duration 4 s, range 35 yards (SpellMisc row of the default difficulty; the hard-difficulty row is ignored)", fb.Name == "Fireball" && fb.Rank == "Rank 1" && fb.IconId == 135812 && fb.CastMs == 1500 && fb.DurationMs == 4000 && Math.Abs(fb.RangeMax - 35f) < 0.01, fb.IconId + " " + fb.CastMs + " " + fb.DurationMs + " " + fb.RangeMax);
@@ -466,6 +507,7 @@ namespace ElansAddonHub
                 Check("index file round trip: build, format, spells with effects, descriptions, skills, abilities, recipes, reagents",
                     back != null && back.Build == "wow_classic_beta|1.60.1.70338|abc" && back.Format == SpellData.FormatVersion && bs.Spells.SpellCount == 11 && bs.Spells.Get(133).Desc == fb.Desc && bs.Spells.Get(133).Effects.Length == 2 && bs.Spells.Get(133).Effects[1].PeriodMs == 2000
                     && bs.Spells.Skills.Count == 6 && bs.Spells.Abilities.Count == 7 && bs.Spells.RecipeCount == 4 && bs.Spells.Producing(1001).Single().Reagents.SequenceEqual(new[] { 2589, 2, 3820, 1 }) && bs.Spells.Get(133).IconId == 135812 && bs.Spells.Get(133).CastMs == 1500);
+                Check("index file round trip: the lock / quest lookups", bs.World != null && bs.World.SkillNeed(39)?.Skill == 65 && bs.World.SortName(-141) == "Paladin" && bs.World.InfoName(81) == "Dungeon" && bs.World.LineOf(92742)?.Quests.Length == 2 && bs.World.QuestIds.Count == 3);
                 Check("index file round trip: factions (names, templates, standings), item details (armor, damage tables, effects, sets), notes and the layouts that were read",
                     bs.Factions.Faction(72).Name == "Stormwind" && bs.Factions.ToHorde(11) == Standing.Hostile && bs.Factions.ToAlliance(99) == Standing.Friendly && bs.Details.HasArmor && bs.Details.Damage.Count(x => x != null) == 5 && bs.Details.Damage[ItemDetails.KindTwoHandCaster] == null
                     && bs.Details.EffectCount == 3 && bs.Details.Sets[700].Bonuses.Count == 2 && bs.Details.SetOfItem[1003] == 700 && bs.Notes.Count == set.Notes.Count && bs.LayoutsSeen["SpellName"] == 0x782EE721);
@@ -691,6 +733,13 @@ namespace ElansAddonHub
                     var tf = snap.Get(19019);
                     Check("real game files: Thunderfury has a damage range and a 'Chance on hit' line; a leather chest piece has armor", tf != null && tf.TryDamage(out var dmin, out var dmax, out _) && dmin > 0 && dmax > dmin && ItemText.Lines(tf).Any(l => l.Kind == "effect" && l.Text.StartsWith("Chance on hit: ")) && (snap.Get(16417)?.Armor ?? 0) > 0);
                 }
+                var w = set.World;
+                Check("real game files: locks need the Classic skill levels (29 Peacebloom: Herbalism 1, 31 Briarthorn: Herbalism 70, 45 Kingsblood: Herbalism 125, 38 Copper Vein: Mining 1, 39 Tin Vein: Mining 65, 41 Iron Deposit: Mining 125, 2: Lockpicking 25)",
+                    w != null && w.SkillNeed(29)?.LockType == 2 && w.SkillNeed(29)?.Skill == 1 && w.SkillNeed(31)?.Skill == 70 && w.SkillNeed(45)?.Skill == 125 && w.SkillNeed(38)?.LockType == 3 && w.SkillNeed(38)?.Skill == 1
+                    && w.SkillNeed(39)?.Skill == 65 && w.SkillNeed(41)?.Skill == 125 && w.SkillNeed(2)?.LockType == 1 && w.SkillNeed(2)?.Skill == 25 && w.LockTypeName(2) == "Herbalism" && w.LockTypeName(3) == "Mining",
+                    w == null ? "no world" : w.SkillNeed(29)?.LockType + "/" + w.SkillNeed(29)?.Skill);
+                Check("real game files: quest sorts and kinds have their names (-304 Cooking, -141 Paladin, 81 Dungeon), the client lists more than 5,000 quests (25 Stonetalon Standstill among them)",
+                    w != null && w.SortName(-304) == "Cooking" && w.SortName(-141) == "Paladin" && w.InfoName(81) == "Dungeon" && w.QuestIds.Count > 5000 && w.QuestIds.Contains(25), w?.QuestIds.Count + "");
                 notes.Add("note real game files: " + set.Spells?.SpellCount + " spells, " + set.Spells?.RecipeCount + " recipes, " + set.Factions?.Factions.Count + " factions, " + set.Factions?.Templates.Count + " templates, " + set.Details?.EffectCount + " item effects, " + set.Details?.SetCount + " sets, read + parse " + ms + " ms");
                 foreach (var n in set.Notes) notes.Add("note real game files: " + n);
                 foreach (var p in set.Problems) notes.Add("note real game files: " + p.Key + ": " + p.Value);

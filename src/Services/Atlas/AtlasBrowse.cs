@@ -438,7 +438,7 @@ namespace ElansAddonHub.Services.Atlas
             else if (ix.Cat == "creatures" || ix.Cat == "objects" || ix.Cat == "quests")
             {
                 if (!classic) r.Notes.Add("The Classic baseline is not on this PC, so levels, zones and spawn data are missing. Download it from the Atlas start page.");
-                if (ix.Cat == "objects" && classic == false) r.Notes.Add("Herbs and ore are told apart by what they give; without the Classic baseline or Lodge drops they are listed under Other.");
+                if (ix.Cat == "objects" && classic == false) r.Notes.Add("Herbs and ore are told apart by the skill their lock needs (your game files and cache) or by what they give; one that neither tells apart is listed under Other.");
                 if (q.Src == "lodge" && !lodge) r.Notes.Add("No Lodge observations yet.");
             }
             else if (ix.Cat == "instances" && !classic && ix.All.Any(e => e.Level <= 0))

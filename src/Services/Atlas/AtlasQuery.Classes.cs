@@ -197,31 +197,62 @@ namespace ElansAddonHub.Services.Atlas
             return m;
         }
 
-        // Where a race starts. Neither the client nor the Classic baseline stores start positions, but the baseline's quests carry the
-        // races that may take them. Most first quests are open to a whole faction; each starting area also has a few for its own races
-        // only (the "Welcome!" quests: Shadowglen for Night Elves, Coldridge Valley for Dwarves and Gnomes, the Valley of Trials for Orcs
-        // and Trolls ...). So among the race's first quests (up to its starting level + 1) the ones with the NARROWEST race mask decide,
-        // and their most common area is the start.
+        // Where a race starts. Neither the client nor the Classic baseline stores start positions, but quests carry the races that may take them. Most
+        // first quests are open to a whole faction; each starting area also has a few for its own races only (the "Welcome!" quests: Shadowglen for Night
+        // Elves, Coldridge Valley for Dwarves and Gnomes, the Valley of Trials for Orcs and Trolls ...). So among the race's first quests (up to its starting
+        // level + 1) the ones with the NARROWEST race mask decide, and their most common area is the start. Two sources of quests: the Classic baseline,
+        // and the quests Forever itself described to this PC or to a Lodge member (SeenView, with Forever's race masks - the only source for Forever's own
+        // races such as the Skyborne). The baseline's answer is shown when it has one; Forever's when the baseline has none.
         static void AddStartZone(AtlasPageModel m, RaceInfo r)
         {
             var ci = ClassicAtlas.Current;
             var idx = MapData.Index;
-            if (ci == null || idx == null || r.BitMask == 0)
+            if (idx == null || r.BitMask == 0) { m.Notes.Add("The game's zone tables are not read yet, so the starting zone is not shown."); return; }
+            int start = Math.Max(1, r.StartingLevel);
+            int quests = 0, seenQuests = 0;
+            int area = ci == null ? 0 : StartArea(ci.Quests.Values, r.BitMask, start, out quests);
+            int seenArea = StartAreaSeen(SeenView.AllQuests(), r.BitMask, start, out seenQuests);
+            bool fromSeen = area == 0 && seenArea != 0;
+            if (fromSeen) { area = seenArea; quests = seenQuests; }
+            if (area == 0)
             {
                 m.Notes.Add(ci == null
-                    ? "The starting zone is worked out from the Classic baseline's first quests, and the baseline is not loaded, so it is not shown."
-                    : "The game's zone tables are not read yet, so the starting zone is not shown.");
+                    ? "The starting zone is worked out from the first quests meant for this race: the Classic baseline is not loaded, and neither your game nor your Lodge's members have been shown such a quest yet, so it is not shown."
+                    : "Neither the Classic baseline nor the quests your game and your Lodge's members have been shown have first quests for this race yet, so its starting zone is not shown.");
                 return;
             }
-            int start = Math.Max(1, r.StartingLevel);
-            int area = StartArea(ci.Quests.Values, r.BitMask, start, out int quests);
-            if (area == 0) { m.Notes.Add("The Classic baseline has no first quests for this race, so its starting zone is not shown."); return; }
             int ui = idx.UiMapForArea(area);
             string zone = ui > 0 ? ZoneName(ui) : null, place = idx.AreaName(area);
             string text = !string.IsNullOrEmpty(place) && !string.IsNullOrEmpty(zone) && !string.Equals(place, zone, StringComparison.OrdinalIgnoreCase) ? place + ", " + zone : zone ?? place;
             if (string.IsNullOrEmpty(text)) { m.Notes.Add("The area of this race's first quests is not in your game's zone tables, so the starting zone is not shown."); return; }
-            m.Facts.Add(new AtlasFact("Starts in", text, AtlasLabel.Classic, ui > 0 ? "zone:" + ui.ToString(CultureInfo.InvariantCulture) : null));
-            m.Notes.Add("Starting zone: where the first quests meant for this race only are given (" + AtlasFormat.Count(quests, "quest", "quests") + " up to level " + (start + 1) + " in the Classic baseline).");
+            m.Facts.Add(new AtlasFact("Starts in", text, fromSeen ? AtlasLabel.Forever : AtlasLabel.Classic, ui > 0 ? "zone:" + ui.ToString(CultureInfo.InvariantCulture) : null));
+            m.Notes.Add("Starting zone: where the first quests meant for this race only are given (" + AtlasFormat.Count(quests, "quest", "quests") + " up to level " + (start + 1)
+                + (fromSeen ? " that Forever described to your game or a Lodge member's)." : " in the Classic baseline)."));
+            if (!fromSeen && seenArea != 0 && seenArea != area)
+            {
+                int sui = idx.UiMapForArea(seenArea);
+                var sz = sui > 0 ? ZoneName(sui) : idx.AreaName(seenArea);
+                if (!string.IsNullOrEmpty(sz)) m.Notes.Add("Forever's own quests for this race point at " + sz + " instead (" + AtlasFormat.Count(seenQuests, "quest", "quests") + ").");
+            }
+        }
+
+        // the same rule on quests Forever described (WdbQuest.Races are ChrRaces.PlayableRaceBit bits; a quest open to every race says nothing)
+        public static int StartAreaSeen(IEnumerable<WdbQuest> all, ulong raceMask, int startLevel, out int quests)
+        {
+            int Pop(ulong v) { int n = 0; while (v != 0) { v &= v - 1; n++; } return n; }
+            var first = new List<KeyValuePair<int, int>>();
+            foreach (var q in all ?? Enumerable.Empty<WdbQuest>())
+            {
+                if (q == null || !q.Full || !q.RaceLimited || q.Sort <= 0 || (q.Races & raceMask) == 0) continue;
+                if (q.MinLevel > startLevel || q.Level > startLevel + 1) continue;
+                first.Add(new KeyValuePair<int, int>(q.Sort, Pop(q.Races)));
+            }
+            quests = 0;
+            if (first.Count == 0) return 0;
+            int narrowest = first.Min(x => x.Value);
+            var best = first.Where(x => x.Value == narrowest).GroupBy(x => x.Key).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First();
+            quests = best.Count();
+            return best.Key;
         }
 
         // the area id of a race's first quests (0 = none): the quests open to it up to startLevel + 1, narrowed to those with the fewest races

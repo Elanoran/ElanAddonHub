@@ -10,6 +10,7 @@ using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
 using ElansAddonHub.Services.Atlas.Classic;
 using ElansAddonHub.Services.Db2;
+using ElansAddonHub.Services.Maps;
 using ElansAddonHub.Services.Talents;
 
 namespace ElansAddonHub
@@ -211,6 +212,32 @@ namespace ElansAddonHub
                         Area(4) + " " + Area(1) + " " + Area(3) + " " + Area(7) + " " + gnomeQuests + " " + Area(8) + " " + Area(10));
                 }
                 Check("race page: the description of the race is a text on the page", rp.Texts.Any(t => t.Title == "About" && t.Body.StartsWith("The orc race")));
+                // the starting zone of a race the Classic baseline has no quests for (Forever's own races): from the quests Forever described, with their race masks
+                {
+                    WdbQuest SQ(int qid, int area, ulong races, int min = 1, int lvl = 1, bool full = true) => new WdbQuest { Id = qid, Title = "Q" + qid, Sort = area, Races = races, MinLevel = min, Level = lvl, Full = full };
+                    ulong orc = ClassData.Data.Race(2).BitMask, human = ClassData.Data.Race(1).BitMask;
+                    var seenQs = new[] { SQ(1, 79, orc | human), SQ(2, 78, orc), SQ(3, 78, orc), SQ(4, 79, orc, 1, 9), SQ(5, -101, orc), SQ(6, 79, WdbQuest.AllRaces), SQ(7, 79, orc, 1, 1, false) };
+                    int sa = AtlasQuery.StartAreaSeen(seenQs, orc, 1, out int saN);
+                    Check("race start (Forever's quests): the race-only quests decide (area 78, 2 quests) over a shared one, a later quest, a quest sort, a quest for every race and a record without details",
+                        sa == 78 && saN == 2 && AtlasQuery.StartAreaSeen(seenQs, human, 1, out _) == 79 && AtlasQuery.StartAreaSeen(seenQs, 1UL << 40, 1, out _) == 0, sa + " " + saN);
+                    var savedMap = MapData.Index;
+                    try
+                    {
+                        MapData.SetForTest(new MapIndex(AtlasTestMapSet()));
+                        SeenData.SetForTest(new SeenSnapshot(null, null, seenQs));
+                        var rpS = AtlasQuery.Build("race:2");
+                        var st = rpS.Facts.FirstOrDefault(f => f.Label == "Starts in");
+                        Check("race page: without the Classic baseline the starting zone comes from the quests Forever described (labelled Forever, linked to the zone) and the note says where it was worked out from",
+                            st != null && st.Source == AtlasLabel.Forever && st.Link == "zone:11" && rpS.Notes.Any(n => n.StartsWith("Starting zone:") && n.Contains("Forever described")), string.Join(" | ", rpS.Facts) + " / " + string.Join(" | ", rpS.Notes));
+                        SeenData.SetForTest(new SeenSnapshot(null, null, new[] { SQ(9, 78, WdbQuest.AllRaces) }));
+                        Check("race page: no first quest for the race anywhere = no 'Starts in', and a note that says why", !AtlasQuery.Build("race:2").Facts.Any(f => f.Label == "Starts in") && AtlasQuery.Build("race:2").Notes.Any(n => n.Contains("starting zone") && n.Contains("not shown")), string.Join(" | ", AtlasQuery.Build("race:2").Notes));
+                    }
+                    finally
+                    {
+                        if (savedMap != null) MapData.SetForTest(savedMap); else MapData.ResetForTest();
+                        SeenData.SetForTest(null, SeenData.State.NotStarted);
+                    }
+                }
 
                 // ============================================================================================================ the spell pages
                 var sp = AtlasQuery.Build("spell:14281");

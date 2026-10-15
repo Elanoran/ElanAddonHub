@@ -245,6 +245,10 @@ namespace ElansAddonHub.Services.Atlas
             var lc = x.L?.Loot("obj", id);
             if (lc != null) items.AddRange(lc.Items.Keys);
             bool herb = false, ore = false;
+            // the lock the object opens with names the skill (Lock.db2): verified data first, the loot and the name only when it is not known
+            var need = SeenView.SkillNeedOf(id);
+            if (need.HasValue && need.Value.LockType == WorldLookups.LockTypeHerbalism) herb = true;
+            else if (need.HasValue && need.Value.LockType == WorldLookups.LockTypeMining) ore = true;
             foreach (var it in items)
             {
                 var ci = ItemData.Get(it);
@@ -359,7 +363,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (string.IsNullOrEmpty(name)) continue;
                 var e = Entry("npc", id, name);
                 e.Client = s != null; e.Classic = c != null;
-                e.Rank = s?.Rank ?? c?.Rank ?? 0; e.Type = s?.Type ?? c?.Type ?? 0; e.Flags = s != null ? (int)s.Flags0 : c?.NpcFlags ?? 0;
+                e.Rank = s?.Rank ?? c?.Rank ?? 0; e.Type = s?.Type ?? c?.Type ?? 0; e.Flags = c?.NpcFlags ?? 0;   // the client cache has type flags, not npc flags (WdbCreature)
                 if (c != null) { e.Level = c.MinLevel; e.Level2 = c.MaxLevel; }
                 e.Zone = ZoneOfSpawns(x, c?.Spawns);
                 if (e.Zone == 0 && x.L != null) { var sp = x.L.Spawns(id); if (sp.Count > 0) e.Zone = sp[0].Zone; }

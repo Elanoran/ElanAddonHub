@@ -130,7 +130,7 @@ namespace ElansAddonHub.Services
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 1;          // bump when the parsing or the saved file changes meaning
+        public const int FormatVersion = 2;          // bump when the parsing or the saved file changes meaning (2: the full quest answer, kill credits, all three type flags)
         public const string CreatureFile = "creaturecache.wdb", ObjectFile = "gameobjectcache.wdb", QuestFile = "questcache.wdb";
 
         // ---- hooks
@@ -402,7 +402,7 @@ namespace ElansAddonHub.Services
                     w.Write(set.Npcs.Count);
                     foreach (var n in set.Npcs)
                     {
-                        w.Write(n.Id); w.Write(n.Name ?? ""); w.Write(n.Title ?? ""); w.Write((byte)n.Type); w.Write((short)n.Family); w.Write((byte)n.Rank); w.Write(n.DisplayId); w.Write(n.Flags0); w.Write(n.Flags1);
+                        w.Write(n.Id); w.Write(n.Name ?? ""); w.Write(n.Title ?? ""); w.Write((byte)n.Type); w.Write((short)n.Family); w.Write((byte)n.Rank); w.Write(n.DisplayId); w.Write(n.Flags0); w.Write(n.Flags1); w.Write(n.Flags2); w.Write(n.KillCredit1); w.Write(n.KillCredit2);
                         w.Write(n.QuestItems.Length); foreach (var q in n.QuestItems) w.Write(q);
                     }
                     w.Write(set.Objects.Count);
@@ -416,6 +416,7 @@ namespace ElansAddonHub.Services
                     foreach (var q in set.Quests)
                     {
                         w.Write(q.Id); w.Write(q.Type); w.Write(q.Level); w.Write(q.MinLevel); w.Write(q.Sort); w.Write(q.Title ?? ""); w.Write(q.Objectives ?? ""); w.Write(q.Description ?? "");
+                        WriteQuestDetails(w, q);
                     }
                 }
                 using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -449,7 +450,7 @@ namespace ElansAddonHub.Services
                     int n = Count(r);
                     for (int k = 0; k < n; k++)
                     {
-                        var c = new WdbCreature { Id = r.ReadInt32(), Name = r.ReadString(), Title = r.ReadString(), Type = r.ReadByte(), Family = r.ReadInt16(), Rank = r.ReadByte(), DisplayId = r.ReadInt32(), Flags0 = r.ReadUInt32(), Flags1 = r.ReadUInt32() };
+                        var c = new WdbCreature { Id = r.ReadInt32(), Name = r.ReadString(), Title = r.ReadString(), Type = r.ReadByte(), Family = r.ReadInt16(), Rank = r.ReadByte(), DisplayId = r.ReadInt32(), Flags0 = r.ReadUInt32(), Flags1 = r.ReadUInt32(), Flags2 = r.ReadUInt32(), KillCredit1 = r.ReadInt32(), KillCredit2 = r.ReadInt32() };
                         int qc = Count(r, 64);
                         if (qc > 0) { c.QuestItems = new int[qc]; for (int j = 0; j < qc; j++) c.QuestItems[j] = r.ReadInt32(); }
                         s.Set.Npcs.Add(c);
@@ -465,11 +466,40 @@ namespace ElansAddonHub.Services
                     }
                     n = Count(r);
                     for (int k = 0; k < n; k++)
-                        s.Set.Quests.Add(new WdbQuest { Id = r.ReadInt32(), Type = r.ReadInt32(), Level = r.ReadInt32(), MinLevel = r.ReadInt32(), Sort = r.ReadInt32(), Title = r.ReadString(), Objectives = r.ReadString(), Description = r.ReadString() });
+                    {
+                        var q = new WdbQuest { Id = r.ReadInt32(), Type = r.ReadInt32(), Level = r.ReadInt32(), MinLevel = r.ReadInt32(), Sort = r.ReadInt32(), Title = r.ReadString(), Objectives = r.ReadString(), Description = r.ReadString() };
+                        ReadQuestDetails(r, q);
+                        s.Set.Quests.Add(q);
+                    }
                     return s;
                 }
             }
             catch (Exception) { return null; }
+        }
+
+        // the fields of the full quest answer (WdbQuest.Full)
+        static void WriteQuestDetails(BinaryWriter w, WdbQuest q)
+        {
+            w.Write(q.Full);
+            if (!q.Full) return;
+            w.Write(q.Flags); w.Write(q.FlagsEx); w.Write(q.InfoId); w.Write(q.SuggestedGroup); w.Write(q.NextQuest); w.Write(q.Money); w.Write(q.RewardSpell); w.Write(q.StartItem); w.Write(q.Races);
+            void Items(WdbItemCount[] a) { w.Write(a.Length); foreach (var x in a) { w.Write(x.Id); w.Write(x.Count); } }
+            Items(q.Rewards); Items(q.Choices); Items(q.Provided);
+            w.Write(q.RepFactions.Length); foreach (var f in q.RepFactions) w.Write(f);
+            w.Write(q.Goals.Length); foreach (var g in q.Goals) { w.Write(g.Type); w.Write(g.ObjectId); w.Write(g.Amount); w.Write(g.Text ?? ""); }
+            w.Write(q.AreaDescription ?? ""); w.Write(q.CompletionLog ?? "");
+        }
+
+        static void ReadQuestDetails(BinaryReader r, WdbQuest q)
+        {
+            q.Full = r.ReadBoolean();
+            if (!q.Full) return;
+            q.Flags = r.ReadInt32(); q.FlagsEx = r.ReadInt32(); q.InfoId = r.ReadInt32(); q.SuggestedGroup = r.ReadInt32(); q.NextQuest = r.ReadInt32(); q.Money = r.ReadInt32(); q.RewardSpell = r.ReadInt32(); q.StartItem = r.ReadInt32(); q.Races = r.ReadUInt64();
+            WdbItemCount[] Items() { int c = Count(r, 64); var a = c == 0 ? WdbQuest.NoItems : new WdbItemCount[c]; for (int i = 0; i < c; i++) a[i] = new WdbItemCount { Id = r.ReadInt32(), Count = r.ReadInt32() }; return a; }
+            q.Rewards = Items(); q.Choices = Items(); q.Provided = Items();
+            int n = Count(r, 64); if (n > 0) { q.RepFactions = new int[n]; for (int i = 0; i < n; i++) q.RepFactions[i] = r.ReadInt32(); }
+            n = Count(r, 64); if (n > 0) { q.Goals = new WdbObjective[n]; for (int i = 0; i < n; i++) q.Goals[i] = new WdbObjective { Type = r.ReadInt32(), ObjectId = r.ReadInt32(), Amount = r.ReadInt32(), Text = r.ReadString() }; }
+            q.AreaDescription = r.ReadString(); q.CompletionLog = r.ReadString();
         }
 
         static int Count(BinaryReader r, int max = 2000000)

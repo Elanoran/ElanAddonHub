@@ -97,6 +97,82 @@ namespace ElansAddonHub
             return new SdRec { Id = id, Data = ms.ToArray() };
         }
 
+        // a creature in the full layout: type flags, kill credits and quest currencies (see WdbSeen.DecodeCreature)
+        static SdRec SdCreatureX(int id, string name, uint flags0, int type, int family, int kc1, int kc2, int[] questItems, int[] currencies)
+        {
+            var bits = new SdBits();
+            bits.Put(0, 11); bits.Put(0, 11); bits.Put(0, 6); bits.Put(0, 1);
+            for (int i = 0; i < 4; i++) { bits.Put(i == 0 ? Encoding.UTF8.GetByteCount(name) + 1 : 0, 11); bits.Put(0, 11); }
+            var ms = new MemoryStream(); var w = new BinaryWriter(ms);
+            var head = bits.Bytes.ToList(); while (head.Count < 15) head.Add(0);
+            w.Write(head.ToArray());
+            w.Write(SdCStr(name));
+            w.Write(flags0); w.Write(0u); w.Write(0x40u);
+            w.Write((byte)type); w.Write(family); w.Write((sbyte)0); w.Write(kc1); w.Write(kc2);
+            w.Write(1); w.Write(1f); w.Write(77); w.Write(1f); w.Write(1f);
+            w.Write(1f); w.Write(1f);
+            w.Write(questItems.Length); w.Write(currencies.Length);
+            w.Write(new byte[32]);
+            foreach (var q in questItems) w.Write(q);
+            foreach (var c in currencies) w.Write(c);
+            return new SdRec { Id = id, Data = ms.ToArray() };
+        }
+
+        sealed class SdGoal { public int Type, Obj, Amount, Effects; public string Text = ""; }
+
+        // a quest in the full layout of build 70374 (see WdbSeen.DecodeQuestFull), with every optional list the answer can carry when `extras`
+        static SdRec SdQuestFull(int id, string title, string objectives, string description, int level, int minLevel, int sort, int info, int group, int next, int money, int spell, int start, int flags,
+            ulong races, int[][] rewards, int[][] provided, int[][] choices, int[] rep, SdGoal[] goals, string area = "", string done = "", bool extras = false)
+        {
+            var ms = new MemoryStream(); var w = new BinaryWriter(ms);
+            void At(int pos) { while (ms.Length < pos) w.Write((byte)0); }
+            w.Write(id); w.Write(2); w.Write(level); w.Write(0); w.Write(minLevel); w.Write(0); w.Write(sort); w.Write(info); w.Write(group); w.Write(next);
+            w.Write(5); w.Write(1f); w.Write(money); w.Write(5); w.Write(1f); w.Write(0);
+            w.Write(extras ? 1 : 0); w.Write(spell);                 // +64 display spell count, +68 reward spell
+            At(88); w.Write(1f); At(96); w.Write(start); w.Write(flags); w.Write(0); w.Write(0); w.Write(0);
+            for (int i = 0; i < 4; i++)
+            {
+                var r = rewards != null && i < rewards.Length ? rewards[i] : null; var p = provided != null && i < provided.Length ? provided[i] : null;
+                w.Write(r?[0] ?? 0); w.Write(r?[1] ?? 0); w.Write(p?[0] ?? 0); w.Write(p?[1] ?? 0);
+            }
+            for (int i = 0; i < 6; i++) { var c = choices != null && i < choices.Length ? choices[i] : null; w.Write(c?[0] ?? 0); w.Write(c?[1] ?? 0); w.Write(0); }
+            At(300);
+            for (int i = 0; i < 5; i++) { w.Write(rep != null && i < rep.Length ? rep[i] : 0); w.Write(5); w.Write(0); w.Write(7); }
+            At(416); w.Write(890); w.Write(878); w.Write(0); w.Write(0L);
+            w.Write(goals.Length); w.Write(races);
+            w.Write(extras ? 1 : 0); w.Write(0); w.Write(-2); w.Write(0); w.Write(0); w.Write(0);
+            w.Write(extras ? 1 : 0); w.Write(0); w.Write(extras ? 1 : 0); w.Write(0);    // conditional descriptions, logs, house rooms, decor
+            if (extras) { w.Write(12345); w.Write(0); w.Write(1); }   // one display spell
+            foreach (var g in goals)
+            {
+                w.Write(380000 + g.Obj % 1000); w.Write(g.Type); w.Write((sbyte)0); w.Write(g.Obj); w.Write(g.Amount); w.Write(unchecked((int)0xCDCDCDCD)); w.Write(32); w.Write(0); w.Write(1f);
+                w.Write(g.Effects); w.Write(0);
+                for (int e = 0; e < g.Effects; e++) w.Write(900 + e);
+                var tb = Encoding.UTF8.GetBytes(g.Text);
+                var gb = new SdBits(); gb.Put(tb.Length, 8); gb.Put(1, 1);
+                var gh = gb.Bytes.ToList(); while (gh.Count < 2) gh.Add(0);
+                w.Write(gh.ToArray()); w.Write(tb);
+            }
+            if (extras)
+            {
+                w.Write(4444);                                       // a treasure picker
+                w.Write(0); w.Write(0);                              // a conditional description: condition, creature,
+                var ct = Encoding.UTF8.GetBytes("Only if you are a gnome.");
+                var cb = new SdBits(); cb.Put(ct.Length, 12); var ch = cb.Bytes.ToList(); while (ch.Count < 2) ch.Add(0);
+                w.Write(ch.ToArray()); w.Write(ct);
+                w.Write(55);                                         // a house room
+            }
+            var texts = new[] { title, objectives, description, area, "", "", "", "", done }.Select(Encoding.UTF8.GetBytes).ToArray();
+            var bits = new SdBits();
+            int[] widths = { 9, 12, 12, 9, 10, 8, 10, 8, 11 };
+            for (int i = 0; i < 9; i++) bits.Put(texts[i].Length, widths[i]);
+            bits.Put(0, 1); bits.Put(0, 1);
+            var head = bits.Bytes.ToList(); while (head.Count < 12) head.Add(0);
+            w.Write(head.ToArray());
+            foreach (var t in texts) w.Write(t);
+            return new SdRec { Id = id, Data = ms.ToArray() };
+        }
+
         static void SdWriteSet(string dir, SdRec[] npcs, SdRec[] objs, SdRec[] quests)
         {
             Directory.CreateDirectory(dir);
@@ -190,6 +266,53 @@ namespace ElansAddonHub
                 Check("quest: description kept as the game wrote it (line breaks, $n); a negative sort and UTF-8 title", qs[94222].Description == "<Penned in faded ink>\r\nSecond line" && qs[1136].Description == "$n, it is now time." && qs[77].Sort == -81 && qs[77].Title == "Négative sort");
                 var qbad = WdbSeen.Quests(SdFile("WQST", 70338, "enUS", 12, new[] { SdQuest(1, "Ok", "o", "d"), new SdRec { Id = 2, Data = SdQuest(2, "Long", "o", "d").Data.Concat(new byte[] { 1 }).ToArray() }, new SdRec { Id = 4, Data = SdQuest(3, "Wrong id", "o", "d").Data }, new SdRec { Id = 5, Data = new byte[30] } }));
                 Check("quest: an extra byte, an id that disagrees with the record's own, a tiny record = skipped", qbad.Items.Count == 1 && qbad.Skipped == 3);
+
+                // ---- the full layouts (build 70374): creature type flags, kill credits and quest currencies; the object's lock; the whole quest answer
+                var crx = WdbSeen.Creatures(SdFile("WMOB", 70374, "enUS", 4, new[]
+                {
+                    SdCreatureX(2958, "Prairie Wolf", 0x08000001, 1, 1, 0, 0, new[] { 4806 }, new int[0]),
+                    SdCreatureX(271036, "Rorschak", 0x08000000, 1, 25, 0, 0, new int[0], new int[0]),
+                    SdCreatureX(253272, "Magram Necromancer", 0x08000004, 7, 0, 253664, 0, new int[0], new[] { 1792 }),
+                })).Items.ToDictionary(c => c.Id);
+                Check("creature: type flags (0x1 tameable, 0x4 boss level), all three flag words, a beast of a pet family that is not tameable, kill credit, quest currencies counted into the record length",
+                    crx.Count == 3 && crx[2958].Tameable && crx[2958].Family == 1 && !crx[271036].Tameable && crx[271036].Family == 25 && crx[253272].BossLevel && crx[253272].KillCredit1 == 253664 && crx[253272].KillCredit2 == 0
+                    && crx[2958].Flags2 == 0x40 && crx[2958].QuestItems.SequenceEqual(new[] { 4806 }), string.Join(",", crx.Keys));
+                var obx = WdbSeen.Objects(SdFile("WGOB", 70374, "enUS", 4, new[] { SdObject(1621, "Briarthorn", 3, 270, new[] { 31, 1418, 0, 1 }), SdObject(1, "Chair", 7, 39, new[] { 31 }) })).Items.ToDictionary(o => o.Id);
+                Check("object: the lock of a chest-type object (herbs, veins, chests are type 3) is its first data field; other types have none", obx[1621].LockId == 31 && obx[1].LockId == 0);
+                var fq = WdbSeen.Quests(SdFile("WQST", 70374, "enUS", 12, new[]
+                {
+                    SdQuestFull(498, "The Rescue", "Krusk in Tarren Mill needs you.", "Me and some other warriors...", 22, 17, 267, 0, 0, 533, 1800, 0, 0, 8, 0xaa2aaaaa4e0ab3b2UL,
+                        new[] { new[] { 3734, 1 } }, new[] { new[] { 3467, 1 }, new[] { 3499, 1 } }, new[] { new[] { 3752, 1 }, new[] { 3733, 1 } }, new[] { 76, 530 },
+                        new[] { new SdGoal { Type = 2, Obj = 1721, Amount = 1, Text = "Rescue Drull" }, new SdGoal { Type = 2, Obj = 1722, Amount = 1, Text = "Rescue Tog'thar", Effects = 2 } }, "", "Return to Krusk.", true),
+                    SdQuestFull(1049, "Compendium of the Fallen", "Bring the Compendium.", "Desc", 38, 28, 796, 81, 5, 0, 0, 5325, 5535, 8, 0x2000000a2UL, null, null, null, new[] { 81 },
+                        new[] { new SdGoal { Type = 1, Obj = 5535, Amount = 1 }, new SdGoal { Type = 0, Obj = 3917, Amount = 12 }, new SdGoal { Type = 6, Obj = 93, Amount = 3000 }, new SdGoal { Type = 10, Obj = 2926, Amount = 1 } }, "Scout the gazebo."),
+                    SdQuestFull(25, "Stonetalon Standstill", "o", "d", 25, 23, 331, 0, 0, 0, 1800, 0, 0, 12, ulong.MaxValue, null, null, null, null, new SdGoal[0]),
+                })).Items.ToDictionary(q => q.Id);
+                var r498 = fq.TryGetValue(498, out var t498) ? t498 : new WdbQuest();
+                Check("quest (full): level, min level, sort, next quest, money, flags, the race mask, rewards / provided items / choices with counts, reputation factions, texts - with display spells, objective visual effects, a treasure picker, a conditional text and a house room in between",
+                    fq.Count == 3 && r498.Full && r498.Level == 22 && r498.MinLevel == 17 && r498.Sort == 267 && r498.NextQuest == 533 && r498.Money == 1800 && r498.Flags == 8 && r498.Races == 0xaa2aaaaa4e0ab3b2UL && r498.RaceLimited
+                    && r498.Rewards.Single().Id == 3734 && r498.Provided.Select(x => x.Id).SequenceEqual(new[] { 3467, 3499 }) && r498.Choices.Select(x => x.Id).SequenceEqual(new[] { 3752, 3733 }) && r498.RepFactions.SequenceEqual(new[] { 76, 530 })
+                    && r498.Title == "The Rescue" && r498.Objectives == "Krusk in Tarren Mill needs you." && r498.Description == "Me and some other warriors..." && r498.CompletionLog == "Return to Krusk.", string.Join(",", fq.Keys) + " full=" + r498.Full);
+                Check("quest (full): the goals keep type, object, amount and text (object 1721 'Rescue Drull'; the second one's visual effects are skipped)",
+                    r498.Goals.Length == 2 && r498.Goals[0].Type == 2 && r498.Goals[0].ObjectId == 1721 && r498.Goals[0].Text == "Rescue Drull" && r498.Goals[1].ObjectId == 1722 && r498.Goals[1].Text == "Rescue Tog'thar");
+                var r1049 = fq.TryGetValue(1049, out var t1049) ? t1049 : new WdbQuest();
+                Check("quest (full): quest info 81, group of 5, reward spell, start item, an item / kill / reputation / area goal, the area text; quest 25 open to every race; no reward lists = empty",
+                    r1049.Full && r1049.InfoId == 81 && r1049.SuggestedGroup == 5 && r1049.RewardSpell == 5325 && r1049.StartItem == 5535 && r1049.Goals.Select(g => g.Type).SequenceEqual(new[] { 1, 0, 6, 10 }) && r1049.Goals[2].Amount == 3000 && r1049.AreaDescription == "Scout the gazebo."
+                    && r1049.Rewards.Length == 0 && r1049.Choices.Length == 0 && fq[25].Races == WdbQuest.AllRaces && !fq[25].RaceLimited && fq[25].Full);
+                var fullOne = SdQuestFull(7, "Seven", "o", "d", 5, 1, 12, 0, 0, 0, 0, 0, 0, 0, ulong.MaxValue, null, null, null, null, new SdGoal[0]);
+                var fqBad = WdbSeen.Quests(SdFile("WQST", 70374, "enUS", 12, new[] { new SdRec { Id = 7, Data = fullOne.Data.Concat(new byte[] { 0 }).ToArray() }, new SdRec { Id = 8, Data = fullOne.Data.Take(fullOne.Data.Length - 3).ToArray() } }));
+                Check("quest (full): a byte too many or too few = skipped (neither the full layout nor the text rule fits)", fqBad.Items.Count == 0 && fqBad.Skipped == 2);
+                Check("quest: the older text-only records still read, without details", !qs[1136].Full && qs[1136].Title == "Frostmaw" && qs[1136].Goals.Length == 0 && qs[1136].Races == WdbQuest.AllRaces);
+                var fidx = Path.Combine(work, "fidx", "seen.bin");
+                var fset = new SeenSet { Build = 70374 };
+                fset.Npcs.AddRange(crx.Values); fset.Objects.AddRange(obx.Values); fset.Quests.AddRange(fq.Values); fset.Quests.Add(qs[1136]);
+                Check("saved index: writes the full details", SeenIndexFile.TryWrite(fidx, fset));
+                var fback = SeenIndexFile.TryRead(fidx)?.Set;
+                var b498 = fback?.Quests.FirstOrDefault(q => q.Id == 498); var b1049 = fback?.Quests.FirstOrDefault(q => q.Id == 1049);
+                Check("saved index: reads back every detail (quest lists, goals, texts, races, kill credits, type flags) and keeps a text-only quest text-only",
+                    b498 != null && b498.Full && b498.Races == 0xaa2aaaaa4e0ab3b2UL && b498.Choices.Length == 2 && b498.Provided[1].Id == 3499 && b498.Goals[1].Text == "Rescue Tog'thar" && b498.CompletionLog == "Return to Krusk." && b498.NextQuest == 533
+                    && b1049.InfoId == 81 && b1049.StartItem == 5535 && b1049.AreaDescription == "Scout the gazebo." && b1049.Goals[2].Amount == 3000 && b1049.RewardSpell == 5325 && b1049.RepFactions.Single() == 81
+                    && fback.Npcs.First(n => n.Id == 253272).KillCredit1 == 253664 && fback.Npcs.First(n => n.Id == 2958).Tameable && fback.Npcs.First(n => n.Id == 2958).Flags2 == 0x40 && !fback.Quests.First(q => q.Id == 1136).Full);
 
                 // ---- files, saved index, refresh
                 var wow = Path.Combine(work, "wow");
@@ -335,6 +458,22 @@ namespace ElansAddonHub
                 if (snap.Npcs.TryGetValue(3057, out var cairne)) Check("real game cache: npc 3057 is Cairne Bloodhoof, a boss", cairne.Name == "Cairne Bloodhoof" && cairne.Rank == 3, cairne.Name + " " + cairne.Rank);
                 if (snap.Quests.TryGetValue(5728, out var he)) Check("real game cache: quest 5728 is Hidden Enemies, level 16", he.Title == "Hidden Enemies" && he.Level == 16 && he.Objectives.StartsWith("Kill Bazzalan"), he.Title + " " + he.Level);
                 Check("real game cache: every quest has a title and every NPC a name", snap.Quests.Values.All(q => q.Title.Length > 0) && snap.Npcs.Values.All(n => n.Name.Length > 0));
+                Check("real game cache: every quest record decodes in the full layout (the numbers too, not only the texts)", snap.Quests.Values.All(q => q.Full), snap.Quests.Values.Count(q => !q.Full) + " text-only");
+                // well-known Classic quests, checked against the Classic baseline's quest_template, only when this player's client has met them
+                if (snap.Quests.TryGetValue(25, out var q25)) Check("real game cache: quest 25 Stonetalon Standstill: level 25, min level 23, Ashenvale (331), 12 Befouled Water Elementals (3917), 18 silver, Orgrimmar reputation, shareable + exploration flags",
+                    q25.Level == 25 && q25.MinLevel == 23 && q25.Sort == 331 && q25.Goals.Any(g => g.Type == 0 && g.ObjectId == 3917 && g.Amount == 12) && q25.Money == 1800 && q25.RepFactions.Contains(76) && q25.Flags == 12, q25.Level + "/" + q25.MinLevel + "/" + q25.Money);
+                if (snap.Quests.TryGetValue(498, out var q498)) Check("real game cache: quest 498 The Rescue: reward 3734, choices 3752 / 3733, provided items 3467 / 3499, two game object goals (1721, 1722)",
+                    q498.Rewards.Any(x => x.Id == 3734) && q498.Choices.Select(x => x.Id).OrderBy(x => x).SequenceEqual(new[] { 3733, 3752 }) && q498.Provided.Select(x => x.Id).OrderBy(x => x).SequenceEqual(new[] { 3467, 3499 }) && q498.Goals.Count(g => g.Type == 2) == 2);
+                if (snap.Quests.TryGetValue(862, out var q862)) Check("real game cache: quest 862 Dig Rat Stew: Cooking (-304), 8 Dig Rats (item 5051), rewards 5487 / 5478 ×5 / 10919",
+                    q862.Sort == -304 && q862.Goals.Any(g => g.Type == 1 && g.ObjectId == 5051 && g.Amount == 8) && q862.Rewards.Any(x => x.Id == 5478 && x.Count == 5) && q862.Rewards.Any(x => x.Id == 10919));
+                if (snap.Quests.TryGetValue(1049, out var q1049)) Check("real game cache: quest 1049 Compendium of the Fallen: a dungeon quest (81) for Orcs, Tauren and Trolls (race bits 1, 5, 7)", q1049.InfoId == 81 && (q1049.Races & 0xA2UL) == 0xA2UL && (q1049.Races & 0x1UL) == 0, q1049.Races.ToString("X"));
+                if (snap.Npcs.TryGetValue(2958, out var pw)) Check("real game cache: npc 2958 Prairie Wolf is a tameable wolf", pw.Tameable && pw.Family == 1 && pw.Type == 1);
+                if (snap.Npcs.TryGetValue(2972, out var kodo)) Check("real game cache: npc 2972 Kodo Calf is a beast that is not tameable (no pet family)", !kodo.Tameable && kodo.Type == 1);
+                if (snap.Npcs.TryGetValue(4949, out var thrall)) Check("real game cache: npc 4949 Thrall shows the boss level", thrall.BossLevel);
+                if (snap.Objects.TryGetValue(1618, out var pb)) Check("real game cache: object 1618 Peacebloom opens with lock 29", pb.LockId == 29 && pb.Type == 3);
+                if (snap.Objects.TryGetValue(1731, out var cv)) Check("real game cache: object 1731 Copper Vein opens with lock 38", cv.LockId == 38);
+                notes.Add("note real game cache: " + snap.Npcs.Values.Count(n => n.Tameable) + " tameable creatures, " + snap.Npcs.Values.Count(n => n.KillCredit1 > 0) + " with a kill credit, " + snap.Objects.Values.Count(o => o.LockId > 0) + " objects with a lock, "
+                    + snap.Quests.Values.Count(q => q.RaceLimited) + " quests limited to some races");
                 notes.Add("note real game cache: " + snap.NpcCount + " NPCs, " + snap.ObjectCount + " objects, " + snap.QuestCount + " quests, build " + set.Build + ", read in " + sw.ElapsedMilliseconds + " ms from " + dir + (set.Notes.Count > 0 ? "; " + string.Join("; ", set.Notes) : ""));
             }
             catch (Exception e) { notes.Add("skip real game cache: " + e.Message); }

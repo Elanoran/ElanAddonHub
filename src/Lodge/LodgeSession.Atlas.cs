@@ -49,6 +49,7 @@ namespace ElansAddonHub.Lodge
         public long NotesChanged;                          // counts every answer that changed the field notes (SharedData.lua is rewritten when it moves)
         readonly Dictionary<int, List<AtlasObs.EntranceSpot>> entrances = new Dictionary<int, List<AtlasObs.EntranceSpot>>();   // instance entrances the lodge merged (server 2.24, atlas6): instance -> spots
         public int Dropped { get; private set; }           // entries of the last answers that failed validation
+        public int SeenMembers { get; private set; }       // how many members' game caches the seen tables come from (server 2.25, atlas7; a count only)
 
         // index by item, built on first use after a change
         Dictionary<int, List<DropRow>> dropIdx; Dictionary<int, List<VendorRow>> vendorIdx; Dictionary<int, List<QuestRow>> questIdx; Dictionary<int, List<AtlasObs.Find>> findIdx;
@@ -77,7 +78,7 @@ namespace ElansAddonHub.Lodge
             if (fieldNotes.Count > 0) NotesChanged++;
             kills.Clear(); objects.Clear(); fishing.Clear(); vendors.Clear(); quests.Clear(); spawns.Clear(); revealed.Clear(); finds.Clear();
             seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear(); fishSpots.Clear(); fieldNotes.Clear(); entrances.Clear();
-            Epoch = ""; Rev = 0; Dropped = 0; Invalidate();
+            Epoch = ""; Rev = 0; Dropped = 0; SeenMembers = 0; Invalidate();
         }
 
         void Invalidate() { dropIdx = null; vendorIdx = null; questIdx = null; findIdx = null; }
@@ -204,6 +205,7 @@ namespace ElansAddonHub.Lodge
                 finds.Sort((a, b) => a.Seq.CompareTo(b.Seq));
                 if (finds.Count > AtlasObs.MaxFinds) finds.RemoveRange(0, finds.Count - AtlasObs.MaxFinds);
             }
+            if (m.ContainsKey("seenMembers")) { var smc = m.Long("seenMembers"); if (smc >= 0 && smc <= 100000) SeenMembers = (int)smc; }
             var rev = m.Long("rev");
             if (rev >= 0 && rev < long.MaxValue / 4) Rev = rev;
             var at = m.Long("at"); if (at > 0 && at < 4_000_000_000L) Updated = at;
@@ -267,7 +269,7 @@ namespace ElansAddonHub.Lodge
             }).ToList();
             return new Dictionary<string, object>
             {
-                ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = Rev, ["at"] = Updated, ["full"] = true,
+                ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = Rev, ["at"] = Updated, ["full"] = true, ["seenMembers"] = SeenMembers,
                 ["kills"] = Counters(kills), ["objects"] = Counters(objects), ["fishing"] = Counters(fishing), ["vendors"] = vo, ["quests"] = qo, ["spawns"] = so, ["items"] = io, ["finds"] = fl,
                 ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso, ["fieldnotes"] = fnc, ["entrances"] = eco,
             };
@@ -359,6 +361,8 @@ namespace ElansAddonHub.Lodge
         public AtlasObs.SeenNpc Npc(int id) { return seenNpcs.TryGetValue(id, out var x) ? x : null; }
         public AtlasObs.SeenObject Object(int id) { return seenObjects.TryGetValue(id, out var x) ? x : null; }
         public AtlasObs.SeenQuest QuestInfo(int questId) { return seenQuests.TryGetValue(questId, out var x) ? x : null; }
+        public IEnumerable<AtlasObs.SeenQuest> AllSeenQuests => seenQuests.Values;
+        public IEnumerable<AtlasObs.SeenNpc> AllSeenNpcs => seenNpcs.Values;
         public AtlasObs.Vendor Vendor(int npcId) { return vendors.TryGetValue(npcId, out var v) ? v : null; }
         public AtlasObs.Quest Quest(int questId) { return quests.TryGetValue(questId, out var q) ? q : null; }
         public IReadOnlyList<AtlasObs.Find> AllFinds => finds;
@@ -380,6 +384,7 @@ namespace ElansAddonHub.Lodge
         public bool SupportsAtlasNotes { get; private set; }                  // the server also takes `fieldnotes` (feature "atlas5", server 2.23)
         public bool SupportsAtlasEntrances { get; private set; }              // the server also takes `entrances` (feature "atlas6", server 2.24)
         public bool SupportsAtlasSeen { get; private set; }                   // the server also takes seenNpcs / seenObjects / seenQuests (feature "atlas2")
+        public bool SupportsAtlasSeenDetails { get; private set; }            // ... with their verified details and the game build (feature "atlas7", server 2.25)
         public readonly LodgeAtlas AtlasData = new LodgeAtlas();
 
         AtlasObs.Snapshot atlasLocal;                         // last read of the Hub module
@@ -414,6 +419,7 @@ namespace ElansAddonHub.Lodge
             var v = ParseVersion(ServerVersion);
             SupportsAtlas = features.Contains("atlas") && (v == null || v >= AtlasServer);
             SupportsAtlasSeen = SupportsAtlas && features.Contains("atlas2");
+            SupportsAtlasSeenDetails = SupportsAtlasSeen && features.Contains("atlas7") && (v == null || v >= AtlasObs.SeenDetailsServerVersion);
             SupportsAtlasNodes = SupportsAtlas && features.Contains("atlas3") && (v == null || v >= AtlasObs.NodesServerVersion);
             SupportsAtlasFish = SupportsAtlas && features.Contains("atlas4") && (v == null || v >= AtlasObs.FishSpotsServerVersion);
             SupportsAtlasNotes = SupportsAtlas && features.Contains("atlas5") && (v == null || v >= AtlasObs.NotesServerVersion);
@@ -522,7 +528,7 @@ namespace ElansAddonHub.Lodge
             IEnumerable<AtlasObs.Revealed> rev;
             try { rev = AtlasObs.RevealedSource?.Items()?.ToList() ?? new List<AtlasObs.Revealed>(); }
             catch (Exception e) { Util.Log("atlas: revealed items: " + e.GetType().Name); rev = new List<AtlasObs.Revealed>(); }
-            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes, SupportsAtlasFish, SupportsAtlasNotes, SupportsAtlasEntrances);
+            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes, SupportsAtlasFish, SupportsAtlasNotes, SupportsAtlasEntrances, SupportsAtlasSeenDetails);
             atlasBacklog = batch != null;
             if (batch == null) return false;
             if (Clock() < atlasNextShare) return false;                                // the next slot is not here yet

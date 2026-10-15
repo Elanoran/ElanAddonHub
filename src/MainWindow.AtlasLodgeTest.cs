@@ -50,8 +50,8 @@ namespace ElansAddonHub
                 + " { i = 0, c = 1, src = \"fish\", at = " + A + " }, { i = 7, c = 1, src = \"mob:5\", at = " + A + " } }";
         }
 
-        string AtlasWelcome(string role, string server, bool feature, bool seen = false) =>
-            FunWelcome(role, FunPeople(false), "", "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"atlas\"" : "") + (seen ? ",\"atlas2\"" : ""), server);
+        string AtlasWelcome(string role, string server, bool feature, bool seen = false, bool details = false) =>
+            FunWelcome(role, FunPeople(false), "", "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"atlas\"" : "") + (seen ? ",\"atlas2\"" : "") + (details ? ",\"atlas7\"" : ""), server);
 
         sealed class FakeRevealed : AtlasObs.IRevealedItemsSource
         {
@@ -89,6 +89,7 @@ namespace ElansAddonHub
                 AtlasSectionsRegression(check);
                 await AtlasSession(check, sent, () => now, t => now = t);
                 await AtlasSeenTest(check, sent, () => now, t => now = t);
+                await AtlasSeenDetailsTest(check, sent);
                 await AtlasNotesTest(check, sent, () => now, t => now = t);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
@@ -504,6 +505,116 @@ namespace ElansAddonHub
             check("the real game folder was never involved (all files are under the scratch folder)", Directory.GetFiles(atlasRoot, "*", SearchOption.AllDirectories).All(f => f.StartsWith(atlasRoot)));
             await Task.CompletedTask;
         }
+        // ---------------------------------------------------------------- seen details (feature "atlas7", server 2.25): the verified fields, the build, the merge, the member count
+        async Task AtlasSeenDetailsTest(Action<string, bool> check, List<Dictionary<string, object>> sent)
+        {
+            var src = new FakeSeen();
+            src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 2958, Name = "Prairie Wolf", Type = 1, Family = 1, Flags0 = 0x08000001, KillCredit1 = 0 });
+            src.N.Add(new ElansAddonHub.Services.Db2.WdbCreature { Id = 253272, Name = "Magram Necromancer", Type = 7, Flags0 = 0x08000004, KillCredit1 = 253664 });
+            src.O.Add(new ElansAddonHub.Services.Db2.WdbObject { Id = 1621, Name = "Briarthorn", Type = 3, Data = Enumerable.Range(0, ElansAddonHub.Services.Db2.WdbObject.Count).Select(i => i == 0 ? 31 : 0).ToArray() });
+            var full = new ElansAddonHub.Services.Db2.WdbQuest
+            {
+                Id = 498, Title = "The Rescue", Level = 22, MinLevel = 17, Sort = 267, Type = 2, Objectives = "Free them.", Description = "Me and some other warriors...", Full = true, Flags = 8, NextQuest = 533, Money = 1800,
+                Races = 0xaa2aaaaa4e0ab3b2UL, Rewards = new[] { new ElansAddonHub.Services.Db2.WdbItemCount { Id = 3734, Count = 1 } }, Choices = new[] { new ElansAddonHub.Services.Db2.WdbItemCount { Id = 3752, Count = 1 }, new ElansAddonHub.Services.Db2.WdbItemCount { Id = 3733, Count = 1 } },
+                Provided = new[] { new ElansAddonHub.Services.Db2.WdbItemCount { Id = 3467, Count = 1 } }, RepFactions = new[] { 76 },
+                Goals = new[] { new ElansAddonHub.Services.Db2.WdbObjective { Type = 2, ObjectId = 1721, Amount = 1, Text = "Rescue Drull" }, new ElansAddonHub.Services.Db2.WdbObjective { Type = 0, ObjectId = 3917, Amount = 12, Text = "" } },
+                CompletionLog = "Return to Krusk.",
+            };
+            src.Q.Add(full);
+            src.Q.Add(new ElansAddonHub.Services.Db2.WdbQuest { Id = 900, Title = "Wolves", Level = 5, MinLevel = 3, Objectives = "Kill." });     // text-only record: no details
+            var savedBuild = AtlasObs.SeenBuild;
+            AtlasObs.SeenSource = src; AtlasObs.SeenBuild = () => 70374;
+            try
+            {
+                // ---- batches
+                var plain = AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true);
+                var det = AtlasObs.MakeBatch(null, null, new Dictionary<string, string>(), true, seenDetails: true);
+                var pq = plain.Frame.Child("seenQuests").Child("498"); var dq = det.Frame.Child("seenQuests").Child("498");
+                check("seen details: without atlas7 the old shape goes out (title, levels, objectives only; no build)", pq.Keys.OrderBy(k => k).SequenceEqual(new[] { "level", "minLevel", "objectives", "title" }) && !plain.Frame.Child("seenNpcs").Child("2958").ContainsKey("tf"));
+                check("seen details: with atlas7 a quest carries the build, sort, flags, next, money, the race mask as two 32-bit halves, rewards / choices / provided as [item, count], reputation, goals and the texts",
+                    dq.NLong("build") == 70374 && dq.NLong("sort") == 267 && dq.NLong("flags") == 8 && dq.NLong("next") == 533 && dq.NLong("money") == 1800 && dq.List("races").Count == 2 && Convert.ToInt64(dq.List("races")[0]) == 0x4e0ab3b2L && Convert.ToInt64(dq.List("races")[1]) == 0xaa2aaaaaL
+                    && dq.List("rewards").Count == 1 && dq.List("choices").Count == 2 && dq.List("provided").Count == 1 && dq.List("rep").Count == 1 && dq.List("goals").Count == 2 && dq.Str("done") == "Return to Krusk." && dq.Str("desc") == "Me and some other warriors...");
+                check("seen details: a text-only record goes without details, and nothing personal is in the frame", !det.Frame.Child("seenQuests").Child("900").ContainsKey("build") && !Json.Write(det.Frame).Contains("Elan"));
+                var dn = det.Frame.Child("seenNpcs");
+                check("seen details: npcs carry their type flags and kill credits, objects their lock", dn.Child("2958").NLong("tf") == 0x08000001 && !dn.Child("2958").ContainsKey("kc") && dn.Child("253272").List("kc").Count == 2 && Convert.ToInt64(dn.Child("253272").List("kc")[0]) == 253664
+                    && det.Frame.Child("seenObjects").Child("1621").NLong("lock") == 31 && dn.Child("2958").NLong("build") == 70374);
+                check("seen details: what was sent without details is sent again once the lodge takes them (the signature includes them), then not again", AtlasObs.MakeBatch(null, null, plain.Sigs, true, seenDetails: true)?.Entries == 5 && AtlasObs.MakeBatch(null, null, det.Sigs, true, seenDetails: true) == null
+                    && AtlasObs.MakeBatch(null, null, plain.Sigs, true) == null);
+                AtlasObs.SeenBuild = () => 70400;
+                check("seen details: a new game build sends every detailed record again (the lodge keeps the newest build's); the text-only quest stays sent", AtlasObs.MakeBatch(null, null, det.Sigs, true, seenDetails: true)?.Entries == 4);
+                AtlasObs.SeenBuild = () => 70374;
+                // the parser takes what the batch builds and refuses what the server would refuse
+                int dropped = 0;
+                var back = AtlasObs.ParseSeenQuest(498, ToParsedForTest(dq), ref dropped);
+                check("seen details: the wire shape parses back to the same quest (races, goals, lists)", back != null && back.Detailed && back.Races == 0xaa2aaaaa4e0ab3b2UL && back.Goals[0].ObjectId == 1721 && back.Goals[0].Text == "Rescue Drull" && back.Choices[1].Id == 3733 && back.Done == "Return to Krusk." && back.ToWdb().Full && back.ToWdb().RaceLimited);
+                var badGoals = (Dictionary<string, object>)ToParsedForTest(dq); badGoals["goals"] = new List<object> { new List<object> { 1.0, 2.0 } };
+                var badRaces = (Dictionary<string, object>)ToParsedForTest(dq); badRaces["races"] = new List<object> { -1.0, 0.0 };
+                var badRew = (Dictionary<string, object>)ToParsedForTest(dq); badRew["rewards"] = Enumerable.Range(1, 5).Select(i => (object)new List<object> { (double)i, 1.0 }).ToList();
+                int d2 = 0;
+                check("seen details: a goal of the wrong shape, a negative race half or five reward items = the record is refused", AtlasObs.ParseSeenQuest(498, badGoals, ref d2) == null && AtlasObs.ParseSeenQuest(498, badRaces, ref d2) == null && AtlasObs.ParseSeenQuest(498, badRew, ref d2) == null && d2 == 3);
+
+                // ---- the session: atlas7 only from a 2.25 server
+                var sentFile = Session.AtlasSentPathForTest; var cacheFile = Session.AtlasCachePathForTest;
+                Session.Disconnect(); Session.AtlasResetForTest(); sent.Clear();
+                try { File.Delete(sentFile); File.Delete(cacheFile); } catch { }
+                WriteAtlasHub("ACC1", AtlasLua(AtlasFixture()));
+                Session.FeedForTest(AtlasWelcome("member", "2.24.0", true, true, true));
+                check("seen details session: a 2.24 server that names atlas7 is not trusted with it", Session.SupportsAtlasSeen && !Session.SupportsAtlasSeenDetails && !Json.Write(AFrames(sent, "atlas.share")[0]).Contains("\"build\""));
+                Session.Disconnect(); Session.AtlasResetForTest(); sent.Clear();
+                try { File.Delete(sentFile); File.Delete(cacheFile); } catch { }
+                Session.FeedForTest(AtlasWelcome("member", "2.25.0", true, true, true));
+                var sh = AFrames(sent, "atlas.share");
+                check("seen details session: a 2.25 server with atlas7 gets the details", Session.SupportsAtlasSeenDetails && sh.Count == 1 && sh[0].Child("seenQuests").Child("498").NLong("build") == 70374 && sh[0].Child("seenObjects").Child("1621").NLong("lock") == 31);
+
+                // ---- the read API: details, the member count, the cache
+                sent.Clear();
+                Session.FeedForTest(AtlasPage("ed1", 80, "\"seenMembers\":3,\"seenNpcs\":{\"2958\":{\"name\":\"Prairie Wolf\",\"type\":1,\"family\":1,\"build\":70374,\"tf\":134217729},\"7\":{\"name\":\"Bad\",\"tf\":-1}},"
+                    + "\"seenObjects\":{\"1621\":{\"name\":\"Briarthorn\",\"type\":3,\"build\":70374,\"lock\":31}},"
+                    + "\"seenQuests\":{\"777\":{\"title\":\"Skyborne Welcome\",\"level\":1,\"minLevel\":1,\"build\":70374,\"sort\":78,\"races\":[0,1],\"goals\":[[0,500,3,\"Talk\"]],\"rewards\":[[100,2]]},\"778\":{\"title\":\"Bad\",\"build\":70374,\"goals\":[[1]]}}", full: true));
+                var a = Session.AtlasData;
+                var q7 = a.QuestInfo(777);
+                check("seen details read API: a quest with its details (race bit 32 from the high half, a goal, a reward), a broken one is left out; npc type flags; object lock; the member count",
+                    q7 != null && q7.Detailed && q7.Races == 1UL << 32 && q7.Goals.Single().ObjectId == 500 && q7.Rewards.Single().Count == 2 && a.QuestInfo(778) == null && a.Npc(2958)?.Tameable == true && a.Npc(7) == null && a.Object(1621)?.Lock == 31 && a.SeenMembers == 3);
+                Session.AtlasSaveCacheForTest();
+                Session.Disconnect(); Session.AtlasResetForTest(); sent.Clear();
+                Session.FeedForTest(AtlasWelcome("member", "2.25.0", true, true, true));
+                check("seen details read API: the cache brings the details and the member count back", Session.AtlasData.QuestInfo(777)?.Races == 1UL << 32 && Session.AtlasData.Object(1621)?.Lock == 31 && Session.AtlasData.SeenMembers == 3);
+                Session.FeedForTest(AtlasPage("ed1", 81, "\"seenNpcs\":{\"5\":{\"name\":\"Five\"}}"));
+                check("seen details read API: a page without the count keeps it", Session.AtlasData.SeenMembers == 3);
+
+                // ---- SeenView: own cache and Lodge merged (the Atlas pages read this)
+                var savedLodge = ElansAddonHub.Services.Atlas.AtlasQuery.Context.Lodge;
+                ElansAddonHub.Services.Atlas.AtlasQuery.Context.Lodge = () => Session.AtlasData;
+                try
+                {
+                    SeenData.SetForTest(new SeenSnapshot(null, null, new[] { new ElansAddonHub.Services.Db2.WdbQuest { Id = 777, Title = "Skyborne Welcome (old)", Level = 1 } }));
+                    var v = ElansAddonHub.Services.Atlas.SeenView.Quest(777, out bool fromLodge);
+                    check("SeenView: the Lodge's detailed record beats this PC's text-only one; Lodge-only quests are listed for the start zones", v != null && fromLodge && v.Full && v.RaceLimited && ElansAddonHub.Services.Atlas.SeenView.AllQuests().Any(x => x.Id == 777 && x.Full));
+                    check("SeenView: start zone from a quest only the Lodge has seen (race bit 32 -> area 78)", ElansAddonHub.Services.Atlas.AtlasQuery.StartAreaSeen(ElansAddonHub.Services.Atlas.SeenView.AllQuests(), 1UL << 32, 1, out _) == 78);
+                    check("SeenView: an object's lock comes from the Lodge when this PC has not seen it", ElansAddonHub.Services.Atlas.SeenView.LockOf(1621) == 31 && ElansAddonHub.Services.Atlas.SeenView.LockOf(1) == 0);
+                    check("SeenView: a creature's type flags come from the Lodge (tameable)", ElansAddonHub.Services.Atlas.SeenView.Npc(2958)?.Tameable == true && ElansAddonHub.Services.Atlas.SeenView.Npc(2958).FromLodge);
+                }
+                finally { ElansAddonHub.Services.Atlas.AtlasQuery.Context.Lodge = savedLodge; SeenData.SetForTest(null, SeenData.State.NotStarted); }
+                Session.Disconnect(); Session.AtlasResetForTest();
+                try { File.Delete(sentFile); File.Delete(cacheFile); } catch { }
+            }
+            finally { AtlasObs.SeenBuild = savedBuild; }
+            await Task.CompletedTask;
+        }
+
+        static object ToParsedForTest(object v)
+        {
+            switch (v)
+            {
+                case int n: return (double)n;
+                case long n: return (double)n;
+                case double n: return n;
+                case Dictionary<string, object> d: return d.ToDictionary(kv => kv.Key, kv => ToParsedForTest(kv.Value));
+                case List<object> l: return l.Select(ToParsedForTest).ToList();
+                default: return v;
+            }
+        }
+
         sealed class FakeSeen : AtlasObs.ISeenSource
         {
             public List<ElansAddonHub.Services.Db2.WdbCreature> N = new List<ElansAddonHub.Services.Db2.WdbCreature>();

@@ -214,6 +214,7 @@ namespace ElansAddonHub.Services.Db2
         public SpellSnapshot Spells;
         public FactionSnapshot Factions;
         public ItemDetails Details;
+        public WorldLookups World;                                  // locks, quest sorts / kinds / lines, the client's quest list (WorldLookups.cs)
         public readonly Dictionary<string, string> Problems = new Dictionary<string, string>();      // group or table -> why it is unavailable
         public readonly List<string> Notes = new List<string>();
         public readonly Dictionary<string, uint> LayoutsSeen = new Dictionary<string, uint>();      // table -> layout hash that was read (for the saved index)
@@ -247,6 +248,7 @@ namespace ElansAddonHub.Services.Db2
             try { set.Spells = Spells(set, raw); } catch (Exception e) { set.Spells = null; set.Problems["spells"] = "could not be read: " + e.Message; }
             try { set.Factions = Factions(set, raw); } catch (Exception e) { set.Factions = null; set.Problems["factions"] = "could not be read: " + e.Message; }
             try { set.Details = ItemDetails.Parse(set, raw); } catch (Exception e) { set.Details = null; set.Problems["itemdetails"] = "could not be read: " + e.Message; }
+            try { set.World = WorldLookups.Parse(set, raw); } catch (Exception e) { set.World = null; set.Problems["world"] = "could not be read: " + e.Message; }
             return set;
         }
 

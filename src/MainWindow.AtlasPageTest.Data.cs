@@ -129,7 +129,7 @@ namespace ElansAddonHub
                 new[]
                 {
                     new WdbCreature { Id = 1, Name = "Gnarlfang", Title = "Fanglord", Type = 1, Rank = 3 },
-                    new WdbCreature { Id = 2, Name = "Innkeeper Hale", Title = "Innkeeper", Type = 7, Flags0 = 0x82 },
+                    new WdbCreature { Id = 2, Name = "Innkeeper Hale", Title = "Innkeeper", Type = 7, Flags0 = 0x08000000 },   // the cache holds type flags (vendors look like everyone else); services come from the Classic baseline
                     new WdbCreature { Id = 60, Name = "Forever Only Boar", Type = 1 },
                 },
                 new[] { new WdbObject { Id = 50, Name = "Ancient Chest", Type = 3 } },

@@ -105,6 +105,20 @@ namespace ElansAddonHub.Services.Atlas
 
             // Classic baseline
             var needs = new List<AtlasRow>();                    // quests that want the item
+            // the quests Forever described (to this PC or a Lodge member): their reward / choice lists and the items their goals ask for
+            foreach (var sq in SeenView.AllQuests().Where(q => q.Full).OrderBy(q => q.Level).ThenBy(q => q.Id))
+            {
+                var key = "quest:" + sq.Id;
+                var rw = sq.Rewards.FirstOrDefault(x => x.Id == id); var ch = sq.Choices.FirstOrDefault(x => x.Id == id);
+                if (rw.Id == id || ch.Id == id)
+                {
+                    var what = rw.Id == id ? "Reward" + (rw.Count > 1 ? " ×" + rw.Count : "") : "One of the rewards" + (ch.Count > 1 ? " ×" + ch.Count : "");
+                    if (byKey.TryGetValue(key, out var have)) { if (have.Label != AtlasLabel.Forever) { have.Label = AtlasLabel.Forever; have.Tier = 0; } }
+                    else AddRow(new AtlasRow { Key = key, Link = key, Label = AtlasLabel.Forever, Tier = 0, Type = "Quest", Title = sq.Title, Detail = what + (sq.Level > 0 ? " · level " + sq.Level : ""), Sort = 1 });
+                }
+                var g = sq.Goals.FirstOrDefault(x => x.Type == 1 && x.ObjectId == id);
+                if (g != null) needs.Add(new AtlasRow { Key = "questobj:" + sq.Id, Link = key, Label = AtlasLabel.Forever, Tier = 1, Type = "Quest", Title = sq.Title, Detail = "Needs " + Math.Max(1, g.Amount) + (sq.Level > 0 ? " · level " + sq.Level : "") });
+            }
             var ci2 = ClassicAtlas.Current;
             if (ci2 != null)
             {
@@ -160,6 +174,7 @@ namespace ElansAddonHub.Services.Atlas
                             }
                         case ClassicSourceKind.QuestObjective:
                             {
+                                if (needs.Any(x => x.Key == "questobj:" + s.SourceId)) break;
                                 var qi = ClassicAtlas.QuestInfo(s.SourceId);
                                 needs.Add(new AtlasRow { Key = "questobj:" + s.SourceId, Link = "quest:" + s.SourceId, Label = AtlasLabel.Classic, Tier = 2, Type = "Quest", Title = QuestTitle(s.SourceId), Detail = "Needs " + Math.Max(1, s.MinCount) + (qi != null ? " · level " + qi.QuestLevel : "") });
                                 break;

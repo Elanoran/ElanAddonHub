@@ -142,11 +142,22 @@ namespace ElansAddonHub.Services.Atlas
                 var desc = FactionData.Describe(cn.FactionId);
                 m.Facts.Add(new AtlasFact("Faction", desc ?? "Faction template " + cn.FactionId, C, tpl != null && FactionData.Name(tpl.FactionId) != null ? AtlasIds.Faction(tpl.FactionId) : null));
             }
-            var svc = Services(seen != null ? seen.Flags0 : (uint)(cn?.NpcFlags ?? 0));
-            if (svc.Length > 0) m.Facts.Add(new AtlasFact("Services", svc, seen != null ? F : C));
+            // the client cache holds the creature's TYPE flags, not its npc flags (WdbCreature): services come from the Classic baseline only
+            var svc = Services((uint)(cn?.NpcFlags ?? 0));
+            if (svc.Length > 0) m.Facts.Add(new AtlasFact("Services", svc, C));
+            var sf = SeenView.Npc(id);
+            if (sf != null)
+            {
+                if (sf.Tameable) m.Facts.Add(new AtlasFact("Tameable", FamilyName(sf.Family).Length > 0 ? "Yes, as a " + FamilyName(sf.Family).ToLowerInvariant() : "Yes", F));
+                else if (sf.Type == 1 && sf.Family > 0) m.Facts.Add(new AtlasFact("Tameable", "No (Forever does not let hunters tame this one)", F));
+                if (sf.BossLevel) m.Facts.Add(new AtlasFact("Shown level", "?? (boss)", F));
+                foreach (var kc in new[] { sf.Kc1, sf.Kc2 }.Where(k => k > 0 && k != id).Distinct())
+                    m.Facts.Add(new AtlasFact("Counts as", NpcName(kc), F, "npc:" + kc));
+                if (sf.FromLodge) AddLayer(m, "lodge");
+            }
             m.Subtitle = string.Join(" · ", new[] { "NPC " + id, title.Length > 0 ? "<" + title + ">" : "", cn != null && AtlasFormat.Levels(cn.MinLevel, cn.MaxLevel).Length > 0 ? "Level " + AtlasFormat.Levels(cn.MinLevel, cn.MaxLevel) : "", rank > 0 ? AtlasFormat.RankName(rank) : "", AtlasFormat.CreatureType(type) }.Where(s => s.Length > 0));
 
-            bool vendor = (seen != null && (seen.Flags0 & 0x80) != 0) || (cn != null && cn.IsVendor) || L?.Vendor(id) != null;
+            bool vendor = (cn != null && cn.IsVendor) || L?.Vendor(id) != null;
             // where it stands
             var plan = new PlanBuilder();
             string tip = (cn != null ? "Level " + AtlasFormat.Levels(cn.MinLevel, cn.MaxLevel) + " · " : "");
@@ -175,9 +186,28 @@ namespace ElansAddonHub.Services.Atlas
                     if (qs.Count > 60) s.HiddenText = (qs.Count - 60) + " more quests not shown";
                 }
             }
+            SeenGoalQuests(m, 0, id, sf != null ? new[] { sf.Kc1, sf.Kc2 } : null);
             LayerNotes(m, !ClassicAtlas.IsReady, !LodgeHas(L));
             if (!SeenData.Ready) m.Notes.Add("What your game has seen (names, ranks) is not read yet.");
             return m;
+        }
+
+        // "Quests that ask for it": the quests Forever described (to this PC or a Lodge member) whose goals name this creature (type 0, or one it counts as)
+        // or this object (type 2)
+        static void SeenGoalQuests(AtlasPageModel m, int goalType, int id, int[] alsoIds)
+        {
+            var ids = new HashSet<int> { id };
+            if (alsoIds != null) foreach (var a in alsoIds) if (a > 0) ids.Add(a);
+            var qs = SeenView.AllQuests().Where(q => q.Full && q.Goals.Any(g => g.Type == goalType && ids.Contains(g.ObjectId))).OrderBy(q => q.Level).ThenBy(q => q.Id).ToList();
+            if (qs.Count == 0) return;
+            var s = Section(m, "goalquests", "Quests that ask for it");
+            s.Note = "From the quests Forever described to your game or a Lodge member's.";
+            foreach (var q in qs.Take(60))
+            {
+                var g = q.Goals.First(x => x.Type == goalType && ids.Contains(x.ObjectId));
+                s.Rows.Add(new AtlasRow { Key = "quest:" + q.Id, Link = "quest:" + q.Id, Label = AtlasLabel.Forever, Tier = 1, Type = "Quest", Title = q.Title, Detail = (q.Level > 0 ? "Level " + q.Level : "") + (g.Amount > 1 ? (q.Level > 0 ? " · " : "") + "×" + g.Amount : "") });
+            }
+            if (qs.Count > 60) s.HiddenText = (qs.Count - 60) + " more quests not shown";
         }
 
         static void AddSimpleLoot(AtlasPageModel m, string key, string title, IReadOnlyList<ClassicLootEntry> list)
@@ -230,6 +260,8 @@ namespace ElansAddonHub.Services.Atlas
             int type = seen != null ? seen.Type : co?.Type ?? 0;
             var kind = ObjectKind(type);
             if (kind.Length > 0) m.Facts.Add(new AtlasFact("Kind", kind, seen != null ? F : C));
+            var need = SeenView.SkillNeedOf(id);
+            if (need.HasValue && SeenView.SkillNeedText(need.Value) is string needText) m.Facts.Add(new AtlasFact("Needs", needText, F));
             m.Subtitle = string.Join(" · ", new[] { "Object " + id, kind }.Where(s => s.Length > 0));
             var plan = new PlanBuilder();
             if (co != null) plan.Classic(co.Spawns, MarkerKind.Node, m.Title, kind + " · " + C, "obj:" + id);
@@ -237,6 +269,7 @@ namespace ElansAddonHub.Services.Atlas
             m.Map = plan.Build();
             AddFoundIn(m, co?.Spawns, null);
             LootSection(m, "loot", "Loot", "obj", id, ClassicSourceKind.ObjectLoot, "No loot is known for this object.");
+            SeenGoalQuests(m, 2, id, null);
             LayerNotes(m, !ClassicAtlas.IsReady, !LodgeHas(L));
             return m;
         }
