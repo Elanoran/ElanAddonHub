@@ -207,7 +207,7 @@ namespace ElansAddonHub
                     gt = new GameTooltip(r.Title, ci?.Quality ?? r.Quality).SetIcon(ci?.IconId ?? r.IconId);     // a row has only a small icon: the hover shows it larger, beside the panel
                     if (ci != null) gt.AddItem(ci); else gt.AddText("Not in the game data on this PC", "grey");
                 }
-                else if (kind == "npc" || kind == "obj" || kind == "quest" || kind == "spell" || kind == "skill" || kind == "faction" || kind == "zone" || kind == "instance")
+                else if (kind == "npc" || kind == "obj" || kind == "quest" || kind == "spell" || kind == "skill" || kind == "faction" || kind == "zone" || kind == "instance" || kind == "class" || kind == "race")
                 {
                     var m = ElansAddonHub.Services.Atlas.AtlasQuery.Build(r.Link);
                     if (m != null && !m.NotFound) { gt = GameTooltip.FromAtlas(m); if (m.Kind == "spell" || m.Kind == "skill") gt.SetIcon(m.IconId); }

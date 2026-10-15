@@ -53,6 +53,8 @@ namespace ElansAddonHub.Services.Atlas
             Add("skills", "Skills and professions", "skill", "skill", "Professions, weapon skills, languages", 80, AtlasNav.Character, "professions", "Professions", "weapon skills languages");
             Add("recipes", "Recipes", "spell", "spell", "What each profession makes, by skill level", 90, AtlasNav.Character, "professions", "Professions", "crafting patterns");
             Add("factions", "Factions", "faction", "faction", "Reputations", 100, AtlasNav.Character, keywords: "reputation");
+            Add("classes", "Classes", "class", "class", "Every class: spells by level, proficiencies, races", 72, AtlasNav.Character, keywords: "warrior paladin hunter rogue priest shaman mage warlock druid spellbook");
+            Add("races", "Races", "race", "race", "Every playable race: racial abilities, classes, side", 74, AtlasNav.Character, keywords: "human orc dwarf night elf undead tauren gnome troll skyborne racial");
         }
 
         public static IReadOnlyList<AtlasCategory> All { get { lock (gate) return list.OrderBy(c => c.Order).ThenBy(c => c.Title, StringComparer.OrdinalIgnoreCase).ToList(); } }

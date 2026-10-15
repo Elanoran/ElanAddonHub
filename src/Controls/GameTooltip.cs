@@ -99,8 +99,11 @@ namespace ElansAddonHub
             if (sp == null) return this;
             var inv = CultureInfo.InvariantCulture;
             var lines = new List<TipLine>();
-            if (details && sp.RangeMax > 0) lines.Add(new TipLine { Kind = "range", Text = sp.RangeMax.ToString("0.#", inv) + " yd range" });
-            if (details) lines.Add(new TipLine { Kind = "cast", Text = sp.CastMs > 0 ? (sp.CastMs / 1000.0).ToString("0.##", inv) + " sec cast" : "Instant" });
+            string range = details && sp.RangeMax > 0 ? sp.RangeMax.ToString("0.#", inv) + " yd range" : null;
+            // the game's own order: cost on the left with the range on the right, then the cast time with the cooldown on the right
+            if (!string.IsNullOrEmpty(sp.CostText)) lines.Add(new TipLine { Kind = "slot", Text = sp.CostText, Right = range });
+            else if (range != null) lines.Add(new TipLine { Kind = "range", Text = range });
+            if (details) lines.Add(new TipLine { Kind = "cast", Text = sp.CastMs > 0 ? (sp.CastMs / 1000.0).ToString("0.##", inv) + " sec cast" : "Instant", Right = ClassSnapshot.CooldownText(sp.CooldownMs) });
             var d = !string.IsNullOrWhiteSpace(sp.Description) ? sp.Description : sp.AuraDescription;
             if (!string.IsNullOrWhiteSpace(d)) lines.Add(new TipLine { Kind = "spelldesc", Text = d.Trim() });
             return AddLines(lines);

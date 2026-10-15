@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -35,6 +36,7 @@ namespace ElansAddonHub
             var plan = AtlasTip.For(m);
             var gt = new GameTooltip(plan.Title, plan.Quality, plan.Rank, playerLevel);
             gt.SetTitleBrush(ToneBrush(plan.Tone, plan.Quality));
+            if (!string.IsNullOrEmpty(m.Accent)) { try { gt.SetTitleBrush(ElansAddonHub.Lodge.Avatar.Frozen(m.Accent)); } catch (Exception) { } }
             if (m.Kind == "item") gt.AddLines(m.Tooltip); else gt.AddLines(plan.Lines);
             if (m.Kind != "item")
                 foreach (var f in plan.Footer) gt.Footer.Children.Add(Muted(f, gt.Footer.Children.Count == 0 ? 0 : 2));

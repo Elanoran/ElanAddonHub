@@ -29,6 +29,7 @@ namespace ElansAddonHub
         void ResetPageState()
         {
             cols = null; leftCol = rightCol = null; startInfo = null; mapCol = null; mapCardEl = null;
+            classBook = null; classGroups = null; classShown.Clear();
             tileGrids.Clear(); tileCaptions.Clear(); presetHost = null; presetLabel = null;
             classicBanner = null; classicOffer = null; classicCard = null; classicBody = null;
             ClassicBannerGetForTest = ClassicBannerNotNowForTest = null; ClassicBannerProgressForTest = null;

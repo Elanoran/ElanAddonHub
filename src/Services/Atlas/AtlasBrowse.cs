@@ -136,7 +136,7 @@ namespace ElansAddonHub.Services.Atlas
         public BrowseControls Controls = new BrowseControls();
         public string Sort = "name";                                 // the sort in use
         public string CountText => Capped ? AtlasFormat.Count(Total, Noun, Noun + "s") + ", the first " + Rows.Count.ToString("N0", CalendarRules.English) + " shown" : AtlasFormat.Count(Total, Noun, Plural(Noun));
-        static string Plural(string noun) => noun.EndsWith("s", StringComparison.Ordinal) ? noun : noun + "s";
+        static string Plural(string noun) => noun.EndsWith("ss", StringComparison.Ordinal) ? noun + "es" : noun.EndsWith("s", StringComparison.Ordinal) ? noun : noun + "s";
         public override string ToString() => Id + " [" + Total + "/" + InCategory + "]";
     }
 
@@ -269,6 +269,7 @@ namespace ElansAddonHub.Services.Atlas
                 case "items": return ItemData.Status == ItemData.State.Disabled ? "Game data is switched off (Settings > General), so there is no item list. The Classic baseline fills it when it is downloaded." : "The item list is read from your game files and is not ready yet.";
                 case "zones": case "instances": return MapData.Status == MapData.State.Disabled ? "Game data is switched off (Settings > General), so there are no maps." : "The maps are read from your game files and are not ready yet.";
                 case "spells": case "skills": case "recipes": case "factions": return SpellData.Status == SpellData.State.Disabled ? "Game data is switched off (Settings > General), so there are no spells." : "Spells, skills and recipes are read from your game files and are not ready yet.";
+                case "classes": case "races": return ClassData.Status == ClassData.State.Disabled ? "Game data is switched off (Settings > General), so there are no classes or races." : "Classes and races are read from your game files and are not ready yet.";
                 default: return "Nothing is known yet. Creatures, objects and quests come from your game's cache and the Classic baseline (get it from the Atlas start page).";
             }
         }

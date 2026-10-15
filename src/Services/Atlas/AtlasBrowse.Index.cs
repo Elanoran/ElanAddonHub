@@ -69,7 +69,7 @@ namespace ElansAddonHub.Services.Atlas
         {
             string R(object o) => o == null ? "-" : RuntimeHelpers.GetHashCode(o).ToString(CultureInfo.InvariantCulture);
             var L = AtlasQuery.LodgeOrNull();
-            return string.Join("|", GatherNodes.OwnToken(), R(ItemData.Snapshot), R(SpellData.Data), R(SeenData.Snapshot), R(MapData.Index), R(ClassicAtlas.Current), L == null ? "-" : R(L) + "," + L.Rev + "," + L.Updated + "," + L.FindCount);
+            return string.Join("|", GatherNodes.OwnToken(), R(ItemData.Snapshot), R(SpellData.Data), R(ClassData.Set), R(SeenData.Snapshot), R(MapData.Index), R(ClassicAtlas.Current), L == null ? "-" : R(L) + "," + L.Rev + "," + L.Updated + "," + L.FindCount);
         }
 
         public static void ForgetForTest() { lock (cacheLock) cache.Clear(); }
@@ -112,6 +112,8 @@ namespace ElansAddonHub.Services.Atlas
                 case "skills": if (SpellData.Spells == null) return null; ix = BuildSkills(x); break;
                 case "recipes": if (SpellData.Spells == null) return null; ix = BuildRecipes(x); break;
                 case "factions": if (SpellData.Factions == null) return null; ix = BuildFactions(x); break;
+                case "classes": if (ClassData.Data == null) return null; ix = BuildClasses(x); break;
+                case "races": if (ClassData.Data == null) return null; ix = BuildRaces(x); break;
                 default: return null;
             }
             ix.Cat = cat; ix.Token = tok;

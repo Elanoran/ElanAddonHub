@@ -61,6 +61,7 @@ namespace ElansAddonHub.Services.Db2
             {
                 Id = s.Id, Name = s.Name, Rank = s.Rank, IconId = s.IconId, CastMs = s.CastMs, DurationMs = s.DurationMs, RangeMax = s.RangeMax,
                 Description = SpellText.Expand(s.Desc, s, look), AuraDescription = SpellText.Expand(s.Aura, s, look),
+                CostText = ClassData.CostText(s.Id), CooldownMs = ClassData.CooldownMs(s.Id),
             };
         }
 
@@ -85,6 +86,7 @@ namespace ElansAddonHub.Services.Db2
             {
                 Id = copy.Id, Name = copy.Name, Rank = copy.Rank, IconId = copy.IconId, CastMs = copy.CastMs, DurationMs = copy.DurationMs, RangeMax = copy.RangeMax,
                 Description = SpellText.Expand(copy.Desc, copy, look), AuraDescription = SpellText.Expand(copy.Aura, copy, look),
+                CostText = ClassData.CostText(copy.Id), CooldownMs = ClassData.CooldownMs(copy.Id),
             };
         }
 

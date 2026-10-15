@@ -26,7 +26,7 @@ namespace ElansAddonHub.Services.Atlas
     // the kinds of thing an id link can name, in the order search groups them
     public static class AtlasKinds
     {
-        public static readonly string[] Order = { "item", "npc", "obj", "quest", "zone", "instance", "spell", "skill", "faction" };
+        public static readonly string[] Order = { "item", "npc", "obj", "quest", "zone", "instance", "spell", "skill", "faction", "class", "race" };
         public static string Plural(string kind)
         {
             switch (kind)
@@ -40,6 +40,8 @@ namespace ElansAddonHub.Services.Atlas
                 case "spell": return "Spells";
                 case "skill": return "Skills";
                 case "faction": return "Factions";
+                case "class": return "Classes";
+                case "race": return "Races";
                 default: return kind;
             }
         }
@@ -56,6 +58,8 @@ namespace ElansAddonHub.Services.Atlas
                 case "spell": return "Spell";
                 case "skill": return "Skill";
                 case "faction": return "Faction";
+                case "class": return "Class";
+                case "race": return "Race";
                 default: return kind;
             }
         }
@@ -72,6 +76,8 @@ namespace ElansAddonHub.Services.Atlas
                 case "spell": return "";     // lightning
                 case "skill": return "";     // book
                 case "faction": return "";   // people
+                case "class": return "";    // star
+                case "race": return "";     // globe
                 default: return "";
             }
         }
@@ -204,6 +210,8 @@ namespace ElansAddonHub.Services.Atlas
         public List<AtlasText> Texts = new List<AtlasText>();
         public List<AtlasSection> Sections = new List<AtlasSection>();
         public AtlasMapPlan Map = new AtlasMapPlan();
+        public object Custom;                                        // a page with a control of its own (a class page: its spells by level)
+        public string Accent = "";                                   // a colour the title takes (#RRGGBB): a class
         public bool MapFirst;                                        // zones, instances, npcs: the map comes before the tables
         public List<string> Notes = new List<string>();              // what is missing and what turns it on ("Classic baseline not downloaded ...")
         public List<AtlasCrumb> Crumbs = new List<AtlasCrumb>();     // the way up (a zone's continent)

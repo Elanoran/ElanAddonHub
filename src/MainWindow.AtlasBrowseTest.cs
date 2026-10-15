@@ -105,8 +105,8 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ registry and ids
                 var cats = AtlasCategories.All.Where(c => !c.Hosted).ToList();      // the window registers Talents and Professions as hosted categories too (atlashosts checks them)
-                Check("registry: the ten built-in categories in start page order, each with a title, a glyph and the id of its browse page",
-                    cats.Select(c => c.Id).SequenceEqual(new[] { "items", "creatures", "objects", "quests", "zones", "instances", "spells", "skills", "recipes", "factions" }) && cats.All(c => c.Title.Length > 0 && c.Glyph.Length > 0 && c.OpenId == "browse:" + c.Id && !c.Hosted), string.Join(",", cats.Select(c => c.Id)));
+                Check("registry: the twelve built-in categories in start page order (Classes and Races after Spells), each with a title, a glyph and the id of its browse page",
+                    cats.Select(c => c.Id).SequenceEqual(new[] { "items", "creatures", "objects", "quests", "zones", "instances", "spells", "classes", "races", "skills", "recipes", "factions" }) && cats.All(c => c.Title.Length > 0 && c.Glyph.Length > 0 && c.OpenId == "browse:" + c.Id && !c.Hosted), string.Join(",", cats.Select(c => c.Id)));
                 var labs = new AtlasCategory { Id = "labs", Title = "Labs", Glyph = AtlasKinds.Glyph("skill"), Blurb = "A hosted page", Order = 200, Host = sub => new TextBlock { Text = "hosted labs: " + sub } };
                 AtlasCategories.Register(labs);
                 Check("registry: a hosted category registers with an id prefix: 'labs:tree/a' routes to it with the sub-path 'tree/a'; ids of other kinds do not", AtlasCategories.TryHosted("labs:tree/a", out var hc, out var hs) && hc.Id == "labs" && hs == "tree/a"
@@ -126,7 +126,7 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ every category lists something
                 var bad = new List<string>();
-                foreach (var c in AtlasCategories.All.Where(c => !c.Hosted))
+                foreach (var c in AtlasCategories.All.Where(c => !c.Hosted && c.Id != "classes" && c.Id != "races"))      // Classes and Races need the class tables: the atlasclasses section has them
                 {
                     var r = Run(c.OpenId);
                     if (r.NotFound || r.Rows.Count == 0 || r.Total != r.Rows.Count || r.InCategory != r.Total || r.Title.Length == 0 || r.Rows.Any(x => string.IsNullOrEmpty(x.Link) || string.IsNullOrEmpty(x.Title) || string.IsNullOrEmpty(x.Label))) bad.Add(c.Id + " " + r + (r.NotFound ? " " + r.Message : ""));
@@ -274,7 +274,7 @@ namespace ElansAddonHub
                 FrameworkElement Tile(string openId) => AtlasWalk(AtlasView).OfType<ContentControl>().FirstOrDefault(c => c.Tag is string s && s == openId && c.IsVisible);
                 var tx = AtlasTexts(AtlasView);
                 Check("start page: a card for each category ('Items', 'Creatures', ... 'Factions', and the hosted 'Labs') under the group it belongs to (Database, World, Character), with a count from the data; no intro card (the header and the search box already say it)",
-                    cats.Where(c => Tile(c.OpenId) != null).Count() == 10 && Tile("labs:") != null && tx.Contains("Browse") && tx.Contains("Database") && tx.Contains("World") && tx.Contains("Character") && !tx.Contains("Browse or search") && !tx.Any(t => t.Contains("Alt+Left goes back")) && tx.Contains("28"), string.Join(" | ", tx.Take(30)));
+                    cats.Where(c => Tile(c.OpenId) != null).Count() == 12 && Tile("labs:") != null && tx.Contains("Browse") && tx.Contains("Database") && tx.Contains("World") && tx.Contains("Character") && !tx.Contains("Browse or search") && !tx.Any(t => t.Contains("Alt+Left goes back")) && tx.Contains("28"), string.Join(" | ", tx.Take(30)));
                 Check("start page: the shortcuts under the cards - 'For <character>' (or 'Where to get things') with Vendor items for my level, Herbs by zone, Dungeons by level ... as buttons, none for Rare creatures", (tx.Contains("Where to get things") || tx.Any(t => t.StartsWith("For "))) && tx.Contains("Vendor items for my level") && tx.Contains("Herbs by zone") && tx.Contains("Dungeons by level") && !tx.Contains("Rare creatures"));
                 Check("start page: the hero search says what to type and the header box's tooltip says you can paste a link", tx.Any(t => t.StartsWith("Search items, creatures")) && AtlasView.SearchBoxForTest.Tag.ToString().Contains("Search") && AtlasView.SearchBoxForTest.ToolTip.ToString().Contains("item:2589"), AtlasView.SearchBoxForTest.Tag.ToString());
                 Check("start page: one status line for the data (game data, Classic baseline, Lodge, world map) and no data cards on the page itself", AtlasView.StatusLineForTest != null && AtlasTexts(AtlasView.StatusLineForTest).Count >= 5 && !tx.Contains("Your game data") && !tx.Contains("Lodge pool") && AtlasView.SourceStates().Count == 4, string.Join(" | ", AtlasTexts(AtlasView.StatusLineForTest)));

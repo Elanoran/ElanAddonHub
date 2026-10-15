@@ -175,7 +175,8 @@ namespace ElansAddonHub
             if (m.Kind != "item" && m.Facts.Any(f => f.Link != null)) leftCol.Children.Add(FactsCard(m, true));     // what links somewhere stays clickable, in the app style
             if (m.Kind == "item" && m.Section("owned") != null) leftCol.Children.Add(SectionCard(m.Section("owned")));
 
-            // right: tables and the map
+            // right: tables and the map (a class page starts with its spells by level)
+            if (m.Custom is ClassSpellBook classSpells) rightCol.Children.Add(ClassSpellsCard(classSpells));
             var mapCard = m.Map.Any || m.Kind == "item" || m.Kind == "npc" || m.Kind == "obj" || m.Kind == "quest" ? MapCard(m) : null;
             if (m.MapFirst && mapCard != null) rightCol.Children.Add(mapCard);
             bool mapPlaced = m.MapFirst;
@@ -211,6 +212,14 @@ namespace ElansAddonHub
             var sp = new StackPanel();
             FrameworkElement icon = null;
             if (m.Kind == "item" || m.IconId > 0) icon = IconBox(m);
+            // the tooltip is at most 320 wide, but the identity column is narrower than that next to the icon (340 or 300 less the card's padding): it wraps instead of being cut off
+            double w = Scroller.ActualWidth;
+            if (w > 0)
+            {
+                double col = w >= TwoColumnWidth ? (w >= 1000 ? LeftWidthWide : LeftWidth) : w - 32;
+                double avail = col - 32 - (icon != null ? 64 : 0);
+                if (avail >= 200 && avail < gt.MaxWidth) gt.MaxWidth = avail;
+            }
             sp.Children.Add(icon != null ? GameTooltip.WithIcon(icon, gt) : gt);
             if (m.TooltipSource.Length > 0) sp.Children.Add(SourceChip(m.TooltipSource, 12));
             return Card(sp);

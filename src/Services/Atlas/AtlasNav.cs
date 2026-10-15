@@ -44,7 +44,7 @@ namespace ElansAddonHub.Services.Atlas
         static readonly Dictionary<string, string> kindCategory = new Dictionary<string, string>
         {
             ["item"] = "items", ["npc"] = "creatures", ["obj"] = "objects", ["quest"] = "quests", ["zone"] = "zones",
-            ["instance"] = "instances", ["spell"] = "spells", ["skill"] = "skills", ["faction"] = "factions",
+            ["instance"] = "instances", ["spell"] = "spells", ["skill"] = "skills", ["faction"] = "factions", ["class"] = "classes", ["race"] = "races",
         };
 
         public static string CategoryOfKind(string kind) => kind != null && kindCategory.TryGetValue(kind, out var c) ? c : "";

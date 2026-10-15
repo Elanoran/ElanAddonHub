@@ -37,7 +37,7 @@ namespace ElansAddonHub.Services.Atlas
                 case "quests": return kind == "quest";
                 case "zones": return kind == "zone" || kind == "instance";
                 case "spells": return kind == "spell" || kind == "skill";
-                case "pages": return kind == "page";
+                case "pages": return kind == "page" || kind == "class" || kind == "race";
                 default: return true;
             }
         }

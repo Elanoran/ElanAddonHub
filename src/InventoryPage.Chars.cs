@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using ElansAddonHub.Services.Atlas;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using ElansAddonHub.Services;
@@ -162,7 +164,7 @@ namespace ElansAddonHub
             var cls = !string.IsNullOrEmpty(core?.Class) ? core.Class : Pretty(c.Class);
             var lineOne = string.Join(" ", new[] { c.Level > 0 ? "Level " + c.Level : null, race, cls }.Where(s => !string.IsNullOrEmpty(s)));
             var info = new StackPanel();
-            info.Children.Add(new TextBlock { Text = lineOne.Length > 0 ? lineOne : c.Name, Style = TextStyle("Text.RowTitle"), Foreground = ClassBrushOf(c.Class), TextTrimming = TextTrimming.CharacterEllipsis });
+            info.Children.Add(IdentityBlock(c, race, cls, lineOne));
             var where = string.Join(" · ", new[] { c.Realm, c.Faction }.Where(s => !string.IsNullOrEmpty(s)));
             if (where.Length > 0) info.Children.Add(Line(where, "Text.Secondary", null, 2));
             if (!string.IsNullOrEmpty(c.Guild)) info.Children.Add(Line("<" + c.Guild + ">", "Text.Secondary", null, 2));
@@ -238,6 +240,30 @@ namespace ElansAddonHub
         readonly Dictionary<int, FrameworkElement> dollSlots = new Dictionary<int, FrameworkElement>();
         WrapPanel gearWrap;
         FrameworkElement gearDollCard, gearStatsCard;
+
+        // "Level 60 Orc Hunter": the race and the class are Ctrl+click links to their Atlas pages when the game data knows them (the text itself is the same either way)
+        TextBlock IdentityBlock(InvChar c, string race, string cls, string lineOne)
+        {
+            var tb = new TextBlock { Style = TextStyle("Text.RowTitle"), Foreground = ClassBrushOf(c.Class), TextTrimming = TextTrimming.CharacterEllipsis };
+            if (lineOne.Length == 0) { tb.Text = c.Name; return tb; }
+            string raceLink = CharacterLinks.Race(race), classLink = CharacterLinks.Class(c.Class, cls);
+            void Part(string text, string link)
+            {
+                if (string.IsNullOrEmpty(text)) return;
+                if (tb.Inlines.Count > 0) tb.Inlines.Add(new System.Windows.Documents.Run(" "));
+                var run = new System.Windows.Documents.Run(text);
+                if (link != null && OpenAtlas != null)
+                {
+                    run.ToolTip = "Ctrl+click: " + text + " in the Atlas";
+                    run.MouseLeftButtonUp += (s, e) => { if (((Keyboard.Modifiers & ModifierKeys.Control) != 0 || forceCtrl) && OpenAtlas != null) { e.Handled = true; OpenAtlas(link); } };
+                }
+                tb.Inlines.Add(run);
+            }
+            Part(c.Level > 0 ? "Level " + c.Level : null, null); Part(race, raceLink); Part(cls, classLink);
+            AtlasLinksForTest = (raceLink, classLink);
+            return tb;
+        }
+        public (string race, string cls) AtlasLinksForTest;
 
         // item level of a worn item: the one the Hub saved (what the game showed), else the base level from the game data (your own WoW files)
         static int ItemIl(HubItem it) => it.Il > 0 ? it.Il : (ElansAddonHub.Services.Db2.ItemData.Get(it.I)?.ItemLevel ?? 0);
