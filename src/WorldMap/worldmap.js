@@ -174,7 +174,7 @@
     clearGroup(id); var g = ensureGroup(id);
     (d.items || []).forEach(function (it) {
       // instance entrances (it.ic dun / raid) carry a kind group (it.g: switched by its child row) and a label; flight masters are the plain diamonds
-      var html = it.ic ? '<div class="inst ' + esc(it.ic) + '">' + (it.ic === 'raid' ? '&#9760;' : '') + '</div>' + (it.lab ? '<div class="instl">' + esc(it.lab) + '</div>' : '') : '<div class="fm ' + (it.f || 'n') + '"></div>';
+      var html = it.ic ? '<div class="inst ' + esc(it.ic) + '">' + (it.ic === 'raid' ? '&#9760;' : '') + '</div>' + (it.lab ? '<div class="instl">' + esc(it.lab) + '</div>' : '') : (window.WmIcons ? window.WmIcons.html(it.f || 'n') : '<div class="fm ' + (it.f || 'n') + '"></div>');
       var ic = L.divIcon({ className: 'fmi', html: html, iconSize: [0, 0] });
       var m = L.marker([it.lat, it.lng], { icon: ic, keyboard: false, zIndexOffset: it.ic ? 350 : 300 });
       m._g = it.g || null;
@@ -449,6 +449,7 @@
       return JSON.stringify(out);
     },
     // the routes of a lines layer by kind (test): [{g, shown}] - shown = the route is in the layer's group (its kind row is on and the layer is on the map)
+    feed: function (m) { handle(m); return 1; },      // test: the app's message as if it had come from the app
     lines: function (id) {
       var g = groups[id]; if (!g || !lineKinds[id]) return '[]';
       return JSON.stringify(lineKinds[id].filter(function (e) { return !e.layer._line; }).map(function (e) { return { g: e.g, shown: !!(map.hasLayer(g) && g.hasLayer(e.layer)) }; }));

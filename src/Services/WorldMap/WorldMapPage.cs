@@ -12,7 +12,7 @@ namespace ElansAddonHub.Services.WorldMap
         public const string Host = "worldmap.outpost.local";
         public const string PageUrl = "https://" + Host + "/" + WorldMapCache.PageFolder + "/index.html";
         public const string Page3dUrl = "https://" + Host + "/" + WorldMapCache.PageFolder + "/view3d.html";
-        public static readonly string[] Files = { "index.html", "worldmap.js", "worldmap.css", "leaflet.js", "leaflet.css", "LICENSE-leaflet.txt", "view3d.html", "view3d.js", "three.min.js", "LICENSE-three.txt" };
+        public static readonly string[] Files = { "index.html", "worldmap.js", "icons.js", "worldmap.css", "leaflet.js", "leaflet.css", "LICENSE-leaflet.txt", "view3d.html", "view3d.js", "three.min.js", "LICENSE-three.txt" };
 
         public static string Dir => Path.Combine(WorldMapCache.Root, WorldMapCache.PageFolder);
 

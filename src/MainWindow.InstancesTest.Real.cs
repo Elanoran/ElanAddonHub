@@ -66,6 +66,8 @@ namespace ElansAddonHub
                 pgR.Entrance != null && pgR.Entrance.ZoneName == "Orgrimmar" && pgR.Entrance.Command != null && pgR.Entrance.Command.StartsWith("/etk way " + rfc.Entrance.UiMapId + " ") && pgR.Entrance.Command.EndsWith(" Ragefire Chasm")
                 && pgZ.Section("instances") != null && pgZ.Section("instances").Rows.Any(r => r.Link == "instance:389") && AtlasBrowse.Run("browse:instances").Rows.Any(r => r.Title == "Ragefire Chasm" && r.Zone == "Orgrimmar" && r.Detail.Contains("Levels 13")), pgR.Entrance?.Command);
 
+            InstancesAudit(idx, Check, notes);
+
             // a screenshot of a real instance page (the zone map of the Barrens is drawn from the game's own tiles on first use)
             try
             {

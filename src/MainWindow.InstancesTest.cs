@@ -164,6 +164,44 @@ namespace ElansAddonHub
                 Check("zone of an entrance: Crypt of Bones at (300, 800) is 60 % / 70 % on Greenvale's map (x north: (1000 - 300) / 1000 from the top, y west: (2000 - 800) / 2000 from the left); the dungeon on another continent has no map there, so no zone, but keeps its spot",
                     cryptA.UiMapId == 11 && Math.Abs(cryptA.Fx - 0.6) < 1e-6 && Math.Abs(cryptA.Fy - 0.7) < 1e-6 && idxA.Instance(94).Entrance != null && idxA.Instance(94).Entrance.UiMapId == 0 && idxA.Instance(94).Entrance.MapId == 5);
 
+                // ---------------------------------------------------------------- the zone a position is in: the terrain's area beats the rectangles (a city's box must not win outside the city)
+                {
+                    var savedProbe = MapIndex.AreaAt; var savedSrc = AreaProbe.TileSourceForTest; var savedDir = AreaProbe.CacheDirOverride;
+                    try
+                    {
+                        MapData.SetForTest(idxA);
+                        AreaProbe.ResetForTest(); AreaProbe.CacheDirOverride = Path.Combine(work, "areas"); MapIndex.AreaAt = null;
+                        var rectOnly = idxA.WorldToMap(0, 150, 200);               // inside Highkeep's small box and Greenvale's large one
+                        int answer = 78;
+                        AreaProbe.TileSourceForTest = (m, c, r) => m == 0 && c == 31 && r == 31 ? Enumerable.Repeat(answer, 256).ToArray() : null;
+                        MapIndex.AreaAt = AreaProbe.AreaAt;
+                        var byArea = idxA.WorldToMap(0, 150, 200);
+                        answer = 79; AreaProbe.ResetForTest(); var byCity = idxA.WorldToMap(0, 150, 200);
+                        answer = 0; AreaProbe.ResetForTest(); var byNothing = idxA.WorldToMap(0, 150, 200);
+                        answer = 4242; AreaProbe.ResetForTest(); var byUnknownArea = idxA.WorldToMap(0, 150, 200);
+                        var noTile = idxA.WorldToMap(0, 500, 900);                  // a tile the source does not have: the rectangles answer
+                        int reads0 = AreaProbe.ReadsForTest; idxA.WorldToMap(0, 500, 900); idxA.WorldToMap(0, 500, 900);
+                        Check("zone rule: without the terrain the smaller city box wins (Highkeep); with the terrain's area it is the zone the chunk is in - Greenvale for area 78 although Highkeep's box also holds the spot, Highkeep for its own area 79; an unknown area, no area and a tile the game does not have fall back to the rectangles; a tile is read once",
+                            rectOnly?.UiMapId == 13 && byArea?.UiMapId == 11 && byCity?.UiMapId == 13 && byNothing?.UiMapId == 13 && byUnknownArea?.UiMapId == 13 && noTile?.UiMapId == 11 && AreaProbe.ReadsForTest == reads0, rectOnly + " " + byArea + " " + byCity + " " + byNothing + " " + noTile);
+                        var set2 = InsSet(0); var idxP = new MapIndex(set2);
+                        MapData.SetForTest(idxP);
+                        answer = 78; AreaProbe.ResetForTest();
+                        var layerFm = WorldMapLayers.Instances(0);
+                        Check("zone rule: the layers and pages that ask WorldToMap (flight master hover text, instance zones, spawn markers) get the same answer, not their own", idxP.WorldToMap(0, 150, 200)?.UiMapId == 11 && layerFm.Count == 2);
+                        AreaProbe.Flush();
+                        Check("zone rule: what was read is saved (1 KB a tile) next to the map cache and read back by a new session without touching the game", Directory.Exists(Path.Combine(work, "areas")) && Directory.GetFiles(Path.Combine(work, "areas"), "areas-*-0.bin").Length == 1 && ReadBackAreas());
+                        bool ReadBackAreas()
+                        {
+                            AreaProbe.ResetForTest(); int src = 0;
+                            AreaProbe.TileSourceForTest = (m, c, r) => { src++; return null; };
+                            int a = AreaProbe.AreaAt(0, 150, 200);
+                            return a == 78 && src == 0;
+                        }
+                        MapData.SetForTest(idxA);
+                    }
+                    finally { MapIndex.AreaAt = savedProbe; AreaProbe.TileSourceForTest = savedSrc; AreaProbe.CacheDirOverride = savedDir; AreaProbe.ResetForTest(); }
+                }
+
                 // ---------------------------------------------------------------- the saved index keeps all of it
                 var idxFile = Path.Combine(work, "mapdata.bin");
                 bool wrote = MapIndexFile.TryWrite(idxFile, "wow_classic_beta|1.60.1.70338|abc", sA);

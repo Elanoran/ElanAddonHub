@@ -234,6 +234,21 @@ namespace ElansAddonHub
                         await WmEval("(function(){ var r=[].slice.call(document.querySelectorAll('.wm-row')).filter(function(e){return e.textContent.indexOf('Flight masters')===0})[0]; r.querySelector('input').click(); r.querySelector('input').click(); return 1; })()");
                         var fmAgain = await WmList("markers", "fm");
                         Check("page: with every faction off nothing of the layer shows, and the layer switched off and on again shows all factions (the same rule as the node kinds)", fmNone.All(m => !(bool)m["shown"]) && fmAgain.Count == 3 && fmAgain.All(m => (bool)m["shown"]), Json.Write(fmNone) + Json.Write(fmAgain));
+                        // the emblems: three own SVG badges (shield, spiked ring, coin) in the colours of the panel's swatches; a fixture picture of all three, large and small, on the map
+                        var emb = Json.Parse(await WmEval("JSON.stringify((function(){ var F = window.WmIcons.factions; var sw = {}; [].slice.call(document.querySelectorAll('.wm-row.sub')).forEach(function(r){ sw[r.textContent.replace(/[0-9 ]/g,'')] = r.querySelector('.sw').style.backgroundColor; }); return { a: F.a.fill, h: F.h.fill, n: F.n.fill, paths: [F.a.body, F.h.body, F.n.body].map(function(p){return p.length}), svgs: document.querySelectorAll('.fmv svg').length, sw: sw }; })())")) as string;
+                        var embO = emb == null ? null : Json.Obj(emb);
+                        var catFm = ((List<Dictionary<string, object>>)WorldMapLayers.Catalog().First(c => (string)c["id"] == "fm")["children"]).ToDictionary(k => (string)k["id"], k => (string)k["color"]);
+                        Check("page: the flight master emblems (icons.js) - a heater shield with a chevron (Alliance), a spiked ring (Horde), a coin with scales (Neutral) - are SVG badges drawn for every marker (" + embO?.Int("svgs") + " on the map), and their fills are the colours of the panel swatches " + string.Join("/", catFm.Values),
+                            embO != null && embO.Int("svgs") >= 3 && string.Equals(embO.Str("a"), catFm["fm.alliance"], StringComparison.OrdinalIgnoreCase) && string.Equals(embO.Str("h"), catFm["fm.horde"], StringComparison.OrdinalIgnoreCase) && string.Equals(embO.Str("n"), catFm["fm.neutral"], StringComparison.OrdinalIgnoreCase), emb);
+                        var stE = await WmState(); var cen = stE.List("center");
+                        string Dd(object o) => Convert.ToDouble(o, CultureInfo.InvariantCulture).ToString("R", CultureInfo.InvariantCulture);
+                        string cLat = Dd(cen[0]), cLng = Dd(cen[1]);
+                        await WmEval("window.wm.feed({t:'goto', lat:" + cLat + ", lng:" + cLng + ", z:7})");
+                        string Item(double dx, double dy, string f, string nm) => "{lat:" + (Convert.ToDouble(cen[0], CultureInfo.InvariantCulture) + dy).ToString("R", CultureInfo.InvariantCulture) + ",lng:" + (Convert.ToDouble(cen[1], CultureInfo.InvariantCulture) + dx).ToString("R", CultureInfo.InvariantCulture) + ",name:'" + nm + "',f:'" + f + "',g:'fm." + (f == "a" ? "alliance" : f == "h" ? "horde" : "neutral") + "',tip:'Flight master',extra:'" + nm + "'}";
+                        await WmEval("window.wm.feed({t:'layer', id:'fm', kind:'markers', items:[" + Item(-0.35, 0, "a", "Alliance") + "," + Item(0, 0, "h", "Horde") + "," + Item(0.35, 0, "n", "Neutral") + "]})");
+                        await Task.Delay(900);
+                        var pngE = await WorldMapView.CaptureForTest(); if (pngE != null) File.WriteAllBytes(P("instances-fm-icons-2d.png"), pngE);
+                        Check("page: the fixture picture of the three emblems on the map is taken (instances-fm-icons-2d.png)", pngE != null && pngE.Length > 2000);
                     }
                     // a toggle in the panel: Vendors on -> need -> "none" (no Classic data here), saved in the settings
                     var before = WorldMapView.ReceivedForTest.Count(x => x == "need");

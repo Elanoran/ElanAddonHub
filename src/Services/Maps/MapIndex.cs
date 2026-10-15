@@ -256,9 +256,22 @@ namespace ElansAddonHub.Services.Maps
         // top tier (cities and dungeons do not overlap but nest), and for zones the one the point is most central in (neighbouring zones' loose
         // rectangles overlap along their borders and over each other's corners). Alternative copies (System 1) are never chosen. null = no map
         // shows that position.
+        // Where the terrain says which area a position is in (AreaProbe; null in a test). The rectangles of the map tables are boxes: a city's covers the edge of the zone around it (Northshire
+        // Abbey is "Stormwind City"), a zone's overlaps its neighbour's. When the area is known its zone decides; the rectangles answer for what the terrain cannot say.
+        public static Func<int, double, double, int> AreaAt;
+        readonly Dictionary<int, int> uiOfArea = new Dictionary<int, int>();
+        int UiMapOfAreaCached(int area) { lock (uiOfArea) { if (!uiOfArea.TryGetValue(area, out var u)) uiOfArea[area] = u = UiMapForArea(area); return u; } }
+
         public MapPoint? WorldToMap(int mapId, double x, double y)
         {
             if (!byWorldMap.TryGetValue(mapId, out var all)) return null;
+            var probe = AreaAt;
+            if (probe != null)
+            {
+                int area = 0;
+                try { area = probe(mapId, x, y); } catch (Exception) { }
+                if (area > 0) { int ui = UiMapOfAreaCached(area); if (ui > 0) { var q = WorldToMap(mapId, x, y, ui); if (q != null) return q; } }
+            }
             var hits = all.Where(a => Contains(a, x, y)).Select(a => new { a, m = Get(a.UiMapId) }).Where(h => h.m != null && h.m.System == 0).ToList();
             if (hits.Count == 0) return null;
             int tier = hits.Max(h => Tier(h.m));

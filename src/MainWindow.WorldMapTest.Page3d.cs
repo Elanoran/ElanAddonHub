@@ -214,6 +214,13 @@ namespace ElansAddonHub
                     await Task.Delay(1500);
                     await WmEval(feedFm); await WmEval(feedRt);
                     var fm3Re = await L3("instances", "null,'fm.'"); var rt3Re = await L3("lines", "'routes'");
+                    // the emblems in 3D: the same SVG badges as DOM overlays; a fixture picture of the three close to the camera
+                    await WmEval("(function(){ var s=JSON.parse(window.wm3.state()); var c=window.wm3.xz2ll(s.tx, s.tz); function it(dx, f, nm){ return {lat:c[0], lng:c[1]+dx, name:nm, f:f, g:'fm.'+(f==='a'?'alliance':f==='h'?'horde':'neutral'), tip:'Flight master', extra:''}; } window.wm3.feedForTest({t:'layer', id:'fm', kind:'markers', items:[it(-0.5,'a','Alliance'), it(0,'h','Horde'), it(0.5,'n','Neutral')]}); return 1; })()");
+                    await WmEval("['fm.horde','fm.alliance','fm.neutral'].forEach(function(k){ window.wm3.setOnForTest(k, true) })");
+                    await Task.Delay(2500);
+                    var emb3 = await L3("instances", "null,'fm.'");
+                    var png3E = await WorldMapView.CaptureForTest(); if (png3E != null) File.WriteAllBytes(P("instances-fm-icons-3d.png"), png3E);
+                    Check("3D: the flight masters are the same SVG emblems (shield / spiked ring / coin) as DOM overlays; the fixture picture is taken (instances-fm-icons-3d.png)", emb3.Count == 3 && emb3.All(x => ((string)x["html"]).Contains("fmsvg")) && ((string)emb3.First(x => (string)x["name"] == "Alliance")["html"]).Contains("fmv a") && png3E != null, string.Join("|", emb3.Select(x => x["name"])));
                     Check("3D: the faction kinds hide flight master markers one by one (4 shown, Horde off = 2) and route lines one by one (3 drawn, Alliance off = 2); all kinds off then the layer on again shows all of them",
                         FmWanted(fm3All) == 4 && LinesShown(rt3All) == 3 && FmWanted(fm3NoH) == 2 && fm3NoH.Where(x => (string)x["g"] == "fm.horde").All(x => !(bool)x["wanted"]) && LinesShown(rt3NoA) == 2 && !(bool)rt3NoA.First(x => (string)x["g"] == "routes.alliance")["shown"]
                         && FmWanted(fm3Re) == 4 && LinesShown(rt3Re) == 3, FmWanted(fm3All) + "/" + LinesShown(rt3All) + " " + FmWanted(fm3NoH) + "/" + LinesShown(rt3NoA) + " " + FmWanted(fm3Re) + "/" + LinesShown(rt3Re));
@@ -234,7 +241,7 @@ namespace ElansAddonHub
                     // markers on the ground: the flight masters sit on the height grid (the page's own grid against the invented landscape the ADTs were made from)
                     var mk = Json.Parse(await WmEval("window.wm3.markers()")) as string; var marks = Json.Parse(mk) as List<object>;
                     double worstG = 0, worstY = 0; int nm = 0;
-                    foreach (var o in marks.Cast<Dictionary<string, object>>().Where(o => !((string)o["name"]).StartsWith("point")))
+                    foreach (var o in marks.Cast<Dictionary<string, object>>().Where(o => !((string)o["name"]).StartsWith("point") && !new[] { "Alliance", "Horde", "Neutral", "H1", "H2", "A1", "N1" }.Contains((string)o["name"])))
                     {
                         double x = (double)o["x"], z = (double)o["z"], expect = WmZ((32 - z / WorldMapMath.TileYards) * WorldMapMath.TileYards, (32 - x / WorldMapMath.TileYards) * WorldMapMath.TileYards);
                         worstG = Math.Max(worstG, Math.Abs((double)o["ground"] / 1.5 - expect)); worstY = Math.Max(worstY, Math.Abs((double)o["y"] - (double)o["ground"])); nm++;

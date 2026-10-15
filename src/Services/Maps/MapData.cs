@@ -170,6 +170,7 @@ namespace ElansAddonHub.Services.Maps
             if (!set.Ok) { Util.Log("map data: unavailable: " + set.Problem); Publish(null, null, State.Unavailable, set.Problem); return; }
             foreach (var n in set.Notes) Util.Log("map data: " + n);
             LastLoadFrom = from;
+            MapIndex.AreaAt = AreaProbe.AreaAt;
             Publish(new MapIndex(set), b, State.Ready, null);
         }
 

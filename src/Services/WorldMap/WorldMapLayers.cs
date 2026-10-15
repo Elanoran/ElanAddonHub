@@ -173,11 +173,19 @@ namespace ElansAddonHub.Services.WorldMap
         }
 
         // ---------------------------------------------------------------- flight masters and routes
-        // the faction of a node: its flags' Alliance / Horde bits, else the mounts it names (Horde mount first); "" = not a flight master players use
+        // The faction of a node, verified on the real TaxiNodes of 1.60.1.70338 (100 rows): Flags bit 1 = Alliance, bit 2 = Horde (1025 Stormwind, 1026 Orgrimmar, 1027 Ratchet / Marshal's Refuge = both);
+        // a node with no faction bit (a Forever addition such as Powderfuse Port, Fishing Village, the Eastern Plaguelands node) is told by its mounts, MountCreatureID[0] = the Horde mount
+        // (2224 wind rider, 3574 bat) and [1] = the Alliance mount (541 gryphon, 3837 hippogryph); both mounts = both factions. Mount 308 is the developers' placeholder (the test island and Northshire
+        // Abbey carry it): it says nothing about a faction, so such a node is neutral rather than "Horde". "" = names no faction at all (a transport, a quest flight).
+        public const int PlaceholderMount = 308;
         public static string FactionOf(TaxiNodeInfo n)
         {
             bool a = (n.Flags & 1) != 0, h = (n.Flags & 2) != 0;
-            if (!a && !h) { a = n.MountAlliance != 0; h = n.MountHorde != 0; }
+            if (!a && !h)
+            {
+                a = n.MountAlliance != 0 && n.MountAlliance != PlaceholderMount; h = n.MountHorde != 0 && n.MountHorde != PlaceholderMount;
+                if (!a && !h && (n.MountHorde == PlaceholderMount || n.MountAlliance == PlaceholderMount)) return Neutral;
+            }
             return a && h ? Neutral : a ? Alliance : h ? Horde : "";
         }
 

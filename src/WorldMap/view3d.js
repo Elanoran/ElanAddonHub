@@ -554,7 +554,7 @@
     (m.items || []).forEach(function (it) {
       var p = ll2xz(it.lat, it.lng);
       // instance entrances (it.ic dun / raid) carry a kind group (it.g: switched by its child row) and a label shown when the camera is near; flight masters are the diamonds
-      var d = el('div', 'm3', it.ic ? '<div class="inst ' + esc(it.ic) + '">' + (it.ic === 'raid' ? '&#9760;' : '') + '</div>' + (it.lab ? '<div class="instl">' + esc(it.lab) + '</div>' : '') : '<div class="fm ' + (it.f || 'n') + '"></div>');
+      var d = el('div', 'm3', it.ic ? '<div class="inst ' + esc(it.ic) + '">' + (it.ic === 'raid' ? '&#9760;' : '') + '</div>' + (it.lab ? '<div class="instl">' + esc(it.lab) + '</div>' : '') : (window.WmIcons ? window.WmIcons.html(it.f || 'n') : '<div class="fm ' + (it.f || 'n') + '"></div>'));
       var tipf = function (e) { showTip(e.clientX, e.clientY, it.name, it.tip || '', it.extra || ''); };
       d.addEventListener('mouseenter', tipf); d.addEventListener('mousemove', tipf); d.addEventListener('mouseleave', hideTip);
       d.addEventListener('mousedown', function (e) { e.stopPropagation(); });
