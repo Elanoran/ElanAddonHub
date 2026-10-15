@@ -102,3 +102,20 @@ body.v3 #hud { position: absolute; top: 10px; right: 10px; z-index: 5; }
 .fmv:hover .fmsvg { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 4px rgba(255,255,255,.7)); }
 .m3 .fmv { pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) { .fmv { transition: none; } }
+
+/* ---- 3D buildings (view3d.js): the switch under "3D view" and its card / progress line */
+.v3r.bl { padding-bottom: 0; }
+.v3r .seg.wide { display: flex; width: 100%; }
+.v3r .seg.wide button { flex: 1; padding: 3px 4px; font-size: 11px; white-space: nowrap; }
+.v3b { margin: 4px 0 2px; padding: 8px 9px; border: 1px solid var(--panel-line); border-radius: 8px; background: rgba(255, 255, 255, .05); font-size: 12px; line-height: 1.4; }
+.v3b[hidden] { display: none; }
+.v3b .bt { color: var(--text); }
+.v3b .bs { color: var(--text-dim); margin-top: 3px; }
+.v3b .bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .14); margin-top: 7px; overflow: hidden; }
+.v3b .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.v3b .ba { display: flex; gap: 6px; margin-top: 8px; }
+.v3b .ba button { background: rgba(255, 255, 255, .08); color: var(--text); border: 1px solid var(--panel-line); border-radius: 6px; padding: 3px 10px; font: inherit; cursor: pointer; }
+.v3b .ba button:hover { background: rgba(255, 255, 255, .16); }
+.v3b .ba button.pri { background: var(--accent); color: #1b1300; border-color: transparent; font-weight: 600; }
+.v3b.err .bt { color: #ff9d92; }
+@media (prefers-reduced-motion: reduce) { .v3b .bar i { transition: none; } }

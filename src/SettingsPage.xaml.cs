@@ -395,6 +395,23 @@ namespace ElansAddonHub
             try { busy = ElansAddonHub.Services.WorldMap.WorldMapService.StateOf(0)?.Running == true || ElansAddonHub.Services.WorldMap.WorldMapService.StateOf(1)?.Running == true; } catch (Exception) { }
             WorldMapCacheRow.Tag = ElansAddonHub.Services.WorldMap.WorldMapCache.StatusLine() + " Made from your game files, read-only; nothing is uploaded.";
             ClearWorldMapButton.IsEnabled = !busy && ElansAddonHub.Services.WorldMap.WorldMapCache.SizeBytes() > 0;
+            UpdateBuildingsLine();
+        }
+
+        // "3D buildings": what is on disk per continent, and a Remove button for each (the shapes are read from the game files again the next time the Buildings switch asks)
+        void UpdateBuildingsLine()
+        {
+            var rows = ElansAddonHub.Services.WorldMap.BuildingsService.Rows();
+            WorldMapBuildingsRow.Tag = ElansAddonHub.Services.WorldMap.BuildingsService.StatusLine();
+            WorldMapBuildingsButtons.Children.Clear();
+            foreach (var r in rows)
+            {
+                var id = r.MapId;
+                var b = new Button { Style = (Style)FindResource("Button.M"), Content = "Remove " + r.Name + " (" + ElansAddonHub.Services.WorldMap.WorldMapCache.SizeText(r.Bytes) + ")", Margin = new Thickness(8, 0, 0, 0) };
+                System.Windows.Automation.AutomationProperties.SetName(b, "Remove the 3D buildings of " + r.Name);
+                b.Click += (s, e) => { ElansAddonHub.Services.WorldMap.BuildingsService.Remove(id); UpdateBuildingsLine(); };
+                WorldMapBuildingsButtons.Children.Add(b);
+            }
         }
 
         // 3D detail (low / medium / high) and height exaggeration of the Atlas world map: read by the 3D page when it starts, so the next time it opens

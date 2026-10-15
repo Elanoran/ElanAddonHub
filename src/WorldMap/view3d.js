@@ -718,6 +718,7 @@
       '<div class="v3r"><span>Height</span><input id="v3exag" type="range" min="1" max="3" step="0.5" aria-label="Height exaggeration"><b id="v3exagv"></b></div>' +
       '<div class="v3r"><button type="button" id="v3north">North up</button><button type="button" id="v3fit">Whole continent</button></div>';
     body.appendChild(s);
+    bldPanel(s);
     p.appendChild(h); p.appendChild(body); hud.appendChild(p);
     ['mousedown', 'wheel', 'click', 'dblclick', 'contextmenu'].forEach(function (ev) { p.addEventListener(ev, function (e) { e.stopPropagation(); }); });
     function syncPrefs() {
@@ -736,7 +737,7 @@
     // new detail / height: tiles are rebuilt on the next pass, lines and points re-seated
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, software ? 1 : D().dpr)); onResize();
     Object.keys(meshes).forEach(function (k) { meshes[k].exag = -1; meshes[k].wantLvl = -1; });
-    refreshHeights(); updateAfter = 0;
+    refreshHeights(); updateAfter = 0; lastSel2 = 0;
     if (save) { clearTimeout(prefsTimer); prefsTimer = setTimeout(function () { send({ t: 'prefs', detail: prefs.detail, exag: prefs.exag }); }, 400); }
     dirty = true;
   }
@@ -901,7 +902,7 @@
     if (!need) { if (now - fpsT0 > 2000) { fpsT0 = now; fpsFrames = 0; } return; }
     dirty = false; frameN++;
     updateCamera();
-    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); } else dirty = true;       // the tile pass is throttled: a change that arrives inside the pause (a liquid file, a texture) gets its pass on a later frame
+    if (now - lastSel2 > 120 || pendingBuilds) { lastSel2 = now; updateTiles(now); updateBuildings(now); } else dirty = true;       // the tile pass is throttled: a change that arrives inside the pause (a liquid file, a texture) gets its pass on a later frame
     var shown = updateOverlays();
     shimmer(now);
     renderer.render(scene, camera);
@@ -914,7 +915,7 @@
   }
   function sendStats() {
     var mem = (performance && performance.memory) ? performance.memory.usedJSHeapSize / 1048576 : 0, inf = renderer.info;
-    send({ t: 'stats', fps: Math.round(fps * 10) / 10, mem: Math.round(mem), tris: inf.render.triangles, tiles: selStats.meshes, tex: inf.memory.textures });
+    send({ t: 'stats', fps: Math.round(fps * 10) / 10, mem: Math.round(mem), tris: inf.render.triangles, tiles: selStats.meshes, tex: inf.memory.textures, bld: BLD.drawn });
   }
   function onResize() {
     if (!renderer) return;
@@ -966,6 +967,289 @@
     return true;
   }
 
+  // ---------------------------------------------------------------- buildings (WMOs): "Bridges only" / "All buildings"
+  // The app (WorldMapBuildingsHost) reads the shapes from the player's game files into <map>/buildings: placements.bin (one 60-byte record per placed building) and m/<FileDataID>.wmb
+  // (the simplified model: 3 levels of detail, short positions + sRGB vertex colours + indices; no normals, the page lights them flat). The page only fetches what the app listed as finished
+  // (bstate.all / bstate.fresh), draws every model with one InstancedMesh per level of detail, and each pass (every 120 ms, with the tiles) culls placements by distance and frustum, picks
+  // the level by distance / size and keeps to a triangle budget and a memory cap, both set by the Detail setting.
+  var BDETAIL = {
+    low:    { view: 1800, tris: 120000, memMb: 48,  l0: 10, l1: 40, k: 150 },
+    medium: { view: 4000, tris: 400000, memMb: 128, l0: 14, l1: 55, k: 250 },
+    high:   { view: 8000, tris: 900000, memMb: 256, l0: 20, l1: 80, k: 400 }
+  };
+  function BD() { return BDETAIL[prefs.detail] || BDETAIL.medium; }
+  var BLD = { mode: 'off', base: '', st: null, built: {}, pl: null, plLoading: false, models: {}, buckets: {}, mem: 0, drawn: 0, tris: 0, byLod: [0, 0, 0], fetching: 0, wanted: 0, inView: 0, skipped: 0,
+    capOverride: null, mat: null, lut: null, loaded: 0, errors: 0, evicted: 0, requests: 0, passes: 0, maxFetch: 6, ui: null, map: -1 };
+  var bM = null, bQ = null, bE = null, bP = null, bS = null, bC = null;
+  function bInit3() {
+    if (bM) return;
+    bM = new THREE.Matrix4(); bQ = new THREE.Quaternion(); bE = new THREE.Euler(0, 0, 0, 'YXZ'); bP = new THREE.Vector3(); bS = new THREE.Vector3(); bC = new THREE.Vector3();
+  }
+  function bLut() {
+    if (BLD.lut) return BLD.lut;
+    var l = new Uint8Array(256);
+    for (var i = 0; i < 256; i++) { var c = i / 255; l[i] = Math.round((c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)) * 255); }
+    return (BLD.lut = l);
+  }
+  function bMaterial() {
+    if (!BLD.mat) BLD.mat = new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 0, specular: 0x000000, side: THREE.DoubleSide });
+    return BLD.mat;
+  }
+
+  // ---- placements.bin
+  function bLoadPlacements() {
+    if (BLD.pl || BLD.plLoading || !BLD.base) return;
+    BLD.plLoading = true;
+    fetch(BLD.base + '/placements.bin').then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+      BLD.plLoading = false;
+      if (!buf || buf.byteLength < 8) return;
+      var dv = new DataView(buf);
+      if (dv.getUint32(0, true) !== 0x31504D57) return;                   // "WMP1"
+      var n = dv.getInt32(4, true);
+      if (n < 0 || 8 + n * 60 !== buf.byteLength) return;
+      var pl = { n: n, fdid: new Int32Array(n), flags: new Uint8Array(n), x: new Float32Array(n), y: new Float32Array(n), z: new Float32Array(n), rx: new Float32Array(n), ry: new Float32Array(n), rz: new Float32Array(n), s: new Float32Array(n),
+        cx: new Float32Array(n), cy: new Float32Array(n), cz: new Float32Array(n), rad: new Float32Array(n) };
+      for (var i = 0; i < n; i++) {
+        var o = 8 + i * 60;
+        pl.fdid[i] = dv.getUint32(o, true); pl.flags[i] = dv.getUint32(o + 4, true) & 255;
+        pl.x[i] = dv.getFloat32(o + 8, true); pl.y[i] = dv.getFloat32(o + 12, true); pl.z[i] = dv.getFloat32(o + 16, true);
+        pl.rx[i] = dv.getFloat32(o + 20, true); pl.ry[i] = dv.getFloat32(o + 24, true); pl.rz[i] = dv.getFloat32(o + 28, true); pl.s[i] = dv.getFloat32(o + 32, true);
+        var x0 = dv.getFloat32(o + 36, true), y0 = dv.getFloat32(o + 40, true), z0 = dv.getFloat32(o + 44, true), x1 = dv.getFloat32(o + 48, true), y1 = dv.getFloat32(o + 52, true), z1 = dv.getFloat32(o + 56, true);
+        pl.cx[i] = (x0 + x1) / 2; pl.cy[i] = (y0 + y1) / 2; pl.cz[i] = (z0 + z1) / 2;
+        pl.rad[i] = Math.max(2, Math.sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0)) / 2);
+      }
+      BLD.pl = pl; dirty = true;
+    }).catch(function () { BLD.plLoading = false; BLD.errors++; });
+  }
+
+  // ---- a model file
+  function bParse(buf) {
+    try {
+      var dv = new DataView(buf);
+      if (buf.byteLength < 32 || dv.getUint32(0, true) !== 0x31424D57) return null;      // "WMB1"
+      var m = { bridge: (dv.getUint8(4) & 1) !== 0, center: [dv.getFloat32(8, true), dv.getFloat32(12, true), dv.getFloat32(16, true)], half: [dv.getFloat32(20, true), dv.getFloat32(24, true), dv.getFloat32(28, true)], lods: [], bytes: 0 };
+      var n = dv.getUint8(5), p = 32, lut = bLut();
+      if (n > 8) return null;
+      for (var k = 0; k < n; k++) {
+        var nv = dv.getUint32(p, true), ni = dv.getUint32(p + 4, true); p += 8;
+        if (nv > 4000000 || ni > 12000000 || ni % 3 !== 0) return null;
+        if (p + nv * 6 > buf.byteLength) return null;
+        var pos = new Int16Array(buf, p, nv * 3); p += nv * 6; p = (p + 3) & ~3;
+        if (p + nv * 3 > buf.byteLength) return null;
+        var src = new Uint8Array(buf, p, nv * 3), col = new Uint8Array(nv * 3); p += nv * 3; p = (p + 3) & ~3;
+        for (var i = 0; i < col.length; i++) col[i] = lut[src[i]];
+        var w = nv <= 65535 ? 2 : 4;
+        if (p + ni * w > buf.byteLength) return null;
+        var idx = w === 2 ? new Uint16Array(buf, p, ni) : new Uint32Array(buf, p, ni); p += ni * w; p = (p + 3) & ~3;
+        m.lods.push({ nv: nv, ni: ni, pos: pos, col: col, idx: idx, geom: null, bytes: nv * 6 + nv * 3 + ni * w });
+        m.bytes += nv * 9 + ni * w;
+      }
+      m.local = new THREE.Matrix4().compose(new THREE.Vector3(m.center[0], m.center[1], m.center[2]), new THREE.Quaternion(), new THREE.Vector3(m.half[0] / 32767, m.half[1] / 32767, m.half[2] / 32767));
+      return m;
+    } catch (e) { return null; }
+  }
+  function bGeom(m, k) {
+    var l = m.lods[k]; if (l.geom) return l.geom;
+    var g = new THREE.BufferGeometry();
+    var a = new THREE.BufferAttribute(l.pos, 3), c = new THREE.BufferAttribute(l.col, 3, true), ix = new THREE.BufferAttribute(l.idx, 1);
+    // once on the graphics card the page's copy is let go (the browser's memory is what is scarce)
+    var free = function () { this.array = null; };
+    a.onUpload(free); c.onUpload(free); ix.onUpload(free);
+    g.setAttribute('position', a); g.setAttribute('color', c); g.setIndex(ix);
+    l.geom = g; return g;
+  }
+  function bFetchModel(fdid, e) {
+    e.state = 'loading'; BLD.fetching++; BLD.requests++;
+    fetch(BLD.base + '/m/' + fdid + '.wmb').then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+      var m = buf ? bParse(buf) : null;
+      if (!m) { e.state = 'none'; if (buf) BLD.errors++; }
+      else if (m.lods.length === 0) e.state = 'none';
+      else { e.m = m; e.state = 'ready'; BLD.mem += m.bytes; BLD.loaded++; }
+    }).catch(function () { e.state = 'none'; BLD.errors++; }).then(function () { BLD.fetching--; dirty = true; });
+  }
+  function bFree(fdid, e) {
+    for (var k = 0; k < 3; k++) {
+      var key = fdid * 4 + k, b = BLD.buckets[key];
+      if (b) { scene.remove(b.mesh); b.mesh.dispose(); delete BLD.buckets[key]; }
+    }
+    if (e.m) { e.m.lods.forEach(function (l) { if (l.geom) { l.geom.dispose(); l.geom = null; } }); BLD.mem -= e.m.bytes; e.m = null; }
+    e.state = 'idle';
+  }
+  function bClear() {
+    Object.keys(BLD.models).forEach(function (k) { bFree(+k, BLD.models[k]); });
+    BLD.models = {}; BLD.buckets = {}; BLD.mem = 0; BLD.pl = null; BLD.plLoading = false; BLD.drawn = 0; BLD.tris = 0; BLD.byLod = [0, 0, 0];
+  }
+  function bHideAll() {
+    Object.keys(BLD.buckets).forEach(function (k) { var b = BLD.buckets[k]; b.mesh.visible = false; b.mesh.count = 0; });
+    BLD.drawn = 0; BLD.tris = 0; BLD.byLod = [0, 0, 0];
+  }
+
+  // ---- the pass: which placements are drawn, at which level
+  var bScratch = { idx: new Int32Array(0), d: new Float32Array(0) };
+  function updateBuildings(now) {
+    if (!renderer || !scene) return;
+    if (BLD.mode === 'off' || !BLD.pl) { if (BLD.drawn > 0) bHideAll(); return; }
+    bInit3();
+    var cfg2 = BD(), pl = BLD.pl, n = pl.n, ex = prefs.exag, eye = camera.position, bridgesOnly = BLD.mode === 'bridges';
+    var fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    var sph = new THREE.Sphere(bC, 1);
+    var cand = [], wanted = 0;
+    for (var i = 0; i < n; i++) {
+      if (bridgesOnly && (pl.flags[i] & 1) === 0) continue;
+      if (!BLD.built[pl.fdid[i]]) continue;
+      wanted++;
+      var r = pl.rad[i], cy = pl.cy[i] * ex, dx = eye.x - pl.cx[i], dy = eye.y - cy, dz = eye.z - pl.cz[i];
+      var dist = Math.sqrt(dx * dx + dy * dy + dz * dz), lim = Math.min(cfg2.view, Math.max(250, r * cfg2.k));
+      if (dist - r > lim) continue;
+      bC.set(pl.cx[i], cy, pl.cz[i]); sph.center.copy(bC); sph.radius = r + 1;
+      if (!fr.intersectsSphere(sph)) continue;
+      cand.push({ i: i, d: Math.max(dist - r, 1), q: Math.max(dist - r, 1) / r });
+    }
+    cand.sort(function (a, b) { return a.d - b.d; });
+    BLD.wanted = wanted; BLD.inView = cand.length; BLD.passes++;
+    var tris = 0, drawn = 0, skipped = 0, byLod = [0, 0, 0], used = {};
+    var lists = {};
+    for (var c = 0; c < cand.length; c++) {
+      var ci = cand[c].i, fd = pl.fdid[ci], e = BLD.models[fd];
+      if (!e) e = BLD.models[fd] = { state: 'idle', m: null, last: now };
+      if (e.state === 'idle') { if (BLD.fetching < BLD.maxFetch) bFetchModel(fd, e); continue; }
+      if (e.state !== 'ready') continue;
+      e.last = now;
+      var q = cand[c].q, lod = q < cfg2.l0 ? 0 : q < cfg2.l1 ? 1 : 2, last = e.m.lods.length - 1;
+      if (lod > last) lod = last;
+      var cost = e.m.lods[lod].ni / 3;
+      while (tris + cost > cfg2.tris && lod < last) { lod++; cost = e.m.lods[lod].ni / 3; }
+      if (tris + cost > cfg2.tris) { skipped++; continue; }
+      tris += cost; drawn++; byLod[lod]++;
+      var key = fd * 4 + lod; (lists[key] || (lists[key] = [])).push(ci); used[key] = true;
+    }
+    // one InstancedMesh per (model, level); its matrices: place (position with the height exaggeration, rotation YXZ, scale) x the model's own box
+    var DEG = Math.PI / 180;
+    Object.keys(lists).forEach(function (key) {
+      var list = lists[key], fd = Math.floor(key / 4), lod = key % 4, e = BLD.models[fd], b = BLD.buckets[key];
+      if (!b || b.cap < list.length) {
+        if (b) { scene.remove(b.mesh); b.mesh.dispose(); }
+        var cap = Math.max(4, Math.ceil(list.length * 1.5));
+        var mesh = new THREE.InstancedMesh(bGeom(e.m, lod), bMaterial(), cap);
+        mesh.frustumCulled = false; mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        scene.add(mesh); b = BLD.buckets[key] = { mesh: mesh, cap: cap, fd: fd, lod: lod };
+      }
+      for (var j = 0; j < list.length; j++) {
+        var p = list[j];
+        bP.set(pl.x[p], pl.y[p] * ex, pl.z[p]); bE.set(pl.rx[p] * DEG, pl.ry[p] * DEG, pl.rz[p] * DEG, 'YXZ'); bQ.setFromEuler(bE); bS.set(pl.s[p], pl.s[p], pl.s[p]);
+        bM.compose(bP, bQ, bS); bM.multiply(e.m.local);
+        b.mesh.setMatrixAt(j, bM);
+      }
+      b.mesh.count = list.length; b.mesh.visible = true; b.mesh.instanceMatrix.needsUpdate = true;
+    });
+    Object.keys(BLD.buckets).forEach(function (key) { if (!used[key]) { var b = BLD.buckets[key]; b.mesh.visible = false; b.mesh.count = 0; } });
+    BLD.drawn = drawn; BLD.tris = tris; BLD.byLod = byLod; BLD.skipped = skipped;
+    // memory cap: the models not used for a while go first
+    var capB = (BLD.capOverride != null ? BLD.capOverride : cfg2.memMb) * 1048576;
+    if (BLD.mem > capB) {
+      var ents = Object.keys(BLD.models).filter(function (k) { var e = BLD.models[k]; return e.state === 'ready' && now - e.last > 2500; }).sort(function (a, b) { return BLD.models[a].last - BLD.models[b].last; });
+      for (var v = 0; v < ents.length && BLD.mem > capB * 0.85; v++) { bFree(+ents[v], BLD.models[ents[v]]); BLD.evicted++; }
+    }
+    if (BLD.fetching > 0) dirty = true;
+  }
+
+  // ---- the panel: the switch and the card
+  function bldPanel(s) {
+    var row = el('div', 'v3r bl', '<span>Buildings</span>');
+    var seg = el('div', 'v3r'); seg.innerHTML = '<span class="seg wide" id="v3bld"><button type="button" data-b="off">Off</button><button type="button" data-b="bridges">Bridges only</button><button type="button" data-b="all">All buildings</button></span>';
+    var card = el('div', 'v3b'); card.id = 'v3bcard'; card.hidden = true;
+    s.appendChild(row); s.appendChild(seg); s.appendChild(card);
+    [].forEach.call(seg.querySelectorAll('button'), function (b) {
+      b.addEventListener('click', function () { bSwitch(b.getAttribute('data-b')); });
+    });
+    BLD.ui = { seg: seg, card: card };
+    bSync();
+  }
+  function bSwitch(mode) {
+    if (mode === BLD.mode) return;
+    BLD.mode = mode; bSync(); dirty = true;
+    if (mode === 'off') { bHideAll(); }
+    send({ t: 'buildings', mode: mode });
+  }
+  function bSync() {
+    if (!BLD.ui) return;
+    [].forEach.call(BLD.ui.seg.querySelectorAll('button'), function (b) { var on = b.getAttribute('data-b') === BLD.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    bCard();
+  }
+  function fmtN(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function bCard() {
+    if (!BLD.ui) return;
+    var c = BLD.ui.card, st = BLD.st, ph = st ? st.phase : 'idle', html = '', cls = 'v3b';
+    if (BLD.mode === 'off' || !st || st.mode === 'off') { c.hidden = true; c.innerHTML = ''; return; }
+    var acts = [];
+    if (ph === 'scanning') html = '<div class="bt">Counting the buildings...</div><div class="bs">This only looks at where they stand.</div>';
+    else if (ph === 'ask') {
+      html = '<div class="bt">' + esc(st.card || 'Show buildings in 3D.') + '</div><div class="bs">Nothing is uploaded and nothing is written to the WoW folder.</div>';
+      acts = [{ id: 'build', text: st.est && st.est.modelsDone > 0 ? 'Continue' : 'Build now', primary: true }, { id: 'later', text: 'Not now' }];
+    } else if (ph === 'building' || ph === 'paused') {
+      var pct = st.total > 0 ? Math.min(100, st.done * 100 / st.total) : 0;
+      html = '<div class="bt">' + esc(st.text || '') + '</div><div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>';
+      acts = [{ id: ph === 'paused' ? 'resume' : 'pause', text: ph === 'paused' ? 'Resume' : 'Pause' }, { id: 'cancel', text: 'Cancel' }];
+    } else if (ph === 'done') {
+      html = '<div class="bs">' + fmtN(st.total) + (BLD.mode === 'bridges' ? ' bridges' : ' buildings') + ' &middot; ' + (st.bytes > 0 ? (st.bytes / 1048576).toFixed(st.bytes < 10485760 ? 1 : 0) + ' MB on disk' : 'ready') + '</div>';
+    } else if (ph === 'error') {
+      cls += ' err'; html = '<div class="bt">' + esc(st.error || 'The buildings could not be made.') + '</div>'; acts = [{ id: 'build', text: 'Try again', primary: true }];
+    } else { c.hidden = true; c.innerHTML = ''; return; }
+    c.className = cls; c.innerHTML = html + (acts.length ? '<div class="ba"></div>' : '');
+    var ba = c.querySelector('.ba');
+    acts.forEach(function (a) {
+      var b = el('button', a.primary ? 'pri' : '', esc(a.text)); b.type = 'button'; b.setAttribute('data-a', a.id);
+      b.addEventListener('click', function () {
+        if (a.id === 'build') send({ t: 'bbuild', mode: BLD.mode });
+        else if (a.id === 'later') bSwitch('off');
+        else if (a.id === 'pause') send({ t: 'bpause' });
+        else if (a.id === 'resume') send({ t: 'bresume' });
+        else if (a.id === 'cancel') send({ t: 'bcancel' });
+      });
+      ba.appendChild(b);
+    });
+    c.hidden = false;
+  }
+  // the app's state message
+  function bldState(m) {
+    BLD.st = m; BLD.map = m.map;
+    var mode = m.mode === 'bridges' || m.mode === 'all' ? m.mode : 'off';
+    if (mode !== BLD.mode) { BLD.mode = mode; if (mode === 'off') bHideAll(); }
+    if (m.all) { BLD.built = {}; m.all.forEach(function (id) { BLD.built[id] = true; }); }
+    if (m.fresh) m.fresh.forEach(function (id) { BLD.built[id] = true; });
+    if (m.placements && !BLD.pl) bLoadPlacements();
+    bSync(); dirty = true; lastSel2 = 0;
+  }
+  function bldInit(b) {
+    bClear();
+    BLD.st = null; BLD.built = {}; BLD.mode = 'off'; BLD.base = ''; BLD.errors = 0;
+    if (!b) return;
+    BLD.mode = b.mode === 'bridges' || b.mode === 'all' ? b.mode : 'off'; BLD.base = String(b.base || '');
+    (b.models || []).forEach(function (id) { BLD.built[id] = true; });
+    if (b.placements && BLD.mode !== 'off') bLoadPlacements();
+  }
+  // test hooks: the state of the buildings, and where the bridges stand against the water
+  function bldInfo() {
+    var ready = 0, loading = 0; Object.keys(BLD.models).forEach(function (k) { var s = BLD.models[k].state; if (s === 'ready') ready++; else if (s === 'loading') loading++; });
+    var instances = 0, meshes = 0, visible = 0; Object.keys(BLD.buckets).forEach(function (k) { var b = BLD.buckets[k]; meshes++; if (b.mesh.visible && b.mesh.count > 0) { visible++; instances += b.mesh.count; } });
+    var st = BLD.st || {};
+    return { mode: BLD.mode, phase: st.phase || '', base: BLD.base, placements: BLD.pl ? BLD.pl.n : 0, built: Object.keys(BLD.built).length, wanted: BLD.wanted, inView: BLD.inView, drawn: BLD.drawn, tris: BLD.tris, byLod: BLD.byLod, skipped: BLD.skipped,
+      modelsReady: ready, modelsLoading: loading, meshes: meshes, visibleMeshes: visible, instances: instances, memMb: Math.round(BLD.mem / 1048576 * 10) / 10, evicted: BLD.evicted, requests: BLD.requests, errors: BLD.errors, passes: BLD.passes,
+      card: BLD.ui ? !BLD.ui.card.hidden : false, cardText: BLD.ui ? (function () { var t = BLD.ui.card.querySelector('.bt') || BLD.ui.card.querySelector('.bs'); return t ? t.textContent : ''; })() : '', cardAll: BLD.ui ? BLD.ui.card.textContent : '', buttons: BLD.ui ? [].map.call(BLD.ui.card.querySelectorAll('button'), function (b) { return b.textContent; }) : [], drawCalls: renderer ? renderer.info.render.calls : 0 };
+  }
+  // bridges: the deck (the placement's origin) against the water surface and the ground beneath (all in the exaggerated scene), nearest to a point first
+  function bldBridges(x, z, max) {
+    var pl = BLD.pl; if (!pl) return [];
+    var out = [], ex = prefs.exag;
+    for (var i = 0; i < pl.n; i++) {
+      if ((pl.flags[i] & 1) === 0) continue;
+      var w = waterAtXZ(pl.cx[i], pl.cz[i]), g = groundY(pl.cx[i], pl.cz[i]);
+      out.push({ i: i, fdid: pl.fdid[i], x: pl.x[i], z: pl.z[i], cx: pl.cx[i], cz: pl.cz[i], deck: pl.y[i] * ex, water: w === null ? null : w * ex, ground: g * ex, d: Math.hypot(pl.cx[i] - x, pl.cz[i] - z) });
+    }
+    out.sort(function (a, b) { return a.d - b.d; });
+    return out.slice(0, max || 10);
+  }
+
   // ---------------------------------------------------------------- the messages from the app
   function handle(m) {
     if (!m || typeof m.t !== 'string') return;
@@ -976,6 +1260,7 @@
       case 'layer': if (inited) layer(m); break;
       case 'layerinfo': setCount(m.id, m.state === 'loading' ? '...' : m.state === 'empty' ? 'none' : String(m.count == null ? '' : m.count)); if (m.note && panelRows[m.id]) panelRows[m.id].row.title = m.note; break;
       case 'toast': toast(m.text, m.ok); break;
+      case 'bstate': bldState(m); break;
       case 'on': (m.on || []).forEach(function (k) { on[k] = true; }); refresh(); break;
     }
   }
@@ -995,6 +1280,7 @@
     // a second init (another continent): clear what the first built
     Object.keys(meshes).forEach(function (k) { var mm = meshes[k]; if (mm.mesh) { scene.remove(mm.mesh); mm.mesh.geometry.dispose(); } clearWater(mm); if (mm.mat) mm.mat.dispose(); }); meshes = {}; waterActive = 0; waterLoaded = 0; waterFailed = 0;
     Object.keys(tex).forEach(function (k) { var e = tex[k]; if (e.tex && !e.shared) try { e.tex.dispose(); } catch (x) { } }); tex = {}; canvasTexCount = 0;
+    bldInit(m.buildings);
     Object.keys(pointLayers).forEach(function (k) { scene.remove(pointLayers[k].obj); pointLayers[k].obj.geometry.dispose(); }); pointLayers = {};
     Object.keys(lineLayers).forEach(function (k) { scene.remove(lineLayers[k].group); }); lineLayers = {};
     Object.keys(ringLayers).forEach(function (k) { ringLayers[k].zones.forEach(function (z) { scene.remove(z.obj); z.obj.geometry.dispose(); }); }); ringLayers = {};
@@ -1073,6 +1359,11 @@
     step: function (n, dt) { var t0 = performance.now(); for (var i = 0; i < (n || 1); i++) { dirty = true; lastSel2 = 0; tick(t0 + i * (dt || 16)); } return frameN; },
     texKeys: function () { return Object.keys(tex).map(function (k) { return k + ':' + tex[k].state; }).join(' '); },
     near: function () { var o = []; Object.keys(meshes).forEach(function (k) { var m = meshes[k]; var d = Math.hypot((m.t.c + .5) * TY - camera.position.x, (m.t.r + .5) * TY - camera.position.z); o.push([d | 0, m.t.c, m.t.r, m.stride, m.texLvl, m.wantLvl, m.wantKey]); }); o.sort(function (a, b) { return a[0] - b[0]; }); return JSON.stringify(o.slice(0, 6)); },
+    buildings: function () { return JSON.stringify(bldInfo()); },
+    bridges: function (lat, lng, max) { var p = ll2xz(lat, lng); return JSON.stringify(bldBridges(p[0], p[1], max)); },
+    buildingClick: function (id) { var b = BLD.ui && BLD.ui.card.querySelector('[data-a="' + id + '"]'); if (b) b.click(); return !!b; },
+    buildingCap: function (mb) { BLD.capOverride = mb; dirty = true; return 1; },
+    buildingMode: function (mode) { bSwitch(mode); return BLD.mode; },
     xz2ll: xz2ll, ll2xz: ll2xz, groundXZ: function (x, z) { return groundY(x, z); }, distToZ: distToZ, zToDist: zToDist
   };
   send({ t: 'hello', p: '3d' });

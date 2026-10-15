@@ -115,6 +115,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "worldMap3d")] public bool WorldMap3d { get; set; }                       // the world map opens in the 3D terrain view (the last mode used)
         [DataMember(Name = "worldMap3dDetail")] public string WorldMap3dDetail { get; set; }          // 3D detail: low | medium (null = the default) | high
         [DataMember(Name = "worldMapExag")] public double WorldMapExag { get; set; }                  // 3D height exaggeration, 1 to 3 (0 = the default, 1.5)
+        [DataMember(Name = "worldMap3dBuildings")] public string WorldMap3dBuildings { get; set; }          // 3D buildings: off (null = the default) | bridges | all
         [DataMember(Name = "savedRoutes")] public List<ElansAddonHub.Services.Atlas.SavedRoute> SavedRoutes { get; set; }              // named loops per zone (at most SavedRoute.MaxSaved)
         [DataMember(Name = "routeForGuide")] public Dictionary<string, string> RouteForGuide { get; set; }                         // "<profession>:<zone>" -> id of the saved route the in-game guide uses (absent = the automatic loop)
         [DataMember(Name = "followedGuides")] public List<ElansAddonHub.Services.Professions.FollowedGuide> FollowedGuides { get; set; }   // the guides written into SharedData.lua ("Follow in game")

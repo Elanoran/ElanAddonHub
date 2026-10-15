@@ -24,9 +24,11 @@ namespace ElansAddonHub.Services.WorldMap
     //                 view3 {lat, lng, dist, az, tilt}    (3D page) the camera moved: its target on the plane, distance in yards, bearing and tilt in degrees
     //                 stats {fps, mem, tris, tiles, tex}  (3D page) a frame-rate / memory sample every few seconds (diagnostics)
     //                 prefs {detail, exag}                (3D page) the detail (low|medium|high) and height exaggeration (1-3) the person chose
+    //                 buildings {mode}                    (3D page) the Buildings switch: off | bridges | all
+    //                 bbuild {mode} | bpause | bresume | bcancel   (3D page) the card and the progress line: Build now, Pause, Resume, Cancel
     //   app -> page   init | goto | layer | layerinfo | toast | on     (built by WorldMapView, see worldmap.js for the shapes)
     // ============================================================================================================================
-    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs }
+    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel }
 
     public sealed class WorldMapMessage
     {
@@ -40,6 +42,7 @@ namespace ElansAddonHub.Services.WorldMap
         public string Why = "", Detail = "";
         public double Dist, Az, Tilt, Fps, MemMb, Exag;
         public long Tris;
+        public int Buildings;                                  // stats: building instances drawn
         public int Textures;
     }
 
@@ -124,7 +127,7 @@ namespace ElansAddonHub.Services.WorldMap
                 case "stats":
                     {
                         if (!(Num(d, "fps", out m.Fps) && Num(d, "mem", out m.MemMb)) || m.Fps < 0 || m.Fps > 2000 || m.MemMb < 0 || m.MemMb > 1000000) { refusal = "stats out of range"; return null; }
-                        m.Tris = (long)Math.Max(0, Math.Min(2000000000, d.Long("tris"))); m.Tiles = Math.Max(0, Math.Min(100000, d.Int("tiles"))); m.Textures = Math.Max(0, Math.Min(100000, d.Int("tex")));
+                        m.Tris = (long)Math.Max(0, Math.Min(2000000000, d.Long("tris"))); m.Buildings = (int)Math.Max(0, Math.Min(10000000, d.Long("bld"))); m.Tiles = Math.Max(0, Math.Min(100000, d.Int("tiles"))); m.Textures = Math.Max(0, Math.Min(100000, d.Int("tex")));
                         m.Type = WorldMapMessageType.Stats; return m;
                     }
                 case "prefs":
@@ -133,6 +136,16 @@ namespace ElansAddonHub.Services.WorldMap
                         if (!(det == "low" || det == "medium" || det == "high") || !Num(d, "exag", out m.Exag) || m.Exag < 1 || m.Exag > 3) { refusal = "prefs: detail low, medium or high and exag 1 to 3"; return null; }
                         m.Type = WorldMapMessageType.Prefs; m.Detail = det; return m;
                     }
+                case "buildings":
+                case "bbuild":
+                    {
+                        var md = d.Str("mode");
+                        if (!(md == "off" || md == "bridges" || md == "all") || (t == "bbuild" && md == "off")) { refusal = t + ": mode bridges or all" + (t == "buildings" ? " (or off)" : ""); return null; }
+                        m.Type = t == "buildings" ? WorldMapMessageType.Buildings : WorldMapMessageType.BBuild; m.Detail = md; return m;
+                    }
+                case "bpause": m.Type = WorldMapMessageType.BPause; return m;
+                case "bresume": m.Type = WorldMapMessageType.BResume; return m;
+                case "bcancel": m.Type = WorldMapMessageType.BCancel; return m;
                 default: refusal = "unknown action"; return null;
             }
         }
