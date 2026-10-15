@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.56.1
+- **A smoother splash screen:** the name fades up, then the diamond under it appears as a small dot and grows, then the thin lines stretch out to both sides, and the status line simply fades in. The splash stays up a moment longer (at least 1.6 s instead of 1.25 s) so the whole sequence plays.
+
 ## 2.56.0
 - **Atlas: Classes and Races.** Two new pages in the Character group of the Atlas menu (and `class:3` / `race:2` links; Ctrl+K finds them by name, a race also by its lore name). A **class page** shows the roles, the resource, the armor and weapon skills it can use, the races that can be it, a link to its talents, and **Spells by level**: every spell of the class grouped under the level it is learned at (1, 4, 6, 10 ...), with its rank, cost and cooldown from your game files, tabs for Beast Mastery / Marksmanship / Survival (and the pet's Beast Training), "Only new spells" to hide the higher ranks, a level range, a search and a switch for talent spells. A **race page** shows the side, languages, mount skill, racial abilities (with their tooltips) and the classes that race can be. Everything is read from your own game files; learning costs and a race's starting zone are not in them and the pages say so. Characters page: Ctrl+click a character's race or class to open its Atlas page.
 - **Atlas: spell pages say who learns them** ("Learned by Hunter, level 12 (rank 2)", "Racial ability of Orc", both linking to the page) and show the cost and the cooldown; the game-style spell tooltips now have the cost line and the cooldown on the cast line.

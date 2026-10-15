@@ -59,8 +59,10 @@ namespace ElansAddonHub
         readonly double[] spLife = new double[20], spStart = new double[20], spX = new double[20], spDrift = new double[20],
                           spRise = new double[20], spSize = new double[20], spWob = new double[20];
         readonly TextBlock title, status;
-        readonly Rectangle barFillL, barFillR;
+        readonly Rectangle barFillL, barFillR, lineL, lineR;
         readonly Canvas titleBox;
+        readonly TranslateTransform titleShift = new TranslateTransform();
+        readonly ScaleTransform diamondScale = new ScaleTransform(0, 0, 240, 47);
 
         // ---------------------------------------------------------------- status line (real startup steps)
         string statusText = "";
@@ -216,21 +218,24 @@ namespace ElansAddonHub
             Children.Add(vignette);
 
             // --- the name and the status line
-            titleBox = new Canvas { Width = W, Height = 120, Opacity = 0 };
+            titleBox = new Canvas { Width = W, Height = 120 };
             title = new TextBlock
             {
                 Text = titleText, Width = W, TextAlignment = TextAlignment.Center, FontSize = 35, FontWeight = FontWeights.SemiBold,
                 FontFamily = new FontFamily("Constantia, Palatino Linotype, Georgia, Segoe UI"),
                 Foreground = Lin(0, 0, 0, 1, ("#FFF7E6", 0), ("#F6DCA8", 0.6), ("#E4B26A", 1)),
+                Opacity = 0, RenderTransform = titleShift,
             };
             TextOptions.SetTextFormattingMode(title, TextFormattingMode.Ideal);
             titleBox.Children.Add(At(title, 0, 0));
-            // little ornament under the name: a hairline with a diamond
-            titleBox.Children.Add(new Path { Data = G("M164,47 L228,47 M252,47 L316,47"), Stroke = Br("#2EE4B26A"), StrokeThickness = 1 });
+            // little ornament under the name: a diamond that starts as a dot, then hairlines that stretch out to both sides
+            lineL = At(new Rectangle { Width = 0, Height = 1, Fill = Br("#2EE4B26A") }, 228, 46.5);
+            lineR = At(new Rectangle { Width = 0, Height = 1, Fill = Br("#2EE4B26A") }, 252, 46.5);
+            titleBox.Children.Add(lineL); titleBox.Children.Add(lineR);
             barFillL = At(new Rectangle { Width = 0, Height = 1, Fill = Lin(1, 0, 0, 0, ("#E4B26A", 0), ("#00E4B26A", 1)) }, 228, 46.5);
             barFillR = At(new Rectangle { Width = 0, Height = 1, Fill = Lin(0, 0, 1, 0, ("#E4B26A", 0), ("#00E4B26A", 1)) }, 252, 46.5);
             titleBox.Children.Add(barFillL); titleBox.Children.Add(barFillR);
-            titleBox.Children.Add(new Path { Data = G("M240,43 L244,47 L240,51 L236,47 Z"), Fill = Br("#E4B26A") });
+            titleBox.Children.Add(new Path { Data = G("M240,43 L244,47 L240,51 L236,47 Z"), Fill = Br("#E4B26A"), RenderTransform = diamondScale });
             status = new TextBlock { Width = W, TextAlignment = TextAlignment.Center, FontSize = 12, FontFamily = new FontFamily("Segoe UI"), Foreground = Br("#9AA3AD"), Opacity = 0 };
             titleBox.Children.Add(At(status, 0, 56));
             Children.Add(At(titleBox, 0, 214));
@@ -306,12 +311,17 @@ namespace ElansAddonHub
             }
 
             // title + status
-            var tt = Smooth((t - 0.7) / 0.6);
-            titleBox.Opacity = tt; SetTop(titleBox, 214 + (1 - tt) * 10);
+            // the name fades up; then the diamond appears as a dot and grows; then the hairlines stretch out; the status line only fades in
+            var tt = Smooth((t - 0.6) / 0.45);
+            title.Opacity = tt; titleShift.Y = (1 - tt) * 10;
+            var dot = Smooth((t - 0.95) / 0.22);
+            diamondScale.ScaleX = diamondScale.ScaleY = dot <= 0 ? 0 : dot < 1 ? 0.25 + 0.75 * OutBack(dot) : 1;
+            var lines = Smooth((t - 1.08) / 0.35) * 64;
+            lineL.Width = lines; SetLeft(lineL, 228 - lines); lineR.Width = lines;
             title.Foreground = title.Foreground; // (frozen brush: nothing to refresh)
             status.Text = statusText;
-            status.Opacity = Smooth((t - statusAt) / 0.2) * Smooth((t - 0.45) / 0.3);
-            var pr = ProgressNow(t) * 64;   // the hairlines beside the diamond fill outwards with the real startup steps
+            status.Opacity = Smooth((t - statusAt) / 0.2) * Smooth((t - 1.25) / 0.3);
+            var pr = Math.Min(ProgressNow(t) * 64, lines);   // the hairlines beside the diamond fill outwards with the real startup steps (never ahead of the stretching line)
             barFillL.Width = pr; SetLeft(barFillL, 228 - pr); barFillR.Width = pr;
         }
     }

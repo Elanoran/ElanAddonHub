@@ -18,7 +18,7 @@ namespace ElansAddonHub
     // It stays at least MinSeconds (so the fire gets lit) and at most MaxSeconds; a click or Esc skips it; then it fades out.
     public static class Splash
     {
-        public const double MinSeconds = 1.25, MaxSeconds = 2.5, StepSeconds = 0.4, FadeSeconds = 0.3;
+        public const double MinSeconds = 1.6,   /* long enough for the name, the dot, the lines and the status to appear */ MaxSeconds = 2.5, StepSeconds = 0.4, FadeSeconds = 0.3;
         static readonly object gate = new object();
         static readonly List<string> queue = new List<string>();
         static bool ready;
