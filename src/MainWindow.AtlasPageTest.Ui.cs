@@ -396,7 +396,7 @@ namespace ElansAddonHub
                     AtlasView.MapsForTest.Count == 0 && AtlasWalk(AtlasView.RailForTest).OfType<Border>().Any(b => b.Tag as string == "rail-map-open") && ClickRailMap() && AtlasView.TabNowForTest == "map" && AtlasView.MapsForTest.Count == 1 && !AtlasView.RailMapHostVisibleForTest);
                 Snapshot(Path.Combine(dir, "atlas-page-item-wide-map.png"));
                 await SwitchTab("overview"); await Task.Delay(200);
-                await AtlasView.Open("zone:11"); UpdateLayout(); await MapReady();
+                await AtlasView.Open("zone:11"); UpdateLayout(); await MapReady(); await Task.Delay(600);
                 Snapshot(Path.Combine(dir, "atlas-page-zone-wide.png"));
                 await AtlasView.Open("item:100"); UpdateLayout();
                 Width = 1100; await Task.Delay(300); UpdateLayout();
