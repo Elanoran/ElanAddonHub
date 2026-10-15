@@ -28,7 +28,12 @@ local reloading = false
 local session = tostring(time()) .. "-" .. tostring(math.random(100000, 999999))
 if hooksecurefunc then pcall(hooksecurefunc, "ReloadUI", function() reloading = true end) end
 
-local function snapshot()
+-- The highest level seen while playing this session (PLAYER_LEVEL_UP carries the new level; UnitLevel can lag behind it).
+-- At logout the game already hands out stale or emptied values (the old level, 0 money, 0 xp), so the logout snapshot never
+-- lowers the level and the published money / xp keep the last values seen while playing.
+local sessionLevel
+
+local function snapshot(atLogout)
   local db = ElansHubDB
   db.chars = db.chars or {}
   local name, realm = clean(UnitName("player")), clean(GetRealmName())
@@ -40,14 +45,21 @@ local function snapshot()
   c.realm = realm
   c.class = clean(className)
   c.classFile = clean(classFile)
-  c.level = clean(UnitLevel("player"))
+  local lvl = clean(UnitLevel("player"))
+  if type(lvl) == "number" and lvl > 0 and not atLogout then sessionLevel = math.max(sessionLevel or 0, lvl) end
+  if atLogout then
+    c.level = math.max(tonumber(c.level) or 0, sessionLevel or 0, (not sessionLevel and tonumber(lvl)) or 0)
+    if c.level == 0 then c.level = lvl end
+  else
+    c.level = (sessionLevel and type(lvl) == "number" and math.max(lvl, sessionLevel)) or lvl
+  end
   local raceName, raceFile = UnitRace("player")
   c.race = clean(raceName)
   c.raceFile = clean(raceFile)
   c.sex = clean(UnitSex("player")) -- 2 male, 3 female
   c.faction = clean((UnitFactionGroup("player")))
-  c.zone = clean(GetRealZoneText())
-  c.subzone = clean(GetSubZoneText())
+  local zone, sub = clean(GetRealZoneText()), clean(GetSubZoneText())
+  if not (atLogout and (zone == nil or zone == "")) then c.zone, c.subzone = zone, sub end
   local inInstance, instanceType = IsInInstance()
   c.instance = clean(inInstance) and clean(instanceType) or nil
   c.guild = clean((GetGuildInfo("player")))
@@ -59,7 +71,7 @@ local function snapshot()
   db.online = not loggingOut
   db.session = session
   db.version = version()
-  if EHUB.PublishCore then pcall(EHUB.PublishCore, c) end -- new data layer (Data.lua); the legacy keys above stay for older Outposts
+  if EHUB.PublishCore then pcall(EHUB.PublishCore, c, atLogout) end -- new data layer (Data.lua); the legacy keys above stay for older Outposts
 end
 
 -- ============================================================ status strip
@@ -350,10 +362,12 @@ f:SetScript("OnEvent", function(_, event, arg1)
   end
   if LIGHT[event] then return end
   if event == "PLAYER_LEVEL_UP" then
-    C_Timer.After(1, snapshot) -- the new level arrives a moment later
+    local new = tonumber(arg1)
+    if new and new > 0 then sessionLevel = math.max(sessionLevel or 0, new) end
+    C_Timer.After(1, function() pcall(snapshot) end) -- the new level arrives a moment later
   elseif event == "PLAYER_LOGOUT" then
     loggingOut = not reloading
-    pcall(snapshot)
+    pcall(snapshot, loggingOut)
   else
     pcall(snapshot)
   end

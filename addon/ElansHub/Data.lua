@@ -204,7 +204,8 @@ end
 ElansHub = H
 
 -- The Hub's own module: general character data every class has. Called by snapshot() (out of combat, event driven).
-function EHUB.PublishCore(c)
+local lastCore -- the last core published while playing (the logout snapshot reuses its money / xp: at logout the game reports 0)
+function EHUB.PublishCore(c, atLogout)
   if type(c) ~= "table" then return end
   local rd = EHUB.Rd or function() return nil end
   local function n(v) if type(v) == "number" and v == v then return v end return nil end
@@ -214,6 +215,12 @@ function EHUB.PublishCore(c)
     xp = n(rd(UnitXP, "player")), xpMax = n(rd(UnitXPMax, "player")), rested = n(rd(GetXPExhaustion)),
     money = n(rd(GetMoney)), guild = c.guild, zone = c.zone, subzone = c.subzone, updated = c.updated,
   }
+  local same = lastCore and lastCore.name == data.name and lastCore.realm == data.realm
+  if atLogout and same and not ((data.xpMax or 0) > 0) then
+    data.xp, data.xpMax, data.rested = lastCore.xp, lastCore.xpMax, lastCore.rested
+    if (data.money or 0) == 0 then data.money = lastCore.money end
+  end
+  if not atLogout then lastCore = data end
   H.Publish("core", 1, data, { by = EHUB.name or "ElansHub", ver = EHUB.Version and EHUB.Version() or nil })
 end
 

@@ -1010,6 +1010,25 @@ do
   _G.ElansHubCopy:Hide()
 end
 
+-- level up, then logout: the game hands the logout snapshot the OLD level and emptied xp / money; the saved data must keep the new level
+-- (levels above the 60 the earlier steps saw, since the session keeps its highest level)
+do
+  local oldLevel = UnitLevel
+  UnitLevel = function() return 61 end
+  for _, f in ipairs(frames) do Fire(f, "OnEvent", "ZONE_CHANGED_NEW_AREA") end
+  local n0 = #TIMERS
+  for _, f in ipairs(frames) do Fire(f, "OnEvent", "PLAYER_LEVEL_UP", 62) end
+  for i = n0 + 1, #TIMERS do pcall(TIMERS[i]) end
+  ok("level up: the new level from the event (62) is saved although UnitLevel still says 61", ElansHubDB.chars["Realm-Elan"].level == 62)
+  local xpBefore = ElansHubData.chars["Realm-Elan"].mods.core.data.xpMax
+  ST.xpmax = 0
+  for _, f in ipairs(frames) do Fire(f, "OnEvent", "PLAYER_LOGOUT") end
+  local core = ElansHubData.chars["Realm-Elan"].mods.core.data
+  ok("logout: a stale level (61) and emptied xp never overwrite what was seen while playing", ElansHubDB.chars["Realm-Elan"].level == 62 and core.level == 62 and core.xpMax == xpBefore and (xpBefore or 0) > 0)
+  UnitLevel = oldLevel
+  ST.xpmax = 4500
+end
+
 -- no combat log, no secure frames, no blocked
 local cl = false
 for _, e in ipairs(EVENTS) do if e:find("COMBAT_LOG") then cl = true end end
@@ -1028,11 +1047,11 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.15.0", "## Version: 1.15.0" in toc and "1.15.0" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc version is 1.15.1", "## Version: 1.15.1" in toc and "1.15.1" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
 check("changelog says a one-time WoW restart is needed", "ONE-TIME" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.12.0")[1])
 check("Data.lua is in the toc right after ElansHub.lua and ElansHubData is a saved variable", files[:2] == ["ElansHub.lua", "Data.lua"] and "ElansHubData" in toc)
 check("Collect.lua is in the toc right after Data.lua", files[:3] == ["ElansHub.lua", "Data.lua", "Collect.lua"])
-check("the snapshot also published core v1 into ElansHubData", L.eval("ElansHubData ~= nil and ElansHubData.chars['Realm-Elan'] ~= nil and ElansHubData.chars['Realm-Elan'].mods.core.v == 1 and ElansHubData.chars['Realm-Elan'].mods.core.data.level == 60"))
+check("the snapshot also published core v1 into ElansHubData", L.eval("ElansHubData ~= nil and ElansHubData.chars['Realm-Elan'] ~= nil and ElansHubData.chars['Realm-Elan'].mods.core.v == 1 and ElansHubData.chars['Realm-Elan'].mods.core.data.level == 62"))   # 62: the level-up / logout check above
 # an Outpost-written file replaces the table cleanly and a second load keeps it
 L.execute("ElansHubShared = nil")
 loader('ElansHubShared = { flights = { legs = { ["Horde|11>22"] = { t = 61.5, n = 3 } }, names = { ["11"] = "A" }, at = 1 } }', "SharedData.lua(generated)")
