@@ -45,7 +45,7 @@ namespace ElansAddonHub.Services.Atlas
             try { return (Context.Characters?.Invoke() ?? new List<InvChar>()).Where(c => c != null && !c.Hidden && !string.IsNullOrEmpty(c.Key)).OrderByDescending(c => c.Level).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList(); }
             catch (Exception) { return new List<InvChar>(); }
         }
-        static readonly Regex IdText = new Regex(@"^\s*(item|npc|obj|object|quest|zone|instance|spell|skill|faction)\s*[:=# ]\s*(\d{1,9})\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        static readonly Regex IdText = new Regex(@"^\s*(item|npc|obj|object|quest|zone|instance|spell|skill|faction|class|race)\s*[:=# ]\s*(\d{1,9})\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         // "item:123", also "Item 123" / "npc=5" -> the canonical id; null when the text is not an id
         public static string NormalizeId(string text)
@@ -183,6 +183,8 @@ namespace ElansAddonHub.Services.Atlas
             Add("spell", SearchSpells(q));
             Add("skill", SearchSkills(q));
             Add("faction", SearchFactions(q));
+            Add("class", SearchClasses(q));
+            Add("race", SearchRaces(q));
             // the group with the best match first (an exact name beats a prefix beats a word...), the fixed order of kinds breaks ties
             res.Groups = groups.OrderBy(g => g.Hits[0].Rank).ThenBy(g => Array.IndexOf(AtlasKinds.Order, g.Kind)).ToList();
             // the hosted categories (Talents, Professions) by name: their pages are the first group, before any entity of the same name
@@ -465,6 +467,8 @@ namespace ElansAddonHub.Services.Atlas
                         var s = SpellData.Skill(n);
                         return s == null ? null : new AtlasHit { Id = id, Kind = kind, Name = s.Name, IconId = s.IconId, Detail = s.IsProfession ? "profession" : SkillCategory(s.Category), Label = AtlasLabel.Forever };
                     }
+                case "class": return DescribeClass(n);
+                case "race": return DescribeRace(n);
                 case "faction":
                     {
                         var f = FactionData.Faction(n);
@@ -510,6 +514,8 @@ namespace ElansAddonHub.Services.Atlas
                     case "spell": m = BuildSpell(n); break;
                     case "skill": m = BuildSkill(n); break;
                     case "faction": m = BuildFaction(n); break;
+                    case "class": m = BuildClass(n); break;
+                    case "race": m = BuildRace(n); break;
                     default: m = new AtlasPageModel { NotFound = true, Title = id, Message = "Atlas cannot open " + kind + " links yet." }; break;
                 }
                 m.Id = id; m.Kind = kind;

@@ -100,6 +100,7 @@ namespace ElansAddonHub
             TalentsView = new TalentsPage(); ProfessionsView = new ProfessionsPage();           // hosted by the Atlas (MainWindow.Atlas.cs), built once so what they show survives navigating away
             TalentsView.Init(() => settings.WowRoot);                                // Atlas layer G: talent trees from the user's own game files (follows the item data's switch)
             if (ElansAddonHub.Services.Db2.TalentData.AutoStart) _ = Task.Delay(4000).ContinueWith(t => ElansAddonHub.Services.Db2.TalentData.Start());
+            ElansAddonHub.Services.Db2.ClassData.Hook();                              // Atlas: classes, races, spell levels / costs / cooldowns from the user's own game files (follows the item data's switch)
             BrowserView.Init(settings);
             BrowserView.ShortcutTab += t => ShowTab(t);
             ProfessionsView.Init(() => settings.WowRoot, () => Session?.AtlasData);
@@ -412,6 +413,7 @@ namespace ElansAddonHub
             if (Begin("atlaspage")) { result += "\r\n" + await AtlasPageTest(dir); End(); }
             if (Begin("atlasbrowse")) { result += "\r\n" + await AtlasBrowseTest(dir); End(); }
             if (Begin("atlashosts")) { result += "\r\n" + await AtlasHostsTest(dir); End(); }
+            if (Begin("atlasclasses")) { result += "\r\n" + await AtlasClassesTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
             result += "\r\n" + string.Join("\r\n", skipped);
             result += "\r\n" + string.Join("\r\n", timings) + $"\r\ntotal: {Sec(total.Elapsed.TotalSeconds)} s";

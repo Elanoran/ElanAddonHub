@@ -78,7 +78,7 @@ namespace ElansAddonHub
             if (Array.IndexOf(e.Args, "--selftest") >= 0) ElansAddonHub.Services.Net.AllowDevSources = true;   // local zips and the fake update server stand in for GitHub (the update-source rules have their own checks)
             if (Array.IndexOf(e.Args, "--selftest") >= 0) Sounds.Muted = true;          // and nothing a self-test plays may reach the speakers
             if (Array.IndexOf(e.Args, "--selftest") >= 0) ElansAddonHub.Services.SeenData.AutoStart = false;
-            if (Array.IndexOf(e.Args, "--selftest") >= 0) { ElansAddonHub.Services.Db2.ItemData.AutoStart = false; ElansAddonHub.Services.Maps.MapData.AutoStart = false; ElansAddonHub.Services.Db2.SpellData.AutoStart = false; ElansAddonHub.Services.Db2.TalentData.AutoStart = false; }   // a self-test never reads the real game files on its own
+            if (Array.IndexOf(e.Args, "--selftest") >= 0) { ElansAddonHub.Services.Db2.ItemData.AutoStart = false; ElansAddonHub.Services.Maps.MapData.AutoStart = false; ElansAddonHub.Services.Db2.SpellData.AutoStart = false; ElansAddonHub.Services.Db2.TalentData.AutoStart = false; ElansAddonHub.Services.Db2.ClassData.AutoStart = false; }   // a self-test never reads the real game files on its own
             base.OnStartup(e);
             // Windows animations off: every Motion.* duration becomes instant (DESIGN.md, Motion)
             if (!SystemParameters.ClientAreaAnimation)

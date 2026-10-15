@@ -118,12 +118,15 @@ namespace ElansAddonHub.Services.Atlas
             AddLayer(m, "client");
             m.Subtitle = string.Join(" · ", new[] { "Spell " + id, sp.Rank ?? "" }.Where(s => s.Length > 0));
             if (!string.IsNullOrEmpty(sp.Rank)) m.Facts.Add(new AtlasFact("Rank", sp.Rank, F));
+            if (!string.IsNullOrEmpty(sp.CostText)) m.Facts.Add(new AtlasFact("Cost", sp.CostText, F));
             m.Facts.Add(new AtlasFact("Cast time", Seconds(sp.CastMs), F));
+            if (sp.CooldownMs > 0) m.Facts.Add(new AtlasFact("Cooldown", ClassSnapshot.CooldownText(sp.CooldownMs).Replace(" cooldown", ""), F));
             if (sp.RangeMax > 0) m.Facts.Add(new AtlasFact("Range", sp.RangeMax.ToString("0.##", CultureInfo.InvariantCulture) + " yards", F));
             if (sp.DurationMs > 0) m.Facts.Add(new AtlasFact("Duration", Seconds(sp.DurationMs), F));
             else if (sp.DurationMs < 0) m.Facts.Add(new AtlasFact("Duration", "Until cancelled", F));
             if (!string.IsNullOrWhiteSpace(sp.Description)) m.Texts.Add(new AtlasText("Description", sp.Description.Trim(), F));
             if (!string.IsNullOrWhiteSpace(sp.AuraDescription)) m.Texts.Add(new AtlasText("While it lasts", sp.AuraDescription.Trim(), F));
+            AddSpellOrigins(m, id);
             var talentLink = AtlasHosts.TalentTreeLink(id, out var talentClass);
             if (talentLink != null) m.Facts.Add(new AtlasFact("Talent of", talentClass, F, talentLink));
             var rec = SpellData.Spells?.RecipeOf(id);

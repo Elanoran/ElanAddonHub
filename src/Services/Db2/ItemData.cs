@@ -157,6 +157,7 @@ namespace ElansAddonHub.Services.Db2
             Interlocked.Increment(ref StartCountForTest);
             if (!SafeEnabled()) { Disable(); return; }
             SpellData.Start();                       // spells, skills, factions and item details are read alongside (same switch, same WoW folder)
+            ClassData.Start();                       // classes, races and spell levels / costs / cooldowns too (it starts itself after the start-up delay; this catches a changed WoW folder)
             lock (gate)
             {
                 again = true;

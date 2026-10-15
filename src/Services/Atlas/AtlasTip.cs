@@ -85,9 +85,10 @@ namespace ElansAddonHub.Services.Atlas
                 case "spell":
                     {
                         var rank = Take("Rank"); p.Rank = rank;
-                        var range = Take("Range"); var cast = Take("Cast time"); var dur = Take("Duration");
-                        if (!string.IsNullOrEmpty(range)) Line("range", range.Replace(" yards", " yd range"));
-                        Line("cast", cast == "Instant" ? "Instant" : cast + " cast");
+                        var range = Take("Range"); var cast = Take("Cast time"); var dur = Take("Duration"); var cost = Take("Cost"); var cd = Take("Cooldown");
+                        if (!string.IsNullOrEmpty(cost)) Line("slot", cost, string.IsNullOrEmpty(range) ? null : range.Replace(" yards", " yd range"));       // "50 Mana      30 yd range", the game's own two-column line
+                        else if (!string.IsNullOrEmpty(range)) Line("range", range.Replace(" yards", " yd range"));
+                        Line("cast", cast == "Instant" ? "Instant" : cast + " cast", string.IsNullOrEmpty(cd) ? null : cd + " cooldown");
                         Line("spelldesc", Text(m, "Description"));
                         Line("spelldesc", Text(m, "While it lasts"));
                         if (!string.IsNullOrEmpty(dur)) Line("plain", "Duration: " + dur);
@@ -109,6 +110,20 @@ namespace ElansAddonHub.Services.Atlas
                         var lv = Take("Creature levels"); var type = Take("Type"); var pl = Take("Players");
                         if (!string.IsNullOrEmpty(lv)) Line("plain", "Level " + lv);
                         Line("plain", string.IsNullOrEmpty(pl) ? type : type + " (" + pl + " players)");
+                        break;
+                    }
+                case "class":
+                    {
+                        Line("plain", Take("Roles"));
+                        var res = Take("Resource");
+                        if (!string.IsNullOrEmpty(res)) Line("grey", res);
+                        break;
+                    }
+                case "race":
+                    {
+                        Line("plain", Take("Side"));
+                        var also = Take("Also called");
+                        if (!string.IsNullOrEmpty(also)) Line("grey", also);
                         break;
                     }
                 case "faction":

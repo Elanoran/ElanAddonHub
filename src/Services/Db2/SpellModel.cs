@@ -17,6 +17,8 @@ namespace ElansAddonHub.Services.Db2
         public static string Spell(int id) => "spell:" + id.ToString(CultureInfo.InvariantCulture);
         public static string Skill(int id) => "skill:" + id.ToString(CultureInfo.InvariantCulture);
         public static string Faction(int id) => "faction:" + id.ToString(CultureInfo.InvariantCulture);
+        public static string Class(int id) => "class:" + id.ToString(CultureInfo.InvariantCulture);
+        public static string Race(int id) => "race:" + id.ToString(CultureInfo.InvariantCulture);
 
         // "spell:6150" -> kind "spell", id 6150; false for anything else
         public static bool TryParse(string s, out string kind, out int id)
@@ -26,7 +28,7 @@ namespace ElansAddonHub.Services.Db2
             int c = s.IndexOf(':');
             if (c <= 0 || c == s.Length - 1) return false;
             kind = s.Substring(0, c);
-            if (kind != "item" && kind != "spell" && kind != "skill" && kind != "faction" && kind != "npc" && kind != "obj" && kind != "quest" && kind != "zone" && kind != "instance") { kind = null; return false; }
+            if (kind != "item" && kind != "spell" && kind != "skill" && kind != "faction" && kind != "npc" && kind != "obj" && kind != "quest" && kind != "zone" && kind != "instance" && kind != "class" && kind != "race") { kind = null; return false; }
             return int.TryParse(s.Substring(c + 1), NumberStyles.None, CultureInfo.InvariantCulture, out id) && id > 0;
         }
     }
@@ -64,6 +66,8 @@ namespace ElansAddonHub.Services.Db2
         public string Name, Rank, Description, AuraDescription;
         public int IconId, CastMs, DurationMs;
         public float RangeMax;
+        public string CostText;                // "50 Mana" / "4% of base mana" (the class layer's SpellPower), null = none or not read
+        public int CooldownMs;                 // the spell's own cooldown (the class layer's SpellCooldowns), 0 = none or not read
         public override string ToString() => Id + " " + Name + (string.IsNullOrEmpty(Rank) ? "" : " (" + Rank + ")");
     }
 
