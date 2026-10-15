@@ -209,7 +209,7 @@ namespace ElansAddonHub.Services.Db2
                 var e = new EffectInfo();
                 e.Aura = r.I16(); int diff = r.I16(); e.Index = r.I32(); e.Effect = r.I32(); r.F32(); r.I32(); e.PeriodMs = r.I32(); r.F32(); r.F32(); e.Chain = r.I32();
                 e.ItemType = r.I32(); r.I32(); r.F32(); r.F32(); r.F32(); e.Trigger = r.I32(); r.F32(); r.F32(); e.Coef = r.F32(); r.F32(); r.F32(); r.F32(); e.Points = r.F32();
-                r.I32(); r.I32(); e.Misc = r.I32(); r.I32(); int radius = r.I32(); int radius2 = r.I32(); if (radius <= 0) radius = radius2; r.Skip(16);   // the second radius slot when the first is empty r.I16(); r.I16();
+                r.I32(); r.I32(); e.Misc = r.I32(); r.I32(); int radius = r.I32(); int radius2 = r.I32(); if (radius <= 0) radius = radius2; r.Skip(16); r.I16(); r.I16();   // radius: the second slot when the first is empty
                 int spell = r.I32();
                 if (!r.AtEnd || spell <= 0 || e.Index < 0 || e.Index > 31) return false;
                 d.Effects[id] = new EffectRow { SpellId = spell, Difficulty = diff, RadiusIndex = radius, Effect = e };
