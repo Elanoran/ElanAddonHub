@@ -453,7 +453,7 @@
   var viewTimer = 0;
   function sendView() {
     clearTimeout(viewTimer);
-    viewTimer = setTimeout(function () { var ll = xz2ll(cam.tx, cam.tz); send({ t: 'view3', lat: clamp(ll[0], -255.9, 0), lng: clamp(ll[1], 0, 255.9), dist: cam.dist, az: ((cam.az % 360) + 360) % 360, tilt: cam.tilt }); }, 500);
+    viewTimer = setTimeout(function () { var ll = xz2ll(cam.tx, cam.tz); send({ t: 'view3', lat: clamp(ll[0], -255.9, 0), lng: clamp(ll[1], 0, 255.9), dist: cam.dist, az: ((cam.az % 360) + 360) % 360, tilt: cam.tilt, s: vseq }); }, 500);
   }
 
   // ---------------------------------------------------------------- picking the ground
@@ -1251,8 +1251,11 @@
   }
 
   // ---------------------------------------------------------------- the messages from the app
+  // vseq: the last place the app sent the camera to; every view3 report names it (see worldmap.js)
+  var vseq = -1;
   function handle(m) {
     if (!m || typeof m.t !== 'string') return;
+    if ((m.t === 'init' || m.t === 'goto' || m.t === 'fit') && typeof m.s === 'number') vseq = m.s;
     switch (m.t) {
       case 'init': init(m); break;
       case 'goto': if (inited) { var d = m.dist ? m.dist : zToDist(m.z == null ? 5 : m.z); setView(m.lat, m.lng, d, null, null, false); setPin(m); } break;
