@@ -36,6 +36,13 @@ namespace ElansAddonHub
                 UpSp(7340, "Food", "Restores health.", 0, Eff(64, 0, 0, 0, 7341)), UpSp(7341, "Well Fed", "", 1800000, Eff(6, 0, 99, 30, 0, 0)),
                 UpSp(7350, "Food", "Restores health.", 0, Eff(64, 0, 0, 0, 7351)), UpSp(7351, "Well Fed", "", 900000, Eff(6, 1, 29, 25, 0, 0)),
                 UpSp(7401, "Spiced Wolf Ribs", "", 0, new EffectInfo { Index = 0, Effect = EffectInfo.CreateItem, ItemType = 301 }),
+                // consumables: elixirs / flask / scrolls / potion buffs are Use spells with a stat aura (6 = apply aura, 29 = stat, Misc 1 agility, 0 strength, 2 stamina); restores say so in their text
+                UpSp(7801, "Elixir", "", 3600000, Eff(6, 1, 29, 12)), UpSp(7802, "Elixir", "", 3600000, Eff(6, 0, 29, 10)), UpSp(7803, "Elixir", "", 3600000, Eff(6, 1, 29, 25)), UpSp(7804, "Flask", "", 7200000, Eff(6, 2, 29, 50)),
+                UpSp(7811, "Healing", "Restores 700 to 900 health."), UpSp(7812, "Healing", "Restores 300 to 400 health."), UpSp(7813, "Mana", "Restores 400 to 600 mana."), UpSp(7814, "Swiftness", "", 900000, Eff(6, 1, 29, 8)),
+                UpSp(7821, "Scroll", "", 1800000, Eff(6, 1, 29, 5)), UpSp(7822, "Scroll", "", 1800000, Eff(6, 0, 29, 6)),
+                UpSp(7831, "Bandage", "Heals 114 damage over 6 sec."), UpSp(7832, "Bandage", "Heals 640 damage over 8 sec."), UpSp(7833, "Bandage", "Heals 301 damage over 7 sec."), UpSp(7834, "Bandage", "Heals 1104 damage over 8 sec."),
+                UpSp(7701, "Sharpen", "", 0, Eff(54, 1101)), UpSp(7702, "Poison", "", 0, Eff(54, 1102)),
+                UpSp(7601, "Silk Bandage", "", 0, new EffectInfo { Index = 0, Effect = EffectInfo.CreateItem, ItemType = 361 }),
             };
             return l;
         }
@@ -45,6 +52,7 @@ namespace ElansAddonHub
             new SkillInfo { Id = 165, Name = "Leatherworking", Category = SkillInfo.CatProfession },
             new SkillInfo { Id = 333, Name = "Enchanting", Category = SkillInfo.CatProfession },
             new SkillInfo { Id = 185, Name = "Cooking", Category = SkillInfo.CatProfession },
+            new SkillInfo { Id = 129, Name = "First Aid", Category = SkillInfo.CatProfession },
         };
 
         static List<SkillAbility> UpAbilityList() => new List<SkillAbility>
@@ -56,12 +64,13 @@ namespace ElansAddonHub
             new SkillAbility { Id = 8, Skill = 333, Spell = 7007, MinRank = 160, Acquire = 0 },
             new SkillAbility { Id = 9, Skill = 165, Spell = 7201, MinRank = 20, Acquire = 0 },
             new SkillAbility { Id = 10, Skill = 185, Spell = 7401, MinRank = 25, Acquire = 2 },
+            new SkillAbility { Id = 11, Skill = 129, Spell = 7601, MinRank = 150, Acquire = 0 },
         };
 
         static Dictionary<int, int[]> UpReagents() => new Dictionary<int, int[]>
         {
             [7001] = new[] { 190, 2 }, [7002] = new[] { 190, 2 }, [7003] = new[] { 190, 2 }, [7004] = new[] { 190, 3 }, [7005] = new[] { 190, 2 }, [7006] = new[] { 190, 1 }, [7007] = new[] { 190, 2 },
-            [7201] = new[] { 190, 4 }, [7401] = new[] { 190, 2 },
+            [7201] = new[] { 190, 4 }, [7401] = new[] { 190, 2 }, [7601] = new[] { 190, 2 },
         };
 
         static int MaskOf(params int[] bits) { int m = 0; foreach (var b in bits) m |= 1 << b; return m; }
@@ -72,13 +81,14 @@ namespace ElansAddonHub
             var s = new EnchantSet();
             void E(int id, string name, int t0, int p0, int a0, int t1 = 0, int p1 = 0, int a1 = 0) => s.Enchants[id] = new EnchantInfo { Id = id, Name = name, Type = new[] { t0, t1, 0 }, Points = new[] { p0, p1, 0 }, Arg = new[] { a0, a1, 0 }, Icon = 0 };
             E(1001, "Agility +4", 5, 4, 3); E(1002, "Strength +3", 5, 3, 4); E(1003, "Stamina +3", 5, 3, 7); E(1004, "Agility +5", 5, 5, 3); E(1005, "Crusader", 3, 0, 20007);
-            E(1006, "Impact +3", 2, 3, 0); E(1007, "Armor +30", 4, 30, 0); E(1008, "Scope +7 damage", 2, 7, 0); E(1009, "Swiftness", 5, 8, 3, 3, 0, 20008);
+            E(1006, "Impact +3", 2, 3, 0); E(1101, "Sharpened +2", 2, 2, 0); E(1102, "Poisoned +5", 2, 5, 0); s.Enchants[1101].Duration = 1800; s.Enchants[1102].Duration = 3600; E(1007, "Armor +30", 4, 30, 0); E(1008, "Scope +7 damage", 2, 7, 0); E(1009, "Swiftness", 5, 8, 3, 3, 0, 20008);
             void R(int spell, int cls, int inv, int sub) => s.Equipped[spell] = new List<EquipReq> { new EquipReq { Class = cls, InvMask = inv, SubMask = sub } };
             int chest = MaskOf(5, 20);
             R(7001, 4, chest, 0); R(7002, 4, chest, 0); R(7005, 4, chest, 0); R(7003, 4, MaskOf(8), 0); R(7006, 4, MaskOf(16), 0); R(7007, 4, MaskOf(1), 0);
             R(7004, 2, 0, MaskOf(0, 1, 4, 5, 6, 7, 8, 10, 13, 15));                                    // melee weapons
             R(7101, 4, MaskOf(1, 5, 7, 8), 0);                                                          // armor kit: head, chest, legs, feet
             R(7102, 2, 0, MaskOf(2, 3, 18));                                                            // scope: bows, guns, crossbows
+            R(7701, 2, 0, MaskOf(0, 1, 4, 5, 6, 7, 8, 10, 13, 15)); R(7702, 2, 0, MaskOf(0, 1, 4, 5, 6, 7, 8, 10, 13, 15));
             return s;
         }
 
@@ -89,6 +99,7 @@ namespace ElansAddonHub
             return new Dictionary<int, InvItemTotals>
             {
                 [190] = new InvItemTotals { Id = 190, Chars = { new InvCount { Char = aela, Bags = 6 } } },
+                [330] = new InvItemTotals { Id = 330, Chars = { new InvCount { Char = aela, Bags = 3 } } },
                 [600] = new InvItemTotals { Id = 600, Chars = { new InvCount { Char = borg, Bags = 2 } } },
             };
         }

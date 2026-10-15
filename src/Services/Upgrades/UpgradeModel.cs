@@ -80,7 +80,7 @@ namespace ElansAddonHub.Services.Upgrades
         public int PerSlot = 3;
         public double RareChance = 2;              // a drop under this many percent counts as rare: ranked low
 
-        public string Serialize() => "D" + (Dungeons ? 1 : 0) + "R" + (Raids ? 1 : 0) + "C" + (Classic ? 1 : 0) + "T" + (TradeableOnly ? 1 : 0) + "L" + LevelOffset + "N" + (Enchants ? 1 : 0) + "A" + (OnlyApplicable ? 1 : 0) + "F" + (Food ? 1 : 0);
+        public string Serialize() => "D" + (Dungeons ? 1 : 0) + "R" + (Raids ? 1 : 0) + "C" + (Classic ? 1 : 0) + "T" + (TradeableOnly ? 1 : 0) + "L" + LevelOffset + "N" + (Enchants ? 1 : 0) + "A" + (OnlyApplicable ? 1 : 0) + "F" + (Food ? 1 : 0) + (HiddenGroups.Count > 0 ? "H" + string.Join("+", HiddenGroups.OrderBy(g => g, StringComparer.Ordinal)) : "");
         public static UpgradeFilters Parse(string s)
         {
             var f = new UpgradeFilters();
@@ -88,11 +88,14 @@ namespace ElansAddonHub.Services.Upgrades
             bool B(char key, bool def) { int i = s.IndexOf(key); return i >= 0 && i + 1 < s.Length && (s[i + 1] == '0' || s[i + 1] == '1') ? s[i + 1] == '1' : def; }
             f.Dungeons = B('D', true); f.Raids = B('R', false); f.Classic = B('C', true); f.TradeableOnly = B('T', false);
             f.Enchants = B('N', true); f.OnlyApplicable = B('A', false); f.Food = B('F', true);
+            int h = s.IndexOf('H');
+            if (h >= 0) foreach (var g in s.Substring(h + 1).Split('+')) if (Array.IndexOf(UpgradeExtras.Groups, g) >= 0) f.HiddenGroups.Add(g);
             int l = s.IndexOf('L');
             if (l >= 0 && l + 1 < s.Length && s[l + 1] == '3') f.LevelOffset = 3;
             return f;
         }
-        public UpgradeFilters Clone() => (UpgradeFilters)MemberwiseClone();
+        public HashSet<string> HiddenGroups = new HashSet<string>();     // consumable groups the person collapsed (food, drink, elixir ...)
+        public UpgradeFilters Clone() { var c = (UpgradeFilters)MemberwiseClone(); c.HiddenGroups = new HashSet<string>(HiddenGroups); return c; }
     }
 
     // Where an item can be had, in the Atlas's own terms.

@@ -133,6 +133,7 @@ namespace ElansAddonHub.Services.Upgrades
         static readonly List<string> order = new List<string>();
         public static int ComputeCount;                      // how often the heavy part ran (self-test)
         public static int CacheLimit = 12;
+        public static int OwnedStamp;                        // bumped whenever the Characters page reads new bags / bank data (reagent and "you have N" counts are part of the answer)
 
         public static void ClearCache() { lock (gate) { cache.Clear(); order.Clear(); } }
 
@@ -143,7 +144,7 @@ namespace ElansAddonHub.Services.Upgrades
             var snap = ItemData.Snapshot;
             return "i" + (snap?.Count ?? 0) + "/" + snap?.Revealed + "/" + ItemData.Status + "|c" + (ClassicAtlas.IsReady ? ClassicAtlas.Current?.Provenance?.CommitSha + ClassicAtlas.Current?.Items.Count : "-")
                    + "|l" + (lodge == null ? "-" : lodge.Epoch + ":" + lodge.Rev + ":" + lodge.RevealedCount) + "|k" + ClassData.Status + "|m" + (ElansAddonHub.Services.Maps.MapData.Index == null ? 0 : 1) + "|s" + SpellData.Status
-                   + "|a" + AtlasQuery.Characters().Count + "|n" + EnchantData.Revision + EnchantData.Status;
+                   + "|a" + AtlasQuery.Characters().Count + "|n" + EnchantData.Revision + EnchantData.Status + "|o" + OwnedStamp;
         }
 
         public static string CacheKey(UpgradeChar who) => who.Fingerprint + "|" + UpgradeWeights.Fingerprint(who.ClassFile, who.Spec) + "|" + DataSignature();
@@ -314,7 +315,7 @@ namespace ElansAddonHub.Services.Upgrades
         {
             var res = new List<ExtraEntry>();
             if (set == null || set.Who == null || !(f ?? new UpgradeFilters()).Food) return res;
-            foreach (var kind in new[] { "Well fed", "Food", "Drink" })
+            foreach (var kind in UpgradeExtras.KindOrder)
                 res.AddRange(set.Food.Where(e => e.Kind == kind).Select(e => UpgradeExtras.Filter(e, f, set.Who, false)).Where(e => e != null).OrderByDescending(e => e.Rank).ThenBy(e => e.ItemId).Take(UpgradeExtras.TopFood));
             return res;
         }

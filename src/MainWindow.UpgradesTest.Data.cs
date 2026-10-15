@@ -85,6 +85,13 @@ namespace ElansAddonHub
                 UpI(303, "Smoked Sagefish", 1, 15, 15, 0, 0, 5, 0), UpI(304, "Dried Bread", 1, 1, 1, 0, 0, 5, 0), UpI(305, "Roast Raptor", 1, 25, 25, 0, 0, 5, 0),
                 UpI(306, "Conjured Water", 1, 5, 5, 0, 0, 5, 0), UpI(307, "Fresh Spring Water", 1, 25, 25, 0, 0, 5, 0), UpI(308, "Melon Juice", 1, 12, 12, 0, 0, 5, 0),
                 UpI(309, "Cactus Apple Surprise", 1, 22, 22, 0, 0, 5, 0), UpI(310, "Grilled Squid", 1, 26, 26, 0, 0, 5, 0), UpI(320, "Recipe: Spiced Wolf Ribs", 1, 20, 20, 0, 9, 0, 0),
+                // consumables: elixirs (2), flask (3), potions (1), scrolls (4), bandages (7), item enhancements (6); ammo is class 6 (arrow 2, bullet 3), inventory type 24
+                UpI(330, "Elixir of Agility", 1, 20, 20, 0, 0, 2, 0), UpI(331, "Elixir of Giants", 1, 22, 22, 0, 0, 2, 0), UpI(332, "Elixir of the Mongoose", 1, 40, 40, 0, 0, 2, 0), UpI(333, "Flask of Titans", 1, 28, 28, 0, 0, 3, 0),
+                UpI(340, "Healing Potion", 1, 20, 20, 0, 0, 1, 0), UpI(341, "Lesser Healing Potion", 1, 5, 5, 0, 0, 1, 0), UpI(342, "Mana Potion", 1, 22, 22, 0, 0, 1, 0), UpI(343, "Swiftness Potion", 1, 15, 15, 0, 0, 1, 0),
+                UpI(350, "Scroll of Agility", 1, 10, 10, 0, 0, 4, 0), UpI(351, "Scroll of Strength", 1, 12, 12, 0, 0, 4, 0),
+                UpI(360, "Linen Bandage", 1, 1, 1, 0, 0, 7, 0), UpI(361, "Silk Bandage", 1, 20, 20, 0, 0, 7, 0), UpI(362, "Wool Bandage", 1, 10, 10, 0, 0, 7, 0), UpI(363, "Heavy Mageweave Bandage", 1, 40, 40, 0, 0, 7, 0),
+                UpI(370, "Rough Arrow", 1, 10, 1, 24, 6, 2, 0), UpI(371, "Razor Arrow", 1, 25, 25, 24, 6, 2, 0), UpI(372, "Jagged Arrow", 1, 40, 40, 24, 6, 2, 0), UpI(373, "Lead Shot", 1, 20, 15, 24, 6, 3, 0),
+                UpI(380, "Rough Sharpening Stone", 1, 5, 1, 0, 0, 6, 0), UpI(382, "Instant Poison", 1, 10, 10, 0, 0, 6, 0),
             };
             return new ItemSnapshot(l, new ClientItem[0]);
         }
@@ -101,11 +108,13 @@ namespace ElansAddonHub
             }
             for (int inv = 1; inv <= 28; inv++) d.ArmorLocation[inv] = new[] { 1f, 1f, 1f, 1f };
             void Dmg(int kind, float per) { d.Damage[kind] = new Dictionary<int, float[]>(); for (int il = 1; il <= 100; il++) d.Damage[kind][il] = Enumerable.Repeat(il * per, 8).ToArray(); }
-            Dmg(ItemDetails.KindOneHand, 0.4f); Dmg(ItemDetails.KindTwoHand, 0.45f); Dmg(ItemDetails.KindRanged, 0.5f); Dmg(ItemDetails.KindWand, 0.3f);
+            Dmg(ItemDetails.KindAmmo, 0.1f); Dmg(ItemDetails.KindOneHand, 0.4f); Dmg(ItemDetails.KindTwoHand, 0.45f); Dmg(ItemDetails.KindRanged, 0.5f); Dmg(ItemDetails.KindWand, 0.3f);
             d.Effects = new Dictionary<int, int[]>
             {
                 [600] = new[] { 0, 7101 }, [601] = new[] { 0, 7102 }, [300] = new[] { 0, 7301 }, [301] = new[] { 0, 7302 }, [303] = new[] { 0, 7311 }, [304] = new[] { 0, 7312 }, [305] = new[] { 0, 7313 },
                 [306] = new[] { 0, 7321 }, [307] = new[] { 0, 7322 }, [308] = new[] { 0, 7323 }, [309] = new[] { 0, 7330 }, [310] = new[] { 0, 7340 }, [302] = new[] { 0, 7350 }, [320] = new[] { 6, 7401 },
+                [330] = new[] { 0, 7801 }, [331] = new[] { 0, 7802 }, [332] = new[] { 0, 7803 }, [333] = new[] { 0, 7804 }, [340] = new[] { 0, 7811 }, [341] = new[] { 0, 7812 }, [342] = new[] { 0, 7813 }, [343] = new[] { 0, 7814 },
+                [350] = new[] { 0, 7821 }, [351] = new[] { 0, 7822 }, [360] = new[] { 0, 7831 }, [361] = new[] { 0, 7832 }, [362] = new[] { 0, 7833 }, [363] = new[] { 0, 7834 }, [380] = new[] { 0, 7701 }, [382] = new[] { 0, 7702 },
             };
             return d;
         }
@@ -154,7 +163,7 @@ namespace ElansAddonHub
             Src(175, ClassicSourceKind.Vendor, 203); Src(176, ClassicSourceKind.Vendor, 203); Src(177, ClassicSourceKind.Vendor, 203);
             Src(120, ClassicSourceKind.Vendor, 203); Src(121, ClassicSourceKind.Vendor, 203);
             Src(190, ClassicSourceKind.Vendor, 203);
-            foreach (var fid in new[] { 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 320, 600, 601 }) Src(fid, ClassicSourceKind.Vendor, 203);
+            foreach (var fid in new[] { 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 320, 600, 601, 330, 331, 332, 333, 340, 341, 342, 343, 350, 351, 360, 362, 363, 370, 371, 372, 373, 380, 382 }) Src(fid, ClassicSourceKind.Vendor, 203);
             idx.Finish();
             return idx;
         }

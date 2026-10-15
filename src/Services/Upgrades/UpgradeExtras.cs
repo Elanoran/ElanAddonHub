@@ -373,53 +373,159 @@ namespace ElansAddonHub.Services.Upgrades
             return b;
         }
 
-        public static void BuildFood(UpgradeSet set, UpgradeChar who, UpgradeEngine.Evaluator ev, UpgradeWorld world)
+        // ---------------------------------------------------------------------------------------------------------------- consumables
+        // the kinds in the order the panel lists them, and the group (a collapsible block) each belongs to
+        public static readonly string[] KindOrder = { "Well fed", "Food", "Drink", "Elixir", "Flask", "Healing potion", "Mana potion", "Potion", "Scroll", "Bandage", "Ammo", "Temporary" };
+        public static readonly string[] Groups = { "food", "drink", "elixir", "flask", "potion", "scroll", "bandage", "ammo", "temp" };
+        public static string GroupOf(string kind)
+        {
+            switch (kind)
+            {
+                case "Well fed": case "Food": return "food";
+                case "Drink": return "drink";
+                case "Elixir": return "elixir";
+                case "Flask": return "flask";
+                case "Healing potion": case "Mana potion": case "Potion": return "potion";
+                case "Scroll": return "scroll";
+                case "Bandage": return "bandage";
+                case "Ammo": return "ammo";
+                case "Temporary": return "temp";
+                default: return "";
+            }
+        }
+        public static string GroupTitle(string group)
+        {
+            switch (group)
+            {
+                case "food": return "Food"; case "drink": return "Drink"; case "elixir": return "Elixirs"; case "flask": return "Flasks"; case "potion": return "Potions";
+                case "scroll": return "Scrolls"; case "bandage": return "Bandages"; case "ammo": return "Ammo"; case "temp": return "Weapon enhancements (temporary)"; default: return group;
+            }
+        }
+
+        // "Restores 700 to 900 health" / "Heals 1104 damage over 8 sec": the amount (the middle of a range) and what it restores
+        static readonly Regex Amount = new Regex(@"(?i)(?:restores|heals)\s+(?:up to\s+)?([\d,]+)(?:\s+to\s+([\d,]+))?\s+(health|mana|damage)(?:\s+over\s+\d+\s+sec)?", RegexOptions.Compiled);
+
+        static double Num0(string s) => double.Parse(s.Replace(",", ""), CultureInfo.InvariantCulture);
+
+        // the best amounts a Use spell's own text gives: health, mana, healing (bandages: "damage")
+        static void AmountsOf(int spell, ref double health, ref double mana, ref double heals, ref string text)
+        {
+            var view = SpellData.Spell(spell);
+            var d = (view?.Description ?? "") + " " + (view?.AuraDescription ?? "");
+            foreach (Match m in Amount.Matches(d))
+            {
+                double a = Num0(m.Groups[1].Value);
+                if (m.Groups[2].Success) a = (a + Num0(m.Groups[2].Value)) / 2;
+                switch (m.Groups[3].Value.ToLowerInvariant()) { case "health": health = Math.Max(health, a); break; case "mana": mana = Math.Max(mana, a); break; default: heals = Math.Max(heals, a); break; }
+                if (text.Length == 0) text = m.Value;
+            }
+        }
+
+        static string DurText(int ms) => ms >= 60000 ? (ms / 60000) + " min" : ms > 0 ? (ms / 1000) + " sec" : "";
+
+        public static void BuildFood(UpgradeSet set, UpgradeChar who, UpgradeEngine.Evaluator ev, UpgradeWorld world) => BuildConsumables(set, who, ev, world);
+
+        public static void BuildConsumables(UpgradeSet set, UpgradeChar who, UpgradeEngine.Evaluator ev, UpgradeWorld world)
         {
             var snap = ItemData.Snapshot;
             if (snap == null || SpellData.Spells == null || ItemDetails.Current?.Effects == null) return;
             var owned = AtlasQuery.Context.Owned?.Invoke();
             var w = ev.W;
             bool mana = who.ClassFile != "WARRIOR" && who.ClassFile != "ROGUE";
-            var well = new List<ExtraEntry>(); var heal = new List<ExtraEntry>(); var drink = new List<ExtraEntry>();
+            var lists = KindOrder.ToDictionary(k => k, k => new List<ExtraEntry>());
+            // the ammo of the ranged weapon that is worn (arrows for bows and crossbows, bullets for guns); none worn = both
+            int ammoSub = 0;
+            if (who.ClassFile == "HUNTER")
+            {
+                if (ev.Worn.TryGetValue(18, out var rw) && rw.ClassId == 2) ammoSub = rw.SubclassId == 3 ? 3 : (rw.SubclassId == 2 || rw.SubclassId == 18) ? 2 : -1;
+            }
+            var es = EnchantData.Ready ? EnchantData.Set : null;
+            ClientItem mainHand = null; ev.Worn.TryGetValue(16, out mainHand);
+            string Words(Buff b, double[] score)
+            {
+                double s = 0; var words = new List<string>();
+                foreach (var kv in b.Stats.OrderByDescending(x => x.Value))
+                {
+                    var key = UpgradeWeights.KeyOfStat((int)kv.Key);
+                    double wt = key == null ? 0 : (w.TryGetValue(key, out var ww) ? ww : 0);
+                    if (kv.Key == 45) wt = Math.Max(wt, w.TryGetValue("heal", out var hh) ? hh : 0);
+                    s += kv.Value * wt;
+                    words.Add("+" + kv.Value.ToString("0", CultureInfo.InvariantCulture) + " " + ItemNames.Stat((int)kv.Key));
+                }
+                score[0] = s;
+                return string.Join(", ", words) + (b.DurationMs > 0 ? " for " + DurText(b.DurationMs) : "");
+            }
+            ExtraEntry New(string kind, ClientItem it, double score, string buff) => new ExtraEntry { Kind = kind, Name = it.Name, ItemId = it.Id, IconId = it.IconId, Quality = Math.Max(0, it.Quality), Score = score, Metric = score, Buff = buff };
             foreach (var it in snap.Items.Values)
             {
-                if (it.ClassId != 0 || it.SubclassId != 5 || it.RequiredLevel > who.Level || string.IsNullOrEmpty(it.Name) || ItemSnapshot.IsPlaceholder(it.Name)) continue;
+                if (string.IsNullOrEmpty(it.Name) || it.RequiredLevel > who.Level || ItemSnapshot.IsPlaceholder(it.Name)) continue;
+                if (it.ClassId == 6)
+                {
+                    // ammo: arrows (2) / bullets (3), ranked by the damage per second the game's table gives
+                    if (who.ClassFile != "HUNTER" || !(ammoSub == 0 ? (it.SubclassId == 2 || it.SubclassId == 3) : ammoSub > 0 && it.SubclassId == ammoSub)) continue;
+                    if (!it.TryDamage(out _, out _, out var adps) || adps <= 0) continue;
+                    lists["Ammo"].Add(New("Ammo", it, adps, "+" + adps.ToString("0.0", CultureInfo.InvariantCulture) + " damage per second to ranged attacks"));
+                    continue;
+                }
+                if (it.ClassId != 0) continue;
                 var eff = ItemDetails.EffectsOf(it.Id).Where(p => p.Key == 0 || p.Key == 4 || p.Key == 5 || p.Key == 6).ToList();
                 if (eff.Count == 0) continue;
-                var buff = new Buff(); double amountH = 0, amountM = 0; string text = "";
+                // a temporary weapon enhancement: the Use spell puts a temporary enchant (effect 54) on an item it may be applied to
+                if (es != null)
+                {
+                    bool temp = false;
+                    foreach (var p in eff)
+                    {
+                        var sp = SpellData.Spells.Get(p.Value);
+                        var te = sp?.Effects?.FirstOrDefault(x => x.Effect == 54 && x.Misc > 0 && es.Get(x.Misc) != null);
+                        if (te == null) continue;
+                        temp = true;
+                        if (mainHand == null || !es.Applies(sp.Id, mainHand)) break;
+                        if (it.Name.IndexOf("poison", StringComparison.OrdinalIgnoreCase) >= 0 && who.ClassFile != "ROGUE") break;
+                        var info = es.Get(te.Misc);
+                        var parts = PartsOf(info, 16, mainHand, w, out _);
+                        double sc = ScoreOf(parts);
+                        if (parts.Count > 0 && sc >= MinEnchantGain)
+                            lists["Temporary"].Add(New("Temporary", it, sc, PartsText(parts) + " on " + mainHand.Name + " (temporary" + (info.Duration > 0 ? ", " + DurText(info.Duration * 1000) : "") + ")"));
+                        break;
+                    }
+                    if (temp) continue;
+                }
+                var buff = new Buff(); double aH = 0, aM = 0, aHeal = 0; string text = "";
                 foreach (var p in eff)
                 {
                     var b = BuffOf(p.Value);
                     foreach (var kv in b.Stats) buff.Stats[kv.Key] = buff.Stats.TryGetValue(kv.Key, out var x) ? Math.Max(x, kv.Value) : kv.Value;
                     if (b.DurationMs > buff.DurationMs) buff.DurationMs = b.DurationMs;
-                    var view = SpellData.Spell(p.Value);
-                    var d = (view?.Description ?? "") + " " + (view?.AuraDescription ?? "");
-                    foreach (Match m in Restores.Matches(d))
-                    {
-                        double a = double.Parse(m.Groups[1].Value.Replace(",", ""), CultureInfo.InvariantCulture);
-                        if (m.Groups[2].Value.ToLowerInvariant() == "health") amountH = Math.Max(amountH, a); else amountM = Math.Max(amountM, a);
-                        if (text.Length == 0) text = m.Value;
-                    }
+                    AmountsOf(p.Value, ref aH, ref aM, ref aHeal, ref text);
                 }
-                double score = 0; var words = new List<string>();
-                foreach (var kv in buff.Stats.OrderByDescending(x => x.Value))
+                var sc2 = new double[1];
+                string words = buff.Stats.Count > 0 ? Words(buff, sc2) : "";
+                double score = sc2[0];
+                switch (it.SubclassId)
                 {
-                    var key = UpgradeWeights.KeyOfStat((int)kv.Key);
-                    double wt = key == null ? 0 : (w.TryGetValue(key, out var ww) ? ww : 0);
-                    if (kv.Key == 45) wt = Math.Max(wt, w.TryGetValue("heal", out var hh) ? hh : 0);
-                    score += kv.Value * wt;
-                    words.Add("+" + kv.Value.ToString("0", CultureInfo.InvariantCulture) + " " + ItemNames.Stat((int)kv.Key));
+                    case 5:
+                        if (buff.Stats.Count > 0 && score >= MinEnchantGain) lists["Well fed"].Add(New("Well fed", it, score, words));
+                        if (aH > 0 && buff.Stats.Count == 0) lists["Food"].Add(New("Food", it, aH, text));
+                        if (mana && aM > 0 && buff.Stats.Count == 0) lists["Drink"].Add(New("Drink", it, aM, text));
+                        break;
+                    case 2: if (buff.Stats.Count > 0 && score >= MinEnchantGain) lists["Elixir"].Add(New("Elixir", it, score, words)); break;
+                    case 3: if (buff.Stats.Count > 0 && score >= MinEnchantGain) lists["Flask"].Add(New("Flask", it, score, words)); break;
+                    case 4: if (buff.Stats.Count > 0 && score >= MinEnchantGain) lists["Scroll"].Add(New("Scroll", it, score, words)); break;
+                    case 1:
+                        if (buff.Stats.Count > 0 && score >= MinEnchantGain) lists["Potion"].Add(New("Potion", it, score, words));
+                        else if (aH > 0 && buff.Stats.Count == 0) lists["Healing potion"].Add(New("Healing potion", it, aH, text));
+                        else if (mana && aM > 0 && buff.Stats.Count == 0) lists["Mana potion"].Add(New("Mana potion", it, aM, text));
+                        break;
+                    case 7:
+                        if (aHeal > 0) lists["Bandage"].Add(New("Bandage", it, aHeal, text));
+                        break;
                 }
-                string Dur(int ms) => ms >= 60000 ? (ms / 60000) + " min" : (ms / 1000) + " sec";
-                if (buff.Stats.Count > 0 && score >= MinEnchantGain)
-                    well.Add(new ExtraEntry { Kind = "Well fed", Name = it.Name, ItemId = it.Id, IconId = it.IconId, Quality = Math.Max(0, it.Quality), Score = score, Metric = score, Buff = string.Join(", ", words) + (buff.DurationMs > 0 ? " for " + Dur(buff.DurationMs) : "") });
-                if (amountH > 0 && buff.Stats.Count == 0) heal.Add(new ExtraEntry { Kind = "Food", Name = it.Name, ItemId = it.Id, IconId = it.IconId, Quality = Math.Max(0, it.Quality), Score = amountH, Metric = amountH, Buff = text });
-                if (mana && amountM > 0 && buff.Stats.Count == 0) drink.Add(new ExtraEntry { Kind = "Drink", Name = it.Name, ItemId = it.Id, IconId = it.IconId, Quality = Math.Max(0, it.Quality), Score = amountM, Metric = amountM, Buff = text });
             }
-            foreach (var l in new[] { well, heal, drink })
+            foreach (var kind in KindOrder)
             {
                 var kept = new List<ExtraEntry>();
-                foreach (var e in l.OrderByDescending(x => x.Score).ThenBy(x => x.ItemId).Take(60))
+                foreach (var e in lists[kind].OrderByDescending(x => x.Score).ThenBy(x => x.ItemId).Take(60))
                 {
                     if (kept.Count >= TopFood * 2) break;
                     var item = ItemData.Get(e.ItemId);
@@ -427,7 +533,7 @@ namespace ElansAddonHub.Services.Upgrades
                     if (e.Sources.Count == 0) continue;
                     if (owned != null && owned.TryGetValue(e.ItemId, out var t)) e.Owned = t.Chars.Sum(c => c.Total);
                     var rec = SpellData.RecipesProducing(e.ItemId).FirstOrDefault();
-                    if (rec != null) { AddReagents(e, rec.Reagents, owned); e.Profession = SpellData.Skill(rec.SkillId)?.Name ?? "Cooking"; AddLearn(e, rec.SpellId, e.Profession, world); }
+                    if (rec != null) { AddReagents(e, rec.Reagents, owned); e.Profession = SpellData.Skill(rec.SkillId)?.Name ?? ""; AddLearn(e, rec.SpellId, e.Profession, world); }
                     e.Applicable = e.Owned > 0 || e.Sources.Any(s => s.Kind == "vendor" || (s.Kind == "craft" && s.Makers.Count > 0));
                     e.ClassicOnly = e.Sources.All(s => !s.Lodge);
                     kept.Add(e);
