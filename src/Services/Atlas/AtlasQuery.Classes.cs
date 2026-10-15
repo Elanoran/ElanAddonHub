@@ -214,6 +214,7 @@ namespace ElansAddonHub.Services.Atlas
             int seenArea = StartAreaSeen(SeenView.AllQuests(), r.BitMask, start, out seenQuests);
             bool fromSeen = area == 0 && seenArea != 0;
             if (fromSeen) { area = seenArea; quests = seenQuests; }
+            if (area == 0 && AddStartFromCharacters(m, r, idx, start)) return;
             if (area == 0)
             {
                 m.Notes.Add(ci == null
@@ -274,6 +275,74 @@ namespace ElansAddonHub.Services.Atlas
             var best = first.Where(x => x.Value == narrowest).GroupBy(x => x.Key).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First();
             quests = best.Count();
             return best.Key;
+        }
+
+        // ---- the second source: a character of this race seen at its first levels stands where the race starts (the Hub saves race, level, zone
+        // and subzone of every character). Forever's newer races (Skyborne) have first quests open to every race, so the quest rule cannot
+        // see them; their characters can. A start once seen is remembered (cache/racestarts.txt), so it stays after the character levels up.
+        public static Func<IEnumerable<HubCore>> StartCharsSource = () =>
+        {
+            var root = MapData.WowRoot();
+            if (string.IsNullOrEmpty(root)) return Enumerable.Empty<HubCore>();
+            return HubData.Read(root).Characters.Select(c => c.Core).Where(c => c != null);
+        };
+        public static string RaceStartsFile = System.IO.Path.Combine(Util.DataDir, "cache", "racestarts.txt");
+        static readonly object startGate = new object();
+
+        internal static bool AddStartFromCharacters(AtlasPageModel m, RaceInfo r, MapIndex idx, int start)
+        {
+            string zone = null, sub = null;
+            try
+            {
+                var seen = StartCharsSource()
+                    .Where(c => c.Level >= 1 && c.Level <= start + 1 && !string.IsNullOrWhiteSpace(c.Zone) && string.Equals((c.Race ?? "").Trim(), r.Name, StringComparison.OrdinalIgnoreCase))
+                    .GroupBy(c => c.Zone.Trim() + "|" + (c.Subzone ?? "").Trim()).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).FirstOrDefault();
+                if (seen != null) { var parts = seen.Key.Split('|'); zone = parts[0]; sub = parts[1]; RememberStart(r.Id, zone, sub); }
+            }
+            catch (Exception e) { Util.Log("race start from characters: " + e.Message); }
+            if (zone == null && !RecallStart(r.Id, out zone, out sub)) return false;
+            var ui = idx.UiMaps.FirstOrDefault(u => string.Equals(u.Name, zone, StringComparison.OrdinalIgnoreCase));
+            string text = !string.IsNullOrEmpty(sub) && !string.Equals(sub, zone, StringComparison.OrdinalIgnoreCase) ? sub + ", " + zone : zone;
+            m.Facts.Add(new AtlasFact("Starts in", text, AtlasLabel.Mine, ui != null ? "zone:" + ui.Id.ToString(CultureInfo.InvariantCulture) : null));
+            m.Notes.Add("Starting zone: where your character of this race was at level " + (start == 1 ? "1-2" : start + "-" + (start + 1)) + " (its first quests are open to every race, so the quests cannot tell).");
+            return true;
+        }
+
+        static void RememberStart(int race, string zone, string sub)
+        {
+            lock (startGate)
+            {
+                try
+                {
+                    var lines = System.IO.File.Exists(RaceStartsFile) ? System.IO.File.ReadAllLines(RaceStartsFile).ToList() : new List<string>();
+                    string line = race.ToString(CultureInfo.InvariantCulture) + "|" + zone.Replace("|", " ") + "|" + (sub ?? "").Replace("|", " ");
+                    if (lines.Contains(line)) return;
+                    lines.RemoveAll(l => l.StartsWith(race.ToString(CultureInfo.InvariantCulture) + "|", StringComparison.Ordinal));
+                    lines.Add(line);
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(RaceStartsFile));
+                    System.IO.File.WriteAllLines(RaceStartsFile, lines);
+                }
+                catch (Exception e) { Util.Log("race starts file: " + e.Message); }
+            }
+        }
+
+        static bool RecallStart(int race, out string zone, out string sub)
+        {
+            zone = sub = null;
+            lock (startGate)
+            {
+                try
+                {
+                    if (!System.IO.File.Exists(RaceStartsFile)) return false;
+                    foreach (var l in System.IO.File.ReadAllLines(RaceStartsFile))
+                    {
+                        var p = l.Split('|');
+                        if (p.Length >= 3 && p[0] == race.ToString(CultureInfo.InvariantCulture) && p[1].Length > 0) { zone = p[1]; sub = p[2]; return true; }
+                    }
+                }
+                catch (Exception e) { Util.Log("race starts file: " + e.Message); }
+            }
+            return false;
         }
 
         static bool StartsWithVowel(string s) => !string.IsNullOrEmpty(s) && "AEIOUaeiou".IndexOf(s[0]) >= 0;

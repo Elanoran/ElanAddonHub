@@ -211,6 +211,29 @@ namespace ElansAddonHub
                         Area(4) == 188 && Area(1) == 24 && Area(3) == 132 && Area(7) == 132 && gnomeQuests == 2 && Area(8) == 363 && Area(10) == 0,
                         Area(4) + " " + Area(1) + " " + Area(3) + " " + Area(7) + " " + gnomeQuests + " " + Area(8) + " " + Area(10));
                 }
+                // the second source: a character of the race seen at its first levels (Forever's Skyborne quests are open to everyone)
+                {
+                    var savedSrc = AtlasQuery.StartCharsSource; var savedFile = AtlasQuery.RaceStartsFile;
+                    try
+                    {
+                        AtlasQuery.RaceStartsFile = Path.Combine(work, "racestarts.txt");
+                        var orc = ClassData.Data.Race(2);
+                        var mi = new ElansAddonHub.Services.Maps.MapIndex(new ElansAddonHub.Services.Maps.MapSet());
+                        var chars = new List<HubCore> { new HubCore { Race = "Orc", Level = 1, Zone = "Durotar", Subzone = "Valley of Trials" }, new HubCore { Race = "Orc", Level = 30, Zone = "Thousand Needles" }, new HubCore { Race = "Troll", Level = 1, Zone = "Elsewhere" } };
+                        AtlasQuery.StartCharsSource = () => chars;
+                        var m1 = new AtlasPageModel();
+                        bool got = AtlasQuery.AddStartFromCharacters(m1, orc, mi, 1);
+                        var f1 = m1.Facts.FirstOrDefault(f => f.Label == "Starts in");
+                        Check("race page: a level 1 character of the race gives its start (subzone, zone), labelled as your characters; a level 30 one and another race do not count",
+                            got && f1 != null && f1.Value == "Valley of Trials, Durotar" && f1.Source == AtlasLabel.Mine, f1?.Value + " / " + f1?.Source);
+                        chars.Clear();
+                        var m2 = new AtlasPageModel();
+                        bool kept = AtlasQuery.AddStartFromCharacters(m2, orc, mi, 1);
+                        Check("race page: once seen, the start is remembered after the character has levelled away (cache file)", kept && m2.Facts.Any(f => f.Label == "Starts in" && f.Value == "Valley of Trials, Durotar"));
+                        Check("race page: no character and nothing remembered -> no start from characters", !AtlasQuery.AddStartFromCharacters(new AtlasPageModel(), ClassData.Data.Race(1), mi, 1));
+                    }
+                    finally { AtlasQuery.StartCharsSource = savedSrc; AtlasQuery.RaceStartsFile = savedFile; }
+                }
                 Check("race page: the description of the race is a text on the page", rp.Texts.Any(t => t.Title == "About" && t.Body.StartsWith("The orc race")));
                 // the starting zone of a race the Classic baseline has no quests for (Forever's own races): from the quests Forever described, with their race masks
                 {

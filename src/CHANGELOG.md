@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.66.1
+- **Atlas: start zones for Forever's new races.** Skyborne's first quests are open to every race, so the quest rule could not tell where Skyborne start. Now a character of yours of that race seen at level 1-2 shows it ("Starts in: Thendal Village, Zephras Isle", labelled Your characters), and the Outpost remembers it after the character has levelled away.
+
 ## 2.66.0
 - **Atlas: what the Forever server sent your game beyond items.** The game keeps the server's hotfixes in `Cache\ADB\enUS\DBCache.bin`; the Outpost read only its item rows. It now also lays the server's rows for spells (names, descriptions, icon, cast time, duration, range, effects), the client's quest list, locks and faction templates over your game files, the way the game itself does: a server row replaces the game file's row, a "removed" entry takes it away. Spells the server added (not in the game files) get pages, tooltips and search results, and every fact that comes from the server's rows is labelled "Server hotfix" (a spell page says what the server changed: "The server changed its icon, cast time, duration or range and effects"). Every table's layout was checked against the game build's own table and the public table definitions; a game update with other layouts leaves the hotfixes out instead of guessing. NPC lines (BroadcastText), gossip options and the creature / object / quest-task entries the server sent are not used: no client table links a line to a creature, and the other entries carry no data on this server.
 - Not shared through the Lodge: these are hotfixes the server sends every client at login, so every member's game already has them.
