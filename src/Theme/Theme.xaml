@@ -165,6 +165,21 @@
     <GradientStop Color="#05FFFFFF" Offset="1" />
   </LinearGradientBrush>
 
+  <!-- painted art (Assets\Art, ArtLibrary.cs): the veils that keep text and icons readable on a picture.
+       Talent tree: Bg at 62 % over the whole spec art. Category card: Bg 88 % at the text side, 40 % at the far side.
+       Zone banner: clear at the top, the page panel's colour (Brush.Scrim) at the bottom edge so the picture fades into the page. -->
+  <SolidColorBrush x:Key="Brush.Art.Veil" Color="#9E0F1113" />
+  <LinearGradientBrush x:Key="Brush.Art.CardVeil" StartPoint="0,0" EndPoint="1,0">
+    <GradientStop Color="#E00F1113" Offset="0" />
+    <GradientStop Color="#B30F1113" Offset="0.45" />
+    <GradientStop Color="#660F1113" Offset="1" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Brush.Art.BannerFade" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#000F1113" Offset="0" />
+    <GradientStop Color="#000F1113" Offset="0.5" />
+    <GradientStop Color="#BF0F1113" Offset="1" />
+  </LinearGradientBrush>
+
   <!-- elevation: 0 flat (fill only) / 1 raised card / 2 overlay (dialogs, popovers). Fill + top highlight + soft shadow, no outline. -->
   <DropShadowEffect x:Key="Elevation.1" x:Shared="False" BlurRadius="16" ShadowDepth="2" Direction="270" Opacity="0.30" Color="Black" />
   <DropShadowEffect x:Key="Elevation.2" x:Shared="False" BlurRadius="40" ShadowDepth="12" Direction="270" Opacity="0.50" Color="Black" />

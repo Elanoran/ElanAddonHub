@@ -31,7 +31,7 @@ namespace ElansAddonHub
         StackPanel railStack;
         FrameworkElement factsCard, railMapHost;
         AtlasMap railMap;
-        FrameworkElement heroEl, tabStrip;
+        FrameworkElement heroEl, tabStrip, bannerEl;
         TextBlock heroName;
         Brush heroBrush;
         string pageTitle = "";
@@ -48,6 +48,7 @@ namespace ElansAddonHub
         public bool TabBuiltForTest(string tab) => tabContent.ContainsKey(tab);
         public FrameworkElement TabHostForTest => tabHost;
         public FrameworkElement HeroForTest => heroEl;
+        public FrameworkElement BannerForTest => bannerEl;
         public string HeroNameForTest => heroName?.Text ?? "";
         public Brush HeroBrushForTest => heroBrush;
         public IReadOnlyList<string> HeroChipsForTest => heroEl == null ? new List<string>() : AtlasWalk(heroEl).OfType<Border>().Where(b => b.Tag as string == "chip").Select(b => ChipText(b)).ToList();
@@ -83,6 +84,8 @@ namespace ElansAddonHub
 
             var col = new StackPanel();
             Body.Children.Add(col);
+            bannerEl = ZoneBanner(m);
+            if (bannerEl != null) col.Children.Add(bannerEl);
             heroEl = HeroView(m, out heroName);
             col.Children.Add(heroEl);
 
@@ -133,7 +136,7 @@ namespace ElansAddonHub
 
         void ResetEntity()
         {
-            entityGrid = null; tabHost = null; railStack = null; factsCard = null; railMapHost = null; heroEl = null; heroName = null; tabStrip = null;
+            entityGrid = null; tabHost = null; railStack = null; factsCard = null; railMapHost = null; heroEl = null; heroName = null; tabStrip = null; bannerEl = null;
             railMap?.ClearMarkers(); railMap = null;
             tabsShown.Clear(); tabButtons.Clear(); tabContent.Clear();
             tabNow = ""; tabDefault = AtlasTabs.Overview; columnMode = -1; railOn = false; wide = false;
@@ -168,6 +171,26 @@ namespace ElansAddonHub
             }
             Grid.SetColumn(col, 1); grid.Children.Add(col);
             return Card(grid, 12);
+        }
+
+        // a zone with painted art (ArtLibrary.Zones) opens with a wide banner: the full width of the page, 176 high, the picture cropped around its focal
+        // point and fading into the page at the bottom. Other pages (and zones with no art) have none.
+        public const double BannerHeight = 176;
+        public static int ZoneIdOf(AtlasPageModel m)
+        {
+            if (m == null || m.Kind != "zone" || m.NotFound || string.IsNullOrEmpty(m.Id) || !m.Id.StartsWith("zone:", StringComparison.Ordinal)) return 0;
+            var s = m.Id.Substring(5); int q = s.IndexOf('?'); if (q >= 0) s = s.Substring(0, q);
+            return int.TryParse(s, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : 0;
+        }
+
+        FrameworkElement ZoneBanner(AtlasPageModel m)
+        {
+            var art = ArtLibrary.Zone(ZoneIdOf(m));
+            var back = art == null ? null : ArtLibrary.Backdrop(art, "Brush.Art.BannerFade", (CornerRadius)FindResource("Radius.Card"), "zone-banner-art");
+            if (back == null) return null;
+            var b = new Border { Height = BannerHeight, Margin = new Thickness(0, 0, 0, 12), Tag = "zone-banner", IsHitTestVisible = false, Child = back };
+            System.Windows.Automation.AutomationProperties.SetName(b, "Painting of " + m.Title);
+            return b;
         }
 
         // the big tile: the game's icon (items, spells, skills, classes), else the quality-coloured letter of an item, else the glyph of the kind. A gold ring on an elite creature.

@@ -31,10 +31,10 @@
         <RowDefinition Height="*" />
       </Grid.RowDefinitions>
 
-      <!-- header art, fading into the background -->
+      <!-- the window's painted background (Assets/Art/background.jpg, ArtLibrary): anchored right so the lodge stays in view, under the readability gradient -->
       <Border Grid.RowSpan="4" Grid.ColumnSpan="2" CornerRadius="13" ClipToBounds="True" IsHitTestVisible="False">
         <Border.Background>
-          <ImageBrush ImageSource="Assets/hero.jpg" Stretch="UniformToFill" AlignmentY="Top" />
+          <ImageBrush x:Name="WindowArt" ImageSource="Assets/Art/background.jpg" Stretch="UniformToFill" AlignmentX="Right" AlignmentY="Center" />
         </Border.Background>
       </Border>
       <Border Grid.RowSpan="4" Grid.ColumnSpan="2" CornerRadius="13" IsHitTestVisible="False">

@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.67.0
+- **Painted art, first set.** The window has a new painted background (a lodge on a ridge at dusk, kept to the right so it stays in view). Durotar and Teldrassil open with a wide painted banner at the top of their Atlas page; other zones look as before. On the Atlas start page the Dungeons and raids card and the Professions card carry a picture under a dark veil, with a slight zoom when you point at them.
+- **Characters > Talents: wider trees with their real names.** The trees now share the width of the page in equal columns that grow with the window (one under the other when the window is narrow), and the talent icons grow with them (32 to 44 px). Each tree is headed by its spec name from your game files (for example Beast Mastery, Marksmanship, Survival) instead of 'Tree 1'; 'Tree N' is only shown until the game's talent data has been read. A hunter's three trees have their own painted background behind a dark veil; other classes keep the plain panel for now.
+- The old header picture is no longer in the app; the new pictures add about 1.7 MB.
+
 ## 2.66.2
 - **Atlas: latest finds strip.** The Finds page now starts with a row of the newest finds in the Lodge (up to 40) as item icons with a quality-coloured frame and a number when more than one was found. Hover an icon (or tab to it and use Left / Right) to see the item's tooltip and who found it, how many, from where, in which zone and how long ago. Click opens the item. Scroll sideways with the mouse wheel, by dragging, by swiping on a touch screen, or with the small arrows at the ends. New finds slide in at the front without moving the strip if you have scrolled away from the start. Guests see "a member" instead of names.
 

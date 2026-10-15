@@ -220,7 +220,7 @@ namespace ElansAddonHub
 
         FrameworkElement BrowseBlock()
         {
-            tileCaptions.Clear();
+            tileCaptions.Clear(); artCards.Clear();
             var sp = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
             sp.Children.Add(SectionHead("Browse"));
             var cats = AtlasCategories.Visible;
@@ -237,7 +237,7 @@ namespace ElansAddonHub
                 var wrap = new System.Windows.Controls.Primitives.UniformGrid { Margin = new Thickness(0, 0, -8, 0), Columns = cols };
                 tileGrids.Add(wrap);
                 foreach (var c in cats.Where(c => (string.IsNullOrEmpty(c.Group) ? AtlasNav.Database : c.Group) == grp))
-                    wrap.Children.Add(CategoryCard(c.Title, c.Glyph, c.OpenId, c.Blurb, c.Hosted ? c.Blurb : "", c.Hosted ? null : c.Id));
+                    wrap.Children.Add(CategoryCard(c.Title, c.Glyph, c.OpenId, c.Blurb, c.Hosted ? c.Blurb : "", c.Hosted ? null : c.Id, c.Id));
                 if (grp == AtlasNav.Lodge && lodgeFinds)
                     wrap.Children.Add(CategoryCard("Finds", "", AtlasNav.FindsId, "What the Lodge's members found and saw drop", "What members found and saw drop", null));
                 sp.Children.Add(wrap);
@@ -247,7 +247,7 @@ namespace ElansAddonHub
             return sp;
         }
 
-        FrameworkElement CategoryCard(string title, string glyph, string openId, string tip, string caption, string countFor)
+        FrameworkElement CategoryCard(string title, string glyph, string openId, string tip, string caption, string countFor, string artKey = null)
         {
             var tile = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(12, 8, 12, 8), MinHeight = 64, Margin = new Thickness(0, 0, 8, 8), Tag = openId, Focusable = false, Cursor = Cursors.Hand, ToolTip = tip };
             tile.SetResourceReference(Control.BackgroundProperty, "Brush.Surface1");
@@ -267,8 +267,38 @@ namespace ElansAddonHub
             if (countFor != null) tileCaptions[countFor] = cap;
             Grid.SetColumn(col, 1); g.Children.Add(col);
             tile.Content = g;
+            var art = ArtLibrary.Category(artKey);
+            var back = art == null ? null : ArtLibrary.Backdrop(art, "Brush.Art.CardVeil", (CornerRadius)FindResource("Radius.Control"), "card-art");
+            if (back != null)
+            {
+                // painted card: the art fills the whole tile under a veil that is darkest behind the text; a slow-enough zoom on hover (Motion.Fast, ease-out)
+                tile.Content = null;
+                tile.Padding = new Thickness(0);
+                g.Margin = new Thickness(12, 8, 12, 8);
+                var layers = new Grid();
+                layers.Children.Add(back); layers.Children.Add(g);
+                tile.Content = layers;
+                artCards[artKey] = tile;
+                if (((Grid)back).Children[0] is Border pic && pic.Background is ImageBrush brush)
+                {
+                    var zoom = new ScaleTransform(1, 1, 0.5, 0.5);
+                    brush.RelativeTransform = zoom;
+                    void To(double s)
+                    {
+                        if (!Motion.Enabled) { zoom.ScaleX = zoom.ScaleY = s; return; }
+                        var a = new System.Windows.Media.Animation.DoubleAnimation(s, Motion.Fast) { EasingFunction = s > 1 ? Motion.EaseOut : Motion.EaseIn };
+                        zoom.BeginAnimation(ScaleTransform.ScaleXProperty, a); zoom.BeginAnimation(ScaleTransform.ScaleYProperty, a);
+                    }
+                    tile.MouseEnter += (s, e) => To(1.04);
+                    tile.MouseLeave += (s, e) => To(1);
+                }
+            }
             return tile;
         }
+
+        // the category cards that carry painted art (ArtLibrary.Categories), by category id
+        readonly Dictionary<string, FrameworkElement> artCards = new Dictionary<string, FrameworkElement>(StringComparer.OrdinalIgnoreCase);
+        public IReadOnlyDictionary<string, FrameworkElement> ArtCardsForTest => artCards;
 
         // counts on the cards and the shortcuts that the data can answer, worked out off the UI thread (the first time they build the category indexes)
         Task FillBrowseBlock()

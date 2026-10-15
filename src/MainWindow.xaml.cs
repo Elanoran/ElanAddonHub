@@ -442,6 +442,7 @@ namespace ElansAddonHub
             if (Begin("atlasbrowse")) { result += "\r\n" + await AtlasBrowseTest(dir); End(); }
             if (Begin("atlashosts")) { result += "\r\n" + await AtlasHostsTest(dir); End(); }
             if (Begin("atlasclasses")) { result += "\r\n" + await AtlasClassesTest(dir); End(); }
+            if (Begin("art")) { result += "\r\n" + await ArtTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
             if (Begin("idlecpu")) { result += "\r\n" + await IdleCpuTest(dir); End(); }
             result += "\r\n" + string.Join("\r\n", skipped);
