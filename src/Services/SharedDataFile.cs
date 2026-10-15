@@ -15,6 +15,7 @@ namespace ElansAddonHub.Services
     //     flights    = { ... }          the Lodge's merged flight times (FlightShare.BuildLua writes them, unchanged)
     //     profGuides = { ... }          the leveling guides the user chose to follow in game (this file, contract "profguide" part D)
     //     fieldNotes = { ... }          what the Lodge's hunters noted about tameable beasts, for Hunter Helper's Beast Finder (BuildFieldNotes below)
+    //     beasts     = { ... }          what the server's own creature cache says about beasts: tameable, pet family, boss (BuildBeasts below)
     //   }
     //
     // More sections can follow: Compose takes extra, already validated fragments (the Talents hand-off in CharacterTalents.cs is deliberately not wired yet).
@@ -63,6 +64,11 @@ namespace ElansAddonHub.Services
         public const int MaxFieldNoteNpcs = 500, MaxFieldNotePoints = 30;
         public const long MaxFieldNotesBytes = 150L * 1024;
 
+        // the `beasts = { ... },` section (BuildBeasts) of what the game's creature cache (this PC's and the Lodge's) says; set when the seen data changes, every write of the file carries it ("" = none)
+        public static string BeastsText = "";
+        public const int MaxBeasts = 3000;
+        public const long MaxBeastsBytes = 120L * 1024;
+
         public const int Version = 1;
         public const int MaxGuidesPerChar = 6, MaxSteps = 60, MaxReagents = 20, MaxRoutePoints = 120, MaxNodesPerObjectMap = 300, MaxObjectsPerStep = 12, MaxZonesPerStep = 8;
         public const int MaxChars = 40, MaxCharKey = 80, MaxText = 120, MaxId = 9_999_999;
@@ -76,6 +82,8 @@ namespace ElansAddonHub.Services
             var extras = (extraSections ?? Enumerable.Empty<string>()).Where(s => !string.IsNullOrEmpty(s)).ToList();
             var notes = FieldNotesText;
             if (!string.IsNullOrEmpty(notes) && !extras.Contains(notes)) extras.Add(notes);
+            var beasts = BeastsText;
+            if (!string.IsNullOrEmpty(beasts) && !extras.Contains(beasts)) extras.Add(beasts);
             if ((guides == null || guides.IsEmpty) && extras.Count == 0) return FlightShare.BuildLua(flights, nowUtc);
             string lua = null;
             // under the size cap: the nodes are cut first, then the routes, then whole guides from the end
@@ -261,6 +269,40 @@ namespace ElansAddonHub.Services
             return sb.ToString();
         }
 
+        // The `beasts = { ... },` text (one tab deep, newline last); "" when there is nothing. What the server's creature cache says about every creature that is a beast (type 1) or has a pet family,
+        // at most MaxBeasts and about MaxBeastsBytes (the tameable ones first, then the ones with a family, then the rest; by id within each):
+        //   beasts = { [<npcId>] = { tame = 1|0, fam = <creature family id>, boss = true, build = "<game build of the record>", name = "<name, tameable ones only>" } }
+        // tame is the creature type flag 0x1; fam is the game's CreatureFamily id (1 wolf, 2 cat, 3 spider ...; absent = none); name is there for the tameable ones so Hunter Helper can list a beast
+        // its own data lacks. Numbers are re-formatted, the name goes through Text() (cleaned, escaped).
+        public static string BuildBeasts(IDictionary<int, Atlas.SeenView.NpcFacts> facts)
+        {
+            if (facts == null) return "";
+            int Rank(Atlas.SeenView.NpcFacts f) => f.Tameable ? 0 : f.Family > 0 ? 1 : 2;
+            var list = facts.Where(kv => kv.Value != null && Id(kv.Key) && (kv.Value.Type == 1 || kv.Value.Family > 0))
+                .OrderBy(kv => Rank(kv.Value)).ThenBy(kv => kv.Key).Take(MaxBeasts).ToList();
+            var lines = new List<KeyValuePair<int, string>>();
+            long bytes = 0;
+            foreach (var kv in list)
+            {
+                var f = kv.Value;
+                var sb = new StringBuilder();
+                sb.Append("\t\t[").Append(I(kv.Key)).Append("] = { tame = ").Append(f.Tameable ? "1" : "0");
+                if (f.Family >= 1 && f.Family <= 100_000) sb.Append(", fam = ").Append(I(f.Family));
+                if (f.BossLevel) sb.Append(", boss = true");
+                if (f.Build > 0 && f.Build <= 99_999_999) sb.Append(", build = \"").Append(I(f.Build)).Append('"');
+                if (f.Tameable) { var nm = Text(f.Name ?? "", 60); if (nm.Length > 0) sb.Append(", name = \"").Append(nm).Append('"'); }
+                sb.Append(" },\n");
+                if (bytes + sb.Length > MaxBeastsBytes) break;
+                bytes += sb.Length;
+                lines.Add(new KeyValuePair<int, string>(kv.Key, sb.ToString()));
+            }
+            if (lines.Count == 0) return "";
+            var res = new StringBuilder("\tbeasts = {\n");
+            foreach (var l in lines.OrderBy(l => l.Key)) res.Append(l.Value);
+            res.Append("\t},\n");
+            return res.ToString();
+        }
+
         // ---------------------------------------------------------------- reading the file that is there (to keep the flights when only the guides change)
 
         // The flight times a SharedData.lua of this WoW folder holds (the first flavor that has the file), re-validated like a download. null: no such file.
@@ -289,7 +331,7 @@ namespace ElansAddonHub.Services
         public static FlightShare.WriteResult Write(string root, FlightShare.Merged flights, ProfGuidesOut guides, DateTime nowUtc, IEnumerable<string> extraSections = null)
         {
             bool haveGuides = guides != null && !guides.IsEmpty;
-            if (flights == null && !haveGuides && !(extraSections ?? Enumerable.Empty<string>()).Any(s => !string.IsNullOrEmpty(s)) && string.IsNullOrEmpty(FieldNotesText) && !FileHasGuides(root) && !FileHasText(root, "fieldNotes")) return null;
+            if (flights == null && !haveGuides && !(extraSections ?? Enumerable.Empty<string>()).Any(s => !string.IsNullOrEmpty(s)) && string.IsNullOrEmpty(FieldNotesText) && string.IsNullOrEmpty(BeastsText) && !FileHasGuides(root) && !FileHasText(root, "fieldNotes") && !FileHasText(root, "	beasts = {")) return null;
             // guides removed ("Stop following") while no Lodge data is in this session: the guides leave the file, the flights in it stay
             var keep = flights ?? ReadFlights(root);
             var lua = Compose(keep, nowUtc, guides, extraSections);

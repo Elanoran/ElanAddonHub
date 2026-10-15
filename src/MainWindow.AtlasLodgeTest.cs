@@ -593,6 +593,15 @@ namespace ElansAddonHub
                     check("SeenView: start zone from a quest only the Lodge has seen (race bit 32 -> area 78)", ElansAddonHub.Services.Atlas.AtlasQuery.StartAreaSeen(ElansAddonHub.Services.Atlas.SeenView.AllQuests(), 1UL << 32, 1, out _) == 78);
                     check("SeenView: an object's lock comes from the Lodge when this PC has not seen it", ElansAddonHub.Services.Atlas.SeenView.LockOf(1621) == 31 && ElansAddonHub.Services.Atlas.SeenView.LockOf(1) == 0);
                     check("SeenView: a creature's type flags come from the Lodge (tameable)", ElansAddonHub.Services.Atlas.SeenView.Npc(2958)?.Tameable == true && ElansAddonHub.Services.Atlas.SeenView.Npc(2958).FromLodge);
+                    // the beasts of both sides for Hunter Helper: this PC's cache says 2958 is not tameable, the Lodge's newer record says it is; untouched ones stay; non-beasts without a family are out
+                    SeenData.SetForTest(new SeenSnapshot(new[] {
+                        new ElansAddonHub.Services.Db2.WdbCreature { Id = 2958, Name = "Prairie Wolf", Type = 1, Family = 1, Flags0 = 0 },
+                        new ElansAddonHub.Services.Db2.WdbCreature { Id = 3000, Name = "Grinning Dog", Type = 1, Family = 25, Flags0 = 0 },
+                        new ElansAddonHub.Services.Db2.WdbCreature { Id = 3001, Name = "Guard", Type = 7, Family = 0, Flags0 = 0 },
+                        new ElansAddonHub.Services.Db2.WdbCreature { Id = 3002, Name = "Odd Demon", Type = 3, Family = 15, Flags0 = 5 } }, null, null));
+                    var bf = ElansAddonHub.Services.Atlas.SeenView.BeastFacts();
+                    check("SeenView beasts: the Lodge's newer record wins (tameable), this PC's own stay, a non-beast without a pet family is left out, a family counts without the beast type",
+                        bf.Count == 3 && bf[2958].Tameable && bf[2958].FromLodge && bf[2958].Build == 70374 && bf[2958].Family == 1 && !bf[3000].Tameable && bf[3000].Family == 25 && !bf.ContainsKey(3001) && bf[3002].Tameable && bf[3002].BossLevel && bf[3002].Family == 15);
                 }
                 finally { ElansAddonHub.Services.Atlas.AtlasQuery.Context.Lodge = savedLodge; SeenData.SetForTest(null, SeenData.State.NotStarted); }
                 Session.Disconnect(); Session.AtlasResetForTest();

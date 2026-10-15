@@ -47,16 +47,36 @@ namespace ElansAddonHub.Services.Atlas
         public static int DetailedQuestCount() => AllQuests().Count(q => q.Full);
 
         // a creature's type flags and kill credits: own cache, else the Lodge's (null = nobody has seen it)
-        public sealed class NpcFacts { public uint TypeFlags; public int Kc1, Kc2, Family, Type; public bool FromLodge; public bool Tameable => (TypeFlags & WdbCreature.TypeTameable) != 0; public bool BossLevel => (TypeFlags & WdbCreature.TypeBoss) != 0; }
+        public sealed class NpcFacts { public string Name = ""; public int Build; public uint TypeFlags; public int Kc1, Kc2, Family, Type; public bool FromLodge; public bool Tameable => (TypeFlags & WdbCreature.TypeTameable) != 0; public bool BossLevel => (TypeFlags & WdbCreature.TypeBoss) != 0; }
 
         public static NpcFacts Npc(int id)
         {
             var own = SeenData.Npc(id);
             var ln = L()?.Npc(id);
             if (ln != null && ln.Build > 0 && (own == null || ln.Build > SeenData.LastBuild))
-                return new NpcFacts { TypeFlags = ln.TypeFlags, Kc1 = ln.Kc1, Kc2 = ln.Kc2, Family = ln.Family, Type = ln.Type, FromLodge = true };
-            if (own != null) return new NpcFacts { TypeFlags = own.Flags0, Kc1 = own.KillCredit1, Kc2 = own.KillCredit2, Family = own.Family, Type = own.Type };
+                return new NpcFacts { Name = ln.Name, Build = ln.Build, TypeFlags = ln.TypeFlags, Kc1 = ln.Kc1, Kc2 = ln.Kc2, Family = ln.Family, Type = ln.Type, FromLodge = true };
+            if (own != null) return new NpcFacts { Name = own.Name, Build = SeenData.LastBuild, TypeFlags = own.Flags0, Kc1 = own.KillCredit1, Kc2 = own.KillCredit2, Family = own.Family, Type = own.Type };
             return null;
+        }
+
+        // every creature either side knows that is a beast (type 1) or carries a pet family, with the same winner rule as Npc(id): the newest game build, this PC's copy on a tie.
+        // Id -> facts; used by the SharedData.lua "beasts" section for Hunter Helper.
+        public static Dictionary<int, NpcFacts> BeastFacts()
+        {
+            var res = new Dictionary<int, NpcFacts>();
+            var snap = SeenData.Snapshot;
+            if (snap != null)
+                foreach (var n in snap.Npcs.Values)
+                    res[n.Id] = new NpcFacts { Name = n.Name, Build = SeenData.LastBuild, TypeFlags = n.Flags0, Kc1 = n.KillCredit1, Kc2 = n.KillCredit2, Family = n.Family, Type = n.Type };
+            var l = L();
+            if (l != null)
+                foreach (var ln in l.AllSeenNpcs)
+                {
+                    if (ln.Build <= 0 || ln.Build <= SeenData.LastBuild && res.ContainsKey(ln.Id)) continue;
+                    res[ln.Id] = new NpcFacts { Name = ln.Name, Build = ln.Build, TypeFlags = ln.TypeFlags, Kc1 = ln.Kc1, Kc2 = ln.Kc2, Family = ln.Family, Type = ln.Type, FromLodge = true };
+                }
+            foreach (var id in res.Where(kv => kv.Value.Type != 1 && kv.Value.Family <= 0).Select(kv => kv.Key).ToList()) res.Remove(id);   // only beasts and pet families
+            return res;
         }
 
         // the Lock an object opens with (own cache, else the Lodge's); 0 = unknown

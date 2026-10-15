@@ -24,7 +24,7 @@ namespace ElansAddonHub
             long nowU = new DateTimeOffset(now).ToUnixTimeSeconds();
             const string AllAtlas = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\",\"atlas\",\"atlas2\",\"atlas3\",\"atlas4\"";
             var sentFile = Session.AtlasSentPathForTest;
-            var hadNow = AtlasQuery.Context.NowUtc; var hadLodge = AtlasQuery.Context.Lodge; var hadOwn = AtlasQuery.Context.OwnFieldNotes; var hadText = SharedDataFile.FieldNotesText;
+            var hadNow = AtlasQuery.Context.NowUtc; var hadLodge = AtlasQuery.Context.Lodge; var hadOwn = AtlasQuery.Context.OwnFieldNotes; var hadText = SharedDataFile.FieldNotesText; var hadBeasts = SharedDataFile.BeastsText;
             string sharedFile = Path.Combine(atlasRoot, "_classic_beta_", "Interface", "AddOns", "ElansHub", "SharedData.lua");
             try
             {
@@ -188,11 +188,42 @@ namespace ElansAddonHub
                 check("writer: at most 500 beasts, the best supported and newest kept (no hunter-less beast over one that has 49)", capNpcs.Count == SharedDataFile.MaxFieldNoteNpcs && capNpcs.ContainsKey("49") && cap.Length < SharedDataFile.MaxFieldNotesBytes);
                 check("writer: nothing to write is the empty string", SharedDataFile.BuildFieldNotes(null) == "" && SharedDataFile.BuildFieldNotes(new AtlasObs.FieldNote[0]) == "");
                 check("writer: without notes Compose is byte for byte what it was (flights only)", SharedDataFile.Compose(null, now, null) == FlightShare.BuildLua(null, now));
+
+                // ---- the beasts section (server tameability / family / boss for Hunter Helper)
+                SharedDataFile.BeastsText = "";
+                Services.Atlas.SeenView.NpcFacts NF(string name, uint tf, int type, int fam, int build) => new Services.Atlas.SeenView.NpcFacts { Name = name, TypeFlags = tf, Type = type, Family = fam, Build = build };
+                var facts = new Dictionary<int, Services.Atlas.SeenView.NpcFacts>
+                {
+                    [100] = NF("Spot", 1, 1, 1, 70374), [101] = NF("Grinning Dog", 0, 1, 25, 70374), [102] = NF("Rat", 0, 1, 0, 70338), [103] = NF("Boss Bear", 0x1 | 0x4, 1, 4, 70374),
+                    [104] = NF("Ev\"il\\ ]] os.execute(\"x\") --\nName", 1, 1, 2, 70374), [105] = NF("Guard", 0, 7, 0, 70374), [0] = NF("Zero", 1, 1, 1, 1), [106] = null,
+                };
+                var bLua = SharedDataFile.BuildBeasts(facts);
+                var bg = LuaData.ReadGlobals("ElansHubShared = {\n" + bLua + "}\n");
+                var bt = bg?["ElansHubShared"] is Dictionary<string, object> bh ? bh.Child("beasts") : null;
+                check("beasts: every beast or pet-family creature with tame 0/1, family, boss and build; the tameable ones carry their name; non-beasts and bad ids are left out",
+                    bt != null && bt.Count == 5 && bt.Child("100").Int("tame") == 1 && bt.Child("100").Int("fam") == 1 && bt.Child("100").Str("build") == "70374" && bt.Child("100").Str("name") == "Spot"
+                    && bt.Child("101").Int("tame") == 0 && bt.Child("101").Int("fam") == 25 && !bt.Child("101").ContainsKey("name") && !bt.Child("102").ContainsKey("fam") && bt.Child("102").Int("tame") == 0
+                    && bt.Child("103").Bool("boss") && bt.Child("103").Int("tame") == 1 && !bt.Child("100").ContainsKey("boss") && !bt.ContainsKey("105") && !bt.ContainsKey("0"));
+                check("beasts: a hostile name stays a string", bt != null && bt.Child("104").Str("name") == "Ev\"il\\ ]] os.execute(\"x\") -- Name" && bt.Count == 5);
+                check("beasts: nothing to write is the empty string", SharedDataFile.BuildBeasts(null) == "" && SharedDataFile.BuildBeasts(new Dictionary<int, Services.Atlas.SeenView.NpcFacts>()) == "" && SharedDataFile.BuildBeasts(new Dictionary<int, Services.Atlas.SeenView.NpcFacts> { [5] = NF("Guard", 0, 7, 0, 1) }) == "");
+                var bigFacts = Enumerable.Range(1, 4000).ToDictionary(i => i, i => NF("Beast " + i, i > 3500 ? 1u : 0u, 1, i % 7, 70374));
+                var bigLua = SharedDataFile.BuildBeasts(bigFacts);
+                var bigT = ((Dictionary<string, object>)LuaData.ReadGlobals("ElansHubShared = {\n" + bigLua + "}\n")["ElansHubShared"]).Child("beasts");
+                check("beasts: capped by count and bytes, the tameable ones always in (they come first)", bigT.Count <= SharedDataFile.MaxBeasts && bigT.Count > 1500 && bigT.ContainsKey("4000") && bigT.ContainsKey("3501") && bigLua.Length < SharedDataFile.MaxBeastsBytes);
+                // the file: written next to the flights, kept by another writer, taken out again
+                SharedDataFile.BeastsText = bLua;
+                SharedDataFile.Write(atlasRoot, null, null, now);
+                check("beasts: SharedData.lua carries the section", File.Exists(sharedFile) && File.ReadAllText(sharedFile).Contains("beasts = {") && File.ReadAllText(sharedFile).Contains("flights"));
+                SharedDataFile.Write(atlasRoot, null, null, now);
+                check("beasts: another writer (flights, guides) keeps the section", File.ReadAllText(sharedFile).Contains("[103] = { tame = 1"));
+                SharedDataFile.BeastsText = "";
+                SharedDataFile.Write(atlasRoot, null, null, now);
+                check("beasts: with nothing to say the section is removed from the file again", !File.ReadAllText(sharedFile).Contains("beasts"));
             }
             finally
             {
                 Session.Disconnect(); Session.AtlasResetForTest();
-                AtlasQuery.Context.NowUtc = hadNow; AtlasQuery.Context.Lodge = hadLodge; AtlasQuery.Context.OwnFieldNotes = hadOwn; SharedDataFile.FieldNotesText = hadText;
+                AtlasQuery.Context.NowUtc = hadNow; AtlasQuery.Context.Lodge = hadLodge; AtlasQuery.Context.OwnFieldNotes = hadOwn; SharedDataFile.FieldNotesText = hadText; SharedDataFile.BeastsText = hadBeasts;
                 try { File.Delete(sentFile); } catch { }
                 try { if (File.Exists(sharedFile)) File.Delete(sharedFile); } catch { }
                 WriteAtlasHub("ACC1", AtlasLua(AtlasFixture()));

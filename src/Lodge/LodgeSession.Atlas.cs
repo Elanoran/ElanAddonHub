@@ -46,6 +46,7 @@ namespace ElansAddonHub.Lodge
         readonly Dictionary<int, List<AtlasObs.FishSpot>> fishSpots = new Dictionary<int, List<AtlasObs.FishSpot>>();   // fishing spots the lodge merged (server 2.21, atlas4): uiMapId -> spots
         public long FishSpotsChanged;                      // counts every answer that changed the fishing spots
         readonly Dictionary<int, AtlasObs.FieldNote> fieldNotes = new Dictionary<int, AtlasObs.FieldNote>();   // hunter field notes the lodge merged (server 2.23, atlas5): npc -> note
+        public long SeenNpcsChanged;                       // counts every answer that changed the seen creatures (SharedData.lua's beasts section is rewritten when it moves)
         public long NotesChanged;                          // counts every answer that changed the field notes (SharedData.lua is rewritten when it moves)
         readonly Dictionary<int, List<AtlasObs.EntranceSpot>> entrances = new Dictionary<int, List<AtlasObs.EntranceSpot>>();   // instance entrances the lodge merged (server 2.24, atlas6): instance -> spots
         public int Dropped { get; private set; }           // entries of the last answers that failed validation
@@ -76,6 +77,7 @@ namespace ElansAddonHub.Lodge
         public void Clear()
         {
             if (fieldNotes.Count > 0) NotesChanged++;
+            if (seenNpcs.Count > 0) SeenNpcsChanged++;
             kills.Clear(); objects.Clear(); fishing.Clear(); vendors.Clear(); quests.Clear(); spawns.Clear(); revealed.Clear(); finds.Clear();
             seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear(); fishSpots.Clear(); fieldNotes.Clear(); entrances.Clear();
             Epoch = ""; Rev = 0; Dropped = 0; SeenMembers = 0; Invalidate();
@@ -138,7 +140,7 @@ namespace ElansAddonHub.Lodge
                 {
                     if (!AtlasObs.Key(kv.Key, AtlasObs.MaxId, out var id) || (!seenNpcs.ContainsKey(id) && seenNpcs.Count >= AtlasObs.MaxSeenNpcs)) { dropped++; continue; }
                     var x = AtlasObs.ParseSeenNpc(id, kv.Value, ref dropped);
-                    if (x != null) seenNpcs[id] = x;
+                    if (x != null) { seenNpcs[id] = x; SeenNpcsChanged++; }
                 }
             var sg = m.Child("seenObjects");
             if (sg != null)
@@ -602,9 +604,30 @@ namespace ElansAddonHub.Lodge
             catch (Exception e) { Util.Log("atlas: hunter field notes: " + e.GetType().Name); }
         }
 
+        // The game's own creature cache (this PC's and the Lodge's, merged by SeenView) goes into SharedData.lua as the `beasts` section when it changed (Hunter Helper: tameable, family, boss).
+        // Works without a Lodge: this PC's cache alone is enough. Checked every 2 s by a cheap signature; built and written only when it moved.
+        string beastsSig = "";
+        void BeastsTick()
+        {
+            try
+            {
+                var snap = SeenData.Snapshot;
+                var sig = (snap == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(snap)) + "|" + SeenData.LastBuild + "|" + AtlasData.SeenNpcsChanged + "|" + AtlasData.SeenNpcCount + "|" + Settings?.WowRoot;
+                if (sig == beastsSig) return;
+                beastsSig = sig;
+                var text = SharedDataFile.BuildBeasts(ElansAddonHub.Services.Atlas.SeenView.BeastFacts());
+                if (text == SharedDataFile.BeastsText) return;
+                SharedDataFile.BeastsText = text;
+                var res = SharedDataFile.Write(Settings?.WowRoot, FlightData, SharedDataFile.Current, Clock());
+                Util.Log("atlas: beasts for Hunter Helper: " + (text.Length == 0 ? "none" : text.Split('\n').Length - 3 + " creatures") + ", " + (res?.Written.Count ?? 0) + " file(s) written");
+            }
+            catch (Exception e) { Util.Log("atlas: beasts for Hunter Helper: " + e.GetType().Name); }
+        }
+
         // every 2 s with the other ticks: look at the Hub file about every 30 s; send a waiting batch when its slot comes; refresh the aggregate every 5 minutes
         void AtlasTick()
         {
+            BeastsTick();
             if (!SupportsAtlas) return;
             if (atlasPollTick++ % 15 == 0 || (atlasBacklog && atlasInflight == null && Clock() >= atlasNextShare)) AtlasSync();
             SaveAtlasCache(false);
