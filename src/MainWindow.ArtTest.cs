@@ -97,9 +97,10 @@ namespace ElansAddonHub
                 {
                     await AtlasView.Open("zone:" + z); await AtlasView.WaitForTest(); await Task.Delay(200); UpdateLayout();
                     var b = AtlasView.BannerForTest;
-                    Check("zone " + z + ": the page opens with the banner above the name card, the full content width and " + ElansAddonHub.AtlasPage.BannerHeight + " high",
-                        b != null && b.IsVisible && Math.Abs(b.ActualHeight - ElansAddonHub.AtlasPage.BannerHeight) < 0.5 && Math.Abs(b.ActualWidth - AtlasView.BodyForTest.ActualWidth) < 1.5
-                        && AtlasView.HeroForTest != null && AtlasView.HeroForTest.TranslatePoint(new Point(0, 0), b).Y > b.ActualHeight - 1,
+                    Check("zone " + z + ": the painting runs behind the name card (taller than the " + ElansAddonHub.AtlasPage.BannerHeight + " banner part), the full content width",
+                        b != null && b.IsVisible && b.ActualHeight > ElansAddonHub.AtlasPage.BannerHeight && Math.Abs(b.ActualWidth - AtlasView.BodyForTest.ActualWidth) < 1.5
+                        && AtlasView.HeroForTest != null && AtlasView.HeroForTest.TranslatePoint(new Point(0, 0), b).Y >= ElansAddonHub.AtlasPage.BannerHeight - 49
+                        && AtlasView.HeroForTest.TranslatePoint(new Point(0, AtlasView.HeroForTest.ActualHeight), b).Y <= b.ActualHeight + 1,
                         b == null ? "none" : b.ActualWidth + "x" + b.ActualHeight + " body " + AtlasView.BodyForTest.ActualWidth);
                     await ShotWait(500);
                     Snapshot(P("art-03-zone-" + z + ".png"));

@@ -174,6 +174,14 @@
     <GradientStop Color="#B30F1113" Offset="0.45" />
     <GradientStop Color="#660F1113" Offset="1" />
   </LinearGradientBrush>
+  <!-- zone hero: the painting behind the banner and the name card - clear at the top, darker where the name sits, the page colour at the bottom -->
+  <LinearGradientBrush x:Key="Brush.Art.HeroFade" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="#000F1113" Offset="0" />
+    <GradientStop Color="#000F1113" Offset="0.38" />
+    <GradientStop Color="#990F1113" Offset="0.7" />
+    <GradientStop Color="#F00F1113" Offset="1" />
+  </LinearGradientBrush>
+  <SolidColorBrush x:Key="Brush.Art.HeroCard" Color="#590F1113" />
   <LinearGradientBrush x:Key="Brush.Art.BannerFade" StartPoint="0,0" EndPoint="0,1">
     <GradientStop Color="#000F1113" Offset="0" />
     <GradientStop Color="#000F1113" Offset="0.5" />

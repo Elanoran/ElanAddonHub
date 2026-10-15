@@ -84,10 +84,9 @@ namespace ElansAddonHub
 
             var col = new StackPanel();
             Body.Children.Add(col);
-            bannerEl = ZoneBanner(m);
-            if (bannerEl != null) col.Children.Add(bannerEl);
             heroEl = HeroView(m, out heroName);
-            col.Children.Add(heroEl);
+            bannerEl = ZoneHero(m, heroEl);
+            col.Children.Add(bannerEl ?? heroEl);
 
             if (m.NotFound)
             {
@@ -183,14 +182,22 @@ namespace ElansAddonHub
             return int.TryParse(s, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : 0;
         }
 
-        FrameworkElement ZoneBanner(AtlasPageModel m)
+        // The painting does not stop at the banner: it runs on behind the name card (made see-through) and fades into the page below it, so the
+        // name, the subtitle and the chips sit on a subtle continuation of the picture. Null = no art for this page (the plain name card is used).
+        FrameworkElement ZoneHero(AtlasPageModel m, FrameworkElement hero)
         {
             var art = ArtLibrary.Zone(ZoneIdOf(m));
-            var back = art == null ? null : ArtLibrary.Backdrop(art, "Brush.Art.BannerFade", (CornerRadius)FindResource("Radius.Card"), "zone-banner-art");
+            var back = art == null ? null : ArtLibrary.Backdrop(art, "Brush.Art.HeroFade", (CornerRadius)FindResource("Radius.Card"), "zone-banner-art");
             if (back == null) return null;
-            var b = new Border { Height = BannerHeight, Margin = new Thickness(0, 0, 0, 12), Tag = "zone-banner", IsHitTestVisible = false, Child = back };
-            System.Windows.Automation.AutomationProperties.SetName(b, "Painting of " + m.Title);
-            return b;
+            var g = new Grid { Tag = "zone-banner", Margin = new Thickness(0, 0, 0, 12) };
+            g.Children.Add(back);
+            var stack = new StackPanel();
+            stack.Children.Add(new Border { Height = BannerHeight - 48, IsHitTestVisible = false });
+            if (hero is Border card) { card.SetResourceReference(Border.BackgroundProperty, "Brush.Art.HeroCard"); card.Margin = new Thickness(0); }
+            stack.Children.Add(hero);
+            g.Children.Add(stack);
+            System.Windows.Automation.AutomationProperties.SetName(back, "Painting of " + m.Title);
+            return g;
         }
 
         // the big tile: the game's icon (items, spells, skills, classes), else the quality-coloured letter of an item, else the glyph of the kind. A gold ring on an elite creature.
