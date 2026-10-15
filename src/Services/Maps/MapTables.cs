@@ -51,7 +51,12 @@ namespace ElansAddonHub.Services.Maps
         // LiquidType: Name_lang 0, Texture[6] 1, Flags 2, SoundBank 3 (0 water, 1 ocean, 2 magma, 3 slime) ...
         public const int LiquidName = 0, LiquidSoundBank = 3;
 
-        public static readonly Def[] All = { UiMap, UiMapArt, UiMapArtTile, UiMapArtStyleLayer, UiMapXMapArt, UiMapAssignment, UiMapGroupMember, Map, AreaTable, WorldMapOverlay, WorldMapOverlayTile, TaxiNodes, TaxiPath, TaxiPathNode };
+        // LFGDungeons / ContentTuning (the level the game suggests for a dungeon or raid; FileDataIDs from the community listfile, layout blocks of 1.60.1.70338 in WoWDBDefs;
+        // table hashes, layout hashes and row counts - 71 LFG rows, 100 tuning rows - verified on the real files of that build)
+        public static readonly Def LfgDungeons = new Def { Name = "LFGDungeons", FileDataId = 1361033, TableHash = 0x999BB9C2, Layouts = new uint[] { 0x34B02DE8 } };
+        public static readonly Def ContentTuning = new Def { Name = "ContentTuning", FileDataId = 1962930, TableHash = 0xBD3635FF, Layouts = new uint[] { 0xA3E13004 } };
+
+        public static readonly Def[] All = { UiMap, UiMapArt, UiMapArtTile, UiMapArtStyleLayer, UiMapXMapArt, UiMapAssignment, UiMapGroupMember, Map, AreaTable, WorldMapOverlay, WorldMapOverlayTile, TaxiNodes, TaxiPath, TaxiPathNode, LfgDungeons, ContentTuning };
 
         // field numbers (stored columns)
         // UiMap: Name_lang 0, ID 1 (stored inline), ParentUiMapID 2, Flags 3, System 4, Type 5
@@ -79,6 +84,12 @@ namespace ElansAddonHub.Services.Maps
         // MaxPlayers 18, WindSettingsID, ZmpFileDataID 20, WdtFileDataID 21, OceanLiquidTypeID, NavigationMaxDistance, PreloadFileDataID, Flags[3]);
         // WdtFileDataID reads 775971 for Azeroth (Eastern Kingdoms) and 782779 for Kalimdor on the real file
         public const int MapWdtFileData = 21;
+        // Corpse[2] is stored column 6 (a float pair: world x north, y west of the spot on map CorpseMapID, field 17 = where a ghost of that instance is put: the entrance);
+        // verified on the real file: Deadmines (-11208, 1681) in Westfall, Wailing Caverns (-751, -2209) in the Barrens, Ragefire Chasm (1816, -4423) in Orgrimmar
+        public const int MapCorpse = 6, MapCorpseMap = 17;
+        // LFGDungeons (layout 34B02DE8, the ID is not stored): Name_lang 0, Description_lang 1, TypeID 2 ... ContentTuningID 31. ContentTuning (A3E13004): ID 0 (inline), Flags 1,
+        // ExpansionID 2 ... MinLevelSquish 9, MaxLevelSquish 10 (the level the game suggests: 17 for Wailing Caverns, 13 for Ragefire Chasm, 60 for Molten Core)
+        public const int LfgName = 0, LfgType = 2, LfgTuning = 31, CtMinLevel = 9, CtMaxLevel = 10;
         // TaxiNodes (layout E7B597F0): Name_lang 0, Pos[3] 1, MapOffset[2] 2, FlightMapOffset[2] 3, ID 4 (inline), ContinentID 5 (inline relation), ConditionID 6, CharacterBitNumber 7,
         // Flags 8, UiTextureKitID 9, MinimapAtlasMemberID 10, Facing 11, SpecialIconConditionID 12, VisibilityConditionID 13, MountCreatureID[2] 14 (Horde, Alliance)
         public const int TnName = 0, TnPos = 1, TnContinent = 5, TnFlags = 8, TnMount = 14;
@@ -268,6 +279,17 @@ namespace ElansAddonHub.Services.Maps
                             MaxPlayers = (int)mw.Field(i, MapMaxPlayers), WdtFileDataId = (int)mw.Field(i, MapWdtFileData),
                         });
                     set.HasMaps = true;
+                    try
+                    {
+                        // where a ghost of the instance is put (the entrance): a float pair and the continent it is on
+                        for (int i = 0; i < mw.Count; i++)
+                        {
+                            var g = set.Maps[i];
+                            g.CorpseMapId = (int)mw.Field(i, MapCorpseMap);
+                            g.CorpseX = Flt(mw, i, MapCorpse, 0, 2); g.CorpseY = Flt(mw, i, MapCorpse, 1, 2);
+                        }
+                    }
+                    catch (Exception e) { set.Notes.Add("Map.db2 corpse positions: " + e.Message + ": no instance entrances"); foreach (var g in set.Maps) { g.CorpseMapId = -1; g.CorpseX = g.CorpseY = 0; } }
                     set.LockedMapRows = mw.EncryptedRecords;
                     if (mw.EncryptedRecords > 0) set.Notes.Add(mw.EncryptedRecords + " Map rows are key-locked in the game files and skipped");
                 }
@@ -305,9 +327,34 @@ namespace ElansAddonHub.Services.Maps
                 catch (Exception e) { set.Notes.Add("AreaTable.db2: " + e.Message + ": no area names"); set.Areas.Clear(); }
             }
             AddTaxi(set, raw);
+            AddLfg(set, raw);
             return set;
         }
 
+
+        // The level the game suggests for each dungeon and raid: LFGDungeons (name, tuning id) + ContentTuning (MinLevelSquish / MaxLevelSquish), both in a known layout or neither
+        // (set.HasLfg false, with a note). Left alone silently when the raw set does not name the tables (a test with its own tables).
+        public static void AddLfg(MapSet set, IDictionary<string, byte[]> raw)
+        {
+            if (!raw.ContainsKey(LfgDungeons.Name) && !raw.ContainsKey(ContentTuning.Name)) return;
+            var lw = OpenTable(set, raw, LfgDungeons, false); var cw = OpenTable(set, raw, ContentTuning, false);
+            if (lw == null || cw == null) { set.Notes.Add("no dungeon levels (a table is missing or its layout is not known)"); return; }
+            try
+            {
+                var tuning = new Dictionary<int, int[]>();
+                for (int i = 0; i < cw.Count; i++) tuning[cw.IdAt(i)] = new[] { (int)cw.Field(i, CtMinLevel), (int)cw.Field(i, CtMaxLevel) };
+                var list = new List<LfgDungeonInfo>();
+                for (int i = 0; i < lw.Count; i++)
+                {
+                    var d = new LfgDungeonInfo { Id = lw.IdAt(i), Name = lw.String(i, LfgName), TypeId = (int)lw.Field(i, LfgType), ContentTuningId = (int)lw.Field(i, LfgTuning) };
+                    if (tuning.TryGetValue(d.ContentTuningId, out var lv) && lv[0] > 0 && lv[0] <= 255 && lv[1] >= lv[0] && lv[1] <= 255) { d.MinLevel = lv[0]; d.MaxLevel = lv[1]; }
+                    list.Add(d);
+                }
+                set.Lfg.AddRange(list);
+                set.HasLfg = list.Count > 0;
+            }
+            catch (Exception e) { set.Notes.Add("dungeon level tables: " + e.Message); set.Lfg.Clear(); set.HasLfg = false; }
+        }
         // Flight masters and routes: all three tables in a known layout or none (set.HasTaxi false, with a note). A raw set that does not mention the tables at
         // all (a test with its own tables) is left alone silently; the game's real file list always names them (null = not in this install).
         public static void AddTaxi(MapSet set, IDictionary<string, byte[]> raw)

@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services.Maps
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 3;          // (3: map WDT file ids, flight tables; 2: explored-area overlays) bump when the parsing or the saved file changes meaning
+        public const int FormatVersion = 4;          // (4: instance entrances + dungeon levels; 3: map WDT file ids, flight tables; 2: explored-area overlays) bump when the parsing or the saved file changes meaning
 
         // ---- hooks (the same shape as ItemData's)
         public static Func<string> WowRoot = () => null;
@@ -164,10 +164,8 @@ namespace ElansAddonHub.Services.Maps
             if (b == null) { Publish(null, null, State.Unavailable, "no .build.info in the WoW folder"); return; }
             var set = Obtain(MapIndexFile.TryRead(CacheFile), b, CacheFile, () =>
             {
-                Dictionary<string, byte[]> raw;
-                try { raw = ReadCasc(root, flavor); }
+                try { return ReadAndParse(root, flavor); }
                 catch (Exception e) { Util.Log("map data: game files: " + e.Message); return new MapSet { Problem = "the game files could not be read: " + e.Message }; }
-                return MapTables.Parse(raw);
             }, out var from);
             if (!set.Ok) { Util.Log("map data: unavailable: " + set.Problem); Publish(null, null, State.Unavailable, set.Problem); return; }
             foreach (var n in set.Notes) Util.Log("map data: " + n);
@@ -184,6 +182,30 @@ namespace ElansAddonHub.Services.Maps
             if (fresh.Ok) MapIndexFile.TryWrite(cacheFile, buildText, fresh);
             from = "game files";
             return fresh;
+        }
+
+        // the tables -> rows, plus the one thing the tables cannot say: the terrain area under each instance entrance (EntranceAreas; a few small ADT files)
+        public static MapSet ReadAndParse(string root, string flavor)
+        {
+            using (var casc = CascStorage.Open(root, flavor))
+            {
+                casc.ZeroFillEncrypted = true;     // key-locked parts read as zeros; the table reader skips those sections
+                var set = MapTables.Parse(ReadTables(casc));
+                if (set.Ok && set.HasMaps) EntranceAreas.Resolve(casc, set);
+                return set;
+            }
+        }
+
+        static Dictionary<string, byte[]> ReadTables(CascStorage casc)
+        {
+            var keys = casc.ResolveFileIds(new HashSet<int>(MapTables.All.Select(d => d.FileDataId)));
+            var raw = new Dictionary<string, byte[]>();
+            foreach (var d in MapTables.All)
+            {
+                try { raw[d.Name] = keys.TryGetValue(d.FileDataId, out var ck) ? casc.ReadByContentKey(ck) : null; }
+                catch (Exception e) { Util.Log("map data: " + d.Name + ".db2: " + e.Message); raw[d.Name] = null; }
+            }
+            return raw;
         }
 
         // the raw table files by name (null = not in this install)
@@ -222,7 +244,7 @@ namespace ElansAddonHub.Services.Maps
                 using (var w = new BinaryWriter(mem, Encoding.UTF8, true))
                 {
                     w.Write(Magic); w.Write(MapData.FormatVersion); w.Write(build ?? "");
-                    w.Write(set.HasArt); w.Write(set.HasAssignments); w.Write(set.HasMaps); w.Write(set.HasFloors); w.Write(set.HasAreas); w.Write(set.HasOverlays); w.Write(set.HasTaxi); w.Write(set.OverlayProblem ?? ""); w.Write(set.LockedMapRows);
+                    w.Write(set.HasArt); w.Write(set.HasAssignments); w.Write(set.HasMaps); w.Write(set.HasFloors); w.Write(set.HasAreas); w.Write(set.HasOverlays); w.Write(set.HasTaxi); w.Write(set.HasLfg); w.Write(set.OverlayProblem ?? ""); w.Write(set.LockedMapRows);
                     w.Write(set.Notes.Count); foreach (var n in set.Notes) w.Write(n);
                     w.Write(set.UiMaps.Count);
                     foreach (var m in set.UiMaps) { w.Write(m.Id); w.Write(m.Name ?? ""); w.Write(m.ParentId); w.Write(m.Flags); w.Write(m.System); w.Write(m.Type); }
@@ -252,7 +274,7 @@ namespace ElansAddonHub.Services.Maps
                         w.Write(a.MinX); w.Write(a.MinY); w.Write(a.MinZ); w.Write(a.MaxX); w.Write(a.MaxY); w.Write(a.MaxZ);
                     }
                     w.Write(set.Maps.Count);
-                    foreach (var m in set.Maps) { w.Write(m.Id); w.Write(m.Directory ?? ""); w.Write(m.Name ?? ""); w.Write(m.InstanceType); w.Write(m.MapType); w.Write(m.Expansion); w.Write(m.MaxPlayers); w.Write(m.AreaTableId); w.Write(m.WdtFileDataId); }
+                    foreach (var m in set.Maps) { w.Write(m.Id); w.Write(m.Directory ?? ""); w.Write(m.Name ?? ""); w.Write(m.InstanceType); w.Write(m.MapType); w.Write(m.Expansion); w.Write(m.MaxPlayers); w.Write(m.AreaTableId); w.Write(m.WdtFileDataId); w.Write(m.CorpseMapId); w.Write(m.CorpseX); w.Write(m.CorpseY); w.Write(m.CorpseAreaId); }
                     w.Write(set.Floors.Count);
                     foreach (var f in set.Floors) { w.Write(f.GroupId); w.Write(f.UiMapId); w.Write(f.FloorIndex); w.Write(f.RelativeHeight); w.Write(f.Name ?? ""); }
                     w.Write(set.Areas.Count);
@@ -263,6 +285,8 @@ namespace ElansAddonHub.Services.Maps
                     foreach (var p in set.TaxiPaths) { w.Write(p.Id); w.Write(p.FromNode); w.Write(p.ToNode); w.Write(p.Cost); }
                     w.Write(set.TaxiPoints.Count);
                     foreach (var q in set.TaxiPoints) { w.Write(q.PathId); w.Write(q.Index); w.Write(q.MapId); w.Write(q.X); w.Write(q.Y); w.Write(q.Z); }
+                    w.Write(set.Lfg.Count);
+                    foreach (var d in set.Lfg) { w.Write(d.Id); w.Write(d.Name ?? ""); w.Write(d.TypeId); w.Write(d.ContentTuningId); w.Write(d.MinLevel); w.Write(d.MaxLevel); }
                 }
                 using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var gz = new GZipStream(fs, CompressionMode.Compress))
@@ -291,7 +315,7 @@ namespace ElansAddonHub.Services.Maps
                     var s = new Saved { Format = r.ReadInt32(), Build = r.ReadString(), Set = new MapSet() };
                     if (s.Format != MapData.FormatVersion) return null;
                     var set = s.Set;
-                    set.HasArt = r.ReadBoolean(); set.HasAssignments = r.ReadBoolean(); set.HasMaps = r.ReadBoolean(); set.HasFloors = r.ReadBoolean(); set.HasAreas = r.ReadBoolean(); set.HasOverlays = r.ReadBoolean(); set.HasTaxi = r.ReadBoolean(); var op = r.ReadString(); set.OverlayProblem = op.Length == 0 ? null : op;
+                    set.HasArt = r.ReadBoolean(); set.HasAssignments = r.ReadBoolean(); set.HasMaps = r.ReadBoolean(); set.HasFloors = r.ReadBoolean(); set.HasAreas = r.ReadBoolean(); set.HasOverlays = r.ReadBoolean(); set.HasTaxi = r.ReadBoolean(); set.HasLfg = r.ReadBoolean(); var op = r.ReadString(); set.OverlayProblem = op.Length == 0 ? null : op;
                     set.LockedMapRows = r.ReadInt32();
                     int n = Count(r, 1000); for (int i = 0; i < n; i++) set.Notes.Add(r.ReadString());
                     n = Count(r, 100000);
@@ -324,7 +348,7 @@ namespace ElansAddonHub.Services.Maps
                             MinX = r.ReadSingle(), MinY = r.ReadSingle(), MinZ = r.ReadSingle(), MaxX = r.ReadSingle(), MaxY = r.ReadSingle(), MaxZ = r.ReadSingle(),
                         });
                     n = Count(r, 1000000);
-                    for (int i = 0; i < n; i++) set.Maps.Add(new GameMapInfo { Id = r.ReadInt32(), Directory = r.ReadString(), Name = r.ReadString(), InstanceType = r.ReadInt32(), MapType = r.ReadInt32(), Expansion = r.ReadInt32(), MaxPlayers = r.ReadInt32(), AreaTableId = r.ReadInt32(), WdtFileDataId = r.ReadInt32() });
+                    for (int i = 0; i < n; i++) set.Maps.Add(new GameMapInfo { Id = r.ReadInt32(), Directory = r.ReadString(), Name = r.ReadString(), InstanceType = r.ReadInt32(), MapType = r.ReadInt32(), Expansion = r.ReadInt32(), MaxPlayers = r.ReadInt32(), AreaTableId = r.ReadInt32(), WdtFileDataId = r.ReadInt32(), CorpseMapId = r.ReadInt32(), CorpseX = r.ReadDouble(), CorpseY = r.ReadDouble(), CorpseAreaId = r.ReadInt32() });
                     n = Count(r, 1000000);
                     for (int i = 0; i < n; i++) set.Floors.Add(new FloorMember { GroupId = r.ReadInt32(), UiMapId = r.ReadInt32(), FloorIndex = r.ReadInt32(), RelativeHeight = r.ReadInt32(), Name = r.ReadString() });
                     n = Count(r, 2000000);
@@ -335,6 +359,8 @@ namespace ElansAddonHub.Services.Maps
                     for (int i = 0; i < n; i++) set.TaxiPaths.Add(new TaxiPathInfo { Id = r.ReadInt32(), FromNode = r.ReadInt32(), ToNode = r.ReadInt32(), Cost = r.ReadInt32() });
                     n = Count(r, 2000000);
                     for (int i = 0; i < n; i++) set.TaxiPoints.Add(new TaxiPoint { PathId = r.ReadInt32(), Index = r.ReadInt32(), MapId = r.ReadInt32(), X = r.ReadDouble(), Y = r.ReadDouble(), Z = r.ReadDouble() });
+                    n = Count(r, 100000);
+                    for (int i = 0; i < n; i++) set.Lfg.Add(new LfgDungeonInfo { Id = r.ReadInt32(), Name = r.ReadString(), TypeId = r.ReadInt32(), ContentTuningId = r.ReadInt32(), MinLevel = r.ReadInt32(), MaxLevel = r.ReadInt32() });
                     return s;
                 }
             }

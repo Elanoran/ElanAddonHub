@@ -82,6 +82,19 @@ namespace ElansAddonHub.Services.Atlas
 
             if (isZone) AddZoneNodes(plan, m, id);
 
+            // the dungeons and raids whose way in is in this zone (the game's own entrance spots), also as door markers on its map
+            var here = isZone ? AtlasInstances.InZone(idx, id) : new List<InstanceInfo>();
+            if (here.Count > 0)
+            {
+                var s = Section(m, "instances", "Dungeons and raids");
+                s.Note = "Their entrances are in " + z.Name + " (the spot where the game puts your ghost).";
+                foreach (var i in here)
+                {
+                    s.Rows.Add(new AtlasRow { Key = "instance:" + i.MapId, Link = "instance:" + i.MapId, Title = i.Name, Detail = AtlasInstances.Summary(i), Extra = "Entrance " + AtlasInstances.Pct(i.Entrance.Fx) + " / " + AtlasInstances.Pct(i.Entrance.Fy), Label = F, Tier = 0, Type = i.Kind, Sort = i.MinLevel });
+                    plan.Spot(id, i.Entrance.Fx, i.Entrance.Fy, MarkerKind.Entrance, i.Name, AtlasInstances.Summary(i) + " · " + F, "instance:" + i.MapId);
+                }
+            }
+
             // quests of the zone: the client's cache and the Classic baseline, the client's first
             var quests = new Dictionary<int, AtlasRow>();
             var areaMap = new Dictionary<int, int>();
@@ -136,6 +149,7 @@ namespace ElansAddonHub.Services.Atlas
                 s.Rows.AddRange(notable.OrderBy(r => r.Tier).ThenByDescending(r => r.Sort).ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase).Take(24));
             }
 
+            { var isec = m.Section("instances"); if (isec != null) { m.Sections.Remove(isec); m.Sections.Insert(m.Sections.FindIndex(x => x.Key == "children") + 1, isec); } }     // right after the places in it
             // the markers belong on this zone's own map
             var built = plan.Build();
             built.Zones = built.Zones.Where(zn => zn.UiMapId == id).ToList();
@@ -164,10 +178,16 @@ namespace ElansAddonHub.Services.Atlas
             AddLayer(m, "maps");
             m.Facts.Add(new AtlasFact("Type", inst.Kind, F));
             if (inst.MaxPlayers > 0) m.Facts.Add(new AtlasFact("Players", inst.MaxPlayers.ToString(CultureInfo.InvariantCulture), F));
+            // the level the game suggests, the wings, and the way in: Map.db2 says where a ghost of the instance is put, which is its door
+            if (inst.MinLevel > 0) m.Facts.Add(new AtlasFact("Suggested level", AtlasFormat.Levels(inst.MinLevel, inst.MaxLevel), F));
+            if (inst.Parts.Count > 1) m.Facts.Add(new AtlasFact("Wings", string.Join(", ", inst.Parts), F));
+            m.Entrance = AtlasInstances.EntranceFor(idx, inst);
+            if (m.Entrance != null)
+                m.Facts.Add(new AtlasFact("Entrance", m.Entrance.UiMapId > 0 ? m.Entrance.ZoneName + " · " + m.Entrance.Coords : "continent " + m.Entrance.MapId + ", x " + Math.Round(m.Entrance.X) + ", y " + Math.Round(m.Entrance.Y), F, m.Entrance.UiMapId > 0 ? "zone:" + m.Entrance.UiMapId : null));
             m.Map.InstanceId = mapId; m.Map.InstanceName = inst.Name;
             var L = Lodge();
             var dv = AtlasDerived.For(ClassicAtlas.Current);
-            m.Subtitle = InstanceDetail(inst) + (inst.HasMap ? "" : " · no map in the game files");
+            m.Subtitle = InstanceDetail(inst) + (AtlasInstances.LevelText(inst).Length > 0 ? " · level " + AtlasInstances.LevelText(inst) : "") + (m.Entrance != null && m.Entrance.UiMapId > 0 ? " · entrance in " + m.Entrance.ZoneName : "") + (inst.HasMap ? "" : " · no map in the game files");
             if (dv != null)
             {
                 AddLayer(m, "classic");

@@ -94,6 +94,16 @@ namespace ElansAddonHub.Services.Maps
         public int InstanceType;    // 0 none (open world), 1 dungeon, 2 raid, 3 battleground, 4 arena, 5 scenario
         public int MapType, Expansion, MaxPlayers, AreaTableId;
         public int WdtFileDataId;   // the world table (WDT) of the map: which map tiles exist and their minimap files (0 = none)
+        public int CorpseMapId = -1;    // where the game puts a ghost that dies in the instance: the continent (-1 = none)
+        public double CorpseX, CorpseY; // ... and the spot on it (world x north / y west): for an instance this is the entrance
+        public int CorpseAreaId;        // the AreaTable id of the terrain chunk at that spot (read from the continent's ADT once per game build; 0 = not read)
+    }
+
+    // LFGDungeons.db2 joined with its ContentTuning row: the name and the level the game suggests for a dungeon or raid (the wings of Dire Maul are rows of their own)
+    public sealed class LfgDungeonInfo
+    {
+        public int Id, TypeId, ContentTuningId, MinLevel, MaxLevel;
+        public string Name = "";
     }
 
     // UiMapGroupMember: the floors of a multi-floor map
@@ -126,8 +136,9 @@ namespace ElansAddonHub.Services.Maps
         public List<TaxiNodeInfo> TaxiNodes = new List<TaxiNodeInfo>();
         public List<TaxiPathInfo> TaxiPaths = new List<TaxiPathInfo>();
         public List<TaxiPoint> TaxiPoints = new List<TaxiPoint>();
+        public List<LfgDungeonInfo> Lfg = new List<LfgDungeonInfo>();
         // which tables were read (a table whose layout this version does not know is simply not there)
-        public bool HasArt, HasAssignments, HasMaps, HasFloors, HasAreas, HasOverlays, HasTaxi;
+        public bool HasArt, HasAssignments, HasMaps, HasFloors, HasAreas, HasOverlays, HasTaxi, HasLfg;
         public string OverlayProblem;                  // why the maps have no overlays (unknown layout ...); null = fine
         public int LockedMapRows;                      // Map rows that sit in key-locked parts of the file
         public string Problem;                         // set = unavailable (nothing else is valid)
@@ -162,5 +173,20 @@ namespace ElansAddonHub.Services.Maps
         public bool Placeholder;                       // a test or unused leftover ("<unused>...", "Scott Test")
         public List<UiMapInfo> Floors = new List<UiMapInfo>();   // bottom to top
         public bool HasMap => Floors.Count > 0;
+        public InstanceEntrance Entrance;              // where the way in is on a continent (null = the game files do not say)
+        public int MinLevel, MaxLevel;                 // the level the game suggests (LFGDungeons + ContentTuning; 0 = the game files do not say)
+        public List<string> Parts = new List<string>();   // the wings the game lists for it (Dire Maul - East / West / North), only when there are several
+    }
+
+    // the way into an instance: a spot on a continent (world x north / y west) and the zone map that shows it
+    public sealed class InstanceEntrance
+    {
+        public int MapId;                              // the continent (Map id) the entrance stands on
+        public double X, Y;
+        public string Source = "";                     // where the position comes from (a label for the page)
+        public int AreaId;                             // the terrain's area at the spot (0 = not read): the exact zone, where the map rectangles (loose boxes) can be wrong near a border
+        public int UiMapId;                            // the most specific map that shows it (a zone or a city); 0 = none does
+        public double Fx, Fy;                          // the spot on that map (0..1 from the left / top)
+        public string ZoneName = "";
     }
 }

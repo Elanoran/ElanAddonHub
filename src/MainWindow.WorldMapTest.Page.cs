@@ -29,6 +29,10 @@ namespace ElansAddonHub
             lset.TaxiPaths.AddRange(taxi.TaxiPaths);
             lset.TaxiPoints.AddRange(taxi.TaxiPoints.Select(p => new TaxiPoint { PathId = p.PathId, Index = p.Index, MapId = p.MapId == 1 ? 0 : p.MapId, X = p.X / 10, Y = p.Y / 5, Z = p.Z }));
             lset.HasTaxi = true;
+            // two instances with their way in on the invented continent (Map.db2's ghost spot), and the level the game suggests for them
+            var crypt = lset.Maps.First(m => m.Id == 99); crypt.CorpseMapId = 0; crypt.CorpseX = 300; crypt.CorpseY = 800;
+            var hall = lset.Maps.First(m => m.Id == 98); hall.CorpseMapId = 0; hall.CorpseX = -400; hall.CorpseY = -500;
+            lset.Lfg.Add(new LfgDungeonInfo { Id = 1, Name = "Crypt of Bones", MinLevel = 17, MaxLevel = 17 }); lset.HasLfg = true;
             return lset;
         }
 
@@ -167,7 +171,70 @@ namespace ElansAddonHub
                     bool zones = await WmWaitCount("zones", 3), fms = await WmWaitCount("fm", 3), routes = await WmWaitCount("routes", 1);
                     Check("page: the layers that are on by default (zone names, flight masters, flight routes) are asked for by the page and arrive: 3 zones, 3 flight masters, 1 route", zones && fms && routes);
                     var st2 = await WmState();
-                    Check("page: the layers are not asked for twice and the ones that are off are not built (vendors, trainers, nodes ... not requested yet)", st2 != null && st2.Child("counts").Count == 3 && ((List<object>)st2.List("on")).Cast<string>().OrderBy(x => x).SequenceEqual(WorldMapLayers.DefaultOn.OrderBy(x => x)), Json.Write(st2?.Child("counts")));
+                    Check("page: the layers are not asked for twice and the ones that are off are not built (vendors, trainers, nodes ... not requested yet; the dungeon and raid layer is on by default and arrives empty on this invented continent)", st2 != null && st2.Child("counts").Count == 4 && st2.Child("counts").ContainsKey("instances") && ((List<object>)st2.List("on")).Cast<string>().OrderBy(x => x).SequenceEqual(WorldMapLayers.DefaultOn.OrderBy(x => x)), Json.Write(st2?.Child("counts")));
+                    // dungeon and raid entrances (Map.db2's ghost spot): on by default, a door for a dungeon and a skull for a raid, labelled with the level the game suggests
+                    bool insArrived = await WmWaitCount("instances", 2);
+                    async Task<List<Dictionary<string, object>>> InsMarkers(string fire = null)
+                    {
+                        var raw = await WmEval("window.wm.markers('instances'" + (fire == null ? "" : ", " + fire) + ")");
+                        var js = Json.Parse(raw) as string; var arr = js == null ? null : Json.Parse(js) as List<object>;
+                        return arr == null ? new List<Dictionary<string, object>>() : arr.OfType<Dictionary<string, object>>().ToList();
+                    }
+                    var insM = await InsMarkers();
+                    Check("page: the dungeon and raid layer arrives on its own (2 entrances on this continent): a door for Crypt of Bones, a skull badge for Deep Hall, labels \"Crypt of Bones · 17\" (the game's suggested level) and \"Deep Hall\", both kinds shown",
+                        insArrived && insM.Count == 2 && insM.Any(m => ((string)m["ic"]).Contains("dun") && (string)m["lab"] == "Crypt of Bones · 17" && (bool)m["shown"] && (string)m["g"] == "instances.dungeons") && insM.Any(m => ((string)m["ic"]).Contains("raid") && (string)m["lab"] == "Deep Hall" && (string)m["g"] == "instances.raids" && (bool)m["shown"]), Json.Write(insM));
+                    // the child rows switch the kinds one by one
+                    await WmEval("(function(){ var r=[].slice.call(document.querySelectorAll('.wm-row')).filter(function(e){return e.textContent.indexOf('Raids')===0})[0]; r.querySelector('input').click(); return 1; })()");
+                    var insNoRaid = await InsMarkers();
+                    await WmEval("(function(){ var r=[].slice.call(document.querySelectorAll('.wm-row')).filter(function(e){return e.textContent.indexOf('Raids')===0})[0]; r.querySelector('input').click(); return 1; })()");
+                    var insRaidBack = await InsMarkers();
+                    Check("page: switching Raids off in the panel hides the skull and keeps the door; switching it on shows it again",
+                        insNoRaid.Count(m => (bool)m["shown"]) == 1 && (string)insNoRaid.First(m => (bool)m["shown"])["g"] == "instances.dungeons" && insRaidBack.Count(m => (bool)m["shown"]) == 2);
+                    var stZ = await WmState(); double zoomNow = stZ == null ? 0 : Convert.ToDouble(stZ["zoom"], CultureInfo.InvariantCulture); bool labelsNow = (await InsMarkers()).All(m => (bool)m["labVisible"]);
+                    // right-click on a marker: Open its page + Navigate here -> the /etk way command of the spot
+                    string insCopied = null; WorldMapView.ClipboardSeamForTest = t => insCopied = t;
+                    await InsMarkers("[0,'contextmenu']");
+                    var insMenu = Json.Parse(await WmEval("[].slice.call(document.querySelectorAll('#ctx button')).map(function(b){return b.textContent}).join('|')")) as string;
+                    await WmEval("[].slice.call(document.querySelectorAll('#ctx button')).filter(function(b){return b.textContent==='Navigate here'})[0].click()");
+                    bool insNav = await WaitFor(() => insCopied != null, 8000);
+                    Check("page: a right click on an entrance offers \"Open its page\" and \"Navigate here\" (not the plain map menu); Navigate here copies the /etk way command of the zone map that shows it",
+                        insMenu != null && insMenu.Contains("Open its page") && insMenu.Contains("Navigate here") && insNav && insCopied.StartsWith("/etk way 11 "), insMenu + " | " + insCopied);
+                    WorldMapView.ClipboardSeamForTest = null;
+                    Check("page: the labels of the entrances show from zoom 3.5 on (zoom " + zoomNow + ": " + (labelsNow ? "shown" : "hidden") + ")", insM.Count == 2 && labelsNow == (zoomNow >= 3.5));
+                    // flight masters and routes by faction: Horde / Alliance / Neutral kind rows; the kinds hide markers and routes one by one, in this view and the 3D one
+                    async Task<List<Dictionary<string, object>>> WmList(string fn, string id)
+                    {
+                        var raw = await WmEval("window.wm." + fn + "('" + id + "')");
+                        var js = Json.Parse(raw) as string; var arr = js == null ? null : Json.Parse(js) as List<object>;
+                        return arr == null ? new List<Dictionary<string, object>>() : arr.OfType<Dictionary<string, object>>().ToList();
+                    }
+                    async Task ClickKid(string title, int nth) => await WmEval("(function(){ var r=[].slice.call(document.querySelectorAll('.wm-row.sub')).filter(function(e){return e.textContent.indexOf('" + title + "')===0})[" + nth + "]; r.querySelector('input').click(); return 1; })()");
+                    var fmK = await WmList("markers", "fm"); var rtK = await WmList("lines", "routes");
+                    string KidTitle(string g) => g.EndsWith(".horde") ? "Horde" : g.EndsWith(".alliance") ? "Alliance" : "Neutral";
+                    Check("page: every flight master and every flight route carries its faction kind (fm.horde / fm.alliance / fm.neutral, routes.*), all shown by default (" + fmK.Count + " masters, " + rtK.Count + " routes)",
+                        fmK.Count == 3 && rtK.Count >= 1 && fmK.All(m => ((string)m["g"]).StartsWith("fm.") && (bool)m["shown"]) && rtK.All(l => ((string)l["g"]).StartsWith("routes.") && (bool)l["shown"]), Json.Write(fmK) + Json.Write(rtK));
+                    if (fmK.Count == 3 && rtK.Count >= 1)
+                    {
+                        var kFm = (string)fmK[0]["g"]; int nFm = fmK.Count(m => (string)m["g"] == kFm);
+                        await ClickKid(KidTitle(kFm), 0);
+                        var fmOff = await WmList("markers", "fm");
+                        await ClickKid(KidTitle(kFm), 0);
+                        var fmBack = await WmList("markers", "fm");
+                        var kRt = (string)rtK[0]["g"]; int nRt = rtK.Count(l => (string)l["g"] == kRt);
+                        await ClickKid(KidTitle(kRt), 1);
+                        var rtOff = await WmList("lines", "routes");
+                        await ClickKid(KidTitle(kRt), 1);
+                        var rtBack = await WmList("lines", "routes");
+                        Check("page: switching a faction off under Flight masters hides just that faction's markers (" + KidTitle(kFm) + ", " + nFm + " of 3), under Flight routes just that faction's routes (" + KidTitle(kRt) + ", " + nRt + " of " + rtK.Count + "); switching it on shows them again",
+                            fmOff.Count(m => (bool)m["shown"]) == 3 - nFm && fmOff.Where(m => (string)m["g"] == kFm).All(m => !(bool)m["shown"]) && fmBack.All(m => (bool)m["shown"])
+                            && rtOff.Count(l => (bool)l["shown"]) == rtK.Count - nRt && rtOff.Where(l => (string)l["g"] == kRt).All(l => !(bool)l["shown"]) && rtBack.All(l => (bool)l["shown"]), Json.Write(fmOff) + Json.Write(rtOff));
+                        // every kind off, then the layer off and on again: all kinds come back
+                        foreach (var k in new[] { "Horde", "Alliance", "Neutral" }) await ClickKid(k, 0);
+                        var fmNone = await WmList("markers", "fm");
+                        await WmEval("(function(){ var r=[].slice.call(document.querySelectorAll('.wm-row')).filter(function(e){return e.textContent.indexOf('Flight masters')===0})[0]; r.querySelector('input').click(); r.querySelector('input').click(); return 1; })()");
+                        var fmAgain = await WmList("markers", "fm");
+                        Check("page: with every faction off nothing of the layer shows, and the layer switched off and on again shows all factions (the same rule as the node kinds)", fmNone.All(m => !(bool)m["shown"]) && fmAgain.Count == 3 && fmAgain.All(m => (bool)m["shown"]), Json.Write(fmNone) + Json.Write(fmAgain));
+                    }
                     // a toggle in the panel: Vendors on -> need -> "none" (no Classic data here), saved in the settings
                     var before = WorldMapView.ReceivedForTest.Count(x => x == "need");
                     await WmEval("(function(){ var r=[].slice.call(document.querySelectorAll('.wm-row')).filter(function(e){return e.textContent.indexOf('Vendors')===0})[0]; r.querySelector('input').click(); return 1; })()");
@@ -219,6 +286,14 @@ namespace ElansAddonHub
                     await Task.Delay(500);
                     var st3 = await WmState();
                     Check("page: a click on a zone opens zone:11 in the Atlas and Back returns to the world map, which is still the same live page", atZone && backOnMap && st3 != null && st3.Bool("ready"), AtlasView.CurrentId);
+                    // a click on a dungeon marker opens the instance page (with its Entrance card); Back returns to the live map
+                    await WmEval("window.wm.markers('instances', [0,'click'])");
+                    bool atInst = await WaitFor(() => AtlasView.CurrentId == "instance:99", 20000);
+                    await AtlasView.Back();
+                    bool backOnMap2 = await WaitFor(() => AtlasView.CurrentId.StartsWith("worldmap:") && AtlasView.IsHosted, 20000);
+                    await Task.Delay(500);
+                    var st3b = await WmState();
+                    Check("page: a click on an entrance opens instance:99 in the Atlas and Back returns to the same world map", atInst && backOnMap2 && st3b != null && st3b.Bool("ready"), AtlasView.CurrentId);
                     // the view moves -> the id follows without a new history step
                     int stepsBefore = AtlasView.History.Count;
                     WorldMapView.Handle("{\"t\":\"view\",\"lat\":-123.4,\"lng\":130.5,\"z\":5.5}");

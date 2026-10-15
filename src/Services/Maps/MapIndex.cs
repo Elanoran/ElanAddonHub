@@ -84,6 +84,12 @@ namespace ElansAddonHub.Services.Maps
                 };
                 if (inst.Name.Length == 0) inst.Name = m.Directory ?? ("Map " + m.Id);
                 inst.Placeholder = IsPlaceholderName(inst.Name);
+                if (!inst.Placeholder && (m.InstanceType == 1 || m.InstanceType == 2))      // dungeons and raids (a battleground or arena is entered from a battlemaster, not a door)
+                {
+                    inst.Entrance = EntranceOf(m);
+                    if (inst.Entrance != null) PlaceEntrance(inst.Entrance);
+                    ApplyLevels(inst);
+                }
                 // the maps that show this instance: the ones the assignments point at it (alternative copies only when there is nothing else)
                 var mine = (byWorldMap.TryGetValue(m.Id, out var asg) ? asg : new List<UiAssignment>()).Select(a => a.UiMapId).Distinct()
                     .Where(ui.ContainsKey).Select(id => ui[id]).ToList();
@@ -98,6 +104,75 @@ namespace ElansAddonHub.Services.Maps
                 inst.Floors = floors;
                 Instances.Add(inst);
             }
+        }
+
+        // ---- instance entrances and levels
+        public const string EntranceSourceName = "Game data: the spot where the game puts your ghost (Map.db2)";
+        const double MaxWorld = 17066.67;
+
+        // The way into an instance: Map.db2 names, for every instance, the continent and the spot where a ghost that dies inside is put - the spirit healer / corpse run target,
+        // which is the instance portal's door (verified on the real files: Deadmines in Westfall, Wailing Caverns in the Barrens, Ragefire Chasm in Orgrimmar, Molten Core at
+        // Blackrock Mountain). A row with no continent (-1), no spot (0, 0) or a spot outside the world has no entrance - nothing is guessed.
+        public static InstanceEntrance EntranceOf(GameMapInfo m)
+        {
+            if (m == null || m.CorpseMapId < 0) return null;
+            double x = m.CorpseX, y = m.CorpseY;
+            if (double.IsNaN(x) || double.IsNaN(y) || double.IsInfinity(x) || double.IsInfinity(y)) return null;
+            if (Math.Abs(x) > MaxWorld || Math.Abs(y) > MaxWorld || Math.Abs(x) + Math.Abs(y) < 1) return null;
+            return new InstanceEntrance { MapId = m.CorpseMapId, X = x, Y = y, AreaId = m.CorpseAreaId, Source = EntranceSourceName };
+        }
+
+        // the zone map an entrance is shown on: the zone the terrain's area id names (exact) when it was read and that map shows the spot, else the most specific map whose
+        // rectangle holds it (loose boxes: near a border they can name the neighbour)
+        void PlaceEntrance(InstanceEntrance e)
+        {
+            MapPoint? p = null;
+            if (e.AreaId > 0)
+            {
+                int ui = UiMapForArea(e.AreaId);
+                if (ui > 0) p = WorldToMap(e.MapId, e.X, e.Y, ui);
+                if (p != null) e.Source = EntranceSourceName + "; the zone is the terrain's own area at that spot";
+            }
+            if (p == null) p = WorldToMap(e.MapId, e.X, e.Y);
+            // a continent shown only on the world map (or the cosmic map) is no zone: say nothing rather than "World"
+            var um = p == null ? null : Get(p.Value.UiMapId);
+            if (um != null && (um.Type == UiMapInfo.World || um.Type == UiMapInfo.Cosmic)) p = null;
+            if (p != null) { e.UiMapId = p.Value.UiMapId; e.Fx = p.Value.Fx; e.Fy = p.Value.Fy; e.ZoneName = Name(p.Value.UiMapId); }
+        }
+        static string Norm(string s)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var c in (s ?? "").ToLowerInvariant()) if (char.IsLetterOrDigit(c)) sb.Append(c);
+            return sb.ToString();
+        }
+        static int Lev(string a, string b)
+        {
+            var d = new int[a.Length + 1, b.Length + 1];
+            for (int i = 0; i <= a.Length; i++) d[i, 0] = i;
+            for (int j = 0; j <= b.Length; j++) d[0, j] = j;
+            for (int i = 1; i <= a.Length; i++)
+                for (int j = 1; j <= b.Length; j++)
+                    d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            return d[a.Length, b.Length];
+        }
+        // the game spells the same dungeon differently in its two tables ("Stormwind Stockades" / "Stormwind Stockade", "Zul'Farak" / "Zul'Farrak", "Onyxia" / "Onyxia's Lair",
+        // "Lower Blackrock Spire" / "Blackrock Spire"): the same words, one inside the other, or one letter apart
+        public static bool SameDungeonName(string a, string b)
+        {
+            a = Norm(a); b = Norm(b);
+            if (a.Length < 6 || b.Length < 6) return false;
+            if (a == b || a.Contains(b) || b.Contains(a)) return true;
+            return Math.Min(a.Length, b.Length) >= 8 && Lev(a, b) <= 1;
+        }
+
+        // the level the game suggests (all the LFG rows of the same name: Dire Maul has three wings, Blackrock Spire two halves)
+        void ApplyLevels(InstanceInfo inst)
+        {
+            if (!Set.HasLfg) return;
+            var rows = Set.Lfg.Where(d => d.MinLevel > 0 && SameDungeonName(d.Name, inst.Name)).OrderBy(d => d.Id).ToList();
+            if (rows.Count == 0) return;
+            inst.MinLevel = rows.Min(d => d.MinLevel); inst.MaxLevel = rows.Max(d => d.MaxLevel);
+            if (rows.Count > 1) inst.Parts = rows.Select(d => d.Name).Distinct().ToList();
         }
 
         // ---- the tree and the art

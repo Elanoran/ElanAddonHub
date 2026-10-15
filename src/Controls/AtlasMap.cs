@@ -572,6 +572,7 @@ namespace ElansAddonHub
                 case MarkerKind.Find: return "Find";
                 case MarkerKind.Vendor: return "Vendor";
                 case MarkerKind.Node: return "Node";
+                case MarkerKind.Entrance: return "Entrance";
                 default: return "Quest";
             }
         }
@@ -585,6 +586,7 @@ namespace ElansAddonHub
                 case MarkerKind.Find: key = "Brush.Cal.Mine"; break;
                 case MarkerKind.Vendor: key = "Brush.Info"; break;
                 case MarkerKind.Node: key = "Brush.Cal.Holiday.3"; break;
+                case MarkerKind.Entrance: key = "Brush.Accent"; break;
                 default: key = "Brush.Cal.Holiday.4"; break;
             }
             return Res<Brush>(key) ?? Brushes.White;
@@ -748,6 +750,10 @@ namespace ElansAddonHub
                         break;
                     case MarkerKind.Node:
                         dc.DrawGeometry(fill, halo, Poly(new Point(c.X, c.Y - r - 1), new Point(c.X + r + 1, c.Y + r - 1), new Point(c.X - r - 1, c.Y + r - 1)));
+                        break;
+                    case MarkerKind.Entrance:
+                        dc.DrawGeometry(fill, halo, new RectangleGeometry(new Rect(c.X - r, c.Y - r, 2 * r, 2 * r + 1), r, r));
+                        dc.DrawRoundedRectangle(ink, null, new Rect(c.X - 2, c.Y, 4, r + 1), 1.5, 1.5);
                         break;
                     case MarkerKind.Quest:
                         dc.DrawEllipse(fill, halo, c, r, r);

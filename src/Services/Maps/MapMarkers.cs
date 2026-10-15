@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace ElansAddonHub.Services.Maps
 {
-    public enum MarkerKind { Spawn, Find, Vendor, Node, Quest }
+    public enum MarkerKind { Spawn, Find, Vendor, Node, Quest, Entrance }
 
     // One marker on an AtlasMap. Fx / Fy are the fractions of the shown map's picture (0..1 from the left / top), the same numbers the game's own
     // map coordinates use (GetPlayerMapPosition x / y), so an observation and a converted Classic position meet on one map.

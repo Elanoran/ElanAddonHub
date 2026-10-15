@@ -393,6 +393,7 @@ namespace ElansAddonHub
             if (Begin("seendata")) { result += "\r\n" + await SeenDataTest(dir); End(); }
             if (Begin("mapdata")) { result += "\r\n" + await MapDataTest(dir); End(); }
             if (Begin("worldmap")) { result += "\r\n" + await WorldMapTest(dir); End(); }
+            if (Begin("instances")) { result += "\r\n" + await InstancesTest(dir); End(); }
             if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }
             if (Begin("gametooltip")) { result += "\r\n" + await GameTooltipTest(dir); End(); }
             if (Begin("talents")) { result += "\r\n" + await TalentsTest(dir); End(); }

@@ -68,6 +68,24 @@ namespace ElansAddonHub.Services.Atlas
         public IReadOnlyList<int> NpcsOnMap(int mapId) => npcsByMap.TryGetValue(mapId, out var l) ? (IReadOnlyList<int>)l : NoIds;
         public IReadOnlyList<int> ObjectsOnMap(int mapId) => objectsByMap.TryGetValue(mapId, out var l) ? (IReadOnlyList<int>)l : NoIds;
 
+        // the levels most creatures inside an instance have (spawn-weighted, the middle 80 %); false when the baseline has too few to say
+        public bool InstanceCreatureLevels(int mapId, out int min, out int max)
+        {
+            min = max = 0;
+            var lv = new List<double>();
+            foreach (var nid in NpcsOnMap(mapId))
+            {
+                var n = Index.Npcs[nid];
+                if (n == null || n.MaxLevel <= 0 || n.Type == 8 || n.Type == 11) continue;
+                int w = n.Spawns.Count(s => s.Map == mapId);
+                for (int k = 0; k < Math.Min(w, 20); k++) lv.Add((n.MinLevel + n.MaxLevel) / 2.0);
+            }
+            if (lv.Count < 3) return false;
+            lv.Sort();
+            min = (int)Math.Round(lv[(int)(lv.Count * 0.1)]); max = Math.Max(min, (int)Math.Round(lv[Math.Min(lv.Count - 1, (int)(lv.Count * 0.9))]));
+            return true;
+        }
+
         // ---- what stands in a zone (cached per map index: a new game build gives new rectangles)
         public sealed class ZoneContent
         {

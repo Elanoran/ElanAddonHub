@@ -443,7 +443,7 @@ namespace ElansAddonHub
                     ["minCol"] = man.MinCol, ["maxCol"] = man.MaxCol, ["minRow"] = man.MinRow, ["maxRow"] = man.MaxRow, ["sea"] = man.Sea,
                 },
                 ["layers"] = WorldMapLayers.Catalog(),
-                ["on"] = (Settings?.WorldMapLayers ?? WorldMapLayers.DefaultOn.ToList()).Where(WorldMapIds.IsLayerId).Distinct().ToList(),
+                ["on"] = OnLayers(),
             };
             if (is3)
             {
@@ -627,7 +627,7 @@ namespace ElansAddonHub
                     NavigateHere(m.Lat, m.Lng);
                     break;
                 case WorldMapMessageType.Layers:
-                    if (Settings != null) { Settings.WorldMapLayers = m.On.ToList(); SaveSettings?.Invoke(); }
+                    if (Settings != null) { Settings.WorldMapLayers = m.On.ToList(); Settings.WorldMapLayersVersion = WorldMapLayers.LayersVersion; SaveSettings?.Invoke(); }
                     break;
                 case WorldMapMessageType.Need:
                     NeedLayer(m.Layer);
@@ -653,6 +653,18 @@ namespace ElansAddonHub
                     if (Settings != null) { Settings.WorldMap3dDetail = m.Detail; Settings.WorldMapExag = Math.Round(m.Exag, 1); SaveSettings?.Invoke(); }
                     break;
             }
+        }
+
+        // the layers that are on: the person's saved list (brought up to this catalog once) or the defaults
+        List<string> OnLayers()
+        {
+            if (Settings != null && Settings.WorldMapLayers != null && Settings.WorldMapLayersVersion < WorldMapLayers.LayersVersion)
+            {
+                Settings.WorldMapLayers = WorldMapLayers.WithNewDefaults(Settings.WorldMapLayers, Settings.WorldMapLayersVersion);
+                Settings.WorldMapLayersVersion = WorldMapLayers.LayersVersion;
+                SaveSettings?.Invoke();
+            }
+            return (Settings?.WorldMapLayers ?? WorldMapLayers.DefaultOn.ToList()).Where(WorldMapIds.IsLayerId).Distinct().ToList();
         }
 
         void PostLayerInfo(string layer, string state, string note) => Post(Json.Write(new Dictionary<string, object> { ["t"] = "layerinfo", ["id"] = layer, ["state"] = state, ["count"] = 0, ["note"] = note ?? "" }));

@@ -503,24 +503,12 @@ namespace ElansAddonHub.Services.Atlas
                 if (i.Placeholder || string.IsNullOrEmpty(i.Name)) continue;
                 var e = Entry("instance", i.MapId, i.Name);
                 e.Client = true; e.Type = i.InstanceType;
-                if (x.Derived != null)
-                {
-                    var lv = new List<double>();
-                    foreach (var nid in x.Derived.NpcsOnMap(i.MapId))
-                    {
-                        var n = x.Classic.NpcInfo(nid);
-                        if (n == null || n.MaxLevel <= 0 || n.Type == 8 || n.Type == 11) continue;
-                        int w = n.Spawns.Count(s => s.Map == i.MapId);
-                        for (int k = 0; k < Math.Min(w, 20); k++) lv.Add((n.MinLevel + n.MaxLevel) / 2.0);
-                    }
-                    if (lv.Count >= 3)
-                    {
-                        lv.Sort();
-                        e.Level = (int)Math.Round(lv[(int)(lv.Count * 0.1)]); e.Level2 = Math.Max(e.Level, (int)Math.Round(lv[Math.Min(lv.Count - 1, (int)(lv.Count * 0.9))]));
-                        e.Classic = true;
-                    }
-                }
-                e.Detail = string.Join(" · ", new[] { AtlasQuery.InstanceDetail(i), e.Level > 0 ? "Levels " + AtlasFormat.Levels(e.Level, e.Level2) : "" }.Where(t => t.Length > 0));
+                // the level the game suggests first; an instance it does not list gets the range of its creatures from the Classic baseline
+                if (i.MinLevel > 0) { e.Level = i.MinLevel; e.Level2 = Math.Max(i.MinLevel, i.MaxLevel); }
+                else if (x.Derived != null && x.Derived.InstanceCreatureLevels(i.MapId, out var clo, out var chi)) { e.Level = clo; e.Level2 = chi; e.Classic = true; }
+                // where the way in is: the zone of its entrance (sort and filter by it)
+                if (i.Entrance != null && i.Entrance.UiMapId > 0) { e.Zone = i.Entrance.UiMapId; e.ZoneName = i.Entrance.ZoneName; e.Extra = e.ZoneName; }
+                e.Detail = string.Join(" · ", new[] { AtlasQuery.InstanceDetail(i), e.Level > 0 ? "Levels " + AtlasFormat.Levels(e.Level, e.Level2) : "", e.ZoneName.Length > 0 ? "entrance in " + e.ZoneName : "" }.Where(t => t.Length > 0));
                 ix.All.Add(e);
             }
             ix.Root.Title = "Dungeons and raids";

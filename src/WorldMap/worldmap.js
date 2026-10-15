@@ -173,11 +173,36 @@
   function buildMarkers(id, d) {
     clearGroup(id); var g = ensureGroup(id);
     (d.items || []).forEach(function (it) {
-      var ic = L.divIcon({ className: 'fmi', html: '<div class="fm ' + (it.f || 'n') + '"></div>', iconSize: [0, 0] });
-      var m = L.marker([it.lat, it.lng], { icon: ic, keyboard: false, zIndexOffset: 300 });
+      // instance entrances (it.ic dun / raid) carry a kind group (it.g: switched by its child row) and a label; flight masters are the plain diamonds
+      var html = it.ic ? '<div class="inst ' + esc(it.ic) + '">' + (it.ic === 'raid' ? '&#9760;' : '') + '</div>' + (it.lab ? '<div class="instl">' + esc(it.lab) + '</div>' : '') : '<div class="fm ' + (it.f || 'n') + '"></div>';
+      var ic = L.divIcon({ className: 'fmi', html: html, iconSize: [0, 0] });
+      var m = L.marker([it.lat, it.lng], { icon: ic, keyboard: false, zIndexOffset: it.ic ? 350 : 300 });
+      m._g = it.g || null;
       bindHover(m, it.name, it.tip || '', it.extra || '', it.link);
+      if (it.ic) m.on('contextmenu', function (e) {
+        L.DomEvent.stop(e); hideTip();
+        var oe = e.originalEvent, items = [];
+        if (it.link) items.push({ text: 'Open its page', run: function () { openLink(it.link); } });
+        items.push({ text: 'Navigate here', run: function () { send({ t: 'nav', lat: it.lat, lng: it.lng }); } });
+        menu(oe.clientX, oe.clientY, it.name, items);
+      });
       g.addLayer(m);
     });
+  }
+  // markers of a kind group (Dungeons, Raids) follow their child row; the labels of the entrances need some zoom
+  function applyMarkerGroups() {
+    if (!map) return;
+    Object.keys(groups).forEach(function (id) {
+      groups[id].eachLayer(function (m) {
+        if (m._g === undefined || m._g === null) return;
+        var e = m.getElement && m.getElement(); if (e) e.style.display = on[m._g] ? '' : 'none';
+      });
+    });
+    Object.keys(lineKinds).forEach(function (id) {
+      var g = groups[id]; if (!g) return;
+      lineKinds[id].forEach(function (e) { var want = !!on[e.g], has = g.hasLayer(e.layer); if (want && !has) g.addLayer(e.layer); else if (!want && has) g.removeLayer(e.layer); });
+    });
+    map.getContainer().classList.toggle('instlab', map.getZoom() >= 3.5);
   }
 
   // zone borders: one polygon per zone (all its rings: the even-odd fill leaves holes out), a thin line that tints the zone under the cursor
@@ -196,21 +221,24 @@
     });
   }
 
+  var lineKinds = {};      // layer id -> [{layer, g}]: routes (and their time labels) that belong to a kind row (Horde ...); canvas lines have no element to hide, so they leave the group
   function buildLines(id, d) {
-    clearGroup(id); var g = ensureGroup(id);
+    clearGroup(id); var g = ensureGroup(id); lineKinds[id] = [];
     (d.items || []).forEach(function (it) {
       var ll = []; for (var i = 0; i + 1 < it.pts.length; i += 2) ll.push([it.pts[i], it.pts[i + 1]]);
       if (ll.length < 2) return;
       var pl = L.polyline(ll, { color: it.c || '#fff', weight: it.w || 2, opacity: it.o || .85, dashArray: it.d || null, interactive: true, smoothFactor: 1 });
       bindHover(pl, it.name || '', it.tip || '', it.extra || '', it.link);
       g.addLayer(pl);
+      if (it.g) lineKinds[id].push({ layer: pl, g: it.g });
       if (it.label && it.mid) {
         var ic = L.divIcon({ className: 'rli', html: '<div class="rl">' + esc(it.label) + '</div>', iconSize: [0, 0] });
         var m = L.marker(it.mid, { icon: ic, interactive: false, keyboard: false }); m._minZ = it.labelZ == null ? 3.5 : it.labelZ; m._line = true;
         g.addLayer(m);
+        if (it.g) lineKinds[id].push({ layer: m, g: it.g });
       }
     });
-    applyLineLabels();
+    applyLineLabels(); applyMarkerGroups();
   }
   function applyLineLabels() {
     if (!map) return;
@@ -227,7 +255,7 @@
       var shown = groupShown(id), g = groups[id], has = map.hasLayer(g);
       if (shown && !has) g.addTo(map); else if (!shown && has) map.removeLayer(g);
     });
-    applyLabelZoom(); applyLineLabels(); queueDraw();
+    applyLabelZoom(); applyLineLabels(); applyMarkerGroups(); queueDraw();
     Object.keys(panelRows).forEach(function (id) {
       var r = panelRows[id]; r.cb.checked = !!on[id];
       var parent = r.parent; var dis = parent && !on[parent];
@@ -355,7 +383,7 @@
       for (var i = 0; i < nice.length; i++) if (nice[i] / yardsPerPx <= 140) best = nice[i];
       sc._d.innerHTML = best.toLocaleString('en-US') + ' yd<i style="width:' + Math.round(best / yardsPerPx) + 'px"></i>';
     }
-    map.on('zoomend', function () { scale(); applyLabelZoom(); applyLineLabels(); }); scale();
+    map.on('zoomend', function () { scale(); applyLabelZoom(); applyLineLabels(); applyMarkerGroups(); }); scale();
     map.on('mousemove', function (e) {
       var w = ll2w(e.latlng.lat, e.latlng.lng);
       co._d.textContent = 'x ' + Math.round(w[0]).toLocaleString('en-US') + '   y ' + Math.round(w[1]).toLocaleString('en-US');
@@ -408,6 +436,22 @@
       var r = { n: polys.length, rings: polys.reduce(function (a, p) { return a + p.getLatLngs().length; }, 0), onMap: !!(g && map.hasLayer(g)) };
       if (hoverIndex != null && polys[hoverIndex]) { var p = polys[hoverIndex]; r.before = p.options.fillOpacity; p.fire('mouseover'); r.hover = p.options.fillOpacity; p.fire('mouseout'); r.after = p.options.fillOpacity; }
       return JSON.stringify(r);
+    },
+    // the entrance markers (test): name, icon class, kind group, whether shown, label text; `fire` = [index, event] fires a marker event (click / contextmenu)
+    markers: function (id, fire) {
+      var g = groups[id], out = []; if (!g) return '[]';
+      var ms = []; g.eachLayer(function (m) { ms.push(m); });
+      ms.forEach(function (m, i) {
+        var e = m.getElement && m.getElement();
+        out.push({ i: i, ic: e ? (e.querySelector('.inst') || {}).className || '' : '', g: m._g || '', shown: !!(e && e.style.display !== 'none' && map.hasLayer(g)), lab: e && e.querySelector('.instl') ? e.querySelector('.instl').textContent : '', labVisible: !!(e && e.querySelector('.instl') && getComputedStyle(e.querySelector('.instl')).display !== 'none') });
+      });
+      if (fire && ms[fire[0]]) ms[fire[0]].fire(fire[1], { latlng: ms[fire[0]].getLatLng(), originalEvent: { clientX: 200, clientY: 200, preventDefault: function () {}, stopPropagation: function () {} } });
+      return JSON.stringify(out);
+    },
+    // the routes of a lines layer by kind (test): [{g, shown}] - shown = the route is in the layer's group (its kind row is on and the layer is on the map)
+    lines: function (id) {
+      var g = groups[id]; if (!g || !lineKinds[id]) return '[]';
+      return JSON.stringify(lineKinds[id].filter(function (e) { return !e.layer._line; }).map(function (e) { return { g: e.g, shown: !!(map.hasLayer(g) && g.hasLayer(e.layer)) }; }));
     },
     state: function () {
       return JSON.stringify({ mode: '2d', ready: ready, zoom: map ? map.getZoom() : null, center: map ? [map.getCenter().lat, map.getCenter().lng] : null, tiles: tilesLoaded, tileErrors: tileErrors,
