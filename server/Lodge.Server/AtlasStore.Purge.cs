@@ -55,6 +55,7 @@ public sealed partial class AtlasStore
         r.Quests = Drop(quests, q => q.By == identity);
         r.Revealed = Drop(revealed, x => x.By == identity);
         r.Seen = Drop(seenNpcs, x => x.By == identity) + Drop(seenObjects, x => x.By == identity) + Drop(seenQuests, x => x.By == identity);
+        if (seenMembers.Remove(identity)) wasMember = true;
         foreach (var (id, set) in spawns.ToList())
         {
             int n = set.Pts.RemoveAll(p => p.By == identity);

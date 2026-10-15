@@ -55,6 +55,7 @@ public sealed partial class AtlasStore
     readonly Dictionary<int, Atlas.SeenNpc> seenNpcs = new();
     readonly Dictionary<int, Atlas.SeenObject> seenObjects = new();
     readonly Dictionary<int, Atlas.SeenQuest> seenQuests = new();
+    readonly HashSet<string> seenMembers = new(StringComparer.Ordinal);   // 2.25: the members whose client caches filled the seen tables (only the count leaves the server)
     readonly List<Atlas.Find> finds = new();
     readonly HashSet<string> findKeys = new(StringComparer.Ordinal);
     long rev;
@@ -93,6 +94,7 @@ public sealed partial class AtlasStore
     public int SeenNpcCount { get { lock (Gate) return seenNpcs.Count; } }
     public int SeenObjectCount { get { lock (Gate) return seenObjects.Count; } }
     public int SeenQuestCount { get { lock (Gate) return seenQuests.Count; } }
+    public int SeenMemberCount { get { lock (Gate) return seenMembers.Count; } }
     public int SourceCount(int kind) { lock (Gate) return aggs[kind].Count; }
     public int NodeObjectCount { get { lock (Gate) return nodeAggs.Count; } }
 
@@ -189,6 +191,9 @@ public sealed partial class AtlasStore
         if (root["seenQuests"] is JsonObject sqo)
             foreach (var (key, node) in sqo)
                 if (seenQuests.Count < Atlas.MaxSeenQuests && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseSeenQuest(node, out var x)) { x.By = By(node); x.Rev = R(node); seenQuests[id] = x; }
+        if (root["seenMembers"] is JsonArray sma)
+            foreach (var node in sma)
+                if (seenMembers.Count < Atlas.MaxSeenMembers && node is JsonValue smv && smv.TryGetValue<string>(out var smi) && smi.Length is > 0 and <= 64) seenMembers.Add(smi);
         if (root["finds"] is JsonArray fa)
             foreach (var node in fa)
             {
@@ -321,9 +326,9 @@ public sealed partial class AtlasStore
         Quests(r, identity, m["quests"], now);
         Spawns(r, identity, m["spawns"]);
         Revealed(r, identity, m["items"]);
-        Seen(r, identity, m["seenNpcs"], Atlas.MaxSeenNpcsPerShare, seenNpcs, Atlas.MaxSeenNpcs, (JsonNode n, out Atlas.SeenNpc v) => Atlas.ParseSeenNpc(n, out v), (a, b) => a.Fill(b), (v, rv, by) => { v.Rev = rv; if (by != null) v.By = by; });
-        Seen(r, identity, m["seenObjects"], Atlas.MaxSeenObjectsPerShare, seenObjects, Atlas.MaxSeenObjects, (JsonNode n, out Atlas.SeenObject v) => Atlas.ParseSeenObject(n, out v), (a, b) => a.Fill(b), (v, rv, by) => { v.Rev = rv; if (by != null) v.By = by; });
-        Seen(r, identity, m["seenQuests"], Atlas.MaxSeenQuestsPerShare, seenQuests, Atlas.MaxSeenQuests, (JsonNode n, out Atlas.SeenQuest v) => Atlas.ParseSeenQuest(n, out v), (a, b) => a.Fill(b), (v, rv, by) => { v.Rev = rv; if (by != null) v.By = by; });
+        Seen(r, identity, m["seenNpcs"], Atlas.MaxSeenNpcsPerShare, seenNpcs, Atlas.MaxSeenNpcs, (JsonNode n, out Atlas.SeenNpc v) => Atlas.ParseSeenNpc(n, out v), (a, b) => a.Merge(b), v => v.Build, (v, rv, by) => { v.Rev = rv; if (by != null) v.By = by; });
+        Seen(r, identity, m["seenObjects"], Atlas.MaxSeenObjectsPerShare, seenObjects, Atlas.MaxSeenObjects, (JsonNode n, out Atlas.SeenObject v) => Atlas.ParseSeenObject(n, out v), (a, b) => a.Merge(b), v => v.Build, (v, rv, by) => { v.Rev = rv; if (by != null) v.By = by; });
+        Seen(r, identity, m["seenQuests"], Atlas.MaxSeenQuestsPerShare, seenQuests, Atlas.MaxSeenQuests, (JsonNode n, out Atlas.SeenQuest v) => Atlas.ParseSeenQuest(n, out v), (a, b) => a.Merge(b), v => v.Build, (v, rv, by) => { v.Rev = rv; if (by != null) v.By = by; });
         Finds(r, md, identity, who, m["finds"], now);
         Nodes(r, md, m["nodes"]);
         FishSpots(r, md, m["fishspots"]);
@@ -436,8 +441,9 @@ public sealed partial class AtlasStore
 
     delegate bool SeenParse<T>(JsonNode n, out T v);
 
-    // npc / object / quest details the clients have seen: the first good description of an id stays, a later one may fill fields that are still empty
-    void Seen<T>(ShareResult r, string identity, JsonNode sect, int maxPerShare, Dictionary<int, T> table, int cap, SeenParse<T> parse, Func<T, T, bool> fill, Action<T, long, string> setRev)
+    // npc / object / quest details the clients have seen (Atlas.MergeOf): a newer game build replaces the row (and becomes its author), the same build
+    // may fill fields that are still empty, an older one changes nothing. Every member who adds or changes a row is counted in seenMembers.
+    void Seen<T>(ShareResult r, string identity, JsonNode sect, int maxPerShare, Dictionary<int, T> table, int cap, SeenParse<T> parse, Func<T, T, bool> fill, Func<T, int> buildOf, Action<T, long, string> setRev)
     {
         if (sect == null) return;
         if (sect is not JsonObject so) { r.Rejected++; return; }
@@ -448,14 +454,16 @@ public sealed partial class AtlasStore
             if (!Atlas.Key(key, Atlas.MaxId, out var id) || !parse(node, out var v)) { r.Rejected++; continue; }
             if (table.TryGetValue(id, out var old))
             {
+                int before = buildOf(old);
                 if (!fill(old, v)) { r.Unchanged++; continue; }
-                setRev(old, ++rev, null);
+                setRev(old, ++rev, buildOf(old) != before ? identity : null);
             }
             else
             {
                 if (table.Count >= cap) { r.Rejected++; continue; }
                 setRev(v, ++rev, identity); table[id] = v;
             }
+            if (seenMembers.Count < Atlas.MaxSeenMembers) seenMembers.Add(identity);
             r.Accepted++; r.Changed = true;
         }
     }
@@ -606,9 +614,9 @@ public sealed partial class AtlasStore
         return o;
     }
 
-    static JsonObject SeenNpcJson(Atlas.SeenNpc x) => new() { ["name"] = x.Name, ["title"] = x.Title, ["type"] = x.Type, ["family"] = x.Family, ["rank"] = x.Rank };
-    static JsonObject SeenObjectJson(Atlas.SeenObject x) => new() { ["name"] = x.Name, ["type"] = x.Type };
-    static JsonObject SeenQuestJson(Atlas.SeenQuest x) => new() { ["title"] = x.Title, ["level"] = x.Level, ["minLevel"] = x.MinLevel, ["objectives"] = x.Objectives };
+    static JsonObject SeenNpcJson(Atlas.SeenNpc x) => Atlas.SeenNpcJson(x);
+    static JsonObject SeenObjectJson(Atlas.SeenObject x) => Atlas.SeenObjectJson(x);
+    static JsonObject SeenQuestJson(Atlas.SeenQuest x) => Atlas.SeenQuestJson(x);
 
     static JsonObject NodesJson(NodeAgg a)
     {
@@ -687,6 +695,7 @@ public sealed partial class AtlasStore
             ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = more ? last : rev, ["at"] = NowSec,
             ["kills"] = secs[0], ["objects"] = secs[1], ["fishing"] = secs[2], ["vendors"] = secs[3], ["quests"] = secs[4], ["spawns"] = secs[5], ["items"] = secs[6], ["finds"] = fa,
             ["seenNpcs"] = secs[8], ["seenObjects"] = secs[9], ["seenQuests"] = secs[10], ["nodes"] = secs[11], ["fishspots"] = secs[12], ["fieldnotes"] = secs[13], ["entrances"] = secs[14],
+            ["seenMembers"] = seenMembers.Count,   // 2.25: how many members' game caches the seen tables come from (a count, never who)
         };
         if (full) res["full"] = true;
         if (more) res["more"] = true;
@@ -783,6 +792,7 @@ public sealed partial class AtlasStore
                 ["v"] = 1, ["epoch"] = Epoch, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev, ["nodeRev"] = nodeRev, ["fishRev"] = fishRev, ["noteRev"] = noteRev, ["entranceRev"] = EntranceRevJson(),
                 ["vendors"] = vo, ["quests"] = qo, ["spawns"] = sp, ["items"] = io, ["finds"] = fa,
                 ["seenNpcs"] = sno, ["seenObjects"] = sob, ["seenQuests"] = sqo,
+                ["seenMembers"] = new JsonArray(seenMembers.OrderBy(x => x, StringComparer.Ordinal).Select(x => (JsonNode)x).ToArray()),
             };
             var bytes = Encoding.UTF8.GetBytes(root.ToJsonString());
             if (bytes.Length > MaxFileBytes)
