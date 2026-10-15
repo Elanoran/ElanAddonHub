@@ -13,7 +13,7 @@ namespace ElansAddonHub.Services.Db2
     // ============================================================================================================================
     public sealed class EnchantInfo
     {
-        public int Id, Icon, MinLevel, MaxLevel, ItemLevelMin, ItemLevelMax, SkillId, SkillRank, Flags;
+        public int Id, Icon, MinLevel, MaxLevel, ItemLevelMin, ItemLevelMax, SkillId, SkillRank, Flags, Duration;   // Duration in seconds (temporary enchants)
         public string Name = "";
         public int[] Type = new int[3], Points = new int[3], Arg = new int[3];     // effect kind (5 stat, 2 damage, 4 resistance, 1 / 3 / 7 spells, 8 socket), amount, argument (stat type, school, spell)
         public const int KindDamage = 2, KindResist = 4, KindStat = 5;
@@ -68,7 +68,7 @@ namespace ElansAddonHub.Services.Db2
                 {
                     var info = new EnchantInfo
                     {
-                        Id = t.IdAt(i), Name = t.String(i, 0) ?? "", Flags = SpellTables.Int(t, i, 7), SkillId = SpellTables.Int(t, i, 12), SkillRank = SpellTables.Int(t, i, 13), MinLevel = SpellTables.Int(t, i, 14),
+                        Id = t.IdAt(i), Name = t.String(i, 0) ?? "", Duration = SpellTables.Int(t, i, 2), Flags = SpellTables.Int(t, i, 7), SkillId = SpellTables.Int(t, i, 12), SkillRank = SpellTables.Int(t, i, 13), MinLevel = SpellTables.Int(t, i, 14),
                         MaxLevel = SpellTables.Int(t, i, 15), Icon = SpellTables.Int(t, i, 16), ItemLevelMin = SpellTables.Int(t, i, 17), ItemLevelMax = SpellTables.Int(t, i, 18),
                     };
                     for (int k = 0; k < 3; k++) { info.Type[k] = SpellTables.IntArr(t, i, 4, k, 3); info.Points[k] = SpellTables.IntArr(t, i, 5, k, 3); info.Arg[k] = SpellTables.IntArr(t, i, 6, k, 3); }

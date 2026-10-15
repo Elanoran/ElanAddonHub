@@ -279,6 +279,7 @@ namespace ElansAddonHub
         void Apply(string root, InvData read)
         {
             loadedOnce = true;
+            ElansAddonHub.Services.Upgrades.UpgradeEngine.OwnedStamp++;                    // what the characters hold changed: reagent counts in the Upgrades panel are worked out again
             ShowCharSkeleton(false);
             data = read;
             chars = read.Chars;

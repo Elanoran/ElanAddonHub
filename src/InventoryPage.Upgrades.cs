@@ -89,7 +89,7 @@ namespace ElansAddonHub
             Sw("soon", "Coming soon", "Also show items up to 3 levels above " + c.Name + "'s level, apart", f.LevelOffset > 0, v => Filters.LevelOffset = v ? 3 : 0);
             Sw("enchants", "Enchants", "Suggest enchants, armor kits, scopes and the like for the worn items", f.Enchants, v => Filters.Enchants = v);
             Sw("applicable", "Only enchants I can apply", "Only enchants that one of your characters or a member of your Lodge can make, or kits you already own", f.OnlyApplicable, v => Filters.OnlyApplicable = v);
-            Sw("food", "Food & drink", "Show the best food and drink for this level", f.Food, v => Filters.Food = v);
+            Sw("food", "Consumables", "Show the best food, drink, elixirs, potions, scrolls, bandages and ammo for this level", f.Food, v => Filters.Food = v);
             sp.Children.Add(bar);
 
             upWeightsHost = new StackPanel { Visibility = Visibility.Collapsed };
@@ -171,7 +171,7 @@ namespace ElansAddonHub
             }
             else if (hidden > 0) { upBody.Children.Add(UpNote(hidden + " more " + (hidden == 1 ? "upgrade is" : "upgrades are") + " hidden by the filters.", 12)); upLines.Add("upnote|hidden|" + hidden); }
 
-            FoodSection(set);
+            ConsumablesSection(set);
 
             // calm notes about the data behind the list
             var notes = new List<string>();
@@ -359,10 +359,11 @@ namespace ElansAddonHub
             var best = en.Best;
             string how = best == null ? "" : best.Line + (en.Sources.Count > 1 ? " · +" + (en.Sources.Count - 1) + " more" : "");
             if (how.Length > 0) main.Children.Add(new TextBlock { Text = how, Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+            if (en.Owned > 0 && en.ItemId > 0) main.Children.Add(new TextBlock { Text = "You have " + en.Owned + " across your characters", Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), Margin = new Thickness(0, 2, 0, 0) });
             if (en.Reagents.Count > 0) main.Children.Add(new TextBlock { Text = "Reagents: " + string.Join(", ", en.Reagents), Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
             Grid.SetColumn(main, 1);
             g.Children.Add(main);
-            bool isFood = en.Kind == "Well fed" || en.Kind == "Food" || en.Kind == "Drink";
+            bool isFood = UpgradeExtras.GroupOf(en.Kind).Length > 0;
             if (!isFood)
             {
                 var pct = new TextBlock { Text = UpgradeScore.PctText(en.Pct), Style = TextStyle("Text.RowTitle"), Foreground = Res("Brush.Success"), Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Right };
@@ -409,22 +410,63 @@ namespace ElansAddonHub
             return GameTooltip.Wrap(gt);
         }
 
-        // "Food & drink": the best few of each kind for this level, under the slots
-        void FoodSection(UpgradeSet set)
+        // "Consumables": the best three of each kind that applies to the class, in groups that fold away
+        static string KindCaption(string kind, string who)
+        {
+            switch (kind)
+            {
+                case "Well fed": return "Well fed: buffs that match " + who + "'s weights";
+                case "Food": return "Healing food for this level";
+                case "Drink": return "Mana drinks for this level";
+                case "Elixir": return "Elixirs that match the weights";
+                case "Flask": return "Flasks that match the weights";
+                case "Healing potion": return "Healing potions";
+                case "Mana potion": return "Mana potions";
+                case "Potion": return "Potions with a buff that matches the weights";
+                case "Scroll": return "Scrolls that match the weights";
+                case "Bandage": return "Bandages (First Aid)";
+                case "Ammo": return "Ammo for the ranged weapon, best first";
+                default: return "Temporary: gone after a while";
+            }
+        }
+
+        void ConsumablesSection(UpgradeSet set)
         {
             var food = UpgradeEngine.PickFood(set, Filters);
             if (food.Count == 0) return;
             var sp = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
-            sp.Children.Add(new TextBlock { Text = "Food & drink", Style = TextStyle("Text.RowTitle"), Margin = new Thickness(8, 0, 0, 0) });
-            foreach (var kind in new[] { "Well fed", "Food", "Drink" })
+            sp.Children.Add(new TextBlock { Text = "Consumables", Style = TextStyle("Text.RowTitle"), Margin = new Thickness(8, 0, 0, 0) });
+            foreach (var group in UpgradeExtras.Groups)
             {
-                var l = food.Where(e => e.Kind == kind).ToList();
-                if (l.Count == 0) continue;
-                sp.Children.Add(new TextBlock { Text = kind == "Well fed" ? "Well fed: buffs that match " + upWho.Name + "'s weights" : kind == "Food" ? "Healing food for this level" : "Mana drinks for this level", Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), Margin = new Thickness(8, 8, 0, 0) });
-                foreach (var e in l) sp.Children.Add(ExtraRow(e, "f:" + kind + ":" + e.ItemId, "upfood|" + kind));
+                var inGroup = food.Where(e => UpgradeExtras.GroupOf(e.Kind) == group).ToList();
+                if (inGroup.Count == 0) continue;
+                bool hidden = Filters.HiddenGroups.Contains(group);
+                var g = group;
+                var head = new Button { Content = (hidden ? "▸ " : "▾ ") + UpgradeExtras.GroupTitle(group) + " · " + inGroup.Count, Style = (Style)FindResource("GhostButton"), Height = 28, Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, ToolTip = hidden ? "Show these" : "Hide these" };
+                System.Windows.Automation.AutomationProperties.SetName(head, UpgradeExtras.GroupTitle(group));
+                head.Click += (s, e) => ToggleGroup(g);
+                upCtl["group:" + group] = head;
+                sp.Children.Add(head);
+                upLines.Add("upgroup|" + group + "|" + inGroup.Count + (hidden ? "|collapsed" : ""));
+                if (hidden) continue;
+                foreach (var kind in UpgradeExtras.KindOrder)
+                {
+                    var l = inGroup.Where(e => e.Kind == kind).ToList();
+                    if (l.Count == 0) continue;
+                    sp.Children.Add(new TextBlock { Text = KindCaption(kind, upWho.Name), Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), Margin = new Thickness(8, 4, 0, 0) });
+                    foreach (var e in l) sp.Children.Add(ExtraRow(e, "f:" + kind + ":" + e.ItemId, "upfood|" + kind));
+                }
             }
             upBody.Children.Add(sp);
         }
+
+        void ToggleGroup(string group)
+        {
+            if (!Filters.HiddenGroups.Remove(group)) Filters.HiddenGroups.Add(group);
+            SaveFilters();
+            RenderUpgrades();
+        }
+        public void UpgradeToggleGroupForTest(string group) => ToggleGroup(group);
 
         // ---- a click on a paper-doll slot: its upgrades are highlighted (a second click clears it)
         void FocusUpgradeSlot(int slot)

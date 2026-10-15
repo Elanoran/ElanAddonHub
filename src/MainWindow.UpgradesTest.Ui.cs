@@ -118,6 +118,14 @@ try                {                    var tgt = InventoryView.UpgradeTipContro
                 lines = InventoryView.UpgradeLinesForTest();
                 Check("filter: Food & drink off hides the section", !lines.Any(l => l.StartsWith("upfood|")) && lines.Any(l => l.StartsWith("upe|1|7007|")) && stored == "D1R0C1T0L0N1A0F0", stored);
                 InventoryView.UpgradeClickSwitchForTest("food"); await Task.Delay(100);
+                lines = InventoryView.UpgradeLinesForTest();
+                Check("consumables: the section is 'Consumables' with a group per kind that applies - food, drink, elixirs, flasks, potions, scrolls, bandages, ammo, temporary - each with its count (Aela: bow, so arrows)",
+                    new[] { "upgroup|food|6", "upgroup|drink|3", "upgroup|elixir|2", "upgroup|flask|1", "upgroup|potion|4", "upgroup|scroll|2", "upgroup|bandage|3", "upgroup|ammo|2", "upgroup|temp|1" }.All(lines.Contains) && lines.Any(l => l.StartsWith("upfood|Ammo|371|Razor Arrow|")) && lines.Any(l => l.StartsWith("upfood|Elixir|330|Elixir of Agility|+12 Agility for 60 min|")), string.Join(" ; ", lines.Where(l => l.StartsWith("upfood|Ammo") || l.StartsWith("upfood|Elixir"))));
+                InventoryView.UpgradeToggleGroupForTest("elixir"); await Task.Delay(100);
+                lines = InventoryView.UpgradeLinesForTest();
+                Check("consumables: a group folds away from its header - only the header stays ('collapsed'), the others are untouched, and the choice is part of the saved filters", lines.Contains("upgroup|elixir|2|collapsed") && !lines.Any(l => l.StartsWith("upfood|Elixir|")) && lines.Any(l => l.StartsWith("upfood|Flask|")) && stored == "D1R0C1T0L0N1A0F1Helixir", stored);
+                InventoryView.UpgradeToggleGroupForTest("elixir"); await Task.Delay(100);
+                Check("consumables: and opens again", InventoryView.UpgradeLinesForTest().Any(l => l.StartsWith("upfood|Elixir|")) && stored == "D1R0C1T0L0N1A0F1", stored);
                 EnchantData.SetForTest(null, EnchantData.State.Unavailable, "layout"); InventoryView.UpgradesDataChanged(); await Task.Delay(100); await Ready();
                 lines = InventoryView.UpgradeLinesForTest();
                 Check("missing data: enchant tables the game does not have (an unknown layout) = a calm note under the list, no enchant rows; the items and the food stay", lines.Any(l => l.StartsWith("upnote|data|Enchants need the enchant tables of your game files")) && !lines.Any(l => l.StartsWith("upe|")) && lines.Any(l => l.StartsWith("up|1|101|")) && lines.Any(l => l.StartsWith("upfood|")), string.Join(" ; ", lines.Where(l => l.StartsWith("upnote"))));
