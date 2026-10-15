@@ -154,11 +154,29 @@ new failures:
     Tools\selftest.ps1                          what this branch changed vs origin/main (the default)
     Tools\selftest.ps1 -Changed v2.33.0         ...vs a tag or any ref
     Tools\selftest.ps1 -Only inventory,toasts   just those sections
-    Tools\selftest.ps1 -Full                    everything
+    Tools\selftest.ps1 -Full                    everything (about 11 min with the pictures, the real game files included)
+    Tools\selftest.ps1 -Only worldmapreal      one of the real-game-file sections (see below)
+    Tools\selftest.ps1 -NoCache                changed mode, but never skip a real-game-file section
     Tools\selftest.ps1 -List                    section names
 
-**During development use the default (`--changed`); run `-Full` before every release.** A full run takes
-about 2.3 minutes; a scoped one is the ~3 s of setup plus the sections it picks.
+**During development use the default (`--changed`); run `-Full` before every release.** A scoped run is the ~1 s of
+setup plus the sections it picks: an Atlas page edit is about a minute, an Upgrades edit under a minute, a world map UI
+edit about 1.5 minutes. The run ends with the slowest sections and the slowest stretches between two checks, so a
+slow check shows up by name.
+
+- **Real-game-file sections** (`mapdatareal worldmapreal instancesreal buildingsreal dungeonmapsreal atlaspagereal`)
+  hold the checks that read the installed WoW client (CASC, Map.db2, terrain, buildings); their synthetic twins stay in
+  `mapdata worldmap instances buildings dungeonmaps atlaspage`. They run in `-Full`, with `-Only`, and in changed mode
+  only when a game-data reader (`Casc`, `Blp`, `Db2/`, `Maps/`, `WorldMap/`, `DungeonMaps/`, the Atlas data layer) or their
+  own test file changed; the patterns are `SelfTestCache.Defs`. Changed mode (and `-UseCache`) also skips one that already
+  passed with the same game build (`.build.info`: `1.60.1.70374` ...) and the same reader and test files: it prints
+  `worldmapreal: skipped (game 1.60.1.70374 and readers unchanged since a passing run on <date>)`. The pass is stored in
+  `%LOCALAPPDATA%\ElansAddonHub-selftest-cache` (never the app's data folder); a FAIL is never stored, a new game patch
+  or an edit of a reader re-runs them, `-NoCache` forces.
+- `idlecpu` is the one-minute idle-CPU measurement (it used to be inside `round3`); it runs when something that ticks
+  changes (`WowWatch`, the pixel strip, presence, the Lodge session) or for a shared file.
+- Pictures (`1-before.png` ... for docs/design) are not assertions: they are only taken in `-Full` or with
+  `ELANSHUB_SHOTS=1` (`ELANSHUB_SHOTS=0` skips them even in `-Full`), together with the waits that only serve them.
 
 - Sections: `addons thirdparty viewer voice update strip lodge lodgefeatures presence profile toasts dialogs
   inventory health round3`. The exe takes `--only a,b`, `--changed <base> [--repo <dir>]` and `--list`; no flag

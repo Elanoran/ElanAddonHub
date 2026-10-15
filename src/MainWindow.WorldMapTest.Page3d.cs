@@ -18,6 +18,13 @@ namespace ElansAddonHub
     // real WebView2 on the invented continent (WebGL when the machine has it, the fallback to the flat map when it has not), and the new messages of the protocol.
     public partial class MainWindow
     {
+        // after a layer was switched off and on in the 3D page, the page asks the app ("need") and the app's answer lands a moment later: wait for the ask (at most `maxMs`, the old fixed wait), then a short settle for the answer
+        async Task WmLayerAsked(int needsBefore, int asks, int maxMs)
+        {
+            await WaitFor(() => WorldMapView.ReceivedForTest.Count(x => x == "need") >= needsBefore + asks, maxMs);
+            await Task.Delay(400);
+        }
+
         async Task<bool> Wm3WaitState(Func<Dictionary<string, object>, bool> cond, int ms = 20000)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -163,8 +170,9 @@ namespace ElansAddonHub
                     var bothRaw = await WmEval("(function(){try{return String(window.wm3.shownPoints('nodes'))}catch(e){return 'ERR '+e.message}})()"); int.TryParse((bothRaw ?? "").Trim('"'), out var both);
                     await WmEval("window.wm3.setOnForTest('nodes.ore', false)");
                     int herbsOnly = Convert.ToInt32(await WmEval("window.wm3.shownPoints('nodes')"));
+                    int needs167 = WorldMapView.ReceivedForTest.Count(x => x == "need");
                     await WmEval("['nodes.herbs','nodes.ore','nodes.chests','nodes.fishing'].forEach(function(k){ window.wm3.setOnForTest(k, false) }); window.wm3.setOnForTest('nodes', false); window.wm3.setOnForTest('nodes', true)");
-                    await Task.Delay(2500);   // the switch asks the app for the layer again: let that answer land, then feed the test layer once more
+                    await WmLayerAsked(needs167, 1, 2500);   // the switch asks the app for the layer again: let that answer land, then feed the test layer once more
                     await WmEval("window.wm3.feedForTest({t:'layer', id:'nodes', kind:'points', pts:[0,0,0,-1,0,-1, 1,1,0,-1,1,-1, 2,2,0,-1,1,-1], names:['n'], styles:[{c:'#4ade80',s:'circle',f:true,l:'Herb',g:'nodes.herbs'},{c:'#d08a4e',s:'square',f:true,l:'Ore',g:'nodes.ore'}]})");
                     int afterReopen = Convert.ToInt32(await WmEval("window.wm3.shownPoints('nodes')"));
                     Check("3D: the node kind filters hide their own points (3 shown, Ore off = 1 herb, all kinds off then the layer on again = all 3)", both == 3 && herbsOnly == 1 && afterReopen == 3, both + " / " + herbsOnly + " / " + afterReopen + " feed " + feedRaw + " raw " + bothRaw);
@@ -186,8 +194,9 @@ namespace ElansAddonHub
                     var insNoRaid = await Ins();
                     await WmEval("window.wm3.setOnForTest('instances.raids', true); window.wm3.setOnForTest('instances.dungeons', false)");
                     var insRaidOnly = await Ins();
+                    int needs190 = WorldMapView.ReceivedForTest.Count(x => x == "need");
                     await WmEval("['instances.dungeons','instances.raids'].forEach(function(k){ window.wm3.setOnForTest(k, false) }); window.wm3.setOnForTest('instances', false); window.wm3.setOnForTest('instances', true)");
-                    await Task.Delay(1500);
+                    await WmLayerAsked(needs190, 1, 1500);
                     await WmEval(feedIns);
                     var insReopen = await Ins();
                     int Wanted(List<Dictionary<string, object>> l) => l.Count(x => x.TryGetValue("wanted", out var v) && v is bool b && b);
@@ -221,8 +230,9 @@ namespace ElansAddonHub
                     var fm3All = await L3("instances", "null,'fm.'"); var rt3All = await L3("lines", "'routes'");
                     await WmEval("window.wm3.setOnForTest('fm.horde', false); window.wm3.setOnForTest('routes.alliance', false)");
                     var fm3NoH = await L3("instances", "null,'fm.'"); var rt3NoA = await L3("lines", "'routes'");
+                    int needs225 = WorldMapView.ReceivedForTest.Count(x => x == "need");
                     await WmEval("['fm.horde','fm.alliance','fm.neutral','routes.horde','routes.alliance','routes.neutral'].forEach(function(k){ window.wm3.setOnForTest(k, false) }); window.wm3.setOnForTest('fm', false); window.wm3.setOnForTest('fm', true); window.wm3.setOnForTest('routes', false); window.wm3.setOnForTest('routes', true)");
-                    await Task.Delay(1500);
+                    await WmLayerAsked(needs225, 2, 1500);
                     await WmEval(feedFm); await WmEval(feedRt);
                     var fm3Re = await L3("instances", "null,'fm.'"); var rt3Re = await L3("lines", "'routes'");
                     // the emblems in 3D: the same SVG badges as DOM overlays; a fixture picture of the three close to the camera

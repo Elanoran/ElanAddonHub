@@ -6,7 +6,7 @@
   Tools\selftest.ps1                          # --changed origin/main (what this branch touched)
   Tools\selftest.ps1 -Only inventory,toasts   # just those sections
   Tools\selftest.ps1 -Changed v2.33.0         # everything since a tag
-  Tools\selftest.ps1 -Full                    # every section, the real-game-file ones included (about 5 min): only when something shared changed
+  Tools\selftest.ps1 -Full                    # every section, the real-game-file ones and the pictures included (about 11 min): only when something shared changed
   Tools\selftest.ps1 -Only worldmapreal      # one real-game-file section (worldmapreal, mapdatareal, instancesreal, buildingsreal, dungeonmapsreal, atlaspagereal)
   Tools\selftest.ps1 -NoCache                # never skip a real-game-file section because it passed before
   Tools\selftest.ps1 -List                    # section names
