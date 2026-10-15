@@ -497,6 +497,8 @@ namespace ElansAddonHub.Services.Atlas
             return ix;
         }
 
+        const int EventFlag = 1;
+
         static BIndex BuildInstances(Ctx x)
         {
             var ix = new BIndex { Noun = "dungeon or raid" };
@@ -504,7 +506,7 @@ namespace ElansAddonHub.Services.Atlas
             {
                 if (i.Placeholder || string.IsNullOrEmpty(i.Name)) continue;
                 var e = Entry("instance", i.MapId, i.Name);
-                e.Client = true; e.Type = i.InstanceType;
+                e.Client = true; e.Type = i.InstanceType; e.Flags = i.Event ? EventFlag : 0;
                 // the level the game suggests first; an instance it does not list gets the range of its creatures from the Classic baseline
                 if (i.MinLevel > 0) { e.Level = i.MinLevel; e.Level2 = Math.Max(i.MinLevel, i.MaxLevel); }
                 else if (x.Derived != null && x.Derived.InstanceCreatureLevels(i.MapId, out var clo, out var chi)) { e.Level = clo; e.Level2 = chi; e.Classic = true; }
@@ -515,8 +517,10 @@ namespace ElansAddonHub.Services.Atlas
             }
             ix.Root.Title = "Dungeons and raids";
             void Add(string slug, string title, Func<BEntry, bool> pred) { if (ix.All.Any(pred)) ix.Root.Kids.Add(new BNode { Slug = slug, Title = title, Pred = pred }); }
-            Add("dungeons", "Dungeons", e => e.Type == 1); Add("raids", "Raids", e => e.Type == 2); Add("battlegrounds", "Battlegrounds", e => e.Type == 3);
-            Add("other", "Other", e => e.Type != 1 && e.Type != 2 && e.Type != 3);
+            // an event or unreleased map (MapIndex: no way in from the world, or a battleground with no map) is listed apart, not among the dungeons it is typed as
+            Add("dungeons", "Dungeons", e => e.Type == 1 && e.Flags == 0); Add("raids", "Raids", e => e.Type == 2 && e.Flags == 0); Add("battlegrounds", "Battlegrounds", e => e.Type == 3 && e.Flags == 0);
+            Add("other", "Other", e => e.Type != 1 && e.Type != 2 && e.Type != 3 && e.Flags == 0);
+            Add("events", "Events and unreleased", e => e.Flags == EventFlag);
             return ix;
         }
 

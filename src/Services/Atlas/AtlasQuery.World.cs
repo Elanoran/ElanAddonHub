@@ -249,7 +249,7 @@ namespace ElansAddonHub.Services.Atlas
                 m.Map = built;
             }
             else LayerNotes(m, true, false);
-            if (!inst.HasMap) m.Notes.Add(inst.Name + " has no map in the game files.");
+            if (!inst.HasMap) m.Notes.Add(inst.Name + " has no map in the game files" + (ElansAddonHub.Services.DungeonMaps.DungeonPlans.CanDraw(mapId) ? "; the map card draws a plan of it from them." : "."));
             return m;
         }
     }

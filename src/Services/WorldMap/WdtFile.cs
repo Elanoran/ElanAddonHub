@@ -10,6 +10,12 @@ namespace ElansAddonHub.Services.WorldMap
     //           entry index = row * 64 + col (a tile without files has all zeros)
     // MAIN (flags, 8 bytes x 4096) is read for the "has an ADT" bit only as a cross-check. Verified on the real Eastern Kingdoms (736 tiles) and
     // Kalimdor (988 tiles) tables of build 1.60.1.70338.
+    // A map made of one building (most dungeons: the Stockade, Molten Core, Blackrock Depths ...) has no tiles: MPHD's flag 0x1 (uses a global map object) is set
+    // and one MODF record (the 64-byte placement of the ADT's MODF, its nameId the WMO's FileDataID) names the building. Its position is (0, 0, 0) on the
+    // files of build 1.60.1.70338 and the model's own axes are the world's turned half way round: world (x, y, z) = (-model x, -model y, model z) - checked
+    // against where the Classic baseline puts the creatures of Molten Core, Blackfathom Deeps, Onyxia's Lair and Blackrock Depths (all inside the turned box,
+    // none inside the unturned one). GlobalWmo carries it with the position moved by half the world on both ground axes, so the placement transform of the
+    // ADT objects (WmoTransform.ToScene, then world x = 17066.67 - scene z, y = 17066.67 - scene x) gives exactly that.
     public sealed class WdtTile { public int Col, Row; public int RootFdid, MinimapFdid, Obj0Fdid; }
 
     public sealed class WdtFile
@@ -17,6 +23,9 @@ namespace ElansAddonHub.Services.WorldMap
         public const int MaidEntry = 32, Entries = 4096;
         public List<WdtTile> Tiles = new List<WdtTile>();
         public int MainTiles = -1;             // tiles MAIN says have an ADT (-1 = no MAIN)
+        public uint MphdFlags;                 // MPHD's flags (0x1 = the map is one global building)
+        public WmoPlacement GlobalWmo;         // the building of a map made of one (null = a map of tiles)
+        public const float HalfWorld = 17066.666f;
         public string Problem;                 // set = nothing usable
         public bool Ok => Problem == null;
         public int WithMinimap => Tiles.Count(t => t.MinimapFdid != 0);
@@ -25,7 +34,7 @@ namespace ElansAddonHub.Services.WorldMap
         {
             var a = new[] { (char)d[p], (char)d[p + 1], (char)d[p + 2], (char)d[p + 3] };
             var s = new string(a);
-            if (s == "MAID" || s == "MAIN") return s;
+            if (s == "MAID" || s == "MAIN" || s == "MPHD" || s == "MODF") return s;
             return new string(a.Reverse().ToArray());
         }
 
@@ -33,7 +42,7 @@ namespace ElansAddonHub.Services.WorldMap
         {
             var w = new WdtFile();
             if (d == null || d.Length < 16) { w.Problem = "the world table is empty or cut off"; return w; }
-            int maid = -1, main = -1, maidSize = 0, mainSize = 0;
+            int maid = -1, main = -1, maidSize = 0, mainSize = 0, modf = -1, modfSize = 0;
             string cut = null;
             for (int p = 0; p + 8 <= d.Length;)
             {
@@ -42,7 +51,22 @@ namespace ElansAddonHub.Services.WorldMap
                 var tag = Tag(d, p);
                 if (tag == "MAID") { maid = p + 8; maidSize = size; }
                 else if (tag == "MAIN") { main = p + 8; mainSize = size; }
+                else if (tag == "MPHD" && size >= 4) w.MphdFlags = BitConverter.ToUInt32(d, p + 8);
+                else if (tag == "MODF") { modf = p + 8; modfSize = size; }
                 p += 8 + size;
+            }
+            if (modf >= 0 && modfSize >= AdtObjects.ModfRecord)
+            {
+                var g = new WmoPlacement
+                {
+                    NameId = BitConverter.ToUInt32(d, modf), UniqueId = BitConverter.ToUInt32(d, modf + 4),
+                    X = BitConverter.ToSingle(d, modf + 8) + HalfWorld, Y = BitConverter.ToSingle(d, modf + 12), Z = BitConverter.ToSingle(d, modf + 16) + HalfWorld,
+                    RotX = BitConverter.ToSingle(d, modf + 20), RotY = BitConverter.ToSingle(d, modf + 24), RotZ = BitConverter.ToSingle(d, modf + 28),
+                    Flags = BitConverter.ToUInt16(d, modf + 56), DoodadSet = BitConverter.ToUInt16(d, modf + 58), NameSet = BitConverter.ToUInt16(d, modf + 60),
+                };
+                int sc = BitConverter.ToUInt16(d, modf + 62);
+                g.Scale = sc == 0 ? 1f : sc / 1024f;
+                if (g.NameId != 0 && g.NameId <= int.MaxValue && !float.IsNaN(g.X) && !float.IsNaN(g.Z) && g.Scale > 0.01f && g.Scale < 100f) w.GlobalWmo = g;
             }
             if (maid < 0) { w.Problem = cut ?? "this world table has no MAID chunk (the file ids of its tiles)"; return w; }
             if (maidSize != Entries * MaidEntry) { w.Problem = "MAID has an unexpected size (" + maidSize + " bytes)"; return w; }

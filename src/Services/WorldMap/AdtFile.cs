@@ -11,6 +11,9 @@ namespace ElansAddonHub.Services.WorldMap
         public int AreaId;                  // AreaTable id of the chunk
         public float PosX, PosY, PosZ;      // MCNK.position: the chunk's corner in world coordinates, z = the base the heights are relative to
         public float[] Heights;             // MCVT: 145 floats (9 x 9 outer + 8 x 8 inner vertices), relative to PosZ; null = the chunk has none
+        public ulong Holes;                 // the chunk's 8 x 8 cells that have no ground: bit (row * 8 + col), row north to south, col west to east (see AdtFile)
+
+        public bool IsHole(int col, int row) => (Holes & (1UL << (row * 8 + col))) != 0;
     }
 
     // One layer of liquid in one terrain chunk (an MH2O instance): a rectangle of the chunk's 8 x 8 cells with a liquid type, an exists mask and heights.
@@ -29,7 +32,9 @@ namespace ElansAddonHub.Services.WorldMap
     // The root ADT of a map tile (terrain), read for the heights and the area ids of its chunks. Written from wowdev.wiki/ADT/v18 and checked on the
     // real files of build 1.60.1.70338: a sequence of chunks (4-byte tag, 4-byte size, data), the tags stored reversed on disk ("KNCM" for MCNK, as
     // the WDT's). The ones that matter:
-    //   MCNK  x 256   a 128-byte header (flags, IndexX, IndexY, ... areaid at 0x34, position float[3] at 0x68) followed by sub-chunks
+    //   MCNK  x 256   a 128-byte header (flags, IndexX, IndexY, ... areaid at 0x34, position float[3] at 0x68) followed by sub-chunks. Holes (cells with no
+    //                 ground, cave mouths): with flag 0x10000 (high_res_holes) the 8 bytes at 0x14 are an 8 x 8 mask, one byte per row of cells, bit = column;
+    //                 without it the uint16 at 0x3C is a 4 x 4 mask, bit (row / 2 * 4 + col / 2), each bit a 2 x 2 block of cells
     //     MCVT        145 floats: 17 rows alternately 9 outer then 8 inner vertices; z = position.z + value
     //   MH2O          the liquids of the whole tile: 256 x {offset to instances, layer count, offset to attributes} (12 bytes, chunk order = MCNK order),
     //                 then per instance (24 bytes): ushort liquid type, ushort liquid object / vertex format, float min, float max, byte x, y, width, height,
@@ -162,6 +167,16 @@ namespace ElansAddonHub.Services.WorldMap
             }
         }
 
+        // the 4 x 4 mask of the old format as the 8 x 8 one
+        public static ulong LowResHoles(ushort m)
+        {
+            ulong r = 0;
+            for (int row = 0; row < 8; row++)
+                for (int col = 0; col < 8; col++)
+                    if ((m & (1 << (row / 2 * 4 + col / 2))) != 0) r |= 1UL << (row * 8 + col);
+            return r;
+        }
+
         static void ReadChunk(AdtFile f, byte[] d, int s, int size)
         {
             if (size < 128) return;
@@ -172,6 +187,7 @@ namespace ElansAddonHub.Services.WorldMap
                 PosX = BitConverter.ToSingle(d, s + 0x68), PosY = BitConverter.ToSingle(d, s + 0x6C), PosZ = BitConverter.ToSingle(d, s + 0x70),
             };
             if (c.IndexX < 0 || c.IndexX > 15 || c.IndexY < 0 || c.IndexY > 15) return;
+            c.Holes = (c.Flags & 0x10000) != 0 ? BitConverter.ToUInt64(d, s + 0x14) : LowResHoles(BitConverter.ToUInt16(d, s + 0x3C));
             // sub-chunks follow the 128-byte header
             int end = s + size;
             for (int p = s + 128; p + 8 <= end;)

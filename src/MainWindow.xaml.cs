@@ -400,6 +400,7 @@ namespace ElansAddonHub
             if (Begin("worldmap")) { result += "\r\n" + await WorldMapTest(dir); End(); }
             if (Begin("instances")) { result += "\r\n" + await InstancesTest(dir); End(); }
             if (Begin("buildings")) { result += "\r\n" + await BuildingsTest(dir); End(); }
+            if (Begin("dungeonmaps")) { result += "\r\n" + await DungeonMapsTest(dir); End(); }
             if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }
             if (Begin("gametooltip")) { result += "\r\n" + await GameTooltipTest(dir); End(); }
             if (Begin("talents")) { result += "\r\n" + await TalentsTest(dir); End(); }

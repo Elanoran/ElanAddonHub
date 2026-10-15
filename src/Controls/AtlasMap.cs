@@ -23,7 +23,8 @@ namespace ElansAddonHub
     //   map.ShowInstance(30);                         // an instance by its map id (its first floor; the selector offers the others)
     //
     // The picture comes from MapRender (PNG cache); the tree, floors and names from MapData.Index. Nothing is kept for maps that are not shown.
-    public sealed class AtlasMap : UserControl
+    // An instance the game ships no art for gets a plan drawn from the player's own game files instead (AtlasMap.Drawn.cs, Services/DungeonMaps).
+    public sealed partial class AtlasMap : UserControl
     {
         // ---- public surface
         public event Action<string> LinkClicked;
@@ -31,7 +32,7 @@ namespace ElansAddonHub
 
         public int UiMapId { get; private set; }
         public int MarkerCount => markers.Count;
-        public enum ViewState { Empty, Loading, Ready, NoArt, Unavailable, Failed }
+        public enum ViewState { Empty, Loading, Ready, NoArt, Unavailable, Failed, Drawing, Ask }
         public ViewState State { get; private set; } = ViewState.Empty;
         public string StateText { get; private set; } = "";
 
@@ -120,6 +121,7 @@ namespace ElansAddonHub
             StyleOf(stateTitle, "Text.Body"); StyleOf(stateHint, "Text.Secondary");
             stateHint.Margin = new Thickness(0, 4, 0, 0); stateTitle.Margin = new Thickness(0, 8, 0, 0);
             stateBox.Children.Add(stateGlyph); stateBox.Children.Add(stateTitle); stateBox.Children.Add(stateHint);
+            BuildDrawnParts();
             stage.Children.Add(stateBox);
             // the hover text is a game tooltip too (the same panel colours and font as GameTooltip)
             tipBox.Background = GameTooltip.Brush("Brush.GameTip.Bg");
@@ -141,11 +143,13 @@ namespace ElansAddonHub
             Loaded += (s, e) =>
             {
                 MapData.Changed -= OnMapDataChanged; MapData.Changed += OnMapDataChanged;
-                if (released) { released = false; if (UiMapId != 0) ShowMap(UiMapId); }
+                Services.DungeonMaps.DungeonPlans.Changed -= OnPlansChanged; Services.DungeonMaps.DungeonPlans.Changed += OnPlansChanged;
+                if (released) { released = false; if (UiMapId != 0) ShowMap(UiMapId); else if (drawnMap != 0) ShowDrawnAgain(); }
             };
             Unloaded += (s, e) =>
             {
                 MapData.Changed -= OnMapDataChanged;
+                Services.DungeonMaps.DungeonPlans.Changed -= OnPlansChanged;
                 gen++;
                 tipTimer?.Stop();
                 // off screen the picture is let go (a continent is tens of MB decoded); it comes back from the PNG when the control is shown again
@@ -191,6 +195,7 @@ namespace ElansAddonHub
             int my = ++gen;
             if (route.Count > 0 && routeMap != uiMapId) ClearRoute();
             UiMapId = uiMapId;
+            LeaveDrawn();
             var idx = MapData.Index;
             ClearPicture();
             BuildChrome(idx, uiMapId);
@@ -226,9 +231,10 @@ namespace ElansAddonHub
         {
             var idx = MapData.Index;
             var inst = idx?.Instance(mapId);
+            if (inst != null && inst.Floors.Count == 0 && Services.DungeonMaps.DungeonPlans.CanDraw(mapId)) { ShowDrawn(inst); return; }
             if (inst == null || inst.Floors.Count == 0)
             {
-                int my = ++gen; ClearPicture(); UiMapId = 0;
+                int my = ++gen; ClearPicture(); UiMapId = 0; LeaveDrawn();
                 BuildChrome(idx, 0, inst);
                 SetState(inst == null ? ViewState.Unavailable : ViewState.NoArt, inst == null ? "Map data is not available" : inst.Name + " has no map in the game files",
                     inst == null ? "" : "The game does not ship a picture of this " + inst.Kind.ToLowerInvariant() + ".");
@@ -242,6 +248,7 @@ namespace ElansAddonHub
         {
             ++gen;
             UiMapId = uiMapId;
+            LeaveDrawn();
             BuildChrome(MapData.Index, uiMapId);
             ApplyPicture(image, false);
             MapChanged?.Invoke(uiMapId);
@@ -283,7 +290,11 @@ namespace ElansAddonHub
             skeleton.Visibility = s == ViewState.Loading ? Visibility.Visible : Visibility.Collapsed;
             skeleton.Show = s == ViewState.Loading;
             stateBox.Visibility = s == ViewState.Ready || s == ViewState.Loading ? Visibility.Collapsed : Visibility.Visible;
-            stateGlyph.Text = s == ViewState.Failed ? "\uE783" : s == ViewState.Empty ? "\uE707" : "\uE909";
+            stateGlyph.Text = s == ViewState.Failed ? "\uE783" : s == ViewState.Empty ? "\uE707" : s == ViewState.Drawing || s == ViewState.Ask ? "\uE70F" : "\uE909";
+            if (s != ViewState.Drawing) stateBar.Visibility = Visibility.Collapsed;
+            if (s != ViewState.Ask) stateButton.Visibility = Visibility.Collapsed;
+            stateBox.IsHitTestVisible = s == ViewState.Ask;
+            if (s != ViewState.Ready) caption.Visibility = Visibility.Collapsed;
             stateTitle.Text = title; stateHint.Text = hint;
             stateHint.Visibility = hint.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             view.InvalidateVisual();

@@ -33,7 +33,12 @@ namespace ElansAddonHub.Services.Maps
         public bool HasWorldPositions => Set.HasAssignments && Set.Assignments.Count > 0;
 
         static readonly Regex Junk = new Regex(@"<unused>|deprecated|\bunused\b|\btest\b|\bdnt\b|\[ph\]|nothing to see here|^\W*$|^\d+$|PVP\s?Barracks", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        public static bool IsPlaceholderName(string name) => string.IsNullOrWhiteSpace(name) || Junk.IsMatch(name);
+        // a word "test" glued to another one is a leftover too ("CashTest", "TEST_01"); a real name that merely contains the letters is not ("Contest", "Testament")
+        static readonly Regex GluedTest = new Regex(@"(?<=[a-z])Test(?![a-z])|(?<![A-Za-z])TEST(?![A-Za-z])|(?<![A-Za-z])test(?=_|\d)", RegexOptions.CultureInvariant);
+        public static bool IsPlaceholderName(string name) => string.IsNullOrWhiteSpace(name) || Junk.IsMatch(name) || GluedTest.IsMatch(name);
+        static readonly Regex TestWord = new Regex(@"\btest\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        // a map's folder name ("TEST_01", "test"); a number is a normal folder name for the newer maps ("2784")
+        public static bool IsTestDirectory(string dir) => !string.IsNullOrEmpty(dir) && (TestWord.IsMatch(dir) || GluedTest.IsMatch(dir));
 
         public MapIndex(MapSet set)
         {
@@ -74,6 +79,8 @@ namespace ElansAddonHub.Services.Maps
 
         void BuildInstances()
         {
+            // the event rule needs the ghost spots: a Map table without them (an older layout) says nothing about a way in
+            bool corpseData = Set.Maps.Any(x => (x.InstanceType == 1 || x.InstanceType == 2) && x.CorpseMapId >= 0);
             foreach (var m in Set.Maps.OrderBy(x => x.Id))
             {
                 if (m.InstanceType < 1 || m.InstanceType > 4) continue;
@@ -83,7 +90,7 @@ namespace ElansAddonHub.Services.Maps
                     Kind = m.InstanceType == 1 ? "Dungeon" : m.InstanceType == 2 ? "Raid" : m.InstanceType == 3 ? "Battleground" : "Arena",
                 };
                 if (inst.Name.Length == 0) inst.Name = m.Directory ?? ("Map " + m.Id);
-                inst.Placeholder = IsPlaceholderName(inst.Name);
+                inst.Placeholder = IsPlaceholderName(inst.Name) || IsTestDirectory(m.Directory);
                 if (!inst.Placeholder && (m.InstanceType == 1 || m.InstanceType == 2))      // dungeons and raids (a battleground or arena is entered from a battlemaster, not a door)
                 {
                     inst.Entrance = EntranceOf(m);
@@ -102,6 +109,8 @@ namespace ElansAddonHub.Services.Maps
                     else if (!floors.Contains(f)) floors.Add(f);
                 }
                 inst.Floors = floors;
+                // data, not names: a dungeon or raid the game puts no ghost of on a continent has no way in from the world; a battleground or arena with no map
+                inst.Event = corpseData && !inst.Placeholder && ((m.InstanceType == 1 || m.InstanceType == 2) ? m.CorpseMapId < 0 : floors.Count == 0);
                 Instances.Add(inst);
             }
         }

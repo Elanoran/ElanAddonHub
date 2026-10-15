@@ -13,6 +13,7 @@ namespace ElansAddonHub.Services.WorldMap
     //          ground type, texture3, colour2, flags2, 16 bytes runtime data
     //          MOGI (nGroups x 32 bytes): flags, bounding box (6 floats), name offset - the flags are the group's, so interior groups are skipped without reading them
     //          GFID: the groups' FileDataIDs, numLod lists of nGroups (the first list is the full-detail groups)
+    //          MOGN: the groups' names, zero-terminated strings; MOGI's name offset points into it (offset 0 = an empty name)
     //   group  MVER + MOGP: a 68-byte header (name offset, description offset, flags, bounding box, portal start / count, batch counts, fog ids, liquid, unique id,
     //          flags2, unknown) followed by sub-chunks:
     //          MOPY (2 bytes per triangle: flags, material id; 0xFF = no material), MOVI (uint16 indices), MOVT (3 floats per vertex, WoW world axes: x north,
@@ -20,7 +21,7 @@ namespace ElansAddonHub.Services.WorldMap
     //          byte material)
     // Group flags that matter: 0x8 = exterior (seen from outside), 0x2000 = interior. Only exterior groups are drawn.
     // ============================================================================================================================
-    public sealed class WmoGroupInfo { public uint Flags; public float MinX, MinY, MinZ, MaxX, MaxY, MaxZ; public int Fdid; }
+    public sealed class WmoGroupInfo { public uint Flags; public float MinX, MinY, MinZ, MaxX, MaxY, MaxZ; public int Fdid; public string Name = ""; }
 
     public sealed class WmoRoot
     {
@@ -39,7 +40,7 @@ namespace ElansAddonHub.Services.WorldMap
         {
             var r = new WmoRoot();
             if (d == null || d.Length < 16) { r.Problem = "the building file is empty or cut off"; return r; }
-            int mohd = -1, momt = -1, mogi = -1, gfid = -1, momtSize = 0, mogiSize = 0, gfidSize = 0;
+            int mohd = -1, momt = -1, mogi = -1, gfid = -1, mogn = -1, momtSize = 0, mogiSize = 0, gfidSize = 0, mognSize = 0;
             for (int p = 0; p + 8 <= d.Length;)
             {
                 int size = BitConverter.ToInt32(d, p + 4);
@@ -48,6 +49,7 @@ namespace ElansAddonHub.Services.WorldMap
                 else if (Is(d, p, "MOMT")) { momt = p + 8; momtSize = size; }
                 else if (Is(d, p, "MOGI")) { mogi = p + 8; mogiSize = size; }
                 else if (Is(d, p, "GFID")) { gfid = p + 8; gfidSize = size; }
+                else if (Is(d, p, "MOGN")) { mogn = p + 8; mognSize = size; }
                 p += 8 + size;
             }
             if (mohd < 0) { r.Problem = "this building has no MOHD chunk"; return r; }
@@ -69,6 +71,8 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     int q = mogi + i * 32;
                     g.Flags = BitConverter.ToUInt32(d, q); g.MinX = F(d, q + 4); g.MinY = F(d, q + 8); g.MinZ = F(d, q + 12); g.MaxX = F(d, q + 16); g.MaxY = F(d, q + 20); g.MaxZ = F(d, q + 24);
+                    int no = BitConverter.ToInt32(d, q + 28);
+                    if (mogn >= 0 && no > 0 && no < mognSize) g.Name = CString(d, mogn + no, mogn + mognSize);
                 }
                 if (gfid >= 0 && i * 4 + 4 <= gfidSize) { uint f = BitConverter.ToUInt32(d, gfid + i * 4); g.Fdid = f > int.MaxValue ? 0 : (int)f; }
                 r.GroupInfos.Add(g);
@@ -93,6 +97,12 @@ namespace ElansAddonHub.Services.WorldMap
             return fwd || rev;
         }
         internal static float F(byte[] d, int o) => BitConverter.ToSingle(d, o);
+        static string CString(byte[] d, int from, int end)
+        {
+            int e = from;
+            while (e < end && d[e] != 0) e++;
+            return System.Text.Encoding.UTF8.GetString(d, from, Math.Min(e - from, 128));
+        }
     }
 
     // The renderable triangles of one group, in scene axes relative to the model's origin ((x, y, z) = (WoW y, WoW z, WoW x): an even permutation, so nothing is mirrored; the placement then turns it by Ry(rotY) Rx(rotX) Rz(rotZ)), one material per triangle.

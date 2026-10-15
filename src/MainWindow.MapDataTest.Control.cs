@@ -488,10 +488,18 @@ namespace ElansAddonHub
                 RenderHost(host);
                 SnapshotSheet(host, P("23-mapdata-alterac.png"));
                 Check("real game files: a battleground (Alterac Valley, map 30) opens through ShowInstance", ready && map.UiMapId == 1459);
-                map.ShowInstance(36);
-                RenderHost(host);
-                SnapshotSheet(host, P("23-mapdata-deadmines.png"));
-                Check("real game files: the Deadmines has no picture in this client: the control says so", map.State == AtlasMap.ViewState.NoArt && map.StateText.Contains("Deadmines"), map.StateText);
+                // the Deadmines has no picture in this client: the control draws a plan from the game files (the dungeonmaps section checks the plans themselves)
+                var savedPlans = ElansAddonHub.Services.DungeonMaps.DungeonPlans.RootOverride;
+                ElansAddonHub.Services.DungeonMaps.DungeonPlans.RootOverride = Path.Combine(work, "dungeonmaps");
+                try
+                {
+                    map.ShowInstance(36);
+                    bool drawn = await WaitFor(() => map.State == AtlasMap.ViewState.Ready || map.State == AtlasMap.ViewState.NoArt, 120000);
+                    RenderHost(host);
+                    SnapshotSheet(host, P("23-mapdata-deadmines.png"));
+                    Check("real game files: the Deadmines has no picture in this client: the control shows a plan drawn from the game files instead, captioned so", drawn && map.State == AtlasMap.ViewState.Ready && map.DrawnPlan != null && (map.CaptionForTest ?? "").Contains("from your game files"), map.State + " " + map.StateText);
+                }
+                finally { ElansAddonHub.Services.DungeonMaps.DungeonPlans.RootOverride = savedPlans; ElansAddonHub.Services.DungeonMaps.DungeonPlans.ResetForTest(); }
             }
             catch (Exception e) { notes.Add("FAIL real game files: " + e); Check("real game files: no exception", false, e.Message); }
             finally

@@ -348,8 +348,9 @@ namespace ElansAddonHub.Services.Atlas
             return res;
         }
 
+        // "Raid · 40 players"; an event or unreleased map says so first ("Event or unreleased · Dungeon": MapIndex gives it no way in from the world)
         public static string InstanceDetail(InstanceInfo i)
-            => string.Join(" · ", new[] { i.Kind, i.MaxPlayers > 0 ? i.MaxPlayers + " players" : "" }.Where(s => !string.IsNullOrEmpty(s)));
+            => string.Join(" · ", new[] { i.Event ? "Event or unreleased" : "", i.Kind, i.MaxPlayers > 0 ? i.MaxPlayers + " players" : "" }.Where(s => !string.IsNullOrEmpty(s)));
 
         static List<AtlasHit> SearchSpells(string q)
         {

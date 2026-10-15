@@ -170,7 +170,10 @@ namespace ElansAddonHub.Services.Maps
         public int MapId;
         public string Name = "", Kind = "";
         public int InstanceType, MaxPlayers;
-        public bool Placeholder;                       // a test or unused leftover ("<unused>...", "Scott Test")
+        public bool Placeholder;                       // a test or unused leftover ("<unused>...", "Scott Test", "CashTest")
+        public bool Event;                             // not a dungeon of the world: a dungeon or raid with no way in from the world (Map.db2 names no continent for
+                                                       // its ghost: the event and unreleased maps - Demon Fall Canyon, Storm Cliffs, City of Dalaran ...), or a
+                                                       // battleground / arena the game has no map of (Hyjal Crater)
         public List<UiMapInfo> Floors = new List<UiMapInfo>();   // bottom to top
         public bool HasMap => Floors.Count > 0;
         public InstanceEntrance Entrance;              // where the way in is on a continent (null = the game files do not say)
