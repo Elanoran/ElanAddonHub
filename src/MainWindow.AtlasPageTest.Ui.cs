@@ -171,7 +171,7 @@ namespace ElansAddonHub
                 && AtlasWalk(AtlasView.ClassicCardForTest).OfType<ProgressBar>().Any(b => Math.Abs(b.Value - 50) < 1), string.Join(" | ", progTexts));
             Height = 1000; await Task.Delay(300); UpdateLayout();
             AtlasView.Scroller_ScrollToForTest(AtlasView.ClassicCardForTest);
-            await Task.Delay(200);
+            await ShotWait(200);
             Snapshot(Path.Combine(dir, "atlas-page-classic-progress.png"));
             Height = h0; await Task.Delay(100);
             fake.Hold.SetResult(true);
@@ -342,7 +342,7 @@ namespace ElansAddonHub
             tx = AtlasTexts(AtlasView);
             Check("zone page in the window: the hero names it, the map comes first (a zone opens on its Map tab), the tabs are Overview | Sources | Map | Related", AtlasView.Model.Id == "zone:11" && tx.Contains("Greenvale") && AtlasView.TabNowForTest == "map" && AtlasView.TabDefaultForTest == "map" && AtlasView.MapsForTest.Count == 1 && new[] { "overview", "sources", "map", "related" }.All(AtlasView.TabsForTest.Contains), string.Join(",", AtlasView.TabsForTest));
             await MapReady();
-            await Task.Delay(500);
+            await ShotWait(500);
             Snapshot(Path.Combine(dir, "atlas-page-zone.png"));
             await SwitchTab("related"); tx = AtlasTexts(AtlasView);
             Check("zone page: Related holds the Creatures / Objects / Quests tables; Sources the notable drops; the Overview the facts", tx.Contains("Creatures") && tx.Contains("Objects") && tx.Contains("Quests") && await SwitchTab("sources") && AtlasTexts(AtlasView).Contains("Notable drops") && await SwitchTab("overview") && AtlasView.TabNowForTest == "overview", string.Join(" | ", tx.Take(12)));
@@ -391,7 +391,7 @@ namespace ElansAddonHub
                 await Task.Delay(300);
                 var railMapEl = AtlasView.RailMapForTest;
                 Check("layout: a wide window (1800) puts the rail (340 px) beside the tab - a thumbnail of the map and the quick facts - and the Overview keeps the rest", AtlasView.ColumnsForTest == 2 && AtlasView.WideForTest && AtlasView.RailShownForTest && railMapEl != null && Math.Abs(AtlasView.RailForTest.ActualWidth - 340) < 1 && AtlasView.RailForTest.ActualHeight > 100, AtlasView.ColumnsForTest + " rail " + AtlasView.RailForTest?.ActualWidth + " scroller " + AtlasView.ScrollerWidthForTest);
-                await Task.Delay(700); Snapshot(Path.Combine(dir, "atlas-page-item-wide.png"));
+                await ShotWait(700); Snapshot(Path.Combine(dir, "atlas-page-item-wide.png"));
                 Check("layout: the thumbnail is a second, quiet map (not one of the page's maps), and a click on it opens the Map tab with the real one",
                     AtlasView.MapsForTest.Count == 0 && AtlasWalk(AtlasView.RailForTest).OfType<Border>().Any(b => b.Tag as string == "rail-map-open") && ClickRailMap() && AtlasView.TabNowForTest == "map" && AtlasView.MapsForTest.Count == 1 && !AtlasView.RailMapHostVisibleForTest);
                 Snapshot(Path.Combine(dir, "atlas-page-item-wide-map.png"));
@@ -485,8 +485,7 @@ namespace ElansAddonHub
             await AtlasView.Open("item:100"); UpdateLayout();
             Check("item page with no layer but the baseline's name missing too: a calm page, not an error", AtlasView.Model.NotFound && AtlasTexts(AtlasView).Any(t => t.Contains("Item")));
 
-            // ---- the player's own game files (read-only), when this PC has them
-            await AtlasRealChecks(dir, work, Check);
+            // the player's own game files run in their own section: "atlaspagereal" (MainWindow.AtlasPageTest.Real.cs)
         }
     }
 }

@@ -26,7 +26,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             var savedLodge = AtlasQuery.Context.Lodge; var savedChars = AtlasQuery.Context.Characters; var savedCrafters = AtlasQuery.Context.Crafters;
             var savedOv = UpgradeWeights.Overrides; var savedSave = UpgradeWeights.SaveOverrides; var savedOwned = AtlasQuery.Context.Owned; var savedEnchAuto = EnchantData.AutoStart;

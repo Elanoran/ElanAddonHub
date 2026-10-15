@@ -59,7 +59,7 @@ namespace ElansAddonHub
             var notes = new List<string>();
             bool ok = true;
             var clock = System.Diagnostics.Stopwatch.StartNew();
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "") + "  (t+" + (clock.ElapsedMilliseconds / 1000.0).ToString("0.0") + "s)"); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "") + "  (t+" + (clock.ElapsedMilliseconds / 1000.0).ToString("0.0") + "s)"); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             var s = settings;
             var seen0 = s.HealthSeen; var toasted0 = s.HealthToasted; bool off0 = s.ToastHealthOff, toastsOff0 = s.ToastsOff;

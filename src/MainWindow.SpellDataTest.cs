@@ -295,7 +295,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             var work = Path.Combine(dir, "spelldata");
             var savedCache = SpellData.CacheFile; var savedItemCache = ItemData.CacheFile; var savedEnabled = ItemData.Enabled;
@@ -611,7 +611,7 @@ namespace ElansAddonHub
             var head = InventoryView.DollTipForTest(1);
             Check("gear slot tooltip: the set shows 3/4 worn (the head, chest and weapon of this character), the worn pieces, the bonus that is reached and the one that is not, 58 armor",
                 head.Contains("58 Armor") && head.Contains("Fixture Battlegear (3/4)") && head.Contains("(2) Set: +20 Attack Power.") && head.Contains("(4) Set: Decreases the cooldown of Concussive Shot by 3 sec.") && head.Contains("Boots of the Set"), string.Join(" | ", head));
-            await Task.Delay(300);
+            await ShotWait(300);
             SnapshotSheet(InventoryView.DollTipSheetForTest(1), P("23-spelldata-tooltip-set.png"));
             baseSet.Details.Sets.Remove(800); foreach (var i in setRes.Items) baseSet.Details.SetOfItem.Remove(i);
 
@@ -625,7 +625,7 @@ namespace ElansAddonHub
             Check("recipe tooltip: the item (Tin Bar), its facts, the reagent '1 x Tin Ore', the skill and rank, the spell and item ids", rtip.Count > 5 && rtip[0] == "Tin Bar" && rtip.Contains("Reagents:") && rtip.Contains("1 x Tin Ore") && rtip.Any(l => l.StartsWith("Mining · skill 65")) && rtip.Contains("Spell ID 6002 · Item ID 3576"), string.Join(" | ", rtip));
             var etip = InventoryView.RecipeTipForTest("Mining", 2);
             Check("recipe tooltip of an enchant (makes no item): the spell's description, then the reagents", etip[0] == "Enchant Bracer" && etip.Contains("Permanently adds +2 Stamina to a bracer.") && etip.Contains("3 x Linen Cloth"), string.Join(" | ", etip));
-            await Task.Delay(400);
+            await ShotWait(400);
             Snapshot(P("23-spelldata-recipes.png"));
             SnapshotSheet(InventoryView.RecipeTipSheetForTest("Mining", 1), P("23-spelldata-tooltip-recipe.png"));
 
@@ -636,7 +636,7 @@ namespace ElansAddonHub
             var ttip = InventoryView.TalentTipForTest(1002);
             Check("talent tooltip: the spell's rank text, its description with the numbers filled in ('Increases your damage by 4% and your threat by 10%.'), the spell id",
                 ttip.Contains("Rank 2") && ttip.Contains("Increases your damage by 4% and your threat by 10%.") && ttip.Contains("Spell ID 1002"), string.Join(" | ", ttip));
-            await Task.Delay(300);
+            await ShotWait(300);
             Snapshot(P("23-spelldata-talents.png"));
             SnapshotSheet(InventoryView.TalentTipSheetForTest(1002), P("23-spelldata-tooltip-talent.png"));
 

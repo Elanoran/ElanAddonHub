@@ -38,7 +38,7 @@ namespace ElansAddonHub
             if (!string.IsNullOrEmpty(shots)) return await VideoShots(shots);
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond) { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
+            void Check(string what, bool cond) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
             var oldThumb = YouTube.ThumbSource; var oldMeta = YouTube.MetaSource;
             bool oldOff = settings.VideoPreviewsOff;
             try
@@ -129,7 +129,7 @@ namespace ElansAddonHub
                 await Task.Delay(300);
                 Check("cache: the same id is fetched once per session (thumbnail + oEmbed)", thumbCalls.Count(x => x == id) == 1 && metaCalls.Count(x => x == id) == 1
                     && list.First(m => m.Id == "yt5").Video.Thumb != null);
-                await Task.Delay(500);
+                await ShotWait(500);
                 Snapshot(Path.Combine(dir, "11-video-card.png"));
 
                 // an edit that adds / removes the link rebuilds the card
@@ -141,7 +141,7 @@ namespace ElansAddonHub
 
                 // ---- Settings > Privacy > Show video previews
                 ShowTab("settings"); SettingsPage.Show("privacy");
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(Path.Combine(dir, "11-video-privacy.png"));
                 Check("setting: default on, the switch shows it", !new Settings().VideoPreviewsOff && ((System.Windows.Controls.CheckBox)SettingsPage.FindName("PvVideo")).IsChecked == true);
                 SettingsPage.ToggleForTest("PvVideo");
@@ -181,7 +181,7 @@ namespace ElansAddonHub
                 Session.FeedForTest(Frame("ys1", "Found this guide for the Wailing Caverns run https://www.youtube.com/watch?v=NDNTLFXB7xo"));
                 var m = Session.MessagesOf("general").First(x => x.Id == "ys1");
                 for (int i = 0; i < 100 && (m.Video?.Title == null); i++) await Task.Delay(200);
-                await Task.Delay(800);
+                await ShotWait(800);
                 Snapshot(Path.Combine(outDir, "chat-video-chat.png"));
                 var info = $"card={m.VideoVisibility} title='{m.Video?.Title}' channel='{m.Video?.Channel}'";
                 LodgePage.VideoPlayerForTest.Open(m.Video.Link, m.Video.Title, m.Video.Channel);

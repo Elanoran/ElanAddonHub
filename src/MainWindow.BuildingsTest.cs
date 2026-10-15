@@ -20,7 +20,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; Util.Log("buildings test: " + (cond ? "ok   " : "FAIL ") + what); }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; Util.Log("buildings test: " + (cond ? "ok   " : "FAIL ") + what); }
             string P(string n) => Path.Combine(dir, n);
             var work = Path.Combine(dir, "buildings");
             var savedRoot = WorldMapCache.RootOverride; var savedCache = MapData.CacheFile; var savedWowRoot = MapData.WowRoot; var savedEnabled = MapData.Enabled; var savedWdt = WorldMapService.WdtSourceForTest;
@@ -41,8 +41,7 @@ namespace ElansAddonHub
                 BuildingsService.SourceForTest = null; BuildingsService.GroundForTest = null; BuildingsService.ModelDelayMsForTest = 0; BuildingsService.ResetForTest();
                 settings.WorldMap3dBuildings = savedMode; settings.WorldMapLayers = savedLayers; settings.WorldMap3dDetail = savedDetail; settings.WorldMap3d = saved3d; settings.WorldMapExag = savedExag;
             }
-            try { await BuildingsRealChecks(dir, work, Check, P, notes); }
-            catch (Exception e) { Check("buildings real-data test crashed", false, e.ToString()); }
+            // the real game files run in their own section: "buildingsreal" (MainWindow.BuildingsTest.Real.cs)
             return (ok ? "buildings: ok" : "buildings: FAILED") + "\r\n" + string.Join("\r\n", notes);
         }
     }

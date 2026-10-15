@@ -29,7 +29,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             var work = Path.Combine(dir, "atlashosts");
             var savedLodge = AtlasQuery.Context.Lodge; var savedNames = TalentsPage.NameOf; var savedAuto = TalentData.AutoStart; var savedCache = TalentData.CacheFile;
             var savedSaved = TalentsView.SavedFile; var savedHh = TalentsView.HunterBuildsFile; var savedLink = ProfessionLinks.Last;

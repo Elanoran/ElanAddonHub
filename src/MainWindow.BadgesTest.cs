@@ -73,7 +73,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             var sent = new List<Dictionary<string, object>>();
             var errors = new List<string>();
@@ -136,7 +136,7 @@ namespace ElansAddonHub
                 Check("ladder: the points and the best badges are on the row", rows[0].PointsText == 1204L.ToString("N0") && rows[0].Top.Count == 3 && rows[3].Top.Count == 0);
                 Check("ladder: a line says where you are", LodgePage.LadderForTest.YouLineForTest.Contains("number 2") && LodgePage.LadderForTest.YouLineForTest.Contains("this month"), LodgePage.LadderForTest.YouLineForTest);
                 Check("ladder: the dot shows on 'Your badges' while there are new badges", LodgePage.LadderForTest.NewDotVisibleForTest);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("badges-ladder.png"));
 
                 // ---- this month | all time
@@ -172,7 +172,7 @@ namespace ElansAddonHub
                 Check("badges card: grouped by family, in the server's order", LodgeSession.BadgeGroups(items).Select(g => g.Name).SequenceEqual(new[] { "Loot Ledger", "Flight Clerk", "Veteran", "Host", "Secrets" }));
                 Check("badges card: the draw is only an icon on a tier-coloured disc (no game art)", bronze.Glyph.Length == 1 && bronze.DiscBrush != gold.DiscBrush && bronze.Glyph != host.Glyph);
                 Check("badges card: looking tells the server (the dot goes) and sends nothing else", count("badges.seen") == 1 && Session.NewBadges == 0 && !LodgePage.LadderForTest.NewDotVisibleForTest);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("badges-panel.png"));
                 LodgePage.CloseBadgesForTest();
                 Check("badges card: closes", !LodgePage.BadgesCardVisibleForTest);
@@ -204,7 +204,7 @@ namespace ElansAddonHub
                 Check("profile card: the best 5 of 7 show, highest tier first, '+2' for the rest", strip.Count == 5 && strip[0].Tier == 3 && strip[1].Tier == 3 && strip[2].Tier == 2 && LodgePage.PopCardForTest.BadgesMoreText == "+2",
                     string.Join(",", strip.Select(b => b.Id)));
                 Check("profile card: the strip is visible", LodgePage.PopCardForTest.BadgesVisibility == System.Windows.Visibility.Visible);
-                await Task.Delay(300);
+                await ShotWait(300);
                 SnapshotSheet(LodgePage.PopCardElementForTest, P("badges-profile-card.png"));
                 LodgePage.PopBadgesClickForTest();
                 Check("profile card: Badges opens their earned badges only", LodgePage.BadgesCardVisibleForTest && LodgePage.BadgesHeadingForTest == "Bob's badges" && LodgePage.BadgesListForTest.ItemsForTest.Count() == 7 && LodgePage.BadgesListForTest.ItemsForTest.All(b => b.Earned && !b.HasProgress));

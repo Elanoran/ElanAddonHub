@@ -87,6 +87,8 @@ namespace ElansAddonHub
         void SnapshotSheet(System.Windows.FrameworkElement el, string file)
         {
             el.UpdateLayout();
+            if (!SelfTestClock.ShotsOn) { SelfTestClock.ShotsSkipped++; return; }   // design pictures only: nothing reads them back
+            var shotClock = System.Diagnostics.Stopwatch.StartNew();
             int w = Math.Max(1, (int)Math.Ceiling(el.ActualWidth)), h = Math.Max(1, (int)Math.Ceiling(el.ActualHeight));
             var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(w * 2, h * 2, 192, 192, System.Windows.Media.PixelFormats.Pbgra32);
             var dv = new System.Windows.Media.DrawingVisual();
@@ -99,13 +101,14 @@ namespace ElansAddonHub
             var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
             enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
             using (var fs = File.Create(file)) enc.Save(fs);
+            SelfTestClock.ShotsTaken++; SelfTestClock.ShotSeconds += shotClock.Elapsed.TotalSeconds;
         }
 
         async Task<string> CharactersTest(string dir)
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             var root = Path.Combine(dir, "charswow");
@@ -302,7 +305,7 @@ namespace ElansAddonHub
                 Check("overview: free bag space counts general bags only (22 slots, 5 used; the reagent bag is apart), bank items, item level, talents, professions",
                     ov.Contains("stat|Bag space|17 free of 22") && ov.Contains("stat|Bank|13 items") && ov.Contains("stat|Item level|58.5") && ov.Contains("stat|Talents|35 spent · 2 unspent") && ov.Contains("stat|Professions|Mining, Herbalism, Cooking"), string.Join(" | ", ov));
                 Check("overview: the age line names the source", InventoryView.ViewInfoForTest.StartsWith("Updated ") && InventoryView.ViewInfoForTest.EndsWith("Elan's Hub"), InventoryView.ViewInfoForTest);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("20-characters-overview.png"));
 
                 InventoryView.SelectTabForTest("gear");
@@ -325,7 +328,7 @@ namespace ElansAddonHub
                 var emptyTip = InventoryView.DollTipForTest(2);
                 Check("gear doll hover on an empty slot names the slot", emptyTip.SequenceEqual(new[] { "Neck · empty" }), string.Join(" | ", emptyTip));
                 Check("gear doll layout: wide = stats beside the doll, narrow = stats under it", !InventoryView.GearStatsUnderDollForTest(900) && InventoryView.GearStatsUnderDollForTest(400));
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("20-characters-gear-window.png"));
                 SnapshotSheet(InventoryView.GearSheetForTest, P("20-characters-gear.png")); // the whole sheet, not cut by the window
 
@@ -340,7 +343,7 @@ namespace ElansAddonHub
                 InventoryView.SelectTabForTest("professions");
                 var pl = InventoryView.CharTabLinesForTest();
                 Check("professions: Mining 225 / 300, Herbalism 300 / 300, Cooking 75 / 150 (secondary)", pl.Where(x => x.StartsWith("prof|")).SequenceEqual(new[] { "prof|Mining|225|300|primary", "prof|Herbalism|300|300|primary", "prof|Cooking|75|150|secondary" }), string.Join(" | ", pl));
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("20-characters-professions.png"));
 
                 // the Pet tab: hunters only
@@ -351,7 +354,7 @@ namespace ElansAddonHub
                 Check("pet: stabled - Spot in slot 2, loyalty from its text, no training points", pt.Contains("pet|stable 2|Spot|Wolf|22|Faithful||Bite 2"), string.Join(" | ", pt));
                 Check("pet: 'Your hunter can teach' lists the known abilities by name with ranks", pt.Contains("known|Bite 6, Claw 4, Faster Attack 2"), string.Join(" | ", pt));
                 Check("pet: counts line (1 with you, 1 stabled, 3 known) and the age line names Hunter Helper", pt.Contains("petinfo|1|1|3") && InventoryView.ViewInfoForTest.StartsWith("2 pets · Updated ") && InventoryView.ViewInfoForTest.EndsWith("Hunter Helper"), InventoryView.ViewInfoForTest);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("20-characters-pet.png"));
                 InventoryView.FilterForTest("Forever-Measley");
                 Check("Pet tab is hidden for a Paladin, and the page falls back to Overview", !InventoryView.PetTabVisibleForTest && InventoryView.TabForTest == "overview", InventoryView.TabForTest);
@@ -366,7 +369,7 @@ namespace ElansAddonHub
                 Check("bags from the Hub: backpack 4/16, Linen Bag 1/6, reagent bag 2/8; the reagent bag has its chip, free space apart",
                     panels.SequenceEqual(new[] { "Backpack|4|16", "Linen Bag|1|6", "Light Leather Reagent Bag|2|8" }) && InventoryView.ChipsForTest().SequenceEqual(new[] { "Light Leather Reagent Bag|Reagents only" })
                     && InventoryView.ViewInfoForTest.StartsWith("17 free of 22 slots · Reagents 6 free") && InventoryView.ViewInfoForTest.EndsWith("Elan's Hub"), string.Join(",", panels) + " / " + InventoryView.ViewInfoForTest);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("20-characters-bags.png"));
                 InventoryView.SelectTabForTest("bank");
                 panels = InventoryView.PanelsForTest();
@@ -403,7 +406,7 @@ namespace ElansAddonHub
                 InventoryView.SelectTabForTest("bank");
                 Check("bank, module too new", InventoryView.BagsMessageForTest == "Update Elan's Outpost to show the bank.", InventoryView.BagsMessageForTest);
                 InventoryView.SelectTabForTest("gear");
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("20-characters-toonew.png"));
                 InventoryView.SelectTabForTest("overview");
                 Check("overview of a character whose other modules are too new still works (core v1)", InventoryView.CharTabLinesForTest().Contains("identity|Level 30 Dwarf Priest"), string.Join(" | ", InventoryView.CharTabLinesForTest()));
@@ -424,7 +427,7 @@ namespace ElansAddonHub
                 Check("Pet tab shows for a hunter with no pets module too", InventoryView.PetTabVisibleForTest);
                 InventoryView.SelectTabForTest("pet");
                 Check("pet, module missing: 'No pets saved' (the hint says to log in with Hunter Helper 1.26.5)", InventoryView.CharTabLinesForTest().SequenceEqual(new[] { "empty|No pets saved for Newbie yet" }), string.Join(" | ", InventoryView.CharTabLinesForTest()));
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("20-characters-pet-empty.png"));
                 InventoryView.FilterForTest("Forever-Future");
                 InventoryView.SelectTabForTest("pet");
@@ -448,7 +451,7 @@ namespace ElansAddonHub
                 ov = InventoryView.CharTabLinesForTest();
                 Check("legacy-only overview: level / class from the Bags save, a note to log in with the Hub, no experience bar", ov.Contains("identity|Level 25 Hunter") && ov.Contains("note|no core") && !ov.Any(x => x.StartsWith("xp|")), string.Join(" | ", ov));
                 Check("legacy-only overview: the age line names Elan's Bags", InventoryView.ViewInfoForTest.EndsWith("Elan's Bags"), InventoryView.ViewInfoForTest);
-                await Task.Delay(300);
+                await ShotWait(300);
                 Snapshot(P("20-characters-legacy-overview.png"));
                 InventoryView.SelectTabForTest("gear");
                 Check("legacy-only gear tab: friendly empty state", InventoryView.CharTabLinesForTest().SequenceEqual(new[] { "empty|No gear saved for Elan yet" }));

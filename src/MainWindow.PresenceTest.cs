@@ -17,7 +17,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond) { notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
+            void Check(string what, bool cond) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
             var s = settings;
             bool hadInvisible = s.LodgeInvisible, hadHint = s.InvisibleHintShown, hadZoneOff = s.ShareZoneOff, hadXpOff = s.ShareXpOff, hadAutoOff = s.AutoStatusOff;
             try
@@ -71,13 +71,13 @@ namespace ElansAddonHub
                 foreach (var (name, m) in cards)
                 {
                     var tip = LodgePage.ShowCardForTest(m, LodgePage.SidebarForTest);
-                    await Task.Delay(250);
+                    await ShotWait(250);
                     SnapshotElement(tip, System.IO.Path.Combine(dir, "12-card-" + name + ".png"));
                     tip.IsOpen = false;
                 }
                 // the chat name opens the same card
                 var chatTip = LodgePage.ShowCardForTest(Session.MessagesOf("general").First().Author, LodgePage.ChatListForTest);
-                await Task.Delay(250);
+                await ShotWait(250);
                 SnapshotElement(chatTip, System.IO.Path.Combine(dir, "12-card-chat.png"));
                 chatTip.IsOpen = false;
 
@@ -119,11 +119,11 @@ namespace ElansAddonHub
                 LodgePage.UpdateMeForTest();
                 Snapshot(System.IO.Path.Combine(dir, "12-invisible.png"));
                 LodgePage.OpenStatusForTest();
-                await Task.Delay(400);
+                await ShotWait(400);
                 SnapshotElement(LodgePage.StatusBoxForTest, System.IO.Path.Combine(dir, "12-status-menu.png"));
                 LodgePage.CloseStatusForTest();
                 var meCard = LodgePage.ShowCardForTest(Session.Me, LodgePage.SidebarForTest);
-                await Task.Delay(250);
+                await ShotWait(250);
                 SnapshotElement(meCard, System.IO.Path.Combine(dir, "12-card-me-invisible.png"));
                 meCard.IsOpen = false;
                 Session.FeedForTest("{\"t\":\"user\",\"user\":{\"id\":1,\"name\":\"Elan\",\"role\":\"owner\",\"invisible\":true}}");

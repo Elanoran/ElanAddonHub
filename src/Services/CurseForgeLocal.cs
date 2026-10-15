@@ -387,7 +387,7 @@ namespace ElansAddonHub.Services
             var root = Path.Combine(Path.GetTempPath(), "elanshub-cflogs-" + Guid.NewGuid().ToString("N"));
             try
             {
-                SettleSec = 0; ConfirmSec = 2; ReadyWaitSec = 4; TotalSec = 8; PollMs = 150;
+                SettleSec = 0; ConfirmSec = 1; ReadyWaitSec = 3; TotalSec = 4; PollMs = 100;   // (the flow polls until TotalSec even after the link is confirmed, so this is what each scenario costs)
                 var fake = new CfAddon { Id = 987654321, Name = "Nope" };
                 string Line(DateTime t, string m) => "[" + t.ToString("yyyy-MM-dd HH:mm:ss.fff") + "] [info]  [BackgroundController] " + m + "\n";
                 int session = 0;

@@ -81,7 +81,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string info = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (cond || info == null ? "" : " (" + info + ")")); ok &= cond; }
+            void Check(string what, bool cond, string info = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (cond || info == null ? "" : " (" + info + ")")); ok &= cond; }
             var reqBefore = FakeUpdateServer.Requests;
             try
             {

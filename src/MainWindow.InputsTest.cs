@@ -93,7 +93,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string extra = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (cond || extra == null ? "" : "  -> " + extra)); ok &= cond; }
+            void Check(string what, bool cond, string extra = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (cond || extra == null ? "" : "  -> " + extra)); ok &= cond; }
             try
             {
                 var input = (Style)FindResource("Input");

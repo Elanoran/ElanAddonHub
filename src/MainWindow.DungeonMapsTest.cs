@@ -25,7 +25,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; Util.Log("dungeonmaps test: " + (cond ? "ok   " : "FAIL ") + what); }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; Util.Log("dungeonmaps test: " + (cond ? "ok   " : "FAIL ") + what); }
             var work = Path.Combine(dir, "dungeonmaps");
             var savedRoot = DungeonPlans.RootOverride; var savedSrc = DungeonPlans.SourceForTest; var savedAuto = DungeonPlans.AutoSeconds; var savedEnabled = DungeonPlans.Enabled;
             var savedWow = DungeonPlans.WowRoot;
@@ -47,9 +47,7 @@ namespace ElansAddonHub
                 DungeonPlans.RootOverride = savedRoot; DungeonPlans.SourceForTest = savedSrc; DungeonPlans.AutoSeconds = savedAuto; DungeonPlans.Enabled = savedEnabled; DungeonPlans.WowRoot = savedWow;
                 DungeonPlans.DelayMsForTest = 0; DungeonPlans.ResetForTest(); MapData.ResetForTest();
             }
-            try { await DmRealChecks(dir, work, Check, notes); }
-            catch (Exception e) { Check("dungeonmaps real-data test crashed", false, e.ToString()); }
-            finally { DungeonPlans.RootOverride = savedRoot; DungeonPlans.WowRoot = savedWow; DungeonPlans.ResetForTest(); MapData.ResetForTest(); }
+            // the real game files run in their own section: "dungeonmapsreal" (MainWindow.DungeonMapsTest.Real.cs)
             return (ok ? "dungeonmaps: ok" : "dungeonmaps: FAILED") + "\r\n" + string.Join("\r\n", notes);
         }
 

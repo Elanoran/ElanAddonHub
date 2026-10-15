@@ -216,7 +216,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             var work = Path.Combine(dir, "itemdata");
             var savedCacheFile = ItemData.CacheFile; var savedRoot = ItemData.WowRoot; var savedEnabled = ItemData.Enabled; var savedDebounce = ItemData.DebounceMs;
@@ -537,7 +537,7 @@ namespace ElansAddonHub
 
             // pictures
             InventoryView.SetSearchForTest("sword");
-            await Task.Delay(300);
+            await ShotWait(300);
             Snapshot(P("22-itemdata-search.png"));
             SnapshotSheet(InventoryView.ResultTipSheetForTest(tipIdx), P("22-itemdata-tooltip-not-owned.png"));
             SnapshotSheet(InventoryView.ResultTipSheetForTest(ownedIdx), P("22-itemdata-tooltip-owned.png"));
@@ -546,7 +546,7 @@ namespace ElansAddonHub
             SnapshotSheet(InventoryView.SlotTipSheetForTest(200, "Forever-Elan"), P("22-itemdata-tooltip-gear.png"));
             InventoryView.FilterForTest("Forever-Elan");
             InventoryView.SelectTabForTest("gear");
-            await Task.Delay(300);
+            await ShotWait(300);
             Snapshot(P("22-itemdata-gear.png"));
             Check("the Outpost wrote nothing into the WoW folder (only the two test files are left)", Directory.GetFiles(root, "*", SearchOption.AllDirectories).Select(f => Path.GetFileName(f)).OrderBy(x => x).SequenceEqual(new[] { "ElansBags.lua", "ElansHub.lua" }));
         }

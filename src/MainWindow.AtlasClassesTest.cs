@@ -23,7 +23,7 @@ namespace ElansAddonHub
         {
             var notes = new List<string>();
             bool ok = true;
-            void Check(string what, bool cond, string detail = null) { notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
+            void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             var work = Path.Combine(dir, "atlasclasses");
             var savedLodge = AtlasQuery.Context.Lodge; var savedAuto = ClassData.AutoStart; var savedCache = ClassData.CacheFile; var savedTrainers = ClassicTrainers.Source;
             var savedWidth = Width; var savedHeight = Height;
