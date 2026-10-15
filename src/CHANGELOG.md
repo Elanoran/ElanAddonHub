@@ -3,10 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
-## Unreleased
+## 2.56.0
 - **Atlas: Classes and Races.** Two new pages in the Character group of the Atlas menu (and `class:3` / `race:2` links; Ctrl+K finds them by name, a race also by its lore name). A **class page** shows the roles, the resource, the armor and weapon skills it can use, the races that can be it, a link to its talents, and **Spells by level**: every spell of the class grouped under the level it is learned at (1, 4, 6, 10 ...), with its rank, cost and cooldown from your game files, tabs for Beast Mastery / Marksmanship / Survival (and the pet's Beast Training), "Only new spells" to hide the higher ranks, a level range, a search and a switch for talent spells. A **race page** shows the side, languages, mount skill, racial abilities (with their tooltips) and the classes that race can be. Everything is read from your own game files; learning costs and a race's starting zone are not in them and the pages say so. Characters page: Ctrl+click a character's race or class to open its Atlas page.
 - **Atlas: spell pages say who learns them** ("Learned by Hunter, level 12 (rank 2)", "Racial ability of Orc", both linking to the page) and show the cost and the cooldown; the game-style spell tooltips now have the cost line and the cooldown on the cast line.
 - Fixed: a long game-style tooltip on an Atlas page is no longer cut off at the edge of its card; it wraps.
+- Fixed: in the 3D world map, zone names could be drawn over the Layers panel; they now stay under it.
 
 ## 2.55.0
 - Fixed: the world map's node kinds (Herbs, Ore, Chests, Fishing) did nothing in the 3D view - every node was shown. They now hide their own nodes in 3D as in 2D, and a layer switched on while all its kinds are off (an older saved setting) shows all kinds instead of nothing.

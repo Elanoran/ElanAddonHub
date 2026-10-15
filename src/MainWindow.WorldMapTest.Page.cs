@@ -231,7 +231,8 @@ namespace ElansAddonHub
                     var st4 = await WmState();
                     Check("page: opening worldmap:0?x=250&y=500&z=6&p=1 centres the map there at zoom 6 (the page's centre is that position)", st4 != null && Math.Abs(st4.List("center").Count > 0 ? (double)st4.List("center")[0] - nlat : 99) < 0.05 && Math.Abs((double)st4.List("center")[1] - nlng) < 0.05 && Math.Abs(st4.Int("zoom") - 6) < 0.01, Json.Write(st4?.List("center")));
                     await AtlasView.Open("item:2589"); await AtlasView.Back();
-                    await Task.Delay(300);
+                    // the live page reports its view while it moves back; under load (a full run) the last report can lag a moment
+                    await WaitFor(() => AtlasView.CurrentId.StartsWith("worldmap:0?x=250&y=500&z=6"), 5000);
                     Check("page: item page -> Back is the map again at the id it had (history works for the hosted map)", AtlasView.CurrentId.StartsWith("worldmap:0?x=250&y=500&z=6") && WorldMapView.MapId == 0, AtlasView.CurrentId);
                     // the Atlas start page lists the category; a search finds it
                     await AtlasView.GoStart();
