@@ -21,6 +21,7 @@ namespace ElansAddonHub.Services.Atlas
         public Func<DateTime> NowUtc = () => DateTime.UtcNow;
         public Func<Dictionary<int, List<AtlasObs.FishSpot>>> OwnFishSpots = () => null;   // fishing spots this PC's Hub observed: uiMapId -> spots
         public Func<Dictionary<int, List<AtlasObs.EntranceSpot>>> OwnEntrances = () => null;   // instance entrances this PC's Toolkit noted: instance map id -> spots
+        public Func<Dictionary<int, List<AtlasObs.NpcSpot>>> OwnNpcSpots = () => null;   // where this PC's Toolkit met, killed or saw npcs: npc -> spots
         public Func<IReadOnlyDictionary<int, AtlasObs.FieldNote>> OwnFieldNotes = () => null;   // Hunter Helper's field notes on this PC: npc -> note
         public Func<Dictionary<int, Dictionary<int, List<AtlasObs.NodePt>>>> OwnNodes = () => null;   // gathering nodes this PC's Hub observed: object -> uiMapId -> nodes
     }

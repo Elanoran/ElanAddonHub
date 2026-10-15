@@ -17,7 +17,9 @@ namespace ElansAddonHub.Services.WorldMap
     //   instances  dungeon and raid entrances (Map.db2 corpse spot) with the level the game suggests; kinds dungeons / raids
     //   nodes      herbs / ore / chests / fishing holes: what players looted (this PC's own and the Lodge's) and the Classic baseline's spawn points
     //   saved      the gathering routes saved in the Atlas
-    //   vendors, trainers, quests, rares: Classic baseline creatures by their flags, vendors and rares the Lodge saw as well
+    //   vendors, trainers, quests, rares: Classic baseline creatures by their flags, vendors and rares the Lodge saw as well; where Lodge members (or you) met
+    //              one at its window or saw it as a rare (Elan's Toolkit npcspots), that place is shown and the baseline's points in that zone are left out
+    //   seen       NPCs seen by Lodge members (and you): met at their windows, killed, seen as rares (kinds met / killed / rares), Forever's own places
     //   finds      what the Lodge's members found (items of green quality and better, with where)
     public sealed class LayerResult
     {
@@ -62,15 +64,17 @@ namespace ElansAddonHub.Services.WorldMap
                 L("trainers", "Trainers", "#a78bfa", "Class and profession trainers (Classic baseline)"),
                 L("quests", "Quest givers", "#fde047", "Creatures that give quests (Classic baseline)"),
                 L("rares", "Rare creatures", "#e5e7eb", "Rare and rare elite creatures (Classic baseline and what the Lodge saw)"),
+                L("seen", "NPCs seen by Lodge members", "#34d399", "Where Lodge members (and you) met NPCs at their windows, killed creatures and saw rares on the minimap, noted by Elan's Toolkit: Forever's own places, ahead of the Classic baseline",
+                    L("seen.met", "Met at their window", "#34d399", "Vendors, trainers, quest givers, flight masters ... where a window opened for them"), L("seen.killed", "Killed", "#f87171", "Where creatures were looted"), L("seen.rares", "Rares", "#e5e7eb", "Rares the minimap marked")),
                 L("finds", "Lodge finds", "#f472b6", "Items of green quality and better that Lodge members found, and where"),
             };
         }
 
-        public static readonly string[] DefaultOn = { "zones", "fm", "fm.horde", "fm.alliance", "fm.neutral", "routes", "routes.horde", "routes.alliance", "routes.neutral", "instances", "instances.dungeons", "instances.raids", "nodes.herbs", "nodes.ore", "nodes.chests", "nodes.fishing" };
+        public static readonly string[] DefaultOn = { "zones", "fm", "fm.horde", "fm.alliance", "fm.neutral", "routes", "routes.horde", "routes.alliance", "routes.neutral", "instances", "instances.dungeons", "instances.raids", "nodes.herbs", "nodes.ore", "nodes.chests", "nodes.fishing", "seen", "seen.met", "seen.rares" };
 
         // The catalog version a saved layer list belongs to. 2 added the dungeon and raid entrances (on by default): a list saved before that gets them switched on once, so a person who
         // updates sees the new layer; after that their own choice stands (the page saves the version with every change).
-        public const int LayersVersion = 3;
+        public const int LayersVersion = 4;
         public static List<string> WithNewDefaults(List<string> saved, int version)
         {
             if (saved == null) return null;
@@ -78,6 +82,8 @@ namespace ElansAddonHub.Services.WorldMap
             if (version < 2) foreach (var id in new[] { "instances", "instances.dungeons", "instances.raids" }) if (!l.Contains(id)) l.Add(id);
     // 3 added the faction kinds of the flight masters and routes: a list that has the layer on gets its kinds on too
     if (version < 3) foreach (var top in new[] { "fm", "routes" }) if (l.Contains(top)) foreach (var k in new[] { "horde", "alliance", "neutral" }) if (!l.Contains(top + "." + k)) l.Add(top + "." + k);
+            // 4 added the NPCs seen by Lodge members (on by default with the met and rare kinds; kill spots are many, so that kind starts off)
+            if (version < 4) foreach (var id in new[] { "seen", "seen.met", "seen.rares" }) if (!l.Contains(id)) l.Add(id);
             return l;
         }
 
@@ -101,6 +107,7 @@ namespace ElansAddonHub.Services.WorldMap
                     case "trainers": return Npcs(mapId, "trainers");
                     case "quests": return Npcs(mapId, "quests");
                     case "rares": return Npcs(mapId, "rares");
+                    case "seen": return Seen(mapId);
                     case "finds": return Finds(mapId);
                     default: return new LayerResult { Note = "unknown layer" };
                 }
@@ -439,6 +446,22 @@ namespace ElansAddonHub.Services.WorldMap
             var dv = AtlasDerived.For(cl);
             var lodge = AtlasQuery.LodgeOrNull();
             var have = new HashSet<int>();
+            var seenAll = AtlasQuery.AllNpcSpots();
+            int seenShown = 0;
+            // where members met it (vendors, trainers, quest givers) or saw it as a rare / killed it (rares), from Elan's Toolkit; returns the zones that fixed its place
+            HashSet<int> AddSeen(int id, string name, string tip)
+            {
+                if (!seenAll.TryGetValue(id, out var views)) return null;
+                bool rares = kind == "rares";
+                foreach (var s in views)
+                {
+                    if (!rares && !s.Fixed) continue;
+                    var w = idx.MapToWorld(s.UiMapId, s.X, s.Y);
+                    if (w == null || w.Value.MapId != mapId) continue;
+                    ps.Add(w.Value.X, w.Value.Y, name, JoinTip(tip, AtlasQuery.NpcSpotTip(s, false)), 0, "npc:" + id); seenShown++;
+                }
+                return AtlasQuery.FixedZones(views);
+            }
             // what the Lodge saw comes first (drawn under, but counted for the "also in the baseline" skip)
             if (lodge != null)
             {
@@ -491,15 +514,64 @@ namespace ElansAddonHub.Services.WorldMap
                     if (!match || have.Contains(n.Id)) continue;
                     var lv = AtlasFormat.Levels(n.MinLevel, n.MaxLevel);
                     var tip = string.Join(" · ", new[] { lv.Length > 0 ? "Level " + lv : "", kind == "rares" ? n.RankName : (n.SubName ?? ""), kind == "rares" ? AtlasQuery.NoteTip(n.Id) : "" }.Where(x => x.Length > 0));
-                    foreach (var s in n.Spawns) if (s.Map == mapId) ps.Add(s.X, s.Y, n.Name, tip.Length > 0 ? tip : label, 1, "npc:" + n.Id);
+                    // Forever's place first: the baseline's points in a zone where members fixed its place are left out (they moved it, or say the same)
+                    var fixedZones = AddSeen(n.Id, n.Name, tip.Length > 0 ? tip : label);
+                    foreach (var s in n.Spawns)
+                    {
+                        if (s.Map != mapId) continue;
+                        if (fixedZones != null && fixedZones.Count > 0) { var p = idx.WorldToMap(s.Map, s.X, s.Y); if (p != null && fixedZones.Contains(p.Value.UiMapId)) continue; }
+                        ps.Add(s.X, s.Y, n.Name, tip.Length > 0 ? tip : label, 1, "npc:" + n.Id);
+                    }
+                    have.Add(n.Id);
+                }
+            // rares Forever has that the baseline does not know (or does not rank as rare): the minimap marked them for a member
+            if (kind == "rares")
+                foreach (var kv in seenAll)
+                {
+                    if (have.Contains(kv.Key) || !kv.Value.Any(s => s.Kind == AtlasObs.NpcSpotVignette)) continue;
+                    AddSeen(kv.Key, AtlasQuery.NpcName(kv.Key), "Rare");
+                    have.Add(kv.Key);
                 }
             string note = ps.Full ? "Showing the first " + MaxPointsPerLayer.ToString("N0", CultureInfo.InvariantCulture) + " places." : "";
             if (ps.Count == 0) note = cl == null ? "This layer needs the Classic baseline (Atlas start page)." : "None known on this continent.";
             else if (cl == null) note = "Only what the Lodge saw; the rest needs the Classic baseline (Atlas start page).";
+            else if (seenShown > 0 && note.Length == 0) note = "Places Lodge members saw come first; the Classic baseline fills in the rest.";
             return PointMessage(kind, ps, styles, note);
         }
 
         static string JoinTip(string a, string b) => string.IsNullOrEmpty(b) ? a : a + " · " + b;
+
+        // ---------------------------------------------------------------- NPCs seen by Lodge members (Elan's Toolkit npcspots, Lodge atlas8)
+        public static LayerResult Seen(int mapId)
+        {
+            var idx = MapData.Index;
+            if (idx == null) return new LayerResult { Note = "The maps are not ready yet." };
+            string[] groups = WorldMapIds.SeenGroups, titles = { "Met at its window", "Killed", "Rare" }, colors = { "#34d399", "#f87171", "#e5e7eb" }, shapes = { "circle", "triangle", "star" };
+            var styles = new List<Dictionary<string, object>>();
+            for (int g = 0; g < groups.Length; g++) styles.Add(Style(colors[g], shapes[g], true, titles[g] + " · " + AtlasLabel.Forever, "seen." + groups[g]));
+            var ps = new PointSet();
+            int lodgeN = 0, own = 0;
+            foreach (var kv in AtlasQuery.AllNpcSpots())
+            {
+                if (ps.Full) break;
+                string name = null;
+                foreach (var s in kv.Value)
+                {
+                    var w = idx.MapToWorld(s.UiMapId, s.X, s.Y);
+                    if (w == null || w.Value.MapId != mapId) continue;
+                    if (name == null) name = AtlasQuery.NpcName(kv.Key);
+                    int gi = s.Kind == AtlasObs.NpcSpotInteract ? 0 : s.Kind == AtlasObs.NpcSpotKill ? 1 : 2;
+                    ps.Add(w.Value.X, w.Value.Y, name, AtlasQuery.NpcSpotTip(s, false), gi, "npc:" + kv.Key);
+                    if (s.Lodge) lodgeN++; else own++;
+                }
+            }
+            string note = ps.Full ? "Showing the first " + MaxPointsPerLayer.ToString("N0", CultureInfo.InvariantCulture) + " places." : "";
+            if (ps.Count == 0) note = AtlasQuery.LodgeOrNull() == null && own == 0
+                ? "Nothing seen yet: Elan's Toolkit 0.5.10 notes where you meet NPCs, kill creatures and see rares, and your Lodge shares what its members saw."
+                : "No NPCs seen on this continent yet.";
+            else if (lodgeN == 0) note = "Seen by you so far: your Lodge shares what its members saw.";
+            return PointMessage("seen", ps, styles, note);
+        }
 
         // ---------------------------------------------------------------- Lodge finds
         public static LayerResult Finds(int mapId)

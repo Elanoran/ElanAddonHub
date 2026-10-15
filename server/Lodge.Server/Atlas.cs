@@ -25,7 +25,7 @@ public static partial class Atlas
     public const int MaxZonesPerSource = 40;
 
     // ---- per member / per table
-    public const int MaxKillSources = 6000, MaxObjectSources = 3000, MaxFishingZones = 400;   // per member
+    public const int MaxKillSources = 6000, MaxObjectSources = 3000, MaxFishingZones = 400, MaxGatherSources = 3000, MaxContainedSources = 1000, MaxGatherPerShare = 100;   // per member (gather: pickpocket, skinning, mining, herbalism, salvage each)
     public const int MaxVendors = 6000, MaxQuests = 20000, MaxSpawnNpcs = 8000, MaxRevealed = 40000;
     public const int MaxVendorItems = 300, MaxQuestItems = 10;
     public const int MaxFinds = 2000, MaxFindsPerMember = 700;
@@ -44,7 +44,7 @@ public static partial class Atlas
     public const long MinUnix = 1_000_000_000L;  // 2001: an observation older than that is no observation
     public const long FutureSlackSeconds = 300;   // 2.22: at most 5 minutes ahead (clock skew); a far-future time would pin a vendor / quest / find against real updates
 
-    [GeneratedRegex(@"^(npc:[1-9][0-9]{0,6}|obj:[1-9][0-9]{0,6}|vendor:[1-9][0-9]{0,6}|quest:[1-9][0-9]{0,6}|fish)\z", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(npc:[1-9][0-9]{0,6}|obj:[1-9][0-9]{0,6}|vendor:[1-9][0-9]{0,6}|quest:[1-9][0-9]{0,6}|item:[1-9][0-9]{0,6}|fish)\z", RegexOptions.CultureInvariant)]
     private static partial Regex SrcRx();
 
     public static bool ValidSrc(string s) => s != null && s.Length <= 16 && SrcRx().IsMatch(s);
@@ -97,9 +97,10 @@ public static partial class Atlas
         public long N;
         public Dictionary<int, long[]> I = new();
         public Dictionary<int, long> Z = new();
+        public CtrX X;                                    // 2.26 extras (AtlasCtrExtras.cs), null = none
         public Ctr Clone()
         {
-            var c = new Ctr { N = N };
+            var c = new Ctr { N = N, X = X?.Clone() };
             foreach (var kv in I) c.I[kv.Key] = new[] { kv.Value[0], kv.Value[1] };
             foreach (var kv in Z) c.Z[kv.Key] = kv.Value;
             return c;
@@ -109,7 +110,7 @@ public static partial class Atlas
             if (o == null || N != o.N || I.Count != o.I.Count || Z.Count != o.Z.Count) return false;
             foreach (var kv in I) if (!o.I.TryGetValue(kv.Key, out var x) || x[0] != kv.Value[0] || x[1] != kv.Value[1]) return false;
             foreach (var kv in Z) if (!o.Z.TryGetValue(kv.Key, out var x) || x != kv.Value) return false;
-            return true;
+            return SameX(X, o.X);
         }
     }
 
@@ -140,6 +141,7 @@ public static partial class Atlas
             }
             if (sum > n) return false;
         }
+        r.X = ParseX(o, n);
         c = r;
         return true;
     }
@@ -156,6 +158,7 @@ public static partial class Atlas
             else r.I[kv.Key] = new[] { kv.Value[0], kv.Value[1] };
         }
         foreach (var kv in nw.Z) r.Z[kv.Key] = r.Z.TryGetValue(kv.Key, out var z) ? Math.Max(z, kv.Value) : kv.Value;
+        r.X = MergeX(old.X, nw.X);
         if (r.I.Count > MaxItemsPerSource || r.Z.Count > MaxZonesPerSource || r.Z.Values.Sum() > r.N) return null;
         foreach (var kv in r.I) if (kv.Value[0] > r.N * MaxDropsPerKill || kv.Value[1] > kv.Value[0] * MaxStack || kv.Value[1] < kv.Value[0]) return null;
         return r;
