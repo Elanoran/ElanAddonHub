@@ -87,3 +87,18 @@ body.v3 #hud { position: absolute; top: 10px; right: 10px; z-index: 5; }
 .v3r button:hover { background: rgba(255, 255, 255, .16); }
 .v3r .seg { display: inline-flex; gap: 2px; }
 .v3r .seg button.on { background: var(--accent); color: #1b1300; border-color: transparent; font-weight: 600; }
+/* dungeon and raid entrances: a door (arch) for a dungeon, a skull badge for a raid; the label shows from zoom 3.5 (2D) / near (3D) */
+.inst { position: absolute; width: 18px; height: 18px; transform: translate(-50%, -50%); cursor: pointer; box-sizing: border-box; border: 2px solid #fff; box-shadow: 0 0 4px #000, 0 0 2px #000; }
+.inst.dun { background: #e879f9; border-radius: 9px 9px 2px 2px; }
+.inst.dun::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 6px; height: 9px; margin-left: -3px; background: #2a0f33; border-radius: 3px 3px 0 0; }
+.inst.raid { background: #f97316; border-radius: 50%; width: 22px; height: 22px; color: #1a0a00; font: 700 14px/18px "Segoe UI Symbol", "Segoe UI", sans-serif; text-align: center; text-shadow: none; }
+.instl { position: absolute; left: 14px; top: 0; transform: translateY(-50%); white-space: nowrap; color: #fff; font-size: 11px; font-weight: 600; text-shadow: 0 0 3px #000, 0 0 6px #000, 1px 1px 2px #000; pointer-events: none; display: none; }
+.instlab .instl, .m3 .instl.near { display: block; }
+.m3 .inst { pointer-events: auto; }
+/* flight master emblems (icons.js): a thin dark outline for contrast on terrain, a lift on hover */
+.fmv { position: absolute; width: 20px; height: 20px; transform: translate(-50%, -50%); cursor: pointer; transition: transform .12s ease-out; }
+.fmv .fmsvg { display: block; filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 2px rgba(0,0,0,.85)); }
+.fmv:hover { transform: translate(-50%, -50%) scale(1.3); z-index: 2; }
+.fmv:hover .fmsvg { filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 4px rgba(255,255,255,.7)); }
+.m3 .fmv { pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .fmv { transition: none; } }

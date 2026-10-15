@@ -14,6 +14,7 @@ namespace ElansAddonHub.Services.WorldMap
     //   zones      the zone names with their creature level range (UiMap rectangles + the Classic baseline's creature levels)
     //   fm         flight masters (TaxiNodes): Alliance, Horde, both
     //   routes     flight paths (TaxiPath + TaxiPathNode) with the time the Lodge's members measured ("2m 10s")
+    //   instances  dungeon and raid entrances (Map.db2 corpse spot) with the level the game suggests; kinds dungeons / raids
     //   nodes      herbs / ore / chests / fishing holes: what players looted (this PC's own and the Lodge's) and the Classic baseline's spawn points
     //   saved      the gathering routes saved in the Atlas
     //   vendors, trainers, quests, rares: Classic baseline creatures by their flags, vendors and rares the Lodge saw as well
@@ -48,8 +49,12 @@ namespace ElansAddonHub.Services.WorldMap
             {
                 L("zones", "Zone names", "#f5d97a", "Zone names with the level range of the creatures that live there"),
                 L("borders", "Zone borders", "#7dd3fc", "Outlines of the zones, from the game's terrain data (the first time it is switched on the terrain is read from your game files, once per game version); point at a zone to tint it"),
-                L("fm", "Flight masters", "#5aa9ff", "Flight masters of the Alliance (blue), the Horde (red) and both (gold)"),
-                L("routes", "Flight routes", "#ff9f43", "Flight paths between flight masters; the flight time is shown when you or the Lodge have flown it"),
+                L("fm", "Flight masters", "#5aa9ff", "Flight masters of the Alliance (blue), the Horde (red) and both (gold)",
+                    L("fm.horde", "Horde", "#ff6b5e", ""), L("fm.alliance", "Alliance", "#5aa9ff", ""), L("fm.neutral", "Neutral", "#f0b429", "Both factions")),
+                L("routes", "Flight routes", "#ff9f43", "Flight paths between flight masters, by faction (a route is Horde or Alliance when both its ends are, else neutral); the flight time is shown when you or the Lodge have flown it",
+                    L("routes.horde", "Horde", "#ff6b5e", ""), L("routes.alliance", "Alliance", "#5aa9ff", ""), L("routes.neutral", "Neutral", "#f0b429", "")),
+                L("instances", "Dungeons & raids", "#e879f9", "Dungeon and raid entrances with their level and group size; click one for its page, right-click to navigate there",
+                    L("instances.dungeons", "Dungeons", "#e879f9", ""), L("instances.raids", "Raids", "#f97316", "")),
                 L("nodes", "Gathering nodes", "#4ade80", "Herbs, ore, chests and fishing holes: what players looted (Forever) and the Classic baseline's spawn points",
                     L("nodes.herbs", "Herbs", "#4ade80", ""), L("nodes.ore", "Ore", "#d08a4e", ""), L("nodes.chests", "Chests", "#f0b429", ""), L("nodes.fishing", "Fishing", "#5aa9ff", "")),
                 L("saved", "Saved routes", "#22d3ee", "The gathering loops you saved in the Atlas"),
@@ -61,7 +66,20 @@ namespace ElansAddonHub.Services.WorldMap
             };
         }
 
-        public static readonly string[] DefaultOn = { "zones", "fm", "routes", "nodes.herbs", "nodes.ore", "nodes.chests", "nodes.fishing" };
+        public static readonly string[] DefaultOn = { "zones", "fm", "fm.horde", "fm.alliance", "fm.neutral", "routes", "routes.horde", "routes.alliance", "routes.neutral", "instances", "instances.dungeons", "instances.raids", "nodes.herbs", "nodes.ore", "nodes.chests", "nodes.fishing" };
+
+        // The catalog version a saved layer list belongs to. 2 added the dungeon and raid entrances (on by default): a list saved before that gets them switched on once, so a person who
+        // updates sees the new layer; after that their own choice stands (the page saves the version with every change).
+        public const int LayersVersion = 3;
+        public static List<string> WithNewDefaults(List<string> saved, int version)
+        {
+            if (saved == null) return null;
+            var l = saved.ToList();
+            if (version < 2) foreach (var id in new[] { "instances", "instances.dungeons", "instances.raids" }) if (!l.Contains(id)) l.Add(id);
+    // 3 added the faction kinds of the flight masters and routes: a list that has the layer on gets its kinds on too
+    if (version < 3) foreach (var top in new[] { "fm", "routes" }) if (l.Contains(top)) foreach (var k in new[] { "horde", "alliance", "neutral" }) if (!l.Contains(top + "." + k)) l.Add(top + "." + k);
+            return l;
+        }
 
         static double R3(double v) => Math.Round(v, 3);
         static void LL(double x, double y, out double lat, out double lng) { WorldMapMath.WorldToLatLng(x, y, out lat, out lng); lat = R3(lat); lng = R3(lng); }
@@ -76,6 +94,7 @@ namespace ElansAddonHub.Services.WorldMap
                     case "borders": return Borders(mapId);
                     case "fm": return FlightMasters(mapId);
                     case "routes": return Routes(mapId);
+                    case "instances": return Instances(mapId);
                     case "nodes": return Nodes(mapId);
                     case "saved": return Saved(mapId);
                     case "vendors": return Npcs(mapId, "vendors");
@@ -154,11 +173,19 @@ namespace ElansAddonHub.Services.WorldMap
         }
 
         // ---------------------------------------------------------------- flight masters and routes
-        // the faction of a node: its flags' Alliance / Horde bits, else the mounts it names (Horde mount first); "" = not a flight master players use
+        // The faction of a node, verified on the real TaxiNodes of 1.60.1.70338 (100 rows): Flags bit 1 = Alliance, bit 2 = Horde (1025 Stormwind, 1026 Orgrimmar, 1027 Ratchet / Marshal's Refuge = both);
+        // a node with no faction bit (a Forever addition such as Powderfuse Port, Fishing Village, the Eastern Plaguelands node) is told by its mounts, MountCreatureID[0] = the Horde mount
+        // (2224 wind rider, 3574 bat) and [1] = the Alliance mount (541 gryphon, 3837 hippogryph); both mounts = both factions. Mount 308 is the developers' placeholder (the test island and Northshire
+        // Abbey carry it): it says nothing about a faction, so such a node is neutral rather than "Horde". "" = names no faction at all (a transport, a quest flight).
+        public const int PlaceholderMount = 308;
         public static string FactionOf(TaxiNodeInfo n)
         {
             bool a = (n.Flags & 1) != 0, h = (n.Flags & 2) != 0;
-            if (!a && !h) { a = n.MountAlliance != 0; h = n.MountHorde != 0; }
+            if (!a && !h)
+            {
+                a = n.MountAlliance != 0 && n.MountAlliance != PlaceholderMount; h = n.MountHorde != 0 && n.MountHorde != PlaceholderMount;
+                if (!a && !h && (n.MountHorde == PlaceholderMount || n.MountAlliance == PlaceholderMount)) return Neutral;
+            }
             return a && h ? Neutral : a ? Alliance : h ? Horde : "";
         }
 
@@ -169,6 +196,10 @@ namespace ElansAddonHub.Services.WorldMap
             if (NotFlightMasters.Any(p => n.Name.StartsWith(p, StringComparison.OrdinalIgnoreCase))) return false;
             return !(n.X == 0 && n.Y == 0);
         }
+
+        // the kind row a faction belongs to (fm.horde ...), and a route's faction from its two ends: both Horde = Horde, both Alliance = Alliance, anything else (a neutral end, mixed) = neutral
+        public static string FactionKey(string f) => f == Alliance ? "alliance" : f == Horde ? "horde" : "neutral";
+        public static string RouteFaction(string a, string b) => a == b && (a == Alliance || a == Horde) ? a : Neutral;
 
         public static string FactionName(string f) => f == Alliance ? "Alliance" : f == Horde ? "Horde" : "Both factions";
 
@@ -185,7 +216,7 @@ namespace ElansAddonHub.Services.WorldMap
                 var p = idx.WorldToMap(mapId, n.X, n.Y);
                 items.Add(new Dictionary<string, object>
                 {
-                    ["lat"] = lat, ["lng"] = lng, ["name"] = n.Name, ["f"] = f, ["tip"] = "Flight master", ["extra"] = FactionName(f) + (p != null ? " · " + idx.Name(p.Value.UiMapId) : ""),
+                    ["lat"] = lat, ["lng"] = lng, ["name"] = n.Name, ["f"] = f, ["g"] = "fm." + FactionKey(f), ["tip"] = "Flight master", ["extra"] = FactionName(f) + (p != null ? " · " + idx.Name(p.Value.UiMapId) : ""),
                     ["link"] = p != null ? "zone:" + p.Value.UiMapId : "",
                 });
             }
@@ -226,7 +257,7 @@ namespace ElansAddonHub.Services.WorldMap
                 long key = Math.Min(path.FromNode, path.ToNode) * 100000L + Math.Max(path.FromNode, path.ToNode);
                 if (!seen.Add(key)) continue;
                 var fa = FactionOf(a); var fb = FactionOf(b);
-                var fac = fa == fb ? fa : (fa == Neutral ? fb : fb == Neutral ? fa : Neutral);
+                var fac = RouteFaction(fa, fb);
                 var line = new List<double>();
                 if (pts.TryGetValue(path.Id, out var l) && l.Count > 1)
                     foreach (var p in l.Where(p => p.MapId == mapId)) { LL(p.X, p.Y, out var la, out var ln); line.Add(la); line.Add(ln); }
@@ -236,7 +267,7 @@ namespace ElansAddonHub.Services.WorldMap
                 int mid = (line.Count / 4) * 2;
                 items.Add(new Dictionary<string, object>
                 {
-                    ["pts"] = line, ["c"] = fac == Alliance ? "#5aa9ff" : fac == Horde ? "#ff6b5e" : "#f0b429", ["w"] = 2.0, ["o"] = 0.8, ["d"] = "6 5",
+                    ["pts"] = line, ["g"] = "routes." + FactionKey(fac), ["c"] = fac == Alliance ? "#5aa9ff" : fac == Horde ? "#ff6b5e" : "#f0b429", ["w"] = 2.0, ["o"] = 0.8, ["d"] = "6 5",
                     ["name"] = ShortName(a.Name) + " ↔ " + ShortName(b.Name), ["tip"] = label.Length > 0 ? "Flight time " + label : "No flight time known yet", ["extra"] = FactionName(fac),
                     ["label"] = label, ["mid"] = new List<double> { line[Math.Min(mid, line.Count - 2)], line[Math.Min(mid + 1, line.Count - 1)] },
                 });
@@ -247,6 +278,35 @@ namespace ElansAddonHub.Services.WorldMap
 
         static string ShortName(string n) { var i = (n ?? "").IndexOf(','); return i > 0 ? n.Substring(0, i) : n; }
         static IDictionary<string, double> SafeTimes() { try { return FlightTimes?.Invoke(); } catch (Exception) { return null; } }
+
+        // ---------------------------------------------------------------- dungeon and raid entrances
+        // Every dungeon and raid whose entrance (Map.db2: where the game puts a ghost that dies inside) stands on this continent. The Classic baseline is not needed;
+        // the level is the game's own suggested level (LFGDungeons + ContentTuning), the creature range of the baseline only fills in an instance the game does not list.
+        public static LayerResult Instances(int mapId)
+        {
+            var idx = MapData.Index;
+            if (idx == null) return new LayerResult { Note = "The maps are not ready yet." };
+            var items = new List<object>();
+            foreach (var i in idx.Instances.Where(i => !i.Placeholder && i.Entrance != null && i.Entrance.MapId == mapId && (i.InstanceType == 1 || i.InstanceType == 2))
+                .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.MapId))
+            {
+                var e = i.Entrance;
+                if (!WorldMapMath.InWorld(e.X, e.Y)) continue;
+                LL(e.X, e.Y, out var lat, out var lng);
+                bool raid = i.InstanceType == 2;
+                var lv = AtlasInstances.LevelText(i);
+                var where = AtlasInstances.Where(i);
+                items.Add(new Dictionary<string, object>
+                {
+                    ["lat"] = lat, ["lng"] = lng, ["name"] = i.Name, ["ic"] = raid ? "raid" : "dun", ["g"] = raid ? "instances.raids" : "instances.dungeons",
+                    ["lab"] = lv.Length > 0 ? i.Name + " · " + lv : i.Name,
+                    ["tip"] = AtlasInstances.Summary(i), ["extra"] = (where.Length > 0 ? where + " · " : "") + "click to open its page",
+                    ["link"] = "instance:" + i.MapId,
+                });
+            }
+            string note = items.Count == 0 ? (idx.Instances.Any(i => i.Entrance != null) ? "No dungeon or raid has its entrance on this continent." : "The game files give no entrance positions.") : "";
+            return Message("instances", "markers", new Dictionary<string, object> { ["items"] = items }, items.Count, note);
+        }
 
         // ---------------------------------------------------------------- gathering nodes
         sealed class PointSet

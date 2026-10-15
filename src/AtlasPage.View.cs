@@ -141,7 +141,7 @@ namespace ElansAddonHub
         void ReleaseMaps()
         {
             foreach (var m in maps) { try { m.ClearMarkers(); } catch { } }
-            maps.Clear(); zonePicks.Clear(); routeButtons.Clear(); worldMapButtons.Clear(); routePanels.Clear();
+            maps.Clear(); ClearEntrance(); zonePicks.Clear(); routeButtons.Clear(); worldMapButtons.Clear(); routePanels.Clear();
         }
 
         // ============================================================================================================================ a page
@@ -175,8 +175,9 @@ namespace ElansAddonHub
             if (m.Kind != "item" && m.Facts.Any(f => f.Link != null)) leftCol.Children.Add(FactsCard(m, true));     // what links somewhere stays clickable, in the app style
             if (m.Kind == "item" && m.Section("owned") != null) leftCol.Children.Add(SectionCard(m.Section("owned")));
 
-            // right: tables and the map (a class page starts with its spells by level)
+            // right: tables and the map (a class page starts with its spells by level, an instance with its entrance)
             if (m.Custom is ClassSpellBook classSpells) rightCol.Children.Add(ClassSpellsCard(classSpells));
+            if (m.Entrance != null) rightCol.Children.Add(EntranceCard(m));
             var mapCard = m.Map.Any || m.Kind == "item" || m.Kind == "npc" || m.Kind == "obj" || m.Kind == "quest" ? MapCard(m) : null;
             if (m.MapFirst && mapCard != null) rightCol.Children.Add(mapCard);
             bool mapPlaced = m.MapFirst;

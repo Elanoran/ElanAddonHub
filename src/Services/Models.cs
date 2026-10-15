@@ -110,6 +110,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "atlasRecents")] public List<string> AtlasRecents { get; set; }        // the Atlas pages opened last (ids only, newest first, at most 8)
         [DataMember(Name = "atlasPins")] public List<string> AtlasPins { get; set; }              // the Atlas pages the person pinned, in their order (ids only)
         [DataMember(Name = "worldMapLayers")] public List<string> WorldMapLayers { get; set; }       // the layers switched on in the Atlas world map (null = the defaults)
+        [DataMember(Name = "worldMapLayersV")] public int WorldMapLayersVersion { get; set; }          // which layer catalog the saved list was made for (a layer added later is switched on once, see WorldMapLayers.WithNewDefaults)
         [DataMember(Name = "worldMapLast")] public string WorldMapLast { get; set; }                  // the continent shown last (its slug)
         [DataMember(Name = "worldMap3d")] public bool WorldMap3d { get; set; }                       // the world map opens in the 3D terrain view (the last mode used)
         [DataMember(Name = "worldMap3dDetail")] public string WorldMap3dDetail { get; set; }          // 3D detail: low | medium (null = the default) | high

@@ -396,8 +396,8 @@ namespace ElansAddonHub.Services.Atlas
                     S("name", "Name"); S("level", "Level"); S("continent", "Continent");
                     break;
                 case "instances":
-                    c.Level = true; c.LevelLabel = "Level";
-                    S("level", "Level"); S("name", "Name"); c.DefaultSort = "level";
+                    c.Level = true; c.LevelLabel = "Level"; c.Zone = true;
+                    S("level", "Level"); S("name", "Name"); S("zone", "Entrance zone"); c.DefaultSort = "level";
                     break;
                 case "recipes":
                     c.Level = true; c.LevelLabel = "Skill level"; c.Learn = HasLearnData();
@@ -441,7 +441,9 @@ namespace ElansAddonHub.Services.Atlas
                 if (ix.Cat == "objects" && classic == false) r.Notes.Add("Herbs and ore are told apart by what they give; without the Classic baseline or Lodge drops they are listed under Other.");
                 if (q.Src == "lodge" && !lodge) r.Notes.Add("No Lodge observations yet.");
             }
-            else if ((ix.Cat == "zones" || ix.Cat == "instances") && !classic)
+            else if (ix.Cat == "instances" && !classic && ix.All.Any(e => e.Level <= 0))
+                r.Notes.Add("Some dungeons and raids have no level in your game files; the Classic baseline's creatures would give a range. Download it from the Atlas start page.");
+            else if (ix.Cat == "zones" && !classic)
                 r.Notes.Add("Level ranges come from the Classic baseline's creatures. Download it from the Atlas start page.");
             if (r.Capped) r.Notes.Add("Only the first " + MaxRows.ToString("N0", CalendarRules.English) + " are listed. Narrow it with the filters.");
         }

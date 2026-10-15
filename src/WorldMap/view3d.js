@@ -553,13 +553,21 @@
     clearDom(id);
     (m.items || []).forEach(function (it) {
       var p = ll2xz(it.lat, it.lng);
-      var d = el('div', 'm3', '<div class="fm ' + (it.f || 'n') + '"></div>');
+      // instance entrances (it.ic dun / raid) carry a kind group (it.g: switched by its child row) and a label shown when the camera is near; flight masters are the diamonds
+      var d = el('div', 'm3', it.ic ? '<div class="inst ' + esc(it.ic) + '">' + (it.ic === 'raid' ? '&#9760;' : '') + '</div>' + (it.lab ? '<div class="instl">' + esc(it.lab) + '</div>' : '') : (window.WmIcons ? window.WmIcons.html(it.f || 'n') : '<div class="fm ' + (it.f || 'n') + '"></div>'));
       var tipf = function (e) { showTip(e.clientX, e.clientY, it.name, it.tip || '', it.extra || ''); };
       d.addEventListener('mouseenter', tipf); d.addEventListener('mousemove', tipf); d.addEventListener('mouseleave', hideTip);
       d.addEventListener('mousedown', function (e) { e.stopPropagation(); });
       if (it.link) d.addEventListener('click', function (e) { e.stopPropagation(); hideTip(); openLink(it.link); });
+      if (it.ic) d.addEventListener('contextmenu', function (e) {
+        e.preventDefault(); e.stopPropagation(); hideTip();
+        var items = [];
+        if (it.link) items.push({ text: 'Open its page', run: function () { openLink(it.link); } });
+        items.push({ text: 'Navigate here', run: function () { send({ t: 'nav', lat: clamp(it.lat, -255.9, 0), lng: clamp(it.lng, 0, 255.9) }); } });
+        menu(e.clientX, e.clientY, it.name, items);
+      });
       $('ov').appendChild(d);
-      domItems.push({ el: d, x: p[0], z: p[1], y: 0, kind: 'marker', layer: id, name: it.name });
+      domItems.push({ el: d, x: p[0], z: p[1], y: 0, kind: 'marker', layer: id, name: it.name, g: it.g || null, lab: it.ic ? d.querySelector('.instl') : null });
     });
   }
   function clearDom(id) {
@@ -587,7 +595,7 @@
       var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(dr.x.length * 3), 3));
       var mat = new THREE.LineBasicMaterial({ color: new THREE.Color(it.c || '#ffffff'), transparent: true, opacity: Math.min(1, (it.o || .85) + .1), fog: true });
       var line = new THREE.Line(g, mat); line.frustumCulled = false; grp.add(line);
-      items.push({ line: line, x: dr.x, z: dr.z, lift: 22 });
+      items.push({ line: line, x: dr.x, z: dr.z, lift: 22, g: it.g || null });
     });
     scene.add(grp); lineLayers[id] = { group: grp, items: items }; placeLines(lineLayers[id]);
     return items.length;
@@ -665,7 +673,7 @@
     var eye = camera.position, far = cam.dist;
     for (var i = 0; i < domItems.length; i++) {
       var it = domItems[i], e = it.el;
-      var show = !!on[it.layer];
+      var show = !!on[it.layer] && (!it.g || !!on[it.g]);
       if (show) {
         tmpV.set(it.x, it.y + (it.kind === 'label' ? 40 : 12), it.z);
         var dx = tmpV.x - eye.x, dy = tmpV.y - eye.y, dz = tmpV.z - eye.z, dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -677,6 +685,7 @@
           tmpV.applyMatrix4(camera.projectionMatrix);
           var sx = (tmpV.x * .5 + .5) * w, sy = (-tmpV.y * .5 + .5) * h;
           if (sx < -80 || sx > w + 80 || sy < -40 || sy > h + 40) show = false;
+          if (show && it.lab) { var near = dist < 9000; if (near !== it.near) { it.lab.classList.toggle('near', near); it.near = near; } }
           if (show) { e.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px)'; e.style.zIndex = String(Math.round(100000 - dist / 2)); e.style.opacity = it.kind === 'label' ? String(clamp(1.4 - dist / (it.sm ? 14000 : 70000), .35, 1)) : '1'; shown++; }
         }
       }
@@ -737,7 +746,7 @@
   function groupShown(id) { return !!on[id]; }
   function refresh() {
     Object.keys(pointLayers).forEach(function (id) { pointLayers[id].obj.visible = !!on[id]; applyGroups(pointLayers[id]); });
-    Object.keys(lineLayers).forEach(function (id) { lineLayers[id].group.visible = !!on[id]; });
+    Object.keys(lineLayers).forEach(function (id) { lineLayers[id].group.visible = !!on[id]; lineLayers[id].items.forEach(function (it) { it.line.visible = !it.g || !!on[it.g]; }); });
     Object.keys(ringLayers).forEach(function (id) { ringLayers[id].zones.forEach(function (z) { z.obj.visible = !!on[id]; }); });
     // point styles that belong to a switched-off child group: hide through the layer object only when the whole layer is off (groups are drawn together)
     Object.keys(panelRows).forEach(function (id) {
@@ -1048,6 +1057,16 @@
       Object.keys(pointLayers).forEach(function (k) { var L = pointLayers[k], a = L.obj.geometry.attributes.position.array; for (var i = 0; i < Math.min(L.n, 5); i++) out.push({ name: 'point ' + k, y: a[i * 3 + 1], ground: groundYE(L.x[i], L.z[i]), x: L.x[i], z: L.z[i] }); });
       return JSON.stringify(out);
     },
+    // the dungeon / raid entrance markers (test): kind group, whether the layer + its kind row are on, whether the marker is on screen now, ground height; `fire` = [index, event name] dispatches a DOM event on one
+    instances: function (fire, prefix) {
+      var out = [], idx = [];
+      domItems.forEach(function (it) { if (it.kind === 'marker' && it.g && it.g.indexOf(prefix || 'instances.') === 0) idx.push(it); });
+      idx.forEach(function (it, i) { out.push({ i: i, name: it.name, g: it.g, wanted: !!on[it.layer] && !!on[it.g], vis: it.vis !== false && it.el.style.display !== 'none', near: !!it.near, y: it.y, ground: groundYE(it.x, it.z), html: it.el.innerHTML }); });
+      if (fire && idx[fire[0]]) idx[fire[0]].el.dispatchEvent(new MouseEvent(fire[1], { bubbles: true, cancelable: true, clientX: 300, clientY: 300 }));
+      return JSON.stringify(out);
+    },
+    // the routes of a lines layer (test): kind group and whether the line is drawn now
+    lines: function (id) { var L = lineLayers[id]; return JSON.stringify(L ? L.items.map(function (it) { return { g: it.g || '', shown: !!(L.group.visible && it.line.visible) }; }) : []); },
     zoneAt: function (lat, lng) { var p = ll2xz(lat, lng), z = zoneAtGround(p[0], p[1]); return z ? z.name : ''; },
     areaAt: function (lat, lng) { var p = ll2xz(lat, lng), col = p[0] / TY, row = p[1] / TY, c = Math.floor(col), r = Math.floor(row), t = tileMap[c * 64 + r]; if (!t || !t.A) return -1; return t.A[Math.min(15, Math.floor((row - r) * 16)) * 16 + Math.min(15, Math.floor((col - c) * 16))]; },
     pickCenter: function () { var g = pickGround(window.innerWidth / 2, window.innerHeight / 2); return g ? JSON.stringify(g) : ''; },

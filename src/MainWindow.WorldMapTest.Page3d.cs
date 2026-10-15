@@ -157,6 +157,73 @@ namespace ElansAddonHub
                     await WmEval("window.wm3.feedForTest({t:'layer', id:'nodes', kind:'points', pts:[0,0,0,-1,0,-1, 1,1,0,-1,1,-1, 2,2,0,-1,1,-1], names:['n'], styles:[{c:'#4ade80',s:'circle',f:true,l:'Herb',g:'nodes.herbs'},{c:'#d08a4e',s:'square',f:true,l:'Ore',g:'nodes.ore'}]})");
                     int afterReopen = Convert.ToInt32(await WmEval("window.wm3.shownPoints('nodes')"));
                     Check("3D: the node kind filters hide their own points (3 shown, Ore off = 1 herb, all kinds off then the layer on again = all 3)", both == 3 && herbsOnly == 1 && afterReopen == 3, both + " / " + herbsOnly + " / " + afterReopen + " feed " + feedRaw + " raw " + bothRaw);
+                    // dungeon and raid entrances in 3D: markers that carry a kind group (Dungeons / Raids), the child rows switch them one by one, a layer switched on with every kind off shows all kinds,
+                    // a right click offers "Open its page" and "Navigate here" (which sends the spot to the app)
+                    await WmEval("window.wm3.setOnForTest('instances', true); window.wm3.setOnForTest('instances.dungeons', true); window.wm3.setOnForTest('instances.raids', true)");
+                    for (int w = 0; w < 100; w++) { var c = await WmEval("(function(){var s=JSON.parse(window.wm3.state()); return s.counts && s.counts.instances !== undefined ? 1 : 0})()"); if (c == "1") break; await Task.Delay(100); }
+                    const string feedIns = "window.wm3.feedForTest({t:'layer', id:'instances', kind:'markers', items:[{lat:-124,lng:130,name:'Crypt of Bones',ic:'dun',g:'instances.dungeons',lab:'Crypt of Bones · 17',tip:'Dungeon · 5 players · level 17',extra:'Greenvale · click to open its page',link:'instance:99'},{lat:-125,lng:131,name:'Old Mine',ic:'dun',g:'instances.dungeons',lab:'Old Mine',tip:'Dungeon',extra:'',link:'instance:97'},{lat:-126,lng:129,name:'Deep Hall',ic:'raid',g:'instances.raids',lab:'Deep Hall · 60',tip:'Raid · 40 players · level 60',extra:'',link:'instance:98'}]})";
+                    async Task<List<Dictionary<string, object>>> Ins(string fire = null)
+                    {
+                        var raw = await WmEval("(function(){try{return window.wm3.instances(" + (fire ?? "") + ")}catch(e){return 'ERR '+e.message}})()");
+                        var js = Json.Parse(raw) as string;
+                        var arr = js == null ? null : Json.Parse(js) as List<object>;
+                        return arr == null ? new List<Dictionary<string, object>>() : arr.OfType<Dictionary<string, object>>().ToList();
+                    }
+                    await WmEval(feedIns);
+                    var insAll = await Ins();
+                    await WmEval("window.wm3.setOnForTest('instances.raids', false)");
+                    var insNoRaid = await Ins();
+                    await WmEval("window.wm3.setOnForTest('instances.raids', true); window.wm3.setOnForTest('instances.dungeons', false)");
+                    var insRaidOnly = await Ins();
+                    await WmEval("['instances.dungeons','instances.raids'].forEach(function(k){ window.wm3.setOnForTest(k, false) }); window.wm3.setOnForTest('instances', false); window.wm3.setOnForTest('instances', true)");
+                    await Task.Delay(1500);
+                    await WmEval(feedIns);
+                    var insReopen = await Ins();
+                    int Wanted(List<Dictionary<string, object>> l) => l.Count(x => x.TryGetValue("wanted", out var v) && v is bool b && b);
+                    Check("3D: the dungeon and raid markers follow their kind rows (3 wanted, Raids off = 2 dungeons, Dungeons off = the raid, every kind off then the layer on again = all 3)",
+                        insAll.Count == 3 && Wanted(insAll) == 3 && Wanted(insNoRaid) == 2 && insNoRaid.Where(x => (string)x["g"] == "instances.raids").All(x => !(bool)x["wanted"]) && Wanted(insRaidOnly) == 1 && (string)insRaidOnly.First(x => (bool)x["wanted"])["name"] == "Deep Hall" && Wanted(insReopen) == 3,
+                        Wanted(insAll) + " / " + Wanted(insNoRaid) + " / " + Wanted(insRaidOnly) + " / " + Wanted(insReopen));
+                    Check("3D: a dungeon is a door, a raid a skull badge, each with its label; the markers stand on the ground",
+                        insAll.Count == 3 && ((string)insAll[0]["html"]).Contains("class=\"inst dun\"") && ((string)insAll[2]["html"]).Contains("class=\"inst raid\"") && ((string)insAll[0]["html"]).Contains("Crypt of Bones · 17") && ((string)insAll[2]["html"]).Contains("Deep Hall · 60")
+                        && insAll.All(x => Math.Abs(Convert.ToDouble(x["y"]) - Convert.ToDouble(x["ground"])) < 1.0 || Convert.ToDouble(x["y"]) == 0), string.Join(" | ", insAll.Select(x => x["name"] + " y" + x["y"] + " g" + x["ground"])));
+                    var navBefore = WorldMapView.ReceivedForTest.Count(x => x == "nav");
+                    await Ins("[0,'contextmenu']");
+                    var menuItems = await WmEval("Array.prototype.map.call(document.querySelectorAll('#ctx button'), function(b){return b.textContent}).join('|')");
+                    await WmEval("(function(){var b = Array.prototype.filter.call(document.querySelectorAll('#ctx button'), function(b){return b.textContent==='Navigate here'})[0]; if (b) b.click(); return 1})()");
+                    bool navSent = await WaitFor(() => WorldMapView.ReceivedForTest.Count(x => x == "nav") > navBefore, 5000);
+                    Check("3D: a right click on an entrance offers \"Open its page\" and \"Navigate here\"; Navigate here sends the spot to the app, which copies the /etk way command",
+                        (menuItems ?? "").Contains("Open its page") && (menuItems ?? "").Contains("Navigate here") && navSent && (WorldMapView.LastCommandForTest ?? "").StartsWith("/etk way"), menuItems + " " + WorldMapView.LastCommandForTest);
+                    // flight masters and routes by faction in 3D: the kind rows hide markers (per marker) and route lines (per line)
+                    await WmEval("['fm','fm.horde','fm.alliance','fm.neutral','routes','routes.horde','routes.alliance','routes.neutral'].forEach(function(k){ window.wm3.setOnForTest(k, true) })");
+                    for (int w = 0; w < 100; w++) { var c = await WmEval("(function(){var s=JSON.parse(window.wm3.state()); return s.counts && s.counts.fm !== undefined && s.counts.routes !== undefined ? 1 : 0})()"); if (c == "1") break; await Task.Delay(100); }
+                    const string feedFm = "window.wm3.feedForTest({t:'layer', id:'fm', kind:'markers', items:[{lat:-124,lng:130,name:'H1',f:'h',g:'fm.horde'},{lat:-125,lng:131,name:'A1',f:'a',g:'fm.alliance'},{lat:-126,lng:129,name:'N1',f:'n',g:'fm.neutral'},{lat:-127,lng:128,name:'H2',f:'h',g:'fm.horde'}]})";
+                    const string feedRt = "window.wm3.feedForTest({t:'layer', id:'routes', kind:'lines', items:[{pts:[-124,130,-125,131],c:'#ff6b5e',name:'r1',g:'routes.horde'},{pts:[-125,131,-126,129],c:'#5aa9ff',name:'r2',g:'routes.alliance'},{pts:[-126,129,-127,128],c:'#f0b429',name:'r3',g:'routes.neutral'}]})";
+                    await WmEval(feedFm); await WmEval(feedRt);
+                    async Task<List<Dictionary<string, object>>> L3(string fn, string arg)
+                    {
+                        var raw = await WmEval("(function(){try{return window.wm3." + fn + "(" + arg + ")}catch(e){return 'ERR '+e.message}})()");
+                        var js = Json.Parse(raw) as string; var arr = js == null ? null : Json.Parse(js) as List<object>;
+                        return arr == null ? new List<Dictionary<string, object>>() : arr.OfType<Dictionary<string, object>>().ToList();
+                    }
+                    int FmWanted(List<Dictionary<string, object>> l) => l.Count(x => ((string)x["g"]).StartsWith("fm.") && (bool)x["wanted"]);
+                    int LinesShown(List<Dictionary<string, object>> l) => l.Count(x => (bool)x["shown"]);
+                    var fm3All = await L3("instances", "null,'fm.'"); var rt3All = await L3("lines", "'routes'");
+                    await WmEval("window.wm3.setOnForTest('fm.horde', false); window.wm3.setOnForTest('routes.alliance', false)");
+                    var fm3NoH = await L3("instances", "null,'fm.'"); var rt3NoA = await L3("lines", "'routes'");
+                    await WmEval("['fm.horde','fm.alliance','fm.neutral','routes.horde','routes.alliance','routes.neutral'].forEach(function(k){ window.wm3.setOnForTest(k, false) }); window.wm3.setOnForTest('fm', false); window.wm3.setOnForTest('fm', true); window.wm3.setOnForTest('routes', false); window.wm3.setOnForTest('routes', true)");
+                    await Task.Delay(1500);
+                    await WmEval(feedFm); await WmEval(feedRt);
+                    var fm3Re = await L3("instances", "null,'fm.'"); var rt3Re = await L3("lines", "'routes'");
+                    // the emblems in 3D: the same SVG badges as DOM overlays; a fixture picture of the three close to the camera
+                    await WmEval("(function(){ var s=JSON.parse(window.wm3.state()); var c=window.wm3.xz2ll(s.tx, s.tz); function it(dx, f, nm){ return {lat:c[0], lng:c[1]+dx, name:nm, f:f, g:'fm.'+(f==='a'?'alliance':f==='h'?'horde':'neutral'), tip:'Flight master', extra:''}; } window.wm3.feedForTest({t:'layer', id:'fm', kind:'markers', items:[it(-0.5,'a','Alliance'), it(0,'h','Horde'), it(0.5,'n','Neutral')]}); return 1; })()");
+                    await WmEval("['fm.horde','fm.alliance','fm.neutral'].forEach(function(k){ window.wm3.setOnForTest(k, true) })");
+                    await Task.Delay(2500);
+                    var emb3 = await L3("instances", "null,'fm.'");
+                    var png3E = await WorldMapView.CaptureForTest(); if (png3E != null) File.WriteAllBytes(P("instances-fm-icons-3d.png"), png3E);
+                    Check("3D: the flight masters are the same SVG emblems (shield / spiked ring / coin) as DOM overlays; the fixture picture is taken (instances-fm-icons-3d.png)", emb3.Count == 3 && emb3.All(x => ((string)x["html"]).Contains("fmsvg")) && ((string)emb3.First(x => (string)x["name"] == "Alliance")["html"]).Contains("fmv a") && png3E != null, string.Join("|", emb3.Select(x => x["name"])));
+                    Check("3D: the faction kinds hide flight master markers one by one (4 shown, Horde off = 2) and route lines one by one (3 drawn, Alliance off = 2); all kinds off then the layer on again shows all of them",
+                        FmWanted(fm3All) == 4 && LinesShown(rt3All) == 3 && FmWanted(fm3NoH) == 2 && fm3NoH.Where(x => (string)x["g"] == "fm.horde").All(x => !(bool)x["wanted"]) && LinesShown(rt3NoA) == 2 && !(bool)rt3NoA.First(x => (string)x["g"] == "routes.alliance")["shown"]
+                        && FmWanted(fm3Re) == 4 && LinesShown(rt3Re) == 3, FmWanted(fm3All) + "/" + LinesShown(rt3All) + " " + FmWanted(fm3NoH) + "/" + LinesShown(rt3NoA) + " " + FmWanted(fm3Re) + "/" + LinesShown(rt3Re));
 
                     await Task.Delay(1500);
                     var s3 = await Wm3State();
@@ -174,7 +241,7 @@ namespace ElansAddonHub
                     // markers on the ground: the flight masters sit on the height grid (the page's own grid against the invented landscape the ADTs were made from)
                     var mk = Json.Parse(await WmEval("window.wm3.markers()")) as string; var marks = Json.Parse(mk) as List<object>;
                     double worstG = 0, worstY = 0; int nm = 0;
-                    foreach (var o in marks.Cast<Dictionary<string, object>>().Where(o => !((string)o["name"]).StartsWith("point")))
+                    foreach (var o in marks.Cast<Dictionary<string, object>>().Where(o => !((string)o["name"]).StartsWith("point") && !new[] { "Alliance", "Horde", "Neutral", "H1", "H2", "A1", "N1" }.Contains((string)o["name"])))
                     {
                         double x = (double)o["x"], z = (double)o["z"], expect = WmZ((32 - z / WorldMapMath.TileYards) * WorldMapMath.TileYards, (32 - x / WorldMapMath.TileYards) * WorldMapMath.TileYards);
                         worstG = Math.Max(worstG, Math.Abs((double)o["ground"] / 1.5 - expect)); worstY = Math.Max(worstY, Math.Abs((double)o["y"] - (double)o["ground"])); nm++;
@@ -191,7 +258,7 @@ namespace ElansAddonHub
                     // the other layers reach the 3D page: flight masters, zone names, routes
                     await WmWaitState(st => { var c = st.Child("counts"); return c != null && c.Int("zones") >= 3 && c.Int("fm") >= 3 && c.Int("routes") >= 1; }, 20000);
                     var c3 = (await Wm3State())?.Child("counts");
-                    Check("3D: the counts of the layers are the same as in the flat map: 3 zone names, 3 flight masters, the routes (2 pairs), 3 zones with borders", c3 != null && c3.Int("zones") == 3 && c3.Int("fm") == 3 && c3.Int("routes") >= 1 && c3.Int("borders") == 3, c3 == null ? "?" : Json.Write(c3));
+                    Check("3D: the counts of the layers are the same as in the flat map: 3 zone names, 3 flight masters, the routes (2 pairs), 3 zones with borders", c3 != null && c3.Int("zones") == 3 && c3.Int("fm") >= 3 && c3.Int("routes") >= 1 && c3.Int("borders") == 3, c3 == null ? "?" : Json.Write(c3));
 
                     // a click on a flight master opens its Atlas page; a ground spot is "Navigate here"
                     await WmEval("window.chrome.webview.postMessage({t:'nav', lat:" + nlat.ToString("R", I) + ", lng:" + nlng.ToString("R", I) + "})");
