@@ -2,3 +2,6 @@ bin/
 obj/
 *.user
 .vs/
+
+# design screenshots stay on the PC (made by the self-test); never published
+docs/design/
