@@ -20,7 +20,7 @@ namespace ElansAddonHub.Services.Upgrades
     {
         public const double MinGain = 0.25;                  // an upgrade is worth at least this many "points" ...
         public const double MinPct = 1.0;                    // ... and at least this many percent of what is worn
-        public const int KeepPerSlot = 30, KeepSoonPerSlot = 8, TryPerSlot = 400, SoonLevels = 3;
+        public const int KeepPerSlot = 30, KeepSoonPerSlot = 8, KeepBlockedPerSlot = 6, ShowBlockedPerSlot = 3, TryPerSlot = 400, SoonLevels = 3;
         public const int LodgeLookups = 14;                  // candidates per slot whose crafters are asked of the Lodge
 
         // ---------------------------------------------------------------------------------------------------------------- the item pool
@@ -83,6 +83,7 @@ namespace ElansAddonHub.Services.Upgrades
                 if (!UpgradeRules.CanUse(Who, it, slot, eff)) return null;
                 if (slot == 17 && TwoHandWorn) return null;
                 if (who_WearsAlready(it.Id, slot)) return null;
+                var verdict = UpgradeRules.Restriction(Who, it);
 
                 bool hasOld = Who.Worn.TryGetValue(slot, out var oldId) && oldId > 0;
                 double nu, basis;
@@ -105,6 +106,7 @@ namespace ElansAddonHub.Services.Upgrades
                 {
                     Item = it, Slot = slot, Score = nu, OldScore = basis, Pct = pct, Soon = soon, NeedsLevel = soon ? it.RequiredLevel : 0, ReplacesOffhand = replacesOff,
                     Revealed = it.Source == "lodge", OldItemId = hasOld ? oldId : 0, Metric = pct ?? gain,
+                    Blocked = verdict.Blocked, BlockReason = verdict.Reason, Requirement = verdict.Note,
                 };
                 string stats = old != null ? UpgradeScore.DiffText(it, old, slot, W) : UpgradeScore.StatsText(it, slot, W);
                 c.DeltaStats = stats;
@@ -195,20 +197,20 @@ namespace ElansAddonHub.Services.Upgrades
             foreach (var slot in set.BySlot.Keys.ToList())
             {
                 var all = set.BySlot[slot];
-                double max = all.Max(c => c.Score);
+                double max = all.Where(c => !c.Blocked).Select(c => c.Score).DefaultIfEmpty(all.Max(c => c.Score)).Max();
                 foreach (var c in all) if (c.Pct == null) c.Metric = max > 0 ? c.Score / max * 100.0 : 0;
                 all.Sort((a, b) => { int r = b.Metric.CompareTo(a.Metric); return r != 0 ? r : a.Item.Id.CompareTo(b.Item.Id); });
                 var kept = new List<UpgradeCandidate>();
-                int keptNow = 0, keptSoon = 0, tried = 0;
+                int keptNow = 0, keptSoon = 0, keptBlocked = 0, tried = 0;
                 foreach (var c in all)
                 {
-                    if (keptNow >= KeepPerSlot && keptSoon >= KeepSoonPerSlot) break;
-                    if (c.Soon ? keptSoon >= KeepSoonPerSlot : keptNow >= KeepPerSlot) continue;
+                    if (keptNow >= KeepPerSlot && keptSoon >= KeepSoonPerSlot && keptBlocked >= KeepBlockedPerSlot) break;
+                    if (c.Blocked ? keptBlocked >= KeepBlockedPerSlot : c.Soon ? keptSoon >= KeepSoonPerSlot : keptNow >= KeepPerSlot) continue;
                     if (++tried > TryPerSlot) break;
                     c.Sources = world.SourcesOf(c.Item, who.Level);
-                    if (c.Sources.Count == 0) { withoutSource.Add(c.Item.Id); continue; }
+                    if (c.Sources.Count == 0) { if (!c.Blocked) withoutSource.Add(c.Item.Id); continue; }
                     kept.Add(c);
-                    if (c.Soon) keptSoon++; else keptNow++;
+                    if (c.Blocked) keptBlocked++; else if (c.Soon) keptSoon++; else keptNow++;
                 }
                 set.BySlot[slot] = kept;
             }
@@ -274,20 +276,21 @@ namespace ElansAddonHub.Services.Upgrades
             {
                 var r = new UpgradeSlotResult { Slot = slot, SlotName = UpgradeRules.SlotTitle(slot), WornId = set.Who.Worn.TryGetValue(slot, out var wid) ? wid : 0 };
                 if (slot == 17 && set.TwoHandWorn) r.Note = "You wield a two-hand weapon, so there is no off hand to fill.";
-                var now = new List<UpgradeCandidate>(); var soon = new List<UpgradeCandidate>();
+                var now = new List<UpgradeCandidate>(); var soon = new List<UpgradeCandidate>(); var blocked = new List<UpgradeCandidate>();
                 if (set.BySlot.TryGetValue(slot, out var cands))
                     foreach (var c in cands)
                     {
                         if (c.Soon && f.LevelOffset < c.NeedsLevel - set.Who.Level) continue;
-                        if (f.TradeableOnly && c.Item.Bonding != 0 && c.Item.Bonding != 2) { if (!c.Soon) r.Hidden++; continue; }
+                        if (f.TradeableOnly && c.Item.Bonding != 0 && c.Item.Bonding != 2) { if (!c.Soon && !c.Blocked) r.Hidden++; continue; }
                         var srcs = c.Sources.Where(s => Allowed(s, f)).ToList();
-                        if (srcs.Count == 0) { if (!c.Soon) r.Hidden++; continue; }
+                        if (srcs.Count == 0) { if (!c.Soon && !c.Blocked) r.Hidden++; continue; }
                         foreach (var s in srcs) s.Reach = ReachOf(s, set.Who, f);
                         var copy = c.Copy();
                         copy.Sources = srcs.OrderByDescending(s => s.Reach).ThenBy(s => s.Lodge ? 0 : 1).ThenByDescending(s => s.Chance).ToList();
                         copy.Reach = copy.Sources[0].Reach;
                         copy.Rank = c.Metric * (0.35 + 0.65 * copy.Reach);
-                        (c.Soon ? soon : now).Add(copy);
+                        if (c.Blocked) { if (f.ShowBlocked) blocked.Add(copy); else r.BlockedHidden++; }
+                        else (c.Soon ? soon : now).Add(copy);
                     }
                 int Cmp(UpgradeCandidate a, UpgradeCandidate b)
                 {
@@ -296,9 +299,10 @@ namespace ElansAddonHub.Services.Upgrades
                     x = (b.Pct ?? 0).CompareTo(a.Pct ?? 0); if (x != 0) return x;
                     return a.Item.Id.CompareTo(b.Item.Id);
                 }
-                now.Sort(Cmp); soon.Sort(Cmp);
+                now.Sort(Cmp); soon.Sort(Cmp); blocked.Sort(Cmp);
                 r.Upgrades = now.Take(Math.Max(1, f.PerSlot)).ToList();
                 r.Soon = soon.Take(2).ToList();
+                r.Blocked = blocked.Take(ShowBlockedPerSlot).ToList();
                 if (f.Enchants && set.EnchantBySlot.TryGetValue(slot, out var se))
                 {
                     r.NoEnchant = se.CurrentId == 0 && se.Enchantable;
@@ -333,7 +337,7 @@ namespace ElansAddonHub.Services.Upgrades
             foreach (var slot in UpgradeRules.SlotsFor(it.InventoryType))
             {
                 var c = ev.Evaluate(it, slot);
-                if (c == null || c.Soon) continue;
+                if (c == null || c.Soon || c.Blocked) continue;
                 double m = c.Pct ?? 1000 + c.Score;
                 if (best == null || m > (best.Pct ?? 1000 + best.Score)) best = c;
             }

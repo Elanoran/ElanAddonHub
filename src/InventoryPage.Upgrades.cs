@@ -87,6 +87,7 @@ namespace ElansAddonHub
             Sw("classic", "Classic baseline", "Include drops, vendors and quests that only the Classic baseline knows", f.Classic, v => Filters.Classic = v);
             Sw("tradeable", "Only tradeable", "Only items you could also buy or be given: not bound when picked up", f.TradeableOnly, v => Filters.TradeableOnly = v);
             Sw("soon", "Coming soon", "Also show items up to 3 levels above " + c.Name + "'s level, apart", f.LevelOffset > 0, v => Filters.LevelOffset = v ? 3 : 0);
+            Sw("blocked", "Show items I can't use", "Also list better items that " + c.Name + " cannot use (wrong class or race, a profession or reputation they lack), greyed and below the others", f.ShowBlocked, v => Filters.ShowBlocked = v);
             Sw("enchants", "Enchants", "Suggest enchants, armor kits, scopes and the like for the worn items", f.Enchants, v => Filters.Enchants = v);
             Sw("applicable", "Only enchants I can apply", "Only enchants that one of your characters or a member of your Lodge can make, or kits you already own", f.OnlyApplicable, v => Filters.OnlyApplicable = v);
             Sw("food", "Consumables", "Show the best food, drink, elixirs, potions, scrolls, bandages and ammo for this level", f.Food, v => Filters.Food = v);
@@ -158,7 +159,7 @@ namespace ElansAddonHub
             {
                 hidden += p.Hidden;
                 bool focus = upFocus == p.Slot;
-                if (p.Upgrades.Count == 0 && p.Soon.Count == 0 && p.Enchants.Count == 0 && !focus) continue;
+                if (p.Upgrades.Count == 0 && p.Soon.Count == 0 && p.Enchants.Count == 0 && p.Blocked.Count == 0 && !focus) continue;
                 var block = UpgradeBlock(p, focus);
                 upBlocks[p.Slot] = block;
                 upBody.Children.Add(block);
@@ -201,7 +202,7 @@ namespace ElansAddonHub
             string wornName = p.WornId > 0 ? WornNameOf(p) : null;
             head.Children.Add(new TextBlock { Text = p.WornId > 0 ? "  ·  wearing " + wornName : "  ·  empty", Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
             sp.Children.Add(head);
-            upLines.Add("upslot|" + p.Slot + "|" + p.SlotName + "|" + (wornName ?? "") + "|" + p.Upgrades.Count + "|" + p.Soon.Count + (focus ? "|focus" : ""));
+            upLines.Add("upslot|" + p.Slot + "|" + p.SlotName + "|" + (wornName ?? "") + "|" + p.Upgrades.Count + "|" + p.Soon.Count + (focus ? "|focus" : "") + (p.Blocked.Count > 0 ? "|blocked" + p.Blocked.Count : ""));
             if (!string.IsNullOrEmpty(p.Note)) sp.Children.Add(UpNote(p.Note, 4));
             else if (p.Upgrades.Count == 0 && p.Soon.Count == 0 && p.Enchants.Count == 0) sp.Children.Add(UpNote("Nothing better found for " + p.SlotName.ToLowerInvariant() + " with these filters.", 4));
             if (p.EnchantCurrent.Length > 0)
@@ -215,6 +216,11 @@ namespace ElansAddonHub
             {
                 sp.Children.Add(new TextBlock { Text = "Coming soon", Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), Margin = new Thickness(8, 8, 0, 0) });
                 foreach (var c in p.Soon) sp.Children.Add(UpgradeRow(p, c, true));
+            }
+            if (p.Blocked.Count > 0)
+            {
+                sp.Children.Add(new TextBlock { Text = "Better, but " + upWho.Name + " cannot use them", Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), Margin = new Thickness(8, 8, 0, 0) });
+                foreach (var c in p.Blocked) sp.Children.Add(UpgradeRow(p, c, c.Soon));
             }
             outer.Child = sp;
             return outer;
@@ -254,11 +260,14 @@ namespace ElansAddonHub
 
             var main = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
             var nameRow = new StackPanel { Orientation = Orientation.Horizontal };
+            if (c.Blocked) { iconBox.Opacity = 0.45; nameRow.Opacity = 0.55; }
             nameRow.Children.Add(new TextBlock { Text = it.Name, Style = TextStyle("Text.RowTitle"), Foreground = UpQuality(it.Quality), TextTrimming = TextTrimming.CharacterEllipsis });
             if (soon) nameRow.Children.Add(new TextBlock { Text = "  at level " + c.NeedsLevel, Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Warn"), VerticalAlignment = VerticalAlignment.Center });
             else if (c.Revealed) nameRow.Children.Add(new TextBlock { Text = "  seen by your Lodge", Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), VerticalAlignment = VerticalAlignment.Center });
             main.Children.Add(nameRow);
-            main.Children.Add(new TextBlock { Text = c.Delta, Style = TextStyle("Text.Secondary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+            if (c.Blocked) main.Children.Add(new TextBlock { Text = "Cannot use: " + c.BlockReason, Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Warn"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+            main.Children.Add(new TextBlock { Text = c.Delta, Style = TextStyle("Text.Secondary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0), Opacity = c.Blocked ? 0.55 : 1 });
+            if (!c.Blocked && !string.IsNullOrEmpty(c.Requirement)) main.Children.Add(new TextBlock { Text = c.Requirement, Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
             if (!string.IsNullOrEmpty(c.EnchantNote)) main.Children.Add(new TextBlock { Text = c.EnchantNote, Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
             var best = c.Sources[0];
             var srcRow = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
@@ -288,7 +297,7 @@ namespace ElansAddonHub
             upTips[p.Slot + ":" + it.Id] = tip; upRows[p.Slot + ":" + it.Id] = bd;
             ToolTipService.SetInitialShowDelay(bd, 150);
             ToolTipService.SetShowDuration(bd, 30000);
-            upLines.Add("up|" + p.Slot + "|" + it.Id + "|" + it.Name + "|" + UpgradeScore.PctText(c.Pct) + "|" + c.Delta + "|" + best.Line + (soon ? "|soon" : ""));
+            upLines.Add("up|" + p.Slot + "|" + it.Id + "|" + it.Name + "|" + UpgradeScore.PctText(c.Pct) + "|" + c.Delta + "|" + best.Line + (soon ? "|soon" : "") + (c.Blocked ? "|blocked|" + c.BlockReason : "") + (!c.Blocked && c.Requirement.Length > 0 ? "|note|" + c.Requirement : ""));
             return bd;
         }
 
@@ -318,6 +327,8 @@ namespace ElansAddonHub
             foot.Children.Add(GameTooltip.Muted(worn != null ? "Compared with " + worn.Name + " (worn)" : p.WornId > 0 ? "The worn item is not known to your game data" : "Nothing is worn in this slot"));
             foreach (var d in UpgradeScore.Diff(it, worn, p.Slot, w, 8))
                 foot.Children.Add(new TextBlock { Text = d.Text, Foreground = GameTooltip.Brush(d.Delta > 0 ? "Brush.GameTip.Green" : "Brush.GameTip.Red"), FontSize = 13, Margin = new Thickness(0, 2, 0, 0) });
+            if (c.Blocked) foot.Children.Add(new TextBlock { Text = upWho.Name + " cannot use this: " + c.BlockReason, Foreground = GameTooltip.Brush("Brush.GameTip.Red"), FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+            else if (!string.IsNullOrEmpty(c.Requirement)) foot.Children.Add(GameTooltip.Muted(c.Requirement + " (cannot be checked)", 4));
             foot.Children.Add(GameTooltip.Muted("Score " + UpgradeScore.PctText(c.Pct) + (c.ReplacesOffhand ? " · replaces your off hand" : ""), 4));
             foot.Children.Add(GameTooltip.Muted("Where to get it", 8));
             foreach (var s in c.Sources.Take(5)) foot.Children.Add(GameTooltip.Muted(s.Line));

@@ -318,6 +318,7 @@ var card = InventoryView.UpgradeCardForTest; card.Measure(new Size(700, double.P
                     }
                 }
                 finally { ItemData.WowRoot = wasRoot; ItemData.Flavor = wasFlavor; EnchantData.AutoStart = wasAuto; EnchantData.ResetForTest(); UpgradeExtras.ForgetForTest(); }
+                UpgradesUsableReal(Check, notes, snap);
                 notes.Add("note real game files: " + snap.Count + " items; level 30 Hunter " + h30.Count + " better-than-nothing candidates from " + n30 + " items in " + ms + " ms; level 45 Hunter " + h45.Count + " (" + h45.Count(c => c.Item.SubclassId == 3 && c.Item.ClassId == 4) + " mail)");
             }
             catch (Exception e)

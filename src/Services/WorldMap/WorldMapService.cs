@@ -108,6 +108,12 @@ namespace ElansAddonHub.Services.WorldMap
 
         public static void ResetForTest() { lock (gate) { states.Clear(); cts.Clear(); tasks.Clear(); tstates.Clear(); tcts.Clear(); ttasks.Clear(); } WorldMapZones.ClearCache(); }
 
+        // the reason for the page: a file the install lists but cannot give (BLTE) is almost always a game that is still downloading in the background, or a damaged install
+        public static string Why(Exception e)
+            => e is IOException && (e.Message ?? "").Contains("BLTE")
+                ? "part of your game files could not be read. If the Battle.net app is still downloading or updating the game, let it finish; otherwise use Scan and Repair in the Battle.net app, then try again."
+                : e.Message;
+
         static void Fire(int mapId) { try { BuildChanged?.Invoke(mapId); } catch (Exception) { } }
 
         // The pyramid of the continent exists when the task returns true. A build already running is joined, not repeated.
@@ -146,7 +152,7 @@ namespace ElansAddonHub.Services.WorldMap
                     Fire(st.MapId);
                 });
                 st.Result = res; st.Complete = res.Complete; st.Running = false; st.Ms = sw.ElapsedMilliseconds;
-                Util.Log("world map: " + cont.Name + " built: " + res.Adt + " map tiles (" + res.Decoded + " decoded, " + res.Reused + " reused, " + res.Missing + " missing), " + res.Files + " files, " + (res.Bytes / 1048576) + " MB in " + st.Ms + " ms");
+                Util.Log("world map: " + cont.Name + " built: " + res.Adt + " map tiles (" + res.Decoded + " decoded, " + res.Reused + " reused, " + res.Missing + " missing" + (res.Unreadable > 0 ? ", " + res.Unreadable + " could not be read" : "") + "), " + res.Files + " files, " + (res.Bytes / 1048576) + " MB in " + st.Ms + " ms");
                 Fire(st.MapId);
                 return res.Complete;
             }
@@ -154,7 +160,7 @@ namespace ElansAddonHub.Services.WorldMap
             catch (Exception e)
             {
                 Util.Log("world map " + cont.Name + ": " + e);
-                st.Running = false; st.Error = "The " + cont.Name + " map could not be built: " + e.Message; Fire(st.MapId);
+                st.Running = false; st.Error = "The " + cont.Name + " map could not be built: " + Why(e); Fire(st.MapId);
                 return false;
             }
         }
@@ -223,7 +229,7 @@ namespace ElansAddonHub.Services.WorldMap
             catch (Exception e)
             {
                 Util.Log("world map terrain " + cont.Name + ": " + e);
-                st.Running = false; st.Error = "The " + cont.Name + " terrain could not be built: " + e.Message; Fire(st.MapId);
+                st.Running = false; st.Error = "The " + cont.Name + " terrain could not be built: " + Why(e); Fire(st.MapId);
                 return false;
             }
         }

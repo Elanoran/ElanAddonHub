@@ -321,6 +321,7 @@ namespace ElansAddonHub
                 await UpgradesUiChecks(Check, dir, now, chars, hub);
 
                 // ---------------------------------------------------------------------------------------------------------------- the real game files (read-only), when there are any
+                UpgradesUsableChecks(Check, aela, notes);
                 UpgradesSmokeReal(Check, notes);
             }
             catch (Exception ex) { ok = false; notes.Add("FAIL exception: " + ex); }

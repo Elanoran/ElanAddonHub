@@ -25,6 +25,7 @@ namespace ElansAddonHub.Services.WorldMap
         public int Decoded;              // minimaps read and cut this time
         public int Reused;               // map tiles whose four files were already there
         public int Missing;              // map tiles the source did not have
+        public int Unreadable;           // of those: tiles the install lists but could not give (counted in Missing too)
         public int Written;              // files written this time (all levels)
         public int Skipped;              // files of the upper levels that were already there
         public int Files;                // files in the pyramid
@@ -120,7 +121,11 @@ namespace ElansAddonHub.Services.WorldMap
                 }
                 else
                 {
-                    var img = load(t);
+                    // a minimap the install cannot give (still downloading in the background, or damaged): that map tile is left out like a missing one, and logged
+                    MapRender.TileImage img;
+                    try { img = load(t); }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception e) { Util.Log("world map: " + (name ?? "map " + mapId) + ": minimap " + t.Col + "," + t.Row + " could not be read: " + e.Message); img = null; res.Unreadable++; }
                     if (img == null || img.Bgra == null || img.Width <= 0 || img.Height <= 0 || img.Bgra.Length < img.Width * img.Height * 4) res.Missing++;
                     else
                     {
