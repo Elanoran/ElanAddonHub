@@ -28,6 +28,7 @@ namespace ElansAddonHub
             AtlasQuery.Context.Lodge = () => Session?.AtlasData;
             AtlasQuery.Context.OwnFishSpots = () => AtlasObs.Read(settings.WowRoot)?.FishSpots;
             AtlasQuery.Context.OwnEntrances = () => AtlasObs.Read(settings.WowRoot)?.Entrances;
+            AtlasQuery.Context.OwnNpcSpots = () => AtlasObs.Read(settings.WowRoot)?.NpcSpots;   // where this PC's Toolkit met, killed or saw npcs (Forever)
             AtlasQuery.Context.OwnFieldNotes = () => AtlasObs.Read(settings.WowRoot)?.FieldNotes;   // Hunter Helper's field notes on this PC
             AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
             AtlasView.LodgeState = LodgeAtlasState;

@@ -116,7 +116,8 @@ namespace ElansAddonHub.Services.Atlas
             var cn = ClassicAtlas.NpcInfo(id);
             var loot = L?.Loot("npc", id);
             var spots = L?.Spawns(id);
-            bool lodgeKnows = (loot != null && loot.N > 0) || (spots != null && spots.Count > 0) || L?.Vendor(id) != null || L?.Note(id) != null;
+            var seenAt = NpcSpots(id);                                  // where members (and you) met it, killed it, saw it as a rare (Toolkit npcspots)
+            bool lodgeKnows = (loot != null && loot.N > 0) || (spots != null && spots.Count > 0) || L?.Vendor(id) != null || L?.Note(id) != null || seenAt.Count > 0;
             if (seen == null && cn == null && !lodgeKnows)
             {
                 var nf = NotFoundPage("npc", id, SeenData.Ready || ClassicAtlas.IsReady ? "No layer knows this NPC. Your game has not met it yet." : "Nothing is read yet that could know this NPC (the game's creature cache and the Classic baseline are both missing).");
@@ -162,11 +163,17 @@ namespace ElansAddonHub.Services.Atlas
             // where it stands
             var plan = new PlanBuilder();
             string tip = (cn != null ? "Level " + AtlasFormat.Levels(cn.MinLevel, cn.MaxLevel) + " · " : "");
-            if (spots != null) foreach (var sp in spots) plan.Spot(sp.Zone, sp.X, sp.Y, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, "Seen by the Lodge · " + F, "npc:" + id);
-            if (cn != null) plan.Classic(cn.Spawns, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, tip + C, "npc:" + id);
+            // Forever first: the spots members saw it at; the older kill positions (spawns) only when there are none; the Classic baseline after, minus its
+            // spawn points in the zones where members fixed its place
+            foreach (var sp in seenAt) plan.Spot(sp.UiMapId, sp.X, sp.Y, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, NpcSpotTip(sp), "npc:" + id);
+            if (spots != null && seenAt.Count == 0) foreach (var sp in spots) plan.Spot(sp.Zone, sp.X, sp.Y, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, "Seen by the Lodge · " + F, "npc:" + id);
+            int classicDropped = 0;
+            var classicSpawns = cn != null ? ClassicOutside(cn.Spawns, FixedZones(seenAt), out classicDropped) : null;
+            if (cn != null) plan.Classic(classicSpawns, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, tip + C, "npc:" + id);
             NoteFacts(m, id, L, plan);                                  // hunter field notes: Seen by Lodge hunters / by you, abilities taught, places seen
             m.Map = plan.Build();
             AddFoundIn(m, cn?.Spawns, spots);
+            NpcSpotSection(m, seenAt, classicDropped);
 
             LootSection(m, "loot", "Loot", "npc", id, ClassicSourceKind.NpcDrop, "No loot is known for this NPC.");
             var sk = ClassicAtlas.Current != null ? AtlasDerived.For(ClassicAtlas.Current).LootOf(ClassicSourceKind.NpcSkin, id) : null;

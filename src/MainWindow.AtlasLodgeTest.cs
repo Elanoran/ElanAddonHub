@@ -91,6 +91,7 @@ namespace ElansAddonHub
                 await AtlasSeenTest(check, sent, () => now, t => now = t);
                 await AtlasSeenDetailsTest(check, sent);
                 await AtlasNotesTest(check, sent, () => now, t => now = t);
+                AtlasNpcSpotsTest(check, sent);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally

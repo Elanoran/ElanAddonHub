@@ -27,6 +27,7 @@ public sealed partial class AtlasStore
         public readonly Dictionary<int, Atlas.FieldNote> Notes = new();   // npc -> hunter field note (2.23)
         public int NotePoints;
         public readonly Dictionary<int, List<Atlas.EntranceSpot>> Entrances = new();   // instance map id -> entrance spots (2.24)
+        public readonly Dictionary<int, List<Atlas.NpcSpot>> NpcSpots = new();   // npc -> where it was met, killed, seen as a vignette (2.26)
         public string Who = "";   // the name the member was last seen under (a Lodge login, case kept): shown through the display name on field notes
     }
 
@@ -130,6 +131,7 @@ public sealed partial class AtlasStore
                 if (d["fishspots"] is JsonObject fo) LoadFish(md, fo);
                 if (d["fieldnotes"] is JsonObject fno) LoadNotes(md, fno, now);
                 if (d["entrances"] is JsonObject eno) LoadEntrances(md, eno);
+                if (d["npcspots"] is JsonObject npo) LoadNpcSpots(md, npo);
                 members[who] = md;
             }
         // the aggregates are derived: rebuild them, remembering the revision of the member data
@@ -164,6 +166,7 @@ public sealed partial class AtlasStore
         }
         RebuildNotes(root["noteRev"] as JsonObject, ref maxRev);
         RebuildEntrances(root["entranceRev"] as JsonObject, ref maxRev);
+        RebuildNpcSpots(root["npcSpotRev"] as JsonObject, ref maxRev);
         if (root["vendors"] is JsonObject vo)
             foreach (var (key, node) in vo)
                 if (vendors.Count < Atlas.MaxVendors && Atlas.Key(key, Atlas.MaxId, out var id) && Atlas.ParseVendor(node, now, out var v)) { v.By = By(node); v.Rev = R(node); vendors[id] = v; }
@@ -294,7 +297,7 @@ public sealed partial class AtlasStore
         public int Total => Accepted + Unchanged + Rejected;
     }
 
-    static readonly string[] Sections = { "kills", "objects", "fishing", "vendors", "quests", "finds", "spawns", "items", "seenNpcs", "seenObjects", "seenQuests", "nodes", "fishspots", "fieldnotes", "entrances" };
+    static readonly string[] Sections = { "kills", "objects", "fishing", "vendors", "quests", "finds", "spawns", "items", "seenNpcs", "seenObjects", "seenQuests", "nodes", "fishspots", "fieldnotes", "entrances", "npcspots" };
 
     // True when the message carries at least one known, non-empty section
     public static bool HasContent(JsonObject m) =>
@@ -334,7 +337,8 @@ public sealed partial class AtlasStore
         FishSpots(r, md, m["fishspots"]);
         FieldNotes(r, md, m["fieldnotes"], now);
         Entrances(r, md, m["entrances"]);
-        if (md.Total == 0 && md.FindCount == 0 && md.Nodes.Count == 0 && md.Fish.Count == 0 && md.Notes.Count == 0 && md.Entrances.Count == 0 && !r.Changed && md.Src.All(s => s.Count == 0)) members.Remove(identity);   // nothing of this person was kept
+        NpcSpots(r, md, m["npcspots"]);
+        if (md.Total == 0 && md.FindCount == 0 && md.Nodes.Count == 0 && md.Fish.Count == 0 && md.Notes.Count == 0 && md.Entrances.Count == 0 && md.NpcSpots.Count == 0 && !r.Changed && md.Src.All(s => s.Count == 0)) members.Remove(identity);   // nothing of this person was kept
         if (r.Changed) { Dirty = true; NoteShare(identity, revBefore); }
         return r;
     }
@@ -636,7 +640,7 @@ public sealed partial class AtlasStore
         return o;
     }
 
-    // { t:"atlas.data", epoch, rev, full?, more?, kills, objects, fishing, vendors, quests, spawns, items, finds, seenNpcs, seenObjects, seenQuests }
+    // { t:"atlas.data", epoch, rev, full?, more?, kills, objects, fishing, vendors, quests, spawns, items, finds, seenNpcs, seenObjects, seenQuests, nodes, fishspots, fieldnotes, entrances, npcspots }
     // Records changed after `since`, in revision order, cut into pages of about Atlas.PageBytes: with more = true ask again with since = rev.
     // full = the client's state cannot be continued (since 0, another epoch, or a revision this store never reached): it replaces everything it had.
     // The aggregate record of a source is replaced as a whole. nameOf turns a find's login into the name shown (display name). Caller holds Gate.
@@ -658,10 +662,11 @@ public sealed partial class AtlasStore
         foreach (var kv in fishAggs) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 12, kv.Key));
         foreach (var kv in noteAggs) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 13, kv.Key));
         foreach (var kv in entranceAggs) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 14, kv.Key));
+        foreach (var kv in npcSpotAggs) if (kv.Value.Rev > since) cand.Add((kv.Value.Rev, 15, kv.Key));
         cand.Sort((a, b) => a.rev.CompareTo(b.rev));
 
-        var secs = new JsonObject[15];
-        for (int i = 0; i < 15; i++) secs[i] = new JsonObject();
+        var secs = new JsonObject[16];
+        for (int i = 0; i < 16; i++) secs[i] = new JsonObject();
         var fa = new JsonArray();
         int bytes = 0, taken = 0;
         long last = since;
@@ -682,6 +687,7 @@ public sealed partial class AtlasStore
                 case 12: node = FishJson(fishAggs[c.key].Spots); break;
                 case 13: node = NoteJson(noteAggs[c.key], nameOf, guest); break;
                 case 14: node = Atlas.EntranceJson(entranceAggs[c.key].Spots, true); break;
+                case 15: node = Atlas.NpcSpotJson(npcSpotAggs[c.key].Spots, true); break;
                 default: node = guest ? FindJson(finds[c.key], GuestFindName, true) : FindJson(finds[c.key], nameOf(finds[c.key].Who)); break;
             }
             int size = node.ToJsonString().Length + key.Length + 6;
@@ -694,7 +700,7 @@ public sealed partial class AtlasStore
         {
             ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = more ? last : rev, ["at"] = NowSec,
             ["kills"] = secs[0], ["objects"] = secs[1], ["fishing"] = secs[2], ["vendors"] = secs[3], ["quests"] = secs[4], ["spawns"] = secs[5], ["items"] = secs[6], ["finds"] = fa,
-            ["seenNpcs"] = secs[8], ["seenObjects"] = secs[9], ["seenQuests"] = secs[10], ["nodes"] = secs[11], ["fishspots"] = secs[12], ["fieldnotes"] = secs[13], ["entrances"] = secs[14],
+            ["seenNpcs"] = secs[8], ["seenObjects"] = secs[9], ["seenQuests"] = secs[10], ["nodes"] = secs[11], ["fishspots"] = secs[12], ["fieldnotes"] = secs[13], ["entrances"] = secs[14], ["npcspots"] = secs[15],
             ["seenMembers"] = seenMembers.Count,   // 2.25: how many members' game caches the seen tables come from (a count, never who)
         };
         if (full) res["full"] = true;
@@ -752,6 +758,7 @@ public sealed partial class AtlasStore
                     d["fieldnotes"] = fno;
                 }
                 if (md.Entrances.Count > 0) d["entrances"] = EntrancesStoreJson(md);
+                if (md.NpcSpots.Count > 0) d["npcspots"] = NpcSpotsStoreJson(md);
                 mo[who] = d;
             }
             var fishRev = new JsonObject();
@@ -789,7 +796,7 @@ public sealed partial class AtlasStore
             foreach (var f in finds) { var j = FindJson(f, ""); j.Remove("by"); j.Remove("s"); j["b"] = f.Identity; j["w"] = f.Who; j["r"] = f.Rev; fa.Add(j); }
             var root = new JsonObject
             {
-                ["v"] = 1, ["epoch"] = Epoch, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev, ["nodeRev"] = nodeRev, ["fishRev"] = fishRev, ["noteRev"] = noteRev, ["entranceRev"] = EntranceRevJson(),
+                ["v"] = 1, ["epoch"] = Epoch, ["rev"] = rev, ["members"] = mo, ["srcRev"] = srcRev, ["nodeRev"] = nodeRev, ["fishRev"] = fishRev, ["noteRev"] = noteRev, ["entranceRev"] = EntranceRevJson(), ["npcSpotRev"] = NpcSpotRevJson(),
                 ["vendors"] = vo, ["quests"] = qo, ["spawns"] = sp, ["items"] = io, ["finds"] = fa,
                 ["seenNpcs"] = sno, ["seenObjects"] = sob, ["seenQuests"] = sqo,
                 ["seenMembers"] = new JsonArray(seenMembers.OrderBy(x => x, StringComparer.Ordinal).Select(x => (JsonNode)x).ToArray()),

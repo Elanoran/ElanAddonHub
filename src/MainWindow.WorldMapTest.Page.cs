@@ -171,7 +171,7 @@ namespace ElansAddonHub
                     bool zones = await WmWaitCount("zones", 3), fms = await WmWaitCount("fm", 3), routes = await WmWaitCount("routes", 1);
                     Check("page: the layers that are on by default (zone names, flight masters, flight routes) are asked for by the page and arrive: 3 zones, 3 flight masters, 1 route", zones && fms && routes);
                     var st2 = await WmState();
-                    Check("page: the layers are not asked for twice and the ones that are off are not built (vendors, trainers, nodes ... not requested yet; the dungeon and raid layer is on by default and arrives empty on this invented continent)", st2 != null && st2.Child("counts").Count == 4 && st2.Child("counts").ContainsKey("instances") && ((List<object>)st2.List("on")).Cast<string>().OrderBy(x => x).SequenceEqual(WorldMapLayers.DefaultOn.OrderBy(x => x)), Json.Write(st2?.Child("counts")));
+                    Check("page: the layers are not asked for twice and the ones that are off are not built (vendors, trainers, nodes ... not requested yet; the dungeon and raid layer is on by default and arrives empty on this invented continent)", st2 != null && st2.Child("counts").Count == 5 && st2.Child("counts").ContainsKey("instances") && ((List<object>)st2.List("on")).Cast<string>().OrderBy(x => x).SequenceEqual(WorldMapLayers.DefaultOn.OrderBy(x => x)), Json.Write(st2?.Child("counts")));
                     // dungeon and raid entrances (Map.db2's ghost spot): on by default, a door for a dungeon and a skull for a raid, labelled with the level the game suggests
                     bool insArrived = await WmWaitCount("instances", 2);
                     async Task<List<Dictionary<string, object>>> InsMarkers(string fire = null)

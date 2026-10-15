@@ -62,7 +62,7 @@ namespace ElansAddonHub
             var savedProbe = MapIndex.AreaAt;
             try
             {
-                var layers = new[] { "zones", "fm", "routes", "instances", "nodes", "vendors", "trainers", "quests", "rares", "finds" };
+                var layers = new[] { "zones", "fm", "routes", "instances", "nodes", "vendors", "trainers", "quests", "rares", "seen", "finds" };
                 int total = 0, outside = 0, atOrigin = 0, noMap = 0, zoneDiff = 0, wrongCont = 0, noArea = 0; var worst = new List<string>();
                 var perLayer = new List<string>();
                 foreach (int mapId in new[] { 0, 1 })

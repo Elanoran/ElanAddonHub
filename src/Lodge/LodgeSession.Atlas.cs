@@ -49,6 +49,8 @@ namespace ElansAddonHub.Lodge
         public long SeenNpcsChanged;                       // counts every answer that changed the seen creatures (SharedData.lua's beasts section is rewritten when it moves)
         public long NotesChanged;                          // counts every answer that changed the field notes (SharedData.lua is rewritten when it moves)
         readonly Dictionary<int, List<AtlasObs.EntranceSpot>> entrances = new Dictionary<int, List<AtlasObs.EntranceSpot>>();   // instance entrances the lodge merged (server 2.24, atlas6): instance -> spots
+        readonly Dictionary<int, List<AtlasObs.NpcSpot>> npcSpots = new Dictionary<int, List<AtlasObs.NpcSpot>>();   // where members met, killed or saw npcs (server 2.26, atlas8): npc -> spots
+        public long NpcSpotsChanged;                       // counts every answer that changed the npc spots
         public int Dropped { get; private set; }           // entries of the last answers that failed validation
         public int SeenMembers { get; private set; }       // how many members' game caches the seen tables come from (server 2.25, atlas7; a count only)
 
@@ -60,7 +62,7 @@ namespace ElansAddonHub.Lodge
         static readonly IReadOnlyList<AtlasObs.Find> NoFinds = new AtlasObs.Find[0];
         static readonly IReadOnlyList<AtlasObs.Spot> NoSpots = new AtlasObs.Spot[0];
 
-        public bool HasData => kills.Count + objects.Count + fishing.Count + vendors.Count + quests.Count + spawns.Count + revealed.Count + finds.Count + seenNpcs.Count + seenObjects.Count + seenQuests.Count + nodes.Count + fishSpots.Count + fieldNotes.Count + entrances.Count > 0;
+        public bool HasData => kills.Count + objects.Count + fishing.Count + vendors.Count + quests.Count + spawns.Count + revealed.Count + finds.Count + seenNpcs.Count + seenObjects.Count + seenQuests.Count + nodes.Count + fishSpots.Count + fieldNotes.Count + entrances.Count + npcSpots.Count > 0;
         public int FieldNoteCount => fieldNotes.Count;
         public int NodeObjectCount => nodes.Count;
         public int KillSources => kills.Count;
@@ -69,6 +71,7 @@ namespace ElansAddonHub.Lodge
         public int VendorCount => vendors.Count;
         public int FindCount => finds.Count;
         public int SpawnNpcCount => spawns.Count;
+        public int NpcSpotNpcCount => npcSpots.Count;
         public int RevealedCount => revealed.Count;
         public int SeenNpcCount => seenNpcs.Count;
         public int SeenObjectCount => seenObjects.Count;
@@ -79,7 +82,7 @@ namespace ElansAddonHub.Lodge
             if (fieldNotes.Count > 0) NotesChanged++;
             if (seenNpcs.Count > 0) SeenNpcsChanged++;
             kills.Clear(); objects.Clear(); fishing.Clear(); vendors.Clear(); quests.Clear(); spawns.Clear(); revealed.Clear(); finds.Clear();
-            seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear(); fishSpots.Clear(); fieldNotes.Clear(); entrances.Clear();
+            seenNpcs.Clear(); seenObjects.Clear(); seenQuests.Clear(); nodes.Clear(); fishSpots.Clear(); fieldNotes.Clear(); entrances.Clear(); if (npcSpots.Count > 0) NpcSpotsChanged++; npcSpots.Clear();
             Epoch = ""; Rev = 0; Dropped = 0; SeenMembers = 0; Invalidate();
         }
 
@@ -181,6 +184,14 @@ namespace ElansAddonHub.Lodge
             if (eno != null)
                 foreach (var kv in AtlasObs.ParseEntrances(eno, ref dropped, true, AtlasObs.MaxLodgeEntranceInstances))
                     if (entrances.ContainsKey(kv.Key) || entrances.Count < AtlasObs.MaxLodgeEntranceInstances) entrances[kv.Key] = kv.Value;
+            var npo = m.Child("npcspots");
+            if (npo != null)
+            {
+                bool any = false;
+                foreach (var kv in AtlasObs.ParseNpcSpots(npo, ref dropped, true, AtlasObs.MaxLodgeNpcSpotNpcs))
+                    if (npcSpots.ContainsKey(kv.Key) || npcSpots.Count < AtlasObs.MaxLodgeNpcSpotNpcs) { npcSpots[kv.Key] = kv.Value; any = true; }
+                if (any) NpcSpotsChanged++;
+            }
             var fno = m.Child("fieldnotes");
             if (fno != null)
             {
@@ -263,6 +274,8 @@ namespace ElansAddonHub.Lodge
             foreach (var kv in fieldNotes.OrderBy(k => k.Key)) fnc[kv.Key.ToString()] = AtlasObs.NoteLodgeNode(kv.Value);
             var eco = new Dictionary<string, object>();
             foreach (var kv in entrances.OrderBy(k => k.Key)) eco[kv.Key.ToString()] = AtlasObs.EntrancesNode(kv.Value, true);
+            var npc = new Dictionary<string, object>();
+            foreach (var kv in npcSpots.OrderBy(k => k.Key)) npc[kv.Key.ToString()] = AtlasObs.NpcSpotsNode(kv.Value, true);
             var fl = finds.Select(f =>
             {
                 var o = new Dictionary<string, object> { ["s"] = f.Seq, ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At, ["by"] = f.By ?? "" };
@@ -273,7 +286,7 @@ namespace ElansAddonHub.Lodge
             {
                 ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = Rev, ["at"] = Updated, ["full"] = true, ["seenMembers"] = SeenMembers,
                 ["kills"] = Counters(kills), ["objects"] = Counters(objects), ["fishing"] = Counters(fishing), ["vendors"] = vo, ["quests"] = qo, ["spawns"] = so, ["items"] = io, ["finds"] = fl,
-                ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso, ["fieldnotes"] = fnc, ["entrances"] = eco,
+                ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso, ["fieldnotes"] = fnc, ["entrances"] = eco, ["npcspots"] = npc,
             };
         }
 
@@ -350,6 +363,10 @@ namespace ElansAddonHub.Lodge
         public IReadOnlyList<AtlasObs.EntranceSpot> EntrancesOf(int instanceMapId) { return entrances.TryGetValue(instanceMapId, out var l) ? l : NoEntrances; }
         public IEnumerable<int> EntranceInstances => entrances.Keys;
         static readonly IReadOnlyList<AtlasObs.EntranceSpot> NoEntrances = new AtlasObs.EntranceSpot[0];
+        // where the lodge's members met, killed or saw an npc as a rare (most members first); empty when nobody shared one
+        public IReadOnlyList<AtlasObs.NpcSpot> NpcSpotsOf(int npcId) { return npcSpots.TryGetValue(npcId, out var l) ? l : NoNpcSpots; }
+        public IEnumerable<KeyValuePair<int, List<AtlasObs.NpcSpot>>> AllNpcSpots => npcSpots;
+        static readonly IReadOnlyList<AtlasObs.NpcSpot> NoNpcSpots = new AtlasObs.NpcSpot[0];
         // item details a member's client revealed (null: nobody has)
         public AtlasObs.Revealed Revealed(int itemId) { return revealed.TryGetValue(itemId, out var r) ? r : null; }
         public IEnumerable<AtlasObs.Revealed> AllRevealed => revealed.Values;
@@ -385,6 +402,7 @@ namespace ElansAddonHub.Lodge
         public bool SupportsAtlasFish { get; private set; }                   // the server also takes `fishspots` (feature "atlas4", server 2.21)
         public bool SupportsAtlasNotes { get; private set; }                  // the server also takes `fieldnotes` (feature "atlas5", server 2.23)
         public bool SupportsAtlasEntrances { get; private set; }              // the server also takes `entrances` (feature "atlas6", server 2.24)
+        public bool SupportsAtlasNpcSpots { get; private set; }               // the server also takes `npcspots` (feature "atlas8", server 2.26)
         public bool SupportsAtlasSeen { get; private set; }                   // the server also takes seenNpcs / seenObjects / seenQuests (feature "atlas2")
         public bool SupportsAtlasSeenDetails { get; private set; }            // ... with their verified details and the game build (feature "atlas7", server 2.25)
         public readonly LodgeAtlas AtlasData = new LodgeAtlas();
@@ -426,13 +444,14 @@ namespace ElansAddonHub.Lodge
             SupportsAtlasFish = SupportsAtlas && features.Contains("atlas4") && (v == null || v >= AtlasObs.FishSpotsServerVersion);
             SupportsAtlasNotes = SupportsAtlas && features.Contains("atlas5") && (v == null || v >= AtlasObs.NotesServerVersion);
             SupportsAtlasEntrances = SupportsAtlas && features.Contains("atlas6") && (v == null || v >= AtlasObs.EntrancesServerVersion);
+            SupportsAtlasNpcSpots = SupportsAtlas && features.Contains("atlas8") && (v == null || v >= AtlasObs.NpcSpotsServerVersion);
             atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasFetching = false;
         }
 
         void ResetAtlas()
         {
             SaveAtlasCache(true);
-            SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; SupportsAtlasFish = false; SupportsAtlasNotes = false; SupportsAtlasEntrances = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
+            SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; SupportsAtlasFish = false; SupportsAtlasNotes = false; SupportsAtlasEntrances = false; SupportsAtlasNpcSpots = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
             atlasLocal = null; atlasSent = null; atlasNextShare = DateTime.MinValue; atlasLastGet = DateTime.MinValue;
         }
 
@@ -530,7 +549,7 @@ namespace ElansAddonHub.Lodge
             IEnumerable<AtlasObs.Revealed> rev;
             try { rev = AtlasObs.RevealedSource?.Items()?.ToList() ?? new List<AtlasObs.Revealed>(); }
             catch (Exception e) { Util.Log("atlas: revealed items: " + e.GetType().Name); rev = new List<AtlasObs.Revealed>(); }
-            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes, SupportsAtlasFish, SupportsAtlasNotes, SupportsAtlasEntrances, SupportsAtlasSeenDetails);
+            var batch = AtlasObs.MakeBatch(atlasLocal, rev, AtlasSent(), SupportsAtlasSeen, SupportsAtlasNodes, SupportsAtlasFish, SupportsAtlasNotes, SupportsAtlasEntrances, SupportsAtlasSeenDetails, SupportsAtlasNpcSpots);
             atlasBacklog = batch != null;
             if (batch == null) return false;
             if (Clock() < atlasNextShare) return false;                                // the next slot is not here yet
