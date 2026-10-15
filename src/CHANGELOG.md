@@ -3,7 +3,7 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
-## Unreleased
+## 2.65.0
 - **Hunter Helper: the server's own word on what can be tamed.** The Outpost now hands the creature facts your game already stored (and your Lodge's members shared) to Elan's Hunter Helper through Elan's Hub's SharedData.lua, as a new `beasts` section: for every beast or creature with a pet family, whether hunters can tame it (the game's tameable flag), its family, whether it is a boss, and the game build the fact comes from; the name is added for tameable ones so the Beast Finder can list a beast its own data lacks. Hunter Helper then shows a beast Forever made untameable (Rorschak, Grinning Dog) as not tameable, and a tameable one its data missed becomes visible. Needs the game's creature cache (read as before) and works without a Lodge; the Lodge's records fill in what your own cache has not seen. Only ids, numbers and tameable names are written; the file stays under its size cap (the biggest parts are dropped first), and every other section is kept.
 
 ## 2.64.0
