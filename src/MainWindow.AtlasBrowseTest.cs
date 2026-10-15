@@ -410,6 +410,7 @@ namespace ElansAddonHub
                 Snapshot(Path.Combine(dir, "atlas-browse-herbs.png"));
                 Width = savedWidth; Height = h0; await Task.Delay(100);
 
+                await AtlasFindsStripTest(dir, Check);
                 // ============================================================================================================ 24 000 items
                 AllLayers(24000);
                 var sw = Stopwatch.StartNew();

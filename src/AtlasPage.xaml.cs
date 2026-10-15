@@ -352,6 +352,7 @@ namespace ElansAddonHub
         // the Lodge pool got a page while the start page is open: its cards (pool, recent finds) are drawn again when what they show changed
         public void PoolChanged()
         {
+            if (IsVisible && started && hosted == null && browse != null) { UpdateFindsStrip(); return; }
             if (!IsVisible || !started || hosted != null || !(IsStart || IsData)) return;
             if (Signature() != drawnSig) { if (IsData) DrawData(); else DrawStart(); }
         }
