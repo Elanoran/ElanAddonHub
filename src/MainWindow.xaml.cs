@@ -225,6 +225,8 @@ namespace ElansAddonHub
             : SelfUpdater.IsNewer(manifest.Hub) ? "Update available: v" + manifest.Hub.Version + (manifestPre ? " (test build)" : "")
             : IsTestBuild ? "Test build" : "Up to date";
         public Task CheckForUpdates() => CheckAll();
+        public Manifest ManifestForAbout => manifest;                                          // Settings > About > What's new: newer version, addon notes
+        public System.Collections.Generic.IEnumerable<AddonCard> CardsForAbout => cards;       // ... and the installed addon versions
         public void CardArtChanged() { AddonCard.Painted = settings.PaintedArt; foreach (var c in cards) c.RefreshArt(); }
         public void AutoUpdateTurnedOn() => _ = AfterCheck();
 
@@ -456,6 +458,7 @@ namespace ElansAddonHub
             if (Begin("atlasclasses")) { result += "\r\n" + await AtlasClassesTest(dir); End(); }
             if (Begin("zonelore")) { result += "\r\n" + await ZoneLoreTest(dir); End(); }
             await RealSec("zonelorereal", ZoneLoreRealTest);
+            if (Begin("about")) { result += "\r\n" + await AboutTest(dir); End(); }
             if (Begin("art")) { result += "\r\n" + await ArtTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
             if (Begin("coldstart")) { result += "\r\n" + await ColdStartTest(dir); End(); }

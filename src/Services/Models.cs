@@ -192,5 +192,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "lastOtherCount")] public int? LastOtherCount { get; set; }
         // the Addons page as a "grid" (cards side by side as the width allows, the default) or a "list" (one column)
         [DataMember(Name = "addonsView")] public string AddonsView { get; set; }
+        // the version the one-time "What's new in x.y.z" note was shown for (Settings > About > What's new); null = never
+        [DataMember(Name = "whatsNewSeen")] public string WhatsNewSeen { get; set; }
     }
 }

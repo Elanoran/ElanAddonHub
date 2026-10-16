@@ -1,7 +1,14 @@
 # Elan's Outpost changelog
 
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
-Keep one `## x.y.z` section per hub version.
+Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
+
+## 2.77.0
+- **What's new, inside the Outpost.** Settings > About has a new **What's new** tab with the changes of every version, newest first: the version you run is marked "This version", and when a newer one is ready it says so. The notes of Elan's Hub and of the other addons are there too (pick one at the top), with the version you have installed marked.
+- **A short note after an update.** The first time the Outpost starts after an update, a small card in the corner says what's new in that version, with a button to the full notes. It shows once per version and never on a new install.
+- **View the log.** Settings > About > **View log** opens the Outpost's log in a window that reads like code: times dimmed, errors in red, warnings in amber, error names and their details picked out. Search it, show only warnings or only errors, copy lines, or open the folder. New lines appear while it is open.
+- **Personal details stay out of the log view.** Your Windows user folder is shown as %USERPROFILE%, and your user and PC name, WoW account names, e-mail and IP addresses are hidden (each hidden bit is marked). Copy copies the cleaned text, so you can paste it into a bug report as it is. The log file itself is not changed.
+- **About is tidier.** The campfire picture is centred, the buttons sit under it, and the line about World of Warcraft being a Blizzard trademark fits on one line when the window is wide enough.
 
 ## 2.76.0
 - **Atlas Home is about you now.** When you play, Home opens with where you are: "You are in Durotar" on the zone's painting, your character with level and class, the first line of the zone's notes, and whether the zone fits your level ("Good for your level", "A bit high for you", "Low for you, little XP"). Small tags show what Elan's Hub sees right now: in combat, resting, grouped, in a dungeon. Your XP bar and a Rested tag sit below. Click it to open the zone (or the dungeon you are in).

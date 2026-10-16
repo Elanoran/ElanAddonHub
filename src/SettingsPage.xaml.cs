@@ -234,12 +234,13 @@ namespace ElansAddonHub
             SecAbout.IsVisibleChanged += (s, e) => SecHost.MaxWidth = SecAbout.IsVisible ? 1040 : 680;   // About is wider: the credits fit on one line each
             Loaded += (s, e) => { var w = Window.GetWindow(this); if (w != null) w.StateChanged += (s2, e2) => AboutRun(); };
             UpdateAbout();
+            InitWhatsNewNote();
         }
 
         void AboutRun()
         {
             var w = Window.GetWindow(this);
-            var on = SecAbout.IsVisible && IsVisible && (w == null || w.WindowState != WindowState.Minimized) && !AboutStill;
+            var on = SecAbout.IsVisible && AboutPaneAbout.Visibility == Visibility.Visible && IsVisible && (w == null || w.WindowState != WindowState.Minimized) && !AboutStill;
             if (on && !aboutTimer.IsEnabled) { aboutClock.Restart(); UpdateAbout(); aboutTimer.Start(); }
             else if (!on && aboutTimer.IsEnabled) { aboutTimer.Stop(); aboutClock.Stop(); }
             if (AboutStill && SecAbout.IsVisible) { UpdateAbout(); aboutScene.Update(3.0); }
@@ -288,6 +289,7 @@ namespace ElansAddonHub
             if (NavProfile.IsChecked == true) ProfileEnter();
             UpdateProfileBar();
             UpdateAbout();
+            if (NavAbout.IsChecked == true && AboutPaneNews.Visibility == Visibility.Visible) FillNews();   // the update check may have brought a newer version or addon notes
             if (NavGm.IsChecked == true)
             {
                 GmStatus.Text = "";
@@ -967,7 +969,6 @@ namespace ElansAddonHub
 
         // ================================================================ about
 
-        void LogFolder_Click(object sender, RoutedEventArgs e) => OpenFolder(Util.DataDir);
         public Action<string> OpenWebLink;   // set by the window: links open in the Outpost's browser (the system browser when it cannot run)
 
         void Link_Navigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)

@@ -121,6 +121,25 @@ mix even though WoW saves both into the same file.
 - Readers ignore unknown fields, so an older Outpost keeps working with an addon that only added fields.
 - Every schema lives in **Schemas** below with its version history. Change the doc in the same commit.
 
+## The Outpost's own changelog and log (Outpost 2.77)
+
+- **What's new** (Settings > About, `Services/Changelog.cs`): `src/CHANGELOG.md` and `addon/ElansHub/CHANGELOG.txt` are
+  `EmbeddedResource`s (`Changelog.outpost.md`, `Changelog.companion.txt`), so every build shows its own notes. The parser is the
+  same rule as release.py's `hub_changelog()` (`## x.y.z` sections of `- ` lines), plus an optional date in the header
+  (`## 2.77.0 - 2026-10-16`) and indented continuation lines. The other addons' notes come from the update manifest
+  (`AddonInfo.Changelog`). Both files are public (they become the GitHub release notes): `Changelog.PrivacyProblems` (user
+  folders, local paths, WoW account folders, e-mails, IPs other than loopback, tokens, secrets, links with credentials or to
+  home-network hosts) must find nothing; the `about` self-test enforces it, and `src/CHANGELOG.md` maps to that section.
+- **One-time note**: `Settings.WhatsNewSeen` = the version the note was shown for. Shown when the Outpost is newer than it (or
+  it is unset on an existing install); a first start (`SettingsStore.Fresh`) only records the version. Never in a self-test.
+- **Log viewer** (`LogViewerWindow.cs`, model in `Services/LogView.cs`): reads `hub.log` (`Util.Log`, `yyyy-MM-dd HH:mm:ss  text`,
+  rewritten from empty past 512 KB) with `FileShare.ReadWrite | Delete`, then polls its length every 0.8 s (grown = read the
+  new bytes, a half-written last line waits; shorter = read again). There is no level column: `LogParser.LevelOf` reads it from
+  the words (error / warning / info; counts of 0 are not trouble); lines without a time continue the entry above (stacks, in
+  any Windows language), and an exception under a plain line raises the whole entry to Error. `LogRedactor` hides the user
+  folder (`%USERPROFILE%`), the Windows user and PC names, `WTF\Account\<account>`, e-mails, IPs and token-like values before
+  anything is shown, searched or copied; the file itself is never changed.
+
 ## Rules
 
 - **Never collect:** chat text, mail contents, other players' data beyond what the user's own group
