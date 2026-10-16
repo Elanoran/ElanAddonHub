@@ -30,7 +30,7 @@ namespace ElansAddonHub
         {
             ResetEntity(); startInfo = null;
             classBook = null; classGroups = null; classShown.Clear();
-            tileGrids.Clear(); tileCaptions.Clear(); presetHost = null; presetLabel = null;
+            tileGrids.Clear(); tileCaptions.Clear(); presetHost = null; presetLabel = null; presetWrap = null; homeChips.Clear();
             classicBanner = null; classicOffer = null; classicCard = null; classicBody = null;
             ClassicBannerGetForTest = ClassicBannerNotNowForTest = null; ClassicBannerProgressForTest = null;
             ClassicPrimaryForTest = ClassicCancelForTest = ClassicRemoveForTest = null;
@@ -220,7 +220,7 @@ namespace ElansAddonHub
 
         FrameworkElement BrowseBlock()
         {
-            tileCaptions.Clear(); artCards.Clear();
+            tileCaptions.Clear(); categoryTiles.Clear();
             var sp = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
             sp.Children.Add(SectionHead("Browse"));
             var cats = AtlasCategories.Visible;
@@ -247,7 +247,9 @@ namespace ElansAddonHub
             return sp;
         }
 
-        FrameworkElement CategoryCard(string title, string glyph, string openId, string tip, string caption, string countFor, string artKey = null)
+        // a category tile: its line icon (AtlasIcons) on a small tile, the name (two lines when it is long) and the count or a few words. No painted art since 2.71:
+        // the paintings are the browse pages' banners now (ArtLibrary.Banners).
+        FrameworkElement CategoryCard(string title, string glyph, string openId, string tip, string caption, string countFor, string iconKey = null)
         {
             var tile = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(12, 8, 12, 8), MinHeight = 64, Margin = new Thickness(0, 0, 8, 8), Tag = openId, Focusable = false, Cursor = Cursors.Hand, ToolTip = tip };
             tile.SetResourceReference(Control.BackgroundProperty, "Brush.Surface1");
@@ -257,48 +259,24 @@ namespace ElansAddonHub
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var it = new AtlasNavItem { Title = title, Glyph = glyph };
+            var it = new AtlasNavItem { Title = title, Glyph = glyph, Icon = iconKey ?? "" };
             var ic = IconTile(it, 40, 20); ic.Margin = new Thickness(0, 0, 12, 0);
             g.Children.Add(ic);
             var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            col.Children.Add(Tb(title, "Text.RowTitle"));
+            var name = Tb(title, "Text.RowTitle"); name.TextWrapping = TextWrapping.Wrap;
+            col.Children.Add(name);
             var cap = Tb(caption, "Text.Caption"); cap.TextTrimming = TextTrimming.CharacterEllipsis;
             col.Children.Add(cap);
             if (countFor != null) tileCaptions[countFor] = cap;
             Grid.SetColumn(col, 1); g.Children.Add(col);
             tile.Content = g;
-            var art = ArtLibrary.Category(artKey);
-            var back = art == null ? null : ArtLibrary.Backdrop(art, "Brush.Art.CardVeil", (CornerRadius)FindResource("Radius.Control"), "card-art");
-            if (back != null)
-            {
-                // painted card: the art fills the whole tile under a veil that is darkest behind the text; a slow-enough zoom on hover (Motion.Fast, ease-out)
-                tile.Content = null;
-                tile.Padding = new Thickness(0);
-                g.Margin = new Thickness(12, 8, 12, 8);
-                var layers = new Grid();
-                layers.Children.Add(back); layers.Children.Add(g);
-                tile.Content = layers;
-                artCards[artKey] = tile;
-                if (((Grid)back).Children[0] is Border pic && pic.Background is ImageBrush brush)
-                {
-                    var zoom = new ScaleTransform(1, 1, 0.5, 0.5);
-                    brush.RelativeTransform = zoom;
-                    void To(double s)
-                    {
-                        if (!Motion.Enabled) { zoom.ScaleX = zoom.ScaleY = s; return; }
-                        var a = new System.Windows.Media.Animation.DoubleAnimation(s, Motion.Fast) { EasingFunction = s > 1 ? Motion.EaseOut : Motion.EaseIn };
-                        zoom.BeginAnimation(ScaleTransform.ScaleXProperty, a); zoom.BeginAnimation(ScaleTransform.ScaleYProperty, a);
-                    }
-                    tile.MouseEnter += (s, e) => To(1.04);
-                    tile.MouseLeave += (s, e) => To(1);
-                }
-            }
+            if (!string.IsNullOrEmpty(iconKey)) categoryTiles[iconKey] = tile;
             return tile;
         }
 
-        // the category cards that carry painted art (ArtLibrary.Categories), by category id
-        readonly Dictionary<string, FrameworkElement> artCards = new Dictionary<string, FrameworkElement>(StringComparer.OrdinalIgnoreCase);
-        public IReadOnlyDictionary<string, FrameworkElement> ArtCardsForTest => artCards;
+        // the category tiles of Home, by category id ("finds" for the Lodge's finds)
+        readonly Dictionary<string, FrameworkElement> categoryTiles = new Dictionary<string, FrameworkElement>(StringComparer.OrdinalIgnoreCase);
+        public IReadOnlyDictionary<string, FrameworkElement> CategoryTilesForTest => categoryTiles;
 
         // counts on the cards and the shortcuts that the data can answer, worked out off the UI thread (the first time they build the category indexes)
         Task FillBrowseBlock()
@@ -319,33 +297,124 @@ namespace ElansAddonHub
                     });
                     if (gen != startGen) return;
                 }
-                var presets = AtlasBrowse.Presets();
-                var me = AtlasQuery.Characters().FirstOrDefault();
+                var chars = AtlasQuery.Characters();
+                var me = AtlasBrowse.ChosenCharacter(chars, navSettings?.AtlasHomeChar);
+                var presets = AtlasBrowse.Presets(me);
                 await Dispatcher.InvokeAsync(() =>
                 {
                     if (gen != startGen || host != presetHost) return;
                     navSig = ""; BuildNav();                      // the nav shows the counts that are known now
-                    host.Children.Clear();
+                    host.Children.Clear(); homeChips.Clear(); presetWrap = null;
                     if (presets.Count == 0)
                     {
                         host.Children.Add(Tb(ClassicBaselineText(), "Text.Caption", Res("Brush.Text.Tertiary"), 4));
                         return;
                     }
-                    presetLabel = Tb(me == null ? "Where to get things" : "For " + me.Name, "Text.Section"); presetLabel.Margin = new Thickness(0, 0, 0, 8);
+                    presetLabel = Tb(me == null ? "Where to get things" : "Recommended for", "Text.Section"); presetLabel.Margin = new Thickness(0, 0, 0, 8);
                     host.Children.Add(presetLabel);
-                    var w = new WrapPanel { Margin = new Thickness(0, 0, 0, 0) };
-                    foreach (var p in presets)
-                    {
-                        var id = p.Id;
-                        var b = GhostButton(p.Title, () => { _ = Open(id); }, p.Tip + " (" + AtlasFormat.Count(p.Count, "match", "matches") + ")");
-                        b.Margin = new Thickness(0, 0, 8, 8);
-                        w.Children.Add(b);
-                    }
-                    host.Children.Add(w);
+                    if (me != null) host.Children.Add(CharChips(chars, me));
+                    presetWrap = new WrapPanel();
+                    homeChar = me;
+                    FillPresets(presets);
+                    host.Children.Add(presetWrap);
                     if (!Services.Atlas.Classic.ClassicAtlas.IsReady) host.Children.Add(Tb(ClassicBaselineText(), "Text.Caption", Res("Brush.Text.Tertiary"), 0));
                     host.Margin = new Thickness(0, 12, 0, 24);
                 });
             });
+        }
+
+        // ---- "Recommended for": the characters as chips (portrait with the class colour, name, level), the shortcuts below are worked out for the selected one.
+        // The choice is kept in the settings (AtlasHomeChar); a character that is gone (or hidden) falls back to the one played last.
+        readonly Dictionary<string, ContentControl> homeChips = new Dictionary<string, ContentControl>(StringComparer.OrdinalIgnoreCase);
+        WrapPanel presetWrap;
+        InvChar homeChar;
+        Task homeCharFill = Task.CompletedTask;
+        public IReadOnlyList<string> HomeCharChipsForTest => homeChips.Keys.ToList();
+        public string HomeCharForTest => homeChar?.Key;
+        public IReadOnlyList<string> PresetIdsForTest => presetWrap == null ? new List<string>() : presetWrap.Children.OfType<Button>().Select(b => b.Tag as string ?? "").ToList();
+        public IReadOnlyList<string> HomeCharChipTextsForTest(string key) => homeChips.TryGetValue(key, out var c) ? AtlasWalk(c).OfType<TextBlock>().Select(t => t.Text).ToList() : new List<string>();
+        public bool HomeCharChipSelectedForTest(string key) => homeChips.TryGetValue(key, out var c) && c.Tag as string == "char|" + key + "|on";
+        public Task SelectHomeCharForTest(string key) { SelectHomeChar(key); return homeCharFill; }
+
+        FrameworkElement CharChips(List<InvChar> chars, InvChar sel)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            foreach (var c in chars)
+            {
+                var key = c.Key;
+                var chip = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(4, 4, 12, 4), Margin = new Thickness(0, 0, 8, 0), Cursor = Cursors.Hand };
+                System.Windows.Automation.AutomationProperties.SetName(chip, c.Name + ", level " + c.Level);
+                chip.ToolTip = c.Name + (string.IsNullOrEmpty(c.Realm) ? "" : " - " + c.Realm) + ", level " + c.Level;
+                var g = new StackPanel { Orientation = Orientation.Horizontal };
+                // the portrait inside a ring (an avatar is a circle): the ring is the accent on the selected character
+                var pic = new Grid { Width = 40, Height = 40, VerticalAlignment = VerticalAlignment.Center };
+                pic.Children.Add(new System.Windows.Shapes.Ellipse { StrokeThickness = 2, Stroke = Brushes.Transparent, Tag = "ring" });
+                var portrait = InventoryPage.PortraitOf(c, 32); portrait.HorizontalAlignment = HorizontalAlignment.Center; portrait.VerticalAlignment = VerticalAlignment.Center;
+                pic.Children.Add(portrait);
+                g.Children.Add(pic);
+                var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+                var name = Tb(c.Name, "Text.RowTitle", InventoryPage.ClassBrushOf(c.Class));
+                col.Children.Add(name);
+                col.Children.Add(Tb("Level " + c.Level, "Text.Caption"));
+                g.Children.Add(col);
+                chip.Content = g;
+                chip.MouseLeftButtonUp += (s, e) => { e.Handled = true; SelectHomeChar(key); };
+                Keyable(chip, () => SelectHomeChar(key), false);
+                homeChips[key] = chip;
+                row.Children.Add(chip);
+            }
+            MarkHomeChip(sel?.Key);
+            var sv = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = row, Margin = new Thickness(0, 0, 0, 12), Focusable = false, Tag = "home-chars" };
+            sv.PreviewMouseWheel += (s, e) => { if (sv.ScrollableWidth <= 0) return; e.Handled = true; sv.ScrollToHorizontalOffset(sv.HorizontalOffset - e.Delta); };
+            return sv;
+        }
+
+        void MarkHomeChip(string key)
+        {
+            foreach (var kv in homeChips)
+            {
+                bool on = string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase);
+                var chip = kv.Value;
+                chip.Tag = "char|" + kv.Key + (on ? "|on" : "|off");
+                if (on) chip.SetResourceReference(Control.BackgroundProperty, "Brush.Accent.Tint"); else chip.ClearValue(Control.BackgroundProperty);
+                if (chip.Content is StackPanel sp && sp.Children.Count > 0 && sp.Children[0] is Grid pic && pic.Children[0] is System.Windows.Shapes.Ellipse ring)
+                {
+                    if (on) ring.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Brush.Accent"); else ring.Stroke = Brushes.Transparent;
+                }
+            }
+        }
+
+        void SelectHomeChar(string key)
+        {
+            var chars = AtlasQuery.Characters();
+            var c = chars.FirstOrDefault(x => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (c == null || presetWrap == null) return;
+            homeChar = c;
+            MarkHomeChip(c.Key);
+            if (navSettings != null && navSettings.AtlasHomeChar != c.Key)
+            {
+                navSettings.AtlasHomeChar = c.Key;
+                if (navSave != null) { navSaveTimer.Stop(); navSaveTimer.Start(); }
+            }
+            var wrap = presetWrap;
+            homeCharFill = Task.Run(async () =>
+            {
+                var presets = AtlasBrowse.Presets(c);
+                await Dispatcher.InvokeAsync(() => { if (wrap == presetWrap && homeChar == c) FillPresets(presets); });
+            });
+        }
+
+        void FillPresets(List<BrowsePreset> presets)
+        {
+            if (presetWrap == null) return;
+            presetWrap.Children.Clear();
+            foreach (var p in presets)
+            {
+                var id = p.Id;
+                var b = GhostButton(p.Title, () => { _ = Open(id); }, p.Tip + " (" + AtlasFormat.Count(p.Count, "match", "matches") + ")");
+                b.Margin = new Thickness(0, 0, 8, 8); b.Tag = id;
+                presetWrap.Children.Add(b);
+            }
         }
 
         static string ClassicBaselineText() => Services.Atlas.Classic.ClassicAtlas.IsReady ? "" : "Download the Classic baseline (above or on the Data sources page) for drop, vendor and spawn sources: more shortcuts appear when the data can answer them.";

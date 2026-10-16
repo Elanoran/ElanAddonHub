@@ -27,10 +27,18 @@ namespace ElansAddonHub.Services.Atlas
 
         // The presets the data can answer right now: one that would list nothing is left out (no vendor data = no "vendor items" button).
         // Runs on a worker thread (it builds the indexes the first time).
-        public static List<BrowsePreset> Presets()
+        public static List<BrowsePreset> Presets() => Presets(DefaultCharacter(AtlasQuery.Characters()));
+
+        // the character Atlas Home recommends for when nothing else is chosen: the one played last (saved last), the highest level on a tie
+        public static InvChar DefaultCharacter(IList<InvChar> chars) => chars == null ? null : chars.OrderByDescending(c => c.Updated).ThenByDescending(c => c.Level).FirstOrDefault();
+
+        // the chosen character (its key) while it is still there, else the default
+        public static InvChar ChosenCharacter(IList<InvChar> chars, string key) => chars?.FirstOrDefault(c => !string.IsNullOrEmpty(key) && string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase)) ?? DefaultCharacter(chars);
+
+        // the shortcuts for one character (me = null: the ones that need no character): its level and class pick the vendor items and quest rewards, its professions the recipes
+        public static List<BrowsePreset> Presets(InvChar me)
         {
             var list = new List<BrowsePreset>();
-            var me = AtlasQuery.Characters().FirstOrDefault();
             void Add(string title, string tip, string id)
             {
                 if (!BrowseQuery.TryParse(id, out var q)) return;
@@ -44,7 +52,8 @@ namespace ElansAddonHub.Services.Atlas
             Add(me == null ? "Quest rewards" : "Quest rewards for my level", "Items quests give" + who, "browse:items?how=quest&sort=level" + my);
             Add("Bags and containers", "Every bag, quiver and pouch in your game data", "browse:items/containers?sort=quality");
             Add("Recipes sold by vendors", "Recipe items a vendor sells (the patterns, plans and formulae)", "browse:items/recipes?how=vendor");
-            Add("Recipes you can learn", "Recipes of your characters' professions that they have not learned yet and have the skill for (needs the profession windows read by Elan's Hub)", "browse:recipes?learn=can");
+            Add("Recipes you can learn", me == null ? "Recipes of your characters' professions that they have not learned yet and have the skill for (needs the profession windows read by Elan's Hub)"
+                : "Recipes of " + me.Name + "'s professions not learned yet that " + me.Name + " has the skill for (needs the profession windows read by Elan's Hub)", "browse:recipes?learn=can" + (me == null ? "" : "&for=" + Uri.EscapeDataString(me.Key)));
             Add("Crafted items", "Items a profession makes, with the skill they need", "browse:items?how=crafted&sort=ilvl");
             Add("Caught by fishing", "Items from fishing holes and open water", "browse:items?how=fishing");
             Add("Best drops seen by the Lodge", "What members saw drop, best chance first", "browse:items?how=drop&src=lodge&sort=chance");

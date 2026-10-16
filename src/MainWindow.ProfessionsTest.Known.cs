@@ -250,9 +250,11 @@ namespace ElansAddonHub
                     !can.NotFound && can.Rows.Select(r => r.Title).OrderBy(x => x).SequenceEqual(new[] { "Faction Banner", "Linen Cloak", "Plain Thing", "Rare Cape", "Robe of Testing" }), string.Join(",", can.Rows.Select(r => r.Title)));
                 Check("browse: the id keeps the filter (learn=can), it counts as a filter to clear, and the control is offered", can.Query.Learn == "can" && can.Id == "browse:recipes?learn=can" && can.Query.HasFilters && can.Controls.Learn);
                 Check("browse: all recipes are still listed without it (8 of Tailoring + Cooking's 7 + the class skill's, from the data)", AtlasBrowse.Run("browse:recipes").Total > can.Total);
-                var pre = AtlasBrowse.Presets();
+                var pre = AtlasBrowse.Presets(bobInv);
                 var pr = pre.FirstOrDefault(p => p.Title == "Recipes you can learn");
-                Check("browse: the preset 'Recipes you can learn' is offered with its count", pr != null && pr.Count == 5 && pr.Id == "browse:recipes?learn=can", pr == null ? "none: " + string.Join(",", pre.Select(p => p.Title)) : pr.Count.ToString());
+                Check("browse: the preset 'Recipes you can learn' is offered with its count, for the character it is worked out for (Bob: for=Realm-Bob)", pr != null && pr.Count == 5 && pr.Id == "browse:recipes?for=Realm-Bob&learn=can", pr == null ? "none: " + string.Join(",", pre.Select(p => p.Title)) : pr.Count + " " + pr.Id);
+                Check("browse: for Alice (never read) the same shortcut is left out; the list for=Realm-Alice is empty while Bob's has his five",
+                    !AtlasBrowse.Presets(aliceInv).Any(p => p.Title == "Recipes you can learn") && AtlasBrowse.Run("browse:recipes?learn=can&for=Realm-Alice").Total == 0 && AtlasBrowse.Run("browse:recipes?learn=can&for=Realm-Bob").Total == 5);
                 list.Clear(); list.Add(aliceInv);
                 AtlasBrowse.ForgetForTest();
                 Check("browse: without any read (Alice only) the preset is left out, the list is empty and its note says to open the profession windows",

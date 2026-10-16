@@ -71,6 +71,8 @@ namespace ElansAddonHub
             }
             var col = new StackPanel();
             Body.Children.Add(col);
+            bannerEl = BrowseHero(r);
+            if (bannerEl != null) col.Children.Add(bannerEl);
             findsStrip = null; findsStripBox = null;
             if (IsFindsPage) { var fsb = FindsStripBlock(); if (fsb != null) col.Children.Add(fsb); }
             if (r.Children.Count > 0) col.Children.Add(ChildChips(r));
@@ -275,6 +277,43 @@ namespace ElansAddonHub
             Navigated?.Invoke(r.Id);
             UpdateNav();
             SizeBrowseList();
+        }
+
+        // the category of a browse page as the art and the icons know it: "finds" for the Lodge's finds, else the category id
+        string BrowseArtKey(BrowseResult r) => IsFindsPage ? AtlasNav.FindsKey : r.Query.Cat ?? "";
+
+        // A category with a painting (ArtLibrary.Banners) opens its browse pages with a banner like a zone page's: the picture across the full width, 176 high,
+        // running on behind a see-through header card (the category's icon, the page title, a line about it) and fading into the page. Null = no art (as before).
+        FrameworkElement BrowseHero(BrowseResult r)
+        {
+            var key = BrowseArtKey(r);
+            var art = ArtLibrary.Banner(key);
+            var back = art == null ? null : ArtLibrary.Backdrop(art, "Brush.Art.HeroFade", (CornerRadius)FindResource("Radius.Card"), "browse-banner-art");
+            if (back == null) return null;
+            var head = new Grid();
+            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var tile = new Border { Width = 56, Height = 56, CornerRadius = (CornerRadius)FindResource("Radius.Card"), Margin = new Thickness(0, 0, 16, 0), VerticalAlignment = VerticalAlignment.Center, Tag = "browse-banner-icon" };
+            tile.SetResourceReference(Border.BackgroundProperty, "Brush.Surface2");
+            tile.Child = AtlasIcons.Make(key, 32, "Brush.Text.Primary");
+            head.Children.Add(tile);
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            var name = Tb(r.Title, "Text.Title"); name.TextTrimming = TextTrimming.CharacterEllipsis; name.ToolTip = r.Title;
+            text.Children.Add(name);
+            var cat = AtlasCategories.Find(r.Query.Cat);
+            var line = IsFindsPage ? "What the Lodge's members found and saw drop" : !string.IsNullOrEmpty(r.Subtitle) ? r.Subtitle : cat?.Blurb ?? "";
+            if (line.Length > 0) { var s = Tb(line, "Text.Secondary", null, 2); s.TextTrimming = TextTrimming.CharacterEllipsis; text.Children.Add(s); }
+            Grid.SetColumn(text, 1); head.Children.Add(text);
+            var card = Card(head, 0);
+            card.SetResourceReference(Border.BackgroundProperty, "Brush.Art.HeroCard");
+            var g = new Grid { Tag = "browse-banner|" + key, Margin = new Thickness(0, 0, 0, 12) };
+            g.Children.Add(back);
+            var stack = new StackPanel();
+            stack.Children.Add(new Border { Height = BannerHeight - 48, IsHitTestVisible = false });
+            stack.Children.Add(card);
+            g.Children.Add(stack);
+            System.Windows.Automation.AutomationProperties.SetName(back, "Painting of " + (cat?.Title ?? r.Title));
+            return g;
         }
 
         // ============================================================================================================================ a hosted category

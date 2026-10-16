@@ -16,6 +16,7 @@ namespace ElansAddonHub.Services.Atlas
     public sealed class AtlasNavEntry
     {
         public string Key = "", Title = "", Glyph = "", Group = "", OpenId = "", Blurb = "";
+        public string Icon = "";                                  // the AtlasIcons drawing (a category id); "" = the glyph
         public int Order;
         public bool Extra;                                        // not a registry category (the Lodge's finds)
         public List<AtlasCategory> Members = new List<AtlasCategory>();
@@ -26,6 +27,7 @@ namespace ElansAddonHub.Services.Atlas
     public sealed class AtlasNavItem
     {
         public string Id = "", Title = "", Detail = "", Glyph = "", Kind = "";
+        public string Icon = "";                // a category page: its AtlasIcons drawing (the category id); "" = the glyph
         public int Quality = -1, IconId;
     }
 
@@ -73,12 +75,12 @@ namespace ElansAddonHub.Services.Atlas
                 var main = e.Members.FirstOrDefault(m => m.NavPrimary) ?? first;
                 e.Order = first.Order;
                 e.Title = e.Members.Select(m => m.NavTitle).FirstOrDefault(t => !string.IsNullOrEmpty(t)) ?? main.Title;
-                e.Glyph = main.Glyph; e.Blurb = main.Blurb; e.OpenId = main.OpenId;
+                e.Glyph = main.Glyph; e.Blurb = main.Blurb; e.OpenId = main.OpenId; e.Icon = main.Id;
             }
             bool lodge = false;
             try { lodge = AtlasQuery.LodgeHasData(); } catch (Exception) { }
             if (lodge && AtlasCategories.Find("items") != null)
-                res.Add(new AtlasNavEntry { Key = FindsKey, Title = "Finds", Glyph = "", Group = Lodge, OpenId = FindsId, Order = 1000, Extra = true, Blurb = "What the Lodge's members found and saw drop" });
+                res.Add(new AtlasNavEntry { Key = FindsKey, Title = "Finds", Glyph = "", Group = Lodge, OpenId = FindsId, Order = 1000, Extra = true, Icon = FindsKey, Blurb = "What the Lodge's members found and saw drop" });
             return res.OrderBy(e => Array.IndexOf(Groups, e.Group) < 0 ? 99 : Array.IndexOf(Groups, e.Group)).ThenBy(e => e.Order).ThenBy(e => e.Title, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
@@ -164,13 +166,13 @@ namespace ElansAddonHub.Services.Atlas
                 var c = AtlasCategories.Find(q.Cat);
                 var title = (c?.Title ?? Pretty(q.Cat)) + (q.Path.Count > 0 ? " · " + Pretty(q.Path[q.Path.Count - 1]) : "");
                 if (q.HasFilters) title += " (filtered)";
-                return new AtlasNavItem { Id = id, Title = title, Detail = "List", Glyph = c?.Glyph ?? "", Kind = "browse" };
+                return new AtlasNavItem { Id = id, Title = title, Detail = "List", Glyph = c?.Glyph ?? "", Kind = "browse", Icon = KeyFor(id) == FindsKey ? FindsKey : c?.Id ?? "" };
             }
             if (AtlasCategories.TryHosted(id, out var hc, out var sub))
             {
                 string last = "";
                 try { last = hc.SubTitle?.Invoke(sub) ?? ""; } catch (Exception) { }
-                return new AtlasNavItem { Id = id, Title = hc.Title + (last.Length > 0 ? " · " + last : ""), Detail = "Page", Glyph = hc.Glyph, Kind = "page" };
+                return new AtlasNavItem { Id = id, Title = hc.Title + (last.Length > 0 ? " · " + last : ""), Detail = "Page", Glyph = hc.Glyph, Kind = "page", Icon = hc.Id };
             }
             if (AtlasIds.TryParse(id, out var kind, out var n))
             {

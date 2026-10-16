@@ -10,7 +10,7 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>2.70.1</Version>
+    <Version>2.71.0</Version>
     <!-- a 64-bit process on 64-bit Windows: the world map builders need more than the 32-bit address space (WebView2Loader is picked per architecture) -->
     <Prefer32Bit>false</Prefer32Bit>
     <PlatformTarget>AnyCPU</PlatformTarget>      <!-- the SDK would pick x86 for a .NET Framework exe -->
@@ -33,7 +33,7 @@
     <Resource Include="Assets\logo-ehh.png" />
     <Resource Include="Assets\logo-hubaddon.png" />
     <Resource Include="Assets\logo-paladin.png" Condition="Exists('Assets\logo-paladin.png')" />
-    <!-- painted art (ArtLibrary.cs): window background, zone banners, Atlas category cards, talent spec backgrounds -->
+    <!-- painted art (ArtLibrary.cs): zone banners, category browse banners, talent spec backgrounds -->
     <Resource Include="Assets\Art\*.jpg" />
   </ItemGroup>
 
