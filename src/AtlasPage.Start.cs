@@ -534,6 +534,7 @@ namespace ElansAddonHub
                 var from = kind == "npc" ? AtlasQuery.NpcName(sid) : kind == "obj" ? AtlasQuery.ObjectName(sid) : kind == "vendor" ? "bought from " + AtlasQuery.NpcName(sid) : kind == "quest" ? "quest " + AtlasQuery.QuestTitle(sid) : kind == "fish" ? "fishing" : "";
                 r.Detail = (string.IsNullOrEmpty(f.By) ? "a member" : f.By) + " · " + f.Count + "× " + (from.Length > 0 ? "from " + from + " " : "") + (f.Zone > 0 ? "· " + AtlasQuery.ZoneName(f.Zone) : "");
                 r.Right = AtlasFormat.Ago(f.At, AtlasQuery.Context.NowUtc());
+                if (FindVersions.IsOlder(f.Build)) r.Extra = FindVersions.Text(f.Build);   // only an older game version is worth a line here
                 rows.Add(r);
             }
             return new ContentControl { Margin = new Thickness(-8, 8, -8, 0), Focusable = false, Content = new ItemsControl { ItemsSource = rows, ItemTemplate = (DataTemplate)FindResource("AtlasRowTemplate"), Focusable = false } };

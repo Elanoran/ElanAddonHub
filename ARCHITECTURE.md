@@ -244,7 +244,21 @@ ItemArmorQuality 2935AA9D, ItemArmorShield 7E6C94F9, ArmorLocation FB67352F, Ite
 - **Indexes** (`AtlasBrowse.Index.cs`): one `BIndex` per category (entries with everything the filters and sorts need, plus a tree of `BNode`s with absolute predicates), built lazily on the worker thread that runs
   `AtlasBrowse.Run(id)`, cached, and rebuilt when any layer underneath is another object or the Lodge pool moved on (`Token()`). Item sub-categories are made from the client's class and subclass names
   (`ItemNames`); only classes that have items appear. "How to get it" per item is worked out at index time from the Lodge (`Drops/Vendors/QuestsRewarding`), the Classic baseline (`SourcesOf`; herb / ore / chest / fishing
-  objects are told apart by what they give), and `SpellData.RecipesProducing`. Usable-by-character is `ItemProficiency` (classic class tables, mail / plate at 40) plus the required level.
+  objects are told apart by `ObjectKinds`, see below), and `SpellData.RecipesProducing`. Usable-by-character is `ItemProficiency` (classic class tables, mail / plate at 40) plus the required level.
+- **Object kinds** (`Services/Atlas/ObjectKinds.cs`, pure, 2.77): herbs | ore | chests | fishing | other for the Objects lists, the world map's node layers, the gathering guide and an item's
+  "Gathered / Container" source. Evidence in this order: type 25 = fishing; the object's Lock (client cache / Lodge `SeenView.LockOf`, else the Classic baseline's `data0` for chests,
+  quest givers and goobers) read through the game's `Lock.db2` (`WorldLookups.Locks`): Herbalism or Mining with a level above 0 = herb / ore; any other known lock (Pick Lock, Open,
+  Herbalism 0 = a quest object anyone can gather) is never herb or ore - a chest-type object with real container loot or a container's name is a chest, the rest other. Only when the
+  lock is unknown does the loot decide (herbs at least half of the distinct items and nothing a chest gives), then the name (vein / deposit; chest / crate / box ... on a chest-type
+  or unknown-type object). Before 2.77 any herb in the loot made a herb (the Alliance chests were listed as herbs). `AtlasBrowse.ObjectVerdictOf(id)` says why; the real-data
+  section `atlasdatareal` writes `objects-audit.txt` with every object that moved.
+- **Quest chains** (`Services/Atlas/QuestChains.cs`, pure, 2.77): links from the Classic baseline's `quest_template` (`PrevQuestId`, `NextQuestId`, `ExclusiveGroup`,
+  `NextQuestInChain`, `BreadcrumbForQuestId`, kept since index format 2) with Forever's own `NextQuest` answers (questcache.wdb) laid over `NextQuestInChain`. The chain walks back
+  over the single predecessor (the quest whose next-in-chain this is, else `PrevQuestId`, else the single quest whose `NextQuestId` opens it) and forward over the single successor
+  (next-in-chain, else `NextQuestId`, else the only quest whose `PrevQuestId` is this one); a quest seen twice or 40 steps stop a walk (`Cut`). A quest on one of Forever's quest
+  lines (`QuestLine.db2`) takes the line as its chain and its name. Also: pre-quests (done / in the log), the quests that open it (all of / one of), exclusive groups, follow-ups,
+  breadcrumbs both ways. The quest page carries it as `Custom` (`AtlasPage.QuestChain.cs`: a timeline with this quest highlighted, folded around it over 12 steps) plus the
+  facts Chain, Requires skill, Standing, You are given and the "Turn in to" table (`creature / gameobject_involvedrelation`). No completion data exists yet, so no step is marked done.
 - **Page** (`AtlasPage.Browse.cs`): breadcrumb, sub-category chips with counts, the filter bar (only the controls the category has), a virtualised `AtlasList`; a filter change runs `Run` again on a worker and swaps the list.
   Without the Classic baseline or a Lodge the lists still work and a quiet note says what to download. `AtlasBrowse.Presets()` are the start page shortcuts; a preset whose list would be empty is not shown.
 
@@ -674,6 +688,8 @@ source label: **Forever** (the user's client, or observed by the Lodge) or **Cla
   build = gameBuild,                                                                                     -- additive (Toolkit 0.5.10)
   -- every counter may carry x = { b = { [build] = n }, q = { [questId] = kills while it wanted an item }, lv = { lo, hi }, cl = { [0..6] = n }, fp = { fingerprints } }
   -- and its items q = questId, sx = { [randomSuffixId] = drops }, b = { [build] = drops }; finds may carry b and sx, src may be "item:<id>"
+  -- (Outpost 2.77) a find's b (the game build) is kept as AtlasObs.Find.Build, shared as "gb" (Lodge 2.26+ stores and returns it; an older Lodge ignores it), shown as
+  -- "game 1.60.1" (the build you run), "build N (older game version)" or "unknown version" (FindVersions)
 }
 ```
 Loot accuracy (Toolkit 0.5.10, `Looter.lua`): a window from a creature that is alive (the target / mouseover with that GUID, `UnitIsDead` false) or within 4 s of a Pick Pocket cast (`UNIT_SPELLCAST_SUCCEEDED`, id 921 or its name) is `pickpocket`; within 4 s of a Skinning / Mining / Herb Gathering / salvage cast, or a second window of a corpse already counted whose items are Trade Goods 6 / 7 / 9 / 1, it is `skinning` / `mining` / `herbalism` / `salvage` (once per corpse and kind); an `Item-` GUID source is `contained`, the item id found by `C_Item.GetItemGUID(ItemLocation:CreateFromBagAndSlot(bag, slot))` over bags 0-4. Quest items: `GetLootSlotInfo`'s isQuestItem + questID; quest kills: the quests whose `C_QuestLog.GetQuestObjectives` still have an unfinished `item` objective (cached until `QUEST_LOG_UPDATE`). Random suffix: field 7 of the item link. Level / class: `UnitLevel` / `UnitClassification` of the target / mouseover with the corpse's GUID. Fingerprint: a 31-bit polynomial hash of the GUID's server id and spawn part. The Outpost sends extras and the new sections only to a Lodge with `atlas9` (2.26, `AtlasCtrExtras.cs`), which merges them per member (max per key, lv range, fp union) and adds `dup` (fingerprints several members sent); pages count `UniqueKills = n - dup`, scale the drops alike, use the quest kills for a quest item, and claim no rate under 30 (`AtlasObs.RateText`). Suffix names (ItemRandomProperties / ItemRandomSuffix) are not read: suffixes show as numbers.

@@ -243,35 +243,47 @@ namespace ElansAddonHub.Services.Atlas
         static int ObjectCat(Ctx x, int id)
         {
             if (x.ObjCats.TryGetValue(id, out var c)) return c;
-            var seen = SeenData.Object(id); var cl = x.Classic?.ObjectInfo(id);
-            int type = seen?.Type ?? cl?.Type ?? 0;
-            string name = seen?.Name ?? cl?.Name ?? "";
-            var items = new List<int>();
-            if (x.Derived != null) foreach (var le in x.Derived.LootOf(ClassicSourceKind.ObjectLoot, id)) items.Add(le.ItemId);
-            var lc = x.L?.Loot("obj", id);
-            if (lc != null) items.AddRange(lc.Items.Keys);
-            bool herb = false, ore = false;
-            // the lock the object opens with names the skill (Lock.db2): verified data first, the loot and the name only when it is not known
-            var need = SeenView.SkillNeedOf(id);
-            if (need.HasValue && need.Value.LockType == WorldLookups.LockTypeHerbalism) herb = true;
-            else if (need.HasValue && need.Value.LockType == WorldLookups.LockTypeMining) ore = true;
-            foreach (var it in items)
+            var v = ObjectVerdict(x, id);
+            switch (v.Kind)
             {
-                var ci = ItemData.Get(it);
-                if (ci != null && ci.ClassId == 7 && ci.SubclassId == 9) herb = true;
-                else if (ci != null && ci.ClassId == 7 && ci.SubclassId == 7) ore = true;
+                case ObjectKinds.Herbs: c = Ctx.Herb; break;
+                case ObjectKinds.Ore: c = Ctx.Ore; break;
+                case ObjectKinds.Chests: c = Ctx.Chest; break;
+                case ObjectKinds.Fishing: c = Ctx.Fishing; break;
+                default: c = Ctx.Other; break;
             }
-            if (type == 25) c = Ctx.Fishing;
-            else if (herb) c = Ctx.Herb;
-            else if (ore || OreName.IsMatch(name)) c = Ctx.Ore;
-            else if (type == 3 && (ChestName.IsMatch(name) || items.Count > 0)) c = Ctx.Chest;
-            else if (ChestName.IsMatch(name)) c = Ctx.Chest;
-            else c = Ctx.Other;
             x.ObjCats[id] = c;
             return c;
         }
-        static readonly Regex OreName = new Regex(@"\b(vein|deposit|ore|mineral)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        static readonly Regex ChestName = new Regex(@"\b(chest|crate|barrel|box|cache|footlocker|trunk|coffer|strongbox|lockbox|basket|sack|cask|urn)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        // the facts of one object for ObjectKinds: the type and name (client cache first, then the Classic baseline), the lock (client cache / Lodge, then the
+        // Classic baseline's data0) with its skill entries from the game files, and the class of every item of its loot (Classic baseline + the Lodge)
+        static ObjectKinds.Verdict ObjectVerdict(Ctx x, int id)
+        {
+            var seen = SeenData.Object(id); var cl = x.Classic?.ObjectInfo(id);
+            var f = new ObjectKinds.Facts { Type = seen?.Type ?? cl?.Type ?? 0, Name = seen?.Name ?? cl?.Name ?? "" };
+            int lk = SeenView.LockOf(id);
+            if (lk <= 0 && cl != null && cl.LockId > 0) lk = cl.LockId;
+            f.Lock = ObjectKinds.LockNeeds(lk);
+            var items = new HashSet<int>();
+            if (x.Derived != null) foreach (var le in x.Derived.LootOf(ClassicSourceKind.ObjectLoot, id)) items.Add(le.ItemId);
+            var lc = x.L?.Loot("obj", id);
+            if (lc != null) foreach (var k in lc.Items.Keys) items.Add(k);
+            foreach (var it in items)
+            {
+                var ci = ItemData.Get(it);
+                if (ci != null) f.Loot.Add(new[] { ci.ClassId, ci.SubclassId });
+            }
+            return ObjectKinds.Classify(f);
+        }
+
+        // why an object id is listed where it is ("lock: Herbalism" ...): the audit list of the self-test; builds nothing, so not on the UI thread
+        public static ObjectKinds.Verdict ObjectVerdictOf(int id)
+        {
+            var x = new Ctx { Classic = ClassicAtlas.Current, L = AtlasQuery.LodgeOrNull(), Map = MapData.Index };
+            x.Derived = AtlasDerived.For(x.Classic);
+            return ObjectVerdict(x, id);
+        }
 
         static void FillSources(BEntry e, Ctx x)
         {

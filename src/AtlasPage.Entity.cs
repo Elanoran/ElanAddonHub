@@ -349,6 +349,7 @@ namespace ElansAddonHub
                         if (m.Lore != null) col.Children.Add(LoreCard(m));       // a zone with the Outpost's notes: "About <zone>"
                         if (!railOn && factsCard != null) col.Children.Add(factsCard);
                         if (m.Custom is ClassSpellBook classSpells) col.Children.Add(ClassSpellsCard(classSpells));
+                        if (m.Custom is QuestChainInfo chain) col.Children.Add(QuestChainCard(chain));
                         if (m.Entrance != null) col.Children.Add(EntranceCard(m));
                         var owned = m.Kind == "item" ? m.Section("owned") : null;
                         if (owned != null && (owned.Open || owned.Empty.Length > 0)) col.Children.Add(SectionCard(owned));

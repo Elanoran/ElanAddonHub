@@ -277,6 +277,7 @@ public static partial class Atlas
     public sealed class Find
     {
         public long Rev, At; public int Item, Count, Z; public double X, Y; public string Src, Identity, Who;
+        public int GameBuild;                                  // the game build it was found in ("gb", optional; 0 = unknown). Not part of the key: a resend never doubles a find
         public string Key => Identity + "|" + Item + "|" + Src + "|" + Z + "|" + X.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "|" + Y.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "|" + At;
     }
 
@@ -292,6 +293,7 @@ public static partial class Atlas
             z = (int)zz;
         }
         f = new Find { Item = (int)i, Count = (int)c, At = at, Src = src, Z = z, X = x, Y = y };
+        if (o["gb"] != null && Whole(o["gb"], 1, MaxBuildId, out var gb)) f.GameBuild = (int)gb;   // a bad build is dropped, the find stays
         return true;
     }
 }

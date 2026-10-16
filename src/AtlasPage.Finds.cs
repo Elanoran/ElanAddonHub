@@ -18,7 +18,7 @@ namespace ElansAddonHub
 
         bool IsFindsPage => browse != null && !browse.NotFound && AtlasNav.KeyFor(browse.Query.ToId()) == AtlasNav.FindsKey;
 
-        // "Found by Tess · 2× from Gnarlfang · Greenvale · 10 minutes ago"; a guest (no name sent) sees "Found by a member"
+        // "Found by Tess · 2× from Gnarlfang · Greenvale · 10 minutes ago · game 1.60.1"; a guest (no name sent) sees "Found by a member"
         public static string FindFoot(AtlasObs.Find f)
         {
             var parts = new List<string> { "Found by " + (string.IsNullOrEmpty(f.By) ? "a member" : f.By) };
@@ -27,6 +27,7 @@ namespace ElansAddonHub
             if (f.Zone > 0) parts.Add(AtlasQuery.ZoneName(f.Zone));
             var ago = AtlasFormat.Ago(f.At, AtlasQuery.Context.NowUtc());
             if (ago.Length > 0) parts.Add(ago);
+            parts.Add(FindVersions.Text(f.Build));       // "game 1.60.1" / "build 70338 (older game version)" / "unknown version"
             return string.Join(" · ", parts);
         }
 

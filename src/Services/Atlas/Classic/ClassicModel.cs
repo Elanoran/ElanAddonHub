@@ -78,6 +78,7 @@ namespace ElansAddonHub.Services.Atlas.Classic
         public string Name;
         public int Type;            // 3 chest (also herb and ore nodes), 25 fishing hole, ...
         public int LootId;          // loot table of chests and nodes (data1), 0 if none
+        public int LockId;          // the Lock it opens with (data0 of a chest / node, a quest giver or a goober), 0 if none or not that kind
         public ClassicSpawn[] Spawns = new ClassicSpawn[0];
         public string Source => ClassicLabel.Source;
     }
@@ -107,6 +108,15 @@ namespace ElansAddonHub.Services.Atlas.Classic
         public int[] ChoiceItems = new int[0], ChoiceCounts = new int[0];
         public int[] ObjectiveItems = new int[0], ObjectiveCounts = new int[0];
         public ClassicQuestGiver[] Givers = new ClassicQuestGiver[0];
+        public ClassicQuestGiver[] Enders = new ClassicQuestGiver[0];   // who takes it back (creature / gameobject_involvedrelation)
+        // the quest's place in its chain (cMaNGOS quest_template): PrevQuestId > 0 = that quest must be done first, < 0 = it must be in the log;
+        // NextQuestId > 0 = this one opens that one (< 0: while this one is in the log); ExclusiveGroup > 0 = only one quest of the group can be done,
+        // < 0 = all of the group must be done before their NextQuestId opens; NextQuestInChain = the quest the ender offers right after this one;
+        // BreadcrumbFor = this quest only leads you to that one.
+        public int PrevQuestId, NextQuestId, ExclusiveGroup, NextQuestInChain, BreadcrumbFor;
+        public int RequiredSkill, RequiredSkillValue;                           // a profession / skill and the level it needs (0 = none)
+        public int RequiredMinRepFaction, RequiredMinRepValue, RequiredMaxRepFaction, RequiredMaxRepValue;   // Faction ids and reputation points
+        public int SourceItem;                                                  // the item the quest gives you when you take it (SrcItemId)
         public string Source => ClassicLabel.Source;
     }
 

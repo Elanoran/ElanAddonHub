@@ -29,19 +29,23 @@ namespace ElansAddonHub.Services.Atlas.Classic
             S("pickpocketing_loot_template", "entry,item", LootCols),
             S("reference_loot_template", "entry,item", LootCols),
             S("gameobject_loot_template", "entry,item", LootCols),
-            S("gameobject_template", "entry", "entry,type,name,data1"),
+            S("gameobject_template", "entry", "entry,type,name,data0,data1"),
             S("gameobject", "guid", SpawnCols),
             S("gameobject_spawn_entry", "guid,entry", "guid,entry"),
             S("npc_vendor", "entry,item", VendorCols),
             S("npc_vendor_template", "entry,item", VendorCols),
             S("quest_template", "entry",
                 "entry,title,minlevel,maxlevel,questlevel,zoneorsort,requiredraces,requiredclasses,srcitemid,srcitemcount,"
+                + "prevquestid,nextquestid,exclusivegroup,breadcrumbforquestid,nextquestinchain,requiredskill,requiredskillvalue,"
+                + "requiredminrepfaction,requiredminrepvalue,requiredmaxrepfaction,requiredmaxrepvalue,"
                 + "reqitemid1,reqitemid2,reqitemid3,reqitemid4,reqitemcount1,reqitemcount2,reqitemcount3,reqitemcount4,"
                 + "rewitemid1,rewitemid2,rewitemid3,rewitemid4,rewitemcount1,rewitemcount2,rewitemcount3,rewitemcount4,"
                 + "rewchoiceitemid1,rewchoiceitemid2,rewchoiceitemid3,rewchoiceitemid4,rewchoiceitemid5,rewchoiceitemid6,"
                 + "rewchoiceitemcount1,rewchoiceitemcount2,rewchoiceitemcount3,rewchoiceitemcount4,rewchoiceitemcount5,rewchoiceitemcount6"),
             S("creature_questrelation", "id,quest", "id,quest"),
             S("gameobject_questrelation", "id,quest", "id,quest"),
+            S("creature_involvedrelation", "id,quest", "id,quest"),
+            S("gameobject_involvedrelation", "id,quest", "id,quest"),
             S("item_template", "entry", "entry,name,quality,itemlevel,requiredlevel"),
         }.ToDictionary(x => x.Name);
     }

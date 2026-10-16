@@ -181,7 +181,7 @@ namespace ElansAddonHub
 
         void EnsureSetup()
         {
-            if (ClassicSetup == null) UseClassicSetup(new ClassicSetup());
+            if (ClassicSetup == null) { UseClassicSetup(new ClassicSetup()); ClassicSetup.UpgradeIfOutdated(); }
         }
 
         void ClassicChanged()

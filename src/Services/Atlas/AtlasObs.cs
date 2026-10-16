@@ -77,6 +77,7 @@ namespace ElansAddonHub.Services
             public int Item, Count, Zone; public double X, Y; public string Src; public long At;
             public string By;                                                  // (lodge aggregate) the member's display name
             public long Seq;                                                   // (lodge aggregate) server revision, orders the list
+            public int Build;                                                  // the game build it was found in (Toolkit "b", Lodge "gb"); 0 = unknown (an older find)
         }
 
         public class Revealed
@@ -427,6 +428,9 @@ namespace ElansAddonHub.Services
             }
             if (o.TryGetValue("by", out var bv) && bv is string by) f.By = CleanName(by);
             if (o.TryGetValue("s", out var sq) && Whole(sq, 0, long.MaxValue / 4, out var seq)) f.Seq = seq;
+            // the game build: "gb" from the Lodge, "b" from the Toolkit; a bad value only loses the build, never the find
+            if (o.TryGetValue("gb", out var gv) && Whole(gv, 1, MaxSeenBuild, out var gb)) f.Build = (int)gb;
+            else if (o.TryGetValue("b", out var tb) && Whole(tb, 1, MaxSeenBuild, out var tbn)) f.Build = (int)tbn;
             return f;
         }
 
@@ -781,6 +785,7 @@ namespace ElansAddonHub.Services
                     if (!includeExtras && f.Src.StartsWith("item:", StringComparison.Ordinal)) continue;   // an older lodge does not know "found inside an item"
                     var o = new Dictionary<string, object> { ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At };
                     if (f.Zone > 0) { o["z"] = f.Zone; o["x"] = f.X; o["y"] = f.Y; }
+                    if (f.Build > 0) o["gb"] = f.Build;          // the game build (a Lodge before 2.27 ignores it; the signature stays, so nothing is sent twice)
                     Add("finds", "", FindKey(f), "1", o);
                 }
             }

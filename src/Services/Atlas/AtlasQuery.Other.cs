@@ -130,6 +130,17 @@ namespace ElansAddonHub.Services.Atlas
                 int pos = Array.IndexOf(line.Quests, id) + 1;
                 m.Facts.Add(new AtlasFact("Quest line", line.Name + (pos > 0 ? " (" + pos + " of " + line.Quests.Length + ")" : ""), F));
             }
+            // the chain (2.77): step N of M, what comes before and after, prerequisites, breadcrumbs, exclusive groups (QuestChains; the card on the Overview)
+            var chain = QuestChains.LiveFor(id);
+            if (chain.Any) m.Custom = chain;
+            if (chain.HasChain && !chain.FromLine) m.Facts.Add(new AtlasFact("Chain", chain.StepText, chain.AnyClassic ? C : F));
+            if (cq != null && cq.RequiredSkill > 0)
+                m.Facts.Add(new AtlasFact("Requires skill", SkillName(cq.RequiredSkill) + (cq.RequiredSkillValue > 0 ? " " + cq.RequiredSkillValue.ToString(CultureInfo.InvariantCulture) : ""), C, AtlasIds.Skill(cq.RequiredSkill)));
+            if (cq != null && cq.RequiredMinRepFaction > 0)
+                m.Facts.Add(new AtlasFact("Standing", QuestChains.Standing(cq.RequiredMinRepValue) + " with " + (FactionData.Name(cq.RequiredMinRepFaction) ?? "faction " + cq.RequiredMinRepFaction), C, FactionData.Name(cq.RequiredMinRepFaction) != null ? AtlasIds.Faction(cq.RequiredMinRepFaction) : null));
+            if (cq != null && cq.RequiredMaxRepFaction > 0)
+                m.Facts.Add(new AtlasFact("Standing under", QuestChains.Standing(cq.RequiredMaxRepValue) + " with " + (FactionData.Name(cq.RequiredMaxRepFaction) ?? "faction " + cq.RequiredMaxRepFaction), C, FactionData.Name(cq.RequiredMaxRepFaction) != null ? AtlasIds.Faction(cq.RequiredMaxRepFaction) : null));
+            if (cq != null && cq.SourceItem > 0 && !(seenFull && seen.StartItem > 0)) m.Facts.Add(new AtlasFact("You are given", ItemName(cq.SourceItem), C, AtlasIds.Item(cq.SourceItem)));
             m.Subtitle = string.Join(" · ", new[] { "Quest " + id, level > 0 ? "Level " + level : "" }.Where(s => s.Length > 0));
             if (seen != null && !string.IsNullOrWhiteSpace(seen.Objectives)) m.Texts.Add(new AtlasText("Objectives", seen.Objectives.Trim(), F));
             if (seen != null && !string.IsNullOrWhiteSpace(seen.Description)) m.Texts.Add(new AtlasText("Description", seen.Description.Trim(), F));
@@ -195,6 +206,18 @@ namespace ElansAddonHub.Services.Atlas
                     var name = g.IsObject ? ObjectName(g.Id) : NpcName(g.Id);
                     s.Rows.Add(new AtlasRow { Key = (g.IsObject ? "obj:" : "npc:") + g.Id, Link = (g.IsObject ? "obj:" : "npc:") + g.Id, Title = name, Label = C, Tier = 2, Type = g.IsObject ? "Object" : "NPC", Zone = ZoneOfSpawns(spawns), Detail = ZoneOfSpawns(spawns) });
                     plan.Classic(spawns, MarkerKind.Quest, name, "Gives " + m.Title + " · " + C, (g.IsObject ? "obj:" : "npc:") + g.Id);
+                }
+            }
+            if (cq != null && cq.Enders.Length > 0)
+            {
+                var s = Section(m, "enders", "Turn in to");
+                s.Note = "From the Classic baseline.";
+                foreach (var g in cq.Enders.Take(12))
+                {
+                    var spawns = g.IsObject ? ClassicAtlas.Current?.ObjectSpawns(g.Id) : ClassicAtlas.Spawns(g.Id);
+                    var name = g.IsObject ? ObjectName(g.Id) : NpcName(g.Id);
+                    s.Rows.Add(new AtlasRow { Key = (g.IsObject ? "obj:" : "npc:") + g.Id, Link = (g.IsObject ? "obj:" : "npc:") + g.Id, Title = name, Label = C, Tier = 2, Type = g.IsObject ? "Object" : "NPC", Zone = ZoneOfSpawns(spawns), Detail = ZoneOfSpawns(spawns) });
+                    if (!cq.Givers.Any(x => x.Id == g.Id && x.IsObject == g.IsObject)) plan.Classic(spawns, MarkerKind.Quest, name, "Takes " + m.Title + " back · " + C, (g.IsObject ? "obj:" : "npc:") + g.Id);
                 }
             }
             m.Map = plan.Build();
