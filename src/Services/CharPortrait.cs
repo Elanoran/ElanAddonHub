@@ -26,7 +26,8 @@ namespace ElansAddonHub.Services
         public static int RaceIcon(string raceFile, int sex)
         {
             if (string.IsNullOrEmpty(raceFile) || sex < 2 || sex > 3) return 0;
-            return RaceFemale.TryGetValue(raceFile, out var f) ? (sex == 3 ? f : f + 1) : 0;
+            if (RaceFemale.TryGetValue(raceFile, out var f)) return sex == 3 ? f : f + 1;
+            return RaceIcons.For(raceFile, sex);       // a race with no achievement portrait (Skyborne): its character-creation portrait from the UI atlas
         }
 
         public static int ClassIcon(string classFile) =>

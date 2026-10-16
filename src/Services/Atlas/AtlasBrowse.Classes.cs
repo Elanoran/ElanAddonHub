@@ -29,7 +29,7 @@ namespace ElansAddonHub.Services.Atlas
             {
                 if (string.IsNullOrEmpty(r.Name)) continue;
                 var e = Entry("race", r.Id, r.Name);
-                e.Client = true; e.SubLabel = r.SideName;
+                e.Client = true; e.SubLabel = r.SideName; e.Icon = RaceIcons.For(r);
                 e.Detail = ClassData.Data.ClassesOf(r.Id).Count + " classes";
                 ix.All.Add(e);
             }

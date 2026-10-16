@@ -49,17 +49,26 @@ namespace ElansAddonHub
                 var rows = AtlasView.NavRowsForTest;
                 Check("nav: the 216 px sub-navigation lists Home on top (no Search row since 2.71.1: the title bar box and Ctrl+K are the search), the groups Database, World, Character and Lodge (the Lodge has finds here) with the registry's rows, and Data sources at the bottom",
                     !AtlasView.NavCollapsedForTest && Math.Abs(AtlasView.NavWidthForTest - 216) < 1 && AtlasView.NavGroupsForTest.SequenceEqual(new[] { "Database", "World", "Character", "Lodge" })
-                    && !rows.Contains("Search") && new[] { "Home", "Items", "Creatures", "Objects", "Quests", "World map", "Zones", "Dungeons and raids", "Spells and talents", "Professions", "Factions", "Finds", "Data sources" }.All(rows.Contains),
+                    && !rows.Contains("Search") && new[] { "Home", "Items", "Creatures", "Objects", "Quests", "World map", "Zones", "Dungeons and raids", "Classes", "Races", "Spells", "Talents", "Professions", "Recipes", "Skills", "Factions", "Finds", "Data sources" }.All(rows.Contains),
                     string.Join(" | ", rows) + " groups=" + string.Join(",", AtlasView.NavGroupsForTest));
-                Check("nav: Skills, Recipes and Talents are not rows of their own (merged into Spells and talents / Professions: nav grouping only)", !rows.Contains("Skills and professions") && !rows.Contains("Recipes") && !rows.Contains("Talents") && !rows.Contains("Spells"));
+                Check("nav (2.71.1): Spells and Talents are two rows, Professions, Recipes and Skills three - no shared row 'Spells and talents', no 'Skills and professions', each row listed once", !rows.Contains("Spells and talents") && !rows.Contains("Skills and professions") && rows.Count == rows.Distinct().Count()
+                    && AtlasNav.Entries().All(e => e.Members.Count == 1 || e.Extra), string.Join(" | ", rows));
                 var order = AtlasNav.Entries().Select(e => e.Group + "/" + e.Title).ToList();
-                Check("nav: built from the registry - World map, Zones, Dungeons and raids in World (in that order), Spells and talents, Professions, Factions in Character", order.IndexOf("World/World map") < order.IndexOf("World/Zones") && order.IndexOf("World/Zones") < order.IndexOf("World/Dungeons and raids")
-                    && order.IndexOf("Character/Spells and talents") < order.IndexOf("Character/Professions") && order.IndexOf("Character/Professions") < order.IndexOf("Character/Factions") && order.Last() == "Lodge/Finds", string.Join(" | ", order));
+                var charOrder = new[] { "Classes", "Races", "Spells", "Talents", "Professions", "Recipes", "Skills", "Factions" }.Select(t => order.IndexOf("Character/" + t)).ToList();
+                Check("nav: built from the registry - World map, Zones, Dungeons and raids in World (in that order); Classes, Races, Spells, Talents, Professions, Recipes, Skills, Factions in Character (in that order)", order.IndexOf("World/World map") < order.IndexOf("World/Zones") && order.IndexOf("World/Zones") < order.IndexOf("World/Dungeons and raids")
+                    && charOrder.All(i => i >= 0) && charOrder.SequenceEqual(charOrder.OrderBy(i => i)) && order.Last() == "Lodge/Finds", string.Join(" | ", order));
                 Check("nav: a count on the rows whose list is already built (Items), none on a hosted page", AtlasView.NavRowForTest("items") != null && AtlasTexts(AtlasView.NavRowForTest("items")).Any(t => t.Length > 0 && char.IsDigit(t[0])) && !AtlasTexts(AtlasView.NavRowForTest("professions")).Any(t => t.Length > 0 && char.IsDigit(t[0])));
-                var pro = AtlasNav.Entries().First(e => e.Key == "professions"); var spt = AtlasNav.Entries().First(e => e.Key == "spells");
-                Check("nav: Professions opens the hosted page (and holds Skills and Recipes), Spells and talents opens the spell list (and holds Talents)", pro.OpenId == "professions:" && pro.Members.Select(m => m.Id).OrderBy(x => x).SequenceEqual(new[] { "professions", "recipes", "skills" }) && spt.OpenId == "browse:spells" && spt.Members.Select(m => m.Id).OrderBy(x => x).SequenceEqual(new[] { "spells", "talents" }), pro.OpenId + " " + spt.OpenId);
+                var ents = AtlasNav.Entries(); string OpenOf(string k) => ents.FirstOrDefault(e => e.Key == k)?.OpenId ?? "-"; string IconOf(string k) => ents.FirstOrDefault(e => e.Key == k)?.Icon ?? "-";
+                Check("nav: each Character row opens its own page with its own icon - Spells the spell list (spark), Talents the calculator (tree), Professions the guides page, Recipes and Skills their lists",
+                    OpenOf("spells") == "browse:spells" && OpenOf("talents") == "talents:" && OpenOf("professions") == "professions:" && OpenOf("recipes") == "browse:recipes" && OpenOf("skills") == "browse:skills"
+                    && new[] { "spells", "talents", "professions", "recipes", "skills" }.All(k => IconOf(k) == k && AtlasIcons.Has(k)),
+                    string.Join(" ", ents.Select(e => e.Key + "=" + e.OpenId + "/" + e.Icon)));
+                Check("nav: the shared-row machinery is idle - no sub-rows under any row", AtlasView.NavSubRowsForTest.Count == 0, string.Join(",", AtlasView.NavSubRowsForTest));
 
                 // the highlighted row for every kind of page
+                var sks = SpellData.Spells?.Skills.Values.ToList() ?? new List<SkillInfo>();
+                int skillProf = sks.FirstOrDefault(k => AtlasNav.IsProfessionName(k.Name))?.Id ?? 129;          // a profession's skill page belongs to Professions
+                int skillPlain = sks.FirstOrDefault(k => !string.IsNullOrEmpty(k.Name) && !AtlasNav.IsProfessionName(k.Name))?.Id ?? 0;     // any other skill to Skills
                 var selected = new List<string>();
                 async Task Sel(string id, string key)
                 {
@@ -68,16 +77,23 @@ namespace ElansAddonHub
                     if (!(now.Count == 1 && now[0] == key)) selected.Add(id + " -> [" + string.Join(",", now) + "] wanted " + key);
                 }
                 await Sel("browse:items", "items"); await Sel("browse:items/weapons?how=vendor", "items"); await Sel("item:100", "items"); await Sel("npc:1", "creatures"); await Sel("obj:50", "objects"); await Sel("quest:7", "quests");
-                await Sel("zone:11", "zones"); await Sel("instance:98", "instances"); await Sel("spell:4000", "spells"); await Sel("skill:129", "professions"); await Sel("faction:72", "factions");
-                await Sel("browse:creatures?rank=elite", "creatures"); await Sel("browse:recipes", "professions"); await Sel(AtlasNav.FindsId, "finds"); await Sel(AtlasNav.DataId, "data"); await Sel("item:99999", "items");
+                await Sel("zone:11", "zones"); await Sel("instance:98", "instances"); await Sel("spell:4000", "spells"); await Sel("faction:72", "factions");
+                await Sel("skill:" + skillProf, "professions"); if (skillPlain > 0) await Sel("skill:" + skillPlain, "skills"); await Sel("browse:skills", "skills"); await Sel("browse:spells", "spells");
+                await Sel("talents:", "talents"); await Sel("talents:tree/hunter", "talents"); await Sel("professions:", "professions"); await Sel("professions:cooking/guide", "professions");
+                await Sel("browse:creatures?rank=elite", "creatures"); await Sel("browse:recipes", "recipes"); await Sel(AtlasNav.FindsId, "finds"); await Sel(AtlasNav.DataId, "data"); await Sel("item:99999", "items");
                 await AtlasView.GoStart(); await Task.Delay(60); UpdateLayout();
                 if (!(AtlasView.NavSelectedForTest.Count == 1 && AtlasView.NavSelectedForTest[0] == "home")) selected.Add("start -> " + string.Join(",", AtlasView.NavSelectedForTest));
                 Check("nav: the row of the section is highlighted for every kind of page - browse lists (with and without filters), item, creature, object, quest, zone, instance, spell, skill, faction, not found, the Lodge's finds, the data sources and the start page", selected.Count == 0, string.Join(" ; ", selected));
-                Check("nav: the hosted pages and the world map belong to their rows too (talents -> Spells and talents, professions -> Professions, worldmap -> World map)",
-                    AtlasNav.KeyFor("talents:tree/hunter") == "spells" && AtlasNav.KeyFor("professions:cooking/recipes") == "professions" && AtlasNav.KeyFor("worldmap:kalimdor") == "worldmap" && AtlasNav.KeyFor("atlas:data") == "data" && AtlasNav.KeyFor("") == "home",
+                Check("nav: the hosted pages and the world map belong to their rows too (talents -> Talents, professions -> Professions, worldmap -> World map)",
+                    AtlasNav.KeyFor("talents:tree/hunter") == "talents" && AtlasNav.KeyFor("spell:4000") == "spells" && AtlasNav.KeyFor("professions:cooking/recipes") == "professions" && AtlasNav.KeyFor("worldmap:kalimdor") == "worldmap" && AtlasNav.KeyFor("atlas:data") == "data" && AtlasNav.KeyFor("") == "home",
                     AtlasNav.KeyFor("talents:tree/hunter") + " " + AtlasNav.KeyFor("professions:cooking/recipes") + " " + AtlasNav.KeyFor("worldmap:kalimdor"));
-                await AtlasView.Open("skill:129"); await Task.Delay(60); UpdateLayout();
-                Check("nav: inside a shared row (a skill) its members are listed under it - Skills and professions, Recipes, Professions - with the one you are in marked", AtlasView.NavSubRowsForTest.OrderBy(x => x).SequenceEqual(new[] { "professions", "recipes", "skills" }) && AtlasView.NavSubRowsForTest.Count == 3, string.Join(",", AtlasView.NavSubRowsForTest));
+                await AtlasView.Open("skill:" + skillProf); await Task.Delay(60); UpdateLayout();
+                Check("nav: no sub-rows on a skill page either (Professions, Recipes and Skills are rows of their own)", AtlasView.NavSubRowsForTest.Count == 0, string.Join(",", AtlasView.NavSubRowsForTest));
+                // ids from before 2.71.1 still work: the old 'Skills and professions > Professions' list opens the Professions page
+                Check("nav: an old link browse:skills/professions opens the Professions page (KeyFor and Upgrade agree), browse:skills/secondary-skills stays a Skills list",
+                    AtlasNav.Upgrade("browse:skills/professions") == "professions:" && AtlasNav.KeyFor("browse:skills/professions") == "professions" && AtlasNav.Upgrade("browse:skills/secondary-skills") == "browse:skills/secondary-skills" && AtlasNav.KeyFor("browse:skills/secondary-skills") == "skills");
+                await AtlasView.Open("browse:skills/professions"); await Task.Delay(60);
+                Check("nav: ... opening it lands on professions: with the Professions row lit", AtlasView.CurrentId.StartsWith("professions:") && AtlasView.NavSelectedForTest.SequenceEqual(new[] { "professions" }), AtlasView.CurrentId);
                 // a row opens its page
                 ClickRow(AtlasView.NavRowForTest("zones")); await AtlasView.WaitForTest(); await Task.Delay(100);
                 Check("nav: clicking a row opens its page (Zones -> browse:zones); Home goes to the start page", AtlasView.CurrentId == "browse:zones" && AtlasView.NavSelectedForTest.SequenceEqual(new[] { "zones" }));

@@ -105,8 +105,8 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ registry and ids
                 var cats = AtlasCategories.All.Where(c => !c.Hosted).ToList();      // the window registers Talents and Professions as hosted categories too (atlashosts checks them)
-                Check("registry: the twelve built-in categories in start page order (Classes and Races after Spells), each with a title, a glyph and the id of its browse page",
-                    cats.Select(c => c.Id).SequenceEqual(new[] { "items", "creatures", "objects", "quests", "zones", "instances", "spells", "classes", "races", "skills", "recipes", "factions" }) && cats.All(c => c.Title.Length > 0 && c.Glyph.Length > 0 && c.OpenId == "browse:" + c.Id && !c.Hosted), string.Join(",", cats.Select(c => c.Id)));
+                Check("registry: the twelve built-in categories in start page order (Classes and Races first in Character, then Spells, Recipes, Skills), each with a title, a glyph and the id of its browse page",
+                    cats.Select(c => c.Id).SequenceEqual(new[] { "items", "creatures", "objects", "quests", "zones", "instances", "classes", "races", "spells", "recipes", "skills", "factions" }) && cats.All(c => c.Title.Length > 0 && c.Glyph.Length > 0 && c.OpenId == "browse:" + c.Id && !c.Hosted), string.Join(",", cats.Select(c => c.Id)));
                 var labs = new AtlasCategory { Id = "labs", Title = "Labs", Glyph = AtlasKinds.Glyph("skill"), Blurb = "A hosted page", Order = 200, Host = sub => new TextBlock { Text = "hosted labs: " + sub } };
                 AtlasCategories.Register(labs);
                 Check("registry: a hosted category registers with an id prefix: 'labs:tree/a' routes to it with the sub-path 'tree/a'; ids of other kinds do not", AtlasCategories.TryHosted("labs:tree/a", out var hc, out var hs) && hc.Id == "labs" && hs == "tree/a"
@@ -129,6 +129,8 @@ namespace ElansAddonHub
                 foreach (var c in AtlasCategories.All.Where(c => !c.Hosted && c.Id != "classes" && c.Id != "races"))      // Classes and Races need the class tables: the atlasclasses section has them
                 {
                     var r = Run(c.OpenId);
+                    // the fake skills are all professions: since 2.71.1 they live on the Professions page, so Skills may be empty here
+                    if (c.Id == "skills" && r.Total == 0 && !r.NotFound && (SpellData.Spells?.Skills.Values.All(s => s.Category == SkillInfo.CatProfession || AtlasNav.IsProfessionName(s.Name)) ?? true)) continue;
                     if (r.NotFound || r.Rows.Count == 0 || r.Total != r.Rows.Count || r.InCategory != r.Total || r.Title.Length == 0 || r.Rows.Any(x => string.IsNullOrEmpty(x.Link) || string.IsNullOrEmpty(x.Title) || string.IsNullOrEmpty(x.Label))) bad.Add(c.Id + " " + r + (r.NotFound ? " " + r.Message : ""));
                 }
                 Check("every category opens and has rows (fake data): every row has a title, a link and a source label", bad.Count == 0, string.Join("; ", bad));
@@ -232,8 +234,9 @@ namespace ElansAddonHub
                 Check("dungeons and raids: sorted by level by default (Crypt of Bones from the creatures that stand in it, the raid without any level last), with Dungeons and Raids as sub-categories, filtered by level",
                     inst.Sort == "level" && inst.Rows[0].Title.Contains("Crypt") && inst.Rows[0].Detail.Contains("Levels 21-24") && inst.Children.Any(k => k.Title == "Dungeons") && inst.Children.Any(k => k.Title == "Raids") && Run("browse:instances?minlvl=22&maxlvl=30").Total == 1 && Run("browse:instances/raids").Total == 1, string.Join(" | ", inst.Rows.Select(r => r.Title + ":" + r.Detail)));
                 var sp = Run("browse:spells"); var sk = Run("browse:skills"); var rc = Run("browse:recipes"); var fc = Run("browse:factions");
-                Check("spells, skills, recipes, factions: Fireball and the bandage recipe; First Aid (secondary) and Alchemy (profession) with their groups; the bandage recipe at First Aid 40 with its reagents; Stormwind in the Alliance",
-                    T(sp).Contains("Fireball") && sp.Children.Any(k => k.Title == "Secondary skills") && T(sk).OrderBy(x => x).SequenceEqual(new[] { "Alchemy", "First Aid" }) && sk.Children.Any(k => k.Title == "Professions") && T(rc).SequenceEqual(new[] { "Heavy Linen Bandage" }) && rc.Rows[0].Detail == "First Aid 40 · grey at 80"
+                Check("spells, skills, recipes, factions: Fireball and the bandage recipe; Skills without First Aid and Alchemy when the Professions page is there (else with their groups); the bandage recipe at First Aid 40 with its reagents; Stormwind in the Alliance",
+                    T(sp).Contains("Fireball") && sp.Children.Any(k => k.Title == "Secondary skills")
+                    && (AtlasCategories.Find(AtlasHosts.Professions)?.Hosted == true ? T(sk).Count == 0 && !sk.Children.Any(k => k.Title == "Professions") : T(sk).OrderBy(x => x).SequenceEqual(new[] { "Alchemy", "First Aid" }) && sk.Children.Any(k => k.Title == "Professions")) && T(rc).SequenceEqual(new[] { "Heavy Linen Bandage" }) && rc.Rows[0].Detail == "First Aid 40 · grey at 80"
                     && rc.Rows[0].Extra == "Uses Linen Cloth ×2" && rc.Rows[0].Link == "item:108" && fc.Rows.First(x => x.Title == "Stormwind").Detail == "in Alliance" && Run("browse:recipes?minlvl=50").Total == 0 && Run("browse:recipes?minlvl=30&maxlvl=45").Total == 1, string.Join(",", T(sp)));
 
                 // ============================================================================================================ presets
@@ -557,7 +560,9 @@ namespace ElansAddonHub
                 var recipes = Run1("browse:recipes");
                 Check("real game files: recipes and professions are listed (" + recipes.Total + ") with First Aid / Tailoring among the sub-categories", recipes.Total > 100 && recipes.Children.Any(k => k.Title == "Tailoring"), string.Join(",", recipes.Children.Take(12).Select(k => k.Title)));
                 var sk = Run1("browse:skills");
-                Check("real game files: the skill list has the professions", sk.Children.Any(k => k.Title == "Professions") && sk.Total > 20);
+                Check("real game files: the Skills list has weapon skills, languages and secondary skills (riding, lockpicking), and no professions when the Professions page is there (" + sk.Total + " skill lines)",
+                    sk.Children.Any(k => k.Title == "Weapon skills") && sk.Children.Any(k => k.Title == "Languages") && sk.Total > 20
+                    && (AtlasCategories.Find(AtlasHosts.Professions)?.Hosted != true || (!sk.Children.Any(k => k.Title == "Professions") && !sk.Rows.Any(r => AtlasNav.IsProfessionName(r.Title)))), string.Join(",", sk.Children.Select(k => k.Title + " " + k.Count)));
             }
             catch (Exception e) { Check("real game files: the browse lists ran to the end", false, e.ToString()); }
         }

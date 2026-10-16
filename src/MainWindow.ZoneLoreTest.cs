@@ -32,7 +32,7 @@ namespace ElansAddonHub
         static ClassSet ZoneLoreRaces()
         {
             var set = new ClassSet();
-            set.Data.Races[2] = new RaceInfo { Id = 2, Name = "Orc", Playable = true, Bit = 1, Side = RaceInfo.Horde, StartingLevel = 1 };
+            set.Data.Races[2] = new RaceInfo { Id = 2, Name = "Orc", ClientFile = "Orc", Playable = true, Bit = 1, Side = RaceInfo.Horde, StartingLevel = 1 };
             set.Data.Races[8] = new RaceInfo { Id = 8, Name = "Troll", Playable = false, Bit = 7, Side = RaceInfo.Horde };     // not playable: no link
             set.Data.Races[90] = new RaceInfo { Id = 90, Name = "High Order Skyborne", Playable = true, Bit = 40, Side = RaceInfo.Alliance, StartingLevel = 1 };
             return set;
@@ -142,6 +142,9 @@ namespace ElansAddonHub
                 Check("Durotar: 'Starts here' lists the Valley of Trials and the Echo Isles; the Orc is a link to its race page, the Troll (not playable here) plain",
                     texts.Contains("Starts here") && texts.Contains("Valley of Trials") && texts.Contains("Echo Isles") && Links(card, "race:").Select(t => t.Tag as string).SequenceEqual(new[] { "race:2" }) && texts.Contains("Troll")
                     && AtlasWalk(card).OfType<Border>().Any(b => b.Tag as string == "race-plain"), string.Join(",", Links(card, "race:").Select(t => t.Tag)));
+                Check("Durotar: the Orc's chip shows the game's race icon in front of its name (RaceIcons, the same icon as its race page); a race the game data does not know has none",
+                    AtlasWalk(card).OfType<Border>().Where(b => b.Tag as string == "race:2").SelectMany(b => AtlasWalk(b).OfType<Image>()).Any(i => i.Tag as string == "race-icon|" + RaceIcons.For("Orc", 2))
+                    && AtlasWalk(card).OfType<Border>().Where(b => b.Tag as string == "race-plain").All(b => !AtlasWalk(b).OfType<Image>().Any()));
                 var npcLinks = Links(card, "npc:");
                 Check("Durotar: History, Notable (each creature a link to its NPC page with why it matters), Worth knowing and the sources are shown",
                     texts.Contains("History") && texts.Contains(dur.History) && texts.Contains("Notable") && npcLinks.Count == dur.Mobs.Count(m => m.Linked) && npcLinks.Select(t => t.Text).SequenceEqual(dur.Mobs.Where(m => m.Linked).Select(m => m.Name))

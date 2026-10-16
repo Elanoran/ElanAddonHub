@@ -111,8 +111,8 @@ namespace ElansAddonHub
                     instCard != null && AtlasTexts(instCard).Contains("Dungeons and raids") && instCard.Tag as string == AtlasCategories.Find("instances")?.OpenId, instCard == null ? "none" : string.Join("|", AtlasTexts(instCard)));
                 if (cards.TryGetValue("skills", out var skillTile))
                 {
-                    var tt = AtlasWalk(skillTile).OfType<TextBlock>().FirstOrDefault(t => t.Text == "Skills and professions");
-                    Check("Atlas Home: a long title ('Skills and professions') wraps instead of being cut off", tt != null && tt.TextWrapping == TextWrapping.Wrap && tt.TextTrimming == TextTrimming.None);
+                    var tt = AtlasWalk(skillTile).OfType<TextBlock>().FirstOrDefault(t => t.Text == "Skills");
+                    Check("Atlas Home: a tile's title wraps instead of being cut off (Skills)", tt != null && tt.TextWrapping == TextWrapping.Wrap && tt.TextTrimming == TextTrimming.None);
                 }
                 var entries = AtlasNav.Entries();
                 Check("Atlas side navigation: every category row draws its line icon (" + entries.Count + " rows)", entries.All(e => AtlasIcons.Has(e.Icon)) && entries.Count(e => AtlasWalk(AtlasView).OfType<ContentControl>().Any(r => r.Tag as string == e.Key + "|off" && IconOf(r) == "atlas-icon|" + e.Icon)) == entries.Count,

@@ -38,7 +38,7 @@ namespace ElansAddonHub.Services.Atlas
                 int r = MatchRank(r0.Name, q);
                 if (r < 0 && r0.LoreName.Length > 0) r = MatchRank(r0.LoreName, q);
                 if (r < 0) continue;
-                res.Add(new AtlasHit { Id = AtlasIds.Race(r0.Id), Kind = "race", Name = r0.Name, Detail = RaceDetail(r0), Label = AtlasLabel.Forever, Rank = r, Tier = 0 });
+                res.Add(new AtlasHit { Id = AtlasIds.Race(r0.Id), Kind = "race", Name = r0.Name, IconId = RaceIcons.For(r0), Detail = RaceDetail(r0), Label = AtlasLabel.Forever, Rank = r, Tier = 0 });
             }
             return res;
         }
@@ -55,7 +55,7 @@ namespace ElansAddonHub.Services.Atlas
         static AtlasHit DescribeRace(int id)
         {
             var r = ClassData.Data?.Race(id);
-            return r == null || !r.Playable ? null : new AtlasHit { Id = AtlasIds.Race(id), Kind = "race", Name = r.Name, Detail = RaceDetail(r), Label = AtlasLabel.Forever };
+            return r == null || !r.Playable ? null : new AtlasHit { Id = AtlasIds.Race(id), Kind = "race", Name = r.Name, IconId = RaceIcons.For(r), Detail = RaceDetail(r), Label = AtlasLabel.Forever };
         }
 
         static string UnavailableClassText() => ClassData.Status == ClassData.State.Disabled ? "Game data is switched off (Settings > General), so there are no classes or races."
@@ -114,7 +114,7 @@ namespace ElansAddonHub.Services.Atlas
                 var s = Section(m, "races", "Races");
                 s.Note = AtlasFormat.Count(races.Count, "race", "races") + " can be a " + c.Name + " (the client's race and class list).";
                 foreach (var r in races)
-                    s.Rows.Add(new AtlasRow { Key = AtlasIds.Race(r.Id), Link = AtlasIds.Race(r.Id), Title = r.Name, Detail = r.SideName, Label = F, Tier = 1, Type = "Race" });
+                    s.Rows.Add(new AtlasRow { Key = AtlasIds.Race(r.Id), Link = AtlasIds.Race(r.Id), Title = r.Name, IconId = RaceIcons.For(r), Detail = r.SideName, Label = F, Tier = 1, Type = "Race" });
             }
 
             if (spells != null && snap.HasSkillRows)
@@ -145,7 +145,7 @@ namespace ElansAddonHub.Services.Atlas
             var r = snap?.Race(id);
             if (r == null || !r.Playable) return NotFoundPage("race", id, snap == null ? UnavailableClassText() : r == null ? "Your game has no race with this id." : "This race cannot be created as a player character in your game.");
             string F = AtlasLabel.Forever;
-            var m = new AtlasPageModel { Id = AtlasIds.Race(id), Kind = "race", Title = r.Name };
+            var m = new AtlasPageModel { Id = AtlasIds.Race(id), Kind = "race", Title = r.Name, IconId = RaceIcons.For(r) };
             AddLayer(m, "client");
             m.Subtitle = "Race " + id + " · " + r.SideName;
             m.Facts.Add(new AtlasFact("Side", r.SideName, F));

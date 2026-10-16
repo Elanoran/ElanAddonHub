@@ -113,7 +113,7 @@ namespace ElansAddonHub
         // Opens an Atlas id ("item:123") or, when it is not an id, searches for the text. Returns when the page is drawn.
         public Task Open(string idOrText)
         {
-            var id = AtlasQuery.NormalizeId(idOrText) ?? idOrText;
+            var id = AtlasNav.Upgrade(AtlasQuery.NormalizeId(idOrText) ?? idOrText);      // an old link to a list that moved opens where it lives now
             if (AtlasCategories.IsRouted(id)) return Show(id, true);           // a browse page or a hosted category
             if (!AtlasIds.TryParse(id, out _, out _)) return OpenPalette(idOrText ?? "");
             return Show(id, true);

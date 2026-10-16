@@ -25,7 +25,7 @@ namespace ElansAddonHub.Services.Atlas
         public Func<string, IEnumerable<AtlasHit>> Search;   // hosted: the pages of this category a search text names ("hunter talents", "cooking"); runs on a worker
         public Func<bool> Available = () => true;       // a category without its data hides itself
         public string Group = "";                       // the nav group (AtlasNav.Database / World / Character / Lodge); "" = Database
-        public string NavKey = "";                      // categories with the same key share ONE nav row ("Spells and talents"); "" = the category's own id
+        public string NavKey = "";                      // categories with the same key share ONE nav row (none of the built-in ones do since 2.71.1); "" = the category's own id
         public string NavTitle = "";                    // the title of that shared row; "" = this category's title
         public bool NavPrimary;                         // in a shared nav row: this category is where the row opens (default: the first by Order)
         public string Keywords = "";                    // extra words the Ctrl+K palette matches the page by ("herbs ore fishing")
@@ -49,9 +49,9 @@ namespace ElansAddonHub.Services.Atlas
             Add("quests", "Quests", "quest", "quest", "By level and zone", 40, AtlasNav.Database);
             Add("zones", "Zones", "zone", "zone", "By continent, with their level range", 50, AtlasNav.World, keywords: "areas places");
             Add("instances", "Dungeons and raids", "instance", "instance", "Sorted by level", 60, AtlasNav.World, keywords: "dungeons raids instances");
-            Add("spells", "Spells", "spell", "spell", "Class abilities, weapon and armor skills, recipes", 70, AtlasNav.Character, "spells", "Spells and talents", "abilities");
-            Add("skills", "Skills and professions", "skill", "skill", "Professions, weapon skills, languages", 80, AtlasNav.Character, "professions", "Professions", "weapon skills languages");
-            Add("recipes", "Recipes", "spell", "spell", "What each profession makes, by skill level", 90, AtlasNav.Character, "professions", "Professions", "crafting patterns");
+            Add("spells", "Spells", "spell", "spell", "Class abilities, weapon and armor skills, recipes", 76, AtlasNav.Character, keywords: "abilities");
+            Add("skills", "Skills", "skill", "skill", "Weapon and armor skills, languages, riding and the class skill lines", 92, AtlasNav.Character, keywords: "weapon skills languages riding lockpicking proficiencies");
+            Add("recipes", "Recipes", "spell", "spell", "Every recipe of every profession, by skill level", 90, AtlasNav.Character, keywords: "crafting patterns plans schematics formulas");
             Add("factions", "Factions", "faction", "faction", "Reputations", 100, AtlasNav.Character, keywords: "reputation");
             Add("classes", "Classes", "class", "class", "Every class: spells by level, proficiencies, races", 72, AtlasNav.Character, keywords: "warrior paladin hunter rogue priest shaman mage warlock druid spellbook");
             Add("races", "Races", "race", "race", "Every playable race: racial abilities, classes, side", 74, AtlasNav.Character, keywords: "human orc dwarf night elf undead tauren gnome troll skyborne racial");
