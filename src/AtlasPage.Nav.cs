@@ -16,7 +16,7 @@ namespace ElansAddonHub
     // the Pin button. Everything here is built from caches (the registry, the counts of the indexes already built, the id lists): it never waits for a page.
     public partial class AtlasPage
     {
-        public const double NavWide = 216, NavNarrow = 56, NavCollapseBelow = 1000, RecentsShown = 5;
+        public const double NavWide = 240, NavNarrow = 56, NavCollapseBelow = 1000, RecentsShown = 5;
         AtlasNavState nav;
         Settings navSettings;
         Action navSave;
@@ -66,7 +66,7 @@ namespace ElansAddonHub
             ApplyNavWidth();
         }
 
-        // wide: the 216 px nav; narrow (the page is under 1000 px): a 56 px strip of icons with tooltips
+        // wide: the 240 px nav (as wide as the Lodge's and the Characters' side menus); narrow (the page is under 1000 px): a 56 px strip of icons with tooltips
         void ApplyNavWidth()
         {
             bool narrow = ActualWidth > 0 && ActualWidth < NavCollapseBelow;

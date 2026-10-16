@@ -47,8 +47,8 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ the sub-navigation
                 var rows = AtlasView.NavRowsForTest;
-                Check("nav: the 216 px sub-navigation lists Home on top (no Search row since 2.71.1: the title bar box and Ctrl+K are the search), the groups Database, World, Character and Lodge (the Lodge has finds here) with the registry's rows, and Data sources at the bottom",
-                    !AtlasView.NavCollapsedForTest && Math.Abs(AtlasView.NavWidthForTest - 216) < 1 && AtlasView.NavGroupsForTest.SequenceEqual(new[] { "Database", "World", "Character", "Lodge" })
+                Check("nav: the 240 px sub-navigation lists Home on top (no Search row since 2.71.1: the title bar box and Ctrl+K are the search), the groups Database, World, Character and Lodge (the Lodge has finds here) with the registry's rows, and Data sources at the bottom",
+                    !AtlasView.NavCollapsedForTest && Math.Abs(AtlasView.NavWidthForTest - 240) < 1 && AtlasView.NavGroupsForTest.SequenceEqual(new[] { "Database", "World", "Character", "Lodge" })
                     && !rows.Contains("Search") && new[] { "Home", "Items", "Creatures", "Objects", "Quests", "World map", "Zones", "Dungeons and raids", "Classes", "Races", "Spells", "Talents", "Professions", "Recipes", "Skills", "Factions", "Finds", "Data sources" }.All(rows.Contains),
                     string.Join(" | ", rows) + " groups=" + string.Join(",", AtlasView.NavGroupsForTest));
                 Check("nav (2.71.1): Spells and Talents are two rows, Professions, Recipes and Skills three - no shared row 'Spells and talents', no 'Skills and professions', each row listed once", !rows.Contains("Spells and talents") && !rows.Contains("Skills and professions") && rows.Count == rows.Distinct().Count()

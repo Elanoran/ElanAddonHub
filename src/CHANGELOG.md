@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.72.2
+- **The side menus are all the same width.** The Atlas and Settings menus are now as wide as the Lodge's and the Characters' (240 px), and the search box in the title bar ends where the menus end.
+- **The Lodge sits on the page like the rest.** The chat, calendar, files and ladder no longer have an extra card with padding inside the page.
+
 ## 2.72.1
 - **About is wider.** The About page uses more of the window, so the credits fit on one line each.
 - **Credit to Radio Paradise.** Credits lists Radio Paradise with a link to their support page, and Settings > Radio Paradise has a "Support Radio Paradise" link next to the name.
