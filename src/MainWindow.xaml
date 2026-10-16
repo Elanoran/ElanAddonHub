@@ -64,8 +64,8 @@
             <TextBlock x:Name="RailVersion" HorizontalAlignment="Center" Margin="0,4,0,0" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}"
                        Cursor="Hand" Background="Transparent" ToolTipService.Placement="Right" MouseLeftButtonUp="RailVersion_Click" />
           </StackPanel>
-          <StackPanel DockPanel.Dock="Top" Margin="0,0,0,0">
-            <!-- Addons sits level with the title bar (no empty strip above it); the divider under it lines up with the top of the page panel -->
+          <StackPanel DockPanel.Dock="Top" Margin="0,6,0,0">
+            <!-- Addons sits level with the title bar (no empty strip above it); the divider under it lines up with the top of the page panel; 6 down so the Addons tile and the title search share their top edge -->
             <Grid Margin="0,0,0,0">
               <RadioButton x:Name="TabAddons" Style="{StaticResource RailButton}" GroupName="tabs" IsChecked="True" Checked="Tab_Checked"
                            ToolTip="Addons  (Ctrl+1)" ToolTipService.Placement="Right" AutomationProperties.Name="Addons">
@@ -81,7 +81,7 @@
                 <TextBlock x:Name="HealthBadgeText" Style="{StaticResource Text.Caption}" FontWeight="Bold" Foreground="{StaticResource Brush.OnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Border>
             </Grid>
-            <Border Width="28" Height="2" CornerRadius="1" Background="{StaticResource Brush.Divider}" Margin="0,3,0,8" />
+            <Border Width="28" Height="2" CornerRadius="1" Background="{StaticResource Brush.Divider}" Margin="0,-3,0,14" />
             <Grid>
               <RadioButton x:Name="TabLodge" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                            ToolTip="Lodge  (Ctrl+2)" ToolTipService.Placement="Right" AutomationProperties.Name="Lodge">
