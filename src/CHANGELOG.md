@@ -4,6 +4,7 @@ Newest first. `Tools/release.py` (addon repo) reads the sections newer than the 
 Keep one `## x.y.z` section per hub version.
 
 ## 2.71.1
+- **The left bar sits higher.** The empty space above the Addons button is gone; the line under it now lines up with the top of the page.
 - **Atlas breadcrumb:** the page you are on is now the same size as the rest of the path.
 - **One search box.** The Atlas no longer has search boxes of its own: the big box at the top of Atlas Home and the "Search" row at the top of the Atlas side menu are gone. The search box in the title bar (and Ctrl+K) is the one way to search, on every page; it works the same as before. Atlas Home now starts straight with Continue (or the Classic data banner).
 - **A little colour in the side menus.** The menus beside the pages (the Atlas side menu, the Lodge's channel list, the character list on the Characters page and the Settings menu) sit on a slightly lighter background, so they read apart from the page. Each section has its own soft colour: in the Atlas, Database is teal, World green, Character amber and Lodge violet; in the Lodge, text channels are blue, voice rooms rose, the people lists violet and Calendar, Files and Ladder each their own; in Settings every category has its own. The colour shows in the section's title, its icons and the row you are on (a soft tint and a small bar on its left). On the Characters page the row you are on takes your character's class colour. The text itself keeps its usual calm grey and white.
