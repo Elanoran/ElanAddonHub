@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.72.3
+- **Album covers in the radio player.** A small cover of the song that is playing now sits before "Artist - Title" in the title bar (a music note when there is none).
+- **Click the song for more.** A click on the cover or the title opens a card with a larger cover, the title, artist, album and year, the channel, and the links to Radio Paradise and **Support Radio Paradise**. If the player shows Retry or a problem, that is there too.
+- **The volume is a slider now.** A small slider sits right in the player, and a click on the speaker mutes the music (click again to bring it back). The music still steps back when people talk in a Lodge voice room. On a narrow window the slider and the channel move into the song card.
+- **Asked politely.** The cover and details come from radioparadise.com: one question per song, only while you listen, never more often than every 15 seconds, a song you already heard since the Outpost started needs no question at all, and covers are kept on your PC. If the details do not match the song you hear, or anything fails, you just get the title without a cover. Settings > General > Radio Paradise > **Show album covers and song details** turns it off.
+
 ## 2.72.2
 - **The side menus are all the same width.** The Atlas and Settings menus are now as wide as the Lodge's and the Characters' (240 px), and the search box in the title bar ends where the menus end.
 - **The Lodge sits on the page like the rest.** The chat, calendar, files and ladder no longer have an extra card with padding inside the page.
