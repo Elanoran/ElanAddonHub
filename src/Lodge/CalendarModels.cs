@@ -132,8 +132,52 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---------------------------------------------------------------- month cell content: labelled bars and chips
-        public const int MaxLanes = 2;                      // lines of content a day cell has under its number: bars and chips share them
+        public const int MaxLanes = 2;                      // lines of content a day cell has under its number at the smallest size: bars and chips share them (a bigger window gives more, see MonthMetrics)
         public const int Columns = 7, GridRows = 6;
+
+        // ---------------------------------------------------------------- month grid size (Outpost 2.77)
+        // The grid takes the width it is given; day cells stay square-ish (row = 0.85 x the cell's width) between MinRow and MaxRow, so they grow with the
+        // window. From SideMin on, the selected day's list moves beside the grid (SidePanel wide) and a row is also kept short enough for the whole month to
+        // fit the visible height. The lines a day has (Lanes) follow its height: the number on top, lines from FirstLaneTop, LanePitch apart, then "+N more".
+        // Narrow cells (Compact, under 64 wide) draw slim colour bars without text; cells under WideCell drop the start time from a chip.
+        public const double MinRow = 84, MaxRow = 220, FirstLaneTop = 28, LanePitch = 20, CompactPitch = 8, ChipHeight = 16, CompactChip = 6, MoreHeight = 16;
+        public const double SidePanel = 320, SideGap = 24, SideMin = 1040, CompactCell = 64, WideCell = 120, MonthChrome = 112;
+        public const int MostLanes = 8;
+
+        public struct MonthMetrics
+        {
+            public double GridWidth, CellWidth, RowHeight;
+            public int Lanes;
+            public bool Side, Compact, Wide;
+            public double Pitch => Compact ? CompactPitch : LanePitch;
+            public double Chip => Compact ? CompactChip : ChipHeight;
+            public double LaneTop(int lane) => FirstLaneTop + lane * Pitch;
+            public double MoreTop => FirstLaneTop + Lanes * Pitch;            // its 14 px line ends 2 above the row's end (the cell's margin)
+        }
+
+        // width = what the month column has (inside its margins), viewportHeight = the visible height of the month page (0 = unknown)
+        public static MonthMetrics Metrics(double width, double viewportHeight)
+        {
+            var m = new MonthMetrics();
+            width = Math.Max(Columns * 32, width);
+            m.Side = width >= SideMin;
+            m.GridWidth = m.Side ? width - SidePanel - SideGap : width;
+            m.CellWidth = m.GridWidth / Columns;
+            m.Compact = m.CellWidth < CompactCell;
+            m.Wide = m.CellWidth >= WideCell;
+            double row = Math.Round(m.CellWidth * 0.85);
+            if (m.Side && viewportHeight > 0)
+            {
+                double fit = Math.Floor((viewportHeight - MonthChrome) / GridRows);
+                row = Math.Min(row, Math.Max(MinRow, fit));
+            }
+            m.RowHeight = Math.Max(MinRow, Math.Min(MaxRow, row));
+            m.Lanes = Math.Max(MaxLanes, Math.Min(MostLanes, (int)Math.Floor((m.RowHeight - FirstLaneTop - MoreHeight) / m.Pitch)));
+            return m;
+        }
+
+        // the words on a chip at this size: "20:00 Molten Core" when the cell is wide enough, else the title alone (a holiday is always its title)
+        public static string DrawnLabel(MonthSeg s, MonthMetrics m) => m.Wide || s.IsBar ? s.Label : s.Ev.Title;
 
         public class MonthSeg
         {
@@ -169,18 +213,19 @@ namespace ElansAddonHub.Lodge
             last = e.EndUtc > e.StartUtc ? ToLocal(e.EndUtc.AddMinutes(-1)).Date : first;
         }
 
-        // Lays the six week rows out. Every day has MaxLanes lines under its number. A multi-day holiday takes ONE line for the days it covers inside a week
+        // Lays the six week rows out. Every day has `lanes` lines under its number (MaxLanes = 2 at the smallest size). A multi-day holiday takes ONE line for the days it covers inside a week
         // row (so it reads as a single bar, labelled where the row starts and again after a gap); the lines left on a day go to its one-day events, most important
         // first. A day always keeps one line for its own event when it has one (a Lodge event is never pushed out by two holidays). What does not fit is counted
         // as "+N more".
-        public static MonthLayout Layout(IList<DayCell> cells)
+        public static MonthLayout Layout(IList<DayCell> cells, int lanes = MaxLanes)
         {
+            int nLanes = Math.Max(1, lanes);                 // the lines this size of cell has (2 at the smallest)
             var res = new MonthLayout();
             for (int row = 0; row < GridRows && (row + 1) * Columns <= cells.Count; row++)
             {
                 int r0 = row * Columns;
-                var cap = new int[Columns]; var occ = new bool[Columns, MaxLanes]; var hidden = new int[Columns];
-                for (int c = 0; c < Columns; c++) cap[c] = MaxLanes - (cells[r0 + c].Events.Count > 0 ? 1 : 0);
+                var cap = new int[Columns]; var occ = new bool[Columns, nLanes]; var hidden = new int[Columns];
+                for (int c = 0; c < Columns; c++) cap[c] = nLanes - (cells[r0 + c].Events.Count > 0 ? 1 : 0);
                 var bars = new List<(EventVM ev, int first, int last)>();
                 foreach (var ev in cells.Skip(r0).Take(Columns).SelectMany(x => x.Bands).Distinct())
                 {
@@ -192,7 +237,7 @@ namespace ElansAddonHub.Lodge
                 {
                     // the line (0 or 1) that is free on most of the bar's days; the bar is drawn on the runs of days where it is free, the other days are counted as "more"
                     int lane = 0, best = -1;
-                    for (int L = 0; L < MaxLanes; L++)
+                    for (int L = 0; L < nLanes; L++)
                     {
                         int n = 0;
                         for (int c = b.first; c <= b.last; c++) if (L < cap[c] && !occ[c, L]) n++;
@@ -216,7 +261,7 @@ namespace ElansAddonHub.Lodge
                 }
                 for (int c = 0; c < Columns; c++)
                 {
-                    var free = Enumerable.Range(0, MaxLanes).Where(L => !occ[c, L]).ToList();
+                    var free = Enumerable.Range(0, nLanes).Where(L => !occ[c, L]).ToList();
                     var chips = cells[r0 + c].Events.OrderBy(ChipPriority).ThenBy(e => e.StartUtc).ThenBy(e => e.Title, StringComparer.Ordinal).ToList();
                     var shown = chips.Take(free.Count).OrderBy(e => e.StartUtc).ThenBy(e => ChipPriority(e)).ToList();
                     for (int i = 0; i < shown.Count; i++)

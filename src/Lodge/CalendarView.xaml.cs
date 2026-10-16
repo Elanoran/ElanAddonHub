@@ -21,10 +21,23 @@ namespace ElansAddonHub.Lodge
         bool selected;
         public MonthCellVM(CalendarRules.DayCell c) { Cell = c; }
         public string Number => Cell.Number;
+        public bool IsWeekend => Cell.Day.DayOfWeek == DayOfWeek.Saturday || Cell.Day.DayOfWeek == DayOfWeek.Sunday;
         public bool Selected { get => selected; set { if (Set(ref selected, value)) { Raise(nameof(Fill)); } } }
-        public Brush Fill => selected ? Avatar.Res("Brush.Accent.Tint") : Cell.IsToday ? Avatar.Res("Brush.Overlay.Chip") : System.Windows.Media.Brushes.Transparent;
-        public Brush NumberBrush => Avatar.Res(Cell.InMonth ? "Brush.Text.Primary" : "Brush.Text.Tertiary");
+        // selected = the accent tint; a day of this month = a faint tile (fainter on the weekend); other months = nothing (and dimmed)
+        public Brush Fill => selected ? Avatar.Res("Brush.Accent.Tint") : !Cell.InMonth ? System.Windows.Media.Brushes.Transparent : Avatar.Res(IsWeekend ? "Brush.Cal.Weekend" : "Brush.Cal.Day");
+        // today: the number sits in an accent circle (on-accent text), whatever is selected
+        public Visibility TodayVisibility => Cell.IsToday ? Visibility.Visible : Visibility.Collapsed;
+        public Brush NumberBrush => Avatar.Res(Cell.IsToday ? "Brush.OnAccent" : Cell.InMonth ? "Brush.Text.Primary" : "Brush.Text.Tertiary");
+        public FontWeight NumberWeight => Cell.IsToday ? FontWeights.SemiBold : FontWeights.Normal;
         public double CellOpacity => Cell.InMonth ? 1 : 0.6;
+    }
+
+    // a weekday name over the grid (the weekend ones quieter)
+    public class WeekdayVM
+    {
+        public string Name { get; set; }
+        public Brush Brush { get; set; }
+        public bool Weekend { get; set; }
     }
 
     // agenda / day cards: the Lodge event card, or the quiet read-only card of a WoW event
@@ -35,11 +48,12 @@ namespace ElansAddonHub.Lodge
         public override DataTemplate SelectTemplate(object item, DependencyObject container) => (item as EventVM)?.IsWow == true ? Wow : Server;
     }
 
-    // The calendar page of the Lodge: Agenda (default) and Month, the event detail card and the create / edit form. All state is in LodgeSession.
+    // The calendar page of the Lodge: Month (default) and Agenda (the last one picked is kept while the app runs), the event detail card and the create / edit form. All state is in LodgeSession.
     public partial class CalendarView : UserControl
     {
         LodgeSession S;
-        bool agenda = true;
+        bool agenda;                       // Month is the default; the choice is kept for as long as the app runs (this view lives with the Lodge page)
+        bool monthPicked;                  // a month was chosen (navigation, an event): Show() keeps it; else it opens on today's month
         int year, month;
         DateTime? selectedDay;
         string lastSignature = "";
@@ -75,6 +89,8 @@ namespace ElansAddonHub.Lodge
         public void Show()
         {
             NewButton.Visibility = EmptyNew.Visibility = S.MyRole == "guest" ? Visibility.Collapsed : Visibility.Visible;
+            if (!monthPicked) { var t = CalendarRules.ToLocal(Now); year = t.Year; month = t.Month; selectedDay = null; }
+            MonthScroll.ScrollToTop();             // the calendar opens on the grid, not where a day's list was scrolled to
             Rebuild(true);
         }
 
@@ -158,49 +174,98 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---- month
+        CalendarRules.MonthMetrics metrics = CalendarRules.Metrics(632, 0);
+        List<MonthCellVM> monthCells;
+        int builtMonth = -1;
+
         void BuildMonth()
         {
             S.EnsureMonth(year, month);
+            ApplyMonthMetrics(false, false);
             var first = new DateTime(year, month, 1);
+            if (builtMonth != year * 12 + month) { builtMonth = year * 12 + month; MonthScroll.ScrollToTop(); }   // another month starts at its grid
             MonthTitle.Text = first.ToString("MMMM yyyy", CalendarRules.English);
             var fdw = (int)CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek;
-            WeekdayRow.ItemsSource = Enumerable.Range(0, 7).Select(i => CalendarRules.English.DateTimeFormat.GetAbbreviatedDayName((DayOfWeek)((fdw + i) % 7))).ToList();
+            WeekdayRow.ItemsSource = Enumerable.Range(0, 7).Select(i => (DayOfWeek)((fdw + i) % 7)).Select(d => new WeekdayVM
+            {
+                Name = CalendarRules.English.DateTimeFormat.GetAbbreviatedDayName(d), Weekend = d == DayOfWeek.Saturday || d == DayOfWeek.Sunday,
+                Brush = Avatar.Res(d == DayOfWeek.Saturday || d == DayOfWeek.Sunday ? "Brush.Text.Tertiary" : "Brush.Text.Secondary"),
+            }).ToList();
             var cells = CalendarRules.MonthGrid(year, month, S.CalendarEvents, Now).Select(c => new MonthCellVM(c)).ToList();
             var today = CalendarRules.ToLocal(Now).Date;
             if (selectedDay == null || selectedDay.Value.Year != year || selectedDay.Value.Month != month) selectedDay = today.Year == year && today.Month == month ? today : first;
             foreach (var c in cells) c.Selected = c.Cell.Day == selectedDay.Value;
+            monthCells = cells;
             MonthGridList.ItemsSource = cells;
-            monthLayout = CalendarRules.Layout(cells.Select(c => c.Cell).ToList());
+            UpdateTodayButton();
+            monthLayout = CalendarRules.Layout(cells.Select(c => c.Cell).ToList(), metrics.Lanes);
             DrawOverlay(cells);
             ShowDay();
         }
 
-        // ---- the bars and chips over the month grid (positions come from CalendarRules.Layout; everything has a fixed size, nothing here changes the grid's height)
+        // "Today" does nothing while today is the selected day of the month shown
+        void UpdateTodayButton()
+        {
+            var today = CalendarRules.ToLocal(Now).Date;
+            TodayButton.IsEnabled = !(today.Year == year && today.Month == month && selectedDay == today);
+        }
+
+        // ---- size: the grid follows the window (CalendarRules.Metrics); what a month holds never changes it
+        void MonthScroll_SizeChanged(object sender, SizeChangedEventArgs e) => ApplyMonthMetrics(true, false);
+
+        void ApplyMonthMetrics(bool redraw, bool force)
+        {
+            double w = MonthScroll.ActualWidth;
+            if (w <= 0) return;
+            var m = CalendarRules.Metrics(w - MonthHost.Margin.Left - MonthHost.Margin.Right, MonthScroll.ActualHeight);
+            if (!force && m.Equals(metrics) && MonthGridList.Height == CalendarRules.GridRows * m.RowHeight) return;
+            bool relayout = m.Lanes != metrics.Lanes || m.Compact != metrics.Compact || m.Wide != metrics.Wide;
+            metrics = m;
+            SideColumn.Width = new GridLength(m.Side ? CalendarRules.SidePanel + CalendarRules.SideGap : 0);
+            Grid.SetRow(DayPanel, m.Side ? 0 : 1); Grid.SetColumn(DayPanel, m.Side ? 1 : 0);
+            DayPanel.Margin = m.Side ? new Thickness(CalendarRules.SideGap, 0, 0, 0) : new Thickness(0, 24, 0, 0);
+            MonthGridList.Height = CalendarRules.GridRows * m.RowHeight;
+            foreach (var rd in MonthOverlay.RowDefinitions) rd.Height = new GridLength(m.RowHeight);
+            if (redraw && (relayout || force) && monthCells != null && S != null)
+            {
+                monthLayout = CalendarRules.Layout(monthCells.Select(c => c.Cell).ToList(), m.Lanes);
+                DrawOverlay(monthCells);
+            }
+        }
+
+        // ---- the bars and chips over the month grid (positions come from CalendarRules.Layout, sizes from the metrics; nothing here changes the grid's height)
         CalendarRules.MonthLayout monthLayout;
-        static readonly double[] LaneTop = { 28, 48 };        // y of line 0 / 1 inside a 84 high day slot: number 4..22, then 16 high lines 4 apart, then "+N more"
-        const double ChipHeight = 16, MoreTop = 68;
 
         void DrawOverlay(IList<MonthCellVM> cells)
         {
             MonthOverlay.Children.Clear();
             if (monthLayout == null) return;
             var cap = (Style)FindResource("Text.Caption");
+            var m = metrics;
             foreach (var s in monthLayout.Segs)
             {
                 var ev = s.Ev;
                 double dim = cells[s.Row * CalendarRules.Columns + s.Col].Cell.InMonth ? 1 : 0.6;
-                var cr = new CornerRadius(s.LeftOpen ? 0 : 8, s.RightOpen ? 0 : 8, s.RightOpen ? 0 : 8, s.LeftOpen ? 0 : 8);
-                var g = new Grid { Height = ChipHeight, VerticalAlignment = VerticalAlignment.Top, Opacity = dim, ClipToBounds = true, IsHitTestVisible = false };
-                g.Margin = new Thickness(s.LeftOpen ? 0 : 4, LaneTop[s.Lane], s.RightOpen ? 0 : 4, 0);
-                g.Children.Add(new Border { Background = ev.TintBrush, CornerRadius = cr });
-                if (!s.LeftOpen || s.IsBar)
+                double r = m.Compact ? m.Chip / 2 : 8;
+                var cr = new CornerRadius(s.LeftOpen ? 0 : r, s.RightOpen ? 0 : r, s.RightOpen ? 0 : r, s.LeftOpen ? 0 : r);
+                var g = new Grid { Height = m.Chip, VerticalAlignment = VerticalAlignment.Top, Opacity = dim, ClipToBounds = true, Cursor = Cursors.Hand, Background = Brushes.Transparent };
+                g.Margin = new Thickness(s.LeftOpen ? 0 : 4, m.LaneTop(s.Lane), s.RightOpen ? 0 : 4, 0);
+                // compact: the bar itself in the kind's colour (no room for words); otherwise the tint with a mark in the colour and the label
+                g.Children.Add(new Border { Background = m.Compact ? ev.BarBrush : ev.TintBrush, CornerRadius = cr });
+                var hv = new Border { Background = Avatar.Res("Brush.Overlay.Hover"), CornerRadius = cr, Opacity = 0, IsHitTestVisible = false };
+                g.Children.Add(hv);
+                if (!m.Compact && (!s.LeftOpen || s.IsBar))
                     g.Children.Add(new Rectangle { Width = 3, Height = 8, RadiusX = 1.5, RadiusY = 1.5, Fill = ev.BarBrush, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) });
                 g.Children.Add(new TextBlock
                 {
-                    Text = s.Label, Style = cap, Foreground = Avatar.Res("Brush.Text.Primary"), TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap,
-                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0),
+                    Text = CalendarRules.DrawnLabel(s, m), Style = cap, Foreground = Avatar.Res("Brush.Text.Primary"), TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap,
+                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0), Visibility = m.Compact ? Visibility.Collapsed : Visibility.Visible,
                 });
                 if (ev.IsCancelled) g.Opacity = dim * 0.6;
+                g.ToolTip = s.Label + " · " + ev.TypeLabel + (ev.IsCancelled ? " · cancelled" : "");
+                g.MouseEnter += (o, a) => hv.Opacity = 1;
+                g.MouseLeave += (o, a) => hv.Opacity = 0;
+                g.MouseLeftButtonUp += (o, a) => { a.Handled = true; OpenDetail(ev); };
                 Grid.SetRow(g, s.Row); Grid.SetColumn(g, s.Col); Grid.SetColumnSpan(g, s.Span);
                 g.Tag = s;
                 MonthOverlay.Children.Add(g);
@@ -209,11 +274,27 @@ namespace ElansAddonHub.Lodge
             {
                 int n = monthLayout.More[i];
                 if (n <= 0) continue;
-                var t = new TextBlock { Text = "+" + n + " more", Style = cap, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, MoreTop, 0, 0), Opacity = cells[i].Cell.InMonth ? 1 : 0.6, IsHitTestVisible = false };
+                var day = cells[i].Cell.Day;
+                var t = new TextBlock
+                {
+                    Text = "+" + n + " more", Style = cap, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(4, m.MoreTop, 4, 0),
+                    Padding = new Thickness(4, 0, 4, 0), Opacity = cells[i].Cell.InMonth ? 1 : 0.6, Background = Brushes.Transparent, Cursor = Cursors.Hand,
+                    TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap, ToolTip = "Show everything on " + day.ToString("ddd d MMM", CalendarRules.English),
+                };
+                t.MouseEnter += (o, a) => t.Foreground = Avatar.Res("Brush.Text.Primary");
+                t.MouseLeave += (o, a) => t.ClearValue(TextBlock.ForegroundProperty);
+                t.MouseLeftButtonUp += (o, a) => { a.Handled = true; OpenDay(day); };
                 Grid.SetRow(t, i / CalendarRules.Columns); Grid.SetColumn(t, i % CalendarRules.Columns);
                 t.Tag = i;
                 MonthOverlay.Children.Add(t);
             }
+        }
+
+        // "+N more": select that day and bring its list into view (beside the grid on a wide window it already is)
+        void OpenDay(DateTime day)
+        {
+            SelectDay(day);
+            if (!metrics.Side) { UpdateLayout(); DayPanel.BringIntoView(new Rect(0, 0, Math.Max(1, DayPanel.ActualWidth), Math.Max(1, Math.Min(DayPanel.ActualHeight, 240)))); }
         }
 
         void ShowDay()
@@ -234,14 +315,54 @@ namespace ElansAddonHub.Lodge
         void SelectDay(DateTime day)
         {
             selectedDay = day.Date;
-            if (day.Year != year || day.Month != month) { year = day.Year; month = day.Month; BuildMonth(); return; }
+            monthPicked = true;
+            if (day.Year != year || day.Month != month)
+            {
+                int dir = new DateTime(day.Year, day.Month, 1) > new DateTime(year, month, 1) ? 1 : -1;
+                year = day.Year; month = day.Month;
+                BuildMonth(); SlideMonth(dir);
+                return;
+            }
             foreach (var c in MonthGridList.Items.OfType<MonthCellVM>()) c.Selected = c.Cell.Day == selectedDay.Value;
+            UpdateTodayButton();
             ShowDay();
         }
 
-        void MonthPrev_Click(object sender, RoutedEventArgs e) { var d = new DateTime(year, month, 1).AddMonths(-1); year = d.Year; month = d.Month; BuildMonth(); }
-        void MonthNext_Click(object sender, RoutedEventArgs e) { var d = new DateTime(year, month, 1).AddMonths(1); year = d.Year; month = d.Month; BuildMonth(); }
-        void MonthToday_Click(object sender, RoutedEventArgs e) { var t = CalendarRules.ToLocal(Now).Date; year = t.Year; month = t.Month; selectedDay = t; BuildMonth(); }
+        void GoMonth(int delta)
+        {
+            var d = new DateTime(year, month, 1).AddMonths(delta);
+            year = d.Year; month = d.Month; monthPicked = true;
+            BuildMonth();
+            SlideMonth(delta);
+        }
+        void MonthPrev_Click(object sender, RoutedEventArgs e) => GoMonth(-1);
+        void MonthNext_Click(object sender, RoutedEventArgs e) => GoMonth(1);
+        void MonthToday_Click(object sender, RoutedEventArgs e)
+        {
+            var t = CalendarRules.ToLocal(Now).Date;
+            int dir = new DateTime(t.Year, t.Month, 1).CompareTo(new DateTime(year, month, 1));
+            year = t.Year; month = t.Month; selectedDay = t; monthPicked = false;
+            BuildMonth();
+            SlideMonth(dir);
+        }
+
+        // a month change slides the grid and the title in from the side it comes from (24 px + fade, Standard motion); nothing moves with Windows animations off
+        int slides;
+        void SlideMonth(int dir)
+        {
+            if (!Motion.Enabled || dir == 0) return;
+            slides++;
+            foreach (var el in new FrameworkElement[] { MonthGridHost, MonthTitle })
+            {
+                var tt = new TranslateTransform(24 * Math.Sign(dir), 0);
+                el.RenderTransform = tt;
+                var slide = new DoubleAnimation(24 * Math.Sign(dir), 0, Motion.Standard) { EasingFunction = Motion.EaseOut };
+                var target = el;
+                slide.Completed += (o, a) => { if (target.RenderTransform == tt) target.RenderTransform = Transform.Identity; };
+                tt.BeginAnimation(TranslateTransform.XProperty, slide);
+                el.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, Motion.Standard) { EasingFunction = Motion.EaseOut });
+            }
+        }
 
         // ---- opening one event (from a chat card, the sidebar line or a click)
         public void OpenEvent(EventVM ev)
@@ -251,7 +372,7 @@ namespace ElansAddonHub.Lodge
             // only the chat card's snapshot is known: show its month, and open it when the server's answer arrives
             var l = CalendarRules.ToLocal(ev.StartUtc);
             ModeMonth.IsChecked = true;
-            year = l.Year; month = l.Month; selectedDay = l.Date;
+            year = l.Year; month = l.Month; selectedDay = l.Date; monthPicked = true;
             pendingOpenId = ev.Id;
             BuildMonth();
         }
@@ -528,7 +649,18 @@ namespace ElansAddonHub.Lodge
         public void SetModeForTest(bool agendaMode) { (agendaMode ? ModeAgenda : ModeMonth).IsChecked = true; }
         public IList<MonthCellVM> MonthCellsForTest => MonthGridList.ItemsSource as IList<MonthCellVM>;
         public string MonthTitleForTest => MonthTitle.Text;
-        public void ShowMonthForTest(int y, int m, DateTime? day = null) { year = y; month = m; selectedDay = day; ModeMonth.IsChecked = true; BuildMonth(); }
+        public void ShowMonthForTest(int y, int m, DateTime? day = null) { year = y; month = m; selectedDay = day; monthPicked = true; ModeMonth.IsChecked = true; BuildMonth(); }
+        public bool MonthFirstInSegmentForTest => ((Panel)ModeMonth.Parent).Children.IndexOf(ModeMonth) == 0 && ((Panel)ModeMonth.Parent).Children.IndexOf(ModeAgenda) == 1;
+        public CalendarRules.MonthMetrics MonthMetricsForTest => metrics;
+        public bool DayPanelBesideForTest => Grid.GetColumn(DayPanel) == 1;
+        public FrameworkElement DayPanelForTest => DayPanel;
+        public FrameworkElement MonthColumnForTest => MonthColumn;
+        public IList<WeekdayVM> WeekdaysForTest => WeekdayRow.ItemsSource as IList<WeekdayVM>;
+        public void MonthGoForTest(int delta) => GoMonth(delta);
+        public void MonthTodayForTest() => MonthToday_Click(null, null);
+        public bool TodayButtonEnabledForTest => TodayButton.IsEnabled;
+        public int SlidesForTest => slides;
+        public void OpenDayForTest(DateTime day) => OpenDay(day);
         public void SelectDayForTest(DateTime d) => SelectDay(d);
         public IList<EventVM> DayEventsForTest => (DayEvents.ItemsSource as IEnumerable<EventVM>)?.ToList() ?? new List<EventVM>();
         public string DayTitleForTest => DayTitle.Text;

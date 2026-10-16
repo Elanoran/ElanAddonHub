@@ -7,6 +7,10 @@ Keep one `## x.y.z` section per hub version.
 - **Talents: a cleaner top.** The "Plan a build for any class" line above the talent trees is gone; the class buttons say it all.
 - **Talents: the hint under the trees is right now.** It reads: click a talent to add a point, right-click to take one back, Ctrl+click to open its spell page. With the keyboard, Enter or + adds a point and Delete or - takes one back (the + and - keys next to Backspace work too now, not only the ones on the number pad).
 - **Talents: Open in Seemeta.** A new button opens the class and the build on screen in Seemeta's WoW Forever talent calculator, in the Outpost browser. Only the class and the talent ranks go into the address.
+- **The Lodge calendar opens on the month.** Month is now the first tab and the default; Agenda is one click away, and the calendar remembers which one you used last until you close the app.
+- **The month fills your window.** Day tiles grow with the window and stay roughly square, so a big screen shows more events per day ("+2 more" counts the rest; click it to see the whole day). On a wide window the chosen day's events sit beside the month instead of under it. In a small window the events become slim coloured bars.
+- **Easier to read at a glance.** Today's date is in a green circle, weekends are a little quieter, chips show the start time when there is room ("20:00 Molten Core") and just the title when there is not, and clicking a chip opens that event. The weekday names follow your Windows week start (Monday or Sunday).
+- **Smooth month changes.** Previous / next / Today slide the month in; with Windows animations turned off it changes instantly.
 
 ## 2.76.1
 - **No more jumping between Atlas lists.** Going from Creatures to Objects, Items and the other lists, the page's own scroll bar no longer pops up for a moment and goes again (the list was first given a guessed height that was too tall). The list now fits the window before it is shown.
