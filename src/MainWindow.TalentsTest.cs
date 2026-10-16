@@ -395,6 +395,10 @@ EHH.DefaultBuild = ""pack""
                     UpdateLayout();
                     var ps = page.PanelsForTest;
                     TalentArrowModel Arrow(int from, int to) => ps.SelectMany(p => p.Model.Arrows).FirstOrDefault(a => a.From == from && a.To == to);
+                    var gold = ((System.Windows.Media.SolidColorBrush)Application.Current.Resources["Brush.Section.Character"]).Color;
+                    Check("renderer: each tree has a thin gold frame in the Talents menu row's hue (Brush.Section.Character)",
+                        ps.Count == 3 && ps.All(p => p.BorderBrush is System.Windows.Media.SolidColorBrush b && b.Color == gold && p.BorderThickness.Left >= 1 && p.BorderThickness.Top >= 1),
+                        string.Join(", ", ps.Select(p => (p.BorderBrush as System.Windows.Media.SolidColorBrush)?.Color + "/" + p.BorderThickness.Left)));
                     Check("renderer: one panel per tree, headers 'Beast Mastery 8 / 51', 'Marksmanship 0 / 51', 'Survival 0 / 51' (spent / the class' 51 points)",
                         ps.Count == 3 && ps.Select(p => p.Model.HeaderText).SequenceEqual(new[] { "Beast Mastery 8 / 51", "Marksmanship 0 / 51", "Survival 0 / 51" }) && ps[0].PointsBlock.Text == "8 / 51" && ps[0].TitleText.Text == "Beast Mastery",
                         string.Join(", ", ps.Select(p => p.Model.HeaderText)));

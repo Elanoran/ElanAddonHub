@@ -312,6 +312,9 @@ namespace ElansAddonHub
             var radius = (CornerRadius)Application.Current.Resources["Radius.Card"];
             CornerRadius = radius;
             Background = Res(surfaceKey ?? "Brush.Surface1");
+            // a thin gold frame per tree, in the hue of the Talents row of the Atlas menu (the Character group)
+            SetResourceReference(BorderBrushProperty, "Brush.Section.Character");
+            BorderThickness = new Thickness(1);
             var layers = new System.Windows.Controls.Grid();
             var back = m.Art == null ? null : ArtLibrary.Backdrop(m.Art, "Brush.Art.Veil", radius, "tree-art");
             Painted = back != null;
