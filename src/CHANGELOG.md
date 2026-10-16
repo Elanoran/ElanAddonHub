@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.72.4
+- **Fewer "Select game instance" windows from CurseForge.** For CurseForge addons whose author only allows updates through CurseForge (Details!, HealBot ...): if CurseForge's own auto-update is on for the addon, the Outpost now lets CurseForge install the update by itself instead of sending it an install link, so CurseForge's window does not appear. If CurseForge is closed, it is started minimized, the card shows "CurseForge is updating it..." and CurseForge is closed again afterwards. If CurseForge is already open, it installs the update on its next update check (the card says when, and **Open in CurseForge** installs it right away). Settings > Addons > CurseForge > **Let CurseForge install author-restricted addons by itself** turns this off.
+- **Tip for the rest.** When auto-update is off for such an addon in CurseForge, the card tells you once how to turn it on to skip the window next time.
+- **Update notes go away by themselves.** "Updated to ..." and "CurseForge installed ..." under an addon card now fade out after a minute, or sooner once the game has loaded the new version (after a /reload, a logout or when WoW closes), so the cards are their normal height again. Errors and notes that need you stay until you act.
+
 ## 2.72.3
 - **Album covers in the radio player.** A small cover of the song that is playing now sits before "Artist - Title" in the title bar (a music note when there is none).
 - **Click the song for more.** A click on the cover or the title opens a card with a larger cover, the title, artist, album and year, the channel, and the links to Radio Paradise and **Support Radio Paradise**. If the player shows Retry or a problem, that is there too.

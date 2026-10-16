@@ -86,19 +86,82 @@ namespace ElansAddonHub
             get => message;
             set
             {
-                message = value; Notify(); Notify(nameof(MessageVisibility));
+                clearGen++;
+                message = value; messageShown = !string.IsNullOrEmpty(value); Notify(); Notify(nameof(MessageVisibility)); Notify(nameof(MessageShown));
+                NoteDoneAt = DateTime.MinValue;                       // any new text is not a "done" note until SetDoneNote says so
+                Fallback = null; Hint = null; Notify(nameof(Fallback)); Notify(nameof(FallbackVisibility)); Notify(nameof(Hint)); Notify(nameof(HintVisibility));
                 Failed = value != null && value.StartsWith("Something went wrong");
                 if (fade != null) fade.Stop();
                 if (StatChip.IsTransient(value))
                 {
                     fade = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
                     var mine = value;
-                    fade.Tick += (s, e) => { fade.Stop(); if (message == mine) { message = null; Notify(nameof(Message)); Notify(nameof(MessageVisibility)); } };
+                    fade.Tick += (s, e) => { fade.Stop(); if (message == mine) ClearNote(); };
                     fade.Start();
                 }
             }
         }
         public Visibility MessageVisibility => string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
+        // the note's row grows / shrinks with Motion.Expand (instant when Windows animations are off); the text stays until it has closed
+        bool messageShown;
+        public bool MessageShown => messageShown;
+        int clearGen;
+
+        // ---- post-install notes ("Updated to ...", "CurseForge installed ...") clear by themselves (2.72.4): after NoteClearSec, or earlier
+        // once the game shows it picked the change up - WoW, running at install time, has exited, or a SavedVariables file of this WoW
+        // was written after the install (= a /reload or logout). Errors and notes that need the user (a fallback button) never clear.
+        public static int NoteClearSec = 60;
+        public DateTime NoteDoneAt { get; private set; } = DateTime.MinValue;   // UTC; MinValue = not a done note
+        public bool NoteWowAtInstall { get; private set; }
+
+        public void SetDoneNote(string text, bool wowRunning)
+        {
+            Message = text;
+            NoteDoneAt = DateTime.UtcNow; NoteWowAtInstall = wowRunning;
+        }
+
+        public static bool NoteExpired(DateTime nowUtc, DateTime doneAtUtc, bool wowAtInstall, bool wowNow, DateTime newestSavedVarsUtc) =>
+            doneAtUtc > DateTime.MinValue
+            && ((nowUtc - doneAtUtc).TotalSeconds >= NoteClearSec || (wowAtInstall && !wowNow) || newestSavedVarsUtc > doneAtUtc);
+
+        public bool NoteExpired(DateTime nowUtc, bool wowNow, DateTime newestSavedVarsUtc) =>
+            !string.IsNullOrEmpty(message) && NoteExpired(nowUtc, NoteDoneAt, NoteWowAtInstall, wowNow, newestSavedVarsUtc);
+
+        // close the note's row (faded), then drop the text
+        public void ClearNote()
+        {
+            NoteDoneAt = DateTime.MinValue;
+            if (string.IsNullOrEmpty(message)) return;
+            var gen = ++clearGen;
+            messageShown = false; Notify(nameof(MessageShown));
+            void Drop() { if (gen != clearGen) return; message = null; Notify(nameof(Message)); Notify(nameof(MessageVisibility)); }
+            if (!Motion.Enabled || Application.Current == null) { Drop(); return; }
+            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Motion.FastMs + 60) };
+            t.Tick += (s, e) => { t.Stop(); Drop(); };
+            t.Start();
+        }
+
+        // a note that needs the user: the button under it ("Open in CurseForge" = CurseForge's install link, its window included)
+        public string Fallback { get; private set; }
+        public Visibility FallbackVisibility => Fallback == null ? Visibility.Collapsed : Visibility.Visible;
+        public void SetActionNote(string text, string button)
+        {
+            Message = text;
+            Fallback = button; Notify(nameof(Fallback)); Notify(nameof(FallbackVisibility));
+        }
+
+        // the one-time "how to avoid CurseForge's window" line under a note (with an info tooltip); shown once per addon per session
+        static readonly HashSet<long> hinted = new HashSet<long>();
+        public string Hint { get; private set; }
+        public Visibility HintVisibility => Hint == null ? Visibility.Collapsed : Visibility.Visible;
+        public string HintTip => CurseForgeDirect.AutoOffTip;
+        public bool OfferHint(long addonId, string text)
+        {
+            if (text == null || !hinted.Add(addonId)) { Hint = null; Notify(nameof(Hint)); Notify(nameof(HintVisibility)); return false; }
+            Hint = text; Notify(nameof(Hint)); Notify(nameof(HintVisibility));
+            return true;
+        }
+        public static void ResetHintsForTest() => hinted.Clear();
         public Visibility BusyVisibility => State == TpState.Busy ? Visibility.Visible : Visibility.Collapsed;
 
         public ThirdPartyCard(AddonEntry e) { Entry = e; Link = AddonSources.LinkFor(e.Key); Refresh(); }
@@ -175,7 +238,12 @@ namespace ElansAddonHub
                     else
                     {
                         ButtonText = "Update via CurseForge";
-                        SetPill("Update via CurseForge", PillKind.Action, (plan.Reason != null ? plan.Reason + " " : "") + "Asks the CurseForge app to install the update.", true);
+                        var route = CurseForgeDirect.RouteFor(cf, null, CurseForgeDirect.IsOn(), CurseForgeDirect.LetCfOn());
+                        var how = route == CurseForgeDirect.Route.CurseForgeAuto
+                            ? "CurseForge's auto-update is on for this addon, so CurseForge installs it by itself - no install window."
+                            : "Asks the CurseForge app to install the update (CurseForge shows its install window)."
+                              + (CurseForgeDirect.AutoOffHelps(cf, null, CurseForgeDirect.IsOn(), CurseForgeDirect.LetCfOn()) ? " " + CurseForgeDirect.AutoOffHint : "");
+                        SetPill("Update via CurseForge", PillKind.Action, (plan.Reason != null ? plan.Reason + " " : "") + how, true);
                     }
                 }
                 else { SetPill("Up to date", PillKind.Quiet, "You have the latest version", false); VersionLine = $"Up to date ({seen})"; ButtonText = ""; ButtonEnabled = false; }
