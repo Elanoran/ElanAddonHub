@@ -453,7 +453,8 @@ namespace ElansAddonHub
         void ShowFailure(string title, string hint, string problem, Action retry, bool flat = true)
         {
             lastProblem = problem;
-            Show("", title, hint, false);
+            Show("", title, hint, false);            // the warning glyph (Segoe Fluent / MDL2), Tertiary like every state of the stack
+            SetNote("");                                   // an older note ("1 area could be read now ...") does not belong to the failure
             overlayButton.Content = "Try again"; overlayButton.Visibility = retry != null ? Visibility.Visible : Visibility.Collapsed;
             overlayAction = retry;
             overlayCopy.Visibility = Visibility.Visible;
