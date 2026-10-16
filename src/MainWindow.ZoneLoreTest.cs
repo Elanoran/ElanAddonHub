@@ -138,7 +138,7 @@ namespace ElansAddonHub
                 Check("Durotar: the Overview has 'About Durotar' with the source label, the facts line and the summary", card != null && card.IsVisible && texts.Contains("About Durotar") && texts.Contains(ZoneLore.Label) && texts.Contains("Levels 1-10 · Horde") && texts.Contains(dur.Summary),
                     string.Join(" | ", texts.Take(6)));
                 var ov = (AtlasView.TabHostForTest as ContentControl)?.Content as Panel;
-                Check("Durotar: the card sits near the top of the Overview (right after the zone's own card)", ov != null && ov.Children.IndexOf(card) == 1, ov == null ? "no panel" : ov.Children.IndexOf(card).ToString());
+                Check("Durotar: the card is the first thing on the Overview (2.70: a zone page has no game-tooltip card of its own any more, its header says it)", ov != null && ov.Children.IndexOf(card) == 0, ov == null ? "no panel" : ov.Children.IndexOf(card).ToString());
                 Check("Durotar: 'Starts here' lists the Valley of Trials and the Echo Isles; the Orc is a link to its race page, the Troll (not playable here) plain",
                     texts.Contains("Starts here") && texts.Contains("Valley of Trials") && texts.Contains("Echo Isles") && Links(card, "race:").Select(t => t.Tag as string).SequenceEqual(new[] { "race:2" }) && texts.Contains("Troll")
                     && AtlasWalk(card).OfType<Border>().Any(b => b.Tag as string == "race-plain"), string.Join(",", Links(card, "race:").Select(t => t.Tag)));
