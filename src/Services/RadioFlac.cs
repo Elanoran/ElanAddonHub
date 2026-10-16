@@ -5,7 +5,7 @@ using System.Text;
 
 namespace ElansAddonHub.Services
 {
-    // --selftest "radio" (2.76): the Lossless streams. Radio Paradise sends FLAC inside an Ogg stream (application/ogg, "OggS" pages, the FLAC
+    // --selftest "radio" (2.75): the Lossless streams. Radio Paradise sends FLAC inside an Ogg stream (application/ogg, "OggS" pages, the FLAC
     // mapping: a 0x7F "FLAC" header packet with STREAMINFO, metadata packets, then one FLAC frame per packet). The Ogg pages are taken apart here
     // and every frame decoded by a small FLAC decoder written for the Outpost (the format is open and simple: fixed / LPC prediction + Rice
     // coded residuals), so nothing has to be installed. The song comes from the stream's own Vorbis comments (ARTIST / TITLE) when a new Ogg

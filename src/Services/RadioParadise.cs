@@ -18,12 +18,12 @@ namespace ElansAddonHub.Services
     public sealed class RadioChannel
     {
         public string Id, Name, Path;      // Path = the Standard stream (MP3 192k; Serenity only has its 64k AAC stream and FLAC)
-        public string Aac, Flac;           // 2.76: the High stream (AAC 320k; Serenity its 64k AAC) and the Lossless one (Ogg FLAC; null = none, Radio 2050)
+        public string Aac, Flac;           // 2.75: the High stream (AAC 320k; Serenity its 64k AAC) and the Lossless one (Ogg FLAC; null = none, Radio 2050)
         public string[] Published;         // every stream link Radio Paradise publishes for this channel
         public override string ToString() => Name;
     }
 
-    // 2.76: Settings > Radio Paradise > Sound quality. Standard = MP3 192k (default), High = AAC 320k, Lossless = FLAC (in an Ogg stream)
+    // 2.75: Settings > Radio Paradise > Sound quality. Standard = MP3 192k (default), High = AAC 320k, Lossless = FLAC (in an Ogg stream)
     public enum RadioQuality { Standard, High, Lossless }
     public enum RadioFormat { Mp3, Aac, Flac }
 

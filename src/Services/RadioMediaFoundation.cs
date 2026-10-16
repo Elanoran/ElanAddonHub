@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace ElansAddonHub.Services
 {
-    // --selftest "radio" (2.76): AAC with what Windows already has. Windows 10 / 11 ship Media Foundation's AAC decoder (msmpeg2adec.dll, also
+    // --selftest "radio" (2.75): AAC with what Windows already has. Windows 10 / 11 ship Media Foundation's AAC decoder (msmpeg2adec.dll, also
     // HE-AAC v1 / v2, which Serenity's 64k stream is); the player feeds it the stream's ADTS frames one by one and takes 16-bit PCM back. No
     // package, no download. Windows "N" editions without the Media Feature Pack have no Media Foundation: Available() is false there and the
     // player falls back (RadioParadise.Resolve). The encoder half (MfAacEncoder) is only for the self-test, which makes its own test stream.

@@ -10,7 +10,7 @@ using NAudio.Wave.SampleProviders;
 namespace ElansAddonHub.Services
 {
     // --selftest "radio": plays a Radio Paradise channel (Outpost 2.72). One HTTP connection, opened only when the user presses Play and closed (aborted)
-    // on Pause / Stop / channel change / quality change / exit; there is no muted background streaming. Decoding (2.76: the Sound quality setting):
+    // on Pause / Stop / channel change / quality change / exit; there is no muted background streaming. Decoding (2.75: the Sound quality setting):
     // Standard = the MP3 192k stream (NAudio's Mp3Frame + the Windows ACM MP3 decoder), High = AAC 320k (Media Foundation's AAC decoder, part of
     // Windows), Lossless = Ogg FLAC (the Outpost's own decoder); no extra package for any of them (RadioDecoders.cs). A quality the channel lacks or
     // this PC can't decode steps down (never up), with a note. The PCM goes into a small buffer that a WaveOutEvent on the default device plays. The volume and the voice-room ducking are a gain on the samples (never the device or the

@@ -6,7 +6,7 @@ using ElansAddonHub.Services;
 namespace ElansAddonHub
 {
     // --selftest "radio": Settings > General > Radio Paradise: the player on / off, the favourite channel (every start begins there), the sound quality
-    // (2.76: Standard MP3 / High AAC / Lossless FLAC; a change while it plays switches the stream at once) and the music level while people talk in a
+    // (2.75: Standard MP3 / High AAC / Lossless FLAC; a change while it plays switches the stream at once) and the music level while people talk in a
     // voice room.
     public partial class SettingsPage
     {

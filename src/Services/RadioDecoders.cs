@@ -5,7 +5,7 @@ using NAudio.Wave;
 
 namespace ElansAddonHub.Services
 {
-    // --selftest "radio" (2.76): one decoder per stream format, all reading the audio part of the one connection (IcyStream) and giving back PCM.
+    // --selftest "radio" (2.75): one decoder per stream format, all reading the audio part of the one connection (IcyStream) and giving back PCM.
     //   MP3  NAudio's Mp3Frame + the Windows ACM MP3 decoder (as before)
     //   AAC  ADTS frames -> Media Foundation's AAC decoder (RadioMediaFoundation.cs)
     //   FLAC Ogg pages -> the Outpost's own FLAC decoder (RadioFlac.cs); the song from the stream's Vorbis comments

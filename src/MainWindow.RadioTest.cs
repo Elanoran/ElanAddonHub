@@ -23,7 +23,7 @@ namespace ElansAddonHub
     // cover from the stream's own StreamUrl against a local fake picture server (FakeCoverServer, never img.radioparadise.com, and no
     // api.radioparadise.com request ever): https only, the host allow-list, the small / large sizes, once per song, the caches, failures; Latin-1
     // titles; the pill (marquee only when the title overflows, the equaliser only while it plays, animations off), the pop-out (channel chips,
-    // volume + mute), focus rings only from the keyboard. 2.76: Sound quality - the fake server answers each path in its real format (the
+    // volume + mute), focus rings only from the keyboard. 2.75: Sound quality - the fake server answers each path in its real format (the
     // MP3 paths MP3, the AAC paths ADTS AAC made here with Windows' own encoder, the FLAC paths Ogg FLAC made by TestFlac below, without ICY like
     // Radio Paradise's), decoding, titles per format, quality switches (also while playing), Radio 2050's fallback, Serenity, a missing decoder
     // (simulated). Pictures with ELANSHUB_SHOTS=1.
@@ -56,7 +56,7 @@ namespace ElansAddonHub
                 Check("channels: the 8 published channels", names == "Main Mix,Mellow,Rock,Global,Beyond,Radio 2050,KFAT,Serenity", names);
                 Check("every channel plays one of its own published links (MP3 192k; Serenity its 64k stream)",
                     RadioParadise.Channels.All(c => c.Published.Contains(c.Path) && RadioParadise.IsAllowedStreamUrl(RadioParadise.StreamUrl(c))) && RadioParadise.Channel("serenity").Path == "serenity" && RadioParadise.Channel("main").Path == "mp3-192");
-                // 2.76: the High and Lossless streams are published links too; what each quality opens per channel (no decoder missing)
+                // 2.75: the High and Lossless streams are published links too; what each quality opens per channel (no decoder missing)
                 Check("quality: every channel's High (AAC) and Lossless (FLAC) stream is one of its own published, allowed links",
                     RadioParadise.Channels.All(c => c.Published.Contains(c.Aac) && RadioParadise.IsAllowedStreamUrl(RadioParadise.StreamUrl(c.Aac))
                         && (c.Flac == null || (c.Published.Contains(c.Flac) && RadioParadise.IsAllowedStreamUrl(RadioParadise.StreamUrl(c.Flac))))));
@@ -658,7 +658,7 @@ namespace ElansAddonHub
                     await Until(() => srv.Open == 0, 4000);
                 }
 
-                // ============================================================================================ 2.76 sound quality: AAC and FLAC
+                // ============================================================================================ 2.75 sound quality: AAC and FLAC
                 {
                     string LastPath() { lock (srv.Requests) return srv.Requests.Count == 0 ? "" : srv.Requests[srv.Requests.Count - 1].Split(' ')[1]; }
                     var chBefore = Radio.Channel.Id;
@@ -900,7 +900,7 @@ namespace ElansAddonHub
             public volatile bool RealTime;        // send at the stream's own pace (new data reaches the player at once) instead of as fast as it reads
             public int MetaInt = 4096;
             static readonly byte[] Frame = MakeFrame();
-            // 2.76: with ByPath the answer follows the path like Radio Paradise's: a FLAC path is Ogg FLAC (application/ogg, never ICY metadata),
+            // 2.75: with ByPath the answer follows the path like Radio Paradise's: a FLAC path is Ogg FLAC (application/ogg, never ICY metadata),
             // an AAC path (-320, the Serenity one) ADTS AAC (audio/aac + ICY), anything else MP3
             public volatile bool ByPath;
             public volatile byte[] Aac;                 // ADTS frames, looped

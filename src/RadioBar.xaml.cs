@@ -103,7 +103,7 @@ namespace ElansAddonHub
             if (player == null) return;
             Select(player.Channel);
             var ch = player.Channel.Name;
-            // 2.76: the quality that plays (or would), subtly after the channel when it is not Standard: "Radio Paradise · Rock · Lossless"
+            // 2.75: the quality that plays (or would), subtly after the channel when it is not Standard: "Radio Paradise · Rock · Lossless"
             var stream = player.WantsPlayback || player.State == RadioState.Playing ? player.Stream ?? player.Planned : player.Planned;
             var label = stream?.Label;
             RpLinkText.Text = "Radio Paradise · " + ch + (label != null && label != "Standard" ? " · " + label : "");
