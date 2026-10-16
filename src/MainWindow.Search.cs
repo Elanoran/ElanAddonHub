@@ -54,8 +54,7 @@ namespace ElansAddonHub
             titleSearchNarrow = narrow;
             TitleSearch.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
             TitleSearchIcon.Visibility = narrow ? Visibility.Visible : Visibility.Collapsed;
-            double left = 16 + (narrow ? 32 : TitleSearchWidth) + 8;
-            HubBanner.Margin = new Thickness(left, 0, 112, 0);
+            LayoutTitleBar();   // the radio, the update banner and the game data chip follow the box (MainWindow.Radio.cs)
         }
 
         // a press on the box is its own: no window drag

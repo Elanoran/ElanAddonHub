@@ -1,0 +1,52 @@
+<UserControl x:Class="ElansAddonHub.RadioBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             HorizontalAlignment="Left" VerticalAlignment="Center">
+  <!-- The Radio Paradise mini player (2.72, DESIGN "Radio"): a 32 high Surface1 chip right of the title bar's search box. Play / pause, the channel,
+       what is playing (trimmed, the full text in the tooltip) and a volume button that opens the flyout (volume, the attribution link to
+       radioparadise.com, "Support Radio Paradise"). A hit-test island: a press on it never starts the window drag. -->
+  <Grid>
+    <Border x:Name="Chip" Height="32" Padding="2,0,2,0" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.ControlLg}"
+            MouseLeftButtonDown="Chip_MouseDown" AutomationProperties.Name="Radio Paradise player">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Button x:Name="PlayButton" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="16" Content="&#xE768;" Click="Play_Click"
+                AutomationProperties.Name="Play" ToolTipService.InitialShowDelay="300" />
+        <ComboBox x:Name="ChannelBox" Style="{StaticResource Dropdown}" Width="120" Height="28" MinHeight="28" Margin="2,0,0,0" VerticalAlignment="Center"
+                  SelectionChanged="Channel_Changed" AutomationProperties.Name="Radio Paradise channel" ToolTip="Channel (this session; the favourite is in Settings > General)" />
+        <TextBlock x:Name="NowText" Style="{StaticResource Text.Secondary}" Foreground="{StaticResource Brush.Text.Primary}" VerticalAlignment="Center" Margin="8,0,0,0"
+                   MaxWidth="200" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
+        <Button x:Name="MoreButton" Style="{StaticResource IconButton}" Width="28" Height="28" FontSize="16" Content="&#xE767;" Margin="4,0,0,0" Click="More_Click"
+                ToolTip="Volume and Radio Paradise" AutomationProperties.Name="Volume and Radio Paradise" />
+      </StackPanel>
+    </Border>
+
+    <Popup x:Name="Flyout" PlacementTarget="{Binding ElementName=Chip}" Placement="Bottom" HorizontalOffset="-24" VerticalOffset="-16" StaysOpen="False" AllowsTransparency="True"
+           PopupAnimation="None" Opened="Flyout_Opened">
+      <Border x:Name="FlyCard" Width="304" Margin="24" Padding="16" Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1"
+              CornerRadius="{StaticResource Radius.Card}" Effect="{StaticResource Elevation.2}">
+        <StackPanel>
+          <!-- attribution: the name of the station and the channel, linked to radioparadise.com (the Outpost browser) -->
+          <Button x:Name="RpLink" Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="-8,-4,0,0" Click="RpLink_Click" ToolTip="radioparadise.com">
+            <TextBlock x:Name="RpLinkText" Style="{StaticResource Text.RowTitle}" Text="Radio Paradise · Main Mix" />
+          </Button>
+          <TextBlock x:Name="FlyTitle" Style="{StaticResource Text.Body}" TextWrapping="Wrap" Margin="0,4,0,0" />
+          <TextBlock x:Name="FlyStatus" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,2,0,0" />
+          <Button x:Name="RetryButton" Style="{StaticResource Button.S}" Content="Retry" HorizontalAlignment="Left" Margin="0,8,0,0" Click="Retry_Click" Visibility="Collapsed" />
+          <ComboBox x:Name="FlyChannelBox" Style="{StaticResource Dropdown}" Margin="0,12,0,0" SelectionChanged="Channel_Changed" Visibility="Collapsed"
+                    AutomationProperties.Name="Radio Paradise channel" />
+          <DockPanel Margin="0,12,0,0">
+            <TextBlock DockPanel.Dock="Left" Text="&#xE767;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" />
+            <TextBlock x:Name="VolumeText" DockPanel.Dock="Right" Style="{StaticResource Text.Secondary}" Width="40" TextAlignment="Right" VerticalAlignment="Center" />
+            <Slider x:Name="VolumeSlider" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" Margin="8,0,0,0" VerticalAlignment="Center"
+                    ValueChanged="Volume_Changed" AutomationProperties.Name="Radio volume" />
+          </DockPanel>
+          <Border Height="1" Background="{StaticResource Brush.Divider}" Margin="0,12,0,8" />
+          <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap"
+                     Text="Radio Paradise is listener-supported radio. It streams live while you listen; nothing is recorded." />
+          <Button x:Name="SupportLink" Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="-8,4,0,0" Content="Support Radio Paradise" Click="Support_Click"
+                  ToolTip="radioparadise.com/donate" />
+        </StackPanel>
+      </Border>
+    </Popup>
+  </Grid>
+</UserControl>

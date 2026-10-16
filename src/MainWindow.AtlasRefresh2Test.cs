@@ -267,7 +267,7 @@ namespace ElansAddonHub
                     ShowTab("addons"); await Task.Delay(100); UpdateLayout();
                     var bar = TitleBarForTest;
                     var onBox = new Point(TitleSearchForTest.TranslatePoint(new Point(TitleSearchForTest.ActualWidth / 2, TitleSearchForTest.ActualHeight / 2), bar).X, bar.ActualHeight / 2);
-                    var empty = new Point(16 + 240 + 120, bar.ActualHeight / 2);
+                    var empty = new Point(RadioPlayerBar.IsVisible ? RadioPlayerBar.TranslatePoint(new Point(RadioPlayerBar.ActualWidth, 0), bar).X + 40 : 16 + 240 + 120, bar.ActualHeight / 2);   // right of the radio player (2.72) when it is there
                     var hitBox = VisualTreeHelper.HitTest(bar, onBox)?.VisualHit; var hitEmpty = VisualTreeHelper.HitTest(bar, empty)?.VisualHit;
                     var press = new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) { RoutedEvent = UIElement.PreviewMouseDownEvent, Source = TitleSearchForTest };
                     TitleSearchForTest.RaiseEvent(press);
@@ -282,7 +282,7 @@ namespace ElansAddonHub
                 Width = 760;
                 Check("title bar narrow (760): the box is an icon button ('Search the Atlas', Ctrl+K in its tooltip) in the same place, the update banner moves right of it; the icon opens the palette",
                     await Until(() => TitleSearchIsIconForTest && !TitleSearchForTest.IsVisible && TitleSearchIconForTest.IsVisible) && TitleSearchIconForTest.ActualWidth >= 24 && System.Windows.Automation.AutomationProperties.GetName(TitleSearchIconForTest) == "Search the Atlas" && TitleSearchIconForTest.ToolTip.ToString().Contains("Ctrl+K")
-                    && HubBanner.Margin.Left >= TitleSearchIconForTest.ActualWidth + 16 && HubBanner.Margin.Left < 120, HubBanner.Margin.Left + " icon " + TitleSearchIconForTest.ActualWidth);
+                    && HubBanner.Margin.Left >= TitleSearchIconForTest.ActualWidth + 16 && HubBanner.Margin.Left < 120 + (RadioPlayerBar.IsVisible ? RadioPlayerBar.ActualWidth + 8 : 0), HubBanner.Margin.Left + " icon " + TitleSearchIconForTest.ActualWidth);
                 TitleSearchIconForTest.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await AtlasView.PaletteOpenWaitForTest();
                 Check("title bar narrow: a click on the icon opens the palette", AtlasView.PaletteOpen);
                 Snapshot(Path.Combine(dir, "atlas-refresh2-palette-narrow.png"));

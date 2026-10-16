@@ -193,6 +193,21 @@
                 <CheckBox x:Name="RealmsBackBox" Style="{StaticResource Switch}" Click="General_Click" AutomationProperties.Name="Tell me when the realms come back up" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
+            <TextBlock Text="Radio Paradise" Style="{StaticResource Head}" />
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Radio player in the title bar" Tag="Listener-supported radio from radioparadise.com, next to the search box. Nothing plays or connects until you press Play, and Pause closes the stream.">
+                <CheckBox x:Name="RadioBox" Style="{StaticResource Switch}" Click="Radio_Click" AutomationProperties.Name="Radio player in the title bar" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Favourite channel" Tag="The player starts on this channel. Picking another one in the player is just for that session.">
+                <ComboBox x:Name="RadioFavBox" Style="{StaticResource Dropdown}" Width="180" SelectionChanged="RadioFav_Changed" AutomationProperties.Name="Favourite channel" />
+              </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Music while people talk" Tag="In a Lodge voice room the music fades to this part of its volume while anyone talks, you included, and comes back when they stop. 0 % is silent.">
+                <StackPanel Orientation="Horizontal">
+                  <Slider x:Name="RadioDuckSlider" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" TickFrequency="0.05" IsSnapToTickEnabled="True" Width="180" VerticalAlignment="Center" ValueChanged="RadioDuck_Changed" AutomationProperties.Name="Music while people talk" />
+                  <TextBlock x:Name="RadioDuckText" Style="{StaticResource Text.Secondary}" Width="44" TextAlignment="Right" VerticalAlignment="Center" />
+                </StackPanel>
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
           </StackPanel>
 
           <!-- ========== Addons ========== -->

@@ -3,6 +3,14 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.72.0
+- **Radio Paradise in the title bar.** A small player sits right of the search box: press Play to listen to Radio Paradise, pick one of its eight channels (Main Mix, Mellow, Rock, Global, Beyond, Radio 2050, KFAT, Serenity) and see what is playing. The speaker button opens the volume, a link to radioparadise.com and **Support Radio Paradise**. Radio Paradise is listener-supported and plays without ads, so if you enjoy it, please support them.
+- **It only plays when you ask.** Nothing connects until you press Play, and Pause really stops the stream (nothing keeps downloading in the background). It stops when you quit the Outpost. If the stream drops, it tries again by itself, waiting a little longer each time, and after ten tries it shows **Retry**. The play / pause key on your keyboard works while the Outpost is in front.
+- **The music steps back when people talk.** While you are in a Lodge voice room, the music fades down (not off) whenever anyone in the room talks, you included, and comes back up a moment after they stop. Choose how low it goes in Settings > General > Radio Paradise > Music while people talk (30 % of your volume by default; 0 % is silent).
+- **Your favourite channel.** Settings > General > Radio Paradise has a **Favourite channel**: the player starts on it every time. Picking another channel in the player is just for that session. The same place has a switch to hide the player completely.
+- The game data bar in the title bar now makes room for the player: on a narrow window the player shrinks to its buttons (channel and title move into its menu), and a long bar shortens its text instead of being cut off.
+- **No more sideways jumps while a page loads.** Scroll bars now float over the edge of the page instead of taking room, so a bar that appears for a moment while a page builds no longer pushes everything sideways.
+
 ## 2.71.2
 - **No outline on the selected left-bar button after a click.** The focus ring now only shows when you move with the keyboard (Tab).
 - **The left bar lines up with the search box.** The Addons button starts at the same height as the search box in the title bar.

@@ -108,6 +108,7 @@ namespace ElansAddonHub
             ProfessionsView.Init(() => settings.WowRoot, () => Session?.AtlasData);
             ProfessionsView.UseSettings(settings, () => Session?.FlightData);
             InitAtlas();
+            InitRadio();                   // Radio Paradise in the title bar: pre-selects the favourite channel, never plays by itself
             // the game's tooltip font from the user's own install (cached after the first read); the tooltips use a system font until then
             System.Threading.Tasks.Task.Run(() => ElansAddonHub.Services.GameFont.Start());
             LodgePage.OpenLink += OpenChatLink;
@@ -435,6 +436,7 @@ namespace ElansAddonHub
             if (Begin("profguide")) { result += "\r\n" + await ProfGuideTest(dir); End(); }
             if (Begin("video")) { result += "\r\n" + await VideoTest(dir); End(); }
             if (Begin("browser")) { result += "\r\n" + await BrowserTest(dir); End(); }
+            if (Begin("radio")) { result += "\r\n" + await RadioTest(dir); End(); }
             if (Begin("presence")) { result += "\r\n" + await PresenceTest(dir); End(); }
             if (Begin("profile")) { result += "\r\n" + await ProfileTest(dir); End(); }
             if (Begin("toasts")) { result += "\r\n" + await ToastTest(dir); End(); }
@@ -1147,6 +1149,7 @@ namespace ElansAddonHub
             quitting = true;
             SettingsStore.Save(settings); // window size
             Session.Disconnect();
+            Radio?.Dispose();             // the stream closes with the Outpost
             tray.Visible = false;
             tray.Dispose();
             Application.Current.Shutdown();
