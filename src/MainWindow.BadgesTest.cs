@@ -289,6 +289,21 @@ namespace ElansAddonHub
                 Session.FeedForTest(LadderFrame(month));
                 Session.Disconnect();
                 Check("disconnect: the badges and the ladder are cleared", !Session.SupportsBadges && Session.MyBadges.Count == 0 && Session.LadderRows.Count == 0 && !LodgePage.LadderRowVisibleForTest && Session.NewBadges == 0);
+
+                // ---- switching between the pages: only the page that is open looks selected in the side list (2.73.1: the one before stayed lit)
+                Session.FeedForTest(BadgesWelcome("member", true).Replace("\"search\"", "\"search\",\"calendar\",\"files\""));
+                string lit() => string.Join(",", LodgePage.LitPageRowsForTest);
+                LodgePage.ShowCalendarForTest();
+                Check("pages: Calendar open, only the Calendar row is lit", lit() == "Calendar", lit());
+                LodgePage.ShowFilesForTest();
+                Check("pages: Calendar -> Files, only the Files row is lit", lit() == "Files", lit());
+                LodgePage.ShowLadderForTest();
+                Check("pages: Files -> Ladder, only the Ladder row is lit", lit() == "Ladder", lit());
+                LodgePage.ShowCalendarForTest();
+                Check("pages: Ladder -> Calendar, only the Calendar row is lit", lit() == "Calendar", lit());
+                LodgePage.HideCalendarForTest(); LodgePage.HideFilesForTest(); LodgePage.HideLadderForTest();   // what a click on a text channel does
+                Check("pages: back to the chat, no page row is lit", lit() == "", lit());
+                Session.Disconnect();
             }
             catch (Exception ex)
             {

@@ -31,7 +31,7 @@ namespace ElansAddonHub.Lodge
             FilesPage.Show();
             if (IsLoaded && IsVisible) Motion.PageIn(FilesPage);
             HideFilesBar();
-            UpdateFilesChrome();
+            UpdatePageRows();
         }
 
         public void HideFiles()

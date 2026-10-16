@@ -26,7 +26,7 @@ namespace ElansAddonHub.Lodge
             LadderPage.Visibility = Visibility.Visible;
             LadderPage.Show();
             if (IsLoaded && IsVisible) Motion.PageIn(LadderPage);
-            UpdateLadderChrome();
+            UpdatePageRows();
         }
 
         public void HideLadder()
@@ -41,6 +41,9 @@ namespace ElansAddonHub.Lodge
         }
 
         // the Ladder row, and the page itself when the server (or the Guild Master) switches the feature off
+        // a page that takes the chat's place from another one: every page row (Calendar, Files, Ladder) shows which page is open now
+        void UpdatePageRows() { UpdateCalendarChrome(); UpdateFilesChrome(); UpdateLadderChrome(); }
+
         void UpdateLadderChrome()
         {
             var s = Session;
@@ -123,6 +126,8 @@ namespace ElansAddonHub.Lodge
         public void ShowLadderForTest() => ShowLadder();
         public void HideLadderForTest() => HideLadder();
         public bool LadderRowVisibleForTest => LadderRow.Visibility == Visibility.Visible;
+        public string[] LitPageRowsForTest => new[] { (CalendarRow, "Calendar"), (FilesRow, "Files"), (LadderRow, "Ladder") }
+            .Where(r => r.Item1.ReadLocalValue(BackgroundProperty) != DependencyProperty.UnsetValue).Select(r => r.Item2).ToArray();
         public bool BadgesCardVisibleForTest => BadgesOverlay.Visibility == Visibility.Visible;
         public string BadgesHeadingForTest => BadgesHeading.Text;
         public BadgesPanel BadgesListForTest => BadgesList;

@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.73.1
+- **The Lodge side list shows the right page.** Going from Calendar to Files or Ladder (or back) left the earlier page's row lit too, so several looked selected at once. Now only the page you are on is lit.
+
 ## 2.73.0
 - **A smaller radio player.** The player in the title bar is now one small rounded pill: the album cover, "Artist – Song", play / pause, and a tiny bouncing equaliser while music plays (it is only decoration, it does not follow the music). A title that is too long for the pill scrolls slowly from end to end and rests at each end; a short one stays still. If you have turned off animations in Windows, nothing moves: the title is cut off with "..." (point at it to read all of it) and the equaliser stands still.
 - **Click the pill for everything else.** A click on the cover or the title opens a card with a larger cover, the song and the artist, all eight channels as small buttons (the one playing is highlighted, one click switches), the volume slider with mute, any problem with **Retry**, and the links to Radio Paradise and **Support Radio Paradise**.

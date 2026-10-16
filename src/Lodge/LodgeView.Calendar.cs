@@ -28,7 +28,7 @@ namespace ElansAddonHub.Lodge
             CalendarPage.Visibility = Visibility.Visible;
             CalendarPage.Show();
             if (IsLoaded && IsVisible) Motion.PageIn(CalendarPage);
-            UpdateCalendarChrome();
+            UpdatePageRows();
         }
 
         public void HideCalendar()
