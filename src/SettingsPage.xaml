@@ -153,6 +153,12 @@
                   </StackPanel>
                 </Border>
               </HeaderedContentControl>
+              <HeaderedContentControl x:Name="LivePosRow" Style="{StaticResource Setting.Row}" Header="Show my live position on the world map" Tag="Needs the matching option in Elan's Hub in game. The trail keeps the last 10 minutes and is never saved.">
+                <StackPanel Orientation="Horizontal">
+                  <Button x:Name="LivePosHowToButton" Style="{StaticResource GhostButton}" Content="How to turn it on" Height="28" Padding="8,0" Margin="0,0,8,0" Click="LivePosHowTo_Click" AutomationProperties.Name="How to turn on live position" />
+                  <CheckBox x:Name="LivePosBox" Style="{StaticResource Switch}" Click="LivePos_Click" VerticalAlignment="Center" AutomationProperties.Name="Show my live position on the world map" />
+                </StackPanel>
+              </HeaderedContentControl>
               <HeaderedContentControl x:Name="WorldMap3dRow" Style="{StaticResource Setting.Row}" Header="World map 3D detail" Tag="How much terrain and texture detail the 3D view draws. Low is easiest on the graphics card.">
                 <Border Style="{StaticResource SegmentHost}">
                   <StackPanel Orientation="Horizontal">

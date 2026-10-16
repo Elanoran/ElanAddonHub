@@ -77,8 +77,9 @@ end
 -- ============================================================ status strip
 -- A tiny block of coloured squares in the very top-left corner of the screen (4x4 pixels each). It carries who you play
 -- and what you are doing, so the hub can see it at once - SavedVariables are only written on /reload and logout.
--- The hub reads those screen pixels (it never touches the game). Presence only: no health, power, auras, cooldowns
--- or positions - nothing the game treats as secret.
+-- The hub reads those screen pixels (it never touches the game). Presence only: no health, power, auras or cooldowns -
+-- nothing the game treats as secret. The one exception is OPT-IN and OFF by default: "Share my map position with Elan's
+-- Outpost" (/ehub position on) adds your position on the zone map, for the Outpost's world map (display only).
 --
 -- Row 0 (v1 layout, unchanged so older hubs keep working): 32 cells. Cell 0 magenta marker, cells 1-4 grey calibration
 -- (0/85/170/255), then 27 data cells of 6 bits (2 bits per colour channel). Payload: magic A7, flags, classId, raceId,
@@ -87,6 +88,10 @@ end
 -- instanceID (2), flags1, flags2, xp %, group size, 12 reserved, 2 checksum bytes (same Fletcher sum as row 0, over 22 bytes).
 --   flags1: 1 combat, 2 dead/ghost, 4 AFK, 8 resting, 16 in instance, 32 raid instance, 64 party instance, 128 in group
 --   flags2: 1 combat flag valid, 2 xp valid, 4 rested, 8 group is a raid
+-- Row 1 version 3 (companion 1.15.3+) uses the first 5 reserved bytes (byte 10 = the first reserved one, 0-based):
+--   byte 10 posFlags: 1 sharing is switched on in the Hub, 2 the position is valid (0 when off, nil, secret, out of range, in an instance)
+--   bytes 11-12 x, bytes 13-14 y: the position on the uiMap of bytes 2-3, 0..65535 for 0..1 (big-endian); all zero unless valid
+-- An Outpost that only knows version 2 ignores these bytes (they were always zero); version 2 = an older Hub that can't send positions.
 -- An old hub reads row 0 only and ignores row 1; a new hub without row 1 (old companion) falls back to v1.
 -- Turn it off with /ehub pixel off.
 local CELL, NCELLS, NDATA = 4, 32, 27
@@ -139,8 +144,9 @@ local function ensureStrip()
       GameTooltip:ClearAllPoints()
       GameTooltip:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -12)
       GameTooltip:AddLine("Elan's Hub status strip", 0.67, 0.83, 0.45)
-      GameTooltip:AddLine("These little coloured squares let Elan's Outpost on this PC see which character you play and what you are doing, without a /reload.", 1, 1, 1, true)
-      GameTooltip:AddLine("Presence only - no health, positions or combat data. Nothing is sent anywhere from here.", 0.7, 0.7, 0.7, true)
+      GameTooltip:AddLine("These little coloured squares let Elan's Outpost on this PC see which character you play and what you are doing, without a /reload, "
+        .. "and (if you turned it on) your map position for its world map. It is read by the Outpost on this PC only; it never controls the game.", 1, 1, 1, true)
+      GameTooltip:AddLine("No health, auras or combat data. Nothing is sent anywhere from here.", 0.7, 0.7, 0.7, true)
       GameTooltip:AddLine("/ehub pixel off hides it.", 0.7, 0.7, 0.7)
       GameTooltip:Show()
     end)
@@ -248,7 +254,68 @@ local function readPresence()
   local rested = num(rd(GetXPExhaustion))
   if rested and rested > 0 then f2 = f2 + 4 end
   P.flags1, P.flags2 = f1, f2
+  P.inInstance = inInst == true
   return P
+end
+
+-- ---- map position (OPT-IN, off by default: ElansHubDB.position == true). Display only, for the Outpost's world map on this PC.
+-- Read only while the option is on; nil, a secret value, out of range or inside an instance = "not valid" (the Outpost's trail pauses).
+local POS_MOVE = 0.002 -- update the strip when you moved more than 0.2% of the map ...
+local POS_EVERY = 5    -- ... or every 5 s (smaller drifts), so the strip doesn't change every second
+local POS_TICK = 1     -- positions fire no event: a cheap 1 s timer, only while the option is on
+local function positionOn() return ElansHubDB.position == true end
+EHUB.PositionOn = positionOn
+EHUB.POSITION_LABEL = "Share my map position with Elan's Outpost"
+EHUB.POSITION_DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes. The Hub draws your map position "
+  .. "into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there. It is only shown on a map \226\128\148 "
+  .. "nothing presses keys or plays the game for you, and nothing is sent anywhere unless you also turn on sharing with your Lodge. Positions are "
+  .. "not available in dungeons, raids and battlegrounds, so the trail pauses there."
+
+local function frac(v)
+  v = clean(v)
+  if type(v) ~= "number" or v ~= v then return nil end
+  if v <= 0 or v >= 1 then return nil end
+  return v
+end
+
+-- the player's position on uiMap `mapId` as two fractions, or nil (never compares or computes with a secret value)
+local function readPosition(mapId, inInstance)
+  if not positionOn() or inInstance or type(mapId) ~= "number" or mapId <= 0 then return nil end
+  if not (C_Map and C_Map.GetPlayerMapPosition) then return nil end
+  local ok, pos = pcall(C_Map.GetPlayerMapPosition, mapId, "player")
+  if not ok then return nil end
+  pos = clean(pos)
+  if type(pos) ~= "table" then return nil end
+  local okG, getXY = pcall(function() return pos.GetXY end)
+  if not okG or type(getXY) ~= "function" then return nil end
+  local okXY, x, y = pcall(getXY, pos)
+  if not okXY then return nil end
+  x, y = frac(x), frac(y)
+  if not x or not y then return nil end
+  return x, y
+end
+EHUB.ReadPosition = readPosition
+
+-- what the strip shows now: changes only on a real move, every POS_EVERY s, or when the map / validity changes
+local posShown = { valid = false, map = 0, x = 0, y = 0, at = -100 }
+EHUB.posShown = posShown
+local function positionDue(map, x, y)
+  local valid = x ~= nil
+  if valid ~= posShown.valid or (valid and map ~= posShown.map) then return true end
+  if not valid then return false end
+  local dx, dy = math.abs(x - posShown.x), math.abs(y - posShown.y)
+  if dx > POS_MOVE or dy > POS_MOVE then return true end
+  return (dx > 0 or dy > 0) and GetTime() - posShown.at >= POS_EVERY
+end
+local function positionForStrip(P)
+  if not positionOn() or not P then return 0, 0, 0 end
+  local x, y = readPosition(P.mapId, P.inInstance)
+  if positionDue(P.mapId, x, y) then
+    posShown.valid, posShown.map, posShown.x, posShown.y, posShown.at = x ~= nil, P.mapId, x or 0, y or 0, GetTime()
+  end
+  if not posShown.valid then return 1, 0, 0 end
+  local function u16(v) return math.max(0, math.min(65535, math.floor(v * 65535 + 0.5))) end
+  return 3, u16(posShown.x), u16(posShown.y)
 end
 
 local lastSig
@@ -279,9 +346,15 @@ local function drawStrip()
   local q
   if P then
     local m, ins = P.mapId % 65536, P.instanceId % 65536
-    q = { 0xB2, 2, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
+    q = { 0xB2, 3, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
           P.xp % 256, P.group % 256 }
     for i = 11, 22 do q[i] = 0 end
+    local okPos, pf, px, py = pcall(positionForStrip, P)
+    if okPos and pf then
+      q[11] = pf
+      q[12], q[13] = math.floor(px / 256), px % 256
+      q[14], q[15] = math.floor(py / 256), py % 256
+    end
     q[23], q[24] = checksum(q, 22)
   end
 
@@ -327,6 +400,52 @@ function EHUB.SetPixels(on)
   if on then ElansHubDB.pixel = nil else ElansHubDB.pixel = false end
   lastSig = nil
   pcall(drawStrip)
+  if EHUB.UpdatePositionTimer then EHUB.UpdatePositionTimer() end
+end
+
+-- the position timer: runs only while "Share my map position" AND the strip are on. A generation number stops an old chain.
+local posGen, posRunning = 0, false
+EHUB.posTicks = 0
+local function posTick(gen)
+  if gen ~= posGen then return end
+  if not (positionOn() and pixelsOn()) then posRunning = false return end
+  EHUB.posTicks = EHUB.posTicks + 1
+  pcall(function()
+    local P = readPresence()
+    local x, y = readPosition(P.mapId, P.inInstance)
+    if positionDue(P.mapId, x, y) then requestDraw() end
+  end)
+  C_Timer.After(POS_TICK, function() posTick(gen) end)
+end
+function EHUB.UpdatePositionTimer()
+  local want = positionOn() and pixelsOn()
+  if want and not posRunning then
+    posRunning = true
+    posGen = posGen + 1
+    local gen = posGen
+    C_Timer.After(POS_TICK, function() posTick(gen) end)
+  elseif not want and posRunning then
+    posRunning = false
+    posGen = posGen + 1 -- the pending callback sees an old generation and stops
+  end
+end
+function EHUB.PositionTimerRunning() return posRunning end
+
+EHUB.POSITION_ON_TEXT = "Elan's Hub: your map position is now shared with Elan's Outpost on this PC (display only). Turn it off any time: /ehub position off"
+function EHUB.SetPosition(on)
+  if on then
+    ElansHubDB.position = true
+    if not ElansHubDB.positionHinted then
+      ElansHubDB.positionHinted = true
+      print("|cffabd473Elan's Hub|r" .. EHUB.POSITION_ON_TEXT:sub(#"Elan's Hub" + 1))
+    end
+  else
+    ElansHubDB.position = nil
+  end
+  posShown.valid, posShown.map, posShown.x, posShown.y, posShown.at = false, 0, 0, 0, -100
+  lastSig = nil
+  pcall(drawStrip)
+  EHUB.UpdatePositionTimer()
 end
 
 local f = CreateFrame("Frame")
@@ -344,6 +463,7 @@ local LIGHT = { ZONE_CHANGED = true, ZONE_CHANGED_INDOORS = true, PLAYER_REGEN_D
 f:SetScript("OnEvent", function(_, event, arg1)
   if event == "PLAYER_LOGIN" then
     for _, fn in ipairs(EHUB.inits) do pcall(fn) end
+    pcall(EHUB.UpdatePositionTimer)
   end
   if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
     pcall(applyScale)
@@ -381,8 +501,18 @@ SlashCmdList.ELANSHUB = function(msg)
     if b == "off" then ElansHubDB.pixel = false elseif b == "on" then ElansHubDB.pixel = nil end
     lastSig = nil
     pcall(drawStrip)
+    pcall(EHUB.UpdatePositionTimer)
     print("|cffabd473Elan's Hub|r: the status strip in the top-left corner is " .. (pixelsOn() and "ON" or "OFF")
       .. " (/ehub pixel on|off). It lets the Hub see your character without a /reload.")
+    return
+  end
+  if a == "position" then
+    local hinted = ElansHubDB.positionHinted
+    if b == "on" then EHUB.SetPosition(true) elseif b == "off" then EHUB.SetPosition(false) end
+    if not (b == "on" and not hinted) then -- the first "on" already printed its one line
+      print("|cffabd473Elan's Hub|r: sharing your map position with Elan's Outpost is " .. (positionOn() and "ON" or "OFF")
+        .. " (/ehub position on|off). Display only, read by the Outpost on this PC.")
+    end
     return
   end
   if a == "" or a == "settings" or a == "config" or a == "options" then

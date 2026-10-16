@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.75.0
+- **Your own dot on the world map (optional, off by default).** Settings > General > **Show my live position on the world map** puts a dot in your class colour on the Atlas world map, with an arrow for the way you are heading and a fading trail of the last 10 minutes. **Follow me** keeps the map centred on you; dragging the map stops it.
+- **It needs one switch in the game too.** In Elan's Hub (1.15.3 or newer) type `/ehub position on` or tick **Share my map position with Elan's Outpost**. The Hub then draws your position into its small status strip in the corner of the screen, and the Outpost on this PC reads it from there. It is only shown on a map - nothing presses keys or plays the game for you, and nothing is sent anywhere. Both switches are off until you turn them on.
+- **Honest about what it can't see.** In dungeons, raids and battlegrounds the game gives no position: the dot turns grey with "Position unavailable here" and the trail pauses. If the game side is off, the map says "Your position isn't shared from the game yet" (or that your Elan's Hub is too old) with a **How to turn it on** link that opens a short how-to card.
+- **Never saved.** The trail lives only in memory: it is cleared when you switch characters, close WoW or turn the setting off, and it is never written to disk or sent to the Lodge.
+
 ## 2.72.3
 - **Album covers in the radio player.** A small cover of the song that is playing now sits before "Artist - Title" in the title bar (a music note when there is none).
 - **Click the song for more.** A click on the cover or the title opens a card with a larger cover, the title, artist, album and year, the channel, and the links to Radio Paradise and **Support Radio Paradise**. If the player shows Retry or a problem, that is there too.

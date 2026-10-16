@@ -104,7 +104,15 @@ local function forbid() FORBIDDEN = FORBIDDEN + 1 return 1 end
 UnitHealth, UnitPower, UnitBuff, UnitDebuff, UnitAura, GetSpellCooldown, UnitPosition = forbid, forbid, forbid, forbid, forbid, forbid, forbid
 C_UnitAuras = { GetAuraDataByIndex = forbid, GetPlayerAuraBySpellID = forbid }
 C_Spell = { GetSpellCooldown = forbid }
-C_Map = { GetBestMapForUnit = function(u) return ST.map end, GetPlayerMapPosition = forbid }
+-- the map position (opt-in): counted, never "forbidden" - the tests check it is only asked for while the option is on
+POSCALLS = 0
+C_Map = { GetBestMapForUnit = function(u) return ST.map end, GetPlayerMapPosition = function(m, u)
+  POSCALLS = POSCALLS + 1
+  if ST.pos == "secret" then return SECRET end
+  if ST.pos == "error" then error("no position") end
+  if ST.pos == nil or m ~= ST.map or u ~= "player" then return nil end
+  return { GetXY = function(self) return ST.px, ST.py end }
+end }
 function UnitAffectingCombat() if ST.secretCombat then return SECRET end return ST.combat end
 function UnitIsDeadOrGhost() return ST.dead end
 function UnitIsAFK() return ST.afk end
@@ -600,6 +608,8 @@ local function decode()
   r.v2 = row1[1] == 0xB2 and c == row1[23] and d == row1[24]
   r.ver = row1[2] r.map = row1[3] * 256 + row1[4] r.inst = row1[5] * 256 + row1[6]
   r.f1 = row1[7] r.f2 = row1[8] r.xp = row1[9] r.group = row1[10]
+  r.pf = row1[11] r.px = row1[12] * 256 + row1[13] r.py = row1[14] * 256 + row1[15]
+  r.rest = 0 for i = 16, 22 do r.rest = r.rest + row1[i] end
   return r
 end
 local function band(a, n) return math.floor(a / n) % 2 * n end
@@ -610,7 +620,7 @@ evt("PLAYER_ENTERING_WORLD")
 local d = decode()
 ok("v1 row still valid (name/class/race/level)", d.v1 and d.name == "Elan" and d.class == 3 and d.race == 2 and d.level == 60)
 ok("v1 flags: sex bits kept, v2-present bit (8) set", d.flags == 1 + 2 * 2 + 8)
-ok("v2 row valid: version 2, uiMapID 1413", d.v2 and d.ver == 2 and d.map == 1413)
+ok("v2 row valid: version 3 (1.15.3: position bytes), uiMapID 1413", d.v2 and d.ver == 3 and d.map == 1413)
 ok("v2 xp 33%, not in combat, combat flag valid", d.xp == 33 and d.f1 == 0 and band(d.f2, 1) == 1 and band(d.f2, 2) == 2)
 ok("old hub view: marker+calibration cells intact", strip.__textures[1].__rgb[1] == 1 and strip.__textures[1].__rgb[3] == 1 and strip.__textures[1].__rgb[2] == 0)
 
@@ -679,6 +689,102 @@ ok("zone change -> new uiMapID on the strip", decode().map == 1426)
 -- pixel off hides both rows
 SlashCmdList.ELANSHUB("pixel off") ok("pixel off hides the strip (both rows)", not strip.__shown)
 SlashCmdList.ELANSHUB("pixel on") ok("pixel on shows it again with v2", strip.__shown and decode().v2)
+
+-- ================= map position (opt-in, off by default)
+do
+  local function plain(s) return (s or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "") end
+  local function u16(v) return math.floor(v * 65535 + 0.5) end
+  ST.pos, ST.px, ST.py = "ok", 0.25, 0.75
+  tick() evt("ZONE_CHANGED")
+  local d = decode()
+  ok("position: off by default (db.position nil, PositionOn false)", db.position == nil and not E.PositionOn())
+  ok("position off: row 1 version 3, posFlags 0, x/y and the rest of the reserved bytes zero", d.v2 and d.ver == 3 and d.pf == 0 and d.px == 0 and d.py == 0 and d.rest == 0)
+  ok("position off: the position was never asked for and no timer runs", POSCALLS == 0 and not E.PositionTimerRunning())
+  local t0 = E.posTicks tick() tick()
+  ok("position off: no position ticks", E.posTicks == t0)
+  -- turn it on (slash): the one chat line, verbatim, once
+  local n0 = #CHAT
+  SlashCmdList.ELANSHUB("position on")
+  ok("position on: db.position true and the timer runs", db.position == true and E.PositionOn() and E.PositionTimerRunning())
+  ok("first time on: exactly one chat line, verbatim", #CHAT == n0 + 1 and plain(CHAT[#CHAT]) == "Elan's Hub: your map position is now shared with Elan's Outpost on this PC (display only). Turn it off any time: /ehub position off")
+  d = decode()
+  ok("position on: posFlags 3 (on + valid), x/y encoded as 0..65535", d.v2 and d.pf == 3 and d.px == u16(0.25) and d.py == u16(0.75) and d.map == ST.map)
+  -- thresholding: a tiny move does not repaint at once, it shows up after 5 s; a real move (> 0.2%) shows at the next tick
+  tick()
+  local dr = NS.draws
+  ST.px = 0.2509 tick() tick()
+  ok("tiny move (0.09%): the strip is not repainted, x unchanged", NS.draws == dr and decode().px == u16(0.25))
+  tick() tick() tick() tick()
+  ok("... after 5 s it is (once)", NS.draws == dr + 1 and decode().px == u16(0.2509))
+  dr = NS.draws
+  ST.px = 0.26 tick()
+  ok("a move of 0.9% shows at the next tick", NS.draws == dr + 1 and decode().px == u16(0.26))
+  dr = NS.draws
+  tick() tick() tick() tick() tick() tick()
+  ok("standing still: no repaint for 6 s", NS.draws == dr)
+  -- invalid positions: nil, secret object, secret coordinates, out of range, an error: flag "on" stays, "valid" clears, x/y zero
+  for _, case in ipairs({ { "nil", nil, 0.3, 0.3 }, { "secret object", "secret", 0.3, 0.3 }, { "secret x", "ok", SECRET, 0.3 }, { "secret y", "ok", 0.3, SECRET },
+                          { "out of range", "ok", 1.2, 0.3 }, { "zero", "ok", 0, 0 }, { "error", "error", 0.3, 0.3 } }) do
+    ST.pos, ST.px, ST.py = case[2], case[3], case[4]
+    tick()
+    d = decode()
+    ok("invalid position (" .. case[1] .. "): posFlags 1 (on, not valid), x/y 0, strip still valid", d.v2 and d.pf == 1 and d.px == 0 and d.py == 0)
+    ST.pos, ST.px, ST.py = "ok", 0.4, 0.4 tick()
+    ok("... valid again afterwards", decode().pf == 3 and decode().px == u16(0.4))
+  end
+  -- instance: never asked, invalid
+  local pc = POSCALLS
+  ST.inst, ST.itype, ST.iid = true, "party", 43
+  tick() evt("ZONE_CHANGED_NEW_AREA") tick()
+  d = decode()
+  ok("in an instance: posFlags 1 (on, not valid), x/y 0", d.pf == 1 and d.px == 0 and d.py == 0)
+  ok("in an instance: the position is not even asked for", POSCALLS == pc)
+  ST.inst, ST.itype, ST.iid = false, "none", 0
+  tick() evt("ZONE_CHANGED_NEW_AREA") tick()
+  ok("out again: valid", decode().pf == 3)
+  -- the zone map changes: the new map's position shows at once
+  dr = NS.draws
+  ST.map = 1413 ST.px = 0.4 tick()
+  ok("another zone map: shown at once with the new uiMapID", decode().map == 1413 and decode().pf == 3)
+  -- pixel strip off: the position timer stops too, and comes back with it
+  SlashCmdList.ELANSHUB("pixel off")
+  ok("pixel off: the position timer stops", not E.PositionTimerRunning())
+  t0 = E.posTicks tick() tick()
+  ok("... and doesn't tick", E.posTicks == t0)
+  SlashCmdList.ELANSHUB("pixel on")
+  ok("pixel on: the position timer runs again", E.PositionTimerRunning())
+  -- on again: no second first-time line
+  n0 = #CHAT
+  SlashCmdList.ELANSHUB("position on")
+  ok("on again: the first-time line is not repeated (a status line instead)", #CHAT == n0 + 1 and not plain(CHAT[#CHAT]):find("is now shared") and plain(CHAT[#CHAT]):find("ON"))
+  -- off: bytes zero, timer stops, never asked again
+  SlashCmdList.ELANSHUB("position off")
+  d = decode()
+  ok("position off: db.position nil, posFlags 0, x/y 0, timer stopped", db.position == nil and d.pf == 0 and d.px == 0 and d.py == 0 and not E.PositionTimerRunning())
+  pc, t0 = POSCALLS, E.posTicks
+  for i = 1, 8 do tick() end evt("ZONE_CHANGED")
+  ok("position off: no ticks, never asked for again", POSCALLS == pc and E.posTicks == t0)
+  -- the settings page: the check and its description, verbatim
+  local DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes. The Hub draws your map position into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there. It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere unless you also turn on sharing with your Lodge. Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there."
+  ok("setting label and description verbatim", E.POSITION_LABEL == "Share my map position with Elan's Outpost" and E.POSITION_DESC == DESC)
+  SlashCmdList.ELANSHUB("settings")
+  if not _G.ElansHubSettings.__shown then SlashCmdList.ELANSHUB("settings") end
+  E.SelectSettingsTab("general")
+  ok("General page shows the description under the check", _G.ElansHubSettings.pages.general.positionNote and _G.ElansHubSettings.pages.general.positionNote.__text == DESC)
+  local cb
+  for _, f in ipairs(ALLF) do if f.__kind == "Button" and f.text and f.text.__text == E.POSITION_LABEL then cb = f end end
+  ok("the check exists and is off", cb ~= nil and not cb.mark.__shown)
+  Fire(cb, "OnClick")
+  ok("ticking it turns sharing on (and the timer)", db.position == true and E.PositionTimerRunning() and cb.mark.__shown)
+  Fire(cb, "OnClick")
+  ok("unticking turns it off", db.position == nil and not E.PositionTimerRunning())
+  -- the strip tooltip says so
+  Fire(strip.hit, "OnEnter")
+  local tip = table.concat(GameTooltip.lines, " | ")
+  ok("strip tooltip mentions the optional position, verbatim", tip:find("and (if you turned it on) your map position for its world map. It is read by the Outpost on this PC only; it never controls the game.", 1, true) ~= nil)
+  Fire(strip.hit, "OnLeave")
+  ST.pos = nil ST.map = 1426
+end
 -- state for the hub's cross-check (STRIP_DUMP): in combat, AFK, level 60 Orc hunter "Elan", zone 1426, party instance 43, group 5
 ST.combat = true ST.afk = true ST.inst = true ST.itype = "party" ST.iid = 43 ST.group = 5 ST.exh = 10 ST.xp = 2250
 tick() evt("PLAYER_REGEN_DISABLED")
@@ -1050,7 +1156,16 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.15.2", "## Version: 1.15.2" in toc and "1.15.2" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc version is 1.15.3", "## Version: 1.15.3" in toc and "1.15.3" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc Notes verbatim (optional live map position, off by default)", "## Notes: Shares your character, zone and status with Elan's Outpost (and your Lodge, if you join one). Optional: your live map position for the Outpost's world map — display only, no automation; everything optional is off by default.\n" in toc)
+_cl153 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.15.3")[-1]
+check("changelog 1.15.3: opt-in, off by default, honest wording", "OFF by default" in _cl153 and "nothing presses keys or plays the game for you" in _cl153 and "/ehub position on|off" in _cl153)
+# the map position is read in ONE place only (ElansHub.lua's readPosition), behind the opt-in
+_pos_files = [f for f in files if "GetPlayerMapPosition" in open(os.path.join(ADDON, f), encoding="utf-8").read()]
+_hub = open(os.path.join(ADDON, "ElansHub.lua"), encoding="utf-8").read()
+check("GetPlayerMapPosition only in ElansHub.lua, only in readPosition, behind positionOn()", _pos_files == ["ElansHub.lua"] and _hub.count("C_Map.GetPlayerMapPosition, mapId") == 1
+      and "if not positionOn() or inInstance" in _hub.split("local function readPosition")[1].split("C_Map.GetPlayerMapPosition, mapId")[0])
+check("position code never hooks or touches protected things", not _re.search(r"hooksecurefunc\(\s*C_Map|SetAttribute|Secure", _hub.split("-- ---- map position")[1].split("local lastSig")[0]))
 check("changelog says a one-time WoW restart is needed", "ONE-TIME" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.12.0")[1])
 check("Data.lua is in the toc right after ElansHub.lua and ElansHubData is a saved variable", files[:2] == ["ElansHub.lua", "Data.lua"] and "ElansHubData" in toc)
 check("Collect.lua is in the toc right after Data.lua", files[:3] == ["ElansHub.lua", "Data.lua", "Collect.lua"])
@@ -1074,7 +1189,7 @@ check("changelog 1.15.0 mentions the Laugh fix and the restart", "1.15.0" in _cl
 # live health / power are never read; the character sheet's MAXIMUMS (UnitHealthMax / UnitPowerMax, gear.stats, Collect.lua only) are not live values
 import re
 check("source never reads live health / power (UnitHealth, UnitPower without Max)", not re.search(r"UnitHealth(?!Max)|UnitPower(?!Max|Type)", SRC))
-for api in ("UnitBuff", "UnitDebuff", "UnitAura", "GetSpellCooldown", "UnitPosition", "GetPlayerMapPosition", "C_UnitAuras", "CombatLog"):
+for api in ("UnitBuff", "UnitDebuff", "UnitAura", "GetSpellCooldown", "UnitPosition", "C_UnitAuras", "CombatLog"):
     check("source never mentions " + api, api not in SRC)
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

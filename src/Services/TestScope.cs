@@ -167,6 +167,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/WorldMap/(WdtFile|WmoFile|AdtFile)\.cs$", "dungeonmaps");
             R(@"^src/Services/(Maps/NamedEntrances|Atlas/AtlasObs\.Entrances|Atlas/AtlasInstances)\.cs$", "dungeonmaps", "instances", "atlaslodge", "atlaspage");
             R(@"^src/(Services/WorldMap/|Controls/WorldMapView\.cs|WorldMap/|MainWindow\.WorldMapTest(\.(?!Real\.)\w+)?\.cs)", "worldmap", "instances", "atlashosts", "atlaspage");
+            R(@"^src/(HelpCard\.cs|MainWindow\.Atlas\.cs)$", "worldmap");    // the how-to cards (the live position's), the live position wiring
             R(@"^src/(Services/WorldMap/(Wmo\w+|AdtObjects|WorldMapBuildings\w*)|MainWindow\.BuildingsTest(\.(?!Real)\w+)?|SettingsPage(\.xaml)?)\.cs$", "buildings", "worldmap");
             R(@"^src/(Services/Atlas/AtlasInstances\.cs|AtlasPage\.Entrance\.cs|MainWindow\.InstancesTest(\.(?!Real\.|Audit\.)\w+)?\.cs)$", "instances", "atlaspage", "atlasbrowse");
             R(@"^src/Services/(InventoryData|IconStore|IconSheet|Blp|Casc|CharPortrait|LuaData|ZoneNames)\.cs$", "inventory");

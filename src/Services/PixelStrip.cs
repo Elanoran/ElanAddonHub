@@ -14,7 +14,8 @@ namespace ElansAddonHub.Services
     //
     // Version 2 (companion 1.5+) adds a second row of 32 data cells directly below the first (same cell size, decoded with
     // row 0's calibration): 24 bytes = magic B2, version 2, uiMapID (2), instanceID (2), flags1, flags2, xp %, group size,
-    // 12 reserved, 2 checksum bytes. Row 0 is unchanged except that flags bit 8 says "row 1 is present". An older hub reads
+    // 12 reserved, 2 checksum bytes. Version 3 (companion 1.15.3+) uses reserved bytes 10-14 for the OPT-IN map position: posFlags
+    // (1 sharing on, 2 position valid), x (2 bytes), y (2 bytes) = 0..65535 of the uiMap in bytes 2-3. Older hubs ignore them. Row 0 is unchanged except that flags bit 8 says "row 1 is present". An older hub reads
     // row 0 only and never looks below it, so v1 and v2 hubs/companions mix in every combination: a v2 decoder without row 1
     // (old companion, or a failed checksum there) simply returns the v1 fields.
     //   flags1: 1 combat, 2 dead/ghost, 4 AFK, 8 resting, 16 in instance, 32 raid instance, 64 party instance, 128 in group
@@ -39,6 +40,14 @@ namespace ElansAddonHub.Services
             public bool Rested => HasV2 && (Flags2 & 4) != 0;
             public bool V2Equals(Info o) => o != null && HasV2 == o.HasV2 && MapId == o.MapId && InstanceId == o.InstanceId && Flags1 == o.Flags1
                 && Flags2 == o.Flags2 && XpPercent == o.XpPercent && GroupSize == o.GroupSize;
+            // ---- row 1 version 3 (companion 1.15.3+): the opt-in map position. RowVersion 2 = an older Hub that cannot send it.
+            public int RowVersion, PosFlags, PosX, PosY;
+            public bool PosSupported => HasV2 && RowVersion >= 3;
+            public bool PosEnabled => PosSupported && (PosFlags & 1) != 0;          // "Share my map position" is on in the Hub
+            public bool PosValid => PosEnabled && (PosFlags & 2) != 0;              // ... and the game gave a position (not in an instance, not secret)
+            public double PosFx => PosX / 65535.0;
+            public double PosFy => PosY / 65535.0;
+            public bool PosEquals(Info o) => o != null && RowVersion == o.RowVersion && PosFlags == o.PosFlags && PosX == o.PosX && PosY == o.PosY;
             public string ClassFile => ClassFiles.TryGetValue(ClassId, out var c) ? c : null;
             public string ClassName => ClassNames.TryGetValue(ClassId, out var c) ? c : null;
             public string RaceFile => RaceFiles.TryGetValue(RaceId, out var c) ? c : null;
@@ -90,10 +99,11 @@ namespace ElansAddonHub.Services
 
         public const int V2Bytes = 24;
 
-        public static byte[] BuildPayloadV2(int mapId, int instanceId, int flags1, int flags2, int xpPercent, int groupSize)
+        public static byte[] BuildPayloadV2(int mapId, int instanceId, int flags1, int flags2, int xpPercent, int groupSize, int version = 2, int posFlags = 0, int posX = 0, int posY = 0)
         {
             var q = new byte[V2Bytes];
-            q[0] = 0xB2; q[1] = 2; q[2] = (byte)(mapId >> 8); q[3] = (byte)mapId; q[4] = (byte)(instanceId >> 8); q[5] = (byte)instanceId;
+            q[0] = 0xB2; q[1] = (byte)version;
+            if (version >= 3) { q[10] = (byte)posFlags; q[11] = (byte)(posX >> 8); q[12] = (byte)posX; q[13] = (byte)(posY >> 8); q[14] = (byte)posY; } q[2] = (byte)(mapId >> 8); q[3] = (byte)mapId; q[4] = (byte)(instanceId >> 8); q[5] = (byte)instanceId;
             q[6] = (byte)flags1; q[7] = (byte)flags2; q[8] = (byte)xpPercent; q[9] = (byte)groupSize;
             Checksum(q, out q[22], out q[23], 22);
             return q;
@@ -211,6 +221,13 @@ namespace ElansAddonHub.Services
                     info.HasV2 = true;
                     info.MapId = q[2] * 256 + q[3]; info.InstanceId = q[4] * 256 + q[5];
                     info.Flags1 = q[6]; info.Flags2 = q[7]; info.XpPercent = Math.Min(100, (int)q[8]); info.GroupSize = q[9];
+                    info.RowVersion = q[1];
+                    if (q[1] >= 3)
+                    {
+                        // a "valid" bit without "on" is not trusted; x / y only count when valid
+                        info.PosFlags = (q[10] & 1) != 0 ? q[10] & 3 : 0;
+                        if ((info.PosFlags & 2) != 0) { info.PosX = q[11] * 256 + q[12]; info.PosY = q[13] * 256 + q[14]; }
+                    }
                 }
             }
             return info;
@@ -231,6 +248,7 @@ namespace ElansAddonHub.Services
         public DateTime LastSeen { get; private set; }             // when it last decoded
         public string Status { get; private set; } = "idle";
         public event Action Changed;
+        public event Action PositionChanged;                       // only the opt-in map position changed: no presence change, no SavedVariables poll
         public IntPtr TestHwnd;                                  // self-test: read this window instead of WoW
         public StripCodec.Info Probe(out string why) => ReadOnce(out why);
 
@@ -258,6 +276,7 @@ namespace ElansAddonHub.Services
                     if (old == null || old.Name != info.Name || old.Level != info.Level || old.ClassId != info.ClassId || old.RaceId != info.RaceId || old.Sex != info.Sex
                         || !old.V2Equals(info))
                         Changed?.Invoke();
+                    else if (!old.PosEquals(info)) PositionChanged?.Invoke();
                 }
             }
             catch (Exception e) { Status = "error " + e.Message; }
