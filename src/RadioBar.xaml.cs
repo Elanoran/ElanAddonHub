@@ -103,7 +103,17 @@ namespace ElansAddonHub
             if (player == null) return;
             Select(player.Channel);
             var ch = player.Channel.Name;
-            RpLinkText.Text = "Radio Paradise · " + ch;
+            // 2.76: the quality that plays (or would), subtly after the channel when it is not Standard: "Radio Paradise · Rock · Lossless"
+            var stream = player.WantsPlayback || player.State == RadioState.Playing ? player.Stream ?? player.Planned : player.Planned;
+            var label = stream?.Label;
+            RpLinkText.Text = "Radio Paradise · " + ch + (label != null && label != "Standard" ? " · " + label : "");
+            foreach (var chip in chips)
+                if (chip.Tag is RadioChannel cc)
+                {
+                    var why = player.Quality == RadioQuality.Lossless && cc.Flac == null ? " " + cc.Name + " has no lossless stream: it plays High." : "";
+                    chip.ToolTip = "Switch to " + cc.Name + " (this session; the favourite is in Settings > General)." + why;
+                }
+            string note = stream?.Note != null ? " " + Capital(stream.Note) + ": playing " + stream.Label + "." : "";
             string glyph = "", tip = "Play Radio Paradise · " + ch, now = null, status = null;
             bool retry = false;
             switch (player.State)
@@ -111,7 +121,8 @@ namespace ElansAddonHub
                 case RadioState.Connecting:
                     glyph = ""; tip = "Pause"; now = player.Attempt > 0 ? "Reconnecting..." : "Connecting..."; status = now; break;
                 case RadioState.Playing:
-                    glyph = ""; tip = "Pause"; now = player.Title ?? "Radio Paradise · " + ch; status = "Playing " + ch + ", live."; break;
+                    glyph = ""; tip = "Pause"; now = player.Title ?? "Radio Paradise · " + ch; status = "Playing " + ch + ", live" + (label != null && label != "Standard" ? " (" + label + ")" : "") + "." + note
+                        + (player.Title == null && stream?.Format == RadioFormat.Flac ? " This stream sends no song titles." : ""); break;
                 case RadioState.Waiting:
                     glyph = ""; tip = "Stop trying"; now = "Reconnecting...";
                     status = "Lost the stream. Trying again in " + Math.Max(1, (int)Math.Round(player.NextWait.TotalSeconds)) + " s (try " + player.Attempt + " of " + RadioParadise.MaxTries + ")."; break;
@@ -119,7 +130,12 @@ namespace ElansAddonHub
                     glyph = ""; tip = "Retry"; now = "Couldn't connect"; retry = true;
                     status = "Couldn't reach Radio Paradise after " + RadioParadise.MaxTries + " tries."; break;
                 case RadioState.Unsupported:
-                    now = "Can't play this"; status = "This stream can't be played here" + (player.LastError != null ? " (" + player.LastError + ")." : "."); break;
+                    now = "Can't play this";
+                    if (player.LastError != null && player.LastError.StartsWith("this PC can't play", StringComparison.Ordinal))
+                        status = "Can't play this format on this PC: " + player.LastError.Substring("this PC can't play ".Length) + "."
+                            + (player.Channel.Flac != null && player.Quality != RadioQuality.Lossless ? " Lossless plays here (Settings > General > Sound quality)." : "");
+                    else status = "This stream can't be played here" + (player.LastError != null ? " (" + player.LastError + ")." : ".");
+                    break;
                 case RadioState.NoDevice:
                     now = "No sound device"; status = "No sound output was found. Plug in headphones or speakers and press Play."; break;
                 default:
@@ -153,6 +169,8 @@ namespace ElansAddonHub
             MuteButton.ToolTip = player.Muted ? "Unmute" : "Mute";
             System.Windows.Automation.AutomationProperties.SetName(MuteButton, player.Muted ? "Unmute the radio" : "Mute the radio");
         }
+
+        static string Capital(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
 
         static void SetCover(Border art, ImageBrush brush, ImageSource img)
         {
@@ -289,6 +307,8 @@ namespace ElansAddonHub
         public Popup FlyoutForTest => Flyout;
         public FrameworkElement FlyCardForTest => FlyCard;
         public string RpLinkTextForTest => RpLinkText.Text;
+        public string StatusTextForTest => FlyStatus.Text;
+        public string ChipToolTipForTest(string id) => chips.FirstOrDefault(c => (c.Tag as RadioChannel)?.Id == id)?.ToolTip as string;
         public Slider VolumeSliderForTest => VolumeSlider;
         public Button MuteButtonForTest => MuteButton;
         public Button SongButtonForTest => SongButton;

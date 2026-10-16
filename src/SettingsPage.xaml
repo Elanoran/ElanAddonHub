@@ -210,6 +210,15 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Favourite channel" Tag="The player starts on this channel. Picking another one in the player is just for that session.">
                 <ComboBox x:Name="RadioFavBox" Style="{StaticResource Dropdown}" Width="180" SelectionChanged="RadioFav_Changed" AutomationProperties.Name="Favourite channel" />
               </HeaderedContentControl>
+              <HeaderedContentControl x:Name="RadioQualityRow" Style="{StaticResource Setting.Row}" Header="Sound quality" Tag="Data per hour of listening: Standard about 90 MB, High about 145 MB, Lossless up to about 0.5 GB. The lossless streams may come without song titles.">
+                <Border Style="{StaticResource SegmentHost}">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="RadioQualityStd" Style="{StaticResource Segment}" Content="Standard" GroupName="rq" Checked="RadioQuality_Changed" ToolTip="MP3 192 kbit/s (Serenity: AAC 64 kbit/s, the only lossy stream it has)" AutomationProperties.Name="Sound quality standard" />
+                    <RadioButton x:Name="RadioQualityHigh" Style="{StaticResource Segment}" Content="High" GroupName="rq" Checked="RadioQuality_Changed" ToolTip="AAC 320 kbit/s (Serenity: AAC 64 kbit/s)" AutomationProperties.Name="Sound quality high" />
+                    <RadioButton x:Name="RadioQualityLossless" Style="{StaticResource Segment}" Content="Lossless" GroupName="rq" Checked="RadioQuality_Changed" ToolTip="FLAC, about 1 Mbit/s. Radio 2050 has no lossless stream: it plays High." AutomationProperties.Name="Sound quality lossless" />
+                  </StackPanel>
+                </Border>
+              </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Show album covers (from the stream)" Tag="The stream names the cover of the song that is playing; the Outpost fetches that picture from img.radioparadise.com once per song, only while you listen, and keeps it on your PC. Off: a music note instead, and no pictures are fetched.">
                 <CheckBox x:Name="RadioCoversBox" Style="{StaticResource Switch}" Click="RadioCovers_Click" AutomationProperties.Name="Show album covers (from the stream)" />
               </HeaderedContentControl>

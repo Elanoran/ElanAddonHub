@@ -169,6 +169,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "radioChannel")] public string RadioChannel { get; set; }    // the favourite channel (Settings), picked at every start; a pick in the player is for that session only. RadioParadise.Channels id, default main
         [DataMember(Name = "radioVolume")] public double? RadioVolume { get; set; }     // 0..1, default 0.6
         [DataMember(Name = "radioDuck")] public double? RadioDuck { get; set; }         // 0..1 of the volume while people talk in my voice room, default 0.3
+        [DataMember(Name = "radioQuality")] public string RadioQuality { get; set; }    // 2.76 Sound quality: null / "standard" = MP3 192k, "high" = AAC 320k, "lossless" = FLAC (RadioParadise.ParseQuality)
         [DataMember(Name = "radioNoCovers")] public bool RadioNoCovers { get; set; }    // false = album covers: the picture the stream names (StreamUrl), fetched once per song (2.73 RadioNowPlaying)
         [DataMember(Name = "peerVolumes")] public Dictionary<string, double> PeerVolumes { get; set; } // by name, 0..2
         [DataMember(Name = "lastChannel")] public string LastChannel { get; set; }

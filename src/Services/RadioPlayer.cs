@@ -10,9 +10,10 @@ using NAudio.Wave.SampleProviders;
 namespace ElansAddonHub.Services
 {
     // --selftest "radio": plays a Radio Paradise channel (Outpost 2.72). One HTTP connection, opened only when the user presses Play and closed (aborted)
-    // on Pause / Stop / channel change / exit; there is no muted background streaming. Decoding: the channel's MP3 192k stream, frame by frame
-    // (NAudio's Mp3Frame + the Windows ACM MP3 decoder, already part of NAudio.WinMM and Windows: no extra package), into a small buffer that a
-    // WaveOutEvent on the default device plays. The volume and the voice-room ducking are a gain on the samples (never the device or the
+    // on Pause / Stop / channel change / quality change / exit; there is no muted background streaming. Decoding (2.76: the Sound quality setting):
+    // Standard = the MP3 192k stream (NAudio's Mp3Frame + the Windows ACM MP3 decoder), High = AAC 320k (Media Foundation's AAC decoder, part of
+    // Windows), Lossless = Ogg FLAC (the Outpost's own decoder); no extra package for any of them (RadioDecoders.cs). A quality the channel lacks or
+    // this PC can't decode steps down (never up), with a note. The PCM goes into a small buffer that a WaveOutEvent on the default device plays. The volume and the voice-room ducking are a gain on the samples (never the device or the
     // session volume, which the Lodge voice shares). The ICY metadata gives the title and the cover's address (2.73); nothing is recorded or saved.
     public enum RadioState { Stopped, Connecting, Playing, Waiting, GaveUp, Unsupported, NoDevice }
 
@@ -30,6 +31,7 @@ namespace ElansAddonHub.Services
         readonly object gate = new object();
         Run current;
         RadioChannel channel = RadioParadise.Channels[0];
+        RadioQuality quality = RadioQuality.Standard;
         float volume = 0.6f, duck = 1f;
         GainProvider gain;
 
@@ -45,6 +47,11 @@ namespace ElansAddonHub.Services
         public readonly List<TimeSpan> Waits = new List<TimeSpan>();   // the backoff waits of this play session (self-test)
         public bool WantsPlayback { get { lock (gate) return current != null; } }
         public RadioChannel Channel => channel;
+        public RadioQuality Quality => quality;            // what Settings asks for
+        public RadioStream Stream { get; private set; }    // what the current / last connection plays (its quality, format and why it differs)
+        public Func<RadioFormat, bool> CanDecode = RadioDecoders.CanDecode;   // the self-test can swap it
+        bool Decodable(RadioFormat f) => !RadioDecoders.HasFailed(f) && CanDecode(f);   // a decoder that failed to start this run never counts
+        public RadioStream Planned => RadioParadise.Resolve(channel, quality, Decodable);   // what Play would open now
         public float AppliedGain => gain?.Current ?? Gain;
 
         public RadioPlayer() { ui = SynchronizationContext.Current; }
@@ -66,6 +73,17 @@ namespace ElansAddonHub.Services
             lock (gate) playing = current != null;
             if (playing) { StopCore(false); Title = null; CoverUrl = null; Start(); }   // the old connection is closed before the new one opens
             else { Title = null; CoverUrl = null; Raise(); }
+        }
+
+        // Settings > Sound quality: while it plays, the old connection is closed before the new one opens (like a channel change)
+        public void SetQuality(RadioQuality q)
+        {
+            if (q == quality) return;
+            quality = q;
+            bool playing;
+            lock (gate) playing = current != null;
+            if (playing) { StopCore(false); Title = null; CoverUrl = null; Start(); }
+            else { Stream = null; Raise(); }
         }
 
         public void Play() { lock (gate) if (current != null) return; Start(); }
@@ -98,10 +116,11 @@ namespace ElansAddonHub.Services
         public void Dispose() => StopCore(false);
 
         // ---- the address: the published link, or the fake server in a self-test (never the real one there)
-        public string UrlFor(RadioChannel c)
+        public string UrlFor(RadioChannel c) => UrlFor(c.Path);
+        public string UrlFor(string path)
         {
-            if (TestBaseUrl != null) return TestBaseUrl.TrimEnd('/') + "/" + c.Path;
-            return RadioParadise.StreamUrl(c);
+            if (TestBaseUrl != null) return TestBaseUrl.TrimEnd('/') + "/" + path;
+            return RadioParadise.StreamUrl(path);
         }
 
         public bool UrlAllowed(string url)
@@ -135,6 +154,14 @@ namespace ElansAddonHub.Services
                 bool longPlay = false;
                 RadioState? final = null;
                 try { longPlay = Connect(run, out final); }
+                catch (RadioDecoderUnavailableException e)
+                {
+                    // this PC can't decode it after all: never again this run, and straight on with the next lower quality (no wait)
+                    RadioDecoders.MarkFailed(e.Format);
+                    if (!run.Cancelled) LastError = e.Message;
+                    if (!run.Cancelled && RadioParadise.Resolve(channel, quality, Decodable) != null) { run.Wake.WaitOne(250); continue; }   // the old socket is gone first
+                    final = RadioState.Unsupported;
+                }
                 catch (Exception e) { if (!run.Cancelled) LastError = e.Message; }
                 if (run.Cancelled) break;
                 if (final != null) { var f = final.Value; Finish(run, () => State = f); break; }   // a format we can't play / no sound device: retrying won't help
@@ -155,7 +182,16 @@ namespace ElansAddonHub.Services
         bool Connect(Run run, out RadioState? final)
         {
             final = null;
-            var url = UrlFor(channel);
+            var stream = RadioParadise.Resolve(channel, quality, Decodable);
+            if (stream == null)
+            {
+                // nothing this PC can decode at or below the chosen quality (Serenity, whose lossy stream is AAC, on a PC without the AAC decoder)
+                LastError = "this PC can't play " + channel.Name + "'s " + RadioParadise.QualityName(quality) + " stream";
+                Set(run, () => Stream = null);
+                final = RadioState.Unsupported; return false;
+            }
+            Set(run, () => Stream = stream);
+            var url = UrlFor(stream.Path);
             if (!UrlAllowed(url)) { LastError = "not an allowed stream address"; final = RadioState.Unsupported; return false; }
             var req = (HttpWebRequest)WebRequest.Create(url);
             req.Method = "GET";
@@ -168,43 +204,45 @@ namespace ElansAddonHub.Services
             run.Request = req;
             if (run.Cancelled) return false;
             Interlocked.Increment(ref ConnectionsOpened);
-            IWavePlayer output = null; IMp3FrameDecompressor decomp = null;
+            IWavePlayer output = null; IRadioDecoder decoder = null;
             var clock = Stopwatch.StartNew();
             try
             {
                 using (var resp = (HttpWebResponse)req.GetResponse())
                 {
                     if ((int)resp.StatusCode != 200) throw new WebException("HTTP " + (int)resp.StatusCode);
-                    var type = (resp.ContentType ?? "").ToLowerInvariant();
-                    if (type.Length > 0 && !(type.Contains("mpeg") || type.Contains("mp3"))) { LastError = "stream format " + type; final = RadioState.Unsupported; return false; }
+                    var type = resp.ContentType ?? "";
+                    // the format the answer says it is (no type: the one asked for); a type the player has no decoder for is not retried
+                    var fmt = type.Length == 0 ? stream.Format : RadioParadise.FormatOf(type);
+                    if (fmt == null) { LastError = "stream format " + type.ToLowerInvariant(); final = RadioState.Unsupported; return false; }
                     int.TryParse(resp.Headers["icy-metaint"], out var metaInt);
                     using (var icy = new IcyStream(resp.GetResponseStream(), Math.Max(0, metaInt)))
                     {
                         icy.MetaChanged += (t, u) => Set(run, () => { Title = t; CoverUrl = u; });
+                        decoder = RadioDecoders.Create(fmt.Value, icy);
+                        decoder.TagsChanged += (t, u) => Set(run, () => { Title = t; CoverUrl = u; });   // FLAC: the song in the stream's own comments
                         BufferedWaveProvider buffer = null;
-                        var pcm = new byte[16384 * 4];
+                        byte[] pcm = null;
                         bool started = false;
                         while (!run.Cancelled)
                         {
                             if (buffer != null && buffer.BufferedDuration.TotalSeconds > 3) { run.Wake.WaitOne(100); continue; }
-                            Mp3Frame frame;
-                            try { frame = Mp3Frame.LoadFromStream(icy); }
-                            catch (System.IO.EndOfStreamException) { break; }
-                            if (frame == null) break;
-                            if (decomp == null)
+                            int n = decoder.Decode(ref pcm);
+                            if (n < 0) break;
+                            if (n == 0) continue;
+                            var of = decoder.OutputFormat;
+                            if (buffer == null || !SameFormat(buffer.WaveFormat, of))
                             {
-                                var fmt = new Mp3WaveFormat(frame.SampleRate, frame.ChannelMode == ChannelMode.Mono ? 1 : 2, frame.FrameLength, frame.BitRate);
-                                try { decomp = new AcmMp3FrameDecompressor(fmt); }
-                                catch (Exception e) { LastError = "no MP3 decoder: " + e.Message; final = RadioState.Unsupported; return false; }
-                                buffer = new BufferedWaveProvider(decomp.OutputFormat) { BufferDuration = TimeSpan.FromSeconds(6), DiscardOnBufferOverflow = true };
+                                // the first audio, or a new format mid-stream (the next link of an Ogg chain at another rate): a fresh buffer and output
+                                if (output != null) { try { output.Stop(); output.Dispose(); } catch { } output = null; started = false; }
+                                buffer = new BufferedWaveProvider(of) { BufferDuration = TimeSpan.FromSeconds(6), DiscardOnBufferOverflow = true };
                                 var g = new GainProvider(buffer.ToSampleProvider()) { Target = Gain };
                                 g.Current = g.Target;
                                 gain = g;
                                 try { output = MakeOutput(); output.Init(new SampleToWaveProvider16(g)); }
                                 catch (Exception e) { LastError = "no sound device: " + e.Message; final = RadioState.NoDevice; return false; }
                             }
-                            int n = decomp.DecompressFrame(frame, pcm, 0);
-                            if (n > 0) { buffer.AddSamples(pcm, 0, n); Interlocked.Add(ref DecodedBytes, n); }
+                            buffer.AddSamples(pcm, 0, n); Interlocked.Add(ref DecodedBytes, n);
                             if (!started && buffer.BufferedDuration.TotalMilliseconds >= 400)
                             {
                                 output.Play(); started = true;
@@ -218,12 +256,14 @@ namespace ElansAddonHub.Services
             {
                 try { output?.Stop(); } catch { }
                 try { output?.Dispose(); } catch { }
-                try { decomp?.Dispose(); } catch { }
+                try { decoder?.Dispose(); } catch { }
                 gain = null;
                 try { req.Abort(); } catch { }
             }
             return clock.Elapsed.TotalSeconds >= 30;
         }
+
+        static bool SameFormat(WaveFormat a, WaveFormat b) => a != null && b != null && a.Encoding == b.Encoding && a.SampleRate == b.SampleRate && a.Channels == b.Channels && a.BitsPerSample == b.BitsPerSample;
 
         IWavePlayer MakeOutput()
         {

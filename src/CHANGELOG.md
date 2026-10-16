@@ -3,6 +3,14 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.75.0
+- **Choose the radio's sound quality.** Settings > General > Radio Paradise > **Sound quality**: **Standard** (MP3, as before), **High** (AAC 320 kbit/s) or **Lossless** (FLAC, CD quality). Data for an hour of listening: Standard about 90 MB, High about 145 MB, Lossless up to about 0.5 GB (it varies with the music). Changing it while music plays switches right away.
+- **Serenity plays now.** Radio Paradise only sends Serenity as AAC and as FLAC, which the player could not play before. Standard and High play its AAC stream, Lossless its FLAC stream.
+- **Radio 2050 has no lossless stream.** With Lossless chosen it plays High instead, and the player's card and the channel button say so.
+- **Song titles in Lossless.** Radio Paradise's lossless streams do not seem to send song titles or covers the way the others do. When they do not, the player shows the channel and says "This stream sends no song titles"; Standard and High keep the title and cover.
+- **Nothing to install.** AAC is played with the decoder that comes with Windows, and FLAC with a small decoder built into the Outpost. If this PC lacks the AAC decoder (some "N" editions of Windows), High plays Standard instead and says why; Serenity then says it can't play this format on this PC (Lossless still works there).
+- The card in the title bar shows the quality next to the channel, for example "Radio Paradise · Rock · Lossless".
+
 ## 2.74.0
 - **Your own dot on the world map (optional, off by default).** Settings > General > **Show my live position on the world map** puts a dot in your class colour on the Atlas world map, with an arrow for the way you are heading and a fading trail of the last 10 minutes. **Follow me** keeps the map centred on you; dragging the map stops it.
 - **It needs one switch in the game too.** In Elan's Hub (1.15.3 or newer) type `/ehub position on` or tick **Share my map position with Elan's Outpost**. The Hub then draws your position into its small status strip in the corner of the screen, and the Outpost on this PC reads it from there. It is only shown on a map - nothing presses keys or plays the game for you, and nothing is sent anywhere. Both switches are off until you turn them on.
