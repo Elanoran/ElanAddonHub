@@ -204,22 +204,8 @@ local function paintSlot(b)
   end
 end
 
-local function showEmoteTip(btn)
-  local e = BY_TOKEN[btn.token]
-  if not e then return end
-  UI.Tip.Begin(btn, "ANCHOR_TOP")
-  local tn = targetName()
-  if tn then
-    UI.Tip.Title(e[2] .. " " .. tn)
-  else
-    UI.Tip.Title(e[2])
-  end
-  UI.Tip.Pair("Command", cmdFor(btn.token), "accent")
-  if not tn then UI.Tip.Note("No target: plain emote") end
-  UI.Tip.Action("Click", "do it")
-  UI.Tip.Action("Right-click", "close")
-  UI.Tip.Show()
-end
+-- no hover tooltip on the slots (1.15.2): it covered the icons. The middle of the ring names the emote, its /command and the target.
+
 
 local function updateCentre()
   if not centreName then return end
@@ -270,8 +256,7 @@ local function setSector(sec)
   end
   updatePointer()
   updateCentre()
-  GameTooltip:Hide()
-  if sec and buttons[sec] then showEmoteTip(buttons[sec]) end
+  GameTooltip:Hide()   -- the trigger icon's own tooltip goes away once a slot is pointed at
 end
 
 local function clearPressed()

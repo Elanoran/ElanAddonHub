@@ -47,7 +47,7 @@ function fn.SetVertexColor(s, r, g, b, a) s.__vc = { r, g, b, a } end
 function fn.SetValue(s, v) s.__v = v local h = scripts[s] and scripts[s].OnValueChanged if h then h(s, v) end end
 function fn.CreateTexture(s) local x = new("Texture", nil, s) s.__textures = s.__textures or {} s.__textures[#s.__textures + 1] = x return x end
 function fn.SetColorTexture(s, r, g, b) s.__rgb = { r, g, b } end
-function fn.CreateFontString(s) return new("FontString", nil, s) end
+function fn.CreateFontString(s) local x = new("FontString", nil, s) s.__fonts = s.__fonts or {} s.__fonts[#s.__fonts + 1] = x return x end
 function fn.CreateLine(s) return new("Line", nil, s) end
 function fn.StartMoving(s) s.__moving = true end
 function fn.StopMovingOrSizing(s) s.__moving = false s.__x, s.__y = 33, 44 end
@@ -376,7 +376,9 @@ ok("default emotes/order", same)
 TARGET = nil
 cursorAt(0, 0) Fire(wheel, "OnEnter") tick()
 cursorAt(20, 100) tick()
-ok("pointing near slot 1 selects it (tooltip names it and its /command)", table.concat(GameTooltip.lines, "|"):find("Thank") and table.concat(GameTooltip.lines, "|"):find("/thank", 1, true))
+local function centre() local s = {} for _, f in ipairs(ring.__fonts or {}) do s[#s + 1] = tostring(f.__text) end return table.concat(s, "|") end
+ok("pointing near slot 1 selects it (the middle of the ring names it and its /command)", centre():find("Thank") and centre():find("/thank", 1, true))
+ok("no hover tooltip on a slot (1.15.2: it covered the icons)", not GameTooltip.__shown and GameTooltip.owner ~= kids[1])
 Fire(ring, "OnMouseDown", "LeftButton") ok("pressed state on the sector", kids[1].down == true)
 Fire(ring, "OnMouseUp", "LeftButton")
 ok("click anywhere in the sector does THANK without unit", EMOTES[1] and EMOTES[1][1] == "THANK" and EMOTES[1][2] == nil)
@@ -389,7 +391,8 @@ allClosed()
 NOW = NOW + 2
 TARGET = "Bob"
 Fire(wheel, "OnEnter") cursorAt(45, 80) tick()
-ok("tooltip names target and command", table.concat(GameTooltip.lines, "|"):find("Cheer Bob") and table.concat(GameTooltip.lines, "|"):find("/cheer", 1, true))
+ok("the middle names the command and the target", centre():find("Cheer") and centre():find("/cheer", 1, true) and centre():find("Bob", 1, true))
+ok("still no slot tooltip with a target", not GameTooltip.__shown and GameTooltip.owner ~= kids[2])
 press(kids[2])
 ok("click with target aims at target", EMOTES[2] and EMOTES[2][1] == "CHEER" and EMOTES[2][2] == "target")
 allClosed()
@@ -1047,7 +1050,7 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.15.1", "## Version: 1.15.1" in toc and "1.15.1" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc version is 1.15.2", "## Version: 1.15.2" in toc and "1.15.2" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
 check("changelog says a one-time WoW restart is needed", "ONE-TIME" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.12.0")[1])
 check("Data.lua is in the toc right after ElansHub.lua and ElansHubData is a saved variable", files[:2] == ["ElansHub.lua", "Data.lua"] and "ElansHubData" in toc)
 check("Collect.lua is in the toc right after Data.lua", files[:3] == ["ElansHub.lua", "Data.lua", "Collect.lua"])
