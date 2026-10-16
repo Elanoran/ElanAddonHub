@@ -40,17 +40,21 @@ namespace ElansAddonHub
                 chips.Add(chip);
                 ChannelChips.Children.Add(chip);
             }
+            // the soft edges: a fade only on a side where the title runs on past the edge, so the first and the last words are fully readable
+            // while the title rests at its start or its end (the inner stops move with the scroll, see SetTitle)
+            fadeLeft = new GradientStop(Colors.Black, 0); fadeRight = new GradientStop(Colors.Black, 1);
             var fade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
             fade.GradientStops.Add(new GradientStop(Colors.Transparent, 0));
-            fade.GradientStops.Add(new GradientStop(Colors.Black, 0.05));
-            fade.GradientStops.Add(new GradientStop(Colors.Black, 0.95));
+            fade.GradientStops.Add(fadeLeft);
+            fade.GradientStops.Add(fadeRight);
             fade.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
-            fade.Freeze();
             marqueeMask = fade;
             IsVisibleChanged += (s, e) => Refresh();
         }
 
         readonly Brush marqueeMask;
+        readonly GradientStop fadeLeft, fadeRight;
+        const double FadeWidth = 18;   // px of each soft edge
 
         public void Init(RadioPlayer p, Settings s, RadioNowPlaying np)
         {
@@ -179,17 +183,25 @@ namespace ElansAddonHub
             var key = now + "|" + max;
             if (marqueeOn && key == marqueeKey) return;
             marqueeKey = key; marqueeOn = true;
-            double over = w - max + 8;                         // a little past the end, so the last letter clears the fade
-            double run = over / MarqueeSpeed;
-            var a = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
-            a.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-            a.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(MarqueePauseSec))));
-            a.KeyFrames.Add(new LinearDoubleKeyFrame(-over, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(MarqueePauseSec + run))));
-            a.KeyFrames.Add(new LinearDoubleKeyFrame(-over, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(2 * MarqueePauseSec + run))));
-            a.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(2 * MarqueePauseSec + 2 * run))));
-            Timeline.SetDesiredFrameRate(a, 30);
+            double over = w - max + 2;                         // the last letter just clears the edge (no fade on that side at the end)
+            double run = over / MarqueeSpeed, P = MarqueePauseSec, ramp = Math.Min(0.4, run / 2);
+            double f = Math.Min(FadeWidth, max * 0.2) / Math.Max(1, max);   // the fade's share of the clip
+            var period = new Duration(TimeSpan.FromSeconds(2 * P + 2 * run));
+            DoubleAnimationUsingKeyFrames Keys(params double[] tv)
+            {
+                var k = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever, Duration = period };
+                for (int i = 0; i < tv.Length; i += 2) k.KeyFrames.Add(new LinearDoubleKeyFrame(tv[i + 1], KeyTime.FromTimeSpan(TimeSpan.FromSeconds(tv[i]))));
+                Timeline.SetDesiredFrameRate(k, 30);
+                return k;
+            }
+            // rest at the start (no left fade), scroll, rest at the end (no right fade), scroll back
+            var a = Keys(0, 0, P, 0, P + run, -over, 2 * P + run, -over, 2 * P + 2 * run, 0);
+            var left = Keys(0, 0, P, 0, P + ramp, f, 2 * P + 2 * run - ramp, f, 2 * P + 2 * run, 0);
+            var right = Keys(0, 1 - f, P + run - ramp, 1 - f, P + run, 1, 2 * P + run, 1, 2 * P + run + ramp, 1 - f, 2 * P + 2 * run, 1 - f);
             TitleClip.OpacityMask = marqueeMask;
             NowShift.BeginAnimation(TranslateTransform.XProperty, a);
+            fadeLeft.BeginAnimation(GradientStop.OffsetProperty, left);
+            fadeRight.BeginAnimation(GradientStop.OffsetProperty, right);
         }
 
         void StopMarquee()
@@ -198,6 +210,8 @@ namespace ElansAddonHub
             marqueeOn = false; marqueeKey = null;
             NowShift.BeginAnimation(TranslateTransform.XProperty, null);
             NowShift.X = 0;
+            fadeLeft.BeginAnimation(GradientStop.OffsetProperty, null);
+            fadeRight.BeginAnimation(GradientStop.OffsetProperty, null);
             TitleClip.OpacityMask = null;
         }
 
@@ -294,6 +308,8 @@ namespace ElansAddonHub
         public bool TitleTrimmedForTest => NowText.TextTrimming != TextTrimming.None;
         public bool MarqueeRunningForTest => marqueeOn;
         public double MarqueeOffsetForTest => NowShift.X;
+        public double FadeLeftForTest => fadeLeft.Offset;      // 0 = no fade on the left
+        public double FadeRightForTest => fadeRight.Offset;    // 1 = no fade on the right
         public bool EqualiserShownForTest => Equaliser.Visibility == Visibility.Visible;
         public bool EqualiserAnimatingForTest => eqOn;
         public FrameworkElement EqualiserForTest => Equaliser;

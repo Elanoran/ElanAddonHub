@@ -370,9 +370,13 @@ namespace ElansAddonHub
                     const string longT = "Godspeed You! Black Emperor - Storm (Lift Your Skinny Fists Like Antennas to Heaven)";
                     srv.FixedTitle = longT;
                     await Until(() => Radio.Title == longT, 8000); await Settle();
-                    double off0 = RadioPlayerBar.MarqueeOffsetForTest;
+                    double off0 = RadioPlayerBar.MarqueeOffsetForTest, fl0 = RadioPlayerBar.FadeLeftForTest, fr0 = RadioPlayerBar.FadeRightForTest;
+                    Check("pill: resting at its start the title has no fade on the left (the first word reads fully), only on the right where it runs on",
+                        fl0 < 0.001 && fr0 < 0.95, $"left {fl0:0.000} right {fr0:0.000}");
                     await Task.Delay(3200);   // the 2 s rest at the start, then it moves
                     double off1 = RadioPlayerBar.MarqueeOffsetForTest;
+                    Check("pill: while it scrolls both edges fade", RadioPlayerBar.FadeLeftForTest > 0.03 && RadioPlayerBar.FadeRightForTest < 0.97,
+                        $"left {RadioPlayerBar.FadeLeftForTest:0.000} right {RadioPlayerBar.FadeRightForTest:0.000}");
                     Check("pill: a title that does not fit scrolls slowly (after a rest at the start), clipped to 240",
                         RadioPlayerBar.MarqueeRunningForTest && Math.Abs(RadioPlayerBar.TitleWidthForTest - 240) < 0.5 && off0 > -1 && off1 < -5 && !RadioPlayerBar.TitleTrimmedForTest,
                         $"marquee {RadioPlayerBar.MarqueeRunningForTest} w {RadioPlayerBar.TitleWidthForTest} offset {off0:0.0} -> {off1:0.0}");

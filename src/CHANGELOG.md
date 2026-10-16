@@ -5,6 +5,7 @@ Keep one `## x.y.z` section per hub version.
 
 ## 2.73.1
 - **The Lodge side list shows the right page.** Going from Calendar to Files or Ladder (or back) left the earlier page's row lit too, so several looked selected at once. Now only the page you are on is lit.
+- **The radio title is readable at both ends.** A long title that scrolls in the player no longer fades out its first and last letters: while it rests at the start there is only a soft edge on the right, at the end only on the left, and both while it moves.
 
 ## 2.73.0
 - **A smaller radio player.** The player in the title bar is now one small rounded pill: the album cover, "Artist – Song", play / pause, and a tiny bouncing equaliser while music plays (it is only decoration, it does not follow the music). A title that is too long for the pill scrolls slowly from end to end and rests at each end; a short one stays still. If you have turned off animations in Windows, nothing moves: the title is cut off with "..." (point at it to read all of it) and the equaliser stands still.
