@@ -85,7 +85,7 @@ namespace ElansAddonHub
             browseEmpty = Tb("Nothing matches these filters.", "Text.Secondary", null, 12);
             browseEmpty.Visibility = r.Rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             col.Children.Add(browseEmpty);
-            browseList = new ListBox { Style = (Style)FindResource("AtlasList"), ItemsSource = r.Rows, Margin = new Thickness(-8, 4, -8, 0), MinHeight = 200, MaxHeight = Math.Max(240, Scroller.ViewportHeight > 0 ? Scroller.ViewportHeight - 240 : 480) };   // a height from the start: a list with none would build every row
+            browseList = new ListBox { Style = (Style)FindResource("AtlasList"), ItemsSource = r.Rows, Margin = new Thickness(-8, 4, -8, 0), MinHeight = 200, MaxHeight = Math.Max(240, Scroller.ViewportHeight > 0 ? Scroller.ViewportHeight - (browseListTop > 0 ? browseListTop : 420) - 4 : 480) };   // a height from the start: a list with none would build every row (where the last list sat: the page fits at once, no scroll bar for a frame)
             browseList.PreviewMouseWheel += (s, e) =>
             {
                 var sv = FindScroll(browseList);
@@ -94,11 +94,15 @@ namespace ElansAddonHub
                 if (atTop || atBottom) { e.Handled = true; Scroller.ScrollToVerticalOffset(Scroller.VerticalOffset - e.Delta); }
             };
             browseList.Visibility = r.Rows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            var fitList = browseList;
+            fitList.LayoutUpdated += (s, e) => { if (ReferenceEquals(fitList, browseList)) SizeBrowseList(); };   // whatever moves the list (filter rows wrapping, the hero, notes, new rows) refits it before the frame is drawn
             col.Children.Add(browseList);
             Scroller.ScrollToTop();
             Motion.PageIn(Body);
-            Dispatcher.BeginInvoke(new Action(SizeBrowseList), DispatcherPriority.Background);
+            Dispatcher.BeginInvoke(new Action(SizeBrowseList), DispatcherPriority.Loaded);   // after layout, before the frame is drawn
         }
+
+        double browseListTop;   // where the list started on the last browse page (the hero, chips and filters above it)
 
         // the list takes the rest of the window below the filter bar
         void SizeBrowseList()
@@ -107,7 +111,9 @@ namespace ElansAddonHub
             try
             {
                 double y = browseList.TranslatePoint(new Point(0, 0), Scroller).Y + Scroller.VerticalOffset;
-                browseList.MaxHeight = Math.Max(240, Scroller.ViewportHeight - y - 4);
+                browseListTop = y;
+                double fit = Math.Max(240, Scroller.ViewportHeight - y - 4);
+                if (Math.Abs(browseList.MaxHeight - fit) > 0.5) browseList.MaxHeight = fit;
             }
             catch (InvalidOperationException) { }
         }

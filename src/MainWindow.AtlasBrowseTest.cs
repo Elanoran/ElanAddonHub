@@ -500,6 +500,32 @@ namespace ElansAddonHub
                 Check("speed: while the index is built again (data changed) the window keeps running (timer ticks " + ticked + "), and the page is drawn after it", ticked >= 10 && AtlasView.IsBrowse && AtlasView.BrowseModel.Total > 0, ticked + " " + skeleton);
                 AllLayers();
 
+                // ============================================================================================================ switching lists: the page's own scroll bar stays put
+                // (2.76: a list first got a guessed height that was too tall, so the page's scroll bar came up for a frame or two and went again when the list
+                // was fitted to the window - the page seemed to jump between Creatures, Objects, Items)
+                {
+                    var flips = new List<string>();
+                    foreach (var hh in new[] { 700, 900, 1200 })
+                    {
+                        Height = hh; await Task.Delay(120);
+                        foreach (var id in new[] { "browse:creatures", "browse:objects", "browse:items", "browse:items/weapons?name=item" })
+                        {
+                            var sv = AtlasView.ScrollerForTest; var seen = new List<string>(); var clock = Stopwatch.StartNew(); var before = ((StackPanel)AtlasView.BodyForTest).Children.Count > 0 ? ((StackPanel)AtlasView.BodyForTest).Children[0] : null;
+                            EventHandler tick = (s, e) =>
+                            {
+                                if (!AtlasView.IsBrowse || AtlasView.CurrentId != id || (((StackPanel)AtlasView.BodyForTest).Children.Count > 0 && ReferenceEquals(((StackPanel)AtlasView.BodyForTest).Children[0], before))) return;   // the new list only (the page before may rightly have had a bar)
+                                var f = sv.ComputedVerticalScrollBarVisibility.ToString();
+                                if (seen.Count == 0 || !seen[seen.Count - 1].StartsWith(f)) seen.Add(f + " (" + clock.ElapsedMilliseconds + " ms, " + Math.Round(sv.ExtentHeight) + " of " + Math.Round(sv.ViewportHeight) + ")");
+                            };
+                            System.Windows.Media.CompositionTarget.Rendering += tick;
+                            try { await AtlasView.Open(id); await AtlasView.WaitForTest(); await Task.Delay(400); }
+                            finally { System.Windows.Media.CompositionTarget.Rendering -= tick; }
+                            if (seen.Count != 1 || (hh > 800 && !seen[0].StartsWith("Collapsed"))) flips.Add(hh + " " + id + ": " + string.Join(" ; ", seen));
+                        }
+                    }
+                    Check("switching lists: the page's own scroll bar does not pop up or away for a frame while the list is fitted (at 900 and 1200 it never shows: the list scrolls, not the page; at 700 the list's 240 px minimum may need it, steadily), at 3 window heights", flips.Count == 0, string.Join(" | ", flips));
+                }
+
                 // ============================================================================================================ the player's own game files
                 await AtlasBrowseRealChecks(dir, Check);
             }
