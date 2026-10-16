@@ -103,7 +103,7 @@ namespace ElansAddonHub
                     var tabs = AtlasView.TabsForTest;
                     seen.Add(kid + "=" + string.Join("/", tabs));
                     bool tabsOk = tabs.Count > 0 && tabs[0] == "overview" && tabs.SequenceEqual(tabs.OrderBy(x => Array.IndexOf(AtlasTabs.Order, x))) && AtlasView.TabStripShownForTest == tabs.Count > 1;
-                    bool heroOk = AtlasView.HeroForTest != null && AtlasView.HeroNameForTest == m.Title && tile != null && tile.Width == 72 && tile.Height == 72 && AtlasView.PageTitleForTest == m.Title && AtlasView.TitleRowGoneForTest;
+                    bool heroOk = AtlasView.HeroForTest != null && AtlasView.HeroNameForTest == m.Title && tile != null && tile.Width >= 72 && tile.Height == tile.Width && AtlasView.PageTitleForTest == m.Title && AtlasView.TitleRowGoneForTest;
                     string defaultWant = m.Kind == "zone" && tabs.Contains("map") ? "map" : "overview";
                     bool defaultOk = AtlasView.TabDefaultForTest == defaultWant && AtlasView.TabNowForTest == defaultWant && AtlasView.CurrentId == kid;
                     bool chipsOk = !new[] { "item", "npc", "quest", "zone", "instance", "spell" }.Contains(m.Kind) || AtlasView.HeroChipsForTest.Count > 0;
@@ -116,7 +116,7 @@ namespace ElansAddonHub
                     }
                     if (!(tabsOk && heroOk && defaultOk && chipsOk && sectionsOk)) bad.Add(kid + " tabs=" + tabsOk + " hero=" + heroOk + " default=" + defaultOk + "(" + AtlasView.TabNowForTest + ") chips=" + chipsOk + " sections=" + sectionsOk);
                 }
-                Check("hero: every kind (item, creature, object, quest, zone, instance, spell, skill, faction) has the hero - name = the page's title, a 72 px tile, chips where the kind has key facts - and its tabs in the fixed order (a strip only when there is more than the Overview); a zone opens on its Map tab, everything else on Overview",
+                Check("hero: every kind (item, creature, object, quest, zone, instance, spell, skill, faction) has the hero - name = the page's title, a square tile of at least 72 px (as tall as the name, subtitle and chips), chips where the kind has key facts - and its tabs in the fixed order (a strip only when there is more than the Overview); a zone opens on its Map tab, everything else on Overview",
                     bad.Count == 0, string.Join("; ", bad) + " :: " + string.Join(" ", seen));
                 Check("tabs: a tab is there only when something is on it - the spell has no Map and no Lodge tab, the unknown item has no strip at all, the start page no hero",
                     await OpenAndTabs("spell:4000", t => !t.Contains("map") && !t.Contains("lodge") && !t.Contains("sources") && t.Contains("related")) && await OpenAndTabs("item:99999", t => t.Count == 0 || t.SequenceEqual(new[] { "overview" })) && !AtlasView.TabStripShownForTest && AtlasView.HeroNameForTest == "Item 99999" && await GoStartAndCheck(), string.Join(" ", seen));

@@ -169,6 +169,7 @@ namespace ElansAddonHub
                 col.Children.Add(w);
             }
             Grid.SetColumn(col, 1); grid.Children.Add(col);
+            if (tile is Border tb) col.SizeChanged += (s, e) => SizeHeroTile(tb, col.ActualHeight);
             return Card(grid, 12);
         }
 
@@ -212,7 +213,7 @@ namespace ElansAddonHub
             var row = new AtlasRow { Title = m.Title, Quality = m.Quality, IconId = m.IconId, Link = m.Id };
             if (m.IconId > 0 || (m.Kind == "item" && !m.NotFound))
             {
-                g.Children.Add(new TextBlock { Text = row.Initial, FontSize = 32, FontWeight = FontWeights.SemiBold, Foreground = row.TileBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+                g.Children.Add(new Viewbox { Tag = "hero-glyph", Child = new TextBlock { Text = row.Initial, FontSize = 32, FontWeight = FontWeights.SemiBold, Foreground = row.TileBrush } });
                 if (m.IconId > 0)
                 {
                     var img = new Image { Stretch = Stretch.UniformToFill };
@@ -221,9 +222,19 @@ namespace ElansAddonHub
                     g.Children.Add(new Border { CornerRadius = new CornerRadius(10), ClipToBounds = true, Child = img });
                 }
             }
-            else g.Children.Add(new TextBlock { Text = AtlasKinds.Glyph(m.Kind), FontFamily = (FontFamily)FindResource("Font.Icons"), FontSize = 32, Foreground = Res("Brush.Text.Tertiary"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            else g.Children.Add(new Viewbox { Tag = "hero-glyph", Child = new TextBlock { Text = AtlasKinds.Glyph(m.Kind), FontFamily = (FontFamily)FindResource("Font.Icons"), FontSize = 32, Foreground = Res("Brush.Text.Tertiary") } });
             tile.Child = g;
+            SizeHeroTile(tile, HeroTileMin);
             return tile;
+        }
+
+        // the tile is as tall as the text beside it (name, subtitle, chips), square, never under 72; the glyph or letter is half of it
+        public const double HeroTileMin = 72;
+        static void SizeHeroTile(Border tile, double size)
+        {
+            size = Math.Max(HeroTileMin, Math.Round(size));
+            tile.Width = size; tile.Height = size;
+            if (tile.Child is Grid g) foreach (var v in g.Children.OfType<Viewbox>()) v.Margin = new Thickness(size * 0.25);
         }
 
         // the facts worth a chip, in the order of the page (their value, or a few words with it)
