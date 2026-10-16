@@ -23,12 +23,14 @@ namespace ElansAddonHub.Services.Atlas
         public Func<string, string> Canonical;          // hosted: the sub-path the control really shows after Host(sub) ran (the id then follows it), null = as asked
         public Func<string, string> SubTitle;           // hosted: the last crumb for a sub-path ("Hunter" for "tree/hunter"), null / "" = none
         public Func<string, IEnumerable<AtlasHit>> Search;   // hosted: the pages of this category a search text names ("hunter talents", "cooking"); runs on a worker
+        public Func<int> NavCount;                      // hosted: the number on its side menu row (runs on a worker; -1 / 0 = none), e.g. the professions; list categories count their list
         public Func<bool> Available = () => true;       // a category without its data hides itself
         public string Group = "";                       // the nav group (AtlasNav.Database / World / Character / Lodge); "" = Database
         public string NavKey = "";                      // categories with the same key share ONE nav row (none of the built-in ones do since 2.71.1); "" = the category's own id
         public string NavTitle = "";                    // the title of that shared row; "" = this category's title
         public bool NavPrimary;                         // in a shared nav row: this category is where the row opens (default: the first by Order)
-        public string Keywords = "";                    // extra words the Ctrl+K palette matches the page by ("herbs ore fishing")
+        public string Keywords = "";
+        public string PageLine = "";                    // a line the list page shows under its count (Spells / Skills: what belongs where), "" = none                    // extra words the Ctrl+K palette matches the page by ("herbs ore fishing")
         public bool Hosted => Host != null;
         public string OpenId => Hosted ? Id + ":" : "browse:" + Id;
     }
@@ -49,13 +51,18 @@ namespace ElansAddonHub.Services.Atlas
             Add("quests", "Quests", "quest", "quest", "By level and zone", 40, AtlasNav.Database);
             Add("zones", "Zones", "zone", "zone", "By continent, with their level range", 50, AtlasNav.World, keywords: "areas places");
             Add("instances", "Dungeons and raids", "instance", "instance", "Sorted by level", 60, AtlasNav.World, keywords: "dungeons raids instances");
-            Add("spells", "Spells", "spell", "spell", "Class abilities, weapon and armor skills, recipes", 76, AtlasNav.Character, keywords: "abilities");
-            Add("skills", "Skills", "skill", "skill", "Weapon and armor skills, languages, riding and the class skill lines", 92, AtlasNav.Character, keywords: "weapon skills languages riding lockpicking proficiencies");
+            Add("spells", "Spells", "spell", "spell", "What you cast: class and racial abilities, the professions' spells", 76, AtlasNav.Character, keywords: "abilities racials");
+            Add("skills", "Skills", "skill", "skill", "What you get better at: weapon and armor skills, languages, riding and the rest", 92, AtlasNav.Character, keywords: "weapon skills languages riding lockpicking proficiencies armor");
             Add("recipes", "Recipes", "spell", "spell", "Every recipe of every profession, by skill level", 90, AtlasNav.Character, keywords: "crafting patterns plans schematics formulas");
             Add("factions", "Factions", "faction", "faction", "Reputations", 100, AtlasNav.Character, keywords: "reputation");
             Add("classes", "Classes", "class", "class", "Every class: spells by level, proficiencies, races", 72, AtlasNav.Character, keywords: "warrior paladin hunter rogue priest shaman mage warlock druid spellbook");
             Add("races", "Races", "race", "race", "Every playable race: racial abilities, classes, side", 74, AtlasNav.Character, keywords: "human orc dwarf night elf undead tauren gnome troll skyborne racial");
+            // one rule of spells and skills (AtlasSkillModel), said on both pages
+            Explain("spells", "Spells are what you cast. Weapon skills, armor skills, languages and riding are under Skills.");
+            Explain("skills", "Skills are what you get better at. What you cast is under Spells; professions have their own page.");
         }
+
+        static void Explain(string id, string line) { var c = list.First(x => x.Id == id); c.PageLine = line; }
 
         public static IReadOnlyList<AtlasCategory> All { get { lock (gate) return list.OrderBy(c => c.Order).ThenBy(c => c.Title, StringComparer.OrdinalIgnoreCase).ToList(); } }
         public static IReadOnlyList<AtlasCategory> Visible { get { return All.Where(c => { try { return c.Available == null || c.Available(); } catch (Exception) { return false; } }).ToList(); } }

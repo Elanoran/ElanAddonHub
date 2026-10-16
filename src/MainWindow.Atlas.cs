@@ -69,12 +69,13 @@ namespace ElansAddonHub
                 Group = AtlasNav.World, Keywords = "continent kalimdor eastern kingdoms flight paths 3d",
                 Host = HostWorldMap, Search = ElansAddonHub.Services.WorldMap.WorldMapIds.Hits, SubTitle = WorldMapSubTitle, Canonical = sub => { WorldMapView.Navigate(sub); return WorldMapView.CurrentSub; },
                 Available = () => MapData.Status != MapData.State.Disabled,
+                NavCount = () => MapData.Index == null ? -1 : ElansAddonHub.Services.WorldMap.WorldMapService.Continents(MapData.Index).Count,     // the side menu's number: the continents it shows
             });
             AtlasCategories.Register(new AtlasCategory
             {
                 Id = AtlasHosts.Professions, Title = "Professions", Glyph = AtlasKinds.Glyph("skill"), Blurb = "Each profession: its recipes by skill, a leveling guide, what you can craft now, camping", Order = 88,
                 Group = AtlasNav.Character, Keywords = "crafting leveling guide gathering alchemy blacksmithing enchanting engineering herbalism leatherworking mining skinning tailoring cooking first aid fishing",
-                Host = HostProfessions, SubTitle = AtlasHosts.ProfessionsSubTitle, Search = AtlasHosts.ProfessionHits,
+                Host = HostProfessions, SubTitle = AtlasHosts.ProfessionsSubTitle, Search = AtlasHosts.ProfessionHits, NavCount = AtlasHosts.ProfessionCount,
                 Canonical = sub => ProfessionsSub(ProfessionsView.ProfessionNow, ProfessionsView.TabNow),
             });
         }

@@ -174,7 +174,8 @@ namespace ElansAddonHub.Services.Atlas
         // the count of a category if its index is already built (never builds), -1 when not
         public static int CountIfBuilt(string cat)
         {
-            lock (cacheLock) return cache.TryGetValue(cat, out var ix) && ix.Token == Token() ? ix.All.Count : -1;
+            var tok = TokenOf(cat);               // the zones' token carries the zone levels: compared with the plain token their count never showed
+            lock (cacheLock) return cache.TryGetValue(cat, out var ix) && ix.Token == tok ? ix.All.Count : -1;
         }
 
         // ============================================================================================================================ run

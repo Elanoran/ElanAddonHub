@@ -16,7 +16,8 @@ namespace ElansAddonHub
     // the Pin button. Everything here is built from caches (the registry, the counts of the indexes already built, the id lists): it never waits for a page.
     public partial class AtlasPage
     {
-        public const double NavWide = 240, NavNarrow = 56, NavCollapseBelow = 1000, RecentsShown = 5;
+        public const double NavNarrow = 56, NavCollapseBelow = 1000, RecentsShown = 5;
+        public static double NavWide => SideMenu.Column(12);        // Size.SideMenu less the fill's overhang (8 px left, 4 px into the gap): 240
         AtlasNavState nav;
         Settings navSettings;
         Action navSave;
@@ -25,6 +26,7 @@ namespace ElansAddonHub
         string navSig = "";
         readonly Dictionary<string, ContentControl> navRows = new Dictionary<string, ContentControl>();
         readonly Dictionary<string, string> navRowSection = new Dictionary<string, string>();      // nav key -> its section brush key (Brush.Section.*)
+        readonly Dictionary<string, TextBlock> navCounts = new Dictionary<string, TextBlock>();     // nav key -> the number on its right (AtlasNavCounts; updated in place)
         public string NavKeyNow { get; private set; } = "";
 
         public AtlasNavState NavState => nav ?? (nav = new AtlasNavState(new List<string>(), new List<string>(), null));
@@ -64,9 +66,12 @@ namespace ElansAddonHub
             AtlasCategories.Changed += () => Dispatcher.BeginInvoke(new Action(() => { navSig = ""; UpdateShell(); }));
             SizeChanged += (s, e) => ApplyNavWidth();
             ApplyNavWidth();
+            // the numbers on the right are remembered (AtlasNavCounts): shown at once, worked out again in the background when their data changed, put into the rows in place
+            AtlasNavCounts.Changed += () => Dispatcher.BeginInvoke(new Action(ApplyNavCounts));
+            IsVisibleChanged += (s, e) => { if (IsVisible) { AtlasNavCounts.Enable(); AtlasNavCounts.Invalidate(); } };
         }
 
-        // wide: the 240 px nav (as wide as the Lodge's and the Characters' side menus); narrow (the page is under 1000 px): a 56 px strip of icons with tooltips
+        // wide: the 240 px nav (its fill Size.SideMenu wide, like every side menu: SideMenu.cs); narrow (the page is under 1000 px): a 56 px strip of icons with tooltips
         void ApplyNavWidth()
         {
             bool narrow = ActualWidth > 0 && ActualWidth < NavCollapseBelow;
@@ -78,6 +83,18 @@ namespace ElansAddonHub
         }
 
         public bool NavCollapsedForTest => navCollapsed;
+        public string NavCountForTest(string key) => navCounts.TryGetValue(key, out var t) ? t.Text : null;
+        public TextBlock NavCountBlockForTest(string key) => navCounts.TryGetValue(key, out var t) ? t : null;
+
+        // the remembered numbers into the rows that are there (no rebuild: only the text of the number changes)
+        void ApplyNavCounts()
+        {
+            foreach (var kv in navCounts)
+            {
+                var t = AtlasNavCounts.Text(kv.Key);
+                if (kv.Value.Text != t) kv.Value.Text = t;
+            }
+        }
         public double NavWidthForTest => NavCol.ActualWidth;
         public IReadOnlyList<string> NavGroupsForTest => AtlasWalk(NavStack).OfType<TextBlock>().Where(t => t.Tag as string == "group").Select(t => t.Text).ToList();
         public IReadOnlyList<string> NavRowsForTest => navRows.Values.Select(r => System.Windows.Automation.AutomationProperties.GetName(r)).ToList();
@@ -159,9 +176,9 @@ namespace ElansAddonHub
                 if (last.Length > 0) l.Add(new AtlasCrumb(last, ""));
                 return l;
             }
-            if (AtlasIds.TryParse(id, out var kind, out _))
+            if (AtlasIds.TryParse(id, out var kind, out var kn))
             {
-                var cc = AtlasNav.CategoryCrumb(kind);
+                var cc = AtlasNav.CategoryCrumb(kind, kn);
                 if (cc != null) l.Add(cc);
                 var bid = AtlasTabs.BaseId(id);             // the tab is not part of the page's identity: item:1?tab=sources is the crumbs of item:1
                 bool mine = model != null && model.Id == bid;
@@ -220,10 +237,12 @@ namespace ElansAddonHub
                 var t = Tb(title, "Text.Body"); t.TextTrimming = TextTrimming.CharacterEllipsis; t.VerticalAlignment = VerticalAlignment.Center; t.Margin = new Thickness(indent > 0 ? 4 : 8, 0, 0, 0);
                 if (selected) t.FontWeight = FontWeights.SemiBold; else t.Foreground = Res("Brush.Text.Secondary");
                 Grid.SetColumn(t, 1); g.Children.Add(t);
-                if (!string.IsNullOrEmpty(count) || kbd != null)
+                // a category row always has its number's text block (empty until the number is known), so a number that arrives later only fills it in
+                if (!string.IsNullOrEmpty(count) || kbd != null || (tag == null && count != null))
                 {
                     var c = Tb(kbd ?? count, "Text.Caption", Res("Brush.Text.Tertiary")); c.VerticalAlignment = VerticalAlignment.Center; c.Margin = new Thickness(8, 0, 0, 0);
                     Grid.SetColumn(c, 2); g.Children.Add(c);
+                    if (tag == null && kbd == null) { c.Tag = "count"; navCounts[key] = c; }
                 }
             }
             else row.ToolTip = title;
@@ -234,16 +253,13 @@ namespace ElansAddonHub
             return row;
         }
 
-        static string CountText(AtlasNavEntry e)
-        {
-            if (e.Extra || e.Members.Count != 1 || e.Members[0].Hosted) return "";
-            int n = AtlasBrowse.CountIfBuilt(e.Members[0].Id);
-            return n > 0 ? n.ToString("N0", Lodge.CalendarRules.English) : "";
-        }
+        // the remembered number of a row ("" until it is known; Home, Talents and Data sources have none)
+        static string CountText(AtlasNavEntry e) => AtlasNavCounts.Text(e.Key);
 
+        // the numbers are not part of it: they change in place (ApplyNavCounts)
         string NavSignature(string key)
         {
-            var cats = string.Join(",", AtlasCategories.Visible.Select(c => c.Id + "/" + AtlasBrowse.CountIfBuilt(c.Id)));
+            var cats = string.Join(",", AtlasCategories.Visible.Select(c => c.Id));
             return string.Join("|", key, navCollapsed, cats, string.Join(",", NavState.Recents.Take((int)RecentsShown)), string.Join(",", NavState.Pins), AtlasQuery.LodgeHasData());
         }
 
@@ -256,8 +272,8 @@ namespace ElansAddonHub
             var sig = NavSignature(key) + "|" + AtlasTabs.BaseId(id);
             if (sig == navSig) return;
             navSig = sig;
-            NavStack.Children.Clear(); navRows.Clear(); navRowSection.Clear();
-            void AddRow(string k, string title, string glyph, string openId, string count = "", string icon = null, string section = "Brush.Section.Neutral")
+            NavStack.Children.Clear(); navRows.Clear(); navRowSection.Clear(); navCounts.Clear();
+            void AddRow(string k, string title, string glyph, string openId, string count = null, string icon = null, string section = "Brush.Section.Neutral")
             {
                 var r = (ContentControl)NavRow(k, title, glyph, openId, count, key == k, null, 0, null, icon, section);
                 navRows[k] = r; NavStack.Children.Add(r);
@@ -308,7 +324,7 @@ namespace ElansAddonHub
             }
             // the footer: Data sources
             NavFooter.Children.Clear();
-            var data = (ContentControl)NavRow("data", "Data sources", "", AtlasNav.DataId, "", key == "data");
+            var data = (ContentControl)NavRow("data", "Data sources", "", AtlasNav.DataId, null, key == "data");
             navRows["data"] = data; NavFooter.Children.Add(data);
         }
 
@@ -403,7 +419,7 @@ namespace ElansAddonHub
         {
             if (AtlasBrowse.IsBrowseId(id)) return BrowseQuery.TryParse(id, out var q) ? q.Cat : "";
             if (AtlasCategories.TryHosted(id, out var hc, out _)) return hc.Id;
-            if (AtlasIds.TryParse(id, out var kind, out _)) return AtlasNav.CategoryOfKind(kind);
+            if (AtlasIds.TryParse(id, out var kind, out var n)) return AtlasNav.EntityCategory(kind, n);
             return "";
         }
 

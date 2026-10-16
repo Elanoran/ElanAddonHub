@@ -74,11 +74,15 @@ namespace ElansAddonHub.Services.Atlas
             return string.Join("|", GatherNodes.OwnToken(), R(ItemData.Snapshot), R(SpellData.Data), R(ClassData.Set), R(SeenData.Snapshot), R(MapData.Index), R(ClassicAtlas.Current), L == null ? "-" : R(L) + "," + L.Rev + "," + L.Updated + "," + L.FindCount);
         }
 
+        // what every index is built from (the Atlas side menu's numbers are worked out again when it changes)
+        public static string DataToken() => Token();
+        static string TokenOf(string cat) => Token() + (cat == "zones" ? "|zl" + ZoneLevels.Revision : "");
+
         public static void ForgetForTest() { lock (cacheLock) cache.Clear(); }
 
         static BIndex Index(string cat)
         {
-            var tok = Token() + (cat == "zones" ? "|zl" + ZoneLevels.Revision : "");
+            var tok = TokenOf(cat);
             lock (cacheLock) if (cache.TryGetValue(cat, out var hit) && hit.Token == tok) return hit;
             lock (buildLock)
             {
@@ -538,34 +542,22 @@ namespace ElansAddonHub.Services.Atlas
         }
 
         // ============================================================================================================================ spells, skills, recipes, factions
-        static string SkillGroup(int category)
-        {
-            switch (category)
-            {
-                case SkillInfo.CatClass: return "Class abilities";
-                case SkillInfo.CatWeapon: return "Weapon skills";
-                case SkillInfo.CatArmor: return "Armor skills";
-                case SkillInfo.CatProfession: return "Professions";
-                case SkillInfo.CatSecondary: return "Secondary skills";
-                case SkillInfo.CatLanguage: return "Languages";
-                case SkillInfo.CatAttributes: return "Attributes";
-                default: return "";
-            }
-        }
-
         static BIndex BuildSpells(Ctx x)
         {
+            // Spells (2.77, AtlasSkillModel): what you cast - class abilities, racial abilities, the professions' spells, and every spell of no skill line.
+            // The spells that ARE a skill (weapon / armor skills, languages, riding, lockpicking ...) are left out: they are on the Skills list.
             var ix = new BIndex { Noun = "spell" };
             var sn = SpellData.Spells;
-            var skillOf = new Dictionary<int, SkillInfo>();
-            foreach (var a in sn.Abilities) if (!skillOf.ContainsKey(a.Spell) && sn.Skills.TryGetValue(a.Skill, out var sk)) skillOf[a.Spell] = sk;
+            var skillOf = AtlasSkillModel.LinesOf(sn);
             foreach (var s in sn.Spells.Values)
             {
                 if (string.IsNullOrEmpty(s.Name)) continue;
+                skillOf.TryGetValue(s.Id, out var sk);
+                var grp = AtlasSkillModel.SpellGroup(sk);
+                if (grp == "") continue;
                 var e = Entry("spell", s.Id, s.Name);
                 e.Client = true; e.Icon = s.IconId;
-                skillOf.TryGetValue(s.Id, out var sk);
-                e.SubLabel = sk != null ? SkillGroup(sk.Category) : "";
+                e.SubLabel = grp ?? "";
                 e.Detail = string.Join(" · ", new[] { s.Rank, sk?.Name }.Where(t => !string.IsNullOrEmpty(t)));
                 ix.All.Add(e);
             }
@@ -576,16 +568,19 @@ namespace ElansAddonHub.Services.Atlas
 
         static BIndex BuildSkills(Ctx x)
         {
-            // Skills (2.71.1): weapon and armor skills, languages, riding, racials, the class skill lines. The professions have their own page (Professions) and the
-            // Recipes list, so they are left out here - unless that page is not there, then they stay and open their skill page.
+            // Skills (2.77, AtlasSkillModel): the lines you get better at - weapon skills, armor skills, languages, riding and the rest. The class and racial
+            // lines are abilities (Spells), the professions have their own page (Professions) and the Recipes list - unless that page is not there, then
+            // they stay here under Professions and open their skill page.
             var ix = new BIndex { Noun = "skill" };
             bool profPage = AtlasCategories.Find(AtlasHosts.Professions)?.Hosted == true;
             foreach (var s in SpellData.Spells.Skills.Values)
             {
                 if (string.IsNullOrEmpty(s.Name)) continue;
-                if (profPage && (s.Category == SkillInfo.CatProfession || AtlasNav.IsProfessionName(s.Name))) continue;
+                var grp = AtlasSkillModel.SkillGroup(s);
+                if (grp == "" && !profPage && AtlasSkillModel.IsProfessionLine(s)) grp = AtlasSkillModel.Professions;
+                if (grp == "") continue;
                 var e = Entry("skill", s.Id, s.Name);
-                e.Client = true; e.Icon = s.IconId; e.SubLabel = SkillGroup(s.Category);
+                e.Client = true; e.Icon = s.IconId; e.SubLabel = grp;
                 e.Detail = AtlasQuery.SkillCategory(s.Category);
                 ix.All.Add(e);
             }

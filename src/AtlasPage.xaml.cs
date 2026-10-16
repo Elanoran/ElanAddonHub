@@ -360,11 +360,12 @@ namespace ElansAddonHub
         // the Lodge pool got a page while the start page is open: its cards (pool, recent finds) are drawn again when what they show changed
         public void PoolChanged()
         {
+            AtlasNavCounts.Invalidate();          // the Lodge's finds: the side menu's numbers are worked out again (in the background, only when the pool really changed)
             if (IsVisible && started && hosted == null && browse != null) { UpdateFindsStrip(); return; }
             if (!IsVisible || !started || hosted != null || !(IsStart || IsData)) return;
             if (Signature() != drawnSig) { if (IsData) DrawData(); else DrawStart(); }
         }
 
-        public void DataChanged() { if (hosted != null) return; if (IsStart) DrawStart(); else if (IsData) DrawData(); else _ = Redraw(); }
+        public void DataChanged() { AtlasNavCounts.Invalidate(); if (hosted != null) return; if (IsStart) DrawStart(); else if (IsData) DrawData(); else _ = Redraw(); }
     }
 }

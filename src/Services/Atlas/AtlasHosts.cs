@@ -97,6 +97,14 @@ namespace ElansAddonHub.Services.Atlas
             return ProfessionNames.ToList();
         }
 
+        // the side menu's number for Professions: the professions of the game data (the twelve by name, a profession the client lists twice counted once); -1 without spell data
+        public static int ProfessionCount()
+        {
+            var sp = SpellData.Spells;
+            if (!SpellData.Ready || sp?.Skills == null) return -1;
+            return sp.Skills.Values.Where(s => s.ParentId == 0 && AtlasNav.IsProfessionName(s.Name)).Select(s => s.Name.Trim().ToLowerInvariant()).Distinct().Count();
+        }
+
         // the title the breadcrumb ends with
         public static string TalentsSubTitle(string sub)
         {
