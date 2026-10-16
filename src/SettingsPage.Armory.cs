@@ -28,6 +28,7 @@ namespace ElansAddonHub
             try
             {
                 ArmoryShareBox.IsChecked = settings.ArmoryShareOn;
+                ArmoryRepsBox.IsChecked = settings.ArmoryShareReps;
                 ArmoryCharsPanel.Visibility = settings.ArmoryShareOn ? Visibility.Visible : Visibility.Collapsed;
                 if (!settings.ArmoryShareOn) { UpdateArmoryNote(); return; }
                 var local = ArmoryShare.Local(settings.WowRoot);
@@ -69,6 +70,7 @@ namespace ElansAddonHub
             var off = session.ArmoryOfflineLine;
             if (armoryLocal.Count > 0 && off != null && session.Connected) text += " " + (session.SupportsArmory ? off : "This Lodge's server has no Armory yet (it needs 2.16), so nothing is uploaded; your choices are kept.");
             else if (armoryLocal.Count > 0 && !session.Online) text += " You are offline: your choices are uploaded when you connect.";
+            if (settings.ArmoryShareReps && chosen > 0 && session.Connected && session.SupportsArmory && !session.SupportsReps) text += " This Lodge's server does not take reputations yet, so they stay on this PC.";
             if (!string.IsNullOrEmpty(session.ArmoryProblem)) text += " " + session.ArmoryProblem;
             ArmoryCharsNote.Text = text;
         }
@@ -79,6 +81,16 @@ namespace ElansAddonHub
             settings.ArmoryShareOn = ArmoryShareBox.IsChecked == true;
             SettingsStore.Save(settings);
             FillArmory();
+            session.ArmorySettingsChanged();
+        }
+
+        // "Also share their reputations" (off by default): the shared characters are uploaded again with (or without) their reputations
+        void ArmoryReps_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading) return;
+            settings.ArmoryShareReps = ArmoryRepsBox.IsChecked == true;
+            SettingsStore.Save(settings);
+            UpdateArmoryNote();
             session.ArmorySettingsChanged();
         }
 
@@ -110,6 +122,8 @@ namespace ElansAddonHub
             var cb = (CheckBox)r.Content; cb.IsChecked = on; ArmoryChar_Click(cb, new RoutedEventArgs());
         }
         public string ArmoryNoteForTest => ArmoryCharsNote.Text;
+        public void ArmoryRepsSwitchForTest(bool on) { ArmoryRepsBox.IsChecked = on; ArmoryReps_Click(ArmoryRepsBox, new RoutedEventArgs()); }
+        public bool ArmoryRepsForTest => ArmoryRepsBox.IsChecked == true;
         public void ArmoryScrollForTest() { ArmoryShareBox.BringIntoView(); ArmoryCharsNote.BringIntoView(); }
         public void ArmoryRefreshForTest() => FillArmory();
     }

@@ -16,6 +16,7 @@ namespace ElansAddonHub.Services.Atlas
     {
         public Func<LodgeAtlas> Lodge = () => null;
         public Func<Dictionary<int, InvItemTotals>> Owned = () => null;       // item id -> what each of the user's characters holds
+        public Func<int, LodgeStandings> Standings = null;                    // "where the Lodge's shared characters stand with this faction" (Armory, feature reputations; asks the server when it does not know yet)
         public Func<IReadOnlyCollection<int>, LodgeCrafters> Crafters = null;  // "who in the Lodge can craft these recipe spells" (answers from the Armory; asks the server when it does not know yet)
         public Func<List<InvChar>> Characters = () => null;                  // the user's own characters (for "usable by my character" in the browse lists)
         public Func<DateTime> NowUtc = () => DateTime.UtcNow;
@@ -345,7 +346,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (i.Placeholder) continue;
                 int r = MatchRank(i.Name, q);
                 if (r < 0) continue;
-                res.Add(new AtlasHit { Id = "instance:" + i.MapId, Kind = "instance", Name = i.Name, Detail = InstanceDetail(i), Label = AtlasLabel.Forever, Rank = r, Tier = 0 });
+                res.Add(new AtlasHit { Id = "instance:" + i.MapId, Kind = "instance", Name = i.Name, IconId = InstanceIcons.For(i.MapId, i.Name, i.InstanceType), Detail = InstanceDetail(i), Label = AtlasLabel.Forever, Rank = r, Tier = 0 });
             }
             return res;
         }
@@ -386,7 +387,7 @@ namespace ElansAddonHub.Services.Atlas
             {
                 int r = MatchRank(s.Name, q);
                 if (r < 0) continue;
-                res.Add(new AtlasHit { Id = "skill:" + s.Id, Kind = "skill", Name = s.Name, IconId = s.IconId, Label = AtlasLabel.Forever, Rank = r, Tier = s.IsProfession ? 0 : 1, Detail = s.IsProfession ? "profession" : SkillCategory(s.Category) });
+                res.Add(new AtlasHit { Id = "skill:" + s.Id, Kind = "skill", Name = s.Name, IconId = SkillIcons.For(s), Label = AtlasLabel.Forever, Rank = r, Tier = s.IsProfession ? 0 : 1, Detail = s.IsProfession ? "profession" : SkillCategory(s.Category) });
             }
             return res;
         }
@@ -415,7 +416,7 @@ namespace ElansAddonHub.Services.Atlas
             {
                 int r = MatchRank(f.Name, q);
                 if (r < 0) continue;
-                res.Add(new AtlasHit { Id = "faction:" + f.Id, Kind = "faction", Name = f.Name, Label = AtlasLabel.Forever, Rank = r, Tier = 0, Detail = f.ParentId > 0 ? "in " + (FactionData.Name(f.ParentId) ?? "a group") : "" });
+                res.Add(new AtlasHit { Id = "faction:" + f.Id, Kind = "faction", Name = f.Name, IconId = FactionIcons.For(f.Id), Label = AtlasLabel.Forever, Rank = r, Tier = 0, Detail = f.ParentId > 0 ? "in " + (FactionData.Name(f.ParentId) ?? "a group") : "" });
             }
             return res;
         }
@@ -474,14 +475,14 @@ namespace ElansAddonHub.Services.Atlas
                 case "skill":
                     {
                         var s = SpellData.Skill(n);
-                        return s == null ? null : new AtlasHit { Id = id, Kind = kind, Name = s.Name, IconId = s.IconId, Detail = s.IsProfession ? "profession" : SkillCategory(s.Category), Label = AtlasLabel.Forever };
+                        return s == null ? null : new AtlasHit { Id = id, Kind = kind, Name = s.Name, IconId = SkillIcons.For(s), Detail = s.IsProfession ? "profession" : SkillCategory(s.Category), Label = AtlasLabel.Forever };
                     }
                 case "class": return DescribeClass(n);
                 case "race": return DescribeRace(n);
                 case "faction":
                     {
                         var f = FactionData.Faction(n);
-                        return f == null ? null : new AtlasHit { Id = id, Kind = kind, Name = f.Name, Label = AtlasLabel.Forever };
+                        return f == null ? null : new AtlasHit { Id = id, Kind = kind, Name = f.Name, IconId = FactionIcons.For(n), Label = AtlasLabel.Forever };
                     }
             }
             return null;

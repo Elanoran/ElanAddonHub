@@ -518,7 +518,7 @@ namespace ElansAddonHub.Services.Atlas
             {
                 if (i.Placeholder || string.IsNullOrEmpty(i.Name)) continue;
                 var e = Entry("instance", i.MapId, i.Name);
-                e.Client = true; e.Type = i.InstanceType; e.Flags = i.Event ? EventFlag : 0;
+                e.Client = true; e.Type = i.InstanceType; e.Flags = i.Event ? EventFlag : 0; e.Icon = InstanceIcons.For(i.MapId, i.Name, i.InstanceType);
                 // the level the game suggests first; an instance it does not list gets the range of its creatures from the Classic baseline
                 if (i.MinLevel > 0) { e.Level = i.MinLevel; e.Level2 = Math.Max(i.MinLevel, i.MaxLevel); }
                 else if (x.Derived != null && x.Derived.InstanceCreatureLevels(i.MapId, out var clo, out var chi)) { e.Level = clo; e.Level2 = chi; e.Classic = true; }
@@ -585,7 +585,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (string.IsNullOrEmpty(s.Name)) continue;
                 if (profPage && (s.Category == SkillInfo.CatProfession || AtlasNav.IsProfessionName(s.Name))) continue;
                 var e = Entry("skill", s.Id, s.Name);
-                e.Client = true; e.Icon = s.IconId; e.SubLabel = SkillGroup(s.Category);
+                e.Client = true; e.Icon = SkillIcons.For(s); e.SubLabel = SkillGroup(s.Category);
                 e.Detail = AtlasQuery.SkillCategory(s.Category);
                 ix.All.Add(e);
             }
@@ -635,6 +635,8 @@ namespace ElansAddonHub.Services.Atlas
                 if (string.IsNullOrEmpty(f.Name)) continue;
                 var e = Entry("faction", f.Id, f.Name);
                 e.Client = true; e.Type = f.ReputationIndex >= 0 ? 1 : 0;
+                e.Group = FactionData.SideOf(SpellData.Factions, f.Id);
+                e.Icon = FactionIcons.For(f.Id);
                 e.Detail = f.ParentId > 0 ? "in " + (FactionData.Name(f.ParentId) ?? "a group") : "";
                 ix.All.Add(e);
             }

@@ -236,7 +236,7 @@ namespace ElansAddonHub.Services.Atlas
                 var skill = SpellData.Skill(rec.SkillId);
                 var s = Section(m, "recipe", "Recipe");
                 s.Note = (skill?.Name ?? "Profession") + (rec.MinRank > 0 ? ", needs skill " + rec.MinRank : "") + (rec.Green > 0 ? " · green at " + rec.Green : "") + (rec.Gray > 0 ? " · grey at " + rec.Gray : "");
-                if (skill != null) s.Rows.Add(new AtlasRow { Key = "skill:" + skill.Id, Link = AtlasIds.Skill(skill.Id), Title = skill.Name, IconId = skill.IconId, Label = F, Tier = 1, Type = "Skill", Detail = "The profession that teaches it" });
+                if (skill != null) s.Rows.Add(new AtlasRow { Key = "skill:" + skill.Id, Link = AtlasIds.Skill(skill.Id), Title = skill.Name, IconId = SkillIcons.For(skill), Label = F, Tier = 1, Type = "Skill", Detail = "The profession that teaches it" });
                 var recLink = AtlasHosts.RecipesLink(skill?.Name);
                 if (recLink != null) m.Facts.Add(new AtlasFact("Profession", skill.Name, F, recLink));
                 AddRecipeKnowledge(m, new[] { rec });
@@ -252,7 +252,7 @@ namespace ElansAddonHub.Services.Atlas
             var sk = SpellData.Skill(id);
             if (sk == null) return NotFoundPage("skill", id, SpellData.Ready ? "Your game has no skill with this id." : "Skill data is read from your game files and is not ready yet.");
             string F = AtlasLabel.Forever;
-            var m = new AtlasPageModel { Id = "skill:" + id, Kind = "skill", Title = sk.Name, IconId = sk.IconId };
+            var m = new AtlasPageModel { Id = "skill:" + id, Kind = "skill", Title = sk.Name, IconId = SkillIcons.For(sk) };
             AddLayer(m, "client");
             m.Subtitle = "Skill " + id + " · " + SkillCategory(sk.Category);
             m.Facts.Add(new AtlasFact("Kind", SkillCategory(sk.Category), F));
@@ -300,17 +300,20 @@ namespace ElansAddonHub.Services.Atlas
             var f = FactionData.Faction(id);
             if (f == null) return NotFoundPage("faction", id, SpellData.Ready ? "Your game has no faction with this id." : "Faction data is read from your game files and is not ready yet.");
             string F = AtlasLabel.Forever;
-            var m = new AtlasPageModel { Id = "faction:" + id, Kind = "faction", Title = f.Name };
+            var m = new AtlasPageModel { Id = "faction:" + id, Kind = "faction", Title = f.Name, IconId = FactionIcons.For(id) };
             AddLayer(m, "client");
             m.Subtitle = "Faction " + id;
             if (f.ParentId > 0 && FactionData.Name(f.ParentId) != null) m.Facts.Add(new AtlasFact("Part of", FactionData.Name(f.ParentId), F, AtlasIds.Faction(f.ParentId)));
+            var sideText = FactionData.SideFact(FactionData.SideOf(id));
+            if (!string.Equals(FactionData.Name(f.ParentId), sideText, StringComparison.OrdinalIgnoreCase) && !string.Equals(f.Name, sideText, StringComparison.OrdinalIgnoreCase)) m.Facts.Add(new AtlasFact("Side", sideText, F));   // "Part of Alliance" already says it
             if (!string.IsNullOrWhiteSpace(f.Description)) m.Texts.Add(new AtlasText("About", f.Description.Trim(), F));
             var kids = SpellData.Factions.Factions.Values.Where(x => x.ParentId == id && !string.IsNullOrEmpty(x.Name)).OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList();
             if (kids.Count > 0)
             {
                 var s = Section(m, "members", "Factions in it");
-                foreach (var k in kids) s.Rows.Add(new AtlasRow { Key = "faction:" + k.Id, Link = AtlasIds.Faction(k.Id), Title = k.Name, Label = F, Tier = 1, Type = "Faction" });
+                foreach (var k in kids) s.Rows.Add(new AtlasRow { Key = "faction:" + k.Id, Link = AtlasIds.Faction(k.Id), Title = k.Name, IconId = FactionIcons.For(k.Id), Detail = BestOwnStanding(k.Id), Label = F, Tier = 1, Type = "Faction" });
             }
+            if (f.ReputationIndex >= 0) { AddOwnStandings(m, id); AddLodgeStandings(m, id); }
             return m;
         }
     }

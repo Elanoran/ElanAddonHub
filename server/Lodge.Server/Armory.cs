@@ -16,6 +16,7 @@ public static partial class Armory
     public const int MaxNodes = 400, MaxPets = 40, MaxAbilities = 40, MaxKnown = 100, MaxProfessions = 12, MaxSlots = 24, MaxLinks = 40;
     public const int MaxBuildLength = 600;
     public const int MaxKnownIds = 2000, MaxCrafterSpells = 16, MaxCrafterRows = 80;       // armory2: the learned recipes of one character (all professions together)
+    public const int MaxReps = 300, MaxStandingRows = 80, MaxFactionId = 1_000_000;          // reputations (2.27): factions per character, rows of one "standing" answer
     public static readonly TimeSpan PutEvery = TimeSpan.FromSeconds(8);
     public const int PutBurst = 30;
 
@@ -74,7 +75,10 @@ public static partial class Armory
     public static bool ValidKey(string key) => key != null && key.Length is >= 3 and <= 80 && Names.Text(key, 80) == key && key.IndexOf('-') > 0;
 
     // ---- the snapshot: returns the clean character, or null (and why) when it can't be used
-    public static JsonObject Clean(JsonObject c, out string why)
+    public static JsonObject Clean(JsonObject c, out string why) => Clean(c, out why, false);
+
+    // `reps`: the lodge takes reputations (feature "reputations"); without it a snapshot's reputations are dropped
+    public static JsonObject Clean(JsonObject c, out string why, bool reps)
     {
         why = null;
         if (c == null) { why = "empty"; return null; }
@@ -106,10 +110,16 @@ public static partial class Armory
         var pets = Pets(c["pets"] as JsonObject);
         if (pets != null) o["pets"] = pets;
         if (gear == null && tal == null && pro == null) { why = "empty"; return null; }
+        if (reps)
+        {
+            var rp = Reps(c["reps"] as JsonObject);
+            if (rp != null) o["reps"] = rp;
+        }
         if (o.ToJsonString().Length > MaxSnapshotBytes)
         {
-            // the learned recipes are the optional, biggest part: a character that is too big with them is still shared without them
-            if (o["professions"] is JsonObject po && po["known"] != null) po.Remove("known");
+            // the optional parts go first (reputations, then the learned recipes): a character that is too big with them is still shared without them
+            o.Remove("reps");
+            if (o.ToJsonString().Length > MaxSnapshotBytes && o["professions"] is JsonObject po && po["known"] != null) po.Remove("known");
             if (o.ToJsonString().Length > MaxSnapshotBytes) { why = "size"; return null; }
         }
         return o;
@@ -251,6 +261,57 @@ public static partial class Armory
             o[line.ToString(CultureInfo.InvariantCulture)] = entry;
         }
         return o.Count == 0 ? null : o;
+    }
+
+    // reputations (2.27): { at, list: [{ id, s, v, min?, max? }] } - id a faction id 1..1000000, s the standing 1 Hated .. 8 Exalted, v / min / max whole numbers
+    // within +-100,000,000; at most MaxReps, sorted by id, one per faction (the first wins). Names are never kept: every client names factions from its own game data.
+    static JsonObject Reps(JsonObject r)
+    {
+        if (r == null || r["list"] is not JsonArray la) return null;
+        var byId = new SortedDictionary<int, JsonObject>();
+        foreach (var n in la)
+        {
+            if (byId.Count >= MaxReps) break;
+            if (n is not JsonObject e || !Num(e["id"], out var id) || id < 1 || id > MaxFactionId || id != Math.Floor(id)) continue;
+            if (!Num(e["s"], out var s) || s < 1 || s > 8 || s != Math.Floor(s) || !Num(e["v"], out _)) continue;
+            if (byId.ContainsKey((int)id)) continue;
+            var x = new JsonObject { ["id"] = (int)id, ["s"] = (int)s, ["v"] = I(e["v"], -100_000_000, 100_000_000) };
+            if (Num(e["min"], out _)) x["min"] = I(e["min"], -100_000_000, 100_000_000);
+            if (Num(e["max"], out _)) x["max"] = I(e["max"], -100_000_000, 100_000_000);
+            byId[(int)id] = x;
+        }
+        if (byId.Count == 0) return null;
+        var list = new JsonArray();
+        foreach (var x in byId.Values) list.Add(x);
+        return new JsonObject { ["at"] = L(r["at"], 0, 4102444800L), ["list"] = list };
+    }
+
+    // "standing with a faction": the row of one shared character, or null when it has no reputation with it
+    public static JsonObject StandingOf(JsonObject c, int faction)
+    {
+        if (c["reps"] is not JsonObject r || r["list"] is not JsonArray list) return null;
+        foreach (var n in list)
+        {
+            if (n is not JsonObject e || e["id"] is not JsonValue iv || !iv.TryGetValue<int>(out var id) || id != faction) continue;
+            var row = new JsonObject
+            {
+                ["faction"] = faction, ["s"] = e["s"]!.DeepClone(), ["v"] = e["v"]!.DeepClone(),
+                ["name"] = c["name"]!.DeepClone(), ["class"] = c["class"]!.DeepClone(), ["level"] = c["level"]!.DeepClone(), ["at"] = r["at"]?.DeepClone() ?? 0,
+            };
+            if (e["min"] != null) row["min"] = e["min"]!.DeepClone();
+            if (e["max"] != null) row["max"] = e["max"]!.DeepClone();
+            return row;
+        }
+        return null;
+    }
+
+    // a snapshot without its reputations (what is served while the lodge has the feature off); the stored one is not changed
+    public static JsonObject WithoutReps(JsonObject c)
+    {
+        if (c["reps"] == null) return c;
+        var o = c.DeepClone().AsObject();
+        o.Remove("reps");
+        return o;
     }
 
     // ---- "who can craft this": the shared characters of one member that have learned any of the spells. One row per (character, spell).

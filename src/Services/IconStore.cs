@@ -138,11 +138,23 @@ namespace ElansAddonHub.Services
             wowRoot = wowRoot ?? WowRoot();
             if (string.IsNullOrEmpty(wowRoot) || !Directory.Exists(wowRoot)) throw new IOException("the WoW folder is not set");
             var res = new Dictionary<int, byte[]>();
-            // made-up ids (RaceIcons): a square cut out of an atlas texture; the atlas is read once for all its squares
-            var crops = ids.Where(RaceIcons.IsCrop).ToList();
-            var files = new HashSet<int>(ids.Where(i => !RaceIcons.IsCrop(i)));
-            var atlases = new HashSet<int>(crops.Select(i => RaceIcons.CropOf(i).AtlasFile));
             using (var casc = CascStorage.Open(wowRoot, flavor ?? Flavor))
+            {
+                // made-up ids (FactionIcons, InstanceIcons): the first of a faction or dungeon's icons the game has (found by name), or a race portrait crop
+                var facPick = ids.Any(NamedIcons.IsIcon) ? NamedIcons.Pick(ids, casc.ResolveNameHashesToFileIds) : new Dictionary<int, int>();
+                var real = new HashSet<int>(ids.Where(i => !NamedIcons.IsIcon(i)).Concat(facPick.Values));
+                // made-up ids (RaceIcons): a square cut out of an atlas texture; the atlas is read once for all its squares
+                var crops = real.Where(RaceIcons.IsCrop).ToList();
+                var files = new HashSet<int>(real.Where(i => !RaceIcons.IsCrop(i)));
+                var atlases = new HashSet<int>(crops.Select(i => RaceIcons.CropOf(i).AtlasFile));
+                ExtractInto(casc, res, files, crops, atlases);
+                foreach (var kv in facPick) if (res.TryGetValue(kv.Value, out var png)) res[kv.Key] = png;
+            }
+            return res;
+        }
+
+        static void ExtractInto(CascStorage casc, Dictionary<int, byte[]> res, HashSet<int> files, List<int> crops, HashSet<int> atlases)
+        {
             {
                 var keys = casc.ResolveFileIds(new HashSet<int>(files.Concat(atlases)));
                 foreach (var kv in keys)
@@ -175,7 +187,6 @@ namespace ElansAddonHub.Services
                     catch (Exception e) { Util.Log("icons: atlas " + atlas + ": " + e.Message); }
                 }
             }
-            return res;
         }
 
         public const int CropSize = 128;     // an atlas square is kept at this size (a 256 one is halved): big enough for the race page's hero tile
@@ -229,6 +240,21 @@ namespace ElansAddonHub.Services
             var log = Path.Combine(dir, "result.txt");
             try
             {
+                // "names:A,B" (icon names under Interface\Icons) or "factions": which names the game has, their FileDataIDs and pictures (to check FactionIcons' table)
+                if (idText.StartsWith("names:", StringComparison.OrdinalIgnoreCase) || idText == "factions")
+                {
+                    var nroot = Environment.GetEnvironmentVariable("ELANSHUB_WOW");
+                    if (string.IsNullOrEmpty(nroot)) nroot = WowLocator.Find();
+                    var names = idText == "factions" ? FactionIcons.Table.Values.SelectMany(v => v).Where(n => !n.StartsWith("race:", StringComparison.Ordinal)).Distinct().ToList()
+                        : idText.Substring(6).Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+                    Dictionary<ulong, int> fd;
+                    using (var casc = CascStorage.Open(nroot, Flavor)) fd = casc.ResolveNameHashesToFileIds(new HashSet<ulong>(names.Select(n => CascStorage.NameHash(FactionIcons.PathOf(n)))));
+                    var lines = names.Select(n => n + "\t" + (fd.TryGetValue(CascStorage.NameHash(FactionIcons.PathOf(n)), out var id2) ? id2.ToString() : "MISSING")).ToList();
+                    var found = new HashSet<int>(fd.Values);
+                    foreach (var kv in Extract(found, nroot, Flavor)) File.WriteAllBytes(Path.Combine(dir, kv.Key + ".png"), kv.Value);
+                    File.WriteAllText(log, "ok names\r\n" + string.Join("\r\n", lines) + "\r\n");
+                    return 0;
+                }
                 // "a-b": a range of ids (to find the ids of named icons such as the race portraits)
                 var rng = idText.Split('-');
                 if (rng.Length == 2 && int.TryParse(rng[0], out var lo) && int.TryParse(rng[1], out var hi) && hi >= lo && hi - lo < 2000)

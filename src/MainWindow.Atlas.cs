@@ -40,6 +40,9 @@ namespace ElansAddonHub
             if (Session != null) Session.CraftersChanged += () => Dispatcher.BeginInvoke(new Action(() => { AtlasView.CraftersChanged(); ProfessionsView?.CraftersChanged(); }));
             if (Session != null) Session.Changed += () => Dispatcher.BeginInvoke(new Action(() => AtlasView.PoolChanged()));
             ProfessionsView.UseCrafters(spells => Session?.CraftersFor(spells));
+            // "Where does the Lodge stand with this faction?" (Armory, feature reputations): an answer redraws the faction page
+            AtlasQuery.Context.Standings = faction => Session?.StandingsFor(faction);
+            if (Session != null) Session.StandingsChanged += () => Dispatcher.BeginInvoke(new Action(() => AtlasView.StandingsChanged()));
             AtlasView.OpenLinkOverride = url => OpenAtlasLink(url);
             // the Lodge can hand out the Classic data (server 2.17): fetched automatically for members, shareable by the owner and officers
             ClassicSync = new ClassicLodgeSync(Session, () => Dispatcher.CheckAccess() ? AtlasView.EnsureClassicSetup() : Dispatcher.Invoke(() => AtlasView.EnsureClassicSetup()), settings);

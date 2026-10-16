@@ -521,6 +521,7 @@ namespace ElansAddonHub.Lodge
                 case "armory.chars": OnArmoryChars(m); break;
                 case "armory.char": OnArmoryChar(m); break;
                 case "armory.crafters": OnArmoryCrafters(m); break;
+                case "armory.standing": OnArmoryStanding(m); break;
                 case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
                 case "badges.mine": case "badges.member": case "badges.state": case "ladder.data": OnBadgesFrame(m); break;
                 case "realms.status": case "realms.back": OnRealmsFrame(m); break;
@@ -1207,6 +1208,7 @@ namespace ElansAddonHub.Lodge
             text = text ?? "";
             if (code == "last-owner") { LeaveRefused?.Invoke(text); return; }   // the last Guild Master tried to leave
             if (HistoryRateError(text)) return;
+            if (code == "noreps") { OnRepsOff(); return; }                  // the Lodge owner switched reputations off
             if (code == "notfound" || (code == "disabled" && text.IndexOf("Armory", StringComparison.OrdinalIgnoreCase) >= 0) || (code == "guest" && text.IndexOf("Armory", StringComparison.OrdinalIgnoreCase) >= 0)) { OnArmoryError(code); return; }
             if (pendingRoom != null && (code == "room-full" || text.IndexOf("is full (", StringComparison.OrdinalIgnoreCase) >= 0 || text.StartsWith("You can't join", StringComparison.OrdinalIgnoreCase)))
             {

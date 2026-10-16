@@ -42,6 +42,8 @@ namespace ElansAddonHub.Lodge
             var v = ParseVersion(ServerVersion);
             SupportsArmory = features.Contains("armory") && (v == null || v >= ArmoryServer);
             SupportsArmory2 = SupportsArmory && features.Contains("armory2") && (v == null || v >= Armory2Server);
+            SupportsReps = SupportsArmory && features.Contains("reputations");
+            ResetStandings();
             craftersAnswers.Clear();
             ArmoryDisabledByServer = false; armoryGuest = false;
             armoryInflight.Clear(); armoryAsked.Clear();
@@ -50,7 +52,7 @@ namespace ElansAddonHub.Lodge
 
         void ResetArmory()
         {
-            SupportsArmory = false; SupportsArmory2 = false; craftersAnswers.Clear(); ArmoryDisabledByServer = false; armoryGuest = false; armoryBacklog = false; armoryDeleteAll = false;
+            SupportsArmory = false; SupportsArmory2 = false; SupportsReps = false; ResetStandings(); craftersAnswers.Clear(); ArmoryDisabledByServer = false; armoryGuest = false; armoryBacklog = false; armoryDeleteAll = false;
             ArmoryEntries = new List<ArmoryEntry>(); ArmoryListed = false; ArmoryProblem = null;
             armoryChars.Clear(); armoryAsked.Clear(); armoryInflight.Clear(); armoryRefused.Clear(); armoryQuiet.Clear();
             armorySent = null; armoryNextPut = DateTime.MinValue; armoryLastList = DateTime.MinValue;
@@ -152,7 +154,7 @@ namespace ElansAddonHub.Lodge
             bool backlog = false;
             foreach (var c in local.Where(c => wanted.Contains(c.Key)))
             {
-                var plain = ArmoryShare.Build(c, false, SupportsArmory2);
+                var plain = ArmoryShare.Build(c, false, SupportsArmory2, RepsShared);
                 if (plain == null) continue;
                 var sig = ArmoryShare.Signature(plain);
                 if (sent.TryGetValue(c.Key, out var have) && have == sig) { armoryQuiet.Remove(c.Key); continue; }
@@ -165,7 +167,7 @@ namespace ElansAddonHub.Lodge
                     if (clock - q.Value < TimeSpan.FromSeconds(ArmoryDebounceSeconds)) { backlog = true; continue; }
                 }
                 if (clock < armoryNextPut) { backlog = true; continue; }
-                var full = ArmoryShare.Build(c, true, SupportsArmory2);
+                var full = ArmoryShare.Build(c, true, SupportsArmory2, RepsShared);
                 var frame = new Dictionary<string, object> { ["t"] = "armory.put", ["key"] = c.Key, ["char"] = full };
                 if (Json.Write(frame).Length > 60 * 1024) { armoryRefused[c.Key] = sig; ArmoryProblem = c.Name + " has too much to share."; continue; }
                 armoryInflight[c.Key] = sig;

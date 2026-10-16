@@ -78,6 +78,42 @@ namespace ElansAddonHub.Lodge
         public string ClassName => string.IsNullOrEmpty(Class) ? "" : char.ToUpperInvariant(Class[0]) + Class.Substring(1).ToLowerInvariant();
     }
 
+    // One row of "where the Lodge stands with a faction" (feature reputations): a shared character whose member chose to share its reputations
+    public sealed class LodgeStanding
+    {
+        public int Faction, Standing, Value, Min, Max, Level;
+        public long At;
+        public string Owner, By, Key, Name, Class;
+        public bool Mine;
+
+        // every field is checked again here, whatever the server sent
+        public static LodgeStanding From(Dictionary<string, object> d)
+        {
+            if (d == null) return null;
+            string S(string k, int max) { var s = d.Str(k); return string.IsNullOrWhiteSpace(s) ? null : (s.Length > max ? s.Substring(0, max) : s.Trim()); }
+            int N(string k) => (int)Math.Max(-100000000, Math.Min(100000000, d.Long(k)));
+            var r = new LodgeStanding
+            {
+                Faction = d.Int("faction"), Standing = d.Int("s"), Value = N("v"), Min = N("min"), Max = N("max"), Level = Math.Max(0, Math.Min(100, d.Int("level"))), At = Math.Max(0, d.Long("at")),
+                Owner = S("owner", 64), By = S("by", 64), Key = S("key", 80), Name = S("name", 24), Class = S("class", 20), Mine = d.Bool("mine"),
+            };
+            if (r.Faction < 1 || r.Standing < 1 || r.Standing > 8 || r.Owner == null || r.Key == null || r.Name == null) return null;
+            if (r.By == null) r.By = r.Owner;
+            return r;
+        }
+
+        public string ClassName => string.IsNullOrEmpty(Class) ? "" : char.ToUpperInvariant(Class[0]) + Class.Substring(1).ToLowerInvariant();
+    }
+
+    // What the Atlas faction page gets back when it asks the Lodge where its members stand
+    public sealed class LodgeStandings
+    {
+        public bool Available;                         // the server and the member allow the question (reputations, member, armory on)
+        public bool Pending;                           // asked, no answer yet
+        public readonly List<LodgeStanding> Rows = new List<LodgeStanding>();
+        public string Problem;                         // why not, in plain words (null when Available)
+    }
+
     // What the Atlas and the Professions page get back when they ask the Lodge who can craft something
     public sealed class LodgeCrafters
     {
@@ -120,7 +156,7 @@ namespace ElansAddonHub.Lodge
         }
 
         // the snapshot of one character, or null when there is nothing to show (no gear, talents or professions). `withTimes` = false for the signature.
-        public static Dictionary<string, object> Build(InvChar c, bool withTimes = true, bool recipes = false)
+        public static Dictionary<string, object> Build(InvChar c, bool withTimes = true, bool recipes = false, bool reps = false)
         {
             if (c == null || c.Hub == null || c.Level < 1) return null;
             var core = c.Core;
@@ -152,6 +188,11 @@ namespace ElansAddonHub.Lodge
             if (pro != null && pro.List.Count > 0) o["professions"] = ProfessionsOf(pro, withTimes, recipes);
             var pets = HubModules.PetsOf(c.Hub);
             if (pets != null && pets.Pets.Count > 0) o["pets"] = PetsOf(pets, withTimes);
+            if (reps)
+            {
+                var rp = HubModules.RepsOf(c.Hub);
+                if (rp != null && rp.ById.Count > 0) o["reps"] = RepsOf(rp, withTimes);
+            }
             if (!o.ContainsKey("gear") && !o.ContainsKey("talents") && !o.ContainsKey("professions")) return null;
             if (withTimes) o["at"] = Math.Max(c.Updated, 0);
             return o;
@@ -285,6 +326,24 @@ namespace ElansAddonHub.Lodge
                 }
                 if (known.Count > 0) o["known"] = known;
             }
+            return o;
+        }
+
+        // `reps` (a server with the reputations feature, and only when the member switched it on): faction id, standing, value and its bounds - never names
+        public const int MaxReps = 300;
+        static Dictionary<string, object> RepsOf(HubRepsModule m, bool withTimes)
+        {
+            var o = Obj();
+            if (withTimes) o["at"] = m.At;
+            var list = new List<object>();
+            foreach (var r in m.ById.Values.OrderBy(r => r.Id).Take(MaxReps))
+            {
+                var e = Obj();
+                e["id"] = r.Id; e["s"] = r.Standing; e["v"] = r.Value;
+                if (r.Max > r.Min) { e["min"] = r.Min; e["max"] = r.Max; }
+                list.Add(e);
+            }
+            o["list"] = list;
             return o;
         }
 

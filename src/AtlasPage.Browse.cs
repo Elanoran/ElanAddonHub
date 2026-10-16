@@ -76,6 +76,8 @@ namespace ElansAddonHub
             findsStrip = null; findsStripBox = null;
             if (IsFindsPage) { var fsb = FindsStripBlock(); if (fsb != null) col.Children.Add(fsb); }
             if (r.Children.Count > 0) col.Children.Add(ChildChips(r));
+            sideHost = null; sideButtons.Clear(); sideCounts.Clear();
+            if (r.Sides.Count > 0) col.Children.Add(SideSwitch(r));          // factions: All | Alliance | Horde | Shared
             col.Children.Add(FilterBar(r));
             browseCount = Tb(r.CountText, "Text.Caption", Res("Brush.Text.Tertiary"), 4);
             col.Children.Add(browseCount);
@@ -270,6 +272,7 @@ namespace ElansAddonHub
             browseList.Visibility = r.Rows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
             browseEmpty.Visibility = r.Rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             browseCount.Text = r.CountText;
+            UpdateSideSwitch(r);
             FillNotes(r);
             browseClear.Visibility = r.Query.HasFilters ? Visibility.Visible : Visibility.Collapsed;
             if (browseList.Items.Count > 0) browseList.ScrollIntoView(browseList.Items[0]);

@@ -21,6 +21,7 @@ public sealed class ArmoryModule : IModule
     }
 
     public bool Enabled => hub.Cfg.ArmoryEnabled;
+    public bool RepsEnabled => hub.Cfg.ArmoryEnabled && hub.Cfg.ArmoryRepsEnabled;
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
@@ -31,6 +32,7 @@ public sealed class ArmoryModule : IModule
             case "armory.list": await List(me); return true;
             case "armory.get": await Get(me, m); return true;
             case "armory.crafters": await Crafters(me, m); return true;
+            case "armory.standing": await Standing(me, m); return true;
         }
         return false;
     }
@@ -52,7 +54,7 @@ public sealed class ArmoryModule : IModule
         if (!me.Personal || !Roles.Can(me.Role, Perm.ArmoryShare)) { await Saved(me, false, null, "guest"); return; }
         if (!Armory.ValidKey(key)) { await Saved(me, false, null, "invalid"); return; }
         if (!me.Budget.ArmoryPut.TryTake()) { me.CountDrop(hub.Clock); await Saved(me, false, key, "rate"); return; }
-        var clean = Armory.Clean(J.Obj(m, "char"), out var why);
+        var clean = Armory.Clean(J.Obj(m, "char"), out var why, RepsEnabled);
         if (clean == null) { await Saved(me, false, key, why ?? "invalid"); return; }
         ArmoryStore.PutResult r; bool saved = true;
         lock (Store.Gate)
@@ -112,7 +114,7 @@ public sealed class ArmoryModule : IModule
         lock (Store.Gate)
         {
             var c = Store.Get(owner, key);
-            if (c != null) json = new JsonObject { ["t"] = "armory.char", ["owner"] = owner, ["by"] = Shown(owner, Store.NameOf(owner)), ["key"] = key, ["char"] = c.DeepClone() }.ToJsonString();
+            if (c != null) json = new JsonObject { ["t"] = "armory.char", ["owner"] = owner, ["by"] = Shown(owner, Store.NameOf(owner)), ["key"] = key, ["char"] = (RepsEnabled ? c : Armory.WithoutReps(c)).DeepClone() }.ToJsonString();
         }
         if (json == null) { await hub.Error(me, "That character is not in the armory (any more)", "notfound"); return; }
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
@@ -131,6 +133,21 @@ public sealed class ArmoryModule : IModule
         if (spells.Count == 0) { await hub.Error(me, "No such recipe", "invalid"); return; }
         string json;
         lock (Store.Gate) json = new JsonObject { ["t"] = "armory.crafters", ["spells"] = new JsonArray(spells.Select(s => (JsonNode)JsonValue.Create(s)).ToArray()), ["who"] = Store.Crafters(spells, Shown, Identity(me)) }.ToJsonString();
+        await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
+    }
+
+    // reputations (2.27): where the lodge's shared characters stand with one faction - { faction } -> armory.standing { faction, who: [{faction, owner, by, key, name, class, level, s, v, min?, max?, at, mine?}] }
+    // Only characters whose member switched reputation sharing on carry reputations at all; nothing else about them is in the answer.
+    async Task Standing(Member me, JsonObject m)
+    {
+        if (!Enabled) { await hub.Error(me, "The Armory is switched off on this lodge", "disabled"); return; }
+        if (!RepsEnabled) { await hub.Error(me, "Reputations are switched off on this lodge", "noreps"); return; }
+        if (!Allowed(me)) { await hub.Error(me, "The Armory is for lodge members", "guest"); return; }
+        if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
+        int faction = m["faction"] is JsonValue fv && fv.TryGetValue<double>(out var d) && d >= 1 && d <= Armory.MaxFactionId && d == Math.Floor(d) ? (int)d : 0;
+        if (faction == 0) { await hub.Error(me, "No such faction", "invalid"); return; }
+        string json;
+        lock (Store.Gate) json = new JsonObject { ["t"] = "armory.standing", ["faction"] = faction, ["who"] = Store.Standings(faction, Shown, Identity(me)) }.ToJsonString();
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
     }
 

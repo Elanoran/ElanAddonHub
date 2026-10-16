@@ -85,8 +85,8 @@ namespace ElansAddonHub.Services.Atlas
             switch (key)
             {
                 case "sources": case "drops": case "givers": case "nodes": return Sources;
-                case "finds": case "crafters": case "lodgenotes": return Lodge;
-                case "owned": case "rewards": case "choices": case "objectives": return Overview;      // what a quest gives and asks for is the quest
+                case "finds": case "crafters": case "lodgenotes": case "standing-lodge": return Lodge;
+                case "owned": case "rewards": case "choices": case "objectives": case "standing-mine": return Overview;      // what a quest gives and asks for is the quest; a faction: where your characters stand
                 default: return Related;
             }
         }
