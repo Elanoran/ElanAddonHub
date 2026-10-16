@@ -3,6 +3,14 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.76.0
+- **Choose the radio's sound quality.** Settings > General > Radio Paradise > **Sound quality**: **Standard** (MP3, as before), **High** (AAC 320 kbit/s) or **Lossless** (FLAC, CD quality). Data for an hour of listening: Standard about 90 MB, High about 145 MB, Lossless up to about 0.5 GB (it varies with the music). Changing it while music plays switches right away.
+- **Serenity plays now.** Radio Paradise only sends Serenity as AAC and as FLAC, which the player could not play before. Standard and High play its AAC stream, Lossless its FLAC stream.
+- **Radio 2050 has no lossless stream.** With Lossless chosen it plays High instead, and the player's card and the channel button say so.
+- **Song titles in Lossless.** Radio Paradise's lossless streams do not seem to send song titles or covers the way the others do. When they do not, the player shows the channel and says "This stream sends no song titles"; Standard and High keep the title and cover.
+- **Nothing to install.** AAC is played with the decoder that comes with Windows, and FLAC with a small decoder built into the Outpost. If this PC lacks the AAC decoder (some "N" editions of Windows), High plays Standard instead and says why; Serenity then says it can't play this format on this PC (Lossless still works there).
+- The card in the title bar shows the quality next to the channel, for example "Radio Paradise · Rock · Lossless".
+
 ## 2.73.0
 - **A smaller radio player.** The player in the title bar is now one small rounded pill: the album cover, "Artist – Song", play / pause, and a tiny bouncing equaliser while music plays (it is only decoration, it does not follow the music). A title that is too long for the pill scrolls slowly from end to end and rests at each end; a short one stays still. If you have turned off animations in Windows, nothing moves: the title is cut off with "..." (point at it to read all of it) and the equaliser stands still.
 - **Click the pill for everything else.** A click on the cover or the title opens a card with a larger cover, the song and the artist, all eight channels as small buttons (the one playing is highlighted, one click switches), the volume slider with mute, any problem with **Retry**, and the links to Radio Paradise and **Support Radio Paradise**.

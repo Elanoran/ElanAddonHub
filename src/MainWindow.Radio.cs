@@ -52,6 +52,7 @@ namespace ElansAddonHub
         {
             if (Radio == null) return;
             radioDucker.Level = settings.RadioDuck ?? 0.3;
+            Radio.SetQuality(RadioParadise.ParseQuality(settings.RadioQuality));   // while it plays: the old stream closes, the new one opens
             if (settings.RadioOff) Radio.Stop();
             else if (!Radio.WantsPlayback) Radio.SetChannel(RadioParadise.Channel(settings.RadioChannel).Id);   // a new favourite shows at once while nothing plays
             RadioPlayerBar.Visibility = settings.RadioOff ? Visibility.Collapsed : Visibility.Visible;

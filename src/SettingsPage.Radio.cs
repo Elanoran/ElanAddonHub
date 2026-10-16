@@ -5,8 +5,9 @@ using ElansAddonHub.Services;
 
 namespace ElansAddonHub
 {
-    // --selftest "radio": Settings > General > Radio Paradise: the player on / off, the favourite channel (every start begins there) and the music level
-    // while people talk in a voice room.
+    // --selftest "radio": Settings > General > Radio Paradise: the player on / off, the favourite channel (every start begins there), the sound quality
+    // (2.76: Standard MP3 / High AAC / Lossless FLAC; a change while it plays switches the stream at once) and the music level while people talk in a
+    // voice room.
     public partial class SettingsPage
     {
         void LoadRadio(Settings s)
@@ -15,6 +16,10 @@ namespace ElansAddonHub
             RadioBox.IsChecked = !s.RadioOff;
             RadioFavBox.SelectedItem = RadioParadise.Channel(s.RadioChannel);
             RadioCoversBox.IsChecked = !s.RadioNoCovers;
+            var q = RadioParadise.ParseQuality(s.RadioQuality);
+            RadioQualityStd.IsChecked = q == RadioQuality.Standard;
+            RadioQualityHigh.IsChecked = q == RadioQuality.High;
+            RadioQualityLossless.IsChecked = q == RadioQuality.Lossless;
             RadioDuckSlider.Value = s.RadioDuck ?? 0.3;
             RadioDuckText.Text = Math.Round(RadioDuckSlider.Value * 100) + " %";
         }
@@ -32,6 +37,15 @@ namespace ElansAddonHub
         {
             if (loading || settings == null) return;
             settings.RadioNoCovers = RadioCoversBox.IsChecked != true;
+            SettingsStore.Save(settings);
+            host.ApplyRadioSettings();
+        }
+
+        void RadioQuality_Changed(object sender, RoutedEventArgs e)
+        {
+            if (loading || settings == null) return;
+            var q = RadioQualityLossless.IsChecked == true ? RadioQuality.Lossless : RadioQualityHigh.IsChecked == true ? RadioQuality.High : RadioQuality.Standard;
+            settings.RadioQuality = q == RadioQuality.Standard ? null : RadioParadise.QualityId(q);
             SettingsStore.Save(settings);
             host.ApplyRadioSettings();
         }
@@ -58,6 +72,8 @@ namespace ElansAddonHub
         public void SetRadioCoversForTest(bool on) { RadioCoversBox.IsChecked = on; RadioCovers_Click(RadioCoversBox, null); }
         public void SetRadioFavouriteForTest(string id) => RadioFavBox.SelectedItem = RadioParadise.Channel(id);
         public void SetRadioDuckForTest(double v) => RadioDuckSlider.Value = v;
+        public void SetRadioQualityForTest(RadioQuality q) => (q == RadioQuality.Lossless ? RadioQualityLossless : q == RadioQuality.High ? RadioQualityHigh : RadioQualityStd).IsChecked = true;
+        public FrameworkElement RadioQualityRowForTest => RadioQualityRow;
         public string RadioFavouriteForTest => (RadioFavBox.SelectedItem as RadioChannel)?.Id;
     }
 }

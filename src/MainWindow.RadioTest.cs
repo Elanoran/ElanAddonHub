@@ -23,7 +23,10 @@ namespace ElansAddonHub
     // cover from the stream's own StreamUrl against a local fake picture server (FakeCoverServer, never img.radioparadise.com, and no
     // api.radioparadise.com request ever): https only, the host allow-list, the small / large sizes, once per song, the caches, failures; Latin-1
     // titles; the pill (marquee only when the title overflows, the equaliser only while it plays, animations off), the pop-out (channel chips,
-    // volume + mute), focus rings only from the keyboard. Pictures with ELANSHUB_SHOTS=1.
+    // volume + mute), focus rings only from the keyboard. 2.76: Sound quality - the fake server answers each path in its real format (the
+    // MP3 paths MP3, the AAC paths ADTS AAC made here with Windows' own encoder, the FLAC paths Ogg FLAC made by TestFlac below, without ICY like
+    // Radio Paradise's), decoding, titles per format, quality switches (also while playing), Radio 2050's fallback, Serenity, a missing decoder
+    // (simulated). Pictures with ELANSHUB_SHOTS=1.
     public partial class MainWindow
     {
         async Task<string> RadioTest(string dir)
@@ -33,7 +36,7 @@ namespace ElansAddonHub
             void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
             string Shown(string t) { RadioNowPlaying.SplitTitle(t, out var a, out var ti); return a != null ? a + " – " + ti : ti; }
-            var hadOff = settings.RadioOff; var hadFav = settings.RadioChannel; var hadDuck = settings.RadioDuck; var hadVol = settings.RadioVolume; var hadNoCovers = settings.RadioNoCovers;
+            var hadOff = settings.RadioOff; var hadFav = settings.RadioChannel; var hadDuck = settings.RadioDuck; var hadVol = settings.RadioVolume; var hadNoCovers = settings.RadioNoCovers; var hadQuality = settings.RadioQuality;
             var hadLink = RadioPlayerBar.OpenLink;
             var w0 = Width; var h0 = Height;
             FakeIcyServer srv = null;
@@ -53,6 +56,32 @@ namespace ElansAddonHub
                 Check("channels: the 8 published channels", names == "Main Mix,Mellow,Rock,Global,Beyond,Radio 2050,KFAT,Serenity", names);
                 Check("every channel plays one of its own published links (MP3 192k; Serenity its 64k stream)",
                     RadioParadise.Channels.All(c => c.Published.Contains(c.Path) && RadioParadise.IsAllowedStreamUrl(RadioParadise.StreamUrl(c))) && RadioParadise.Channel("serenity").Path == "serenity" && RadioParadise.Channel("main").Path == "mp3-192");
+                // 2.76: the High and Lossless streams are published links too; what each quality opens per channel (no decoder missing)
+                Check("quality: every channel's High (AAC) and Lossless (FLAC) stream is one of its own published, allowed links",
+                    RadioParadise.Channels.All(c => c.Published.Contains(c.Aac) && RadioParadise.IsAllowedStreamUrl(RadioParadise.StreamUrl(c.Aac))
+                        && (c.Flac == null || (c.Published.Contains(c.Flac) && RadioParadise.IsAllowedStreamUrl(RadioParadise.StreamUrl(c.Flac))))));
+                {
+                    string Plan(string id, RadioQuality q) { var r = RadioParadise.Resolve(RadioParadise.Channel(id), q, f => true); return r == null ? "none" : r.Path + ":" + r.Format + ":" + r.Label; }
+                    var plan = string.Join(" ", new[] { "main", "rock", "radio2050", "serenity" }.SelectMany(id => new[] { RadioQuality.Standard, RadioQuality.High, RadioQuality.Lossless }.Select(q => Plan(id, q))));
+                    Check("quality: Standard MP3 192k, High AAC 320k, Lossless FLAC; Serenity AAC 64k for Standard / High and FLAC for Lossless; Radio 2050 has no FLAC -> High",
+                        plan == "mp3-192:Mp3:Standard aac-320:Aac:High flacbg:Flac:Lossless rock-192:Mp3:Standard rock-320:Aac:High rock-flacbg:Flac:Lossless "
+                              + "radio2050-192:Mp3:Standard radio2050-320:Aac:High radio2050-320:Aac:High serenity:Aac:Standard serenity:Aac:Standard serenity-flac:Flac:Lossless", plan);
+                    var r2050 = RadioParadise.Resolve(RadioParadise.Channel("radio2050"), RadioQuality.Lossless, f => true);
+                    Check("quality: Radio 2050 at Lossless says why it plays High", r2050.Quality == RadioQuality.High && r2050.Note == "Radio 2050 has no lossless stream", r2050.Note);
+                    var noAac = RadioParadise.Resolve(RadioParadise.Channel("main"), RadioQuality.High, f => f != RadioFormat.Aac);
+                    var noFlac = RadioParadise.Resolve(RadioParadise.Channel("rock"), RadioQuality.Lossless, f => f != RadioFormat.Flac);
+                    var noAacSer = RadioParadise.Resolve(RadioParadise.Channel("serenity"), RadioQuality.High, f => f != RadioFormat.Aac);
+                    var noAacSerL = RadioParadise.Resolve(RadioParadise.Channel("serenity"), RadioQuality.Lossless, f => f != RadioFormat.Aac);
+                    Check("quality: a decoder this PC lacks steps down, never up (no AAC: High -> MP3; no FLAC: Lossless -> AAC; Serenity without AAC: nothing below Lossless)",
+                        noAac.Path == "mp3-192" && noAac.Note == "this PC can't play AAC" && noFlac.Path == "rock-320" && noAacSer == null && noAacSerL.Path == "serenity-flac",
+                        noAac?.Path + " " + noFlac?.Path + " " + noAacSer?.Path + " " + noAacSerL?.Path);
+                    Check("quality: the setting is stored as standard / high / lossless, Standard by default",
+                        RadioParadise.ParseQuality(null) == RadioQuality.Standard && RadioParadise.ParseQuality("high") == RadioQuality.High && RadioParadise.ParseQuality("lossless") == RadioQuality.Lossless
+                        && RadioParadise.ParseQuality("junk") == RadioQuality.Standard && new Settings().RadioQuality == null);
+                    Check("formats: audio/mpeg -> MP3, audio/aac -> AAC, application/ogg -> FLAC, anything else none",
+                        RadioParadise.FormatOf("audio/mpeg") == RadioFormat.Mp3 && RadioParadise.FormatOf("audio/aac") == RadioFormat.Aac && RadioParadise.FormatOf("audio/aacp") == RadioFormat.Aac
+                        && RadioParadise.FormatOf("application/ogg") == RadioFormat.Flac && RadioParadise.FormatOf("audio/flac") == RadioFormat.Flac && RadioParadise.FormatOf("video/mp4") == null);
+                }
                 Check("every published link is allowed (aac / mp3 / flac of all channels)", RadioParadise.Channels.SelectMany(c => c.Published).All(p => RadioParadise.IsAllowedStreamUrl("https://stream.radioparadise.com/" + p)));
                 var bad = new[]
                 {
@@ -535,7 +564,7 @@ namespace ElansAddonHub
                 await Until(() => srv.Open == 0, 4000);
 
                 // ---- a stream that is not MP3: no retries
-                srv.ContentType = "audio/aac"; srv.Connections = 0;
+                srv.ContentType = "video/mp4"; srv.Connections = 0;
                 Radio.Play();
                 Check("a format it can't play: says so and does not retry", await Until(() => Radio.State == RadioState.Unsupported, 5000) && srv.Connections == 1 && !Radio.WantsPlayback, Radio.State + " " + srv.Connections);
                 srv.ContentType = "audio/mpeg";
@@ -625,6 +654,173 @@ namespace ElansAddonHub
                     await Until(() => srv.Open == 0, 4000);
                 }
 
+                // ============================================================================================ 2.76 sound quality: AAC and FLAC
+                {
+                    string LastPath() { lock (srv.Requests) return srv.Requests.Count == 0 ? "" : srv.Requests[srv.Requests.Count - 1].Split(' ')[1]; }
+                    var chBefore = Radio.Channel.Id;
+
+                    // ---- the test's own streams: 2 s of a 440 Hz tone made into AAC by Windows' own encoder, FLAC by TestFlac (no files, no network)
+                    var sine = new short[TestFlac.Rate * 2 * 2];
+                    for (int i = 0; i < TestFlac.Rate * 2; i++) { var v = (short)(8000 * Math.Sin(2 * Math.PI * 440 * i / TestFlac.Rate)); sine[2 * i] = v; sine[2 * i + 1] = v; }
+                    byte[] adts = null; string encErr = null;
+                    try
+                    {
+                        using (var enc = new MfAacEncoder(TestFlac.Rate, 2))
+                        using (var ms = new MemoryStream())
+                        {
+                            foreach (var u in enc.Encode(sine)) { var h = AdtsReader.Header(1, 4, 2, u.Length); ms.Write(h, 0, h.Length); ms.Write(u, 0, u.Length); }
+                            adts = ms.ToArray();
+                        }
+                    }
+                    catch (Exception e) { encErr = e.Message; }
+                    Check("AAC: Windows' own AAC decoder (Media Foundation) is on this PC, and its encoder made the test stream (ADTS, LC 44.1 kHz stereo)",
+                        RadioMf.Available() && adts != null && adts.Length > 10000, encErr ?? "decoder " + RadioMf.Available());
+                    if (adts != null)
+                    {
+                        var dec = RadioDecoders.Create(RadioFormat.Aac, new MemoryStream(adts));
+                        byte[] pcm = null; long bytes = 0; double peak = 0; int n;
+                        while ((n = dec.Decode(ref pcm)) >= 0) { bytes += n; for (int i = 0; i + 1 < n; i += 2) peak = Math.Max(peak, Math.Abs(BitConverter.ToInt16(pcm, i) / 32768.0)); }
+                        var f = dec.OutputFormat; dec.Dispose();
+                        double sec = f == null ? 0 : bytes / (double)f.AverageBytesPerSecond;
+                        Check("AAC: the decoder turns the ADTS frames into audio samples (2 s in, about 2 s of 44.1 kHz stereo out, the level kept)",
+                            f != null && f.SampleRate == 44100 && f.Channels == 2 && sec > 1.8 && sec < 2.1 && peak > 0.2 && peak < 0.3, $"{f} {sec:0.00} s peak {peak:0.000}");
+                        var junk = new byte[3000]; new Random(5).NextBytes(junk);
+                        for (int i = 0; i < junk.Length - 1; i++) if (junk[i] == 0xFF) junk[i] = 0;
+                        var dec2 = RadioDecoders.Create(RadioFormat.Aac, new MemoryStream(junk.Concat(adts).ToArray()));
+                        long b2 = 0; while ((n = dec2.Decode(ref pcm)) >= 0) b2 += n;
+                        dec2.Dispose();
+                        Check("AAC: joining mid-stream (bytes before the first frame) finds the frames and plays", b2 == bytes, b2 + " vs " + bytes);
+                    }
+                    {
+                        const int frames = 9;
+                        var song = TestFlac.Song(0, frames);
+                        var dec = new OggFlacRadioDecoder(new MemoryStream(song));
+                        string tag = null; dec.TagsChanged += (t, u) => tag = t;
+                        var got = new List<float>(); byte[] pcm = null; int n;
+                        while ((n = dec.Decode(ref pcm)) >= 0) for (int i = 0; i < n; i += 4) got.Add(BitConverter.ToSingle(pcm, i));
+                        bool exact = got.Count == frames * TestFlac.Block * 2;
+                        for (int f = 0; f < frames && exact; f++)
+                        {
+                            TestFlac.Signal(0, f, out var l, out var r);
+                            for (int i = 0; i < TestFlac.Block && exact; i++)
+                                exact = (int)Math.Round(got[(f * TestFlac.Block + i) * 2] * 32768) == l[i] && (int)Math.Round(got[(f * TestFlac.Block + i) * 2 + 1] * 32768) == r[i];
+                        }
+                        Check("FLAC: lossless - every decoded sample equals the one encoded (fixed + LPC prediction, verbatim + constant subframes, independent / left-side / mid-side stereo; CRCs checked)",
+                            exact && dec.Frames == frames && dec.BadFrames == 0 && dec.OutputFormat?.SampleRate == 44100 && dec.OutputFormat.Channels == 2, $"{got.Count} samples, frames {dec.Frames} bad {dec.BadFrames}");
+                        Check("FLAC: the song comes from the stream's own Vorbis comments (ARTIST - TITLE)", tag == "Test Artist - Song 1", tag);
+                        // one damaged frame (its CRC no longer fits): skipped, the rest decode
+                        var dmg = (byte[])song.Clone();
+                        int page = -1; for (int i = 0, k = 0; i < dmg.Length - 4; i++) if (dmg[i] == (byte)'O' && dmg[i + 1] == (byte)'g' && dmg[i + 2] == (byte)'g' && dmg[i + 3] == (byte)'S' && ++k == 5) { page = i; break; }
+                        dmg[page + 27 + dmg[page + 26] + 200] ^= 0x5A;
+                        var dec2 = new OggFlacRadioDecoder(new MemoryStream(dmg));
+                        while (dec2.Decode(ref pcm) >= 0) { }
+                        Check("FLAC: a damaged frame is skipped (CRC), the others still play", dec2.BadFrames == 1 && dec2.Frames == frames - 1, $"bad {dec2.BadFrames} ok {dec2.Frames}");
+                        string t2 = null;
+                        var d3 = new OggFlacRadioDecoder(new MemoryStream(TestFlac.Song(1, 2, null, "Only A Title"))); d3.TagsChanged += (t, u) => t2 = t; while (d3.Decode(ref pcm) >= 0) { }
+                        Check("FLAC: a title without an artist is the title alone; Vorbis comments without TITLE name no song",
+                            t2 == "Only A Title" && VorbisComments.StreamTitle(VorbisComments.Parse(new byte[] { 3, 0, 0, 0, (byte)'a', (byte)'b', (byte)'c', 0, 0, 0, 0 }, 0, 11)) == null, t2);
+                    }
+
+                    // ---- through the player and the fake server, each path answered in its real format
+                    srv.ByPath = true; srv.Aac = adts; srv.OggSong = k => TestFlac.Song(k, 12); srv.FixedTitle = null; srv.CoverMode = "rp";
+                    SettingsPage.SetRadioQualityForTest(RadioQuality.High);
+                    Radio.SetChannel("main");   // (a Settings change while nothing plays shows the favourite again)
+                    Check("Settings: Sound quality High is saved and reaches the player (nothing connects by itself)",
+                        settings.RadioQuality == "high" && Radio.Quality == RadioQuality.High && !Radio.WantsPlayback && srv.Open == 0, settings.RadioQuality);
+                    Radio.Play();
+                    Check("High: Main Mix's AAC 320k link (audio/aac) plays - decoded audio and the ICY title",
+                        await Until(() => Radio.State == RadioState.Playing && Radio.DecodedBytes > 0 && Radio.Title != null && Radio.Title.StartsWith("Test Artist - Song "), 8000)
+                        && LastPath() == "/aac-320" && Radio.Stream?.Format == RadioFormat.Aac, Radio.State + " " + LastPath() + " " + Radio.Title + " " + Radio.LastError);
+                    Check("pop-out: the quality after the channel, \"Radio Paradise · Main Mix · High\"", RadioPlayerBar.RpLinkTextForTest == "Radio Paradise · Main Mix · High", RadioPlayerBar.RpLinkTextForTest);
+                    srv.PeakOpen = srv.Open;
+                    long d0 = Radio.DecodedBytes;
+                    SettingsPage.SetRadioQualityForTest(RadioQuality.Lossless);
+                    Check("Lossless while playing: the AAC stream closes first, then Main Mix's FLAC link opens (never two at once)",
+                        await Until(() => Radio.State == RadioState.Playing && LastPath() == "/flacbg" && Radio.Stream?.Format == RadioFormat.Flac, 8000) && srv.PeakOpen == 1 && srv.Open == 1,
+                        $"{Radio.State} {LastPath()} peak {srv.PeakOpen} open {srv.Open} {Radio.LastError}");
+                    Check("Lossless: the Ogg FLAC stream decodes into audio; the song from its Vorbis comments (the FLAC stream has no ICY)",
+                        await Until(() => Radio.DecodedBytes > d0 + 200000 && Radio.Title != null && Radio.Title.StartsWith("Test Artist - Song "), 8000) && Radio.CoverUrl == null,
+                        Radio.DecodedBytes - d0 + " " + Radio.Title);
+                    var ft = Radio.Title;
+                    Check("Lossless: the title follows the next link of the Ogg chain (the next song)", await Until(() => Radio.Title != ft && Radio.Title != null && Radio.Title.StartsWith("Test Artist - Song "), 8000), ft + " -> " + Radio.Title);
+                    Check("pop-out: \"Radio Paradise · Main Mix · Lossless\" and the pill shows the song", RadioPlayerBar.RpLinkTextForTest == "Radio Paradise · Main Mix · Lossless"
+                        && RadioPlayerBar.NowTextForTest != null && RadioPlayerBar.NowTextForTest.StartsWith("Test Artist – Song "), RadioPlayerBar.RpLinkTextForTest + " | " + RadioPlayerBar.NowTextForTest);
+                    Radio.SetChannel("radio2050");
+                    Check("Radio 2050 at Lossless: it has no FLAC, so it plays its AAC 320k link and says so (status, chip tooltip)",
+                        await Until(() => Radio.State == RadioState.Playing && LastPath() == "/radio2050-320", 8000) && Radio.Stream?.Quality == RadioQuality.High
+                        && RadioPlayerBar.StatusTextForTest.Contains("Radio 2050 has no lossless stream: playing High.") && (RadioPlayerBar.ChipToolTipForTest("radio2050") ?? "").Contains("has no lossless stream")
+                        && RadioPlayerBar.RpLinkTextForTest == "Radio Paradise · Radio 2050 · High", LastPath() + " | " + RadioPlayerBar.StatusTextForTest);
+                    Radio.SetChannel("serenity");
+                    Check("Serenity at Lossless: its FLAC link plays", await Until(() => Radio.State == RadioState.Playing && LastPath() == "/serenity-flac" && Radio.DecodedBytes > 0, 8000), LastPath() + " " + Radio.State + " " + Radio.LastError);
+                    await Until(() => Radio.Title != null, 4000);
+                    if (SelfTestClock.ShotsOn)
+                    {
+                        Width = 1280; await ShotWait(500); Snapshot(P("radio-serenity-lossless.png"));
+                        RadioPlayerBar.FlyoutForTest.IsOpen = true; await ShotWait(400); SnapshotElement(RadioPlayerBar.FlyCardForTest, P("radio-popout-serenity-lossless.png")); RadioPlayerBar.FlyoutForTest.IsOpen = false;
+                        Width = w0;
+                    }
+                    SettingsPage.SetRadioQualityForTest(RadioQuality.Standard);
+                    Check("Serenity at Standard: its AAC 64k link plays (it has no MP3), with the ICY title",
+                        await Until(() => Radio.State == RadioState.Playing && LastPath() == "/serenity" && Radio.Title != null && Radio.Title.StartsWith("Test Artist - Song ")
+                            && RadioPlayerBar.RpLinkTextForTest == "Radio Paradise · Serenity", 8000)
+                        && Radio.Stream?.Format == RadioFormat.Aac && settings.RadioQuality == null, LastPath() + " " + Radio.Title + " | " + RadioPlayerBar.RpLinkTextForTest + " | " + settings.RadioQuality);
+                    if (SelfTestClock.ShotsOn)
+                    {
+                        Width = 1280; await ShotWait(500);
+                        RadioPlayerBar.FlyoutForTest.IsOpen = true; await ShotWait(400); SnapshotElement(RadioPlayerBar.FlyCardForTest, P("radio-popout-serenity.png")); RadioPlayerBar.FlyoutForTest.IsOpen = false;
+                        Width = w0;
+                    }
+                    Radio.Stop();
+                    Check("Pause: the stream closes (any format)", await Until(() => srv.Open == 0, 4000));
+
+                    // ---- a decoder this PC lacks (simulated, as on a Windows "N" edition without Media Foundation)
+                    RadioDecoders.SimulateMissing.Add(RadioFormat.Aac);
+                    int co = Radio.ConnectionsOpened;
+                    Radio.Play();
+                    Check("no AAC decoder: Serenity says it can't play this format on this PC (no connection, no retries, no crash)",
+                        await Until(() => Radio.State == RadioState.Unsupported, 4000) && Radio.ConnectionsOpened == co && !Radio.WantsPlayback
+                        && RadioPlayerBar.StatusTextForTest.StartsWith("Can't play this format on this PC") && RadioPlayerBar.StatusTextForTest.Contains("Lossless plays here"), RadioPlayerBar.StatusTextForTest);
+                    SettingsPage.SetRadioQualityForTest(RadioQuality.High);
+                    Radio.SetChannel("main");
+                    Radio.Play();
+                    Check("no AAC decoder: High on Main Mix falls back to the MP3 link and says why",
+                        await Until(() => Radio.State == RadioState.Playing && LastPath() == "/mp3-192", 8000) && Radio.Stream?.Note == "this PC can't play AAC"
+                        && RadioPlayerBar.StatusTextForTest.Contains("This PC can't play AAC: playing Standard."), LastPath() + " | " + RadioPlayerBar.StatusTextForTest);
+                    Radio.Stop();
+                    await Until(() => srv.Open == 0, 4000);
+                    // the decoder fails only once the stream is open: straight on with the next lower stream, no wait, one connection at a time
+                    Radio.CanDecode = f => true;
+                    int cc = srv.Connections; srv.PeakOpen = 0;
+                    Radio.Play();
+                    Check("a decoder that fails after connecting: the next lower stream opens at once (AAC -> MP3), never two at once, no backoff",
+                        await Until(() => Radio.State == RadioState.Playing && LastPath() == "/mp3-192", 8000) && srv.Connections == cc + 2 && srv.PeakOpen == 1 && Radio.Waits.Count == 0
+                        && srv.Requests[srv.Requests.Count - 2].StartsWith("GET /aac-320 "), $"{srv.Connections - cc} peak {srv.PeakOpen} waits {Radio.Waits.Count}");
+                    Radio.Stop();
+                    await Until(() => srv.Open == 0, 4000);
+                    RadioDecoders.ResetForTest(); Radio.CanDecode = RadioDecoders.CanDecode;
+                    RadioDecoders.SimulateMissing.Add(RadioFormat.Flac);
+                    SettingsPage.SetRadioQualityForTest(RadioQuality.Lossless);
+                    Radio.SetChannel("main");
+                    var planned = Radio.Planned;
+                    Check("no FLAC decoder (simulated): Lossless steps down to High (AAC 320k), never fails", planned?.Path == "aac-320" && planned.Note == "this PC can't play FLAC", planned?.Path);
+                    RadioDecoders.ResetForTest();
+
+                    // ---- the Settings row
+                    SettingsPage.SetRadioQualityForTest(RadioQuality.Standard);
+                    Check("Settings: back to Standard (stored as the default, nothing saved for it); the MP3 link again", settings.RadioQuality == null && Radio.Planned?.Path == Radio.Channel.Path && Radio.Planned.Format == RadioFormat.Mp3, Radio.Planned?.Path);
+                    if (SelfTestClock.ShotsOn)
+                    {
+                        ShowTab("settings"); SettingsPage.Show("general");
+                        await ShotWait(300);
+                        SettingsPage.RadioQualityRowForTest.BringIntoView();
+                        await ShotWait(400);
+                        Snapshot(P("radio-settings-quality.png"));
+                        ShowTab("addons");
+                    }
+                    srv.ByPath = false;
+                    Radio.SetChannel(chBefore);
+                }
+
                 // ============================================================================================ off in Settings
                 Radio.Play();
                 await Until(() => Radio.State == RadioState.Playing, 8000);
@@ -647,7 +843,8 @@ namespace ElansAddonHub
                 Radio.TestBaseUrl = null; Radio.BackoffScale = 1; RadioSpeechForTest = null;
                 RadioPlayerBar.OpenLink = hadLink; RadioPlayerBar.AnimationsOnForTest = null;
                 try { GameDataProgress.ResetForTest(); } catch { }
-                settings.RadioOff = hadOff; settings.RadioChannel = hadFav; settings.RadioDuck = hadDuck; settings.RadioVolume = hadVol; settings.RadioNoCovers = hadNoCovers;
+                settings.RadioOff = hadOff; settings.RadioChannel = hadFav; settings.RadioDuck = hadDuck; settings.RadioVolume = hadVol; settings.RadioNoCovers = hadNoCovers; settings.RadioQuality = hadQuality;
+                try { RadioDecoders.ResetForTest(); Radio.CanDecode = RadioDecoders.CanDecode; Radio.SetQuality(RadioParadise.ParseQuality(hadQuality)); } catch { }
                 try { RadioSongs.TestBaseUrl = null; RadioSongs.CoverDirOverride = null; Radio.Muted = false; } catch { }
                 np?.Dispose();
                 try { SettingsPage.SetRadioForTest(!hadOff); } catch { }
@@ -699,6 +896,13 @@ namespace ElansAddonHub
             public volatile bool RealTime;        // send at the stream's own pace (new data reaches the player at once) instead of as fast as it reads
             public int MetaInt = 4096;
             static readonly byte[] Frame = MakeFrame();
+            // 2.76: with ByPath the answer follows the path like Radio Paradise's: a FLAC path is Ogg FLAC (application/ogg, never ICY metadata),
+            // an AAC path (-320, the Serenity one) ADTS AAC (audio/aac + ICY), anything else MP3
+            public volatile bool ByPath;
+            public volatile byte[] Aac;                 // ADTS frames, looped
+            public volatile Func<int, byte[]> OggSong;  // song n (0, 1, ...) as one link of an Ogg chain, its title in its Vorbis comments
+            public static bool IsFlacPath(string path) => path.Contains("flac");
+            public static bool IsAacPath(string path) => path.EndsWith("-320") || path == "/serenity";
 
             public static int Id(string s) { int h = 17; foreach (var ch in s ?? "") h = unchecked(h * 31 + ch); return Math.Abs(h % 90000) + 10000; }
 
@@ -743,14 +947,24 @@ namespace ElansAddonHub
                         lock (Requests) Requests.Add(head.ToString());
                         if (Refuse) { var no = Encoding.ASCII.GetBytes("HTTP/1.0 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n"); s.Write(no, 0, no.Length); return; }
                         bool meta = head.ToString().IndexOf("\nIcy-MetaData: 1", StringComparison.OrdinalIgnoreCase) >= 0;
-                        var resp = "HTTP/1.0 200 OK\r\nContent-Type: " + ContentType + "\r\nicy-name: Fake\r\n" + (meta ? "icy-metaint: " + MetaInt + "\r\n" : "") + "\r\n";
+                        var path = head.ToString().Split(' ').Skip(1).FirstOrDefault() ?? "";
+                        bool flac = ByPath && IsFlacPath(path), aac = ByPath && !flac && IsAacPath(path);
+                        if (flac) meta = false;                 // Radio Paradise's FLAC streams have no icy-metaint
+                        var ctype = flac ? "application/ogg" : aac ? "audio/aac" : ContentType;
+                        var resp = "HTTP/1.0 200 OK\r\nContent-Type: " + ctype + "\r\nicy-name: Fake\r\n" + (meta ? "icy-metaint: " + MetaInt + "\r\n" : "") + "\r\n";
                         var hb = Encoding.ASCII.GetBytes(resp);
                         s.Write(hb, 0, hb.Length);
-                        long sent = 0; int pos = 0, blocks = 0;
+                        long sent = 0; int pos = 0, blocks = 0, song = 0;
                         var chunk = new byte[MetaInt];
+                        var loop = aac ? Aac : Frame;
+                        var ogg = flac ? OggSong(0) : null;
                         while (!stop)
                         {
-                            for (int i = 0; i < chunk.Length; i++) { chunk[i] = Frame[pos]; pos = (pos + 1) % Frame.Length; }
+                            for (int i = 0; i < chunk.Length; i++)
+                            {
+                                if (flac) { chunk[i] = ogg[pos++]; if (pos == ogg.Length) { pos = 0; ogg = OggSong(++song); } }
+                                else { chunk[i] = loop[pos]; pos = (pos + 1) % loop.Length; }
+                            }
                             s.Write(chunk, 0, meta ? MetaInt : chunk.Length);
                             sent += chunk.Length;
                             if (meta)
@@ -778,6 +992,146 @@ namespace ElansAddonHub
             }
 
             public void Dispose() { stop = true; try { listener.Stop(); } catch { } }
+        }
+
+        // A tiny FLAC encoder for the self-test's own Lossless stream (no recordings, no fixture files): 4096-sample stereo frames, 44.1 kHz 16 bit,
+        // in an Ogg chain like Radio Paradise's (one link per song, its ARTIST / TITLE in the link's Vorbis comments). The frames take turns so the
+        // player's decoder meets every kind: fixed and LPC prediction, verbatim and constant subframes, independent / left-side / mid-side stereo.
+        static class TestFlac
+        {
+            public const int Block = 4096, Rate = 44100;
+
+            sealed class BitWriter
+            {
+                public readonly List<byte> Bytes = new List<byte>();
+                int acc, n;
+                public void W(long v, int bits) { for (int i = bits - 1; i >= 0; i--) { acc = (acc << 1) | (int)((v >> i) & 1); if (++n == 8) { Bytes.Add((byte)acc); acc = 0; n = 0; } } }
+                public void Align() { while (n != 0) W(0, 1); }
+            }
+
+            // the music of song n, frame f: a soft chord with a little noise, frame 3 silent (constant subframes)
+            public static void Signal(int song, int f, out int[] l, out int[] r)
+            {
+                l = new int[Block]; r = new int[Block];
+                if (f % 8 == 3) return;
+                uint seed = (uint)(song * 7919 + f * 104729 + 1);
+                for (int i = 0; i < Block; i++)
+                {
+                    double t = (f * Block + i) / (double)Rate;
+                    seed = seed * 1664525 + 1013904223;
+                    int noise = (int)(seed >> 26) - 32;
+                    l[i] = (int)(6000 * Math.Sin(2 * Math.PI * (220 + 20 * song) * t) + 2000 * Math.Sin(2 * Math.PI * 330 * t)) + noise;
+                    r[i] = (int)(5000 * Math.Sin(2 * Math.PI * (277 + 20 * song) * t + 1)) + noise / 2;
+                }
+            }
+
+            static void Residual(BitWriter w, int[] res, int from)
+            {
+                long sum = 0; for (int i = from; i < res.Length; i++) sum += Math.Abs((long)res[i]);
+                double mean = Math.Max(1, sum / (double)Math.Max(1, res.Length - from));
+                int k = Math.Min(14, Math.Max(0, (int)Math.Floor(Math.Log(mean, 2))));
+                w.W(0, 2); w.W(0, 4); w.W(k, 4);   // Rice, partition order 0, parameter k
+                for (int i = from; i < res.Length; i++)
+                {
+                    uint u = (uint)((res[i] << 1) ^ (res[i] >> 31));
+                    uint q = u >> k;
+                    for (uint z = 0; z < q; z++) w.W(0, 1);
+                    w.W(1, 1);
+                    if (k > 0) w.W(u & ((1u << k) - 1), k);
+                }
+            }
+
+            // kind: 0 verbatim, 1 fixed order 1, 2 fixed order 2, 3 LPC order 2 (coefficients 2, -1, the same predictor written the LPC way)
+            static void Subframe(BitWriter w, int[] s, int bps, int kind)
+            {
+                w.W(0, 1);
+                if (s.All(v => v == s[0])) { w.W(0, 6); w.W(0, 1); w.W(s[0], bps); return; }   // constant
+                if (kind == 0) { w.W(1, 6); w.W(0, 1); foreach (var v in s) w.W(v, bps); return; }
+                int order = kind == 1 ? 1 : 2;
+                var res = new int[s.Length];
+                for (int i = order; i < s.Length; i++) res[i] = order == 1 ? s[i] - s[i - 1] : s[i] - 2 * s[i - 1] + s[i - 2];
+                if (kind == 3) { w.W(32 + order - 1, 6); w.W(0, 1); for (int i = 0; i < order; i++) w.W(s[i], bps); w.W(3, 4); w.W(0, 5); w.W(2, 4); w.W(-1, 4); }
+                else { w.W(8 + order, 6); w.W(0, 1); for (int i = 0; i < order; i++) w.W(s[i], bps); }
+                Residual(w, res, order);
+            }
+
+            public static byte[] Frame(int[] l, int[] r, int frameNo)
+            {
+                int mode = frameNo % 3;                               // 0 independent, 1 left/side, 2 mid/side
+                int chCode = mode == 0 ? 1 : mode == 1 ? 8 : 10;
+                var w = new BitWriter();
+                w.W(0x3FFE, 14); w.W(0, 1); w.W(0, 1);
+                w.W(12, 4); w.W(9, 4); w.W(chCode, 4); w.W(4, 3); w.W(0, 1);   // 4096 samples, 44.1 kHz, the channels, 16 bit
+                w.W(frameNo & 0x7F, 8);
+                var hb = w.Bytes.ToArray();
+                w.W(FlacFrameDecoder.Crc8(hb, 0, hb.Length), 8);
+                int[] a = l, b = r;
+                if (mode == 1) b = l.Select((v, i) => v - r[i]).ToArray();
+                if (mode == 2) { a = l.Select((v, i) => (v + r[i]) >> 1).ToArray(); b = l.Select((v, i) => v - r[i]).ToArray(); }
+                Subframe(w, a, 16, new[] { 2, 3, 2 }[mode]);
+                Subframe(w, b, mode == 0 ? 16 : 17, new[] { 0, 1, 3 }[mode]);
+                w.Align();
+                var body = w.Bytes.ToArray();
+                int crc = FlacFrameDecoder.Crc16(body, 0, body.Length);
+                return body.Concat(new[] { (byte)(crc >> 8), (byte)crc }).ToArray();
+            }
+
+            // ---- Ogg
+            static readonly uint[] OggCrcTable = Enumerable.Range(0, 256).Select(i => { uint c = (uint)i << 24; for (int k = 0; k < 8; k++) c = (c & 0x80000000) != 0 ? (c << 1) ^ 0x04C11DB7 : c << 1; return c; }).ToArray();
+
+            static byte[] Page(byte[] packet, int type, long granule, uint serial, uint seq)
+            {
+                var lacing = new List<byte>();
+                int left = packet.Length;
+                while (left >= 255) { lacing.Add(255); left -= 255; }
+                lacing.Add((byte)left);
+                var ms = new MemoryStream();
+                ms.Write(Encoding.ASCII.GetBytes("OggS"), 0, 4);
+                ms.WriteByte(0); ms.WriteByte((byte)type);
+                ms.Write(BitConverter.GetBytes(granule), 0, 8);
+                ms.Write(BitConverter.GetBytes(serial), 0, 4);
+                ms.Write(BitConverter.GetBytes(seq), 0, 4);
+                ms.Write(new byte[4], 0, 4);
+                ms.WriteByte((byte)lacing.Count);
+                ms.Write(lacing.ToArray(), 0, lacing.Count);
+                ms.Write(packet, 0, packet.Length);
+                var page = ms.ToArray();
+                uint crc = 0;
+                foreach (var x in page) crc = (crc << 8) ^ OggCrcTable[((crc >> 24) ^ x) & 0xFF];
+                Array.Copy(BitConverter.GetBytes(crc), 0, page, 22, 4);
+                return page;
+            }
+
+            // song n as one link of the chain: the FLAC header packet (STREAMINFO), the Vorbis comments, then the frames
+            public static byte[] Song(int n, int frames = 10, string artist = "Test Artist", string title = null)
+            {
+                uint serial = (uint)(0x5EED0000 + n);
+                var ms = new MemoryStream();
+                void Put(byte[] b) => ms.Write(b, 0, b.Length);
+                var si = new BitWriter();
+                si.W(Block, 16); si.W(Block, 16); si.W(0, 24); si.W(0, 24);
+                si.W(Rate, 20); si.W(1, 3); si.W(15, 5); si.W(0, 36);
+                for (int i = 0; i < 16; i++) si.W(0, 8);
+                var head = new List<byte> { 0x7F, (byte)'F', (byte)'L', (byte)'A', (byte)'C', 1, 0, 0, 1, (byte)'f', (byte)'L', (byte)'a', (byte)'C', 0, 0, 0, 34 };
+                head.AddRange(si.Bytes);
+                Put(Page(head.ToArray(), 2, 0, serial, 0));
+                var vc = new MemoryStream();
+                void Str(string t) { var b = Encoding.UTF8.GetBytes(t); vc.Write(BitConverter.GetBytes(b.Length), 0, 4); vc.Write(b, 0, b.Length); }
+                Str("Elan's Outpost self-test");
+                var tags = new List<string>();
+                if (artist != null) tags.Add("ARTIST=" + artist);
+                tags.Add("TITLE=" + (title ?? "Song " + (n + 1)));
+                vc.Write(BitConverter.GetBytes(tags.Count), 0, 4);
+                foreach (var t in tags) Str(t);
+                var vcb = vc.ToArray();
+                Put(Page(new byte[] { 0x84, (byte)(vcb.Length >> 16), (byte)(vcb.Length >> 8), (byte)vcb.Length }.Concat(vcb).ToArray(), 0, 0, serial, 1));
+                for (int f = 0; f < frames; f++)
+                {
+                    Signal(n, f, out var l, out var r);
+                    Put(Page(Frame(l, r, f), f == frames - 1 ? 4 : 0, (long)(f + 1) * Block, serial, (uint)(f + 2)));
+                }
+                return ms.ToArray();
+            }
         }
 
         // A fake of img.radioparadise.com on 127.0.0.1 (RadioNowPlaying.TestBaseUrl): /covers/{s,m,l}/<id>.jpg answer with one of three made-up
