@@ -95,7 +95,14 @@ namespace ElansAddonHub
                 WorldMapView.RetryForTest();
                 var rr = await WorldMapView.LastRetryForTest;
                 bool back = await WaitFor(() => WorldMapView.PageReady && !WorldMapView.StatusShown && WorldMapView.WebShown, 30000);
-                var src = Json.Parse(await WmEval("(function(){ var t = document.querySelector('.leaflet-tile'); return t ? t.src : ''; })()")) as string;
+                // "ready" can still be the old page's for a moment after Retry: wait until the reopened page's tiles carry the new revision (or time out)
+                string src = null;
+                for (int i = 0; i < 60; i++)
+                {
+                    src = Json.Parse(await WmEval("(function(){ var t = document.querySelector('.leaflet-tile'); return t ? t.src : ''; })()")) as string;
+                    if (src != null && src.Contains("?r=" + WorldMapService.Revision)) break;
+                    await Task.Delay(250);
+                }
                 Check("failed tile: Retry with the file there reads it (1 recovered), the stand-in and its marker are gone, the page opens again with tile addresses that carry the new revision (" + src?.Substring(Math.Max(0, (src?.Length ?? 0) - 12)) + ") and the status line goes",
                     rr != null && rr.Recovered == 1 && rr.StillPending == 0 && back && WorldMapService.Revision > rev0 && WorldMapService.PendingOf(0).Count == 0 && src != null && src.Contains("?r=" + WorldMapService.Revision) && WorldMapView.Note.Contains("could be read now"),
                     (rr == null ? "no result" : rr.Recovered + "/" + rr.StillPending + " " + rr.Error) + " " + src + " " + WorldMapView.Note);
