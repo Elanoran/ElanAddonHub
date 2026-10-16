@@ -549,8 +549,8 @@
       <local:FilesView x:Name="FilesPage" Grid.Column="1" Visibility="Collapsed" />
       <local:LadderView x:Name="LadderPage" Grid.Column="1" Visibility="Collapsed" />
 
-      <!-- ===== chat: a Surface1 card ===== -->
-      <Border x:Name="ChatCard" Grid.Column="1" Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
+      <!-- ===== chat: straight on the page panel (no card of its own, like the Atlas' pages) ===== -->
+      <Border x:Name="ChatCard" Grid.Column="1" Background="Transparent" CornerRadius="{StaticResource Radius.Card}">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

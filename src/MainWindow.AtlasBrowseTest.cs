@@ -291,7 +291,7 @@ namespace ElansAddonHub
                     Check("start page, narrow (760): the nav is the 56 px strip of icons and there are at least 2 cards per row", stripNarrow && Math.Abs(navNarrow - 56) < 1 && tilesNarrow >= 2, tilesNarrow + " nav " + navNarrow);
                     Width = 1300; await Task.Delay(300); UpdateLayout();
                     int tilesMid = AtlasView.TileColumnsForTest;
-                    Check("start page, 1300: the 216 px nav with names, and more cards per row than narrow", !AtlasView.NavCollapsedForTest && Math.Abs(AtlasView.NavWidthForTest - 216) < 1 && tilesMid > tilesNarrow, tilesMid + " vs " + tilesNarrow + " nav " + AtlasView.NavWidthForTest);
+                    Check("start page, 1300: the 240 px nav with names, and more cards per row than narrow", !AtlasView.NavCollapsedForTest && Math.Abs(AtlasView.NavWidthForTest - 240) < 1 && tilesMid > tilesNarrow, tilesMid + " vs " + tilesNarrow + " nav " + AtlasView.NavWidthForTest);
                     Width = 1700; Height = 1000; await Task.Delay(300); UpdateLayout();
                     int tilesWide = AtlasView.TileColumnsForTest;
                     Check("start page, wide (1700): up to 6 cards per row, at most four rows of cards", tilesWide >= 4 && tilesWide >= tilesMid && RowsOfTiles() <= 4, tilesWide + " rows " + RowsOfTiles());

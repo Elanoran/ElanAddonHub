@@ -13,7 +13,7 @@ namespace ElansAddonHub
     //   - a web view (the Browser page) is a window of its own and would be drawn above the layer: it steps aside while the palette is open (BrowserPage.HoldForOverlay)
     public partial class MainWindow
     {
-        public const double TitleSearchNarrowBelow = 900, TitleSearchWidth = 240;
+        public const double TitleSearchNarrowBelow = 900, TitleSearchWidth = 247;   // its right edge level with the side menus' (240 wide, inset in the page)
         bool titleSearchNarrow, searchWired;
         public ModifierKeys? GlobalModifiersForTest;                  // self-test: the modifier keys held (the real keyboard cannot be pressed from a test)
 

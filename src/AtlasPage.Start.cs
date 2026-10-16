@@ -97,7 +97,7 @@ namespace ElansAddonHub
         }
 
         // ---- layout: tiles per row and info columns follow the width; nothing is drawn again, the same elements are placed anew only when the count changes
-        public const double InfoTwoColumns = 900, InfoThreeColumns = 1400, TileMinWidth = 170;
+        public const double InfoTwoColumns = 876, InfoThreeColumns = 1400, TileMinWidth = 170;
         readonly List<FrameworkElement> startCards = new List<FrameworkElement>();
         readonly List<System.Windows.Controls.Primitives.UniformGrid> tileGrids = new List<System.Windows.Controls.Primitives.UniformGrid>();
         Grid startInfo; int startInfoCols, startTileCols;

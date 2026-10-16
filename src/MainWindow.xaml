@@ -36,7 +36,7 @@
       <!-- title bar. The global search sits at its left (TitleSearch: a launcher for the Ctrl+K palette on every page; an icon when the window is narrow). It is a hit-test island: a press on it
            is its own and never starts the window drag; the empty caption around it still drags. Realm status dots and minimise / close stay at the right. -->
       <Grid Grid.Row="0" Grid.Column="1" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
-        <TextBox x:Name="TitleSearch" Style="{StaticResource Input}" HorizontalAlignment="Left" VerticalAlignment="Center" Width="240" Height="32" Margin="16,0,0,0" IsReadOnly="True" Cursor="IBeam"
+        <TextBox x:Name="TitleSearch" Style="{StaticResource Input}" HorizontalAlignment="Left" VerticalAlignment="Center" Width="247" Height="32" Margin="16,0,0,0" IsReadOnly="True" Cursor="IBeam"
                  Tag="Search  (Ctrl K)" ToolTip="Search the Atlas by name, or paste a link like item:2589 or npc:46  (Ctrl+K)" AutomationProperties.Name="Search the Atlas"
                  PreviewMouseDown="TitleSearch_Down" PreviewKeyDown="TitleSearch_KeyDown" PreviewTextInput="TitleSearch_TextInput" />
         <Button x:Name="TitleSearchIcon" Style="{StaticResource IconButton}" HorizontalAlignment="Left" VerticalAlignment="Center" Width="32" Height="32" Margin="16,0,0,0" FontSize="16" Content="&#xE721;"

@@ -55,7 +55,7 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <Border Background="{StaticResource Brush.Surface1}" CornerRadius="{StaticResource Radius.Card}">
+  <Border Background="Transparent" CornerRadius="{StaticResource Radius.Card}">
     <Grid>
       <Grid x:Name="Main">
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>

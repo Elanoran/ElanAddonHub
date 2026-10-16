@@ -91,7 +91,7 @@
   <Border Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
     <Grid x:Name="Shell">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition x:Name="NavCol" Width="216" />
+        <ColumnDefinition x:Name="NavCol" Width="240" />
         <ColumnDefinition Width="16" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
