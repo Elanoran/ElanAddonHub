@@ -52,6 +52,7 @@ namespace ElansAddonHub.Services
         public Func<RadioFormat, bool> CanDecode = RadioDecoders.CanDecode;   // the self-test can swap it
         bool Decodable(RadioFormat f) => !RadioDecoders.HasFailed(f) && CanDecode(f);   // a decoder that failed to start this run never counts
         public RadioStream Planned => RadioParadise.Resolve(channel, quality, Decodable);   // what Play would open now
+        public RadioStream PlanFor(RadioQuality q) => RadioParadise.Resolve(channel, q, Decodable);   // what Play would open at another quality (the pop-out's segments)
         public float AppliedGain => gain?.Current ?? Gain;
 
         public RadioPlayer() { ui = SynchronizationContext.Current; }

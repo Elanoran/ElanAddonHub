@@ -157,6 +157,39 @@
       </Setter>
     </Style>
 
+    <!-- 2.77: a quality segment - the Settings Segment look (Theme.xaml), but its ring comes from FocusVisualStyle, so it shows for the keyboard
+         only (the Segment template's IsKeyboardFocused ring also lit after a mouse click) -->
+    <Style x:Key="Radio.Segment" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="GroupName" Value="RadioParadiseQuality" />
+      <Setter Property="FocusVisualStyle" Value="{StaticResource Radio.FocusRect}" />
+      <Setter Property="ToolTipService.InitialShowDelay" Value="300" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Grid Height="24" Background="Transparent">
+              <Border x:Name="sel" Background="{StaticResource Brush.Surface3}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" />
+              <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12,0" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+                <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
+                <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+                <Setter TargetName="sel" Property="Opacity" Value="1" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
     <!-- the slim slider (DESIGN 8) with the ring from FocusVisualStyle instead of the thumb's keyboard-focus trigger -->
     <Style x:Key="Radio.Slider" TargetType="Slider">
       <Setter Property="Height" Value="24" />
@@ -277,6 +310,20 @@
           </DockPanel>
           <!-- the 8 channels: one click switches (this session; the favourite is in Settings > General) -->
           <WrapPanel x:Name="ChannelChips" Margin="0,0,0,8" AutomationProperties.Name="Radio Paradise channel" />
+          <!-- 2.77: the sound quality - the same setting as Settings > General > Sound quality (either place changes both). A quality this channel
+               doesn't have (Radio 2050: Lossless) is dimmed and its tooltip / the note below say what plays instead. -->
+          <DockPanel x:Name="QualityRow" Margin="0,0,0,4">
+            <TextBlock DockPanel.Dock="Left" Style="{StaticResource Text.Secondary}" Text="Quality" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <Border Style="{StaticResource SegmentHost}">
+              <StackPanel x:Name="QualitySegments" Orientation="Horizontal" AutomationProperties.Name="Sound quality">
+                <RadioButton x:Name="QualityStd" Style="{StaticResource Radio.Segment}" Content="Standard" Checked="Quality_Checked" AutomationProperties.Name="Sound quality standard" />
+                <RadioButton x:Name="QualityHigh" Style="{StaticResource Radio.Segment}" Content="High" Checked="Quality_Checked" AutomationProperties.Name="Sound quality high" />
+                <RadioButton x:Name="QualityLossless" Style="{StaticResource Radio.Segment}" Content="Lossless" Checked="Quality_Checked" AutomationProperties.Name="Sound quality lossless" />
+              </StackPanel>
+            </Border>
+          </DockPanel>
+          <TextBlock x:Name="QualityNote" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed" />
+          <Border Height="4" />
           <!-- the volume: the speaker mutes, the slider sets it (moving it unmutes) -->
           <DockPanel x:Name="FlyVolumeRow">
             <Button x:Name="MuteButton" DockPanel.Dock="Left" Style="{StaticResource Radio.Icon}" Content="&#xE767;" Margin="-4,0,0,0"

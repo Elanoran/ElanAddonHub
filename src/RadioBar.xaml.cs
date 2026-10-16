@@ -28,6 +28,8 @@ namespace ElansAddonHub
         const string GlyphVolume = "", GlyphMuted = "";
         const double MarqueeSpeed = 30, MarqueePauseSec = 2;   // px per second; the rest at each end
         readonly List<RadioButton> chips = new List<RadioButton>();
+        RadioButton[] qualitySegs;                      // Standard, High, Lossless (2.77)
+        public Action<RadioQuality> QualityPicked;      // the window stores it as Settings' Sound quality and applies it (null: the player alone)
 
         public RadioBar()
         {
@@ -50,6 +52,8 @@ namespace ElansAddonHub
             fade.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
             marqueeMask = fade;
             IsVisibleChanged += (s, e) => Refresh();
+            qualitySegs = new[] { QualityStd, QualityHigh, QualityLossless };
+            for (int i = 0; i < qualitySegs.Length; i++) qualitySegs[i].Tag = (RadioQuality)i;
         }
 
         readonly Brush marqueeMask;
@@ -95,6 +99,7 @@ namespace ElansAddonHub
         {
             bool was = loading; loading = true;
             foreach (var chip in chips) chip.IsChecked = chip.Tag == c;
+            if (player != null) foreach (var seg in qualitySegs) seg.IsChecked = (RadioQuality)seg.Tag == player.Quality;
             loading = was;
         }
 
@@ -113,7 +118,7 @@ namespace ElansAddonHub
                     var why = player.Quality == RadioQuality.Lossless && cc.Flac == null ? " " + cc.Name + " has no lossless stream: it plays High." : "";
                     chip.ToolTip = "Switch to " + cc.Name + " (this session; the favourite is in Settings > General)." + why;
                 }
-            string note = stream?.Note != null ? " " + Capital(stream.Note) + ": playing " + stream.Label + "." : "";
+            RefreshQuality();
             string glyph = "", tip = "Play Radio Paradise · " + ch, now = null, status = null;
             bool retry = false;
             switch (player.State)
@@ -121,8 +126,8 @@ namespace ElansAddonHub
                 case RadioState.Connecting:
                     glyph = ""; tip = "Pause"; now = player.Attempt > 0 ? "Reconnecting..." : "Connecting..."; status = now; break;
                 case RadioState.Playing:
-                    glyph = ""; tip = "Pause"; now = player.Title ?? "Radio Paradise · " + ch; status = "Playing " + ch + ", live" + (label != null && label != "Standard" ? " (" + label + ")" : "") + "." + note
-                        + (player.Title == null && stream?.Format == RadioFormat.Flac ? " This stream sends no song titles." : ""); break;
+                    glyph = ""; tip = "Pause"; now = player.Title ?? "Radio Paradise · " + ch; status = "Playing " + ch + ", live" + (label != null && label != "Standard" ? " (" + label + ")" : "") + "."
+                        + (player.Title == null && stream?.Format == RadioFormat.Flac ? " This stream sends no song titles or covers; Standard and High show them." : ""); break;
                 case RadioState.Waiting:
                     glyph = ""; tip = "Stop trying"; now = "Reconnecting...";
                     status = "Lost the stream. Trying again in " + Math.Max(1, (int)Math.Round(player.NextWait.TotalSeconds)) + " s (try " + player.Attempt + " of " + RadioParadise.MaxTries + ")."; break;
@@ -133,7 +138,7 @@ namespace ElansAddonHub
                     now = "Can't play this";
                     if (player.LastError != null && player.LastError.StartsWith("this PC can't play", StringComparison.Ordinal))
                         status = "Can't play this format on this PC: " + player.LastError.Substring("this PC can't play ".Length) + "."
-                            + (player.Channel.Flac != null && player.Quality != RadioQuality.Lossless ? " Lossless plays here (Settings > General > Sound quality)." : "");
+                            + (player.Channel.Flac != null && player.Quality != RadioQuality.Lossless ? " Lossless plays here: pick it under Quality above." : "");
                     else status = "This stream can't be played here" + (player.LastError != null ? " (" + player.LastError + ")." : ".");
                     break;
                 case RadioState.NoDevice:
@@ -168,6 +173,41 @@ namespace ElansAddonHub
             MuteButton.Content = muted ? GlyphMuted : GlyphVolume;
             MuteButton.ToolTip = player.Muted ? "Unmute" : "Mute";
             System.Windows.Automation.AutomationProperties.SetName(MuteButton, player.Muted ? "Unmute the radio" : "Mute the radio");
+        }
+
+        // 2.77: the quality segments. Each says what it plays on this channel; one the channel lacks (Radio 2050: Lossless; Serenity: High is its
+        // 64k stream) or this PC can't decode is dimmed, its tooltip says what plays instead, and the note under the row says it for the chosen one.
+        void RefreshQuality()
+        {
+            string chosenNote = null;
+            foreach (var seg in qualitySegs)
+            {
+                var q = (RadioQuality)seg.Tag;
+                var plan = player.PlanFor(q);
+                string name = QualityLabel(q), what = q == RadioQuality.Lossless ? "FLAC, about 1 Mbit/s" : q == RadioQuality.High ? "AAC 320 kbit/s" : "MP3 192 kbit/s";
+                string why = null;
+                if (plan == null) why = "This PC can't play " + player.Channel.Name + "'s " + RadioParadise.QualityName(q) + " stream.";
+                else if (plan.Label != name)
+                    why = Capital(plan.Note ?? player.Channel.Name + " has no " + RadioParadise.QualityName(q) + " stream") + ": it plays " + plan.Label
+                        + (plan.Format == RadioFormat.Aac && plan.Label == "Standard" ? " (AAC 64 kbit/s)" : "") + ".";
+                else if (plan.Format == RadioFormat.Aac && q == RadioQuality.Standard) what = "AAC 64 kbit/s, " + player.Channel.Name + "'s only lossy stream";
+                seg.ToolTip = why ?? name + ": " + what + ".";
+                System.Windows.Automation.AutomationProperties.SetHelpText(seg, why ?? "");
+                if (why != null) seg.SetResourceReference(ForegroundProperty, "Brush.Text.Tertiary"); else seg.ClearValue(ForegroundProperty);
+                if (q == player.Quality) chosenNote = why;
+            }
+            QualityNote.Text = chosenNote ?? "";
+            QualityNote.Visibility = chosenNote != null ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        static string QualityLabel(RadioQuality q) => q == RadioQuality.Lossless ? "Lossless" : q == RadioQuality.High ? "High" : "Standard";
+
+        // a quality picked here is the Settings value (saved), switched at once; while it plays the old stream closes before the new one opens
+        void Quality_Checked(object sender, RoutedEventArgs e)
+        {
+            if (loading || player == null || qualitySegs == null || !(((RadioButton)sender).Tag is RadioQuality q) || q == player.Quality) return;
+            if (QualityPicked != null) QualityPicked(q); else player.SetQuality(q);
+            Refresh();
         }
 
         static string Capital(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
@@ -336,5 +376,10 @@ namespace ElansAddonHub
         public void ClickSupportForTest() => Support_Click(null, null);
         public void ClickRpLinkForTest() => RpLink_Click(null, null);
         public FrameworkElement ChipForTest => Chip;
+        public IReadOnlyList<RadioButton> QualitySegmentsForTest => qualitySegs;
+        public RadioQuality? CheckedQualityForTest => qualitySegs.FirstOrDefault(s => s.IsChecked == true)?.Tag as RadioQuality?;
+        public string QualityNoteForTest => QualityNote.Visibility == Visibility.Visible ? QualityNote.Text : "";
+        public bool QualityDimmedForTest(RadioQuality q) => qualitySegs[(int)q].ReadLocalValue(ForegroundProperty) != DependencyProperty.UnsetValue;
+        public void PickQualityForTest(RadioQuality q) => qualitySegs[(int)q].IsChecked = true;
     }
 }

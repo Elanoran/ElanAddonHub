@@ -51,7 +51,7 @@ namespace ElansAddonHub.Services
         // without extra components); High the AAC 320k one and Lossless the FLAC one ("flacbg", Radio Paradise's FLAC for background listening),
         // both decoded with what Windows has (RadioDecoders.cs). Formats as the streams send them (checked 2026-10): mp3-192 audio/mpeg; aac-320 and
         // serenity audio/aac (ADTS; serenity is HE-AAC 64k), both with ICY titles; flacbg and serenity-flac application/ogg (Ogg FLAC 44.1 kHz
-        // 16 bit, no icy-metaint: no ICY titles).
+        // 16 bit, no icy-metaint: no ICY titles; 2.77: and no per-song Ogg links or comments either - see RadioFlac.cs).
         public static readonly RadioChannel[] Channels =
         {
             Ch("main", "Main Mix", "mp3-192", "aac-320", "flacbg", "aac-128", "mp3-192", "aac-320", "flacbg"),

@@ -10,6 +10,8 @@ Keep one `## x.y.z` section per hub version.
 - **All side menus have the same width.** The Atlas, Settings, Characters and Lodge menus are now equally wide, and the search box in the title bar ends right where they end.
 
 ## 2.77.0
+- **Radio: pick the sound quality in the player.** The radio's pop-out (click the song) now has a Quality row: Standard, High or Lossless. It is the same setting as in Settings, so changing it in one place changes the other, and while music plays it switches at once. A quality the channel doesn't have is dimmed and says what plays instead (Radio 2050 has no Lossless, so it plays High).
+- **Radio: song titles on Lossless.** We listened closely: Radio Paradise's lossless (FLAC) streams send no song titles and no covers at all, so the player can't show them there. The pop-out now says so plainly; Standard and High show the song and its cover as before.
 - **Talents: a cleaner top.** The "Plan a build for any class" line above the talent trees is gone; the class buttons say it all.
 - **Talents: the hint under the trees is right now.** It reads: click a talent to add a point, right-click to take one back, Ctrl+click to open its spell page. With the keyboard, Enter or + adds a point and Delete or - takes one back (the + and - keys next to Backspace work too now, not only the ones on the number pad).
 - **Talents: Open in Seemeta.** A new button opens the class and the build on screen in Seemeta's WoW Forever talent calculator, in the Outpost browser. Only the class and the talent ranks go into the address.
