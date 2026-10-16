@@ -14,6 +14,7 @@ namespace ElansAddonHub
             if (RadioFavBox.Items.Count == 0) foreach (var c in RadioParadise.Channels) RadioFavBox.Items.Add(c);
             RadioBox.IsChecked = !s.RadioOff;
             RadioFavBox.SelectedItem = RadioParadise.Channel(s.RadioChannel);
+            RadioCoversBox.IsChecked = !s.RadioNoCovers;
             RadioDuckSlider.Value = s.RadioDuck ?? 0.3;
             RadioDuckText.Text = Math.Round(RadioDuckSlider.Value * 100) + " %";
         }
@@ -22,6 +23,15 @@ namespace ElansAddonHub
         {
             if (loading || settings == null) return;
             settings.RadioOff = RadioBox.IsChecked != true;
+            SettingsStore.Save(settings);
+            host.ApplyRadioSettings();
+        }
+
+        // covers and song details (2.72.2): off = RadioNowPlaying asks nothing
+        void RadioCovers_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading || settings == null) return;
+            settings.RadioNoCovers = RadioCoversBox.IsChecked != true;
             SettingsStore.Save(settings);
             host.ApplyRadioSettings();
         }
@@ -45,6 +55,7 @@ namespace ElansAddonHub
 
         // ---- for the self-test
         public void SetRadioForTest(bool on) { RadioBox.IsChecked = on; Radio_Click(RadioBox, null); }
+        public void SetRadioCoversForTest(bool on) { RadioCoversBox.IsChecked = on; RadioCovers_Click(RadioCoversBox, null); }
         public void SetRadioFavouriteForTest(string id) => RadioFavBox.SelectedItem = RadioParadise.Channel(id);
         public void SetRadioDuckForTest(double v) => RadioDuckSlider.Value = v;
         public string RadioFavouriteForTest => (RadioFavBox.SelectedItem as RadioChannel)?.Id;

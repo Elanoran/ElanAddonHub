@@ -8,8 +8,9 @@ namespace ElansAddonHub.Services
 {
     // --selftest "radio": the Radio Paradise mini player in the title bar (Outpost 2.72). This file holds the rules that come from Radio Paradise's own
     // pages (radioparadise.com/listen/stream-links), the ICY stream reader, the reconnect backoff and the ducking curve; RadioPlayer.cs plays.
-    //   - only the published stream links: https://stream.radioparadise.com/<path>, nothing else (no api.radioparadise.com, no audio.radioparadise.stream,
-    //     no now_playing API); the track title comes only from the stream's own ICY metadata (Icy-MetaData: 1, icy-metaint, StreamTitle='...';)
+    //   - only the published stream links: https://stream.radioparadise.com/<path>, nothing else (no get_block, no audio.radioparadise.stream); the
+    //     track title comes from the stream's own ICY metadata (Icy-MetaData: 1, icy-metaint, StreamTitle='...';). The cover, album and year (2.72.2)
+    //     come from api.radioparadise.com/api/now_playing, once per song and never polled: see RadioNowPlaying.cs
     //   - one connection, opened only on Play, closed on Pause / Stop / exit; reconnect only while the user wants playback (2, 4, 8 ... s up to 5 min,
     //     with jitter, 10 tries, then Retry)
     //   - attribution "Radio Paradise · <channel>" linked to radioparadise.com and "Support Radio Paradise" (donate); no logo, never called official
@@ -17,6 +18,7 @@ namespace ElansAddonHub.Services
     {
         public string Id, Name, Path;      // Path = the stream link the player uses (MP3 192k; Serenity only has its 64k stream and FLAC)
         public string[] Published;         // every stream link Radio Paradise publishes for this channel
+        public int? ApiChan;               // the channel number of api.radioparadise.com (its list_chan); null = no song details for this channel
         public override string ToString() => Name;
     }
 
@@ -28,20 +30,23 @@ namespace ElansAddonHub.Services
         public const string ProjectUrl = "https://github.com/Elanoran/ElanAddonHub";
         public const string DefaultChannel = "main";
 
-        static RadioChannel Ch(string id, string name, string path, params string[] published) => new RadioChannel { Id = id, Name = name, Path = path, Published = published };
+        static RadioChannel Ch(string id, string name, int? api, string path, params string[] published) => new RadioChannel { Id = id, Name = name, ApiChan = api, Path = path, Published = published };
 
         // the channels and their published links (radioparadise.com/listen/stream-links); the player uses MP3 192k because Windows decodes it without
-        // extra components (see RadioPlayer); AAC / FLAC links are listed so the allow-list matches the page exactly
+        // extra components (see RadioPlayer); AAC / FLAC links are listed so the allow-list matches the page exactly.
+        // The API channel numbers are the ones radioparadise.com's own player uses (its list_chan answer, checked 2026-10-16: 0 main-mix, 1 mellow,
+        // 2 rock, 3 global, 5 beyond, 42 serenity, 945 kfat). Radio 2050 ("2050" in the site's code) is a talk-and-music show whose now_playing has
+        // no artist or title, so it gets no song details.
         public static readonly RadioChannel[] Channels =
         {
-            Ch("main", "Main Mix", "mp3-192", "aac-128", "mp3-192", "aac-320", "flacbg"),
-            Ch("mellow", "Mellow", "mellow-192", "mellow-128", "mellow-192", "mellow-320", "mellow-flacbg"),
-            Ch("rock", "Rock", "rock-192", "rock-128", "rock-192", "rock-320", "rock-flacbg"),
-            Ch("global", "Global", "global-192", "global-128", "global-192", "global-320", "global-flacbg"),
-            Ch("beyond", "Beyond", "beyond-192", "beyond-128", "beyond-192", "beyond-320", "beyond-flacbg"),
-            Ch("radio2050", "Radio 2050", "radio2050-192", "radio2050-128", "radio2050-192", "radio2050-320"),
-            Ch("kfat", "KFAT", "kfat-192", "kfat-128", "kfat-192", "kfat-320", "kfat-flacbg"),
-            Ch("serenity", "Serenity", "serenity", "serenity", "serenity-flac"),
+            Ch("main", "Main Mix", 0, "mp3-192", "aac-128", "mp3-192", "aac-320", "flacbg"),
+            Ch("mellow", "Mellow", 1, "mellow-192", "mellow-128", "mellow-192", "mellow-320", "mellow-flacbg"),
+            Ch("rock", "Rock", 2, "rock-192", "rock-128", "rock-192", "rock-320", "rock-flacbg"),
+            Ch("global", "Global", 3, "global-192", "global-128", "global-192", "global-320", "global-flacbg"),
+            Ch("beyond", "Beyond", 5, "beyond-192", "beyond-128", "beyond-192", "beyond-320", "beyond-flacbg"),
+            Ch("radio2050", "Radio 2050", null, "radio2050-192", "radio2050-128", "radio2050-192", "radio2050-320"),
+            Ch("kfat", "KFAT", 945, "kfat-192", "kfat-128", "kfat-192", "kfat-320", "kfat-flacbg"),
+            Ch("serenity", "Serenity", 42, "serenity", "serenity", "serenity-flac"),
         };
 
         public static RadioChannel Channel(string id) => Channels.FirstOrDefault(c => c.Id == id) ?? Channels[0];

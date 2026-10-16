@@ -15,20 +15,23 @@ namespace ElansAddonHub
     public partial class MainWindow
     {
         public RadioPlayer Radio { get; private set; }
+        public RadioNowPlaying RadioSongs { get; private set; }   // the cover, album and year (2.72.2): one request per song, see RadioNowPlaying
         readonly RadioDucker radioDucker = new RadioDucker();
         DispatcherTimer duckTimer;
         readonly Stopwatch duckClock = Stopwatch.StartNew();
         public Func<bool?> RadioSpeechForTest;          // self-test: who is talking in my voice room (null = not in one)
-        public const double RadioWideFrom = 1100, RadioMediumFrom = 900, GameDataChipRoom = 280, RadioFullRow = 200;
+        public const double RadioWideFrom = 1100, RadioMediumFrom = 900, GameDataChipRoom = 280, RadioFullRow = 310;
 
         void InitRadio()
         {
             Radio = new RadioPlayer { Volume = (float)(settings.RadioVolume ?? 0.6) };
             Radio.SetChannel(RadioParadise.Channel(settings.RadioChannel).Id);   // the favourite, pre-selected; never plays by itself
             radioDucker.Level = settings.RadioDuck ?? 0.3;
+            RadioSongs = new RadioNowPlaying();
             RadioPlayerBar.OpenLink = OpenAtlasLink;
-            RadioPlayerBar.Init(Radio, settings);
+            RadioPlayerBar.Init(Radio, settings, RadioSongs);
             Radio.Changed += RadioChanged;
+            RadioSongs.Changed += () => LayoutTitleBar();   // a cover / a longer title can change the chip's width
             RadioPlayerBar.SizeChanged += (s, e) => LayoutTitleBar();
             GameDataBar.IsVisibleChanged += (s, e) => LayoutTitleBar();   // the chip takes its room back from the radio's title while it is up
             ((FrameworkElement)TitleSearch.Parent).SizeChanged += (s, e) => LayoutTitleBar();
@@ -52,12 +55,17 @@ namespace ElansAddonHub
             if (settings.RadioOff) Radio.Stop();
             else if (!Radio.WantsPlayback) Radio.SetChannel(RadioParadise.Channel(settings.RadioChannel).Id);   // a new favourite shows at once while nothing plays
             RadioPlayerBar.Visibility = settings.RadioOff ? Visibility.Collapsed : Visibility.Visible;
+            UpdateRadioSong();
             LayoutTitleBar();
         }
+
+        // the song details: asked for only while it plays and only when Settings allows it (RadioNowPlaying keeps the one-per-song and 15 s rules)
+        void UpdateRadioSong() => RadioSongs?.Update(Radio.Channel, Radio.Title, Radio.State == RadioState.Playing, !settings.RadioOff && !settings.RadioNoCovers);
 
         // the ducking runs only while the radio wants to play (nothing ticks otherwise)
         void RadioChanged()
         {
+            UpdateRadioSong();
             bool on = Radio.WantsPlayback;
             if (on && duckTimer == null)
             {

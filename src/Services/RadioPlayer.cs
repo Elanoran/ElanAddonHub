@@ -51,7 +51,9 @@ namespace ElansAddonHub.Services
         // ---- volume: the slider (0..1, a squared curve so the low end is usable) times the ducking factor
         public float Volume { get => volume; set { volume = Math.Max(0, Math.Min(1, value)); ApplyGain(); } }
         public float Duck { get => duck; set { duck = Math.Max(0, Math.Min(1, value)); ApplyGain(); } }
-        public float Gain => volume * volume * duck;
+        public bool Muted { get => muted; set { muted = value; ApplyGain(); } }   // the speaker in the title bar (this session only; the volume is kept)
+        bool muted;
+        public float Gain => muted ? 0 : volume * volume * duck;
         void ApplyGain() { var g = gain; if (g != null) g.Target = Gain; }
 
         public void SetChannel(string id)

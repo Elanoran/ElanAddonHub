@@ -17,8 +17,10 @@ namespace ElansAddonHub
     // --selftest "radio" (Outpost 2.72): the Radio Paradise player against a local fake ICY server (127.0.0.1, MP3 frames in a loop, icy-metaint, a
     // StreamTitle that changes). Never the real stream: a self-test player only opens loopback addresses (RadioPlayer.UrlAllowed) and plays into a
     // NullOutput. Covers the published-link allow-list, the User-Agent and Icy-MetaData header, one connection on Play and none at start, Pause closing
-    // it, the title, the reconnect waits and Retry, the favourite channel, the ducking curve, the Settings switch, the title bar layout. Pictures
-    // with ELANSHUB_SHOTS=1.
+    // it, the title, the reconnect waits and Retry, the favourite channel, the ducking curve, the Settings switch, the title bar layout. 2.72.2: the
+    // covers and song details against a local fake now_playing + cover server (FakeNowPlayingServer, never api.radioparadise.com): once per song,
+    // only while playing, 15 s apart, the host allow-list, a mismatch / failure / redirect shows no cover, the memory and disk caches, the Settings
+    // switch; the inline volume slider and mute. Pictures with ELANSHUB_SHOTS=1.
     public partial class MainWindow
     {
         async Task<string> RadioTest(string dir)
@@ -27,10 +29,11 @@ namespace ElansAddonHub
             bool ok = true;
             void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); ok &= cond; }
             string P(string n) => Path.Combine(dir, n);
-            var hadOff = settings.RadioOff; var hadFav = settings.RadioChannel; var hadDuck = settings.RadioDuck; var hadVol = settings.RadioVolume;
+            var hadOff = settings.RadioOff; var hadFav = settings.RadioChannel; var hadDuck = settings.RadioDuck; var hadVol = settings.RadioVolume; var hadNoCovers = settings.RadioNoCovers;
             var hadLink = RadioPlayerBar.OpenLink;
             var w0 = Width; var h0 = Height;
             FakeIcyServer srv = null;
+            FakeNowPlayingServer np = null;
             try
             {
                 // ============================================================================================ before anything: nothing connected
@@ -60,6 +63,53 @@ namespace ElansAddonHub
                     System.Text.RegularExpressions.Regex.IsMatch(RadioParadise.UserAgent, @"^ElansOutpost/\d+\.\d+\.\d+ \(\+https://github\.com/Elanoran/ElanAddonHub\)$") && RadioParadise.UserAgent.Contains(App.Version), RadioParadise.UserAgent);
                 Check("a self-test player opens only loopback addresses (never the real stream)",
                     !Radio.UrlAllowed("https://stream.radioparadise.com/mp3-192") && Radio.UrlAllowed("http://127.0.0.1:5000/mp3-192") && RadioPlayer.SelfTestRun);
+
+                // ---- covers and song details: the rules (2.72.2)
+                {
+                    var map = string.Join(",", RadioParadise.Channels.Select(c => c.Id + "=" + (c.ApiChan?.ToString() ?? "-")));
+                    Check("covers: API channel numbers as radioparadise.com's own list_chan (Radio 2050 has none)", map == "main=0,mellow=1,rock=2,global=3,beyond=5,radio2050=-,kfat=945,serenity=42", map);
+                    Check("covers: the API address is https://api.radioparadise.com/api/now_playing?chan=N", RadioNowPlaying.ApiUrl(1) == "https://api.radioparadise.com/api/now_playing?chan=1" && RadioNowPlaying.IsAllowedApiUrl(RadioNowPlaying.ApiUrl(945)));
+                    var badApi = new[]
+                    {
+                        "http://api.radioparadise.com/api/now_playing?chan=1", "https://api.radioparadise.com:8443/api/now_playing?chan=1", "https://api.radioparadise.com/api/get_block?bitrate=4&info=true",
+                        "https://api.radioparadise.com/api/now_playing?chan=1&x=2", "https://api.radioparadise.com/api/now_playing", "https://api.radioparadise.com.evil.example/api/now_playing?chan=1",
+                        "https://audio.radioparadise.stream/api/now_playing?chan=1", "https://user@api.radioparadise.com/api/now_playing?chan=1", "https://img.radioparadise.com/api/now_playing?chan=1", "", null
+                    };
+                    var letApi = badApi.Where(RadioNowPlaying.IsAllowedApiUrl).ToList();
+                    Check("covers: any other API address is refused (http, ports, get_block, other paths / hosts, look-alikes)", letApi.Count == 0, string.Join(" ", letApi));
+                    var goodImg = new[] { "https://img.radioparadise.com/covers/s/24351.jpg", "https://img.radioparadise.com/covers/m/24351.jpg", "https://img.radioparadise.com/covers/l/1.png" };
+                    var badImg = new[]
+                    {
+                        "http://img.radioparadise.com/covers/s/1.jpg", "https://img.radioparadise.com.evil.example/covers/s/1.jpg", "https://evil.example/img.radioparadise.com/covers/s/1.jpg",
+                        "https://img.radioparadise.com:444/covers/s/1.jpg", "https://img.radioparadise.com/covers/s/1.jpg?x=1", "https://img.radioparadise.com/covers/s/1.exe",
+                        "https://api.radioparadise.com/covers/s/1.jpg", "https://user@img.radioparadise.com/covers/s/1.jpg", "file:///C:/covers/1.jpg", "", null
+                    };
+                    var letImg = badImg.Where(RadioNowPlaying.IsAllowedCoverUrl).ToList();
+                    Check("covers: only https://img.radioparadise.com/... pictures are fetched", goodImg.All(RadioNowPlaying.IsAllowedCoverUrl) && letImg.Count == 0, string.Join(" ", letImg));
+                    Check("covers: the API's artist + title must match the stream's title (case, accents, punctuation ignored)",
+                        RadioNowPlaying.Matches("Guns N' Roses - Paradise City", "Guns N’ Roses", "Paradise City") && RadioNowPlaying.Matches("Bjork - Joga", "Björk", "Jóga")
+                        && !RadioNowPlaying.Matches("Air - La femme d'argent", "Air", "Sexy Boy") && !RadioNowPlaying.Matches("Air - Sexy Boy", "Moby", "Sexy Boy") && !RadioNowPlaying.Matches("Air - ", "Air", ""));
+                    Check("covers: at most one request every 15 s by default", RadioNowPlaying.DefaultGap == TimeSpan.FromSeconds(15) && new RadioNowPlaying().Gap == TimeSpan.FromSeconds(15));
+                    Check("covers: on by default", !new Settings().RadioNoCovers);
+                    var lone = new RadioNowPlaying();
+                    lone.Update(RadioParadise.Channel("main"), "Miles Davis - So What", true, true);
+                    Check("covers: a self-test without the fake server asks nobody (api.radioparadise.com is never reached)",
+                        await Until(() => lone.LastOutcome == "refused", 3000) && lone.ApiRequests == 0 && lone.Refused.Contains(RadioNowPlaying.ApiUrl(0)), lone.LastOutcome);
+                    var r2050 = new RadioNowPlaying();
+                    r2050.Update(RadioParadise.Channel("radio2050"), "Radio 2050 - Episode", true, true);
+                    await Task.Delay(100);
+                    Check("covers: Radio 2050 (no song details from the API) asks nothing", r2050.LastOutcome == "no-channel" && r2050.ApiRequests == 0 && r2050.Refused.Count == 0, r2050.LastOutcome);
+                    // the disk cache keeps the newest 200 pictures
+                    var pd = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "radio-prune-" + Guid.NewGuid().ToString("N"))).FullName;
+                    try
+                    {
+                        for (int i = 0; i < 205; i++) { var f = Path.Combine(pd, i.ToString("000") + ".img"); File.WriteAllBytes(f, new byte[] { 1 }); File.SetLastWriteTimeUtc(f, DateTime.UtcNow.AddMinutes(-1000 + i)); }
+                        RadioNowPlaying.Prune(pd, RadioNowPlaying.CacheFiles);
+                        var left = Directory.GetFiles(pd).Select(Path.GetFileName).OrderBy(x => x).ToList();
+                        Check("covers: the disk cache keeps the newest 200 pictures (the oldest go)", left.Count == 200 && left[0] == "005.img" && RadioNowPlaying.CacheFiles == 200, left.Count + " " + left.FirstOrDefault());
+                    }
+                    finally { try { Directory.Delete(pd, true); } catch { } }
+                }
 
                 // ---- ICY metadata
                 Check("title: StreamTitle='Artist - Title'; is read", RadioParadise.ParseStreamTitle("StreamTitle='Air - La femme d''argent';StreamUrl='';") != null
@@ -137,6 +187,13 @@ namespace ElansAddonHub
                 srv = new FakeIcyServer();
                 Radio.TestBaseUrl = "http://127.0.0.1:" + srv.Port + "/";
                 Radio.Rnd = new Random(3);
+                var fakeSrv = srv;
+                np = new FakeNowPlayingServer(() => fakeSrv.LastTitle);
+                RadioSongs.TestBaseUrl = "http://127.0.0.1:" + np.Port + "/";
+                RadioSongs.Gap = TimeSpan.FromMilliseconds(1500);   // the 15 s rule, faster (the same logic)
+                RadioSongs.CoverDirOverride = Path.Combine(dir, "radio-covers");
+                RadioSongs.ForgetForTest(true); RadioSongs.ResetGapForTest();
+                Check("covers: nothing is asked before Play", np.ApiRequests == 0 && RadioSongs.ApiRequests == 0);
                 RadioPlayerBar.PlayButtonForTest.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
                 Check("Play: connects, decodes and plays", await Until(() => Radio.State == RadioState.Playing && Radio.DecodedBytes > 0, 8000), Radio.State + " " + Radio.LastError);
                 Check("Play: one connection", srv.Connections == 1 && Radio.ConnectionsOpened == 1, srv.Connections + "");
@@ -149,6 +206,106 @@ namespace ElansAddonHub
                     Radio.Title + " / " + RadioPlayerBar.NowTextForTest);
                 var firstTitle = Radio.Title;
                 Check("title: follows the stream when the song changes", await Until(() => Radio.Title != null && Radio.Title != firstTitle, 8000), firstTitle + " -> " + Radio.Title);
+
+                // ============================================================================================ covers and song details (fake now_playing)
+                {
+                    const string pf = "Pink Floyd - Wish You Were Here";
+                    // the fake stream at real-time pace on a fresh connection: a title reaches the player within a moment (as on the real stream),
+                    // not after the seconds of audio a faster-than-real-time server queues up
+                    Radio.Stop(); await Until(() => srv.Open == 0, 4000);
+                    srv.RealTime = true; srv.FixedTitle = pf;
+                    Radio.Play();
+                    await Until(() => Radio.Title == pf, 12000);
+                    Check("covers: the playing song gets its cover in the title bar (from the API, matched to the stream's title)",
+                        await Until(() => RadioPlayerBar.CoverShownForTest && RadioSongs.Current?.Matched == true && RadioSongs.Current.StreamTitle == pf, 8000),
+                        RadioSongs.LastOutcome + " / " + RadioSongs.Current?.StreamTitle);
+                    Check("covers: the title still comes from the stream, next to the cover", RadioPlayerBar.NowTextForTest == pf, RadioPlayerBar.NowTextForTest);
+                    var pfReq = np.Api.LastOrDefault(r => r.Answered == pf);
+                    Check("covers: GET /api/now_playing?chan=2 (Rock) with the stream's User-Agent",
+                        pfReq != null && pfReq.Path == "/api/now_playing?chan=2" && pfReq.Head.IndexOf("\nUser-Agent: " + RadioParadise.UserAgent + "\r", StringComparison.Ordinal) >= 0, pfReq?.Path);
+                    int apiAt = np.ApiRequests, imgAt = np.ImageRequests, blocksAt = srv.Blocks;
+                    await Task.Delay(2500);
+                    Check("covers: one request per song, not per metadata block (same title for many blocks: no more requests)",
+                        np.ApiRequests == apiAt && np.ImageRequests == imgAt && np.Api.Count(r => r.Answered == pf) == 1 && srv.Blocks - blocksAt >= 5, $"api {apiAt}->{np.ApiRequests} blocks {srv.Blocks - blocksAt}");
+                    Check("covers: the small and the larger cover, from img.radioparadise.com paths", np.Images.Count(p => p.StartsWith("/covers/s/")) >= 1 && np.Images.Count(p => p.StartsWith("/covers/m/")) >= 1, string.Join(" ", np.Images));
+                    var apiTimes = np.Api.Select(r => r.At).ToList();
+                    var gaps = apiTimes.Zip(apiTimes.Skip(1), (a, b) => (b - a).TotalMilliseconds).ToList();
+                    Check("covers: requests are never closer than the gap (15 s in the app; 1.5 s here), even while titles change fast", gaps.All(g => g >= 1450),
+                        string.Join(", ", gaps.Select(g => g.ToString("0"))));
+                    // the flyout: larger cover, title, artist, album and year
+                    RadioPlayerBar.FlyoutForTest.IsOpen = true; await Settle();
+                    Check("flyout: the larger cover, the title, the artist, album and year",
+                        RadioPlayerBar.FlyCoverShownForTest && RadioPlayerBar.FlyTitleForTest == "Wish You Were Here" && RadioPlayerBar.FlyArtistForTest == "Pink Floyd" && RadioPlayerBar.FlyAlbumForTest == "Wish You Were Here · 1975"
+                        && RadioPlayerBar.RpLinkTextForTest == "Radio Paradise · Rock",
+                        $"'{RadioPlayerBar.FlyTitleForTest}' '{RadioPlayerBar.FlyArtistForTest}' '{RadioPlayerBar.FlyAlbumForTest}' cover {RadioPlayerBar.FlyCoverShownForTest}");
+                    RadioPlayerBar.FlyoutForTest.IsOpen = false;
+                    RadioPlayerBar.SongButtonForTest.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                    Check("flyout: a click on the song (cover / title) opens it", RadioPlayerBar.FlyoutForTest.IsOpen);
+                    RadioPlayerBar.FlyoutForTest.IsOpen = false;
+
+                    // the next song gets its own details
+                    const string md = "Miles Davis - So What";
+                    srv.FixedTitle = md; await Until(() => Radio.Title == md, 12000);
+                    Check("covers: the next song gets its own cover and details", await Until(() => RadioSongs.Current?.Matched == true && RadioSongs.Current.StreamTitle == md && RadioPlayerBar.CoverShownForTest, 6000)
+                        && RadioSongs.Current.Album == "Kind of Blue", RadioSongs.LastOutcome);
+
+                    // a song heard before: no request at all
+                    await Task.Delay(1600);
+                    int api1 = np.ApiRequests, img1 = np.ImageRequests;
+                    srv.FixedTitle = pf; await Until(() => Radio.Title == pf, 8000);
+                    Check("cache: a song heard before shows its cover at once", await Until(() => RadioPlayerBar.CoverShownForTest && RadioSongs.Current?.StreamTitle == pf, 1000) && RadioSongs.LastOutcome == "cached", RadioSongs.LastOutcome);
+                    await Task.Delay(1800);
+                    Check("cache: ... without asking the API or fetching the picture again", np.ApiRequests == api1 && np.ImageRequests == img1, $"api {api1}->{np.ApiRequests} img {img1}->{np.ImageRequests}");
+
+                    // the API is ahead of / behind the stream: no cover, the stream's text
+                    np.Mode = "mismatch";
+                    const string air = "Air - La Femme d'Argent";
+                    int api2 = np.ApiRequests;
+                    srv.FixedTitle = air; await Until(() => Radio.Title == air, 8000);
+                    Check("mismatch: the API names another song -> no cover, the stream's title", await Until(() => np.ApiRequests > api2 && RadioSongs.LastOutcome == "mismatch", 6000)
+                        && !RadioPlayerBar.CoverShownForTest && RadioPlayerBar.NowTextForTest == air && RadioSongs.Current?.Matched == false, RadioSongs.LastOutcome);
+                    RadioPlayerBar.FlyoutForTest.IsOpen = true; await Settle();
+                    Check("mismatch: the flyout shows the stream's text, no album, the music note instead of a cover",
+                        RadioPlayerBar.FlyTitleForTest == air && RadioPlayerBar.FlyArtistForTest == "" && RadioPlayerBar.FlyAlbumForTest == "" && !RadioPlayerBar.FlyCoverShownForTest);
+                    if (SelfTestClock.ShotsOn) { await ShotWait(400); SnapshotElement(RadioPlayerBar.FlyCardForTest, P("radio-flyout-nocover.png")); }
+                    RadioPlayerBar.FlyoutForTest.IsOpen = false;
+
+                    // failures: an error, a redirect, covers on other hosts
+                    np.Mode = "fail";
+                    const string bon = "Bonobo - Kerala";
+                    int api3 = np.ApiRequests;
+                    srv.FixedTitle = bon; await Until(() => Radio.Title == bon, 8000);
+                    Check("failure: the API answers 503 -> quietly no cover (the music note)", await Until(() => np.ApiRequests > api3 && RadioSongs.LastOutcome == "failed", 6000)
+                        && !RadioPlayerBar.CoverShownForTest && RadioPlayerBar.NowTextForTest == bon && Radio.State == RadioState.Playing, RadioSongs.LastOutcome);
+                    np.Mode = "redirect";
+                    const string ka = "Khruangbin - Maria También";
+                    int api4 = np.ApiRequests;
+                    srv.FixedTitle = ka; await Until(() => Radio.Title == ka, 8000);
+                    Check("failure: a redirect is never followed -> no cover", await Until(() => np.ApiRequests > api4 && RadioSongs.LastOutcome == "failed", 6000)
+                        && !RadioPlayerBar.CoverShownForTest && !np.Paths.Any(p => p.StartsWith("/elsewhere")), RadioSongs.LastOutcome + " " + string.Join(" ", np.Paths.Skip(Math.Max(0, np.Paths.Count - 3))));
+                    np.Mode = "evilcover";
+                    const string tt = "Tame Impala - The Less I Know the Better";
+                    int api5 = np.ApiRequests, img5 = np.ImageRequests, ref5 = RadioSongs.Refused.Count;
+                    srv.FixedTitle = tt; await Until(() => Radio.Title == tt, 8000);
+                    Check("allow-list: covers on other hosts / plain http are not fetched (details yes, picture no)",
+                        await Until(() => np.ApiRequests > api5 && RadioSongs.Current?.Matched == true && RadioSongs.Current.StreamTitle == tt, 6000)
+                        && np.ImageRequests == img5 && RadioSongs.Refused.Count - ref5 == 2 && !RadioPlayerBar.CoverShownForTest,
+                        $"img {img5}->{np.ImageRequests} refused {string.Join(" ", RadioSongs.Refused.Skip(ref5))}");
+                    np.Mode = "match";
+
+                    // the disk cache: a new session (memory forgotten) asks the API again but loads the picture from cache\radio-covers
+                    RadioSongs.ForgetForTest(true);
+                    int api6 = np.ApiRequests, img6 = np.ImageRequests;
+                    await Task.Delay(1600);
+                    srv.FixedTitle = pf; await Until(() => Radio.Title == pf, 8000);
+                    Check("disk cache: the cover comes from cache\\radio-covers (one API request, no picture request)",
+                        await Until(() => RadioPlayerBar.CoverShownForTest && RadioSongs.Current?.StreamTitle == pf, 6000) && np.ApiRequests == api6 + 1 && np.ImageRequests == img6
+                        && Directory.GetFiles(RadioSongs.CoverDir, "*.img").Length >= 2, $"api {api6}->{np.ApiRequests} img {img6}->{np.ImageRequests}");
+                    // the connection counts below are about the play / pause checks: this block's own reconnect does not count
+                    srv.RealTime = false;
+                    srv.Connections = 1;
+                    lock (srv.Requests) if (srv.Requests.Count > 1) srv.Requests.RemoveRange(1, srv.Requests.Count - 1);
+                }
                 Check("play button: shows Pause while playing", (string)RadioPlayerBar.PlayButtonForTest.Content == "" && (string)RadioPlayerBar.PlayButtonForTest.ToolTip == "Pause");
                 Check("ducking runs only while it plays", DuckTimerRunningForTest);
                 Check("the self-test plays into a NullOutput, never a sound device", RadioPlayer.SelfTestRun);
@@ -157,6 +314,7 @@ namespace ElansAddonHub
                 {
                     srv.FixedTitle = "Pink Floyd - Wish You Were Here";
                     await Until(() => Radio.Title == srv.FixedTitle, 8000);
+                    await Until(() => RadioPlayerBar.CoverShownForTest, 6000);
                     Width = 1280; Height = 760; await ShotWait(600);
                     Snapshot(P("radio-playing.png"));
                     RadioPlayerBar.FlyoutForTest.IsOpen = true; await ShotWait(500);
@@ -170,6 +328,10 @@ namespace ElansAddonHub
                     Snapshot(P("radio-and-progress.png"));
                     Width = 760; await ShotWait(600);
                     Snapshot(P("radio-narrow.png"));
+                    RadioPlayerBar.FlyoutForTest.IsOpen = true; await ShotWait(500);
+                    SnapshotElement(RadioPlayerBar.FlyCardForTest, P("radio-flyout-narrow.png"));
+                    RadioPlayerBar.FlyoutForTest.IsOpen = false;
+                    Width = 1280; await ShotWait(300);
                     GameDataProgress.End("radiotest"); GameDataProgress.ResetForTest();
                     srv.FixedTitle = null;
                 }
@@ -180,8 +342,20 @@ namespace ElansAddonHub
                 Check("flyout: 'Radio Paradise · <channel>' links to radioparadise.com, 'Support Radio Paradise' to /donate",
                     string.Join(" ", opened) == "https://radioparadise.com https://radioparadise.com/donate" && RadioPlayerBar.RpLinkTextForTest == "Radio Paradise · Rock" && hadLink != null, string.Join(" ", opened));
                 RadioPlayerBar.OpenLink = hadLink;
+                Width = Math.Max(Width, 1280); await Settle();
+                await Until(() => RadioPlayerBar.Mode != 2, 2000);
+                Check("volume: a slider right in the title bar (no button, no flyout needed)", RadioPlayerBar.InlineVolumeShownForTest && !RadioPlayerBar.FlyVolumeShownForTest
+                    && RadioPlayerBar.VolumeSliderForTest.ActualWidth >= 72 && RadioPlayerBar.VolumeSliderForTest.ActualWidth <= 88, "mode " + RadioPlayerBar.Mode + " w " + RadioPlayerBar.VolumeSliderForTest.ActualWidth);
                 RadioPlayerBar.VolumeSliderForTest.Value = 0.5;
-                Check("volume: the flyout's slider sets the gain (squared curve) and is remembered", Math.Abs(Radio.Volume - 0.5) < 0.001 && Math.Abs(Radio.Gain - 0.25) < 0.001 && settings.RadioVolume == 0.5);
+                Check("volume: the slider sets the gain (squared curve) and is remembered", Math.Abs(Radio.Volume - 0.5) < 0.001 && Math.Abs(Radio.Gain - 0.25) < 0.001 && settings.RadioVolume == 0.5
+                    && Math.Abs(RadioPlayerBar.FlyVolumeSliderForTest.Value - 0.5) < 0.001);
+                RadioPlayerBar.MuteButtonForTest.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Check("volume: the speaker mutes (gain 0, the volume is kept)", Radio.Muted && Radio.Gain == 0 && Math.Abs(Radio.Volume - 0.5) < 0.001 && (string)RadioPlayerBar.MuteButtonForTest.ToolTip == "Unmute");
+                RadioPlayerBar.MuteButtonForTest.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Check("volume: and again unmutes", !Radio.Muted && Math.Abs(Radio.Gain - 0.25) < 0.001 && (string)RadioPlayerBar.MuteButtonForTest.ToolTip == "Mute");
+                RadioPlayerBar.MuteButtonForTest.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                RadioPlayerBar.FlyVolumeSliderForTest.Value = 0.7; RadioPlayerBar.VolumeSliderForTest.Value = 0.5;
+                Check("volume: moving a slider unmutes; the flyout's slider (narrow window) is the same volume", !Radio.Muted && Math.Abs(Radio.Volume - 0.5) < 0.001 && Math.Abs(RadioPlayerBar.FlyVolumeSliderForTest.Value - 0.5) < 0.001);
 
                 // ---- ducking with the player (simulated speaking state of the voice room)
                 bool? talk = false;
@@ -202,6 +376,36 @@ namespace ElansAddonHub
                 Check("Pause: the HTTP connection is closed (the server sees it go)", await Until(() => srv.Open == 0, 4000) && Radio.State == RadioState.Stopped && !Radio.WantsPlayback, "open " + srv.Open);
                 await Task.Delay(700);
                 Check("Pause: no reconnect, no muted streaming in the background", srv.Connections == 1 && srv.Open == 0 && !DuckTimerRunningForTest, srv.Connections + "");
+
+                // ---- covers: nothing is asked while paused / stopped, and a request still waiting for the gap is dropped when the music stops
+                {
+                    int a0 = np.ApiRequests;
+                    RadioSongs.Update(Radio.Channel, "Paused Artist - Paused Song", false, true);
+                    await Task.Delay(1800);
+                    Check("covers: a new title while paused / stopped asks nothing", np.ApiRequests == a0, (np.ApiRequests - a0) + " requests");
+                    RadioSongs.ResetGapForTest();
+                    RadioSongs.Update(Radio.Channel, "Queued Artist - First", true, true);       // asked at once
+                    RadioSongs.Update(Radio.Channel, "Queued Artist - Second", true, true);      // waits for the gap ...
+                    RadioSongs.Update(Radio.Channel, "Queued Artist - Second", false, true);     // ... and the music stops meanwhile
+                    await Task.Delay(2200);
+                    Check("covers: a waiting request is dropped when the music stops (only the first was asked)", np.ApiRequests == a0 + 1, (np.ApiRequests - a0) + " requests");
+                    // three songs in quick succession while playing: the first is asked at once, the third after the rest of the gap, the second never
+                    RadioSongs.ResetGapForTest();
+                    int r0 = np.ApiRequests; DateTime t0 = DateTime.UtcNow;
+                    RadioSongs.Update(Radio.Channel, "Miles Davis - Freddie Freeloader", true, true);
+                    await Task.Delay(300);
+                    RadioSongs.Update(Radio.Channel, "Nina Simone - Sinnerman", true, true);
+                    await Task.Delay(300);
+                    RadioSongs.Update(Radio.Channel, "Nina Simone - Feeling Good", true, true);
+                    await Until(() => np.ApiRequests >= r0 + 2, 4000);
+                    await Task.Delay(1800);
+                    List<FakeNowPlayingServer.Req> rs; lock (np.Api) rs = np.Api.Where(r => r.At >= t0.AddMilliseconds(-50)).ToList();
+                    double apart = rs.Count == 2 ? (rs[1].At - rs[0].At).TotalMilliseconds : -1;
+                    Check("rate limit: songs changing fast -> the first at once, the latest after the gap (15 s in the app, 1.5 s here), the one between never",
+                        np.ApiRequests == r0 + 2 && apart >= 1450 && apart < 2500 && (rs[0].At - t0).TotalMilliseconds < 800, $"{np.ApiRequests - r0} requests, {apart:0} ms apart");
+                    RadioSongs.Update(Radio.Channel, "Paused Artist - Paused Song", false, true);
+                    RadioSongs.Update(Radio.Channel, Radio.Title, false, true);
+                }
 
                 // ---- channel change while playing: the old connection goes before the new one opens
                 Radio.Play();
@@ -291,18 +495,45 @@ namespace ElansAddonHub
                         var buttons = R((FrameworkElement)VisualTreeHelperFind());
                         bool clipped = System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(GameDataBar) != null;
                         detail = $"search {search.Left:0}-{search.Right:0} radio {radio.Left:0}-{radio.Right:0} chip {chip.Left:0}-{chip.Right:0} (wants {GameDataBar.DesiredSize.Width:0}, margin {GameDataBar.Margin}) clipped {clipped} buttons {buttons.Left:0}";
-                        return radio.Left >= search.Right + 4 && radio.Right <= buttons.Left - 8
+                        detail += $" slider {RadioPlayerBar.InlineVolumeShownForTest} flyslider {RadioPlayerBar.FlyVolumeShownForTest} song {RadioPlayerBar.SongButtonForTest.IsVisible}";
+                        bool volumeOk = RadioPlayerBar.Mode == 2 ? !RadioPlayerBar.InlineVolumeShownForTest && RadioPlayerBar.FlyVolumeShownForTest : RadioPlayerBar.InlineVolumeShownForTest && !RadioPlayerBar.FlyVolumeShownForTest;
+                        return volumeOk && RadioPlayerBar.SongButtonForTest.IsVisible
+                            && radio.Left >= search.Right + 4 && radio.Right <= buttons.Left - 8
                             && (RealmStrip.Visibility != Visibility.Visible || radio.Right <= R(RealmStrip).Left - 8)
                             && (!GameDataBar.IsVisible || (!clipped && chip.Left >= radio.Right + 8 && chip.Right <= buttons.Left - 8));
                     }
                     Check($"title bar at {wd}: search, radio, game data chip (whole, not cut), window buttons in a row without overlap", await Until(Fine, 1500), detail + " mode " + RadioPlayerBar.Mode);
                 }
-                Check("narrow: the channel moves into the flyout and the title is hidden; wide: both in the bar", RadioPlayerBar.Mode == 2 && !RadioPlayerBar.ChannelBoxForTest.IsVisible);
+                Check("narrow: the channel and the volume slider move into the song flyout, the title is hidden, the cover stays (it opens the flyout)",
+                    RadioPlayerBar.Mode == 2 && !RadioPlayerBar.ChannelBoxForTest.IsVisible && !RadioPlayerBar.InlineVolumeShownForTest && RadioPlayerBar.FlyVolumeShownForTest
+                    && RadioPlayerBar.SongButtonForTest.IsVisible && RadioPlayerBar.NowTextForTest == "");
+                RadioPlayerBar.FlyVolumeSliderForTest.Value = 0.4;
+                Check("narrow: the flyout's slider sets the volume", Math.Abs(Radio.Volume - 0.4) < 0.001 && Math.Abs(RadioPlayerBar.VolumeSliderForTest.Value - 0.4) < 0.001);
                 Radio.Stop(); srv.FixedTitle = null;
                 await Until(() => srv.Open == 0, 4000);
                 GameDataProgress.End("radiotest"); GameDataProgress.ResetForTest();
                 Width = w0; Height = h0; await Settle();
                 if (SelfTestClock.ShotsOn) { Width = 1280; await ShotWait(500); Snapshot(P("radio-stopped.png")); Width = w0; }
+
+                // ============================================================================================ covers off in Settings
+                {
+                    SettingsPage.SetRadioCoversForTest(false);
+                    Check("Settings: the covers switch is saved", settings.RadioNoCovers);
+                    const string talkTalk = "Talk Talk - Life's What You Make It";
+                    srv.FixedTitle = talkTalk;
+                    Radio.Play();
+                    await Until(() => Radio.State == RadioState.Playing && Radio.Title == talkTalk, 8000);
+                    int a0 = np.ApiRequests, i0 = np.ImageRequests;
+                    await Task.Delay(2000);
+                    Check("covers off: no request to radioparadise.com for song details at all; the stream's title, the music note",
+                        np.ApiRequests == a0 && np.ImageRequests == i0 && RadioSongs.ApiRequests + RadioSongs.ImageRequests == np.ApiRequests + np.ImageRequests
+                        && !RadioPlayerBar.CoverShownForTest && Radio.Title == talkTalk && RadioSongs.Current?.Matched == false, $"api {a0}->{np.ApiRequests}");
+                    SettingsPage.SetRadioCoversForTest(true);
+                    Check("covers on again: the playing song is asked for once", await Until(() => RadioSongs.Current?.Matched == true && RadioSongs.Current.StreamTitle == talkTalk, 6000)
+                        && np.ApiRequests == a0 + 1, $"api {a0}->{np.ApiRequests} {RadioSongs.LastOutcome}");
+                    Radio.Stop(); srv.FixedTitle = null;
+                    await Until(() => srv.Open == 0, 4000);
+                }
 
                 // ============================================================================================ off in Settings
                 Radio.Play();
@@ -326,7 +557,9 @@ namespace ElansAddonHub
                 Radio.TestBaseUrl = null; Radio.BackoffScale = 1; RadioSpeechForTest = null;
                 RadioPlayerBar.OpenLink = hadLink;
                 try { GameDataProgress.ResetForTest(); } catch { }
-                settings.RadioOff = hadOff; settings.RadioChannel = hadFav; settings.RadioDuck = hadDuck; settings.RadioVolume = hadVol;
+                settings.RadioOff = hadOff; settings.RadioChannel = hadFav; settings.RadioDuck = hadDuck; settings.RadioVolume = hadVol; settings.RadioNoCovers = hadNoCovers;
+                try { RadioSongs.TestBaseUrl = null; RadioSongs.Gap = RadioNowPlaying.DefaultGap; RadioSongs.CoverDirOverride = null; Radio.Muted = false; } catch { }
+                np?.Dispose();
                 try { SettingsPage.SetRadioForTest(!hadOff); } catch { }
                 Width = w0; Height = h0;
                 srv?.Dispose();
@@ -350,6 +583,9 @@ namespace ElansAddonHub
             public volatile int DropAfterBytes;   // end the stream after this many audio bytes (0 = never)
             public volatile string ContentType = "audio/mpeg";
             public volatile string FixedTitle;
+            public volatile string LastTitle;     // the title of the last metadata block that had one (the fake now_playing answers with it)
+            public int Blocks;                    // metadata blocks sent (with or without a title)
+            public volatile bool RealTime;        // send at the stream's own pace (new data reaches the player at once) instead of as fast as it reads
             public int MetaInt = 4096;
             static readonly byte[] Frame = MakeFrame();
 
@@ -407,7 +643,10 @@ namespace ElansAddonHub
                             if (meta)
                             {
                                 var t = FixedTitle ?? "Test Artist - Song " + (1 + blocks / 6);
-                                var b = Encoding.UTF8.GetBytes(blocks % 6 == 0 || FixedTitle != null ? "StreamTitle='" + t + "';StreamUrl='';" : "");
+                                bool withTitle = blocks % 6 == 0 || FixedTitle != null;
+                                if (withTitle) LastTitle = t;
+                                Interlocked.Increment(ref Blocks);
+                                var b = Encoding.UTF8.GetBytes(withTitle ? "StreamTitle='" + t + "';StreamUrl='';" : "");
                                 int n = (b.Length + 15) / 16;
                                 var m = new byte[1 + n * 16]; m[0] = (byte)n; Array.Copy(b, 0, m, 1, b.Length);
                                 s.Write(m, 0, m.Length);
@@ -415,12 +654,133 @@ namespace ElansAddonHub
                             }
                             if (DropAfterBytes > 0 && sent >= DropAfterBytes) return;
                             if (c.Client.Poll(0, SelectMode.SelectRead) && c.Client.Available == 0) return;   // the client went away
-                            Thread.Sleep(20);
+                            Thread.Sleep(RealTime ? 250 : 20);   // 4096 bytes per 250 ms = 128 kbit/s, just ahead of the player
                         }
                     }
                 }
                 catch { }
                 finally { Interlocked.Decrement(ref Open); }
+            }
+
+            public void Dispose() { stop = true; try { listener.Stop(); } catch { } }
+        }
+
+        // A fake of Radio Paradise's now_playing and its covers on 127.0.0.1 (RadioNowPlaying.TestBaseUrl): /api/now_playing?chan=N answers with the
+        // title the fake ICY stream sends right now (like the real API, which can be a moment ahead or behind), covers at
+        // https://img.radioparadise.com/covers/{s,m}/<id>.jpg that the client fetches from here by path. Modes: match, mismatch (another song),
+        // fail (503), redirect (302 to /elsewhere), evilcover (covers on other hosts / plain http). Counts and keeps every request.
+        sealed class FakeNowPlayingServer : IDisposable
+        {
+            public sealed class Req { public DateTime At; public string Path, Head, Answered; }
+            readonly TcpListener listener;
+            readonly Func<string> titleNow;
+            volatile bool stop;
+            public readonly int Port;
+            public volatile string Mode = "match";
+            public int ApiRequests, ImageRequests;
+            public readonly List<Req> Api = new List<Req>();
+            public readonly List<string> Images = new List<string>();
+            public readonly List<string> Paths = new List<string>();
+            readonly List<byte[]> art = new List<byte[]>();
+            static readonly Dictionary<string, string[]> Albums = new Dictionary<string, string[]>
+            {
+                ["Pink Floyd - Wish You Were Here"] = new[] { "Wish You Were Here", "1975" },
+                ["Miles Davis - So What"] = new[] { "Kind of Blue", "1959" },
+                ["Nina Simone - Feeling Good"] = new[] { "I Put a Spell on You", "1965" },
+            };
+
+            public FakeNowPlayingServer(Func<string> title)
+            {
+                titleNow = title;
+                // three made-up "covers" (soft gradients with a disc), drawn here on the UI thread; PNG bytes behind .jpg names like a real CDN might
+                var palettes = new[]
+                {
+                    new[] { System.Windows.Media.Color.FromRgb(0x2B, 0x4C, 0x7E), System.Windows.Media.Color.FromRgb(0xC9, 0x7B, 0x63) },
+                    new[] { System.Windows.Media.Color.FromRgb(0x1F, 0x5C, 0x4D), System.Windows.Media.Color.FromRgb(0xE3, 0xC5, 0x67) },
+                    new[] { System.Windows.Media.Color.FromRgb(0x5B, 0x2A, 0x6E), System.Windows.Media.Color.FromRgb(0xF2, 0x8C, 0x8C) },
+                };
+                foreach (var p in palettes)
+                {
+                    var dv = new System.Windows.Media.DrawingVisual();
+                    using (var dc = dv.RenderOpen())
+                    {
+                        dc.DrawRectangle(new System.Windows.Media.LinearGradientBrush(p[0], p[1], 45), null, new Rect(0, 0, 256, 256));
+                        dc.DrawEllipse(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x55, 0, 0, 0)), null, new Point(150, 140), 72, 72);
+                        dc.DrawEllipse(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xAA, 0xFF, 0xFF, 0xFF)), null, new Point(150, 140), 10, 10);
+                    }
+                    var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(256, 256, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                    bmp.Render(dv);
+                    var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                    enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                    using (var ms = new MemoryStream()) { enc.Save(ms); art.Add(ms.ToArray()); }
+                }
+                listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                Port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                new Thread(Accept) { IsBackground = true, Name = "Fake now_playing" }.Start();
+            }
+
+            void Accept()
+            {
+                while (!stop)
+                {
+                    TcpClient c;
+                    try { c = listener.AcceptTcpClient(); } catch { return; }
+                    new Thread(() => Serve(c)) { IsBackground = true }.Start();
+                }
+            }
+
+            static string Esc(string s) => (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("/", "\\/");
+            static int Id(string s) { int h = 17; foreach (var ch in s ?? "") h = unchecked(h * 31 + ch); return Math.Abs(h % 90000) + 10000; }
+
+            void Serve(TcpClient c)
+            {
+                try
+                {
+                    using (c)
+                    using (var s = c.GetStream())
+                    {
+                        var head = new StringBuilder();
+                        var one = new byte[1];
+                        while (!head.ToString().EndsWith("\r\n\r\n") && s.Read(one, 0, 1) == 1) head.Append((char)one[0]);
+                        var h = head.ToString();
+                        var path = h.Split(' ').Skip(1).FirstOrDefault() ?? "";
+                        lock (Paths) Paths.Add(path);
+                        void Send(string status, string type, byte[] body, string extra = "")
+                        {
+                            var hb = Encoding.ASCII.GetBytes("HTTP/1.0 " + status + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length + "\r\n" + extra + "Connection: close\r\n\r\n");
+                            s.Write(hb, 0, hb.Length); s.Write(body, 0, body.Length);
+                        }
+                        if (path.StartsWith("/api/now_playing"))
+                        {
+                            Interlocked.Increment(ref ApiRequests);
+                            var t = titleNow() ?? "";
+                            lock (Api) Api.Add(new Req { At = DateTime.UtcNow, Path = path, Head = h, Answered = t });
+                            var mode = Mode;
+                            if (mode == "fail") { Send("503 Service Unavailable", "text/plain", new byte[0]); return; }
+                            if (mode == "redirect") { Send("302 Found", "text/plain", new byte[0], "Location: http://127.0.0.1:" + Port + "/elsewhere/now_playing\r\n"); return; }
+                            int dash = t.IndexOf(" - ", StringComparison.Ordinal);
+                            string artist = dash > 0 ? t.Substring(0, dash) : t, title = dash > 0 ? t.Substring(dash + 3) : "";
+                            if (mode == "mismatch") { artist = "Someone Else"; title = "Another Song"; }
+                            var alb = Albums.TryGetValue(t, out var a) ? a : new[] { "Fake Album", "2001" };
+                            int id = Id(artist + title);
+                            string sm = "https://img.radioparadise.com/covers/s/" + id + ".jpg", md = "https://img.radioparadise.com/covers/m/" + id + ".jpg";
+                            if (mode == "evilcover") { sm = "https://img.radioparadise.com.evil.example/covers/s/" + id + ".jpg"; md = "http://img.radioparadise.com/covers/m/" + id + ".jpg"; }
+                            var json = "{\"time\":120,\"artist\":\"" + Esc(artist) + "\",\"title\":\"" + Esc(title) + "\",\"album\":\"" + Esc(alb[0]) + "\",\"year\":\"" + alb[1]
+                                + "\",\"cover\":\"" + Esc(md.Replace("/m/", "/l/")) + "\",\"cover_med\":\"" + Esc(md) + "\",\"cover_small\":\"" + Esc(sm) + "\"}";
+                            Send("200 OK", "application/json", Encoding.UTF8.GetBytes(json));
+                        }
+                        else if (path.StartsWith("/covers/"))
+                        {
+                            Interlocked.Increment(ref ImageRequests);
+                            lock (Images) Images.Add(path);
+                            int.TryParse(System.IO.Path.GetFileNameWithoutExtension(path), out var id);
+                            Send("200 OK", "image/png", art[id % art.Count]);
+                        }
+                        else Send("404 Not Found", "text/plain", new byte[0]);
+                    }
+                }
+                catch { }
             }
 
             public void Dispose() { stop = true; try { listener.Stop(); } catch { } }

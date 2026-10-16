@@ -204,6 +204,9 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Favourite channel" Tag="The player starts on this channel. Picking another one in the player is just for that session.">
                 <ComboBox x:Name="RadioFavBox" Style="{StaticResource Dropdown}" Width="180" SelectionChanged="RadioFav_Changed" AutomationProperties.Name="Favourite channel" />
               </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Show album covers and song details (asks radioparadise.com once per song)" Tag="The cover, album and year of the song that is playing, at most once every 15 seconds and only while you listen. Off: just the title from the stream, and nothing else is asked.">
+                <CheckBox x:Name="RadioCoversBox" Style="{StaticResource Switch}" Click="RadioCovers_Click" AutomationProperties.Name="Show album covers and song details" />
+              </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Music while people talk" Tag="In a Lodge voice room the music fades to this part of its volume while anyone talks, you included, and comes back when they stop. 0 % is silent.">
                 <StackPanel Orientation="Horizontal">
                   <Slider x:Name="RadioDuckSlider" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" TickFrequency="0.05" IsSnapToTickEnabled="True" Width="180" VerticalAlignment="Center" ValueChanged="RadioDuck_Changed" AutomationProperties.Name="Music while people talk" />
