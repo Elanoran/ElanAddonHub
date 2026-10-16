@@ -150,12 +150,15 @@ namespace ElansAddonHub.Services
 
         FileStream Archive(int n)
         {
-            if (!archives.TryGetValue(n, out var fs))
+            lock (archives)
             {
-                fs = OpenShared(Path.Combine(dataDir, "data", "data." + n.ToString("D3")));
-                archives[n] = fs;
+                if (!archives.TryGetValue(n, out var fs))
+                {
+                    fs = OpenShared(Path.Combine(dataDir, "data", "data." + n.ToString("D3")));
+                    archives[n] = fs;
+                }
+                return fs;
             }
-            return fs;
         }
 
         // the BLTE file behind an encoding key
@@ -218,8 +221,145 @@ namespace ElansAddonHub.Services
             return 0;
         }
 
+        // ---- the root as a sorted table (opt-in: UseRootIndex). Without it every ResolveFileIds walks (and decodes) the whole root file again, about
+        // 0.1 s and 50+ MB of short-lived arrays each time; a reader that asks for files in several rounds (the map data: a WDT, then its tiles, per
+        // instance; the area probe: one tile at a time) paid that dozens or hundreds of times. With it the root is walked once per opened storage and
+        // every later lookup is a binary search. Same answers as the walk: per FileDataID the entry with the best score, the first one on a tie.
+        public bool UseRootIndex;
+        readonly object rootGate = new object();
+        int[] rootIds;          // sorted, unique
+        byte[] rootKeys;        // 16 bytes per id, same order
+        public int RootIndexCount => rootIds?.Length ?? 0;
+        public long RootIndexMs { get; private set; }
+
         // FileDataID -> content key, for all wanted ids in one pass over the root file (TSFM, versions 1 and 2)
         public Dictionary<int, byte[]> ResolveFileIds(HashSet<int> wanted)
+        {
+            if (UseRootIndex)
+            {
+                lock (rootGate) { if (rootIds == null) BuildRootIndex(); }
+                var hit = new Dictionary<int, byte[]>();
+                foreach (var fid in wanted)
+                {
+                    int i = Array.BinarySearch(rootIds, fid);
+                    if (i < 0) continue;
+                    var k = new byte[16];
+                    Buffer.BlockCopy(rootKeys, i * 16, k, 0, 16);
+                    hit[fid] = k;
+                }
+                return hit;
+            }
+            return WalkRoot(wanted);
+        }
+
+        void BuildRootIndex()
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            int n = 0;
+            int cap0 = Math.Max(1 << 16, Math.Min(1 << 26, RootEntryCount() + 1024));     // the header says how many entries there are: no growing arrays
+            var ids = new int[cap0]; var scores = new byte[cap0]; var keys = new byte[cap0 * 16];
+            ForEachRootBlock((nr, idBuf, keyBuf, sc) =>
+            {
+                if (n + nr > ids.Length)
+                {
+                    int cap = Math.Max(ids.Length * 2, n + nr);
+                    Array.Resize(ref ids, cap); Array.Resize(ref scores, cap); Array.Resize(ref keys, cap * 16);
+                }
+                Buffer.BlockCopy(idBuf, 0, ids, n * 4, nr * 4);
+                Buffer.BlockCopy(keyBuf, 0, keys, n * 16, nr * 16);
+                for (int i = 0; i < nr; i++) scores[n + i] = (byte)sc;
+                n += nr;
+            });
+            if (n >= 1 << 28) throw new IOException("root file too large");
+            // order: id, then the better score, then the earlier entry
+            var order = new long[n];
+            for (int i = 0; i < n; i++) order[i] = ((long)ids[i] << 32) | ((long)(7 - scores[i]) << 28) | (uint)i;
+            Array.Sort(order);
+            int u = 0;
+            for (int i = 0; i < n; i++) if (i == 0 || (int)(order[i] >> 32) != (int)(order[i - 1] >> 32)) u++;
+            var uIds = new int[u]; var uKeys = new byte[u * 16];
+            int w = 0;
+            for (int i = 0; i < n; i++)
+            {
+                int id = (int)(order[i] >> 32);
+                if (i > 0 && id == (int)(order[i - 1] >> 32)) continue;
+                uIds[w] = id;
+                Buffer.BlockCopy(keys, (int)(order[i] & 0x0FFFFFFF) * 16, uKeys, w * 16, 16);
+                w++;
+            }
+            rootIds = uIds; rootKeys = uKeys;
+            RootIndexMs = sw.ElapsedMilliseconds;
+        }
+
+        // the number of entries the root header announces (0 when it does not say)
+        int RootEntryCount()
+        {
+            try
+            {
+                var ek = EncodingKeyFor(rootCKey);
+                if (ek == null) return 0;
+                using (var root = OpenEKey(ek))
+                {
+                    var hd = new byte[24];
+                    root.ReadAt(0, hd, 0, 24);
+                    uint hdrSize = BitConverter.ToUInt32(hd, 4), ver = BitConverter.ToUInt32(hd, 8);
+                    bool v2 = hdrSize == 0x18 && (ver == 1 || ver == 2);
+                    long n = v2 ? BitConverter.ToUInt32(hd, 12) : BitConverter.ToUInt32(hd, 4);
+                    return n > 0 && n < (1 << 26) ? (int)n : 0;
+                }
+            }
+            catch (Exception) { return 0; }
+        }
+
+        // every block of the root: (entries, their FileDataIDs (absolute, as int32 little endian), their content keys, the block's score)
+        void ForEachRootBlock(Action<int, byte[], byte[], int> block)
+        {
+            var ek = EncodingKeyFor(rootCKey);
+            if (ek == null) throw new IOException("root file is not in the encoding table");
+            using (var root = OpenEKey(ek))
+            {
+                var hd = new byte[24];
+                root.ReadAt(0, hd, 0, 24);
+                if (hd[0] != 'T' || hd[1] != 'S' || hd[2] != 'F' || hd[3] != 'M') throw new IOException("unknown root format");
+                uint hdrSize = BitConverter.ToUInt32(hd, 4), ver = BitConverter.ToUInt32(hd, 8);
+                bool v2 = hdrSize == 0x18 && (ver == 1 || ver == 2);
+                long pos = v2 ? hdrSize : 12;
+                ver = v2 ? ver : 0;
+                long len = root.Length;
+                var bh = new byte[17];
+                byte[] ids = new byte[0], keys = new byte[0];
+                while (pos + 12 < len)
+                {
+                    root.ReadAt(pos, bh, 0, 12);
+                    int nr = (int)BitConverter.ToUInt32(bh, 0);
+                    uint locale, cf;
+                    if (ver == 2)
+                    {
+                        root.ReadAt(pos + 12, bh, 12, 5);
+                        locale = BitConverter.ToUInt32(bh, 4);
+                        cf = BitConverter.ToUInt32(bh, 8) | BitConverter.ToUInt32(bh, 12) | ((uint)bh[16] << 17);
+                        pos += 17;
+                    }
+                    else { cf = BitConverter.ToUInt32(bh, 4); locale = BitConverter.ToUInt32(bh, 8); pos += 12; }
+                    if (ids.Length < nr * 4) { ids = new byte[nr * 4]; keys = new byte[nr * 16]; }
+                    root.ReadAt(pos, ids, 0, nr * 4);
+                    long ckPos = pos + (long)nr * 4;
+                    root.ReadAt(ckPos, keys, 0, nr * 16);
+                    // deltas -> absolute ids, in place
+                    int cur = -1;
+                    for (int i = 0; i < nr; i++)
+                    {
+                        cur = i == 0 ? BitConverter.ToInt32(ids, 0) : cur + 1 + BitConverter.ToInt32(ids, i * 4);
+                        ids[i * 4] = (byte)cur; ids[i * 4 + 1] = (byte)(cur >> 8); ids[i * 4 + 2] = (byte)(cur >> 16); ids[i * 4 + 3] = (byte)(cur >> 24);
+                    }
+                    int sc = ((cf & 0x80) == 0 ? 4 : 0) + ((cf & 0x100) == 0 ? 2 : 0) + ((locale & 0x2) != 0 ? 1 : 0);
+                    block(nr, ids, keys, sc);
+                    pos = ckPos + (long)nr * 16 + ((cf & 0x10000000) != 0 ? 0 : (long)nr * 8);
+                }
+            }
+        }
+
+        Dictionary<int, byte[]> WalkRoot(HashSet<int> wanted)
         {
             var res = new Dictionary<int, byte[]>();
             var score = new Dictionary<int, int>();
@@ -292,6 +432,22 @@ namespace ElansAddonHub.Services
                 var buf = new byte[f.Length];
                 f.ReadAt(0, buf, 0, buf.Length);
                 return buf;
+            }
+        }
+
+        // the same into a buffer the caller keeps (grown when too small): for many files read one after the other (the area probe's terrain tiles), so
+        // each one does not become another large array for the garbage collector. Returns the file's length, -1 when the storage does not hold it.
+        public int ReadByContentKey(byte[] ckey, ref byte[] buffer)
+        {
+            var ek = EncodingKeyFor(ckey);
+            if (ek == null || !TryFind(ek, out _)) return -1;
+            using (var f = OpenEKey(ek))
+            {
+                if (f.Length > int.MaxValue) throw new IOException("file too large");
+                int n = (int)f.Length;
+                if (buffer == null || buffer.Length < n) buffer = new byte[Math.Max(n, (buffer?.Length ?? 0) * 3 / 2)];
+                f.ReadAt(0, buffer, 0, n);
+                return n;
             }
         }
 
@@ -379,7 +535,7 @@ namespace ElansAddonHub.Services
 
         void Read(long pos, byte[] buf, int off, int count)
         {
-            lock (gate) { src.Position = pos; CascStorage.ReadFull(src, buf, off, count); }
+            lock (src) { src.Position = pos; CascStorage.ReadFull(src, buf, off, count); }   // the archive stream is shared by every file read from it (and by threads using one storage)
         }
 
         byte[] Block(int i)
@@ -392,9 +548,10 @@ namespace ElansAddonHub.Services
             {
                 case 'N': dec = new byte[raw.Length - 1]; Buffer.BlockCopy(raw, 1, dec, 0, dec.Length); break;
                 case 'Z':
+                    if (decSize[i] > 0) { dec = new byte[decSize[i]]; Inflate(raw, dec, 0, dec.Length); break; }
                     using (var ms = new MemoryStream(raw, 3, raw.Length - 3)) // 1 type byte + 2 byte zlib header
                     using (var ds = new DeflateStream(ms, CompressionMode.Decompress))
-                    using (var o = new MemoryStream(decSize[i] > 0 ? decSize[i] : 4096))
+                    using (var o = new MemoryStream(4096))
                     {
                         ds.CopyTo(o);
                         dec = o.ToArray();
@@ -408,7 +565,38 @@ namespace ElansAddonHub.Services
             return dec;
         }
 
+        static void Inflate(byte[] raw, byte[] dst, int off, int count)
+        {
+            using (var ms = new MemoryStream(raw, 3, raw.Length - 3)) // 1 type byte + 2 byte zlib header
+            using (var ds = new DeflateStream(ms, CompressionMode.Decompress))
+            {
+                int got = 0;
+                while (got < count) { int r = ds.Read(dst, off + got, count - got); if (r <= 0) break; got += r; }
+                if (got < count) throw new EndOfStreamException("BLTE block decoded short");
+            }
+        }
+
+        // a whole block that is wanted whole (reading a file from start to end): decoded straight into the caller's buffer, not kept
+        bool TryDecodeInto(int i, byte[] buf, int off)
+        {
+            if (decSize[i] <= 0 || cache.ContainsKey(i)) return false;
+            var raw = new byte[rawSize[i]];
+            Read(rawPos[i], raw, 0, raw.Length);
+            switch ((char)raw[0])
+            {
+                case 'N': if (raw.Length - 1 != decSize[i]) return false; Buffer.BlockCopy(raw, 1, buf, off, decSize[i]); return true;
+                case 'Z': Inflate(raw, buf, off, decSize[i]); return true;
+                case 'E' when zeroFill: Array.Clear(buf, off, decSize[i]); return true;
+                default: return false;
+            }
+        }
+
         public void ReadAt(long pos, byte[] buf, int off, int count)
+        {
+            lock (gate) ReadAtLocked(pos, buf, off, count);   // the block cache is not shared between threads (the encoding file of a shared storage is)
+        }
+
+        void ReadAtLocked(long pos, byte[] buf, int off, int count)
         {
             if (pos < 0 || pos + count > Length) throw new EndOfStreamException();
             // first block that holds pos
@@ -416,6 +604,12 @@ namespace ElansAddonHub.Services
             while (lo <= hi) { int mid = (lo + hi) >> 1; if (decStart[mid] <= pos) { bi = mid; lo = mid + 1; } else hi = mid - 1; }
             while (count > 0)
             {
+                if (pos == decStart[bi] && count >= decSize[bi] && decSize[bi] > 0 && TryDecodeInto(bi, buf, off))
+                {
+                    int whole = decSize[bi];
+                    pos += whole; off += whole; count -= whole; bi++;
+                    continue;
+                }
                 var b = Block(bi);
                 int inBlock = (int)(pos - decStart[bi]);
                 int n = Math.Min(count, b.Length - inBlock);

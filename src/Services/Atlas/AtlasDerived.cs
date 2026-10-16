@@ -109,6 +109,37 @@ namespace ElansAddonHub.Services.Atlas
             }
         }
 
+        // what was worked out last for this zone, of whichever map index (the previous game build's while the new one is being worked out); null = never
+        public ZoneContent ZoneAny(int uiMapId) { lock (zones) return zones.TryGetValue(uiMapId, out var z) ? z : null; }
+
+        // already worked out for this map index (no work, no wait)
+        public bool HasZone(MapIndex map, int uiMapId)
+        {
+            if (map == null) return false;
+            lock (zones) return zones.TryGetValue(uiMapId, out var z) && ReferenceEquals(z.Map, map);
+        }
+
+        // The terrain tiles Zone(map, id) will ask the area probe about, per world map: the tile of every spawn that stands inside one of the zone's rectangles
+        // (Compute asks MapIndex.WorldToMap, which asks AreaProbe.AreaAt, for exactly those). Lets ZoneLevels read them ahead on a few threads.
+        public Dictionary<int, HashSet<int>> ZoneTiles(MapIndex map, IEnumerable<int> uiMapIds)
+        {
+            var res = new Dictionary<int, HashSet<int>>();
+            if (map == null) return res;
+            var want = new HashSet<int>(uiMapIds);
+            foreach (var g in map.Set.Assignments.Where(a => want.Contains(a.UiMapId)).GroupBy(a => a.MapId))
+            {
+                var rects = g.ToList();
+                if (!res.TryGetValue(g.Key, out var set)) res[g.Key] = set = new HashSet<int>();
+                void Add(float x, float y)
+                {
+                    foreach (var a in rects) if (x >= a.MinX && x <= a.MaxX && y >= a.MinY && y <= a.MaxY) { int k = AreaProbe.TileKey(x, y); if (k >= 0) set.Add(k); return; }
+                }
+                foreach (var nid in NpcsOnMap(g.Key)) foreach (var s in Index.Npcs[nid].Spawns) if (s.Map == g.Key) Add(s.X, s.Y);
+                foreach (var oid in ObjectsOnMap(g.Key)) foreach (var s in Index.Objects[oid].Spawns) if (s.Map == g.Key) Add(s.X, s.Y);
+            }
+            return res;
+        }
+
         ZoneContent Compute(MapIndex map, int uiMapId)
         {
             var z = new ZoneContent { Map = map, UiMapId = uiMapId };

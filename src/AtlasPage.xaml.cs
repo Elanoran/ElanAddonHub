@@ -35,6 +35,7 @@ namespace ElansAddonHub
         public AtlasPage()
         {
             InitializeComponent();
+            InitUpdates();
             SizeChanged += (s, e) => Layout();
             copiedTimer.Tick += (s, e) => { copiedTimer.Stop(); CopiedText.Visibility = Visibility.Collapsed; };
             Scroller.SizeChanged += (s, e) => Layout();
@@ -273,6 +274,7 @@ namespace ElansAddonHub
         async Task BuildAndDraw(string id)
         {
             int gen = ++buildGen;
+            ForgetUpdateOffer();
             if (hosted != null && !AtlasCategories.IsHosted(id)) LeaveHosted();
             if (string.IsNullOrEmpty(id)) { DrawStart(); return; }
             if (AtlasNav.IsPage(id)) { DrawData(); return; }
@@ -311,23 +313,29 @@ namespace ElansAddonHub
             subscribed = true;
             refresh.Tick -= RefreshTick; refresh.Tick += RefreshTick;
             ItemData.Changed += OnDataChanged; SpellData.Changed += OnDataChanged; MapData.Changed += OnDataChanged; SeenData.Changed += OnDataChanged;
+            ZoneLevels.Changed += OnDataChanged; ClassData.Changed += OnDataChanged;
         }
         void Unsubscribe()
         {
             if (!subscribed) return;
             subscribed = false;
             ItemData.Changed -= OnDataChanged; SpellData.Changed -= OnDataChanged; MapData.Changed -= OnDataChanged; SeenData.Changed -= OnDataChanged;
+            ZoneLevels.Changed -= OnDataChanged; ClassData.Changed -= OnDataChanged;
             refresh.Stop();
         }
-        void OnDataChanged() { Dispatcher.BeginInvoke(new Action(() => { refresh.Stop(); refresh.Start(); })); }
+        // at most 600 ms after the first change (not after the last: while the readers finish one after the other the changes kept pushing the redraw out until all were done)
+        void OnDataChanged() { Dispatcher.BeginInvoke(new Action(() => { if (!refresh.IsEnabled) refresh.Start(); })); }
         void RefreshTick(object s, EventArgs e)
         {
             refresh.Stop();
             if (!IsVisible) return;
             if (IsStart) DrawStart();
             else if (IsData) DrawData();
-            else if (browse != null) _ = Redraw();
-            else if (model != null && (model.NotFound || model.Notes.Count > 0 || !model.Layers.Contains("client"))) _ = Redraw();
+            // a page that had nothing yet (or zones whose levels were on their way) is drawn again; a page with content is not redrawn under the reader:
+            // when the new data would change it, the notice offers it (AtlasPage.Updates.cs)
+            else if (browse != null) { if (browse.NotFound || browse.LevelsPending) _ = Redraw(); else _ = OfferUpdate(); }
+            else if (model != null && (model.NotFound || !model.Layers.Contains("client"))) _ = Redraw();   // it waited for the game data
+            else if (model != null) _ = OfferUpdate();
         }
         public Task Redraw() => lastBuild = BuildAndDraw(history.Current ?? "");
 

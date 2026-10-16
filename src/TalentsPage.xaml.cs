@@ -50,6 +50,10 @@ namespace ElansAddonHub
             LevelBox.SelectedItem = 60; LegacyBox.SelectedItem = 0;
             TalentData.Changed += OnDataChanged;
             SpellData.Changed += OnDataChanged;
+            // new talent trees while a class is on screen (a patch: the previous build's trees were shown meanwhile): offered, not swapped under the planner
+            if (Content is UIElement page) { Content = null; var g = new Grid(); g.Children.Add(page); g.Children.Add(updateNotice); Content = g; }
+            updateNotice.ShowClicked += () => { applyNew = true; Refresh(); applyNew = false; DataUpdateNotice.FadeIn(CalcCard); };
+            GameDataProgress.Changed += () => { try { Dispatcher.BeginInvoke(new Action(() => { if (EmptyBox.Visibility == Visibility.Visible && set == null && (TalentData.Status == TalentData.State.Loading || TalentData.Status == TalentData.State.NotStarted)) WaitingText(); }), System.Windows.Threading.DispatcherPriority.Background); } catch { } };
             PreviewKeyDown += (s, e) => { if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control && !(Keyboard.FocusedElement is TextBox)) { Undo_Click(null, null); e.Handled = true; } };
         }
 
@@ -83,7 +87,7 @@ namespace ElansAddonHub
         {
             if (!loadedOnce) { saved = SavedBuilds.Load(SavedFile); loadedOnce = true; }
             if (TalentData.Status == TalentData.State.NotStarted || TalentData.Status == TalentData.State.Disabled) TalentData.Start();
-            Refresh();
+            applyNew = true; Refresh(); applyNew = false;     // opening the page shows the newest trees (no offer needed)
             if (!embedded) Motion.PageIn(this);
         }
 
@@ -97,6 +101,8 @@ namespace ElansAddonHub
             if (st == TalentData.State.Ready && d != null && d.Trees.Count > 0)
             {
                 bool newSet = !ReferenceEquals(d, set);
+                if (newSet && set != null && tree != null && IsVisible && !applyNew) { updateNotice.Offer(); info.Add("update offered"); return; }
+                updateNotice.Hide();
                 set = d;
                 EmptyBox.Visibility = Visibility.Collapsed; CalcCard.Visibility = Visibility.Visible; BuildsCard.Visibility = Visibility.Visible; ClassBar.Visibility = Visibility.Visible;
                 if (newSet || ClassBar.Children.Count == 0) BuildClassBar();
@@ -119,11 +125,23 @@ namespace ElansAddonHub
                 case TalentData.State.Unavailable:
                     EmptyTitle.Text = "The talent trees could not be read";
                     EmptyText.Text = (TalentData.Reason ?? "").Length == 0 ? "Check the WoW folder in Settings." : TalentData.Reason + (TalentData.Reason.Contains("game updated") ? ". Update Elan's Outpost for this game version." : ""); break;
-                default:
-                    EmptyTitle.Text = "Reading the talent trees from your game...";
-                    EmptyText.Text = "This takes a moment the first time and is kept for the next start."; break;
+                default: WaitingText(); break;
             }
             info.Add("empty|" + st);
+        }
+
+        readonly DataUpdateNotice updateNotice = new DataUpdateNotice();
+        bool applyNew;
+        public bool UpdateOfferedForTest => updateNotice.ShownForTest;
+
+        // the first read of the trees: what is being done right now (GameDataProgress), and why
+        void WaitingText()
+        {
+            var v = GameDataProgress.Now();
+            var j = v.Find(TalentData.JobId);
+            EmptyTitle.Text = j != null && j.State == GameDataProgress.JobState.Running ? GameDataProgress.StepText(j) + "..." : "Reading the talent trees from your game...";
+            var why = GameDataProgress.ReasonText(v.Reason);
+            EmptyText.Text = (why.Length > 0 ? why + ". " : "") + "This takes a moment the first time and is kept for the next start.";
         }
 
         public static Brush ClassBrush(string classFile) => InventoryPage.ClassBrushOf(classFile);      // the one table of class colours (identity colours)

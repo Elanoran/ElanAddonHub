@@ -92,18 +92,16 @@ namespace ElansAddonHub
             ElansAddonHub.Services.Db2.ItemData.WowRoot = () => settings.WowRoot;
             ElansAddonHub.Services.Db2.ItemData.Enabled = () => !settings.ItemDataOff;
             ElansAddonHub.Services.AtlasObs.RevealedSource = new ElansAddonHub.Services.Db2.RevealedItemsSource();   // the items the game client revealed go to the Lodge through the existing Atlas sync
-            if (ElansAddonHub.Services.Db2.ItemData.AutoStart) _ = Task.Delay(2500).ContinueWith(t => ElansAddonHub.Services.Db2.ItemData.Start());   // item data from the user's own game files, in the background
             ElansAddonHub.Services.SeenData.WowRoot = () => settings.WowRoot;   // what the client has seen (creature / object / quest caches), same switch as the item data
             ElansAddonHub.Services.SeenData.Enabled = () => !settings.ItemDataOff;
             ElansAddonHub.Services.AtlasObs.SeenSource = ElansAddonHub.Services.SeenData.AsSource;
             ElansAddonHub.Services.AtlasObs.SeenBuild = () => ElansAddonHub.Services.SeenData.LastBuild;
-            if (ElansAddonHub.Services.SeenData.AutoStart) _ = Task.Delay(3500).ContinueWith(t => ElansAddonHub.Services.SeenData.Start());
             ElansAddonHub.Services.Maps.MapData.WowRoot = () => settings.WowRoot;   // Atlas maps: the same "Game data" switch and WoW folder as the item data
             ElansAddonHub.Services.Maps.MapData.Enabled = () => !settings.ItemDataOff;
-            if (ElansAddonHub.Services.Maps.MapData.AutoStart) _ = Task.Delay(3500).ContinueWith(t => ElansAddonHub.Services.Maps.MapData.Start());
             TalentsView = new TalentsPage(); ProfessionsView = new ProfessionsPage();           // hosted by the Atlas (MainWindow.Atlas.cs), built once so what they show survives navigating away
             TalentsView.Init(() => settings.WowRoot);                                // Atlas layer G: talent trees from the user's own game files (follows the item data's switch)
-            if (ElansAddonHub.Services.Db2.TalentData.AutoStart) _ = Task.Delay(4000).ContinueWith(t => ElansAddonHub.Services.Db2.TalentData.Start());
+            // the game data from the user's own game files, in the background: maps, items (+ spells, classes), seen data and talents start together and share one opened game storage (GameDataStart)
+            _ = GameDataStart.StartAllLater();
             ElansAddonHub.Services.Db2.ClassData.Hook();                              // Atlas: classes, races, spell levels / costs / cooldowns from the user's own game files (follows the item data's switch)
             BrowserView.Init(settings);
             BrowserView.ShortcutTab += t => ShowTab(t);
@@ -446,7 +444,7 @@ namespace ElansAddonHub
             await RealSec("zonelorereal", ZoneLoreRealTest);
             if (Begin("art")) { result += "\r\n" + await ArtTest(dir); End(); }
             if (Begin("round3")) { result += "\r\n" + await Round3Test(dir); End(); }
-            if (Begin("idlecpu")) { result += "\r\n" + await IdleCpuTest(dir); End(); }
+            if (Begin("coldstart")) { result += "\r\n" + await ColdStartTest(dir); End(); }
             result += "\r\n" + string.Join("\r\n", skipped);
             result += "\r\n" + string.Join("\r\n", timings) + "\r\n" + SelfTestClock.Report() + $"\r\ntotal: {Sec(total.Elapsed.TotalSeconds)} s";
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "result.txt"), result);

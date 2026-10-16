@@ -39,6 +39,8 @@ namespace ElansAddonHub.Services.Atlas
     public sealed class BIndex
     {
         public string Cat = "", Noun = "", Token = "";
+        public bool LevelsPending;                                   // zones: built before the level ranges were known (ZoneLevels)
+        public bool OldLevels;                                       // ... and the previous game build's ranges stand in meanwhile
         public List<BEntry> All = new List<BEntry>();
         Dictionary<int, BEntry> byId;
         public BEntry ById(int id)
@@ -76,7 +78,7 @@ namespace ElansAddonHub.Services.Atlas
 
         static BIndex Index(string cat)
         {
-            var tok = Token();
+            var tok = Token() + (cat == "zones" ? "|zl" + ZoneLevels.Revision : "");
             lock (cacheLock) if (cache.TryGetValue(cat, out var hit) && hit.Token == tok) return hit;
             lock (buildLock)
             {
@@ -482,12 +484,18 @@ namespace ElansAddonHub.Services.Atlas
         static BIndex BuildZones(Ctx x)
         {
             var ix = new BIndex { Noun = "zone" };
+            // the level ranges need the terrain under the Classic baseline's creatures: when that means reading many tiles of the game files, the list
+            // is built without them now and ZoneLevels works them out in the background (the list is built again when they are there)
+            bool levels = x.Derived == null || ZoneLevels.ReadyOrCheap(x.Map, x.Derived, ZoneLevels.ZoneIds(x.Map));
+            ix.LevelsPending = !levels;
             foreach (var m in x.Map.UiMaps)
             {
                 if (m.System != 0 || m.Type != UiMapInfo.Zone || string.IsNullOrEmpty(m.Name) || MapIndex.IsPlaceholderName(m.Name)) continue;
                 var e = Entry("zone", m.Id, m.Name);
                 e.Client = true; e.Group = ContinentOf(x, m.Id);
-                var zc = x.Derived?.Zone(x.Map, m.Id);
+                // while new ones are worked out, the levels last worked out (the previous game build's) stand in
+                var zc = levels ? x.Derived?.Zone(x.Map, m.Id) : x.Derived?.ZoneAny(m.Id);
+                if (!levels && zc != null && zc.MinLevel > 0) ix.OldLevels = true;
                 if (zc != null && zc.MinLevel > 0) { e.Level = zc.MinLevel; e.Level2 = zc.MaxLevel; e.Classic = true; }
                 e.Detail = string.Join(" · ", new[] { e.Group, e.Level > 0 ? "Levels " + AtlasFormat.Levels(e.Level, e.Level2) : "" }.Where(t => t.Length > 0));
                 ix.All.Add(e);

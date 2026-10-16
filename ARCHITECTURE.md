@@ -469,6 +469,13 @@ confined to AddOns. Cheapest next steps if revisited: protect release tags; a ha
   Marksmanship tree: if it is not there, hide the node in the calculator (TalentSet reading) and drop the `LeftOut` special case in `BuildLinks`;
   if it is there, the other sites are out of date and `LeftOut` stays only for reading their links.
 
+### Game data start, progress and updates (Outpost 2.70)
+- `GameDataStart.StartAll()` starts every reader together, 2.5 s after the window shows (maps first). They lease one opened storage (`CascShared`: one per WoW folder + client + build, closed 15 s after the last reader; `CascStorage.UseRootIndex` keeps the root file as a sorted id -> content key table, built once, ~0.3 s and 25 MB for 1.25 M ids, instead of a full root walk per lookup). Rebuilds from the game files take turns (`CascShared.OneAtATime`), so their large short-lived arrays are never alive together; loads of the saved copies never wait.
+- Every reader reports to `GameDataProgress` (Begin / Rebuilding with the reason / Step / Report n of m / End). The title bar strip, the waiting pages and the talent planner read it. Reason: no saved file = first start; a saved file of another build = WoW updated; a file this version cannot read = the Outpost was updated.
+- Stale while revalidate: a saved copy of another game build in the current format is published at once (`<Reader>.Stale` = true, `LastLoadFrom` "cache file (previous game build)"), then the game files are read and the fresh set replaces it. The terrain areas (`cache\areas-<build>-<map>.bin`) are kept per build, so the old map index keeps its zone levels meanwhile.
+- Zone levels (`ZoneLevels`): the Zones list no longer waits for the area probe. When many terrain tiles are missing, the list is built without (or with the previous) levels and `ZoneLevels` reads the tiles ahead on 3 threads (`AreaProbe.Prefetch`, area ids only, one buffer per thread), works out every zone and bumps its revision (the zones index is part keyed on it).
+- Pages: `AtlasPage.Updates.cs` builds the new page off the UI thread when data changes and compares a text signature; equal = nothing happens, different = the "Updated with the new game data" notice; a page that had no data (NotFound / no client layer / zone levels pending) is redrawn directly. The refresh fires at most 600 ms after the first change (it used to be pushed out by every later change).
+- Measured (dev PC, Forever beta 1.60.1.70425, Classic baseline loaded, empty cache): Zones list 66 s -> 1.1 s (levels 1.7 s), all readers 3.1 s -> 1.4 s, peak working set 2.5 GB -> 0.77 GB; warm start Zones list 0.8 s -> 0.3 s. Self-test section `coldstart` keeps it there.
 ## Schemas
 
 ### `core` v1 (Hub, per character)

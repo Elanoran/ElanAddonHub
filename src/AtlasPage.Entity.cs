@@ -90,7 +90,7 @@ namespace ElansAddonHub
 
             if (m.NotFound)
             {
-                col.Children.Add(EmptyCard("", m.Message.Length > 0 ? m.Message : "Nothing is known about this.", "Search for a name (Ctrl+K), or open the start page to see what data Atlas has."));
+                col.Children.Add(WaitingForData(m.Id) ? WaitCard(m.Id) : EmptyCard("", m.Message.Length > 0 ? m.Message : "Nothing is known about this.", "Search for a name (Ctrl+K), or open the start page to see what data Atlas has."));   // the first read of its data: the build stack
                 foreach (var n in m.Notes) col.Children.Add(Note(n));
                 foreach (var s in m.Sections.Where(s => s.Open)) col.Children.Add(SectionCard(s));
                 Motion.PageIn(Body);
