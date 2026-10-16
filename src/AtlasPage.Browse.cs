@@ -119,7 +119,7 @@ namespace ElansAddonHub
             {
                 var c = crumbs[i];
                 if (i > 0) w.Children.Add(Tb("›", "Text.Secondary", Res("Brush.Text.Tertiary")));
-                var t = Tb(c.Title, string.IsNullOrEmpty(c.Link) ? "Text.Body" : "Text.Secondary");
+                var t = Tb(c.Title, "Text.Secondary", string.IsNullOrEmpty(c.Link) ? Res("Brush.Text.Primary") : null);   // the current page: the same size as the links, brighter
                 t.Margin = new Thickness(i > 0 ? 4 : 0, 0, 4, 0);
                 if (!string.IsNullOrEmpty(c.Link))
                 {

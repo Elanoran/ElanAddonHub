@@ -162,7 +162,7 @@
               <HeaderedContentControl x:Name="WorldMapBuildingsRow" Style="{StaticResource Setting.Row}" Header="World map 3D buildings" Tag="Building shapes for the 3D world map.">
                 <StackPanel x:Name="WorldMapBuildingsButtons" Orientation="Horizontal" />
               </HeaderedContentControl>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="World map 3D height" Tag="Exaggerates the mountains in the 3D view (1x is true to the game, 3x is dramatic).">
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="World map 3D height" Tag="How tall the land is in the 3D view: 1x is true to the game (the middle), lower flattens it, higher makes the mountains taller.">
                 <StackPanel Orientation="Horizontal">
                   <Slider x:Name="Exag3dSlider" Minimum="0.5" Maximum="1.5" SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1" IsSnapToTickEnabled="True" Width="180" VerticalAlignment="Center" ValueChanged="Exag3d_Changed" AutomationProperties.Name="3D height exaggeration" />
                   <TextBlock x:Name="Exag3dText" Style="{StaticResource Text.Secondary}" Width="44" TextAlignment="Right" VerticalAlignment="Center" />
