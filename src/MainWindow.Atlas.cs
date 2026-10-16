@@ -100,7 +100,26 @@ namespace ElansAddonHub
             v.SubChanged += sub => AtlasView.HostedChanged(ElansAddonHub.Services.WorldMap.WorldMapIds.Category, sub);
             ElansAddonHub.Services.WorldMap.WorldMapLayers.SavedRoutes = () => settings.SavedRoutes;
             ElansAddonHub.Services.WorldMap.WorldMapLayers.FlightTimes = FlightTimesForMap;
+            WireLive();
+            v.Live = LivePos;
             return v;
+        }
+
+        // "Show my live position on the world map": the strip's position (opt-in in the Hub) -> the trail (memory only) -> the world map's live layer
+        public readonly ElansAddonHub.Services.WorldMap.LivePosition LivePos = new ElansAddonHub.Services.WorldMap.LivePosition();
+        bool liveWired;
+        void WireLive()
+        {
+            if (liveWired) return;
+            liveWired = true;
+            Session.Presence.PositionChanged += () => Dispatcher.BeginInvoke(new Action(UpdateLive));
+            UpdateLive();
+        }
+        // also called by Settings when the switch changes (off clears the trail at once)
+        public void UpdateLive()
+        {
+            try { LivePos.Update(settings.WorldMapLivePos, Session.Presence.Playing, Session.Presence.Current, DateTime.UtcNow); } catch (Exception e) { Util.Log("live position: " + e.Message); }
+            worldMapView?.PushLive(true);
         }
 
         // "Horde|11>22" -> seconds: what the Lodge's members measured, then what this PC's Hunter Helper learned

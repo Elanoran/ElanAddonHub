@@ -455,6 +455,8 @@ namespace ElansAddonHub
                     var png = await WorldMapView.CaptureForTest();
                     if (png != null) File.WriteAllBytes(P("worldmap-synthetic.png"), png);
                     Check("screenshot: the page was captured", png != null && png.Length > 5000, (png?.Length ?? 0) + "");
+                    WorldMapLiveUnitTest(Check);
+                    await WorldMapLiveTest(Check, P);
 
                     await WorldMapPage3dTest(dir, notes, Check, P, taxi, lidx);
                     ShowTab("atlas"); AtlasView.History.Clear();

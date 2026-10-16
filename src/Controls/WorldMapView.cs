@@ -666,6 +666,7 @@ namespace ElansAddonHub
                 },
                 ["layers"] = WorldMapLayers.Catalog(),
                 ["on"] = OnLayers(),
+                ["follow"] = Settings != null && Settings.WorldMapFollow,
             };
             if (is3)
             {
@@ -853,6 +854,14 @@ namespace ElansAddonHub
                 case WorldMapMessageType.Inited:
                     PageInited = true;
                     if (mode3d && mapId >= 0) bld.OnInited(mapId);
+                    lastMe = null; PushLive(true);
+                    break;
+                case WorldMapMessageType.HowTo:
+                    HowToOpenedForTest++;
+                    HelpPages.Open(HelpPages.LivePosition, Window.GetWindow(this));
+                    break;
+                case WorldMapMessageType.Follow:
+                    if (Settings != null && Settings.WorldMapFollow != m.Ok) { Settings.WorldMapFollow = m.Ok; SaveSettings?.Invoke(); }
                     break;
                 case WorldMapMessageType.Ready:
                     if ((Ignore2dReadyForTest && loadedPage == "2d") || (Ignore3dReadyForTest && loadedPage == "3d")) break;
@@ -918,6 +927,57 @@ namespace ElansAddonHub
                     break;
             }
         }
+
+        // ---------------------------------------------------------------- the live position layer ("Show my live position on the world map")
+        // LivePosition says the state and keeps the trail (memory only); this pushes it to the page as a "me" message, at most once a second.
+        LivePosition live;
+        DispatcherTimer liveTimer;
+        DateTime lastLivePost = DateTime.MinValue;
+        string lastMe;
+        public string LastMeForTest => lastMe;
+        public int HowToOpenedForTest { get; private set; }
+        public int LivePostsForTest { get; private set; }
+        public static TimeSpan LiveInterval = TimeSpan.FromSeconds(1);
+        public LivePosition Live
+        {
+            get => live;
+            set { if (live != null) live.Changed -= OnLiveChanged; live = value; if (live != null) live.Changed += OnLiveChanged; PushLive(true); }
+        }
+        void OnLiveChanged() { try { Dispatcher.BeginInvoke(new Action(() => PushLive(false))); } catch (Exception) { } }
+        bool LiveOn => Settings != null && Settings.WorldMapLivePos;
+
+        // the "me" message for the map shown now
+        public string LiveJson()
+        {
+            var now = DateTime.UtcNow;
+            if (live == null || !LiveOn) return WorldMapProtocol.Me(LiveState.Off, null, null, null, null, mapId, now);
+            var here = live.Here;
+            string elsewhere = null;
+            if (live.State == LiveState.Ok && here.HasValue && here.Value.MapId != mapId)
+            {
+                var idx = MapData.Index;
+                try { elsewhere = idx == null ? null : WorldMapService.Continent(idx, here.Value.MapId)?.Name; } catch (Exception) { }
+            }
+            return WorldMapProtocol.Me(live.State, live.Name, LivePosition.ColorOf(live.ClassFile), here, live.Trail.Points(now), mapId, now, elsewhere);
+        }
+
+        // force: send now (a new page, the setting changed); else at most once per LiveInterval, the newest state wins
+        public void PushLive(bool force)
+        {
+            if (!PageInited || web == null && !ForceLiveForTest) return;
+            var wait = LiveInterval - (DateTime.UtcNow - lastLivePost);
+            if (!force && wait > TimeSpan.Zero)
+            {
+                if (liveTimer == null) { liveTimer = new DispatcherTimer(); liveTimer.Tick += (s, e) => { liveTimer.Stop(); PushLive(false); }; }
+                if (!liveTimer.IsEnabled) { liveTimer.Interval = wait; liveTimer.Start(); }
+                return;
+            }
+            var json = LiveJson();
+            if (json == lastMe) return;
+            lastMe = json; lastLivePost = DateTime.UtcNow; LivePostsForTest++;
+            Post(json);
+        }
+        public static bool ForceLiveForTest;
 
         // the layers that are on: the person's saved list (brought up to this catalog once) or the defaults
         List<string> OnLayers()

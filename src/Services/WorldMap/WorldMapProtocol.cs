@@ -27,9 +27,12 @@ namespace ElansAddonHub.Services.WorldMap
     //                 buildings {mode}                    (3D page) the Buildings switch: off | bridges | all
     //                 bbuild {mode} | bpause | bresume | bcancel   (3D page) the card and the progress line: Build now, Pause, Resume, Cancel
     //                 error {msg}                         a script error in the page (logged and kept for "Copy details"; at most a few per page)
+    //                 howto                               the live layer's "How to turn it on" link: the app opens its how-to card
+    //                 follow {on}                         the live layer's "Follow me" switch (remembered in the settings)
     //   app -> page   init | goto | layer | layerinfo | toast | on     (built by WorldMapView, see worldmap.js for the shapes)
+    //                 me {state, ...}                      the live position layer (see Me below), at most once a second
     // ============================================================================================================================
-    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error }
+    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow }
 
     public sealed class WorldMapMessage
     {
@@ -148,6 +151,12 @@ namespace ElansAddonHub.Services.WorldMap
                 case "bpause": m.Type = WorldMapMessageType.BPause; return m;
                 case "bresume": m.Type = WorldMapMessageType.BResume; return m;
                 case "bcancel": m.Type = WorldMapMessageType.BCancel; return m;
+                case "howto": m.Type = WorldMapMessageType.HowTo; return m;
+                case "follow":
+                    {
+                        if (!d.TryGetValue("on", out var fo) || !(fo is bool fb)) { refusal = "follow needs on true or false"; return null; }
+                        m.Type = WorldMapMessageType.Follow; m.Ok = fb; return m;
+                    }
                 case "error": m.Type = WorldMapMessageType.Error; m.Detail = Clean(d.Str("msg"), 240); if (m.Detail.Length == 0) { refusal = "error needs a msg"; return null; } return m;
                 default: refusal = "unknown action"; return null;
             }
@@ -174,6 +183,57 @@ namespace ElansAddonHub.Services.WorldMap
 
         // ---- app -> page: the shapes of the messages are built by plain dictionaries (Json.Write)
         public static string Toast(string text, bool ok) => Json.Write(new Dictionary<string, object> { ["t"] = "toast", ["text"] = text ?? "", ["ok"] = ok });
+        // ---- "me": the live layer (your dot, trail and notice). Built and checked here: a state from the list, a #rrggbb colour, a clean one-line name,
+        // only points inside the plane (a dropped point breaks the line), at most LiveTrail.MaxPoints, ages 0..600 s. The page checks the shapes again.
+        //   {t:'me', state, name, color, notice, howto, here:[lat,lng], last:[lat,lng], trail:[lat,lng,age,brk, ...], where}
+        //   state: off (no layer) | none (not playing) | ok | elsewhere (a position on another continent) | unavailable | notshared | oldhub
+        public const double TrailBreakYards = 200, TrailBreakSeconds = 30;
+        static readonly Regex HexColor = new Regex(@"^#[0-9A-Fa-f]{6}\z", RegexOptions.CultureInvariant);
+        public static string Me(LiveState state, string name, string color, LiveTrail.Point? here, IList<LiveTrail.Point> trail, int viewMapId, DateTime now, string elsewhere = null)
+        {
+            string st;
+            switch (state)
+            {
+                case LiveState.Off: st = "off"; break;
+                case LiveState.NotPlaying: st = "none"; break;
+                case LiveState.Ok: st = here.HasValue && here.Value.MapId == viewMapId ? "ok" : "elsewhere"; break;
+                case LiveState.Unavailable: st = "unavailable"; break;
+                case LiveState.NotShared: st = "notshared"; break;
+                case LiveState.OldHub: st = "oldhub"; break;
+                default: st = "none"; break;
+            }
+            var d = new Dictionary<string, object> { ["t"] = "me", ["state"] = st };
+            if (st == "off" || st == "none") return Json.Write(d);
+            d["name"] = LivePositionText.CleanName(name);
+            d["color"] = color != null && HexColor.IsMatch(color) ? color : "#E8E6E3";
+            d["notice"] = st == "elsewhere" ? "You are on another map" + (string.IsNullOrEmpty(elsewhere) ? "" : ": " + Clean(elsewhere, 60)) : LivePositionText.NoticeFor(state) ?? "";
+            d["howto"] = LivePositionText.HasHowTo(state);
+            d["howtoText"] = LivePositionText.HowToLink;
+            if (st == "ok") { WorldMapMath.WorldToLatLng(here.Value.X, here.Value.Y, out var la, out var ln); if (InPlane(la, ln)) d["here"] = new List<object> { R6(la), R6(ln) }; else { d["state"] = "unavailable"; d["notice"] = LivePositionText.Unavailable; } }
+            var list = new List<object>();
+            if (trail != null)
+            {
+                int start = Math.Max(0, trail.Count - LiveTrail.MaxPoints);
+                bool brk = true; LiveTrail.Point? prev = null;
+                for (int i = start; i < trail.Count; i++)
+                {
+                    var p = trail[i];
+                    if (p.MapId != viewMapId) { brk = true; prev = null; continue; }
+                    WorldMapMath.WorldToLatLng(p.X, p.Y, out var la, out var ln);
+                    if (!InPlane(la, ln)) { brk = true; prev = null; continue; }
+                    if (prev.HasValue && (LiveTrail.Dist(prev.Value.X, prev.Value.Y, p.X, p.Y) > TrailBreakYards || (p.At - prev.Value.At).TotalSeconds > TrailBreakSeconds)) brk = true;
+                    double age = Math.Max(0, Math.Min(LiveTrail.Keep.TotalSeconds, (now - p.At).TotalSeconds));
+                    list.Add(R6(la)); list.Add(R6(ln)); list.Add(Math.Round(age, 1)); list.Add(brk ? 1 : 0);
+                    brk = false; prev = p;
+                }
+            }
+            d["trail"] = list;
+            // unavailable: the dot greys out where you were last seen on this map (if anywhere)
+            if ((string)d["state"] == "unavailable" && list.Count >= 4) d["last"] = new List<object> { list[list.Count - 4], list[list.Count - 3] };
+            return Json.Write(d);
+        }
+        static double R6(double v) => Math.Round(v, 6);
+
         public static string Goto(double lat, double lng, double z, string pinName = null, string pinTip = null, int seq = -1)
         {
             var d = new Dictionary<string, object> { ["t"] = "goto", ["lat"] = lat, ["lng"] = lng, ["z"] = z };

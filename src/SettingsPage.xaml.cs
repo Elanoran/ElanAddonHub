@@ -137,6 +137,7 @@ namespace ElansAddonHub
             ItemDataBox.IsChecked = !s.ItemDataOff;
             {
                 WorldMapFlatOnly.IsChecked = s.WorldMapFlat; WorldMapAuto.IsChecked = !s.WorldMapFlat;
+                LivePosBox.IsChecked = s.WorldMapLivePos;
                 var det = s.WorldMap3dDetail;
                 Detail3dLow.IsChecked = det == "low"; Detail3dHigh.IsChecked = det == "high"; Detail3dMedium.IsChecked = det != "low" && det != "high";
                 Exag3dSlider.Value = s.WorldMapExag >= 0.5 && s.WorldMapExag <= 1.5 ? s.WorldMapExag : 1;
@@ -423,6 +424,16 @@ namespace ElansAddonHub
                 WorldMapBuildingsButtons.Children.Add(b);
             }
         }
+
+        // "Show my live position on the world map" (off by default): the trail is memory only, so off forgets it at once
+        void LivePos_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading || settings == null) return;
+            settings.WorldMapLivePos = LivePosBox.IsChecked == true;
+            SettingsStore.Save(settings);
+            host?.UpdateLive();
+        }
+        public void LivePosHowTo_Click(object sender, RoutedEventArgs e) => HelpPages.Open(HelpPages.LivePosition, Window.GetWindow(this));
 
         // World map view: Automatic (3D when picked and it works; flat after a 3D problem, remembered) or Flat only (the 3D view is never started). The map reads it each time it opens.
         void WorldMapView_Click(object sender, RoutedEventArgs e)

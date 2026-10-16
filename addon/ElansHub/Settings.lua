@@ -42,8 +42,16 @@ local function buildGeneral(page)
   place(UI.Check(page, "/rl shortcut for /reload (after /reload)",
     function() return EHUB.DB().rl ~= false end,
     function(v) EHUB.DB().rl = v and true or false end))
-  y = y - 6
-  note(page, "The pixel strip only carries who you play and what you are doing (class, level, zone, group, combat flag). It never reads health, buffs or cooldowns.", y)
+  place(UI.Check(page, EHUB.POSITION_LABEL,
+    function() return EHUB.PositionOn() end,
+    function(v) EHUB.SetPosition(v) end,
+    EHUB.POSITION_DESC), 24)
+  local pd = note(page, EHUB.POSITION_DESC, y, 400)
+  pd:ClearAllPoints()
+  pd:SetPoint("TOPLEFT", page, "TOPLEFT", 24, y)
+  page.positionNote = pd
+  y = y - 84
+  note(page, "The pixel strip only carries who you play and what you are doing (class, level, zone, group, combat flag), and your map position only if you turn that on. It never reads health, buffs or cooldowns.", y)
 end
 
 local function buildWheel(page)
@@ -172,8 +180,8 @@ local function buildAbout(page)
   list:SetWidth(420)
   list:SetJustifyH("LEFT")
   if list.SetWordWrap then list:SetWordWrap(true) end
-  list:SetText("/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on|off|lock|unlock|reset|open\n/ehub pixel on|off\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI")
-  y = y - 90
+  list:SetText("/ehub  -  this window\n/ehub wheel  -  the Emote wheel page\n/ehub wheel on|off|lock|unlock|reset|open\n/ehub pixel on|off\n/ehub position on|off  -  share your map position with the Outpost (off by default)\n/ehub diag  -  emote API facts (plays nothing)\n/rl  -  reload the UI")
+  y = y - 104
   local out = UI.Text(page, 12, C.gold)
   out:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
   out:SetText("Get the Hub")

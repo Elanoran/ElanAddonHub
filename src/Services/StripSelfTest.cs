@@ -102,6 +102,47 @@ namespace ElansAddonHub.Services
                 info = StripCodec.Decode(flat2, 300, 40, 1200, out why);
                 Check("v2 row ignored when row 0 doesn't announce it", info != null && !info.HasV2, why);
             }
+            // ---- v3 (companion 1.15.3+): the opt-in map position in the reserved bytes; on / valid flags; old Hubs; corrupt rows
+            {
+                int x = (int)Math.Round(0.25 * 65535), y = (int)Math.Round(0.75 * 65535);
+                StripCodec.Info Dec(byte[] row, int cell = 4, int noise = 10, double tint = 1.0)
+                {
+                    var px = Render(v2p, cell, 0, 0, 300, 40, noise, tint, rnd, row);
+                    return StripCodec.Decode(px, 300, 40, 1200, out _);
+                }
+                foreach (var (cell, noise, tint) in new[] { (4, 0, 1.0), (4, 14, 0.85), (3, 10, 1.0), (8, 12, 0.9) })
+                {
+                    var i3 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 3, 3, x, y), cell, noise, tint);
+                    Check($"v3 strip, position valid: x/y decoded (cell={cell} noise=+-{noise} tint={tint})", i3 != null && i3.HasV2 && i3.RowVersion == 3 && i3.PosSupported && i3.PosEnabled && i3.PosValid && i3.PosX == x && i3.PosY == y
+                        && Math.Abs(i3.PosFx - 0.25) < 1e-4 && Math.Abs(i3.PosFy - 0.75) < 1e-4 && i3.MapId == 1413, i3 == null ? "null" : $"v={i3.RowVersion} f={i3.PosFlags} x={i3.PosX} y={i3.PosY}");
+                }
+                var on = Dec(StripCodec.BuildPayloadV2(0, 43, 16 + 64, 1, 0, 0, 3, 1, 0, 0));
+                Check("v3 strip, sharing on but no position (an instance): enabled, not valid, x/y 0", on != null && on.PosSupported && on.PosEnabled && !on.PosValid && on.PosX == 0 && on.InInstance);
+                var off = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 3, 0, 0, 0));
+                Check("v3 strip, sharing off in the game: supported, not enabled", off != null && off.PosSupported && !off.PosEnabled && !off.PosValid);
+                var odd = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 3, 2, x, y));
+                Check("v3 strip: a 'valid' bit without 'on' is not trusted (no position)", odd != null && odd.PosFlags == 0 && !odd.PosValid && odd.PosX == 0);
+                var oldHub = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0));
+                Check("v2 strip (an Elan's Hub before 1.15.3): decodes as before, position not supported (the Outpost can say 'too old')", oldHub != null && oldHub.HasV2 && oldHub.RowVersion == 2 && !oldHub.PosSupported && !oldHub.PosEnabled && oldHub.MapId == 1413);
+                var oldv = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 2, 3, x, y));
+                Check("v2 strip: whatever is in the reserved bytes is ignored", oldv != null && !oldv.PosSupported && !oldv.PosValid && oldv.PosX == 0);
+                var v3row = StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 3, 3, x, y);
+                var bad3 = Render(v2p, 4, 0, 0, 300, 40, 0, 1.0, rnd, v3row);
+                for (int yy = 4; yy < 8; yy++) for (int xx = 4 * 15; xx < 4 * 16; xx++) for (int ch = 0; ch < 3; ch++) bad3[(yy * 300 + xx) * 4 + ch] ^= 0x80;   // a cell of the x bytes
+                var b3 = StripCodec.Decode(bad3, 300, 40, 1200, out var w3);
+                Check("v3 strip with a corrupted position cell: row 1 fails its checksum, no position (v1 kept)", b3 != null && b3.Name == "Elan" && !b3.HasV2 && !b3.PosValid, w3);
+                var one = Render(v2p, 4, 0, 0, 300, 4, 0, 1.0, rnd, v3row);
+                var o1 = StripCodec.Decode(one, 300, 4, 1200, out var w4);
+                Check("old-hub view of a v3 strip (row 0 only): v1 fields intact", o1 != null && o1.Name == "Elan" && !o1.HasV2, w4);
+                var chp = new GamePresence.Character();
+                GamePresence.ApplyLive(chp, Dec(v3row));
+                var cho = new GamePresence.Character();
+                GamePresence.ApplyLive(cho, oldHub);
+                Check("presence: the position reaches the character (uiMap 1413, 0.25 / 0.75); an old Hub's says 'not supported'", chp.PosSupported && chp.PosEnabled && chp.PosValid && chp.PosMapId == 1413 && Math.Abs(chp.PosFx - 0.25) < 1e-4
+                    && cho.HasLive && !cho.PosSupported && !cho.PosValid && cho.PosMapId == 0);
+                var i1 = Dec(v3row); var i2 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 3, 3, x + 300, y));
+                Check("a move alone is a position change, not a presence change (no Lodge update, no file poll)", i1.V2Equals(i2) && !i1.PosEquals(i2));
+            }
             // names for the ids: open-world uiMapID, dungeon instance id, unknown -> nothing
             var ch1 = new GamePresence.Character();
             GamePresence.ApplyLive(ch1, StripCodec.Decode(Render(v2p, 4, 0, 0, 300, 40, 0, 1.0, rnd, v2row), 300, 40, 1200, out _));

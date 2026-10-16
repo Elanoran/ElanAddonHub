@@ -311,6 +311,100 @@
     new C().addTo(map);
   }
 
+  // ---------------------------------------------------------------- the live position layer ("me"): your dot, a fading trail, a notice, Follow me
+  // Only drawn while the app sends it (Settings > Show my live position on the world map). Nothing here is stored; the app keeps the trail in memory.
+  var ME_STATES = { off: 1, none: 1, ok: 1, elsewhere: 1, unavailable: 1, notshared: 1, oldhub: 1 };
+  var me = null, meGroup = null, meDot = null, meCtrl = null, follow = false, meAt = 0, meTrail = [];
+  function fin(v) { return typeof v === 'number' && isFinite(v); }
+  function llOk(a) { return a && a.length === 2 && fin(a[0]) && fin(a[1]) && a[0] <= 0 && a[0] >= -256 && a[1] >= 0 && a[1] <= 256; }
+  function meClear() {
+    if (meGroup && map) map.removeLayer(meGroup);
+    meGroup = null; meDot = null; meTrail = [];
+    if (meCtrl && map) map.removeControl(meCtrl);
+    meCtrl = null;
+  }
+  function meMsg(m) {
+    var st = ME_STATES[m.state] ? m.state : 'none';
+    if (st === 'off' || st === 'none') { me = { state: st }; meClear(); return; }
+    var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [];
+    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && fin(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1 }); }
+    me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
+      howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null };
+    meTrail = pts; meAt = Date.now();
+    meDraw();
+    if (follow && map && me.state === 'ok' && me.here) map.panTo(me.here, { animate: false });
+  }
+  function heading() {
+    var n = meTrail.length; if (!me || !me.here || n < 1) return null;
+    var a = meTrail[n - 1].ll, b = me.here;
+    if (n >= 2 && Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) < 1e-9) a = meTrail[n - 2].ll;
+    var dLat = b[0] - a[0], dLng = b[1] - a[1];
+    if (Math.abs(dLat) + Math.abs(dLng) < 1e-6) return null;
+    return Math.round(Math.atan2(dLng, dLat) * 180 / Math.PI);
+  }
+  function meDraw() {
+    if (!map || !me) return;
+    if (!meGroup) { meGroup = L.layerGroup(); meGroup.addTo(map); }
+    meGroup.clearLayers(); meDot = null;
+    // the trail: runs of points (a break starts a new run), cut into age bands that fade out over the 10 minutes
+    var extra = (Date.now() - meAt) / 1000, BAND = 60, run = [], band = -1;
+    function flush() {
+      if (run.length < 2) return;
+      var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600));
+      meGroup.addLayer(L.polyline(run, { color: '#000', weight: 6, opacity: op * 0.45, interactive: false, lineCap: 'round', lineJoin: 'round' }));      // a dark casing: readable on any tile
+      meGroup.addLayer(L.polyline(run, { color: me.color, weight: 3, opacity: op, interactive: false, lineCap: 'round', lineJoin: 'round', className: 'me-trail' }));
+    }
+    for (var i = 0; i < meTrail.length; i++) {
+      var p = meTrail[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
+      if (p.brk) { flush(); run = []; band = b; }
+      if (b !== band) { flush(); run = run.length ? [run[run.length - 1]] : []; band = b; }
+      run.push(p.ll);
+    }
+    if (me.state === 'ok' && me.here && run.length) run.push(me.here);
+    flush();
+    // the dot: class colour with a heading arrow; grey with a label where the position is not available
+    var at = me.state === 'ok' ? me.here : me.state === 'unavailable' ? me.last : null;
+    if (at) {
+      var grey = me.state !== 'ok', hd = grey ? null : heading();
+      var html = '<div class="me-dot' + (grey ? ' grey' : '') + '" style="--c:' + me.color + '">' + (hd === null ? '' : '<i class="me-arrow" style="transform:rotate(' + hd + 'deg)"></i>') + '</div>'
+        + (grey ? '<div class="me-lab">' + esc(me.notice || 'Position unavailable here') + '</div>' : '');
+      meDot = L.marker(at, { icon: L.divIcon({ className: 'me-i', html: html, iconSize: [0, 0] }), keyboard: false, interactive: true, zIndexOffset: 1000 });
+      bindHover(meDot, me.name || 'You', grey ? (me.notice || 'Position unavailable here') : 'You are here', grey ? 'The trail pauses here' : 'Live from Elan\'s Hub (display only)', null);
+      meGroup.addLayer(meDot);
+    }
+    meCtrlDraw();
+  }
+  function meCtrlDraw() {
+    if (!map || !me) return;
+    if (!meCtrl) {
+      var C = L.Control.extend({ options: { position: 'bottomright' }, onAdd: function () { var d = el('div', 'wm-me'); L.DomEvent.disableClickPropagation(d); L.DomEvent.disableScrollPropagation(d); this._d = d; return d; } });
+      meCtrl = new C(); meCtrl.addTo(map);
+    }
+    var d = meCtrl._d; d.innerHTML = '';
+    var head = el('div', 'me-h'); var sw = el('span', 'me-sw'); sw.style.background = me.color; head.appendChild(sw); head.appendChild(el('b', '', esc(me.name || 'You')));
+    d.appendChild(head);
+    var showNotice = me.state !== 'ok';
+    if (showNotice && me.notice) d.appendChild(el('div', 'me-n' + (me.state === 'unavailable' ? '' : ' calm'), esc(me.notice)));
+    if (me.howto) {
+      var a = el('button', 'me-link', esc(me.howtoText)); a.type = 'button';
+      a.addEventListener('click', function () { send({ t: 'howto' }); });
+      d.appendChild(a);
+    }
+    if (me.state === 'ok' || me.state === 'unavailable') {
+      var f = el('button', 'me-follow' + (follow ? ' on' : ''), follow ? 'Following you' : 'Follow me'); f.type = 'button'; f.setAttribute('aria-pressed', String(follow));
+      f.addEventListener('click', function () { setFollow(!follow, true); });
+      d.appendChild(f);
+    }
+  }
+  function setFollow(v, tell) {
+    follow = !!v;
+    if (tell) send({ t: 'follow', on: follow });
+    if (follow && map && me && me.state === 'ok' && me.here) map.panTo(me.here, { animate: false });
+    meCtrlDraw();
+  }
+  // the trail keeps fading while nothing new arrives
+  setInterval(function () { if (me && meTrail.length && map) meDraw(); }, 15000);
+
   // ---------------------------------------------------------------- the messages from the app
   // vseq: the last place the app sent the map to; every view report names it, so the app can drop a report that was on its way before that goto
   var vseq = -1;
@@ -325,6 +419,7 @@
       case 'layerinfo': setCount(m.id, m.state === 'loading' ? '...' : m.state === 'empty' ? 'none' : String(m.count == null ? '' : m.count)); if (m.note && panelRows[m.id]) panelRows[m.id].row.title = m.note; break;
       case 'toast': toast(m.text, m.ok); break;
       case 'on': (m.on || []).forEach(function (k) { on[k] = true; }); refresh(); break;
+      case 'me': meMsg(m); break;
     }
   }
   if (wv) wv.addEventListener('message', function (e) { handle(e.data); });
@@ -358,6 +453,7 @@
 
   function init(m) {
     cfg = m.map;
+    follow = m.follow === true; meGroup = null; meDot = null; meCtrl = null; me = null; meTrail = [];
     if (map) { map.remove(); map = null; data = {}; groups = {}; counts = {}; requested = {}; panelRows = {}; defs = {}; on = {}; }
     $('map').innerHTML = '';
     document.documentElement.style.setProperty('--sea', cfg.sea || '#081110');
@@ -418,6 +514,7 @@
       ]);
     });
     map.on('movestart zoomstart', function () { hideMenu(); hideTip(); });
+    map.on('dragstart', function () { if (follow) setFollow(false, true); });      // dragging the map yourself stops following
     map.on('move zoom resize', queueDraw);
     var vt = 0;
     map.on('moveend', function () {
@@ -458,6 +555,19 @@
     },
     // the routes of a lines layer by kind (test): [{g, shown}] - shown = the route is in the layer's group (its kind row is on and the layer is on the map)
     feed: function (m) { handle(m); return 1; },      // test: the app's message as if it had come from the app
+    // the live layer (test): state, dot (grey?), trail lines and points, notice, how-to link, follow, heading; `click` = 'howto' | 'follow' presses that button
+    me: function (click) {
+      var d = meCtrl && meCtrl._d;
+      if (click && d) { var b = d.querySelector(click === 'howto' ? '.me-link' : '.me-follow'); if (b) b.click(); }
+      var lines = 0; if (meGroup) meGroup.eachLayer(function (l) { if (l.getLatLngs) lines++; });
+      var de = meDot && meDot.getElement && meDot.getElement();
+      var c = map ? map.getCenter() : null, h = me && me.here;
+      return JSON.stringify({ state: me ? me.state : null, layer: !!(meGroup && map && map.hasLayer(meGroup)), dot: !!meDot, grey: !!(de && de.querySelector('.me-dot.grey')),
+        label: de && de.querySelector('.me-lab') ? de.querySelector('.me-lab').textContent : '', arrow: !!(de && de.querySelector('.me-arrow')), heading: heading(),
+        lines: lines, points: meTrail.length, panel: !!d, notice: d && d.querySelector('.me-n') ? d.querySelector('.me-n').textContent : '',
+        link: d && d.querySelector('.me-link') ? d.querySelector('.me-link').textContent : '', followBtn: !!(d && d.querySelector('.me-follow')), follow: follow,
+        centered: !!(c && h && Math.abs(c.lat - h[0]) < 0.05 && Math.abs(c.lng - h[1]) < 0.05) });
+    },
     lines: function (id) {
       var g = groups[id]; if (!g || !lineKinds[id]) return '[]';
       return JSON.stringify(lineKinds[id].filter(function (e) { return !e.layer._line; }).map(function (e) { return { g: e.g, shown: !!(map.hasLayer(g) && g.hasLayer(e.layer)) }; }));

@@ -25,6 +25,11 @@ namespace ElansAddonHub.Services
             public int Flags, XpPercent = -1, GroupSize;   // Flags: 1 combat 2 dead 4 AFK 8 resting 16 instance 32 raid inst 64 party inst 128 group
             public bool Rested, InInstance;
             public string InstanceName;
+            // ---- the OPT-IN map position (companion 1.15.3+, "Share my map position with Elan's Outpost"): display only, never sent to the Lodge.
+            // PosSupported false = the Hub is too old to send it; PosEnabled false = switched off in the game; PosValid false = no position here (instance ...)
+            public bool PosSupported, PosEnabled, PosValid;
+            public int PosMapId;                                  // the uiMap the fractions are on
+            public double PosFx, PosFy;                           // 0..1 on that map
             public Character Copy() => (Character)MemberwiseClone();
             public bool InCombat => (Flags & 1) != 0;
             public bool Dead => (Flags & 2) != 0;
@@ -57,6 +62,7 @@ namespace ElansAddonHub.Services
             this.pixelOn = pixelOn ?? (() => true);
             Strip = new PixelStrip(this.pixelOn);
             Strip.Changed += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(Poll));
+            Strip.PositionChanged += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(OnStripPosition));
             timer.Tick += (s, e) => Poll();
             debounce.Tick += (s, e) => { debounce.Stop(); Poll(); };
             this.watch.Changed += running => { ApplyWow(running); Poll(); };
@@ -96,8 +102,10 @@ namespace ElansAddonHub.Services
             else held = null;
 
             bool changed = playing != Playing || !Same(shown, Current);
+            bool moved = !SamePos(shown, Current);
             Playing = playing; Current = shown;
             if (changed) Changed?.Invoke();
+            if (changed || moved) PositionChanged?.Invoke();
         }
 
         // Live data from the addon's pixel strip beats SavedVariables (which only change on /reload and logout).
@@ -141,6 +149,7 @@ namespace ElansAddonHub.Services
         {
             if (!info.HasV2) return;
             c.HasLive = true;
+            ApplyPosition(c, info);
             c.Flags = info.Flags1; c.CombatKnown = info.CombatKnown; c.GroupSize = info.GroupSize;
             c.XpPercent = info.XpKnown ? info.XpPercent : -1;
             c.Rested = info.Rested;
@@ -153,6 +162,25 @@ namespace ElansAddonHub.Services
             else if (info.MapId != 0 || info.InstanceId != 0 || info.InInstance) c.Zone = null; // somewhere we have no name for: show nothing, not a wrong zone
         }
 
+        public static void ApplyPosition(Character c, StripCodec.Info info)
+        {
+            c.PosSupported = info.PosSupported; c.PosEnabled = info.PosEnabled; c.PosValid = info.PosValid;
+            c.PosMapId = info.PosValid ? info.MapId : 0;
+            c.PosFx = info.PosValid ? info.PosFx : 0; c.PosFy = info.PosValid ? info.PosFy : 0;
+        }
+
+        // only the position moved on the strip: the character shown stays (no poll of the files, no Changed for the Lodge), its position is updated
+        public event Action PositionChanged;
+        void OnStripPosition()
+        {
+            var info = Strip.Latest; var cur = Current;
+            if (info == null || cur == null || !info.HasV2 || !string.Equals(cur.Name, info.Name, StringComparison.OrdinalIgnoreCase)) return;
+            ApplyPosition(cur, info);
+            PositionChanged?.Invoke();
+        }
+        // tests: as if the strip said this
+        public void SetPositionForTest(Character c, bool playing) { Current = c; Playing = playing; PositionChanged?.Invoke(); }
+
         static bool FromThisSession(Character c, DateTime started)
         {
             if (started == DateTime.MinValue || c.Updated <= 0) return true;
@@ -164,6 +192,10 @@ namespace ElansAddonHub.Services
                 && a.ClassFile == b.ClassFile && a.RaceFile == b.RaceFile && a.Sex == b.Sex && a.Zone == b.Zone && a.Guild == b.Guild
                 && a.HasLive == b.HasLive && a.Flags == b.Flags && a.XpPercent == b.XpPercent && a.Rested == b.Rested && a.GroupSize == b.GroupSize
                 && a.InInstance == b.InInstance && a.InstanceName == b.InstanceName && a.CombatKnown == b.CombatKnown);
+
+        static bool SamePos(Character a, Character b) =>
+            ReferenceEquals(a, b) || (a != null && b != null && a.PosSupported == b.PosSupported && a.PosEnabled == b.PosEnabled && a.PosValid == b.PosValid
+                && a.PosMapId == b.PosMapId && a.PosFx == b.PosFx && a.PosFy == b.PosFy);
 
         static DateTime SafeStamp(string f) { try { return File.GetLastWriteTimeUtc(f); } catch { return DateTime.MinValue; } }
 
