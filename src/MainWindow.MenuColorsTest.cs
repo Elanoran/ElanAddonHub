@@ -134,7 +134,7 @@ namespace ElansAddonHub
                     Check("atlas home: the page starts with its first section at the top (or, under a Classic banner, 24 below it: the space the search box left is closed)", isBanner ? Math.Abs(nextY - (firstY + shown[0].ActualHeight) - 24) < 1 : Math.Abs(firstY) < 1, gap);
                 }
                 else Check("atlas home: the page has its sections", false, shown.Count.ToString());
-                Check("atlas home: Continue and Browse are still there, Continue first", homeTexts.Contains("Continue") && homeTexts.Contains("Browse") && homeTexts.IndexOf("Continue") < homeTexts.IndexOf("Browse"));
+                Check("atlas home (2.74): the hero and Continue are there, the hero first; no Browse tiles (the side menu has them)", homeTexts.Contains("Continue") && !homeTexts.Contains("Browse") && AtlasView.HomeHeroForTest != null && shown.Count > 0 && shown.Contains(AtlasView.HomeHeroForTest) && shown.IndexOf(AtlasView.HomeHeroForTest) <= 1);
                 Check("atlas home: the Home row is selected in the neutral section", SelectedProblem(AtlasView.NavRowForTest("home"), "Brush.Section.Neutral") == null, SelectedProblem(AtlasView.NavRowForTest("home"), "Brush.Section.Neutral"));
                 await ShotWait(300); Snapshot(P("menucolors-atlas-home.png"));
                 var savedMods = AtlasView.ModifiersForTest;

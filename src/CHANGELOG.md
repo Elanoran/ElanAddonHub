@@ -3,6 +3,17 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.76.0
+- **Atlas Home is about you now.** When you play, Home opens with where you are: "You are in Durotar" on the zone's painting, your character with level and class, the first line of the zone's notes, and whether the zone fits your level ("Good for your level", "A bit high for you", "Low for you, little XP"). Small tags show what Elan's Hub sees right now: in combat, resting, grouped, in a dungeon. Your XP bar and a Rested tag sit below. Click it to open the zone (or the dungeon you are in).
+- **When WoW is not running** Home shows where your last character was ("Last seen in Greenvale", saved 3 h ago). With no character at all it shows a calm Atlas picture and how to get Elan's Hub.
+- **Cards for your character.** Under "Recommended for": quests in your zone for your level (it cannot hide the quests you finished yet), dungeons for your level (or your group), rare creatures in the zone and where they were seen, upgrades you can get in the zone, and how many recipes you can learn now. Only cards with something in them show. Pick another character's chip to see theirs.
+- **Lodge today.** One line with how many members are online, today's finds, the next event and the next raid reset, and who of the Lodge is playing in the same zone as you (only members who share their zone; anyone who appears offline is never shown).
+- **Recent finds of your zone.** The Lodge's latest finds show the ones from your zone first; switch to All for everything.
+- **The category tiles are gone from Home.** Every category is in the side menu, as before.
+- **Home keeps up while you play.** A new zone or a level-up changes the picture and the cards in place, after a short pause; combat and rest change the tags at once. Nothing you are reading jumps: when something above it grows or shrinks, the page scrolls along.
+- **No more jumpy start page.** Opening Home used to show the scroll bar for a moment (or take it away) while the shortcuts filled in a moment later, so the page seemed to move. Home now waits until it is complete (at most about half a second) and then appears in one go.
+- Fixed: in a cave or another small map inside a zone (the Wolf Den, a mine) the Outpost did not know which zone you were in. It now goes up the map's parents to the zone.
+
 ## 2.75.0
 - **Choose the radio's sound quality.** Settings > General > Radio Paradise > **Sound quality**: **Standard** (MP3, as before), **High** (AAC 320 kbit/s) or **Lossless** (FLAC, CD quality). Data for an hour of listening: Standard about 90 MB, High about 145 MB, Lossless up to about 0.5 GB (it varies with the music). Changing it while music plays switches right away.
 - **Serenity plays now.** Radio Paradise only sends Serenity as AAC and as FLAC, which the player could not play before. Standard and High play its AAC stream, Lossless its FLAC stream.

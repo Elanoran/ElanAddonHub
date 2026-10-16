@@ -30,18 +30,21 @@ namespace ElansAddonHub
         {
             ResetEntity(); startInfo = null;
             classBook = null; classGroups = null; classShown.Clear();
-            tileGrids.Clear(); tileCaptions.Clear(); presetHost = null; presetLabel = null; presetWrap = null; homeChips.Clear();
+            tileGrids.Clear(); presetHost = null; presetLabel = null; presetWrap = null; homeChips.Clear(); ResetHome();
             classicBanner = null; classicOffer = null; classicCard = null; classicBody = null;
             ClassicBannerGetForTest = ClassicBannerNotNowForTest = null; ClassicBannerProgressForTest = null;
             ClassicPrimaryForTest = ClassicCancelForTest = ClassicRemoveForTest = null;
         }
 
         // ============================================================================================================================ Home
-        // The start page is a launchpad: the Classic call to action (only while the baseline is missing), Continue (recent pages), every category as a card in its
-        // group, shortcuts for your characters, the Lodge's latest finds, and ONE line for the state of the data (opens "Data sources"). It has no search box of its
-        // own (2.71.1): the title bar box and Ctrl+K are the one way to search, on every page.
+        // Atlas Home (2.74) is about you, now: the hero (where you are, from the Hub status strip, else where your last character was), "Recommended for" (the
+        // character chips, the cards for the chosen one, the shortcuts), the Lodge today, Continue (recent pages), the Lodge's recent finds (this zone or all), and
+        // ONE line for the state of the data (opens "Data sources"). The categories are in the side menu (no tiles here since 2.74); no search box of its own
+        // (2.71.1): the title bar box and Ctrl+K are the one way to search. AtlasPage.Home.cs draws the hero, the cards, the Lodge and the finds.
+        public int DrawStartCountForTest;
         void DrawStart()
         {
+            DrawStartCountForTest++;
             model = null; browse = null; hosted = null; browseList = null; drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear();
@@ -51,20 +54,22 @@ namespace ElansAddonHub
             var col = new StackPanel();
             Body.Children.Add(col);
 
-            // the banners keep the 24 between sections to what follows (they used to sit on the search box's 24)
+            // the banners keep the 24 between sections to what follows
             var banner = ClassicBannerView(); banner.Margin = new Thickness(0, 0, 0, 24); col.Children.Add(banner);
             var offer = ClassicOfferView(); offer.Margin = new Thickness(0, 0, 0, 24); col.Children.Add(offer);
+            col.Children.Add(HomeHeroBlock());
+            col.Children.Add(RecommendBlock());
+            _ = FillHome();
+            col.Children.Add(HomeLodgeBlock());
             var cont = ContinueBlock();
             if (cont != null) col.Children.Add(cont);
-            col.Children.Add(BrowseBlock());
-            _ = FillBrowseBlock();
-            var finds = FindsBlock(4);
-            if (finds != null) col.Children.Add(Card(finds, 24));
+            var finds = HomeFindsBlock();
+            if (finds != null) col.Children.Add(finds);
             col.Children.Add(StatusLine());
             startInfoCols = 0; startTileCols = 0;
             LayoutStart();
             Scroller.ScrollToTop();
-            Motion.PageIn(Body);
+            HoldHome();
         }
 
         // ============================================================================================================================ Data sources
@@ -109,8 +114,9 @@ namespace ElansAddonHub
 
         void LayoutStart()
         {
-            if (startInfo == null && tileGrids.Count == 0) return;
+            if (startInfo == null && tileGrids.Count == 0 && homeCardGrid == null) return;
             double w = Scroller.ActualWidth > 0 ? Scroller.ActualWidth : 760;
+            if (homeCardGrid != null) { int hc = CardColumnsFor(w, homeCardGrid.Children.Count); if (homeCardGrid.Columns != hc) homeCardGrid.Columns = hc; }
             if (tileGrids.Count > 0)
             {
                 int tiles = TileColumnsFor(w);
@@ -184,116 +190,66 @@ namespace ElansAddonHub
             return sp;
         }
 
-        // ---- Browse: every category as a card (icon tile, name, how many), grouped like the nav
-        readonly Dictionary<string, TextBlock> tileCaptions = new Dictionary<string, TextBlock>();
+        // ---- "Recommended for": the character chips, the cards for the chosen one (AtlasPage.Home.cs) and the shortcuts, filled off the UI thread
         int startGen;
         Task startFill = Task.CompletedTask;
         public Task StartFillForTest => startFill;
         StackPanel presetHost;
         TextBlock presetLabel;
 
-        FrameworkElement BrowseBlock()
+        FrameworkElement RecommendBlock()
         {
-            tileCaptions.Clear(); categoryTiles.Clear();
-            var sp = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-            sp.Children.Add(SectionHead("Browse"));
-            var cats = AtlasCategories.Visible;
-            var groups = AtlasNav.Groups.Where(g => cats.Any(c => (string.IsNullOrEmpty(c.Group) ? AtlasNav.Database : c.Group) == g)).ToList();
-            foreach (var c in cats) { var g = string.IsNullOrEmpty(c.Group) ? AtlasNav.Database : c.Group; if (!groups.Contains(g)) groups.Add(g); }
-            bool lodgeFinds = false;
-            try { lodgeFinds = AtlasQuery.LodgeHasData() && AtlasCategories.Find("items") != null; } catch (Exception) { }
-            if (lodgeFinds && !groups.Contains(AtlasNav.Lodge)) groups.Add(AtlasNav.Lodge);
-            int cols = TileColumnsFor(Scroller.ActualWidth > 0 ? Scroller.ActualWidth : 760);
-            foreach (var grp in groups)
-            {
-                var label = Tb(grp, "Text.Secondary"); double above = sp.Children.Count > 1 ? 8 : 0; label.Margin = new Thickness(0, above, 0, 8);
-                sp.Children.Add(label);
-                var wrap = new System.Windows.Controls.Primitives.UniformGrid { Margin = new Thickness(0, 0, -8, 0), Columns = cols };
-                tileGrids.Add(wrap);
-                foreach (var c in cats.Where(c => (string.IsNullOrEmpty(c.Group) ? AtlasNav.Database : c.Group) == grp))
-                    wrap.Children.Add(CategoryCard(c.Title, c.Glyph, c.OpenId, c.Blurb, c.Hosted ? c.Blurb : "", c.Hosted ? null : c.Id, c.Id));
-                if (grp == AtlasNav.Lodge && lodgeFinds)
-                    wrap.Children.Add(CategoryCard("Finds", "", AtlasNav.FindsId, "What the Lodge's members found and saw drop", "What members found and saw drop", null, "finds"));
-                sp.Children.Add(wrap);
-            }
-            presetHost = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
-            sp.Children.Add(presetHost);
-            return sp;
+            presetHost = new StackPanel { Tag = "home-recommend" };
+            homeCardsHost = new StackPanel { Tag = "home-cards", Visibility = Visibility.Collapsed };
+            return presetHost;
         }
 
-        // a category tile: its line icon (AtlasIcons) on a small tile, the name (two lines when it is long) and the count or a few words. No painted art since 2.71:
-        // the paintings are the browse pages' banners now (ArtLibrary.Banners).
-        FrameworkElement CategoryCard(string title, string glyph, string openId, string tip, string caption, string countFor, string iconKey = null)
-        {
-            var tile = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(12, 8, 12, 8), MinHeight = 64, Margin = new Thickness(0, 0, 8, 8), Tag = openId, Focusable = false, Cursor = Cursors.Hand, ToolTip = tip };
-            tile.SetResourceReference(Control.BackgroundProperty, "Brush.Surface1");
-            tile.MouseLeftButtonUp += Row_Click;
-            Keyable(tile, () => _ = Open(openId), false);
-            System.Windows.Automation.AutomationProperties.SetName(tile, title);
-            var g = new Grid();
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var it = new AtlasNavItem { Title = title, Glyph = glyph, Icon = iconKey ?? "" };
-            var ic = IconTile(it, 40, 20); ic.Margin = new Thickness(0, 0, 12, 0);
-            g.Children.Add(ic);
-            var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            var name = Tb(title, "Text.RowTitle"); name.TextWrapping = TextWrapping.Wrap;
-            col.Children.Add(name);
-            var cap = Tb(caption, "Text.Caption"); cap.TextTrimming = TextTrimming.CharacterEllipsis;
-            col.Children.Add(cap);
-            if (countFor != null) tileCaptions[countFor] = cap;
-            Grid.SetColumn(col, 1); g.Children.Add(col);
-            tile.Content = g;
-            if (!string.IsNullOrEmpty(iconKey)) categoryTiles[iconKey] = tile;
-            return tile;
-        }
-
-        // the category tiles of Home, by category id ("finds" for the Lodge's finds)
-        readonly Dictionary<string, FrameworkElement> categoryTiles = new Dictionary<string, FrameworkElement>(StringComparer.OrdinalIgnoreCase);
-        public IReadOnlyDictionary<string, FrameworkElement> CategoryTilesForTest => categoryTiles;
-
-        // counts on the cards and the shortcuts that the data can answer, worked out off the UI thread (the first time they build the category indexes)
-        Task FillBrowseBlock()
+        // the chips, the cards and the shortcuts; then the counts of the categories, so the side menu shows them (they build the category indexes the first time)
+        Task FillHome()
         {
             int gen = ++startGen;
             var host = presetHost;
-            var caps = new Dictionary<string, TextBlock>(tileCaptions);
             var cats = AtlasCategories.Visible.Where(c => !c.Hosted).ToList();
+            var live = homeHere;
             return startFill = Task.Run(async () =>
             {
-                foreach (var c in cats)
-                {
-                    int n = AtlasBrowse.Count(c);
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        if (gen != startGen || !caps.TryGetValue(c.Id, out var cap)) return;
-                        cap.Text = n > 0 ? n.ToString("N0", Lodge.CalendarRules.English) : "Nothing yet";
-                    });
-                    if (gen != startGen) return;
-                }
                 var chars = AtlasQuery.Characters();
-                var me = AtlasBrowse.ChosenCharacter(chars, navSettings?.AtlasHomeChar);
+                // the character playing now is the one chosen; else the one chosen last (kept in the settings), else the one played last
+                var me = live != null && live.Live ? AtlasHome.Match(chars, live.Name, live.Realm) : null;
+                if (me == null) me = AtlasBrowse.ChosenCharacter(chars, navSettings?.AtlasHomeChar);
                 var presets = AtlasBrowse.Presets(me);
                 await Dispatcher.InvokeAsync(() =>
                 {
                     if (gen != startGen || host != presetHost) return;
-                    navSig = ""; BuildNav();                      // the nav shows the counts that are known now
+                    homeChars = chars;
                     host.Children.Clear(); homeChips.Clear(); presetWrap = null;
-                    if (presets.Count == 0)
+                    homeChar = me;
+                    bool cards = me != null || (homeHere != null && homeHere.Known && homeHere.Level > 0);
+                    if (presets.Count == 0 && !cards)
                     {
-                        host.Children.Add(Tb(ClassicBaselineText(), "Text.Caption", Res("Brush.Text.Tertiary"), 4));
+                        var t = ClassicBaselineText();
+                        if (t.Length > 0) { host.Children.Add(Tb(t, "Text.Caption", Res("Brush.Text.Tertiary"), 0)); host.Margin = new Thickness(0, 0, 0, 24); }
+                        RevealHome();
                         return;
                     }
-                    presetLabel = Tb(me == null ? "Where to get things" : "Recommended for", "Text.Section"); presetLabel.Margin = new Thickness(0, 0, 0, 8);
+                    presetLabel = Tb(me == null && !cards ? "Where to get things" : "Recommended for", "Text.Section"); presetLabel.Margin = new Thickness(0, 0, 0, 8);
                     host.Children.Add(presetLabel);
                     if (me != null) host.Children.Add(CharChips(chars, me));
+                    host.Children.Add(homeCardsHost);
                     presetWrap = new WrapPanel();
-                    homeChar = me;
                     FillPresets(presets);
                     host.Children.Add(presetWrap);
                     if (!Services.Atlas.Classic.ClassicAtlas.IsReady) host.Children.Add(Tb(ClassicBaselineText(), "Text.Caption", Res("Brush.Text.Tertiary"), 0));
-                    host.Margin = new Thickness(0, 12, 0, 24);
+                    host.Margin = new Thickness(0, 0, 0, 24);
+                    if (cards) FillHomeCards(); else RevealHome();
                 });
+                await homeCardsFill;
+                foreach (var c in cats)
+                {
+                    AtlasBrowse.Count(c);
+                    if (gen != startGen) return;
+                }
+                await Dispatcher.InvokeAsync(() => { if (gen == startGen) { navSig = ""; BuildNav(); } });      // the nav shows the counts that are known now
             });
         }
 
@@ -374,7 +330,8 @@ namespace ElansAddonHub
             homeCharFill = Task.Run(async () =>
             {
                 var presets = AtlasBrowse.Presets(c);
-                await Dispatcher.InvokeAsync(() => { if (wrap == presetWrap && homeChar == c) FillPresets(presets); });
+                await Dispatcher.InvokeAsync(() => { if (wrap == presetWrap && homeChar == c) { FillPresets(presets); FillHomeCards(); } });
+                await homeCardsFill;
             });
         }
 
@@ -564,14 +521,11 @@ namespace ElansAddonHub
             return sp;
         }
 
-        FrameworkElement FindsBlock(int take = 8)
+        // the finds as rows: the item in its quality colour, who found it and from what, the zone, how long ago
+        FrameworkElement FindRows(IEnumerable<AtlasObs.Find> finds)
         {
-            var L = AtlasQuery.Context.Lodge?.Invoke();
-            if (L == null || L.AllFinds.Count == 0) return null;
-            var sp = new StackPanel();
-            sp.Children.Add(Tb("Recent finds in the Lodge", "Text.Section"));
             var rows = new List<AtlasRow>();
-            foreach (var f in L.AllFinds.OrderByDescending(f => f.Seq).Take(take))
+            foreach (var f in finds)
             {
                 var r = AtlasQuery.ItemRow(f.Item, "", AtlasLabel.Forever);
                 var src = f.Src ?? "";
@@ -582,14 +536,7 @@ namespace ElansAddonHub
                 r.Right = AtlasFormat.Ago(f.At, AtlasQuery.Context.NowUtc());
                 rows.Add(r);
             }
-            var host = new ContentControl { Margin = new Thickness(-8, 8, -8, 0), Focusable = false, Content = new ItemsControl { ItemsSource = rows, ItemTemplate = (DataTemplate)FindResource("AtlasRowTemplate"), Focusable = false } };
-            sp.Children.Add(host);
-            if (take < 8 && L.AllFinds.Count > take && AtlasCategories.Find("items") != null)
-            {
-                var all = GhostButton("All " + L.AllFinds.Count.ToString("N0", CalendarRules.English) + " finds", () => { _ = Open(AtlasNav.FindsId); }, "Everything the Lodge has found and seen drop");
-                all.Margin = new Thickness(0, 4, 0, 0); sp.Children.Add(all);
-            }
-            return sp;
+            return new ContentControl { Margin = new Thickness(-8, 8, -8, 0), Focusable = false, Content = new ItemsControl { ItemsSource = rows, ItemTemplate = (DataTemplate)FindResource("AtlasRowTemplate"), Focusable = false } };
         }
     }
 }

@@ -453,7 +453,7 @@ namespace ElansAddonHub
         // ============================================================================================================================ layout: the rail beside the tab (wide) or the facts inside the Overview (narrow)
         void Layout()
         {
-            if (startInfo != null || tileGrids.Count > 0) { LayoutStart(); return; }
+            if (startInfo != null || tileGrids.Count > 0 || homeCardGrid != null) { LayoutStart(); return; }
             if (entityGrid == null || model == null) return;
             bool hasRail = factsCard != null || HasRailMap(model);
             int m = ColumnModeFor(Scroller.ActualWidth, hasRail);

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
+using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
 using ElansAddonHub.Services.Maps;
@@ -32,6 +34,7 @@ namespace ElansAddonHub
             AtlasQuery.Context.OwnFieldNotes = () => AtlasObs.Read(settings.WowRoot)?.FieldNotes;   // Hunter Helper's field notes on this PC
             AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
             AtlasView.LodgeState = LodgeAtlasState;
+            InitAtlasHome();
             // "Who in the Lodge can craft this?" (Armory, server 2.19): cached answers; an answer that arrives redraws the recipe / item page and the Professions rows
             AtlasQuery.Context.Crafters = spells => Session?.CraftersFor(spells);
             if (Session != null) Session.CraftersChanged += () => Dispatcher.BeginInvoke(new Action(() => { AtlasView.CraftersChanged(); ProfessionsView?.CraftersChanged(); }));
@@ -173,6 +176,60 @@ namespace ElansAddonHub
         {
             ShowTab("atlas");
             _ = AtlasView.Open(idOrText);
+        }
+
+        // ---- Atlas Home (2.74): the character on the status strip and the Lodge's day, and the events that keep them current while Home is open
+        void InitAtlasHome()
+        {
+            if (Session == null) return;
+            AtlasView.LiveSource = () => new HomeLive { Char = Session.Presence.Current, Strip = Session.Presence.Strip?.Latest, Playing = Session.Presence.Playing };
+            AtlasView.HomeLodgeSource = HomeLodgeNow;
+            Session.Presence.Changed += () => Dispatcher.BeginInvoke(new Action(() => { AtlasView.LiveChanged(); AtlasView.HomeLodgeChanged(); }));
+            Session.Changed += () => Dispatcher.BeginInvoke(new Action(() => AtlasView.HomeLodgeChanged()));
+            // a member who comes, goes or moves to another zone changes "near you"
+            System.ComponentModel.PropertyChangedEventHandler moved = (s, e) => { if (e.PropertyName == nameof(MemberVM.ZoneLine) || e.PropertyName == nameof(MemberVM.Playing) || e.PropertyName == nameof(MemberVM.SecondLine)) AtlasView.HomeLodgeChanged(); };
+            foreach (var m in Session.Members) m.PropertyChanged += moved;
+            Session.Members.CollectionChanged += (s, e) =>
+            {
+                if (e.NewItems != null) foreach (MemberVM m in e.NewItems) m.PropertyChanged += moved;
+                if (e.OldItems != null) foreach (MemberVM m in e.OldItems) m.PropertyChanged -= moved;
+                AtlasView.HomeLodgeChanged();
+            };
+        }
+
+        // the Lodge's day as Home shows it (null = not connected to a Lodge)
+        HomeLodge HomeLodgeNow()
+        {
+            if (Session == null || !Session.Online) return null;
+            var now = DateTime.UtcNow;
+            var l = new HomeLodge { Online = Session.Members.Count(m => m.IsMe || !m.Invisible), Members = HomeMembersOf(Session.Members) };
+            var ev = Session.NextEvent;
+            if (ev != null) { l.NextEventTitle = ev.Title ?? ""; l.NextEventUtc = ev.StartUtc; }
+            if (Session.WowEventsEnabled)
+            {
+                var reset = Session.WowEvents.Where(e => e.WowKind == "raidreset" && e.StartUtc > now).OrderBy(e => e.StartUtc).FirstOrDefault();
+                if (reset != null) { l.NextResetTitle = reset.Title ?? ""; l.NextResetUtc = reset.StartUtc; }
+            }
+            return l;
+        }
+
+        // the Lodge's members for Home: what they play and where, as far as they share it (the server leaves the zone out when they keep it to themselves,
+        // and only the owner is ever sent members who appear offline - Home leaves those out too)
+        public static List<HomeMember> HomeMembersOf(IEnumerable<MemberVM> members)
+        {
+            var l = new List<HomeMember>();
+            foreach (var m in members ?? Enumerable.Empty<MemberVM>())
+            {
+                int lv = 0;
+                var gl = m.GameLine ?? "";
+                if (gl.StartsWith("Lv ", StringComparison.Ordinal)) int.TryParse(gl.Substring(3), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out lv);
+                l.Add(new HomeMember
+                {
+                    Name = m.Display ?? "", CharName = m.CharName ?? "", Place = m.Playing ? m.Place ?? "" : "", Level = lv, Playing = m.Playing, Invisible = m.Invisible, IsMe = m.IsMe,
+                    Status = m.StateText ?? "", Color = m.Playing ? m.ClassBrush : null,
+                });
+            }
+            return l;
         }
 
         string LodgeAtlasState()
