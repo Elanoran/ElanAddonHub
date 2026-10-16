@@ -29,9 +29,9 @@ namespace ElansAddonHub
 
         // message i of n in a mixed channel: runs of three from one person 45 s apart (grouping), every 37th mine, pictures, YouTube links,
         // mentions, long multi-line ones, replies and reactions
-        static string ChatHistoryMsg(int i, int n, long now, Func<int, string> textFor = null)
+        static string ChatHistoryMsg(int i, int n, long now, Func<int, string> textFor = null, string pre = "c")
         {
-            string id = "c" + i.ToString("D5");
+            string id = pre + i.ToString("D5");
             string from; int fid;
             if (i % 37 == 0) { from = "Elan"; fid = 1; }
             else { from = ChatWho[((i - 1) / 3) % 3]; fid = from == "Bob" ? 2 : from == "Tess" ? 4 : 3; }
@@ -44,19 +44,21 @@ namespace ElansAddonHub
             else if (i % 20 == 11) text = "@Elan are you around for Deadmines " + i + "?";
             else if (i % 13 == 0) text = "a longer one " + i + "\nwith a second line\nand a third line that goes on for a while, so that it wraps when the window is narrow enough to need it";
             else text = "chatter number " + i;
-            if (i % 10 == 3 && i > 5) extra += ",\"replyTo\":{\"id\":\"c" + (i - 5).ToString("D5") + "\",\"by\":\"Bob\",\"snippet\":\"chatter number " + (i - 5) + "\"}";
+            if (i % 10 == 3 && i > 5) extra += ",\"replyTo\":{\"id\":\"" + pre + (i - 5).ToString("D5") + "\",\"by\":\"Bob\",\"snippet\":\"chatter number " + (i - 5) + "\"}";
             if (i % 10 == 5) extra += ",\"reactions\":{\"ready\":[\"Bob\",\"Tess\"],\"lol\":[\"Elan\"]}";
-            return "{\"channel\":\"general\",\"id\":" + Q(id) + ",\"at\":" + at + ",\"from\":" + Q(from) + ",\"fromId\":" + fid + ",\"text\":" + ChatJ(text) + extra + "}";
+            return "{\"channel\":\"long\",\"id\":" + Q(id) + ",\"at\":" + at + ",\"from\":" + Q(from) + ",\"fromId\":" + fid + ",\"text\":" + ChatJ(text) + extra + "}";
         }
 
-        static string ChatLive(string id, string from, int fid, string text, string extra = "", string channel = "general") =>
+        static string ChatLive(string id, string from, int fid, string text, string extra = "", string channel = "long") =>
             "{\"t\":\"msg\",\"channel\":" + Q(channel) + ",\"id\":" + Q(id) + ",\"at\":" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + ",\"from\":" + Q(from) + ",\"fromId\":" + fid + ",\"text\":" + ChatJ(text) + extra + "}";
 
-        string ChatWelcome(int n, long now, Func<int, string> textFor = null)
+        string ChatWelcome(int n, long now, Func<int, string> textFor = null, string pre = "c")
         {
-            var hist = string.Join(",", Enumerable.Range(1, n).Select(i => ChatHistoryMsg(i, n, now, textFor)));
+            var hist = string.Join(",", Enumerable.Range(1, n).Select(i => ChatHistoryMsg(i, n, now, textFor, pre)));
             var loot = string.Join(",", Enumerable.Range(1, 20).Select(i => "{\"channel\":\"loot\",\"id\":\"L" + i + "\",\"at\":" + (now - (21 - i) * 60000L) + ",\"from\":\"Tess\",\"fromId\":4,\"text\":\"loot line " + i + "\"}"));
-            return FunWelcome("owner", FunPeople(false), hist).Replace("\"loot\":[]}", "\"loot\":[" + loot + "]}");
+            // a channel of its own, "Long" (General keeps what the other Lodge sections left in it)
+            return FunWelcome("owner", FunPeople(false), "").Replace("\"loot\":[]}", "\"loot\":[" + loot + "],\"long\":[" + hist + "]}")
+                .Replace("\"channels\":[", "\"channels\":[{\"id\":\"long\",\"name\":\"Long\",\"type\":\"text\",\"minRole\":\"guest\"},");
         }
 
         static BitmapSource ChatPicture(int w, int h, byte seed)
@@ -90,7 +92,7 @@ namespace ElansAddonHub
             var perf = new List<string>();
             bool ok = true;
             Action<string, bool> check = (what, cond) => { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; };
-            var hadShown = Session.IsShownToUser; var hadThumb = YouTube.ThumbSource; var hadMeta = YouTube.MetaSource; var hadOff = settings.VideoPreviewsOff;
+            var hadShown = Session.IsShownToUser; var hadThumb = YouTube.ThumbSource; var hadMeta = YouTube.MetaSource; var hadOff = settings.VideoPreviewsOff; var hadLast = settings.LastChannel;
             try
             {
                 Session.Disconnect();
@@ -111,7 +113,7 @@ namespace ElansAddonHub
             finally
             {
                 Session.SentForTest = null;
-                Session.IsShownToUser = hadShown; YouTube.ThumbSource = hadThumb; YouTube.MetaSource = hadMeta; settings.VideoPreviewsOff = hadOff;
+                Session.IsShownToUser = hadShown; YouTube.ThumbSource = hadThumb; YouTube.MetaSource = hadMeta; settings.VideoPreviewsOff = hadOff; settings.LastChannel = hadLast;
                 YouTube.ClearCaches();
                 Session.Disconnect();
             }
@@ -127,9 +129,9 @@ namespace ElansAddonHub
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var L = LodgePage;
             async Task Feed(string json) { Session.FeedForTest(json); await ChatSettle(); }
-            ChannelVM General() => Session.TextChannels.First(c => c.Id == "general");
+            ChannelVM Long() => Session.TextChannels.First(c => c.Id == "long");
             ChannelVM Loot() => Session.TextChannels.First(c => c.Id == "loot");
-            MessageVM Msg(string id) => Session.MessagesOf("general").FirstOrDefault(m => m.Id == id);
+            MessageVM Msg(string id) => Session.MessagesOf("long").FirstOrDefault(m => m.Id == id);
             bool OnScreen(string id) { var y = L.OffsetOfForTest(id); return !double.IsNaN(y) && y >= -1 && y < L.ViewportForTest; }
             (string id, double y) Anchor() { var id = L.FirstVisibleForTest(out var y); return (id, y); }
             bool Same((string id, double y) a, out string what)
@@ -147,10 +149,10 @@ namespace ElansAddonHub
             await Feed(ChatWelcome(N, now, i => i == 300 ? "the late one https://www.youtube.com/watch?v=chatlistLAT" : null));
             Session.Select(Loot());
             await ChatSettle();
-            Session.Select(General());
+            Session.Select(Long());
             await ChatSettle();
             // (the video cards of the history come in on their own, a moment later: wait for them, except the one that is held back)
-            await Until(() => Session.MessagesOf("general").Where(m => m.Video != null && m.Id != "c00300").All(m => m.VideoVisibility == Visibility.Visible), 8000);
+            await Until(() => Session.MessagesOf("long").Where(m => m.Video != null && m.Id != "c00300").All(m => m.VideoVisibility == Visibility.Visible), 8000);
             L.ScrollToEndForTest();
             await ChatSettle();
 
@@ -161,7 +163,7 @@ namespace ElansAddonHub
 
             // ---- new messages
             await Feed(ChatLive("live1", "Bob", 2, "a new one while I'm at the bottom"));
-            check("live: a new message while at the bottom scrolls it into view and is read", await Until(() => AtEnd() && EndOnScreen("live1")) && !General().Unread);
+            check("live: a new message while at the bottom scrolls it into view and is read", await Until(() => AtEnd() && EndOnScreen("live1")) && !Long().Unread);
 
             var s0 = L.MessageScrollableForTest;
             L.ScrollToVerticalForTest(Math.Max(0, L.MessageScrollableForTest - 2500));
@@ -173,7 +175,7 @@ namespace ElansAddonHub
             await ChatSettle();
             diag += " after " + L.ScrollOffsetForTest.ToString("0") + "/" + L.MessageScrollableForTest.ToString("0");
             check("live: a new message while scrolled up does not move the view (" + (Same(a, out var w1) ? "" : w1 + " " + diag) + ")", Same(a, out _) && Math.Abs(L.ScrollOffsetForTest - off) < 1.5);
-            check("live: ... it is unread, the 'New' line goes above it", General().Unread && General().Divider?.Id == "live2" && Msg("live2").ShowDivider);
+            check("live: ... it is unread, the 'New' line goes above it", Long().Unread && Long().Divider?.Id == "live2" && Msg("live2").ShowDivider);
             check("live: ... and the pill offers Jump to present", L.JumpModeForTest == "present");
 
             for (int i = 3; i <= 62; i++) await Feed(ChatLive("live" + i, "Bob", 2, "more news " + i));
@@ -187,7 +189,7 @@ namespace ElansAddonHub
             var yDiv = L.OffsetOfForTest("live2");
             check("unread: Jump to first unread brings the line near the top of the view (" + yDiv.ToString("0.0") + ")", Math.Abs(yDiv - 36) < 2);
             L.ClickJumpForTest();
-            check("unread: then Jump to present goes to the end, where the channel is read", await Until(() => AtEnd() && !General().Unread));
+            check("unread: then Jump to present goes to the end, where the channel is read", await Until(() => AtEnd() && !Long().Unread));
 
             // ---- sending
             L.ScrollToVerticalForTest(Math.Max(0, L.MessageScrollableForTest - 2500));
@@ -200,9 +202,9 @@ namespace ElansAddonHub
                 Shown(L.RowForTest("live3")).Any(t => t.Text == "Bob") && !Shown(L.RowForTest("live4")).Any(t => t.Text == "Bob") && Msg("live4").Continuation);
 
             // ---- edits, reactions, deletes, mentions in view
-            await Feed("{\"t\":\"edited\",\"channel\":\"general\",\"id\":\"live60\",\"text\":\"edited text here\"}");
-            await Feed("{\"t\":\"react\",\"channel\":\"general\",\"id\":\"live60\",\"reaction\":\"ready\",\"users\":[\"Bob\"],\"by\":\"Bob\",\"on\":true}");
-            await Feed("{\"t\":\"deleted\",\"channel\":\"general\",\"id\":\"live61\"}");
+            await Feed("{\"t\":\"edited\",\"channel\":\"long\",\"id\":\"live60\",\"text\":\"edited text here\"}");
+            await Feed("{\"t\":\"react\",\"channel\":\"long\",\"id\":\"live60\",\"reaction\":\"ready\",\"users\":[\"Bob\"],\"by\":\"Bob\",\"on\":true}");
+            await Feed("{\"t\":\"deleted\",\"channel\":\"long\",\"id\":\"live61\"}");
             await Feed(ChatLive("ment1", "Tess", 4, "@Elan ping, the raid is forming"));
             await ChatSettle();
             var row60 = L.RowForTest("live60");
@@ -217,7 +219,7 @@ namespace ElansAddonHub
             await Until(() => AtEnd() && OnScreen("rep1"));
             var rowR = L.RowForTest("rep1");
             check("reply: the row shows the quoted line", rowR != null && VisualsOf<TextBlock>(rowR).Any(t => t.IsVisible && string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text)).Contains("chatter number 100")));
-            var found = await L.JumpToAsync("general", Msg("rep1").ReplyId);
+            var found = await L.JumpToAsync("long", Msg("rep1").ReplyId);
             await ChatSettle();
             var y100 = L.OffsetOfForTest("c00100");
             check("reply: the quote jumps to the original 500 messages up: near the top of the view, flashed (" + y100.ToString("0.0") + ")", found && Msg("c00100").Flash && Math.Abs(y100 - 36) < 2);
@@ -225,7 +227,7 @@ namespace ElansAddonHub
             check("jump: the view is not at the end any more, the pill offers Jump to present", !L.AtBottomForTest && L.JumpModeForTest == "present");
 
             // ---- size changes above the view must not move what I'm reading
-            found = await L.JumpToAsync("general", "c00320");
+            found = await L.JumpToAsync("long", "c00320");
             await ChatSettle();
             check("jump: a jump to a message further down the history lands it near the top", found && Math.Abs(L.OffsetOfForTest("c00320") - 36) < 2);
             var a2 = Anchor();
@@ -239,12 +241,12 @@ namespace ElansAddonHub
             check("late picture: a picture that loads above the view does not move it (" + (Same(a2, out var w3) ? "" : w3) + ")", Same(a2, out _));
             Snapshot(Path.Combine(dir, "chatlist-3-picture-above.png"));
             a2 = Anchor();
-            await Feed("{\"t\":\"edited\",\"channel\":\"general\",\"id\":\"c00310\",\"text\":\"now a much longer message\\nover\\nfour\\nlines\"}");
-            await Feed("{\"t\":\"react\",\"channel\":\"general\",\"id\":\"c00311\",\"reaction\":\"lol\",\"users\":[\"Bob\"],\"by\":\"Bob\",\"on\":true}");
+            await Feed("{\"t\":\"edited\",\"channel\":\"long\",\"id\":\"c00310\",\"text\":\"now a much longer message\\nover\\nfour\\nlines\"}");
+            await Feed("{\"t\":\"react\",\"channel\":\"long\",\"id\":\"c00311\",\"reaction\":\"lol\",\"users\":[\"Bob\"],\"by\":\"Bob\",\"on\":true}");
             await ChatSettle();
             check("above the view: an edit and a new reaction above do not move the view (" + (Same(a2, out var w4) ? "" : w4) + ")", Same(a2, out _));
             a2 = Anchor();
-            await Feed("{\"t\":\"deleted\",\"channel\":\"general\",\"id\":\"c00312\"}");
+            await Feed("{\"t\":\"deleted\",\"channel\":\"long\",\"id\":\"c00312\"}");
             await ChatSettle();
             check("above the view: a deleted message above does not move the view (" + (Same(a2, out var w5) ? "" : w5) + ")", Same(a2, out _));
 
@@ -253,7 +255,7 @@ namespace ElansAddonHub
             await Until(() => AtEnd());
             await Feed(ChatLive("pic1", "Bob", 2, "", ",\"file\":{\"id\":\"pic1x\",\"name\":\"pic1.png\",\"size\":20000,\"mime\":\"image/png\"}"));
             await Until(() => AtEnd() && OnScreen("pic1"));
-            Session.MessagesOf("general").First(m => m.Id == "pic1").File.Image = ChatPicture(360, 240, 90);
+            Session.MessagesOf("long").First(m => m.Id == "pic1").File.Image = ChatPicture(360, 240, 90);
             await ChatSettle();
             check("late picture: a picture that loads in the last message keeps the list at the end", AtEnd() && EndOnScreen("pic1"));
             await Feed(ChatLive("vid1", "Tess", 4, "https://www.youtube.com/watch?v=chatlistLA2"));
@@ -263,13 +265,13 @@ namespace ElansAddonHub
             await ChatSettle();
             check("late card: a video card that appears in the last message keeps the list at the end", AtEnd() && EndOnScreen("vid1"));
             L.ScrollToEndForTest();
-            await Until(() => AtEnd() && !General().Unread);
+            await Until(() => AtEnd() && !Long().Unread);
 
             // ---- the very first message, and older history on the way up
-            found = await L.JumpToAsync("general", "c00001");
+            found = await L.JumpToAsync("long", "c00001");
             await ChatSettle();
             check("jump: to the first message of the channel (top of the list)", found && Msg("c00001").Flash && L.ScrollOffsetForTest < 1 && L.OffsetOfForTest("c00001") >= 0);
-            check("history: at the top the note says it is the start (the server had no more)", await Until(() => L.OlderNoteForTest == "This is the start of #General"));
+            check("history: at the top the note says it is the start (the server had no more)", await Until(() => L.OlderNoteForTest == "This is the start of #Long"));
             L.ClickJumpForTest();
             await Until(() => AtEnd());
             // scrolling up step by step (a wheel turn each) never makes the view jump, all the way to the first message
@@ -293,21 +295,21 @@ namespace ElansAddonHub
             // ---- channels: back at the newest; with unread messages at the line
             Session.Select(Loot());
             await ChatSettle();
-            Session.Select(General());
+            Session.Select(Long());
             check("switch: coming back to a channel opens it at the newest message again (the place is not kept)", await Until(() => AtEnd() && OnScreen("vid1")));
             Session.Select(Loot());
             await ChatSettle();
             await Feed(ChatLive("away1", "Bob", 2, "while you were in Loot"));
             await Feed(ChatLive("away2", "Bob", 2, "and another"));
-            Session.Select(General());
+            Session.Select(Long());
             await ChatSettle();
             var yAway = L.OffsetOfForTest("away1");
-            check("switch: with unread messages it opens at the 'New' line (" + yAway.ToString("0.0") + ")", General().Divider?.Id == "away1" && !double.IsNaN(yAway) && yAway > 0 && yAway < L.ViewportForTest);
+            check("switch: with unread messages it opens at the 'New' line (" + yAway.ToString("0.0") + ")", Long().Divider?.Id == "away1" && !double.IsNaN(yAway) && yAway > 0 && yAway < L.ViewportForTest);
             L.ClickJumpForTest();
-            await Until(() => AtEnd() && !General().Unread);
+            await Until(() => AtEnd() && !Long().Unread);
 
             // ---- typing line
-            await Feed("{\"t\":\"typing\",\"channel\":\"general\",\"id\":2}");
+            await Feed("{\"t\":\"typing\",\"channel\":\"long\",\"id\":2}");
             check("typing: someone typing shows under the list", await Until(() => L.TypingTextForTest.Contains("typing")));
 
             // ---- selection, menu, keyboard
@@ -365,8 +367,8 @@ namespace ElansAddonHub
             var cache = Directory.CreateDirectory(Path.Combine(Util.DataDir, "cache")).FullName;
             var png = ChatPng(360, 240);
             for (int i = 7; i <= N; i += 50) File.WriteAllBytes(Path.Combine(cache, "img" + i + ".png"), png);
-            Session.FeedForTest(ChatWelcome(N, now));
-            var general = Session.TextChannels.First(c => c.Id == "general");
+            Session.FeedForTest(ChatWelcome(N, now, null, "p"));
+            var general = Session.TextChannels.First(c => c.Id == "long");
             Session.Select(Session.TextChannels.First(c => c.Id == "loot"));
             await ChatSettle();
             await Task.Delay(300);
@@ -382,7 +384,7 @@ namespace ElansAddonHub
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             UpdateLayout();
             double openMs = sw.Elapsed.TotalMilliseconds;
-            check("perf: a 5000-message channel opens at its newest message", await Until(() => L.AtBottomForTest && !double.IsNaN(L.OffsetOfForTest("c05000"))));
+            check("perf: a 5000-message channel opens at its newest message", await Until(() => L.AtBottomForTest && !double.IsNaN(L.OffsetOfForTest("p05000"))));
             int rows = L.RowCountForTest;
             long m1 = Managed(), w1 = Ws();
             Snapshot(Path.Combine(dir, "chatlist-6-5000-bottom.png"));
@@ -406,11 +408,11 @@ namespace ElansAddonHub
                 stepsDown.Add(t.Elapsed.TotalMilliseconds);
             }
             sw.Restart();
-            var found = await L.JumpToAsync("general", "c00100");
+            var found = await L.JumpToAsync("long", "p00100");
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             UpdateLayout();
             double jumpMs = sw.Elapsed.TotalMilliseconds;
-            check("perf: a jump 4900 messages up finds the message", found && Math.Abs(L.OffsetOfForTest("c00100") - 36) < 2);
+            check("perf: a jump 4900 messages up finds the message", found && Math.Abs(L.OffsetOfForTest("p00100") - 36) < 2);
             int rowsAfterJump = L.RowCountForTest;
             Snapshot(Path.Combine(dir, "chatlist-7-5000-jump.png"));
             sw.Restart();
@@ -418,7 +420,7 @@ namespace ElansAddonHub
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             UpdateLayout();
             double presentMs = sw.Elapsed.TotalMilliseconds;
-            check("perf: Jump to present returns to the newest", await Until(() => L.AtBottomForTest && !double.IsNaN(L.OffsetOfForTest("c05000"))));
+            check("perf: Jump to present returns to the newest", await Until(() => L.AtBottomForTest && !double.IsNaN(L.OffsetOfForTest("p05000"))));
 
             Session.Select(Session.TextChannels.First(c => c.Id == "loot"));
             await ChatSettle();
