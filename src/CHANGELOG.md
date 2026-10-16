@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.80.1
+- **Talents Forever links work again.** Talents Forever now makes its links for the newest talent trees (they end in -7), and the Talents calculator refused them. Both the new links and the older ones (ending in -6) open again. Older links for a Priest, Shaman, Mage or Warlock are moved onto today's trees, so every point lands on the same talent the site shows. If an older link has points in a talent the game has since removed, the Outpost names that talent and asks you to open the link on the site and copy it again.
+
 ## 2.80.0
 - **Every class and race has its own painting.** The Atlas pages of the nine classes and the ten races (the Skyborne's High Order and Windshapers each their own) now open with a painted banner behind the name, like the zone pages do: a warrior on an old battlefield, a hunter and their wolf above a misty forest, the Skyborne's floating isles and more, in the same style as the rest of the Atlas art.
 

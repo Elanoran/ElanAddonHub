@@ -14,7 +14,7 @@ namespace ElansAddonHub.Services.Talents
     //
     //   seemeta.com            .../wow-forever/talent-calculator/<class>?build=<tree1>-<tree2>-<tree3>   (digits, trailing zeros cut; &level= and &race= ignored)
     //   wowforevertalent.com   .../<class>/#b=1~<tree version>~<class>~<level>~<tree1>-<tree2>-<tree3>   (digits, one per talent, nothing cut)
-    //   talentsforever.com     .../<class>/<level>/<tree1>-<tree2>-<tree3>[-legacy x3][-order]-6        (digits, trailing zeros cut; the order is a symbol per talent)
+    //   talentsforever.com     .../<class>/<level>/<tree1>-<tree2>-<tree3>[-legacy x3][-order]-7        (digits, trailing zeros cut; the order is a symbol per talent; -6 = older trees)
     //
     // Only the talentsforever.com link holds the order the points were spent in; it is replayed through the rules like a recommended build. The other links hold
     // the final ranks only. Sites seen but NOT readable are named with the reason (Zockify numbers talents with its own ids; WoW Forever Builds lists different
@@ -242,8 +242,59 @@ namespace ElansAddonHub.Services.Talents
         }
 
         // ============================================================================================================================ talentsforever.com
-        // https://talentsforever.com/hunter/60/5555-0-2-6      or with the order: .../hunter/60/55-5-23-AB2C-6   (legacy segments are three more between)
+        // https://talentsforever.com/hunter/60/5555-0-2-7      or with the order: .../hunter/60/55-5-23-AB2C-7   (legacy segments are three more between)
+        // The last segment is the generation of the site's trees the digits count on. -7 (15 Oct 2026) counts on the trees of build 70425; -6 on the trees
+        // before it, which differ for the Priest, Shaman, Mage and Warlock only. A ?b=<build>&d=<date> query may follow; it is not part of the build.
         static readonly Regex TfPath = new Regex(@"([a-z]+)/(\d+)/([0-9A-Za-z-]*)$", RegexOptions.IgnoreCase);
+        const int TfNow = 7;
+
+        // -6 -> -7: where each talent of a -6 tree sits in the -7 trees (tree * 100 + index in the site's order), or the name of a talent build 70425 removed;
+        // "=" is a tree that did not change. Read from the site's own tables (TALENT_ORDER_V6 against its current trees, renames followed), October 2026.
+        static readonly Dictionary<string, string> TfV6Moves = new Dictionary<string, string>
+        {
+            { "PRIEST", "0,1,2,3,4,9,6,7,8,10,11,5,13,12,14,15,16,17|=|200,201,202,Shadow Affinity,204,205,203,206,207,208,Improved Fade,210,211,212,213,214,215,216" },
+            { "SHAMAN", "0,1,7,3,5,2,6,4,8,9,Call of Thunder,11,13,10,14,12|=|200,204,202,203,201,205,206,207,208,209,210,211,212,213,214,215" },
+            { "MAGE", "0,1,2,4,5,6,7,8,9,10,11,12,13,3,15,16,17,18|=|=" },
+            { "WARLOCK", "0,1,2,Malediction,4,5,6,7,8,9,10,11,12,13,14,15,16|=|=" },
+        };
+
+        // a -6 link's tree digits and order code carried to the -7 positions; null + words when a point sits on a talent that is gone
+        static string[] TfFromV6(TalentTreeDef tree, string[] trees, List<List<TalentNode>> lists, ref string order, out string error)
+        {
+            error = null;
+            if (!TfV6Moves.TryGetValue(tree.ClassFile, out var spec)) return trees;
+            var moves = spec.Split('|').Select((t, s) => t == "=" ? Enumerable.Range(0, lists[s].Count).Select(i => (s * 100 + i).ToString()).ToArray() : t.Split(',')).ToArray();
+            var flatOld = moves.SelectMany(t => t).ToList();
+            var ranks = lists.Select(l => Enumerable.Repeat('0', l.Count).ToArray()).ToArray();
+            for (int s = 0; s < trees.Length && s < moves.Length; s++)
+            {
+                if (trees[s].Length > moves[s].Length) { error = "The " + TfName + " link was made for different talent trees than this game has (the " + TreeName(tree, s) + " tree has more talents than the site had)."; return null; }
+                for (int i = 0; i < trees[s].Length; i++)
+                {
+                    if (trees[s][i] == '0') continue;
+                    if (!int.TryParse(moves[s][i], out var at)) { error = "This " + TfName + " link was made on older talent trees and has points in " + moves[s][i] + ", which the game no longer has. Open it on the site, then copy the address again."; return null; }
+                    if (at / 100 >= ranks.Length || at % 100 >= ranks[at / 100].Length) { error = "The " + TfName + " link was made for different talent trees than this game has."; return null; }
+                    ranks[at / 100][at % 100] = trees[s][i];
+                }
+            }
+            if (order.Length > 0)
+            {
+                var sb = new StringBuilder();
+                for (int k = 0; k < order.Length; k++)
+                {
+                    int f = Syms.IndexOf(order[k]);
+                    bool run = k + 1 < order.Length && order[k + 1] >= '1' && order[k + 1] <= '4';
+                    if (f >= 0 && f < flatOld.Count && int.TryParse(flatOld[f], out var at))
+                    {
+                        int nf = lists.Take(at / 100).Sum(l => l.Count) + at % 100;
+                        if (nf < Syms.Length) { sb.Append(Syms[nf]); if (run) sb.Append(order[k + 1]); }
+                    }
+                    if (run) k++;
+                }
+                order = sb.ToString();
+            }
+            return ranks.Select(r => new string(r).TrimEnd('0')).ToArray();
+        }
 
         static Decoded ReadTf(Uri u, Func<string, TalentTreeDef> find, Func<TalentNode, string> nameOf, int legacy)
         {
@@ -259,13 +310,21 @@ namespace ElansAddonHub.Services.Talents
             int nt = tree.SpecCount;
             // the last segment is the version of the site's trees when there is one more segment than trees
             string last = all[all.Count - 1];
-            int ver = all.Count > nt && last.Length == 1 && last[0] >= '2' && last[0] <= '6' ? last[0] - '0' : 1;
-            if (ver != 6) return Fail(TfName, "This Talents Forever link was made on older talent trees (" + (ver == 1 ? "before the site marked its versions" : "version " + ver) + "). Open it on the site, then copy the address again.");
+            int ver = all.Count > nt && last.Length == 1 && last[0] >= '2' && last[0] <= '9' ? last[0] - '0' : 1;
+            if (ver > TfNow) return Fail(TfName, "This Talents Forever link was made on newer talent trees than this Outpost knows (version " + ver + "). Update the Outpost to open it.");
+            if (ver < 6) return Fail(TfName, "This Talents Forever link was made on older talent trees (" + (ver == 1 ? "before the site marked its versions" : "version " + ver) + "). Open it on the site, then copy the address again.");
             all.RemoveAt(all.Count - 1);
             if (all.Count < nt) all.AddRange(Enumerable.Repeat("", nt - all.Count));
             var trees = all.Take(nt).ToArray();
             var extra = all.Skip(nt).ToList();
             var order = extra.Count >= 4 ? extra[3] : extra.Count == 1 ? extra[0] : "";
+            if (ver == 6)
+            {
+                if (trees.Any(s => !Regex.IsMatch(s, "^[0-9]*$"))) return Fail(TfName, "The " + TfName + " link is damaged (it has characters that do not belong).");
+                var now = Enumerable.Range(0, nt).Select(s => SiteNodes(tree, s, true)).ToList();
+                trees = TfFromV6(tree, trees, now, ref order, out var why);
+                if (trees == null) return Fail(TfName, why);
+            }
             var d = Place(TfName, tree, trees, true, false, out var lists);
             if (!d.Ok || order.Length == 0) return d;
             ReplayOrder(d, tree, lists, order, nameOf, legacy);

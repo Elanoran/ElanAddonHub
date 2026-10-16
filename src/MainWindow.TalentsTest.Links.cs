@@ -30,7 +30,7 @@ namespace ElansAddonHub
 
         const string TalSyms = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz056789";
 
-        // talentsforever.com: ranks, then (when an order is given) the order code: a symbol per talent, a run length when the run is not all of its ranks, then -6
+        // talentsforever.com: ranks, then (when an order is given) the order code: a symbol per talent, a run length when the run is not all of its ranks, then -7 (the trees of today's game)
         static string TalTfLink(TalentTreeDef t, TalentState s, List<TalentNode> order)
         {
             var flat = Enumerable.Range(0, t.SpecCount).SelectMany(sp => TalSiteOrder(t, sp, true)).ToList();
@@ -44,7 +44,7 @@ namespace ElansAddonHub
                 if (run < left[node.Id]) code.Append(run);
                 left[node.Id] -= run; k += run;
             }
-            return "https://talentsforever.com/" + t.ClassFile.ToLowerInvariant() + "/60/" + string.Join("-", TalDigits(t, s, true, true)) + (code.Length > 0 ? "-" + code : "") + "-6";
+            return "https://talentsforever.com/" + t.ClassFile.ToLowerInvariant() + "/60/" + string.Join("-", TalDigits(t, s, true, true)) + (code.Length > 0 ? "-" + code : "") + "-7";
         }
 
         // a legal layout of `points` points, spent one point at a time over every talent that the rules allow, in tree order; `order` gets the points in that order
@@ -119,6 +119,14 @@ namespace ElansAddonHub
             Check("links: the index.html#class/level/... form of the same site decodes too", tf8.Ok && tf8.State.SameAs(want), tf8.Error);
             var tf9 = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-0-0-0-6", set, nm);
             Check("links: Talents Forever legacy segments (three after the trees) are skipped, not mistaken for an order", tf9.Ok && tf9.State.SameAs(want) && tf9.Order == null, tf9.Error);
+            // since 15 Oct 2026 the site writes -7 (the trees of build 70425); the Hunter's trees did not change, so -6 and -7 are the same build
+            var tf10 = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-7", set, nm);
+            var tf11 = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-ABCDEG-7?b=70425&d=261016", set, nm);
+            Check("links: Talents Forever '-7' links decode to the same build as '-6' (with and without an order; the ?b=70425&d=261016 the site adds is ignored)",
+                tf10.Ok && tf10.Site == "Talents Forever" && tf10.State.SameAs(want) && tf10.Order == null && tf11.Ok && tf11.State.SameAs(want) && tf11.Order != null && tf2.Order != null
+                && tf11.Order.Steps.Select(x => x.NodeId).SequenceEqual(tf2.Order.Steps.Select(x => x.NodeId)), tf10.Error + " " + tf11.Error);
+            var tf12 = BuildLinks.Decode("https://talentsforever.com/hunter/60/5231-1-2-8", set, nm);
+            Check("links: a Talents Forever link on newer trees than this Outpost knows (-8) says to update the Outpost", !tf12.Ok && tf12.Error.Contains("newer") && tf12.Error.Contains("Update"), tf12.Error);
 
             // ---- not readable, not known, not a link
             var z = BuildLinks.Decode("https://www.zockify.com/forever/talents/#IQEBAQ", set, nm);
@@ -227,6 +235,57 @@ namespace ElansAddonHub
                 var withLast = BuildLinks.Decode(TalWftLink(h, big), set, nameOf);
                 Check("real game files, links: on the Hunter a link from a site that leaves the leftover out puts every Marksmanship rank on the node it was made for", withLast.Ok && TalSiteOrder(h, 1, true).All(n => withLast.State.Rank(n.Id) == big.Rank(n.Id)) && withLast.State.Rank(leftover.Id) == 0);
             }
+            // ---- Talents Forever -7 and -6 on the real trees (build 70425). Links copied from the site's own Popular builds (October 2026); the -6 forms are the
+            // same builds written in the site's -6 order (its TALENT_ORDER_V6), the order codes the same points in the same sequence. No network.
+            if (classes.Count == 9)
+            {
+                var siteV7 = new[]
+                {
+                    "warrior/60/0502-05-250533120321021351-7", "paladin/60/50003-503-05225131201331321-7", "hunter/60/5-005005001-500230230250222151-7",
+                    "rogue/60/00530310501-32300320200515231--7", "priest/60/525335031030001001-30515100202--7", "shaman/60/3500331023121351-050002-053200001-7",
+                    "mage/60/0552205023100311531-03--7", "warlock/60/05520323035201351-0050203001--7", "druid/60/050022-55000032021032212051-05003-7",
+                };
+                var bad7 = siteV7.Select(c => (c, d: BuildLinks.Decode("https://talentsforever.com/" + c + "?b=70425&d=261016", set, nameOf))).Where(x => !(x.d.Ok && x.d.State.Total == x.c.Split('/')[2].Where(char.IsDigit).Sum(ch => ch - '0') - 7 && x.d.State.Total > 30)).Select(x => x.c + ": " + x.d.Error).ToList();
+                Check("real game files, links: a -7 Talents Forever build of each of the nine classes (from the site) reads as a legal build with every point on the game's trees", bad7.Count == 0, string.Join(" | ", bad7));
+
+                // the talents build 70425 added sit where the site counts them: a -7 rank lands on the talent the site names
+                Func<string, string, int, string> at = (c, link, tr) =>
+                {
+                    var d = BuildLinks.Decode("https://talentsforever.com/" + link, set, nameOf); var t = set.ForClassFile(c);
+                    return d.Ok ? string.Join(",", BuildLinks.SiteNodes(t, tr, true).Where(n => d.State.Rank(n.Id) > 0).Select(n => nameOf(n) + "=" + d.State.Rank(n.Id))) : d.Error;
+                };
+                var pShadow = at("PRIEST", "priest/60/--50052201251312251-7", 2);
+                var mArcane = at("MAGE", "mage/60/0552205023100311531-03--7", 0);
+                Check("real game files, links: -7 ranks land on the talents the site shows (Priest Shadow 'Dark Inspiration=5', Mage Arcane 'Missile Barrage=2' and 'Arcane Wrath=1')",
+                    pShadow.Contains("Dark Inspiration=5") && pShadow.StartsWith("Shadow Focus=5,Improved Mind Blast=5,") && mArcane.Contains("Missile Barrage=2") && mArcane.Contains("Arcane Wrath=1"), pShadow + " / " + mArcane);
+
+                // -6 links (made before 15 Oct) still open: the Priest, Shaman, Mage and Warlock talents that moved are carried to where they sit now
+                var pairs = new[]
+                {
+                    ("priest/60/525335031030001001-30515100202--7", "priest/60/525330031305001001-30515100202--6"),
+                    ("shaman/60/0530031-055030031005112251-05-7", "shaman/60/0500331-055030031005112251-00005-6"),
+                    ("mage/60/2551225223122301531-13--7", "mage/60/255225223122311531-13--6"),
+                    ("warlock/60/05500320035201351-0050203001--7", "warlock/60/05500320035201351-0050203001--6"),
+                    ("hunter/60/5-005005001-500230230250222151-7", "hunter/60/5-005005001-500230230250222151-6"),
+                    ("shaman/60/0530031-055030031005112251-05-BCFGRSUXYbcdefghj-7", "shaman/60/0500331-055030031005112251-00005-BFEGRSUXYbcdefghm-6"),
+                    ("priest/60/525335031030001001-30515100202--ABCDEFHIKORSUVWXac-7", "priest/60/525330031305001001-30515100202--ABCDELHIJORSUVWXac-6"),
+                };
+                var badPairs = new List<string>();
+                foreach (var (v7, v6) in pairs)
+                {
+                    var a = BuildLinks.Decode("https://talentsforever.com/" + v7, set, nameOf); var b = BuildLinks.Decode("https://talentsforever.com/" + v6, set, nameOf);
+                    bool same = a.Ok && b.Ok && a.State.Total > 0 && a.State.SameAs(b.State) && (a.Order == null) == (b.Order == null) && b.OrderNote == a.OrderNote
+                        && (a.Order == null || a.Order.Steps.Select(x => x.NodeId).SequenceEqual(b.Order.Steps.Select(x => x.NodeId)));
+                    if (!same) badPairs.Add(v6 + ": " + a.Error + b.Error + " " + a.OrderNote + " " + b.OrderNote);
+                }
+                Check("real game files, links: the same build as a -6 and as a -7 Talents Forever link imports to the same talents (Priest, Shaman, Mage and Warlock moved; with the leveling order too)",
+                    badPairs.Count == 0, string.Join(" | ", badPairs));
+                var withOrder = BuildLinks.Decode("https://talentsforever.com/" + pairs[5].Item2, set, nameOf);
+                Check("real game files, links: the -6 Shaman link's leveling order is used (no note)", withOrder.Ok && withOrder.Order != null && withOrder.OrderNote == null, withOrder.Error + " " + withOrder.OrderNote);
+                var gone = BuildLinks.Decode("https://talentsforever.com/priest/60/--00000000002-6", set, nameOf);
+                Check("real game files, links: a -6 link with points in a talent build 70425 removed (Improved Fade) is refused with its name, not guessed", !gone.Ok && gone.Error.Contains("Improved Fade") && gone.Error.Contains("no longer"), gone.Error);
+            }
+
             // a link with one more digit than a real tree has is refused on the real trees too
             var warrior = set.ForClassFile("WARRIOR");
             if (warrior != null)
