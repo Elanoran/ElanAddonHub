@@ -84,7 +84,7 @@ namespace ElansAddonHub.Services.Atlas
         {
             switch (key)
             {
-                case "sources": case "drops": case "givers": case "nodes": return Sources;
+                case "sources": case "drops": case "givers": case "enders": case "nodes": return Sources;
                 case "finds": case "crafters": case "lodgenotes": return Lodge;
                 case "owned": case "rewards": case "choices": case "objectives": return Overview;      // what a quest gives and asks for is the quest
                 default: return Related;

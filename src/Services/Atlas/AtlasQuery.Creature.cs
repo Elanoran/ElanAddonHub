@@ -310,6 +310,8 @@ namespace ElansAddonHub.Services.Atlas
             if (kind.Length > 0) m.Facts.Add(new AtlasFact("Kind", kind, seen != null ? F : C));
             var need = SeenView.SkillNeedOf(id);
             if (need.HasValue && SeenView.SkillNeedText(need.Value) is string needText) m.Facts.Add(new AtlasFact("Needs", needText, F));
+            else if (!need.HasValue && SeenView.LockOf(id) <= 0 && co != null && co.LockId > 0 && SpellData.World?.SkillNeed(co.LockId) is LockNeed cn && SeenView.SkillNeedText(cn) is string cText)
+                m.Facts.Add(new AtlasFact("Needs", cText, C));          // the client has not told its lock: the baseline's (the lock's skill still comes from the game files)
             m.Subtitle = string.Join(" · ", new[] { "Object " + id, kind }.Where(s => s.Length > 0));
             var plan = new PlanBuilder();
             if (co != null) plan.Classic(co.Spawns, MarkerKind.Node, m.Title, kind + " · " + C, "obj:" + id);

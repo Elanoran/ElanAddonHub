@@ -233,11 +233,11 @@ namespace ElansAddonHub.Services.Atlas.Classic
             // objects
             {
                 var t = T["gameobject_template"];
-                int e = t.Idx["entry"], ty = t.Idx["type"], n = t.Idx["name"], d1 = t.Idx["data1"];
+                int e = t.Idx["entry"], ty = t.Idx["type"], n = t.Idx["name"], d0 = t.Idx["data0"], d1 = t.Idx["data1"];
                 foreach (var r in t.Rows)
                 {
                     int id = I(r, e), type = I(r, ty);
-                    idx.Objects[id] = new ClassicObject { Id = id, Name = S(r, n), Type = type, LootId = (type == 3 || type == 25) ? I(r, d1) : 0 };
+                    idx.Objects[id] = new ClassicObject { Id = id, Name = S(r, n), Type = type, LootId = (type == 3 || type == 25) ? I(r, d1) : 0, LockId = (type == 2 || type == 3 || type == 10) ? Math.Max(0, I(r, d0)) : 0 };
                 }
                 var st = T["gameobject"];
                 var byObj = new Dictionary<int, List<ClassicSpawn>>();
@@ -324,6 +324,8 @@ namespace ElansAddonHub.Services.Atlas.Classic
                 var t = T["quest_template"];
                 var giversN = Givers(T["creature_questrelation"], false);
                 var giversO = Givers(T["gameobject_questrelation"], true);
+                var endersN = Givers(T["creature_involvedrelation"], false);
+                var endersO = Givers(T["gameobject_involvedrelation"], true);
                 int Ix(string c) => t.Idx[c];
                 foreach (var r in t.Rows)
                 {
@@ -331,7 +333,13 @@ namespace ElansAddonHub.Services.Atlas.Classic
                     var q = new ClassicQuest
                     {
                         Id = id, Title = S(r, Ix("title")), MinLevel = I(r, Ix("minlevel")), QuestLevel = I(r, Ix("questlevel")), ZoneOrSort = I(r, Ix("zoneorsort")),
-                        RequiredRaces = I(r, Ix("requiredraces")), RequiredClasses = I(r, Ix("requiredclasses"))
+                        RequiredRaces = I(r, Ix("requiredraces")), RequiredClasses = I(r, Ix("requiredclasses")),
+                        PrevQuestId = I(r, Ix("prevquestid")), NextQuestId = I(r, Ix("nextquestid")), ExclusiveGroup = I(r, Ix("exclusivegroup")),
+                        NextQuestInChain = I(r, Ix("nextquestinchain")), BreadcrumbFor = I(r, Ix("breadcrumbforquestid")),
+                        RequiredSkill = I(r, Ix("requiredskill")), RequiredSkillValue = I(r, Ix("requiredskillvalue")),
+                        RequiredMinRepFaction = I(r, Ix("requiredminrepfaction")), RequiredMinRepValue = I(r, Ix("requiredminrepvalue")),
+                        RequiredMaxRepFaction = I(r, Ix("requiredmaxrepfaction")), RequiredMaxRepValue = I(r, Ix("requiredmaxrepvalue")),
+                        SourceItem = Math.Max(0, I(r, Ix("srcitemid"))),
                     };
                     Items(r, t, "rewitemid", "rewitemcount", 4, out q.RewardItems, out q.RewardCounts);
                     Items(r, t, "rewchoiceitemid", "rewchoiceitemcount", 6, out q.ChoiceItems, out q.ChoiceCounts);
@@ -340,6 +348,10 @@ namespace ElansAddonHub.Services.Atlas.Classic
                     if (giversN.TryGetValue(id, out var gn)) gl.AddRange(gn);
                     if (giversO.TryGetValue(id, out var go)) gl.AddRange(go);
                     q.Givers = gl.ToArray();
+                    var el = new List<ClassicQuestGiver>();
+                    if (endersN.TryGetValue(id, out var en)) el.AddRange(en);
+                    if (endersO.TryGetValue(id, out var eo)) el.AddRange(eo);
+                    q.Enders = el.ToArray();
                     idx.Quests[id] = q;
                     for (int k = 0; k < q.RewardItems.Length; k++) idx.Add(q.RewardItems[k], new ClassicItemSource { Kind = ClassicSourceKind.QuestReward, SourceId = id, MinCount = q.RewardCounts[k], MaxCount = q.RewardCounts[k] });
                     for (int k = 0; k < q.ChoiceItems.Length; k++) idx.Add(q.ChoiceItems[k], new ClassicItemSource { Kind = ClassicSourceKind.QuestChoice, SourceId = id, MinCount = q.ChoiceCounts[k], MaxCount = q.ChoiceCounts[k] });

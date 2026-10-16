@@ -3,6 +3,15 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.77.0
+- **Objects are sorted right.** An Alliance chest is a chest, not a herb. The Atlas used to call anything a herb as soon as a herb could drop from it, so many chests and strongboxes showed up under Herbs, on the world map's herb layer and in the gathering guide. Now the lock decides: what needs Herbalism is a herb, what needs Mining is ore, and everything you open some other way is a chest or other. Quest objects anyone can pick up (Serpentbloom, a beached sea creature, a sealed tome) are no longer listed as herbs or chests either.
+- **An object's page says what it needs** ("Needs Herbalism 70") also when only the Classic baseline knows its lock.
+- **Quest chains.** A quest's page shows the chain it belongs to: every step as a link, this quest highlighted, "Step 3 of 7" and the chain's name when the game has one. Long chains fold around the quest you look at; Show all opens the rest.
+- **What comes before and after a quest:** the quests to finish first (or to have in your log), the quests that open it, "Only one of" groups, quests that all have to be done before the next one opens, breadcrumbs, and the quests it opens.
+- **More of what a quest needs:** a profession and its level, a reputation standing ("Honored with Stormwind"), the item it gives you, and who you turn it in to.
+- **Finds remember the game version.** A find now keeps the game build it was made in and shows it quietly: "game 1.60.1" for the version you play, "build 70338 (older game version)" for one from before a patch, "unknown version" for older finds. An item's finds also say how many are from an older game version. The Lodge keeps the build too (a Lodge that has not been updated simply ignores it).
+- The Classic data is read once more from the files already on your PC after this update (no download), to pick up locks and quest chains.
+
 ## 2.76.0
 - **Atlas Home is about you now.** When you play, Home opens with where you are: "You are in Durotar" on the zone's painting, your character with level and class, the first line of the zone's notes, and whether the zone fits your level ("Good for your level", "A bit high for you", "Low for you, little XP"). Small tags show what Elan's Hub sees right now: in combat, resting, grouped, in a dungeon. Your XP bar and a Rested tag sit below. Click it to open the zone (or the dungeon you are in).
 - **When WoW is not running** Home shows where your last character was ("Last seen in Greenvale", saved 3 h ago). With no character at all it shows a calm Atlas picture and how to get Elan's Hub.

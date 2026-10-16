@@ -17,7 +17,9 @@ namespace ElansAddonHub.Services.Atlas.Classic
     // (a few tens of MB for the whole classic world); stored as one gzip file with a small binary layout (varints, floats, string = length + UTF-8).
     public sealed class ClassicIndex
     {
-        public const int FormatVersion = 1;
+        // 2 (Outpost 2.77): objects carry their lock, quests their chain (prev / next / exclusive group / breadcrumb), skill and reputation needs, enders.
+        // A version-1 file still loads (those fields empty); ClassicAtlas.Outdated tells the page to read the dump again.
+        public const int FormatVersion = 2, OldestReadable = 1;
         static readonly byte[] Magic = { (byte)'E', (byte)'C', (byte)'L', (byte)'I' };
 
         public ClassicProvenance Provenance = new ClassicProvenance();
@@ -192,10 +194,11 @@ namespace ElansAddonHub.Services.Atlas.Classic
             }
         }
 
-        public void Write(BinaryWriter w)
+        // format = FormatVersion; an older one only for the self-test (a file an earlier Outpost wrote)
+        public void Write(BinaryWriter w, int format = FormatVersion)
         {
             w.Write(Magic);
-            V(w, FormatVersion);
+            V(w, format);
             var p = Provenance;
             Str(w, p.Repo); Str(w, p.DumpName); Str(w, p.CommitSha); Str(w, p.CommitDate); V(w, p.UpdatesApplied); Str(w, p.BuiltUtc);
 
@@ -210,7 +213,7 @@ namespace ElansAddonHub.Services.Atlas.Classic
             }
 
             V(w, Objects.Count);
-            foreach (var o in Objects.Values.OrderBy(x => x.Id)) { V(w, o.Id); Str(w, o.Name); V(w, o.Type); V(w, o.LootId); Spawns(w, o.Spawns); }
+            foreach (var o in Objects.Values.OrderBy(x => x.Id)) { V(w, o.Id); Str(w, o.Name); V(w, o.Type); V(w, o.LootId); if (format >= 2) V(w, o.LockId); Spawns(w, o.Spawns); }
 
             V(w, Quests.Count);
             foreach (var q in Quests.Values.OrderBy(x => x.Id))
@@ -219,6 +222,11 @@ namespace ElansAddonHub.Services.Atlas.Classic
                 Pairs(w, q.RewardItems, q.RewardCounts); Pairs(w, q.ChoiceItems, q.ChoiceCounts); Pairs(w, q.ObjectiveItems, q.ObjectiveCounts);
                 V(w, q.Givers.Length);
                 foreach (var g in q.Givers) { w.Write((byte)(g.IsObject ? 1 : 0)); V(w, g.Id); }
+                if (format < 2) continue;
+                V(w, q.Enders.Length);
+                foreach (var g in q.Enders) { w.Write((byte)(g.IsObject ? 1 : 0)); V(w, g.Id); }
+                V(w, q.PrevQuestId); V(w, q.NextQuestId); V(w, q.ExclusiveGroup); V(w, q.NextQuestInChain); V(w, q.BreadcrumbFor);
+                V(w, q.RequiredSkill); V(w, q.RequiredSkillValue); V(w, q.RequiredMinRepFaction); V(w, q.RequiredMinRepValue); V(w, q.RequiredMaxRepFaction); V(w, q.RequiredMaxRepValue); V(w, q.SourceItem);
             }
 
             V(w, ItemSources.Count);
@@ -239,7 +247,7 @@ namespace ElansAddonHub.Services.Atlas.Classic
             var m = r.ReadBytes(4);
             if (m.Length != 4 || m[0] != Magic[0] || m[1] != Magic[1] || m[2] != Magic[2] || m[3] != Magic[3]) throw new InvalidDataException("not a Classic index");
             int ver = RV(r);
-            if (ver != FormatVersion) throw new InvalidDataException("index format " + ver + " (this app reads " + FormatVersion + ")");
+            if (ver < OldestReadable || ver > FormatVersion) throw new InvalidDataException("index format " + ver + " (this app reads " + OldestReadable + " to " + FormatVersion + ")");
             var x = new ClassicIndex();
             var p = x.Provenance;
             p.Repo = RStr(r); p.DumpName = RStr(r); p.CommitSha = RStr(r); p.CommitDate = RStr(r); p.UpdatesApplied = RV(r); p.BuiltUtc = RStr(r); p.FormatVersion = ver;
@@ -259,6 +267,7 @@ namespace ElansAddonHub.Services.Atlas.Classic
             for (int i = 0; i < n; i++)
             {
                 var o = new ClassicObject { Id = RV(r), Name = RStr(r), Type = RV(r), LootId = RV(r) };
+                if (ver >= 2) o.LockId = RV(r);
                 o.Spawns = RSpawns(r);
                 x.Objects[o.Id] = o;
             }
@@ -271,6 +280,14 @@ namespace ElansAddonHub.Services.Atlas.Classic
                 int g = Count(r);
                 q.Givers = new ClassicQuestGiver[g];
                 for (int k = 0; k < g; k++) q.Givers[k] = new ClassicQuestGiver { IsObject = r.ReadByte() == 1, Id = RV(r) };
+                if (ver >= 2)
+                {
+                    g = Count(r);
+                    q.Enders = new ClassicQuestGiver[g];
+                    for (int k = 0; k < g; k++) q.Enders[k] = new ClassicQuestGiver { IsObject = r.ReadByte() == 1, Id = RV(r) };
+                    q.PrevQuestId = RV(r); q.NextQuestId = RV(r); q.ExclusiveGroup = RV(r); q.NextQuestInChain = RV(r); q.BreadcrumbFor = RV(r);
+                    q.RequiredSkill = RV(r); q.RequiredSkillValue = RV(r); q.RequiredMinRepFaction = RV(r); q.RequiredMinRepValue = RV(r); q.RequiredMaxRepFaction = RV(r); q.RequiredMaxRepValue = RV(r); q.SourceItem = RV(r);
+                }
                 x.Quests[q.Id] = q;
             }
 

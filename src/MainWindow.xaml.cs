@@ -454,6 +454,8 @@ namespace ElansAddonHub
             if (Begin("atlashome")) { result += "\r\n" + await AtlasHomeTest(dir); End(); }
             if (Begin("atlashosts")) { result += "\r\n" + await AtlasHostsTest(dir); End(); }
             if (Begin("atlasclasses")) { result += "\r\n" + await AtlasClassesTest(dir); End(); }
+            if (Begin("atlasdata")) { result += "\r\n" + await AtlasDataTest(dir); End(); }
+            await RealSec("atlasdatareal", AtlasDataRealTest);
             if (Begin("zonelore")) { result += "\r\n" + await ZoneLoreTest(dir); End(); }
             await RealSec("zonelorereal", ZoneLoreRealTest);
             if (Begin("art")) { result += "\r\n" + await ArtTest(dir); End(); }

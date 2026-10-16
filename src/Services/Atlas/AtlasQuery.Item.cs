@@ -255,7 +255,9 @@ namespace ElansAddonHub.Services.Atlas
                 {
                     var s = Section(m, "finds", "Found by the Lodge");
                     var members = new HashSet<string>(finds.Select(f => f.By ?? "a member"));
-                    s.Note = AtlasFormat.Count(finds.Count, "find", "finds") + " by " + AtlasFormat.Count(members.Count, "member", "members") + " (newest first). Names are Lodge display names.";
+                    int older = finds.Count(f => FindVersions.IsOlder(f.Build));
+                    s.Note = AtlasFormat.Count(finds.Count, "find", "finds") + " by " + AtlasFormat.Count(members.Count, "member", "members") + " (newest first)"
+                        + (older > 0 ? ", " + older + " of them in an older game version" : "") + ". Names are Lodge display names.";
                     foreach (var f in finds.OrderByDescending(x => x.Seq).ThenByDescending(x => x.At).Take(15)) s.Rows.Add(FindRow(f));
                     if (finds.Count > 15) s.HiddenText = (finds.Count - 15) + " older finds not shown";
                     AddLayer(m, "lodge");
@@ -323,6 +325,7 @@ namespace ElansAddonHub.Services.Atlas
             {
                 Key = "find:" + f.Seq, Link = link, Label = AtlasLabel.Forever, Tier = 0, Type = "Find", Title = string.IsNullOrEmpty(f.By) ? "a member" : f.By,
                 Detail = f.Count + "× " + from + (zone.Length > 0 ? " · " + zone : ""), Right = AtlasFormat.Ago(f.At, Context.NowUtc()), Zone = zone, Sort = f.Seq,
+                Extra = FindVersions.Text(f.Build),            // which game version it was found in ("unknown version" for a find from before the build was stamped)
             };
         }
 

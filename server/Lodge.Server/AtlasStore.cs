@@ -652,6 +652,7 @@ public sealed partial class AtlasStore
     {
         var o = new JsonObject { ["s"] = f.Rev, ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = dayOnly ? f.At - f.At % 86_400 : f.At, ["by"] = by };
         if (f.Z > 0) { o["z"] = f.Z; o["x"] = f.X; o["y"] = f.Y; }
+        if (f.GameBuild > 0) o["gb"] = f.GameBuild;     // optional; older Outposts ignore it
         return o;
     }
 

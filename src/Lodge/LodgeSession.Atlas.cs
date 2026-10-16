@@ -286,6 +286,7 @@ namespace ElansAddonHub.Lodge
             {
                 var o = new Dictionary<string, object> { ["s"] = f.Seq, ["i"] = f.Item, ["c"] = f.Count, ["src"] = f.Src, ["at"] = f.At, ["by"] = f.By ?? "" };
                 if (f.Zone > 0) { o["z"] = f.Zone; o["x"] = f.X; o["y"] = f.Y; }
+                if (f.Build > 0) o["gb"] = f.Build;
                 return (object)o;
             }).ToList();
             return new Dictionary<string, object>

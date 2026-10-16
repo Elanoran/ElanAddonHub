@@ -166,6 +166,21 @@ namespace ElansAddonHub.Services.Atlas
             finally { cts?.Dispose(); cts = null; }
         }
 
+        // an index an earlier Outpost wrote (an older format: no object locks, no quest chains) is read again from the dump already on this PC, once per run,
+        // in the background; nothing is downloaded. True when a rebuild was started.
+        static bool upgradeTried;
+        public static void ResetUpgradeForTest() { upgradeTried = false; }
+        public static bool Outdated(ClassicIndex idx) => idx != null && idx.Provenance != null && idx.Provenance.FormatVersion > 0 && idx.Provenance.FormatVersion < ClassicIndex.FormatVersion;
+        public bool UpgradeIfOutdated(bool realOnly = true)
+        {
+            if (upgradeTried || Busy || (realOnly && !(Backend is RealClassicBackend))) return false;
+            if (Backend.State() != ClassicState.Ready || !Outdated(Backend.Index())) return false;
+            upgradeTried = true;
+            Util.Log("atlas classic: the index is format " + Backend.Index().Provenance.FormatVersion + ", reading the dump again for format " + ClassicIndex.FormatVersion);
+            _ = StartAsync();
+            return true;
+        }
+
         public string LastFailure { get; private set; } = "";
         public void Cancel() { try { cts?.Cancel(); } catch (ObjectDisposedException) { } }
 
