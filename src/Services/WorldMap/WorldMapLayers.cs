@@ -67,14 +67,27 @@ namespace ElansAddonHub.Services.WorldMap
                 L("seen", "NPCs seen by Lodge members", "#34d399", "Where Lodge members (and you) met NPCs at their windows, killed creatures and saw rares on the minimap, noted by Elan's Toolkit: Forever's own places, ahead of the Classic baseline",
                     L("seen.met", "Met at their window", "#34d399", "Vendors, trainers, quest givers, flight masters ... where a window opened for them"), L("seen.killed", "Killed", "#f87171", "Where creatures were looted"), L("seen.rares", "Rares", "#e5e7eb", "Rares the minimap marked")),
                 L("finds", "Lodge finds", "#f472b6", "Items of green quality and better that Lodge members found, and where"),
+                Live(L("trailevents", "Events on my trail", "#ffd100", "Small marks on your live trail: kills, notable loot, gathering, level ups, deaths, quests and discoveries (from Elan's Hub 1.16.0; shown only while your live position is on, kept for 10 minutes, never saved)")),
             };
         }
 
-        public static readonly string[] DefaultOn = { "zones", "fm", "fm.horde", "fm.alliance", "fm.neutral", "routes", "routes.horde", "routes.alliance", "routes.neutral", "instances", "instances.dungeons", "instances.raids", "nodes.herbs", "nodes.ore", "nodes.chests", "nodes.fishing", "seen", "seen.met", "seen.rares" };
+        // the marks on the live trail (TrailEventText): the item quality colours of the game, and one colour per kind (drawn by the page over game art, like the layer swatches)
+        public static readonly string[] EventQualityColors = { "#9D9D9D", "#FFFFFF", "#1EFF00", "#0070DD", "#A335EE", "#FF8000", "#E6CC80", "#00CCFF" };
+        public static readonly Dictionary<TrailKind, string> EventKindColors = new Dictionary<TrailKind, string>
+        {
+            [TrailKind.Kill] = "#F87171", [TrailKind.Loot] = "#1EFF00", [TrailKind.Herb] = "#4ADE80", [TrailKind.Ore] = "#D08A4E", [TrailKind.Skin] = "#E0B07A",
+            [TrailKind.Level] = "#FFD100", [TrailKind.Died] = "#9CA3AF", [TrailKind.Quest] = "#FDE047", [TrailKind.Area] = "#7DD3FC", [TrailKind.Flight] = "#5AA9FF",
+        };
+        public const string EventFallbackColor = "#E8E6E3";
+
+        // a row that is drawn from the live position ("me" message), not built by the app: the page never asks for it, and only shows the row while the live layer is there
+        static Dictionary<string, object> Live(Dictionary<string, object> d) { d["live"] = true; return d; }
+
+        public static readonly string[] DefaultOn = { "zones", "fm", "fm.horde", "fm.alliance", "fm.neutral", "routes", "routes.horde", "routes.alliance", "routes.neutral", "instances", "instances.dungeons", "instances.raids", "nodes.herbs", "nodes.ore", "nodes.chests", "nodes.fishing", "seen", "seen.met", "seen.rares", "trailevents" };
 
         // The catalog version a saved layer list belongs to. 2 added the dungeon and raid entrances (on by default): a list saved before that gets them switched on once, so a person who
         // updates sees the new layer; after that their own choice stands (the page saves the version with every change).
-        public const int LayersVersion = 4;
+        public const int LayersVersion = 5;
         public static List<string> WithNewDefaults(List<string> saved, int version)
         {
             if (saved == null) return null;
@@ -84,6 +97,8 @@ namespace ElansAddonHub.Services.WorldMap
     if (version < 3) foreach (var top in new[] { "fm", "routes" }) if (l.Contains(top)) foreach (var k in new[] { "horde", "alliance", "neutral" }) if (!l.Contains(top + "." + k)) l.Add(top + "." + k);
             // 4 added the NPCs seen by Lodge members (on by default with the met and rare kinds; kill spots are many, so that kind starts off)
             if (version < 4) foreach (var id in new[] { "seen", "seen.met", "seen.rares" }) if (!l.Contains(id)) l.Add(id);
+            // 5 added the events on your live trail (on by default; they only show while the live position is on)
+            if (version < 5 && !l.Contains("trailevents")) l.Add("trailevents");
             return l;
         }
 
@@ -109,6 +124,7 @@ namespace ElansAddonHub.Services.WorldMap
                     case "rares": return Npcs(mapId, "rares");
                     case "seen": return Seen(mapId);
                     case "finds": return Finds(mapId);
+                    case "trailevents": return new LayerResult { Note = "Drawn from your live position." };
                     default: return new LayerResult { Note = "unknown layer" };
                 }
             }

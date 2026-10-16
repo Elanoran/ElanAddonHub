@@ -92,6 +92,7 @@ end
 --   byte 10 posFlags: 1 sharing is switched on in the Hub, 2 the position is valid (0 when off, nil, secret, out of range, in an instance)
 --   bytes 11-12 x, bytes 13-14 y: the position on the uiMap of bytes 2-3, 0..65535 for 0..1 (big-endian); all zero unless valid
 -- An Outpost that only knows version 2 ignores these bytes (they were always zero); version 2 = an older Hub that can't send positions.
+-- Row 1 version 4 (companion 1.16.0+) also uses bytes 15-21 for one trail event at a time (see "trail events" below); all zero = none.
 -- An old hub reads row 0 only and ignores row 1; a new hub without row 1 (old companion) falls back to v1.
 -- Turn it off with /ehub pixel off.
 local CELL, NCELLS, NDATA = 4, 32, 27
@@ -145,7 +146,7 @@ local function ensureStrip()
       GameTooltip:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -12)
       GameTooltip:AddLine("Elan's Hub status strip", 0.67, 0.83, 0.45)
       GameTooltip:AddLine("These little coloured squares let Elan's Outpost on this PC see which character you play and what you are doing, without a /reload, "
-        .. "and (if you turned it on) your map position for its world map. It is read by the Outpost on this PC only; it never controls the game.", 1, 1, 1, true)
+        .. "and (if you turned it on) your map position, with small marks for what happened along your trail, for its world map. It is read by the Outpost on this PC only; it never controls the game.", 1, 1, 1, true)
       GameTooltip:AddLine("No health, auras or combat data. Nothing is sent anywhere from here.", 0.7, 0.7, 0.7, true)
       GameTooltip:AddLine("/ehub pixel off hides it.", 0.7, 0.7, 0.7)
       GameTooltip:Show()
@@ -266,10 +267,12 @@ local POS_TICK = 1     -- positions fire no event: a cheap 1 s timer, only while
 local function positionOn() return ElansHubDB.position == true end
 EHUB.PositionOn = positionOn
 EHUB.POSITION_LABEL = "Share my map position with Elan's Outpost"
-EHUB.POSITION_DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes. The Hub draws your map position "
-  .. "into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there. It is only shown on a map \226\128\148 "
-  .. "nothing presses keys or plays the game for you, and nothing is sent anywhere unless you also turn on sharing with your Lodge. Positions are "
-  .. "not available in dungeons, raids and battlegrounds, so the trail pauses there."
+EHUB.POSITION_DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened "
+  .. "there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). "
+  .. "The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads "
+  .. "it from there. It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing "
+  .. "with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the "
+  .. "trail pauses there."
 
 local function frac(v)
   v = clean(v)
@@ -318,6 +321,256 @@ local function positionForStrip(P)
   return 3, u16(posShown.x), u16(posShown.y)
 end
 
+-- ---- trail events (part of the OPT-IN "Share my map position", companion 1.16.0+). Display only: small marks on the Outpost's trail.
+-- Only while the position option AND the strip are on: then a separate frame listens to a few plain events (registered when it turns on,
+-- unregistered when it turns off). Nothing is read from combat events, no Blizzard frame is hooked, every value goes through clean()
+-- (issecretvalue) and string work runs in pcall. Nothing is saved: the queue lives in memory and only feeds the strip.
+-- Strip row 1 version 4, bytes 15-21 (0-based): seq (1-255, 0 = no event), kind, id (3 bytes, big-endian), extra, age (s since it happened).
+-- Each event stays on the strip for EV_HOLD seconds (the Outpost reads about once a second), then the next queued one; seq tells them apart.
+--   kind 1 kill (id = creature id, or 0), 2 loot (id = item id; extra = quality (15 = unknown) + 16 for a quest item), 3 herb / 4 ore / 5 skinning (id = the
+--   item gathered, or 0), 6 level up (id = the new level), 7 died, 8 quest turned in (id = quest id), 9 new area (id = a hash of its name, see
+--   areaHash), 10 new flight path. Names and icons are looked up by the Outpost in its own game data; no text is sent.
+local EV_HOLD, EV_MAX, GATHER_WAIT = 3, 8, 8
+local EV = { kill = 1, loot = 2, herb = 3, mine = 4, skin = 5, level = 6, died = 7, quest = 8, area = 9, flight = 10 }
+EHUB.EV, EHUB.EV_HOLD = EV, EV_HOLD
+local evQueue, evCur, evSeq, evTimer = {}, nil, 0, false
+EHUB.evSent = 0
+local function eventsOn() return positionOn() and pixelsOn() end
+EHUB.TrailEventsOn = eventsOn
+local function evClear() evQueue = {} evCur = nil end
+
+local evStep
+local function evSchedule(delay)
+  if evTimer then return end
+  evTimer = true
+  C_Timer.After(delay, function() evTimer = false pcall(evStep) end)
+end
+evStep = function()
+  if not eventsOn() then evClear() return end
+  local now = GetTime()
+  if evCur and now - evCur.shownAt < EV_HOLD then evSchedule(EV_HOLD - (now - evCur.shownAt) + 0.05) return end
+  local had = evCur ~= nil
+  evCur = table.remove(evQueue, 1)
+  if evCur then
+    evSeq = evSeq % 255 + 1
+    evCur.seq, evCur.shownAt = evSeq, now
+    evCur.age = math.max(0, math.min(255, math.floor(now - evCur.at + 0.5)))
+    EHUB.evSent = EHUB.evSent + 1
+    evSchedule(EV_HOLD + 0.05)
+  end
+  if (had or evCur) and EHUB.RequestDraw then EHUB.RequestDraw() end
+end
+
+-- queue an event (callers pass plain numbers only: everything from the game went through clean() first)
+local function pushEvent(kind, id, extra)
+  if not eventsOn() then return false end
+  id = tonumber(id) or 0
+  if id ~= id or id < 0 or id >= 16777216 then id = 0 end
+  extra = tonumber(extra) or 0
+  if extra ~= extra or extra < 0 or extra > 255 then extra = 0 end
+  if #evQueue >= EV_MAX then table.remove(evQueue, 1) end
+  evQueue[#evQueue + 1] = { kind = kind, id = math.floor(id), extra = math.floor(extra), at = GetTime() }
+  evStep()
+  return true
+end
+EHUB.PushEvent = pushEvent
+function EHUB.EventShown() return evCur end
+function EHUB.EventsQueued() return #evQueue end
+local function eventBytes()
+  if not (evCur and eventsOn()) then return 0, 0, 0, 0, 0 end
+  return evCur.seq, evCur.kind, evCur.id, evCur.extra, evCur.age
+end
+
+-- the same events within a few seconds (a message the game shows twice: centre text and chat) count once
+local recent = {}
+local function pushOnce(kind, id)
+  local k, now = kind .. ":" .. id, GetTime()
+  if recent[k] and now - recent[k] < 10 then return false end
+  recent[k] = now
+  return pushEvent(kind, id, 0)
+end
+
+-- a 24-bit number for an area's name (the client gives no id for a discovered area). The Outpost hashes its AreaTable names the same way.
+local function areaHash(name)
+  local h = 0
+  for i = 1, #name do h = (h * 31 + string.byte(name, i)) % 16777213 end
+  if h == 0 then h = 1 end
+  return h
+end
+EHUB.AreaHash = areaHash
+
+local function str(v) v = clean(v) if type(v) == "string" and v ~= "" then return v end return nil end
+
+-- a game format string ("You receive loot: %s.") -> a Lua pattern that captures its %s / %d parts; nil when the global is missing
+local function fmtPattern(fmt)
+  if type(fmt) ~= "string" or fmt == "" then return nil end
+  local p = fmt:gsub("([%^%$%(%)%.%[%]%*%+%-%?])", "%%%1")
+  p = p:gsub("%%%d%%%$s", "\001"):gsub("%%%d%%%$d", "\002"):gsub("%%s", "\001"):gsub("%%d", "\002") -- "%1$s" (reordered) and "%s"
+  p = p:gsub("\001", "(.+)"):gsub("\002", "(%%d+)")
+  return "^" .. p .. "$"
+end
+EHUB.FmtPattern = fmtPattern
+local function globalPattern(name) local ok, v = pcall(function() return _G[name] end) return ok and fmtPattern(v) or nil end
+
+-- item link -> id, quality (0-7, -1 unknown), quest item
+local QUALITY_COLORS = { ff9d9d9d = 0, ffffffff = 1, ff1eff00 = 2, ff0070dd = 3, ffa335ee = 4, ffff8000 = 5, ffe6cc80 = 6, ff00ccff = 7 }
+local function itemOf(link)
+  local okI, id = pcall(string.match, link, "|Hitem:(%d+)")
+  id = okI and tonumber(id) or nil
+  if not id then return nil end
+  local q
+  if C_Item and C_Item.GetItemQualityByID then q = tonumber(rd(C_Item.GetItemQualityByID, id)) end
+  if not q and GetItemInfo then
+    local ok, _, _, iq = pcall(GetItemInfo, id)
+    if ok then q = tonumber(clean(iq)) end
+  end
+  if not q then
+    local okC, c = pcall(string.match, link, "|c(%x%x%x%x%x%x%x%x)")
+    if okC and c then q = QUALITY_COLORS[c:lower()] end
+  end
+  local quest = false
+  if GetItemInfoInstant then
+    local ok, _, _, _, _, _, classId = pcall(GetItemInfoInstant, id)
+    quest = ok and clean(classId) == 12
+  end
+  return id, q or -1, quest
+end
+
+-- gathering: the profession's spell (any rank) by its id, or by the name of its first rank in this client's language
+local GATHER = { [2366] = EV.herb, [2368] = EV.herb, [3570] = EV.herb, [11993] = EV.herb, [2575] = EV.mine, [2576] = EV.mine, [3564] = EV.mine,
+                 [10248] = EV.mine, [8613] = EV.skin, [8617] = EV.skin, [8618] = EV.skin, [10768] = EV.skin }
+local gatherNames
+local function spellName(id)
+  if C_Spell and C_Spell.GetSpellName then return str(rd(C_Spell.GetSpellName, id)) end
+  if GetSpellInfo then return str(rd(GetSpellInfo, id)) end
+end
+local function gatherKind(spellId)
+  if GATHER[spellId] then return GATHER[spellId] end
+  if not gatherNames then
+    gatherNames = {}
+    for id, k in pairs({ [2366] = EV.herb, [2575] = EV.mine, [8613] = EV.skin }) do local n = spellName(id) if n then gatherNames[n] = k end end
+  end
+  local n = spellName(spellId)
+  return n and gatherNames[n] or nil
+end
+local gatherPending -- { kind, at, token }: the next item you loot within GATHER_WAIT s is what you gathered
+local gatherToken = 0
+EHUB.GatherPending = function() return gatherPending end
+
+-- nothing looted within GATHER_WAIT s after the cast: the mark without an item
+local function gatherExpire(token)
+  if not gatherPending or gatherPending.token ~= token then return end
+  local left = GATHER_WAIT - (GetTime() - gatherPending.at)
+  if left > 0 then C_Timer.After(left + 0.05, function() gatherExpire(token) end) return end
+  local k = gatherPending.kind
+  gatherPending = nil
+  pushEvent(k, 0, 0)
+end
+
+local function npcIdOf(guid)
+  guid = str(guid)
+  if not guid then return nil end
+  local ok, kind, id = pcall(string.match, guid, "^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
+  if ok and (kind == "Creature" or kind == "Vehicle") then return tonumber(id) end
+  return nil
+end
+
+local lootPats, infoPats
+local evHandlers = {}
+-- an XP message right after your target died: the creature you killed (its id from its GUID; the message must name it, so quest XP never counts)
+function evHandlers.CHAT_MSG_COMBAT_XP_GAIN(msg)
+  msg = str(msg)
+  if not msg then return end
+  if rd(UnitExists, "target") ~= true or rd(UnitIsDead, "target") ~= true or rd(UnitIsPlayer, "target") == true then return end
+  local name = str(rd(UnitName, "target"))
+  if not name then return end
+  local okF, at = pcall(string.find, msg, name, 1, true)
+  if not okF or not at then return end
+  local id = npcIdOf(rd(UnitGUID, "target"))
+  if id then pushEvent(EV.kill, id, 0) end
+end
+-- your own loot only ("You receive loot: ..."): what you gathered, else only notable items (uncommon and better, or quest items)
+function evHandlers.CHAT_MSG_LOOT(msg)
+  msg = str(msg)
+  if not msg then return end
+  if not lootPats then lootPats = {} for _, k in ipairs({ "LOOT_ITEM_SELF_MULTIPLE", "LOOT_ITEM_SELF" }) do lootPats[#lootPats + 1] = globalPattern(k) end end
+  local link
+  for _, p in ipairs(lootPats) do
+    local ok, l = pcall(string.match, msg, p)
+    if ok and l then link = l break end
+  end
+  if not link then return end
+  local id, q, quest = itemOf(link)
+  if not id then return end
+  if gatherPending and GetTime() - gatherPending.at <= GATHER_WAIT then
+    local g = gatherPending
+    gatherPending = nil
+    pushEvent(g.kind, id, 0)
+    if not (q >= 3 or quest) then return end -- a rare find from a node still gets its own mark
+  end
+  if q >= 2 or quest then pushEvent(EV.loot, id, (q >= 0 and q or 15) + (quest and 16 or 0)) end
+end
+function evHandlers.UNIT_SPELLCAST_SUCCEEDED(unit, _, spellId)
+  if str(unit) ~= "player" then return end
+  spellId = tonumber(clean(spellId))
+  if not spellId then return end
+  local k = gatherKind(spellId)
+  if not k then return end
+  if gatherPending then pushEvent(gatherPending.kind, 0, 0) end -- the last one never looted anything
+  gatherToken = gatherToken + 1
+  local token = gatherToken
+  gatherPending = { kind = k, at = GetTime(), token = token }
+  C_Timer.After(GATHER_WAIT, function() gatherExpire(token) end)
+end
+function evHandlers.PLAYER_LEVEL_UP(level)
+  level = tonumber(clean(level))
+  if level and level > 0 and level < 256 then pushOnce(EV.level, math.floor(level)) end
+end
+function evHandlers.PLAYER_DEAD() pushEvent(EV.died, 0, 0) end
+function evHandlers.QUEST_TURNED_IN(questId)
+  questId = tonumber(clean(questId))
+  if questId and questId > 0 then pushOnce(EV.quest, questId) end
+end
+-- "Discovered: <area>" / "Discovered <area>: 85 experience gained" and "New flight path discovered!" (centre text, sometimes also in chat)
+local function infoText(s)
+  if not infoPats then infoPats = {} for _, k in ipairs({ "ERR_ZONE_EXPLORED_XP", "ERR_ZONE_EXPLORED" }) do infoPats[#infoPats + 1] = globalPattern(k) end end
+  local okT, taxi = pcall(function() return _G.ERR_NEWTAXIPATH end)
+  if okT and type(taxi) == "string" and s == taxi then pushOnce(EV.flight, 0) return end
+  for _, p in ipairs(infoPats) do
+    local ok, name = pcall(string.match, s, p)
+    if ok and type(name) == "string" and name ~= "" then pushOnce(EV.area, areaHash(name)) return end
+  end
+end
+function evHandlers.UI_INFO_MESSAGE(...)
+  for i = 1, select("#", ...) do local s = str((select(i, ...))) if s then infoText(s) end end
+end
+evHandlers.CHAT_MSG_SYSTEM = evHandlers.UI_INFO_MESSAGE
+
+local evFrame = CreateFrame("Frame")
+EHUB.evFrame = evFrame
+local EV_EVENTS = { "CHAT_MSG_COMBAT_XP_GAIN", "CHAT_MSG_LOOT", "PLAYER_LEVEL_UP", "PLAYER_DEAD", "QUEST_TURNED_IN", "UI_INFO_MESSAGE", "CHAT_MSG_SYSTEM" }
+local evRegistered = false
+evFrame:SetScript("OnEvent", function(_, event, ...)
+  if not eventsOn() then return end
+  local h = evHandlers[event]
+  if h then pcall(h, ...) end
+end)
+-- the listening follows the option: registered only while "Share my map position" and the strip are on
+function EHUB.UpdateTrailEvents()
+  local want = eventsOn()
+  if want and not evRegistered then
+    for _, e in ipairs(EV_EVENTS) do pcall(evFrame.RegisterEvent, evFrame, e) end
+    if evFrame.RegisterUnitEvent then pcall(evFrame.RegisterUnitEvent, evFrame, "UNIT_SPELLCAST_SUCCEEDED", "player")
+    else pcall(evFrame.RegisterEvent, evFrame, "UNIT_SPELLCAST_SUCCEEDED") end
+    evRegistered = true
+  elseif not want and evRegistered then
+    pcall(evFrame.UnregisterAllEvents, evFrame)
+    evRegistered = false
+  end
+  if not want then evClear() gatherPending = nil recent = {} end
+end
+function EHUB.TrailEventsListening() return evRegistered end
+
 local lastSig
 EHUB.draws = 0
 
@@ -346,7 +599,7 @@ local function drawStrip()
   local q
   if P then
     local m, ins = P.mapId % 65536, P.instanceId % 65536
-    q = { 0xB2, 3, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
+    q = { 0xB2, 4, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
           P.xp % 256, P.group % 256 }
     for i = 11, 22 do q[i] = 0 end
     local okPos, pf, px, py = pcall(positionForStrip, P)
@@ -354,6 +607,12 @@ local function drawStrip()
       q[11] = pf
       q[12], q[13] = math.floor(px / 256), px % 256
       q[14], q[15] = math.floor(py / 256), py % 256
+    end
+    local okE, es, ek, ei, ex, ea = pcall(eventBytes)
+    if okE and es and es > 0 then
+      q[16], q[17] = es, ek
+      q[18], q[19], q[20] = math.floor(ei / 65536) % 256, math.floor(ei / 256) % 256, ei % 256
+      q[21], q[22] = ex, ea
     end
     q[23], q[24] = checksum(q, 22)
   end
@@ -418,6 +677,7 @@ local function posTick(gen)
   C_Timer.After(POS_TICK, function() posTick(gen) end)
 end
 function EHUB.UpdatePositionTimer()
+  pcall(EHUB.UpdateTrailEvents)
   local want = positionOn() and pixelsOn()
   if want and not posRunning then
     posRunning = true

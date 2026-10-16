@@ -63,6 +63,7 @@ namespace ElansAddonHub.Services
             Strip = new PixelStrip(this.pixelOn);
             Strip.Changed += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(Poll));
             Strip.PositionChanged += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(OnStripPosition));
+            Strip.TrailEvent += ev => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => TrailEvent?.Invoke(ev)));
             timer.Tick += (s, e) => Poll();
             debounce.Tick += (s, e) => { debounce.Stop(); Poll(); };
             this.watch.Changed += running => { ApplyWow(running); Poll(); };
@@ -180,6 +181,9 @@ namespace ElansAddonHub.Services
         }
         // tests: as if the strip said this
         public void SetPositionForTest(Character c, bool playing) { Current = c; Playing = playing; PositionChanged?.Invoke(); }
+        // a trail event from the strip (companion 1.16.0+, part of the opt-in position): each one once, on the UI thread. Display only, never sent to the Lodge.
+        public event Action<StripEvent> TrailEvent;
+        public void TrailEventForTest(StripEvent ev) => TrailEvent?.Invoke(ev);
 
         static bool FromThisSession(Character c, DateTime started)
         {

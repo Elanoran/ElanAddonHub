@@ -958,7 +958,7 @@ namespace ElansAddonHub
                 var idx = MapData.Index;
                 try { elsewhere = idx == null ? null : WorldMapService.Continent(idx, here.Value.MapId)?.Name; } catch (Exception) { }
             }
-            return WorldMapProtocol.Me(live.State, live.Name, LivePosition.ColorOf(live.ClassFile), here, live.Trail.Points(now), mapId, now, elsewhere);
+            return WorldMapProtocol.Me(live.State, live.Name, LivePosition.ColorOf(live.ClassFile), here, live.Trail.Points(now), mapId, now, elsewhere, live.Trail.Marks(now));
         }
 
         // force: send now (a new page, the setting changed); else at most once per LiveInterval, the newest state wins

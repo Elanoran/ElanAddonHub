@@ -3,6 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.77.0
+- **Your live dot in 3D too.** With **Show my live position on the world map** on, the 3D view now shows your dot, its heading arrow and the fading trail of the last 10 minutes, lying on the ground. **Follow me** works there as well: the camera glides along with you as you move. Turning or dragging the view stops following, like on the flat map; zooming keeps it.
+- **Marks on your trail.** Small icons now show what happened along your trail: a creature you killed, a notable item you looted (green or better, in its quality colour, or a quest item), a herb, ore or skin you gathered, a level up, a death, a quest you turned in, and a new area or flight path you found. Point at one to see what and when ("Looted Malachite, 14:05, 3 min ago"); click it to open its Atlas page. They fade with the trail and are gone after 10 minutes.
+- **Your choice in the layer list.** The new row **Events on my trail** (on by default, shown only while your live position is) turns the marks off and on, on the flat map and in 3D.
+- **It needs Elan's Hub 1.16.0.** The marks come from the same in-game option as your position (**Share my map position with Elan's Outpost**, off until you turn it on). The Hub only sends numbers through its status strip; the Outpost looks up the names in its own game data. The marks are kept in memory only: never saved, never sent anywhere (sharing with your Lodge does not exist yet). An older Hub simply sends no marks.
+- Kills are only marked for a creature you had targeted when it died and that gave you experience; the Hub never reads combat events.
+
 ## 2.76.0
 - **Atlas Home is about you now.** When you play, Home opens with where you are: "You are in Durotar" on the zone's painting, your character with level and class, the first line of the zone's notes, and whether the zone fits your level ("Good for your level", "A bit high for you", "Low for you, little XP"). Small tags show what Elan's Hub sees right now: in combat, resting, grouped, in a dungeon. Your XP bar and a Rested tag sit below. Click it to open the zone (or the dungeon you are in).
 - **When WoW is not running** Home shows where your last character was ("Last seen in Greenvale", saved 3 h ago). With no character at all it shows a calm Atlas picture and how to get Elan's Hub.

@@ -272,8 +272,9 @@
     on[id] = !!v;
     if (v && defs[id] && !defs[id].child) { var kids = Object.keys(panelRows).filter(function (k) { return panelRows[k].parent === id; }); if (kids.length && !kids.some(function (k) { return on[k]; })) kids.forEach(function (k) { on[k] = true; }); }
     var def = defs[id];
-    if (v && def && !def.child && !data[id] && !requested[id]) { requested[id] = true; send({ t: 'need', layer: id }); setCount(id, '...'); }
+    if (v && def && !def.child && !def.live && !data[id] && !requested[id]) { requested[id] = true; send({ t: 'need', layer: id }); setCount(id, '...'); }
     refresh(); sendLayers();
+    if (def && def.live && me && map && me.state !== 'off' && me.state !== 'none') { meDraw(); meRow(); }
   }
   var layersTimer = 0;
   function sendLayers() {
@@ -314,24 +315,46 @@
   // ---------------------------------------------------------------- the live position layer ("me"): your dot, a fading trail, a notice, Follow me
   // Only drawn while the app sends it (Settings > Show my live position on the world map). Nothing here is stored; the app keeps the trail in memory.
   var ME_STATES = { off: 1, none: 1, ok: 1, elsewhere: 1, unavailable: 1, notshared: 1, oldhub: 1 };
-  var me = null, meGroup = null, meDot = null, meCtrl = null, follow = false, meAt = 0, meTrail = [];
+  var me = null, meGroup = null, meDot = null, meCtrl = null, follow = false, meAt = 0, meTrail = [], meEvMarkers = [];
+  // the events on the trail (Elan's Hub 1.16.0+): checked again here, drawn only with the "Events on my trail" row on
+  function meEvents(list) {
+    var out = [], kinds = (window.WmIcons && window.WmIcons.evKinds) || {};
+    (Array.isArray(list) ? list.slice(0, 200) : []).forEach(function (e) {
+      if (!e || !llOk([e.lat, e.lng]) || !fin(e.age) || !kinds[e.k]) return;
+      out.push({ ll: [e.lat, e.lng], age: Math.max(0, Math.min(600, e.age)), k: e.k, name: String(e.name || '').slice(0, 80), line: String(e.line || '').slice(0, 80),
+        c: /^#[0-9a-fA-F]{6}$/.test(e.c || '') ? e.c : '#e8e6e3', link: typeof e.link === 'string' ? e.link.slice(0, 40) : '', at: String(e.at || '').slice(0, 5) });
+    });
+    return out;
+  }
+  function evWhen(e, extra) {
+    var a = e.age + (extra || 0), mins = Math.round(a / 60);
+    return (e.at ? e.at + ' · ' : '') + (a < 60 ? 'just now' : mins + ' min ago') + (e.link ? ' · click to open' : '');
+  }
+  function evOpacity(age) { return Math.max(0.3, 1 - Math.min(600, age) / 600 * 0.7); }
+  // the panel row "Events on my trail" is only there while the live layer is
+  function meRow() {
+    var r = panelRows.trailevents; if (!r) return;
+    var live = !!(me && me.state !== 'off' && me.state !== 'none');
+    r.row.style.display = live ? '' : 'none';
+    setCount('trailevents', live && me.events ? String(me.events.length) : '');
+  }
   function fin(v) { return typeof v === 'number' && isFinite(v); }
   function llOk(a) { return a && a.length === 2 && fin(a[0]) && fin(a[1]) && a[0] <= 0 && a[0] >= -256 && a[1] >= 0 && a[1] <= 256; }
   function meClear() {
     if (meGroup && map) map.removeLayer(meGroup);
     meGroup = null; meDot = null; meTrail = [];
     if (meCtrl && map) map.removeControl(meCtrl);
-    meCtrl = null;
+    meCtrl = null; meEvMarkers = [];
   }
   function meMsg(m) {
     var st = ME_STATES[m.state] ? m.state : 'none';
-    if (st === 'off' || st === 'none') { me = { state: st }; meClear(); return; }
+    if (st === 'off' || st === 'none') { me = { state: st }; meClear(); meRow(); return; }
     var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [];
     for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && fin(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1 }); }
     me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
-      howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null };
+      howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events) };
     meTrail = pts; meAt = Date.now();
-    meDraw();
+    meDraw(); meRow();
     if (follow && map && me.state === 'ok' && me.here) map.panTo(me.here, { animate: false });
   }
   function heading() {
@@ -362,6 +385,14 @@
     }
     if (me.state === 'ok' && me.here && run.length) run.push(me.here);
     flush();
+    // the events: small marks on the trail, fading with it; point at one for what and when, click it for its Atlas page
+    meEvMarkers = [];
+    var fan = on.trailevents && me.events && window.WmIcons ? window.WmIcons.evFan(me.events, me.state === 'ok' ? me.here : null) : [];
+    if (on.trailevents && me.events && window.WmIcons) me.events.forEach(function (e, ei) {
+      var mk = L.marker(e.ll, { icon: L.divIcon({ className: 'me-ev-i', html: window.WmIcons.ev(e.k, e.c, evOpacity(e.age + extra).toFixed(2), fan[ei]), iconSize: [0, 0] }), keyboard: false, interactive: true, zIndexOffset: 950 });
+      bindHover(mk, e.name, e.line, evWhen(e, extra), e.link);
+      meGroup.addLayer(mk); meEvMarkers.push(mk);
+    });
     // the dot: class colour with a heading arrow; grey with a label where the position is not available
     var at = me.state === 'ok' ? me.here : me.state === 'unavailable' ? me.last : null;
     if (at) {
@@ -525,8 +556,8 @@
     window.addEventListener('blur', hideMenu);
     // first view
     if (m.view) go(m.view); else map.fitBounds(bounds, { animate: false, padding: [10, 10] });
-    ready = false; refresh();
-    (m.layers || []).forEach(function (d) { if (on[d.id]) { requested[d.id] = true; send({ t: 'need', layer: d.id }); setCount(d.id, '...'); } });
+    ready = false; refresh(); meRow();
+    (m.layers || []).forEach(function (d) { if (on[d.id] && !d.live) { requested[d.id] = true; send({ t: 'need', layer: d.id }); setCount(d.id, '...'); } });
     // a tile layer with no tiles to fetch still reports ready
     setTimeout(function () { if (!ready) { ready = true; send({ t: 'ready', tiles: tilesLoaded, errors: tileErrors }); } }, 6000);
     send({ t: 'inited' });
@@ -555,7 +586,16 @@
     },
     // the routes of a lines layer by kind (test): [{g, shown}] - shown = the route is in the layer's group (its kind row is on and the layer is on the map)
     feed: function (m) { handle(m); return 1; },      // test: the app's message as if it had come from the app
+    setOn: function (id, v) { setOn(id, v); return 1; },      // test: a layer row switched
     // the live layer (test): state, dot (grey?), trail lines and points, notice, how-to link, follow, heading; `click` = 'howto' | 'follow' presses that button
+    // the events on the trail (test): how many are drawn, whether the row shows, and `tip` = index -> point at that mark and read the tooltip; `open` = index -> click it
+    ev: function (tip, open) {
+      var r = { drawn: meEvMarkers.length, have: me && me.events ? me.events.length : 0, on: !!on.trailevents, row: !!(panelRows.trailevents && panelRows.trailevents.row.style.display !== 'none'),
+        count: panelRows.trailevents ? panelRows.trailevents.ct.textContent : '', kinds: meEvMarkers.map(function (mk) { var e = mk.getElement && mk.getElement(); var q = e && e.querySelector('.me-ev'); return q ? q.getAttribute('data-k') : ''; }) };
+      if (tip != null && meEvMarkers[tip]) { meEvMarkers[tip].fire('mousemove', { originalEvent: { clientX: 220, clientY: 220 } }); var t = $('tip'); r.tip = t.hidden ? '' : t.textContent; r.tipHtml = t.innerHTML; meEvMarkers[tip].fire('mouseout'); }
+      if (open != null && meEvMarkers[open]) meEvMarkers[open].fire('click', { originalEvent: { clientX: 220, clientY: 220 } });
+      return JSON.stringify(r);
+    },
     me: function (click) {
       var d = meCtrl && meCtrl._d;
       if (click && d) { var b = d.querySelector(click === 'howto' ? '.me-link' : '.me-follow'); if (b) b.click(); }
