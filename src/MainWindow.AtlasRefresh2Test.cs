@@ -267,7 +267,12 @@ namespace ElansAddonHub
                     ShowTab("addons"); await Task.Delay(100); UpdateLayout();
                     var bar = TitleBarForTest;
                     var onBox = new Point(TitleSearchForTest.TranslatePoint(new Point(TitleSearchForTest.ActualWidth / 2, TitleSearchForTest.ActualHeight / 2), bar).X, bar.ActualHeight / 2);
-                    var empty = new Point(RadioPlayerBar.IsVisible ? RadioPlayerBar.TranslatePoint(new Point(RadioPlayerBar.ActualWidth, 0), bar).X + 40 : 16 + 240 + 120, bar.ActualHeight / 2);   // right of the radio player (2.72) when it is there
+                    // an empty spot of the caption right of the radio player (2.72) when it is there: the update banner or the game data chip may sit just after it
+                    // (an earlier section can leave one up), so walk right until nothing but the bar itself is under the point
+                    double x0 = RadioPlayerBar.IsVisible ? RadioPlayerBar.TranslatePoint(new Point(RadioPlayerBar.ActualWidth, 0), bar).X + 8 : 16 + 240 + 120;
+                    var empty = new Point(x0, bar.ActualHeight / 2);
+                    for (double x = x0; x < bar.ActualWidth - 150; x += 4)
+                        if (ReferenceEquals(VisualTreeHelper.HitTest(bar, new Point(x, bar.ActualHeight / 2))?.VisualHit, bar)) { empty = new Point(x, bar.ActualHeight / 2); break; }
                     var hitBox = VisualTreeHelper.HitTest(bar, onBox)?.VisualHit; var hitEmpty = VisualTreeHelper.HitTest(bar, empty)?.VisualHit;
                     var press = new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left) { RoutedEvent = UIElement.PreviewMouseDownEvent, Source = TitleSearchForTest };
                     TitleSearchForTest.RaiseEvent(press);
