@@ -294,11 +294,7 @@ namespace ElansAddonHub.Services.Atlas
             return Math.Round(p).ToString("0", Inv) + "%";
         }
 
-        public static string Money(long copper)
-        {
-            var parts = ItemText.Coins(copper).Select(c => c.Key.ToString("N0", CalendarRules.English) + c.Value);
-            return string.Join(" ", parts);
-        }
+        public static string Money(long copper) => MoneyFormat.Text(copper);
 
         public static string Count(long n, string one, string many) => n.ToString("N0", CalendarRules.English) + " " + (n == 1 ? one : many);
 

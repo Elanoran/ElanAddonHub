@@ -521,6 +521,7 @@ namespace ElansAddonHub
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 g.Children.Add(Tb(f.Label, "Text.Secondary"));
                 var v = Tb(f.Value, "Text.Body"); v.TextWrapping = TextWrapping.Wrap; Grid.SetColumn(v, 1); g.Children.Add(v);
+                if (f.Label == "Money") MoneyText.Coins(v);
                 PalettePreview.Children.Add(g);
             }
             var secs = m.Sections.Where(s => s.Open).Take(4).Select(s => s.Title + " " + (s.Rows.Count + s.Hidden.Count).ToString("N0", Lodge.CalendarRules.English)).ToList();

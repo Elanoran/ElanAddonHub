@@ -140,10 +140,7 @@ namespace ElansAddonHub
 
         FrameworkElement CoinLine(long copper)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(new Ellipse { Width = 12, Height = 12, Fill = Res("Brush.Warn"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
-            row.Children.Add(new TextBlock { Text = InventoryReader.Money(copper), Style = TextStyle("Text.Body"), Foreground = Res("Brush.Warn"), VerticalAlignment = VerticalAlignment.Center });
-            return row;
+            return new MoneyText(copper);      // the game's coins (2.77)
         }
 
         FrameworkElement Tile(string label, string value)

@@ -4,7 +4,7 @@
              xmlns:local="clr-namespace:ElansAddonHub">
   <UserControl.Resources>
     <!-- one row of every Atlas table (DESIGN 8, list row): 36 px tile (the item's icon, or its first letter in the quality colour, or the kind's glyph), title (the row's one semibold),
-         a Secondary detail line, a Caption extra line, and on the right a figure and the source label as a quiet chip. Rows without a link are not hit-testable (no hover veil). -->
+         a Secondary detail line, a Caption extra line, and on the right a figure and the source label as a quiet chip. Money in detail / extra / right shows the game's coins (MoneyText.Source). Rows without a link are not hit-testable (no hover veil). -->
     <DataTemplate x:Key="AtlasRowTemplate">
       <ContentControl x:Name="row" Style="{StaticResource Side.Row}" Padding="8,4" MinHeight="48" Tag="{Binding Link}" MouseLeftButtonUp="Row_Click" Focusable="False">
         <ContentControl.ToolTip><ToolTip Style="{StaticResource GameTip}" Opened="RowTip_Opened" /></ContentControl.ToolTip>
@@ -26,11 +26,11 @@
           </Border>
           <StackPanel Grid.Column="1" VerticalAlignment="Center">
             <TextBlock Text="{Binding Title}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding TitleBrush}" TextTrimming="CharacterEllipsis" />
-            <TextBlock x:Name="detail" Text="{Binding Detail}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
-            <TextBlock x:Name="extra" Text="{Binding Extra}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="detail" local:MoneyText.Source="{Binding Detail}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="extra" local:MoneyText.Source="{Binding Extra}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
           <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
-            <TextBlock x:Name="right" Text="{Binding Right}" Style="{StaticResource Text.Body}" HorizontalAlignment="Right" />
+            <TextBlock x:Name="right" local:MoneyText.Source="{Binding Right}" Style="{StaticResource Text.Body}" HorizontalAlignment="Right" />
             <Border x:Name="chip" Style="{StaticResource Chip}" Padding="8,0" MinHeight="20" HorizontalAlignment="Right" Margin="0,2,0,0">
               <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
             </Border>

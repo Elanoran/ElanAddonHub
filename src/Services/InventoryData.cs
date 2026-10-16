@@ -605,10 +605,6 @@ namespace ElansAddonHub.Services
         }
         static string Plural(int n, string unit) => n + " " + unit + (n == 1 ? "" : "s");
 
-        public static string Money(long copper)
-        {
-            long g = copper / 10000, s = copper / 100 % 100, c = copper % 100;
-            return g > 0 ? $"{g:N0}g {s}s {c}c" : s > 0 ? $"{s}s {c}c" : $"{c}c";
-        }
+        public static string Money(long copper) => MoneyFormat.Text(copper);
     }
 }

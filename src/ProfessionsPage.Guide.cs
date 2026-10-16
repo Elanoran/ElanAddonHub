@@ -121,7 +121,7 @@ namespace ElansAddonHub
             var sp = new StackPanel();
             sp.Children.Add(Line(g.Profession.Name + " " + SkillGuide.Range(g.Start, g.Reached) + (g.Character != null ? " for " + g.Character : ""), "Text.Section"));
             var total = (g.TotalApprox ? "about " : "") + ProfMoney.Format(g.TotalCost) + (g.UnknownPrices > 0 ? " plus " + g.UnknownPrices + " item" + (g.UnknownPrices == 1 ? "" : "s") + " with no known price" : "");
-            sp.Children.Add(Line("Still to buy or find: " + total + ". " + g.Steps.Count(s => !s.IsMilestone) + " steps, " + g.Crafting.Sum(s => s.Crafts).ToString("N0", CultureInfo.InvariantCulture) + " crafts.", "Text.Secondary", null, 4));
+            sp.Children.Add(MoneyText.Coins(Line("Still to buy or find: " + total + ". " + g.Steps.Count(s => !s.IsMilestone) + " steps, " + g.Crafting.Sum(s => s.Crafts).ToString("N0", CultureInfo.InvariantCulture) + " crafts.", "Text.Secondary", null, 4)));
             var how = Line("Generated from the game's recipe table: orange recipes first (every craft a skill-up), then yellow (about 1.25 crafts per point), green only when nothing else is left (about 2.5); the cheapest reagents win. Vendor prices are from the Classic baseline or the Lodge; ~ is an estimate.", "Text.Caption", null, 4);
             how.TextWrapping = TextWrapping.Wrap; sp.Children.Add(how);
             return Card(sp);
@@ -156,7 +156,7 @@ namespace ElansAddonHub
                     mid.Children.Add(wh);
                 }
                 row.Children.Add(mid);
-                var price = Line(l.ToGet == 0 ? "have it" : l.Price.Known ? (l.Price.Kind == PriceKind.Estimated ? "~" : "") + ProfMoney.Format(l.Total) : "price unknown", "Text.Secondary", l.ToGet == 0 ? Res("Brush.Success") : null);
+                var price = MoneyText.Coins(Line(l.ToGet == 0 ? "have it" : l.Price.Known ? (l.Price.Kind == PriceKind.Estimated ? "~" : "") + ProfMoney.Format(l.Total) : "price unknown", "Text.Secondary", l.ToGet == 0 ? Res("Brush.Success") : null));
                 price.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(price, 2);
                 row.Children.Add(price);
                 sp.Children.Add(row);
@@ -204,7 +204,7 @@ namespace ElansAddonHub
             {
                 learn.Children.Add(LinkText(NameOf(s.LearnItemId), AtlasIds.Item(s.LearnItemId), "Text.Secondary", QualityBrush(2)));
                 if (s.LearnSources.Count == 0) learn.Children.Add(Line(" - no source known", "Text.Caption"));
-                foreach (var src in s.LearnSources.Take(1)) { learn.Children.Add(Line(" - ", "Text.Caption")); learn.Children.Add(LinkText(src.Text, src.Link, "Text.Caption")); learn.Children.Add(Line(" (" + src.Label + ")", "Text.Caption")); }
+                foreach (var src in s.LearnSources.Take(1)) { learn.Children.Add(Line(" - ", "Text.Caption")); learn.Children.Add(MoneyText.Coins(LinkText(src.Text, src.Link, "Text.Caption"))); learn.Children.Add(Line(" (" + src.Label + ")", "Text.Caption")); }
             }
             else learn.Children.Add(Line(s.Unlearned ? s.Learn.Replace("Learn first: ", "") : s.Learn, "Text.Secondary", s.Known ? Res("Brush.Success") : null));
             sp.Children.Add(learn);
@@ -218,8 +218,8 @@ namespace ElansAddonHub
                 mats.Children.Add(one);
             }
             sp.Children.Add(mats);
-            sp.Children.Add(Line("Step " + (s.CostApprox ? "~" : "") + ProfMoney.Format(s.Cost) + " - running total ~" + ProfMoney.Format(s.RunningCost), "Text.Caption", null, 4));
-            var why = Line("Why: " + s.Why, "Text.Caption", null, 2); why.TextWrapping = TextWrapping.Wrap; sp.Children.Add(why);
+            sp.Children.Add(MoneyText.Coins(Line("Step " + (s.CostApprox ? "~" : "") + ProfMoney.Format(s.Cost) + " - running total ~" + ProfMoney.Format(s.RunningCost), "Text.Caption", null, 4)));
+            var why = MoneyText.Coins(Line("Why: " + s.Why, "Text.Caption", null, 2)); why.TextWrapping = TextWrapping.Wrap; sp.Children.Add(why);
             grid.Children.Add(sp);
             SetTip(card, LazyTip(() => RecipeTip(r)));
             return card;

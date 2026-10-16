@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.77.0
+- **Money looks like it does in the game.** Gold, silver and copper are shown as the number followed by the game's own gold, silver and copper coin: in item tooltips (Sell Price), your characters' gold and the total on the Characters page, the guild bank's money, vendor prices and trainer costs in the Atlas, quest reward money, prices in the Professions guide and recipe tooltips, and vendor prices in the upgrade suggestions.
+- The coins are read from your own WoW install (nothing is downloaded). Without the game installed, small drawn coins in gold, silver and copper are shown instead.
+- Money is written the same way everywhere: parts that are zero are left out ("1g 5c" instead of "1g 0s 5c"), and copied text such as the profession guide keeps the letters.
+
 ## 2.76.0
 - **Atlas Home is about you now.** When you play, Home opens with where you are: "You are in Durotar" on the zone's painting, your character with level and class, the first line of the zone's notes, and whether the zone fits your level ("Good for your level", "A bit high for you", "Low for you, little XP"). Small tags show what Elan's Hub sees right now: in combat, resting, grouped, in a dungeon. Your XP bar and a Rested tag sit below. Click it to open the zone (or the dungeon you are in).
 - **When WoW is not running** Home shows where your last character was ("Last seen in Greenvale", saved 3 h ago). With no character at all it shows a calm Atlas picture and how to get Elan's Hub.

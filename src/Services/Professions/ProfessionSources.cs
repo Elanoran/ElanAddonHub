@@ -169,16 +169,7 @@ namespace ElansAddonHub.Services.Professions
     // money as the game writes it: 1g 20s 5c
     public static class ProfMoney
     {
-        public static string Format(long copper)
-        {
-            if (copper <= 0) return "0c";
-            long g = copper / 10000, s = copper / 100 % 100, c = copper % 100;
-            var parts = new List<string>();
-            if (g > 0) parts.Add(g.ToString("N0", CultureInfo.InvariantCulture) + "g");
-            if (s > 0) parts.Add(s + "s");
-            if (c > 0 || parts.Count == 0) parts.Add(c + "c");
-            return string.Join(" ", parts);
-        }
+        public static string Format(long copper) => MoneyFormat.Text(Math.Max(0, copper));
     }
 
     // a source table for tests and for a page without any data: answers from dictionaries

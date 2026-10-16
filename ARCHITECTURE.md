@@ -171,6 +171,10 @@ quest gives them come later). One principle decides everything about it:
 - Used by the Characters page: item tooltips (bags, bank, guild bank, gear), "not revealed yet on WoW Forever" for items the
   client does not know, matches for items you do not own in the search ("Not on your characters"), and the item level on the
   Gear tab when the Hub did not save one. Elan's addons never see or need this data; it is Outpost-only.
+- Money (2.77): every amount is copper; `Services/MoneyFormat.cs` is the only place that splits it into gold / silver / copper (and reads amounts
+  back out of a line of text), `Controls/MoneyText.cs` draws it with the game's coin pictures (FileDataIDs 237618 / 237620 / 237617 =
+  `Interface\MoneyFrame\UI-GoldIcon` / `UI-SilverIcon` / `UI-CopperIcon`, through `IconStore`'s cache; drawn coins without a game). The older
+  helpers (`AtlasFormat.Money`, `InventoryReader.Money`, `ProfMoney.Format`, `UpgradeSource.Money`, `ItemText.Coins`) all call it.
 - Not in the client, so not in this layer: loot tables, vendors, spawns, quest givers. (Armor, weapon damage, item effects and
   item sets are not stored in the item either: the next section reads them from further tables.)
 

@@ -39,7 +39,11 @@ namespace ElansAddonHub
             if (!string.IsNullOrEmpty(m.Accent)) { try { gt.SetTitleBrush(ElansAddonHub.Lodge.Avatar.Frozen(m.Accent)); } catch (Exception) { } }
             if (m.Kind == "item") gt.AddLines(m.Tooltip); else gt.AddLines(plan.Lines);
             if (m.Kind != "item")
-                foreach (var f in plan.Footer) gt.Footer.Children.Add(Muted(f, gt.Footer.Children.Count == 0 ? 0 : 2));
+                foreach (var f in plan.Footer)
+                {
+                    var t = Muted(f, gt.Footer.Children.Count == 0 ? 0 : 2);
+                    gt.Footer.Children.Add(f.StartsWith("Money: ", StringComparison.Ordinal) ? MoneyText.Coins(t) : t);   // a quest's reward money with the game's coins
+                }
             return gt;
         }
     }

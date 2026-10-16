@@ -432,6 +432,7 @@ namespace ElansAddonHub
             await RealSec("dungeonmapsreal", DungeonMapsRealTest);
             if (Begin("spelldata")) { result += "\r\n" + await SpellDataTest(dir); End(); }
             if (Begin("gametooltip")) { result += "\r\n" + await GameTooltipTest(dir); End(); }
+            if (Begin("money")) { result += "\r\n" + await MoneyTest(dir); End(); }
             if (Begin("talents")) { result += "\r\n" + await TalentsTest(dir); End(); }
             if (Begin("professions")) { result += "\r\n" + await ProfessionsTest(dir); End(); }
             if (Begin("profguide")) { result += "\r\n" + await ProfGuideTest(dir); End(); }

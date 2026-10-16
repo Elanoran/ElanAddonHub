@@ -199,15 +199,7 @@ namespace ElansAddonHub.Services.Upgrades
 
         public static string Percent(double p) => (p >= 10 ? Math.Round(p).ToString("0", CultureInfo.InvariantCulture) : p >= 1 ? p.ToString("0.#", CultureInfo.InvariantCulture) : p.ToString("0.##", CultureInfo.InvariantCulture)) + "%";
 
-        public static string Money(long copper)
-        {
-            long g = copper / 10000, s = copper / 100 % 100, c = copper % 100;
-            var l = new List<string>();
-            if (g > 0) l.Add(g.ToString("N0", CultureInfo.GetCultureInfo("en-US")) + "g");
-            if (s > 0) l.Add(s + "s");
-            if (c > 0 || l.Count == 0) l.Add(c + "c");
-            return string.Join(" ", l);
-        }
+        public static string Money(long copper) => MoneyFormat.Text(copper);
     }
 
     // One better item for one slot.
