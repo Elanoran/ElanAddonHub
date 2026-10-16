@@ -215,6 +215,7 @@ namespace ElansAddonHub.Services.Atlas
         public string Accent = "";                                   // a colour the title takes (#RRGGBB): a class
         public bool MapFirst;                                        // zones, instances, npcs: the map comes before the tables
         public AtlasEntrance Entrance;                               // an instance page: where its way in is (null = the game files do not say)
+        public ZoneLoreEntry Lore;                                   // a zone page: the Outpost's notes on the zone (ZoneLore; null = none)
         public List<string> Notes = new List<string>();              // what is missing and what turns it on ("Classic baseline not downloaded ...")
         public List<AtlasCrumb> Crumbs = new List<AtlasCrumb>();     // the way up (a zone's continent)
         public List<string> Layers = new List<string>();             // the layers that contributed: "client", "seen", "lodge", "classic", "maps"

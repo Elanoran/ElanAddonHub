@@ -1,0 +1,2886 @@
+{
+ "format": 1,
+ "note": "Elan's Outpost zone notes (written for the Outpost). Notable creatures with source 'classic' were checked against the Classic baseline's spawn points; 'unchecked' = the check could not decide.",
+ "aliases": {
+  "2665": 2521
+ },
+ "zones": [
+  {
+   "zoneId": 1411,
+   "name": "Durotar",
+   "levels": "1-10",
+   "faction": "Horde",
+   "summary": "A dry red land on the coast, home of the orcs and the Darkspear trolls. New Horde characters learn the basics here before moving on to the Barrens. Orgrimmar sits at its northern edge.",
+   "history": "Quilboar once held this land. After the Third War the orcs under Thrall settled it and named it for Thrall's father, Durotan. The Darkspear trolls lost the Echo Isles to the sorcerer Zalazane and built Sen'jin Village on the mainland. The Burning Blade cult still lurks in the hills.",
+   "startingFor": [
+    {
+     "area": "Valley of Trials",
+     "races": [
+      "Orc"
+     ],
+     "note": ""
+    },
+    {
+     "area": "Echo Isles",
+     "races": [
+      "Troll"
+     ],
+     "note": "Darkspear trolls; their early quests lead to Sen'jin Village"
+    }
+   ],
+   "mobs": [
+    {
+     "name": "Zalazane",
+     "id": 3205,
+     "source": "classic",
+     "why": "Troll sorcerer who drove the Darkspear off the Echo Isles"
+    },
+    {
+     "name": "Sarkoth",
+     "id": 3281,
+     "source": "classic",
+     "why": "Level 4 target of an early quest in the starting area"
+    },
+    {
+     "name": "Gazz'uz",
+     "id": 3204,
+     "source": "classic",
+     "why": "Burning Blade warlock; a known warlock quest target"
+    },
+    {
+     "name": "Vol'jin",
+     "id": 10540,
+     "source": "classic",
+     "why": "Leader of the Darkspear trolls",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "Razor Hill: the main Horde town after the starting valley",
+    "Sen'jin Village: Darkspear coastal village",
+    "Echo Isles: troll starting islands",
+    "Tiragarde Keep: old human fort full of hostile mobs",
+    "Orgrimmar and Ragefire Chasm are at the north edge"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Durotar"
+   ]
+  },
+  {
+   "zoneId": 1412,
+   "name": "Mulgore",
+   "levels": "1-10",
+   "faction": "Horde",
+   "summary": "Green rolling plains where the tauren live. It is the gentlest Horde starting zone, with small villages and many wild beasts. Thunder Bluff rises on the mesas.",
+   "history": "The tauren settled these plains after leaving the Barrens, led by Cairne Bloodhoof. Their capital, Thunder Bluff, sits high on the mesas. They honor the Earth Mother and live as hunters. Quilboar and goblins trouble the south.",
+   "startingFor": [
+    {
+     "area": "Camp Narache",
+     "races": [
+      "Tauren"
+     ],
+     "note": ""
+    }
+   ],
+   "mobs": [
+    {
+     "name": "Cairne Bloodhoof",
+     "id": 3057,
+     "source": "classic",
+     "why": "High Chieftain of the tauren",
+     "unchecked": true
+    },
+    {
+     "name": "Baine Bloodhoof",
+     "id": 2993,
+     "source": "classic",
+     "why": "Cairne's son, in the early quests"
+    },
+    {
+     "name": "Arra'chea",
+     "id": 3058,
+     "source": "classic",
+     "why": "Harpy chief, an early quest target"
+    },
+    {
+     "name": "Ghost Howl",
+     "id": 3056,
+     "source": "classic",
+     "why": "Rare wolf"
+    },
+    {
+     "name": "Grull Hawkwind",
+     "id": 2980,
+     "source": "classic",
+     "why": "Elder in the starting camp"
+    },
+    {
+     "name": "Kyle the Frenzied",
+     "id": 277154,
+     "source": "forever-seen",
+     "why": "Odd wandering rare seen by the Forever client"
+    }
+   ],
+   "mentions": [
+    "Camp Narache: tauren starting camp",
+    "Bloodhoof Village: main tauren town",
+    "Thunder Bluff: tauren capital",
+    "Bael'dun Digsite: goblin dig in the south"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Mulgore"
+   ]
+  },
+  {
+   "zoneId": 1413,
+   "name": "The Barrens",
+   "levels": "10-25",
+   "faction": "Contested",
+   "summary": "A huge dry savannah crossed by one long road. Most Horde characters spend their teens here. It holds the Crossroads, Ratchet and two dungeons.",
+   "history": "The Barrens were green until a long drought dried them. Centaurs, quilboar and raptors now rule much of the land. The orcs built the Crossroads as a base. Goblins run the port of Ratchet. Wailing Caverns and Razorfen Kraul lie on its edge.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Mankrik",
+     "id": 3432,
+     "source": "classic",
+     "why": "Orc whose lost wife starts a famous quest chain"
+    },
+    {
+     "name": "Kreenig Snarlsnout",
+     "id": 3438,
+     "source": "classic",
+     "why": "Quilboar leader near a well-known quest"
+    },
+    {
+     "name": "Hezrul Bloodmark",
+     "id": 3396,
+     "source": "classic",
+     "why": "Centaur chief"
+    },
+    {
+     "name": "Verdan the Everliving",
+     "id": 5775,
+     "source": "classic",
+     "why": "Elite elemental near Wailing Caverns",
+     "unchecked": true
+    },
+    {
+     "name": "Takk the Leaper",
+     "id": 5842,
+     "source": "classic",
+     "why": "Rare raptor"
+    },
+    {
+     "name": "Swinegart Spearhide",
+     "id": 5864,
+     "source": "classic",
+     "why": "Rare quilboar"
+    },
+    {
+     "name": "Mutanus the Devourer",
+     "id": 3654,
+     "source": "classic",
+     "why": "Last boss of Wailing Caverns",
+     "unchecked": true
+    },
+    {
+     "name": "Lord Cobrahn",
+     "id": 3669,
+     "source": "classic",
+     "why": "Druid boss in Wailing Caverns",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "The Crossroads: central Horde hub",
+    "Ratchet: goblin port with a boat to Booty Bay",
+    "Wailing Caverns: dungeon",
+    "Razorfen Kraul: dungeon",
+    "Camp Taurajo: tauren outpost"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/The_Barrens"
+   ]
+  },
+  {
+   "zoneId": 1416,
+   "name": "Alterac Mountains",
+   "levels": "30-40",
+   "faction": "Contested",
+   "summary": "A cold, rocky range north of Hillsbrad, dotted with ruined human towns and ogre camps. Players come here for mid-level quests, to reach Alterac Valley, and to visit the ruins of a fallen kingdom.",
+   "history": "Alterac was once a human kingdom that sat between Lordaeron and the northern lands. Its ruler, Lord Perenolde, secretly helped the orcs in the Second War and tried to cover it up by freeing orc prisoners. The other kingdoms cast him out and the land fell apart. Ogres of the Crushridge clan took over the old fortress, and raiders of the Syndicate hide in the hills. Orcs of the Frostwolf clan later settled in the valley beyond, which is why Alliance and Horde now fight there.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Lord Aliden Perenolde",
+     "id": 2423,
+     "source": "classic",
+     "why": "The traitor lord of Alterac, remembered in the ruins and in the Syndicate story."
+    },
+    {
+     "name": "Mug'thol",
+     "id": 2257,
+     "source": "classic",
+     "why": "Elite ogre chief who rules Crushridge Hold."
+    },
+    {
+     "name": "Gravis Slipknot",
+     "id": 14221,
+     "source": "classic",
+     "why": "Rare mob in the mountains that hunters and loot hunters look for."
+    },
+    {
+     "name": "Crushridge Warmonger",
+     "id": 2287,
+     "source": "classic",
+     "why": "Typical tough ogre guarding the hold."
+    },
+    {
+     "name": "Glommus",
+     "id": 2422,
+     "source": "classic",
+     "why": "Elite mob that wanders the mountains."
+    },
+    {
+     "name": "Archmage Ansirem Runeweaver",
+     "id": 2543,
+     "source": "classic",
+     "why": "Kirin Tor mage tied to the Dalaran quests in the area."
+    }
+   ],
+   "mentions": [
+    "Alterac Valley: the huge battleground north of here, where Stormpike and Frostwolf armies fight",
+    "Strahnbrad and the Ruins of Alterac: broken towns of the old kingdom",
+    "Crushridge Hold: the ogre stronghold with tough elites",
+    "Dalaran Crater: where the mage city used to stand before it was lifted away",
+    "Ravenholdt Manor: a hidden rogue estate"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Alterac_Mountains",
+    "https://classicdb.ch/?npc=2257"
+   ]
+  },
+  {
+   "zoneId": 1417,
+   "name": "Arathi Highlands",
+   "levels": "30-40",
+   "faction": "Contested",
+   "summary": "Open grassland and hills in the middle of Lordaeron. Humans, trolls, ogres and orcs all fight over it, which makes it a busy place for quests in the thirties.",
+   "history": "This was the home of the first human empire, Arathor, whose capital stood here long ago. Later the kingdom of Stromgarde held the land. After the Third War Stromgarde was weak and fell under attack from the Syndicate, ogres and the Witherbark trolls. Prince Galen Trollbane held only a small piece of his own city. Today the Alliance holds Refuge Pointe and the Horde holds Hammerfall.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Prince Galen Trollbane",
+     "id": 2607,
+     "source": "classic",
+     "why": "The last ruler of broken Stromgarde."
+    },
+    {
+     "name": "Lord Falconcrest",
+     "id": 2597,
+     "source": "classic",
+     "why": "Syndicate leader who hides in a fort near Stromgarde."
+    },
+    {
+     "name": "Prince Nazjak",
+     "id": 2779,
+     "source": "classic",
+     "why": "Rare spawn that people hunt along the coast south of Stromgarde."
+    },
+    {
+     "name": "Kenata Dabyrie",
+     "id": 4480,
+     "source": "classic",
+     "why": "Quest giver at Dabyrie's Farmstead, key in the Alliance quests."
+    },
+    {
+     "name": "Hammerfall Guardian",
+     "id": 2621,
+     "source": "classic",
+     "why": "Strong guards at the Horde town of Hammerfall."
+    }
+   ],
+   "mentions": [
+    "Refuge Pointe: the Alliance camp",
+    "Hammerfall: the Horde camp",
+    "Stromgarde Keep: the broken human capital",
+    "Witherbark Village and Boulderfist Hall: troll and ogre homes",
+    "Arathi Basin: the 15v15 battleground whose entrance is here",
+    "Thandol Span: the long bridge south to the Wetlands"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Arathi_Highlands",
+    "https://classicdb.ch/?npc=2779"
+   ]
+  },
+  {
+   "zoneId": 1418,
+   "name": "Badlands",
+   "levels": "35-45",
+   "faction": "Contested",
+   "summary": "A dry, red canyon land south of Loch Modan, full of ogres, troggs and dwarf diggers. You come here for mid-level quests, the Horde outpost of Kargath, and the Uldaman dungeon.",
+   "history": "The Badlands hide old titan ruins, and Uldaman is the best known of them. Dwarf explorers dug into it looking for the secrets of their own past. Thrall sent the Kargath Expeditionary Force here to set up the Horde's only outpost in Khaz Modan. Ogres and Dark Iron dwarves hold much of the rest.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Warlord Goretooth",
+     "id": 9077,
+     "source": "classic",
+     "why": "Orc leader of the Kargath Expeditionary Force"
+    },
+    {
+     "name": "Boss Tho'grun",
+     "id": 2944,
+     "source": "classic",
+     "why": "Named ogre boss in the Badlands"
+    }
+   ],
+   "mentions": [
+    "Kargath: small Horde outpost on the northern edge",
+    "Uldaman: titan-ruin dungeon entrance in the east (levels 35-45); its first boss Ironaya guards the vault door",
+    "Dustbelch Grotto and Angor Fortress: ogre and dwarf strongholds",
+    "Mirage Flats: wide desert in the south"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Badlands",
+    "https://warcraft.wiki.gg/wiki/Warlord_Goretooth",
+    "https://warcraft.wiki.gg/wiki/Boss_Tho%27grun",
+    "https://warcraft.wiki.gg/wiki/Rexxar"
+   ]
+  },
+  {
+   "zoneId": 1419,
+   "name": "Blasted Lands",
+   "levels": "45-60",
+   "faction": "Hostile",
+   "summary": "A scarred red wasteland at the far south of the kingdoms, where the Dark Portal stands. Nethergarde Keep guards it. Come here for high-level quests and the fel-ruined Tainted Scar.",
+   "history": "The Blasted Lands were once the southern part of the Black Morass swamp. Demonic magic from the Dark Portal dried them into a barren wasteland during the First War. Nethergarde Keep was built later to keep watch on the portal. Demons under Lord Kazzak gather at the Tainted Scar, and Dreadmaul ogres roam the desert.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Lord Kazzak",
+     "id": 12397,
+     "source": "classic",
+     "why": "Giant demon world boss waiting at the Tainted Scar"
+    },
+    {
+     "name": "Razelikh the Defiler",
+     "id": 7664,
+     "source": "classic",
+     "why": "Elite demon lieutenant, killed at the Rise of the Defiler",
+     "unchecked": true
+    },
+    {
+     "name": "Grunter",
+     "id": 8303,
+     "source": "classic",
+     "why": "Rare mob in the desert"
+    },
+    {
+     "name": "Magronos the Unyielding",
+     "id": 8297,
+     "source": "classic",
+     "why": "Rare mob in the zone"
+    }
+   ],
+   "mentions": [
+    "Nethergarde Keep: Alliance fort beside the Dark Portal",
+    "The Tainted Scar: ridge where Kazzak stands",
+    "Dreadmaul Rock: ogre fortress in the north",
+    "Dark Portal: the gate that leads to Outland",
+    "Fallen Hero of the Horde: ghost at the swamp border who starts a long quest chain"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Blasted_Lands",
+    "https://warcraft.wiki.gg/wiki/Razelikh_the_Defiler",
+    "https://warcraft.wiki.gg/wiki/Grunter",
+    "https://warcraft.wiki.gg/wiki/Magronos_the_Unyielding"
+   ]
+  },
+  {
+   "zoneId": 1420,
+   "name": "Tirisfal Glades",
+   "levels": "1-10",
+   "faction": "Horde",
+   "summary": "A gloomy, misty forest of farms and graveyards. This is where new Forsaken characters begin, with Brill as the first town.",
+   "history": "Tirisfal was a calm farming region just outside the old capital of Lordaeron. The plague and the Scourge turned it into a land of the dead. After Arthas destroyed the kingdom, some undead broke free from the Lich King and became the Forsaken under Sylvanas. They took the ruins of Lordaeron and built the Undercity below it. The Scarlet Crusade still holds the northeast with their monastery.",
+   "startingFor": [
+    {
+     "area": "Deathknell",
+     "races": [
+      "Undead"
+     ],
+     "note": "Starting village for the Forsaken."
+    }
+   ],
+   "mobs": [
+    {
+     "name": "Dark Cleric Duesten",
+     "id": 2123,
+     "source": "classic",
+     "why": "Priest trainer in Deathknell; one of the first NPCs undead players meet."
+    },
+    {
+     "name": "Executor Zygand",
+     "id": 1515,
+     "source": "classic",
+     "why": "Quest giver in Deathknell for early quests."
+    },
+    {
+     "name": "Apothecary Johaan",
+     "id": 1518,
+     "source": "classic",
+     "why": "Quest giver near Brill in the plague-research story."
+    },
+    {
+     "name": "Captain Melrache",
+     "id": 1665,
+     "source": "classic",
+     "why": "Elite-level boss of the Scarlet camp at Garren's Haunt."
+    },
+    {
+     "name": "Alexi Barov",
+     "id": 11022,
+     "source": "classic",
+     "why": "Head of the House of Barov, linked to the Scholomance story."
+    }
+   ],
+   "mentions": [
+    "Brill: the main Forsaken town",
+    "Deathknell: the Undead starting village",
+    "Scarlet Monastery: the dungeon entrance in the far northeast",
+    "Ruins of Lordaeron: the entrance to the Undercity",
+    "Agamand Mills and Garren's Haunt: spooky farms with quests"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Tirisfal_Glades",
+    "https://classicdb.ch/?npc=1515"
+   ]
+  },
+  {
+   "zoneId": 1421,
+   "name": "Silverpine Forest",
+   "levels": "10-20",
+   "faction": "Horde",
+   "summary": "A dark pine forest south of Tirisfal. It is the second stop for Forsaken players, full of worgen rumors, Scarlet raiders and the dungeon Shadowfang Keep.",
+   "history": "Silverpine was once a quiet forest on the edge of Lordaeron, watched over by the nearby mages of Dalaran. During the Third War, the wizard Arugal summoned worgen to fight the orcs and they turned on him and the land. Shadowfang Keep became his lair. The Forsaken now fight the worgen and the Alliance from the Sepulcher, their base in the north.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Archmage Ataeric",
+     "id": 2120,
+     "source": "classic",
+     "why": "Mage from Dalaran in the forest who gives quests."
+    },
+    {
+     "name": "Deathstalker Faerleia",
+     "id": 2058,
+     "source": "classic",
+     "why": "Forsaken ranger leader at the Sepulcher."
+    },
+    {
+     "name": "Ivar the Foul",
+     "id": 1971,
+     "source": "classic",
+     "why": "Worgen-related quest villain at Pyrewood area."
+    },
+    {
+     "name": "Moonrage Whitescalp",
+     "id": 1769,
+     "source": "classic",
+     "why": "Common Moonrage worgen in the forest."
+    },
+    {
+     "name": "Fenrus the Devourer",
+     "id": 4274,
+     "source": "classic",
+     "why": "First boss of Shadowfang Keep, the dungeon entered from here.",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "The Sepulcher: the Forsaken base",
+    "Shadowfang Keep: the dungeon at the forest's heart, level 22-30",
+    "Pyrewood Village and Ambermill: lost villages",
+    "Quests about the worgen curse and Dalaran rescue"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Silverpine_Forest",
+    "https://classicdb.ch/?npc=2120"
+   ]
+  },
+  {
+   "zoneId": 1422,
+   "name": "Western Plaguelands",
+   "levels": "51-58",
+   "faction": "Contested",
+   "summary": "A ruined, plague-struck land of dead farms and old Lordaeron villages. Levelers and dungeon runners come here for undead hunting and for the Scholomance dungeon.",
+   "history": "This was once the farming heartland of Lordaeron. Arthas spread the plague of undeath here, and the villagers turned into the walking dead. Andorhal fell first, and ever since it has been a Scourge stronghold. The Argent Dawn now trains fighters to keep the plague from spreading further. Dark necromancers, the Cult of the Damned and the Scarlet Crusade all fight for ground.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Araj the Summoner",
+     "id": 1852,
+     "source": "classic",
+     "why": "Necromancer boss in Andorhal tied to a quest chain."
+    },
+    {
+     "name": "Weldon Barov",
+     "id": 11023,
+     "source": "classic",
+     "why": "Barov family member with a long quest chain."
+    },
+    {
+     "name": "Commander Ashlam Valorfist",
+     "id": 10838,
+     "source": "classic",
+     "why": "Argent Dawn commander at Chillwind Camp."
+    },
+    {
+     "name": "Kirtonos the Herald",
+     "id": 10506,
+     "source": "classic",
+     "why": "Boss summoned from Scholomance.",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "Scholomance: the necromancer school dungeon at Caer Darrow",
+    "Andorhal: ruined town with the Scourge",
+    "Chillwind Camp: the Alliance-friendly camp",
+    "Hearthglen: Scarlet Crusade fortress",
+    "Sorrow Hill and Felstone Field: famous quest areas"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Western_Plaguelands",
+    "https://classicdb.ch/?npc=1852"
+   ]
+  },
+  {
+   "zoneId": 1423,
+   "name": "Eastern Plaguelands",
+   "levels": "53-60",
+   "faction": "Contested",
+   "summary": "A dead, haunted land that is the last big zone before level 60. It is full of undead, plague beasts and the entrance to Stratholme and Naxxramas.",
+   "history": "The Eastern Plaguelands are the heart of Lordaeron's fall. Stratholme was the first city to be touched by the plague, and Arthas purged it here. The Scourge floated their necropolis, Naxxramas, over the land. The Scarlet Crusade and the Argent Dawn, an alliance of Horde and Alliance heroes, fight for the rest. Light's Hope Chapel is the Argent Dawn's last stand.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Tirion Fordring",
+     "id": 1855,
+     "source": "classic",
+     "why": "Fallen paladin who becomes a key hero of the Light."
+    },
+    {
+     "name": "Lord Maxwell Tyrosus",
+     "id": 11034,
+     "source": "classic",
+     "why": "Leader of the Argent Dawn in the field."
+    },
+    {
+     "name": "Duke Nicholas Zverenhoff",
+     "id": 11039,
+     "source": "classic",
+     "why": "Argent Dawn leader at Light's Hope Chapel."
+    },
+    {
+     "name": "Betina Bigglezink",
+     "id": 11035,
+     "source": "classic",
+     "why": "Argent Dawn quest giver at the chapel."
+    },
+    {
+     "name": "Carlin Redpath",
+     "id": 11063,
+     "source": "classic",
+     "why": "Quest giver for Scourge quests."
+    }
+   ],
+   "mentions": [
+    "Light's Hope Chapel: base of the Argent Dawn",
+    "Stratholme: the dungeon here, split into two halves",
+    "Naxxramas: the raid hanging over the zone",
+    "Corin's Crossing and Terrordale: undead towns",
+    "Scourge Invasion: world event that sends the dead into other zones"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Eastern_Plaguelands",
+    "https://classicdb.ch/?npc=1855"
+   ]
+  },
+  {
+   "zoneId": 1424,
+   "name": "Hillsbrad Foothills",
+   "levels": "20-30",
+   "faction": "Contested",
+   "summary": "Green hills and farmland with two rival towns, Southshore for the Alliance and Tarren Mill for the Horde. Players meet each other and fight over quests and kills.",
+   "history": "Hillsbrad was a farm region of Lordaeron. The land was spared in the Third War but fell to Syndicate raiders and the Dalaran exiles. Durnholde Keep, once an internment camp for orcs, stands on the hill. The Forsaken took Tarren Mill from the humans, and Southshore stayed human. The two towns have fought ever since.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Magistrate Burnside",
+     "id": 2335,
+     "source": "classic",
+     "why": "Quest giver in Hillsbrad."
+    },
+    {
+     "name": "Foreman Bonds",
+     "id": 2305,
+     "source": "classic",
+     "why": "Quest giver with Syndicate quests."
+    },
+    {
+     "name": "Captain Ironhill",
+     "id": 2304,
+     "source": "classic",
+     "why": "Elite Syndicate captain."
+    },
+    {
+     "name": "Lieutenant Farren Orinelle",
+     "id": 2228,
+     "source": "classic",
+     "why": "Alliance officer giving early Hillsbrad quests."
+    },
+    {
+     "name": "High Executor Darthalia",
+     "id": 2215,
+     "source": "classic",
+     "why": "Forsaken leader at Tarren Mill."
+    },
+    {
+     "name": "Drull",
+     "id": 2239,
+     "source": "classic",
+     "why": "Horde officer at Tarren Mill."
+    }
+   ],
+   "mentions": [
+    "Southshore and Tarren Mill: the rival towns",
+    "Durnholde Keep: entrance to the Old Hillsbrad dungeon",
+    "Southshore vs Tarren Mill: a well known world PvP fight",
+    "Syndicate and Dalaran quests"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Hillsbrad_Foothills",
+    "https://classicdb.ch/?npc=2335"
+   ]
+  },
+  {
+   "zoneId": 1425,
+   "name": "The Hinterlands",
+   "levels": "41-51",
+   "faction": "Contested",
+   "summary": "A thick jungle-forest in the north-east of the Eastern Kingdoms. The Wildhammer dwarves and the Horde-friendly Revantusk trolls live here, along with hostile Witherbark and Vilebranch trolls.",
+   "history": "The Hinterlands are the home of the Wildhammer dwarves, whose clan built Aerie Peak. They share the land with troll tribes that go back to the Amani empire. The Vilebranch trolls hold the city of Jintha'Alor and serve the old blood god. The Revantusk trolls joined the Horde, while the Wildhammer joined the Alliance. Their wars over this valley are what the quests tell about.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Vile Priestess Hexx",
+     "id": 7995,
+     "source": "classic",
+     "why": "Vilebranch leader in Jintha'Alor."
+    },
+    {
+     "name": "Mith'rethis the Enchanter",
+     "id": 8217,
+     "source": "classic",
+     "why": "Rare elite known for rare drops."
+    },
+    {
+     "name": "Gammerita",
+     "id": 7977,
+     "source": "classic",
+     "why": "Rare turtle that hunters tame."
+    },
+    {
+     "name": "Falstad Wildhammer",
+     "id": 5635,
+     "source": "classic",
+     "why": "High thane of the Wildhammer at Aerie Peak."
+    },
+    {
+     "name": "Gryphon Master Talonaxe",
+     "id": 5636,
+     "source": "classic",
+     "why": "Flight master at Aerie Peak."
+    }
+   ],
+   "mentions": [
+    "Aerie Peak: the Wildhammer town",
+    "Revantusk Village: the Horde troll village",
+    "Jintha'Alor: Vilebranch troll city",
+    "Seradane: a green dragon in the northwest",
+    "The Overlook Cliffs and Skulk Rock"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://classicdb.ch/?npc=7977"
+   ]
+  },
+  {
+   "zoneId": 1426,
+   "name": "Dun Morogh",
+   "levels": "1-10",
+   "faction": "Alliance",
+   "summary": "A snowy mountain land and the homeland of the dwarves and gnomes. It is where new dwarf and gnome characters start, with Ironforge just inside.",
+   "history": "Dun Morogh holds Ironforge, the dwarf capital, and the old gnome city of Gnomeregan. Gnomeregan was overrun by troggs and then poisoned by the traitor Mekgineer Thermaplugg, so the gnomes fled to Ironforge. The dwarves have kept the peace of the mountains for a long time, but Frostmane trolls and troggs keep trying to move in. The Alliance defends the land from Kharanos.",
+   "startingFor": [
+    {
+     "area": "Coldridge Valley",
+     "races": [
+      "Dwarf",
+      "Gnome"
+     ],
+     "note": "Start for dwarves and gnomes."
+    }
+   ],
+   "mobs": [
+    {
+     "name": "Great Father Arctikus",
+     "id": 1260,
+     "source": "classic",
+     "why": "Famous rare bear in the snow."
+    },
+    {
+     "name": "Balir Frosthammer",
+     "id": 713,
+     "source": "classic",
+     "why": "Coldridge Valley trainer in the starting area."
+    },
+    {
+     "name": "Senir Whitebeard",
+     "id": 1252,
+     "source": "classic",
+     "why": "Quest giver for new players in Dun Morogh."
+    },
+    {
+     "name": "Jarven Thunderbrew",
+     "id": 1373,
+     "source": "classic",
+     "why": "Brewmaster tied to the brewing quests."
+    },
+    {
+     "name": "Mangeclaw",
+     "id": 1961,
+     "source": "classic",
+     "why": "Rare bear in the zone."
+    },
+    {
+     "name": "Mekgineer Thermaplugg",
+     "id": 7800,
+     "source": "classic",
+     "why": "The villain behind the Gnomeregan disaster.",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "Kharanos: the main town after Coldridge Valley",
+    "Ironforge: the dwarf capital at the center",
+    "Gnomeregan: the poisoned gnome city dungeon",
+    "Coldridge Valley: the first valley for dwarves and gnomes",
+    "Frostmane trolls and Rockjaw troggs"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Dun_Morogh",
+    "https://classicdb.ch/?npc=1260"
+   ]
+  },
+  {
+   "zoneId": 1427,
+   "name": "Searing Gorge",
+   "levels": "43-56",
+   "faction": "Contested",
+   "summary": "A burning rocky gorge at the foot of Blackrock Mountain. Dark Iron dwarves hold forges and fortresses here. Go for forge and Thorium Brotherhood quests and to enter Blackrock Depths.",
+   "history": "About 230 years ago the Dark Iron sorcerer-thane Thaurissan summoned Ragnaros in the War of the Three Hammers. The eruption made Blackrock Mountain and blackened the gorge. The Dark Iron later dug the Cauldron and its Slag Pit, worked by captured slaves. The Thorium Brotherhood, a Dark Iron splinter group, set up Thorium Point to watch them.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Overseer Maltorius",
+     "id": 14621,
+     "source": "classic",
+     "why": "Slag Pit overseer"
+    },
+    {
+     "name": "Kalaran Windblade",
+     "id": 8479,
+     "source": "classic",
+     "why": "Quest giver of the Divine Retribution chain"
+    },
+    {
+     "name": "Dark Iron Taskmaster",
+     "id": 5846,
+     "source": "classic",
+     "why": "Slave driver found across the gorge"
+    },
+    {
+     "name": "Dark Iron Steelshifter",
+     "id": 8337,
+     "source": "classic",
+     "why": "Craftsman guard, levels 42-45",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "Thorium Point: fort for both factions, hub for the Thorium Brotherhood",
+    "Blackrock Mountain: next door, holds Blackrock Depths, Blackrock Spire, Molten Core and Blackwing Lair",
+    "The Cauldron and the Slag Pit: Dark Iron strongholds",
+    "Key to Searing Gorge: the Alliance entrance from Loch Modan was locked in Classic and needed a key quest"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Searing_Gorge",
+    "https://warcraft.wiki.gg/wiki/Overseer_Maltorius",
+    "https://warcraft.wiki.gg/wiki/Kalaran_Windblade",
+    "https://warcraft.wiki.gg/wiki/Dark_Iron_Taskmaster",
+    "https://warcraft.wiki.gg/wiki/Dark_Iron_Steelshifter"
+   ]
+  },
+  {
+   "zoneId": 1428,
+   "name": "Burning Steppes",
+   "levels": "50-59",
+   "faction": "Contested",
+   "summary": "A hot ash-covered land beside Blackrock Mountain. Blackrock orcs and black dragon forces rule it. You go for high-level quests and the way up to Blackrock Spire.",
+   "history": "Dark Iron dwarves first settled the Burning Steppes after leaving Ironforge, and Thaurissan's summoning of Ragnaros melted the mountains into the Blackrock volcano. Orcs settled here in the First War, and the Horde used Blackrock Spire as a base in the Second War. Orgrim Doomhammer killed Anduin Lothar near the volcano late in that war.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Ragged John",
+     "id": 9563,
+     "source": "classic",
+     "why": "Old man at Morgan's Vigil with a dragon story"
+    },
+    {
+     "name": "Grark Lorkrub",
+     "id": 9520,
+     "source": "classic",
+     "why": "Orc prisoner at Blackrock Stronghold with a Horde escort quest"
+    },
+    {
+     "name": "Gor'tesh",
+     "id": 9176,
+     "source": "classic",
+     "why": "Brute lord of the Firegut ogres, an Alliance quest target"
+    }
+   ],
+   "mentions": [
+    "Morgan's Vigil and Flame Crest: Alliance and Horde camps",
+    "Blackrock Spire: dungeon above the zone, ending with Warchief Rend Blackhand",
+    "Dreadmaul Hold and Altar of Storms: giants and dragons",
+    "Lord Victor Nefarius and Nefarian: black dragon story behind the Onyxia and Blackwing attunements"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Burning_Steppes",
+    "https://warcraft.wiki.gg/wiki/Ragged_John",
+    "https://warcraft.wiki.gg/wiki/Grark_Lorkrub",
+    "https://warcraft.wiki.gg/wiki/Gor%27tesh"
+   ]
+  },
+  {
+   "zoneId": 1429,
+   "name": "Elwynn Forest",
+   "levels": "1-10",
+   "faction": "Alliance",
+   "summary": "The green home of Stormwind. It is peaceful, with farms, lakes and mines, plus a few bandit, gnoll and kobold camps.",
+   "history": "Stormwind was founded around 1,200 years before the Dark Portal opened, and Elwynn became the heartland of the human kingdom. Orcs invaded in the First War, and Lothar's knights drove them back through the forest. Goldshire and Moonbrook were the last towns to fall. Today the army guards the roads, but gnolls, bandits and murlocs still trouble the farms.",
+   "startingFor": [
+    {
+     "area": "Northshire Valley",
+     "races": [
+      "Human"
+     ],
+     "note": "Dwarf and Gnome start in Dun Morogh instead."
+    }
+   ],
+   "mobs": [
+    {
+     "name": "Hogger",
+     "id": 448,
+     "source": "classic",
+     "why": "Famous gnoll elite near Elwynn's roads"
+    },
+    {
+     "name": "Marshal Dughan",
+     "id": 240,
+     "source": "classic",
+     "why": "Goldshire's leader and quest giver"
+    },
+    {
+     "name": "Goldtooth",
+     "id": 327,
+     "source": "classic",
+     "why": "Kobold boss at Goldtooth's Den"
+    },
+    {
+     "name": "Princess",
+     "id": 330,
+     "source": "classic",
+     "why": "Rare boar with a fun solo kill"
+    },
+    {
+     "name": "Gruff Swiftbite",
+     "id": 100,
+     "source": "classic",
+     "why": "Rare gnoll near Forest's Edge"
+    },
+    {
+     "name": "Marshal Haggard",
+     "id": 294,
+     "source": "classic",
+     "why": "Retired guard leader at Eastvale Logging Camp"
+    }
+   ],
+   "mentions": [
+    "Goldshire: main village and crossroads",
+    "Northshire Abbey: the human starting valley",
+    "Fargodeep Mine and Goldtooth's Den: kobold mines",
+    "Eastvale Logging Camp and Westbrook Garrison: the army posts on the east and west edges",
+    "Stormwind City: the Alliance capital just northwest"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Elwynn_Forest",
+    "https://warcraft.wiki.gg/wiki/Gruff_Swiftbite",
+    "https://warcraft.wiki.gg/wiki/Marshal_Haggard",
+    "https://warcraft.wiki.gg/wiki/Goldtooth"
+   ]
+  },
+  {
+   "zoneId": 1430,
+   "name": "Deadwind Pass",
+   "levels": "55-60",
+   "faction": "Hostile",
+   "summary": "A gloomy mountain pass leading up to Karazhan, the tower of a mad mage. There is little to do but kill ogres and see the sights.",
+   "history": "Deadwind Pass runs between Duskwood and the Swamp of Sorrows. The wizard Aegwynn built Karazhan, and her son Medivh lived there. He died at the hands of Lothar and Khadgar, which left a fel blight on the land. Ogres have since settled the pass, with mounds in the Vice.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Deadwind Warlock",
+     "id": 7372,
+     "source": "classic",
+     "why": "Magic-using ogre"
+    },
+    {
+     "name": "Deadwind Brute",
+     "id": 7369,
+     "source": "classic",
+     "why": "Heavy-hitting ogre"
+    },
+    {
+     "name": "Deadwind Mauler",
+     "id": 7371,
+     "source": "classic",
+     "why": "Melee ogre"
+    },
+    {
+     "name": "Deadwind Ogre Mage",
+     "id": 7379,
+     "source": "classic",
+     "why": "Caster ogre"
+    },
+    {
+     "name": "Deadwind Enforcer",
+     "id": 7373,
+     "source": "classic",
+     "why": "Strong ogre guard",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "Karazhan: tower on the hill, closed to players in Classic",
+    "Morgan's Plot: ruined farm",
+    "The Vice: canyon where the Deadwind ogres live",
+    "Sleeping Gorge and Deadman's Crossing"
+   ],
+   "foreverNotes": "Karazhan is not open to players in Classic.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Deadwind_Pass"
+   ]
+  },
+  {
+   "zoneId": 1431,
+   "name": "Duskwood",
+   "levels": "18-30",
+   "faction": "Contested",
+   "summary": "A dark, spooky forest full of undead, spiders and worgen. Darkshire is the hub. Go for a creepy quest chain and the road south to Stranglethorn.",
+   "history": "Duskwood was once called Brightwood. In the First War the Horde raided the area, and Medivh's death spread fel energy that changed it into the dark Duskwood. The necromancer Morbent Fel then filled the woods with undead, and Defias agents hid in the dark. Darkshire is guarded by the Night Watch.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Stitches",
+     "id": 412,
+     "source": "classic",
+     "why": "Giant abomination who walks toward Darkshire",
+     "unchecked": true
+    },
+    {
+     "name": "Eliza",
+     "id": 314,
+     "source": "classic",
+     "why": "Bride of the embalmer, a spooky quest villain",
+     "unchecked": true
+    },
+    {
+     "name": "Morbent Fel",
+     "id": 1200,
+     "source": "classic",
+     "why": "Necromancer behind much of the undead"
+    },
+    {
+     "name": "Mor'Ladim",
+     "id": 522,
+     "source": "classic",
+     "why": "Elite skeleton in Raven Hill Cemetery"
+    },
+    {
+     "name": "Commander Felstrom",
+     "id": 771,
+     "source": "classic",
+     "why": "Rare undead in the Dawning Woods Catacombs"
+    },
+    {
+     "name": "Lord Malathrom",
+     "id": 503,
+     "source": "classic",
+     "why": "Rare ghoul in the Dawning Woods Catacombs"
+    },
+    {
+     "name": "Abercrombie",
+     "id": 289,
+     "source": "classic",
+     "why": "Hermit who starts the Stitches quests"
+    }
+   ],
+   "mentions": [
+    "Darkshire: central town, ruled by Lord Ello Ebonlocke",
+    "Raven Hill Cemetery",
+    "Twilight Grove: the Emerald Dream portal",
+    "Manor Mistmantle and Yorgen Farmstead",
+    "Road east into Deadwind Pass and south to Stranglethorn Vale"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Duskwood",
+    "https://warcraft.wiki.gg/wiki/Mor%27Ladim",
+    "https://warcraft.wiki.gg/wiki/Commander_Felstrom",
+    "https://warcraft.wiki.gg/wiki/Lord_Malathrom"
+   ]
+  },
+  {
+   "zoneId": 1432,
+   "name": "Loch Modan",
+   "levels": "10-20",
+   "faction": "Alliance",
+   "summary": "A green, rainy dwarf land around a big lake, east of Dun Morogh. Good for levels 10-20 with quests about troggs, ogres and bears.",
+   "history": "Loch Modan was built by the dwarves of Ironforge after the Second War, who dammed the river to make the loch. The Stonewrought Dam is its famous work. Dark Iron dwarves, troggs and the Mo'grosh ogres hit the dwarves again and again. The Thelsamar townsfolk have stayed brave through all of it.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Grawmug",
+     "id": 1205,
+     "source": "classic",
+     "why": "Rare mob that levelers hunt in the zone."
+    },
+    {
+     "name": "Ol' Sooty",
+     "id": 1225,
+     "source": "classic",
+     "why": "Rare elite mob in Loch Modan."
+    },
+    {
+     "name": "Grizlak",
+     "id": 1425,
+     "source": "classic",
+     "why": "Rare bear in the zone.",
+     "unchecked": true
+    },
+    {
+     "name": "Mountaineer Kadrell",
+     "id": 1340,
+     "source": "classic",
+     "why": "Dwarf quest giver at Thelsamar."
+    },
+    {
+     "name": "Mo'grosh Ogre",
+     "id": 1178,
+     "source": "classic",
+     "why": "Typical elite ogre at the Mo'grosh Stronghold."
+    }
+   ],
+   "mentions": [
+    "Thelsamar: the main town",
+    "Stonewrought Dam: the big dwarf-built dam",
+    "Mo'grosh Stronghold: an elite ogre cave",
+    "Ironband's Excavation Site and the trogg digs",
+    "Dun Algaz and the road to the Badlands"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Loch_Modan",
+    "https://classicdb.ch/?npc=1205"
+   ]
+  },
+  {
+   "zoneId": 1433,
+   "name": "Redridge Mountains",
+   "levels": "15-25",
+   "faction": "Alliance",
+   "summary": "A hilly red region around a big lake. Lakeshire is the Alliance town. Go for Blackrock orc and gnoll quests.",
+   "history": "Dark Iron dwarves founded a colony in the north, and their thane summoned Ragnaros, who made Blackrock Mountain. Orcs conquered the Redridge Mountains in the First War. Later Blackrock raiders, an orc warlock named Morganth and the Shadowhide gnolls took the eastern half. Lakeshire's militia holds the lake shore.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Gath'Ilzogg",
+     "id": 334,
+     "source": "classic",
+     "why": "Blackrock warlord at Stonewatch Keep"
+    },
+    {
+     "name": "Lieutenant Fangore",
+     "id": 703,
+     "source": "classic",
+     "why": "Shadowhide gnoll general in the east, party of five advised"
+    },
+    {
+     "name": "Kazon",
+     "id": 584,
+     "source": "classic",
+     "why": "Rare near Render's Camp"
+    },
+    {
+     "name": "Magistrate Solomon",
+     "id": 344,
+     "source": "classic",
+     "why": "Leader of Lakeshire"
+    },
+    {
+     "name": "Marshal Marris",
+     "id": 382,
+     "source": "classic",
+     "why": "Lakeshire quest giver at the bridge"
+    }
+   ],
+   "mentions": [
+    "Lakeshire: main town",
+    "Stonewatch Keep and Tower",
+    "Render's Valley: Blackrock orc camps",
+    "Alther's Mill and Three Corners",
+    "Black dragon quests"
+   ],
+   "foreverNotes": "The Warcraft Wiki Forever map comparison marks Redridge as substantively changed on the map, without saying how.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Redridge_Mountains",
+    "https://warcraft.wiki.gg/wiki/Kazon",
+    "https://warcraft.wiki.gg/wiki/Lieutenant_Fangore",
+    "https://warcraft.wiki.gg/wiki/Gath%27Ilzogg",
+    "https://warcraft.wiki.gg/wiki/Marshal_Marris"
+   ]
+  },
+  {
+   "zoneId": 1434,
+   "name": "Stranglethorn Vale",
+   "levels": "30-45",
+   "faction": "Contested",
+   "summary": "A huge jungle full of trolls, tigers, raptors and pirates. Booty Bay is the neutral port. It is a classic leveling zone with many kills and quests.",
+   "history": "The Gurubashi trolls ruled the vale until a civil war, driven by priests of Hakkar the Soulflayer, broke their empire. The Zandalari beat Hakkar at Zul'Gurub, and the surviving Atal'ai priests fled to the Swamp of Sorrows. Goblins of the Steamwheedle Cartel took Booty Bay from the trolls. Pirates, ogres and rebels have fought over the jungle since.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "King Bangalash",
+     "id": 731,
+     "source": "classic",
+     "why": "Famous white tiger rare in Northern Stranglethorn"
+    },
+    {
+     "name": "Mokk the Savage",
+     "id": 1514,
+     "source": "classic",
+     "why": "Gorilla rare at the Spirit Den in the Cape"
+    },
+    {
+     "name": "Colonel Kurzen",
+     "id": 813,
+     "source": "classic",
+     "why": "Elite jungle fighter under the Mind's Eye"
+    },
+    {
+     "name": "Baron Revilgaz",
+     "id": 2496,
+     "source": "classic",
+     "why": "Goblin trade-prince of Booty Bay"
+    },
+    {
+     "name": "Hemet Nesingwary",
+     "id": 715,
+     "source": "classic",
+     "why": "Hunter who runs the big game quests"
+    },
+    {
+     "name": "Mosh'Ogg Warmonger",
+     "id": 709,
+     "source": "classic",
+     "why": "Elite ogre at the Mosh'Ogg Ogre Mound"
+    },
+    {
+     "name": "Commander Aggro'gosh",
+     "id": 2464,
+     "source": "classic",
+     "why": "Horde commander at Grom'gol Base Camp"
+    }
+   ],
+   "mentions": [
+    "Booty Bay: neutral port with boats to Ratchet and Menethil",
+    "Nesingwary's Expedition: hunting quests",
+    "Grom'gol Base Camp and Rebel Camp: faction camps; the rebels fight Kurzen",
+    "Zul'Gurub: raid entrance in the north, the old Gurubashi capital",
+    "Gurubashi Arena: PvP arena near Booty Bay"
+   ],
+   "foreverNotes": "Reports say Stranglethorn gains a new dungeon, The Drowned City (levels 35-40), tied to submerged ruins off the coast.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Stranglethorn_Vale",
+    "https://warcraft.wiki.gg/wiki/Mokk_the_Savage",
+    "https://warcraft.wiki.gg/wiki/King_Bangalash",
+    "https://warcraft.wiki.gg/wiki/Mosh%27Ogg_Warmonger",
+    "https://warcraft.wiki.gg/wiki/Commander_Aggro%27gosh",
+    "https://seemeta.com/en/wow-forever/zones"
+   ]
+  },
+  {
+   "zoneId": 1435,
+   "name": "Swamp of Sorrows",
+   "levels": "35-45",
+   "faction": "Contested",
+   "summary": "A wet, marshy land near the Dark Portal. The sunken Temple of Atal'Hakkar sits in the swamp. Go for orc and troll quests and the Sunken Temple dungeon.",
+   "history": "The swamp was once the northern part of the Black Morass. The Atal'ai trolls built a temple here after the Gurubashi empire fell, and the green dragonflight sank it into the bog. The orcs built Stonard in the First War, and the swamp was named for those who died in the Second War.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Itharius",
+     "id": 5353,
+     "source": "classic",
+     "why": "Green dragon ambassador who sends you into the temple"
+    },
+    {
+     "name": "Fallen Hero of the Horde",
+     "id": 7572,
+     "source": "classic",
+     "why": "Ghost at the Blasted Lands border who starts a long quest chain"
+    },
+    {
+     "name": "Stonard Scout",
+     "id": 861,
+     "source": "classic",
+     "why": "Orc patrol from Stonard"
+    }
+   ],
+   "mentions": [
+    "Stonard: Horde town",
+    "Temple of Atal'Hakkar: Sunken Temple dungeon entrance in the east; the prophet Jammal'an leads the Atal'ai",
+    "Splinterspear Junction and Misty Reed Farm",
+    "Itharius's cave: starts the green dragon quest chain"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Swamp_of_Sorrows",
+    "https://warcraft.wiki.gg/wiki/Itharius",
+    "https://warcraft.wiki.gg/wiki/Fallen_Hero_of_the_Horde",
+    "https://warcraft.wiki.gg/wiki/Jammal%27an_the_Prophet"
+   ]
+  },
+  {
+   "zoneId": 1436,
+   "name": "Westfall",
+   "levels": "10-20",
+   "faction": "Alliance",
+   "summary": "Rolling farmland in the far west, plagued by the Defias Brotherhood. The Deadmines dungeon lies beside the coast. Good for quests from level 10.",
+   "history": "Westfall was Stormwind's breadbasket until the Defias Brotherhood took over. The Defias began as stonemasons who were never paid for rebuilding Stormwind. Their leader Edwin VanCleef made the Deadmines his base. The People's Militia, later the Westfall Brigade, pushed back and helped end the Brotherhood there.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Gryan Stoutmantle",
+     "id": 234,
+     "source": "classic",
+     "why": "Militia leader at Sentinel Hill"
+    },
+    {
+     "name": "Foe Reaper 4000",
+     "id": 573,
+     "source": "classic",
+     "why": "Rare harvest golem on the farms"
+    },
+    {
+     "name": "Old Blanchy",
+     "id": 582,
+     "source": "classic",
+     "why": "Beloved farm horse and quest giver"
+    }
+   ],
+   "mentions": [
+    "Sentinel Hill: main outpost",
+    "Moonbrook: former mining town above the Deadmines",
+    "Deadmines: dungeon for levels 15-21, ending with Edwin VanCleef",
+    "Alexston Farmstead and The Dead Acre: harvest golem fields",
+    "Defias Brotherhood quest chain"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Westfall",
+    "https://warcraft.wiki.gg/wiki/Foe_Reaper_4000",
+    "https://warcraft.wiki.gg/wiki/Defias_Overseer",
+    "https://warcraft.wiki.gg/wiki/Mr._Smite"
+   ]
+  },
+  {
+   "zoneId": 1437,
+   "name": "Wetlands",
+   "levels": "20-30",
+   "faction": "Alliance",
+   "summary": "A grey swampland on the sea, with Menethil Harbor as the main town. You go here to fight Dragonmaw orcs and to take boats to Auberdine and Theramore.",
+   "history": "The Wetlands used to be the home of the proud dwarves of Khaz Modan. During the Second War, orcs of the Dragonmaw clan held red dragons captive and raided here. The Alliance freed them, but the clan is still dangerous at Grim Batol. The swamps lie below the Thandol Span, a bridge the dwarves built to the north.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Garneg Charskull",
+     "id": 2108,
+     "source": "classic",
+     "why": "Rare dwarf-killer quest target."
+    },
+    {
+     "name": "Gnawbone",
+     "id": 14425,
+     "source": "classic",
+     "why": "Rare beast."
+    },
+    {
+     "name": "Captain Stoutfist",
+     "id": 2104,
+     "source": "classic",
+     "why": "Dwarf captain at Menethil."
+    },
+    {
+     "name": "Dragonmaw Battlemaster",
+     "id": 1037,
+     "source": "classic",
+     "why": "Orc warlord."
+    },
+    {
+     "name": "Ormer Ironbraid",
+     "id": 1078,
+     "source": "classic",
+     "why": "Dwarf quest giver in the swamp."
+    },
+    {
+     "name": "Leech Widow",
+     "id": 1112,
+     "source": "classic",
+     "why": "Rare spider."
+    }
+   ],
+   "mentions": [
+    "Menethil Harbor: the boat port",
+    "Grim Batol: the old dragon fortress",
+    "Dun Modr and Dragonmaw Fortress",
+    "Thandol Span: the long bridge north to Arathi",
+    "Boats to Auberdine and Theramore"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Wetlands",
+    "https://classicdb.ch/?npc=2104"
+   ]
+  },
+  {
+   "zoneId": 1438,
+   "name": "Teldrassil",
+   "levels": "1-12",
+   "faction": "Alliance",
+   "summary": "A green island forest that grows on the branches of a giant tree. It is calm and pretty, with gentle early quests. Night Elves begin their journey here.",
+   "history": "Teldrassil is a young world tree, planted by the night elves after they lost their first great tree long ago. The druids grew it to give their people a new home and a link to nature. Its branches hold the capital Darnassus above the waves. Corruption has crept into some of its animals and satyrs, and Cenarion druids work to heal it.",
+   "startingFor": [
+    {
+     "area": "Shadowglen",
+     "races": [
+      "Night Elf"
+     ],
+     "note": "Dolanaar is the next town on the road."
+    }
+   ],
+   "mobs": [
+    {
+     "name": "Githyiss the Vile",
+     "id": 1994,
+     "source": "classic",
+     "why": "Early rare spider that low-level hunters seek"
+    },
+    {
+     "name": "Lady Sathrah",
+     "id": 7319,
+     "source": "classic",
+     "why": "Rare spider queen in the north"
+    },
+    {
+     "name": "Lord Melenas",
+     "id": 2038,
+     "source": "classic",
+     "why": "Satyr leader listed among the island's notable foes"
+    },
+    {
+     "name": "Melithar Staghelm",
+     "id": 2077,
+     "source": "classic",
+     "why": "Druid who gives early quests near the start"
+    },
+    {
+     "name": "Conservator Ilthalaine",
+     "id": 2079,
+     "source": "classic",
+     "why": "Starts the corruption quests near Aldrassil"
+    },
+    {
+     "name": "Tenaron Stormgrip",
+     "id": 3514,
+     "source": "classic",
+     "why": "Druid trainer and quest giver near Dolanaar"
+    },
+    {
+     "name": "Gnarlpine Ambusher",
+     "id": 2152,
+     "source": "classic",
+     "why": "Furbolg tribe that attacks you on the road"
+    }
+   ],
+   "mentions": [
+    "Shadowglen: the Night Elf starting valley",
+    "Dolanaar: first real town",
+    "Aldrassil: the great tree at the island's heart",
+    "Rut'theran Village: the dock where ferries leave for Darkshore",
+    "Portal to Darnassus: the tree trunk leads up to the capital"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://wowpedia.fandom.com/wiki/Teldrassil_NPCs",
+    "https://wowpedia.fandom.com/wiki/Teldrassil_questing_guide",
+    "https://www.wowhead.com/classic/npc=2077/melithar-staghelm"
+   ]
+  },
+  {
+   "zoneId": 1439,
+   "name": "Darkshore",
+   "levels": "9-25",
+   "faction": "Alliance",
+   "summary": "A long, foggy coast north of Ashenvale. Auberdine is the only travel hub and the base for most quests. You deal with corrupted furbolgs, murlocs, naga and dark cultists.",
+   "history": "Darkshore was once one of the richest parts of the night elf empire, with great cities like Ameth'Aran and Bashal'Aran. The Great Sundering destroyed much of the coast. After the Third War the night elves came back and revived the port of Auberdine. Today furbolgs have turned feral, and the Cult of the Dark Strand and the Twilight's Hammer lurk in hideouts.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Thundris Windweaver",
+     "id": 3649,
+     "source": "classic",
+     "why": "Leader of the Alliance effort on the coast"
+    },
+    {
+     "name": "Terenthis",
+     "id": 3693,
+     "source": "classic",
+     "why": "Auberdine quest giver who starts the furbolg corruption chain"
+    },
+    {
+     "name": "Cerellean Whiteclaw",
+     "id": 3644,
+     "source": "classic",
+     "why": "Auberdine quest giver"
+    },
+    {
+     "name": "Athrikus Narassin",
+     "id": 3660,
+     "source": "classic",
+     "why": "Dark Strand cult leader"
+    },
+    {
+     "name": "Lady Vespira",
+     "id": 7016,
+     "source": "classic",
+     "why": "Rare spider; Wowhead lists her in Darkshore"
+    },
+    {
+     "name": "Grimclaw",
+     "id": 3695,
+     "source": "classic",
+     "why": "Strong Darkshore bear that quest hunters seek"
+    },
+    {
+     "name": "Onu",
+     "id": 3616,
+     "source": "classic",
+     "why": "Ancient in the Grove of the Ancients worried about the Twilight's Hammer"
+    }
+   ],
+   "mentions": [
+    "Auberdine: the only travel hub and an Alliance night elf village",
+    "Ameth'Aran and Bashal'Aran: ruins of old night elf cities",
+    "Tower of Althalaxx: a quest-chain landmark",
+    "Grove of the Ancients: where the Twilight's Hammer lurks at the Master's Glaive",
+    "Boat link to Rut'theran Village in Teldrassil"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Darkshore_(Classic)",
+    "https://www.wowhead.com/classic/npc=3660/athrikus-narassin",
+    "https://www.wowhead.com/classic/npc=7016/lady-vespira"
+   ]
+  },
+  {
+   "zoneId": 1440,
+   "name": "Ashenvale",
+   "levels": "18-30",
+   "faction": "Contested",
+   "summary": "A big, old forest the night elves guard, now fought over by the Horde. Expect many quests on both sides and open-world fights. Warsong lumber camps and forest bosses make it busy.",
+   "history": "Ashenvale has been a night elf homeland for thousands of years. The Burning Legion and satyrs have corrupted parts of the forest, and the Horde has cut timber to feed its war effort. The night elves resist from Astranaar and other posts. The zone is contested, with constant fights between Alliance and Horde.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Raene Wolfrunner",
+     "id": 3691,
+     "source": "classic",
+     "why": "Ruler of the Alliance side in Astranaar"
+    },
+    {
+     "name": "Delgren the Purifier",
+     "id": 3663,
+     "source": "classic",
+     "why": "Leads the fight against the Shadow Council from Maestra's Post"
+    },
+    {
+     "name": "Geltharis",
+     "id": 4619,
+     "source": "classic",
+     "why": "Notable elite in the forest"
+    },
+    {
+     "name": "Dal Bloodclaw",
+     "id": 3987,
+     "source": "classic",
+     "why": "Villain of an Ashenvale quest chain"
+    },
+    {
+     "name": "Mastok Wrilehiss",
+     "id": 12737,
+     "source": "classic",
+     "why": "Elite quest target"
+    },
+    {
+     "name": "Kayneth Stillwind",
+     "id": 3848,
+     "source": "classic",
+     "why": "Night elf commander in Forest Song"
+    },
+    {
+     "name": "Je'neu Sancrea",
+     "id": 12736,
+     "source": "classic",
+     "why": "Zoram'gar Outpost quest giver for Blackfathom Deeps"
+    }
+   ],
+   "mentions": [
+    "Astranaar: main Alliance hub, ruled by Raene Wolfrunner",
+    "Splintertree Post and Warsong Lumber Camp: Horde logging bases",
+    "Blackfathom Deeps: dungeon in the northwest corner on Zoram Strand",
+    "Bough Shadow: elite micro dungeon where a Dragon of Nightmare can appear",
+    "Forest Song, Maestra's Post and Zoram'gar Outpost: smaller quest camps"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Ashenvale_(Classic)",
+    "https://www.wowhead.com/classic/npc=4619/geltharis",
+    "https://www.wowhead.com/classic/npc=3987/dal-bloodclaw",
+    "https://www.wowhead.com/classic/npc=12737/mastok-wrilehiss"
+   ]
+  },
+  {
+   "zoneId": 1441,
+   "name": "Thousand Needles",
+   "levels": "25-35",
+   "faction": "Contested",
+   "summary": "A canyon land with tall stone spires. The Shimmering Flats hold a goblin and gnome racetrack. Tauren and centaurs fight over the rocks.",
+   "history": "Gnomes and goblins built the Mirage Raceway on the flats to settle which race builds better. Tauren from Freewind Post fought the Grimtotem and the centaur clans. Razorfen Downs, a dungeon, sits near the border.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Pozzik",
+     "id": 4630,
+     "source": "classic",
+     "why": "Goblin racer at the raceway"
+    },
+    {
+     "name": "Fizzle Brassbolts",
+     "id": 4454,
+     "source": "classic",
+     "why": "Gnome racer at the raceway"
+    },
+    {
+     "name": "Razzeric",
+     "id": 4706,
+     "source": "classic",
+     "why": "Racing goblin"
+    },
+    {
+     "name": "Kanati Greycloud",
+     "id": 10638,
+     "source": "classic",
+     "why": "Tauren quest-giver"
+    },
+    {
+     "name": "Grenka Bloodscreech",
+     "id": 4490,
+     "source": "classic",
+     "why": "Harpy leader at Highperch",
+     "unchecked": true
+    },
+    {
+     "name": "Arnak Grimtotem",
+     "id": 10896,
+     "source": "classic",
+     "why": "Grimtotem chief"
+    },
+    {
+     "name": "Cliffwatcher Longhorn",
+     "id": 10537,
+     "source": "classic",
+     "why": "Freewind Post leader"
+    }
+   ],
+   "mentions": [
+    "Freewind Post: tauren quest hub",
+    "Mirage Raceway: goblin and gnome racetrack",
+    "Highperch: wyvern nests",
+    "Shimmering Flats: salt flats",
+    "Razorfen Downs: dungeon nearby"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Thousand_Needles"
+   ]
+  },
+  {
+   "zoneId": 1442,
+   "name": "Stonetalon Mountains",
+   "levels": "15-27",
+   "faction": "Contested",
+   "summary": "A rocky range between the Barrens and the north. Both factions have posts here. Goblin loggers and night elf druids fight over the forests.",
+   "history": "The mountains once held a fountain of health blessed by Elune. In the Third War it was corrupted, then cleansed by Thrall and Cairne. Later the goblin Venture Company cut the forests and mined the rock.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Gerenzo Wrenchwhistle",
+     "id": 4202,
+     "source": "classic",
+     "why": "Gnome engineer targeted in a quest"
+    },
+    {
+     "name": "Witch Doctor Jin'Zil",
+     "id": 3995,
+     "source": "classic",
+     "why": "Horde troll quest-giver"
+    },
+    {
+     "name": "Kaela Shadowspear",
+     "id": 4080,
+     "source": "classic",
+     "why": "Alliance quest organizer"
+    },
+    {
+     "name": "Gaxim Rustfizzle",
+     "id": 4077,
+     "source": "classic",
+     "why": "Alliance goblin-fighting quest-giver"
+    }
+   ],
+   "mentions": [
+    "Sun Rock Retreat: Horde town",
+    "Windshear Crag: Venture Co. mining area",
+    "Grimtotem Post: neutral camp",
+    "Charred Vale: burnt valley with dragons",
+    "Stonetalon Peak: ruined mountaintop"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Stonetalon_Mountains"
+   ]
+  },
+  {
+   "zoneId": 1443,
+   "name": "Desolace",
+   "levels": "30-40",
+   "faction": "Contested",
+   "summary": "A barren land of dust, ruins and centaur camps. It holds Maraudon, a big dungeon. Both factions fight cultists and rival centaur clans.",
+   "history": "Desolace was once green grassland. Tauren shamans woke the earth spirit Theradras, who drained the land. She and Zaetar fathered the centaur, who drove out the tauren. The Horde joined the Magram and slew Theradras in Maraudon.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Khan Hratha",
+     "id": 5402,
+     "source": "classic",
+     "why": "Kolkar centaur chief",
+     "unchecked": true
+    },
+    {
+     "name": "Warug",
+     "id": 5398,
+     "source": "classic",
+     "why": "Magram leader friendly to the Horde"
+    },
+    {
+     "name": "Kaskk",
+     "id": 14226,
+     "source": "classic",
+     "why": "Rare mob"
+    },
+    {
+     "name": "Princess Theradras",
+     "id": 12201,
+     "source": "classic",
+     "why": "Boss of Maraudon",
+     "unchecked": true
+    },
+    {
+     "name": "Celebras the Cursed",
+     "id": 12225,
+     "source": "classic",
+     "why": "Maraudon boss",
+     "unchecked": true
+    },
+    {
+     "name": "Taiga Wisemane",
+     "id": 11624,
+     "source": "classic",
+     "why": "Druid cleansing demon taint"
+    }
+   ],
+   "mentions": [
+    "Shadowprey Village: Darkspear village on the coast",
+    "Ghost Walker Post: tauren camp",
+    "Nijel's Point: Alliance outpost",
+    "Maraudon: dungeon with three wings",
+    "Kodo Graveyard"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Desolace"
+   ]
+  },
+  {
+   "zoneId": 1444,
+   "name": "Feralas",
+   "levels": "40-50",
+   "faction": "Contested",
+   "summary": "A thick jungle with ogres, gnolls and sea creatures. Dire Maul is hidden here. Each faction holds a camp.",
+   "history": "Feralas was once part of the night elf lands, and old elven ruins remain. Gordunni ogres broke into Dire Maul. The Alliance holds Feathermoon Stronghold on an island. The Horde friend Camp Mojache sits inland.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Antilus the Soarer",
+     "id": 5347,
+     "source": "classic",
+     "why": "Rare giant bird"
+    },
+    {
+     "name": "Qirot",
+     "id": 5350,
+     "source": "classic",
+     "why": "Rare beast"
+    },
+    {
+     "name": "Lady Szallah",
+     "id": 5343,
+     "source": "classic",
+     "why": "Rare naga"
+    },
+    {
+     "name": "Zerillis",
+     "id": 10082,
+     "source": "classic",
+     "why": "Rare elite",
+     "unchecked": true
+    },
+    {
+     "name": "Lord Shalzaru",
+     "id": 8136,
+     "source": "classic",
+     "why": "Sea-giant lord"
+    },
+    {
+     "name": "Prince Tortheldrin",
+     "id": 11486,
+     "source": "classic",
+     "why": "Boss in Dire Maul",
+     "unchecked": true
+    },
+    {
+     "name": "Gordok Ogre-Mage",
+     "id": 11443,
+     "source": "classic",
+     "why": "Ogre of Dire Maul"
+    }
+   ],
+   "mentions": [
+    "Feathermoon Stronghold: Alliance island fort",
+    "Camp Mojache: tauren camp",
+    "Dire Maul: dungeon in the north",
+    "Tower of Estulan: ruined tower",
+    "Gordunni ogre caves"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Feralas"
+   ]
+  },
+  {
+   "zoneId": 1445,
+   "name": "Dustwallow Marsh",
+   "levels": "35-45",
+   "faction": "Contested",
+   "summary": "A misty swamp with Theramore, the human port in Kalimdor. Onyxia's Lair sits in the northwest. Dragons and ogres roam the mud.",
+   "history": "After the Third War Jaina Proudmoore founded Theramore here. The orcs of Brackenwall Village are close by. Onyxia, daughter of Deathwing, lairs in a cave. The marsh is full of old ruins.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Lady Jaina Proudmoore",
+     "id": 4968,
+     "source": "classic",
+     "why": "Ruler of Theramore"
+    },
+    {
+     "name": "Captain Garran Vimes",
+     "id": 4944,
+     "source": "classic",
+     "why": "Theramore guard captain"
+    },
+    {
+     "name": "Archmage Tervosh",
+     "id": 4967,
+     "source": "classic",
+     "why": "Theramore mage"
+    },
+    {
+     "name": "Overlord Mok'Morokk",
+     "id": 4500,
+     "source": "classic",
+     "why": "Ogre warlord"
+    },
+    {
+     "name": "Drogoth the Roamer",
+     "id": 14231,
+     "source": "classic",
+     "why": "Rare wanderer"
+    },
+    {
+     "name": "Onyxia",
+     "id": 10184,
+     "source": "classic",
+     "why": "Dragon boss of her own raid",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "Theramore Isle: human port",
+    "Brackenwall Village: Horde camp",
+    "Mudsprocket: neutral goblin town",
+    "Onyxia's Lair: raid entrance"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Dustwallow_Marsh"
+   ]
+  },
+  {
+   "zoneId": 1446,
+   "name": "Tanaris",
+   "levels": "40-50",
+   "faction": "Contested",
+   "summary": "A vast desert on the south coast with the goblin town Gadgetzan. Zul'Farrak and the Caverns of Time are here. It is a main leveling zone for the 40s.",
+   "history": "Tanaris was once greener. Troll tribes left the ruined city Zul'Farrak. Gadgetzan was built as a neutral trade city. Bronze dragons guard time in the Caverns of Time. Pirates and elementals roam the dunes.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Chief Ukorz Sandscalp",
+     "id": 7267,
+     "source": "classic",
+     "why": "Zul'Farrak troll chief",
+     "unchecked": true
+    },
+    {
+     "name": "Gahz'rilla",
+     "id": 7273,
+     "source": "classic",
+     "why": "Hydra boss of Zul'Farrak",
+     "unchecked": true
+    },
+    {
+     "name": "Antu'sul",
+     "id": 8127,
+     "source": "classic",
+     "why": "Zul'Farrak overseer",
+     "unchecked": true
+    },
+    {
+     "name": "Hydromancer Velratha",
+     "id": 7795,
+     "source": "classic",
+     "why": "Zul'Farrak boss",
+     "unchecked": true
+    },
+    {
+     "name": "Sergeant Bly",
+     "id": 7604,
+     "source": "classic",
+     "why": "Zul'Farrak boss",
+     "unchecked": true
+    },
+    {
+     "name": "Anachronos",
+     "id": 15192,
+     "source": "classic",
+     "why": "Bronze dragon of the Caverns of Time"
+    }
+   ],
+   "mentions": [
+    "Gadgetzan: neutral goblin town",
+    "Zul'Farrak: troll dungeon",
+    "Caverns of Time: bronze dragon caves",
+    "Lost Rigger Cove: pirate cove"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Tanaris"
+   ]
+  },
+  {
+   "zoneId": 1447,
+   "name": "Azshara",
+   "levels": "45-55",
+   "faction": "Contested",
+   "summary": "A rocky coast of ruined elven lands, with goblin, orc and Alliance camps and few quest hubs. Lake Mennar is an elite area. Players go for the dragon Azuregos, the shark Maws and rare targets.",
+   "history": "Azshara was part of the night elf capital Zin-Azshari. The city fell in the War of the Ancients and much of it sank into the sea. The region is named for Queen Azshara, whom demonic influence drove mad. Ruins, naga and hydras fill the coast today. The blue dragon Azuregos still guards the south.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Azuregos",
+     "id": 6109,
+     "source": "classic",
+     "why": "World boss dragon"
+    },
+    {
+     "name": "Maws",
+     "id": 15571,
+     "source": "classic",
+     "why": "Giant shark boss summoned in the Bay of Storms",
+     "unchecked": true
+    },
+    {
+     "name": "Hetaera",
+     "id": 6140,
+     "source": "classic",
+     "why": "Naga elite from Hetaera's Clutch"
+    },
+    {
+     "name": "Master Feardred",
+     "id": 6652,
+     "source": "classic",
+     "why": "Rare elite"
+    },
+    {
+     "name": "Gatekeeper Rageroar",
+     "id": 6651,
+     "source": "classic",
+     "why": "Rare elite"
+    },
+    {
+     "name": "Lord Arkkoroc",
+     "id": 6134,
+     "source": "classic",
+     "why": "Rules from his watery temple"
+    },
+    {
+     "name": "Magus Rimtori",
+     "id": 8578,
+     "source": "classic",
+     "why": "Leads a Thalassian expedition for Highborne relics",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "Valormok: Horde town",
+    "Talrendis Point: Alliance camp",
+    "Grim Ulang: orc trading village",
+    "Lake Mennar: elite micro dungeon",
+    "Bay of Storms: naga, sea giants and Hetaera's Clutch",
+    "Duke Hydraxis lives on a small island far to the east"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Azshara_(Classic)",
+    "https://www.wowhead.com/classic/npc=6109/azuregos",
+    "https://www.wowhead.com/classic/npc=6652/master-feardred",
+    "https://wowpedia.fandom.com/wiki/Maws"
+   ]
+  },
+  {
+   "zoneId": 1448,
+   "name": "Felwood",
+   "levels": "48-55",
+   "faction": "Contested",
+   "summary": "A forest twisted by demon corruption, north of Winterspring. Quests are grindy and tough. You come for rare animals and the corrupt grove of Jaedenar.",
+   "history": "Felwood used to be a lovely forest like Ashenvale. Demonic corruption poisoned its trees and animals, and the Scourge and surviving demons from the Third War settled here. Cenarion druids at Emerald Sanctuary try to heal it. The Shadow Council rules Jaedenar from Shadow Hold.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Lord Banehollow",
+     "id": 9516,
+     "source": "classic",
+     "why": "Shadow Council leader in Shadow Hold"
+    },
+    {
+     "name": "Immolatus",
+     "id": 7137,
+     "source": "classic",
+     "why": "Fire infernal rare elite"
+    },
+    {
+     "name": "Dessecus",
+     "id": 7104,
+     "source": "classic",
+     "why": "Rare elite"
+    },
+    {
+     "name": "Ragepaw",
+     "id": 14342,
+     "source": "classic",
+     "why": "Tamable rare"
+    },
+    {
+     "name": "Olm the Wise",
+     "id": 14343,
+     "source": "classic",
+     "why": "Tamable rare"
+    },
+    {
+     "name": "Mongress",
+     "id": 14344,
+     "source": "classic",
+     "why": "Tamable rare"
+    },
+    {
+     "name": "Death Howl",
+     "id": 14339,
+     "source": "classic",
+     "why": "Tamable rare"
+    },
+    {
+     "name": "Alshirr Banebreath",
+     "id": 14340,
+     "source": "classic",
+     "why": "Rare"
+    }
+   ],
+   "mentions": [
+    "Emerald Sanctuary: Cenarion camp",
+    "Jaedenar and Shadow Hold: the Shadow Council's base",
+    "Timbermaw Hold: furbolg base and tunnel to Winterspring",
+    "Deadwood Village, Felpaw Village, Jadefire Glen and Bloodvenom Post: smaller camps",
+    "Bloodvenom Falls: cursed waters"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Felwood_(Classic)",
+    "https://www.wowhead.com/classic/npc=9516/lord-banehollow",
+    "http://wowrarespawns.blogspot.com/2012/04/felwood-rare-spawns.html"
+   ]
+  },
+  {
+   "zoneId": 1449,
+   "name": "Un'Goro Crater",
+   "levels": "48-55",
+   "faction": "Hostile",
+   "summary": "A lost crater full of dinosaurs, giant plants and fire elementals. Quests send you into the wild to collect and hunt. It is a great place for levels 50 to 55.",
+   "history": "Un'Goro was shaped by the titans and is full of ancient life. It stays warm and wet from the volcano at its center. Marshal Expeditions run camps to study the creatures. Strange crystals and hive insects live here too.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "King Mosh",
+     "id": 6584,
+     "source": "classic",
+     "why": "Giant rare boss"
+    },
+    {
+     "name": "Uhk'loc",
+     "id": 6585,
+     "source": "classic",
+     "why": "Big rare ape"
+    },
+    {
+     "name": "Ravasaur Matriarch",
+     "id": 6581,
+     "source": "classic",
+     "why": "Rare raptor"
+    },
+    {
+     "name": "Tyrant Devilsaur",
+     "id": 6500,
+     "source": "classic",
+     "why": "Elite devilsaur that roams the middle"
+    },
+    {
+     "name": "Blazerunner",
+     "id": 9376,
+     "source": "classic",
+     "why": "Fire elemental elite in Fire Plume Ridge"
+    },
+    {
+     "name": "Gorishi Hive Queen",
+     "id": 10041,
+     "source": "classic",
+     "why": "Hive leader in the southwest",
+     "unchecked": true
+    },
+    {
+     "name": "Williden Marshal",
+     "id": 9270,
+     "source": "classic",
+     "why": "Expedition leader and quest giver"
+    },
+    {
+     "name": "Ringo",
+     "id": 9999,
+     "source": "classic",
+     "why": "Famous escort quest NPC"
+    }
+   ],
+   "mentions": [
+    "Marshal's Refuge: neutral camp",
+    "Fire Plume Ridge: volcano in the center",
+    "The Slithering Scar: bug land",
+    "Golakka Hot Springs: crystals",
+    "Terror Run: dinosaur plains"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://wowpedia.fandom.com/wiki/Un'Goro_Crater_(Classic)",
+    "https://wowpedia.fandom.com/wiki/Marshal's_Refuge"
+   ]
+  },
+  {
+   "zoneId": 1450,
+   "name": "Moonglade",
+   "levels": "55-60",
+   "faction": "Sanctuary",
+   "summary": "A small, peaceful druid valley around Lake Elune'ara. The only land way in is through Timbermaw Hold. Druids visit Nighthaven to train, and everyone can come for quests and the Lunar Festival.",
+   "history": "Cenarius lived in Moonglade in ancient times, and the Cenarion Circle was founded there. In the Third War Tyrande retrieved the Horn of Cenarius here to wake Malfurion. After that, Moonglade opened to every druid race, and Keeper Remulos became its guardian. Moonglade Wardens keep the peace between races.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Keeper Remulos",
+     "id": 11832,
+     "source": "classic",
+     "why": "Guardian and ruler of Moonglade"
+    },
+    {
+     "name": "Rabine Saturna",
+     "id": 11801,
+     "source": "classic",
+     "why": "Recruits heroes against the silithid"
+    },
+    {
+     "name": "Dendrite Starblaze",
+     "id": 11802,
+     "source": "classic",
+     "why": "Teaches druids bear and aquatic form"
+    },
+    {
+     "name": "Omen",
+     "id": 15467,
+     "source": "classic",
+     "why": "Sleeps in Lake Elune'ara and wakes for the Lunar Festival",
+     "unchecked": true
+    },
+    {
+     "name": "Loganaar",
+     "id": 12042,
+     "source": "classic",
+     "why": "The druid trainer in Moonglade"
+    }
+   ],
+   "mentions": [
+    "Nighthaven: the main druid town",
+    "Lake Elune'ara: sacred lake with fish",
+    "Shrine of Remulos: where Remulos tends the emerald dragons",
+    "Stormrage Barrow Dens: druid sanctums with a portal to the Dreamway",
+    "Lunar Festival: yearly event here"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Moonglade_(Classic)",
+    "https://www.wowhead.com/classic/npc=11832/keeper-remulos",
+    "https://www.wowhead.com/classic/npc=15467/omen"
+   ]
+  },
+  {
+   "zoneId": 1451,
+   "name": "Silithus",
+   "levels": "55-60",
+   "faction": "Contested",
+   "summary": "A dry desert full of insects, south of Un'Goro. The gate to Ahn'Qiraj opens here. You go for end-game quests and bug hives.",
+   "history": "After the War of the Shifting Sands, the Qiraji were sealed behind the Scarab Wall, but their silithid servants spread across southern Kalimdor. The night elves later reopened the gates of Ahn'Qiraj. The Cenarion Circle now watches the hives from Cenarion Hold. The bronze dragonflight has returned, and patch 1.12 added world PvP over Silithyst.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Commander Mar'alith",
+     "id": 15181,
+     "source": "classic",
+     "why": "Cenarion Hold commander, searching for his missing wife"
+    },
+    {
+     "name": "Highlord Demitrian",
+     "id": 14347,
+     "source": "classic",
+     "why": "Sends top heroes after Prince Thunderaan"
+    },
+    {
+     "name": "Prince Thunderaan",
+     "id": 14435,
+     "source": "classic",
+     "why": "The wind lord heroes are sent to defeat",
+     "unchecked": true
+    },
+    {
+     "name": "Twilight Marauder Morna",
+     "id": 15541,
+     "source": "classic",
+     "why": "Twilight's Hammer leader at their camp"
+    },
+    {
+     "name": "Twilight Keeper Exeter",
+     "id": 11803,
+     "source": "classic",
+     "why": "Twilight's Hammer cultist in the camps"
+    },
+    {
+     "name": "Rutgar Glyphshaper",
+     "id": 15170,
+     "source": "classic",
+     "why": "Dwarf explorer at the Bronzebeard Encampment"
+    },
+    {
+     "name": "Fandral Staghelm",
+     "id": 15382,
+     "source": "classic",
+     "why": "Archdruid seen at the Scarab Wall",
+     "unchecked": true
+    },
+    {
+     "name": "Merithra of the Dream",
+     "id": 15378,
+     "source": "classic",
+     "why": "Green dragon of the gate event",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "Cenarion Hold: main hub of the Cenarion Circle",
+    "The Scarab Wall and Gates of Ahn'Qiraj",
+    "Ruins of Ahn'Qiraj (20-man) and Temple of Ahn'Qiraj (40-man): raids",
+    "Hive'Ashi, Hive'Regal and Hive'Zora: silithid hives",
+    "Twilight camps: Base Camp, Outpost and Post",
+    "Bronzebeard Encampment and Valor's Rest"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Silithus_(Classic)",
+    "https://www.wowhead.com/classic/npc=14347/highlord-demitrian",
+    "https://www.wowhead.com/classic/npc=15541/twilight-marauder-morna"
+   ]
+  },
+  {
+   "zoneId": 1452,
+   "name": "Winterspring",
+   "levels": "55-60",
+   "faction": "Contested",
+   "summary": "A cold snowy peak area above Felwood. It has the neutral town Everlook and tough groups of frost trolls and bears. Great for the last levels before 60.",
+   "history": "Winterspring is a cold mountain land where Winterfall furbolgs have gone mad and dragonkin and demons haunt the gorges. The goblin town of Everlook is the neutral hub. Elite demons in Darkwhisper Gorge guard a blocked way to Hyjal.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "High Chief Winterfall",
+     "id": 10738,
+     "source": "classic",
+     "why": "Leader of the Winterfall furbolgs"
+    },
+    {
+     "name": "Lady Hederine",
+     "id": 10201,
+     "source": "classic",
+     "why": "Rare elite succubus in Darkwhisper Gorge"
+    },
+    {
+     "name": "General Colbatann",
+     "id": 10196,
+     "source": "classic",
+     "why": "Rare elite sorcerer-dragon commander"
+    },
+    {
+     "name": "Kashoch the Reaver",
+     "id": 10198,
+     "source": "classic",
+     "why": "Rare elite"
+    },
+    {
+     "name": "Azurous",
+     "id": 10202,
+     "source": "classic",
+     "why": "Rare elite"
+    },
+    {
+     "name": "Rak'shiri",
+     "id": 10200,
+     "source": "classic",
+     "why": "Rare yeti"
+    },
+    {
+     "name": "Mezzir the Howler",
+     "id": 10197,
+     "source": "classic",
+     "why": "Rare"
+    },
+    {
+     "name": "Ursius",
+     "id": 10806,
+     "source": "classic",
+     "why": "Elite bear"
+    }
+   ],
+   "mentions": [
+    "Everlook: goblin capital and flight point",
+    "Starfall Village: Cenarion-friendly village",
+    "Mazthoril: elite area with dragon lairs",
+    "Winterfall Village: furbolg camp",
+    "Darkwhisper Gorge and Frostwhisper Gorge: elite areas",
+    "Frostsaber Rock and Frostfire Hot Springs"
+   ],
+   "foreverNotes": "WoW Forever's own Winterspring map lists levels 53-60.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Winterspring_(Classic)",
+    "https://foreverdb.net/maps/1452",
+    "https://www.wowhead.com/classic/npc=10201/lady-hederine"
+   ]
+  },
+  {
+   "zoneId": 1453,
+   "name": "Stormwind City",
+   "levels": "1-60",
+   "faction": "Alliance",
+   "summary": "The human capital and a major Alliance hub. It has the auction house, bank, class trainers and many gates. The Stockade lies in its canals.",
+   "history": "Stormwind was razed by the orcs in the First War, and King Llane was killed. The Stonemasons' Guild rebuilt it and built the Deeprun Tram to Ironforge. Unpaid guild workers rioted, a queen died by accident, and the guild turned into the Defias Brotherhood. After King Varian Wrynn went missing, Highlord Bolvar Fordragon ruled for his young son Anduin. Lady Prestor is secretly the black dragon Onyxia.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Anduin Wrynn",
+     "id": 1747,
+     "source": "classic",
+     "why": "Young heir of Stormwind"
+    },
+    {
+     "name": "Highlord Bolvar Fordragon",
+     "id": 1748,
+     "source": "classic",
+     "why": "Regent of the city"
+    },
+    {
+     "name": "Lady Katrana Prestor",
+     "id": 1749,
+     "source": "classic",
+     "why": "Noble who is secretly Onyxia"
+    },
+    {
+     "name": "Master Mathias Shaw",
+     "id": 332,
+     "source": "classic",
+     "why": "Leader of SI:7 spies"
+    },
+    {
+     "name": "Grand Admiral Jes-Tereth",
+     "id": 1750,
+     "source": "classic",
+     "why": "Naval leader"
+    },
+    {
+     "name": "General Marcus Jonathan",
+     "id": 466,
+     "source": "classic",
+     "why": "High Commander of Stormwind Defense"
+    }
+   ],
+   "mentions": [
+    "The Stockade: prison dungeon in the canals, entered from the Mage Quarter",
+    "Trade District, Cathedral Square, Old Town",
+    "Mage Quarter, Valley of Heroes and Dwarven District",
+    "Stormwind Harbor with boats to Darnassus and Auberdine",
+    "Deeprun Tram to Ironforge"
+   ],
+   "foreverNotes": "The Warcraft Wiki Forever map comparison marks Stormwind as substantively changed on the map, without saying how.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Stormwind_City",
+    "https://warcraft.wiki.gg/wiki/Forever_map_comparison"
+   ]
+  },
+  {
+   "zoneId": 1454,
+   "name": "Orgrimmar",
+   "levels": "1-60",
+   "faction": "Horde",
+   "summary": "The Horde capital, a fortress in the cliffs of Durotar. Trainers, a bank, an auction house and the leaders are here. Ragefire Chasm lies below.",
+   "history": "Thrall founded Orgrimmar after leading the orcs to Kalimdor. He named it for the old warchief Orgrim Doomhammer. The city is built of wood and spikes in a stone valley. A fire cult has settled the caverns beneath.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Thrall",
+     "id": 4949,
+     "source": "classic",
+     "why": "Warchief of the Horde"
+    },
+    {
+     "name": "Eitrigg",
+     "id": 3144,
+     "source": "classic",
+     "why": "Old orc advisor"
+    },
+    {
+     "name": "Neeru Fireblade",
+     "id": 3216,
+     "source": "classic",
+     "why": "Warlock quest-giver"
+    },
+    {
+     "name": "Oggleflint",
+     "id": 11517,
+     "source": "classic",
+     "why": "Ragefire Chasm chieftain",
+     "unchecked": true
+    },
+    {
+     "name": "Taragaman the Hungerer",
+     "id": 11520,
+     "source": "classic",
+     "why": "Ragefire Chasm boss",
+     "unchecked": true
+    },
+    {
+     "name": "Jergosh the Invoker",
+     "id": 11518,
+     "source": "classic",
+     "why": "Ragefire Chasm boss",
+     "unchecked": true
+    },
+    {
+     "name": "Bazzalan",
+     "id": 11519,
+     "source": "classic",
+     "why": "Ragefire Chasm boss",
+     "unchecked": true
+    }
+   ],
+   "mentions": [
+    "Valley of Strength: main hub",
+    "Valley of Spirits: shaman quarter",
+    "Ragefire Chasm: dungeon entrance",
+    "Cleft of Shadow: warlock and rogue quarter"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Orgrimmar"
+   ]
+  },
+  {
+   "zoneId": 1455,
+   "name": "Ironforge",
+   "levels": "City",
+   "faction": "Alliance",
+   "summary": "The dwarf capital, built into a mountain. It has a big forge hall, tinkers' quarter, a tavern, a bank and an auction house. Dwarves, gnomes and other Alliance players use it as a home.",
+   "history": "Ironforge was built by the Bronzebeard clan long ago and has stood through many wars. It was home to the Council of Three Hammers and survived the Dark Iron War. King Magni Bronzebeard rules it. Gnomes found shelter here after the fall of Gnomeregan. Today it is a safe place for Alliance players.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "King Magni Bronzebeard",
+     "id": 2784,
+     "source": "classic",
+     "why": "The dwarf king."
+    },
+    {
+     "name": "Royal Historian Archesonus",
+     "id": 8879,
+     "source": "classic",
+     "why": "Quest giver for the Ironforge lore."
+    },
+    {
+     "name": "Bruuk Barleybeard",
+     "id": 5570,
+     "source": "classic",
+     "why": "Bartender at the Stonefire Tavern."
+    },
+    {
+     "name": "Tinkmaster Overspark",
+     "id": 7944,
+     "source": "classic",
+     "why": "Gnome engineer master."
+    },
+    {
+     "name": "Grand Mason Marblesten",
+     "id": 2790,
+     "source": "classic",
+     "why": "Stonecutters leader."
+    }
+   ],
+   "mentions": [
+    "The Deeprun Tram: underground rail to Stormwind",
+    "The Great Forge",
+    "Tinker Town: gnome quarter",
+    "The Mystic Ward: mages and priests",
+    "The Hall of Explorers"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Ironforge",
+    "https://classicdb.ch/?npc=2784"
+   ]
+  },
+  {
+   "zoneId": 1456,
+   "name": "Thunder Bluff",
+   "levels": "1-60",
+   "faction": "Horde",
+   "summary": "The capital of the tauren, built on mesas above Mulgore. Rope bridges link the bluffs. Elders live in the high lodges.",
+   "history": "Cairne Bloodhoof led the tauren to these mesas as a safe home. The city is open and has no walls. The Grimtotem tribe plots against the Bloodhoofs. The Great Tree honors the Sun Spirit.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Cairne Bloodhoof",
+     "id": 3057,
+     "source": "classic",
+     "why": "High Chieftain"
+    },
+    {
+     "name": "Arch Druid Hamuul Runetotem",
+     "id": 5769,
+     "source": "classic",
+     "why": "Druid leader"
+    },
+    {
+     "name": "Magatha Grimtotem",
+     "id": 4046,
+     "source": "classic",
+     "why": "Elder Crone of the Grimtotem"
+    }
+   ],
+   "mentions": [
+    "Elder Rise: chiefs' district",
+    "Spirit Rise: spirit healers",
+    "Hunter Rise: hunter trainers",
+    "Lower Rise: shops"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Thunder_Bluff"
+   ]
+  },
+  {
+   "zoneId": 1457,
+   "name": "Darnassus",
+   "levels": "1-60",
+   "faction": "Alliance",
+   "summary": "The Night Elf capital, up in the branches of Teldrassil. Trainers, shops and the Temple of the Moon are here. It is calm and green.",
+   "history": "Darnassus is the night elf capital, grown in the branches of Teldrassil. High Priestess Tyrande Whisperwind rules from the Temple of the Moon. Archdruid Fandral Staghelm leads the druids from the Cenarion Enclave. A portal in the Temple Gardens takes you to Rut'theran Village.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Tyrande Whisperwind",
+     "id": 7999,
+     "source": "classic",
+     "why": "High Priestess and ruler"
+    },
+    {
+     "name": "Arch Druid Fandral Staghelm",
+     "id": 3516,
+     "source": "classic",
+     "why": "Leads the druids"
+    },
+    {
+     "name": "Mathrengyl Bearwalker",
+     "id": 4217,
+     "source": "classic",
+     "why": "Druid class trainer"
+    },
+    {
+     "name": "Priestess Alathea",
+     "id": 11401,
+     "source": "classic",
+     "why": "Priest class trainer"
+    }
+   ],
+   "mentions": [
+    "Temple of the Moon: home of the Sisters of Elune and the city's leaders",
+    "Cenarion Enclave: druid and hunter trainers",
+    "Warrior's Terrace: city gate, forge and training dummies",
+    "Temple Gardens: bank and portal to Rut'theran Village",
+    "Tradesmen's Terrace: Auction House",
+    "Craftsmen's Terrace: inn and mailboxes"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Darnassus",
+    "https://www.wowhead.com/classic/npc=7999/tyrande-whisperwind"
+   ]
+  },
+  {
+   "zoneId": 1458,
+   "name": "Undercity",
+   "levels": "City",
+   "faction": "Horde",
+   "summary": "The capital of the Forsaken, built in the sewers under Lordaeron. It has trainers, banks, an auction house and the Apothecarium.",
+   "history": "The Undercity was a series of sewers and crypts under the capital of Lordaeron. After Arthas destroyed the city, the Forsaken made it their home. Lady Sylvanas Windrunner rules from the Royal Quarter and plans to take back the lands above. The Royal Apothecary Society studies plague cures there, as well as other dark experiments.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Lady Sylvanas Windrunner",
+     "id": 10181,
+     "source": "classic",
+     "why": "The Banshee Queen and ruler of the Forsaken."
+    },
+    {
+     "name": "Varimathras",
+     "id": 2425,
+     "source": "classic",
+     "why": "Dreadlord who serves Sylvanas."
+    },
+    {
+     "name": "Master Apothecary Faranell",
+     "id": 2055,
+     "source": "classic",
+     "why": "Head of the Apothecarium."
+    }
+   ],
+   "mentions": [
+    "The Apothecarium: plague labs",
+    "The Royal Quarter: Sylvanas's court",
+    "Trade Quarter: bank and auction",
+    "The Rogues' Quarter",
+    "Zeppelin tower to Orgrimmar"
+   ],
+   "foreverNotes": "",
+   "sources": [
+    "https://classicdb.ch/?npc=10181"
+   ]
+  },
+  {
+   "zoneId": 2482,
+   "name": "Mount Hyjal",
+   "levels": "60",
+   "faction": "Contested",
+   "summary": "A max-level zone that is new to WoW Forever, high in northern Kalimdor. You go there for endgame quests, reputations, world events and two new raids. You walk in from Winterspring through Darkwhisper Gorge.",
+   "history": "Hyjal has always been sacred ground of the Wild Gods and the night elves. After the Sundering, Illidan made a new Well of Eternity on its peak, and the World Tree Nordrassil was planted over it. In the Third War, the demon Archimonde marched on the mountain and was beaten in a great final battle, which cost the night elves their immortality. Malfurion then sealed the mountain away. In Forever the forest is slowly healing, and the story is said to involve the Wild Gods and dangers left behind.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Nythus the Dreambound",
+     "id": 0,
+     "source": "unverified",
+     "why": "Final boss of the Hyjal Summit raid (20 players)"
+    },
+    {
+     "name": "Sonya Darkhallow",
+     "id": 0,
+     "source": "unverified",
+     "why": "Final boss of the Barrow Deeps raid"
+    }
+   ],
+   "mentions": [
+    "Hyjal Summit: new 20-player raid with 13 listed encounters",
+    "Barrow Deeps: new raid under the mountain (wiki says 10 players); opened together with Onyxia's Lair",
+    "Darkwhisper Gorge: the way in, east of Winterspring",
+    "Subzones include Summit of Eternity, Shrine of Aviana, Malorne's Retreat, Cradle of Tranquility and Felblood Scar",
+    "Cenarion Circle quests and max-level world events are said to be based here"
+   ],
+   "foreverNotes": "The whole zone is Forever-only (vanilla Hyjal was closed). Added in 1.60.1. Raids unlock after launch (wiki: 9 December, with Onyxia's Lair). The player's quest cache holds no Hyjal quests yet, so story details are not confirmed.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Mount_Hyjal_(Forever)",
+    "https://warcraft.wiki.gg/wiki/Forever",
+    "https://warcraft.wiki.gg/wiki/Hyjal_Summit_(instance)",
+    "https://warcraft.wiki.gg/wiki/Barrow_Deeps_(instance)",
+    "https://www.warcrafttavern.com/forever/news/all-new-zones-areas-in-wow-forever-revealed-at-blizzcon/",
+    "https://www.gfinityesports.com/article/world-of-warcraft-forever-new-zones-travel-routes-guide"
+   ]
+  },
+  {
+   "zoneId": 2521,
+   "name": "Zephras Isle",
+   "levels": "1-12",
+   "faction": "Sanctuary",
+   "summary": "A floating island in Skywall, the elemental plane of air, and the home of the new Skyborne race. Every Skyborne character starts here and levels to about 12 before sailing to Azeroth. The main town is Valanaar, with airships from the Valanaar Skydocks.",
+   "history": "Long ago, Highborne exiles made a pact with the wind spirits and built a society in Skywall. They became the Skyborne, who call themselves shen'dorei. Centuries ago the air spirits vanished, and the magic holding the islands up is fading. Other islands have broken apart, refugees crowd onto Zephras, and the people are split: the Windshapers want to find and restore the spirits, while the High Order wants to stand on its own with arcane power.",
+   "startingFor": [
+    {
+     "area": "Thendal Village (Thendal Grove)",
+     "races": [
+      "High Order Skyborne",
+      "Windshaper Skyborne"
+     ],
+     "note": "Both Skyborne variants start here at level 1. First quests: 'Coming of Age' (talk to Rorian the Dayseeker) and 'Harmony in Balance' (thin out the young vuldren east of the village). The Skyborne race needs the Skyborne Heroic or Epic Pack."
+    }
+   ],
+   "mobs": [
+    {
+     "name": "Rorian the Dayseeker",
+     "id": 251361,
+     "source": "forever-seen",
+     "why": "Leader of Thendal Village; gives new Skyborne their first tasks"
+    },
+    {
+     "name": "Aetheen of the Gales",
+     "id": 251366,
+     "source": "forever-seen",
+     "why": "Elder of Zephras Isle"
+    },
+    {
+     "name": "Ayessa Dawnsinger",
+     "id": 251968,
+     "source": "forever-seen",
+     "why": "Grand Skyseer of the Windshapers (Horde side leader)"
+    },
+    {
+     "name": "Elaadrin Evengale",
+     "id": 252475,
+     "source": "forever-seen",
+     "why": "Supreme Magister of the High Order (Alliance side leader)"
+    },
+    {
+     "name": "Juvenile Vuldren",
+     "id": 250873,
+     "source": "forever-seen",
+     "why": "First creatures you hunt, east of Thendal Village"
+    },
+    {
+     "name": "Ventaari Brightwish",
+     "id": 251487,
+     "source": "forever-seen",
+     "why": "Windshapers figure with quotes on the wiki's Zephras page"
+    }
+   ],
+   "mentions": [
+    "Valanaar: the island's main town; airships go to Dalaran/Alterac (Alliance) and Mulgore (Horde)",
+    "Thendal Grove and Thendal Village: the Skyborne starting area",
+    "Shen'dar Village, Falaath Village and the Shrine of Akir: smaller settlements",
+    "Ruins of Ban'aethal, Sanctum of Storms and the Bandit Hideout: places to explore and fight",
+    "Non-Skyborne players can also do the Zephras intro quests (per a GM post reported by Icy Veins)"
+   ],
+   "foreverNotes": "Entirely new in WoW Forever (patch 1.60.1); not in Classic or retail.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Zephras_Isle",
+    "https://warcraft.wiki.gg/wiki/Forever",
+    "https://news.blizzard.com/en-us/article/24302071/wow",
+    "https://www.icy-veins.com/wow-forever/news/wow-forever-players-can-experience-zephras-isle-without-playing-skyborne/",
+    "https://www.gfinityesports.com/article/world-of-warcraft-forever-skyborne-race-zephras-isle-guide"
+   ]
+  },
+  {
+   "zoneId": 2548,
+   "name": "Riverglades",
+   "levels": "35-45",
+   "faction": "Contested",
+   "summary": "A big new contested zone on the east coast of the Eastern Kingdoms, east of the Badlands and Burning Steppes. It fills the mid-level gap with many quests and a lot of world PvP. A neutral goblin port links it by boat to Tanaris.",
+   "history": "The valley was once Stormwind land. In the First War the orcs raided the town of Sunnyglade and enslaved the people there, until soldiers freed them and rebuilt it. The Horde later took the region, and Stormwind gave it up to defend its home. Now the people of Farholde Keep, led by Demar Brant, fight to win it back, while the Horde holds its own camps.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Knight Commander Demar Brant",
+     "id": 0,
+     "source": "unverified",
+     "why": "Leads the Alliance at Farholde Keep"
+    }
+   ],
+   "mentions": [
+    "Krol'dok Stronghold: new 5-player dungeon, levels 40-45 (first listed as 40-55, later corrected)",
+    "Farholde Keep: the Alliance base and flight point",
+    "Rog'mar and Bolder'ok: Horde bases",
+    "Powderfuse Port: neutral goblin port with a boat to Tanaris",
+    "Sunnyglade: the old human town from the First War story"
+   ],
+   "foreverNotes": "Entirely new in WoW Forever (patch 1.60.1); opens at full launch. Developers mentioned over 150 quests. Wildlife and foes listed on the wiki include gnolls, murlocs, ogres, crocolisks and harvest golems; Twilight's Hammer is also present. No Riverglades quests are in the player's quest cache yet.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Riverglades",
+    "https://warcraft.wiki.gg/wiki/Forever",
+    "https://www.warcrafttavern.com/forever/news/all-new-zones-areas-in-wow-forever-revealed-at-blizzcon/",
+    "https://www.gfinityesports.com/article/world-of-warcraft-forever-new-zones-travel-routes-guide",
+    "https://www.warcrafttavern.com/forever/news/kroldok-stronghold-dungeon-level-range-corrected/"
+   ]
+  },
+  {
+   "zoneId": 2652,
+   "name": "Shen'dralas",
+   "levels": "35-50 (unconfirmed)",
+   "faction": "Contested",
+   "summary": "A hidden valley in central Kalimdor, between Desolace, Mulgore and Feralas, full of old Highborne ruins. It carries on the centaur clan story from Desolace. You enter from Desolace through the Valley of Bones.",
+   "history": "Shen'dralas is tied to the Shen'dralar, the Highborne of Dire Maul. In the player's quests, the Gelkis centaur send you after the rival Magram, who are raising very old, two-legged skeletons in the cursed Valley of Bones. The scout Nerlokh waits at the valley's southern entrance and suspects the Magram's necromancers are not what they seem. Bristleback quilboar also live in the area.",
+   "startingFor": [],
+   "mobs": [
+    {
+     "name": "Undead Ravager",
+     "id": 11561,
+     "source": "classic",
+     "why": "Risen skeletons in the Valley of Bones; target of 'Ravaging Ravagers'"
+    },
+    {
+     "name": "Magram Necromancer",
+     "id": 253272,
+     "source": "forever-seen",
+     "why": "The Magram casters behind the undead; 'Outing Outcasts' has you take their garb"
+    },
+    {
+     "name": "Quolga the Wise",
+     "id": 255678,
+     "source": "forever-seen",
+     "why": "Bristleback Thornmatron, an elite quilboar"
+    },
+    {
+     "name": "Nerlokh",
+     "id": 0,
+     "source": "unverified",
+     "why": "Gelkis scout and quest giver at the Valley of Bones"
+    }
+   ],
+   "mentions": [
+    "Valley of Bones: the cursed way in from Desolace",
+    "Gelkis vs Magram quest chain (Gelkis reputation; ends with an attack on Khan Jehn)",
+    "Bristleback Retreat, Outcast Hideaway, Evenshade's Overlook, Magram Front and Forlorn Gardens: subzones",
+    "Links to the Shen'dralar of Dire Maul (Prince Tortheldrin)"
+   ],
+   "foreverNotes": "Entirely new in WoW Forever (patch 1.60.1). The level range is not official: the wiki says unknown, Gfinity says 45-53, and the cached quests are level 38-40 (from 35). The Valley of Bones, a Desolace subzone in Classic, is filed under Shen'dralas in Forever's area data.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Shen%27dralas",
+    "https://www.warcrafttavern.com/forever/news/all-new-zones-areas-in-wow-forever-revealed-at-blizzcon/",
+    "https://www.gfinityesports.com/article/world-of-warcraft-forever-new-zones-travel-routes-guide"
+   ]
+  }
+ ]
+}

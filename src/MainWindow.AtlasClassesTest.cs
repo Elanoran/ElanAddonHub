@@ -253,7 +253,9 @@ namespace ElansAddonHub
                         Check("race page: without the Classic baseline the starting zone comes from the quests Forever described (labelled Forever, linked to the zone) and the note says where it was worked out from",
                             st != null && st.Source == AtlasLabel.Forever && st.Link == "zone:11" && rpS.Notes.Any(n => n.StartsWith("Starting zone:") && n.Contains("Forever described")), string.Join(" | ", rpS.Facts) + " / " + string.Join(" | ", rpS.Notes));
                         SeenData.SetForTest(new SeenSnapshot(null, null, new[] { SQ(9, 78, WdbQuest.AllRaces) }));
-                        Check("race page: no first quest for the race anywhere = no 'Starts in', and a note that says why", !AtlasQuery.Build("race:2").Facts.Any(f => f.Label == "Starts in") && AtlasQuery.Build("race:2").Notes.Any(n => n.Contains("starting zone") && n.Contains("not shown")), string.Join(" | ", AtlasQuery.Build("race:2").Notes));
+                        ZoneLore.SetForTest("{\"zones\":[]}");       // no zone notes either (with them the Orc's start comes from Durotar's notes: the zonelore section)
+                        try { Check("race page: no first quest for the race anywhere = no 'Starts in', and a note that says why", !AtlasQuery.Build("race:2").Facts.Any(f => f.Label == "Starts in") && AtlasQuery.Build("race:2").Notes.Any(n => n.Contains("starting zone") && n.Contains("not shown")), string.Join(" | ", AtlasQuery.Build("race:2").Notes)); }
+                        finally { ZoneLore.ResetForTest(); }
                     }
                     finally
                     {

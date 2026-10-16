@@ -135,7 +135,7 @@ namespace ElansAddonHub
 
         void ResetEntity()
         {
-            entityGrid = null; tabHost = null; railStack = null; factsCard = null; railMapHost = null; heroEl = null; heroName = null; tabStrip = null; bannerEl = null;
+            entityGrid = null; tabHost = null; railStack = null; factsCard = null; railMapHost = null; heroEl = null; heroName = null; tabStrip = null; bannerEl = null; loreCard = null;
             railMap?.ClearMarkers(); railMap = null;
             tabsShown.Clear(); tabButtons.Clear(); tabContent.Clear();
             tabNow = ""; tabDefault = AtlasTabs.Overview; columnMode = -1; railOn = false; wide = false;
@@ -334,6 +334,7 @@ namespace ElansAddonHub
                 case AtlasTabs.Overview:
                     {
                         col.Children.Add(ItemCard(m));       // every kind: the game tooltip is the page's main card
+                        if (m.Lore != null) col.Children.Add(LoreCard(m));       // a zone with the Outpost's notes: "About <zone>"
                         if (!railOn && factsCard != null) col.Children.Add(factsCard);
                         if (m.Custom is ClassSpellBook classSpells) col.Children.Add(ClassSpellsCard(classSpells));
                         if (m.Entrance != null) col.Children.Add(EntranceCard(m));
@@ -475,7 +476,7 @@ namespace ElansAddonHub
                 if (factsCard != null) railStack.Children.Add(factsCard);
             }
             else if (factsCard != null && tabContent.TryGetValue(AtlasTabs.Overview, out var ov) && ov is StackPanel sp)
-                sp.Children.Insert(Math.Min(1, sp.Children.Count), factsCard);
+                sp.Children.Insert(Math.Min(loreCard != null && sp.Children.Contains(loreCard) ? 2 : 1, sp.Children.Count), factsCard);
             ApplyRailWidth();
         }
 

@@ -194,6 +194,7 @@ namespace ElansAddonHub.Services.Atlas
             }
             else m.Notes.Add(SpellData.Spells == null ? "Spell data is read from your game files and is not ready yet, so the racial abilities are not listed." : "The skill lines of the races are not in the game data this Outpost can read, so the racial abilities are not listed.");
             AddStartZone(m, r);
+            AddStartFromLore(m, r);
             return m;
         }
 

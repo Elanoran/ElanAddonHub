@@ -30,6 +30,7 @@ namespace ElansAddonHub.Services.Atlas
             m.Facts.Add(new AtlasFact("Type", z.TypeName, F));
             if (m.Crumbs.Count > 0) m.Facts.Add(new AtlasFact("In", m.Crumbs[m.Crumbs.Count - 1].Title, F, m.Crumbs[m.Crumbs.Count - 1].Link));
             m.Map.ShowZone = id;
+            m.Lore = ZoneLore.For(id);
             var subs = idx.Children(id);
             var L = Lodge();
             var plan = new PlanBuilder();
