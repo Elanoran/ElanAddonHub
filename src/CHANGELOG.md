@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.77.0
+- **Talents: a cleaner top.** The "Plan a build for any class" line above the talent trees is gone; the class buttons say it all.
+- **Talents: the hint under the trees is right now.** It reads: click a talent to add a point, right-click to take one back, Ctrl+click to open its spell page. With the keyboard, Enter or + adds a point and Delete or - takes one back (the + and - keys next to Backspace work too now, not only the ones on the number pad).
+- **Talents: Open in Seemeta.** A new button opens the class and the build on screen in Seemeta's WoW Forever talent calculator, in the Outpost browser. Only the class and the talent ranks go into the address.
+
 ## 2.76.0
 - **Atlas Home is about you now.** When you play, Home opens with where you are: "You are in Durotar" on the zone's painting, your character with level and class, the first line of the zone's notes, and whether the zone fits your level ("Good for your level", "A bit high for you", "Low for you, little XP"). Small tags show what Elan's Hub sees right now: in combat, resting, grouped, in a dungeon. Your XP bar and a Rested tag sit below. Click it to open the zone (or the dungeon you are in).
 - **When WoW is not running** Home shows where your last character was ("Last seen in Greenvale", saved 3 h ago). With no character at all it shows a calm Atlas picture and how to get Elan's Hub.

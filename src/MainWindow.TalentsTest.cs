@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Input;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Db2;
 using ElansAddonHub.Services.Talents;
@@ -362,6 +364,25 @@ EHH.DefaultBuild = ""pack""
                 for (int i = 0; i < 5; i++) page.Click(10, false);
                 Check("page: Alpha 5/5 (rank badge), points line '5 of 51 points spent (5/0/0) · 46 left · needs level 14'", page.NodeRankTextForTest(10) == "5/5" && page.PointsLineForTest == "5 of 51 points spent (5/0/0) · 46 left · needs level 14", page.PointsLineForTest);
                 Check("page: right-click gives a point back; Undo takes the last click back", page.Click(10, true) == Why.Ok && page.NodeRankTextForTest(10) == "4/5");
+                {
+                    // the hint under the trees says what really happens: press each thing it names on a real talent box and compare (Alpha is 4/5 here)
+                    var hint = page.HintForTest;
+                    var box = page.NodeBoxForTest(10);
+                    string Press(Action a) { a(); return page.NodeRankTextForTest(10); }
+                    void MouseClick(MouseButton b) => box.RaiseEvent(new MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, b) { RoutedEvent = b == MouseButton.Left ? UIElement.MouseLeftButtonDownEvent : UIElement.MouseRightButtonDownEvent });
+                    void KeyPress(Key k) { var src = PresentationSource.FromVisual(box); if (src != null) box.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, src, 0, k) { RoutedEvent = Keyboard.KeyDownEvent }); }
+                    var seen = new[]
+                    {
+                        Press(() => MouseClick(MouseButton.Left)), Press(() => MouseClick(MouseButton.Right)),
+                        Press(() => KeyPress(Key.Enter)), Press(() => KeyPress(Key.Delete)), Press(() => KeyPress(Key.OemPlus)), Press(() => KeyPress(Key.OemMinus)),
+                    };
+                    Check("hint: says left click adds a point and right-click takes one back (not '+1 / -1'), names Ctrl+click and the keys, and no Shift shortcut that does not exist",
+                        hint.Contains("Click a talent to add a point") && hint.Contains("right-click to take one back") && hint.Contains("Ctrl+click") && hint.Contains("Enter or + adds a point") && hint.Contains("Delete or - takes one back")
+                        && !hint.Contains("+1") && !hint.Contains("-1") && !hint.Contains("Shift"), hint);
+                    Check("hint: matches what the talent does: click 5/5, right-click 4/5, Enter 5/5, Delete 4/5, + 5/5, - 4/5",
+                        seen.SequenceEqual(new[] { "5/5", "4/5", "5/5", "4/5", "5/5", "4/5" }), string.Join(" ", seen));
+                    Check("page: no 'Plan a build for any class' line on top (the class chips say it)", page.SummaryGoneForTest);
+                }
                 var tipTexts = page.TipTextsForTest(10);
                 Check("tooltip: name, 'Rank 4 of 5', the description at rank 4 with the curve's amount (12), then the next rank (15), spell id", tipTexts.Contains("Alpha") && tipTexts.Contains("Rank 4 of 5") && tipTexts.Contains("Increases your agility by 12.") && tipTexts.Contains("Next rank: Increases your agility by 15.") && tipTexts.Any(t => t.StartsWith("Spell ID 100") && t.Contains("Ctrl+click")), string.Join(" | ", tipTexts));
                 var tipLocked = page.TipTextsForTest(13);

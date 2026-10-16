@@ -426,6 +426,11 @@ Required tables unknown / missing = layer unavailable ("game updated", logged, S
   named in the error: Zockify (its own talent ids), WoW Forever Builds (its talent lists differ from the game's for several classes), WoW Forever Talents, Icy Veins, RankedBoost, Wowhead (format unknown/unreachable).
   The game's own loadout string (the client has `C_Traits.GenerateImportString`) is recognised and refused plainly: no real string was available to verify a decoder. After an import the save boxes are prefilled with
   the site in the notes. Rules: a link whose digits do not line up with our tree (too long, rank above the max, not a legal layout, class not in the game data) is refused as a whole, never partly applied.
+- **Open in Seemeta** (2.77, `BuildLinks.SeemetaUrl`, `TalentsPage.OpenWebLink` = `MainWindow.OpenAtlasLink`): the other way, the build on screen as a Seemeta link (same digit order, trailing zeros cut, empty trees at
+  the end left out, an empty middle tree kept as `--`; nothing spent = the class page alone), opened in the Outpost browser (system browser when WebView2 is missing). Only the class and the ranks go into the address.
+  Checked on the live site in Chromium (October 2026): `?build=1`, `?build=55-05-5` (20 of 51, 10/5/5) and `?build=55--5` (15, 10/0/5) load; an illegal build is silently dropped by the site.
+  Seemeta was chosen because its format is stable and has no tree version in it: WoW Forever Talent links carry a tree-version string that changes with its data, and Talents Forever moved its version suffix
+  from 6 to 7 (it rewrites `-6` to `-7` on load), so the decoder's "only version 6" rule now refuses its current links (follow-up for the link reader, not changed here).
 - **Recommended builds**: Hunter reads Hunter Helper's own list from the installed addon (`<WowRoot>\<flavor>\Interface\AddOns\ElansHunterHelper\Data\Builds.lua`, read-only, 512 KB cap, parsed with `LuaData`),
   names mapped to nodes by the spell name (case and punctuation ignored), unmatched names reported, the order replayed through the rules with the level of each point. Other classes: none yet (see below).
   Saved builds (name, notes, code) live in `talentbuilds.json` in the Outpost's data folder.

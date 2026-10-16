@@ -167,6 +167,23 @@ namespace ElansAddonHub
             Check("page: our own code still works first, and a broken code keeps the code's own message (not 'not a link')",
                 !page.Import("ETB1-hello") && page.StatusForTest.Contains("build code") && !page.StatusForTest.Contains("talent calculator"), page.StatusForTest);
             Check("page: plain words give one message that names both kinds (code or link)", !page.Import("banana") && page.StatusForTest.Contains("build code") && page.StatusForTest.Contains("link"), page.StatusForTest);
+
+            // ---- the other way: Open in Seemeta (the format checked on the live site; the test opens nothing, a fake catches the address)
+            const string sbase = "https://seemeta.com/en/wow-forever/talent-calculator/hunter";
+            Check("seemeta out: the build on screen (5231-1-2) gives '" + sbase + "?build=5231-1-2', which decodes back to the same build",
+                page.SeemetaUrlNow == sbase + "?build=5231-1-2" && BuildLinks.Decode(page.SeemetaUrlNow, set, nm) is var rt && rt.Ok && rt.State.SameAs(want), page.SeemetaUrlNow);
+            var only2 = new TalentState(); only2.Set(17, 2);
+            var onlyFirst = new TalentState(); onlyFirst.Set(10, 5);
+            var gap = new TalentState(); gap.Set(10, 5); gap.Set(17, 2);
+            Check("seemeta out: zeros at the end cut, empty trees at the end left out, an empty middle tree kept ('--2', '5', '5--2'), nothing spent = the class page alone",
+                BuildLinks.SeemetaUrl(t, only2) == sbase + "?build=--2" && BuildLinks.SeemetaUrl(t, onlyFirst) == sbase + "?build=5" && BuildLinks.SeemetaUrl(t, gap) == sbase + "?build=5--2"
+                && BuildLinks.SeemetaUrl(t, new TalentState()) == sbase && BuildLinks.SeemetaUrl(null, want) == null,
+                BuildLinks.SeemetaUrl(t, only2) + " " + BuildLinks.SeemetaUrl(t, gap));
+            var oldOpen = TalentsPage.OpenWebLink; string opened = null;
+            TalentsPage.OpenWebLink = u => opened = u;
+            try { page.SeemetaClickForTest(); } finally { TalentsPage.OpenWebLink = oldOpen; }
+            Check("seemeta out: the 'Open in Seemeta' button hands that address to the Outpost browser (class and ranks only, no character or account in it)",
+                opened == sbase + "?build=5231-1-2" && !opened.Contains("&"), opened);
             page.Reset_ClickForTest();
         }
 
