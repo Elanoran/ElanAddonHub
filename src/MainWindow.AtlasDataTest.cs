@@ -229,6 +229,7 @@ namespace ElansAddonHub
                 links.Add(Ln(60, nic: 61)); links.Add(Ln(61, nic: 62)); links.Add(Ln(62, nic: 60));
                 links.Add(Ln(70)); links.Add(Ln(71, prev: 70)); links.Add(Ln(72, prev: 70));
                 links.Add(Ln(80, nic: 80));                                                         // points at itself
+                links.Add(Ln(90)); links.Add(Ln(91, prev: 90)); links.Add(new QuestLink { Id = 92, Title = "Q92", Prev = 90, Classes = 1 }); links.Add(new QuestLink { Id = 93, Title = "Q93", Prev = 90, Classes = 2 });
                 for (int i = 1000; i < 1060; i++) links.Add(Ln(i, 0, 0, i + 1));                    // 60 steps
                 var tab = QuestChains.Build(links);
                 var c3 = QuestChains.For(tab, 3);
@@ -245,6 +246,8 @@ namespace ElansAddonHub
                 Check("chains: a loop in the links stops where it would repeat (each quest once, marked cut), a quest pointing at itself is not a chain", c61.Steps.Count == 3 && c61.Steps.Select(s => s.Id).Distinct().Count() == 3 && c61.Cut && !c80.HasChain);
                 var c70 = QuestChains.For(tab, 70);
                 Check("chains: a fork has no single next step; both branches are listed as what it opens", !c70.HasChain && c70.Unlocks.OrderBy(i => i).SequenceEqual(new[] { 71, 72 }));
+                var c90 = QuestChains.For(tab, 90);
+                Check("chains: a quest that also opens class letters continues with the quest for everybody; the letters are what it opens", c90.Steps.Select(x => x.Id).SequenceEqual(new[] { 90, 91 }) && c90.Unlocks.OrderBy(i => i).SequenceEqual(new[] { 92, 93 }), string.Join(",", c90.Steps) + " / " + string.Join(",", c90.Unlocks));
                 var cl = QuestChains.For(tab, 1000);
                 Check("chains: a very long chain stops at " + QuestChains.MaxSteps + " steps each way (marked cut)", cl.Steps.Count == QuestChains.MaxSteps + 1 && cl.Cut && cl.Position == 1);
                 var line = new QuestLineInfo { Id = 5, Name = "Toxic Soil", Quests = new[] { 3, 900, 901 } };

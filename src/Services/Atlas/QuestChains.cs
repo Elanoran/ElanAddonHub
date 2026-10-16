@@ -15,6 +15,7 @@ namespace ElansAddonHub.Services.Atlas
     //   NextInChain       the quest the ender offers right after this one (Forever's own answer, WdbQuest.NextQuest, wins over the baseline's)
     //   Group > 0         only one quest of the group can be done;  Group < 0 all of the group must be done before their Next opens
     //   BreadcrumbFor     this quest only leads you to that one (optional)
+    // When several quests open after one (Kobold Camp Cleanup opens Investigate Echo Ridge and six class letters), the one for the same classes and races carries the chain.
     // A chain: walk back from the quest over its single predecessor and forward over its single successor; a quest seen twice stops the walk (a cycle in
     // the data never hangs the page), so does MaxSteps. Forever's own quest lines (QuestLine.db2 via WorldLookups) give the chain and its name when the
     // quest is in one.
@@ -22,6 +23,7 @@ namespace ElansAddonHub.Services.Atlas
     {
         public int Id; public string Title = "";
         public int Prev, Next, NextInChain, Group, BreadcrumbFor;
+        public int Races, Classes;               // bit masks, 0 = any (a fork into class quests keeps the chain on the quest for everybody)
         public bool FromForever;                 // NextInChain came from the player's own game
     }
 
@@ -106,7 +108,12 @@ namespace ElansAddonHub.Services.Atlas
             if (q != null && q.NextInChain > 0 && q.NextInChain != id) return q.NextInChain;
             if (q != null && q.Next > 0 && q.Next != id && q.Group >= 0) return q.Next;
             var pv = Of(t.ByPrev, id);
-            return pv.Count == 1 ? pv[0] : 0;
+            if (pv.Count == 1) return pv[0];
+            if (pv.Count == 0 || q == null) return 0;
+            // several quests open after this one: the one meant for the same players (same classes, the same or any race) carries the chain, the class
+            // letters and side quests are what it opens. Two or more such quests are a real fork: no next step.
+            var same = pv.Where(o => t.Get(o) is QuestLink c && c.Classes == q.Classes && (c.Races == q.Races || c.Races == 0 || q.Races == 0)).ToList();
+            return same.Count == 1 ? same[0] : 0;
         }
 
         // the chain and the needs of one quest. `line` = Forever's quest line holding it (null = none); `title` names a quest the table does not have.
@@ -190,7 +197,7 @@ namespace ElansAddonHub.Services.Atlas
                 var links = new Dictionary<int, QuestLink>();
                 if (ci != null)
                     foreach (var c in ci.Quests.Values)
-                        links[c.Id] = new QuestLink { Id = c.Id, Title = c.Title ?? "", Prev = c.PrevQuestId, Next = c.NextQuestId, NextInChain = c.NextQuestInChain, Group = c.ExclusiveGroup, BreadcrumbFor = c.BreadcrumbFor };
+                        links[c.Id] = new QuestLink { Id = c.Id, Title = c.Title ?? "", Prev = c.PrevQuestId, Next = c.NextQuestId, NextInChain = c.NextQuestInChain, Group = c.ExclusiveGroup, BreadcrumbFor = c.BreadcrumbFor, Races = c.RequiredRaces, Classes = c.RequiredClasses };
                 if (snap != null)
                     foreach (var s in snap.Quests.Values)
                     {
