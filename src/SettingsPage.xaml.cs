@@ -124,6 +124,7 @@ namespace ElansAddonHub
             ChannelStable.IsChecked = !UpdateChannel.IsTest(s);
             CfAutoBox.IsChecked = s.CfAutoCheck;
             CfDirectBox.IsChecked = !s.CfDirectOff;
+            CfLetBox.IsChecked = !s.CfLetInstallOff;
             PaintedBox.IsChecked = s.PaintedArt;
             SplashBox.IsChecked = !s.NoSplash;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
@@ -351,6 +352,8 @@ namespace ElansAddonHub
             settings.CfAutoCheck = CfAutoBox.IsChecked == true;
             bool cfDirectChanged = settings.CfDirectOff != (CfDirectBox.IsChecked != true);
             settings.CfDirectOff = CfDirectBox.IsChecked != true;
+            cfDirectChanged |= settings.CfLetInstallOff != (CfLetBox.IsChecked != true);
+            settings.CfLetInstallOff = CfLetBox.IsChecked != true;
             settings.NoSplash = SplashBox.IsChecked != true;
             bool realmsChanged = settings.RealmStatusOff != (RealmStatusBox.IsChecked != true);
             settings.RealmStatusOff = RealmStatusBox.IsChecked != true; settings.RealmsBackNotice = RealmsBackBox.IsChecked == true;

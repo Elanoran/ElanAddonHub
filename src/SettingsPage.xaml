@@ -257,6 +257,9 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Update CurseForge addons directly (recommended)" Tag="The Outpost downloads the update CurseForge lists from CurseForge's own download server, checks its size and checksum, keeps a backup and swaps the folders - no 'Select game instance' window. Addons whose author only allows updates through CurseForge, or that need another addon first, still go through the CurseForge app. Off = always ask the CurseForge app.">
                 <CheckBox x:Name="CfDirectBox" Style="{StaticResource Switch}" Click="General_Click" />
               </HeaderedContentControl>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Let CurseForge install author-restricted addons by itself (no 'Select game instance' window)" Tag="For addons the Outpost can't update itself: when CurseForge's own auto-update is on for the addon, CurseForge installs the update (started minimized and closed again if it isn't running) instead of being sent its install link. Off = always send the install link.">
+                <CheckBox x:Name="CfLetBox" Style="{StaticResource Switch}" Click="General_Click" AutomationProperties.Name="Let CurseForge install author-restricted addons by itself" />
+              </HeaderedContentControl>
             </StackPanel></ContentControl>
             <StackPanel Orientation="Horizontal">
               <Button Style="{StaticResource Button.M}" Content="Check for updates now" Click="CheckNow_Click" />

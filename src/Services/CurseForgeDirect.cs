@@ -64,6 +64,35 @@ namespace ElansAddonHub.Services
             return new Plan { Direct = true };
         }
 
+        // ---- Which way an "Update" click goes (2.72.4). Direct = the Outpost installs it (above). Otherwise CurseForge has to install it, and
+        // its curseforge://install link always opens the "Select game instance" window. Since 2.72.4, when the addon has CurseForge's own
+        // auto-update on (CfAddon.AutoInstall) and the setting "Let CurseForge install author-restricted addons by itself" is on (default),
+        // the Outpost lets CurseForge do it by itself instead (CurseForgeLocal.LetInstall): no install link, so no window.
+        // CurseForge itself never auto-installs a locked, ignored or working-copy addon (its AddonInstance.IncludeInUpdateAll), so those keep the link.
+        public enum Route { Direct, CurseForgeAuto, DeepLink }
+
+        // Settings > Addons > CurseForge "Let CurseForge install author-restricted addons by itself" - MainWindow wires it to settings (!CfLetInstallOff)
+        public static Func<bool> LetCfOn = () => true;
+
+        public static Route RouteFor(CfAddon a, CfInstance inst, bool directOn, bool letCfOn)
+        {
+            if (a == null) return Route.DeepLink;
+            if (Decide(a, inst, directOn).Direct) return Route.Direct;
+            if (letCfOn && a.AutoInstall && CfMayAutoInstall(a)) return Route.CurseForgeAuto;
+            return Route.DeepLink;
+        }
+
+        static bool CfMayAutoInstall(CfAddon a) => !a.IsLocked && !a.IsIgnored && !a.IsWorkingCopy;
+
+        // the deep link is used only because CurseForge's auto-update is off for this addon: the card says how to avoid the window
+        public static bool AutoOffHelps(CfAddon a, CfInstance inst, bool directOn, bool letCfOn) =>
+            a != null && letCfOn && !a.AutoInstall && CfMayAutoInstall(a) && RouteFor(a, inst, directOn, letCfOn) == Route.DeepLink;
+
+        public const string AutoOffHint = "Turn on auto-update for this addon in CurseForge to skip CurseForge's install window.";
+        public const string AutoOffTip = "CurseForge opens its \"Select game instance\" window for every install the Outpost asks for, because its install link "
+            + "can't say which game instance. Addons with CurseForge's auto-update on are installed by CurseForge itself (no window): in CurseForge, "
+            + "open the addon's menu and turn on auto-update, or turn it on for the whole game instance in its settings.";
+
         // null = fine: https, a forgecdn.net host (edge.forgecdn.net, mediafilez.forgecdn.net ...), the default port, no user info
         public static string UrlProblem(string url)
         {

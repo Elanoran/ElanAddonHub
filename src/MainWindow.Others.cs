@@ -28,6 +28,7 @@ namespace ElansAddonHub
         void InitOthers()
         {
             CurseForgeDirect.IsOn = () => !settings.CfDirectOff;
+            CurseForgeDirect.LetCfOn = () => !settings.CfLetInstallOff;
             OtherCards.ItemsSource = others;
             othersView = CollectionViewSource.GetDefaultView(others);
             othersView.Filter = o =>
@@ -88,7 +89,12 @@ namespace ElansAddonHub
                         others.Insert(at, nc);
                         nc.LoadLogo(dir);
                     }
-                    else if (!card.IsBusy) { card.CfChecked = checkedAt; card.SetEntry(e); card.LoadLogo(dir); }
+                    else if (!card.IsBusy)
+                    {
+                        card.CfChecked = checkedAt; card.SetEntry(e); card.LoadLogo(dir);
+                        // "CurseForge installs it on its next check" and it has: the note becomes a done note (which clears by itself)
+                        if (card.Fallback == OpenInCfButton && e.Cf != null && !e.Cf.UpdateAvailable) DoneNote(card, InstalledByCfText(e.Cf, WowWatch.Shared.Running), WowWatch.Shared.Running);
+                    }
                 }
                 RememberLayout(null, others.Count);
             }
@@ -322,27 +328,36 @@ namespace ElansAddonHub
             await RefreshOthers();
         }
 
-        async Task InstallCf(ThirdPartyCard c)
+        // Update click on a CurseForge card. Three ways (CurseForgeDirect.RouteFor): the Outpost installs it (Direct); CurseForge installs it
+        // by itself because its auto-update is on for the addon (CurseForgeAuto: no install link = no "Select game instance" window); or
+        // CurseForge's install link (DeepLink: its window). forceLink = the "Open in CurseForge" fallback button.
+        async Task InstallCf(ThirdPartyCard c, bool forceLink = false)
         {
             var cf = c.Entry.Cf;
             if (cf == null || addOnsDir == null || c.IsBusy) return;
             var key = c.Entry.Key; var dir = addOnsDir;
             c.Message = null;
             var plan = CurseForgeDirect.Decide(cf, cfInst, CurseForgeDirect.IsOn());
-            if (plan.Direct) { await InstallCfDirect(c, cf, key, dir); return; }
+            var route = forceLink ? CurseForgeDirect.Route.DeepLink : CurseForgeDirect.RouteFor(cf, cfInst, CurseForgeDirect.IsOn(), CurseForgeDirect.LetCfOn());
+            if (route == CurseForgeDirect.Route.Direct) { await InstallCfDirect(c, cf, key, dir); return; }
+            if (route == CurseForgeDirect.Route.CurseForgeAuto) { await InstallCfAuto(c, cf, key, dir); return; }
             c.SetBusy(true, "CurseForge...");
-            string msg; bool pendingRetry = false;
+            string msg; bool pendingRetry = false, done = false;
+            var wow = GamePresence.WowRunningNow();
             try
             {
                 var res = await CurseForgeLocal.RequestInstall(cf, cf.LatestId, dir, t => Dispatcher.BeginInvoke(new Action(() => c.SetBusyText(t))));
                 if (res == CurseForgeLocal.CfInstallResult.Installed)
-                    msg = "CurseForge installed " + cf.LatestFileName + ". In game, type /reload." + (GamePresence.WowRunningNow() ? " (WoW is running; if the addon looks unchanged, restart it.)" : "");
+                {
+                    wow = GamePresence.WowRunningNow();
+                    msg = InstalledByCfText(cf, wow); done = true;
+                }
                 else if (res == CurseForgeLocal.CfInstallResult.Started)
                     msg = "CurseForge is waiting for you: choose Forever as the install location and click Install in its window. This card updates by itself when it finishes.";
                 else
                     msg = "Something went wrong: CurseForge didn't start the install. Open CurseForge and update it there, or click Retry.";
                 pendingRetry = res == CurseForgeLocal.CfInstallResult.NotStarted;
-                if (plan.Reason != null && !msg.StartsWith("CurseForge installed")) msg = plan.Reason + " " + msg;
+                if (plan.Reason != null && !done) msg = plan.Reason + " " + msg;
             }
             catch (Exception ex) { Util.Log($"curseforge update {key} failed: {ex}"); msg = "Something went wrong: " + ex.Message; }
             c.SetBusy(false);
@@ -351,9 +366,49 @@ namespace ElansAddonHub
             if (card != null)
             {
                 if (pendingRetry) card.RetryTip = "CurseForge didn't start the install - open CurseForge and update it there, or click to try again";
-                card.Message = msg;
+                if (done) DoneNote(card, msg, wow);
+                else card.Message = msg;
+                // once per addon: how to skip CurseForge's window next time (only when its auto-update being off is the reason)
+                if (!pendingRetry && CurseForgeDirect.AutoOffHelps(cf, cfInst, CurseForgeDirect.IsOn(), CurseForgeDirect.LetCfOn())) card.OfferHint(cf.Id, CurseForgeDirect.AutoOffHint);
             }
             UpdateOthersHeader();
+        }
+
+        static string InstalledByCfText(CfAddon cf, bool wow) =>
+            "CurseForge installed " + cf.LatestFileName + ". In game, type /reload." + (wow ? " (WoW is running; if the addon looks unchanged, restart it.)" : "");
+
+        public const string OpenInCfButton = "Open in CurseForge";
+
+        // CurseForge's auto-update is on for this addon: let CurseForge install it by itself (CurseForgeLocal.LetInstall) - no install window
+        async Task InstallCfAuto(ThirdPartyCard c, CfAddon cf, string key, string dir)
+        {
+            c.SetBusy(true, "CurseForge...");
+            CurseForgeLocal.CfAutoResult res;
+            try { res = await CurseForgeLocal.LetInstall(cf, dir, t => Dispatcher.BeginInvoke(new Action(() => c.SetBusyText(t)))); }
+            catch (Exception ex) { Util.Log($"curseforge auto update {key} failed: {ex}"); res = CurseForgeLocal.CfAutoResult.NotStarted; }
+            var wow = GamePresence.WowRunningNow();
+            c.SetBusy(false);
+            await RefreshOthers();
+            var card = others.FirstOrDefault(x => x.Entry.Key == key);
+            if (card != null) ShowCfAutoResult(card, cf, res, wow);
+            UpdateOthersHeader();
+        }
+
+        // the card's note for each LetInstall outcome (the selftest checks these texts)
+        void ShowCfAutoResult(ThirdPartyCard card, CfAddon cf, CurseForgeLocal.CfAutoResult res, bool wow)
+        {
+            switch (res)
+            {
+                case CurseForgeLocal.CfAutoResult.Installed: DoneNote(card, InstalledByCfText(cf, wow), wow); break;
+                case CurseForgeLocal.CfAutoResult.LaterWhileRunning: card.SetActionNote(CurseForgeLocal.LaterText(), OpenInCfButton); break;
+                case CurseForgeLocal.CfAutoResult.TimedOut: card.SetActionNote(CurseForgeLocal.TimedOutText, OpenInCfButton); break;
+                default: card.SetActionNote("CurseForge couldn't be started to install it. Click Open in CurseForge to install it there.", OpenInCfButton); break;
+            }
+        }
+
+        async void CfFallback_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is ThirdPartyCard c) await InstallCf(c, forceLink: true);
         }
 
         // The direct path (CurseForgeDirect): CurseForge's own latest file from forgecdn, checked, backed up, swapped - no CurseForge window.
@@ -368,8 +423,51 @@ namespace ElansAddonHub
             c.SetBusy(false);
             await RefreshOthers();
             var card = others.FirstOrDefault(x => x.Entry.Key == key);
-            if (card != null) card.Message = msg;
+            if (card != null) { if (res.Ok) DoneNote(card, msg, running); else card.Message = msg; }
             UpdateOthersHeader();
+        }
+
+        // ---- post-install notes clear by themselves (ThirdPartyCard.NoteExpired): a light 3 s sweep runs only while such a note is shown
+        System.Windows.Threading.DispatcherTimer noteSweep;
+
+        void DoneNote(ThirdPartyCard card, string msg, bool wowRunning)
+        {
+            card.SetDoneNote(msg, wowRunning);
+            if (noteSweep == null)
+            {
+                noteSweep = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+                noteSweep.Tick += (s, e) => SweepNotes(others, DateTime.UtcNow, WowWatch.Shared.Running, NewestSavedVarsUtc());
+            }
+            noteSweep.Start();
+        }
+
+        // returns how many notes it cleared; stops the sweep when none is left
+        int SweepNotes(IEnumerable<ThirdPartyCard> cards, DateTime nowUtc, bool wowNow, DateTime newestSavedVarsUtc)
+        {
+            int n = 0;
+            foreach (var c in cards.Where(x => x.NoteDoneAt > DateTime.MinValue).ToList())
+                if (c.NoteExpired(nowUtc, wowNow, newestSavedVarsUtc)) { c.ClearNote(); n++; }
+            if (!others.Any(x => x.NoteDoneAt > DateTime.MinValue)) noteSweep?.Stop();
+            return n;
+        }
+
+        // newest write of a SavedVariables file of this WoW client (the same folders every SavedVariables reader uses: SavedVarsFiles.Dirs);
+        // the game writes them on /reload and logout, so a newer one = the new addon files are loaded
+        DateTime NewestSavedVarsUtc()
+        {
+            var newest = DateTime.MinValue;
+            try
+            {
+                if (addOnsDir == null || string.IsNullOrEmpty(settings.WowRoot)) return newest;
+                var flavorDir = Path.GetFullPath(Path.Combine(addOnsDir, "..", "..")).TrimEnd('\\') + "\\";
+                foreach (var d in SavedVarsFiles.Dirs(settings.WowRoot))
+                {
+                    if (!Path.GetFullPath(d).StartsWith(flavorDir, StringComparison.OrdinalIgnoreCase)) continue;
+                    foreach (var f in new DirectoryInfo(d).EnumerateFiles("*.lua")) if (f.LastWriteTimeUtc > newest) newest = f.LastWriteTimeUtc;
+                }
+            }
+            catch (Exception e) { Util.Log("saved variables stamp: " + e.GetType().Name); }
+            return newest;
         }
 
         // Settings > Addons: is the CurseForge integration healthy? Local files only.
@@ -434,12 +532,13 @@ namespace ElansAddonHub
             var running = GamePresence.WowRunningNow();
             c.Message = null;
             c.SetBusy(true, "Updating...");
-            string msg;
+            string msg; bool done = false;
             try
             {
                 var res = await AddonSources.Install(addOnsDir, c.Entry, c.Link, c.Remote, clientInterface, new Progress<double>(p => c.Progress = p));
                 msg = "Updated to " + c.Remote.Version + ". In game, type /reload" + (running ? " (WoW is running; if the addon looks unchanged, restart it)." : ".");
                 if (res.Warning != null) msg += "\n" + res.Warning;
+                else done = true;                       // a warning stays until the next action; a plain "Updated" note clears by itself
                 c.Remote = null;
             }
             catch (Exception ex)
@@ -452,7 +551,7 @@ namespace ElansAddonHub
             var card = others.FirstOrDefault(x => x.Entry.Key == key);
             if (card != null)
             {
-                card.Message = msg;
+                if (done) DoneNote(card, msg, running); else card.Message = msg;
                 var r = await AddonSources.Lookup(card.Entry, card.Link, clientInterface);
                 card.SetRemote(r, clientInterface);
             }
@@ -510,6 +609,75 @@ namespace ElansAddonHub
                     Ck("missing dependency = Update via CurseForge", okCard.ButtonText == "Update via CurseForge");
                 }
                 finally { settings.CfDirectOff = off0; }
+            }
+            sb.AppendLine(await CurseForgeLocal.SelfTestLetInstall());
+            {
+                // 2.72.4: the CurseForge-installs-it-by-itself texts on the card, and post-install notes that clear by themselves
+                void Ck(string w, bool ok, string info = null) => sb.AppendLine($"curseforge notes {w}: {(ok ? "ok" : "FAIL")}{(info == null ? "" : " (" + info + ")")}");
+                var off0 = settings.CfDirectOff; var let0 = settings.CfLetInstallOff; var sec0 = ThirdPartyCard.NoteClearSec;
+                string svFile = null;
+                try
+                {
+                    var autoCf = new CfAddon { Id = 5151, Name = "CfAuto", InstalledId = 1, LatestId = 2, LatestFileName = "CfAuto-2.zip", AllowDistribution = false, AutoInstallPref = true, Folders = new List<string> { "CfAuto" } };
+                    ThirdPartyCard New() => new ThirdPartyCard(new AddonEntry { Key = "CfAuto", Title = "CfAuto", Folders = new List<string> { "CfAuto" }, Cf = autoCf });
+                    var card = New();
+                    settings.CfDirectOff = false; settings.CfLetInstallOff = false; card.Refresh();
+                    Ck("auto-update on: the pill says CurseForge installs it by itself", card.PillTip.Contains("installs it by itself") && card.ButtonText == "Update via CurseForge", card.PillTip);
+                    autoCf.AutoInstallPref = false; card.Refresh();
+                    Ck("auto-update off: the pill says how to skip CurseForge's window", card.PillTip.Contains(CurseForgeDirect.AutoOffHint), card.PillTip);
+                    settings.CfLetInstallOff = true; card.Refresh();
+                    Ck("setting off: the install link as before, no hint", !card.PillTip.Contains(CurseForgeDirect.AutoOffHint) && !card.PillTip.Contains("by itself"), card.PillTip);
+                    settings.CfLetInstallOff = false; autoCf.AutoInstallPref = true;
+
+                    // the card's note for every LetInstall outcome
+                    ShowCfAutoResult(card, autoCf, CurseForgeLocal.CfAutoResult.Installed, false);
+                    Ck("installed: done note, no button", card.Message == "CurseForge installed CfAuto-2.zip. In game, type /reload." && card.NoteDoneAt > DateTime.MinValue && card.FallbackVisibility == Visibility.Collapsed, card.Message);
+                    ShowCfAutoResult(card, autoCf, CurseForgeLocal.CfAutoResult.LaterWhileRunning, false);
+                    Ck("running: next check + Open in CurseForge, not a done note", card.Message == CurseForgeLocal.LaterText() && card.Fallback == OpenInCfButton && card.NoteDoneAt == DateTime.MinValue && card.MessageShown, card.Message);
+                    ShowCfAutoResult(card, autoCf, CurseForgeLocal.CfAutoResult.TimedOut, false);
+                    Ck("timeout: clear message + Open in CurseForge", card.Message == CurseForgeLocal.TimedOutText && card.FallbackVisibility == Visibility.Visible, card.Message);
+                    ShowCfAutoResult(card, autoCf, CurseForgeLocal.CfAutoResult.NotStarted, false);
+                    Ck("not started: Open in CurseForge", card.Fallback == OpenInCfButton && card.Message.Contains("Open in CurseForge"), card.Message);
+                    card.Message = null;
+                    Ck("a new note drops the button", card.FallbackVisibility == Visibility.Collapsed && !card.MessageShown);
+                    ThirdPartyCard.ResetHintsForTest();
+                    card.Message = "CurseForge is waiting for you"; var h1 = card.OfferHint(5151, CurseForgeDirect.AutoOffHint);
+                    var h1Shown = card.HintVisibility == Visibility.Visible && card.HintTip.Contains("Select game instance");
+                    card.Message = "CurseForge is waiting for you"; var h2 = card.OfferHint(5151, CurseForgeDirect.AutoOffHint);
+                    Ck("the auto-update hint is shown once per addon, with its tooltip", h1 && h1Shown && !h2 && card.HintVisibility == Visibility.Collapsed);
+
+                    // done notes: the timeout, WoW exiting, a SavedVariables write after the install; errors and action notes stay
+                    ThirdPartyCard.NoteClearSec = 60;
+                    var a = New(); a.SetDoneNote("Updated to CfAuto-2.zip. In game, type /reload.", false); var t0 = a.NoteDoneAt;
+                    Ck("done note stays before the timeout", SweepNotes(new[] { a }, t0.AddSeconds(30), false, DateTime.MinValue) == 0 && a.MessageShown);
+                    Ck("done note clears after the timeout", SweepNotes(new[] { a }, t0.AddSeconds(61), false, DateTime.MinValue) == 1 && !a.MessageShown && a.NoteDoneAt == DateTime.MinValue);
+                    for (int i = 0; i < 20 && a.Message != null; i++) await Task.Delay(50);
+                    Ck("its text is dropped after the fade", a.Message == null && a.MessageVisibility == Visibility.Collapsed);
+                    var b = New(); b.SetDoneNote("CurseForge installed CfAuto-2.zip. In game, type /reload. (WoW is running; if the addon looks unchanged, restart it.)", true);
+                    Ck("WoW still running: stays", SweepNotes(new[] { b }, b.NoteDoneAt.AddSeconds(5), true, DateTime.MinValue) == 0);
+                    Ck("WoW exited after the install: clears early", SweepNotes(new[] { b }, b.NoteDoneAt.AddSeconds(5), false, DateTime.MinValue) == 1);
+                    // a real SavedVariables file of this test WoW folder (the same folders SavedVarsFiles.Dirs gives every reader)
+                    var svDir = Path.Combine(Path.GetFullPath(Path.Combine(addOnsDir, "..", "..")), "WTF", "Account", "NOTESTEST", "SavedVariables");
+                    Directory.CreateDirectory(svDir);
+                    svFile = Path.Combine(svDir, "ZzNotesTest.lua"); File.WriteAllText(svFile, "ZzNotesTest = {}\n");
+                    var c2 = New(); c2.SetDoneNote("Updated to CfAuto-2.zip. In game, type /reload.", true);
+                    File.SetLastWriteTimeUtc(svFile, c2.NoteDoneAt.AddMinutes(-10));
+                    var before = NewestSavedVarsUtc();
+                    Ck("SavedVariables older than the install: stays", SweepNotes(new[] { c2 }, c2.NoteDoneAt.AddSeconds(5), true, before) == 0, before.ToString("o"));
+                    File.SetLastWriteTimeUtc(svFile, c2.NoteDoneAt.AddSeconds(3));
+                    var after = NewestSavedVarsUtc();
+                    Ck("SavedVariables written after the install (/reload): clears", after > c2.NoteDoneAt && SweepNotes(new[] { c2 }, c2.NoteDoneAt.AddSeconds(5), true, after) == 1, after.ToString("o"));
+                    var err = New(); err.Message = "Something went wrong: test";
+                    var act = New(); act.SetActionNote(CurseForgeLocal.TimedOutText, OpenInCfButton);
+                    var wait = New(); wait.Message = "CurseForge is waiting for you: choose Forever as the install location and click Install in its window.";
+                    Ck("errors and notes that need the user never clear", SweepNotes(new[] { err, act, wait }, DateTime.UtcNow.AddHours(2), false, DateTime.MaxValue) == 0
+                        && err.MessageShown && act.MessageShown && wait.MessageShown && act.FallbackVisibility == Visibility.Visible);
+                }
+                finally
+                {
+                    settings.CfDirectOff = off0; settings.CfLetInstallOff = let0; ThirdPartyCard.NoteClearSec = sec0; ThirdPartyCard.ResetHintsForTest();
+                    try { if (svFile != null) Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(svFile)), true); } catch { }
+                }
             }
             sb.AppendLine(await CurseForgeDirect.SelfTest());
             sb.AppendLine($"addons dir={addOnsDir} interface={clientInterface} cards={others.Count}");

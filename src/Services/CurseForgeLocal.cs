@@ -28,6 +28,12 @@ namespace ElansAddonHub.Services
         public List<string> LatestModules = new List<string>(), InstalledModules = new List<string>();      // foldername of latestFile / installedFile modules
         public List<long> RequiredDeps = new List<long>();   // latestFile.dependencies with type 3 (RequiredDependency)
         public List<long> MissingDeps = new List<long>();    // the required ones that are not in the same CurseForge instance
+        // CurseForge's own "auto-update" for this addon: preferenceAutoInstallUpdates of the addon entry (null = follow the instance)
+        // over the instance's preferenceAutoInstallUpdates. Resolved exactly like CurseForge's agent (AddonInstance.GetPreferredAutoInstallUpdates:
+        // addon value ?? instance value), verified read-only in Curse.Agent.Host 1.3x.
+        public bool? AutoInstallPref;
+        public bool InstanceAutoInstall;
+        public bool AutoInstall => AutoInstallPref ?? InstanceAutoInstall;
     }
 
     public class CfInstance
@@ -36,6 +42,7 @@ namespace ElansAddonHub.Services
         public DateTime LastRefresh;                         // UTC, MinValue = unknown
         public List<CfAddon> Addons = new List<CfAddon>();
         public HashSet<long> InstalledIds = new HashSet<long>();   // every addonID of the instance (also ones without a folder here)
+        public bool AutoInstallDefault;                      // the instance's preferenceAutoInstallUpdates (CurseForge's default for its addons)
     }
 
     // Read-only view of the CurseForge desktop app's state, plus the two things the app lets other programs ask for:
@@ -88,7 +95,7 @@ namespace ElansAddonHub.Services
                     var list = inst.List("installedAddons");
                     bool pathMatch = !string.IsNullOrEmpty(path) && Norm(path) == want;
                     if (!pathMatch && !list.OfType<Dictionary<string, object>>().Any(a => Norm(a.Str("modFolderPath")) == wantAdd)) continue;
-                    var res = new CfInstance { Path = path, Name = inst.Str("name"), LastRefresh = ParseUtc(inst.Str("lastRefreshAttempt")) };
+                    var res = new CfInstance { Path = path, Name = inst.Str("name"), LastRefresh = ParseUtc(inst.Str("lastRefreshAttempt")), AutoInstallDefault = inst.Bool("preferenceAutoInstallUpdates") };
                     // CurseForge only rewrites this file when something changed; its log records every update check
                     var logged = LastLoggedCheck(inst.Str("name"));
                     if (logged > res.LastRefresh) res.LastRefresh = logged;
@@ -107,6 +114,8 @@ namespace ElansAddonHub.Services
                         foreach (var m in (ins ?? lat).List("modules").OfType<Dictionary<string, object>>())
                             if (m.Str("foldername") is string fn && fn.Length > 0 && !add.Folders.Contains(fn, StringComparer.OrdinalIgnoreCase)) add.Folders.Add(fn);
                         ReadDirectFields(a, ins, lat, add);
+                        add.InstanceAutoInstall = res.AutoInstallDefault;
+                        add.AutoInstallPref = a.TryGetValue("preferenceAutoInstallUpdates", out var ap) && ap is bool apb ? apb : (bool?)null;
                         if (add.Id > 0) res.InstalledIds.Add(add.Id);
                         foreach (var fp in a.List("filePaths").OfType<string>())
                         {
@@ -494,6 +503,215 @@ namespace ElansAddonHub.Services
                 SettleSec = oldT[0]; ConfirmSec = oldT[1]; ReadyWaitSec = oldT[2]; TotalSec = oldT[3]; PollMs = oldT[4];
                 SendLink = oSend; StartApp = oStart; RunningNow = oRun; MainPid = oPid;
                 Environment.SetEnvironmentVariable("ELANSHUB_CF_MAINLOGS", oldEnv);
+                try { Directory.Delete(root, true); } catch { }
+            }
+            return sb.ToString();
+        }
+
+        // ---- "Let CurseForge install it by itself" (2.72.4, CurseForgeDirect.Route.CurseForgeAuto): for an addon with CurseForge's own
+        // auto-update on, no install link (= no "Select game instance" window). What CurseForge does, verified read-only in its agent
+        // (Curse.Agent.Host 1.3x, decompiled from the copy in app.asar.unpacked) and app.asar, October 2026:
+        //   - every scan of a game instance ends with CheckForUpdatesAsync + UpdateAutoUpdatable(), which installs the latest file of every
+        //     addon whose GetPreferredAutoInstallUpdates() (addon value ?? instance value) is true and that isn't locked / ignored / a working copy.
+        //   - a scan runs when CurseForge starts, and while it runs only on its periodic check: AddonsPeriodicTasks, every
+        //     "updateFrequency" of its settings (15 min, 30 min, 1 h or 3 h; storage.json "addons-settings").
+        //   - a second start of CurseForge.exe while it runs only brings its window to the front (app.asar onSecondInstance) - no scan;
+        //     there is no deep link or switch that asks for one. So a RUNNING CurseForge can't be nudged without the install link:
+        //     the card says it installs on its next check, with the link as an explicit button.
+        // Not running: start it minimized (its start-up scan installs the update), wait for the new installed file id in its file,
+        // then close the instance we started, politely (CloseStarted - never killed).
+        public enum CfAutoResult { Installed, LaterWhileRunning, TimedOut, NotStarted }
+
+        static int AutoTotalSec = 240;
+        static Process hidden;
+        static Func<bool> StartHidden = () =>
+        {
+            try
+            {
+                if (!Installed) return false;
+                hidden = Process.Start(new ProcessStartInfo(ExePath, "--minimized") { UseShellExecute = false });
+                return hidden != null;
+            }
+            catch (Exception e) { Util.Log("start curseforge (minimized) failed: " + e.Message); return false; }
+        };
+        static Func<Task> CloseHidden = async () => { var p = hidden; hidden = null; await CloseStarted(p); };
+
+        public static async Task<CfAutoResult> LetInstall(CfAddon a, string addOnsDir, Action<string> status = null, int timeoutSeconds = -1)
+        {
+            if (a == null) return CfAutoResult.NotStarted;
+            if (timeoutSeconds <= 0) timeoutSeconds = AutoTotalSec;
+            void Say(string t) { try { status?.Invoke(t); } catch { } }
+            long from = a.InstalledId;
+            bool Done()
+            {
+                var now = Load(addOnsDir)?.Addons.FirstOrDefault(x => x.Id == a.Id);
+                return now != null && now.InstalledId > 0 && now.InstalledId != from;
+            }
+            if (Done()) return CfAutoResult.Installed;
+            // running and not one the Outpost started (for a check or the previous addon of "Update all"): it can't be nudged
+            if (RunningNow() && !Busy) return CfAutoResult.LaterWhileRunning;
+            bool started = false;
+            if (!Busy)                                  // a check (CheckNow) that already started it: just wait for its start-up scan
+            {
+                Busy = true;
+                if (!StartHidden()) { Busy = false; return CfAutoResult.NotStarted; }
+                started = true;
+            }
+            Say(UpdatingText);
+            var res = CfAutoResult.TimedOut;
+            try
+            {
+                var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+                while (DateTime.UtcNow < deadline)
+                {
+                    await Task.Delay(PollMs);
+                    if (Done()) { res = CfAutoResult.Installed; break; }
+                }
+            }
+            finally
+            {
+                // closing waits until CurseForge's log is quiet about installs: not on the card's time
+                if (started) _ = Task.Run(async () => { try { await CloseHidden(); } catch { } finally { Busy = false; } });
+            }
+            if (res == CfAutoResult.TimedOut) Util.Log($"curseforge auto-install of {a.Id} not seen in {timeoutSeconds} s");
+            return res;
+        }
+
+        public const string UpdatingText = "CurseForge is updating it...";
+
+        // "about every hour" from CurseForge's own update frequency (storage.json, read only), null = unknown
+        public static string StorageFile =>
+            Environment.GetEnvironmentVariable("ELANSHUB_CF_STORAGE") is string o && o.Length > 0 ? o
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "curseforge", "storage.json");
+
+        public static string CheckEvery()
+        {
+            try
+            {
+                var f = StorageFile;
+                if (!File.Exists(f)) return null;
+                string t; using (var fs = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) using (var sr = new StreamReader(fs)) t = sr.ReadToEnd();
+                var m = System.Text.RegularExpressions.Regex.Match(t, @"updateFrequency[\\]*""?\s*:\s*(\d)");
+                if (!m.Success) return "about every 15 minutes";               // the agent's default (900 s) when the setting was never changed
+                switch (m.Groups[1].Value) { case "0": return "about every 15 minutes"; case "1": return "about every 30 minutes"; case "2": return "about every hour"; case "3": return "about every 3 hours"; }
+            }
+            catch { }
+            return null;
+        }
+
+        public static string LaterText()
+        {
+            var every = CheckEvery();
+            return "CurseForge is running, so it installs this on its next update check" + (every != null ? " (" + every + ")" : "") + " - or click Open in CurseForge to install it now.";
+        }
+
+        public const string TimedOutText = "CurseForge didn't install it in time. It may still finish in the background - or click Open in CurseForge to install it now.";
+
+        // ---- selftest: the auto-update fields, the route table and LetInstall with a synthetic CurseForge file and fake start/close seams
+        // (nothing real is started; CurseForge's own files are never written - the test writes its OWN temp file and points ELANSHUB_CF_FILE at it)
+        public static async Task<string> SelfTestLetInstall()
+        {
+            var sb = new StringBuilder();
+            void Check(string what, bool c, string info = null) => sb.AppendLine($"curseforge auto {what}: {(c ? "ok" : "FAIL")}{(info == null ? "" : " (" + info + ")")}");
+            var oldFile = Environment.GetEnvironmentVariable("ELANSHUB_CF_FILE"); var oldStore = Environment.GetEnvironmentVariable("ELANSHUB_CF_STORAGE");
+            var oRun = RunningNow; var oStart = StartHidden; var oClose = CloseHidden; var oPoll = PollMs; var oTotal = AutoTotalSec; var oBusy = Busy;
+            var root = Path.Combine(Path.GetTempPath(), "elanshub-cfauto-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var wow = Path.Combine(root, "World of Warcraft", "_classic_");
+                var add = Path.Combine(wow, "Interface", "AddOns");
+                Directory.CreateDirectory(add);
+                var file = Path.Combine(root, "AddonGameInstance.json");
+                Environment.SetEnvironmentVariable("ELANSHUB_CF_FILE", file);
+                string Addon(long id, string name, string pref, long installed, bool allow = false, bool locked = false) =>
+                    "{\"addonID\":" + id + ",\"name\":\"" + name + "\",\"allowModDistribution\":" + (allow ? "true" : "false") + ",\"isLocked\":" + (locked ? "true" : "false")
+                    + ",\"preferenceAutoInstallUpdates\":" + pref + ",\"installedFile\":{\"id\":" + installed + ",\"fileName\":\"" + name + "-1.zip\",\"modules\":[{\"foldername\":\"" + name + "\"}]}"
+                    + ",\"latestFile\":{\"id\":200,\"fileName\":\"" + name + "-2.zip\",\"modules\":[{\"foldername\":\"" + name + "\"}]}}";
+                void Write(bool instAuto, long followInstalled = 100) => File.WriteAllText(file, "[{\"name\":\"Forever\",\"installPath\":" + Json.Write(wow) + ",\"preferenceAutoInstallUpdates\":" + (instAuto ? "true" : "false")
+                    + ",\"installedAddons\":[" + Addon(1, "Follow", "null", followInstalled) + "," + Addon(2, "On", "true", 100) + "," + Addon(3, "Off", "false", 100) + "," + Addon(4, "Locked", "true", 100, locked: true)
+                    + "," + Addon(5, "Free", "null", 100, allow: true) + "]}]");
+
+                // 1) parsing: null follows the instance, true / false override it
+                Write(false);
+                var cf = Load(add);
+                CfAddon A(CfInstance i, string n) => i?.Addons.FirstOrDefault(x => x.Name == n);
+                Check("instance default read", cf != null && !cf.AutoInstallDefault, cf == null ? LastLoadError ?? "no instance" : null);
+                Check("addon null = follows instance (off)", A(cf, "Follow") != null && A(cf, "Follow").AutoInstallPref == null && !A(cf, "Follow").AutoInstall);
+                Check("addon true overrides an off instance", A(cf, "On")?.AutoInstall == true && A(cf, "On")?.AutoInstallPref == true);
+                Write(true);
+                cf = Load(add);
+                Check("addon null = follows instance (on)", cf != null && cf.AutoInstallDefault && A(cf, "Follow")?.AutoInstall == true);
+                Check("addon false overrides an on instance", A(cf, "Off")?.AutoInstall == false && A(cf, "Off")?.AutoInstallPref == false);
+
+                // 2) the route table: direct setting x let-CurseForge setting x auto-update x author / locked
+                var R = CurseForgeDirect.Route.Direct; var Au = CurseForgeDirect.Route.CurseForgeAuto; var D = CurseForgeDirect.Route.DeepLink;
+                var free = A(cf, "Free"); free.LatestUrl = "https://edge.forgecdn.net/files/1/2/Free-2.zip"; free.LatestLength = 10; free.LatestModules.Add("Free");
+                free.LatestHashes.Add(new KeyValuePair<string, string>("sha1", "00"));
+                var rows = new[]
+                {
+                    // addon, directOn, letOn, expected
+                    Tuple.Create(free, true, true, R), Tuple.Create(free, true, false, R),
+                    Tuple.Create(free, false, true, Au), Tuple.Create(free, false, false, D),           // direct off: the auto path still avoids the window
+                    Tuple.Create(A(cf, "Follow"), true, true, Au), Tuple.Create(A(cf, "Follow"), true, false, D),
+                    Tuple.Create(A(cf, "On"), true, true, Au), Tuple.Create(A(cf, "On"), false, true, Au), Tuple.Create(A(cf, "On"), true, false, D),
+                    Tuple.Create(A(cf, "Off"), true, true, D), Tuple.Create(A(cf, "Off"), false, false, D),
+                    Tuple.Create(A(cf, "Locked"), true, true, D),                                       // CurseForge never auto-installs a locked addon
+                };
+                var bad = rows.Where(r => CurseForgeDirect.RouteFor(r.Item1, cf, r.Item2, r.Item3) != r.Item4).Select(r => r.Item1.Name + "/" + r.Item2 + "/" + r.Item3 + "=" + CurseForgeDirect.RouteFor(r.Item1, cf, r.Item2, r.Item3)).ToList();
+                Check("route table (" + rows.Length + " rows)", bad.Count == 0, string.Join("; ", bad));
+                var ignored = new CfAddon { Id = 9, Name = "Ign", AutoInstallPref = true, IsIgnored = true };
+                var wcopy = new CfAddon { Id = 10, Name = "Wc", AutoInstallPref = true, IsWorkingCopy = true };
+                Check("ignored / working copy keep the link", CurseForgeDirect.RouteFor(ignored, cf, true, true) == D && CurseForgeDirect.RouteFor(wcopy, cf, true, true) == D);
+                Check("hint only when auto-update off is the reason", CurseForgeDirect.AutoOffHelps(A(cf, "Off"), cf, true, true) && !CurseForgeDirect.AutoOffHelps(A(cf, "Off"), cf, true, false)
+                    && !CurseForgeDirect.AutoOffHelps(A(cf, "Locked"), cf, true, true) && !CurseForgeDirect.AutoOffHelps(A(cf, "On"), cf, true, true) && !CurseForgeDirect.AutoOffHelps(free, cf, true, true));
+
+                // 3) LetInstall: not running = start minimized, wait for the new installed id, close what it started
+                Write(true);
+                cf = Load(add);
+                var follow = A(cf, "Follow");
+                PollMs = 100; Busy = false;
+                bool running = false; int starts = 0, closes = 0;
+                RunningNow = () => running;
+                StartHidden = () => { starts++; Task.Run(async () => { await Task.Delay(500); Write(true, 200); }); return true; };
+                CloseHidden = () => { closes++; return Task.CompletedTask; };
+                var texts = new List<string>();
+                var r1 = await LetInstall(follow, add, t => texts.Add(t), 5);
+                for (int i = 0; i < 20 && closes == 0; i++) await Task.Delay(50);
+                Check("not running: started minimized, installed id seen", r1 == CfAutoResult.Installed && starts == 1, r1 + ", starts=" + starts);
+                Check("card shows CurseForge is updating it", texts.Contains(UpdatingText));
+                Check("closes only what it started, frees Busy", closes == 1 && !Busy, "closes=" + closes + ", busy=" + Busy);
+
+                // 4) never installs = TimedOut (the card shows the Open in CurseForge fallback), still closed
+                Write(true); starts = 0; closes = 0;
+                StartHidden = () => { starts++; return true; };
+                var r2 = await LetInstall(follow, add, null, 1);
+                for (int i = 0; i < 20 && closes == 0; i++) await Task.Delay(50);
+                Check("no new file in time = TimedOut", r2 == CfAutoResult.TimedOut && starts == 1 && closes == 1, r2 + ", starts=" + starts + ", closes=" + closes);
+
+                // 5) running: can't be nudged (verified in its app.asar / agent) - nothing is started or sent
+                running = true; starts = 0;
+                var r3 = await LetInstall(follow, add, null, 1);
+                Check("running = LaterWhileRunning, nothing started", r3 == CfAutoResult.LaterWhileRunning && starts == 0, r3.ToString());
+                running = false;
+
+                // 6) start fails = NotStarted
+                StartHidden = () => false;
+                Check("start failed = NotStarted", await LetInstall(follow, add, null, 1) == CfAutoResult.NotStarted && !Busy);
+
+                // 7) CurseForge's check interval from its storage.json (a temp stand-in)
+                var store = Path.Combine(root, "storage.json");
+                Environment.SetEnvironmentVariable("ELANSHUB_CF_STORAGE", store);
+                File.WriteAllText(store, "{\"addons-settings\": \"{\\\"updateFrequency\\\":2,\\\"maxSimultaneousDownloads\\\":3}\"}");
+                Check("check interval from storage.json", CheckEvery() == "about every hour", CheckEvery());
+                Check("running text names the interval and the button", LaterText().Contains("about every hour") && LaterText().Contains("Open in CurseForge"), LaterText());
+                File.Delete(store);
+                Check("no storage.json = no interval claimed", CheckEvery() == null && !LaterText().Contains("("), LaterText());
+            }
+            catch (Exception e) { sb.AppendLine("curseforge auto selftest crashed: " + e); sb.AppendLine("curseforge auto: FAIL"); }
+            finally
+            {
+                RunningNow = oRun; StartHidden = oStart; CloseHidden = oClose; PollMs = oPoll; AutoTotalSec = oTotal; Busy = oBusy;
+                Environment.SetEnvironmentVariable("ELANSHUB_CF_FILE", oldFile); Environment.SetEnvironmentVariable("ELANSHUB_CF_STORAGE", oldStore);
                 try { Directory.Delete(root, true); } catch { }
             }
             return sb.ToString();
