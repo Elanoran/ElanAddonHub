@@ -152,12 +152,16 @@
       </StackPanel>
     </DataTemplate>
 
-    <!-- a day of the month grid: the number; its bars and chips are drawn over the grid by CalendarView (MonthOverlay). Fixed 80 high inside a 2 px margin: 84 per row, however many events -->
+    <!-- a day of the month grid: a tile (faint veil, fainter on the weekend, none for other months; the selected day in the accent tint), the number top left
+         (today: in an accent circle). Its bars and chips are drawn over the grid by CalendarView (MonthOverlay). The height comes from the grid (CalendarRules.Metrics),
+         never from what the day holds. -->
     <DataTemplate x:Key="DayCell">
-      <Grid x:Name="cell" Margin="2" Height="80" Tag="{Binding}" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Day_Click" Opacity="{Binding CellOpacity}">
+      <Grid x:Name="cell" Margin="2" Tag="{Binding}" Background="Transparent" Cursor="Hand" MouseLeftButtonUp="Day_Click" Opacity="{Binding CellOpacity}">
         <Border Background="{Binding Fill}" CornerRadius="{StaticResource Radius.Control}" />
         <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
-        <TextBlock Text="{Binding Number}" Style="{StaticResource Text.Body}" Foreground="{Binding NumberBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,4,0,0" />
+        <Border Width="22" Height="22" CornerRadius="11" Background="{StaticResource Brush.Accent}" Visibility="{Binding TodayVisibility}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,2,0,0" />
+        <TextBlock Text="{Binding Number}" Style="{StaticResource Text.Body}" Foreground="{Binding NumberBrush}" FontWeight="{Binding NumberWeight}" Width="22" TextAlignment="Center"
+                   HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,4,0,0" />
       </Grid>
       <DataTemplate.Triggers>
         <Trigger SourceName="cell" Property="IsMouseOver" Value="True"><Setter TargetName="hv" Property="Opacity" Value="1" /></Trigger>
@@ -191,14 +195,14 @@
       <Grid x:Name="Main">
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 
-        <!-- header: title, Agenda | Month, New event -->
+        <!-- header: title, Month | Agenda (Month is the default), New event -->
         <Border BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,0,1" Padding="16,8">
           <DockPanel MinHeight="32">
             <Button x:Name="NewButton" DockPanel.Dock="Right" Style="{StaticResource Button.Primary.S}" Content="New event" Click="New_Click" Margin="8,0,0,0" ToolTip="Plan a raid, a dungeon night or a get-together" />
             <Border DockPanel.Dock="Right" Style="{StaticResource SegmentHost}">
               <StackPanel Orientation="Horizontal">
-                <RadioButton x:Name="ModeAgenda" Style="{StaticResource Segment}" Content="Agenda" GroupName="calmode" IsChecked="True" Checked="Mode_Changed" />
-                <RadioButton x:Name="ModeMonth" Style="{StaticResource Segment}" Content="Month" GroupName="calmode" Checked="Mode_Changed" />
+                <RadioButton x:Name="ModeMonth" Style="{StaticResource Segment}" Content="Month" GroupName="calmode" IsChecked="True" Checked="Mode_Changed" />
+                <RadioButton x:Name="ModeAgenda" Style="{StaticResource Segment}" Content="Agenda" GroupName="calmode" Checked="Mode_Changed" />
               </StackPanel>
             </Border>
             <TextBlock Text="&#xE787;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -231,7 +235,7 @@
         </Border>
 
         <!-- agenda -->
-        <ScrollViewer x:Name="AgendaScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
+        <ScrollViewer x:Name="AgendaScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" app:Motion.EdgeFade="True">
           <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
             <ItemsControl x:Name="AgendaList" ItemTemplate="{StaticResource DayGroup}" />
             <StackPanel x:Name="AgendaEmpty" HorizontalAlignment="Center" Margin="0,48,0,0" Visibility="Collapsed">
@@ -243,37 +247,47 @@
           </StackPanel>
         </ScrollViewer>
 
-        <!-- month -->
-        <ScrollViewer x:Name="MonthScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" app:Motion.EdgeFade="True">
-          <StackPanel Margin="24,16,24,24" MaxWidth="680" HorizontalAlignment="Stretch">
-            <DockPanel Margin="0,0,0,12">
-              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE76C;" Click="MonthNext_Click" ToolTip="Next month" AutomationProperties.Name="Next month" />
-              <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Height="28" Content="Today" Click="MonthToday_Click" Margin="0,0,4,0" />
-              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE76B;" Click="MonthPrev_Click" Margin="0,0,4,0" ToolTip="Previous month" AutomationProperties.Name="Previous month" />
-              <TextBlock x:Name="MonthTitle" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
-            </DockPanel>
-            <ItemsControl x:Name="WeekdayRow" Margin="0,0,0,4">
-              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Style="{StaticResource Text.Caption}" HorizontalAlignment="Center" /></DataTemplate></ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <Grid>
-              <ItemsControl x:Name="MonthGridList" ItemTemplate="{StaticResource DayCell}">
-                <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" Rows="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-              </ItemsControl>
-              <!-- bars and chips, laid out by CalendarRules.Layout over the same 7 x 6 cells (rows 84 = the cell 80 + its 2 px margins) -->
-              <Grid x:Name="MonthOverlay" IsHitTestVisible="False" VerticalAlignment="Top" ClipToBounds="True">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                  <RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" />
-                </Grid.RowDefinitions>
+        <!-- month (the default): the header (month name, previous / Today / next), the weekday row and the 7 x 6 grid; the selected day's events below it,
+             or beside it on a wide window. Sizes come from CalendarRules.Metrics (ApplyMonthMetrics). -->
+        <ScrollViewer x:Name="MonthScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" app:Motion.EdgeFade="True" SizeChanged="MonthScroll_SizeChanged">
+          <Grid x:Name="MonthHost" Margin="24,16,24,24">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition x:Name="SideColumn" Width="0" /></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <StackPanel x:Name="MonthColumn">
+              <DockPanel Margin="0,0,0,12">
+                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE76C;" Click="MonthNext_Click" ToolTip="Next month" AutomationProperties.Name="Next month" />
+                <Button x:Name="TodayButton" DockPanel.Dock="Right" Style="{StaticResource Button.S}" Content="Today" Click="MonthToday_Click" Margin="4,0,4,0" VerticalAlignment="Center" ToolTip="Back to this month" />
+                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Content="&#xE76B;" Click="MonthPrev_Click" ToolTip="Previous month" AutomationProperties.Name="Previous month" />
+                <TextBlock x:Name="MonthTitle" Style="{StaticResource Text.Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              </DockPanel>
+              <Grid x:Name="MonthStage" ClipToBounds="False">
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                <ItemsControl x:Name="WeekdayRow" Margin="0,0,0,4" Focusable="False">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" Foreground="{Binding Brush}" Style="{StaticResource Text.Caption}" HorizontalAlignment="Left" Margin="8,0,0,0" /></DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Grid x:Name="MonthGridHost" Grid.Row="1">
+                  <ItemsControl x:Name="MonthGridList" ItemTemplate="{StaticResource DayCell}" Height="504" Focusable="False">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="7" Rows="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  </ItemsControl>
+                  <!-- bars and chips, laid out by CalendarRules.Layout over the same 7 x 6 cells (rows = Metrics.RowHeight); empty space lets clicks through to the days -->
+                  <Grid x:Name="MonthOverlay" VerticalAlignment="Top" ClipToBounds="True">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" /><RowDefinition Height="84" />
+                    </Grid.RowDefinitions>
+                  </Grid>
+                </Grid>
               </Grid>
-            </Grid>
-            <TextBlock x:Name="DayTitle" Style="{StaticResource Text.Section}" Margin="0,24,0,12" />
-            <ItemsControl x:Name="DayEvents" ItemTemplateSelector="{StaticResource CardPicker}" />
-            <TextBlock x:Name="DayEmpty" Text="Nothing planned this day." Style="{StaticResource Text.Secondary}" Visibility="Collapsed" />
-          </StackPanel>
+            </StackPanel>
+            <StackPanel x:Name="DayPanel" Grid.Row="1" Margin="0,24,0,0">
+              <TextBlock x:Name="DayTitle" Style="{StaticResource Text.Section}" Margin="0,0,0,12" TextTrimming="CharacterEllipsis" />
+              <ItemsControl x:Name="DayEvents" ItemTemplateSelector="{StaticResource CardPicker}" />
+              <TextBlock x:Name="DayEmpty" Text="Nothing planned this day." Style="{StaticResource Text.Secondary}" Visibility="Collapsed" />
+            </StackPanel>
+          </Grid>
         </ScrollViewer>
       </Grid>
 

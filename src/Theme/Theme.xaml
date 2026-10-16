@@ -136,6 +136,9 @@
   <SolidColorBrush x:Key="Brush.Cal.Holiday.6.Tint" Color="#2EDBA062" />
   <SolidColorBrush x:Key="Brush.Cal.Holiday.7" Color="#9AA7BD" />
   <SolidColorBrush x:Key="Brush.Cal.Holiday.7.Tint" Color="#2E9AA7BD" />
+  <!-- month grid day tiles (Outpost 2.77): a faint veil on the days of the month, fainter still on the weekend; other months have none -->
+  <SolidColorBrush x:Key="Brush.Cal.Day" Color="#0DFFFFFF" />
+  <SolidColorBrush x:Key="Brush.Cal.Weekend" Color="#06FFFFFF" />
 
   <!-- section colours of the secondary menus (2.71.1: the Atlas side navigation, the Lodge sidebar, the Characters list, the Settings menu). Eight muted
        hues of about the same lightness (none shouts, none is the accent green or a status colour) + a neutral grey. A section's brush tints its group

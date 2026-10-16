@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.77.0
+- **The Lodge calendar opens on the month.** Month is now the first tab and the default; Agenda is one click away, and the calendar remembers which one you used last until you close the app.
+- **The month fills your window.** Day tiles grow with the window and stay roughly square, so a big screen shows more events per day ("+2 more" counts the rest; click it to see the whole day). On a wide window the chosen day's events sit beside the month instead of under it. In a small window the events become slim coloured bars.
+- **Easier to read at a glance.** Today's date is in a green circle, weekends are a little quieter, chips show the start time when there is room ("20:00 Molten Core") and just the title when there is not, and clicking a chip opens that event. The weekday names follow your Windows week start (Monday or Sunday).
+- **Smooth month changes.** Previous / next / Today slide the month in; with Windows animations turned off it changes instantly.
+
 ## 2.76.0
 - **Atlas Home is about you now.** When you play, Home opens with where you are: "You are in Durotar" on the zone's painting, your character with level and class, the first line of the zone's notes, and whether the zone fits your level ("Good for your level", "A bit high for you", "Low for you, little XP"). Small tags show what Elan's Hub sees right now: in combat, resting, grouped, in a dungeon. Your XP bar and a Rested tag sit below. Click it to open the zone (or the dungeon you are in).
 - **When WoW is not running** Home shows where your last character was ("Last seen in Greenvale", saved 3 h ago). With no character at all it shows a calm Atlas picture and how to get Elan's Hub.

@@ -174,7 +174,7 @@ namespace ElansAddonHub
             await Until(() => cal.MonthOverlayForTest.Children.Count == 0 && cal.MonthCellsForTest.Any(c => c.Cell.Day == new DateTime(2027, 2, 10)));
             var topLeft2 = cal.MonthGridElementForTest.TranslatePoint(new Point(0, 0), cal);
             var emptyHs = VisualsOf<Grid>(cal.MonthGridElementForTest).Where(g => g.Tag is MonthCellVM).Select(g => g.ActualHeight).ToList();
-            check("no shift: an empty month (Feb 2027) has the same grid height (" + gridH + "), the same day size, the same overlay and the same position as a busy one",
+            check("no shift: an empty month (Feb 2027) has the same grid height (" + gridH + " / " + cal.MonthGridElementForTest.ActualHeight + "), the same day size, the same overlay (" + ovH + " / " + cal.MonthOverlayForTest.ActualHeight + ") and the same position (" + Math.Round(topLeft.Y, 1) + " / " + Math.Round(topLeft2.Y, 1) + ") as a busy one",
                 gridH > 0 && Math.Abs(cal.MonthGridElementForTest.ActualHeight - gridH) < 0.5 && Math.Abs(cal.MonthOverlayForTest.ActualHeight - ovH) < 0.5 && Math.Abs(ovH - gridH) < 0.5
                 && busyHs.Count == 42 && emptyHs.Count == 42 && busyHs.Concat(emptyHs).Max() - busyHs.Concat(emptyHs).Min() < 0.5 && Math.Abs(topLeft.Y - topLeft2.Y) < 0.5 && cal.MonthOverlayForTest.Children.Count == 0);
             cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 15));

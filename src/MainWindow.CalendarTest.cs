@@ -75,6 +75,7 @@ namespace ElansAddonHub
                 settings.ToastsOff = false;
                 var plus2 = TimeZoneInfo.CreateCustomTimeZone("test+2", TimeSpan.FromHours(2), "Test +2", "Test +2");
                 CalendarRules.Zone = () => plus2;
+                await CalDefaultView(check);
                 await CalOldServer(check);
                 await CalAgenda(check, sent);
                 await CalMonth(check, sent);
@@ -84,6 +85,7 @@ namespace ElansAddonHub
                 await CalReminders(check);
                 await CalChatCard(check, sent);
                 await CalTimeZones(check);
+                await CalMonthSizes(check, dir);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally
@@ -558,6 +560,190 @@ namespace ElansAddonHub
                     && (double)new CalendarForm { Title = "x", Day = new DateTime(2026, 10, 17), Hour = 20 }.ToRequest("cal:create")["off"] == 120);
             }
             await Task.Delay(50);
+        }
+
+        // ---------------------------------------------------------------- the default view (Outpost 2.77: Month first and by default)
+        async Task CalDefaultView(Action<string, bool> check)
+        {
+            var fresh = new CalendarView();
+            check("default: a new calendar opens in Month (not Agenda): the month page is shown, the agenda hidden",
+                !fresh.IsAgenda && fresh.MonthScrollForTest.Visibility == Visibility.Visible && fresh.AgendaScrollForTest.Visibility == Visibility.Collapsed);
+            check("default: the switch reads Month | Agenda (Month is the first segment and the checked one)", fresh.MonthFirstInSegmentForTest);
+            await Task.CompletedTask;
+        }
+
+        // ---------------------------------------------------------------- the month grid at every window size (Outpost 2.77)
+        async Task CalMonthSizes(Action<string, bool> check, string dir)
+        {
+            var cal = LodgePage.CalendarForTest;
+            double hadW = Width, hadH = Height; var hadState = WindowState;
+            var hadCulture = System.Threading.Thread.CurrentThread.CurrentCulture;
+            var plus2 = TimeZoneInfo.CreateCustomTimeZone("test+2", TimeSpan.FromHours(2), "Test +2", "Test +2");
+            CalendarRules.Zone = () => plus2;
+            try
+            {
+                WindowState = WindowState.Normal;
+                // the usual events plus a busy Tuesday (20 Oct: seven raids) so every size has a day that overflows
+                var busy = string.Join(",", Enumerable.Range(0, 7).Select(i => CalEv("z" + i, "Raid night " + (i + 1), new DateTime(2026, 10, 20, 8 + i, 0, 0, DateTimeKind.Utc), 60, "Bob", true, 1, 1, 3)));
+                Session.FeedForTest(CalWelcome("owner", CalEvents() + "," + busy, CalMs(CalNow)));
+                LodgePage.ShowCalendarForTest();
+                cal.SetModeForTest(true);
+                await Until(() => cal.IsAgenda);
+                LodgePage.HideCalendarForTest();
+                LodgePage.ShowCalendarForTest();
+                check("session: the last view picked (Agenda) is kept when the calendar is opened again", await Until(() => cal.IsAgenda && cal.AgendaScrollForTest.IsVisible));
+                cal.SetModeForTest(false);
+                LodgePage.HideCalendarForTest();
+                LodgePage.ShowCalendarForTest();
+                check("session: ... and so is Month", await Until(() => !cal.IsAgenda && cal.MonthScrollForTest.IsVisible));
+
+                cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 12));
+                var results = new List<CalendarRules.MonthMetrics>();
+                // small = the app's smallest window, medium = the usual one, large = a big monitor; huge = a 4K-wide calendar (the page itself is made that wide)
+                var sizes = new[] { ("small", 740.0, 560.0, 0.0, 0.0), ("medium", 1180.0, 760.0, 0.0, 0.0), ("large", 1680.0, 1000.0, 0.0, 0.0), ("huge", 2560.0, 1440.0, 0.0, 0.0) };
+                foreach (var (name, ww, wh, cw, ch) in sizes)
+                {
+                    Width = ww; Height = wh;
+                    if (cw > 0) { cal.Width = cw; cal.Height = ch; } else { cal.ClearValue(WidthProperty); cal.ClearValue(HeightProperty); }
+                    await Settle();
+                    var sv = (ScrollViewer)cal.MonthScrollForTest;
+                    double inner = sv.ActualWidth - 48;
+                    await Until(() => Math.Abs(cal.MonthMetricsForTest.GridWidth - CalendarRules.Metrics(inner, sv.ActualHeight).GridWidth) < 0.5 && cal.MonthOverlayForTest.Children.Count > 0);
+                    UpdateLayout();
+                    var m = cal.MonthMetricsForTest;
+                    var want = CalendarRules.Metrics(sv.ActualWidth - 48, sv.ActualHeight);
+                    results.Add(m);
+                    string tag = name + " (" + Math.Round(sv.ActualWidth) + " wide: cell " + Math.Round(m.CellWidth) + " x " + m.RowHeight + ", " + m.Lanes + " lines" + (m.Side ? ", day list beside" : "") + (m.Compact ? ", compact" : "") + ")";
+                    check(tag + ": the grid's size follows the page width (metrics match)", m.Equals(want));
+
+                    var grid = cal.MonthGridElementForTest;
+                    var cellEls = VisualsOf<Grid>(grid).Where(g => g.Tag is MonthCellVM).ToList();
+                    var hs = cellEls.Select(g => g.ActualHeight).ToList(); var ws = cellEls.Select(g => g.ActualWidth).ToList();
+                    check(tag + ": 42 day cells of one size, square-ish (height " + Math.Round(hs.DefaultIfEmpty().Min()) + ", width " + Math.Round(ws.DefaultIfEmpty().Min()) + ") and as tall as the metrics say",
+                        cellEls.Count == 42 && hs.Max() - hs.Min() < 0.5 && ws.Max() - ws.Min() < 0.5 && Math.Abs(hs[0] - (m.RowHeight - 4)) < 0.5
+                        && (m.RowHeight <= CalendarRules.MinRow || m.RowHeight >= CalendarRules.MaxRow || m.Side || Math.Abs(hs[0] + 4 - Math.Round((ws[0] + 4) * 0.85)) < 4));
+
+                    // nothing sticks out: the grid and the day list stay inside the page, the page never scrolls sideways
+                    var gridRight = grid.TranslatePoint(new Point(grid.ActualWidth, 0), sv).X;
+                    var day = cal.DayPanelForTest;
+                    var dayRight = day.TranslatePoint(new Point(day.ActualWidth, 0), sv).X;
+                    check(tag + ": the grid and the day list fit the page width (grid ends at " + Math.Round(gridRight) + ", day list at " + Math.Round(dayRight) + " of " + Math.Round(sv.ViewportWidth) + ")",
+                        gridRight <= sv.ViewportWidth + 0.5 && dayRight <= sv.ViewportWidth + 0.5 && sv.ExtentWidth <= sv.ViewportWidth + 0.5);
+                    check(tag + ": the selected day's list sits " + (m.Side ? "beside" : "under") + " the grid", cal.DayPanelBesideForTest == m.Side
+                        && (m.Side ? day.TranslatePoint(new Point(0, 0), grid).X >= grid.ActualWidth : day.TranslatePoint(new Point(0, 0), grid).Y >= grid.ActualHeight));
+
+                    // every chip and "+N more" lies inside its own day cell: below the number, above the cell's end, never clipped
+                    var ov = cal.MonthOverlayForTest;
+                    double row = m.RowHeight;
+                    bool inside = true; string worst = "";
+                    foreach (FrameworkElement el in ov.Children)
+                    {
+                        int r = Grid.GetRow(el);
+                        var top = el.TranslatePoint(new Point(0, 0), ov).Y - r * row;
+                        var bottom = top + el.ActualHeight;
+                        var left = el.TranslatePoint(new Point(0, 0), ov).X; var colW = ov.ActualWidth / 7;
+                        int c = Grid.GetColumn(el), span = Grid.GetColumnSpan(el);
+                        bool ok = top >= CalendarRules.FirstLaneTop - 0.5 && bottom <= row - 2 + 0.5 && el.ActualHeight > 0 && left >= c * colW - 0.5 && left + el.ActualWidth <= (c + span) * colW + 0.5;
+                        if (el is TextBlock tb) ok &= tb.DesiredSize.Width <= el.ActualWidth + 0.5 || tb.TextTrimming != TextTrimming.None;
+                        if (!ok) { inside = false; worst = (el as TextBlock)?.Text ?? (el.Tag as CalendarRules.MonthSeg)?.Label + " top " + Math.Round(top) + " bottom " + Math.Round(bottom); }
+                    }
+                    check(tag + ": every chip, bar and '+N more' lies inside its day cell (" + ov.Children.Count + " drawn" + (inside ? "" : "; out: " + worst) + ")", inside && ov.Children.Count > 0);
+
+                    // chips fit or overflow: a day never shows more than it has lines, and shown + more = all of it
+                    var cells = cal.MonthCellsForTest; var lay = cal.MonthLayoutForTest;
+                    int bi = cells.ToList().FindIndex(x => x.Cell.Day == new DateTime(2026, 10, 20));
+                    var moreLabel = ov.Children.OfType<TextBlock>().FirstOrDefault(t => (int)t.Tag == bi);
+                    check(tag + ": a day shows at most its " + m.Lanes + " lines and counts the rest; the busy 20th (7 raids) shows " + lay.ShownOn(bi) + " and '" + moreLabel?.Text + "'",
+                        cells.Select((x, i) => lay.ShownOn(i) <= m.Lanes && lay.ShownOn(i) + lay.More[i] == x.Cell.Count).All(x => x)
+                        && lay.ShownOn(bi) == Math.Min(7, m.Lanes) && (m.Lanes >= 7 ? moreLabel == null : moreLabel != null && moreLabel.Text == "+" + (7 - m.Lanes) + " more"));
+                    var mc = ov.Children.OfType<Grid>().FirstOrDefault(g => (g.Tag as CalendarRules.MonthSeg)?.Ev.Id == "b1");
+                    var mcText = mc?.Children.OfType<TextBlock>().FirstOrDefault();
+                    check(tag + ": a chip reads " + (m.Compact ? "as a slim bar in its colour (no room for words)" : m.Wide ? "time + title ('20:00 Molten Core')" : "its title ('Molten Core', no room for the time)"),
+                        mcText != null && (m.Compact ? mcText.Visibility == Visibility.Collapsed && mc.ActualHeight <= 8 : mcText.Text == (m.Wide ? "20:00 Molten Core" : "Molten Core") && mcText.IsVisible)
+                        && (mc.ToolTip as string ?? "").StartsWith("20:00 Molten Core"));
+                    if (SelfTestClock.ShotsOn)
+                    {
+                        await ShotWait(300);
+                        if (cw > 0) { cal.Background = (System.Windows.Media.Brush)FindResource("Brush.Surface1"); SnapshotElement(cal, System.IO.Path.Combine(dir, "calendar-month-" + name + ".png")); cal.ClearValue(BackgroundProperty); }
+                        else Snapshot(System.IO.Path.Combine(dir, "calendar-month-" + name + ".png"));
+                    }
+                }
+                cal.ClearValue(WidthProperty); cal.ClearValue(HeightProperty);
+                var text = results.Where(r => !r.Compact).ToList();
+                check("sizes: the cells grow with the window (" + string.Join(" < ", results.Select(r => Math.Round(r.CellWidth))) + " wide) and so do the lines a day shows (" + string.Join(", ", results.Select(r => r.Lanes + (r.Compact ? " slim" : ""))) + ")",
+                    results.Zip(results.Skip(1), (a, b) => b.CellWidth >= a.CellWidth - 0.5).All(x => x) && text.Zip(text.Skip(1), (a, b) => b.Lanes >= a.Lanes).All(x => x)
+                    && text.Count >= 2 && text.Last().Lanes > text.First().Lanes && results.Last().CellWidth > results.First().CellWidth * 1.5);
+                // a 4K-wide page (the calendar itself made that wide, whatever screen the test runs on)
+                cal.Width = 2480; cal.Height = 1400;
+                await Until(() => cal.MonthMetricsForTest.GridWidth > 1800);
+                var m4 = cal.MonthMetricsForTest;
+                check("4K: a 2480 px page puts the day list beside the grid, cells " + Math.Round(m4.CellWidth) + " x " + m4.RowHeight + " with " + m4.Lanes + " lines, the month fits the height",
+                    m4.Side && m4.Wide && cal.DayPanelBesideForTest && m4.Lanes >= 5 && 6 * m4.RowHeight + CalendarRules.MonthChrome <= cal.MonthScrollForTest.ActualHeight + 0.5);
+                cal.ClearValue(WidthProperty); cal.ClearValue(HeightProperty);
+                var tiny = CalendarRules.Metrics(7 * 50, 600); var wide4k = CalendarRules.Metrics(3600, 2000);
+                check("sizes: a very narrow column keeps the 84 px minimum with slim bars; a 4K column is capped (220 rows, at most 8 lines) and fits the visible height",
+                    tiny.Compact && tiny.RowHeight == CalendarRules.MinRow && tiny.Lanes >= CalendarRules.MaxLanes && wide4k.Side && wide4k.RowHeight <= Math.Floor((2000 - CalendarRules.MonthChrome) / 6) && wide4k.Lanes <= CalendarRules.MostLanes);
+
+                // today, weekends and the week start
+                Width = 1180; Height = 760; await Settle();
+                cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 14));
+                await Until(() => cal.MonthCellsForTest.Count == 42);
+                var all = cal.MonthCellsForTest;
+                var todays = all.Where(c => c.TodayVisibility == Visibility.Visible).ToList();
+                var todayEl = VisualsOf<Grid>(cal.MonthGridElementForTest).FirstOrDefault(g => g.Tag is MonthCellVM v && v.Cell.IsToday);
+                var circle = todayEl == null ? null : VisualsOf<Border>(todayEl).FirstOrDefault(b => Math.Abs(b.ActualWidth - 22) < 0.5 && b.IsVisible);
+                check("today: exactly one day (the 11th) has the accent circle, its number in the on-accent colour, also when another day is selected",
+                    todays.Count == 1 && todays[0].Cell.Day == new DateTime(2026, 10, 11) && circle != null && circle.Background == FindResource("Brush.Accent") && todays[0].NumberBrush == FindResource("Brush.OnAccent") && !todays[0].Selected);
+                var sat = all.First(c => c.Cell.Day == new DateTime(2026, 10, 17)); var wed = all.First(c => c.Cell.Day == new DateTime(2026, 10, 14)); var thu = all.First(c => c.Cell.Day == new DateTime(2026, 10, 15));
+                var outside = all.First(c => !c.Cell.InMonth);
+                check("weekends: a weekend day has its own, fainter tile; a weekday the day tile; other months none; the selected day the accent tint",
+                    sat.Fill == FindResource("Brush.Cal.Weekend") && thu.Fill == FindResource("Brush.Cal.Day") && outside.Fill == System.Windows.Media.Brushes.Transparent && wed.Fill == FindResource("Brush.Accent.Tint")
+                    && cal.WeekdaysForTest.Where(w => w.Weekend).All(w => w.Brush == FindResource("Brush.Text.Tertiary")) && cal.WeekdaysForTest.Count(w => w.Weekend) == 2);
+                foreach (var cult in new[] { "en-US", "da-DK" })
+                {
+                    System.Threading.Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo(cult);
+                    cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 14));
+                    var fdw = CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek;
+                    check("week start: " + cult + " starts the week on " + fdw + " - the first weekday label and the first column agree",
+                        cal.WeekdaysForTest[0].Name == CalendarRules.English.DateTimeFormat.GetAbbreviatedDayName(fdw) && cal.MonthCellsForTest[0].Cell.Day.DayOfWeek == fdw
+                        && cal.MonthCellsForTest.Count(c => c.Cell.Day == new DateTime(2026, 10, 1)) == 1 && (cult == "en-US" ? fdw == DayOfWeek.Sunday : fdw == DayOfWeek.Monday));
+                }
+                System.Threading.Thread.CurrentThread.CurrentCulture = hadCulture;
+
+                // navigation: previous / next / Today, the title, the selected day and the Today button; the slide only with animations on
+                cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 11));
+                int slides0 = cal.SlidesForTest;
+                check("navigation: on today's month with today selected, Today has nothing to do (off)", !cal.TodayButtonEnabledForTest);
+                cal.MonthGoForTest(1);
+                check("navigation: next = November 2026, the 1st selected, Today on", cal.MonthTitleForTest == "November 2026" && cal.MonthCellsForTest.First(c => c.Selected).Cell.Day == new DateTime(2026, 11, 1) && cal.TodayButtonEnabledForTest);
+                cal.MonthGoForTest(-2);
+                check("navigation: two back = September 2026", cal.MonthTitleForTest == "September 2026");
+                cal.MonthGoForTest(-9);
+                check("navigation: across the year = December 2025", cal.MonthTitleForTest == "December 2025");
+                cal.MonthTodayForTest();
+                check("navigation: Today = October 2026 with the 11th selected, Today off again", cal.MonthTitleForTest == "October 2026" && cal.MonthCellsForTest.First(c => c.Selected).Cell.Day == new DateTime(2026, 10, 11) && !cal.TodayButtonEnabledForTest);
+                check("navigation: the month slides in only with Windows animations on (" + (cal.SlidesForTest - slides0) + " slides, animations " + (Motion.Enabled ? "on" : "off") + ")", cal.SlidesForTest - slides0 == (Motion.Enabled ? 4 : 0));
+
+                // clicks: a chip opens its event, "+N more" opens its day
+                cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 11));
+                await Until(() => cal.MonthOverlayForTest.Children.Count > 0);
+                var chip = cal.MonthOverlayForTest.Children.OfType<Grid>().First(g => (g.Tag as CalendarRules.MonthSeg)?.Ev.Id == "d1");
+                chip.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+                check("click: a chip in the grid opens that event's detail (Blackwing Lair)", await Until(() => cal.DetailOpenForTest && cal.DetailForTest?.Id == "d1"));
+                cal.CloseDetailForTest();
+                await Until(() => !cal.DetailOpenForTest);
+                var more = cal.MonthOverlayForTest.Children.OfType<TextBlock>().First(t => cal.MonthCellsForTest[(int)t.Tag].Cell.Day == new DateTime(2026, 10, 20));
+                more.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+                check("click: '+N more' opens its day - all seven raids of the 20th are listed", await Until(() => cal.DayEventsForTest.Count == 7 && cal.MonthCellsForTest.First(c => c.Selected).Cell.Day == new DateTime(2026, 10, 20)));
+            }
+            finally
+            {
+                System.Threading.Thread.CurrentThread.CurrentCulture = hadCulture;
+                cal.ClearValue(WidthProperty); cal.ClearValue(HeightProperty);
+                Width = hadW; Height = hadH; WindowState = hadState;
+                LodgePage.HideCalendarForTest();
+                await Settle();
+            }
         }
     }
 }
