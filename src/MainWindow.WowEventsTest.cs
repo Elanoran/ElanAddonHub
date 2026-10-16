@@ -182,13 +182,13 @@ namespace ElansAddonHub
         {
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow)));
             Session.Select(Session.TextChannels.First(c => c.Id == "general"));
-            await Task.Delay(400);
-            check("session: the 8 WoW events are loaded next to the server's 7 (never mixed into them)", Session.WowEvents.Count == 8 && Session.Events.Count == 7 && Session.Events.All(e => !e.IsWow) && Session.WowEvents.All(e => e.IsWow));
-            check("session: reminders, the sidebar line and the 'today' badge still mean Lodge events", Session.NextEvent.Id == "a1" && LodgePage.CalendarBadgeForTest == "1" && LodgePage.NextEventTextForTest.StartsWith("The Deadmines"));
+            check("session: the 8 WoW events are loaded next to the server's 7 (never mixed into them)", await Until(() => Session.WowEvents.Count == 8 && Session.Events.Count == 7 && Session.Events.All(e => !e.IsWow) && Session.WowEvents.All(e => e.IsWow)));
+            check("session: reminders, the sidebar line and the 'today' badge still mean Lodge events", await Until(() => Session.NextEvent.Id == "a1" && LodgePage.CalendarBadgeForTest == "1" && LodgePage.NextEventTextForTest.StartsWith("The Deadmines")));
             LodgePage.ShowCalendarForTest();
             var cal = LodgePage.CalendarForTest;
             cal.SetModeForTest(true);
-            await Task.Delay(600);
+            // the agenda is drawn and the two holiday pictures have come from the icon cache
+            await Until(() => cal.AgendaGroupsForTest.Count == 7 && VisualsOf<Image>(cal.AgendaListElementForTest).Count(i => i.Source != null) == 2);
             LodgePage.UpdateLayout();
             var groups = cal.AgendaGroupsForTest;
             string Ids(CalendarRules.DayGroup g) => string.Join(",", g.Events.Select(e => e.Title));
@@ -220,7 +220,7 @@ namespace ElansAddonHub
         {
             var cal = LodgePage.CalendarForTest;
             cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 14));
-            await Task.Delay(500);
+            await Until(() => cal.MonthCellsForTest.Count == 42 && cal.MonthOverlayForTest.Children.Count > 0 && cal.MonthGridElementForTest.ActualHeight > 0);
             var cells = cal.MonthCellsForTest;
             MonthCellVM C(int d) => cells.First(c => c.Cell.Day == new DateTime(2026, 10, d));
             check("month: a holiday covers every day from its first to its last (Darkmoon 5-17, Hallow's End 13-21)", Enumerable.Range(5, 17).All(d => C(d).Cell.Bands.Count > 0) && C(4).Cell.Bands.Count == 0 && C(22).Cell.Bands.Count == 0);
@@ -247,8 +247,14 @@ namespace ElansAddonHub
             check("month: the 25th shows the far guild raid as a chip with its time", lay.Chips.Any(s => s.Row * 7 + s.Col == Ix(25) && s.Label == "21:00 Far guild raid"));
             check("month: holidays are bars, never chips (the chips of the 14th are timed events)", lay.Chips.All(s => !s.Ev.IsBand) && lay.Bars.All(s => s.Ev.IsBand));
             check("month: bars in their colour, a holiday's colour is the one its title hashes to", lay.Bars.All(s => s.Ev.ColorKey == "Brush.Cal.Holiday." + CalendarColors.HolidayIndex(s.Ev.Title)));
-            check("drawn: fixed size - the grid is 504 high (6 x 84), every day 80 high, every bar and chip 16 high", Math.Abs(cal.MonthGridElementForTest.ActualHeight - 504) < 0.5
-                && VisualsOf<Grid>(cal.MonthGridElementForTest).Where(g => g.Tag is MonthCellVM).All(g => Math.Abs(g.ActualHeight - 80) < 0.5) && overlay.Children.OfType<Grid>().All(g => Math.Abs(g.ActualHeight - 16) < 0.5));            check("month: the selected day lists the bands first, then the day's events by time", cal.DayEventsForTest.Select(e => e.Title).SequenceEqual(new[] { "Darkmoon Faire", "Hallow's End", "Molten Core resets", "Karazhan run" }));
+            // behaviour, not pixels: the days do not grow with what is in them (all 42 the same height, room for the number and two lines), the grid is just
+            // those six rows, and every bar and chip has one height
+            var dayHs = VisualsOf<Grid>(cal.MonthGridElementForTest).Where(g => g.Tag is MonthCellVM).Select(g => g.ActualHeight).ToList();
+            var segHs = overlay.Children.OfType<Grid>().Select(g => g.ActualHeight).ToList();
+            double gridH = cal.MonthGridElementForTest.ActualHeight;
+            check("drawn: fixed size - every day the same height whatever it holds (" + (dayHs.Count > 0 ? dayHs.Min() + "-" + dayHs.Max() : "none") + "), the grid six such rows (" + gridH + "), every bar and chip one height",
+                dayHs.Count == 42 && dayHs.Max() - dayHs.Min() < 0.5 && dayHs.Min() >= 48 && gridH >= 6 * dayHs.Min() - 0.5 && gridH <= 6 * (dayHs.Min() + 12)
+                && segHs.Count > 0 && segHs.Max() - segHs.Min() < 0.5 && segHs.Min() >= 12);            check("month: the selected day lists the bands first, then the day's events by time", cal.DayEventsForTest.Select(e => e.Title).SequenceEqual(new[] { "Darkmoon Faire", "Hallow's End", "Molten Core resets", "Karazhan run" }));
             cal.SelectDayForTest(new DateTime(2026, 10, 19));
             check("month: on the 19th the day list shows only the running holiday", cal.DayEventsForTest.Select(e => e.Title).SequenceEqual(new[] { "Hallow's End" }));
             cal.SelectDayForTest(new DateTime(2026, 10, 25));
@@ -264,31 +270,25 @@ namespace ElansAddonHub
             void ClickBox(CheckBox cb, bool on) { cb.IsChecked = on; cb.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); }
             check("settings: both switches exist in Settings > Lodge and are on by default", stripBox != null && wowBox != null && !new Settings().EventsStripOff && !new Settings().WowEventsOff);
             cal.SetModeForTest(true);
-            await Task.Delay(200);
+            await Settle();
             cal.ClickWowSwitchForTest(false);
-            await Task.Delay(300);
-            check("toggle: 'Show in-game WoW events' off (on the Calendar page) is stored, and the WoW cards leave the agenda", settings.WowEventsOff && !cal.AgendaGroupsForTest.SelectMany(g => g.Events).Any(e => e.IsWow) && cal.AgendaGroupsForTest.Count == 4);
+            check("toggle: 'Show in-game WoW events' off (on the Calendar page) is stored, and the WoW cards leave the agenda", await Until(() => settings.WowEventsOff && !cal.AgendaGroupsForTest.SelectMany(g => g.Events).Any(e => e.IsWow) && cal.AgendaGroupsForTest.Count == 4));
             check("toggle: the bar stays so it can be switched back on; the Settings switch follows", cal.WowBarVisibleForTest && !cal.WowSwitchOnForTest);
             cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 14));
-            await Task.Delay(300);
-            check("toggle: off -> no bars in the month, and the 14th has no events", cal.MonthCellsForTest.All(c => c.Cell.Bands.Count == 0) && cal.DayEventsForTest.Count == 0);
+            check("toggle: off -> no bars in the month, and the 14th has no events", await Until(() => cal.MonthCellsForTest.All(c => c.Cell.Bands.Count == 0) && cal.DayEventsForTest.Count == 0));
             check("toggle: off -> the strip lists no WoW events either", !LodgePage.StripItemsForTest.Any(e => e.IsWow));
             cal.SetModeForTest(true);
             ClickBox(wowBox, true);
-            await Task.Delay(300);
-            check("toggle: the Settings switch turns them back on (same setting)", !settings.WowEventsOff && cal.AgendaGroupsForTest.SelectMany(g => g.Events).Count(e => e.IsWow) == 7 && cal.WowSwitchOnForTest);
+            check("toggle: the Settings switch turns them back on (same setting)", await Until(() => !settings.WowEventsOff && cal.AgendaGroupsForTest.SelectMany(g => g.Events).Count(e => e.IsWow) == 7 && cal.WowSwitchOnForTest));
             ClickBox(wowBox, false);
             check("toggle: ... and off from Settings", settings.WowEventsOff && Session.ViewEvents.All(e => !e.IsWow));
             ClickBox(wowBox, true);
             LodgePage.HideCalendarForTest();
-            await Task.Delay(400);
-            check("toggle: 'Show upcoming events above the chat' on -> the strip is shown", LodgePage.StripShownForTest && LodgePage.StripVisibleForTest);
+            check("toggle: 'Show upcoming events above the chat' on -> the strip is shown", await Until(() => LodgePage.StripShownForTest && LodgePage.StripVisibleForTest));
             ClickBox(stripBox, false);
-            await Task.Delay(700);
-            check("toggle: off -> stored, the strip collapses to nothing (0 high, collapsed)", settings.EventsStripOff && !LodgePage.StripShownForTest && !LodgePage.StripVisibleForTest && LodgePage.StripHeightForTest == 0);
+            check("toggle: off -> stored, the strip collapses to nothing (0 high, collapsed)", await Until(() => settings.EventsStripOff && !LodgePage.StripShownForTest && !LodgePage.StripVisibleForTest && LodgePage.StripHeightForTest == 0));
             ClickBox(stripBox, true);
-            await Task.Delay(700);
-            check("toggle: on again -> the strip is back at its fixed height", !settings.EventsStripOff && LodgePage.StripShownForTest && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5);
+            check("toggle: on again -> the strip is back at its fixed height", await Until(() => !settings.EventsStripOff && LodgePage.StripShownForTest && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5));
         }
 
         // ---------------------------------------------------------------- detail
@@ -297,18 +297,17 @@ namespace ElansAddonHub
             var cal = LodgePage.CalendarForTest;
             LodgePage.ShowCalendarForTest();
             cal.SetModeForTest(true);
-            await Task.Delay(300);
+            await Settle();
             sent.Clear();
             var hw = Session.WowEvents.First(e => e.Title == "Hallow's End");
             cal.OpenDetail(hw);
-            await Task.Delay(600);
-            check("detail: a WoW event opens the same detail card", cal.DetailOpenForTest && cal.DetailForTest == hw);
+            check("detail: a WoW event opens the same detail card", await Until(() => cal.DetailOpenForTest && cal.DetailForTest == hw && VisualsOf<TextBlock>(cal.DetailBoxForTest).Any(t => t.IsVisible && t.Text == "Trick or treat!")));
             check("detail: dates span the holiday, description and source are stated", hw.DateText == "Tuesday 13 October - Wednesday 21 October" && hw.Note == "Trick or treat!" && hw.ByLine == "From your in-game calendar - only on this PC");
             check("detail: no Edit, no Cancel event, no 'Nobody has answered yet', no answer buttons", !cal.DetailEditVisibleForTest && !cal.DetailCancelVisibleForTest && hw.ActionsVisibility == Visibility.Collapsed && hw.Groups.Count == 0);
             var texts = VisualsOf<TextBlock>(cal.DetailBoxForTest).Where(t => t.IsVisible).Select(t => t.Text).ToList();
             check("detail: drawn - title, 'Holiday' chip, the description; no 'Nobody has answered yet'", texts.Contains("Hallow's End") && texts.Contains("Holiday") && texts.Contains("Trick or treat!") && !texts.Contains("Nobody has answered yet."));
             cal.CloseDetailForTest();
-            await Task.Delay(300);
+            await Until(() => !cal.DetailOpenForTest);
             var kara = Session.WowEvents.First(e => e.Title == "Karazhan run");
             check("detail: my in-game invite is stated, not an answer I can change", kara.MyLine == "In-game invite: going" && kara.StatusText == "Open" && !kara.IsOpen);
             check("detail: opening it sent nothing to the server", sent.Count == 0);
@@ -321,9 +320,9 @@ namespace ElansAddonHub
         async Task WowStrip(Action<string, bool> check, List<Dictionary<string, object>> sent)
         {
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(400);
+            await Settle();
             LodgePage.HideCalendarForTest();
-            await Task.Delay(300);
+            await Until(() => LodgePage.StripShownForTest && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5 && LodgePage.StripItemsForTest.Count == 3);
             var up = CalendarRules.Upcoming(Session.ViewEvents, CalNow);
             check("strip: the next three events within 7 days, soonest first (Deadmines 21:00, Night run 00:30, Molten Core 20:00)", up.Select(e => e.Id).SequenceEqual(new[] { "a1", "h1", "b1" }));
             var all = CalendarRules.Upcoming(Session.ViewEvents, CalNow, 20);
@@ -337,44 +336,38 @@ namespace ElansAddonHub
             check("drawn: titles, times, fills and the answer are on screen", texts.Contains("The Deadmines") && texts.Contains("Today 21:00  ·  in 2 h") && texts.Contains("2/5") && texts.Contains("Going") && texts.Contains("Night run"));
             // WoW events in the strip (the Lodge has little this week)
             Session.FeedForTest(CalWelcome("owner", CalEv("c1", "Guild night", new DateTime(2026, 10, 12, 20, 0, 0, DateTimeKind.Utc), 0, "Bob", false, 0, 0, 0, string.Join(",", CalSig("Dax", "going", ""), CalSig("Zed", "going", ""))), CalMs(CalNow)));
-            await Task.Delay(400);
+            await Until(() => LodgePage.StripItemsForTest.Count == 3 && LodgePage.StripItemsForTest[0].Title == "Guild night");
             var mixed = LodgePage.StripItemsForTest;
             check("strip: a Lodge event and my in-game events share it (Guild night, Text only, Karazhan run)", mixed.Select(e => e.Title).SequenceEqual(new[] { "Guild night", "Text only", "Karazhan run" }) && mixed[1].IsWow && mixed[1].StripFill == "WoW" && mixed[0].StripFill == "2 going");
             check("strip: the height is the same for three pills as for one (fixed 64)", Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5);
             // fewer events: same height, fewer pills
             settings.WowEventsOff = true; Session.WowCalendarSettingsChanged();
-            await Task.Delay(300);
-            check("strip: with WoW events off one pill is left and the strip is still 64 high", LodgePage.StripItemsForTest.Count == 1 && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5);
+            check("strip: with WoW events off one pill is left and the strip is still 64 high", await Until(() => LodgePage.StripItemsForTest.Count == 1 && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5));
             settings.WowEventsOff = false; Session.WowCalendarSettingsChanged();
-            await Task.Delay(200);
+            await Until(() => LodgePage.StripItemsForTest.Count == 3);
             // clicking
             LodgePage.ClickStripItemForTest(0);
-            await Task.Delay(700);
-            check("strip: a click opens that event's detail in the Calendar", LodgePage.CalendarShownForTest && LodgePage.CalendarForTest.DetailOpenForTest && LodgePage.CalendarForTest.DetailForTest.Id == "c1");
+            check("strip: a click opens that event's detail in the Calendar", await Until(() => LodgePage.CalendarShownForTest && LodgePage.CalendarForTest.DetailOpenForTest && LodgePage.CalendarForTest.DetailForTest.Id == "c1"));
             LodgePage.CalendarForTest.CloseDetailForTest();
             LodgePage.HideCalendarForTest();
-            await Task.Delay(300);
+            await Until(() => !LodgePage.CalendarShownForTest && !LodgePage.CalendarForTest.DetailOpenForTest);
             LodgePage.ClickStripItemForTest(1);
-            await Task.Delay(700);
-            check("strip: a click on my in-game event opens its read-only detail", LodgePage.CalendarForTest.DetailOpenForTest && LodgePage.CalendarForTest.DetailForTest.IsWow && LodgePage.CalendarForTest.DetailForTest.Title == "Text only");
+            check("strip: a click on my in-game event opens its read-only detail", await Until(() => LodgePage.CalendarForTest.DetailOpenForTest && LodgePage.CalendarForTest.DetailForTest.IsWow && LodgePage.CalendarForTest.DetailForTest.Title == "Text only"));
             LodgePage.CalendarForTest.CloseDetailForTest();
             LodgePage.HideCalendarForTest();
-            await Task.Delay(300);
+            await Until(() => !LodgePage.CalendarShownForTest && !LodgePage.CalendarForTest.DetailOpenForTest);
             LodgePage.ClickStripAllForTest();
-            await Task.Delay(500);
-            check("strip: 'See all' opens the Calendar", LodgePage.CalendarShownForTest);
+            check("strip: 'See all' opens the Calendar", await Until(() => LodgePage.CalendarShownForTest));
             LodgePage.HideCalendarForTest();
-            await Task.Delay(300);
+            await Until(() => !LodgePage.CalendarShownForTest);
             // nothing to show -> nothing at all
             Session.FeedForTest(CalWelcome("owner", "", CalMs(CalNow)));
             WriteWow(WowLua(WowEv("Hallow's End", "holiday", RealmUtc(13, 0, 0), RealmUtc(20, 23, 59), "2026-10-13 00:00", "2026-10-20 23:59", true, IconHallow)));
             Session.ReloadWowEvents(true);
-            await Task.Delay(700);
-            check("strip: no timed events this week (only a holiday) -> it collapses to nothing: 0 high, not visible, no pills", !LodgePage.StripShownForTest && !LodgePage.StripVisibleForTest && LodgePage.StripHeightForTest == 0 && LodgePage.StripItemsForTest.Count == 0);
+            check("strip: no timed events this week (only a holiday) -> it collapses to nothing: 0 high, not visible, no pills", await Until(() => !LodgePage.StripShownForTest && !LodgePage.StripVisibleForTest && LodgePage.StripHeightForTest == 0 && LodgePage.StripItemsForTest.Count == 0));
             WriteWow(WowLua(WowFixtureEvents()));
             Session.ReloadWowEvents(true);
-            await Task.Delay(700);
-            check("strip: the fixture's own events bring it back", LodgePage.StripShownForTest && LodgePage.StripItemsForTest.Count == 3 && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5);
+            check("strip: the fixture's own events bring it back", await Until(() => LodgePage.StripShownForTest && LodgePage.StripItemsForTest.Count == 3 && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5));
         }
 
         // ---------------------------------------------------------------- the strip must not move the message list
@@ -387,9 +380,7 @@ namespace ElansAddonHub
             Session.FeedForTest(CalWelcome("owner", "", CalMs(CalNow), "2.11.0", true, history));
             Session.Select(Session.TextChannels.First(c => c.Id == "general"));
             Session.ReloadWowEvents(true);
-            await Task.Delay(700);
-            LodgePage.UpdateLayout();
-            check("noshift: no events -> no strip", !LodgePage.StripShownForTest && LodgePage.StripHeightForTest == 0);
+            check("noshift: no events -> no strip", await Until(() => !LodgePage.StripShownForTest && LodgePage.StripHeightForTest == 0 && LodgePage.MessageScrollableForTest > 400));
             double scrollable = LodgePage.MessageScrollableForTest;
             check("noshift: the history is long enough to scroll (" + Math.Round(scrollable) + " px)", scrollable > 400);
 
@@ -408,37 +399,43 @@ namespace ElansAddonHub
 
             // reading in the middle of the history
             LodgePage.ScrollMessagesToForTest(scrollable / 2);
-            await Task.Delay(300);
+            await Until(() => Math.Abs(LodgePage.MessageOffsetForTest - scrollable / 2) < 2);
+            await Settle();
             int row = 24;
             double y0 = LodgePage.FirstMessageYForTest(row);
             double off0 = LodgePage.MessageOffsetForTest;
             check("noshift: a message is in view while reading (y=" + Math.Round(y0) + ")", !double.IsNaN(y0));
             Session.FeedForTest("{\"t\":\"cal:events\",\"events\":[" + CalEv("s1", "Molten Core", new DateTime(2026, 10, 12, 18, 0, 0, DateTimeKind.Utc), 180, "Bob", true, 2, 3, 5, "") + "]}");
             double worstShow = await Worst(row, y0, 40);
-            await Task.Delay(300);
+            await Until(() => LodgePage.StripShownForTest && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5);
+            await Settle();
             double y1 = LodgePage.FirstMessageYForTest(row);
             check("noshift: the strip appears (64 high) and the message being read stays within 1 px the whole time (worst " + worstShow.ToString("0.0", CultureInfo.InvariantCulture) + " px)", LodgePage.StripShownForTest && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5 && worstShow <= 1.5 && Math.Abs(y1 - y0) <= 1);
             check("noshift: the list's offset moved by the strip's height instead (" + Math.Round(LodgePage.MessageOffsetForTest - off0) + " px)", Math.Abs(LodgePage.MessageOffsetForTest - off0 - 64) < 1.5);
             Session.FeedForTest("{\"t\":\"cal:events\",\"events\":[" + CalCancelled("s1", "Molten Core", new DateTime(2026, 10, 12, 18, 0, 0, DateTimeKind.Utc), "cancelled") + "]}");
             double worstHide = await Worst(row, y0, 40);
-            await Task.Delay(300);
+            await Until(() => !LodgePage.StripShownForTest && LodgePage.StripHeightForTest == 0);
+            await Settle();
             double y2 = LodgePage.FirstMessageYForTest(row);
             check("noshift: it disappears again (0 high, collapsed) and the message stays put (worst " + worstHide.ToString("0.0", CultureInfo.InvariantCulture) + " px)", !LodgePage.StripShownForTest && LodgePage.StripHeightForTest == 0 && worstHide <= 1.5 && Math.Abs(y2 - y0) <= 1 && Math.Abs(LodgePage.MessageOffsetForTest - off0) < 1.5);
             // following the newest messages: still at the bottom afterwards
             LodgePage.ScrollToEndForTest();
-            await Task.Delay(300);
+            await Until(() => Math.Abs(LodgePage.MessageScrollableForTest - LodgePage.MessageOffsetForTest) <= 1.5);
             Session.FeedForTest("{\"t\":\"cal:events\",\"events\":[" + CalEv("s2", "Blackwing Lair", new DateTime(2026, 10, 13, 18, 0, 0, DateTimeKind.Utc), 180, "Bob", true, 2, 3, 5, "") + "]}");
-            await Task.Delay(700);
+            // the strip must be fully open (the animation done) before "still at the bottom" means anything
+            await Until(() => LodgePage.StripShownForTest && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5);
+            await Settle();
             check("noshift: at the bottom the list stays at the bottom when the strip appears", LodgePage.StripShownForTest && Math.Abs(LodgePage.MessageScrollableForTest - LodgePage.MessageOffsetForTest) <= 1.5);
             Session.FeedForTest("{\"t\":\"cal:events\",\"events\":[" + CalCancelled("s2", "Blackwing Lair", new DateTime(2026, 10, 13, 18, 0, 0, DateTimeKind.Utc), "cancelled") + "]}");
-            await Task.Delay(700);
+            await Until(() => !LodgePage.StripShownForTest && LodgePage.StripHeightForTest == 0);
+            await Settle();
             check("noshift: ... and when it goes", !LodgePage.StripShownForTest && Math.Abs(LodgePage.MessageScrollableForTest - LodgePage.MessageOffsetForTest) <= 1.5);
             // the strip's content changing while it stays does not change its height
             Session.FeedForTest("{\"t\":\"cal:events\",\"events\":[" + CalEv("s3", "Karazhan", new DateTime(2026, 10, 12, 18, 0, 0, DateTimeKind.Utc), 180, "Bob", true, 1, 1, 3, "") + "]}");
-            await Task.Delay(500);
+            await Until(() => LodgePage.StripShownForTest && LodgePage.StripItemsForTest.Count == 1 && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5);
             double h1 = LodgePage.StripHeightForTest;
             Session.FeedForTest("{\"t\":\"cal:events\",\"events\":[" + CalEv("s4", "Zul'Gurub", new DateTime(2026, 10, 12, 19, 0, 0, DateTimeKind.Utc), 180, "Bob", true, 1, 1, 3, "") + "," + CalEv("s5", "Stratholme", new DateTime(2026, 10, 12, 20, 0, 0, DateTimeKind.Utc), 180, "Bob", true, 1, 1, 3, "") + "]}");
-            await Task.Delay(300);
+            await Until(() => LodgePage.StripItemsForTest.Count == 3);
             check("noshift: one pill, then three pills: the strip keeps its height (" + h1 + " -> " + LodgePage.StripHeightForTest + ")", Math.Abs(h1 - 64) < 0.5 && Math.Abs(LodgePage.StripHeightForTest - 64) < 0.5 && LodgePage.StripItemsForTest.Count == 3);
         }
 
@@ -446,16 +443,14 @@ namespace ElansAddonHub
         async Task WowOldServer(Action<string, bool> check)
         {
             Session.FeedForTest(CalWelcome("owner", "", CalMs(CalNow), "2.10.0", false));
-            await Task.Delay(300);
-            check("old server: no calendar feature -> no strip, no calendar row (WoW events need the Lodge calendar page)", !LodgePage.StripShownForTest && LodgePage.StripHeightForTest == 0 && !LodgePage.CalendarRowVisibleForTest && Session.StripEvents(CalNow).Count == 0);
+            check("old server: no calendar feature -> no strip, no calendar row (WoW events need the Lodge calendar page)", await Until(() => !LodgePage.StripShownForTest && LodgePage.StripHeightForTest == 0 && !LodgePage.CalendarRowVisibleForTest && Session.StripEvents(CalNow).Count == 0));
             // no saved calendar at all (the addon is older / the game never ran): nothing to show, no bar
             try { File.Delete(WowSvFile()); } catch { }
             WowCalendar.ResetCache();
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(400);
+            await Settle();
             LodgePage.ShowCalendarForTest();
-            await Task.Delay(400);
-            check("no addon data: the WoW list is empty, the switch bar stays out of the way, the agenda is just the Lodge's", Session.WowEvents.Count == 0 && !Session.WowAvailable && !LodgePage.CalendarForTest.WowBarVisibleForTest && LodgePage.CalendarForTest.AgendaGroupsForTest.Count == 4);
+            check("no addon data: the WoW list is empty, the switch bar stays out of the way, the agenda is just the Lodge's", await Until(() => Session.WowEvents.Count == 0 && !Session.WowAvailable && !LodgePage.CalendarForTest.WowBarVisibleForTest && LodgePage.CalendarForTest.AgendaGroupsForTest.Count == 4));
             LodgePage.HideCalendarForTest();
         }
     }

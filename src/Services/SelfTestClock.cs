@@ -22,10 +22,11 @@ namespace ElansAddonHub
         {
             var now = Sw.Elapsed.TotalSeconds;
             var gap = now - last; last = now;
-            if (gap >= 1.0) lock (Gaps) Gaps.Add(Tuple.Create(gap, section, what ?? ""));
+            if (gap >= 0.5) lock (Gaps) Gaps.Add(Tuple.Create(gap, section, what ?? ""));
         }
 
-        // PNG renders for docs/design are not assertions: they run in a -Full run or when ELANSHUB_SHOTS=1 (ELANSHUB_SHOTS=0 skips them even then)
+        // PNG renders for docs/design are not assertions: they run only when ELANSHUB_SHOTS=1 (or a picture run sets another *_SHOTS variable); a -Full run
+        // does not take them any more (they cost minutes of renders, encodes and settle waits that check nothing)
         public static bool Full;
         public static int ShotsTaken, ShotsSkipped; public static double ShotSeconds;
         static bool? envShots;
@@ -34,8 +35,8 @@ namespace ElansAddonHub
             get
             {
                 var flag = Environment.GetEnvironmentVariable("ELANSHUB_SHOTS");
-                if (flag == "0") return false;   // forces them off, even in a -Full run
-                if (Full || flag == "1") return true;
+                if (flag == "0") return false;   // forces them off, even in a picture run
+                if (flag == "1") return true;
                 if (envShots.HasValue) return envShots.Value;
                 envShots = false;
                 // the design / browser / video picture runs exist to make pictures
@@ -45,11 +46,11 @@ namespace ElansAddonHub
             }
         }
 
-        public static string Report(int top = 40)
+        public static string Report(int top = 150)
         {
             List<Tuple<double, string, string>> g;
             lock (Gaps) g = Gaps.OrderByDescending(x => x.Item1).Take(top).ToList();
-            return "pictures: " + ShotsTaken + " taken in " + ShotSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " s, " + ShotsSkipped + " skipped (ELANSHUB_SHOTS=1 or -Full takes them)\r\n"
+            return "pictures: " + ShotsTaken + " taken in " + ShotSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " s, " + ShotsSkipped + " skipped (ELANSHUB_SHOTS=1 takes them)\r\n"
                 + string.Join("\r\n", g.Select(x => "slow " + x.Item1.ToString("0.0", CultureInfo.InvariantCulture) + " s before [" + x.Item2 + "] " + (x.Item3.Length > 110 ? x.Item3.Substring(0, 110) : x.Item3)));
         }
     }

@@ -57,7 +57,15 @@ namespace ElansAddonHub
         {
             var h = GetStdHandle(-11);
             if (h == IntPtr.Zero || h == new IntPtr(-1)) AttachConsole(-1);
-            var text = string.Join("\r\n", TestScope.All.Select(n => n.PadRight(15) + TestScope.Info[n])) + "\r\n";
+            // --list --changed <base> [--repo dir] / --list --only a,b: what such a run would select, without running it (Tools\selftest.ps1 -WhatIf)
+            var args = Environment.GetCommandLineArgs();
+            string text;
+            if (TestScope.ArgValue(args, "--changed") != null || TestScope.ArgValue(args, "--only") != null || TestScope.ArgValue(args, "--paths") != null)
+            {
+                var picked = TestScope.FromArgs(args, out var explain, out var error);
+                text = (error ?? explain) + "\r\n" + picked.Count + " section(s): " + string.Join(",", picked) + "\r\n";
+            }
+            else text = string.Join("\r\n", TestScope.All.Select(n => n.PadRight(15) + TestScope.Info[n])) + "\r\n";
             using (var o = Console.OpenStandardOutput()) { var b = System.Text.Encoding.UTF8.GetBytes(text); o.Write(b, 0, b.Length); o.Flush(); }
         }
 

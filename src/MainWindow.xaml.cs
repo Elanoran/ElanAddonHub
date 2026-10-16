@@ -308,7 +308,7 @@ namespace ElansAddonHub
                 foreach (var sec in new[] { "addons", "lodge", "voice", "overlay", "about" })
                 {
                     SettingsPage.Show(sec);
-                    await Task.Delay(sec == "about" ? 2200 : 300);
+                    await ShotWait(sec == "about" ? 2200 : 300);   // only the pictures need the page settled
                     Snapshot(System.IO.Path.Combine(dir, "3-settings-" + sec + ".png"));
                 }
                 SettingsPage.Show("general");
@@ -690,6 +690,29 @@ namespace ElansAddonHub
 
         // the wait that lets a window settle for a design picture: only when pictures are taken (ELANSHUB_SHOTS=1 / -Full), otherwise nothing reads them
         static Task ShotWait(int ms) => SelfTestClock.ShotsOn ? Task.Delay(ms) : Task.CompletedTask;
+
+        // the self-test's condition wait: instead of a fixed sleep before a check, poll the condition (layout brought up to date first) every
+        // ~15 ms until it holds or the timeout runs out, and return its last value - Check("...", await Until(() => cond)). Fast when the app
+        // is fast, patient when the machine is busy; a debounce or an animation simply takes as long as it takes.
+        async Task<bool> Until(Func<bool> cond, int timeoutMs = 4000)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (true)
+            {
+                UpdateLayout();
+                bool v;
+                try { v = cond(); } catch (Exception) { v = false; }
+                if (v || sw.ElapsedMilliseconds >= timeoutMs) return v;
+                await Task.Delay(15);
+            }
+        }
+
+        // a short yield for the work an action queued on the dispatcher (bindings, layout, a Loaded handler) - not a timer
+        async Task Settle()
+        {
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            UpdateLayout();
+        }
 
         void Snapshot(string file)
         {

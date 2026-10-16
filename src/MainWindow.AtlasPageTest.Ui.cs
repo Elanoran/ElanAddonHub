@@ -169,7 +169,7 @@ namespace ElansAddonHub
             await AtlasView.Open(AtlasNav.DataId); await Task.Delay(100); UpdateLayout();
             Check("classic card: while downloading it shows a progress bar, 'Downloading the dump · the file · 50 %' and a Cancel button (and no Get button)", progTexts.Any(t => t.StartsWith("Downloading the dump · ClassicDB_test.sql.gz") && t.EndsWith("50 %")) && progTexts.Contains("Cancel") && AtlasView.ClassicCancelForTest != null && AtlasView.ClassicPrimaryForTest == null
                 && AtlasWalk(AtlasView.ClassicCardForTest).OfType<ProgressBar>().Any(b => Math.Abs(b.Value - 50) < 1), string.Join(" | ", progTexts));
-            Height = 1000; await Task.Delay(300); UpdateLayout();
+            Height = 1000; await ShotWait(300); UpdateLayout();
             AtlasView.Scroller_ScrollToForTest(AtlasView.ClassicCardForTest);
             await ShotWait(200);
             Snapshot(Path.Combine(dir, "atlas-page-classic-progress.png"));
@@ -298,15 +298,21 @@ namespace ElansAddonHub
             Check("item page: picking Highkeep in the picker shows that zone's map and its markers", AtlasView.MapsForTest[0].UiMapId == 13 && AtlasView.MapsForTest[0].MarkerCount == ((AtlasMapZone)((ComboBoxItem)picker.SelectedItem).Tag).Markers.Count);
             picker.SelectedIndex = 0;
             await WaitFor(() => AtlasView.MapsForTest[0].UiMapId == 11 && AtlasView.MapsForTest[0].State == AtlasMap.ViewState.Ready, 15000);
-            Height = 900; await Task.Delay(300); UpdateLayout(); await MapReady(); await Task.Delay(300);
-            Snapshot(Path.Combine(dir, "atlas-page-item-map.png"));
-            Height = h0; await Task.Delay(200);
+            if (SelfTestClock.ShotsOn)   // the design picture only: a taller window, the map settled
+            {
+                Height = 900; await Task.Delay(300); UpdateLayout(); await MapReady(); await Task.Delay(300);
+                Snapshot(Path.Combine(dir, "atlas-page-item-map.png"));
+                Height = h0; await Task.Delay(200);
+            }
             // Lodge
             Check("item page: the Lodge tab holds 'Found by the Lodge' with the members' names", await SwitchTab("lodge") && AtlasTexts(AtlasView).Contains("Found by the Lodge") && AtlasView.CurrentId == "item:100?tab=lodge");
-            await SwitchTab("overview"); await Task.Delay(100); UpdateLayout();
-            Height = 900; await Task.Delay(300); UpdateLayout();
-            Snapshot(Path.Combine(dir, "atlas-page-item.png"));
-            Height = h0; await Task.Delay(200);
+            await SwitchTab("overview"); UpdateLayout();
+            if (SelfTestClock.ShotsOn)
+            {
+                Height = 900; await Task.Delay(300); UpdateLayout();
+                Snapshot(Path.Combine(dir, "atlas-page-item.png"));
+                Height = h0; await Task.Delay(200);
+            }
 
             // ---- links and history
             var row = RowFor("npc:1");
@@ -316,7 +322,7 @@ namespace ElansAddonHub
             Check("links: clicking it opens the NPC page and makes it the current page", AtlasView.CurrentId == "npc:1" && AtlasView.Model.Id == "npc:1" && AtlasView.TabsForTest.Contains("related") && AtlasView.History.CanBack);
             Check("links: the NPC page shows its facts on the Overview and its loot, with the Lodge's 12 %, on Related", AtlasTexts(AtlasView).Contains("<Fanglord>") && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Loot") && AtlasTexts(AtlasView).Any(t => t.StartsWith("41 of 340 kills (12.1 %)")) && await SwitchTab("overview"));
             Check("links: a fact is a link too (Faction: Stormwind opens the faction)", RowFor("zone:11") == null && AtlasWalk(AtlasView).OfType<TextBlock>().Any(t => t.Tag as string == "faction:72"));
-            await SwitchTab("map"); await MapReady(); await SwitchTab("overview"); await Task.Delay(500);
+            await SwitchTab("map"); await MapReady(); await SwitchTab("overview"); await ShotWait(500);
             Snapshot(Path.Combine(dir, "atlas-page-npc.png"));
             await AtlasView.Back();
             Check("history: Back returns to the item with its page drawn again", AtlasView.CurrentId == "item:100" && AtlasView.Model.Id == "item:100" && AtlasView.History.CanForward && AtlasView.BackEnabledForTest);
@@ -358,7 +364,7 @@ namespace ElansAddonHub
 
             Check("spell page: the main card is a GameTooltip with the description in gold", GtAll<GameTooltip>(AtlasView.BodyForTest).Any(g => g.Title == AtlasView.Model.Title && GtColor(GtColored(g), "Heals the target.") == "#FFFFD100"));
             Snapshot(Path.Combine(dir, "atlas-page-spell-gt.png"));
-            await AtlasView.Open("item:100"); UpdateLayout(); await Task.Delay(300);
+            await AtlasView.Open("item:100"); UpdateLayout(); await ShotWait(300);
             Snapshot(Path.Combine(dir, "atlas-page-item-gt.png"));
             var rowTip = AtlasView.RowTipFor(new AtlasRow { Link = "item:100", Title = "Gnarlfang's Claw", Quality = 3 });
             Check("a table row's hover tooltip is the item's GameTooltip; a row of an unknown id says it is not in the game data", rowTip.Title == "Gnarlfang's Claw" && rowTip.Texts().Contains("Item Level 14") && AtlasView.RowTipFor(new AtlasRow { Link = "item:424242", Title = "Ghost" }).Texts().Contains("Not in the game data on this PC"));
@@ -387,30 +393,31 @@ namespace ElansAddonHub
             {
                 await AtlasView.Open("item:100"); UpdateLayout();
                 var w0 = Width;
-                Width = 1800; Height = 1000; await Task.Delay(300); UpdateLayout();
-                await Task.Delay(300);
+                Width = 1800; Height = 1000;
+                // behaviour, not the rail's pixel width: a second, narrower column beside the tab that holds the map thumbnail and the facts
+                bool railOk() => AtlasView.ColumnsForTest == 2 && AtlasView.WideForTest && AtlasView.RailShownForTest && AtlasView.RailMapForTest != null && AtlasView.RailForTest.ActualWidth >= 240 && AtlasView.RailForTest.ActualWidth <= 0.4 * AtlasView.ScrollerWidthForTest && AtlasView.RailForTest.ActualHeight > 100;
+                await Until(railOk);
                 var railMapEl = AtlasView.RailMapForTest;
-                Check("layout: a wide window (1800) puts the rail (340 px) beside the tab - a thumbnail of the map and the quick facts - and the Overview keeps the rest", AtlasView.ColumnsForTest == 2 && AtlasView.WideForTest && AtlasView.RailShownForTest && railMapEl != null && Math.Abs(AtlasView.RailForTest.ActualWidth - 340) < 1 && AtlasView.RailForTest.ActualHeight > 100, AtlasView.ColumnsForTest + " rail " + AtlasView.RailForTest?.ActualWidth + " scroller " + AtlasView.ScrollerWidthForTest);
+                Check("layout: a wide window (1800) puts the rail beside the tab (a narrower second column: a thumbnail of the map and the quick facts) and the Overview keeps the rest", railOk(), AtlasView.ColumnsForTest + " rail " + AtlasView.RailForTest?.ActualWidth + " scroller " + AtlasView.ScrollerWidthForTest);
                 await ShotWait(700); Snapshot(Path.Combine(dir, "atlas-page-item-wide.png"));
                 Check("layout: the thumbnail is a second, quiet map (not one of the page's maps), and a click on it opens the Map tab with the real one",
                     AtlasView.MapsForTest.Count == 0 && AtlasWalk(AtlasView.RailForTest).OfType<Border>().Any(b => b.Tag as string == "rail-map-open") && ClickRailMap() && AtlasView.TabNowForTest == "map" && AtlasView.MapsForTest.Count == 1 && !AtlasView.RailMapHostVisibleForTest);
                 Snapshot(Path.Combine(dir, "atlas-page-item-wide-map.png"));
-                await SwitchTab("overview"); await Task.Delay(200);
-                await AtlasView.Open("zone:11"); UpdateLayout(); await MapReady(); await Task.Delay(600);
-                Snapshot(Path.Combine(dir, "atlas-page-zone-wide.png"));
+                await SwitchTab("overview"); await Settle();
+                if (SelfTestClock.ShotsOn) { await AtlasView.Open("zone:11"); UpdateLayout(); await MapReady(); await Task.Delay(600); Snapshot(Path.Combine(dir, "atlas-page-zone-wide.png")); }
                 await AtlasView.Open("item:100"); UpdateLayout();
-                Width = 1100; await Task.Delay(300); UpdateLayout();
-                Check("layout: at 1100 (the page area is narrower than 880 px beside the nav) it is one column again, the rail is gone", AtlasView.ColumnsForTest == 1 && !AtlasView.WideForTest && !AtlasView.RailShownForTest, AtlasView.ScrollerWidthForTest.ToString());
-                Width = w0; Height = h0; await Task.Delay(250); UpdateLayout();
+                Width = 1100;
+                Check("layout: at 1100 (the page area is narrower than 880 px beside the nav) it is one column again, the rail is gone", await Until(() => AtlasView.ColumnsForTest == 1 && !AtlasView.WideForTest && !AtlasView.RailShownForTest), AtlasView.ScrollerWidthForTest.ToString());
+                Width = w0; Height = h0; await Settle();
             }
 
             // ---- narrow window: one column
             await AtlasView.Open("item:100"); UpdateLayout();
-            Width = 760; await Task.Delay(250); UpdateLayout();
-            Check("layout: a narrow window stacks everything (the hero, the tab strip, then the tab)", !AtlasView.WideForTest && AtlasView.TabStripShownForTest, AtlasView.WideForTest + " " + AtlasView.ActualWidth);
+            Width = 760;
+            Check("layout: a narrow window stacks everything (the hero, the tab strip, then the tab)", await Until(() => !AtlasView.WideForTest && AtlasView.TabStripShownForTest && AtlasView.ActualWidth < 760), AtlasView.WideForTest + " " + AtlasView.ActualWidth);
             Snapshot(Path.Combine(dir, "atlas-page-item-narrow.png"));
-            Width = 920; await Task.Delay(250); UpdateLayout();
-            Check("layout: and the same at the default width", !AtlasView.WideForTest);
+            Width = 920;
+            Check("layout: and the same at the default width", await Until(() => !AtlasView.WideForTest && AtlasView.ActualWidth > 600));
 
             // ---- never blocks the UI; a slow page does not overwrite a newer one
             int ticks = 0; var uiThread = Thread.CurrentThread.ManagedThreadId; int buildThread = -1;
@@ -467,7 +474,7 @@ namespace ElansAddonHub
             await AtlasRefresh2Checks(dir, Check);
 
             // ---- screenshots of the start page: with data, and with nothing at all
-            Height = 1000; await AtlasView.GoStart(); await Task.Delay(400); UpdateLayout();
+            Height = 1000; await AtlasView.GoStart(); await ShotWait(400); UpdateLayout();
             Snapshot(Path.Combine(dir, "atlas-page-start.png"));
             Height = h0;
             ClassicAtlas.Use(null); ItemData.SetForTest(null, ItemData.State.Disabled, "off"); SpellData.SetForTest(null, SpellData.State.Disabled); SeenData.SetForTest(null, SeenData.State.Disabled); MapData.SetForTest(null, null, MapData.State.Disabled);

@@ -170,7 +170,8 @@ namespace ElansAddonHub
             check("sheet: Copy as web link gives https://host/lodge/#join=host/lodge|invite", clip.Count == 1 && clip[0] == web && form.WebLinkForTest == web && form.TitleForTest.StartsWith("Web link copied"), string.Join(" | ", clip));
             check("sheet: ...and the secret is only after the # in both", elans.IndexOf(InvA, StringComparison.Ordinal) > elans.IndexOf('#') && web.IndexOf(InvA, StringComparison.Ordinal) > web.IndexOf('#') && !web.Contains("?"));
             sheet.Close();
-            await Task.Delay(300);
+            await Until(() => !sheet.IsOpen);
+            await Settle();
             sheet.Open();
             check("sheet: opened again, the old link is gone (it is shown once)", !form.ResultVisibleForTest && form.LinkForTest == "" && form.WebLinkForTest == null && form.NameForTest == "");
 
@@ -205,7 +206,7 @@ namespace ElansAddonHub
             Session.FeedForTest("{\"t\":\"error\",\"text\":\"Your rank can't do that\"}");
             check("sheet: a refusal from the server shows in the sheet itself", form.StatusForTest == "Your rank can't do that", form.StatusForTest);
             sheet.Close();
-            await Task.Delay(300);
+            await Until(() => !sheet.IsOpen);
             s.LodgeUrl = Inv2Url;
         }
 
@@ -349,7 +350,7 @@ namespace ElansAddonHub
             await Task.Delay(100);
             check("card: ...and the answer shows as a link for Vera", sheet.FormForTest.ResultVisibleForTest && sheet.FormForTest.TitleForTest.Contains("Vera") && sheet.FormForTest.LinkForTest.EndsWith("|" + InvA));
             sheet.Close();
-            await Task.Delay(300);
+            await Until(() => !sheet.IsOpen);
 
             sent.Clear();
             shows("Bob", "officer", false);
@@ -357,7 +358,7 @@ namespace ElansAddonHub
             c = Inv2Last(sent, "admin.invite.create");
             check("card: owner -> Bob (Officer): the rank is Officer, not the default Member", c != null && c.Str("name") == "Bob" && c.Str("role") == "officer");
             sheet.Close();
-            await Task.Delay(300);
+            await Until(() => !sheet.IsOpen);
 
             Session.FeedForTest(Inv2Welcome("officer", true));
             sent.Clear();
@@ -366,7 +367,7 @@ namespace ElansAddonHub
             c = Inv2Last(sent, "admin.invite.create");
             check("card: officer -> Mia (Member): a person invite as Member", c != null && c.Str("kind") == "person" && c.Str("name") == "Mia" && c.Str("role") == "member");
             sheet.Close();
-            await Task.Delay(300);
+            await Until(() => !sheet.IsOpen);
 
             // a rank the officer may not give is never sent as 'member' instead
             sent.Clear();
@@ -374,7 +375,7 @@ namespace ElansAddonHub
             check("card: an officer asked for a device link on an officer sends NOTHING (never falls back to another rank) and says why",
                 !sent.Any(f => f.Str("t") == "admin.invite.create") && sheet.FormForTest.StatusForTest.Contains("below you"), sheet.FormForTest.StatusForTest);
             sheet.Close();
-            await Task.Delay(300);
+            await Until(() => !sheet.IsOpen);
         }
 
         // ---------------------------------------------------------------- "Create a lodge" guide
@@ -435,8 +436,7 @@ namespace ElansAddonHub
             s.LodgeUrl = oldUrl;
             var ownerLink = "elanshub://lodge/join#example.org/lodge|" + InvA;
             g.LinkBoxForTest = ownerLink; g.NextForTest();
-            await Task.Delay(300);
-            check("guide: a good owner link closes the guide and empties the box (the secret does not stay in it)", !g.IsOpen && g.LinkBoxForTest == "");
+            check("guide: a good owner link closes the guide and empties the box (the secret does not stay in it)", await Until(() => !g.IsOpen && g.LinkBoxForTest == ""));
             check("guide: ...it feeds the normal join: the Lodge join screen with 'Your new lodge: example.org/lodge'", lodge.JoinPanelVisibleForTest && lodge.IncomingTitleForTest == "Your new lodge: example.org/lodge", lodge.IncomingTitleForTest);
             check("guide: ...it says you become the Guild Master and that nothing happens until Join", (lodge.IncomingTextForTest ?? "").Contains("Guild Master") && (lodge.IncomingTextForTest ?? "").Contains("owner link"));
             check("guide: ...the name box is empty and captioned for the Guild Master's name", lodge.NameBoxForTest == "" && lodge.NameCaptionForTest.Contains("Guild Master"), lodge.NameCaptionForTest);
@@ -698,8 +698,7 @@ namespace ElansAddonHub
             Session.FeedForTest(Inv2Welcome("owner", true));
             ShowTab("settings");
             SettingsPage.Show("gm");
-            await Task.Delay(300);
-            check("lodgecard: the Guild Master sees 'Your lodge', filled from the welcome", SettingsPage.GmOwnerOnlyVisibleForTest && SettingsPage.LodgeNameBoxForTest == "The Silver Lodge" && SettingsPage.LodgeWelcomeBoxForTest == "Welcome in. Be kind.", SettingsPage.LodgeNameBoxForTest);
+            check("lodgecard: the Guild Master sees 'Your lodge', filled from the welcome", await Until(() => SettingsPage.GmOwnerOnlyVisibleForTest && SettingsPage.LodgeNameBoxForTest == "The Silver Lodge" && SettingsPage.LodgeWelcomeBoxForTest == "Welcome in. Be kind."), SettingsPage.LodgeNameBoxForTest);
             check("lodgecard: Save is on for a 2.12 server", SettingsPage.LodgeInfoSaveEnabledForTest);
             check("lodgecard: the boxes stop typing at the server's caps (40 and 280)", SettingsPage.LodgeNameMaxForTest == LodgeSession.MaxLodgeName && SettingsPage.LodgeWelcomeMaxForTest == LodgeSession.MaxLodgeWelcome && LodgeSession.MaxLodgeName == 40 && LodgeSession.MaxLodgeWelcome == 280 && LodgeSession.MaxLodgeWelcomeLines == 4);
 
@@ -743,11 +742,9 @@ namespace ElansAddonHub
             // not for officers or members; not on an old server
             Session.FeedForTest(Inv2Welcome("officer", true));
             ShowTab("settings"); SettingsPage.Show("gm");
-            await Task.Delay(200);
-            check("lodgecard: an officer sees the Guild Master page but NOT 'Your lodge' (owner only)", SettingsPage.NavGmVisibleForTest && !SettingsPage.GmOwnerOnlyVisibleForTest);
+            check("lodgecard: an officer sees the Guild Master page but NOT 'Your lodge' (owner only)", await Until(() => SettingsPage.NavGmVisibleForTest && !SettingsPage.GmOwnerOnlyVisibleForTest));
             Session.FeedForTest(Inv2Welcome("member", false));
-            await Task.Delay(100);
-            check("lodgecard: a member has no Guild Master page at all", !SettingsPage.NavGmVisibleForTest && !SettingsPage.GmOwnerOnlyVisibleForTest);
+            check("lodgecard: a member has no Guild Master page at all", await Until(() => !SettingsPage.NavGmVisibleForTest && !SettingsPage.GmOwnerOnlyVisibleForTest));
             Session.FeedForTest(Inv2Welcome("owner", true, v212: false));
             ShowTab("settings"); SettingsPage.Show("gm");
             await Task.Delay(200);

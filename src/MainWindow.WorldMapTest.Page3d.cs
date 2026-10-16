@@ -140,8 +140,7 @@ namespace ElansAddonHub
                 await WaitFor(() => copied != null, 8000);
                 Check("borders: with the terrain read, \"Navigate here\" at the same spot names the zone the chunk really belongs to (Westmark = Greenvale's map, 11) instead of the nearest rectangle centre", copied != null && copied.StartsWith("/etk way 11 "), copied + " (before: " + wayBox + ")");
                 copied = null;
-                var png2 = await WorldMapView.CaptureForTest();
-                if (png2 != null) File.WriteAllBytes(P("worldmap-borders-2d.png"), png2);
+                if (SelfTestClock.ShotsOn) { var png2 = await WorldMapView.CaptureForTest(); if (png2 != null) File.WriteAllBytes(P("worldmap-borders-2d.png"), png2); }
 
                 // ---------------------------------------------------------------- the switch to 3D
                 await AtlasView.Open("worldmap:0?x=250&y=500&z=4.5&m=2");
@@ -238,10 +237,13 @@ namespace ElansAddonHub
                     // the emblems in 3D: the same SVG badges as DOM overlays; a fixture picture of the three close to the camera
                     await WmEval("(function(){ var s=JSON.parse(window.wm3.state()); var c=window.wm3.xz2ll(s.tx, s.tz); function it(dx, f, nm){ return {lat:c[0], lng:c[1]+dx, name:nm, f:f, g:'fm.'+(f==='a'?'alliance':f==='h'?'horde':'neutral'), tip:'Flight master', extra:''}; } window.wm3.feedForTest({t:'layer', id:'fm', kind:'markers', items:[it(-0.5,'a','Alliance'), it(0,'h','Horde'), it(0.5,'n','Neutral')]}); return 1; })()");
                     await WmEval("['fm.horde','fm.alliance','fm.neutral'].forEach(function(k){ window.wm3.setOnForTest(k, true) })");
-                    await Task.Delay(2500);
+                    // the three emblems arrive as DOM overlays: wait for them instead of a fixed 2.5 s
+                    bool Emb3Ok(List<Dictionary<string, object>> e) => e.Count == 3 && e.All(x => ((string)x["html"]).Contains("fmsvg")) && ((string)e.First(x => (string)x["name"] == "Alliance")["html"]).Contains("fmv a");
                     var emb3 = await L3("instances", "null,'fm.'");
-                    var png3E = await WorldMapView.CaptureForTest(); if (png3E != null) File.WriteAllBytes(P("instances-fm-icons-3d.png"), png3E);
-                    Check("3D: the flight masters are the same SVG emblems (shield / spiked ring / coin) as DOM overlays; the fixture picture is taken (instances-fm-icons-3d.png)", emb3.Count == 3 && emb3.All(x => ((string)x["html"]).Contains("fmsvg")) && ((string)emb3.First(x => (string)x["name"] == "Alliance")["html"]).Contains("fmv a") && png3E != null, string.Join("|", emb3.Select(x => x["name"])));
+                    for (var embClock = System.Diagnostics.Stopwatch.StartNew(); !Emb3Ok(emb3) && embClock.ElapsedMilliseconds < 8000;) { await Task.Delay(100); emb3 = await L3("instances", "null,'fm.'"); }
+                    byte[] png3E = null;
+                    if (SelfTestClock.ShotsOn) { await Task.Delay(1000); png3E = await WorldMapView.CaptureForTest(); if (png3E != null) File.WriteAllBytes(P("instances-fm-icons-3d.png"), png3E); }
+                    Check("3D: the flight masters are the same SVG emblems (shield / spiked ring / coin) as DOM overlays" + (SelfTestClock.ShotsOn ? "; the fixture picture is taken (instances-fm-icons-3d.png)" : ""), Emb3Ok(emb3) && (!SelfTestClock.ShotsOn || png3E != null), string.Join("|", emb3.Select(x => x["name"])));
                     Check("3D: the faction kinds hide flight master markers one by one (4 shown, Horde off = 2) and route lines one by one (3 drawn, Alliance off = 2); all kinds off then the layer on again shows all of them",
                         FmWanted(fm3All) == 4 && LinesShown(rt3All) == 3 && FmWanted(fm3NoH) == 2 && fm3NoH.Where(x => (string)x["g"] == "fm.horde").All(x => !(bool)x["wanted"]) && LinesShown(rt3NoA) == 2 && !(bool)rt3NoA.First(x => (string)x["g"] == "routes.alliance")["shown"]
                         && FmWanted(fm3Re) == 4 && LinesShown(rt3Re) == 3, FmWanted(fm3All) + "/" + LinesShown(rt3All) + " " + FmWanted(fm3NoH) + "/" + LinesShown(rt3NoA) + " " + FmWanted(fm3Re) + "/" + LinesShown(rt3Re));
@@ -322,8 +324,7 @@ namespace ElansAddonHub
                         double expectWet = (lspec.VertexH(4, 4) + lspec.VertexH(5, 4) + lspec.VertexH(4, 5) + lspec.VertexH(5, 5)) / 4;
                         Check("3D liquids: looking at the invented lake the page draws " + (w1?.Int("meshes") ?? 0) + " liquid meshes (" + (w1 == null ? "?" : Json.Write(w1.Child("byKind"))) + ": water and lava) from the .wmw files; a cell of the lake has the surface the file says (" + wetAt + " expected " + expectWet.ToString("0.00", I) + "), a hole in its exists mask and a dry place far away have none",
                             w1 != null && w1.Int("meshes") > 0 && w1.Child("byKind").Int("1") > 0 && w1.Child("byKind").Int("3") > 0 && double.TryParse(wetAt, NumberStyles.Float, I, out var wetV) && Math.Abs(wetV - expectWet) < 0.01 && holeAt == "null" && dryAt == "null", wetAt + " " + holeAt + " " + dryAt + " " + (w1 == null ? "" : Json.Write(w1)));
-                        await Task.Delay(800);
-                        var pngW = await WorldMapView.CaptureForTest(); if (pngW != null) File.WriteAllBytes(P("worldmap-3d-water-lake-synthetic.png"), pngW);
+                        if (SelfTestClock.ShotsOn) { await Task.Delay(800); var pngW = await WorldMapView.CaptureForTest(); if (pngW != null) File.WriteAllBytes(P("worldmap-3d-water-lake-synthetic.png"), pngW); }
                         // the sea along the south edge: tile row 33, chunks 8..15
                         WorldMapMath.GridToWorld(31.5, 33 + 11.0 / 16.0, out var sx1, out var sy1);
                         WorldMapMath.WorldToLatLng(sx1, sy1, out var slat1, out var slng1);
@@ -333,7 +334,7 @@ namespace ElansAddonHub
                         var js = File.ReadAllText(Path.Combine(WorldMapCache.Root, "_page", "view3d.js"));
                         Check("3D liquids: the sea along the south edge is drawn as ocean meshes (" + (w2 == null ? "?" : Json.Write(w2.Child("byKind"))) + ", surface " + seaAt + " = sea level), the open sea outside the continent's tiles is one flat plane (" + (w2 != null && w2.Bool("outer")) + "), and the old global sea plane is gone from the page (no 260000-yard plane)",
                             w2 != null && w2.Child("byKind").Int("2") > 0 && seaAt == "0" && w2.Bool("outer") && !js.Contains("260000") && !js.Contains("sea.position"), seaAt + " " + (w2 == null ? "" : Json.Write(w2)));
-                        var pngS = await WorldMapView.CaptureForTest(); if (pngS != null) File.WriteAllBytes(P("worldmap-3d-water-sea-synthetic.png"), pngS);
+                        if (SelfTestClock.ShotsOn) { var pngS = await WorldMapView.CaptureForTest(); if (pngS != null) File.WriteAllBytes(P("worldmap-3d-water-sea-synthetic.png"), pngS); }
                         var s5 = await Wm3State();
                         Check("3D liquids: no script error while the liquids load and rebuild (" + (s5?.List("errs")?.Count ?? -1) + " errors)", s5 != null && (s5.List("errs") ?? new List<object>()).Count == 0, s5 == null ? "?" : Json.Write(s5.List("errs")));
                     }
@@ -403,9 +404,10 @@ namespace ElansAddonHub
                 await WaitFor(() => WorldMapView.PageReady && WorldMapView.LoadedPage == "2d", 120000);
                 await WmEval("(function(){ var r=[].slice.call(document.querySelectorAll('.wm-row')).filter(function(e){return e.textContent.indexOf('Zone borders')===0})[0]; if (r && !r.querySelector('input').checked) r.querySelector('input').click(); return 1; })()");
                 bool gotB = await WmWaitCount("borders", 10, 60000);
-                await Task.Delay(2500);
+                // the rest of the borders keep arriving: wait for the 20 the check wants (it was a fixed 2.5 s)
                 var bj = Json.Obj(Json.Parse(await WmEval("window.wm.borders(null)")) as string);
-                var p2 = await WorldMapView.CaptureForTest(); if (p2 != null) File.WriteAllBytes(P("worldmap-borders-2d-real.png"), p2);
+                for (var bClock = System.Diagnostics.Stopwatch.StartNew(); (bj == null || bj.Int("n") < 20) && bClock.ElapsedMilliseconds < 15000;) { await Task.Delay(150); bj = Json.Obj(Json.Parse(await WmEval("window.wm.borders(null)")) as string); }
+                if (SelfTestClock.ShotsOn) { await Task.Delay(1500); var p2 = await WorldMapView.CaptureForTest(); if (p2 != null) File.WriteAllBytes(P("worldmap-borders-2d-real.png"), p2); }
                 Check("real borders: the flat map shows Kalimdor's zone borders (" + bj?.Int("n") + " zones, " + bj?.Int("rings") + " rings) as thin lines", gotB && bj != null && bj.Int("n") >= 20, bj == null ? "?" : Json.Write(bj));
                 // 3D
                 WorldMapView.SetMode(true);

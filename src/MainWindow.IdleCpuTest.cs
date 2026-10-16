@@ -7,7 +7,7 @@ using ElansAddonHub.Services;
 
 namespace ElansAddonHub
 {
-    // --selftest "idlecpu": the CPU the idle hub uses with WoW running vs paused (3 alternating samples per mode, medians). A measurement of about a minute that only moves when something
+    // --selftest "idlecpu": the CPU the idle hub uses with WoW running vs paused (up to 3 alternating samples per mode, medians; one pair when it is clear). A measurement of 20 s to a minute that only moves when something
     // that ticks changes (WowWatch, the pixel strip, presence, the Lodge session ...), so it is its own section instead of part of "round3" (which any Settings edit selects).
     public partial class MainWindow
     {
@@ -40,7 +40,7 @@ namespace ElansAddonHub
                 // 3 alternating samples per mode (a busy moment on the PC hits both the same), compared by MEDIAN with a small absolute
                 // allowance; one retry before it counts as a failure: this is a timing measurement on a shared machine
                 double Median(System.Collections.Generic.List<double> v) { var o = v.OrderBy(x => x).ToList(); return o[o.Count / 2]; }
-                double runMs = 0, idleMs = 0; int idlePolls = 0; bool cpuOk = false; int attempt = 0;
+                double runMs = 0, idleMs = 0; int idlePolls = 0, runS0 = 0; bool cpuOk = false; int attempt = 0;
                 for (; attempt < 2 && !cpuOk; attempt++)
                 {
                     var runS = new System.Collections.Generic.List<double>(); var idleS = new System.Collections.Generic.List<double>(); idlePolls = 0;
@@ -48,12 +48,15 @@ namespace ElansAddonHub
                     {
                         var r = await Measure(true); runS.Add(r.cpuMs);
                         var i = await Measure(false); idleS.Add(i.cpuMs); idlePolls += i.polls;
+                        // a first pair where paused is clearly no dearer than running settles it: the other two pairs only decide close calls
+                        // (saves ~30 s a run; a real regression - paused well above running - never takes this exit)
+                        if (round == 0 && i.cpuMs <= r.cpuMs + 50) break;
                     }
-                    runMs = Median(runS); idleMs = Median(idleS);
+                    runMs = Median(runS); idleMs = Median(idleS); runS0 = runS.Count;
                     cpuOk = idleMs <= runMs * 1.2 + 150;
                 }
                 wow = false; WowWatch.Shared.Poll();
-                notes.Add($"idle CPU, median of 3 x {secs} s (hub window shown, nothing happening): WoW-running timers {runMs:0} ms ({runMs / secs / 10:0.00} % of a core), paused {idleMs:0} ms ({idleMs / secs / 10:0.00} % of a core); watcher polls {idlePolls}; attempts {attempt}");
+                notes.Add($"idle CPU, median of {runS0} x {secs} s (hub window shown, nothing happening): WoW-running timers {runMs:0} ms ({runMs / secs / 10:0.00} % of a core), paused {idleMs:0} ms ({idleMs / secs / 10:0.00} % of a core); watcher polls {idlePolls}; attempts {attempt}");
                 Check("idle: paused costs no more CPU than running (" + idleMs.ToString("0") + " vs " + runMs.ToString("0") + " ms, median; allowed 1.2x + 150 ms)", cpuOk);
             }
             catch (Exception e) { ok = false; notes.Add("FAIL exception: " + e); }

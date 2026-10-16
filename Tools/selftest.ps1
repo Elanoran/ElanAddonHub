@@ -25,6 +25,8 @@ param(
     [string]$Changed,
     [switch]$Full,
     [switch]$List,
+    [switch]$WhatIf,    # print what changed mode (or -Only / -Paths) would select and why, without running anything
+    [string[]]$Paths,   # with -WhatIf: as if exactly these repo-relative files had changed
     [switch]$NoBuild,
     [switch]$UseCache,  # let -Full / -Only skip a real-game-file section that passed before with the same game build and sources (changed mode always does)
     [switch]$NoCache,   # never skip a real-game-file section
@@ -49,6 +51,17 @@ if (-not $NoBuild) {
 if (-not (Test-Path $exe)) { Write-Host "No exe at $exe"; exit 2 }
 
 if ($List) { & $exe --list | Out-String | Write-Host; exit 0 }
+if ($WhatIf) {
+    # what a run with these switches would select, and why per file - nothing runs
+    $wargs = @('--list', '--repo', $root)
+    if ($Paths) { $wargs += @("--paths", ($Paths -join ";")) }
+    elseif ($Only) { $wargs += @("--only", ($Only -join ",")) }
+    else {
+        if (-not $Changed) { & git -C $root rev-parse --verify --quiet origin/main 2>$null | Out-Null; $Changed = if ($LASTEXITCODE -eq 0) { 'origin/main' } else { 'main' } }
+        $wargs += @('--changed', $Changed)
+    }
+    & $exe @wargs | Out-String | Write-Host; exit 0
+}
 
 $argv = @('--repo', $root)
 $useCache = [bool]$UseCache
@@ -112,13 +125,19 @@ if ($old) { Write-Host 'Known failures (ignored):'; $old | ForEach-Object { Writ
 if ($new) { Write-Host 'FAIL lines:' -ForegroundColor Red; $new | ForEach-Object { Write-Host ('  ' + $_.Trim()) -ForegroundColor Red } }
 
 Write-Host ''
+$inv = [Globalization.CultureInfo]::InvariantCulture
+$secs = @($lines | ForEach-Object { if ($_ -match '^section (\S+): ([\d.]+) s\s*$') { [pscustomobject]@{ Name = $Matches[1]; Sec = [double]::Parse($Matches[2], $inv) } } } | Sort-Object Sec -Descending)
 Write-Host 'Timing (slowest first):'
-$lines | ForEach-Object { if ($_ -match '^section (\S+): ([\d.]+) s\s*$') { [pscustomobject]@{ Name = $Matches[1]; Sec = [double]$Matches[2] } } } |
-    Sort-Object Sec -Descending | ForEach-Object { Write-Host ('  {0,-15}{1,7:0.0} s' -f $_.Name, $_.Sec) }
+$secs | ForEach-Object { Write-Host ('  {0,-18}{1,7} s' -f $_.Name, $_.Sec.ToString('0.0', $inv)) }
+# the slowest single checks (the work since the previous check), so what to trim next is measured, not guessed
 $slow = @($lines | Where-Object { $_ -match '^slow ' })
-if ($slow) { Write-Host ''; Write-Host 'Slowest stretches between checks (work before the named check):'; $slow | Select-Object -First 25 | ForEach-Object { Write-Host ('  ' + $_) }; Write-Host '' }
+if ($slow) { Write-Host ''; Write-Host 'Slowest checks (the work before the named check):'; $slow | Select-Object -First 12 | ForEach-Object { Write-Host ('  ' + $_) }; Write-Host '' }
+# the sections whose own summary line says they failed (the FAIL lines above carry each check's detail)
+$failedSecs = @($lines | ForEach-Object { if ($_ -cmatch '^\s*([\w ]+?)(?: selftest)?: (FAILED|crashed)') { $Matches[1] } } | Select-Object -Unique)
+if ($failedSecs) { Write-Host ('Failed sections: ' + ($failedSecs -join ', ')) -ForegroundColor Red }
 $tot = $lines | Where-Object { $_ -match '^total: ' }
-Write-Host "  $tot   (wall clock incl. start/exit: $([math]::Round($wall,1)) s)"
+Write-Host ('Summary: {0} section(s), {1}; slowest {2}' -f $secs.Count, $tot, (($secs | Select-Object -First 3 | ForEach-Object { $_.Name + ' ' + $_.Sec.ToString('0.0', $inv) + ' s' }) -join ', '))
+Write-Host "  (wall clock incl. build-free start and exit: $([math]::Round($wall,1)) s)"
 Write-Host "Result: $resultFile"
 if ($new) { Write-Host "NEW FAILURES: $($new.Count)" -ForegroundColor Red; exit 1 }
 Write-Host 'OK: no new failures'

@@ -14,7 +14,11 @@ namespace ElansAddonHub.Services
     //   --changed base  run the sections the files changed since <base> can affect (git diff base...HEAD + uncommitted)
     //   --repo dir      where to run git for --changed (default: the current directory)
     //   --list          print the section names
-    // No flag: everything, exactly as before. Anything unknown or shared maps to ALL: safe rather than clever.
+    //   --paths a;b     as if exactly those files had changed (Tools\selftest.ps1 -WhatIf -Paths ...)
+    // No flag: everything (the release run). A file maps to the sections that test it: a new source file no rule knows runs the sections its
+    // header comment names, anything else unknown is ALL. Only the truly shared files (App, Brand, Util, SettingsStore, Models, Json, Net, the
+    // fixture) are ALL; the window, the theme, the art, the project file and the self-test plumbing pick their own few sections, because the
+    // setup every run does already starts the whole app with them. Keep a typical one-feature change to a couple of minutes.
     public static class TestScope
     {
         // execution order == order of the full run
@@ -115,14 +119,42 @@ namespace ElansAddonHub.Services
             void R(string rx, params string[] s) => r.Add(Tuple.Create(new Regex(rx, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), s));
             var lodgeAll = new[] { "armory", "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "atlasclassiclodge", "video", "viewer", "toasts", "presence", "profile", "round3" };
 
-            // ---- shared: everything depends on these
-            R(@"^src/(App\.xaml(\.cs)?|MainWindow\.xaml(\.cs)?|MainWindow\.Others\.cs|MainWindow\.Welcome\.cs|ElansAddonHub\.csproj|Motion\.cs|Brand\.cs|SourceIcons\.cs|PillBase\.cs|WelcomeGuide\.cs)$", Star);
-            R(@"^src/Theme/", Star);
+            // ---- shared: everything depends on these (kept short on purpose: every file here makes a changed-mode run a full run)
+            R(@"^src/(App\.xaml(\.cs)?|Brand\.cs)$", Star);
+            R(@"^src/Services/(Util|SettingsStore|Models|Json|Net|SelfTestFixture)\.cs$", Star);
+            // ---- the window itself and the self-test plumbing: the setup every run does (window shown, first update check, isolation, the scope
+            //      and cache checks) already starts the app with them; on top of that, the sections that drive the window's own parts
+            var core = new[] { "addons", "startup", "addonsgrid", "update", "round3", "atlashosts", "linkopen" };
+            R(@"^src/MainWindow\.xaml(\.cs)?$", core);
+            R(@"^src/MainWindow\.Welcome\.cs$|^src/WelcomeGuide\.cs$", "round3", "addons", "startup");
+            R(@"^src/(MainWindow\.Others|SourceIcons|PillBase)\.cs$", "addons", "thirdparty", "selfupdated", "addonsgrid", "startup");
+            R(@"^src/Services/(TestScope|SelfTestCache|SelfTestClock)\.cs$");   // their own checks run in every run (scope selftest, cache selftest)
+            R(@"^src/Services/FakeUpdateServer\.cs$", "addons", "thirdparty", "startup", "addonsgrid", "selfupdated", "update", "round3");
+            R(@"^src/Services/WowLocator\.cs$", "addons", "update", "round3", "readers", "inventory", "itemdata", "seendata");
+            R(@"^src/Services/(Splash|SplashScene)\.cs$", "startup", "round3");
+            // a project change that is not only the <Version> bump (references, resources): the build proves it compiles; these prove the app,
+            // its resources and WebView2 still start
+            R(@"^src/ElansAddonHub\.csproj$", "addons", "startup", "art", "browser");
+            // animations (Motion): the sections that wait for something to open, collapse or fade
+            R(@"^src/Motion\.cs$", "startup", "addonsgrid", "viewer", "lodgefun", "calendar", "wowevents", "lodgefiles", "badges", "video", "browser", "toasts", "dialogs", "health", "atlaspage", "atlasbrowse", "round3");
+            // ---- theme and assets: the design sections, not everything (a broken XAML resource fails the start-up every run does)
+            R(@"^src/Theme/Theme\.xaml$", "inputs", "gametooltip", "dialogs", "toasts", "addonsgrid", "art", "calendar", "wowevents");
+            R(@"^src/Theme/AddonIcons\.xaml$", "addons", "thirdparty", "addonsgrid", "selfupdated");
+            R(@"^src/Theme/(Avatars|ProfileCard)\.xaml$", "profile", "presence", "lodgefeatures", "badges");
+            R(@"^src/Theme/Badges\.xaml$", "badges", "profile");
+            R(@"^src/Theme/ReactionIcons\.xaml$", "lodgefeatures", "lodgefun");
+            R(@"^src/Assets/Art/", "art");
+            R(@"^src/Assets/[\w.-]+\.(jpe?g|png)$", "art");
+            R(@"^src/Assets/(hub\.(png|ico)|logo-[\w-]+\.png)$", "addons", "addonsgrid", "art");
             R(@"^src/(Controls/CardGrid|MainWindow\.(AddonsGrid|AddonsGridTest)|AddonCard)\.cs$", "addonsgrid", "addons", "startup", "selfupdated", "thirdparty");
             R(@"^src/MainWindow\.(InputsTest|DesignTest\.Inputs)\.cs$", "inputs");
-            R(@"^src/Services/(Util|SettingsStore|Models|Json|Net|SelfTestFixture|FakeUpdateServer|TestScope|WowLocator|Splash|SplashScene)\.cs$", Star);
-            R(@"^src/Assets/(?!Data/zonelore\.json$)", Star);
             R(@"^src/Assets/Data/zonelore\.json$", "zonelore", "atlasclasses");
+            R(@"^src/Controls/TalentTreePanel\.cs$", "talents", "characters", "art", "atlashosts");
+            R(@"^src/Controls/FindsStrip\.cs$", "atlasbrowse", "atlaspage");
+            R(@"^src/MainWindow\.Search\.cs$", "atlaspage", "atlashosts");
+            R(@"^src/FodyWeavers\.(xml|xsd)$", "addons", "startup", "art", "browser");
+            R(@"^src/MainWindow\.DesignTest(\.\w+)?\.cs$");   // the screenshot-only design runs (ELANSHUB_DESIGN_SHOTS), not part of --selftest; the ones a section uses have their own rule
+            R(@"^src/MainWindow\.RealSections\.cs$", SelfTestCache.Defs.Select(d => d.Name).ToArray());
             // ---- inventory
             R(@"^src/(Services/(Maps/|Casc\.cs|Blp\.cs|Db2/Wdc5\.cs)|Controls/AtlasMap\.cs|MainWindow\.MapDataTest(\.(?!Real\.)\w+)?\.cs)", "mapdata", "worldmap", "instances", "dungeonmaps");
             R(@"^src/(Services/DungeonMaps/|Controls/AtlasMap\.Drawn\.cs|MainWindow\.DungeonMapsTest(\.(?!Real\.)\w+)?\.cs)", "dungeonmaps", "mapdata", "atlaspage");
@@ -135,7 +167,7 @@ namespace ElansAddonHub.Services
             R(@"^src/(Services/(Db2/|Casc\.cs)|MainWindow\.ItemDataTest\.cs)", "itemdata");
             R(@"^src/(Services/(Db2/Wdb|Atlas/(SeenData|AtlasObs))|MainWindow\.SeenDataTest)\w*\.cs$", "seendata");
             R(@"^src/InventoryPage", "inventory", "characters", "upgrades", "armory", "itemdata", "spelldata");
-            R(@"^src/(MainWindow\.ArmoryTest|SettingsPage\.Armory|Lodge/(ArmoryModels|LodgeSession\.Armory))\.cs$", "armory");
+            R(@"^src/(MainWindow\.ArmoryTest(\.\w+)?|SettingsPage\.Armory|Lodge/(ArmoryModels|LodgeSession\.Armory))\.cs$", "armory");
             R(@"^src/(Services/(Db2/|Casc\.cs)|MainWindow\.ItemDataTest\.cs)", "itemdata", "spelldata", "atlasclasses");
             R(@"^src/(Services/(Db2/Class\w*|Atlas/(AtlasClasses|AtlasQuery\.Classes|AtlasBrowse\.Classes))|AtlasPage\.Classes|MainWindow\.AtlasClassesTest(\.\w+)?)\.cs$", "atlasclasses", "atlaspage", "atlasbrowse", "gametooltip");
             R(@"^src/MainWindow\.SpellDataTest(\.\w+)?\.cs$", "spelldata");
@@ -161,9 +193,27 @@ namespace ElansAddonHub.Services
             // ---- the real-game-file sections: they run when what reads / parses / renders game data (or their own test file) changes, not for UI-only edits
             foreach (var d in SelfTestCache.Defs) { R(d.Readers, d.Name); R(d.Tests, d.Name); }
             // ---- lodge: chat, voice, files, profiles, toasts, presence, viewer
-            R(@"^src/Lodge/", lodgeAll);
+            // the Lodge's feature files pick their own sections (+ lodgefeatures as the chat smoke); the session core, the models and the page
+            // itself (LodgeSession.cs, LodgeModels.cs, LodgeView.xaml(.cs)) and anything new under Lodge/ still run every Lodge section
+            const string lodgeFeature = @"(Calendar\w*|LodgeView\.Calendar|LodgeSession\.(Calendar|WowCalendar)|Badges\w*|LadderView\w*|LodgeView\.Ladder|LodgeSession\.Badges|Files\w*|LodgeFiles|LodgeView\.Files|LodgeSession\.Files|SafeFile"
+                + @"|Invite\w*|CreateLodgeGuide\w*|LodgeInvites|LodgeSession\.(Invites|Leave)|Lfg\w*|LodgeView\.(Lfg|History)|LodgeSession\.History|ItemChipVM|MemberGroups|LodgeSession\.(Realms|Armory|Atlas|Classic|FlightShare)|ArmoryModels"
+                + @"|VideoViewer\w*|YouTube|ImageViewer\w*|Toast\w*|Overlay\w*|Avatar\w*|Profile\w*|AutoStatus)(\.xaml)?(\.cs)?$";
+            R(@"^src/Lodge/(?!" + lodgeFeature + ")", lodgeAll);
+            R(@"^src/Lodge/(Calendar\w*|LodgeView\.Calendar|LodgeSession\.(Calendar|WowCalendar))(\.xaml)?(\.cs)?$", "calendar", "wowevents", "lodgefeatures");
+            R(@"^src/Lodge/(Badges\w*|LadderView\w*|LodgeView\.Ladder|LodgeSession\.Badges)(\.xaml)?(\.cs)?$", "badges", "profile", "lodgefeatures");
+            R(@"^src/Lodge/(Files\w*|LodgeFiles|LodgeView\.Files|LodgeSession\.Files|SafeFile)(\.xaml)?(\.cs)?$", "lodgefiles", "lodgehardening", "lodgefeatures");
+            R(@"^src/Lodge/(Invite\w*|CreateLodgeGuide\w*|LodgeInvites|LodgeSession\.(Invites|Leave))(\.xaml)?(\.cs)?$", "invites", "invites2", "linkopen", "lodgefeatures");
+            R(@"^src/Lodge/(Lfg\w*|LodgeView\.(Lfg|History)|LodgeSession\.History|ItemChipVM|MemberGroups)(\.xaml)?(\.cs)?$", "lodgefun", "presence", "lodgefeatures");
+            R(@"^src/Lodge/LodgeSession\.Realms\.cs$", "realms", "lodgefeatures");
+            R(@"^src/Lodge/LodgeSession\.Classic\.cs$", "atlasclassiclodge", "lodgefeatures");
+            R(@"^src/Lodge/LodgeSession\.FlightShare\.cs$", "flightshare", "profguide", "lodgefeatures");
+            R(@"^src/Lodge/LodgeSession\.Atlas\.cs$", "lodgefeatures");   // its own rules above add atlaslodge / atlaspage / atlasbrowse
+            R(@"^src/Lodge/(VideoViewer\w*|YouTube)(\.xaml)?(\.cs)?$", "video", "lodgefeatures");
+            R(@"^src/Lodge/ImageViewer(\.xaml)?(\.cs)?$", "viewer", "lodgefeatures");
+            R(@"^src/Lodge/(Toast\w*|Overlay\w*)(\.xaml)?(\.cs)?$", "toasts", "round3", "lodgefeatures");
+            R(@"^src/Lodge/(Avatar\w*|Profile\w*|AutoStatus)(\.xaml)?(\.cs)?$", "profile", "presence", "badges", "lodgefeatures");
             R(@"^src/Services/(LodgeClient|AvatarArt|GamePresence|ItemLinks)\.cs$", lodgeAll);
-            R(@"^src/Services/(VoiceEngine|VoiceEffects)\.cs$", "voice", "lodge");
+            R(@"^src/Services/Voice\w*\.cs$", "voice", "lodge");
             R(@"^src/Services/Sounds\.cs$", "toasts", "lodge", "voice");
             R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "armory", "atlasclassiclodge");
             R(@"^src/MainWindow\.ProfileTest\.cs$", "profile");
@@ -171,14 +221,14 @@ namespace ElansAddonHub.Services
             R(@"^src/(BrowserPage(\.xaml(\.cs)?)?|MainWindow\.BrowserTest|Services/(WebEngine|BrowserUrl|AdBlock))(\.cs)?$", "browser", "video");
             R(@"^src/MainWindow\.PresenceTest\.cs$", "presence");
             R(@"^src/MainWindow\.HardeningTest\.cs$", "lodgehardening");
-            R(@"^src/MainWindow\.LodgeFunTest\.cs$", "lodgefun");
+            R(@"^src/MainWindow\.LodgeFunTest(\.\w+)?\.cs$", "lodgefun");
             R(@"^src/MainWindow\.InvitesTest\.cs$", "invites");
             R(@"^src/MainWindow\.Invites2Test\.cs$", "invites2");
             R(@"^src/MainWindow\.DesignTest\.Invites2\.cs$");   // screenshot-only design run
             R(@"^src/(MainWindow\.LinkOpen(Test)?|Services/LinkOpen)\.cs$", "linkopen", "invites");
             R(@"^src/MainWindow\.DesignTest\.LinkOpen\.cs$");   // screenshot-only design run
             R(@"^src/MainWindow\.CalendarTest\.cs$", "calendar");
-            R(@"^src/MainWindow\.WowEventsTest\.cs$", "wowevents");
+            R(@"^src/MainWindow\.(WowEvents|WowDistinct)Test\.cs$", "wowevents", "calendar");
             R(@"^src/Services/WowCalendar\.cs$", "wowevents", "calendar", "lodge");
             R(@"^src/(MainWindow\.FlightShareTest|Services/FlightShare)\.cs$", "flightshare", "lodge");
             R(@"^src/(MainWindow\.Atlas(Lodge|Notes)Test|Lodge/LodgeSession\.Atlas|Services/Atlas/(AtlasObs(\.Notes)?|AtlasQuery\.Notes))\.cs$", "atlaslodge", "lodge");
@@ -205,9 +255,9 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/UpdateChannel\.cs$", "update", "round3");
             R(@"^addon/", "addons");
             // ---- health, dialogs, strip
-            R(@"^src/(HealthDialog\.cs|MainWindow\.Health(Test)?\.cs)$", "health");
+            R(@"^src/(HealthDialog\.cs|MainWindow\.Health(Hub)?(Test)?\.cs)$", "health");
             R(@"^src/Services/(AddonHealth|HealthMonitor|WowWatch)\.cs$", "health", "round3");
-            R(@"^src/(Services/(HealthMonitor|WowWatch|PixelStrip|StripSelfTest|GamePresence|LodgeClient|VoiceEngine)|Lodge/LodgeSession[\w.]*|MainWindow\.IdleCpuTest)\.cs$", "idlecpu");   // what ticks while the hub is idle
+            R(@"^src/(Services/(HealthMonitor|WowWatch|PixelStrip|StripSelfTest|GamePresence|LodgeClient|VoiceEngine)|Lodge/LodgeSession(\.History)?|MainWindow\.IdleCpuTest)\.cs$", "idlecpu");   // what ticks while the hub is idle (the session's timers live in LodgeSession.cs / .History.cs)
             R(@"^src/MainWindow\.Round3Test\.cs$", "round3");
             R(@"^src/ThemedDialog", "dialogs", "invites2");
             R(@"^src/Services/(StripSelfTest|PixelStrip)\.cs$", "strip");
@@ -216,11 +266,14 @@ namespace ElansAddonHub.Services
             // the release bumps: a project file whose only change is <Version>, and the newest Lodge server constant (it only feeds the owner's update notice)
             R(@"^src/ElansAddonHub\.csproj#version$");
             R(@"^src/Brand\.cs#lodgeserver$", "lodge", "lodgefeatures");
+            R(@"^src/Services/Models\.cs#setting$", "round3");   // a new setting: Settings save / load is exercised by round3; the feature's own files pick the rest
             return r;
         }
 
-        // sections affected by the changed files, with the reason per file; unknown/shared files make it ALL
-        public static List<string> FromPaths(IEnumerable<string> files, out List<string> why)
+        // sections affected by the changed files, with the reason per file; unknown/shared files make it ALL.
+        // head(path) returns the start of a file (null when it is gone): a source file no rule knows is mapped by the sections its header
+        // comment names (--selftest "atlaspage", "(sections art, characters, talents)"), so a new test file runs its own section, not everything.
+        public static List<string> FromPaths(IEnumerable<string> files, out List<string> why, Func<string, string> head = null)
         {
             why = new List<string>();
             var set = new HashSet<string>();
@@ -231,7 +284,12 @@ namespace ElansAddonHub.Services
                 if (f.Length == 0) continue;
                 any = true;
                 var hit = Rules.Where(x => x.Item1.IsMatch(f)).ToList();
-                if (hit.Count == 0) { why.Add(f + " -> ALL (unknown file)"); set.UnionWith(All); continue; }
+                if (hit.Count == 0)
+                {
+                    var named = f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && head != null ? HeaderSections(SafeHead(head, f)) : new List<string>();
+                    if (named.Count > 0) { why.Add(f + " -> " + string.Join(",", named) + " (named in its header)"); set.UnionWith(named); continue; }
+                    why.Add(f + " -> ALL (unknown file: add a rule in TestScope or name its section in the file's header comment)"); set.UnionWith(All); continue;
+                }
                 var secs = new HashSet<string>(hit.SelectMany(x => x.Item2));
                 if (secs.Contains(Star)) { why.Add(f + " -> ALL (shared)"); set.UnionWith(All); continue; }
                 why.Add(f + " -> " + (secs.Count == 0 ? "nothing (not self-tested)" : string.Join(",", Order(secs))));
@@ -242,6 +300,39 @@ namespace ElansAddonHub.Services
         }
 
         static IEnumerable<string> Order(IEnumerable<string> s) => All.Where(a => s.Contains(a));
+
+        static string SafeHead(Func<string, string> head, string f) { try { return head(f); } catch { return null; } }
+
+        static readonly Regex HeaderSelftest = new Regex(@"--selftest\s+""?([a-z0-9]+)""?", RegexOptions.CultureInvariant);
+        static readonly Regex HeaderQuoted = new Regex(@"""([a-z0-9]+)""", RegexOptions.CultureInvariant);
+        static readonly Regex HeaderSectionList =new Regex(@"\(sections?\s+([a-z0-9, ]+?)\)", RegexOptions.CultureInvariant);
+
+        // the sections a file's leading comment names; only the comment lines before the code starts count
+        public static List<string> HeaderSections(string text)
+        {
+            var found = new HashSet<string>();
+            if (string.IsNullOrEmpty(text)) return new List<string>();
+            int code = 0;
+            foreach (var raw in text.Split('\n').Take(80))
+            {
+                var l = raw.Trim();
+                if (l.Length == 0 || l.StartsWith("using ") || l.StartsWith("namespace ") || l == "{") continue;
+                if (!l.StartsWith("//")) { if (++code > 2) break; continue; }   // the class line and its brace may come before a member's comment
+                foreach (Match m in HeaderSelftest.Matches(l)) if (All.Contains(m.Groups[1].Value)) found.Add(m.Groups[1].Value);
+                if (l.Contains("section") || l.Contains("selftest"))   // The "armory" section, ... / "wowevents" / "calendar" selftest, part 2
+                    foreach (Match m in HeaderQuoted.Matches(l)) if (All.Contains(m.Groups[1].Value)) found.Add(m.Groups[1].Value);
+                foreach (Match m in HeaderSectionList.Matches(l))
+                    foreach (var w in Regex.Split(m.Groups[1].Value, @"[\s,]+")) if (All.Contains(w)) found.Add(w);
+            }
+            return Order(found).ToList();
+        }
+
+        static string ReadHead(string repo, string path)
+        {
+            var full = Path.Combine(repo, path.Split('#')[0]);
+            if (!File.Exists(full)) return null;
+            using (var r = new StreamReader(full)) { var buf = new char[6000]; int n = r.ReadBlock(buf, 0, buf.Length); return new string(buf, 0, n); }
+        }
 
         // the selection plus everything it depends on, in run order
         public static List<string> Closure(IEnumerable<string> picked)
@@ -271,7 +362,7 @@ namespace ElansAddonHub.Services
         {
             explain = "scope: all sections (no --only / --changed)"; error = null;
             string only = ArgValue(args, "--only"), changed = ArgValue(args, "--changed");
-            if (only == null && changed == null) return All.ToList();
+            if (only == null && changed == null && ArgValue(args, "--paths") == null) return All.ToList();
             var picked = new HashSet<string>();
             var sb = new StringBuilder();
             if (only != null)
@@ -281,13 +372,23 @@ namespace ElansAddonHub.Services
                 picked.UnionWith(s);
                 sb.AppendLine("scope --only " + only + " -> " + string.Join(",", s));
             }
+            var paths = ArgValue(args, "--paths");   // --paths a;b;c: as if exactly those files had changed (for -WhatIf -Paths)
+            if (paths != null)
+            {
+                var repo = ArgValue(args, "--repo") ?? Directory.GetCurrentDirectory();
+                var s = FromPaths(paths.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries), out var why, p => ReadHead(repo, p));
+                picked.UnionWith(s);
+                sb.AppendLine("scope --paths -> " + (s.Count == All.Length ? "ALL" : s.Count == 0 ? "no sections" : string.Join(",", s)));
+                foreach (var w in why) sb.AppendLine("  " + w);
+            }
             if (changed != null)
             {
-                var files = GitChanged(changed, ArgValue(args, "--repo") ?? Directory.GetCurrentDirectory(), out var gitErr);
+                var repo = ArgValue(args, "--repo") ?? Directory.GetCurrentDirectory();
+                var files = GitChanged(changed, repo, out var gitErr);
                 if (files == null) { picked.UnionWith(All); sb.AppendLine("scope --changed " + changed + " -> ALL (git failed: " + gitErr + ")"); }
                 else
                 {
-                    var s = FromPaths(files, out var why);
+                    var s = FromPaths(files, out var why, p => ReadHead(repo, p));
                     picked.UnionWith(s);
                     sb.AppendLine("scope --changed " + changed + ": " + files.Count + " changed file(s) -> " + (s.Count == All.Length ? "ALL" : s.Count == 0 ? "no sections" : string.Join(",", s)));
                     foreach (var w in why) sb.AppendLine("  " + w);
@@ -338,6 +439,8 @@ namespace ElansAddonHub.Services
         {
             ["src/ElansAddonHub.csproj"] = Tuple.Create("version", new Regex(@"^\s*<Version>[0-9.]+</Version>\s*$")),
             ["src/Brand.cs"] = Tuple.Create("lodgeserver", new Regex(@"^\s*public const string LatestLodgeServer = ""[0-9.]+"";\s*$")),
+            // a new saved setting: [DataMember] auto-properties and comments only - the feature that reads it is in the same change and picks its sections
+            ["src/Services/Models.cs"] = Tuple.Create("setting", new Regex(@"^\s*(\[DataMember\(Name = ""\w+""\)\] public [\w<>,\[\]? ]+ \w+ \{ get; set; \}( = [^;]+;)?\s*(//.*)?|//.*|)$")),
         };
 
         static string BumpOnly(string file, string baseRef, string repo)
@@ -396,16 +499,41 @@ namespace ElansAddonHub.Services
             Ck("backslash paths are normalised", Same(Map("src\\InventoryPage.Bags.cs"), "characters", "upgrades", "armory", "itemdata", "spelldata", "inventory"));
             var lodge = Map("src/Lodge/LodgeView.xaml.cs");
             Ck("Lodge files -> lodge, viewer, toasts, presence (not inventory)", new[] { "lodge", "viewer", "toasts", "presence" }.All(lodge.Contains) && !lodge.Contains("inventory"));
-            Ck("Theme and Motion -> ALL", Map("src/Theme/Theme.xaml").Count == All.Length && Map("src/Motion.cs").Count == All.Length);
-            Ck("shared files -> ALL", new[] { "src/App.xaml.cs", "src/MainWindow.xaml.cs", "src/ElansAddonHub.csproj", "src/Services/Util.cs", "src/Services/SettingsStore.cs" }.All(f => Map(f).Count == All.Length));
-            Ck("unknown file -> ALL", Map("src/Brand_new_file.cs").Count == All.Length && Map("somewhere/else.bin").Count == All.Length);
-            Ck("one shared file among specific ones -> ALL", Map("src/InventoryPage.xaml", "src/Motion.cs").Count == All.Length);
+            Ck("a Lodge feature file -> its own sections (the calendar view: calendar, wowevents + the chat smoke), the Lodge core (session, models, page) -> every Lodge section; a feature partial of the session does not run idlecpu",
+                Same(Map("src/Lodge/CalendarView.xaml.cs"), "lodgefeatures", "calendar", "wowevents") && Same(Map("src/Lodge/LodgeSession.Realms.cs"), "lodge", "lodgefeatures", "realms")
+                && new[] { "src/Lodge/LodgeSession.cs", "src/Lodge/LodgeModels.cs", "src/Lodge/LodgeView.xaml", "src/Lodge/SomethingNew.cs" }.All(f => new[] { "lodge", "lodgefun", "invites2", "calendar", "badges" }.All(Map(f).Contains))
+                && Map("src/Lodge/LodgeSession.cs").Contains("idlecpu") && !Map("src/Lodge/LodgeSession.Badges.cs").Contains("idlecpu"));
+            Ck("a theme token or a painted picture -> the design sections only (no real-game-file, Lodge-protocol or map sections)",
+                Map("src/Theme/Theme.xaml").Contains("inputs") && Map("src/Theme/Theme.xaml").Contains("gametooltip") && Map("src/Theme/Theme.xaml").Count < 12 && !Map("src/Theme/Theme.xaml").Any(s => s.EndsWith("real"))
+                && Same(Map("src/Assets/Art/zone-1411.jpg", "src/Assets/Art/talent-mage-0.jpg"), "art"));
+            Ck("the window, the project file and the animations -> a handful of sections, not ALL; the self-test's own plumbing -> nothing extra (its checks always run)",
+                new[] { "src/MainWindow.xaml.cs", "src/MainWindow.xaml", "src/ElansAddonHub.csproj", "src/Motion.cs" }.All(f => Map(f).Count > 0 && Map(f).Count < 20 && !Map(f).Any(s => s.EndsWith("real") || s == "worldmap" || s == "buildings" || s == "idlecpu"))
+                && Map("src/Services/TestScope.cs", "src/Services/SelfTestCache.cs", "src/Services/SelfTestClock.cs").Count == 0);
+            Ck("shared files -> ALL", new[] { "src/App.xaml.cs", "src/Brand.cs", "src/Services/Util.cs", "src/Services/SettingsStore.cs", "src/Services/Json.cs" }.All(f => Map(f).Count == All.Length));
+            Ck("unknown file -> ALL", Map("src/Brand_new_file.cs").Count == All.Length && Map("somewhere/else.bin").Count == All.Length && Map("src/Assets/Data/new.json").Count == All.Length);
+            Ck("one shared file among specific ones -> ALL", Map("src/InventoryPage.xaml", "src/Services/Util.cs").Count == All.Length);
+            var heads = new Dictionary<string, string>
+            {
+                ["src/MainWindow.NewThingTest.cs"] = "using System;\r\n\r\nnamespace ElansAddonHub\r\n{\r\n    // --selftest \"atlaspage\", part 9: something new\r\n    public partial class MainWindow\r\n",
+                ["src/MainWindow.TreeData.cs"] = "using System;\r\nnamespace ElansAddonHub\r\n{\r\n    // Full-size trees for the self-test (sections art, characters, talents): data\r\n",
+                ["src/Services/Quiet.cs"] = "using System;\r\nnamespace X\r\n{\r\n    public class Quiet\r\n    {\r\n        int a;\r\n        int b;\r\n    // --selftest \"atlaspage\" mentioned far below the code start\r\n",
+            };
+            List<string> MapH(string f) => FromPaths(new[] { f }, out _, p => heads.TryGetValue(p, out var h) ? h : null);
+            Ck("a new source file no rule knows runs the sections its header comment names ('--selftest \"x\"', '(sections a, b, c)'); without such a header it is ALL",
+                Same(MapH("src/MainWindow.NewThingTest.cs"), "atlaspage") && Same(MapH("src/MainWindow.TreeData.cs"), "characters", "talents", "art")
+                && MapH("src/Services/Quiet.cs").Count == All.Length && MapH("src/Services/Gone.cs").Count == All.Length);
             Ck("docs only -> nothing", Map("README.md", "docs/design/x.png", "src/CHANGELOG.md", "ARCHITECTURE.md").Count == 0);
-            Ck("a release bump (project <Version> only) -> nothing; the newest Lodge server constant -> the Lodge sections only; any other project change -> ALL",
-                Map("src/ElansAddonHub.csproj#version").Count == 0 && Same(Map("src/Brand.cs#lodgeserver"), "lodge", "lodgefeatures") && Map("src/ElansAddonHub.csproj").Count == All.Length && Map("src/Brand.cs").Count == All.Length);
+            Ck("a release bump (project <Version> only) -> nothing; the newest Lodge server constant -> the Lodge sections only; any other project change -> the start-up smoke sections; any other Brand change -> ALL",
+                Map("src/ElansAddonHub.csproj#version").Count == 0 && Same(Map("src/Brand.cs#lodgeserver"), "lodge", "lodgefeatures") && Same(Map("src/ElansAddonHub.csproj"), "addons", "startup", "browser", "art") && Map("src/Brand.cs").Count == All.Length);
             Ck("bump lines: a version line and the Lodge server line are bumps, anything else is not",
                 BumpLine(Bumps["src/ElansAddonHub.csproj"].Item2, "    <Version>2.63.1</Version>\r") && !BumpLine(Bumps["src/ElansAddonHub.csproj"].Item2, "    <PlatformTarget>AnyCPU</PlatformTarget>")
                 && BumpLine(Bumps["src/Brand.cs"].Item2, "        public const string LatestLodgeServer = \"2.24.0\";") && !BumpLine(Bumps["src/Brand.cs"].Item2, "        public const string Name = \"Elan's Outpost\";"));
+            Ck("a new saved setting (Models.cs: [DataMember] auto-properties and comments only) -> round3, not ALL; any other Models change -> ALL",
+                Same(Map("src/Services/Models.cs#setting"), "round3") && Map("src/Services/Models.cs").Count == All.Length
+                && BumpLine(Bumps["src/Services/Models.cs"].Item2, "        [DataMember(Name = \"atlasPins\")] public List<string> AtlasPins { get; set; }              // the Atlas pages the person pinned")
+                && BumpLine(Bumps["src/Services/Models.cs"].Item2, "        [DataMember(Name = \"upgradeWeights\")] public Dictionary<string, string> UpgradeWeights { get; set; }")
+                && BumpLine(Bumps["src/Services/Models.cs"].Item2, "        // ---- gathering routes") && BumpLine(Bumps["src/Services/Models.cs"].Item2, "")
+                && !BumpLine(Bumps["src/Services/Models.cs"].Item2, "    public class QuickLink") && !BumpLine(Bumps["src/Services/Models.cs"].Item2, "        public bool IsOld => Version < 3;"));
             Ck("no changes -> nothing", Map().Count == 0);
             Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "invites2" || a == "characters" || a == "upgrades" || a == "armory" || a == "itemdata" || a == "spelldata" || a == "inventory" || a == "health")));
             Ck("every rule section is a real section", Rules.SelectMany(r => r.Item2).All(s => s == Star || All.Contains(s)));

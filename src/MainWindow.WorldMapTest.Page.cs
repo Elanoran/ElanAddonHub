@@ -246,9 +246,12 @@ namespace ElansAddonHub
                         await WmEval("window.wm.feed({t:'goto', lat:" + cLat + ", lng:" + cLng + ", z:7})");
                         string Item(double dx, double dy, string f, string nm) => "{lat:" + (Convert.ToDouble(cen[0], CultureInfo.InvariantCulture) + dy).ToString("R", CultureInfo.InvariantCulture) + ",lng:" + (Convert.ToDouble(cen[1], CultureInfo.InvariantCulture) + dx).ToString("R", CultureInfo.InvariantCulture) + ",name:'" + nm + "',f:'" + f + "',g:'fm." + (f == "a" ? "alliance" : f == "h" ? "horde" : "neutral") + "',tip:'Flight master',extra:'" + nm + "'}";
                         await WmEval("window.wm.feed({t:'layer', id:'fm', kind:'markers', items:[" + Item(-0.35, 0, "a", "Alliance") + "," + Item(0, 0, "h", "Horde") + "," + Item(0.35, 0, "n", "Neutral") + "]})");
-                        await Task.Delay(900);
-                        var pngE = await WorldMapView.CaptureForTest(); if (pngE != null) File.WriteAllBytes(P("instances-fm-icons-2d.png"), pngE);
-                        Check("page: the fixture picture of the three emblems on the map is taken (instances-fm-icons-2d.png)", pngE != null && pngE.Length > 2000);
+                        if (SelfTestClock.ShotsOn)   // a design picture: only when pictures are wanted (ELANSHUB_SHOTS=1)
+                        {
+                            await Task.Delay(900);
+                            var pngE = await WorldMapView.CaptureForTest(); if (pngE != null) File.WriteAllBytes(P("instances-fm-icons-2d.png"), pngE);
+                            Check("page: the fixture picture of the three emblems on the map is taken (instances-fm-icons-2d.png)", pngE != null && pngE.Length > 2000);
+                        }
                     }
                     // a toggle in the panel: Vendors on -> need -> "none" (no Classic data here), saved in the settings
                     var before = WorldMapView.ReceivedForTest.Count(x => x == "need");

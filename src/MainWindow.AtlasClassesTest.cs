@@ -306,18 +306,20 @@ namespace ElansAddonHub
                 ClickTab("tab:163"); await Task.Delay(100); UpdateLayout();
                 Check("window: the Marksmanship chip shows only that tab; the filter is remembered in the card", AtlasView.ClassFilterForTest.SkillId == 163 && AtlasView.ClassRowsForTest.Count > 5 && AtlasView.ClassRowsForTest.All(r => !r.Title.StartsWith("Aspect")) && AtlasView.ClassControlForTest("clear").Visibility == Visibility.Visible);
                 var search = (TextBox)AtlasView.ClassControlForTest("search");
-                search.Text = "arcane shot"; await Task.Delay(400); UpdateLayout();
-                Check("window: typing 'arcane shot' (debounced) narrows the list to the three ranks, in level order 6, 12, 20", AtlasView.ClassRowsForTest.Count == 3 && AtlasView.ClassRowsForTest.All(r => r.Title == "Arcane Shot") && AtlasView.ClassHeadersForTest.SequenceEqual(new[] { "Level 6", "Level 12", "Level 20" }), string.Join(",", AtlasView.ClassHeadersForTest));
+                search.Text = "arcane shot";
+                Check("window: typing 'arcane shot' (debounced) narrows the list to the three ranks, in level order 6, 12, 20", await Until(() => AtlasView.ClassRowsForTest.Count == 3 && AtlasView.ClassRowsForTest.All(r => r.Title == "Arcane Shot") && AtlasView.ClassHeadersForTest.SequenceEqual(new[] { "Level 6", "Level 12", "Level 20" })), string.Join(",", AtlasView.ClassHeadersForTest));
                 var sw = (CheckBox)AtlasView.ClassControlForTest("new"); sw.IsChecked = true; sw.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); await Task.Delay(100);
                 Check("window: 'Only new spells' hides the higher ranks (Arcane Shot once, at level 6)", AtlasView.ClassRowsForTest.Count == 1 && AtlasView.ClassHeadersForTest.SequenceEqual(new[] { "Level 6" }));
                 ((Button)AtlasView.ClassControlForTest("clear")).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); await Task.Delay(100); UpdateLayout();
                 Check("window: Clear filters brings back the whole list and the All tab", AtlasView.ClassFilterForTest.SkillId == 0 && string.IsNullOrEmpty(AtlasView.ClassFilterForTest.Text) && !AtlasView.ClassFilterForTest.NewOnly && search.Text == "" && AtlasView.ClassRowsForTest.Count > 12 && AtlasView.ClassControlForTest("clear").Visibility == Visibility.Collapsed);
                 var min = (TextBox)AtlasView.ClassControlForTest("min"); var max = (TextBox)AtlasView.ClassControlForTest("max");
-                min.Text = "16"; max.Text = "20"; await Task.Delay(400); UpdateLayout();
-                Check("window: Min / Max level 16 and 20 keep the levels 16, 18 and 20", AtlasView.ClassHeadersForTest.SequenceEqual(new[] { "Level 16", "Level 18", "Level 20" }), string.Join(",", AtlasView.ClassHeadersForTest));
-                min.Text = "90"; await Task.Delay(400);
-                Check("window: a level range nothing is in says so calmly ('No spell matches these filters')", AtlasView.ClassRowsForTest.Count == 0 && AtlasTexts(AtlasView).Contains("No spell matches these filters."));
-                min.Text = ""; max.Text = ""; await Task.Delay(400);
+                // the level boxes are debounced: wait for the list to follow (a fixed 400 ms wait was a flake on a busy machine)
+                min.Text = "16"; max.Text = "20";
+                Check("window: Min / Max level 16 and 20 keep the levels 16, 18 and 20", await Until(() => AtlasView.ClassHeadersForTest.SequenceEqual(new[] { "Level 16", "Level 18", "Level 20" })), string.Join(",", AtlasView.ClassHeadersForTest));
+                min.Text = "90";
+                Check("window: a level range nothing is in says so calmly ('No spell matches these filters')", await Until(() => AtlasView.ClassRowsForTest.Count == 0 && AtlasTexts(AtlasView).Contains("No spell matches these filters.")));
+                min.Text = ""; max.Text = "";
+                await Until(() => AtlasView.ClassRowsForTest.Count > 12);
                 ClickTab("tab:261"); await Task.Delay(100);
                 Check("window: the Beast Training (pet) chip lists the pet's abilities, including the one with no level in its own group", AtlasView.ClassRowsForTest.Count == 4 && AtlasView.ClassHeadersForTest.Contains("No level in the game data"));
                 ClickTab("tab:0"); await Task.Delay(100);

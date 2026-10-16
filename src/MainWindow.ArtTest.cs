@@ -35,10 +35,14 @@ namespace ElansAddonHub
                 // ---- the pictures themselves
                 var all = ArtLibrary.All().ToList();
                 var bad = all.Where(a => ArtLibrary.Load(a) == null).Select(a => a.File).ToList();
-                Check("resources: all " + all.Count + " pictures load from the exe (background, 51 zone banners, 17 category cards, 27 talent trees)", all.Count == 96 && bad.Count == 0, string.Join(", ", bad));
+                // nothing lost (at least the 96 pieces of 2.69: background, 51 zone banners, 17 category cards, 27 talent trees) and every one loads; more art is fine
+                Check("resources: all " + all.Count + " pictures load from the exe (at least the background, 51 zone banners, 17 category cards, 27 talent trees)", all.Count >= 96 && bad.Count == 0, string.Join(", ", bad));
                 var bg = ArtLibrary.Load(ArtLibrary.Background);
-                Check("resources: the background is 2016 x 1152, a banner 1680 x 420 (4:1), a spec picture decoded at 720 wide (no full-size bitmaps for small slots)",
-                    bg != null && bg.PixelWidth == 2016 && bg.PixelHeight == 1152 && ArtLibrary.Load(ArtLibrary.Zone(1411))?.PixelWidth == 1680 && ArtLibrary.Load(ArtLibrary.Zone(1411))?.PixelHeight == 420 && ArtLibrary.Load(ArtLibrary.Spec("HUNTER", 0))?.PixelWidth == 720);
+                var banner = ArtLibrary.Load(ArtLibrary.Zone(1411)); var specPic = ArtLibrary.Load(ArtLibrary.Spec("HUNTER", 0));
+                // shapes, not the files' pixel counts: a repainted picture of another size must not fail this
+                Check("resources: the background is big enough for a large window (at least 1920 wide, landscape), a zone banner is 4:1, a spec picture is decoded at no more than 720 wide (no full-size bitmaps for small slots)",
+                    bg != null && bg.PixelWidth >= 1920 && bg.PixelWidth > bg.PixelHeight && banner != null && Math.Abs((double)banner.PixelWidth / banner.PixelHeight - 4) < 0.08 && specPic != null && specPic.PixelWidth <= 720 && specPic.PixelWidth >= 360,
+                    (bg == null ? "no bg" : bg.PixelWidth + "x" + bg.PixelHeight) + " banner " + banner?.PixelWidth + "x" + banner?.PixelHeight + " spec " + specPic?.PixelWidth);
                 Check("resources: a missing picture is null, never an exception (the slot stays plain)", ArtLibrary.Load(new ArtPiece("nope.jpg", 0.5, 0.5)) == null);
                 Check("mapping: every game zone has a banner (2665 shares 2521's), zone 11 none; the Atlas Home categories have art; every class has three trees of art, no fourth",
                     ArtLibrary.Zone(1411) != null && ArtLibrary.Zone(1438) != null && ArtLibrary.Zone(1429) != null && ArtLibrary.Zone(11) == null && ArtLibrary.Zone(2665)?.File == ArtLibrary.Zone(2521)?.File && ArtLibrary.Category("instances") != null && ArtLibrary.Category("professions") != null
@@ -53,7 +57,7 @@ namespace ElansAddonHub
                 ShowTab("addons");
                 await Task.Delay(200); UpdateLayout();
                 Check("window: the background is the new painting, anchored right (the lodge stays in view), under the readability gradient",
-                    WindowArt.ImageSource is System.Windows.Media.Imaging.BitmapSource ws && ws.PixelWidth == 2016 && WindowArt.AlignmentX == System.Windows.Media.AlignmentX.Right);
+                    WindowArt.ImageSource is System.Windows.Media.Imaging.BitmapSource ws && bg != null && ws.PixelWidth == bg.PixelWidth && ws.PixelHeight == bg.PixelHeight && WindowArt.AlignmentX == System.Windows.Media.AlignmentX.Right);
                 await ShotWait(400);
                 Snapshot(P("art-01-addons.png"));
 

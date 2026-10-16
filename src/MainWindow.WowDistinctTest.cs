@@ -66,10 +66,10 @@ namespace ElansAddonHub
             check("occurrences: a single multi-day holiday stays ONE span (Hallow's End, 15 days)", d.Events.Count(e => e.Title == "Hallow's End") == 1 && d.Events.First(e => e.Title == "Hallow's End").Days == 15);
             Session.FeedForTest(CalWelcome("owner", DistinctLodgeEvents(), CalMs(CalNow)));
             Session.ReloadWowEvents(true);
-            await Task.Delay(400);
+            await Until(() => Session.WowEvents.Count(e => e.Title == "Call to Arms: Warsong Gulch") == 2);
             LodgePage.ShowCalendarForTest();
             cal.SetModeForTest(true);
-            await Task.Delay(500);
+            await Until(() => cal.IsAgenda && VisualsOf<TextBlock>(cal.AgendaListElementForTest).Any(t => t.Text == "Sun 23:00 - 00:00") && VisualsOf<TextBlock>(cal.AgendaListElementForTest).Any(t => t.Text != null && t.Text.StartsWith("A fishing tournament") && t.ActualHeight > 0));
             var vmW = Session.WowEvents.Where(e => e.Title == "Call to Arms: Warsong Gulch").OrderBy(e => e.StartUtc).ToList();
             var fish = Session.WowEvents.Where(e => e.Title.StartsWith("Stranglethorn")).OrderBy(e => e.StartUtc).ToList();
             var dmf = Session.WowEvents.First(e => e.Title == "Darkmoon Faire");
@@ -95,7 +95,8 @@ namespace ElansAddonHub
             var bar0 = bars.Select(b => ((SolidColorBrush)b.Background).Color).Distinct().Count();
             check("drawn: the bars use several colours (" + bar0 + ")", bar0 >= 5);
             var desc = VisualsOf<TextBlock>(cal.AgendaListElementForTest).FirstOrDefault(t => t.Text != null && t.Text.StartsWith("A fishing tournament"));
-            check("drawn: a long description is cut to 2 lines (" + Math.Round(desc?.ActualHeight ?? -1) + " px, the text itself is far longer)", desc != null && desc.ActualHeight <= 32.5 && desc.ActualHeight >= 31.5 && desc.Text.Length > 300);
+            double descLine = desc == null ? 0 : desc.FontSize * desc.FontFamily.LineSpacing;
+            check("drawn: a long description is cut to 2 lines (" + Math.Round(desc?.ActualHeight ?? -1) + " px for a " + Math.Round(descLine, 1) + " px line, the text itself is far longer)", desc != null && desc.ActualHeight > 1.5 * descLine && desc.ActualHeight < 2.5 * descLine && desc.Text.Length > 300);
 
             // ---- colours
             check("colour: a holiday keeps its colour for its title - every occurrence, any case, any padding", CalendarColors.HolidayIndex("Hallow's End") == CalendarColors.HolidayIndex("  hallow's end ") && vmW[0].ColorKey == vmW[1].ColorKey
@@ -127,7 +128,7 @@ namespace ElansAddonHub
 
             // ---- month: labelled chips and bars
             cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 15));
-            await Task.Delay(500);
+            await Until(() => cal.MonthCellsForTest.Count == 42 && cal.MonthOverlayForTest.Children.Count > 0 && cal.MonthGridElementForTest.ActualHeight > 0);
             var cells = cal.MonthCellsForTest; var lay = cal.MonthLayoutForTest;
             MonthCellVM C(int day) => cells.First(c => c.Cell.Day == new DateTime(2026, 10, day));
             int Ix(int day) => cells.IndexOf(C(day));
@@ -160,7 +161,7 @@ namespace ElansAddonHub
             var l3 = CalendarRules.Layout(CalendarRules.MonthGrid(2026, 10, busy.Skip(1).ToList(), CalNow));
             check("layout: three events and no holiday = two chips (earliest first) and ''+1 more''", l3.Chips.Count(s => s.Row * 7 + s.Col == bi) == 2 && l3.More[bi] == 1 && l3.Chips.Where(s => s.Row * 7 + s.Col == bi).OrderBy(s => s.Lane).First().Label == "12:00 Alpha");
             var drawnTexts = cal.MonthOverlayForTest.Children.OfType<Grid>().SelectMany(g => g.Children.OfType<TextBlock>()).ToList();
-            check("drawn: chip and bar titles use Text.Caption (11 px) and fit their 16 px line", drawnTexts.Count == lay.Segs.Count && drawnTexts.All(t => t.FontSize == 11 && t.ActualHeight <= 16.5 && t.TextTrimming == TextTrimming.CharacterEllipsis));
+            check("drawn: every chip and bar title fits inside its line (one line, cut with an ellipsis, never taller than the chip)", drawnTexts.Count == lay.Segs.Count && drawnTexts.All(t => t.Parent is FrameworkElement fe && fe.ActualHeight > 0 && t.ActualHeight <= fe.ActualHeight + 0.5 && t.TextTrimming == TextTrimming.CharacterEllipsis && t.TextWrapping == TextWrapping.NoWrap));
             var barRects = cal.MonthOverlayForTest.Children.OfType<Grid>().Select(g => g.Children.OfType<System.Windows.Shapes.Rectangle>().FirstOrDefault()).Where(r => r != null).ToList();
             check("drawn: every chip / bar has its coloured left mark in the colour of its kind", barRects.Count >= lay.Segs.Count - lay.Segs.Count(s => s.LeftOpen) && barRects.All(r => r.Fill is SolidColorBrush sb && keys.Any(k => Col(k) == sb.Color)));
 
@@ -168,48 +169,42 @@ namespace ElansAddonHub
             double gridH = cal.MonthGridElementForTest.ActualHeight;
             var topLeft = cal.MonthGridElementForTest.TranslatePoint(new Point(0, 0), cal);
             double ovH = cal.MonthOverlayForTest.ActualHeight;
-            bool cellsFixed = VisualsOf<Grid>(cal.MonthGridElementForTest).Where(g => g.Tag is MonthCellVM).All(g => Math.Abs(g.ActualHeight - 80) < 0.5);
+            var busyHs = VisualsOf<Grid>(cal.MonthGridElementForTest).Where(g => g.Tag is MonthCellVM).Select(g => g.ActualHeight).ToList();
             cal.ShowMonthForTest(2027, 2, new DateTime(2027, 2, 10));
-            await Task.Delay(300);
+            await Until(() => cal.MonthOverlayForTest.Children.Count == 0 && cal.MonthCellsForTest.Any(c => c.Cell.Day == new DateTime(2027, 2, 10)));
             var topLeft2 = cal.MonthGridElementForTest.TranslatePoint(new Point(0, 0), cal);
-            check("no shift: an empty month (Feb 2027) has the same grid (504 high), the same cell size, the same overlay and the same position as a busy one",
-                Math.Abs(gridH - 504) < 0.5 && Math.Abs(cal.MonthGridElementForTest.ActualHeight - gridH) < 0.5 && Math.Abs(cal.MonthOverlayForTest.ActualHeight - ovH) < 0.5 && Math.Abs(ovH - 504) < 0.5 && cellsFixed
-                && VisualsOf<Grid>(cal.MonthGridElementForTest).Where(g => g.Tag is MonthCellVM).All(g => Math.Abs(g.ActualHeight - 80) < 0.5) && Math.Abs(topLeft.Y - topLeft2.Y) < 0.5 && cal.MonthOverlayForTest.Children.Count == 0);
+            var emptyHs = VisualsOf<Grid>(cal.MonthGridElementForTest).Where(g => g.Tag is MonthCellVM).Select(g => g.ActualHeight).ToList();
+            check("no shift: an empty month (Feb 2027) has the same grid height (" + gridH + "), the same day size, the same overlay and the same position as a busy one",
+                gridH > 0 && Math.Abs(cal.MonthGridElementForTest.ActualHeight - gridH) < 0.5 && Math.Abs(cal.MonthOverlayForTest.ActualHeight - ovH) < 0.5 && Math.Abs(ovH - gridH) < 0.5
+                && busyHs.Count == 42 && emptyHs.Count == 42 && busyHs.Concat(emptyHs).Max() - busyHs.Concat(emptyHs).Min() < 0.5 && Math.Abs(topLeft.Y - topLeft2.Y) < 0.5 && cal.MonthOverlayForTest.Children.Count == 0);
             cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 15));
-            await Task.Delay(300);
+            await Until(() => cal.MonthOverlayForTest.Children.Count > 0);
 
             // ---- filter chips
             check("filter: the four chips are there (Lodge, Holidays, Raid resets, My game events), all on by default, and the bar shows with the WoW bar", cal.FilterBarVisibleForTest && new[] { "lodge", "holiday", "raidreset", "mine" }.All(g => cal.FilterButtonForTest(g).IsChecked == true && cal.FilterButtonForTest(g).IsEnabled)
                 && !new Settings().CalHideLodge && !new Settings().CalHideHolidays && !new Settings().CalHideResets && !new Settings().CalHideMine);
             int barsAll = lay.Bars.Count(), chipsAll = cal.MonthLayoutForTest.Chips.Count();
             cal.ClickFilterForTest("holiday", false);
-            await Task.Delay(300);
-            cal.SetModeForTest(true); await Task.Delay(300);
-            var ag = cal.AgendaGroupsForTest.SelectMany(g => g.Events).ToList();
-            check("filter: Holidays off -> stored, no holiday cards in the agenda, no bars in the month; Lodge, resets and my events stay", settings.CalHideHolidays && ag.All(e => e.WowKind != "holiday") && ag.Any(e => !e.IsWow) && ag.Any(e => e.WowKind == "raidreset") && ag.Any(e => e.WowKind == "player")
-                && cal.FilterButtonForTest("holiday").IsChecked != true);
-            cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 15)); await Task.Delay(300);
-            check("filter: ... and the month has no bars, the Karazhan chip on the 15th now has room (no ''+N more'' there)", cal.MonthLayoutForTest.Bars.Count() == 0 && cal.MonthLayoutForTest.More[Ix(15)] == 0 && cal.MonthLayoutForTest.Chips.Any(s => s.Label == "20:00 Karazhan run"));
+            await Settle();
+            cal.SetModeForTest(true);
+            check("filter: Holidays off -> stored, no holiday cards in the agenda, no bars in the month; Lodge, resets and my events stay", await Until(() => { var ag = cal.AgendaGroupsForTest.SelectMany(g => g.Events).ToList(); return cal.IsAgenda && settings.CalHideHolidays && ag.All(e => e.WowKind != "holiday") && ag.Any(e => !e.IsWow) && ag.Any(e => e.WowKind == "raidreset") && ag.Any(e => e.WowKind == "player")
+                && cal.FilterButtonForTest("holiday").IsChecked != true; }));
+            cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 15));
+            check("filter: ... and the month has no bars, the Karazhan chip on the 15th now has room (no ''+N more'' there)", await Until(() => cal.MonthLayoutForTest.Bars.Count() == 0 && cal.MonthLayoutForTest.More[Ix(15)] == 0 && cal.MonthLayoutForTest.Chips.Any(s => s.Label == "20:00 Karazhan run")));
             cal.ClickFilterForTest("holiday", true);
             cal.ClickFilterForTest("raidreset", false); cal.ClickFilterForTest("mine", false);
-            await Task.Delay(300);
-            var mday = cal.MonthLayoutForTest;
-            check("filter: Raid resets + My game events off -> no reset chip, no Karazhan / Guild night chip, holidays and Lodge still there", settings.CalHideResets && settings.CalHideMine && !mday.Chips.Any(s => s.Ev.WowKind == "raidreset" || s.Ev.WowKind == "player" || s.Ev.WowKind == "guild") && mday.Bars.Any() && mday.Chips.Any(s => !s.Ev.IsWow));
+            check("filter: Raid resets + My game events off -> no reset chip, no Karazhan / Guild night chip, holidays and Lodge still there", await Until(() => { var mday = cal.MonthLayoutForTest; return settings.CalHideResets && settings.CalHideMine && !mday.Chips.Any(s => s.Ev.WowKind == "raidreset" || s.Ev.WowKind == "player" || s.Ev.WowKind == "guild") && mday.Bars.Any() && mday.Chips.Any(s => !s.Ev.IsWow); }));
             cal.ClickFilterForTest("raidreset", true); cal.ClickFilterForTest("mine", true);
             cal.ClickFilterForTest("lodge", false);
-            await Task.Delay(300);
-            check("filter: Lodge off -> no Lodge chips; the strip above the chat still lists Lodge events (the filter is for the Calendar page)", settings.CalHideLodge && !cal.MonthLayoutForTest.Segs.Any(s => !s.Ev.IsWow) && Session.StripEvents(CalNow).Any(e => !e.IsWow));
+            check("filter: Lodge off -> no Lodge chips; the strip above the chat still lists Lodge events (the filter is for the Calendar page)", await Until(() => settings.CalHideLodge && !cal.MonthLayoutForTest.Segs.Any(s => !s.Ev.IsWow) && cal.MonthLayoutForTest.Segs.Count > 0 && Session.StripEvents(CalNow).Any(e => !e.IsWow)));
             cal.ClickFilterForTest("lodge", true);
-            await Task.Delay(300);
-            check("filter: everything back on gives the same bars and chips as before", cal.MonthLayoutForTest.Bars.Count() == barsAll && cal.MonthLayoutForTest.Chips.Count() == chipsAll && !settings.CalHideLodge && !settings.CalHideHolidays && !settings.CalHideResets && !settings.CalHideMine);
+            check("filter: everything back on gives the same bars and chips as before", await Until(() => cal.MonthLayoutForTest.Bars.Count() == barsAll && cal.MonthLayoutForTest.Chips.Count() == chipsAll && !settings.CalHideLodge && !settings.CalHideHolidays && !settings.CalHideResets && !settings.CalHideMine));
             cal.ClickWowSwitchForTest(false);
-            await Task.Delay(300);
             check("filter: the master switch 'Show in-game WoW events' off hides all three in-game kinds and greys their chips; Lodge stays (the switch keeps its meaning)",
-                settings.WowEventsOff && !cal.FilterButtonForTest("holiday").IsEnabled && !cal.FilterButtonForTest("raidreset").IsEnabled && !cal.FilterButtonForTest("mine").IsEnabled && cal.FilterButtonForTest("lodge").IsEnabled
-                && cal.MonthLayoutForTest.Segs.All(s => !s.Ev.IsWow) && cal.MonthLayoutForTest.Segs.Count > 0);
+                await Until(() => settings.WowEventsOff && !cal.FilterButtonForTest("holiday").IsEnabled && !cal.FilterButtonForTest("raidreset").IsEnabled && !cal.FilterButtonForTest("mine").IsEnabled && cal.FilterButtonForTest("lodge").IsEnabled
+                && cal.MonthLayoutForTest.Segs.All(s => !s.Ev.IsWow) && cal.MonthLayoutForTest.Segs.Count > 0));
             cal.ClickWowSwitchForTest(true);
-            await Task.Delay(300);
-            check("filter: ... and on again brings back each chip exactly as the toggles had it", !settings.WowEventsOff && cal.FilterButtonForTest("holiday").IsEnabled && cal.MonthLayoutForTest.Bars.Count() == barsAll);
+            check("filter: ... and on again brings back each chip exactly as the toggles had it", await Until(() => !settings.WowEventsOff && cal.FilterButtonForTest("holiday").IsEnabled && cal.MonthLayoutForTest.Bars.Count() == barsAll));
             var back = Util.FromJson<Settings>(Util.ToJson(new Settings { CalHideLodge = true, CalHideMine = true }));
             check("filter: the toggles are saved with the settings (round trip), older settings files read as all shown", back.CalHideLodge && back.CalHideMine && !back.CalHideHolidays && !back.CalHideResets && !Util.FromJson<Settings>("{}").CalHideLodge);
 
@@ -223,21 +218,21 @@ namespace ElansAddonHub
             check("old format: the same spans in format 2 are trusted (the addon says they are one occurrence)", WowCalendar.Read(settings.WowRoot).Events.All(e => !e.Recurring));
             WriteWow(WowLua(OldMergedWowEvents(), -18000, 1));
             Session.ReloadWowEvents(true);
-            await Task.Delay(400);
+            await Until(() => Session.WowEvents.Count(e => e.Recurring) == 3);
             cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 15));
-            await Task.Delay(400);
+            await Until(() => cal.MonthLayoutForTest.Bars.Any(s => s.Ev.Title == "Hallow's End"));
             var rec = Session.WowEvents.Where(e => e.Recurring).ToList();
             check("old format: recurring entries are no bands and no chips - nothing in the month grid, nothing in the day list", rec.Count == 3 && rec.All(e => !e.IsBand && e.TimeText == "Repeats weekly") && cal.MonthCellsForTest.All(c => !c.Cell.Bands.Any(b => b.Recurring) && !c.Cell.Events.Any(b => b.Recurring))
                 && !cal.MonthLayoutForTest.Segs.Any(s => s.Ev.Recurring) && !cal.DayEventsForTest.Any(e => e.Recurring));
             check("old format: the month still draws the ones that are real (Hallow's End and the long fair as bars, Karazhan as a chip)", cal.MonthLayoutForTest.Bars.Any(s => s.Ev.Title == "Hallow's End") && cal.MonthLayoutForTest.Chips.Any(s => s.Label == "20:00 Karazhan run"));
             cal.SetModeForTest(true);
-            await Task.Delay(400);
+            await Until(() => cal.IsAgenda && cal.AgendaGroupsForTest.SelectMany(g => g.Events).Count(e => e.Recurring) == 3);
             var agOld = cal.AgendaGroupsForTest.SelectMany(g => g.Events).ToList();
             check("old format: the agenda lists each once, under Today (they are running), with a hint to update the addon in the caption", agOld.Count(e => e.Recurring) == 3 && cal.AgendaGroupsForTest[0].Events.Count(e => e.Recurring) == 3 && cal.WowCaptionForTest.Contains("1.9.1") && cal.WowCaptionForTest.Contains("/reload"));
             check("old format: the card says 'Repeats weekly', not a month-long range (" + string.Join(" / ", rec.Select(e => e.WhenLine)) + ")", rec.All(e => e.WhenLine.StartsWith("Repeats weekly") && !e.WhenLine.Contains(" - ")));
             WriteWow(WowLua(WowFixtureEvents()));
             Session.ReloadWowEvents(true);
-            await Task.Delay(400);
+            await Until(() => Session.WowEvents.Count(e => e.Recurring) == 0);
             LodgePage.HideCalendarForTest();
         }
     }

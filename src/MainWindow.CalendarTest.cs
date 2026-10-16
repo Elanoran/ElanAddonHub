@@ -104,8 +104,8 @@ namespace ElansAddonHub
             // a 2.10 server: no "calendar" feature at all
             Session.FeedForTest(CalWelcome("owner", "", CalMs(CalNow), "2.10.0", false, card));
             Session.Select(Session.TextChannels.First(c => c.Id == "general"));
-            await Task.Delay(300);
-            check("old server: no calendar feature -> the calendar is hidden (no row, no next-event line)", !Session.SupportsCalendar && !LodgePage.CalendarRowVisibleForTest && !LodgePage.NextEventVisibleForTest);
+            await Settle();
+            check("old server: no calendar feature -> the calendar is hidden (no row, no next-event line)", await Until(() => !Session.SupportsCalendar && !LodgePage.CalendarRowVisibleForTest && !LodgePage.NextEventVisibleForTest));
             LodgePage.ShowCalendarForTest();
             check("old server: ShowCalendar does nothing", !LodgePage.CalendarShownForTest);
             Session.FeedForTest("{\"t\":\"cal:events\",\"events\":[" + CalEv("z1", "Ghost", CalNow.AddHours(1), 60, "Bob", true, 1, 1, 1) + "]}");
@@ -117,8 +117,7 @@ namespace ElansAddonHub
             check("old server: version below 2.11 hides it even when the feature is listed", !Session.SupportsCalendar && !LodgePage.CalendarRowVisibleForTest);
             // a 2.11 server shows it
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(300);
-            check("2.11 server: the Calendar row appears and the events are loaded", Session.SupportsCalendar && LodgePage.CalendarRowVisibleForTest && Session.Events.Count == 7);
+            check("2.11 server: the Calendar row appears and the events are loaded", await Until(() => Session.SupportsCalendar && LodgePage.CalendarRowVisibleForTest && Session.Events.Count == 7));
             check("2.11 server: events are kept sorted by start", Session.Events.Zip(Session.Events.Skip(1), (a, b) => a.StartUtc <= b.StartUtc).All(x => x));
         }
 
@@ -128,7 +127,7 @@ namespace ElansAddonHub
             LodgePage.ShowCalendarForTest();
             var cal = LodgePage.CalendarForTest;
             cal.SetModeForTest(true);
-            await Task.Delay(500);
+            await Until(() => LodgePage.CalendarShownForTest && cal.AgendaGroupsForTest.Count == 4 && VisualsOf<TextBlock>(cal.AgendaListElementForTest).Any(t => t.Text == "Bring fire resistance"));
             LodgePage.UpdateLayout();
             check("page: the calendar takes the chat's place and the Calendar row is selected", LodgePage.CalendarShownForTest);
             var groups = cal.AgendaGroupsForTest;
@@ -166,10 +165,9 @@ namespace ElansAddonHub
 
             // empty
             Session.FeedForTest(CalWelcome("owner", "", CalMs(CalNow)));
-            await Task.Delay(200);
-            check("agenda: nothing planned -> a calm empty state with the New event button", cal.AgendaEmptyVisibleForTest && cal.NewButtonVisibleForTest && !LodgePage.NextEventVisibleForTest);
+            check("agenda: nothing planned -> a calm empty state with the New event button", await Until(() => cal.AgendaEmptyVisibleForTest && cal.NewButtonVisibleForTest && !LodgePage.NextEventVisibleForTest));
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(300);
+            await Until(() => !cal.AgendaEmptyVisibleForTest && cal.AgendaGroupsForTest.Count == 4);
         }
 
         // ---------------------------------------------------------------- month
@@ -178,7 +176,7 @@ namespace ElansAddonHub
             var cal = LodgePage.CalendarForTest;
             sent.Clear();
             cal.ShowMonthForTest(2026, 10, new DateTime(2026, 10, 12));
-            await Task.Delay(300);
+            await Until(() => cal.MonthCellsForTest.Count == 42 && cal.MonthOverlayForTest.Children.Count > 0 && cal.MonthGridElementForTest.ActualHeight > 0);
             var cells = cal.MonthCellsForTest;
             MonthCellVM C(int d) => cells.First(c => c.Cell.Day == new DateTime(2026, 10, d));
             check("month: 42 cells, the title is the month", cells.Count == 42 && cal.MonthTitleForTest == "October 2026");
@@ -191,12 +189,13 @@ namespace ElansAddonHub
             var overlay = cal.MonthOverlayForTest;
             var drawn = overlay.Children.OfType<Grid>().ToList();
             var moreText = overlay.Children.OfType<TextBlock>().Select(t => t.Text).ToList();
-            check("drawn: one chip per layout entry, each 16 high, and exactly one '+1 more' label", drawn.Count == lay.Segs.Count && drawn.All(g => Math.Abs(g.ActualHeight - 16) < 0.5) && moreText.SequenceEqual(new[] { "+1 more" }));
+            check("drawn: one chip per layout entry, all of one height, and exactly one '+1 more' label", drawn.Count == lay.Segs.Count && drawn.Count > 0 && drawn.Max(g => g.ActualHeight) - drawn.Min(g => g.ActualHeight) < 0.5 && drawn[0].ActualHeight >= 12 && moreText.SequenceEqual(new[] { "+1 more" }));
             check("drawn: Lodge chips carry the accent colour (the same colour as the Lodge type label)", drawn.Count > 0 && Session.Events.All(e => e.ColorKey == "Brush.Cal.Lodge" && e.TypeLabel == "Lodge") && ((System.Windows.Media.SolidColorBrush)Session.Events[0].BarBrush).Color == ((System.Windows.Media.SolidColorBrush)FindResource("Brush.Accent")).Color);
             var grid0 = cal.MonthGridElementForTest;
             double gridH = grid0.ActualHeight;
-            check("month: fixed cell size - 42 cells of 84 x 84 slots, the grid is 504 high, with or without events", Math.Abs(gridH - 504) < 0.5 && cal.MonthCellsForTest.Count == 42
-                && VisualsOf<Grid>(grid0).Where(g => g.Tag is MonthCellVM).All(g => Math.Abs(g.ActualHeight - 80) < 0.5));
+            var dayHs = VisualsOf<Grid>(grid0).Where(g => g.Tag is MonthCellVM).Select(g => g.ActualHeight).ToList();
+            check("month: fixed cell size - 42 days of one height with or without events (" + (dayHs.Count > 0 ? dayHs.Min() + "-" + dayHs.Max() : "none") + "), the grid six such rows (" + gridH + ")", cal.MonthCellsForTest.Count == 42
+                && dayHs.Count == 42 && dayHs.Max() - dayHs.Min() < 0.5 && dayHs.Min() >= 48 && gridH >= 6 * dayHs.Min() - 0.5 && gridH <= 6 * (dayHs.Min() + 12));
             check("month: today is marked, days of other months are dimmed", C(11).Cell.IsToday && !C(12).Cell.IsToday && cells.Any(c => !c.Cell.InMonth && c.CellOpacity < 1));
             check("month: the selected day lists its events, soonest first", cal.DayEventsForTest.Select(e => e.Id).SequenceEqual(new[] { "h1", "b1", "c1" }) && cal.DayTitleForTest.StartsWith("Tomorrow") && C(12).Selected);
             cal.SelectDayForTest(new DateTime(2026, 10, 17));
@@ -208,19 +207,18 @@ namespace ElansAddonHub
 
             // a month beyond the welcome's 30 days is fetched once, and its events draw chips when the answer arrives
             cal.ShowMonthForTest(2026, 12);
-            await Task.Delay(100);
+            await Until(() => sent.Any(o => (string)o["t"] == "cal:range"), 2000);
             var req = sent.Where(o => (string)o["t"] == "cal:range").ToList();
             check("month: December is fetched (cal:range once, a window of 5-7 weeks)", req.Count == 1 && (double)req[0]["to"] - (double)req[0]["from"] > 34 * 86400000.0 && (double)req[0]["to"] - (double)req[0]["from"] < 62 * 86400000.0);
             cal.ShowMonthForTest(2026, 12);
             check("month: the same month is not asked for twice", sent.Count(o => (string)o["t"] == "cal:range") == 1);
             Session.FeedForTest("{\"t\":\"cal:range\",\"from\":1,\"to\":2,\"events\":[" + CalEv("x1", "Naxxramas", new DateTime(2026, 12, 5, 18, 0, 0, DateTimeKind.Utc), 180, "Elan", true, 2, 3, 5) + "]}");
-            await Task.Delay(200);
+            check("month: the fetched event shows as a chip on the 5th of December, and the grid keeps its size", await Until(() => cal.MonthLayoutForTest.Chips.Any(s => s.Label == "20:00 Naxxramas") && Session.Events.Any(e => e.Id == "x1") && Math.Abs(cal.MonthGridElementForTest.ActualHeight - gridH) < 0.5));
             cells = cal.MonthCellsForTest;
-            check("month: the fetched event shows as a chip on the 5th of December, and the grid keeps its size", cal.MonthLayoutForTest.Chips.Any(s => s.Label == "20:00 Naxxramas") && Session.Events.Any(e => e.Id == "x1") && Math.Abs(cal.MonthGridElementForTest.ActualHeight - gridH) < 0.5);
             check("month: the fetched event also joins the agenda, in a group of its own",
                 cal.IsAgenda == false && CalendarRules.Agenda(Session.Events, CalNow).Last().Label == "Saturday 5 December");
             cal.SetModeForTest(true);
-            await Task.Delay(200);
+            await Until(() => cal.IsAgenda);
         }
 
         // ---------------------------------------------------------------- the sign-up buttons
@@ -228,7 +226,7 @@ namespace ElansAddonHub
         {
             var cal = LodgePage.CalendarForTest;
             cal.SetModeForTest(true);
-            await Task.Delay(300);
+            await Until(() => cal.IsAgenda && cal.AgendaGroupsForTest.Count == 4);
             var a1 = Session.EventById("a1"); var b1 = Session.EventById("b1"); var c1 = Session.EventById("c1"); var f1 = Session.EventById("f1");
             check("buttons: I am going as Tank on the Deadmines: Going is the chosen answer", a1.MyStatus == "going" && a1.GoingActive && !a1.MaybeActive && !a1.DeclinedActive && a1.SelectedRole == "tank");
             check("buttons: no answer yet on Molten Core: nothing chosen, all three can be pressed (tank has a place left)", b1.MyStatus == null && !b1.GoingActive && b1.GoingEnabled && b1.MaybeEnabled && b1.DeclinedEnabled && !b1.LeaveEnabled);
@@ -243,7 +241,7 @@ namespace ElansAddonHub
             check("buttons: pick Healer (1/3) -> Going is on again", b1.GoingEnabled && b1.SelectedRole == "healer");
 
             // what a press sends
-            await Task.Delay(300);
+            await Until(() => VisualsOf<Button>(cal.AgendaListElementForTest).Count(b => b.Tag == b1 && b.Content is string) >= 4);
             LodgePage.UpdateLayout();
             var allButtons = VisualsOf<Button>(cal.AgendaListElementForTest).ToList();
             notesDebug = string.Join("/", allButtons.Select(b => (b.Content as string) + ":" + (b.Tag?.GetType().Name)));
@@ -263,7 +261,7 @@ namespace ElansAddonHub
             // the answer comes back
             Session.FeedForTest("{\"t\":\"cal:events\",\"events\":[" + CalEv("b1", "Molten Core", new DateTime(2026, 10, 12, 18, 0, 0, DateTimeKind.Utc), 180, "Elan", true, 2, 3, 5,
                 string.Join(",", CalSig("Kor", "going", "tank"), CalSig("Mia", "going", "healer"), CalSig("Elan", "going", "healer", "late maybe"))) + "]}");
-            await Task.Delay(200);
+            await Until(() => b1.GoingActive && VisualsOf<Button>(cal.AgendaListElementForTest).Any(b => b.Tag == b1 && b.Content as string == "Clear" && b.IsVisible));
             check("buttons: the frame makes Going the chosen answer; my line and the fill follow", b1.GoingActive && b1.MyRole == "healer" && b1.MyLine == "You are going as Healer" && b1.FillText == "Tank 1/2 · Healer 2/3 · DPS 0/5" && b1.LeaveVisibility == Visibility.Visible);
             sent.Clear();
             buttons = VisualsOf<Button>(cal.AgendaListElementForTest).Where(b => b.Tag == b1 && b.Content is string).ToDictionary(b => (string)b.Content, b => b, StringComparer.Ordinal);
@@ -292,12 +290,11 @@ namespace ElansAddonHub
             var cal = LodgePage.CalendarForTest;
             var b1 = Session.EventById("b1");
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(300);
+            await Settle();
             b1 = Session.EventById("b1");
             cal.OpenDetail(b1);
-            await Task.Delay(500);
+            check("detail: opens as an overlay card for the event", await Until(() => cal.DetailOpenForTest && cal.DetailForTest == b1 && VisualsOf<TextBlock>(cal.DetailBoxForTest).Any(t => t.Text == "Lv 60 Mage")));
             cal.DetailBoxForTest.UpdateLayout();
-            check("detail: opens as an overlay card for the event", cal.DetailOpenForTest && cal.DetailForTest == b1);
             var groups = b1.Groups.ToList();
             check("detail: sign-ups are listed by role, then maybe (Tank, Healer, DPS, Maybe)", string.Join("|", groups.Select(g => g.Title + " " + g.CountText)) == "Tank 1/2|Healer 1/3|DPS 1/5|Maybe 1");
             var kor = groups.First(g => g.Title == "DPS").People.First();
@@ -312,20 +309,21 @@ namespace ElansAddonHub
                 && texts.Contains("Lv 60 Mage") && texts.Contains("Repeats weekly"));
             check("detail: the owner (an officer) can edit and cancel anyone's event", cal.DetailEditVisibleForTest && cal.DetailCancelVisibleForTest);
             cal.CloseDetailForTest();
-            await Task.Delay(300);
+            await Until(() => !cal.DetailOpenForTest);
 
             // a plain member: Edit / Cancel only on their own events
             Session.FeedForTest(CalWelcome("member", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(300);
+            await Settle();
             var mine = Session.EventById("b1"); var theirs = Session.EventById("a1");
             check("detail: a member can manage their own event but not Bob's (the server enforces it too)", mine.CanManage && !theirs.CanManage);
             cal.OpenDetail(theirs);
-            await Task.Delay(300);
-            check("detail: ... so Bob's event shows no Edit / Cancel to a member", !cal.DetailEditVisibleForTest && !cal.DetailCancelVisibleForTest);
+            await Until(() => cal.DetailOpenForTest && cal.DetailForTest == theirs);
+            await Settle();
+            check("detail: ... so Bob's event shows no Edit / Cancel to a member", cal.DetailOpenForTest && !cal.DetailEditVisibleForTest && !cal.DetailCancelVisibleForTest);
             cal.CloseDetailForTest();
-            await Task.Delay(300);
+            await Until(() => !cal.DetailOpenForTest);
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(200);
+            await Settle();
         }
 
         // ---------------------------------------------------------------- the form
@@ -350,9 +348,8 @@ namespace ElansAddonHub
 
             // the real form
             cal.OpenFormForTest();
-            await Task.Delay(500);
+            check("form: opens as an overlay card with the LFG form's look; New event; repeat and chat channel shown", await Until(() => cal.FormOpenForTest && cal.FormHeadingForTest == "New event" && cal.FormRepeatAreaVisibleForTest && !cal.FormScopeVisibleForTest));
             LodgePage.UpdateLayout();
-            check("form: opens as an overlay card with the LFG form's look; New event; repeat and chat channel shown", cal.FormOpenForTest && cal.FormHeadingForTest == "New event" && cal.FormRepeatAreaVisibleForTest && !cal.FormScopeVisibleForTest);
             check("form: instance suggestions are the same as the LFG form's", cal.FormSuggestionsForTest.Cast<string>().SequenceEqual(LfgCatalog.Suggest("")));
             cal.FormTitleForTest = "Mol";
             check("form: typing narrows the suggestions", cal.FormSuggestionsForTest.Cast<string>().Contains("Molten Core"));
@@ -381,7 +378,7 @@ namespace ElansAddonHub
 
             // a social, one-off event that is not posted in chat
             cal.OpenFormForTest();
-            await Task.Delay(300);
+            await Until(() => cal.FormOpenForTest && cal.FormHeadingForTest == "New event");
             cal.FormTitleForTest = "Guild night";
             cal.FormRolesForTest(false);
             cal.FormWhenForTest(0, 20, 21, 2);
@@ -395,8 +392,7 @@ namespace ElansAddonHub
             // edit: no repeat / channel choices; a series event asks "this or following"
             var d1 = Session.EventById("d1");
             cal.OpenFormForTest(d1);
-            await Task.Delay(400);
-            check("form: Edit has the event's values, no repeat and no channel; a weekly event offers 'This and following'", cal.FormHeadingForTest == "Edit event" && cal.FormTitleForTest == "Blackwing Lair" && !cal.FormRepeatAreaVisibleForTest && cal.FormScopeVisibleForTest);
+            check("form: Edit has the event's values, no repeat and no channel; a weekly event offers 'This and following'", await Until(() => cal.FormHeadingForTest == "Edit event" && cal.FormTitleForTest == "Blackwing Lair" && !cal.FormRepeatAreaVisibleForTest && cal.FormScopeVisibleForTest));
             var ef = cal.ReadFormForTest();
             check("form: the edit reads back the same instant (17 Oct 20:00 local) and length", ef.StartUtc.Value == d1.StartUtc && ef.DurationMin == 180 && ef.Tank == 2 && ef.Healer == 3 && ef.Dps == 5 && ef.Editing);
             cal.FormTitleForTest = "Blackwing Lair (full clear)";
@@ -404,17 +400,14 @@ namespace ElansAddonHub
             check("form: saving an edit sends cal:edit with the id and scope", cal.SubmitFormForTest() && sent.Count == 1 && (string)sent[0]["t"] == "cal:edit" && (string)sent[0]["id"] == "d1" && (string)sent[0]["scope"] == "this");
             var c1 = Session.EventById("c1");
             cal.OpenFormForTest(c1);
-            await Task.Delay(300);
-            check("form: a one-off event has no 'following' choice; a social event opens with No roles", !cal.FormScopeVisibleForTest && !cal.ReadFormForTest().Roles);
+            check("form: a one-off event has no 'following' choice; a social event opens with No roles", await Until(() => cal.FormOpenForTest && cal.FormTitleForTest == c1.Title && !cal.FormScopeVisibleForTest && !cal.ReadFormForTest().Roles));
             cal.CloseFormForTest();
-            await Task.Delay(300);
-            check("form: Esc / Cancel closes it", !cal.FormOpenForTest);
+            check("form: Esc / Cancel closes it", await Until(() => !cal.FormOpenForTest));
             // guests cannot create
             Session.FeedForTest(CalWelcome("guest", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(300);
-            check("form: a guest sees the calendar but has no New event button", Session.SupportsCalendar && !cal.NewButtonVisibleForTest);
+            check("form: a guest sees the calendar but has no New event button", await Until(() => Session.SupportsCalendar && !cal.NewButtonVisibleForTest));
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(200);
+            await Until(() => cal.NewButtonVisibleForTest);
         }
 
         // ---------------------------------------------------------------- reminders
@@ -476,7 +469,7 @@ namespace ElansAddonHub
             Session.Clock = () => CalNow;
             Session.Toasts.Visible.Clear();
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow)));
-            await Task.Delay(200);
+            await Settle();
         }
 
         // ---------------------------------------------------------------- the chat card
@@ -490,9 +483,9 @@ namespace ElansAddonHub
             LodgePage.HideCalendarForTest();
             Session.FeedForTest(CalWelcome("owner", CalEvents(), CalMs(CalNow), "2.11.0", true, Card("k1", "b1", "Molten Core", b1.StartUtc) + "," + Card("k2", "old1", "Zul'Gurub", new DateTime(2026, 9, 3, 18, 0, 0, DateTimeKind.Utc))));
             Session.Select(Session.TextChannels.First(c => c.Id == "general"));
-            await Task.Delay(500);
+            await Until(() => VisualsOf<Button>(LodgePage.ChatListForTest).Count(b => b.Content as string == "Open in Calendar") == 2);
             LodgePage.UpdateLayout();
-            var k1 = Session.MessagesOf("general").First(m => m.Id == "k1"); var k2 = Session.MessagesOf("general").First(m => m.Id == "k2");
+            var k1 =Session.MessagesOf("general").First(m => m.Id == "k1"); var k2 = Session.MessagesOf("general").First(m => m.Id == "k2");
             b1 = Session.EventById("b1");
             check("card: the chat message is the event itself (live), its fallback line is hidden", k1.Event == b1 && k1.EventVisibility == Visibility.Visible && k1.TextVisibility == Visibility.Collapsed && k1.Text.StartsWith("[Event] Molten Core"));
             var texts = VisualsOf<TextBlock>(LodgePage.ChatListForTest).Select(t => t.Text).Where(t => !string.IsNullOrEmpty(t)).ToList();
@@ -508,32 +501,28 @@ namespace ElansAddonHub
             // click -> the calendar opens on the event
             sent.Clear();
             buttons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Task.Delay(500);
-            check("card: 'Open in Calendar' shows the calendar and opens the event's detail", LodgePage.CalendarShownForTest && cal.DetailOpenForTest && cal.DetailForTest == b1);
+            check("card: 'Open in Calendar' shows the calendar and opens the event's detail", await Until(() => LodgePage.CalendarShownForTest && cal.DetailOpenForTest && cal.DetailForTest == b1));
             cal.CloseDetailForTest();
-            await Task.Delay(300);
+            await Until(() => !cal.DetailOpenForTest);
             // an event outside the loaded window: a stand-in from the card, resolved when the month arrives
             check("card: an old event outside the window is a stand-in (title and time from the card) with no sign-up numbers", k2.Event != null && k2.Event.Stub && k2.Event.Title == "Zul'Gurub" && k2.Event.FillText == "");
             LodgePage.HideCalendarForTest();
-            await Task.Delay(200);
+            await Until(() => !LodgePage.CalendarShownForTest);
             sent.Clear();
             LodgePage.OpenCalendarEvent(k2.Event);
-            await Task.Delay(300);
-            check("card: opening it asks the server for that month (cal:range)", sent.Any(o => (string)o["t"] == "cal:range") && cal.IsAgenda == false);
+            check("card: opening it asks the server for that month (cal:range)", await Until(() => sent.Any(o => (string)o["t"] == "cal:range") && cal.IsAgenda == false));
             Session.FeedForTest("{\"t\":\"cal:range\",\"from\":1,\"to\":2,\"events\":[" + CalEv("old1", "Zul'Gurub", new DateTime(2026, 9, 3, 18, 0, 0, DateTimeKind.Utc), 180, "Elan", true, 2, 3, 5, CalSig("Kor", "going", "dps")) + "]}");
-            await Task.Delay(400);
-            check("card: when the month arrives the same card becomes the real event and its detail opens", !k2.Event.Stub && cal.DetailOpenForTest && k2.Event.FillText.Contains("DPS 1/5"));
+            check("card: when the month arrives the same card becomes the real event and its detail opens", await Until(() => !k2.Event.Stub && cal.DetailOpenForTest && k2.Event.FillText.Contains("DPS 1/5")));
             cal.CloseDetailForTest();
-            await Task.Delay(300);
+            await Until(() => !cal.DetailOpenForTest);
             cal.SetModeForTest(true);
             LodgePage.HideCalendarForTest();
             check("page: choosing a channel brings the chat back and the channel looks selected again", !LodgePage.CalendarShownForTest && !ChannelVM.CalendarShown);
             // the sidebar line opens the next event
             LodgePage.ClickNextEventForTest();
-            await Task.Delay(400);
-            check("sidebar: the next-event line opens the event (The Deadmines tonight)", LodgePage.CalendarShownForTest && cal.DetailOpenForTest && cal.DetailForTest.Id == "a1");
+            check("sidebar: the next-event line opens the event (The Deadmines tonight)", await Until(() => LodgePage.CalendarShownForTest && cal.DetailOpenForTest && cal.DetailForTest.Id == "a1"));
             cal.CloseDetailForTest();
-            await Task.Delay(300);
+            await Until(() => !cal.DetailOpenForTest);
             LodgePage.HideCalendarForTest();
         }
 

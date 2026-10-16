@@ -160,9 +160,7 @@ namespace ElansAddonHub
                     var zl = await WmWaitCount("zones", 3, 60000); var fm = await WmWaitCount("fm", 10, 60000); var rt = await WmWaitCount("routes", 5, 60000);
                     var rs = await WmState();
                     Check("real game files: the default layers arrive from the real tables: " + (rs?.Child("counts") == null ? "?" : Json.Write(rs.Child("counts"))) + " (zone names, flight masters, flight routes of Kalimdor)", zl && fm && rt);
-                    await Task.Delay(1200);
-                    var p1 = await WorldMapView.CaptureForTest();
-                    if (p1 != null) File.WriteAllBytes(P("worldmap-real-region.png"), p1);
+                    if (SelfTestClock.ShotsOn) { await Task.Delay(1200); var p1 = await WorldMapView.CaptureForTest(); if (p1 != null) File.WriteAllBytes(P("worldmap-real-region.png"), p1); }
                     // layers on: nodes (Classic), vendors, rares ...
                     if (ci != null)
                     {
@@ -172,9 +170,7 @@ namespace ElansAddonHub
                         var cs = await WmState();
                         Check("real game files: with the Classic baseline the node, vendor and rare layers fill in on the real region (" + Json.Write(cs.Child("counts")) + ")", cs.Child("counts").Int("nodes") > 100 && cs.Child("counts").Int("vendors") > 20 && cs.Child("counts").Int("rares") > 5, Json.Write(cs.Child("counts")));
                         await AtlasView.Open("worldmap:1?x=1550&y=-4400&z=6");
-                        await Task.Delay(1800);
-                        var p2 = await WorldMapView.CaptureForTest();
-                        if (p2 != null) File.WriteAllBytes(P("worldmap-real-zoomed.png"), p2);
+                        if (SelfTestClock.ShotsOn) { await Task.Delay(1800); var p2 = await WorldMapView.CaptureForTest(); if (p2 != null) File.WriteAllBytes(P("worldmap-real-zoomed.png"), p2); }
                     }
                     else notes.Add("note real game files: no Classic baseline on this PC: the node / vendor / quest / rare layers have no data to show");
                     ResetAtlasForTest();

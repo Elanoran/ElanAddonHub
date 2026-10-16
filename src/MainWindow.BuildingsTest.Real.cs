@@ -179,7 +179,7 @@ namespace ElansAddonHub
                     fpsBy[v.name] = bench == null ? 0 : (bench.TryGetValue("avg", out var av) && av is double ad ? ad : 0);
                     var st = await Wm3State(); b = await Wm3Bld() ?? b;
                     await Task.Delay(300);
-                    var png = await WorldMapView.CaptureForTest(); if (png != null) File.WriteAllBytes(Shot(v.name), png);
+                    var png = SelfTestClock.ShotsOn ? await WorldMapView.CaptureForTest() : null; if (png != null) File.WriteAllBytes(Shot(v.name), png);
                     var mem = WorldMapView.ProcessMemoryMbForTest(out var det);
                     drawnBy[v.name] = b?.Int("drawn") ?? 0;
                     results.Add(v.name + ": " + b?.Int("drawn") + " buildings drawn (" + string.Join("/", (b?.List("byLod") ?? new List<object>()).Select(o => Convert.ToString(o, I))) + " by level), " + b?.Int("tris") + " triangles, " + (b != null && b.TryGetValue("memMb", out var mmv) ? Convert.ToDouble(mmv, I) : 0) + " MB of shapes, " + st?.Int("drawCalls") + " calls, bench " + Json.Write(bench) + ", WebView2 " + mem + " MB (" + det + ")");
@@ -214,7 +214,7 @@ namespace ElansAddonHub
                 var bOff = await Wm3Bld();
                 Check("real 3D buildings: Bridges only draws " + bBr?.Int("drawn") + " of the " + bAll?.Int("drawn") + " that All buildings draws here, and Off removes them all (" + bOff?.Int("drawn") + " drawn, " + bOff?.Int("visibleMeshes") + " meshes visible)",
                     bAll != null && bBr != null && bOff != null && bBr.Int("drawn") < bAll.Int("drawn") && bBr.Int("drawn") >= 1 && bOff.Int("drawn") == 0 && bOff.Int("visibleMeshes") == 0, Json.Write(bBr) + " | " + Json.Write(bOff));
-                var png2 = await WorldMapView.CaptureForTest(); if (png2 != null) File.WriteAllBytes(Shot("lakeshire-off"), png2);
+                var png2 = SelfTestClock.ShotsOn ? await WorldMapView.CaptureForTest() : null; if (png2 != null) File.WriteAllBytes(Shot("lakeshire-off"), png2);
             }
             finally
             {

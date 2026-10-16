@@ -82,7 +82,7 @@ namespace ElansAddonHub
                 Check("card: switching to All buildings the first time shows an inline card in the panel (not a modal: " + ip?.Str("pos") + " positioned, no dialog) with the estimate from the scan - \"" + bAsk?.Str("cardText") + "\" - and the buttons Build now and Not now; nothing is drawn and nothing was built yet",
                     bAsk != null && bAsk.Str("cardText") == expectCard && bAsk.Str("cardText").Contains("about " + (world.Placements - 1) + " buildings in Northland") && string.Join("|", (bAsk.List("buttons")).Select(o => (string)o)) == "Build now|Not now" && ip != null && ip.Bool("inPanel") && ip.Str("pos") != "fixed" && ip.Str("pos") != "absolute" && ip.Int("dialogs") == 0
                     && bAsk.Int("drawn") == 0 && settings.WorldMap3dBuildings == "all" && !Directory.Exists(BuildingsService.DirOf(0)) && BuildingsService.BuildCountForTest == builds0, (bAsk == null ? "no card" : "expect=" + expectCard + " same=" + (bAsk.Str("cardText") == expectCard) + " ip=" + inPanel + " settings=" + settings.WorldMap3dBuildings + " dir=" + Directory.Exists(BuildingsService.DirOf(0)) + " builds=" + (BuildingsService.BuildCountForTest - builds0) + " " + Json.Write(bAsk)));
-                var shot1 = await WorldMapView.CaptureForTest(); if (shot1 != null) File.WriteAllBytes(P("buildings-synthetic-card.png"), shot1);
+                var shot1 = SelfTestClock.ShotsOn ? await WorldMapView.CaptureForTest() : null; if (shot1 != null) File.WriteAllBytes(P("buildings-synthetic-card.png"), shot1);
                 await WmEval("window.wm3.buildingClick('later')");
                 var bNot = await BldWait(b => b.Str("mode") == "off", 10000);
                 Check("card: Not now puts the switch back to Off (saved: " + (settings.WorldMap3dBuildings ?? "off") + "), hides the card and builds nothing", bNot != null && bNot.Str("mode") == "off" && !(bool)bNot["card"] && settings.WorldMap3dBuildings == null && BuildingsService.BuildCountForTest == builds0 && !Directory.Exists(BuildingsService.DirOf(0)));
@@ -96,7 +96,7 @@ namespace ElansAddonHub
                 var bBr = await BldWait(b => b.Str("phase") == "done" && b.Int("drawn") >= 1, 30000);
                 Check("bridges: Build now builds the one bridge in the background and it is drawn (" + bBr?.Int("drawn") + " instance, " + bBr?.Int("meshes") + " mesh, phase " + bBr?.Str("phase") + "); the card is down to one quiet line: \"" + bBr?.Str("cardText") + "\"",
                     bBr != null && bBr.Str("phase") == "done" && bBr.Int("drawn") == 1 && bBr.Int("meshes") == 1 && bBr.Str("cardText").StartsWith("1 bridges") && bBr.Str("cardText").Contains("on disk") && BuildingsService.IsReady(0, "bridges") && bBr.Int("modelsReady") == 1, bBr == null ? "?" : Json.Write(bBr));
-                var png2 = await WorldMapView.CaptureForTest(); if (png2 != null) File.WriteAllBytes(P("buildings-synthetic-bridge.png"), png2);
+                var png2 = SelfTestClock.ShotsOn ? await WorldMapView.CaptureForTest() : null; if (png2 != null) File.WriteAllBytes(P("buildings-synthetic-bridge.png"), png2);
 
                 // ---------------------------------------------------------------- all buildings: progress, the map stays usable, Pause, nearest first
                 await View(hx, hy, 700, 20, 55);
@@ -139,7 +139,7 @@ namespace ElansAddonHub
                 // ---------------------------------------------------------------- instancing and levels of detail
                 await View(hx, hy, 800, 20, 62);
                 var bNear = await Bld(2500);
-                                var shot3 = await WorldMapView.CaptureForTest(); if (shot3 != null) File.WriteAllBytes(P("buildings-synthetic-houses.png"), shot3);
+                                var shot3 = SelfTestClock.ShotsOn ? await WorldMapView.CaptureForTest() : null; if (shot3 != null) File.WriteAllBytes(P("buildings-synthetic-houses.png"), shot3);
                 Check("instancing: " + bNear?.Int("drawn") + " buildings are on screen from " + bNear?.Int("visibleMeshes") + " meshes (one per shape and level, not one per building), " + bNear?.Int("drawCalls") + " draw calls in all (terrain included), " + bNear?.Int("tris") + " triangles",
                     bNear != null && bNear.Int("drawn") >= 100 && bNear.Int("visibleMeshes") >= 1 && bNear.Int("visibleMeshes") <= 8 && bNear.Int("instances") == bNear.Int("drawn") && bNear.Int("meshes") <= 12, bNear == null ? "?" : Json.Write(bNear));
                 await View(hx, hy, 130, 20, 45);
@@ -206,7 +206,7 @@ namespace ElansAddonHub
                 var bAgain = await BldWait(b => b.Int("drawn") >= 100 && b.Str("phase") == "done", 40000);
                 Check("restart: the next time the page starts with Buildings on and everything made, the buildings are there at once (" + bAgain?.Int("drawn") + " drawn, phase " + bAgain?.Str("phase") + ") without a card or a build (" + (BuildingsService.BuildCountForTest - buildsBefore) + " new builds); \"" + bAgain?.Str("cardText") + "\"",
                     bAgain != null && bAgain.Int("drawn") >= 100 && bAgain.Str("phase") == "done" && BuildingsService.BuildCountForTest == buildsBefore && bAgain.Str("cardText").Contains("on disk") && bAgain.List("buttons").Count == 0 && bAgain.Int("built") == 5);
-                var shot4 = await WorldMapView.CaptureForTest(); if (shot4 != null) File.WriteAllBytes(P("buildings-synthetic-restart.png"), shot4);
+                var shot4 = SelfTestClock.ShotsOn ? await WorldMapView.CaptureForTest() : null; if (shot4 != null) File.WriteAllBytes(P("buildings-synthetic-restart.png"), shot4);
             }
             finally
             {

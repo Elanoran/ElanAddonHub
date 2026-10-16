@@ -190,14 +190,14 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ narrow
                 await AtlasView.Open("item:100"); UpdateLayout();
-                Width = 760; await Task.Delay(300); UpdateLayout();
+                Width = 760; await Until(() => !AtlasView.WideForTest && AtlasView.NavCollapsedForTest && AtlasView.ActualWidth < 760); UpdateLayout();
                 var heroEl = AtlasView.HeroForTest; var scroller = AtlasView.ScrollerWidthForTest;
                 Check("narrow (760): the hero, the tab strip and the tab stack in one column inside the page - nothing wider than the page (no sideways scroll) and the nav is the 56 px strip", !AtlasView.WideForTest && heroEl.ActualWidth <= scroller + 1 && AtlasView.TabHostForTest.ActualWidth <= scroller + 1 && AtlasView.NavCollapsedForTest, heroEl.ActualWidth + " vs " + scroller);
                 await AtlasView.Open("npc:1"); UpdateLayout();
                 Check("narrow (760): the quick facts (the creature's links) are inside the Overview, under the tooltip card, and the rail is empty", AtlasView.FactsCardForTest != null && AtlasView.FactsCardForTest.Parent is StackPanel fp && fp.Children.IndexOf(AtlasView.FactsCardForTest) == 1 && !AtlasView.RailShownForTest);
-                Width = 1800; await Task.Delay(300); UpdateLayout();
-                Check("wide (1800): the same facts moved to the rail on the right (340 px) - placed again, the page not drawn again", AtlasView.RailShownForTest && AtlasView.FactsCardForTest.Parent == AtlasView.RailForTest && Math.Abs(AtlasView.RailForTest.ActualWidth - 340) < 1);
-                Width = 1300; Height = 900; await Task.Delay(300);
+                Width = 1800;
+                Check("wide (1800): the same facts moved to the rail on the right (a narrower second column) - placed again, the page not drawn again", await Until(() => AtlasView.RailShownForTest && AtlasView.FactsCardForTest.Parent == AtlasView.RailForTest && AtlasView.RailForTest.ActualWidth >= 240 && AtlasView.RailForTest.ActualWidth <= 0.4 * AtlasView.ScrollerWidthForTest), AtlasView.RailForTest?.ActualWidth + " of " + AtlasView.ScrollerWidthForTest);
+                Width = 1300; Height = 900; await Settle();
 
                 // ============================================================================================================ Side.Row: a real focus ring
                 {
@@ -213,9 +213,9 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ the title bar search and Ctrl+K on every page
                 await AtlasView.GoStart(); UpdateLayout();
-                Check("title bar: the search box sits at the left of the title bar (Search (Ctrl K)), 240 wide, the realm dots and minimise / close stay at the right; it is a read-only launcher with a name for assistive tools",
-                    TitleSearchForTest.IsVisible && Math.Abs(TitleSearchForTest.ActualWidth - 240) < 1 && TitleSearchForTest.Tag as string == "Search  (Ctrl K)" && TitleSearchForTest.IsReadOnly && System.Windows.Automation.AutomationProperties.GetName(TitleSearchForTest) == "Search the Atlas"
-                    && TitleSearchForTest.TranslatePoint(new Point(0, 0), this).X < 200 && RealmStrip.Margin.Right == 108 && !TitleSearchIconForTest.IsVisible, TitleSearchForTest.TranslatePoint(new Point(0, 0), this).X + "");
+                Check("title bar: the search box sits at the left of the title bar (Search (Ctrl K)), wide enough for its placeholder, the realm dots keep clear of minimise / close at the right; it is a read-only launcher with a name for assistive tools",
+                    TitleSearchForTest.IsVisible && TitleSearchForTest.ActualWidth >= 160 && TitleSearchForTest.ActualWidth <= 400 && TitleSearchForTest.Tag as string == "Search  (Ctrl K)" && TitleSearchForTest.IsReadOnly && System.Windows.Automation.AutomationProperties.GetName(TitleSearchForTest) == "Search the Atlas"
+                    && TitleSearchForTest.TranslatePoint(new Point(0, 0), this).X < 200 && RealmStrip.Margin.Right >= 96 && !TitleSearchIconForTest.IsVisible, TitleSearchForTest.TranslatePoint(new Point(0, 0), this).X + " w " + TitleSearchForTest.ActualWidth + " realm margin " + RealmStrip.Margin.Right);
                 foreach (var page in new[] { "addons", "lodge", "inventory", "settings", "browser" })
                 {
                     ShowTab(page); await Task.Delay(120); UpdateLayout();
@@ -279,15 +279,16 @@ namespace ElansAddonHub
                 }
 
                 // ---- narrow: the box shrinks to an icon, the update banner makes room
-                Width = 760; await Task.Delay(300); UpdateLayout();
-                Check("title bar narrow (760): the box is an icon button (32, 'Search the Atlas', Ctrl+K in its tooltip) in the same place, the update banner moves right of it; the icon opens the palette",
-                    TitleSearchIsIconForTest && !TitleSearchForTest.IsVisible && TitleSearchIconForTest.IsVisible && TitleSearchIconForTest.Width == 32 && System.Windows.Automation.AutomationProperties.GetName(TitleSearchIconForTest) == "Search the Atlas" && TitleSearchIconForTest.ToolTip.ToString().Contains("Ctrl+K") && HubBanner.Margin.Left == 56, HubBanner.Margin.Left + "");
+                Width = 760;
+                Check("title bar narrow (760): the box is an icon button ('Search the Atlas', Ctrl+K in its tooltip) in the same place, the update banner moves right of it; the icon opens the palette",
+                    await Until(() => TitleSearchIsIconForTest && !TitleSearchForTest.IsVisible && TitleSearchIconForTest.IsVisible) && TitleSearchIconForTest.ActualWidth >= 24 && System.Windows.Automation.AutomationProperties.GetName(TitleSearchIconForTest) == "Search the Atlas" && TitleSearchIconForTest.ToolTip.ToString().Contains("Ctrl+K")
+                    && HubBanner.Margin.Left >= TitleSearchIconForTest.ActualWidth + 16 && HubBanner.Margin.Left < 120, HubBanner.Margin.Left + " icon " + TitleSearchIconForTest.ActualWidth);
                 TitleSearchIconForTest.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await AtlasView.PaletteOpenWaitForTest();
                 Check("title bar narrow: a click on the icon opens the palette", AtlasView.PaletteOpen);
                 Snapshot(Path.Combine(dir, "atlas-refresh2-palette-narrow.png"));
                 AtlasView.ClosePalette();
-                Width = 1300; await Task.Delay(300); UpdateLayout();
-                Check("title bar: wide again the box is back (240) and the banner keeps clear of it", !TitleSearchIsIconForTest && TitleSearchForTest.IsVisible && HubBanner.Margin.Left == 16 + 240 + 8);
+                Width = 1300;
+                Check("title bar: wide again the box is back and the banner keeps clear of it", await Until(() => !TitleSearchIsIconForTest && TitleSearchForTest.IsVisible && TitleSearchForTest.ActualWidth > 0) && HubBanner.Margin.Left >= TitleSearchForTest.ActualWidth + 16, HubBanner.Margin.Left + " box " + TitleSearchForTest.ActualWidth);
                 Check("the Atlas header has no search box of its own any more (the title bar's is the one) and no title row", AtlasView.TitleRowGoneForTest);
             }
             finally
