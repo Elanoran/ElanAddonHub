@@ -712,7 +712,8 @@
     </Style.Triggers>
   </Style>
 
-  <!-- ScrollViewer: content + slim bars, no corner box, no arrow buttons -->
+  <!-- ScrollViewer: content + slim bars, no corner box, no arrow buttons. The bars OVERLAY the content (it spans both columns), so a bar that
+       appears or goes away never changes the content's width: no reflow, no sideways shift while a page builds or slides in. -->
   <Style TargetType="ScrollViewer">
     <Setter Property="Template">
       <Setter.Value>
@@ -726,7 +727,7 @@
               <RowDefinition Height="*" />
               <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Grid.ColumnSpan="1" Margin="{TemplateBinding Padding}"
+            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Grid.ColumnSpan="2" Grid.RowSpan="2" Margin="{TemplateBinding Padding}"
                                     CanContentScroll="{TemplateBinding CanContentScroll}" />
             <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Orientation="Vertical"
                        Value="{TemplateBinding VerticalOffset}" Maximum="{TemplateBinding ScrollableHeight}"
