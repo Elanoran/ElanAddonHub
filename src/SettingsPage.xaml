@@ -6,9 +6,12 @@
   <!-- Settings (DESIGN.md): nav card on the left, page title + sections on the right. Each section = Text.Section header (+ Secondary note), then a
        Card.Rows card of Setting.Row rows (hairlines between rows only) or a Card.Group card with a 16 px padded body. Sections are 24 apart. -->
   <UserControl.Resources>
-    <!-- section list on the left: 36 high pill, icon Tertiary -> Primary, hover veil, selected = accent tint + accent icon -->
+    <!-- section list on the left: 36 high pill, the icon in the category's section hue (BorderBrush = Brush.Section.<Name>), hover veil, selected = the
+         section's tint (Background = Brush.Section.<Name>.Tint) + a 4 px bar in its hue + Primary text (DESIGN 4, "Section colours") -->
     <Style x:Key="Nav" TargetType="RadioButton">
       <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
+      <Setter Property="Background" Value="{StaticResource Brush.Section.Neutral.Tint}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Brush.Section.Neutral}" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -20,9 +23,10 @@
             <Grid Height="36" Background="Transparent">
               <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource Radius.Control}" />
               <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+              <Border x:Name="ind" Width="4" Height="16" CornerRadius="2" Background="{TemplateBinding BorderBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False" />
               <Grid Margin="12,0">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="28" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                <TextBlock x:Name="ic" Text="{TemplateBinding Tag}" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center" />
+                <TextBlock x:Name="ic" Text="{TemplateBinding Tag}" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{TemplateBinding BorderBrush}" VerticalAlignment="Center" />
                 <ContentPresenter Grid.Column="1" VerticalAlignment="Center" />
                 <Ellipse x:Name="dot" Grid.Column="2" Width="8" Height="8" Fill="{StaticResource Brush.Warn}" VerticalAlignment="Center" Visibility="Collapsed" />
               </Grid>
@@ -32,13 +36,12 @@
               <Trigger Property="Tag" Value="&#xEA18;"><Setter TargetName="dot" Property="Visibility" Value="Visible" /></Trigger>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
-                <Setter TargetName="ic" Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
                 <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
                 <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
               </Trigger>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Accent.Tint}" />
-                <Setter TargetName="ic" Property="Foreground" Value="{StaticResource Brush.Accent}" />
+                <Setter TargetName="bd" Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+                <Setter TargetName="ind" Property="Visibility" Value="Visible" />
                 <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
               </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
@@ -90,18 +93,18 @@
     </Grid.ColumnDefinitions>
 
     <!-- sections -->
-    <Border Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}">
+    <Border x:Name="NavBox" Background="{StaticResource Brush.Section.Panel}" CornerRadius="{StaticResource Radius.Card}">
       <StackPanel Margin="8">
         <TextBlock Text="Settings" Style="{StaticResource Text.Caption}" Margin="12,8,0,8" />
-        <RadioButton x:Name="NavGeneral" Style="{StaticResource Nav}" Tag="&#xE713;" Content="General" Checked="Nav_Checked" IsChecked="True" />
-        <RadioButton x:Name="NavAddons" Style="{StaticResource Nav}" Tag="&#xEA86;" Content="Addons" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavLodge" Style="{StaticResource Nav}" Tag="&#xE716;" Content="Lodge" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavProfile" Style="{StaticResource Nav}" Tag="&#xE77B;" Content="Profile" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavPrivacy" Style="{StaticResource Nav}" Tag="&#xE72E;" Content="Privacy" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavVoice" Style="{StaticResource Nav}" Tag="&#xE720;" Content="Voice" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavOverlay" Style="{StaticResource Nav}" Tag="&#xE81E;" Content="In-game overlay" Checked="Nav_Checked" />
-        <RadioButton x:Name="NavGm" Style="{StaticResource Nav}" Tag="&#xEA18;" Content="Guild Master" Checked="Nav_Checked" Visibility="Collapsed" />
-        <RadioButton x:Name="NavAbout" Style="{StaticResource Nav}" Tag="&#xE946;" Content="About" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavGeneral" Style="{StaticResource Nav}" BorderBrush="{StaticResource Brush.Section.General}" Background="{StaticResource Brush.Section.General.Tint}" Tag="&#xE713;" Content="General" Checked="Nav_Checked" IsChecked="True" />
+        <RadioButton x:Name="NavAddons" Style="{StaticResource Nav}" BorderBrush="{StaticResource Brush.Section.Addons}" Background="{StaticResource Brush.Section.Addons.Tint}" Tag="&#xEA86;" Content="Addons" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavLodge" Style="{StaticResource Nav}" BorderBrush="{StaticResource Brush.Section.Lodge}" Background="{StaticResource Brush.Section.Lodge.Tint}" Tag="&#xE716;" Content="Lodge" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavProfile" Style="{StaticResource Nav}" BorderBrush="{StaticResource Brush.Section.Profile}" Background="{StaticResource Brush.Section.Profile.Tint}" Tag="&#xE77B;" Content="Profile" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavPrivacy" Style="{StaticResource Nav}" BorderBrush="{StaticResource Brush.Section.Privacy}" Background="{StaticResource Brush.Section.Privacy.Tint}" Tag="&#xE72E;" Content="Privacy" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavVoice" Style="{StaticResource Nav}" BorderBrush="{StaticResource Brush.Section.Voice}" Background="{StaticResource Brush.Section.Voice.Tint}" Tag="&#xE720;" Content="Voice" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavOverlay" Style="{StaticResource Nav}" BorderBrush="{StaticResource Brush.Section.Overlay}" Background="{StaticResource Brush.Section.Overlay.Tint}" Tag="&#xE81E;" Content="In-game overlay" Checked="Nav_Checked" />
+        <RadioButton x:Name="NavGm" Style="{StaticResource Nav}" BorderBrush="{StaticResource Brush.Section.GuildMaster}" Background="{StaticResource Brush.Section.GuildMaster.Tint}" Tag="&#xEA18;" Content="Guild Master" Checked="Nav_Checked" Visibility="Collapsed" />
+        <RadioButton x:Name="NavAbout" Style="{StaticResource Nav}" BorderBrush="{StaticResource Brush.Section.About}" Background="{StaticResource Brush.Section.About.Tint}" Tag="&#xE946;" Content="About" Checked="Nav_Checked" />
       </StackPanel>
     </Border>
 

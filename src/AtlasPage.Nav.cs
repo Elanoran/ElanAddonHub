@@ -24,6 +24,7 @@ namespace ElansAddonHub
         bool navCollapsed, shellInited;
         string navSig = "";
         readonly Dictionary<string, ContentControl> navRows = new Dictionary<string, ContentControl>();
+        readonly Dictionary<string, string> navRowSection = new Dictionary<string, string>();      // nav key -> its section brush key (Brush.Section.*)
         public string NavKeyNow { get; private set; } = "";
 
         public AtlasNavState NavState => nav ?? (nav = new AtlasNavState(new List<string>(), new List<string>(), null));
@@ -85,6 +86,10 @@ namespace ElansAddonHub
         public bool NavRowSelected(string key) => navRows.TryGetValue(key, out var r) && r.Tag is string t && t.EndsWith("|on", StringComparison.Ordinal);
         public IReadOnlyList<string> NavSelectedForTest => navRows.Where(kv => NavRowSelected(kv.Key)).Select(kv => kv.Key).ToList();
         public ContentControl NavRowForTest(string key) => navRows.TryGetValue(key, out var r) ? r : null;
+        public string NavRowSectionForTest(string key) => navRowSection.TryGetValue(key, out var s) ? s : null;
+        // the group label's text block (its Foreground is the section hue)
+        public TextBlock NavGroupLabelForTest(string group) => AtlasWalk(NavStack).OfType<TextBlock>().FirstOrDefault(t => t.Tag as string == "group" && t.Text == group);
+        public FrameworkElement NavBackdropForTest => NavBackdrop;
         public IReadOnlyList<string> NavSubRowsForTest => AtlasWalk(NavStack).OfType<ContentControl>().Where(c => c.Tag is string t && t.StartsWith("sub|")).Select(c => ((string)c.Tag).Substring(4).Split('|')[0]).ToList();
         public FrameworkElement NavScroller_ForTest => NavPanel;
         public void UpdateNavForTest() { navSig = ""; BuildNav(); }
@@ -183,19 +188,31 @@ namespace ElansAddonHub
             if (last != null && !(last.Cursor == Cursors.Hand)) last.Foreground = b;
         }
 
-        FrameworkElement NavRow(string key, string title, string glyph, string openId, string count, bool selected, string tag = null, double indent = 0, string kbd = null, string icon = null)
+        // the section colour of a nav group (DESIGN 4, "Section colours"): Database, World, Character and Lodge have their own hue; Home, Pinned, Recent,
+        // Data sources and a group the registry does not know are Neutral
+        internal static string SectionBrushKey(string group) => Array.IndexOf(AtlasNav.Groups, group) >= 0 ? "Brush.Section." + group : "Brush.Section.Neutral";
+
+        // a selected row of a secondary menu: its section's tint as the fill and the 4 px bar in the section's hue (Side.Row's BorderBrush)
+        internal static void MarkSelected(Control row, string section)
+        {
+            row.SetResourceReference(Control.BackgroundProperty, section + ".Tint");
+            row.SetResourceReference(Control.BorderBrushProperty, section);
+        }
+
+        FrameworkElement NavRow(string key, string title, string glyph, string openId, string count, bool selected, string tag = null, double indent = 0, string kbd = null, string icon = null, string section = "Brush.Section.Neutral")
         {
             var row = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(8, 4, 8, 4), MinHeight = indent > 0 ? 28 : 32, Margin = new Thickness(0, 0, 0, 2), Focusable = false, Cursor = Cursors.Hand };
             row.Tag = (tag ?? key) + (selected ? "|on" : "|off");
             System.Windows.Automation.AutomationProperties.SetName(row, title);
-            if (selected) row.SetResourceReference(Control.BackgroundProperty, "Brush.Accent.Tint");
+            if (tag == null) navRowSection[key] = section;
+            if (selected) MarkSelected(row, section);
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
             if (!navCollapsed) { g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); }
             var gl = new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("Font.Icons"), FontSize = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            gl.Foreground = selected ? Res("Brush.Text.Primary") : Res("Brush.Text.Secondary");
+            gl.SetResourceReference(TextBlock.ForegroundProperty, section);      // the row's icon carries its section's hue (selected or not); the name stays a text colour
             // a category row draws its own line icon (AtlasIcons) in place of the font glyph
-            var drawn = indent > 0 ? null : AtlasIcons.Make(icon, 20, selected ? "Brush.Text.Primary" : "Brush.Text.Secondary");
+            var drawn = indent > 0 ? null : AtlasIcons.Make(icon, 20, section);
             if (indent > 0) { gl.Visibility = Visibility.Hidden; }
             g.Children.Add(drawn ?? (FrameworkElement)gl);
             if (!navCollapsed)
@@ -211,7 +228,7 @@ namespace ElansAddonHub
             }
             else row.ToolTip = title;
             row.Content = g;
-            Action go = () => { if (key == "search") { _ = OpenPalette(); } else if (key == "home") { _ = GoStart(); } else _ = Open(openId); };
+            Action go = () => { if (key == "home") { _ = GoStart(); } else _ = Open(openId); };
             row.MouseLeftButtonUp += (s, e) => { e.Handled = true; go(); };
             Keyable(row, go, selected);
             return row;
@@ -239,30 +256,31 @@ namespace ElansAddonHub
             var sig = NavSignature(key) + "|" + AtlasTabs.BaseId(id);
             if (sig == navSig) return;
             navSig = sig;
-            NavStack.Children.Clear(); navRows.Clear();
-            void AddRow(string k, string title, string glyph, string openId, string count = "", string kbd = null, string icon = null)
+            NavStack.Children.Clear(); navRows.Clear(); navRowSection.Clear();
+            void AddRow(string k, string title, string glyph, string openId, string count = "", string icon = null, string section = "Brush.Section.Neutral")
             {
-                var r = (ContentControl)NavRow(k, title, glyph, openId, count, key == k, null, 0, kbd, icon);
+                var r = (ContentControl)NavRow(k, title, glyph, openId, count, key == k, null, 0, null, icon, section);
                 navRows[k] = r; NavStack.Children.Add(r);
             }
+            // no Search row: the title bar box and Ctrl+K are the one way to search (2.71.1)
             AddRow("home", "Home", "", AtlasBrowse.HomeLink);
-            AddRow("search", "Search", "", "", kbd: "Ctrl K");
             var entries = AtlasNav.Entries();
             foreach (var grp in AtlasNav.Groups)
             {
                 var list = entries.Where(e => e.Group == grp).ToList();
                 if (list.Count == 0) continue;
-                NavStack.Children.Add(GroupLabel(grp));
+                var section = SectionBrushKey(grp);
+                NavStack.Children.Add(GroupLabel(grp, null, section));
                 foreach (var e in list)
                 {
-                    AddRow(e.Key, e.Title, e.Glyph, e.OpenId, CountText(e), null, e.Icon);
+                    AddRow(e.Key, e.Title, e.Glyph, e.OpenId, CountText(e), e.Icon, section);
                     // a shared row ("Professions": skills, recipes, the hosted page) lists its members while you are in it
                     if (key == e.Key && e.Members.Count > 1 && !navCollapsed)
                     {
                         var cur = CurrentCategoryId(id);
                         foreach (var m in e.Members.OrderBy(m => m.Order))
                         {
-                            var sub = (ContentControl)NavRow(e.Key, m.Title, m.Glyph, m.OpenId, "", cur == m.Id, "sub|" + m.Id, 12);
+                            var sub = (ContentControl)NavRow(e.Key, m.Title, m.Glyph, m.OpenId, "", cur == m.Id, "sub|" + m.Id, 12, null, null, section);
                             NavStack.Children.Add(sub);
                         }
                     }
@@ -272,7 +290,7 @@ namespace ElansAddonHub
             foreach (var e in entries.Where(e => Array.IndexOf(AtlasNav.Groups, e.Group) < 0))
             {
                 if (!NavStack.Children.OfType<TextBlock>().Any(t => t.Text == e.Group)) NavStack.Children.Add(GroupLabel(e.Group));
-                AddRow(e.Key, e.Title, e.Glyph, e.OpenId, CountText(e), null, e.Icon);
+                AddRow(e.Key, e.Title, e.Glyph, e.OpenId, CountText(e), e.Icon);
             }
             // Pinned and Recent
             var pins = NavState.Pins.Select(AtlasNav.Describe).Where(x => x != null).ToList();
@@ -294,7 +312,7 @@ namespace ElansAddonHub
             navRows["data"] = data; NavFooter.Children.Add(data);
         }
 
-        FrameworkElement GroupLabel(string text, Action clear = null)
+        FrameworkElement GroupLabel(string text, Action clear = null, string section = "Brush.Section.Neutral")
         {
             if (navCollapsed)
             {
@@ -306,7 +324,8 @@ namespace ElansAddonHub
             var g = new Grid { Margin = new Thickness(8, 12, 0, 4) };
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var t = Tb(text, "Text.Caption", Res("Brush.Text.Tertiary")); t.Tag = "group";
+            var t = Tb(text, "Text.Caption"); t.Tag = "group";
+            t.SetResourceReference(TextBlock.ForegroundProperty, section);     // the group's label in its section hue (tinted, as readable as Secondary text)
             g.Children.Add(t);
             if (clear != null)
             {
@@ -325,7 +344,7 @@ namespace ElansAddonHub
             row.Tag = (pinned ? "pin|" : "recent|") + it.Id;
             System.Windows.Automation.AutomationProperties.SetName(row, it.Title);
             row.ToolTip = it.Title + (it.Detail.Length > 0 ? "  (" + it.Detail + ")" : "");
-            if (on) row.SetResourceReference(Control.BackgroundProperty, "Brush.Accent.Tint");
+            if (on) MarkSelected(row, "Brush.Section.Neutral");             // Pinned and Recent are neutral sections
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
             var tile = IconTile(it, 20, 12);

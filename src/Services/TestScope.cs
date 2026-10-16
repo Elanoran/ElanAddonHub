@@ -25,7 +25,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "addonsgrid", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "gametooltip", "talents", "professions", "profguide", "mapdata", "mapdatareal", "worldmap", "worldmapreal", "instances", "instancesreal", "buildings", "buildingsreal", "dungeonmaps", "dungeonmapsreal", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "inputs", "atlasclassic", "atlasclassiclodge", "atlaspage", "atlaspagereal", "atlasbrowse", "atlashosts", "atlasclasses", "zonelore", "zonelorereal", "art", "round3", "idlecpu", "coldstart",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "gametooltip", "talents", "professions", "profguide", "mapdata", "mapdatareal", "worldmap", "worldmapreal", "instances", "instancesreal", "buildings", "buildingsreal", "dungeonmaps", "dungeonmapsreal", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "inputs", "menucolors", "atlasclassic", "atlasclassiclodge", "atlaspage", "atlaspagereal", "atlasbrowse", "atlashosts", "atlasclasses", "zonelore", "zonelorereal", "art", "round3", "idlecpu", "coldstart",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -42,6 +42,7 @@ namespace ElansAddonHub.Services
             ["addons"] = "install + check-all + pills + settings tour (Hunter Helper cards)",
             ["thirdparty"] = "other addons: scan, suggest, CurseForge, zip install/rollback, real GitHub/WoWI lookups",
             ["startup"] = "Addons page start-up: placeholders match the cards, nothing above the bottom of a list moves while the check and the scan run (cold start, slow update server, counts equal / different / first run), counts remembered",
+            ["menucolors"] = "section colours of the secondary menus (Outpost 2.71.1): the Brush.Section tokens (a hue + .Tint per section, every hue as readable as Text.Secondary on the menu fill), the Atlas side navigation (group labels and rows in their section hue, the selected row's tint and 4 px bar for Items / Zones / Factions / Finds / Data sources, no Search row), the Atlas Home without a search box of its own (spacing, Ctrl+K and the title bar box open the palette from Home), the Settings menu (one hue per category, the chosen one's tint and bar), the Characters list (the class colour as the selected row's tint and bar), the Lodge sidebar (Text channels, Voice rooms, people groups, Calendar / Files / Ladder icons, the selected channel and the Calendar row), the faint menu fill behind each menu, screenshots",
             ["addonsgrid"] = "Addons page grid: columns at 760 / 1300 / 1700 (1 / 2 / 3), equal card heights, status / source / updated chips and the button on the face, a card opening in place without reshuffling, placeholders exactly where the real cards land, the Grid | List switch and its setting, the other addons in the same columns, every button reachable",
             ["selfupdated"] = "addons that update themselves: the Self source (CurseForge / Wago id but not managed by the CurseForge app), git-describe dev builds (label, comparisons), the addon's own logo as the row icon (IconTexture, heuristic, depth / size / path limits, decode cache, no network)",
             ["viewer"] = "in-app picture viewer",
@@ -139,6 +140,8 @@ namespace ElansAddonHub.Services
             // animations (Motion): the sections that wait for something to open, collapse or fade
             R(@"^src/Motion\.cs$", "startup", "addonsgrid", "viewer", "lodgefun", "calendar", "wowevents", "lodgefiles", "badges", "video", "browser", "toasts", "dialogs", "health", "atlaspage", "atlasbrowse", "round3");
             // ---- theme and assets: the design sections, not everything (a broken XAML resource fails the start-up every run does)
+            // the secondary menus' section colours (2.71.1): the tokens, the four menus and their own test
+            R(@"^src/(Theme/Theme\.xaml|AtlasPage\.(Nav|Start)\.cs|AtlasPage\.xaml|SettingsPage\.xaml|InventoryPage(\.xaml(\.cs)?|\.Armory\.cs)|Lodge/(LodgeView\.xaml|LodgeModels\.cs|LodgeView\.(Calendar|Files|Ladder)\.cs)|MainWindow\.MenuColorsTest\.cs)$", "menucolors");
             R(@"^src/Theme/Theme\.xaml$", "inputs", "gametooltip", "dialogs", "toasts", "addonsgrid", "art", "calendar", "wowevents");
             R(@"^src/Theme/AddonIcons\.xaml$", "addons", "thirdparty", "addonsgrid", "selfupdated");
             R(@"^src/Theme/(Avatars|ProfileCard)\.xaml$", "profile", "presence", "lodgefeatures", "badges");
@@ -495,7 +498,7 @@ namespace ElansAddonHub.Services
             void Ck(string w, bool c) { n.Add((c ? "ok   " : "FAIL ") + w); ok &= c; }
             bool Same(IEnumerable<string> a, params string[] b) => a.SequenceEqual(b);
             List<string> Map(params string[] f) => FromPaths(f, out _);
-            Ck("inventory files -> the Characters page sections only (characters, inventory); the icon store also reads game files, so the Atlas page's real-file section", Same(Map("src/InventoryPage.xaml.cs", "src/Services/InventoryData.cs", "src/Services/IconStore.cs"), "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "inventory", "atlaspagereal"));
+            Ck("inventory files -> the Characters page sections only (characters, inventory, the list's section colours); the icon store also reads game files, so the Atlas page's real-file section", Same(Map("src/InventoryPage.xaml.cs", "src/Services/InventoryData.cs", "src/Services/IconStore.cs"), "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "inventory", "menucolors", "atlaspagereal"));
             Ck("UI-only edits do not run the real-game-file sections (world map page, Atlas page, Characters page); a reader does (Casc, Wdc5, WorldMap/WdtFile)",
                 !Map("src/Controls/WorldMapView.cs", "src/WorldMap/worldmap.js", "src/AtlasPage.Nav.cs", "src/InventoryPage.Bags.cs").Any(s => s.EndsWith("real")) && Same(Map("src/Services/Casc.cs").Where(s => s.EndsWith("real")), "mapdatareal", "worldmapreal", "instancesreal", "buildingsreal", "dungeonmapsreal", "atlaspagereal")
                 && Map("src/Services/WorldMap/WdtFile.cs").Contains("worldmapreal") && !Map("src/Services/WorldMap/WdtFile.cs").Contains("atlaspagereal") && Map("src/MainWindow.BuildingsTest.Real.cs").SequenceEqual(new[] { "buildingsreal" })
@@ -539,7 +542,7 @@ namespace ElansAddonHub.Services
                 && BumpLine(Bumps["src/Services/Models.cs"].Item2, "        // ---- gathering routes") && BumpLine(Bumps["src/Services/Models.cs"].Item2, "")
                 && !BumpLine(Bumps["src/Services/Models.cs"].Item2, "    public class QuickLink") && !BumpLine(Bumps["src/Services/Models.cs"].Item2, "        public bool IsOld => Version < 3;"));
             Ck("no changes -> nothing", Map().Count == 0);
-            Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "invites2" || a == "characters" || a == "upgrades" || a == "armory" || a == "itemdata" || a == "spelldata" || a == "inventory" || a == "health")));
+            Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "invites2" || a == "characters" || a == "upgrades" || a == "armory" || a == "itemdata" || a == "spelldata" || a == "inventory" || a == "health" || a == "menucolors")));
             Ck("every rule section is a real section", Rules.SelectMany(r => r.Item2).All(s => s == Star || All.Contains(s)));
             Ck("every dependency is a real section", Deps.All(d => All.Contains(d.Key) && d.Value.All(All.Contains)));
             Ck("every section has a description", All.All(Info.ContainsKey));

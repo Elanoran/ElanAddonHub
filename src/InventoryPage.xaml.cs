@@ -47,6 +47,7 @@ namespace ElansAddonHub
             public string Initial => InventoryPage.Initial(Char.Name);
             public Brush ClassBrush => ClassBrushOf(Char.Class);
             public Brush ClassTint => TintOf(Char.Class);
+            public Brush SelectTint => SelectTintOf(Char.Class);       // the selected row's fill: its class colour at 16 % (the section tint of this list)
             // "Lv 60 Hunter · Realm": the realm tells two characters of the same name apart
             public string Line2 => string.Join(" · ", new[] { string.Join(" ", new[] { Char.Level > 0 ? "Lv " + Char.Level : null, Pretty(Char.Class) }.Where(s => !string.IsNullOrEmpty(s))), Char.Realm }.Where(s => !string.IsNullOrEmpty(s)));
             public int PortraitId => CharPortrait.IconFor(Char.RaceFile, Char.Sex, Char.Class);
@@ -130,6 +131,16 @@ namespace ElansAddonHub
         static string Pretty(string cls) => string.IsNullOrEmpty(cls) ? null : char.ToUpperInvariant(cls[0]) + cls.Substring(1).ToLowerInvariant();
 
         // class colour at 20 % (circle behind the initial)
+        // a selected character row: the class colour at 16 % (like a Brush.Section.*.Tint); no class = the neutral section tint
+        internal static Brush SelectTintOf(string cls)
+        {
+            if (cls == null || !ClassColors.TryGetValue(cls, out var hex)) return Res("Brush.Section.Neutral.Tint");
+            var c = (Color)ColorConverter.ConvertFromString(hex);
+            var b = new SolidColorBrush(Color.FromArgb(0x29, c.R, c.G, c.B));
+            b.Freeze();
+            return b;
+        }
+
         static Brush TintOf(string cls)
         {
             if (cls == null || !ClassColors.TryGetValue(cls, out var hex)) return Res("Brush.Overlay.Chip");

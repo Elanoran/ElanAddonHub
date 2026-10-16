@@ -130,7 +130,7 @@ namespace ElansAddonHub.Lodge
             bool on = s.SupportsCalendar && s.Selected != null;
             CalendarRow.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
             if (!on && calendarShown) HideCalendar();
-            if (calendarShown) CalendarRow.SetResourceReference(BackgroundProperty, "Brush.Accent.Tint"); else CalendarRow.ClearValue(BackgroundProperty);
+            if (calendarShown) { CalendarRow.SetResourceReference(BackgroundProperty, "Brush.Section.Calendar.Tint"); CalendarRow.SetResourceReference(BorderBrushProperty, "Brush.Section.Calendar"); } else { CalendarRow.ClearValue(BackgroundProperty); CalendarRow.ClearValue(BorderBrushProperty); }
             CalendarRowText.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, calendarShown ? "Brush.Text.Primary" : "Brush.Text.Secondary");
             if (on)
             {

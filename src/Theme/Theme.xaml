@@ -137,6 +137,61 @@
   <SolidColorBrush x:Key="Brush.Cal.Holiday.7" Color="#9AA7BD" />
   <SolidColorBrush x:Key="Brush.Cal.Holiday.7.Tint" Color="#2E9AA7BD" />
 
+  <!-- section colours of the secondary menus (2.71.1: the Atlas side navigation, the Lodge sidebar, the Characters list, the Settings menu). Eight muted
+       hues of about the same lightness (none shouts, none is the accent green or a status colour) + a neutral grey. A section's brush tints its group
+       label, its row icons and the selected row's 4 px indicator; its .Tint (the hue at 16 %, like Brush.Accent.Tint) is the selected row's fill.
+       Every hue reads at least as well as Text.Secondary on Brush.Section.Panel (checked by the menucolors self-test). -->
+  <Color x:Key="Color.Section.Teal">#6CBFB5</Color>
+  <Color x:Key="Color.Section.Green">#8DBE92</Color>
+  <Color x:Key="Color.Section.Amber">#D9AE62</Color>
+  <Color x:Key="Color.Section.Violet">#B19CE0</Color>
+  <Color x:Key="Color.Section.Blue">#7FA9DB</Color>
+  <Color x:Key="Color.Section.Rose">#D990AA</Color>
+  <Color x:Key="Color.Section.Orange">#DC9A6E</Color>
+  <Color x:Key="Color.Section.Slate">#9DA8BA</Color>
+  <Color x:Key="Color.Section.Neutral">#8A9199</Color>
+  <!-- the faint fill behind a secondary menu: the page panel (Bg #0F1113) lifted a few % towards slate, so the menu reads apart from the page -->
+  <SolidColorBrush x:Key="Brush.Section.Panel" Color="#14171A" />
+  <!-- Atlas side navigation: the registry's groups; Home, Pinned, Recent and Data sources are Neutral -->
+  <SolidColorBrush x:Key="Brush.Section.Database" Color="{StaticResource Color.Section.Teal}" />
+  <SolidColorBrush x:Key="Brush.Section.Database.Tint" Color="{StaticResource Color.Section.Teal}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.World" Color="{StaticResource Color.Section.Green}" />
+  <SolidColorBrush x:Key="Brush.Section.World.Tint" Color="{StaticResource Color.Section.Green}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Character" Color="{StaticResource Color.Section.Amber}" />
+  <SolidColorBrush x:Key="Brush.Section.Character.Tint" Color="{StaticResource Color.Section.Amber}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Lodge" Color="{StaticResource Color.Section.Violet}" />
+  <SolidColorBrush x:Key="Brush.Section.Lodge.Tint" Color="{StaticResource Color.Section.Violet}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Neutral" Color="{StaticResource Color.Section.Neutral}" />
+  <SolidColorBrush x:Key="Brush.Section.Neutral.Tint" Color="{StaticResource Color.Section.Neutral}" Opacity="0.16" />
+  <!-- Lodge sidebar: the Calendar / Files / Ladder rows, Text channels, Voice rooms, the people groups -->
+  <SolidColorBrush x:Key="Brush.Section.Calendar" Color="{StaticResource Color.Section.Orange}" />
+  <SolidColorBrush x:Key="Brush.Section.Calendar.Tint" Color="{StaticResource Color.Section.Orange}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Files" Color="{StaticResource Color.Section.Teal}" />
+  <SolidColorBrush x:Key="Brush.Section.Files.Tint" Color="{StaticResource Color.Section.Teal}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Ladder" Color="{StaticResource Color.Section.Amber}" />
+  <SolidColorBrush x:Key="Brush.Section.Ladder.Tint" Color="{StaticResource Color.Section.Amber}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Channels" Color="{StaticResource Color.Section.Blue}" />
+  <SolidColorBrush x:Key="Brush.Section.Channels.Tint" Color="{StaticResource Color.Section.Blue}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Voice" Color="{StaticResource Color.Section.Rose}" />
+  <SolidColorBrush x:Key="Brush.Section.Voice.Tint" Color="{StaticResource Color.Section.Rose}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.People" Color="{StaticResource Color.Section.Violet}" />
+  <SolidColorBrush x:Key="Brush.Section.People.Tint" Color="{StaticResource Color.Section.Violet}" Opacity="0.16" />
+  <!-- Settings menu: one hue per category (its Lodge category uses Brush.Section.Lodge) -->
+  <SolidColorBrush x:Key="Brush.Section.General" Color="{StaticResource Color.Section.Slate}" />
+  <SolidColorBrush x:Key="Brush.Section.General.Tint" Color="{StaticResource Color.Section.Slate}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Addons" Color="{StaticResource Color.Section.Teal}" />
+  <SolidColorBrush x:Key="Brush.Section.Addons.Tint" Color="{StaticResource Color.Section.Teal}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Profile" Color="{StaticResource Color.Section.Amber}" />
+  <SolidColorBrush x:Key="Brush.Section.Profile.Tint" Color="{StaticResource Color.Section.Amber}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Privacy" Color="{StaticResource Color.Section.Blue}" />
+  <SolidColorBrush x:Key="Brush.Section.Privacy.Tint" Color="{StaticResource Color.Section.Blue}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.Overlay" Color="{StaticResource Color.Section.Green}" />
+  <SolidColorBrush x:Key="Brush.Section.Overlay.Tint" Color="{StaticResource Color.Section.Green}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.GuildMaster" Color="{StaticResource Color.Section.Orange}" />
+  <SolidColorBrush x:Key="Brush.Section.GuildMaster.Tint" Color="{StaticResource Color.Section.Orange}" Opacity="0.16" />
+  <SolidColorBrush x:Key="Brush.Section.About" Color="{StaticResource Color.Section.Neutral}" />
+  <SolidColorBrush x:Key="Brush.Section.About.Tint" Color="{StaticResource Color.Section.Neutral}" Opacity="0.16" />
+
   <!-- overlays: white veils on any surface (hover 6 %, pressed 10 %, chips 8 %); hairline dividers 7 % -->
   <SolidColorBrush x:Key="Brush.Overlay.Chip" Color="#14FFFFFF" />
   <SolidColorBrush x:Key="Brush.Overlay.Hover" Color="#0FFFFFFF" />
@@ -895,10 +950,12 @@
   </Style>
 
   <!-- a calm sidebar row that is not a radio button (Lodge channels, voice rooms, people): transparent, white veil on hover (120 ms), the fill the
-       caller sets (Background) is the selected tint (Brush.Accent.Tint). Put the click handler on it; Padding is the inner padding, MinHeight the row height.
+       caller sets (Background) is the selected tint (Brush.Accent.Tint, or in a secondary menu its section's Brush.Section.*.Tint with BorderBrush = the
+       section's hue for the 4 px selection bar). Put the click handler on it; Padding is the inner padding, MinHeight the row height.
        A row you can reach with Tab (Focusable + IsTabStop) shows a 2 px Brush.Focus ring inside its edge while the keyboard focus is on it. -->
   <Style x:Key="Side.Row" TargetType="ContentControl">
     <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="IsTabStop" Value="False" />
     <Setter Property="Padding" Value="8,4" />
@@ -907,6 +964,8 @@
         <ControlTemplate TargetType="ContentControl">
           <Grid Background="Transparent">
             <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="{StaticResource Radius.Control}" />
+            <!-- a secondary menu's selected row: a 4 x 16 bar in its section's hue (BorderBrush; transparent = none) at the left edge -->
+            <Border x:Name="ind" Width="4" Height="16" CornerRadius="2" Background="{TemplateBinding BorderBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False" />
             <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
             <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
             <Border x:Name="ring" CornerRadius="{StaticResource Radius.Control}" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
