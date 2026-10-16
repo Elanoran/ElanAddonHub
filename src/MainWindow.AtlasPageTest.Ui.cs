@@ -352,6 +352,35 @@ namespace ElansAddonHub
             Snapshot(Path.Combine(dir, "atlas-page-zone.png"));
             await SwitchTab("related"); tx = AtlasTexts(AtlasView);
             Check("zone page: Related holds the Creatures / Objects / Quests tables; Sources the notable drops; the Overview the facts", tx.Contains("Creatures") && tx.Contains("Objects") && tx.Contains("Quests") && await SwitchTab("sources") && AtlasTexts(AtlasView).Contains("Notable drops") && await SwitchTab("overview") && AtlasView.TabNowForTest == "overview", string.Join(" | ", tx.Take(12)));
+            // 2.70: a zone's header (breadcrumb Zones > Northland > Greenvale, the hero's chips "Zone", "In Northland") already says what the game-tooltip card and the
+            // rail's "In <continent>" fact card repeated: neither is drawn, on any tab; other kinds keep theirs
+            {
+                UpdateLayout();
+                var zoneTips = GtAll<GameTooltip>(AtlasView.TabHostForTest).Count;
+                bool noFactsAnyTab = true;
+                foreach (var tab in AtlasView.TabsForTest.ToList()) { await SwitchTab(tab); UpdateLayout(); if (AtlasView.FactsCardForTest != null || (AtlasView.RailForTest != null && AtlasTexts(AtlasView.RailForTest).Any(t => t == "In"))) noFactsAnyTab = false; }
+                await SwitchTab("overview"); UpdateLayout(); await ShotWait(400);
+                Snapshot(Path.Combine(dir, "atlas-page-zone-overview.png"));
+                Check("zone page (2.70): the Overview has no game-tooltip copy of the zone (\"Greenvale / Zone / Northland\") and no tab has the \"In Northland\" fact card; the hero still says it (chip \"" + AtlasView.HeroChipsForTest.FirstOrDefault(c => c.StartsWith("In ")) + "\")",
+                    zoneTips == 0 && noFactsAnyTab && AtlasView.HeroChipsForTest.Any(c => c == "In Northland") && ElansAddonHub.AtlasPage.HeaderCarriesFacts(AtlasView.Model), zoneTips + " " + noFactsAnyTab + " " + string.Join(",", AtlasView.HeroChipsForTest));
+                await AtlasView.Open("npc:1"); UpdateLayout();
+                Check("zone page (2.70): ... a creature page keeps its game-tooltip card and its facts", GtAll<GameTooltip>(AtlasView.BodyForTest).Count > 0 && !ElansAddonHub.AtlasPage.HeaderCarriesFacts(AtlasView.Model));
+                // the Map tab: browsing the breadcrumb away from the zone and back
+                await AtlasView.Open("zone:11"); UpdateLayout();
+                await SwitchTab("map"); await MapReady();
+                var zm = AtlasView.MapsForTest[0]; int home0 = zm.MarkerCount;
+                var plan10 = AtlasView.Model.Map.Zones.FirstOrDefault(z => z.UiMapId == 10);
+                zm.ClickBreadcrumbForTest(1);
+                await WaitFor(() => zm.UiMapId == 10 && zm.State == AtlasMap.ViewState.Ready, 10000);
+                UpdateLayout(); await ShotWait(500);
+                Snapshot(Path.Combine(dir, "atlas-page-zone-map-away.png"));
+                Check("zone page Map tab (2.70): the breadcrumb took the map to Northland: Greenvale's " + home0 + " places are not projected onto it (only the page's own places on Northland: " + (plan10?.Markers.Count ?? 0) + "), and \"Back to Greenvale\" is offered",
+                    home0 > 0 && zm.UiMapId == 10 && zm.MarkerCount == (plan10?.Markers.Count ?? 0) && zm.HomeButtonShownForTest && (string)zm.HomeButtonForTest.Content == "← Back to Greenvale", zm.MarkerCount + " " + zm.HomeButtonForTest.Content);
+                zm.GoHome();
+                await WaitFor(() => zm.UiMapId == 11 && zm.State == AtlasMap.ViewState.Ready, 10000);
+                Check("zone page Map tab: Back to Greenvale returns to the zone with its places, and the button goes", zm.UiMapId == 11 && zm.MarkerCount == home0 && !zm.HomeButtonShownForTest, zm.UiMapId + " " + zm.MarkerCount);
+                await SwitchTab("overview");
+            }
             await AtlasView.Open("instance:98"); UpdateLayout();
             Check("instance page in the window: a raid with no map says so in the map card's own words", await WaitFor(() => AtlasView.MapsForTest.Count == 1 && AtlasView.MapsForTest[0].State == AtlasMap.ViewState.NoArt, 5000) && AtlasView.MapsForTest[0].StateText.Contains("no map in the game files"), AtlasView.MapsForTest.Count > 0 ? AtlasView.MapsForTest[0].State + " " + AtlasView.MapsForTest[0].StateText : "no map control");
             await AtlasView.Open("item:99999"); UpdateLayout();

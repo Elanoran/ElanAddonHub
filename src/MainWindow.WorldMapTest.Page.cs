@@ -60,6 +60,89 @@ namespace ElansAddonHub
 
         async Task<string> WmEval(string js) { var r = await WorldMapView.EvalForTest(js); return r; }
 
+        // 2.70: a world map that has a problem never stays black or empty: a tile the game's storage does not have yet (a Battle.net install still downloading) has a
+        // stand-in, a status line with Retry and Copy details, an automatic retry; a page whose browser part stops or that never becomes ready shows a failure card;
+        // Settings > World map view "Flat only" never starts the 3D view
+        async Task WorldMapProblemsTest(CheckFn Check, Func<string, string> P)
+        {
+            var savedTile = WorldMapService.TileSourceForTest; bool saved3d = settings.WorldMap3d; int savedTimeout = WorldMapView.PageTimeoutMs;
+            try
+            {
+                WorldMapView.Dispose(); WorldMapService.ResetForTest(); WorldMapCache.Clear();
+                settings.WorldMap3d = false; settings.WorldMap3dProblem = null; settings.WorldMapFlat = false;
+                int bad = WmFdid(31, 31);
+                WorldMapService.StandInForTest = t => null;
+                WorldMapService.TileSourceForTest = fdid => fdid == bad ? null : WmTile((fdid - 70000) % 64, (fdid - 70000) / 64);
+                await AtlasView.Open("worldmap:0?x=266&y=266&z=5");
+                bool rdy = await WaitFor(() => WorldMapView.PageReady && WorldMapView.LoadedPage == "2d", 90000);
+                await WaitFor(() => WorldMapView.StatusShown, 5000);
+                var pend = WorldMapService.PendingOf(0);
+                Check("failed tile: a minimap the game's storage does not have yet is a hatched stand-in on the map and the header says \"" + WorldMapView.StatusText + "\" with Retry and Copy details (the map itself works)",
+                    rdy && WorldMapView.WebShown && WorldMapView.StatusShown && WorldMapView.StatusText == "1 area couldn't be read yet (the game may still be downloading)" && WorldMapView.RetryShown && pend.Count == 1 && pend[0].Col == 31 && pend[0].Row == 31 && pend[0].Reason == "missing",
+                    WorldMapView.StatusText + " | " + string.Join(",", pend.Select(p => p.Col + "," + p.Row + " " + p.Reason)));
+                await Task.Delay(900);
+                var pngF = await WorldMapView.CaptureForTest(); if (pngF != null && SelfTestClock.ShotsOn) File.WriteAllBytes(P("worldmap-failed-tile.png"), pngF);
+                Snapshot(P("worldmap-failed-tile-window.png"));
+                string clip = null; WorldMapView.ClipboardSeamForTest = s => clip = s;
+                WorldMapView.CopyDetailsForTest();
+                var prof = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                Check("failed tile: Copy details puts a plain report on the clipboard: the Outpost version, the continent, the tile with its reason, the page's state, the world map's recent log lines - and no user folder",
+                    clip != null && clip.Contains("Outpost: 2.70") && clip.Contains("Continent: Northland (map 0), 2D view") && clip.Contains("picture tile 31,31: missing in local storage - shown as hatched placeholder") && clip.Contains("2d page: started yes, ready yes")
+                    && clip.Contains("Recent world map log lines") && !clip.ToLowerInvariant().Contains(prof.ToLowerInvariant()) && WorldMapView.Note.StartsWith("Details copied"), clip);
+                // the download finished: Retry reads it, the page is opened again with the real picture (a new revision in the tile addresses: nothing from the browser cache)
+                WorldMapService.TileSourceForTest = fdid => WmTile((fdid - 70000) % 64, (fdid - 70000) / 64);
+                int rev0 = WorldMapService.Revision;
+                WorldMapView.RetryForTest();
+                var rr = await WorldMapView.LastRetryForTest;
+                bool back = await WaitFor(() => WorldMapView.PageReady && !WorldMapView.StatusShown && WorldMapView.WebShown, 30000);
+                var src = Json.Parse(await WmEval("(function(){ var t = document.querySelector('.leaflet-tile'); return t ? t.src : ''; })()")) as string;
+                Check("failed tile: Retry with the file there reads it (1 recovered), the stand-in and its marker are gone, the page opens again with tile addresses that carry the new revision (" + src?.Substring(Math.Max(0, (src?.Length ?? 0) - 12)) + ") and the status line goes",
+                    rr != null && rr.Recovered == 1 && rr.StillPending == 0 && back && WorldMapService.Revision > rev0 && WorldMapService.PendingOf(0).Count == 0 && src != null && src.Contains("?r=" + WorldMapService.Revision) && WorldMapView.Note.Contains("could be read now"),
+                    (rr == null ? "no result" : rr.Recovered + "/" + rr.StillPending + " " + rr.Error) + " " + src + " " + WorldMapView.Note);
+                // automatic retry: once per run of the app and when the game's storage changed
+                Check("automatic retry: nothing to retry once the tiles read; a continent with stand-ins is tried again by itself on the next open (once per app run, and whenever the game's storage index changed)",
+                    !WorldMapService.ShouldAutoRetry(0));
+
+                // a browser part of the page stops: a failure card, never a frozen or black map
+                WorldMapView.HandleProcessFailed("RenderProcessExited", "Crashed");
+                Check("failure: when the page's browser process stops the map shows what failed in plain words with Try again, Copy details and \"Use the flat map\" (not a black area)",
+                    WorldMapView.FailureShown && WorldMapView.FailureTitle == "The world map page stopped" && WorldMapView.FlatButtonShown && !WorldMapView.WebShown, WorldMapView.FailureTitle);
+                await Task.Delay(300);
+                Snapshot(P("worldmap-failure-window.png"));
+                WorldMapView.CopyDetailsForTest();
+                Check("failure: Copy details names the problem (\"" + WorldMapView.Problem + "\")", clip != null && clip.Contains("Problem: A browser process of the world map page stopped: RenderProcessExited (Crashed)"), clip);
+                WorldMapView.RetryFailureForTest();
+                bool again = await WaitFor(() => WorldMapView.PageReady && WorldMapView.WebShown && !WorldMapView.FailureShown, 60000);
+                Check("failure: Try again starts the page again and the map is back", again);
+
+                // a page that never becomes ready: the failure card after the timeout (not an endless "Opening...")
+                WorldMapView.PageTimeoutMs = 1500; WorldMapView.Ignore2dReadyForTest = true;
+                WorldMapView.Dispose();
+                await AtlasView.Open("worldmap:northland");
+                bool timedOut = await WaitFor(() => WorldMapView.FailureShown && WorldMapView.TimeoutsForTest > 0, 30000);
+                Check("failure: a flat page that does not become ready within the timeout shows \"" + WorldMapView.FailureTitle + "\" with Try again / Copy details / Use the flat map, and it is logged",
+                    timedOut && WorldMapView.FailureTitle == "The world map page did not open" && WorldMapView.FlatButtonShown && WorldReportHas("page not ready after"), WorldMapView.FailureTitle);
+                WorldMapView.Ignore2dReadyForTest = false; WorldMapView.PageTimeoutMs = savedTimeout;
+                WorldMapView.RetryFailureForTest();
+                Check("failure: ... and Try again opens it once the page works", await WaitFor(() => WorldMapView.PageReady && WorldMapView.WebShown, 60000));
+
+                // Settings > World map view: Flat only
+                settings.WorldMapFlat = true;
+                WorldMapView.SetMode(true);
+                await Task.Delay(200);
+                Check("Flat only: with Settings > World map view \"Flat only\" the 3D view is not started (the 2D | 3D switch is hidden, a note says why)", !WorldMapView.Is3D && !WorldMapView.ModeSegmentsShown && WorldMapView.Note.Contains("Flat only"), WorldMapView.Note);
+                settings.WorldMapFlat = false;
+            }
+            finally
+            {
+                WorldMapView.Ignore2dReadyForTest = false; WorldMapView.Ignore3dReadyForTest = false; WorldMapView.PageTimeoutMs = savedTimeout; WorldMapView.ClipboardSeamForTest = null;
+                WorldMapService.StandInForTest = null; WorldMapService.TileSourceForTest = savedTile;
+                settings.WorldMapFlat = false; settings.WorldMap3dProblem = null; settings.WorldMap3d = saved3d;
+            }
+        }
+
+        static bool WorldReportHas(string text) => WorldMapReport.LogLines(60).Any(l => l.Contains(text));
+
         async Task WorldMapPageTest(string dir, string work, List<string> notes, Action<bool> record)
         {
             void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); record(cond); Util.Log("worldmap test " + (cond ? "ok " : "FAIL ") + what.Substring(0, Math.Min(80, what.Length))); }
@@ -92,6 +175,7 @@ namespace ElansAddonHub
                 lone.Navigate("northland");
                 await WaitFor(() => lone.NoWebViewShown, 60000);
                 Check("no WebView2: the control shows a calm explanation (no link, nothing crashes) and the rest of the Atlas is said to work", lone.NoWebViewShown && lone.OverlayShown && lone.ProgressText.Contains("WebView2") && !lone.WebShown && !lone.HasWebForTest, lone.ProgressText);
+                Check("no WebView2 (2.70): the card offers Try again, Copy details and \"Use the flat map\" (the continent's map in the Atlas: " + lone.FlatMapLinkForTest + ")", lone.FailureShown && lone.FlatButtonShown && lone.FlatMapLinkForTest != null && lone.FlatMapLinkForTest.StartsWith("zone:") && lone.FlatMapLinkForTest.EndsWith("?tab=map"), lone.FlatMapLinkForTest);
                 WorldMapView.ForceNoWebViewForTest = false;
                 lone.Dispose();
                 WorldMapService.ResetForTest();
@@ -366,6 +450,8 @@ namespace ElansAddonHub
                     Check("screenshot: the page was captured", png != null && png.Length > 5000, (png?.Length ?? 0) + "");
 
                     await WorldMapPage3dTest(dir, notes, Check, P, taxi, lidx);
+                    ShowTab("atlas"); AtlasView.History.Clear();
+                    await WorldMapProblemsTest(Check, P);
                     ShowTab("atlas"); AtlasView.History.Clear();
                     // a new game build: the pictures of the old build are removed, the new build is made on the next visit
                     WorldMapView.Dispose();

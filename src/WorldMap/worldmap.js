@@ -7,6 +7,11 @@
   var UNITS = 4, YARDS = 1600 / 3, MAXZ = 9, NATIVE = 7;
   var wv = window.chrome && window.chrome.webview;
   function send(o) { if (wv) { try { wv.postMessage(o); } catch (e) { /* the app is gone */ } } }
+  // a script error is told to the app (logged, and in the world map's "Copy details"); the first few only
+  var errs = [];
+  function reportErr(msg) { msg = String(msg || 'unknown error').slice(0, 200); errs.push(msg); if (errs.length <= 5) send({ t: 'error', msg: msg }); }
+  window.addEventListener('error', function (e) { reportErr((e.message || e) + (e.lineno ? ' (line ' + e.lineno + ')' : '')); });
+  window.addEventListener('unhandledrejection', function (e) { reportErr('unhandled: ' + (e.reason && e.reason.message || e.reason)); });
   function w2ll(x, y) { var col = 32 - y / YARDS, row = 32 - x / YARDS; return [-row * UNITS, col * UNITS]; }
   function ll2w(lat, lng) { var col = lng / UNITS, row = -lat / UNITS; return [(32 - row) * YARDS, (32 - col) * YARDS]; }
   function $(id) { return document.getElementById(id); }
@@ -363,7 +368,7 @@
     var fit = map.getBoundsZoom(bounds, false);
     map.setMinZoom(Math.max(0, Math.floor((fit - 1) * 4) / 4));
     map.setMaxBounds(bounds.pad(.35));
-    tileLayer = L.tileLayer(m.map.base + '/z{z}/{x}_{y}.jpg', { tileSize: 256, minNativeZoom: 0, maxNativeZoom: NATIVE, minZoom: 0, maxZoom: MAXZ, noWrap: true, bounds: bounds.pad(.02), keepBuffer: 3, updateWhenZooming: false, errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==' });
+    tileLayer = L.tileLayer(m.map.base + '/z{z}/{x}_{y}.jpg' + (m.map.rev ? '?r=' + m.map.rev : ''), { tileSize: 256, minNativeZoom: 0, maxNativeZoom: NATIVE, minZoom: 0, maxZoom: MAXZ, noWrap: true, bounds: bounds.pad(.02), keepBuffer: 3, updateWhenZooming: false, errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==' });
     tileLayer.on('tileerror', function () { tileErrors++; });
     tileLayer.on('tileload', function () { tilesLoaded++; });
     tileLayer.once('load', function () { if (!ready) { ready = true; send({ t: 'ready', tiles: tilesLoaded, errors: tileErrors }); } });

@@ -95,18 +95,24 @@ namespace ElansAddonHub
             bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             crumbs.Margin = new Thickness(0, 0, 8, 0);
             Grid.SetColumn(crumbs, 0); bar.Children.Add(crumbs);
+            // "Back to <the page's map>": shown while the breadcrumb (or a floor) has taken the map somewhere else than the page's own map (HomeMap)
+            homeButton = new Button { Height = 28, Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(0, 0, 8, 0), Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center, Tag = "map-home" };
+            StyleOf(homeButton, "Button.S");
+            homeButton.Click += (s, e) => GoHome();
+            Grid.SetColumn(homeButton, 1); bar.Children.Add(homeButton);
             floorHost.Child = floorPanel;
             floorHost.Margin = new Thickness(0, 0, 8, 0);
             StyleOf(floorHost, "SegmentHost");
-            Grid.SetColumn(floorHost, 1); bar.Children.Add(floorHost);
+            Grid.SetColumn(floorHost, 2); bar.Children.Add(floorHost);
             var tools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             zoomOut = Tool("\uE71F", "Zoom out", () => ZoomBy(1 / 1.5));
             zoomIn = Tool("\uE8A3", "Zoom in", () => ZoomBy(1.5));
             zoomFit = Tool("\uE73F", "Fit the map", ResetView);
             tools.Children.Add(zoomOut); tools.Children.Add(zoomIn); tools.Children.Add(zoomFit);
-            Grid.SetColumn(tools, 2); bar.Children.Add(tools);
+            Grid.SetColumn(tools, 3); bar.Children.Add(tools);
             Grid.SetRow(bar, 0); root.Children.Add(bar);
 
             // ---- stage: the picture + markers (one element), the hover text, the empty / loading states
@@ -195,6 +201,7 @@ namespace ElansAddonHub
             int my = ++gen;
             if (route.Count > 0 && routeMap != uiMapId) ClearRoute();
             UiMapId = uiMapId;
+            SwitchMarkers(uiMapId);
             LeaveDrawn();
             var idx = MapData.Index;
             ClearPicture();
@@ -234,7 +241,7 @@ namespace ElansAddonHub
             if (inst != null && inst.Floors.Count == 0 && Services.DungeonMaps.DungeonPlans.CanDraw(mapId)) { ShowDrawn(inst); return; }
             if (inst == null || inst.Floors.Count == 0)
             {
-                int my = ++gen; ClearPicture(); UiMapId = 0; LeaveDrawn();
+                int my = ++gen; ClearPicture(); UiMapId = 0; SwitchMarkers(0); LeaveDrawn();
                 BuildChrome(idx, 0, inst);
                 SetState(inst == null ? ViewState.Unavailable : ViewState.NoArt, inst == null ? "Map data is not available" : inst.Name + " has no map in the game files",
                     inst == null ? "" : "The game does not ship a picture of this " + inst.Kind.ToLowerInvariant() + ".");
@@ -325,6 +332,7 @@ namespace ElansAddonHub
                     var id = m.Id;
                     var b = new Button { Content = m.Name, Height = 28, Padding = new Thickness(8, 0, 8, 0) };
                     StyleOf(b, "GhostButton");
+                    if (id == homeMap) { b.SetResourceReference(ForegroundProperty, "Brush.Accent"); b.Tag = "crumb-home"; b.ToolTip = "This page's map"; }
                     b.Click += (s, e) => ShowMap(id);
                     crumbs.Children.Add(b); crumbButtons.Add(b);
                 }
@@ -347,7 +355,11 @@ namespace ElansAddonHub
                 floorHost.Visibility = Visibility.Visible;
             }
             else floorHost.Visibility = Visibility.Collapsed;
+            UpdateHome();
         }
+
+        // the crumb of the page's own map, when it is in the breadcrumb (a link, in the accent colour)
+        public bool HomeCrumbHighlightedForTest => crumbButtons.Any(b => b.Tag as string == "crumb-home");
 
         static TextBlock Text(string text, string style)
         {
@@ -440,14 +452,58 @@ namespace ElansAddonHub
 
         // =============================================================================================================================
         // markers
-        public void AddMarkers(IEnumerable<AtlasMarker> items)
+        // Markers belong to the map shown when they are added (their fractions are of THAT picture). When the breadcrumb or a floor takes the control to
+        // another map, they are put aside, never projected onto the other picture: that map shows its own markers (put aside earlier, or the ones
+        // MarkersForMap gives for it - the same entity's places on that map) or none; going back brings the first ones back.
+        readonly Dictionary<int, List<AtlasMarker>> markerSets = new Dictionary<int, List<AtlasMarker>>();
+        int markerMap;
+        public int MarkerMapForTest => markerMap;
+        public Func<int, IEnumerable<AtlasMarker>> MarkersForMap;
+
+        static bool Placeable(AtlasMarker m) => m != null && !double.IsNaN(m.Fx) && !double.IsNaN(m.Fy);
+
+        void SwitchMarkers(int map)
         {
-            if (items == null) return;
-            foreach (var m in items) if (m != null && !double.IsNaN(m.Fx) && !double.IsNaN(m.Fy)) markers.Add(m);
+            if (map == markerMap) return;
+            if (markers.Count > 0 || markerSets.ContainsKey(markerMap)) markerSets[markerMap] = new List<AtlasMarker>(markers);
+            markers.Clear();
+            if (markerSets.TryGetValue(map, out var kept)) markers.AddRange(kept);
+            else if (MarkersForMap != null && map != 0) { var own = MarkersForMap(map); if (own != null) markers.AddRange(own.Where(Placeable)); }
+            markerMap = map;
             clusters = null; hover = null; HideTip(); view.InvalidateVisual();
         }
 
-        public void ClearMarkers() { markers.Clear(); clusters = null; hover = null; HideTip(); view.InvalidateVisual(); }
+        public void AddMarkers(IEnumerable<AtlasMarker> items)
+        {
+            if (items == null) return;
+            if (markerMap != UiMapId) SwitchMarkers(UiMapId);
+            foreach (var m in items) if (Placeable(m)) markers.Add(m);
+            clusters = null; hover = null; HideTip(); view.InvalidateVisual();
+        }
+
+        public void ClearMarkers() { markers.Clear(); markerSets.Clear(); markerMap = UiMapId; clusters = null; hover = null; HideTip(); view.InvalidateVisual(); }
+
+        // ---- the page's own map (an entity page: the zone it is about, the zone of the spawns shown): a "Back to <name>" button while another map is shown,
+        // and that map's crumb in the accent colour when it is in the breadcrumb
+        int homeMap; string homeName = "";
+        readonly Button homeButton;
+        public int HomeMap => homeMap;
+        public Button HomeButtonForTest => homeButton;
+        public bool HomeButtonShownForTest => homeButton.Visibility == Visibility.Visible;
+        public void SetHome(int uiMapId, string name)
+        {
+            homeMap = uiMapId; homeName = string.IsNullOrWhiteSpace(name) ? (MapData.Index?.Get(uiMapId)?.Name ?? "") : name;
+            UpdateHome();
+        }
+        public void GoHome() { if (homeMap != 0 && homeMap != UiMapId) ShowMap(homeMap); }
+        void UpdateHome()
+        {
+            bool away = homeMap != 0 && UiMapId != homeMap && !Compact;
+            homeButton.Content = "← Back to " + (homeName.Length > 0 ? homeName : "this page's map");
+            homeButton.ToolTip = "Show " + (homeName.Length > 0 ? homeName : "the page's map") + " again, with this page's places on it";
+            System.Windows.Automation.AutomationProperties.SetName(homeButton, "Back to " + homeName);
+            homeButton.Visibility = away ? Visibility.Visible : Visibility.Collapsed;
+        }
 
         // ---- a route: numbered stops joined by a line (a closed loop), drawn over the picture and under/over the markers; belongs to the map shown when it was set
         public sealed class RouteStop

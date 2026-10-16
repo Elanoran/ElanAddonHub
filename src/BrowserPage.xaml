@@ -112,7 +112,7 @@
   </UserControl.Resources>
 
   <!-- page panel (DESIGN 4): the page sits on a scrim; 12 px all round also keeps the rectangular web view clear of the rounded corners -->
-  <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="12">
+  <Border Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="12">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />

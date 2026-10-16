@@ -22,7 +22,7 @@ $artFiles = 'AddonIcons.xaml', 'Avatars.xaml', 'ReactionIcons.xaml', 'SplashScen
 $files = Get-ChildItem $root -Recurse -Include *.xaml, *.cs | Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' }
 $fontOk = 11, 12, 13, 15, 22, 16, 20, 32                  # Text ramp + icon sizes (inline glyph 12, row 16, rail 20, hero 32)
 $radiusOk = 0, 8, 10, 12, 14
-$deliberate = 'ClassColors|"HUNTER"|"PALADIN"|QualityHex|EdgeHex|Palette =|RoleColor|AccentHex|SlotBg|EmptyEdge|SlotColor|Teal =|Margin="64,56,64,64"|Thickness\(64, 56, 64, 64\)|"#8A94A3"|GradientStop Color="#(FF8000|FFD27A|B85800)"|r == "owner" ? "#FF8000"|"#B048F8"|x:Name="thumb"|x:Name="ph"|Background="#01000000"|Color="#(B3|33|59|B5|FF)0F1113"|Margin="14" Background="{StaticResource Brush.Bg}"'
+$deliberate = 'ClassColors|"HUNTER"|"PALADIN"|QualityHex|EdgeHex|Palette =|RoleColor|AccentHex|SlotBg|EmptyEdge|SlotColor|Teal =|Margin="64,56,64,64"|Thickness\(64, 56, 64, 64\)|"#8A94A3"|GradientStop Color="#(FF8000|FFD27A|B85800)"|r == "owner" ? "#FF8000"|"#B048F8"|x:Name="thumb"|x:Name="ph"|Background="#01000000"|Margin="14" Background="{StaticResource Brush.Window}"'
 $deliberateFiles = 'AvatarView.xaml', 'OverlayWindow.xaml', 'InventoryPage.Bags.cs', 'WorldMapLayers.cs', 'WorldMapPyramid.cs'    # the world map's marker colours and sea colour (drawn by the web page over game art, not WPF theme colours); scaled artwork in a 100-unit Viewbox; the in-game overlay's rank-framed pills; the Bags slot grid (in-game look)
 $devOnly = 'IconSheet.cs', 'Splash.cs'                     # contact sheets for --iconsheet / --splash previews, never shown to users
 $radiusPill = 'x:Name="ring"|PART_Track|PART_Indicator|x:Name="th"|CornerRadius="17"|CornerRadius="0,3,3,0"|CornerRadius="13'

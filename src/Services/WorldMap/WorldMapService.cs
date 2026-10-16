@@ -67,6 +67,8 @@ namespace ElansAddonHub.Services.WorldMap
         static readonly Dictionary<int, Task<bool>> ttasks = new Dictionary<int, Task<bool>>();
         public static Func<int, byte[]> AdtSourceForTest;          // self-test: the root ADT bytes of a FileDataID instead of the game's files
         public static Func<byte[]> LiquidTypeSourceForTest;        // self-test: the LiquidType.db2 bytes instead of the game's file
+        public static Func<int, byte[]> WdlSourceForTest;          // self-test: the WDL bytes of a FileDataID instead of the game's file (null = none)
+        public static Func<WdtTile, MapRender.TileImage> StandInForTest;   // self-test: the low-detail picture of a map tile instead of the continent's Atlas art
         public static int TerrainBuildCountForTest;
         public static event Action<int> BuildChanged;       // on a worker thread: progress, done, failed
 
@@ -106,7 +108,10 @@ namespace ElansAddonHub.Services.WorldMap
 
         public static void CancelAll() { lock (gate) { foreach (var c in cts.Values.Concat(tcts.Values)) { try { c.Cancel(); } catch (Exception) { } } } }
 
-        public static void ResetForTest() { lock (gate) { states.Clear(); cts.Clear(); tasks.Clear(); tstates.Clear(); tcts.Clear(); ttasks.Clear(); } WorldMapZones.ClearCache(); }
+        public static void ResetForTest() { lock (gate) { states.Clear(); cts.Clear(); tasks.Clear(); tstates.Clear(); tcts.Clear(); ttasks.Clear(); retried.Clear(); tretried.Clear(); rtasks.Clear(); } WorldMapZones.ClearCache(); }
+
+        // "Try again" after a failed build: the failed states are forgotten (a finished build of another continent is not touched)
+        public static void ForgetFailures(int mapId) { lock (gate) { if (states.TryGetValue(mapId, out var s) && !s.Running) { states.Remove(mapId); tasks.Remove(mapId); } if (tstates.TryGetValue(mapId, out var t) && !t.Running) { tstates.Remove(mapId); ttasks.Remove(mapId); } } }
 
         // the reason for the page: a file the install lists but cannot give (BLTE) is almost always a game that is still downloading in the background, or a damaged install
         public static string Why(Exception e)
@@ -150,9 +155,10 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     st.Phase = p.Phase; st.Done = p.Done; st.Total = p.Total;
                     Fire(st.MapId);
-                });
+                }, ContinentArt(cont, MapData.Index));
                 st.Result = res; st.Complete = res.Complete; st.Running = false; st.Ms = sw.ElapsedMilliseconds;
-                Util.Log("world map: " + cont.Name + " built: " + res.Adt + " map tiles (" + res.Decoded + " decoded, " + res.Reused + " reused, " + res.Missing + " missing" + (res.Unreadable > 0 ? ", " + res.Unreadable + " could not be read" : "") + "), " + res.Files + " files, " + (res.Bytes / 1048576) + " MB in " + st.Ms + " ms");
+                lock (gate) retried.Add(cont.MapId);
+                Util.Log("world map: " + cont.Name + " built: " + res.Adt + " map tiles (" + res.Decoded + " decoded, " + res.Reused + " reused, " + res.Missing + " missing" + (res.Unreadable > 0 ? ", " + res.Unreadable + " could not be read" : "") + (res.Pending.Count > 0 ? ", " + res.Pending.Count + " shown with a stand-in for now" : "") + "), " + res.Files + " files, " + (res.Bytes / 1048576) + " MB in " + st.Ms + " ms");
                 Fire(st.MapId);
                 return res.Complete;
             }
@@ -221,7 +227,8 @@ namespace ElansAddonHub.Services.WorldMap
                     Fire(st.MapId);
                 });
                 st.TerrainResult = res; st.Complete = res.Complete; st.Running = false; st.Ms = sw.ElapsedMilliseconds;
-                Util.Log("world map: " + cont.Name + " terrain built: " + res.Tiles + " tiles (" + res.Written + " read, " + res.Reused + " reused, " + res.Missing + " missing, " + res.Failed + " failed), " + res.Zones + " zones, " + (res.Bytes / 1024) + " KB in " + st.Ms + " ms");
+                lock (gate) tretried.Add(cont.MapId);
+                Util.Log("world map: " + cont.Name + " terrain built: " + res.Tiles + " tiles (" + res.Written + " read, " + res.Reused + " reused, " + res.Missing + " missing, " + res.Failed + " failed" + (res.Pending.Count > 0 ? "; " + res.LowDetail + " at low detail, " + res.Holes + " placeholders for now" : "") + "), " + res.Zones + " zones, " + (res.Bytes / 1024) + " KB in " + st.Ms + " ms");
                 Fire(st.MapId);
                 return res.Complete;
             }
@@ -240,7 +247,7 @@ namespace ElansAddonHub.Services.WorldMap
             CascStorage casc = null;
             try
             {
-                List<WdtTile> tiles; Func<WdtTile, byte[]> load; LiquidKinds kinds = null;
+                List<WdtTile> tiles; Func<WdtTile, byte[]> load; LiquidKinds kinds = null; WdlFile wdl = null;
                 if (WdtSourceForTest != null)
                 {
                     var wf = WdtFile.Parse(WdtSourceForTest(mapId));
@@ -248,6 +255,7 @@ namespace ElansAddonHub.Services.WorldMap
                     tiles = wf.Tiles.Where(t => t.MinimapFdid != 0 && t.RootFdid != 0).ToList();
                     load = t => AdtSourceForTest?.Invoke(t.RootFdid);
                     if (LiquidTypeSourceForTest != null) kinds = LiquidKinds.FromDb2(LiquidTypeSourceForTest());
+                    if (WdlSourceForTest != null && wf.WdlFdid > 0) { var wb = WdlSourceForTest(wf.WdlFdid); if (wb != null) wdl = WdlFile.Parse(wb); }
                 }
                 else
                 {
@@ -271,17 +279,30 @@ namespace ElansAddonHub.Services.WorldMap
                     }
                     catch (Exception e) { Util.Log("world map terrain: liquid types: " + e.Message); }
                     load = t => keys.TryGetValue(t.RootFdid, out var ck) ? c.ReadByContentKey(ck) : null;
+                    // the low-resolution heights (one small file): the stand-in of a tile whose own terrain file is not readable yet
+                    if (wf.WdlFdid > 0)
+                    {
+                        try
+                        {
+                            var wk2 = casc.ResolveFileIds(new HashSet<int> { wf.WdlFdid });
+                            var wb = wk2.TryGetValue(wf.WdlFdid, out var wck2) ? casc.ReadByContentKey(wck2) : null;
+                            if (wb != null) { wdl = WdlFile.Parse(wb); if (!wdl.Ok) { Util.Log("world map terrain: " + name + ": " + wdl.Problem); wdl = null; } }
+                        }
+                        catch (Exception e) { Util.Log("world map terrain: " + name + ": the low-resolution heights could not be read: " + WorldMapPending.Short(e)); wdl = null; }
+                    }
                 }
                 tiles = WdtFile.WithoutStrays(tiles, 12, null);
                 if (filter != null) tiles = tiles.Where(filter).ToList();
                 if (tiles.Count == 0) throw new InvalidDataException(name + " has no terrain tiles");
-                return WorldMapTerrain.Build(mapId, key, tiles, load, mapDir, zr, progress, ct, kinds);
+                var w = wdl != null && wdl.Ok ? wdl : null;
+                return WorldMapTerrain.Build(mapId, key, tiles, load, mapDir, zr, progress, ct, kinds, w == null ? (Func<WdtTile, TerrainTile>)null : t => w.Tile(t.Col, t.Row), WorldMapPending.StorageStamp(WowRoot()));
             }
             finally { casc?.Dispose(); }
         }
 
         // The work itself, no state: reads the WDT, the minimaps and writes the pyramid under mapDir. `filter` limits it to some map tiles (a test of a region).
-        public static PyramidResult Build(int mapId, string name, int wdtFdid, string key, string mapDir, Func<WdtTile, bool> filter, CancellationToken ct, Action<PyramidProgress> progress)
+        public static PyramidResult Build(int mapId, string name, int wdtFdid, string key, string mapDir, Func<WdtTile, bool> filter, CancellationToken ct, Action<PyramidProgress> progress,
+            Func<WdtTile, MapRender.TileImage> standIn = null)
         {
             byte[] wdtBytes; Func<int, MapRender.TileImage> tileOf; CascStorage casc = null;
             Dictionary<int, byte[]> keys = null;
@@ -325,9 +346,158 @@ namespace ElansAddonHub.Services.WorldMap
                 if (stray.Count > 0) Util.Log("world map: " + name + ": " + stray.Count + " stray map tile(s) left out");
                 if (filter != null) tiles = tiles.Where(filter).ToList();
                 if (tiles.Count == 0) throw new InvalidDataException(name + " has no minimap tiles");
-                return WorldMapPyramid.Build(mapId, name, key, tiles, t => tileOf(t.MinimapFdid), mapDir, progress, ct);
+                return WorldMapPyramid.Build(mapId, name, key, tiles, t => tileOf(t.MinimapFdid), mapDir, progress, ct, StandInForTest ?? standIn, WorldMapPending.StorageStamp(WowRoot()));
             }
             finally { casc?.Dispose(); }
         }
+
+        // ---------------------------------------------------------------- stand-ins: the continent's own Atlas map art, under a tile that cannot be read yet
+        // The continent picture (MapRender: made from the game's world map art) is decoded once, the first time a tile needs it; a map tile's square of it is
+        // found from the world position of the tile's corners (the continent map is a linear, axis-aligned view of the world) and scaled up bilinearly.
+        public static Func<WdtTile, MapRender.TileImage> ContinentArt(WorldContinent cont, MapIndex idx)
+        {
+            if (StandInForTest != null) return StandInForTest;
+            if (cont == null || idx == null || cont.UiMapId <= 0) return null;
+            byte[] art = null; int aw = 0, ah = 0; bool tried = false; var lk = new object();
+            return t =>
+            {
+                lock (lk)
+                {
+                    if (!tried)
+                    {
+                        tried = true;
+                        try
+                        {
+                            if (!idx.HasArt(cont.UiMapId)) return null;
+                            var path = MapRender.TryGet(cont.UiMapId);
+                            if (path == null)
+                            {
+                                using (var done = new ManualResetEventSlim(false)) { MapRender.Request(cont.UiMapId, p => { path = p; try { done.Set(); } catch (Exception) { } }); done.Wait(30000); }
+                            }
+                            if (path != null && MapRender.Load(path) is System.Windows.Media.Imaging.BitmapSource bs)
+                            {
+                                var f = new System.Windows.Media.Imaging.FormatConvertedBitmap(bs, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                                aw = f.PixelWidth; ah = f.PixelHeight; art = new byte[aw * ah * 4];
+                                f.CopyPixels(art, aw * 4, 0);
+                            }
+                        }
+                        catch (Exception e) { Util.Log("world map: continent art for stand-ins: " + WorldMapPending.Short(e)); art = null; }
+                    }
+                }
+                if (art == null) return null;
+                // the tile's corners on the continent map: a point just inside each edge, extended to the edge (a corner exactly on the map's border may fall outside it)
+                double ty = WorldMapMath.TileYards, inset = ty * 0.02;
+                double xN = (32 - t.Row) * ty, yW = (32 - t.Col) * ty;
+                var a = idx.WorldToMap(cont.MapId, xN - inset, yW - inset, cont.UiMapId);
+                var b = idx.WorldToMap(cont.MapId, xN - ty + inset, yW - ty + inset, cont.UiMapId);
+                if (a == null || b == null) return null;
+                double k = ty / (ty - 2 * inset);
+                double dfx = (b.Value.Fx - a.Value.Fx) * k, dfy = (b.Value.Fy - a.Value.Fy) * k;
+                double fx0 = a.Value.Fx - dfx * (inset / ty), fy0 = a.Value.Fy - dfy * (inset / ty);
+                const int N = WorldMapMath.MinimapPx;
+                var o = new byte[N * N * 4];
+                for (int y = 0; y < N; y++)
+                {
+                    double sy = (fy0 + dfy * (y + 0.5) / N) * ah - 0.5;
+                    int y0 = Math.Max(0, Math.Min(ah - 1, (int)Math.Floor(sy))), y1 = Math.Min(ah - 1, y0 + 1); double wy = Math.Max(0, Math.Min(1, sy - y0));
+                    for (int x = 0; x < N; x++)
+                    {
+                        double sx = (fx0 + dfx * (x + 0.5) / N) * aw - 0.5;
+                        int x0 = Math.Max(0, Math.Min(aw - 1, (int)Math.Floor(sx))), x1 = Math.Min(aw - 1, x0 + 1); double wx = Math.Max(0, Math.Min(1, sx - x0));
+                        int i = (y * N + x) * 4, p00 = (y0 * aw + x0) * 4, p01 = (y0 * aw + x1) * 4, p10 = (y1 * aw + x0) * 4, p11 = (y1 * aw + x1) * 4;
+                        for (int c = 0; c < 3; c++)
+                            o[i + c] = (byte)Math.Round((art[p00 + c] * (1 - wx) + art[p01 + c] * wx) * (1 - wy) + (art[p10 + c] * (1 - wx) + art[p11 + c] * wx) * wy);
+                        o[i + 3] = 255;
+                    }
+                }
+                return new MapRender.TileImage { Bgra = o, Width = N, Height = N };
+            };
+        }
+
+        // ---------------------------------------------------------------- tiles that could not be read yet: what is pending, and trying them again
+        static readonly HashSet<int> retried = new HashSet<int>(), tretried = new HashSet<int>();      // maps whose stand-ins were tried in this run of the app
+        static readonly Dictionary<int, Task<RetryResult>> rtasks = new Dictionary<int, Task<RetryResult>>();
+        public static int RetryCountForTest;
+
+        public sealed class RetryResult { public int Recovered, StillPending; public string Error; public bool Ran; }
+
+        // the stand-ins of a continent now: the pictures' and (when it was read) the terrain's
+        public static List<PendingTile> PendingOf(int mapId)
+        {
+            var l = new List<PendingTile>();
+            var m = WorldMapCache.Built(mapId); if (m != null) l.AddRange(m.Pending);
+            var t = WorldMapCache.TerrainBuilt(mapId); if (t != null) l.AddRange(t.Pending);
+            return l;
+        }
+
+        public static bool Retrying(int mapId) { lock (gate) return rtasks.TryGetValue(mapId, out var t) && !t.IsCompleted; }
+
+        // worth trying again by itself: stand-ins are there and either they were not tried yet in this run of the app, or the game's storage changed since
+        public static bool ShouldAutoRetry(int mapId)
+        {
+            var m = WorldMapCache.Built(mapId); var t = WorldMapCache.TerrainBuilt(mapId);
+            bool pics = m != null && m.Pending.Count > 0, ter = t != null && t.Pending.Count > 0;
+            if (!pics && !ter) return false;
+            if (Retrying(mapId)) return false;
+            string now = WorldMapPending.StorageStamp(WowRoot());
+            lock (gate)
+            {
+                if (pics && (!retried.Contains(mapId) || (now.Length > 0 && now != m.Stamp))) return true;
+                if (ter && (!tretried.Contains(mapId) || (now.Length > 0 && now != t.Stamp))) return true;
+            }
+            return false;
+        }
+
+        // reads the stand-in tiles of a continent again (pictures and terrain, whichever has some), in the background; a running retry is joined.
+        // The map stays usable meanwhile (the finished manifests stay until the new ones are written).
+        public static Task<RetryResult> RetryPending(int mapId)
+        {
+            lock (gate)
+            {
+                if (rtasks.TryGetValue(mapId, out var running) && !running.IsCompleted) return running;
+                var cont = Continent(MapData.Index, mapId);
+                var key = WorldMapCache.BuildKey;
+                var zr = ZoneResolver.FromIndex(MapData.Index);
+                var idx = MapData.Index;
+                var task = Task.Factory.StartNew(() =>
+                {
+                    var r = new RetryResult();
+                    if (cont == null) { r.Error = "The game has no world map for this continent."; return r; }
+                    try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; } catch (Exception) { }
+                    Interlocked.Increment(ref RetryCountForTest);
+                    try
+                    {
+                        var m = WorldMapCache.Built(mapId, key);
+                        if (m != null && m.Pending.Count > 0)
+                        {
+                            r.Ran = true;
+                            var res = Build(cont.MapId, cont.Name, cont.WdtFileDataId, key, WorldMapCache.MapDir(key, cont.MapId), null, CancellationToken.None, null, ContinentArt(cont, idx));
+                            r.Recovered += res.Recovered; r.StillPending += res.Pending.Count;
+                            Util.Log("world map: " + cont.Name + ": retried " + m.Pending.Count + " picture tile(s): " + res.Recovered + " read now, " + res.Pending.Count + " still not readable");
+                        }
+                        lock (gate) retried.Add(mapId);
+                        var t = WorldMapCache.TerrainBuilt(mapId, key);
+                        if (t != null && t.Pending.Count > 0)
+                        {
+                            r.Ran = true;
+                            var res = BuildTerrain(cont.MapId, cont.Name, cont.WdtFileDataId, key, WorldMapCache.MapDir(key, cont.MapId), null, zr, CancellationToken.None, null);
+                            r.Recovered += res.Recovered; r.StillPending += res.Pending.Count;
+                            Util.Log("world map: " + cont.Name + ": retried " + t.Pending.Count + " terrain tile(s): " + res.Recovered + " read now, " + res.Pending.Count + " still not readable");
+                        }
+                        lock (gate) tretried.Add(mapId);
+                    }
+                    catch (Exception e) { r.Error = Why(e); Util.Log("world map: " + cont.Name + ": retry failed: " + WorldMapPending.Short(e)); }
+                    if (r.Recovered > 0) Interlocked.Increment(ref revision);
+                    Fire(mapId);
+                    return r;
+                }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                rtasks[mapId] = task;
+                return task;
+            }
+        }
+
+        // bumps when a retry replaced stand-ins: the page adds it to its file addresses so the browser does not show the old pictures from its cache
+        static int revision;
+        public static int Revision => revision;
     }
 }

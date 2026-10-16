@@ -73,6 +73,24 @@ namespace ElansAddonHub
         public bool FrozenImageShownForTest => freezeImg != null && freezeImg.Source != null;
         public BitmapSource FrozenSnapshotForTest => freezeImg?.Source as BitmapSource;
         public static bool ForceNoGlForTest;                   // self-test: pretend WebGL is missing (the page is told to behave as if it were)
+        // 2.70: problems are never a black or empty map - a status line for tiles that could not be read yet, a failure card with what failed, Retry,
+        // "Copy details" (WorldMapReport) and "Use the flat map"; a page that does not start (or a browser part that stops) is noticed and logged
+        public static int PageTimeoutMs = 15000;               // a page that has not said "ready" this long after it was opened has failed
+        public static bool Ignore2dReadyForTest, Ignore3dReadyForTest;     // self-test: a page that never becomes ready
+        public static Func<string> WebViewVersionForTest;
+        public string StatusText => statusText.Text;
+        public bool StatusShown => statusHost.Visibility == Visibility.Visible;
+        public bool RetryShown => retryButton.Visibility == Visibility.Visible;
+        public bool Try3dShown => try3dButton.Visibility == Visibility.Visible;
+        public bool FailureShown => overlay.Visibility == Visibility.Visible && overlayCopy.Visibility == Visibility.Visible;
+        public bool FlatButtonShown => overlayFlat.Visibility == Visibility.Visible;
+        public string FailureTitle => overlayTitle.Text;
+        public string FailureHint => overlayHint.Text;
+        public string LastReportForTest { get; private set; }
+        public string Problem => lastProblem ?? (GlFallbackReason != null ? "3D view not available: " + GlFallbackReason : "");
+        public IReadOnlyList<string> PageErrors => pageErrors;
+        public int TimeoutsForTest { get; private set; }
+        public Task<WorldMapService.RetryResult> LastRetryForTest { get; private set; }
 
         // ---- parts
         readonly StackPanel bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
@@ -88,7 +106,17 @@ namespace ElansAddonHub
         readonly TextBlock overlayTitle = new TextBlock { HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap };
         readonly TextBlock overlayHint = new TextBlock { HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 460 };
         readonly ProgressBar overlayBar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 320, Margin = new Thickness(0, 12, 0, 0), Visibility = Visibility.Collapsed };
-        readonly Button overlayButton = new Button { Margin = new Thickness(0, 16, 0, 0), HorizontalAlignment = HorizontalAlignment.Center, Visibility = Visibility.Collapsed, MinWidth = 120 };
+        readonly Button overlayButton = new Button { Margin = new Thickness(4, 0, 4, 0), HorizontalAlignment = HorizontalAlignment.Center, Visibility = Visibility.Collapsed, MinWidth = 120 };
+        readonly Button overlayCopy = new Button { Margin = new Thickness(4, 0, 4, 0), Content = "Copy details", Visibility = Visibility.Collapsed };
+        readonly Button overlayFlat = new Button { Margin = new Thickness(4, 0, 4, 0), Content = "Use the flat map", Visibility = Visibility.Collapsed };
+        // the status line beside the switches: tiles that could not be read yet, a retry in progress, 3D switched off after a problem
+        readonly StackPanel statusHost = new StackPanel { Orientation = Orientation.Horizontal, Visibility = Visibility.Collapsed, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        readonly TextBlock statusGlyph = new TextBlock { Text = "", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        readonly TextBlock statusText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        readonly Button retryButton = new Button { Content = "Retry", Margin = new Thickness(8, 0, 0, 0) }, statusCopy = new Button { Content = "Copy details", Margin = new Thickness(4, 0, 0, 0) }, try3dButton = new Button { Content = "Try 3D again", Margin = new Thickness(4, 0, 0, 0) };
+        readonly List<string> pageErrors = new List<string>();
+        string lastProblem;
+        DispatcherTimer pageTimer;
         WebView2 web;
         Task<bool> webTask;
 
@@ -128,6 +156,17 @@ namespace ElansAddonHub
             bar.Children.Add(modeHost);
             noteText.Style = (Style)FindResource("Text.Caption");
             bar.Children.Add(noteText);
+            statusGlyph.FontFamily = (FontFamily)FindResource("Font.Icons"); statusGlyph.FontSize = 12; statusGlyph.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Warn");
+            statusText.Style = (Style)FindResource("Text.Caption"); statusText.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text.Secondary");
+            foreach (var b in new[] { retryButton, statusCopy, try3dButton }) { b.Style = (Style)FindResource("GhostButton"); b.Height = 28; b.Padding = new Thickness(8, 0, 8, 0); }
+            retryButton.ToolTip = "Read the areas that could not be read again (useful once the Battle.net app has finished downloading or updating the game)";
+            statusCopy.ToolTip = "Copy a short report of the world map (versions, graphics, what could not be read, recent log lines) to paste to whoever helps you";
+            try3dButton.ToolTip = "Start the 3D view again";
+            retryButton.Click += (s, e) => StartRetry(false);
+            statusCopy.Click += (s, e) => CopyDetails();
+            try3dButton.Click += (s, e) => { if (Settings != null) { Settings.WorldMap3dProblem = null; SaveSettings?.Invoke(); } GlFallbackReason = null; SetMode(true); UpdateStatus(); };
+            statusHost.Children.Add(statusGlyph); statusHost.Children.Add(statusText); statusHost.Children.Add(retryButton); statusHost.Children.Add(statusCopy); statusHost.Children.Add(try3dButton);
+            bar.Children.Add(statusHost);
             SetRow(bar, 0); Children.Add(bar);
 
             var card = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(24) };
@@ -137,7 +176,13 @@ namespace ElansAddonHub
             overlayBar.Style = (Style)FindResource("ThinProgress");
             overlayButton.Style = (Style)FindResource("Button.M");
             overlayButton.Click += (s, e) => overlayAction?.Invoke();
-            card.Children.Add(overlayGlyph); card.Children.Add(overlayTitle); card.Children.Add(overlayHint); card.Children.Add(overlayBar); card.Children.Add(overlayButton);
+            overlayCopy.Style = (Style)FindResource("Button.M"); overlayFlat.Style = (Style)FindResource("Button.M");
+            overlayCopy.Click += (s, e) => CopyDetails();
+            overlayFlat.Click += (s, e) => OpenFlatAtlasMap();
+            overlayFlat.ToolTip = "Open the continent's flat map in the Atlas (drawn by the app itself, no web page)";
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 16, 0, 0) };
+            buttons.Children.Add(overlayButton); buttons.Children.Add(overlayCopy); buttons.Children.Add(overlayFlat);
+            card.Children.Add(overlayGlyph); card.Children.Add(overlayTitle); card.Children.Add(overlayHint); card.Children.Add(overlayBar); card.Children.Add(buttons);
             overlay.Child = card;
             stage.Children.Add(overlay);
             SetRow(stage, 1); Children.Add(stage);
@@ -168,17 +213,22 @@ namespace ElansAddonHub
             else SetNote("");
             if (!modeKnown) { modeKnown = true; mode3d = Settings != null && Settings.WorldMap3d; }
             if (t.Mode == 3) mode3d = true; else if (t.Mode == 2) mode3d = false;
+            if (FlatOnly) mode3d = false;
             ShowModeSegments();
             target = t;
             Resolve();
         }
 
-        void ShowModeSegments() { suppressMode = true; seg2d.IsChecked = !mode3d; seg3d.IsChecked = mode3d; suppressMode = false; }
+        void ShowModeSegments() { suppressMode = true; seg2d.IsChecked = !mode3d; seg3d.IsChecked = mode3d; suppressMode = false; modeHost.Visibility = FlatOnly ? Visibility.Collapsed : Visibility.Visible; }
+
+        // Settings > World map view "Flat only": the 3D view is never started
+        bool FlatOnly => Settings != null && Settings.WorldMapFlat;
 
         // the 2D | 3D switch: the view (x, y, zoom) is handed over
         public void SetMode(bool is3d)
         {
             modeKnown = true;
+            if (is3d && FlatOnly) { is3d = false; SetNote("3D is off: Settings > General > World map view is \"Flat only\"."); }
             if (is3d == mode3d && loadedPage == (is3d ? "3d" : "2d")) { ShowModeSegments(); return; }
             mode3d = is3d;
             if (Settings != null && Settings.WorldMap3d != is3d) { Settings.WorldMap3d = is3d; SaveSettings?.Invoke(); }
@@ -249,6 +299,8 @@ namespace ElansAddonHub
                 else if (t.Slug.Length > 0) Post("{\"t\":\"fit\",\"s\":" + (++viewSeq).ToString(CultureInfo.InvariantCulture) + "}");      // the continent by name: the whole continent again
                 Present();
                 SubChanged?.Invoke(CurrentSub);
+                UpdateStatus();
+                MaybeAutoRetry();
                 return;
             }
             EnsureAssets(c, t, gen);
@@ -282,6 +334,8 @@ namespace ElansAddonHub
                                 // no terrain: the flat map still works
                                 var st = WorldMapService.TerrainStateOf(c.MapId);
                                 GlFallbackReason = "the terrain could not be read" + (st?.Error != null ? " (" + st.Error + ")" : "");
+                                lastProblem = "The 3D terrain could not be read: " + (st?.Error ?? "unknown reason");
+                                Util.Log("world map: " + c.Name + ": 3D terrain could not be built, showing the flat map: " + (st?.Error ?? "unknown reason"));
                                 mode3d = false; ShowModeSegments();
                                 SetNote("The 3D view needs the terrain, which could not be read from your game files; showing the flat map.");
                                 StartPage(c, t);
@@ -370,6 +424,8 @@ namespace ElansAddonHub
             overlayGlyph.Text = glyph; overlayTitle.Text = title; overlayHint.Text = hint;
             overlayHint.Visibility = hint.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             overlayBar.Visibility = Visibility.Collapsed; overlayButton.Visibility = Visibility.Collapsed;
+            overlayCopy.Visibility = Visibility.Collapsed; overlayFlat.Visibility = Visibility.Collapsed;
+            statusHost.Visibility = Visibility.Collapsed;
             webWanted = false; ApplyWebVisibility();
             overlay.Visibility = Visibility.Visible;
         }
@@ -389,10 +445,124 @@ namespace ElansAddonHub
         void ShowBuildFailed(WorldContinent c, bool terrain)
         {
             var st = terrain ? WorldMapService.TerrainStateOf(c.MapId) : WorldMapService.StateOf(c.MapId);
-            Show("", "The " + c.Name + (terrain ? " terrain" : " map") + " could not be built", st?.Error ?? "Something went wrong while reading the game files.", false);
-            overlayButton.Content = "Try again"; overlayButton.Visibility = Visibility.Visible;
-            overlayAction = () => { WorldMapService.ResetForTest(); Resolve(); };
+            ShowFailure("The " + c.Name + (terrain ? " terrain" : " map") + " could not be built", st?.Error ?? "Something went wrong while reading the game files.",
+                "Building the " + c.Name + (terrain ? " terrain" : " map") + " failed: " + (st?.Error ?? "unknown reason"), () => { WorldMapService.ForgetFailures(c.MapId); Resolve(); });
         }
+
+        // a failure: what failed in plain words, Try again, Copy details and the app's own flat map of the continent (no web page)
+        void ShowFailure(string title, string hint, string problem, Action retry, bool flat = true)
+        {
+            lastProblem = problem;
+            Show("", title, hint, false);
+            overlayButton.Content = "Try again"; overlayButton.Visibility = retry != null ? Visibility.Visible : Visibility.Collapsed;
+            overlayAction = retry;
+            overlayCopy.Visibility = Visibility.Visible;
+            overlayFlat.Visibility = flat && FlatMapId() > 0 ? Visibility.Visible : Visibility.Collapsed;
+            statusHost.Visibility = Visibility.Collapsed;
+        }
+        public void ShowFailureForTest(string title, string hint, string problem) => ShowFailure(title, hint, problem, () => Resolve());
+
+        // the continent's own map in the Atlas (a WPF picture of the game's world map art: works without WebView2 or graphics acceleration)
+        int FlatMapId()
+        {
+            var idx = MapData.Index; if (idx == null) return 0;
+            int id = mapId >= 0 ? mapId : target.MapId;
+            var c = id >= 0 ? WorldMapService.Continent(idx, id) : WorldMapService.Continents(idx).FirstOrDefault();
+            return c != null && idx.Get(c.UiMapId) != null ? c.UiMapId : 0;
+        }
+        public string FlatMapLinkForTest => FlatMapId() > 0 ? "zone:" + FlatMapId().ToString(CultureInfo.InvariantCulture) + "?tab=map" : null;
+        void OpenFlatAtlasMap() { var id = FlatMapId(); if (id > 0) OpenAtlas?.Invoke("zone:" + id.ToString(CultureInfo.InvariantCulture) + "?tab=map"); }
+
+        // ---------------------------------------------------------------- tiles that could not be read yet (WorldMapPending): the status line, Retry, the automatic retry
+        public void UpdateStatus()
+        {
+            string text = ""; bool retry = false, try3d = false;
+            if (mapId >= 0)
+            {
+                var pend = WorldMapService.PendingOf(mapId);
+                if (!mode3d) pend = pend.Where(p => p.Part == "picture").ToList();
+                int areas = pend.Select(p => p.Col * 64 + p.Row).Distinct().Count();
+                bool rough = pend.Any(p => p.Shown == "plain" || p.Shown == "flat");
+                if (WorldMapService.Retrying(mapId) && areas > 0) text = "Reading " + Areas(areas) + " again...";
+                else if (areas > 0) { text = (rough ? Areas(areas) + " couldn't be read yet" : Areas(areas) + " shown in low detail") + " (the game may still be downloading)"; retry = true; }
+            }
+            if (text.Length == 0 && !mode3d && !FlatOnly && Settings != null && !string.IsNullOrEmpty(Settings.WorldMap3dProblem))
+            { text = "3D is off after a problem on this PC (" + Settings.WorldMap3dProblem + ")"; try3d = true; }
+            statusText.Text = text;
+            retryButton.Visibility = retry ? Visibility.Visible : Visibility.Collapsed;
+            try3dButton.Visibility = try3d ? Visibility.Visible : Visibility.Collapsed;
+            statusHost.Visibility = text.Length > 0 && overlay.Visibility != Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+            statusHost.ToolTip = text.Length > 0 && retry ? "Parts of your game files were not on this PC yet when the map was made (a Battle.net install that is still downloading in the background, or a game that was updating). Those areas are shown with a stand-in and are read again by themselves the next time you open the map; Retry does it now." : null;
+        }
+        static string Areas(int n) => n == 1 ? "1 area" : n.ToString(CultureInfo.InvariantCulture) + " areas";
+
+        void MaybeAutoRetry() { if (mapId >= 0 && WorldMapService.ShouldAutoRetry(mapId)) StartRetry(true); }
+
+        // reads the stand-in tiles again in the background; when some read now the page is opened again with them (a new "rev", so nothing comes from the browser cache)
+        void StartRetry(bool auto)
+        {
+            int my = mapId; if (my < 0) return;
+            var c = WorldMapService.Continent(MapData.Index, my); if (c == null) return;
+            Util.Log("world map: " + c.Name + ": trying the tiles that could not be read again (" + (auto ? "automatic" : "Retry") + ")");
+            var task = WorldMapService.RetryPending(my);
+            LastRetryForTest = task;
+            UpdateStatus();
+            task.ContinueWith(t =>
+            {
+                try
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (my != mapId) return;
+                        var r = t.Status == TaskStatus.RanToCompletion ? t.Result : null;
+                        if (r != null && r.Recovered > 0 && PageInited && web != null)
+                        {
+                            SetNote(Areas(r.Recovered) + " could be read now and " + (r.Recovered == 1 ? "is" : "are") + " shown properly.");
+                            StartPage(c, new WorldMapTarget { MapId = mapId, HasView = hasView, X = vx, Y = vy, Z = vz });
+                        }
+                        else if (!auto && r != null && r.StillPending > 0) SetNote("Still not readable: let the Battle.net app finish downloading or updating the game, then press Retry (or just open the map again later).");
+                        UpdateStatus();
+                    }));
+                }
+                catch (Exception) { }
+            });
+        }
+        public void RetryForTest() => StartRetry(false);
+        public void RetryFailureForTest() => overlayAction?.Invoke();
+
+        // ---------------------------------------------------------------- "Copy details"
+        static string WebViewVersion()
+        {
+            if (WebViewVersionForTest != null) return WebViewVersionForTest();
+            try { return CoreWebView2Environment.GetAvailableBrowserVersionString() ?? ""; } catch (Exception) { return ""; }
+        }
+
+        public string BuildReport()
+        {
+            var idx = MapData.Index;
+            var c = mapId >= 0 && idx != null ? WorldMapService.Continent(idx, mapId) : null;
+            var man = mapId >= 0 ? WorldMapCache.Built(mapId) : null; var tman = mapId >= 0 ? WorldMapCache.TerrainBuilt(mapId) : null;
+            var info = new WorldMapReport.Info
+            {
+                Outpost = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "",
+                Game = MapData.BuildStamp ?? "", Flavor = MapData.Flavor() ?? "", WebView = WebViewVersion(), Renderer = GlRenderer,
+                Continent = c?.Name ?? "", MapId = mapId, Mode = mode3d ? "3D" : "2D", Problem = lastProblem ?? (GlFallbackReason != null ? "3D view not available: " + GlFallbackReason : ""),
+                PictureTiles = man == null ? 0 : man.Adt + man.Missing, TerrainTiles = tman == null ? 0 : tman.Tiles + tman.Missing,
+                Pending = mapId >= 0 ? WorldMapService.PendingOf(mapId) : new List<PendingTile>(),
+                Page = (loadedPage ?? "none") + " page: started " + (pageHello ? "yes" : "no") + ", ready " + (PageReady ? "yes" : "no") + (TimeoutsForTest > 0 ? ", timed out " + TimeoutsForTest + "x" : "") + (GlOk ? ", WebGL ok" : ""),
+                PageErrors = pageErrors.ToList(),
+            };
+            return WorldMapReport.Build(info);
+        }
+
+        void CopyDetails()
+        {
+            var text = BuildReport();
+            LastReportForTest = text;
+            bool ok = Copy(text);
+            SetNote(ok ? "Details copied: paste them in Lodge chat (or wherever you ask for help)." : "Could not reach the clipboard; try again.");
+        }
+        public void CopyDetailsForTest() => CopyDetails();
 
         void OnBuildChanged(int id)
         {
@@ -402,7 +572,7 @@ namespace ElansAddonHub
                 {
                     if (id != mapId) return;
                     var st = WorldMapService.RunningStateOf(id);
-                    if (st == null) return;
+                    if (st == null) { if (overlay.Visibility != Visibility.Visible) UpdateStatus(); return; }      // a retry of tiles that could not be read: the status line follows it
                     if (overlay.Visibility == Visibility.Visible)
                     {
                         overlayTitle.Text = st.Text;
@@ -421,7 +591,49 @@ namespace ElansAddonHub
         {
             if (web == null || !PageInited) return;
             overlay.Visibility = Visibility.Collapsed;
+            overlayCopy.Visibility = Visibility.Collapsed; overlayFlat.Visibility = Visibility.Collapsed;
             webWanted = true; ApplyWebVisibility();
+            UpdateStatus();
+        }
+
+        // the page has PageTimeoutMs to say "ready" after it was opened: a page that never does (a script that cannot run, a graphics process that hangs) is a
+        // failure the person sees, never a black or empty area. The 3D page falls back to the flat map; the flat page shows the failure card.
+        void ArmPageTimer(int gen, WorldContinent c)
+        {
+            pageTimer?.Stop();
+            pageTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Math.Max(200, PageTimeoutMs)) };
+            pageTimer.Tick += (s, e) =>
+            {
+                pageTimer?.Stop();
+                if (gen != initGen || PageReady || mapId != c.MapId) return;
+                TimeoutsForTest++;
+                var what = !pageHello ? "the page did not start" : "the page started but did not finish drawing";
+                Util.Log("world map: " + c.Name + ": " + (loadedPage ?? "?") + " page not ready after " + (PageTimeoutMs / 1000.0).ToString("0.#", CultureInfo.InvariantCulture) + " s (" + what + "); WebView2 " + WebViewVersion() + (GlRenderer.Length > 0 ? ", WebGL " + GlRenderer : "") + (pageErrors.Count > 0 ? ", page errors: " + string.Join(" | ", pageErrors.Take(3)) : ""));
+                if (mode3d) Fallback3d("the 3D page did not finish loading (" + what + ")", GlRenderer);
+                else ShowFailure("The world map page did not open", "The map is made, but the page that shows it did not " + (!pageHello ? "start" : "finish drawing") + ". Try again; if it keeps happening, \"Copy details\" and send them to whoever helps you. The flat map of the Atlas works without it.",
+                    "The flat world map page did not become ready within " + (PageTimeoutMs / 1000.0).ToString("0.#", CultureInfo.InvariantCulture) + " s (" + what + ")", () => { RecreateWeb(); Resolve(); });
+            };
+            pageTimer.Start();
+        }
+
+        // 3D could not be used here: the flat map, a note, and (Automatic) it is remembered with a way back ("Try 3D again" in the status line)
+        void Fallback3d(string why, string renderer)
+        {
+            GlFallbackReason = why;
+            lastProblem = "3D view not available: " + why;
+            Util.Log("world map: 3D view not available (" + why + "); renderer " + (string.IsNullOrEmpty(renderer) ? "unknown" : renderer) + ", WebView2 " + WebViewVersion() + "; showing the flat map");
+            mode3d = false;
+            if (Settings != null) { Settings.WorldMap3d = false; Settings.WorldMap3dProblem = why; SaveSettings?.Invoke(); }
+            ShowModeSegments();
+            target = new WorldMapTarget { MapId = mapId, HasView = hasView, X = vx, Y = vy, Z = vz };
+            Dispatcher.BeginInvoke(new Action(() => { if (!mode3d) { Resolve(); SetNote("The 3D view can't draw on this PC (" + why + "); showing the flat map."); UpdateStatus(); } }));
+        }
+
+        // the web view is made again (after its browser part stopped, or a page that never started)
+        void RecreateWeb()
+        {
+            try { pageTimer?.Stop(); Thaw(); if (web != null) { stage.Children.Remove(web); web.Dispose(); } } catch (Exception) { }
+            web = null; webTask = null; loadedPage = null; pageHello = false; PageInited = false; PageReady = false; pendingInit = null;
         }
 
         // ---------------------------------------------------------------- the page
@@ -429,6 +641,7 @@ namespace ElansAddonHub
         {
             int gen = ++initGen;
             Show("", "Opening " + c.Name + "...", "", true);
+            lastProblem = null; pageErrors.Clear();
             bool ok;
             try { ok = await EnsureWeb(); }
             catch (Exception e) { Util.Log("world map: " + e); ok = false; }
@@ -448,6 +661,7 @@ namespace ElansAddonHub
                 {
                     ["id"] = c.MapId, ["name"] = c.Name, ["base"] = "https://" + WorldMapPage.Host + "/" + WorldMapCache.BuildKey + "/" + c.MapId.ToString(CultureInfo.InvariantCulture),
                     ["minCol"] = man.MinCol, ["maxCol"] = man.MaxCol, ["minRow"] = man.MinRow, ["maxRow"] = man.MaxRow, ["sea"] = man.Sea,
+                    ["rev"] = WorldMapService.Revision,
                 },
                 ["layers"] = WorldMapLayers.Catalog(),
                 ["on"] = OnLayers(),
@@ -468,6 +682,7 @@ namespace ElansAddonHub
                 {
                     ["base"] = "https://" + WorldMapPage.Host + "/" + WorldMapCache.BuildKey + "/" + c.MapId.ToString(CultureInfo.InvariantCulture) + "/" + WorldMapTerrain.Folder,
                     ["minZ"] = Math.Round(tman.MinZ, 1), ["maxZ"] = Math.Round(tman.MaxZ, 1), ["tiles"] = tiles,
+                    ["holes"] = tman.Pending.Where(p => p.Shown == "flat").SelectMany(p => new[] { p.Col, p.Row }).ToList(),      // no heights at all yet: a flat hatched placeholder
                 };
                 init["buildings"] = bld.InitInfo(c.MapId, "https://" + WorldMapPage.Host + "/" + WorldMapCache.BuildKey + "/" + c.MapId.ToString(CultureInfo.InvariantCulture));
                 init["prefs"] = new Dictionary<string, object> { ["detail"] = Detail(), ["exag"] = Exag(), ["userDetail"] = Settings != null && !string.IsNullOrEmpty(Settings.WorldMap3dDetail) };
@@ -490,6 +705,8 @@ namespace ElansAddonHub
                 try { web.CoreWebView2.Navigate(is3 ? WorldMapPage.Page3dUrl : WorldMapPage.PageUrl); } catch (Exception e) { Util.Log("world map navigate: " + e.Message); }
             }
             else if (pageHello) Post(json); else pendingInit = json;
+            ArmPageTimer(gen, c);
+            MaybeAutoRetry();
         }
 
         public string Detail() { var d = Settings?.WorldMap3dDetail; return d == "low" || d == "high" ? d : "medium"; }
@@ -520,17 +737,39 @@ namespace ElansAddonHub
                 Directory.CreateDirectory(WorldMapCache.Root);
                 c.SetVirtualHostNameToFolderMapping(WorldMapPage.Host, WorldMapCache.Root, CoreWebView2HostResourceAccessKind.Deny);
                 c.WebMessageReceived += OnMessage;
+                c.ProcessFailed += OnProcessFailed;
                 loadedPage = mode3d ? "3d" : "2d";
                 c.Navigate(mode3d ? WorldMapPage.Page3dUrl : WorldMapPage.PageUrl);
                 return true;
             }
             catch (Exception e)
             {
-                Util.Log("world map web: " + e.Message);
+                Util.Log("world map web: the page could not be started (WebView2 " + WebViewVersion() + "): " + WorldMapPending.Short(e));
+                lastProblem = "The web view of the world map could not be started: " + WorldMapPending.Short(e);
                 try { stage.Children.Remove(wv); wv.Dispose(); } catch (Exception) { }
                 web = null; webTask = null; loadedPage = null;
                 return false;
             }
+        }
+
+        // a browser process of the page stopped (a crash, the graphics process, out of memory): logged, and never left as a frozen or black map
+        void OnProcessFailed(object sender, CoreWebView2ProcessFailedEventArgs e)
+        {
+            string kind = "", reason = "";
+            try { kind = e.ProcessFailedKind.ToString(); reason = e.Reason.ToString(); } catch (Exception) { }
+            try { Dispatcher.BeginInvoke(new Action(() => HandleProcessFailed(kind, reason))); } catch (Exception) { }
+        }
+
+        public void HandleProcessFailed(string kind, string reason)
+        {
+            Util.Log("world map: a browser process of the page stopped: " + kind + " (" + reason + "); " + (loadedPage ?? "?") + " page, WebView2 " + WebViewVersion() + (GlRenderer.Length > 0 ? ", WebGL " + GlRenderer : ""));
+            if (mapId < 0) return;
+            bool gpu = kind.IndexOf("Gpu", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (gpu && mode3d) { RecreateWeb(); Fallback3d("the graphics process stopped", GlRenderer); return; }
+            if (kind.IndexOf("FrameRender", StringComparison.OrdinalIgnoreCase) >= 0 || kind.IndexOf("Utility", StringComparison.OrdinalIgnoreCase) >= 0 || gpu) return;      // the page itself lives on
+            RecreateWeb();
+            ShowFailure("The world map page stopped", "A part of the browser that draws the map closed (" + kind + "). Try again; if it keeps happening, \"Copy details\" and send them to whoever helps you.",
+                "A browser process of the world map page stopped: " + kind + " (" + reason + ")", () => Resolve());
         }
 
         // the sandbox: see the class comment. Allowed: the page's own virtual host. Everything else is refused.
@@ -570,7 +809,12 @@ namespace ElansAddonHub
         void ShowNoWebView()
         {
             NoWebViewShown = true;
-            Show("", "The world map needs Microsoft Edge WebView2", "WebView2 is not installed on this PC, so the map cannot be shown here. The rest of the Atlas works as usual: zones, creatures, objects and routes all still have their own maps.", false);
+            bool missing = ForceNoWebViewForTest || string.IsNullOrEmpty(WebViewVersion());
+            Util.Log("world map: no web view: " + (missing ? "the WebView2 runtime is not installed" : "WebView2 " + WebViewVersion() + " could not be started") + (lastProblem != null ? " (" + lastProblem + ")" : ""));
+            ShowFailure(missing ? "The world map needs Microsoft Edge WebView2" : "The world map page could not be started",
+                missing ? "WebView2 is not installed on this PC, so this map cannot be shown here. \"Use the flat map\" opens the continent's map in the Atlas instead; zones, creatures, objects and routes all still have their own maps."
+                        : "Microsoft Edge WebView2 is there but did not start. Try again, or use the Atlas' flat map of the continent. \"Copy details\" makes a short report for whoever helps you.",
+                lastProblem ?? (missing ? "The WebView2 runtime is not installed" : "WebView2 could not be started"), () => { webTask = null; NoWebViewShown = false; Resolve(); });
         }
 
         // ---------------------------------------------------------------- messages
@@ -610,9 +854,16 @@ namespace ElansAddonHub
                     if (mode3d && mapId >= 0) bld.OnInited(mapId);
                     break;
                 case WorldMapMessageType.Ready:
+                    if ((Ignore2dReadyForTest && loadedPage == "2d") || (Ignore3dReadyForTest && loadedPage == "3d")) break;
                     PageReady = true; PageInited = true;
+                    pageTimer?.Stop();
+                    if (mode3d && GlOk && Settings != null && Settings.WorldMap3dProblem != null) { Settings.WorldMap3dProblem = null; SaveSettings?.Invoke(); }      // 3D works again
                     Present();
                     SubChanged?.Invoke(CurrentSub);
+                    break;
+                case WorldMapMessageType.Error:
+                    if (pageErrors.Count < 10) pageErrors.Add(m.Detail);
+                    Util.Log("world map page error (" + (loadedPage ?? "?") + "): " + m.Detail);
                     break;
                 case WorldMapMessageType.View:
                     {
@@ -647,16 +898,12 @@ namespace ElansAddonHub
                     break;
                 case WorldMapMessageType.Webgl:
                     GlOk = m.Ok; GlRenderer = m.Detail;
+                    if (m.Ok) Util.Log("world map: 3D page has WebGL: " + (m.Detail.Length > 0 ? m.Detail : "renderer unknown") + (m.Why.Length > 0 ? " (" + m.Why + ")" : "") + ", WebView2 " + WebViewVersion());
                     if (!m.Ok && mode3d && mapId >= 0)
                     {
-                        // no WebGL: the flat map, with a note (the choice of 3D is kept off until the person asks again)
-                        GlFallbackReason = m.Why;
-                        mode3d = false;
-                        if (Settings != null && Settings.WorldMap3d) { Settings.WorldMap3d = false; SaveSettings?.Invoke(); }
-                        ShowModeSegments();
-                        target = new WorldMapTarget { MapId = mapId, HasView = hasView, X = vx, Y = vy, Z = vz };
-                        var why = m.Why;
-                        Dispatcher.BeginInvoke(new Action(() => { if (!mode3d) { Resolve(); SetNote("The 3D view needs WebGL, which is not available here (" + (string.IsNullOrEmpty(why) ? "no reason given" : why) + "); showing the flat map."); } }));
+                        // no WebGL (none, blocked, or the context was lost): the flat map, with a note; remembered (Automatic) with a way back
+                        pageTimer?.Stop();
+                        Fallback3d(string.IsNullOrEmpty(m.Why) ? "graphics/WebGL unavailable" : "graphics/WebGL unavailable: " + m.Why, m.Detail);
                     }
                     break;
                 case WorldMapMessageType.Stats:
@@ -804,6 +1051,7 @@ namespace ElansAddonHub
         // The Atlas leaves the page (another page is shown): nothing to stop, the page keeps what it had
         public void Dispose()
         {
+            try { pageTimer?.Stop(); } catch (Exception) { }
             try { bld.Detach(); WorldMapService.BuildChanged -= OnBuildChanged; MapData.Changed -= OnMapDataChanged; subscribed = false; } catch (Exception) { }
             try { Thaw(); if (web != null) { stage.Children.Remove(web); web.Dispose(); web = null; webTask = null; } } catch (Exception) { }
             pageHello = false; PageInited = false; PageReady = false; pendingInit = null; mapId = -1; initGen++; buildGen++; loadedPage = null; GlOk = false; borderWaitMap = -1;

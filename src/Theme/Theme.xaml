@@ -74,7 +74,18 @@
   <SolidColorBrush x:Key="Brush.Surface3" Color="{StaticResource Color.Surface3}" />
   <!-- raised cards float over the header art: almost opaque Surface1 -->
   <SolidColorBrush x:Key="Brush.Card" Color="#F016191C" />
-  <!-- the page panel (Bg at 75 %): pages sit on it, never directly on the hero art; cards on it are Surface1, inputs Surface2 -->
+  <!-- the window: a calm, solid gradient (a touch of light at the top, deeper at the bottom), darker than the page panel so the panel reads as a surface.
+       No picture behind the pages (2.70): painted art lives only in its own slots (zone banners, Atlas Home cards, talent trees). -->
+  <Color x:Key="Color.Window.Top">#121519</Color>
+  <Color x:Key="Color.Window.Bottom">#08090B</Color>
+  <LinearGradientBrush x:Key="Brush.Window" StartPoint="0,0" EndPoint="0.35,1">
+    <GradientStop Color="{StaticResource Color.Window.Top}" Offset="0" />
+    <GradientStop Color="#0B0D0F" Offset="0.45" />
+    <GradientStop Color="{StaticResource Color.Window.Bottom}" Offset="1" />
+  </LinearGradientBrush>
+  <!-- the page panel: solid Bg. Pages (and their side navigation) sit on it; cards on it are Surface1, inputs Surface2. Nothing shows through. -->
+  <SolidColorBrush x:Key="Brush.Panel" Color="{StaticResource BgColor}" />
+  <!-- the dim behind an overlay inside a page (a sheet, a form, a guide): Bg at 75 % -->
   <SolidColorBrush x:Key="Brush.Scrim" Color="#BF0F1113" />
 
   <!-- text roles. Primary 14.6:1 / Secondary 5.5:1 on Surface1 (AA for body text). Tertiary is 3.8:1: icons, hints, timestamps only. -->
@@ -153,7 +164,7 @@
   <SolidColorBrush x:Key="Brush.Media" Color="#FF000000" />
   <SolidColorBrush x:Key="Brush.Game.Pill" Color="#B3101214" />
   <SolidColorBrush x:Key="Brush.Game.Pill.Active" Color="#E6101214" />
-  <SolidColorBrush x:Key="Brush.Rail" Color="#B30C0E10" />
+  <SolidColorBrush x:Key="Brush.Rail" Color="#0C0E10" />
   <!-- pressed darkening of a filled (accent / danger / ghost) control, and the text colour on a danger fill -->
   <SolidColorBrush x:Key="Brush.Press.Dark" Color="#1F000000" />
   <SolidColorBrush x:Key="Brush.Press.Dark.Soft" Color="#14000000" />
@@ -167,7 +178,7 @@
 
   <!-- painted art (Assets\Art, ArtLibrary.cs): the veils that keep text and icons readable on a picture.
        Talent tree: Bg at 62 % over the whole spec art. Category card: Bg 88 % at the text side, 40 % at the far side.
-       Zone banner: clear at the top, the page panel's colour (Brush.Scrim) at the bottom edge so the picture fades into the page. -->
+       Zone banner: clear at the top, the page panel's colour (Brush.Panel) at the bottom edge so the picture fades into the page. -->
   <SolidColorBrush x:Key="Brush.Art.Veil" Color="#9E0F1113" />
   <LinearGradientBrush x:Key="Brush.Art.CardVeil" StartPoint="0,0" EndPoint="1,0">
     <GradientStop Color="#E00F1113" Offset="0" />
@@ -179,13 +190,13 @@
     <GradientStop Color="#000F1113" Offset="0" />
     <GradientStop Color="#000F1113" Offset="0.38" />
     <GradientStop Color="#990F1113" Offset="0.7" />
-    <GradientStop Color="#F00F1113" Offset="1" />
+    <GradientStop Color="#FF0F1113" Offset="1" />
   </LinearGradientBrush>
   <SolidColorBrush x:Key="Brush.Art.HeroCard" Color="#590F1113" />
   <LinearGradientBrush x:Key="Brush.Art.BannerFade" StartPoint="0,0" EndPoint="0,1">
     <GradientStop Color="#000F1113" Offset="0" />
     <GradientStop Color="#000F1113" Offset="0.5" />
-    <GradientStop Color="#BF0F1113" Offset="1" />
+    <GradientStop Color="#FF0F1113" Offset="1" />
   </LinearGradientBrush>
 
   <!-- elevation: 0 flat (fill only) / 1 raised card / 2 overlay (dialogs, popovers). Fill + top highlight + soft shadow, no outline. -->

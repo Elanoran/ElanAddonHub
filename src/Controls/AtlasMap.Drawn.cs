@@ -56,6 +56,7 @@ namespace ElansAddonHub
             ++gen;
             ClearPicture();
             UiMapId = 0;
+            SwitchMarkers(0);
             LeaveDrawn();
             drawnMap = inst.MapId; drawnInst = inst;
             DungeonPlans.Changed -= OnPlansChanged; DungeonPlans.Changed += OnPlansChanged;     // also before the control is loaded the first time

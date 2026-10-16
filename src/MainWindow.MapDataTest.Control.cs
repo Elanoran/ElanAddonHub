@@ -282,6 +282,32 @@ namespace ElansAddonHub
             Check("control: a world position (map 0, x 500, y 1000) is placed on the shown map at (0.5, 0.5); one it does not show gives null", wf != null && Math.Abs(wf.Value.X - 0.5) < 1e-6 && Math.Abs(wf.Value.Y - 0.5) < 1e-6 && map.WorldToFraction(0, -900, -1900) == null);
             map.ShowMap(20); await WaitFor(() => map.State == AtlasMap.ViewState.Ready && map.UiMapId == 20);
 
+            // ---- 2.70: a page's map (zone / item / NPC page): the page's places belong to the map they were added on - browsing the breadcrumb to another map never
+            // projects them onto it (that map shows the page's own places there, or none), "Back to <zone>" returns, the page's map is the accent crumb
+            map.ClearMarkers();
+            map.MarkersForMap = id => id == 13 ? new[] { new AtlasMarker(0.4, 0.4, MarkerKind.Vendor, "Highkeep vendor") } : null;
+            map.SetHome(11, "Greenvale");
+            map.ShowMap(11);
+            await WaitFor(() => map.State == AtlasMap.ViewState.Ready && map.UiMapId == 11);
+            map.AddMarkers(new[] { new AtlasMarker(0.2, 0.3, MarkerKind.Spawn, "Boar"), new AtlasMarker(0.6, 0.3, MarkerKind.Spawn, "Boar"), new AtlasMarker(0.5, 0.7, MarkerKind.Vendor, "Innkeeper") });
+            bool atHome = map.MarkerCount == 3 && !map.HomeButtonShownForTest;
+            map.ClickBreadcrumbForTest(1);
+            await WaitFor(() => map.State == AtlasMap.ViewState.Ready && map.UiMapId == 10);
+            RenderHost(host);
+            SnapshotSheet(host, P("23-mapdata-control-browsed-away.png"));
+            Check("page map: browsing the breadcrumb from the page's zone (Greenvale, 3 places) to Northland shows none of Greenvale's places there (they are not projected onto the continent) and a \"Back to Greenvale\" button",
+                atHome && map.UiMapId == 10 && map.MarkerCount == 0 && map.HomeButtonShownForTest && (string)map.HomeButtonForTest.Content == "← Back to Greenvale", map.MarkerCount + " " + map.HomeButtonForTest.Content);
+            map.ShowMap(13);
+            Check("page map: on another zone of the page (Highkeep) only the page's own places in that zone are drawn (1), the way back is still offered", map.UiMapId == 13 && map.MarkerCount == 1 && map.HomeButtonShownForTest, map.MarkerCount + "");
+            map.GoHome();
+            Check("page map: Back to Greenvale shows the page's map again with its 3 places, and the button goes", map.UiMapId == 11 && map.MarkerCount == 3 && !map.HomeButtonShownForTest, map.UiMapId + " " + map.MarkerCount);
+            map.SetHome(10, "Northland");
+            map.ShowMap(11);
+            Check("page map: when the page's map is in the breadcrumb (Northland above Greenvale) its crumb is drawn in the accent colour", map.HomeCrumbHighlightedForTest && map.HomeButtonShownForTest);
+            map.SetHome(0, null); map.MarkersForMap = null; map.ClearMarkers();
+            map.ShowMap(20); await WaitFor(() => map.State == AtlasMap.ViewState.Ready && map.UiMapId == 20);
+            Check("page map: a map with no page map set has no Back button", !map.HomeButtonShownForTest);
+
             // ---- in a real window: keyboard, the tooltip delay, letting go of the picture when the control leaves the screen, map data arriving late
             var host2 = new Border { Width = 892, Height = 632, Padding = new Thickness(16) };
             host2.SetResourceReference(Border.BackgroundProperty, "Brush.Surface1");

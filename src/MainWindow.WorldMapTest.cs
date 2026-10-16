@@ -26,7 +26,7 @@ namespace ElansAddonHub
         static int WmFdid(int col, int row) => 70000 + row * 64 + col;
 
         // a WDT as the game writes it: reversed chunk tags (MVER MPHD MAIN MAID), 4096 entries of 8 FileDataIDs each
-        static byte[] WmWdt(IEnumerable<Tuple<int, int>> tiles, bool reversedTags = true, int maidSize = 131072, bool withMain = true, bool maid = true)
+        static byte[] WmWdt(IEnumerable<Tuple<int, int>> tiles, bool reversedTags = true, int maidSize = 131072, bool withMain = true, bool maid = true, int wdl = 0)
         {
             var ms = new MemoryStream(); var w = new BinaryWriter(ms);
             void Chunk(string tag, byte[] body)
@@ -35,7 +35,8 @@ namespace ElansAddonHub
                 w.Write(Encoding.ASCII.GetBytes(t)); w.Write(body.Length); w.Write(body);
             }
             Chunk("MVER", BitConverter.GetBytes(18));
-            Chunk("MPHD", new byte[32]);
+            var mphd = new byte[32]; Array.Copy(BitConverter.GetBytes(wdl), 0, mphd, 24, 4);
+            Chunk("MPHD", mphd);
             var list = tiles.ToList();
             if (withMain)
             {
@@ -168,6 +169,7 @@ namespace ElansAddonHub
                     wdt.Ok && wdt.Tiles.Count == 32 && wdt.MainTiles == 32 && wdt.WithMinimap == 32 && wdt.Tiles.All(t => t.MinimapFdid == WmFdid(t.Col, t.Row) && t.RootFdid == WmFdid(t.Col, t.Row) + 1000000), wdt.Problem + " " + wdt.Tiles.Count);
                 var wdtPlain = WdtFile.Parse(WmWdt(tiles, reversedTags: false));
                 Check("wdt: chunk tags written the straight way read the same", wdtPlain.Ok && wdtPlain.Tiles.Count == 32);
+                Check("wdt: MPHD's WDL FileDataID (+24, the low-resolution heights) is read; a WDT without one says 0", WdtFile.Parse(WmWdt(tiles, wdl: 7777)).WdlFdid == 7777 && wdt.WdlFdid == 0);
                 var noMaid = WdtFile.Parse(WmWdt(tiles, maid: false));
                 var badSize = WdtFile.Parse(WmWdt(tiles, maidSize: 4096));
                 var cutOff = WdtFile.Parse(WmWdt(tiles).Take(5000).ToArray());
@@ -209,17 +211,42 @@ namespace ElansAddonHub
                 var again = WorldMapPyramid.Build(5, "Testland", "keyA", four, Load, pdir, null, CancellationToken.None);
                 Check("pyramid: a second build finds every tile already there: nothing is read from the source, nothing is written, the manifest is back", loads == 0 && again.Decoded == 0 && again.Reused == 4 && again.Written == 0 && again.Skipped == 10 && again.Complete && WorldMapPyramid.ReadManifest(pdir) != null, loads + " " + again.Decoded + " " + again.Reused + " " + again.Written);
 
-                // a missing tile (ocean): no files, the gap inside a tile above is the sea colour
+                // 2.70: a map tile the WDT lists but the local storage does not have yet (a Battle.net install still downloading in the background): a hatched stand-in, never
+                // the near-black sea, marked as not final (a ".low" marker + the manifest's pending list) - before 2.70 it was a black hole cached for good
                 var pdir2 = Path.Combine(work, "pyr2");
                 var withGap = four.Take(3).Concat(new[] { new WdtTile { Col = 11, Row = 21, MinimapFdid = 99 } }).ToArray();
-                var gap = WorldMapPyramid.Build(5, "Testland", "keyA", withGap, Load, pdir2, null, CancellationToken.None);
-                Check("pyramid: a map tile the source does not have (ocean) is counted as missing, has no files, and its place in the tile above is the sea colour",
-                    gap.Complete && gap.Missing == 1 && gap.Decoded == 3 && Directory.GetFiles(Path.Combine(pdir2, "z7")).Length == 12 && !File.Exists(WorldMapPyramid.TileFile(pdir2, 6, 11, 21)) && WmNear(WmPixel(WorldMapPyramid.TileFile(pdir2, 5, 5, 10), 192, 192), WorldMapPyramid.SeaR, WorldMapPyramid.SeaG, WorldMapPyramid.SeaB, 4), gap.Missing + " " + gap.Decoded);
-                // a minimap the install lists but cannot give (a game still downloading in the background: "not a BLTE block"): left out like a missing one, the build goes on
+                var gap = WorldMapPyramid.Build(5, "Testland", "keyA", withGap, Load, pdir2, null, CancellationToken.None, null, "stamp1");
+                var gman = WorldMapPyramid.ReadManifest(pdir2);
+                var hatchPx = WmPixel(WorldMapPyramid.TileFile(pdir2, 7, 22, 42), 100, 10); var stripePx = WmPixel(WorldMapPyramid.TileFile(pdir2, 7, 22, 42), 1, 0);
+                bool NotSea(byte[] p) => !WmNear(p, WorldMapPyramid.SeaR, WorldMapPyramid.SeaG, WorldMapPyramid.SeaB, 4);
+                Check("pyramid: a map tile the local storage does not have yet gets a hatched stand-in on the theme's surfaces (Surface2 #1E2226 with Surface3 stripes), not the near-black sea; it is counted as missing and listed as pending (missing in local storage, shown as a placeholder) with a marker next to it",
+                    gap.Complete && gap.Missing == 1 && gap.Decoded == 3 && gap.Pending.Count == 1 && Directory.GetFiles(Path.Combine(pdir2, "z7"), "*.jpg").Length == 16 && File.Exists(WorldMapPyramid.MarkerFile(pdir2, 11, 21))
+                    && WmNear(hatchPx, 0x1E, 0x22, 0x26, 6) && stripePx[0] + stripePx[1] + stripePx[2] > hatchPx[0] + hatchPx[1] + hatchPx[2] + 6 && NotSea(WmPixel(WorldMapPyramid.TileFile(pdir2, 5, 5, 10), 200, 200))
+                    && gman != null && gman.Pending.Count == 1 && gman.Pending[0].Col == 11 && gman.Pending[0].Row == 21 && gman.Pending[0].Reason == "missing" && gman.Pending[0].Shown == "plain" && gman.Stamp == "stamp1",
+                    gap.Missing + " " + gap.Decoded + " px " + string.Join(",", hatchPx) + " / " + string.Join(",", stripePx));
+                // still not there: the stand-in stays as it is (nothing rewritten), it is tried again each time
+                loads = 0; var still = WorldMapPyramid.Build(5, "Testland", "keyA", withGap, Load, pdir2, null, CancellationToken.None);
+                Check("pyramid: building again with the tile still missing reads only that tile (" + loads + " read), rewrites nothing and keeps it pending",
+                    still.Complete && loads == 1 && still.Written == 0 && still.Pending.Count == 1 && still.Reused == 3 && File.Exists(WorldMapPyramid.MarkerFile(pdir2, 11, 21)), loads + " w" + still.Written);
+                // the download finished: a retry reads the real minimap, the stand-in and its marker go, the zoom levels above it are made again
+                loads = 0; var fixedTile = four[3];
+                var retried = WorldMapPyramid.Build(5, "Testland", "keyA", four.Take(3).Concat(new[] { fixedTile }).ToArray(), Load, pdir2, null, CancellationToken.None);
+                var rman = WorldMapPyramid.ReadManifest(pdir2);
+                Check("pyramid: once the tile is readable the next build replaces the stand-in (1 recovered): the real minimap (yellow) at the native level and in the level-5 quadrant above it, no marker, nothing pending in the manifest",
+                    retried.Complete && retried.Recovered == 1 && loads == 1 && retried.Pending.Count == 0 && !File.Exists(WorldMapPyramid.MarkerFile(pdir2, 11, 21)) && rman != null && rman.Pending.Count == 0
+                    && WmNear(WmPixel(WorldMapPyramid.TileFile(pdir2, 7, 23, 43), 250, 250), 220, 220, 40) && WmNear(WmPixel(WorldMapPyramid.TileFile(pdir2, 5, 5, 10), 192, 192), 220, 220, 40), retried.Recovered + " " + loads);
+                // a stand-in from the continent's own art (the Atlas world map picture of that square), under a light hatch
+                var pdirArt = Path.Combine(work, "pyrArt");
+                var withArt = WorldMapPyramid.Build(5, "Testland", "keyA", withGap, Load, pdirArt, null, CancellationToken.None, t => Solid(512, 512, 40, 160, 90));
+                var artPx = WmPixel(WorldMapPyramid.TileFile(pdirArt, 7, 22, 42), 100, 10);
+                Check("pyramid: with the continent's map art there, the stand-in is that art (a little darker, under a light hatch) and listed as \"continent map art\"",
+                    withArt.Pending.Count == 1 && withArt.Pending[0].Shown == "art" && WmNear(artPx, 90 * 4 / 5, 160 * 4 / 5, 40 * 4 / 5, 6) && withArt.Pending[0].ShownText == "continent map art", string.Join(",", artPx));
+                // a minimap the install lists but cannot give (a game still downloading in the background: "not a BLTE block"): a stand-in too, the build goes on
                 var pdir2b = Path.Combine(work, "pyr2b");
                 var broken = WorldMapPyramid.Build(5, "Testland", "keyA", four, t => t == four[1] ? throw new IOException("not a BLTE block") : Load(t), pdir2b, null, CancellationToken.None);
-                Check("pyramid: a minimap that cannot be read (not a BLTE block) is left out and counted, the rest of the continent is built",
-                    broken.Complete && broken.Missing == 1 && broken.Unreadable == 1 && broken.Decoded == 3 && WorldMapPyramid.ReadManifest(pdir2b) != null, broken.Missing + " " + broken.Unreadable + " " + broken.Decoded);
+                var bman = WorldMapPyramid.ReadManifest(pdir2b);
+                Check("pyramid: a minimap that cannot be read (not a BLTE block) gets a stand-in and is listed as a read error with the reason; the rest of the continent is built",
+                    broken.Complete && broken.Missing == 1 && broken.Unreadable == 1 && broken.Decoded == 3 && bman != null && bman.Pending.Count == 1 && bman.Pending[0].Reason == "unreadable" && bman.Pending[0].Detail.Contains("BLTE") && bman.Pending[0].ReasonText.StartsWith("read error"), broken.Missing + " " + broken.Unreadable + " " + broken.Decoded);
                 Check("pyramid: the page's reason for an unreadable game file says what to do (let Battle.net finish, or Scan and Repair)",
                     WorldMapService.Why(new IOException("not a BLTE block")).Contains("Scan and Repair") && WorldMapService.Why(new IOException("disk full")) == "disk full");
                 var none = Assert(() => WorldMapPyramid.Build(5, "Testland", "keyA", new[] { new WdtTile { Col = 1, Row = 1, MinimapFdid = 99 } }, Load, Path.Combine(work, "pyr3"), null, CancellationToken.None));
@@ -393,6 +420,38 @@ namespace ElansAddonHub
                 var found = ItemLinks.Find("meet at worldmap:kalimdor or worldmap:1?x=1630&y=-4373&z=5. bad worldmap:1?x=99999&y=1 and xworldmap:kalimdor");
                 Check("links: worldmap:<continent> and worldmap:<map>?x=&y=&z= in chat become Atlas chips (a position outside the world and a glued prefix do not)",
                     found.Count == 2 && found.All(f => f.Kind == ItemRefKind.Atlas && f.AtlasKind == "worldmap") && found[0].AtlasId == "worldmap:kalimdor" && found[1].AtlasId == "worldmap:1?x=1630&y=-4373&z=5", string.Join(" | ", found.Select(f => f.AtlasId)));
+
+                // ---------------------------------------------------------------- "Copy details": the report a member can paste (no personal data)
+                {
+                    var prof = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    var logFile = Path.Combine(work, "fake-hub.log");
+                    File.WriteAllLines(logFile, new[]
+                    {
+                        "2026-10-15 20:01:02  Lodge: Elan joined the voice room",
+                        "2026-10-15 20:01:03  world map: Kalimdor: minimap 40,28 is not in the local game storage yet; shown as a placeholder and read again later",
+                        "2026-10-15 20:01:04  world map terrain: tile 40,28: not a BLTE block in " + Path.Combine(prof, "AppData", "Local", "ElansAddonHub", "x.bin"),
+                        "2026-10-15 20:01:05  worldmap test ok something the self-test logged",
+                        "2026-10-15 20:01:06  world map web: the page could not be started (WebView2 140.0): E:\\Users\\SomeoneElse\\Documents\\x",
+                        "2026-10-15 20:01:07  inventory: Forever-Elan bags read",
+                    });
+                    WorldMapReport.LogPathForTest = () => logFile;
+                    var rep = WorldMapReport.Build(new WorldMapReport.Info
+                    {
+                        Outpost = "2.70.0", Game = "1.60.1.70425-ea9c525e", Flavor = "_classic_beta_", WebView = "140.0.3485.54", Renderer = "ANGLE (NVIDIA GeForce RTX 3070 Direct3D11)", Continent = "Kalimdor", MapId = 1, Mode = "3D",
+                        Problem = "the page did not start (" + Path.Combine(prof, "AppData", "Local", "ElansAddonHub", "webview2") + ")", PictureTiles = 988, TerrainTiles = 988,
+                        Pending = new List<PendingTile> { new PendingTile { Col = 40, Row = 28, Part = "picture", Reason = "missing", Shown = "art" }, new PendingTile { Col = 40, Row = 28, Part = "terrain", Reason = "unreadable", Detail = "not a BLTE block", Shown = "low" } },
+                        Page = "3d page: started yes, ready no", PageErrors = new List<string> { "TypeError: x is undefined (line 12)" },
+                    });
+                    WorldMapReport.LogPathForTest = null;
+                    Check("report: Copy details names the Outpost, game build and flavour, WebView2, the WebGL renderer, the continent, the tile counts, each tile not readable yet with its reason and what is shown, the page's state and errors",
+                        rep.Contains("Outpost: 2.70.0") && rep.Contains("Game: 1.60.1.70425-ea9c525e (_classic_beta_)") && rep.Contains("WebView2 runtime: 140.0.3485.54") && rep.Contains("Graphics (WebGL): ANGLE (NVIDIA") && rep.Contains("Continent: Kalimdor (map 1), 3D view")
+                        && rep.Contains("picture tile 40,28: missing in local storage - shown as continent map art") && rep.Contains("terrain tile 40,28: read error (not a BLTE block) - shown as low-detail heights (WDL)") && rep.Contains("Pictures: 988 map tiles, 1 shown with a stand-in") && rep.Contains("Page error: TypeError"), rep);
+                    Check("report: the recent log lines are only the world map's (not the Lodge, the inventory or the self-test's own), and no path shows the user folder (it is %USERPROFILE% / %LOCALAPPDATA%), another user's folder neither",
+                        rep.Contains("minimap 40,28 is not in the local game storage") && rep.Contains("world map web:") && !rep.Contains("Lodge: Elan") && !rep.Contains("inventory:") && !rep.Contains("worldmap test")
+                        && !rep.ToLowerInvariant().Contains(prof.ToLowerInvariant()) && !rep.Contains("SomeoneElse") && rep.Contains("%LOCALAPPDATA%\\ElansAddonHub") && rep.Contains("%USERPROFILE%"), rep);
+                    Check("report: Redact keeps a path that is not personal (the WoW folder) and turns the user folder into %USERPROFILE%",
+                        WorldMapReport.Redact("D:\\Blizzard\\World of Warcraft") == "D:\\Blizzard\\World of Warcraft" && WorldMapReport.Redact(Path.Combine(prof, "x")).StartsWith("%USERPROFILE%") && WorldMapReport.Redact(null) == "");
+                }
 
                 // ---------------------------------------------------------------- settings: what is remembered
                 Check("settings: the layers and the last continent are saved fields of the settings (null = the defaults)", new Settings().WorldMapLayers == null && new Settings().WorldMapLast == null);

@@ -90,7 +90,7 @@
     </Grid.ColumnDefinitions>
 
     <!-- sections -->
-    <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}">
+    <Border Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}">
       <StackPanel Margin="8">
         <TextBlock Text="Settings" Style="{StaticResource Text.Caption}" Margin="12,8,0,8" />
         <RadioButton x:Name="NavGeneral" Style="{StaticResource Nav}" Tag="&#xE713;" Content="General" Checked="Nav_Checked" IsChecked="True" />
@@ -106,7 +106,7 @@
     </Border>
 
     <!-- the page panel: pages sit on a scrim, never directly on the hero art -->
-    <Border Grid.Column="2" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Padding="24,24,8,16">
+    <Border Grid.Column="2" Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}" Padding="24,24,8,16">
     <Grid>
       <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
       <!-- Profile: sticky footer with the buttons and the inline status (DataContext = ProfileEditVM). An overlay: Surface3 + hairline + elevation 2. -->
@@ -141,6 +141,14 @@
               </HeaderedContentControl>
               <HeaderedContentControl x:Name="WorldMapCacheRow" Style="{StaticResource Setting.Row}" Header="World map pictures and terrain" Tag="The Atlas world map is made from your game files the first time you open a continent (the 3D terrain and zone borders the first time you ask for them) and kept here until the game updates.">
                 <Button x:Name="ClearWorldMapButton" Style="{StaticResource Button.M}" Content="Clear world map cache" Click="ClearWorldMap_Click" AutomationProperties.Name="Clear world map cache" />
+              </HeaderedContentControl>
+              <HeaderedContentControl x:Name="WorldMapViewRow" Style="{StaticResource Setting.Row}" Header="World map view" Tag="Automatic: the 3D view when you pick it and your graphics can draw it; after a 3D problem the flat map is used and remembered, and the map offers to try 3D again. Flat only: the 3D view is never started.">
+                <Border Style="{StaticResource SegmentHost}">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="WorldMapAuto" Style="{StaticResource Segment}" Content="Automatic" GroupName="wm-view" Click="WorldMapView_Click" AutomationProperties.Name="World map view automatic" />
+                    <RadioButton x:Name="WorldMapFlatOnly" Style="{StaticResource Segment}" Content="Flat only" GroupName="wm-view" Click="WorldMapView_Click" AutomationProperties.Name="World map view flat only" />
+                  </StackPanel>
+                </Border>
               </HeaderedContentControl>
               <HeaderedContentControl x:Name="WorldMap3dRow" Style="{StaticResource Setting.Row}" Header="World map 3D detail" Tag="How much terrain and texture detail the 3D view draws. Low is easiest on the graphics card.">
                 <Border Style="{StaticResource SegmentHost}">

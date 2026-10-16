@@ -288,11 +288,14 @@ namespace ElansAddonHub
             maps.Add(map);
             map.LinkClicked += id => { _ = Open(id); };
             AtlasMapZone current = null;
+            // the page's places are drawn only on the map they belong to: browsing the breadcrumb to another map shows that map's own places of this
+            // page (another zone of the plan) or none, and "Back to <zone>" returns to the page's map with its places (2.70)
+            map.MarkersForMap = id => plan.Zones.FirstOrDefault(x => x.UiMapId == id)?.Markers;
             void ShowZone(AtlasMapZone z)
             {
                 current = z;
                 map.ClearMarkers();
-                if (z != null) { map.ShowMap(z.UiMapId); map.AddMarkers(z.Markers); }
+                if (z != null) { map.SetHome(z.UiMapId, z.Name); map.ShowMap(z.UiMapId); map.ClearMarkers(); map.AddMarkers(z.Markers); }      // ShowMap may already bring this zone's places (MarkersForMap): cleared, then added once
             }
             if (plan.InstanceId > 0 && plan.Zones.Count == 0) { Defer(() => map.ShowInstance(plan.InstanceId)); }
             else if (plan.Zones.Count > 0 && plan.ShowZone == 0)

@@ -60,7 +60,7 @@
   </UserControl.Resources>
 
   <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art -->
-  <Border x:Name="Panel" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
+  <Border x:Name="Panel" Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
     <ScrollViewer VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True" x:Name="PageScroll">
       <StackPanel Margin="0,0,8,0">
         <StackPanel Margin="0,0,0,16">

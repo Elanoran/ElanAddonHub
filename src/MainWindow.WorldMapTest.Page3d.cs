@@ -380,6 +380,34 @@ namespace ElansAddonHub
                 Check("3D fallback: when WebGL is not there (here: switched off for the test) the 3D page says so, the flat map is shown with a note about it, 2D is selected and the setting stays 2D",
                     fell && WorldMapView.Note.Contains("WebGL") && WorldMapView.GlFallbackReason.Contains("test") && !WorldMapView.Segment3dChecked && !settings.WorldMap3d && WorldMapView.WebShown, WorldMapView.Note + " | " + WorldMapView.GlFallbackReason + " | " + WorldMapView.LoadedPage);
                 Snapshot(P("worldmap-3d-fallback-window.png"));
+                Check("3D fallback (2.70): it is remembered (Automatic) with the reason, logged with the renderer and the WebView2 version, and the header offers \"Try 3D again\"",
+                    settings.WorldMap3dProblem != null && settings.WorldMap3dProblem.Contains("WebGL") && WorldMapView.Try3dShown && WorldMapView.StatusText.StartsWith("3D is off after a problem on this PC") && WorldReportHas("3D view not available"), WorldMapView.StatusText + " | " + settings.WorldMap3dProblem);
+                // "Try 3D again" with graphics that work: 3D is back and the remembered problem is forgotten
+                WorldMapView.SetMode(true);
+                bool back3d = await WaitFor(() => WorldMapView.Is3D && WorldMapView.LoadedPage == "3d" && WorldMapView.PageReady && WorldMapView.GlOk, 90000);
+                Check("3D fallback: Try 3D again starts the 3D view, and once it draws the remembered problem is cleared", back3d && settings.WorldMap3dProblem == null && !WorldMapView.Try3dShown, settings.WorldMap3dProblem);
+                // the graphics context is lost while the 3D view draws (a driver reset, a GPU that is taken away): the flat map, never a black view
+                if (back3d)
+                {
+                    WorldMapView.Handle("{\"t\":\"webgl\",\"ok\":false,\"why\":\"the graphics context was lost\",\"renderer\":\"Test GPU\"}");
+                    bool lost = await WaitFor(() => !WorldMapView.Is3D && WorldMapView.LoadedPage == "2d" && WorldMapView.PageReady && WorldMapView.WebShown, 60000);
+                    Check("3D context lost: the flat map is shown with \"The 3D view can't draw on this PC (graphics/WebGL unavailable: the graphics context was lost)\" and Try 3D again",
+                        lost && WorldMapView.Note.Contains("can't draw on this PC") && WorldMapView.Note.Contains("context was lost") && WorldMapView.Try3dShown && WorldMapView.Problem.Contains("context was lost"), WorldMapView.Note);
+                }
+                // a 3D page that never becomes ready (a hung graphics process, a script that cannot run): after the timeout the flat map, never an endless black view
+                {
+                    int savedTimeout = WorldMapView.PageTimeoutMs;
+                    settings.WorldMap3dProblem = null; WorldMapView.PageTimeoutMs = 2500; WorldMapView.Ignore3dReadyForTest = true;
+                    int t0 = WorldMapView.TimeoutsForTest;
+                    WorldMapView.SetMode(true);
+                    bool timed = await WaitFor(() => WorldMapView.TimeoutsForTest > t0 && !WorldMapView.Is3D && WorldMapView.LoadedPage == "2d" && WorldMapView.PageReady, 90000);
+                    WorldMapView.Ignore3dReadyForTest = false; WorldMapView.PageTimeoutMs = savedTimeout;
+                    Check("3D no-ready timeout: a 3D page that does not finish loading falls back to the flat map with a note, remembers why and logs it",
+                        timed && WorldMapView.GlFallbackReason != null && WorldMapView.GlFallbackReason.Contains("did not finish loading") && settings.WorldMap3dProblem != null && WorldReportHas("page not ready after"), WorldMapView.GlFallbackReason + " | " + WorldMapView.Note);
+                    WorldMapView.CopyDetailsForTest();
+                    Check("3D no-ready timeout: Copy details says the 3D view was not available and why", WorldMapView.LastReportForTest != null && WorldMapView.LastReportForTest.Contains("Problem: 3D view not available: the 3D page did not finish loading"), WorldMapView.LastReportForTest);
+                    settings.WorldMap3dProblem = null;
+                }
                 WorldMapProtocol3dChecks(Check);
                 WorldMapView.ClipboardSeamForTest = null;
             }

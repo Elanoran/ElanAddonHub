@@ -32,6 +32,8 @@ namespace ElansAddonHub.Services.WorldMap
         public long Bytes;
         public int MinCol, MaxCol, MinRow, MaxRow;
         public bool Complete;
+        public int Recovered;            // tiles that had a stand-in and read now (2.70)
+        public List<PendingTile> Pending = new List<PendingTile>();     // tiles drawn with a stand-in this time (missing / unreadable), not final
     }
 
     public sealed class PyramidProgress { public string Phase = ""; public int Done, Total; }
@@ -52,6 +54,8 @@ namespace ElansAddonHub.Services.WorldMap
             public string BuildKey = "", Name = "", Built = "", Sea = SeaHex;
             public int MinCol, MaxCol, MinRow, MaxRow;
             public long Bytes;
+            public List<PendingTile> Pending = new List<PendingTile>();     // 2.70: tiles shown with a stand-in, read again later (WorldMapPending)
+            public string Stamp = "";                                       // the game storage stamp when it was built (WorldMapPending.StorageStamp)
             public bool Valid => Version == WorldMapPyramid.Version && Adt > 0 && Files > 0;
         }
 
@@ -68,6 +72,7 @@ namespace ElansAddonHub.Services.WorldMap
                     Version = d.Int("v"), MapId = d.Int("mapId"), BuildKey = d.Str("build") ?? "", Name = d.Str("name") ?? "", NativeLevel = d.Int("native"),
                     Adt = d.Int("adt"), Missing = d.Int("missing"), Files = d.Int("files"), Bytes = d.Long("bytes"), Built = d.Str("built") ?? "", Sea = d.Str("sea") ?? SeaHex,
                     MinCol = d.Int("minCol"), MaxCol = d.Int("maxCol"), MinRow = d.Int("minRow"), MaxRow = d.Int("maxRow"),
+                    Pending = WorldMapPending.ListFrom(d, "pending"), Stamp = d.Str("stamp") ?? "",
                 };
             }
             catch (Exception) { return null; }
@@ -78,19 +83,28 @@ namespace ElansAddonHub.Services.WorldMap
             ["v"] = m.Version, ["mapId"] = m.MapId, ["build"] = m.BuildKey, ["name"] = m.Name, ["native"] = m.NativeLevel, ["tilePx"] = WorldMapMath.TilePx,
             ["adt"] = m.Adt, ["missing"] = m.Missing, ["files"] = m.Files, ["bytes"] = m.Bytes, ["built"] = m.Built, ["sea"] = m.Sea,
             ["minCol"] = m.MinCol, ["maxCol"] = m.MaxCol, ["minRow"] = m.MinRow, ["maxRow"] = m.MaxRow,
+            ["pending"] = WorldMapPending.ListJson(m.Pending), ["stamp"] = m.Stamp ?? "",
         });
+
+        // "<x>_<y>.low" next to the native tiles of a map tile drawn with a stand-in (one marker per map tile, at its top-left native tile)
+        public static string MarkerFile(string mapDir, int col, int row) => Path.Combine(mapDir, "z" + WorldMapMath.NativeLevel, (col * 2) + "_" + (row * 2) + WorldMapPending.MarkerExt);
 
         static bool Have(string path) { try { var f = new FileInfo(path); return f.Exists && f.Length > 0; } catch (Exception) { return false; } }
 
         // ---- build
         // `load` gives the BGRA minimap of a map tile (null = the source does not have it). Throws OperationCanceledException when `ct` is cancelled.
+        // `standIn` (may be null) gives a low-detail picture of a map tile whose minimap cannot be read (the continent's Atlas art there); null = a plain hatch.
+        // A finished pyramid's manifest stays while it is built again (a retry): the map keeps working and the manifest is replaced at the end.
         public static PyramidResult Build(int mapId, string name, string buildKey, IList<WdtTile> tiles, Func<WdtTile, MapRender.TileImage> load, string mapDir,
-            Action<PyramidProgress> progress, CancellationToken ct)
+            Action<PyramidProgress> progress, CancellationToken ct, Func<WdtTile, MapRender.TileImage> standIn = null, string stamp = "")
         {
             var res = new PyramidResult { Adt = tiles.Count };
             Directory.CreateDirectory(mapDir);
-            try { if (File.Exists(ManifestPath(mapDir))) File.Delete(ManifestPath(mapDir)); } catch (Exception) { }
+            var old = ReadManifest(mapDir);
+            if (old == null || !old.Valid) { try { if (File.Exists(ManifestPath(mapDir))) File.Delete(ManifestPath(mapDir)); } catch (Exception) { } }
             var present = new HashSet<long>();                // pyramid tiles that exist at the level being finished
+            var fresh = new List<long>();                     // native tiles written this time: the tiles above them are made again
+            int real = 0;
             int nativeLevel = WorldMapMath.NativeLevel;
             // work to do: every map tile, then the tiles of the levels above
             int upper = 0;
@@ -112,43 +126,84 @@ namespace ElansAddonHub.Services.WorldMap
             {
                 ct.ThrowIfCancellationRequested();
                 WorldMapMath.PyramidRangeOfAdt(nativeLevel, t.Col, t.Row, out var x0, out var y0, out var x1, out var y1);
-                bool all = true;
-                for (int y = y0; y <= y1 && all; y++) for (int x = x0; x <= x1 && all; x++) all = Have(TileFile(mapDir, nativeLevel, x, y));
+                var marker = MarkerFile(mapDir, t.Col, t.Row);
+                bool wasStandIn = File.Exists(marker);
+                bool haveFiles = true;
+                for (int y = y0; y <= y1 && haveFiles; y++) for (int x = x0; x <= x1 && haveFiles; x++) haveFiles = Have(TileFile(mapDir, nativeLevel, x, y));
+                bool all = haveFiles && !wasStandIn;              // a stand-in is never final: its minimap is read again every time
                 if (all)
                 {
-                    res.Reused++;
+                    res.Reused++; real++;
                     for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) present.Add(Key(x, y));
                 }
                 else
                 {
-                    // a minimap the install cannot give (still downloading in the background, or damaged): that map tile is left out like a missing one, and logged
-                    MapRender.TileImage img;
+                    // a minimap the install cannot give (still downloading in the background, or damaged): a stand-in for now (continent art or a hatch),
+                    // marked as not final, and logged
+                    MapRender.TileImage img; string why = "missing", detail = "";
                     try { img = load(t); }
                     catch (OperationCanceledException) { throw; }
-                    catch (Exception e) { Util.Log("world map: " + (name ?? "map " + mapId) + ": minimap " + t.Col + "," + t.Row + " could not be read: " + e.Message); img = null; res.Unreadable++; }
-                    if (img == null || img.Bgra == null || img.Width <= 0 || img.Height <= 0 || img.Bgra.Length < img.Width * img.Height * 4) res.Missing++;
+                    catch (Exception e) { detail = WorldMapPending.Short(e); Util.Log("world map: " + (name ?? "map " + mapId) + ": minimap " + t.Col + "," + t.Row + " could not be read: " + detail); img = null; res.Unreadable++; why = "unreadable"; }
+                    bool good = !(img == null || img.Bgra == null || img.Width <= 0 || img.Height <= 0 || img.Bgra.Length < img.Width * img.Height * 4);
+                    byte[] px; string shown = "";
+                    if (!good && wasStandIn && haveFiles)
+                    {
+                        // still not readable: the stand-in that is there stays (nothing rewritten), the marker says why now
+                        res.Missing++;
+                        var keep = WorldMapPending.ReadMarker(marker) ?? new PendingTile { Col = t.Col, Row = t.Row, Part = "picture", Shown = "plain" };
+                        keep.Reason = why; keep.Detail = detail;
+                        WorldMapPending.WriteMarker(marker, keep);
+                        res.Pending.Add(keep);
+                        for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) present.Add(Key(x, y));
+                        if (t.Col < minC) minC = t.Col; if (t.Col > maxC) maxC = t.Col; if (t.Row < minR) minR = t.Row; if (t.Row > maxR) maxR = t.Row;
+                        done++;
+                        if ((done & 7) == 0 || done == tiles.Count) Report("tiles");
+                        continue;
+                    }
+                    if (good) px =img.Width == WorldMapMath.MinimapPx && img.Height == WorldMapMath.MinimapPx ? img.Bgra : Resample(img, WorldMapMath.MinimapPx);
                     else
                     {
-                        var px = img.Width == WorldMapMath.MinimapPx && img.Height == WorldMapMath.MinimapPx ? img.Bgra : Resample(img, WorldMapMath.MinimapPx);
-                        var tile = new byte[WorldMapMath.TilePx * WorldMapMath.TilePx * 4];
-                        for (int y = y0; y <= y1; y++)
-                            for (int x = x0; x <= x1; x++)
-                            {
-                                int ox = (x - t.Col * 2) * WorldMapMath.TilePx, oy = (y - t.Row * 2) * WorldMapMath.TilePx;
-                                for (int r = 0; r < WorldMapMath.TilePx; r++)
-                                    Buffer.BlockCopy(px, ((oy + r) * WorldMapMath.MinimapPx + ox) * 4, tile, r * WorldMapMath.TilePx * 4, WorldMapMath.TilePx * 4);
-                                WriteJpeg(TileFile(mapDir, nativeLevel, x, y), tile);
-                                res.Written++; present.Add(Key(x, y));
-                            }
-                        res.Decoded++;
-                        if (t.Col < minC) minC = t.Col; if (t.Col > maxC) maxC = t.Col; if (t.Row < minR) minR = t.Row; if (t.Row > maxR) maxR = t.Row;
+                        res.Missing++;
+                        MapRender.TileImage art = null;
+                        try { art = standIn?.Invoke(t); } catch (OperationCanceledException) { throw; } catch (Exception) { art = null; }
+                        shown = art != null && art.Bgra != null && art.Width > 0 && art.Bgra.Length >= art.Width * art.Height * 4 ? "art" : "plain";
+                        px = Placeholder(shown == "art" ? (art.Width == WorldMapMath.MinimapPx && art.Height == WorldMapMath.MinimapPx ? art.Bgra : Resample(art, WorldMapMath.MinimapPx)) : null);
+                        if (why == "missing") Util.Log("world map: " + (name ?? "map " + mapId) + ": minimap " + t.Col + "," + t.Row + " is not in the local game storage yet; shown as " + (shown == "art" ? "continent map art" : "a placeholder") + " and read again later");
+                    }
+                    var tile = new byte[WorldMapMath.TilePx * WorldMapMath.TilePx * 4];
+                    for (int y = y0; y <= y1; y++)
+                        for (int x = x0; x <= x1; x++)
+                        {
+                            int ox = (x - t.Col * 2) * WorldMapMath.TilePx, oy = (y - t.Row * 2) * WorldMapMath.TilePx;
+                            for (int r = 0; r < WorldMapMath.TilePx; r++)
+                                Buffer.BlockCopy(px, ((oy + r) * WorldMapMath.MinimapPx + ox) * 4, tile, r * WorldMapMath.TilePx * 4, WorldMapMath.TilePx * 4);
+                            WriteJpeg(TileFile(mapDir, nativeLevel, x, y), tile);
+                            res.Written++; present.Add(Key(x, y)); fresh.Add(Key(x, y));
+                        }
+                    if (good)
+                    {
+                        res.Decoded++; real++;
+                        if (wasStandIn) { WorldMapPending.RemoveMarker(marker); res.Recovered++; Util.Log("world map: " + (name ?? "map " + mapId) + ": minimap " + t.Col + "," + t.Row + " reads now; the stand-in is replaced"); }
+                    }
+                    else
+                    {
+                        var p = new PendingTile { Col = t.Col, Row = t.Row, Part = "picture", Reason = why, Detail = detail, Shown = shown };
+                        WorldMapPending.WriteMarker(marker, p);
+                        res.Pending.Add(p);
                     }
                 }
-                if (all) { if (t.Col < minC) minC = t.Col; if (t.Col > maxC) maxC = t.Col; if (t.Row < minR) minR = t.Row; if (t.Row > maxR) maxR = t.Row; }
+                if (t.Col < minC) minC = t.Col; if (t.Col > maxC) maxC = t.Col; if (t.Row < minR) minR = t.Row; if (t.Row > maxR) maxR = t.Row;
                 done++;
                 if ((done & 7) == 0 || done == tiles.Count) Report("tiles");
             }
-            if (present.Count == 0) throw new InvalidDataException("none of the " + tiles.Count + " minimap tiles could be read");
+            if (real == 0) throw new InvalidDataException("none of the " + tiles.Count + " minimap tiles could be read");
+
+            // a native tile written this time (a first build, a resumed one, or a stand-in replaced by the real minimap): the tiles above it are made again
+            foreach (var k in fresh)
+            {
+                int ax = KX(k), ay = KY(k);
+                for (int lv = nativeLevel - 1; lv >= 0; lv--) { ax /= 2; ay /= 2; var f = TileFile(mapDir, lv, ax, ay); try { if (File.Exists(f)) File.Delete(f); } catch (Exception) { } }
+            }
 
             // the levels above, from the one below
             var below = present;
@@ -196,6 +251,7 @@ namespace ElansAddonHub.Services.WorldMap
             {
                 Version = Version, MapId = mapId, BuildKey = buildKey, Name = name ?? "", NativeLevel = nativeLevel, Adt = tiles.Count - res.Missing, Missing = res.Missing, Files = files, Bytes = bytes,
                 Built = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), MinCol = res.MinCol, MaxCol = res.MaxCol, MinRow = res.MinRow, MaxRow = res.MaxRow,
+                Pending = res.Pending, Stamp = stamp ?? "",
             };
             var tmp = ManifestPath(mapDir) + ".tmp";
             File.WriteAllText(tmp, ManifestJson(m));
@@ -203,6 +259,31 @@ namespace ElansAddonHub.Services.WorldMap
             File.Move(tmp, ManifestPath(mapDir));
             res.Complete = true;
             return res;
+        }
+
+        // the stand-in of a minimap that cannot be read yet (512 x 512 BGRA): the low-detail picture under a light diagonal hatch, or - with none - the hatch on
+        // the theme's raised surfaces (Surface2 #1E2226 with Surface3 #262B30 stripes, Theme.xaml). Calm, and clearly not land or sea.
+        public const int HatchPeriod = 24, HatchWidth = 3;
+        public static readonly byte[] PlainBase = { 0x26, 0x22, 0x1E }, PlainStripe = { 0x30, 0x2B, 0x26 };    // BGR of Surface2 / Surface3
+        public static bool IsHatch(int x, int y) => ((x + y) % HatchPeriod) < HatchWidth;
+        public static byte[] Placeholder(byte[] art)
+        {
+            const int N = WorldMapMath.MinimapPx;
+            var o = new byte[N * N * 4];
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    int i = (y * N + x) * 4; bool h = IsHatch(x, y);
+                    if (art == null) { var c = h ? PlainStripe : PlainBase; o[i] = c[0]; o[i + 1] = c[1]; o[i + 2] = c[2]; }
+                    else
+                        for (int k = 0; k < 3; k++)
+                        {
+                            int v = art[i + k] * 4 / 5;                    // a little darker than the real minimaps around it
+                            o[i + k] = (byte)(h ? Math.Min(255, v + (255 - v) / 5) : v);
+                        }
+                    o[i + 3] = 255;
+                }
+            return o;
         }
 
         static long Key(int x, int y) => ((long)x << 32) | (uint)y;

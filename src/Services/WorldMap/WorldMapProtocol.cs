@@ -26,9 +26,10 @@ namespace ElansAddonHub.Services.WorldMap
     //                 prefs {detail, exag}                (3D page) the detail (low|medium|high) and height exaggeration (1-3) the person chose
     //                 buildings {mode}                    (3D page) the Buildings switch: off | bridges | all
     //                 bbuild {mode} | bpause | bresume | bcancel   (3D page) the card and the progress line: Build now, Pause, Resume, Cancel
+    //                 error {msg}                         a script error in the page (logged and kept for "Copy details"; at most a few per page)
     //   app -> page   init | goto | layer | layerinfo | toast | on     (built by WorldMapView, see worldmap.js for the shapes)
     // ============================================================================================================================
-    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel }
+    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error }
 
     public sealed class WorldMapMessage
     {
@@ -147,6 +148,7 @@ namespace ElansAddonHub.Services.WorldMap
                 case "bpause": m.Type = WorldMapMessageType.BPause; return m;
                 case "bresume": m.Type = WorldMapMessageType.BResume; return m;
                 case "bcancel": m.Type = WorldMapMessageType.BCancel; return m;
+                case "error": m.Type = WorldMapMessageType.Error; m.Detail = Clean(d.Str("msg"), 240); if (m.Detail.Length == 0) { refusal = "error needs a msg"; return null; } return m;
                 default: refusal = "unknown action"; return null;
             }
         }

@@ -87,6 +87,27 @@ namespace ElansAddonHub
 
         static (int col, int row) WmAdtOf(int fdid) { int i = fdid - 1070000; return (i % 64, i / 64); }
 
+        // a WDL as the game writes it (reversed tags): MVER, MAOF (4096 offsets, row * 64 + col), then per tile MARE (17 x 17 outer + 16 x 16 inner int16 heights) + MAHO
+        static byte[] WmWdl(IEnumerable<Tuple<int, int>> tiles)
+        {
+            var ms = new MemoryStream(); var w = new BinaryWriter(ms);
+            void Tag(string t) => w.Write(Encoding.ASCII.GetBytes(new string(t.Reverse().ToArray())));
+            Tag("MVER"); w.Write(4); w.Write(18);
+            Tag("MAOF"); w.Write(4096 * 4); long maof = ms.Position; w.Write(new byte[4096 * 4]);
+            double ty = WorldMapMath.TileYards, step = ty / 16;
+            foreach (var t in tiles)
+            {
+                long at = ms.Position;
+                ms.Position = maof + (t.Item2 * 64 + t.Item1) * 4; w.Write((uint)at); ms.Position = at;
+                Tag("MARE"); w.Write(1090);
+                double x0 = (32 - t.Item2) * ty, y0 = (32 - t.Item1) * ty;
+                for (int r = 0; r < 17; r++) for (int c = 0; c < 17; c++) w.Write((short)Math.Round(WmZ(x0 - r * step, y0 - c * step)));
+                for (int r = 0; r < 16; r++) for (int c = 0; c < 16; c++) w.Write((short)Math.Round(WmZ(x0 - (r + 0.5) * step, y0 - (c + 0.5) * step)));
+                Tag("MAHO"); w.Write(32); w.Write(new byte[32]);
+            }
+            return ms.ToArray();
+        }
+
         async Task WorldMapTerrainTest(string dir, string work, List<string> notes, Action<bool> record)
         {
             void Check(string what, bool cond, string detail = null) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what + (!cond && detail != null ? " [" + detail + "]" : "")); record(cond); Util.Log("worldmap test " + (cond ? "ok " : "FAIL ") + what.Substring(0, Math.Min(80, what.Length))); }
@@ -165,6 +186,40 @@ namespace ElansAddonHub
                 int loads1 = adtLoads;
                 var again = WorldMapService.BuildTerrain(5, "Testland", 7001, key, mapDir, null, zr, CancellationToken.None, null);
                 Check("terrain cache: building again reads the 30 finished tiles back from disk (nothing written; the two bad ones are tried once more)", again.Complete && again.Reused == 30 && again.Written == 0 && adtLoads - loads1 == 2, again.Reused + " " + (adtLoads - loads1));
+                var tman0 = WorldMapTerrain.ReadManifest(tdir);
+                Check("terrain cache (2.70): with no low-resolution heights (no WDL) the two bad tiles are pending placeholders: listed with their reason (missing in local storage / read error), a marker each, no height file (the 3D page draws a flat hatched placeholder there, never open sea)",
+                    tman0 != null && tman0.Pending.Count == 2 && tman0.Pending.All(p => p.Shown == "flat" && p.Part == "terrain") && tman0.Pending.Any(p => p.Col == 35 && p.Row == 33 && p.Reason == "missing") && tman0.Pending.Any(p => p.Col == 34 && p.Row == 33 && p.Reason == "unreadable")
+                    && File.Exists(WorldMapTerrain.MarkerFile(tdir, 35, 33)) && !File.Exists(WorldMapTerrain.TileFile(tdir, 35, 33)) && again.Holes == 2, tman0 == null ? "no manifest" : string.Join(",", tman0.Pending.Select(p => p.Col + "," + p.Row + " " + p.Reason + " " + p.Shown)));
+
+                // ---------------------------------------------------------------- 2.70: low detail from the WDL while a tile's own file cannot be read, replaced when it can
+                {
+                    var mapDirL = WorldMapCache.MapDir(key, 8);
+                    WorldMapService.WdtSourceForTest = mapId => WmWdt(tiles, wdl: 7777);
+                    var wdlBytes = WmWdl(tiles);
+                    WorldMapService.WdlSourceForTest = fdid => fdid == 7777 ? wdlBytes : null;
+                    var wdlP = WdlFile.Parse(wdlBytes);
+                    Check("WDL: the low-resolution height map (reversed tags, MAOF offsets at row * 64 + col, MARE 17 x 17 + 16 x 16) gives every tile; a tile it does not list has none; junk is refused",
+                        wdlP.Ok && wdlP.Count == 32 && wdlP.Has(35, 33) && !wdlP.Has(5, 5) && wdlP.Tile(5, 5) == null && !WdlFile.Parse(new byte[10]).Ok && !WdlFile.Parse(null).Ok, wdlP.Problem + " " + wdlP.Count);
+                    var lowRes = WorldMapService.BuildTerrain(8, "Testland", 7001, key, mapDirL, null, zr, CancellationToken.None, null);
+                    var tdirL = WorldMapTerrain.Dir(mapDirL);
+                    var low = WorldMapTerrain.ReadTile(tdirL, 35, 33);
+                    double lerr = 0; int ln = 0;
+                    if (low != null) for (int r = 0; r < 65; r += 4) for (int c = 0; c < 65; c += 4) { lerr += Math.Abs(low.Z(r, c) - WmZ((32 - 33) * ty - r * ty / 64, (32 - 35) * ty - c * ty / 64)); ln++; }
+                    var lman = WorldMapTerrain.ReadManifest(tdirL);
+                    Check("WDL: a tile whose terrain file is missing (35,33) and one that is damaged (34,33) are drawn at low detail from the WDL: real hills, not flat (" + (low == null ? 0 : low.MaxZ - low.MinZ).ToString("0", I) + " yd of relief, " + (lerr / Math.Max(1, ln)).ToString("0.00", I) + " yd from the true ground on average), pending as \"low\" with a marker",
+                        lowRes.Complete && lowRes.LowDetail == 2 && lowRes.Holes == 0 && low != null && low.MaxZ - low.MinZ > 20 && lerr / Math.Max(1, ln) < 3 && lman != null && lman.Pending.Count == 2 && lman.Pending.All(p => p.Shown == "low") && File.Exists(WorldMapTerrain.MarkerFile(tdirL, 35, 33)) && lowRes.Files == 32,
+                        lowRes.LowDetail + " " + lowRes.Holes + " " + (low == null ? "no tile" : low.MinZ + ".." + low.MaxZ) + " err " + lerr / Math.Max(1, ln));
+                    // the download finished: the real files are read, the low-detail stand-ins are replaced
+                    WorldMapService.AdtSourceForTest = fdid => { Interlocked.Increment(ref adtLoads); var (c, r) = WmAdtOf(fdid); return WmAdtCached(c, r); }; adtLoads = 0;
+                    var healed = WorldMapService.BuildTerrain(8, "Testland", 7001, key, mapDirL, null, zr, CancellationToken.None, null);
+                    var real35 = WorldMapTerrain.ReadTile(tdirL, 35, 33);
+                    var hman = WorldMapTerrain.ReadManifest(tdirL);
+                    Check("WDL: once the tiles read, the next build replaces both low-detail stand-ins (2 recovered, only those 2 read): the real grid with its area ids, its water file, no marker, nothing pending",
+                        healed.Complete && healed.Recovered == 2 && adtLoads == 2 && real35 != null && real35.MissingChunks == 0 && real35.Area.Any(a => a != 0) && File.Exists(WorldMapTerrain.WaterFile(tdirL, 35, 33)) && !File.Exists(WorldMapTerrain.MarkerFile(tdirL, 35, 33)) && hman != null && hman.Pending.Count == 0,
+                        healed.Recovered + " loads " + adtLoads);
+                    WorldMapService.WdlSourceForTest = null; WorldMapService.WdtSourceForTest = mapId => WmWdt(tiles);
+                    WorldMapService.AdtSourceForTest = fdid => { Interlocked.Increment(ref adtLoads); if (fdid == missingFdid) return null; if (fdid == garbageFdid) return new byte[500]; var (c, r) = WmAdtOf(fdid); return WmAdtCached(c, r); };
+                }
 
                 // a cancelled build leaves its finished tiles and no manifest; the next one only reads the rest
                 var mapDir2 = WorldMapCache.MapDir(key, 6); adtLoads = 0;
@@ -247,6 +302,7 @@ namespace ElansAddonHub
             {
                 WmAdtCacheDrop();
                 WorldMapService.AdtSourceForTest = savedAdt; WorldMapService.WdtSourceForTest = savedWdt; WorldMapService.TileSourceForTest = savedTile; WorldMapCache.RootOverride = savedRoot;
+                WorldMapService.WdlSourceForTest = null;
                 WorldMapService.ResetForTest();
             }
         }

@@ -24,6 +24,9 @@ namespace ElansAddonHub.Services.WorldMap
         public List<WdtTile> Tiles = new List<WdtTile>();
         public int MainTiles = -1;             // tiles MAIN says have an ADT (-1 = no MAIN)
         public uint MphdFlags;                 // MPHD's flags (0x1 = the map is one global building)
+        // MPHD (32 bytes since 8.1): flags, lgt, occ, fogs, mpv, tex, wdl, pd4 FileDataIDs. The WDL (the low-resolution heights the client draws in the
+        // distance) is at +24: verified on the real Eastern Kingdoms (775971 -> WDL 775970, 736 MARE tiles = the WDT's 736 tiles) and Kalimdor (782779 -> 782778, 988).
+        public int WdlFdid;
         public WmoPlacement GlobalWmo;         // the building of a map made of one (null = a map of tiles)
         public const float HalfWorld = 17066.666f;
         public string Problem;                 // set = nothing usable
@@ -51,7 +54,11 @@ namespace ElansAddonHub.Services.WorldMap
                 var tag = Tag(d, p);
                 if (tag == "MAID") { maid = p + 8; maidSize = size; }
                 else if (tag == "MAIN") { main = p + 8; mainSize = size; }
-                else if (tag == "MPHD" && size >= 4) w.MphdFlags = BitConverter.ToUInt32(d, p + 8);
+                else if (tag == "MPHD" && size >= 4)
+                {
+                    w.MphdFlags = BitConverter.ToUInt32(d, p + 8);
+                    if (size >= 28) { uint wdl = BitConverter.ToUInt32(d, p + 8 + 24); w.WdlFdid = wdl > 0 && wdl <= int.MaxValue ? (int)wdl : 0; }
+                }
                 else if (tag == "MODF") { modf = p + 8; modfSize = size; }
                 p += 8 + size;
             }

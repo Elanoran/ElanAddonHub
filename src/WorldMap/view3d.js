@@ -5,10 +5,16 @@
    The plane the app talks in is the 2D map's (lat = -row * 4, lng = col * 4). Everything the app sends is in that plane; the formulas are repeated here. */
 (function () {
   'use strict';
-  var errs = []; window.addEventListener('error', function (e) { errs.push(String(e.message || e).slice(0, 200) + ' line ' + (e.lineno || '')); });
   var TY = 1600 / 3, UNITS = 4, MAXZ = 9;
   var wv = window.chrome && window.chrome.webview;
   function send(o) { if (wv) { try { wv.postMessage(o); } catch (e) { /* the app is gone */ } } }
+  // a script error is told to the app (logged, and in the world map's "Copy details"); the first few only
+  var errs = [];
+  function reportErr(msg) { msg = String(msg || 'unknown error').slice(0, 200); errs.push(msg); if (errs.length <= 5) send({ t: 'error', msg: msg }); }
+  window.addEventListener('error', function (e) { reportErr((e.message || e) + (e.lineno ? ' (line ' + e.lineno + ')' : '')); });
+  window.addEventListener('unhandledrejection', function (e) { reportErr('unhandled: ' + (e.reason && e.reason.message || e.reason)); });
+  // the app bumps "rev" when tiles that could not be read before were read again: the file addresses change, so the browser cache is not used
+  function rv() { return cfg && cfg.rev ? '?r=' + cfg.rev : ''; }
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -91,7 +97,7 @@
       while (active < 14 && idx < order.length) {
         var t = order[idx++]; active++;
         (function (t) {
-          fetch(base + '/' + t.c + '_' + t.r + '.wmt').then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+          fetch(base + '/' + t.c + '_' + t.r + '.wmt' + rv()).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
             var p = parseTile(buf);
             if (p && p.c === t.c && p.r === t.r) { t.H = p.H; t.A = p.A; t.min = p.min; t.max = p.max; heightsLoaded++; heightGen++; dirty = true; } else heightsFailed++;
           }).catch(function () { heightsFailed++; }).then(function () { active--; pump(); });
@@ -123,7 +129,7 @@
     t.encoding = THREE.sRGBEncoding; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.anisotropy = D().aniso; t.generateMipmaps = true; t.needsUpdate = true;
     return t;
   }
-  function imgUrl(lvl, x, y) { return cfg.base + '/z' + lvl + '/' + x + '_' + y + '.jpg'; }
+  function imgUrl(lvl, x, y) { return cfg.base + '/z' + lvl + '/' + x + '_' + y + '.jpg' + rv(); }
   function loadImg(url, cb) {
     var im = new Image(), done = false; inFlight++;
     function fin(r) { if (done) return; done = true; inFlight--; cb(r); }
@@ -240,7 +246,7 @@
   function wbit(l, cx, cy) { var b = cy * 8 + cx; return b < 32 ? (l.lo >>> b) & 1 : (l.hi >>> (b - 32)) & 1; }
   function loadWater(t) {
     t.ws = 1; waterActive++;
-    fetch(terrain.base + '/' + t.c + '_' + t.r + '.wmw').then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+    fetch(terrain.base + '/' + t.c + '_' + t.r + '.wmw' + rv()).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
       var L = parseWater(buf, t.c, t.r);
       if (L) { t.W = L; t.ws = 2; waterLoaded++; } else { t.W = []; t.ws = 3; waterFailed++; }
       t.wgen = (t.wgen || 0) + 1; dirty = true;
@@ -310,13 +316,35 @@
     for (var r = 0; r < 64; r++) {
       var c = 0;
       while (c < 64) {
-        if (tileMap[c * 64 + r]) { c++; continue; }
-        var s = c; while (c < 64 && !tileMap[c * 64 + r]) c++;
+        if (tileMap[c * 64 + r] || holeMap[c * 64 + r]) { c++; continue; }
+        var s = c; while (c < 64 && !tileMap[c * 64 + r] && !holeMap[c * 64 + r]) c++;
         addQuad(a, s * TY, r * TY, c * TY, (r + 1) * TY, 0, 0, 0, 0);
       }
     }
     var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(a), 3));
     outerSea = new THREE.Mesh(g, waterMats[2]); outerSea.renderOrder = 2; outerSea.frustumCulled = false; scene.add(outerSea);
+    buildHoles();
+  }
+  // tiles whose terrain could not be read yet and that have no low-detail heights either (the app's "holes"): a flat hatched placeholder at sea level in
+  // the theme's raised-surface colours (Surface2 / Surface3), so the gap reads as "not loaded yet" and never as black land or open sea
+  var holeMap = {}, holeMesh = null, holeMat = null;
+  function buildHoles() {
+    if (holeMesh) { scene.remove(holeMesh); holeMesh.geometry.dispose(); holeMesh = null; }
+    var keys = Object.keys(holeMap); if (!keys.length) return;
+    if (!holeMat) {
+      var cv = document.createElement('canvas'); cv.width = cv.height = 64; var g2 = cv.getContext('2d');
+      g2.fillStyle = '#1E2226'; g2.fillRect(0, 0, 64, 64); g2.strokeStyle = '#262B30'; g2.lineWidth = 8;
+      for (var k = -64; k <= 128; k += 32) { g2.beginPath(); g2.moveTo(k, 0); g2.lineTo(k + 64, 64); g2.stroke(); }
+      var ht = new THREE.CanvasTexture(cv); ht.wrapS = ht.wrapT = THREE.RepeatWrapping; ht.encoding = THREE.sRGBEncoding;
+      holeMat = new THREE.MeshBasicMaterial({ map: ht, fog: true });
+    }
+    var pos = [], uv = [], rep = 8;
+    keys.forEach(function (k) {
+      var c = Math.floor(+k / 64), r = +k % 64, x0 = c * TY, z0 = r * TY, x1 = x0 + TY, z1 = z0 + TY;
+      pos.push(x0, 1, z0, x0, 1, z1, x1, 1, z0, x1, 1, z0, x0, 1, z1, x1, 1, z1); uv.push(0, 0, 0, rep, rep, 0, rep, 0, 0, rep, rep, rep);
+    });
+    var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3)); g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+    holeMesh = new THREE.Mesh(g, holeMat); holeMesh.renderOrder = 1; holeMesh.frustumCulled = false; scene.add(holeMesh);
   }
   function shimmer(now) {
     var p = now / 1000;
@@ -1291,6 +1319,8 @@
     tileList = []; tileMap = {}; heightsLoaded = 0; heightsFailed = 0; heightGen = 0; ready = false; frameN = 0; built = 0;
     var tl = terrain.tiles || [];
     for (var i = 0; i + 1 < tl.length; i += 2) { var t = { c: tl[i], r: tl[i + 1], H: null, A: null, min: 0, max: 0 }; tileList.push(t); tileMap[t.c * 64 + t.r] = t; }
+    holeMap = {}; var hl = terrain.holes || [];
+    for (var h = 0; h + 1 < hl.length; h += 2) if (!tileMap[hl[h] * 64 + hl[h + 1]]) holeMap[hl[h] * 64 + hl[h + 1]] = 1;
     buildOuterSea();
     landBounds = { minCol: cfg.minCol, maxCol: cfg.maxCol, minRow: cfg.minRow, maxRow: cfg.maxRow };
     (m.on || []).forEach(function (k) { on[k] = true; });
@@ -1367,7 +1397,8 @@
     buildingClick: function (id) { var b = BLD.ui && BLD.ui.card.querySelector('[data-a="' + id + '"]'); if (b) b.click(); return !!b; },
     buildingCap: function (mb) { BLD.capOverride = mb; dirty = true; return 1; },
     buildingMode: function (mode) { bSwitch(mode); return BLD.mode; },
-    xz2ll: xz2ll, ll2xz: ll2xz, groundXZ: function (x, z) { return groundY(x, z); }, distToZ: distToZ, zToDist: zToDist
+    xz2ll: xz2ll, ll2xz: ll2xz, groundXZ: function (x, z) { return groundY(x, z); }, distToZ: distToZ, zToDist: zToDist,
+    holes: function () { return JSON.stringify({ n: Object.keys(holeMap).length, drawn: !!(holeMesh && holeMesh.parent), rev: cfg && cfg.rev || 0 }); }
   };
   send({ t: 'hello', p: '3d' });
 })();

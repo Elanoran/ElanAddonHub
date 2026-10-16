@@ -104,6 +104,8 @@ namespace ElansAddonHub.Services.WorldMap
         public long Bytes, WaterBytes, Ms;
         public float MinZ, MaxZ;
         public bool Complete;
+        public int LowDetail, Holes, Recovered;      // 2.70: tiles drawn from the WDL at low detail, tiles with no heights at all (a flat placeholder), stand-ins that read now
+        public List<PendingTile> Pending = new List<PendingTile>();
     }
 
     public static class WorldMapTerrain
@@ -122,8 +124,12 @@ namespace ElansAddonHub.Services.WorldMap
             public string BuildKey = "", Built = "";
             public long Bytes, WaterBytes, Ms;
             public float MinZ, MaxZ;
+            public List<PendingTile> Pending = new List<PendingTile>();     // 2.70: tiles at low detail or with a placeholder, read again later
+            public string Stamp = "";
             public bool Valid => Version == WorldMapTerrain.Version && Tiles > 0 && Files > 0;
         }
+
+        public static string MarkerFile(string terrainDir, int col, int row) => Path.Combine(terrainDir, col + "_" + row + WorldMapPending.MarkerExt);
 
         public static Manifest ReadManifest(string terrainDir)
         {
@@ -137,7 +143,7 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     Version = d.Int("v"), MapId = d.Int("mapId"), BuildKey = d.Str("build") ?? "", Tiles = d.Int("tiles"), Missing = d.Int("missing"), Files = d.Int("files"), Zones = d.Int("zones"),
                     Bytes = d.Long("bytes"), Ms = d.Long("ms"), WaterFiles = d.Int("waterFiles"), WaterLayers = d.Int("waterLayers"), WaterCells = d.Int("waterCells"), WaterBytes = d.Long("waterBytes"), Built = d.Str("built") ?? "",
-                    MinZ = (float)Num(d, "minZ"), MaxZ = (float)Num(d, "maxZ"),
+                    MinZ = (float)Num(d, "minZ"), MaxZ = (float)Num(d, "maxZ"), Pending = WorldMapPending.ListFrom(d, "pending"), Stamp = d.Str("stamp") ?? "",
                 };
             }
             catch (Exception) { return null; }
@@ -183,14 +189,18 @@ namespace ElansAddonHub.Services.WorldMap
         // `load` gives the bytes of the root ADT of a tile (null = the source does not have it). Throws OperationCanceledException when `ct` is cancelled.
         // `zones` (may be null) turns the area ids into zones for borders.json. A cancelled or crashed build leaves its finished tile files; the next
         // one skips every tile whose file is complete (the right size), so it resumes. Files are written as .tmp and renamed; the manifest comes last.
+        // `lowDetail` (may be null) gives a tile's heights at low detail (the continent's WDL) when its root ADT cannot be read: written as the tile's grid with a
+        // ".low" marker (read again by every later build), so the 3D view shows the land's shape instead of a hole. With none, only the marker: the page draws a
+        // flat hatched placeholder there. A finished terrain's manifest stays while it is built again (a retry) and is replaced at the end.
         public static TerrainResult Build(int mapId, string buildKey, IList<WdtTile> tiles, Func<WdtTile, byte[]> load, string mapDir, ZoneResolver zones,
-            Action<PyramidProgress> progress, CancellationToken ct, LiquidKinds kinds = null)
+            Action<PyramidProgress> progress, CancellationToken ct, LiquidKinds kinds = null, Func<WdtTile, TerrainTile> lowDetail = null, string stamp = "")
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var res = new TerrainResult { Tiles = tiles.Count };
             var dir = Dir(mapDir);
             Directory.CreateDirectory(dir);
-            try { if (File.Exists(ManifestPath(dir))) File.Delete(ManifestPath(dir)); } catch (Exception) { }
+            var old = ReadManifest(dir);
+            if (old == null || !old.Valid) { try { if (File.Exists(ManifestPath(dir))) File.Delete(ManifestPath(dir)); } catch (Exception) { } }
             int total = tiles.Count + 1, done = 0;
             void Report(string phase) { progress?.Invoke(new PyramidProgress { Phase = phase, Done = done, Total = total }); }
             Report("terrain");
@@ -200,24 +210,42 @@ namespace ElansAddonHub.Services.WorldMap
                 ct.ThrowIfCancellationRequested();
                 var file = TileFile(dir, t.Col, t.Row);
                 var wfile = WaterFile(dir, t.Col, t.Row);
+                var marker = MarkerFile(dir, t.Col, t.Row);
+                bool wasStandIn = File.Exists(marker);
                 TerrainTile tt = null; WaterTile wt = null;
-                if (Have(file)) tt = ReadTile(dir, t.Col, t.Row);
-                if (File.Exists(wfile)) wt = ReadWater(dir, t.Col, t.Row);
+                if (!wasStandIn && Have(file)) tt = ReadTile(dir, t.Col, t.Row);
+                if (!wasStandIn && File.Exists(wfile)) wt = ReadWater(dir, t.Col, t.Row);
                 if (tt != null && wt != null) res.Reused++;
                 else
                 {
-                    byte[] bytes = null; bool failedHere = false;
-                    try { bytes = t.RootFdid == 0 ? null : load(t); } catch (OperationCanceledException) { throw; } catch (Exception e) { Util.Log("world map terrain: tile " + t.Col + "," + t.Row + ": " + e.Message); res.Failed++; failedHere = true; }
-                    if (bytes == null) { if (!failedHere) res.Missing++; }
+                    byte[] bytes = null; string why = null, detail = "";
+                    try { bytes = t.RootFdid == 0 ? null : load(t); } catch (OperationCanceledException) { throw; } catch (Exception e) { detail = WorldMapPending.Short(e); Util.Log("world map terrain: tile " + t.Col + "," + t.Row + ": " + detail); res.Failed++; why = "unreadable"; }
+                    AdtFile adt = null;
+                    if (bytes == null) { if (why == null) { res.Missing++; why = "missing"; } }
                     else
                     {
-                        var adt = AdtFile.Parse(bytes);
-                        if (!adt.Ok || adt.WithHeights == 0) { res.Failed++; tt = null; }
-                        else
-                        {
-                            if (tt == null) { tt = TerrainTile.FromAdt(t.Col, t.Row, adt); WriteAtomic(file, tt.ToBytes()); res.Written++; }
-                            if (wt == null) { wt = WaterTile.FromAdt(t.Col, t.Row, adt, kinds); WriteAtomic(wfile, wt.ToBytes()); res.WaterWritten++; }
-                        }
+                        adt = AdtFile.Parse(bytes);
+                        if (!adt.Ok || adt.WithHeights == 0) { res.Failed++; why = "unreadable"; detail = adt.Ok ? "no heights in the terrain file" : WorldMapReport.Redact(adt.Problem ?? "damaged terrain file"); adt = null; }
+                    }
+                    if (adt != null)
+                    {
+                        if (wasStandIn) { tt = null; wt = null; }
+                        if (tt == null) { tt = TerrainTile.FromAdt(t.Col, t.Row, adt); WriteAtomic(file, tt.ToBytes()); res.Written++; }
+                        if (wt == null) { wt = WaterTile.FromAdt(t.Col, t.Row, adt, kinds); WriteAtomic(wfile, wt.ToBytes()); res.WaterWritten++; }
+                        if (wasStandIn) { WorldMapPending.RemoveMarker(marker); res.Recovered++; Util.Log("world map terrain: tile " + t.Col + "," + t.Row + " reads now; the low-detail stand-in is replaced"); }
+                    }
+                    else
+                    {
+                        // not readable yet: the land's shape from the WDL at low detail (or a flat placeholder in the page), marked as not final
+                        TerrainTile low = null;
+                        try { low = lowDetail?.Invoke(t); } catch (OperationCanceledException) { throw; } catch (Exception) { low = null; }
+                        var p = new PendingTile { Col = t.Col, Row = t.Row, Part = "terrain", Reason = why, Detail = detail, Shown = low != null ? "low" : "flat" };
+                        if (low != null) { WriteAtomic(file, low.ToBytes()); tt = low; res.LowDetail++; }
+                        else { try { if (File.Exists(file)) File.Delete(file); } catch (Exception) { } tt = null; res.Holes++; }
+                        try { if (File.Exists(wfile)) File.Delete(wfile); } catch (Exception) { }
+                        WorldMapPending.WriteMarker(marker, p);
+                        res.Pending.Add(p);
+                        if (why == "missing") Util.Log("world map terrain: tile " + t.Col + "," + t.Row + " is not in the local game storage yet; " + (low != null ? "drawn at low detail from the WDL" : "a placeholder is drawn") + " and it is read again later");
                     }
                 }
                 if (tt != null) { if (tt.MinZ < minZ) minZ = tt.MinZ; if (tt.MaxZ > maxZ) maxZ = tt.MaxZ; }
@@ -243,6 +271,7 @@ namespace ElansAddonHub.Services.WorldMap
             {
                 ["v"] = Version, ["mapId"] = mapId, ["build"] = buildKey, ["tiles"] = res.Tiles - res.Missing - res.Failed, ["missing"] = res.Missing + res.Failed, ["files"] = res.Files, ["zones"] = res.Zones, ["bytes"] = res.Bytes, ["waterFiles"] = res.WaterFiles, ["waterLayers"] = res.WaterLayers, ["waterCells"] = res.WaterCells, ["waterBytes"] = res.WaterBytes,
                 ["ms"] = res.Ms, ["minZ"] = Math.Round(res.MinZ, 2), ["maxZ"] = Math.Round(res.MaxZ, 2), ["samples"] = TerrainTile.Samples, ["built"] = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+                ["pending"] = WorldMapPending.ListJson(res.Pending), ["stamp"] = stamp ?? "",
             }));
             WriteAtomic(ManifestPath(dir), Encoding.UTF8.GetBytes(man.ToString()));
             res.Complete = true;

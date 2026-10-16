@@ -36,7 +36,7 @@
   </UserControl.Resources>
 
   <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art -->
-  <Border Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
+  <Border Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />

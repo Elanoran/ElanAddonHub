@@ -345,7 +345,7 @@ namespace ElansAddonHub
             {
                 case AtlasTabs.Overview:
                     {
-                        col.Children.Add(ItemCard(m));       // every kind: the game tooltip is the page's main card
+                        if (!HeaderCarriesFacts(m)) col.Children.Add(ItemCard(m));       // every kind but a zone: the game tooltip is the page's main card (a zone's header already says it all)
                         if (m.Lore != null) col.Children.Add(LoreCard(m));       // a zone with the Outpost's notes: "About <zone>"
                         if (!railOn && factsCard != null) col.Children.Add(factsCard);
                         if (m.Custom is ClassSpellBook classSpells) col.Children.Add(ClassSpellsCard(classSpells));
@@ -360,6 +360,7 @@ namespace ElansAddonHub
                             if (!s.Open && s.Empty.Length > 0 && !(m.Kind == "item" && s.Key == "owned")) col.Children.Add(SectionCard(s));
                         if (!HasMapTab(m) && MapWanted(m)) col.Children.Add(MapCard(m));       // no map tab: the page says what it knows about its places (or that it knows none) right here
                         foreach (var n in m.Notes) col.Children.Add(Note(n));
+                        if (col.Children.Count == 0) col.Children.Add(Note("Everything about " + m.Title + " is on its tabs" + (tabsShown.Count > 1 ? ": " + string.Join(", ", tabsShown.Where(x => x != AtlasTabs.Overview).Select(AtlasTabs.Title)) : "") + "."));
                         break;
                     }
                 case AtlasTabs.Map:
@@ -400,9 +401,14 @@ namespace ElansAddonHub
             return Card(sp);
         }
 
-        // the quick facts (what links somewhere); an item's own facts (crafted by ...) are all shown. Null when there is none.
+        // a zone page: its header (the breadcrumb Zones > continent > zone, the hero's chips "Zone", "In <continent>", "Creature levels") already carries
+        // what the game tooltip card and the rail's "In <continent>" fact card would repeat, so neither is drawn on any of its tabs (2.70)
+        public static bool HeaderCarriesFacts(AtlasPageModel m) => m != null && m.Kind == "zone";
+
+        // the quick facts (what links somewhere); an item's own facts (crafted by ...) are all shown. Null when there is none (and on a zone: its header has them).
         FrameworkElement FactsFor(AtlasPageModel m)
         {
+            if (HeaderCarriesFacts(m)) return null;
             bool any = m.Kind == "item" ? m.Facts.Count > 0 : m.Facts.Any(f => f.Link != null);
             return any ? FactsCard(m, m.Kind != "item") : null;
         }
@@ -514,7 +520,7 @@ namespace ElansAddonHub
                 railMap = new AtlasMap { Height = 180, Margin = new Thickness(0, 12, 0, 0), Compact = true };
                 var z = plan.ShowZone > 0 ? plan.Zones.FirstOrDefault(x => x.UiMapId == plan.ShowZone) ?? new AtlasMapZone { UiMapId = plan.ShowZone, Name = AtlasQuery.ZoneName(plan.ShowZone) } : plan.Best ?? plan.Zones.FirstOrDefault();
                 var mp = railMap;
-                if (z != null) Defer(() => { mp.ShowMap(z.UiMapId); mp.AddMarkers(z.Markers); });
+                if (z != null) Defer(() => { mp.SetHome(z.UiMapId, z.Name); mp.ShowMap(z.UiMapId); mp.AddMarkers(z.Markers); });
                 var hit = new Grid();
                 hit.Children.Add(railMap);
                 var veil = new Border { Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = "Open the map", Tag = "rail-map-open" };

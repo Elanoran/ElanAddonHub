@@ -15,7 +15,7 @@
     <WindowChrome CaptionHeight="0" ResizeBorderThickness="12" GlassFrameThickness="0" CornerRadius="0" />
   </WindowChrome.WindowChrome>
 
-  <Border Margin="14" Background="{StaticResource Brush.Bg}" CornerRadius="{StaticResource Radius.Window}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1">
+  <Border x:Name="WindowFrame" Margin="14" Background="{StaticResource Brush.Window}" CornerRadius="{StaticResource Radius.Window}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1">
     <Border.Effect>
       <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.55" Color="Black" />
     </Border.Effect>
@@ -31,23 +31,7 @@
         <RowDefinition Height="*" />
       </Grid.RowDefinitions>
 
-      <!-- the window's painted background (Assets/Art/background.jpg, ArtLibrary): anchored right so the lodge stays in view, under the readability gradient -->
-      <Border Grid.RowSpan="4" Grid.ColumnSpan="2" CornerRadius="13" ClipToBounds="True" IsHitTestVisible="False">
-        <Border.Background>
-          <ImageBrush x:Name="WindowArt" ImageSource="Assets/Art/background.jpg" Stretch="UniformToFill" AlignmentX="Right" AlignmentY="Center" />
-        </Border.Background>
-      </Border>
-      <Border Grid.RowSpan="4" Grid.ColumnSpan="2" CornerRadius="13" IsHitTestVisible="False">
-        <Border.Background>
-          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-            <GradientStop Color="#B30F1113" Offset="0" />
-            <GradientStop Color="#330F1113" Offset="0.12" />
-            <GradientStop Color="#590F1113" Offset="0.4" />
-            <GradientStop Color="#B50F1113" Offset="0.7" />
-            <GradientStop Color="#FF0F1113" Offset="0.97" />
-          </LinearGradientBrush>
-        </Border.Background>
-      </Border>
+      <!-- no picture behind the pages (2.70): the window frame is the calm Brush.Window gradient, the pages sit on solid Brush.Panel surfaces -->
 
       <!-- title bar. The global search sits at its left (TitleSearch: a launcher for the Ctrl+K palette on every page; an icon when the window is narrow). It is a hit-test island: a press on it
            is its own and never starts the window drag; the empty caption around it still drags. Realm status dots and minimise / close stay at the right. -->

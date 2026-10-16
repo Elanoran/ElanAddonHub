@@ -133,6 +133,7 @@ namespace ElansAddonHub
             ClassicAutoBox.IsChecked = !s.ClassicFromLodgeOff;
             ItemDataBox.IsChecked = !s.ItemDataOff;
             {
+                WorldMapFlatOnly.IsChecked = s.WorldMapFlat; WorldMapAuto.IsChecked = !s.WorldMapFlat;
                 var det = s.WorldMap3dDetail;
                 Detail3dLow.IsChecked = det == "low"; Detail3dHigh.IsChecked = det == "high"; Detail3dMedium.IsChecked = det != "low" && det != "high";
                 Exag3dSlider.Value = s.WorldMapExag >= 1 && s.WorldMapExag <= 3 ? s.WorldMapExag : 1.5;
@@ -412,6 +413,15 @@ namespace ElansAddonHub
                 b.Click += (s, e) => { ElansAddonHub.Services.WorldMap.BuildingsService.Remove(id); UpdateBuildingsLine(); };
                 WorldMapBuildingsButtons.Children.Add(b);
             }
+        }
+
+        // World map view: Automatic (3D when picked and it works; flat after a 3D problem, remembered) or Flat only (the 3D view is never started). The map reads it each time it opens.
+        void WorldMapView_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading || settings == null) return;
+            settings.WorldMapFlat = WorldMapFlatOnly.IsChecked == true;
+            if (!settings.WorldMapFlat) settings.WorldMap3dProblem = null;      // back to Automatic: a remembered 3D problem is forgotten (3D can be tried again)
+            SettingsStore.Save(settings);
         }
 
         // 3D detail (low / medium / high) and height exaggeration of the Atlas world map: read by the 3D page when it starts, so the next time it opens

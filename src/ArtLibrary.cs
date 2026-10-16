@@ -20,8 +20,7 @@ namespace ElansAddonHub
 
     public static class ArtLibrary
     {
-        // the window background (MainWindow.xaml has it as a plain ImageBrush; listed here so the self-test checks it loads)
-        public static readonly ArtPiece Background = new ArtPiece("background.jpg", 0.75, 0.5);
+        // no window background picture since 2.70: the window is the Brush.Window gradient and the pages are solid panels (Theme.xaml)
 
         // zone pages: the uiMap id -> its banner
         public static readonly Dictionary<int, ArtPiece> Zones = new Dictionary<int, ArtPiece>
@@ -139,7 +138,6 @@ namespace ElansAddonHub
 
         public static IEnumerable<ArtPiece> All()
         {
-            yield return Background;
             foreach (var a in Zones.Values) yield return a;
             foreach (var a in Categories.Values) yield return a;
             foreach (var a in Specs.Values) yield return a;

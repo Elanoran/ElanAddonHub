@@ -4,7 +4,7 @@
              xmlns:local="clr-namespace:ElansAddonHub.Lodge"
              xmlns:app="clr-namespace:ElansAddonHub"
              AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver" PreviewKeyDown="View_PreviewKeyDown">
-  <!-- The Lodge follows DESIGN.md: a page panel (Scrim) holding the sidebar (calm rows, like the Settings nav) and the chat (a Surface1 card);
+  <!-- The Lodge follows DESIGN.md: a page panel (Brush.Panel, solid) holding the sidebar (calm rows, like the Settings nav) and the chat (a Surface1 card);
        Text.* styles, the 4-pt scale, no outlines (fill, elevation, hairlines), accent only for selection / the one action, status colours only for status. -->
   <UserControl.Resources>
     <!-- small round avatar (personal picture or class colour, class badge in game) with role ring, speaking ring and status dot -->
@@ -313,7 +313,7 @@
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
     <!-- ===================== server update note (owner / officers only, dismissible) ===================== -->
-    <Border x:Name="ServerNotice" Grid.Row="0" Visibility="Collapsed" Margin="16,4,12,8" Padding="12,8" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}">
+    <Border x:Name="ServerNotice" Grid.Row="0" Visibility="Collapsed" Margin="16,4,12,8" Padding="12,8" Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}">
       <DockPanel>
         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE711;" Margin="8,0,0,0" Click="ServerNoticeClose_Click"
                 ToolTip="Dismiss (until the next Lodge server version)" AutomationProperties.Name="Dismiss" />
@@ -374,7 +374,7 @@
     </ScrollViewer>
 
     <!-- ===================== lodge: the page panel (DESIGN 4) holds the sidebar and the chat card ===================== -->
-    <Border x:Name="ChatPanel" Grid.Row="1" Visibility="Collapsed" Margin="16,4,12,12" Padding="16" Background="{StaticResource Brush.Scrim}" CornerRadius="{StaticResource Radius.Card}">
+    <Border x:Name="ChatPanel" Grid.Row="1" Visibility="Collapsed" Margin="16,4,12,12" Padding="16" Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}">
     <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="240" />

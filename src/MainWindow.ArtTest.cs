@@ -21,6 +21,25 @@ namespace ElansAddonHub
     // scratch folder); pictures with ELANSHUB_SHOTS=1.
     public partial class MainWindow
     {
+        static double Lum(System.Windows.Media.Color c) => 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B;
+
+        // the page panels (the Border that holds each page's content; Brush.Panel since 2.70), from the pages' own trees
+        IEnumerable<Border> PagePanels()
+        {
+            var panel = FindResource("Brush.Panel");
+            foreach (FrameworkElement page in new FrameworkElement[] { AtlasView, InventoryView, BrowserView, TalentsView, SettingsPage, LodgePage })
+                foreach (var b in LogicalWalk(page).OfType<Border>().Where(b => ReferenceEquals(b.Background, panel))) yield return b;
+        }
+
+        // the logical tree (a collapsed page has no visual tree until it is first shown)
+        static IEnumerable<DependencyObject> LogicalWalk(DependencyObject d)
+        {
+            if (d == null) yield break;
+            yield return d;
+            foreach (var c in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>())
+                foreach (var x in LogicalWalk(c)) yield return x;
+        }
+
         async Task<string> ArtTest(string dir)
         {
             var notes = new List<string>();
@@ -35,14 +54,14 @@ namespace ElansAddonHub
                 // ---- the pictures themselves
                 var all = ArtLibrary.All().ToList();
                 var bad = all.Where(a => ArtLibrary.Load(a) == null).Select(a => a.File).ToList();
-                // nothing lost (at least the 96 pieces of 2.69: background, 51 zone banners, 17 category cards, 27 talent trees) and every one loads; more art is fine
-                Check("resources: all " + all.Count + " pictures load from the exe (at least the background, 51 zone banners, 17 category cards, 27 talent trees)", all.Count >= 96 && bad.Count == 0, string.Join(", ", bad));
-                var bg = ArtLibrary.Load(ArtLibrary.Background);
+                // nothing lost (at least the 95 pieces of 2.70: 51 zone banners, 17 category cards, 27 talent trees; the window background is gone) and every one loads; more art is fine
+                Check("resources: all " + all.Count + " pictures load from the exe (at least 51 zone banners, 17 category cards, 27 talent trees), and no window wallpaper is listed or built in",
+                    all.Count >= 95 && bad.Count == 0 && !all.Any(a => a.File == "background.jpg") && ArtLibrary.Load(new ArtPiece("background.jpg", 0.5, 0.5)) == null, string.Join(", ", bad));
                 var banner = ArtLibrary.Load(ArtLibrary.Zone(1411)); var specPic = ArtLibrary.Load(ArtLibrary.Spec("HUNTER", 0));
                 // shapes, not the files' pixel counts: a repainted picture of another size must not fail this
-                Check("resources: the background is big enough for a large window (at least 1920 wide, landscape), a zone banner is 4:1, a spec picture is decoded at no more than 720 wide (no full-size bitmaps for small slots)",
-                    bg != null && bg.PixelWidth >= 1920 && bg.PixelWidth > bg.PixelHeight && banner != null && Math.Abs((double)banner.PixelWidth / banner.PixelHeight - 4) < 0.08 && specPic != null && specPic.PixelWidth <= 720 && specPic.PixelWidth >= 360,
-                    (bg == null ? "no bg" : bg.PixelWidth + "x" + bg.PixelHeight) + " banner " + banner?.PixelWidth + "x" + banner?.PixelHeight + " spec " + specPic?.PixelWidth);
+                Check("resources: a zone banner is 4:1, a spec picture is decoded at no more than 720 wide (no full-size bitmaps for small slots)",
+                    banner != null && Math.Abs((double)banner.PixelWidth / banner.PixelHeight - 4) < 0.08 && specPic != null && specPic.PixelWidth <= 720 && specPic.PixelWidth >= 360,
+                    "banner " + banner?.PixelWidth + "x" + banner?.PixelHeight + " spec " + specPic?.PixelWidth);
                 Check("resources: a missing picture is null, never an exception (the slot stays plain)", ArtLibrary.Load(new ArtPiece("nope.jpg", 0.5, 0.5)) == null);
                 Check("mapping: every game zone has a banner (2665 shares 2521's), zone 11 none; the Atlas Home categories have art; every class has three trees of art, no fourth",
                     ArtLibrary.Zone(1411) != null && ArtLibrary.Zone(1438) != null && ArtLibrary.Zone(1429) != null && ArtLibrary.Zone(11) == null && ArtLibrary.Zone(2665)?.File == ArtLibrary.Zone(2521)?.File && ArtLibrary.Category("instances") != null && ArtLibrary.Category("professions") != null
@@ -56,8 +75,17 @@ namespace ElansAddonHub
                 Width = 1400; Height = 860;
                 ShowTab("addons");
                 await Task.Delay(200); UpdateLayout();
-                Check("window: the background is the new painting, anchored right (the lodge stays in view), under the readability gradient",
-                    WindowArt.ImageSource is System.Windows.Media.Imaging.BitmapSource ws && bg != null && ws.PixelWidth == bg.PixelWidth && ws.PixelHeight == bg.PixelHeight && WindowArt.AlignmentX == System.Windows.Media.AlignmentX.Right);
+                var winGrad = FindResource("Brush.Window") as System.Windows.Media.LinearGradientBrush;
+                var chrome = AtlasWalk(WindowFrame).OfType<Border>().ToList();
+                var pageHosts = new FrameworkElement[] { AtlasView, InventoryView, BrowserView, TalentsView, SettingsPage, LodgePage };
+                Check("window: no wallpaper - the frame is the Brush.Window gradient (lighter at the top, deeper at the bottom), no picture brush in the window chrome outside the pages",
+                    winGrad != null && ReferenceEquals(WindowFrame.Background, winGrad) && winGrad.GradientStops.Count >= 2 && Lum(winGrad.GradientStops[0].Color) > Lum(winGrad.GradientStops.Last().Color)
+                    && !chrome.Any(b => b.Background is System.Windows.Media.ImageBrush && !pageHosts.Any(p => b.IsDescendantOf(p))));
+                var panels = PagePanels().ToList();
+                Check("window: the rail and every page panel are solid (alpha 255), the panel lighter than the window's bottom so it reads as a surface (" + panels.Count + " panels)",
+                    FindResource("Brush.Rail") is System.Windows.Media.SolidColorBrush rb && rb.Color.A == 255 && FindResource("Brush.Panel") is System.Windows.Media.SolidColorBrush pb && pb.Color.A == 255
+                    && winGrad != null && Lum(pb.Color) > Lum(winGrad.GradientStops.Last().Color) && panels.Count >= 6 && panels.All(p => p.Background is System.Windows.Media.SolidColorBrush s && s.Color.A == 255),
+                    string.Join(",", panels.Select(p => (p.Background as System.Windows.Media.SolidColorBrush)?.Color.ToString() ?? "?")));
                 await ShotWait(400);
                 Snapshot(P("art-01-addons.png"));
 
@@ -231,7 +259,7 @@ namespace ElansAddonHub
                 }
                 catch { }
             }
-            notes.Insert(0, "art (2.67.0): " + (ok ? "all ok" : "FAILURES"));
+            notes.Insert(0, "art (2.70.0): " + (ok ? "all ok" : "FAILURES"));
             return string.Join("\r\n", notes);
         }
     }
