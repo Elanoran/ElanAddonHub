@@ -154,15 +154,26 @@ new failures:
     Tools\selftest.ps1                          what this branch changed vs origin/main (the default)
     Tools\selftest.ps1 -Changed v2.33.0         ...vs a tag or any ref
     Tools\selftest.ps1 -Only inventory,toasts   just those sections
-    Tools\selftest.ps1 -Full                    everything (about 11 min with the pictures, the real game files included)
+    Tools\selftest.ps1 -Full                    everything, the real game files included (about 9 min, no pictures)
     Tools\selftest.ps1 -Only worldmapreal      one of the real-game-file sections (see below)
     Tools\selftest.ps1 -NoCache                changed mode, but never skip a real-game-file section
+    Tools\selftest.ps1 -WhatIf                  what changed mode would run and why per file, without running it
+    Tools\selftest.ps1 -WhatIf -Paths src/Theme/Theme.xaml   ...as if only that file had changed
     Tools\selftest.ps1 -List                    section names
 
 **During development use the default (`--changed`); run `-Full` before every release.** A scoped run is the ~1 s of
-setup plus the sections it picks: an Atlas page edit is about a minute, an Upgrades edit under a minute, a world map UI
-edit about 1.5 minutes. The run ends with the slowest sections and the slowest stretches between two checks, so a
-slow check shows up by name.
+setup plus the sections that test the changed files: a decoder or an Atlas page edit is about a minute, a theme token
+half a minute, an art picture a few seconds, a Lodge feature file (calendar, badges, invites ...) its own sections; only
+the Lodge core (session, models, page) runs every Lodge section (about 2 minutes). Only App, Brand, Util,
+SettingsStore, Models (except adding a setting), Json, Net and the fixture still mean "everything". The run ends with
+the per-section times, the 12 slowest checks, the failed sections and a one-line summary.
+
+Writing checks: wait for a condition, not a fixed time - `Check("...", await Until(() => cond))` polls (layout brought
+up to date) until it holds or 4 s pass; `await Settle()` lets queued dispatcher work run. Keep fixed waits only where a
+check proves that something does NOT happen (no request sent, nothing moved). Check behaviour, not incidental pixels or
+counts: "all days one height", "a narrower second column", "at least the 96 pictures", not "80 px" or "exactly 96".
+A new test file should name its section in its header comment (`// --selftest "atlaspage", ...`): changed mode maps an
+unknown file by that.
 
 - **Real-game-file sections** (`mapdatareal worldmapreal instancesreal buildingsreal dungeonmapsreal atlaspagereal`)
   hold the checks that read the installed WoW client (CASC, Map.db2, terrain, buildings); their synthetic twins stay in
@@ -173,18 +184,18 @@ slow check shows up by name.
   `worldmapreal: skipped (game 1.60.1.70374 and readers unchanged since a passing run on <date>)`. The pass is stored in
   `%LOCALAPPDATA%\ElansAddonHub-selftest-cache` (never the app's data folder); a FAIL is never stored, a new game patch
   or an edit of a reader re-runs them, `-NoCache` forces.
-- `idlecpu` is the one-minute idle-CPU measurement (it used to be inside `round3`); it runs when something that ticks
-  changes (`WowWatch`, the pixel strip, presence, the Lodge session) or for a shared file.
-- Pictures (`1-before.png` ... for docs/design) are not assertions: they are only taken in `-Full` or with
-  `ELANSHUB_SHOTS=1` (`ELANSHUB_SHOTS=0` skips them even in `-Full`), together with the waits that only serve them.
+- `idlecpu` is the idle-CPU measurement (20 s when the first pair is clear, up to a minute); it runs when something
+  that ticks changes (`WowWatch`, the pixel strip, presence, `LodgeSession.cs` / `.History.cs`) or for a shared file.
+- Pictures (`1-before.png` ... and the world map / buildings WebView captures, for docs/design) are not assertions:
+  they are only taken with `ELANSHUB_SHOTS=1` (not in `-Full` any more), together with the waits that only serve them.
 
 - Sections: `addons thirdparty viewer voice update strip lodge lodgefeatures presence profile toasts dialogs
   inventory health round3`. The exe takes `--only a,b`, `--changed <base> [--repo <dir>]` and `--list`; no flag
   runs everything. Unselected sections are logged as `skipped <name>` in `result.txt`, each run section as
   `section <name>: 12.3 s`, plus `total:`. `scope.txt` says why each file chose its sections.
 - The path -> section table, the section dependencies and their unit checks are in `src/Services/TestScope.cs`.
-  Unknown or shared files (App, MainWindow, csproj, Theme, Motion, Util, SettingsStore, ...) select ALL: add a
-  new test block to `TestScope.All`/`Info` and the table when you add one.
+  Shared files (App, Brand, Util, SettingsStore, Models, Json, Net, SelfTestFixture) and unknown files without a
+  section in their header select ALL: add a new test block to `TestScope.All`/`Info` and the table when you add one.
 - The wrapper runs on a hidden Windows desktop (`Tools\HiddenRun.cs`), so no window, toast or dialog appears
   on screen or takes focus; `-Visible` shows it. Checks that need the real desktop (the live pixel-strip screen
   capture) report `skipped (hidden desktop)` there (`ELANSHUB_HIDDEN_DESKTOP=1`). Do not run two visible

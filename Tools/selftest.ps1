@@ -6,7 +6,8 @@
   Tools\selftest.ps1                          # --changed origin/main (what this branch touched)
   Tools\selftest.ps1 -Only inventory,toasts   # just those sections
   Tools\selftest.ps1 -Changed v2.33.0         # everything since a tag
-  Tools\selftest.ps1 -Full                    # every section, the real-game-file ones and the pictures included (about 11 min): only when something shared changed
+  Tools\selftest.ps1 -Full                    # every section, the real-game-file ones included (about 9 min; pictures only with ELANSHUB_SHOTS=1): before a release
+  Tools\selftest.ps1 -WhatIf [-Paths a,b]    # what changed mode (or -Only) would run and why, without running
   Tools\selftest.ps1 -Only worldmapreal      # one real-game-file section (worldmapreal, mapdatareal, instancesreal, buildingsreal, dungeonmapsreal, atlaspagereal)
   Tools\selftest.ps1 -NoCache                # never skip a real-game-file section because it passed before
   Tools\selftest.ps1 -List                    # section names
@@ -133,7 +134,7 @@ $secs | ForEach-Object { Write-Host ('  {0,-18}{1,7} s' -f $_.Name, $_.Sec.ToStr
 $slow = @($lines | Where-Object { $_ -match '^slow ' })
 if ($slow) { Write-Host ''; Write-Host 'Slowest checks (the work before the named check):'; $slow | Select-Object -First 12 | ForEach-Object { Write-Host ('  ' + $_) }; Write-Host '' }
 # the sections whose own summary line says they failed (the FAIL lines above carry each check's detail)
-$failedSecs = @($lines | ForEach-Object { if ($_ -cmatch '^\s*([\w ]+?)(?: selftest)?: (FAILED|crashed)') { $Matches[1] } } | Select-Object -Unique)
+$failedSecs = @($lines | ForEach-Object { if ($_ -cmatch '^\s*([\w ]+?)(?: selftest| \([^)]*\))?: (FAILED|FAILURES|crashed)') { $Matches[1] } } | Select-Object -Unique)
 if ($failedSecs) { Write-Host ('Failed sections: ' + ($failedSecs -join ', ')) -ForegroundColor Red }
 $tot = $lines | Where-Object { $_ -match '^total: ' }
 Write-Host ('Summary: {0} section(s), {1}; slowest {2}' -f $secs.Count, $tot, (($secs | Select-Object -First 3 | ForEach-Object { $_.Name + ' ' + $_.Sec.ToString('0.0', $inv) + ' s' }) -join ', '))
