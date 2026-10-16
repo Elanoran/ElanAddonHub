@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.72.1
+- **About is wider.** The About page uses more of the window, so the credits fit on one line each.
+- **Credit to Radio Paradise.** Credits lists Radio Paradise with a link to their support page, and Settings > Radio Paradise has a "Support Radio Paradise" link next to the name.
+- **Links in Settings open in the Outpost's own browser** (credits, support links), like the Atlas' links.
+
 ## 2.72.0
 - **Radio Paradise in the title bar.** A small player sits right of the search box: press Play to listen to Radio Paradise, pick one of its eight channels (Main Mix, Mellow, Rock, Global, Beyond, Radio 2050, KFAT, Serenity) and see what is playing. The speaker button opens the volume, a link to radioparadise.com and **Support Radio Paradise**. Radio Paradise is listener-supported and plays without ads, so if you enjoy it, please support them.
 - **It only plays when you ask.** Nothing connects until you press Play, and Pause really stops the stream (nothing keeps downloading in the background). It stops when you quit the Outpost. If the stream drops, it tries again by itself, waiting a little longer each time, and after ten tries it shows **Retry**. The play / pause key on your keyboard works while the Outpost is in front.

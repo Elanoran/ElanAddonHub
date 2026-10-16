@@ -84,6 +84,7 @@ namespace ElansAddonHub
             LodgePage.Init(Session);
             InitRealms();
             SettingsPage.Init(this, settings, LodgePage);
+            SettingsPage.OpenWebLink = OpenAtlasLink;
             InventoryView.Init(() => settings.WowRoot);
             InventoryView.InitArmory(Session);
             if (settings.UpgradeWeights == null) settings.UpgradeWeights = new Dictionary<string, string>();

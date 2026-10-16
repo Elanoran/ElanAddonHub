@@ -229,6 +229,7 @@ namespace ElansAddonHub
             aboutTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
             aboutTimer.Tick += (s, e) => aboutScene.Update(aboutClock.Elapsed.TotalSeconds);
             SecAbout.IsVisibleChanged += (s, e) => AboutRun();
+            SecAbout.IsVisibleChanged += (s, e) => SecHost.MaxWidth = SecAbout.IsVisible ? 1040 : 680;   // About is wider: the credits fit on one line each
             Loaded += (s, e) => { var w = Window.GetWindow(this); if (w != null) w.StateChanged += (s2, e2) => AboutRun(); };
             UpdateAbout();
         }
@@ -953,9 +954,12 @@ namespace ElansAddonHub
         // ================================================================ about
 
         void LogFolder_Click(object sender, RoutedEventArgs e) => OpenFolder(Util.DataDir);
+        public Action<string> OpenWebLink;   // set by the window: links open in the Outpost's browser (the system browser when it cannot run)
+
         void Link_Navigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
         {
-            try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { }
+            if (OpenWebLink != null) OpenWebLink(e.Uri.AbsoluteUri);   // the Outpost's own browser (like the Atlas' links)
+            else { try { Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch { } }
             e.Handled = true;
         }
 

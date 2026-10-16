@@ -124,7 +124,7 @@
         </DockPanel>
       </Border>
       <ScrollViewer x:Name="Scroll" VerticalScrollBarVisibility="Auto" app:Motion.EdgeFade="True">
-        <Grid Margin="0,0,16,8" MaxWidth="680" HorizontalAlignment="Stretch">
+        <Grid x:Name="SecHost" Margin="0,0,16,8" MaxWidth="680" HorizontalAlignment="Stretch">
 
           <!-- ========== General ========== -->
           <StackPanel x:Name="SecGeneral">
@@ -193,7 +193,10 @@
                 <CheckBox x:Name="RealmsBackBox" Style="{StaticResource Switch}" Click="General_Click" AutomationProperties.Name="Tell me when the realms come back up" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>
-            <TextBlock Text="Radio Paradise" Style="{StaticResource Head}" />
+            <DockPanel Margin="0,0,0,0">
+              <TextBlock DockPanel.Dock="Right" Style="{StaticResource Text.Secondary}" VerticalAlignment="Bottom" Margin="0,0,4,8"><Hyperlink NavigateUri="https://radioparadise.com/donate" RequestNavigate="Link_Navigate">Support Radio Paradise</Hyperlink></TextBlock>
+              <TextBlock Text="Radio Paradise" Style="{StaticResource Head}" />
+            </DockPanel>
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Radio player in the title bar" Tag="Listener-supported radio from radioparadise.com, next to the search box. Nothing plays or connects until you press Play, and Pause closes the stream.">
                 <CheckBox x:Name="RadioBox" Style="{StaticResource Switch}" Click="Radio_Click" AutomationProperties.Name="Radio player in the title bar" />
@@ -930,6 +933,8 @@
                   <TextBlock Text="Single exe" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://github.com/Fody/Costura" RequestNavigate="Link_Navigate">Costura</Hyperlink></TextBlock></Grid>
                 <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                   <TextBlock Text="Icons" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}"><Hyperlink NavigateUri="https://github.com/primer/octicons" RequestNavigate="Link_Navigate">Octicons (GitHub mark)</Hyperlink></TextBlock></Grid>
+                <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="Music" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}" TextWrapping="Wrap"><Hyperlink NavigateUri="https://radioparadise.com" RequestNavigate="Link_Navigate">Radio Paradise</Hyperlink> - listener-supported radio, no ads. <Hyperlink NavigateUri="https://radioparadise.com/donate" RequestNavigate="Link_Navigate">Support Radio Paradise</Hyperlink></TextBlock></Grid>
                 <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                   <TextBlock Text="Splash and artwork" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}">Original, made for this project</TextBlock></Grid>
               </StackPanel>
