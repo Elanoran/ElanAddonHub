@@ -51,14 +51,14 @@ namespace ElansAddonHub
                 // ---- the pictures themselves
                 var all = ArtLibrary.All().ToList();
                 var bad = all.Where(a => ArtLibrary.Load(a) == null).Select(a => a.File).ToList();
-                Check("resources: all " + all.Count + " pictures load from the exe (background, 2 zone banners, 2 category cards, 3 hunter specs)", all.Count == 8 && bad.Count == 0, string.Join(", ", bad));
+                Check("resources: all " + all.Count + " pictures load from the exe (background, 51 zone banners, 17 category cards, 27 talent trees)", all.Count == 96 && bad.Count == 0, string.Join(", ", bad));
                 var bg = ArtLibrary.Load(ArtLibrary.Background);
-                Check("resources: the background is 2016 x 1152, a banner 2304 x 960, a spec picture decoded at 720 wide (no full-size bitmaps for small slots)",
-                    bg != null && bg.PixelWidth == 2016 && bg.PixelHeight == 1152 && ArtLibrary.Load(ArtLibrary.Zone(1411))?.PixelWidth == 2304 && ArtLibrary.Load(ArtLibrary.Zone(1411))?.PixelHeight == 960 && ArtLibrary.Load(ArtLibrary.Spec("HUNTER", 0))?.PixelWidth == 720);
+                Check("resources: the background is 2016 x 1152, a banner 1680 x 420 (4:1), a spec picture decoded at 720 wide (no full-size bitmaps for small slots)",
+                    bg != null && bg.PixelWidth == 2016 && bg.PixelHeight == 1152 && ArtLibrary.Load(ArtLibrary.Zone(1411))?.PixelWidth == 1680 && ArtLibrary.Load(ArtLibrary.Zone(1411))?.PixelHeight == 420 && ArtLibrary.Load(ArtLibrary.Spec("HUNTER", 0))?.PixelWidth == 720);
                 Check("resources: a missing picture is null, never an exception (the slot stays plain)", ArtLibrary.Load(new ArtPiece("nope.jpg", 0.5, 0.5)) == null);
-                Check("mapping: zones 1411 / 1438 have banners, others none; categories 'instances' / 'professions' have art; hunter trees 0-2 have art, a warrior's none",
-                    ArtLibrary.Zone(1411) != null && ArtLibrary.Zone(1438) != null && ArtLibrary.Zone(11) == null && ArtLibrary.Zone(1429) == null && ArtLibrary.Category("instances") != null && ArtLibrary.Category("professions") != null
-                    && ArtLibrary.Category("items") == null && ArtLibrary.Spec("HUNTER", 0) != null && ArtLibrary.Spec("hunter", 2) != null && ArtLibrary.Spec("HUNTER", 3) == null && ArtLibrary.Spec("WARRIOR", 0) == null && ArtLibrary.Spec("HUNTER", -1) == null);
+                Check("mapping: every game zone has a banner (2665 shares 2521's), zone 11 none; the Atlas Home categories have art; every class has three trees of art, no fourth",
+                    ArtLibrary.Zone(1411) != null && ArtLibrary.Zone(1438) != null && ArtLibrary.Zone(1429) != null && ArtLibrary.Zone(11) == null && ArtLibrary.Zone(2665)?.File == ArtLibrary.Zone(2521)?.File && ArtLibrary.Category("instances") != null && ArtLibrary.Category("professions") != null
+                    && ArtLibrary.Category("items") != null && ArtLibrary.Category("finds") != null && ArtLibrary.Spec("HUNTER", 0) != null && ArtLibrary.Spec("hunter", 2) != null && ArtLibrary.Spec("HUNTER", 3) == null && ArtLibrary.Spec("WARRIOR", 0) != null && ArtLibrary.Spec("DRUID", 2) != null && ArtLibrary.Spec("HUNTER", -1) == null);
                 var wide = ArtLibrary.Crop(2.4, 6, 0.5, 0.66); var tall = ArtLibrary.Crop(0.62, 1.0, 0.5, 0.72); var edge = ArtLibrary.Crop(2.4, 6, 0.5, 0.98);
                 Check("crop: a banner keeps the full width and slides down to its focal point; a spec picture keeps its lower part; the crop never leaves the picture",
                     Math.Abs(wide.Width - 1) < 1e-9 && Math.Abs(wide.Height - 0.4) < 1e-9 && Math.Abs(wide.Y - 0.46) < 1e-9 && Math.Abs(tall.Height - 0.62) < 1e-9 && Math.Abs(tall.Y - 0.38) < 1e-9 && Math.Abs(edge.Bottom - 1) < 1e-9,
@@ -129,7 +129,7 @@ namespace ElansAddonHub
                 await Task.Delay(200); UpdateLayout();
                 var tl = InventoryView.CharTabLinesForTest();
                 Check("hunter talents: the tree headers are the spec names from the game's talent data", new[] { "treehead|1|Beast Mastery|0", "treehead|2|Marksmanship|1", "treehead|3|Survival|2" }.All(tl.Contains), string.Join(" | ", tl.Where(x => x.StartsWith("tree"))));
-                Check("hunter talents: each tree has its spec's art behind it (BM, MM, SV) under the veil", new[] { "treeart|1|talent-hunter-bm.jpg", "treeart|2|talent-hunter-mm.jpg", "treeart|3|talent-hunter-sv.jpg" }.All(tl.Contains)
+                Check("hunter talents: each tree has its spec's art behind it (BM, MM, SV) under the veil", new[] { "treeart|1|talent-hunter-bm.jpg", "treeart|2|talent-hunter-1.jpg", "treeart|3|talent-hunter-sv.jpg" }.All(tl.Contains)
                     && InventoryView.TalentCardsForTest.All(c => c.Tag as string == "tree-painted"), string.Join(" | ", tl.Where(x => x.StartsWith("tree"))));
                 Check("hunter talents: the trees and nodes are as before (three 3x3 trees, 29 nodes with the loose ones)", tl.Count(x => x.StartsWith("tree|")) == 3 && tl.Contains("loose|2") && InventoryView.TalentNodesForTest == 29);
                 var cardsT = InventoryView.TalentCardsForTest;
@@ -170,8 +170,8 @@ namespace ElansAddonHub
                 }
                 UpdateLayout();
                 tl = InventoryView.CharTabLinesForTest();
-                Check("warrior talents: headers Arms / Fury / Protection, no art behind any tree (plain panels)", new[] { "treehead|1|Arms|0", "treehead|2|Fury|1", "treehead|3|Protection|2" }.All(tl.Contains) && !tl.Any(x => x.StartsWith("treeart|"))
-                    && InventoryView.TalentCardsForTest.All(c => c.Tag as string == "tree-plain"), string.Join(" | ", tl.Where(x => x.StartsWith("tree"))));
+                Check("warrior talents: headers Arms / Fury / Protection, each tree with the warrior's own art (Arms, Fury, Protection)", new[] { "treehead|1|Arms|0", "treehead|2|Fury|1", "treehead|3|Protection|2", "treeart|1|talent-warrior-0.jpg", "treeart|2|talent-warrior-1.jpg", "treeart|3|talent-warrior-2.jpg" }.All(tl.Contains)
+                    && InventoryView.TalentCardsForTest.All(c => c.Tag as string == "tree-painted"), string.Join(" | ", tl.Where(x => x.StartsWith("tree"))));
                 await ShotWait(500);
                 Snapshot(P("art-05-talents-warrior.png"));
             }

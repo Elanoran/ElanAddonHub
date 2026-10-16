@@ -239,7 +239,7 @@ namespace ElansAddonHub
                 foreach (var c in cats.Where(c => (string.IsNullOrEmpty(c.Group) ? AtlasNav.Database : c.Group) == grp))
                     wrap.Children.Add(CategoryCard(c.Title, c.Glyph, c.OpenId, c.Blurb, c.Hosted ? c.Blurb : "", c.Hosted ? null : c.Id, c.Id));
                 if (grp == AtlasNav.Lodge && lodgeFinds)
-                    wrap.Children.Add(CategoryCard("Finds", "", AtlasNav.FindsId, "What the Lodge's members found and saw drop", "What members found and saw drop", null));
+                    wrap.Children.Add(CategoryCard("Finds", "", AtlasNav.FindsId, "What the Lodge's members found and saw drop", "What members found and saw drop", null, "finds"));
                 sp.Children.Add(wrap);
             }
             presetHost = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
