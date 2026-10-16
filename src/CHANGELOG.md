@@ -4,6 +4,7 @@ Newest first. `Tools/release.py` (addon repo) reads the sections newer than the 
 Keep one `## x.y.z` section per hub version.
 
 ## 2.71.2
+- **No outline on the selected left-bar button after a click.** The focus ring now only shows when you move with the keyboard (Tab).
 - **The left bar lines up with the search box.** The Addons button starts at the same height as the search box in the title bar.
 - **Long Lodge channels open at once and scroll smoothly.** The chat used to build every message of a channel at the same time, so a channel with thousands of messages (a long evening, or after scrolling far back) took many seconds to open, used a lot of memory and stuttered on every turn of the wheel. Now only the messages around what you are reading are built, and more are added as you scroll. On the test PC a channel of 5000 messages opens in about 0.7 seconds instead of 44, uses about 25 MB instead of 1.2 GB, and a turn of the wheel takes about 10 ms instead of 0.7 seconds. Everything else works as before: a channel opens at the newest message (or at the "New" line), new messages follow you only when you are at the bottom, older history loads as you scroll up, and replies, pins and search still jump to any message.
 - Fixed: a picture or a video preview that finishes loading, an edit or a new reaction above what you are reading no longer pushes the text you are reading down the screen.

@@ -1053,12 +1053,23 @@
 
   <!-- navigation rail: a 44 px rounded-square icon. Rest = quiet icon, hover = white veil, selected = accent tint + accent icon + a pill on the window edge
        (accent = selection). Icons are 20 px. -->
-  <Style x:Key="RailButton" TargetType="RadioButton">
+    <!-- the rail's focus ring: a FocusVisualStyle, so it shows only when you move with the keyboard (Tab), never after a mouse click -->
+  <Style x:Key="Rail.FocusRing">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Border Width="52" Height="52" CornerRadius="16" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+<Style x:Key="RailButton" TargetType="RadioButton">
     <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Width" Value="64" />
     <Setter Property="Height" Value="52" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource Rail.FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
@@ -1070,7 +1081,6 @@
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
             </Border>
             <Border x:Name="hv" Width="44" Height="44" CornerRadius="12" Background="{StaticResource Brush.Overlay.Hover}" Opacity="0" IsHitTestVisible="False" />
-            <Border x:Name="ring" Width="52" Height="52" CornerRadius="16" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -1078,7 +1088,6 @@
               <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverIn}" /></Trigger.EnterActions>
               <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
             </Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
             <Trigger Property="IsChecked" Value="True">
               <Setter TargetName="box" Property="Background" Value="{StaticResource Brush.Accent.Tint}" />
               <Setter Property="Foreground" Value="{StaticResource Brush.Accent}" />
