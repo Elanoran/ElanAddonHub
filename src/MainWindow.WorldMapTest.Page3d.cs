@@ -67,10 +67,10 @@ namespace ElansAddonHub
             var gl = WorldMapProtocol.Parse("{\"t\":\"webgl\",\"ok\":false,\"why\":\"no \\u0007GPU\\n\",\"renderer\":\"ANGLE (x)\"}", out _);
             var v3 = WorldMapProtocol.Parse("{\"t\":\"view3\",\"lat\":-120.5,\"lng\":130.25,\"dist\":2400,\"az\":370,\"tilt\":45}", out _);
             var st = WorldMapProtocol.Parse("{\"t\":\"stats\",\"fps\":59.5,\"mem\":310,\"tris\":412345,\"tiles\":88,\"tex\":71}", out _);
-            var pf = WorldMapProtocol.Parse("{\"t\":\"prefs\",\"detail\":\"high\",\"exag\":2.5}", out _);
+            var pf = WorldMapProtocol.Parse("{\"t\":\"prefs\",\"detail\":\"high\",\"exag\":1.3}", out _);
             Check("protocol 3D: webgl {ok, why, renderer}, view3 {lat, lng, dist, az, tilt}, stats {fps, mem, tris, tiles, tex} and prefs {detail, exag} parse; control characters are removed from the page's text",
                 gl != null && gl.Type == WorldMapMessageType.Webgl && !gl.Ok && gl.Why == "no GPU" && gl.Detail == "ANGLE (x)" && v3 != null && v3.Type == WorldMapMessageType.View3 && v3.Dist == 2400 && v3.Az == 370 && v3.Tilt == 45
-                && st != null && st.Fps == 59.5 && st.MemMb == 310 && st.Tris == 412345 && st.Tiles == 88 && st.Textures == 71 && pf != null && pf.Detail == "high" && pf.Exag == 2.5, gl?.Why);
+                && st != null && st.Fps == 59.5 && st.MemMb == 310 && st.Tris == 412345 && st.Tiles == 88 && st.Textures == 71 && pf != null && pf.Detail == "high" && pf.Exag == 1.3, gl?.Why);
             var bad = new[]
             {
                 "{\"t\":\"webgl\"}", "{\"t\":\"webgl\",\"ok\":\"yes\"}",
@@ -267,9 +267,9 @@ namespace ElansAddonHub
                     foreach (var o in marks.Cast<Dictionary<string, object>>().Where(o => !((string)o["name"]).StartsWith("point") && !new[] { "Alliance", "Horde", "Neutral", "H1", "H2", "A1", "N1" }.Contains((string)o["name"])))
                     {
                         double x = (double)o["x"], z = (double)o["z"], expect = WmZ((32 - z / WorldMapMath.TileYards) * WorldMapMath.TileYards, (32 - x / WorldMapMath.TileYards) * WorldMapMath.TileYards);
-                        worstG = Math.Max(worstG, Math.Abs((double)o["ground"] / 1.5 - expect)); worstY = Math.Max(worstY, Math.Abs((double)o["y"] - (double)o["ground"])); nm++;
+                        worstG = Math.Max(worstG, Math.Abs((double)o["ground"] / 1.0 - expect)); worstY = Math.Max(worstY, Math.Abs((double)o["y"] - (double)o["ground"])); nm++;
                     }
-                    Check("3D: " + nm + " flight masters stand on the ground: their height is the grid's (x" + "1.5" + " exaggeration) to within " + worstY.ToString("0.000", I) + " yd, and the grid agrees with the landscape the ADTs were made from to " + worstG.ToString("0.00", I) + " yd", nm >= 3 && worstY < 0.01 && worstG < 0.5, worstG + " " + worstY);
+                    Check("3D: " + nm + " flight masters stand on the ground: their height is the grid's (x" + "1.0" + ", true height) to within " + worstY.ToString("0.000", I) + " yd, and the grid agrees with the landscape the ADTs were made from to " + worstG.ToString("0.00", I) + " yd", nm >= 3 && worstY < 0.01 && worstG < 0.5, worstG + " " + worstY);
                     // zone borders in 3D come from the same file: the layer is on (it was switched on in the flat map), the zone under a point is found
                     WorldMapMath.WorldToLatLng((32 - 30.5) * WorldMapMath.TileYards, (32 - 29.7) * WorldMapMath.TileYards, out var zlat, out var zlng);     // tile col 29.7 / row 30.5: area 101 / 102 (Westmark)
                     var zone = Json.Parse(await WmEval("window.wm3.zoneAt(" + zlat.ToString("R", I) + "," + zlng.ToString("R", I) + ")")) as string;
@@ -294,10 +294,10 @@ namespace ElansAddonHub
                     await WaitFor(() => WorldMapView.RefusedForTest.Count >= ref1 + 5, 8000);
                     Check("3D: junk from the 3D page (a camera 1 yard away, an unknown detail, negative fps, a WebGL flag that is not a flag, a link outside the entity kinds) is refused five times over and does nothing", WorldMapView.RefusedForTest.Count == ref1 + 5 && WorldMapView.Is3D, (WorldMapView.RefusedForTest.Count - ref1) + "");
                     // the settings from the page: detail and height are remembered
-                    var pj = "{\"t\":\"prefs\",\"detail\":\"high\",\"exag\":2}";
+                    var pj = "{\"t\":\"prefs\",\"detail\":\"high\",\"exag\":1.2}";
                     await WmEval("window.chrome.webview.postMessage(" + pj + ")");
-                    bool prefsSaved = await WaitFor(() => settings.WorldMap3dDetail == "high" && settings.WorldMapExag == 2, 8000);
-                    Check("3D: the page's detail and height buttons are remembered in the settings (high, 2.0x)", prefsSaved, settings.WorldMap3dDetail + " " + settings.WorldMapExag);
+                    bool prefsSaved = await WaitFor(() => settings.WorldMap3dDetail == "high" && settings.WorldMapExag == 1.2, 8000);
+                    Check("3D: the page's detail and height buttons are remembered in the settings (high, 1.2x)", prefsSaved, settings.WorldMap3dDetail + " " + settings.WorldMapExag);
                     settings.WorldMap3dDetail = null; settings.WorldMapExag = 0;
 
                     // the liquids: the lake (with its lava), the sea along the south edge and the ground where there is none

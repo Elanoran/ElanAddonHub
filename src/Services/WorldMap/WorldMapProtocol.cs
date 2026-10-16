@@ -23,7 +23,7 @@ namespace ElansAddonHub.Services.WorldMap
     //                 webgl {ok, why, renderer}           (3D page) WebGL is there, or why not: the app falls back to the flat map
     //                 view3 {lat, lng, dist, az, tilt}    (3D page) the camera moved: its target on the plane, distance in yards, bearing and tilt in degrees
     //                 stats {fps, mem, tris, tiles, tex}  (3D page) a frame-rate / memory sample every few seconds (diagnostics)
-    //                 prefs {detail, exag}                (3D page) the detail (low|medium|high) and height exaggeration (1-3) the person chose
+    //                 prefs {detail, exag}                (3D page) the detail (low|medium|high) and height scale (0.5-1.5, 1 = true height) the person chose
     //                 buildings {mode}                    (3D page) the Buildings switch: off | bridges | all
     //                 bbuild {mode} | bpause | bresume | bcancel   (3D page) the card and the progress line: Build now, Pause, Resume, Cancel
     //                 error {msg}                         a script error in the page (logged and kept for "Copy details"; at most a few per page)
@@ -135,7 +135,7 @@ namespace ElansAddonHub.Services.WorldMap
                 case "prefs":
                     {
                         var det = d.Str("detail");
-                        if (!(det == "low" || det == "medium" || det == "high") || !Num(d, "exag", out m.Exag) || m.Exag < 1 || m.Exag > 3) { refusal = "prefs: detail low, medium or high and exag 1 to 3"; return null; }
+                        if (!(det == "low" || det == "medium" || det == "high") || !Num(d, "exag", out m.Exag) || m.Exag < 0.5 || m.Exag > 1.5) { refusal = "prefs: detail low, medium or high and exag 0.5 to 1.5"; return null; }
                         m.Type = WorldMapMessageType.Prefs; m.Detail = det; return m;
                     }
                 case "buildings":

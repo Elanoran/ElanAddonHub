@@ -711,7 +711,7 @@ namespace ElansAddonHub
         }
 
         public string Detail() { var d = Settings?.WorldMap3dDetail; return d == "low" || d == "high" ? d : "medium"; }
-        public double Exag() { var e = Settings?.WorldMapExag ?? 0; return e >= 1 && e <= 3 ? e : 1.5; }
+        public double Exag() { var e = Settings?.WorldMapExag ?? 0; return e >= 0.5 && e <= 1.5 ? e : 1; }   // 1 = true height, in the middle of 0.5 - 1.5
 
         Task<bool> EnsureWeb()
         {

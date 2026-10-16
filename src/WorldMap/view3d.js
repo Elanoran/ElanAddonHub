@@ -31,7 +31,7 @@
     medium: { maxDist: 16000, tris: 800000,  texQ: 1.0, lodQ: 1.0, maxLvl: 7, cache: 130, canvas: 10, dpr: 1.5, aniso: 4 },
     high:   { maxDist: 26000, tris: 1800000, texQ: 1.5, lodQ: 1.5, maxLvl: 7, cache: 230, canvas: 20, dpr: 2,   aniso: 8 }
   };
-  var prefs = { detail: 'medium', exag: 1.5 };
+  var prefs = { detail: 'medium', exag: 1 };
   function D() { return DETAIL[prefs.detail] || DETAIL.medium; }
 
   var renderer = null, scene = null, camera = null, canvas = null, fog = null, glInfo = '', software = false;
@@ -743,7 +743,7 @@
     // 3D settings
     var s = el('div', 'v3set');
     s.innerHTML = '<div class="v3h">3D view</div><div class="v3r"><span>Detail</span><span class="seg" id="v3detail"><button type="button" data-d="low">Low</button><button type="button" data-d="medium">Medium</button><button type="button" data-d="high">High</button></span></div>' +
-      '<div class="v3r"><span>Height</span><input id="v3exag" type="range" min="1" max="3" step="0.5" aria-label="Height exaggeration"><b id="v3exagv"></b></div>' +
+      '<div class="v3r"><span>Height</span><input id="v3exag" type="range" min="0.5" max="1.5" step="0.1" aria-label="Height exaggeration (1 = true height)"><b id="v3exagv"></b></div>' +
       '<div class="v3r"><button type="button" id="v3north">North up</button><button type="button" id="v3fit">Whole continent</button></div>';
     body.appendChild(s);
     bldPanel(s);
@@ -754,7 +754,7 @@
       $('v3exag').value = prefs.exag; $('v3exagv').textContent = prefs.exag.toFixed(1) + 'x';
     }
     [].forEach.call(s.querySelectorAll('#v3detail button'), function (b) { b.addEventListener('click', function () { prefs.detail = b.getAttribute('data-d'); applyPrefs(true); syncPrefs(); }); });
-    $('v3exag').addEventListener('input', function () { prefs.exag = parseFloat(this.value) || 1.5; $('v3exagv').textContent = prefs.exag.toFixed(1) + 'x'; applyPrefs(false); });
+    $('v3exag').addEventListener('input', function () { prefs.exag = parseFloat(this.value) || 1; $('v3exagv').textContent = prefs.exag.toFixed(1) + 'x'; applyPrefs(false); });
     $('v3exag').addEventListener('change', function () { applyPrefs(true); });
     $('v3north').addEventListener('click', function () { flight = { from: { tx: cam.tx, tz: cam.tz, dist: cam.dist, az: cam.az, tilt: cam.tilt }, to: { tx: cam.tx, tz: cam.tz, dist: cam.dist, az: cam.az + ((((0 - cam.az) + 540) % 360) - 180), tilt: cam.tilt }, t0: performance.now(), dur: 500 }; dirty = true; });
     $('v3fit').addEventListener('click', fitAll);
@@ -1306,7 +1306,7 @@
 
   function init(m) {
     cfg = m.map; terrain = m.terrain; forceNoGl = !!m.forceNoGl;
-    if (m.prefs) { prefs.detail = DETAIL[m.prefs.detail] ? m.prefs.detail : 'medium'; prefs.exag = clamp(+m.prefs.exag || 1.5, 1, 3); prefs.__user = !!m.prefs.userDetail; }
+    if (m.prefs) { prefs.detail = DETAIL[m.prefs.detail] ? m.prefs.detail : 'medium'; prefs.exag = clamp(+m.prefs.exag || 1, 0.5, 1.5); prefs.__user = !!m.prefs.userDetail; }
     if (!renderer && !startGl()) { inited = false; return; }
     // a second init (another continent): clear what the first built
     Object.keys(meshes).forEach(function (k) { var mm = meshes[k]; if (mm.mesh) { scene.remove(mm.mesh); mm.mesh.geometry.dispose(); } clearWater(mm); if (mm.mat) mm.mat.dispose(); }); meshes = {}; waterActive = 0; waterLoaded = 0; waterFailed = 0;

@@ -114,7 +114,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "worldMapLast")] public string WorldMapLast { get; set; }                  // the continent shown last (its slug)
         [DataMember(Name = "worldMap3d")] public bool WorldMap3d { get; set; }                       // the world map opens in the 3D terrain view (the last mode used)
         [DataMember(Name = "worldMap3dDetail")] public string WorldMap3dDetail { get; set; }          // 3D detail: low | medium (null = the default) | high
-        [DataMember(Name = "worldMapExag")] public double WorldMapExag { get; set; }                  // 3D height exaggeration, 1 to 3 (0 = the default, 1.5)
+        [DataMember(Name = "worldMapExag2")] public double WorldMapExag { get; set; }                 // 3D height scale, 0.5 to 1.5 (0 = the default, 1 = true height); "worldMapExag2" so the old 1-3 choice starts again at 1
         [DataMember(Name = "worldMap3dBuildings")] public string WorldMap3dBuildings { get; set; }          // 3D buildings: off (null = the default) | bridges | all
         [DataMember(Name = "worldMapFlat")] public bool WorldMapFlat { get; set; }                    // Settings > World map view "Flat only": the 3D view is never started (false = Automatic)
         [DataMember(Name = "worldMap3dProblem")] public string WorldMap3dProblem { get; set; }        // why the 3D view was switched off by itself on this PC (null = it was not); cleared when 3D works again

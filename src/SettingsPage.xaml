@@ -164,7 +164,7 @@
               </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="World map 3D height" Tag="Exaggerates the mountains in the 3D view (1x is true to the game, 3x is dramatic).">
                 <StackPanel Orientation="Horizontal">
-                  <Slider x:Name="Exag3dSlider" Minimum="1" Maximum="3" Width="180" VerticalAlignment="Center" ValueChanged="Exag3d_Changed" AutomationProperties.Name="3D height exaggeration" />
+                  <Slider x:Name="Exag3dSlider" Minimum="0.5" Maximum="1.5" SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1" IsSnapToTickEnabled="True" Width="180" VerticalAlignment="Center" ValueChanged="Exag3d_Changed" AutomationProperties.Name="3D height exaggeration" />
                   <TextBlock x:Name="Exag3dText" Style="{StaticResource Text.Secondary}" Width="44" TextAlignment="Right" VerticalAlignment="Center" />
                 </StackPanel>
               </HeaderedContentControl>

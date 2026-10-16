@@ -136,7 +136,7 @@ namespace ElansAddonHub
                 WorldMapFlatOnly.IsChecked = s.WorldMapFlat; WorldMapAuto.IsChecked = !s.WorldMapFlat;
                 var det = s.WorldMap3dDetail;
                 Detail3dLow.IsChecked = det == "low"; Detail3dHigh.IsChecked = det == "high"; Detail3dMedium.IsChecked = det != "low" && det != "high";
-                Exag3dSlider.Value = s.WorldMapExag >= 1 && s.WorldMapExag <= 3 ? s.WorldMapExag : 1.5;
+                Exag3dSlider.Value = s.WorldMapExag >= 0.5 && s.WorldMapExag <= 1.5 ? s.WorldMapExag : 1;
                 Exag3dText.Text = Exag3dSlider.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "x";
             }
             UpdateWorldMapLine();
