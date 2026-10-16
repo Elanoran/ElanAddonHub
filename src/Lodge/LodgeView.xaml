@@ -378,7 +378,7 @@
     <Border x:Name="ChatPanel" Grid.Row="1" Visibility="Collapsed" Margin="16,4,12,12" Padding="16" Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}">
     <Grid>
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="240" />
+        <ColumnDefinition Width="{app:SideMenuColumn}" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
 

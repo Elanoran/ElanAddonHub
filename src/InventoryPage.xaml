@@ -85,7 +85,7 @@
     <!-- characters on the left, items on the right -->
     <Grid x:Name="Body" Grid.Row="2">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="240" />
+        <ColumnDefinition Width="{local:SideMenuColumn Bleed=8}" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
       <!-- the faint menu fill behind the character list (Brush.Section.Panel): the list reads apart from the page -->

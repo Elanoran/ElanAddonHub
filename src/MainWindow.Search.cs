@@ -13,7 +13,8 @@ namespace ElansAddonHub
     //   - a web view (the Browser page) is a window of its own and would be drawn above the layer: it steps aside while the palette is open (BrowserPage.HoldForOverlay)
     public partial class MainWindow
     {
-        public const double TitleSearchNarrowBelow = 900, TitleSearchWidth = 247;   // its right edge level with the side menus' (240 wide, inset in the page)
+        public const double TitleSearchNarrowBelow = 900;
+        public static double TitleSearchWidth => SideMenu.SearchWidth;      // its right edge level with the side menus' (Size.SideMenu, SideMenu.cs)
         bool titleSearchNarrow, searchWired;
         public ModifierKeys? GlobalModifiersForTest;                  // self-test: the modifier keys held (the real keyboard cannot be pressed from a test)
 
@@ -35,6 +36,7 @@ namespace ElansAddonHub
             foreach (var rb in new[] { TabAddons, TabLodge, TabInventory, TabBrowser, TabAtlas, TabSettings }) rb.Checked += (s, e) => { if (AtlasView.PaletteOpen) AtlasView.ClosePalette(false); };
             PreviewKeyDown += GlobalSearch_PreviewKeyDown;
             SizeChanged += (s, e) => ApplyTitleSearch();
+            TitleSearch.Width = TitleSearchWidth;
             ApplyTitleSearch();
         }
 

@@ -303,6 +303,7 @@ namespace ElansAddonHub
             var cat = AtlasCategories.Find(r.Query.Cat);
             var line = IsFindsPage ? "What the Lodge's members found and saw drop" : !string.IsNullOrEmpty(r.Subtitle) ? r.Subtitle : cat?.Blurb ?? "";
             if (line.Length > 0) { var s = Tb(line, "Text.Secondary", null, 2); s.TextTrimming = TextTrimming.CharacterEllipsis; text.Children.Add(s); }
+            if (!IsFindsPage && !string.IsNullOrEmpty(cat?.PageLine)) { var ex = Tb(cat.PageLine, "Text.Caption", Res("Brush.Text.Tertiary")); ex.TextWrapping = TextWrapping.Wrap; ex.Tag = "page-line"; ex.Margin = new Thickness(0, 2, 0, 0); text.Children.Add(ex); }
             Grid.SetColumn(text, 1); head.Children.Add(text);
             var card = Card(head, 0);
             card.SetResourceReference(Border.BackgroundProperty, "Brush.Art.HeroCard");

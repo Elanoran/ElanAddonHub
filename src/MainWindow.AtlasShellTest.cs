@@ -57,7 +57,9 @@ namespace ElansAddonHub
                 var charOrder = new[] { "Classes", "Races", "Spells", "Talents", "Professions", "Recipes", "Skills", "Factions" }.Select(t => order.IndexOf("Character/" + t)).ToList();
                 Check("nav: built from the registry - World map, Zones, Dungeons and raids in World (in that order); Classes, Races, Spells, Talents, Professions, Recipes, Skills, Factions in Character (in that order)", order.IndexOf("World/World map") < order.IndexOf("World/Zones") && order.IndexOf("World/Zones") < order.IndexOf("World/Dungeons and raids")
                     && charOrder.All(i => i >= 0) && charOrder.SequenceEqual(charOrder.OrderBy(i => i)) && order.Last() == "Lodge/Finds", string.Join(" | ", order));
-                Check("nav: a count on the rows whose list is already built (Items), none on a hosted page", AtlasView.NavRowForTest("items") != null && AtlasTexts(AtlasView.NavRowForTest("items")).Any(t => t.Length > 0 && char.IsDigit(t[0])) && !AtlasTexts(AtlasView.NavRowForTest("professions")).Any(t => t.Length > 0 && char.IsDigit(t[0])));
+                await AtlasNavCounts.RefreshAsync(true); await WaitFor(() => !string.IsNullOrEmpty(AtlasView.NavCountForTest("items")), 6000);
+                Check("nav: a count on the list rows (Items) and on Professions (2.77, AtlasNavCounts), none on Talents (a calculator)", AtlasView.NavRowForTest("items") != null && AtlasTexts(AtlasView.NavRowForTest("items")).Any(t => t.Length > 0 && char.IsDigit(t[0]))
+                    && AtlasTexts(AtlasView.NavRowForTest("professions")).Any(t => t.Length > 0 && char.IsDigit(t[0])) && !AtlasTexts(AtlasView.NavRowForTest("talents")).Any(t => t.Length > 0 && char.IsDigit(t[0])));
                 var ents = AtlasNav.Entries(); string OpenOf(string k) => ents.FirstOrDefault(e => e.Key == k)?.OpenId ?? "-"; string IconOf(string k) => ents.FirstOrDefault(e => e.Key == k)?.Icon ?? "-";
                 Check("nav: each Character row opens its own page with its own icon - Spells the spell list (spark), Talents the calculator (tree), Professions the guides page, Recipes and Skills their lists",
                     OpenOf("spells") == "browse:spells" && OpenOf("talents") == "talents:" && OpenOf("professions") == "professions:" && OpenOf("recipes") == "browse:recipes" && OpenOf("skills") == "browse:skills"
@@ -90,8 +92,8 @@ namespace ElansAddonHub
                 await AtlasView.Open("skill:" + skillProf); await Task.Delay(60); UpdateLayout();
                 Check("nav: no sub-rows on a skill page either (Professions, Recipes and Skills are rows of their own)", AtlasView.NavSubRowsForTest.Count == 0, string.Join(",", AtlasView.NavSubRowsForTest));
                 // ids from before 2.71.1 still work: the old 'Skills and professions > Professions' list opens the Professions page
-                Check("nav: an old link browse:skills/professions opens the Professions page (KeyFor and Upgrade agree), browse:skills/secondary-skills stays a Skills list",
-                    AtlasNav.Upgrade("browse:skills/professions") == "professions:" && AtlasNav.KeyFor("browse:skills/professions") == "professions" && AtlasNav.Upgrade("browse:skills/secondary-skills") == "browse:skills/secondary-skills" && AtlasNav.KeyFor("browse:skills/secondary-skills") == "skills");
+                Check("nav: an old link browse:skills/professions opens the Professions page (KeyFor and Upgrade agree), browse:skills/secondary-skills stays a Skills list (Other skills since 2.77)",
+                    AtlasNav.Upgrade("browse:skills/professions") == "professions:" && AtlasNav.KeyFor("browse:skills/professions") == "professions" && AtlasNav.Upgrade("browse:skills/secondary-skills") == "browse:skills/other-skills" && AtlasNav.KeyFor("browse:skills/secondary-skills") == "skills");
                 await AtlasView.Open("browse:skills/professions"); await Task.Delay(60);
                 Check("nav: ... opening it lands on professions: with the Professions row lit", AtlasView.CurrentId.StartsWith("professions:") && AtlasView.NavSelectedForTest.SequenceEqual(new[] { "professions" }), AtlasView.CurrentId);
                 // a row opens its page

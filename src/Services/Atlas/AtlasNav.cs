@@ -104,7 +104,7 @@ namespace ElansAddonHub.Services.Atlas
             {
                 // a profession's skill page (skill:185 Cooking) belongs to Professions: the Skills list no longer holds the professions
                 if (kind == "skill" && IsProfessionSkill(n) && AtlasCategories.Find(AtlasHosts.Professions)?.Hosted == true) return KeyOfCategoryId(AtlasHosts.Professions);
-                return KeyOfCategoryId(CategoryOfKind(kind));
+                return KeyOfCategoryId(EntityCategory(kind, n));
             }
             return "";
         }
@@ -121,11 +121,27 @@ namespace ElansAddonHub.Services.Atlas
 
         // ids from before 2.71.1 that name a list which moved: "browse:skills/professions" (the professions left the Skills list for their own page) opens the
         // Professions page. Every other id comes back as it is.
+        // 2.77 (AtlasSkillModel): the groups that moved between Spells and Skills - browse:spells/weapon-skills opens browse:skills/weapon-skills,
+        // browse:skills/class-abilities opens browse:spells/class-abilities, the old "Secondary skills" / "Attributes" open Other skills (filters kept).
         public static string Upgrade(string id)
         {
             if (string.IsNullOrEmpty(id) || !AtlasBrowse.IsBrowseId(id) || !BrowseQuery.TryParse(id, out var q)) return id;
             if (q.Cat == "skills" && q.Path.Count > 0 && q.Path[0] == "professions" && AtlasCategories.Find(AtlasHosts.Professions)?.Hosted == true) return AtlasHosts.Professions + ":";
+            var moved = q.Path.Count > 0 ? AtlasSkillModel.Moved(q.Cat, q.Path[0]) : null;
+            if (moved != null)
+            {
+                var nq = q.Clone(); nq.Cat = moved.Item1; nq.Path = new List<string> { moved.Item2 };
+                return nq.ToId();
+            }
             return id;
+        }
+
+        // the list an entity page belongs to: its kind's, except a spell that is a skill ("Swords", "Riding": Skills) and a class or racial skill line (Spells)
+        public static string EntityCategory(string kind, int n)
+        {
+            if (kind == "spell" && AtlasCategories.Find("skills") != null && AtlasSkillModel.SpellIsSkill(n)) return "skills";
+            if (kind == "skill" && AtlasCategories.Find("spells") != null && AtlasSkillModel.SkillIsSpells(n)) return "spells";
+            return CategoryOfKind(kind);
         }
 
         static string KeyOfCategoryId(string cat)
@@ -135,9 +151,12 @@ namespace ElansAddonHub.Services.Atlas
         }
 
         // the category crumb of an entity page ("Items" for item:100), null when the kind has none
-        public static AtlasCrumb CategoryCrumb(string kind)
+        public static AtlasCrumb CategoryCrumb(string kind) => CategoryCrumb(kind, 0);
+
+        // ... of one entity (a spell that is a skill: Skills; a class skill line: Spells)
+        public static AtlasCrumb CategoryCrumb(string kind, int n)
         {
-            var c = AtlasCategories.Find(CategoryOfKind(kind));
+            var c = AtlasCategories.Find(n > 0 ? EntityCategory(kind, n) : CategoryOfKind(kind));
             return c == null ? null : new AtlasCrumb(c.Title, c.OpenId);
         }
 

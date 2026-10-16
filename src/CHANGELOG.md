@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.77.0
+- **The numbers in the Atlas side menu stay put.** They are remembered when you leave the Atlas and when you close the Outpost, so they are there at once instead of popping in. When your game data finishes loading or the Lodge finds something new, they are counted again in the background and the number changes in place.
+- **Zones, World map and Professions have a number now.** Zones shows how many zones there are, World map how many continents it shows, Professions how many professions. Home, Talents and Data sources have none (they are not lists).
+- **Spells and skills are sorted out.** Spells are what you cast: class and racial abilities and your professions' spells. Skills are what you get better at: weapon skills, armor skills, languages, riding and the rest. Weapon skills, languages and riding are no longer listed under Spells as well; each page says this in one line. Old links to those lists open the right page.
+- **All side menus have the same width.** The Atlas, Settings, Characters and Lodge menus are now equally wide, and the search box in the title bar ends right where they end.
+
 ## 2.76.0
 - **Atlas Home is about you now.** When you play, Home opens with where you are: "You are in Durotar" on the zone's painting, your character with level and class, the first line of the zone's notes, and whether the zone fits your level ("Good for your level", "A bit high for you", "Low for you, little XP"). Small tags show what Elan's Hub sees right now: in combat, resting, grouped, in a dungeon. Your XP bar and a Rested tag sit below. Click it to open the zone (or the dungeon you are in).
 - **When WoW is not running** Home shows where your last character was ("Last seen in Greenvale", saved 3 h ago). With no character at all it shows a calm Atlas picture and how to get Elan's Hub.
