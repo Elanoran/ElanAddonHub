@@ -280,7 +280,7 @@ namespace ElansAddonHub
                 DockPanel.SetDock(map, Dock.Right);
                 srcRow.Children.Add(map);
             }
-            srcRow.Children.Add(new TextBlock { Text = best.Line + (c.Sources.Count > 1 ? " · +" + (c.Sources.Count - 1) + " more" : ""), Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
+            srcRow.Children.Add(MoneyText.Coins(new TextBlock { Text = best.Line + (c.Sources.Count > 1 ? " · +" + (c.Sources.Count - 1) + " more" : ""), Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center }));
             main.Children.Add(srcRow);
             Grid.SetColumn(main, 1);
             g.Children.Add(main);
@@ -331,7 +331,7 @@ namespace ElansAddonHub
             else if (!string.IsNullOrEmpty(c.Requirement)) foot.Children.Add(GameTooltip.Muted(c.Requirement + " (cannot be checked)", 4));
             foot.Children.Add(GameTooltip.Muted("Score " + UpgradeScore.PctText(c.Pct) + (c.ReplacesOffhand ? " · replaces your off hand" : ""), 4));
             foot.Children.Add(GameTooltip.Muted("Where to get it", 8));
-            foreach (var s in c.Sources.Take(5)) foot.Children.Add(GameTooltip.Muted(s.Line));
+            foreach (var s in c.Sources.Take(5)) foot.Children.Add(MoneyText.Coins(GameTooltip.Muted(s.Line)));
             if (c.Sources.Count > 5) foot.Children.Add(GameTooltip.Muted("+" + (c.Sources.Count - 5) + " more in the Atlas"));
             foot.Children.Add(GameTooltip.Muted("Click to open it in the Atlas", 8));
             return GameTooltip.Wrap(gt);
@@ -369,7 +369,7 @@ namespace ElansAddonHub
             main.Children.Add(new TextBlock { Text = words, Style = TextStyle("Text.Secondary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
             var best = en.Best;
             string how = best == null ? "" : best.Line + (en.Sources.Count > 1 ? " · +" + (en.Sources.Count - 1) + " more" : "");
-            if (how.Length > 0) main.Children.Add(new TextBlock { Text = how, Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+            if (how.Length > 0) main.Children.Add(MoneyText.Coins(new TextBlock { Text = how, Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) }));
             if (en.Owned > 0 && en.ItemId > 0) main.Children.Add(new TextBlock { Text = "You have " + en.Owned + " across your characters", Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), Margin = new Thickness(0, 2, 0, 0) });
             if (en.Reagents.Count > 0) main.Children.Add(new TextBlock { Text = "Reagents: " + string.Join(", ", en.Reagents), Style = TextStyle("Text.Caption"), Foreground = Res("Brush.Text.Tertiary"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
             Grid.SetColumn(main, 1);
@@ -413,7 +413,7 @@ namespace ElansAddonHub
             if (en.Learn.Count > 0) { foot.Children.Add(GameTooltip.Muted("How the formula is learned", 8)); foreach (var l in en.Learn) foot.Children.Add(GameTooltip.Muted(l)); }
             if (en.Reagents.Count > 0) { foot.Children.Add(GameTooltip.Muted("Reagents", 8)); foreach (var l in en.Reagents) foot.Children.Add(GameTooltip.Muted(l)); }
             foot.Children.Add(GameTooltip.Muted(en.Kind == "Enchanting" ? "Who can apply it" : "Where to get it", 8));
-            foreach (var s in en.Sources.Take(5)) foot.Children.Add(GameTooltip.Muted(s.Line));
+            foreach (var s in en.Sources.Take(5)) foot.Children.Add(MoneyText.Coins(GameTooltip.Muted(s.Line)));
             if (en.Owned > 0) foot.Children.Add(GameTooltip.Muted("You have " + en.Owned + " across your characters"));
             if (en.ClassicOnly) foot.Children.Add(GameTooltip.Muted("Only the Classic baseline knows where"));
             if (en.Partial) foot.Children.Add(GameTooltip.Muted("This enchant also has an effect that is not scored"));

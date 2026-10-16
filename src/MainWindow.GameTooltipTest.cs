@@ -101,8 +101,9 @@ namespace ElansAddonHub
                 Check("weapon: damage on the left and speed on the right of ONE row; slot likewise (two columns)", damageRow != null && damageRow.Children.OfType<TextBlock>().Any(t => t.Text == "Speed 2.60" && Grid.GetColumn(t) == 1)
                     && weapon.Body.Children.OfType<Grid>().Any(g => g.Children.OfType<TextBlock>().Any(t => t.Text == "One-Hand") && g.Children.OfType<TextBlock>().Any(t => t.Text == "Sword" && Grid.GetColumn(t) == 1)));
                 var price = weapon.Body.Children.OfType<StackPanel>().Last();
-                var coins = price.Children.OfType<Ellipse>().Select(e => ((SolidColorBrush)e.Fill).Color.ToString()).ToList();
-                Check("price: 'Sell Price:' with 1g 23s 45c as three coin glyphs (gold, silver, copper)", coins.Count == 3 && coins[0] == "#FFFFD100" && coins[1] == "#FFC0C7D0" && coins[2] == "#FFC8764A");
+                var priceMoney = price.Children.OfType<MoneyText>().SingleOrDefault();
+                Check("price: 'Sell Price:' with 1g 23s 45c as the game's three coins (MoneyText: gold, silver, copper pictures, no drawn dots)", priceMoney != null && priceMoney.Copper == 12345 && priceMoney.CoinOrder == "gsc"
+                    && !GtAll<Ellipse>(price).Any(), priceMoney?.CoinOrder);
                 Check("no app accent inside: every colour of the tooltip is one of the game's tokens", wc.All(x => new[] { "#FFFFFFFF", "#FFFFD100", "#FF1EFF00", "#FFA335EE", "#FF9D9D9D", "#FFFF2020" }.Contains(x.Value)), string.Join(",", wc.Select(x => x.Value).Distinct()));
                 await ShotWait(100);
                 SnapshotSheet(Gt(weapon), P("gt-weapon.png"));

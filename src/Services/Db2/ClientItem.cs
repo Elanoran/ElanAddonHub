@@ -261,14 +261,6 @@ namespace ElansAddonHub.Services.Db2
         }
 
         // gold / silver / copper parts of an amount (zero parts left out except a lone 0c)
-        public static List<KeyValuePair<long, char>> Coins(long copper)
-        {
-            var r = new List<KeyValuePair<long, char>>();
-            long g = copper / 10000, s = copper / 100 % 100, c = copper % 100;
-            if (g > 0) r.Add(new KeyValuePair<long, char>(g, 'g'));
-            if (s > 0) r.Add(new KeyValuePair<long, char>(s, 's'));
-            if (c > 0 || r.Count == 0) r.Add(new KeyValuePair<long, char>(c, 'c'));
-            return r;
-        }
+        public static List<KeyValuePair<long, char>> Coins(long copper) => MoneyFormat.Parts(copper).Select(p => new KeyValuePair<long, char>(p.Amount, p.Coin)).ToList();
     }
 }

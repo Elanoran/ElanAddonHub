@@ -104,7 +104,7 @@ namespace ElansAddonHub
                 bw.Children.Add(LinkText(NameOf(o.BlueprintItemId), AtlasIds.Item(o.BlueprintItemId), "Text.Secondary", QualityBrush(2)));
                 var srcs = sources?.SourcesOf(o.BlueprintItemId, 2) ?? new List<SourceLine>();
                 if (srcs.Count == 0) bw.Children.Add(Line(" - no source known yet (the Classic baseline has no Forever blueprints; the Lodge will once members find one)", "Text.Caption"));
-                foreach (var s in srcs) { bw.Children.Add(Line(" - ", "Text.Caption")); bw.Children.Add(LinkText(s.Text, s.Link, "Text.Caption")); bw.Children.Add(Line(" (" + s.Label + ")", "Text.Caption")); }
+                foreach (var s in srcs) { bw.Children.Add(Line(" - ", "Text.Caption")); bw.Children.Add(MoneyText.Coins(LinkText(s.Text, s.Link, "Text.Caption"))); bw.Children.Add(Line(" (" + s.Label + ")", "Text.Caption")); }
                 sp.Children.Add(bw);
             }
             else sp.Children.Add(Line("No blueprint: learned with the profession", "Text.Caption", null, 4));

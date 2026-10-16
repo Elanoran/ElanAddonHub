@@ -220,13 +220,13 @@ namespace ElansAddonHub
                 BagsHost.Children.Add(wrap);
                 ShowMessage(cur.CanView ? "You have not looked at " + cur.Label + " (tab " + cur.Index + ") yet. Open the guild bank in the game and click that tab once: it is saved then (/reload or log out writes the file)."
                                         : "You have no access to " + cur.Label + " (tab " + cur.Index + ").");
-                ViewInfo.Text = g.Name + " · " + seenCount + " of " + tabs.Count + " tabs seen · " + money;
+                MoneyText.Coins(ViewInfo, g.Name + " · " + seenCount + " of " + tabs.Count + " tabs seen · " + money);
                 return;
             }
             var pseudo = new InvContainer { BagId = 100 + cur.Index, Size = cur.Seen.Size, BagName = cur.Label, Slots = cur.Seen.Slots, BagIcon = cur.Icon, BagQuality = 1 };
             wrap.Children.Add(BuildPanel(pseudo, "Guild bank", c, false, GuildCols(), true));
             BagsHost.Children.Add(wrap);
-            ViewInfo.Text = g.Name + " · " + seenCount + (tabs.Count > seenCount ? " of " + tabs.Count : "") + " tabs seen · " + money + " · " + cur.Label + " seen " + InventoryReader.Ago(cur.Seen.At > 0 ? cur.Seen.At : g.Updated);
+            MoneyText.Coins(ViewInfo, g.Name + " · " + seenCount + (tabs.Count > seenCount ? " of " + tabs.Count : "") + " tabs seen · " + money + " · " + cur.Label + " seen " + InventoryReader.Ago(cur.Seen.At > 0 ? cur.Seen.At : g.Updated));
         }
         readonly List<string> guildTabInfo = new List<string>();
 
@@ -602,7 +602,7 @@ namespace ElansAddonHub
         public bool GuildTabVisibleForTest => TabGuild.Visibility == Visibility.Visible;
         public bool TabStripVisibleForTest => TabStrip.Visibility == Visibility.Visible;
         public string TitleForTest => TitleText.Text;
-        public string ViewInfoForTest => ViewInfo.Text;
+        public string ViewInfoForTest => MoneyText.PlainText(ViewInfo);
         public string SelectedKeyForTest => filterKey;
         // the tooltip of a bag slot holding item `id` (name, game data facts, counts), as texts and as an element to photograph
         InvSlot TestSlot(int id) { var any = chars.SelectMany(c => c.Bags.Concat(c.Bank ?? new List<InvItem>())).FirstOrDefault(i => i.Id == id); var known = ElansAddonHub.Services.Db2.ItemData.Get(id); return new InvSlot { Slot = 1, Id = id, Count = 1, Quality = any?.Quality ?? known?.Quality ?? 1, Name = any?.Name ?? known?.Name ?? "Item #" + id }; }

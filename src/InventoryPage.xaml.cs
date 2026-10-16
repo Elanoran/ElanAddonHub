@@ -90,9 +90,8 @@ namespace ElansAddonHub
                     sp.Children.Add(new TextBlock { Text = l[0], Style = (Style)R["Text.RowTitle"], Foreground = ClassBrush });
                     if (l[1].Length > 0) sp.Children.Add(new TextBlock { Text = l[1], Style = (Style)R["Text.Caption"], Foreground = Res("Brush.Text.Tertiary"), Margin = new Thickness(0, 2, 0, 0) });
                     var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-                    // a gold coin like the game's, then the bag and bank glyphs
-                    line.Children.Add(new System.Windows.Shapes.Ellipse { Width = 10, Height = 10, Fill = Res("Brush.Warn"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
-                    line.Children.Add(new TextBlock { Text = l[2], Style = (Style)R["Text.Secondary"], Foreground = Res("Brush.Warn"), VerticalAlignment = VerticalAlignment.Center });
+                    // the money with the game's coins, then the bag and bank glyphs
+                    line.Children.Add(new MoneyText(Char.Money) { FontSize = 12, Foreground = Res("Brush.Text.Secondary") });
                     Add(line, "\uE719", l[3], "Bags: items · last save");
                     Add(line, "\uE825", l[4], "Bank: items · last seen");
                     sp.Children.Add(line);
@@ -326,7 +325,7 @@ namespace ElansAddonHub
             EmptyBox.Visibility = Visibility.Collapsed;
             Body.Visibility = Visibility.Visible;
             var newest = vis.Max(c => c.Updated);
-            Summary.Text = vis.Count + (vis.Count == 1 ? " character" : " characters") + " · " + TotalMoneyText(vis) + " in total · latest save " + InventoryReader.Ago(newest);
+            MoneyText.Coins(Summary, vis.Count + (vis.Count == 1 ? " character" : " characters") + " · " + TotalMoneyText(vis) + " in total · latest save " + InventoryReader.Ago(newest));
             var flavor = InventoryReader.FlavorOf(vis.Select(c => c.File).FirstOrDefault(f => f != null));
             if (flavor != null) IconStore.Flavor = flavor;
             var rows = vis.Select(c => new CharRow { Char = c, Selected = c.Key == filterKey }).ToList();

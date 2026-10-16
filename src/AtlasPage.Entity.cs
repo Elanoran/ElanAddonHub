@@ -163,7 +163,7 @@ namespace ElansAddonHub
                 foreach (var c in chips)
                 {
                     var b = new Border { Style = (Style)FindResource("Chip"), Padding = new Thickness(8, 0, 8, 0), MinHeight = 24, Margin = new Thickness(0, 0, 8, 4), Tag = "chip" };
-                    var t = Tb(c.Key, "Text.Secondary", c.Value); t.VerticalAlignment = VerticalAlignment.Center; b.Child = t;
+                    var t = MoneyText.Coins(Tb(c.Key, "Text.Secondary", c.Value)); t.VerticalAlignment = VerticalAlignment.Center; b.Child = t;
                     w.Children.Add(b);
                 }
                 col.Children.Add(w);

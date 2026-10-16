@@ -11,6 +11,9 @@ Keep one `## x.y.z` section per hub version.
 - **The month fills your window.** Day tiles grow with the window and stay roughly square, so a big screen shows more events per day ("+2 more" counts the rest; click it to see the whole day). On a wide window the chosen day's events sit beside the month instead of under it. In a small window the events become slim coloured bars.
 - **Easier to read at a glance.** Today's date is in a green circle, weekends are a little quieter, chips show the start time when there is room ("20:00 Molten Core") and just the title when there is not, and clicking a chip opens that event. The weekday names follow your Windows week start (Monday or Sunday).
 - **Smooth month changes.** Previous / next / Today slide the month in; with Windows animations turned off it changes instantly.
+- **Money looks like it does in the game.** Gold, silver and copper are shown as the number followed by the game's own gold, silver and copper coin: in item tooltips (Sell Price), your characters' gold and the total on the Characters page, the guild bank's money, vendor prices and trainer costs in the Atlas, quest reward money, prices in the Professions guide and recipe tooltips, and vendor prices in the upgrade suggestions.
+- The coins are read from your own WoW install (nothing is downloaded). Without the game installed, small drawn coins in gold, silver and copper are shown instead.
+- Money is written the same way everywhere: parts that are zero are left out ("1g 5c" instead of "1g 0s 5c"), and copied text such as the profession guide keeps the letters.
 
 ## 2.76.1
 - **No more jumping between Atlas lists.** Going from Creatures to Objects, Items and the other lists, the page's own scroll bar no longer pops up for a moment and goes again (the list was first given a guessed height that was too tall). The list now fits the window before it is shown.

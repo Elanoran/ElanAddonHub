@@ -769,6 +769,13 @@
   <SolidColorBrush x:Key="Brush.GameTip.Divider" Color="#33475F" />
   <SolidColorBrush x:Key="Brush.GameTip.Silver" Color="#C0C7D0" />
   <SolidColorBrush x:Key="Brush.GameTip.Copper" Color="#C8764A" />
+  <!-- money coins (Controls\MoneyText.cs): drawn only when the game's own coin pictures cannot be read (no WoW install). The game's metals, not the theme. -->
+  <RadialGradientBrush x:Key="Brush.Coin.Gold" GradientOrigin="0.35,0.3" Center="0.5,0.5" RadiusX="0.6" RadiusY="0.6"><GradientStop Color="#FFF2A8" Offset="0" /><GradientStop Color="#F2C230" Offset="0.55" /><GradientStop Color="#B07F10" Offset="1" /></RadialGradientBrush>
+  <RadialGradientBrush x:Key="Brush.Coin.Silver" GradientOrigin="0.35,0.3" Center="0.5,0.5" RadiusX="0.6" RadiusY="0.6"><GradientStop Color="#FFFFFF" Offset="0" /><GradientStop Color="#C0C7D0" Offset="0.55" /><GradientStop Color="#7D8590" Offset="1" /></RadialGradientBrush>
+  <RadialGradientBrush x:Key="Brush.Coin.Copper" GradientOrigin="0.35,0.3" Center="0.5,0.5" RadiusX="0.6" RadiusY="0.6"><GradientStop Color="#F2B48C" Offset="0" /><GradientStop Color="#C8764A" Offset="0.55" /><GradientStop Color="#7A3F1F" Offset="1" /></RadialGradientBrush>
+  <SolidColorBrush x:Key="Brush.Coin.GoldRim" Color="#7A5A08" />
+  <SolidColorBrush x:Key="Brush.Coin.SilverRim" Color="#5A616B" />
+  <SolidColorBrush x:Key="Brush.Coin.CopperRim" Color="#5C2E14" />
   <SolidColorBrush x:Key="Brush.GameTip.Q0" Color="#9D9D9D" />
   <SolidColorBrush x:Key="Brush.GameTip.Q1" Color="#FFFFFF" />
   <SolidColorBrush x:Key="Brush.GameTip.Q2" Color="#1EFF00" />

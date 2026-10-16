@@ -143,7 +143,7 @@ namespace ElansAddonHub
                 foreach (var s in srcs)
                 {
                     lw.Children.Add(Line(" - ", "Text.Caption"));
-                    lw.Children.Add(LinkText(s.Text, s.Link, "Text.Caption"));
+                    lw.Children.Add(MoneyText.Coins(LinkText(s.Text, s.Link, "Text.Caption")));
                     lw.Children.Add(Line(" (" + s.Label + ")", "Text.Caption"));
                 }
                 mid.Children.Add(lw);
@@ -208,7 +208,7 @@ namespace ElansAddonHub
                     var p = sources?.PriceOf(g.ItemId) ?? default(ItemPrice);
                     var have = chars.Count > 0 ? "you have " + Have(g.ItemId) + " across characters" : "";
                     var price = p.Known ? (p.Kind == PriceKind.Estimated ? "~" : "") + ProfMoney.Format(p.Copper) + " each" : "";
-                    if (have.Length + price.Length > 0) sp.Children.Add(GameTooltip.Muted(NameOf(g.ItemId) + ": " + string.Join(" · ", new[] { have, price }.Where(x => x.Length > 0)), 2));
+                    if (have.Length + price.Length > 0) sp.Children.Add(MoneyText.Coins(GameTooltip.Muted(NameOf(g.ItemId) + ": " + string.Join(" · ", new[] { have, price }.Where(x => x.Length > 0)), 2)));
                 }
             sp.Children.Add(GameTooltip.Muted(prof?.Name + " - yellow from " + r.Yellow + ", green " + r.Green + ", grey " + r.Grey + (r.Start > 1 ? " - can be learned from about skill " + r.Start + " (estimated)" : ""), 8));
             var kb = KnownBy(r.SpellId);

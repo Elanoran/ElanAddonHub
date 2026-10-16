@@ -182,17 +182,12 @@ namespace ElansAddonHub
 
         static FrameworkElement Indented(string text, Brush fg) { var t = Text(text, fg); t.Margin = new Thickness(8, 0, 0, 0); return t; }
 
-        // "Sell Price: 25 (gold) 53 (silver) 55 (copper)"
+        // "Sell Price: 25 (gold) 53 (silver) 55 (copper)" with the game's coin pictures (MoneyText)
         static FrameworkElement Price(string label, long copper)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
             row.Children.Add(new TextBlock { Text = label, Foreground = Brush("Brush.GameTip.Text"), VerticalAlignment = VerticalAlignment.Center });
-            foreach (var c in ItemText.Coins(copper))
-            {
-                var fill = c.Value == 'g' ? Brush("Brush.GameTip.Gold") : c.Value == 's' ? Brush("Brush.GameTip.Silver") : Brush("Brush.GameTip.Copper");
-                row.Children.Add(new TextBlock { Text = c.Key.ToString("N0", CultureInfo.GetCultureInfo("en-US")), Foreground = Brush("Brush.GameTip.Text"), Margin = new Thickness(8, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center });
-                row.Children.Add(new Ellipse { Width = 12, Height = 12, Fill = fill, VerticalAlignment = VerticalAlignment.Center });
-            }
+            row.Children.Add(new MoneyText(copper) { Foreground = Brush("Brush.GameTip.Text"), Margin = new Thickness(8, 0, 0, 0) });
             return row;
         }
 
