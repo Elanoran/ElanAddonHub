@@ -79,6 +79,11 @@ namespace ElansAddonHub.Services.Maps
             try
             {
                 var areas = set.Areas.GroupBy(a => a.Id).ToDictionary(g => g.Key, g => g.First());
+                // several instances lie on the same continent and next to each other: each WDT and terrain tile is read once for all of them (same answers;
+                // only the chunks' area id and corner are kept of a tile)
+                var wdts = new Dictionary<int, WdtFile>();
+                var adts = new Dictionary<int, Tuple<int[], float[]>>();
+                byte[] tileBuf = null;                         // one buffer for every tile read here
                 foreach (var m in Wanting(set).Where(x => x.AltEntranceMapId < 0).ToList())
                 {
                     var a = AreaNamed(set, m);
@@ -90,10 +95,13 @@ namespace ElansAddonHub.Services.Maps
                     if (rects.Count == 0) continue;
                     var cont = set.Maps.FirstOrDefault(x => x.Id == a.ContinentId);
                     if (cont == null || cont.WdtFileDataId <= 0) continue;
-                    var wk = casc.ResolveFileIds(new HashSet<int> { cont.WdtFileDataId });
-                    if (!wk.TryGetValue(cont.WdtFileDataId, out var wck)) continue;
-                    var wdt = WdtFile.Parse(casc.ReadByContentKey(wck));
-                    if (!wdt.Ok) continue;
+                    if (!wdts.TryGetValue(cont.WdtFileDataId, out var wdt))
+                    {
+                        var wk = casc.ResolveFileIds(new HashSet<int> { cont.WdtFileDataId });
+                        wdt = wk.TryGetValue(cont.WdtFileDataId, out var wck) ? WdtFile.Parse(casc.ReadByContentKey(wck)) : null;
+                        wdts[cont.WdtFileDataId] = wdt;
+                    }
+                    if (wdt == null || !wdt.Ok) continue;
                     var tiles = new HashSet<int>();
                     foreach (var r in rects)
                     {
@@ -107,11 +115,25 @@ namespace ElansAddonHub.Services.Maps
                     foreach (var t in files)
                     {
                         if (!keys.TryGetValue(t.RootFdid, out var ck)) continue;
-                        AdtFile f;
-                        try { f = AdtFile.Parse(casc.ReadByContentKey(ck)); } catch (Exception) { continue; }
-                        if (!f.Ok) continue;
-                        foreach (var ch in f.Chunks)
-                            if (ch != null && ch.AreaId == a.Id) { sx += ch.PosX - DungeonMaps.DungeonGeometry.ChunkSize / 2; sy += ch.PosY - DungeonMaps.DungeonGeometry.ChunkSize / 2; n++; }
+                        if (!adts.TryGetValue(t.RootFdid, out var f))
+                        {
+                            try
+                            {
+                                int len = casc.ReadByContentKey(ck, ref tileBuf);
+                                var adt = AdtFile.Parse(len < 0 ? null : tileBuf, Math.Max(0, len));
+                                if (adt.Ok)
+                                {
+                                    var ids = new int[256]; var pos = new float[512];
+                                    for (int i = 0; i < 256; i++) { var ch = adt.Chunks[i]; if (ch == null) { ids[i] = int.MinValue; continue; } ids[i] = ch.AreaId; pos[i * 2] = ch.PosX; pos[i * 2 + 1] = ch.PosY; }
+                                    f = Tuple.Create(ids, pos);
+                                }
+                            }
+                            catch (Exception) { f = null; }
+                            adts[t.RootFdid] = f;
+                        }
+                        if (f == null) continue;
+                        for (int i = 0; i < 256; i++)
+                            if (f.Item1[i] != int.MinValue && f.Item1[i] == a.Id) { sx += f.Item2[i * 2] - DungeonMaps.DungeonGeometry.ChunkSize / 2; sy += f.Item2[i * 2 + 1] - DungeonMaps.DungeonGeometry.ChunkSize / 2; n++; }
                     }
                     if (n == 0) continue;
                     m.AltEntranceMapId = a.ContinentId; m.AltX = sx / n; m.AltY = sy / n; m.AltAreaId = a.Id; m.AltKind = KindArea;

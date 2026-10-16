@@ -181,6 +181,7 @@ namespace ElansAddonHub.Services.Db2
                 try
                 {
                     if (!SafeEnabled()) { Disable(); continue; }
+                    GameDataProgress.Begin(JobId, "Spells", "Loading the spells", 0.3);
                     LoadOnce();
                 }
                 catch (Exception e)
@@ -189,6 +190,7 @@ namespace ElansAddonHub.Services.Db2
                     Publish(null, State.Unavailable, "could not be read: " + e.Message, null);
                 }
                 LastLoadMs = sw.ElapsedMilliseconds;
+                GameDataProgress.End(JobId, state == State.Ready, state == State.Ready ? null : reason);
             }
         }
 
@@ -213,7 +215,7 @@ namespace ElansAddonHub.Services.Db2
         }
 
         public static void ResetForTest()
-        {
+        { Stale = false;
             lock (gate) { data = null; shipped = null; hotfixStamp = null; state = State.NotStarted; reason = null; running = false; again = false; Build = null; builtFor = null; }
             ItemDetails.Current = null;
         }
@@ -236,21 +238,40 @@ namespace ElansAddonHub.Services.Db2
                 Publish(Overlay(have, adb, build), State.Ready, null, build);
                 return;
             }
-            var set = Obtain(SpellIndexFile.TryRead(CacheFile), build, CacheFile, () =>
+            var saved = SpellIndexFile.TryRead(CacheFile);
+            // the game was patched: the spells of the previous build are shown at once while the new game files are read in the background
+            bool old = data == null && saved != null && saved.Build != build && saved.Format == FormatVersion && !saved.Set.Problems.ContainsKey("all") && (saved.Set.Spells != null || saved.Set.Factions != null || saved.Set.Details != null);
+            if (old)
             {
+                LastLoadFrom = "cache file (previous game build)"; Stale = true;
+                shipped = saved.Set; hotfixStamp = stamp;
+                Publish(Overlay(saved.Set, adb, saved.Build), State.Ready, null, saved.Build);
+            }
+            var set = Obtain(saved, build, CacheFile, CascShared.OneAtATime(JobId, () =>
+            {
+                GameDataProgress.Rebuilding(JobId, GameDataProgress.ReasonFor(CacheFile, saved?.Build, build), "Reading spells", 1.2, "tables", old);
                 SpellRaw raw;
-                try { raw = ReadCasc(root, flavor); }
+                try { raw = ReadCasc(root, flavor, (n, t) => GameDataProgress.Report(JobId, n, t, 0, 0.5)); }
                 catch (Exception e) { Util.Log("spell data: game files: " + e.Message); var f = new AtlasSet(); f.Problems["all"] = "the game files could not be read: " + e.Message; return f; }
-                return SpellParse.All(raw);
-            }, out var from);
+                GameDataProgress.Step(JobId, "Sorting spells, skills and recipes", 0.5);
+                var parsed = SpellParse.All(raw);
+                GameDataProgress.Step(JobId, "Saving the spells", 0.85);
+                return parsed;
+            }), out var from);
+            saved = null;
+            GameDataProgress.Step(JobId, "Laying the server's hotfixes over the spells", 0.9);
+            if (set.Problems.ContainsKey("all") && old) { Util.Log("spell data: the new game files could not be read (" + set.Problems["all"] + "); the spells of the previous game build stay"); return; }
             if (set.Problems.ContainsKey("all")) { Util.Log("spell data: unavailable: " + set.Problems["all"]); Publish(null, State.Unavailable, set.Problems["all"], null); return; }
             foreach (var kv in set.Problems) Util.Log("spell data: " + kv.Key + ": " + kv.Value);
             foreach (var n in set.Notes) Util.Log("spell data: " + n);
             if (set.Spells == null && set.Factions == null && (set.Details == null)) { Publish(null, State.Unavailable, set.Problems.Values.FirstOrDefault() ?? "no table could be read", null); return; }
-            LastLoadFrom = from;
+            LastLoadFrom = from; Stale = false;
             shipped = set; hotfixStamp = stamp;
             Publish(Overlay(set, adb, build), State.Ready, null, build);
         }
+
+        // the data shown is of the previous game build (the new one is being read)
+        public static bool Stale { get; private set; }
 
         static string HotfixStamp(string adbFile)
         {
@@ -290,19 +311,24 @@ namespace ElansAddonHub.Services.Db2
             return fresh;
         }
 
-        public static SpellRaw ReadCasc(string root, string flavor)
+        public const string JobId = "spells";
+
+        public static SpellRaw ReadCasc(string root, string flavor, Action<int, int> progress = null)
         {
             var raw = new SpellRaw();
-            using (var casc = CascStorage.Open(root, flavor))
+            using (var lease = CascShared.Open(root, flavor))     // shared with the other readers; key-locked parts read as zeros (the table reader skips those sections)
             {
-                casc.ZeroFillEncrypted = true;     // key-locked parts read as zeros; the table reader skips those sections
+                var casc = lease.Casc;
                 var all = SpellTables.All.Concat(WorldTables.All).ToArray();
                 var keys = casc.ResolveFileIds(new HashSet<int>(all.Select(d => d.FileId)));
+                int i = 0;
                 foreach (var def in all)
                 {
+                    progress?.Invoke(i++, all.Length);
                     try { if (keys.TryGetValue(def.FileId, out var ck)) raw.Tables[def.Name] = casc.ReadByContentKey(ck); }
                     catch (Exception e) { Util.Log("spell data: " + def.Name + ".db2: " + e.Message); }
                 }
+                progress?.Invoke(all.Length, all.Length);
             }
             return raw;
         }

@@ -150,6 +150,9 @@
           <Grid x:Name="HostSlot" Visibility="Collapsed">
             <ContentControl x:Name="HostContent" Focusable="False" IsTabStop="False" />
           </Grid>
+
+          <!-- new game data arrived while this page showed the older data: a calm offer to show it (AtlasPage.Updates.cs); it floats, so nothing below moves -->
+          <local:DataUpdateNotice x:Name="UpdateNotice" />
         </Grid>
       </Grid>
 

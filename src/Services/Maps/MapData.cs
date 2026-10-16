@@ -126,6 +126,7 @@ namespace ElansAddonHub.Services.Maps
                 try
                 {
                     if (!SafeEnabled()) { Disable(); continue; }
+                    GameDataProgress.Begin(JobId, "Maps", "Loading the maps", 0.3);
                     LoadOnce();
                 }
                 catch (Exception e)
@@ -134,6 +135,7 @@ namespace ElansAddonHub.Services.Maps
                     Publish(null, null, State.Unavailable, "could not be read: " + e.Message);
                 }
                 LastLoadMs = sw.ElapsedMilliseconds;
+                GameDataProgress.End(JobId, state == State.Ready, state == State.Ready ? null : reason);
             }
         }
 
@@ -152,24 +154,34 @@ namespace ElansAddonHub.Services.Maps
         // test hooks
         public static void SetForTest(MapIndex idx, string buildText = "wow_classic_beta|1.60.1.70338|0123456789abcdef", State st = State.Ready, string why = null)
         { lock (gate) { index = idx; build = buildText; state = st; reason = why; } }
-        public static void ResetForTest() { lock (gate) { index = null; build = null; state = State.NotStarted; reason = null; running = false; again = false; } }
+        public static void ResetForTest() { Stale = false; lock (gate) { index = null; build = null; state = State.NotStarted; reason = null; running = false; again = false; } }
 
         // ---------------------------------------------------------------------------------------------------------------------
+        public static int HoldMsForTest;             // self-test pictures: the first read takes this much longer, so a page can be seen waiting
+
         static void LoadOnce()
         {
+            if (HoldMsForTest > 0) { GameDataProgress.Rebuilding(JobId, GameDataProgress.Why.FirstStart, "Reading maps", 2); Thread.Sleep(HoldMsForTest); }
             var root = WowRoot();
             if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) { Publish(null, null, State.Unavailable, "the WoW folder is not set"); return; }
             var flavor = Flavor() ?? "_classic_beta_";
             var b = ItemData.GameBuild(root, flavor);
             if (b == null) { Publish(null, null, State.Unavailable, "no .build.info in the WoW folder"); return; }
-            var set = Obtain(MapIndexFile.TryRead(CacheFile), b, CacheFile, () =>
+            var saved = MapIndexFile.TryRead(CacheFile);
+            // the game was patched: the maps of the previous build are shown at once (and their terrain areas, cached under that build) while the new game
+            // files are read in the background
+            bool old = index == null && saved != null && saved.Build != b && saved.Format == FormatVersion && saved.Set.Ok;
+            if (old) { LastLoadFrom = "cache file (previous game build)"; Stale = true; MapIndex.AreaAt = AreaProbe.AreaAt; Publish(new MapIndex(saved.Set), saved.Build, State.Ready, null); }
+            var set = Obtain(saved, b, CacheFile, CascShared.OneAtATime(JobId, () =>
             {
+                GameDataProgress.Rebuilding(JobId, GameDataProgress.ReasonFor(CacheFile, saved?.Build, b), "Reading maps", 2, "tables", old);
                 try { return ReadAndParse(root, flavor); }
                 catch (Exception e) { Util.Log("map data: game files: " + e.Message); return new MapSet { Problem = "the game files could not be read: " + e.Message }; }
-            }, out var from);
+            }), out var from);
+            if (!set.Ok && old) { Util.Log("map data: the new game files could not be read (" + set.Problem + "); the maps of the previous game build stay"); return; }
             if (!set.Ok) { Util.Log("map data: unavailable: " + set.Problem); Publish(null, null, State.Unavailable, set.Problem); return; }
             foreach (var n in set.Notes) Util.Log("map data: " + n);
-            LastLoadFrom = from;
+            LastLoadFrom = from; Stale = false;
             MapIndex.AreaAt = AreaProbe.AreaAt;
             Publish(new MapIndex(set), b, State.Ready, null);
         }
@@ -185,14 +197,29 @@ namespace ElansAddonHub.Services.Maps
             return fresh;
         }
 
+        public const string JobId = "maps";
+
+        // the data shown is of the previous game build (the new one is being read)
+        public static bool Stale { get; private set; }
+
         // the tables -> rows, plus the one thing the tables cannot say: the terrain area under each instance entrance (EntranceAreas; a few small ADT files)
         public static MapSet ReadAndParse(string root, string flavor)
         {
-            using (var casc = CascStorage.Open(root, flavor))
+            using (var lease = CascShared.Open(root, flavor))     // shared with the other readers; key-locked parts read as zeros (the table reader skips those sections)
             {
-                casc.ZeroFillEncrypted = true;     // key-locked parts read as zeros; the table reader skips those sections
-                var set = MapTables.Parse(ReadTables(casc));
-                if (set.Ok && set.HasMaps) { EntranceAreas.Resolve(casc, set); NamedEntrances.Resolve(casc, set); }
+                var casc = lease.Casc;
+                var raw = ReadTables(casc);
+                GameDataProgress.Step(JobId, "Sorting the maps", 0.45);
+                var set = MapTables.Parse(raw);
+                raw = null;
+                if (set.Ok && set.HasMaps)
+                {
+                    GameDataProgress.Step(JobId, "Finding the dungeon entrances", 0.55);
+                    EntranceAreas.Resolve(casc, set);
+                    GameDataProgress.Step(JobId, "Placing the dungeons without an entrance", 0.75);
+                    NamedEntrances.Resolve(casc, set);
+                }
+                GameDataProgress.Step(JobId, "Saving the maps", 0.95);
                 return set;
             }
         }
@@ -201,8 +228,10 @@ namespace ElansAddonHub.Services.Maps
         {
             var keys = casc.ResolveFileIds(new HashSet<int>(MapTables.All.Select(d => d.FileDataId)));
             var raw = new Dictionary<string, byte[]>();
+            int i = 0, n = MapTables.All.Count();
             foreach (var d in MapTables.All)
             {
+                GameDataProgress.Report(JobId, i++, n, 0, 0.4);
                 try { raw[d.Name] = keys.TryGetValue(d.FileDataId, out var ck) ? casc.ReadByContentKey(ck) : null; }
                 catch (Exception e) { Util.Log("map data: " + d.Name + ".db2: " + e.Message); raw[d.Name] = null; }
             }
@@ -212,9 +241,9 @@ namespace ElansAddonHub.Services.Maps
         // the raw table files by name (null = not in this install)
         public static Dictionary<string, byte[]> ReadCasc(string root, string flavor)
         {
-            using (var casc = CascStorage.Open(root, flavor))
+            using (var lease = CascShared.Open(root, flavor))     // shared with the other readers; key-locked parts read as zeros (the table reader skips those sections)
             {
-                casc.ZeroFillEncrypted = true;     // key-locked parts read as zeros; the table reader skips those sections
+                var casc = lease.Casc;
                 var keys = casc.ResolveFileIds(new HashSet<int>(MapTables.All.Select(d => d.FileDataId)));
                 var raw = new Dictionary<string, byte[]>();
                 foreach (var d in MapTables.All)

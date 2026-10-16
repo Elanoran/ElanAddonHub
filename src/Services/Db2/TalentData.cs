@@ -135,6 +135,7 @@ namespace ElansAddonHub.Services.Db2
                 try
                 {
                     if (!SafeEnabled()) { Disable(); continue; }
+                    GameDataProgress.Begin(JobId, "Talent trees", "Loading the talent trees", 0.2);
                     LoadOnce();
                 }
                 catch (Exception e)
@@ -143,6 +144,7 @@ namespace ElansAddonHub.Services.Db2
                     Publish(null, State.Unavailable, "could not be read: " + e.Message, null);
                 }
                 LastLoadMs = sw.ElapsedMilliseconds;
+                GameDataProgress.End(JobId, state == State.Ready, state == State.Ready ? null : reason);
             }
         }
 
@@ -165,7 +167,7 @@ namespace ElansAddonHub.Services.Db2
         }
 
         public static void ResetForTest()
-        {
+        { Stale = false;
             lock (gate) { data = null; state = State.NotStarted; reason = null; running = false; again = false; Build = null; builtFor = null; }
         }
 
@@ -177,18 +179,24 @@ namespace ElansAddonHub.Services.Db2
             var build = ItemData.GameBuild(root, flavor);
             if (build == null) { Publish(null, State.Unavailable, "no .build.info in the WoW folder", null); return; }
             if (state == State.Ready && data != null && builtFor == build) return;
-            var set = Obtain(TalentIndexFile.TryRead(CacheFile), build, CacheFile, () =>
+            var saved = TalentIndexFile.TryRead(CacheFile);
+            // the game was patched: the talent trees of the previous build are shown at once while the new game files are read in the background
+            bool old = data == null && saved != null && saved.Build != build && saved.Format == FormatVersion && !saved.Set.Problems.ContainsKey("all") && saved.Set.Trees.Count > 0;
+            if (old) { LastLoadFrom = "cache file (previous game build)"; Stale = true; Publish(saved.Set, State.Ready, null, saved.Build); }
+            var set = Obtain(saved, build, CacheFile, CascShared.OneAtATime(JobId, () =>
             {
+                GameDataProgress.Rebuilding(JobId, GameDataProgress.ReasonFor(CacheFile, saved?.Build, build), "Reading talent trees", 0.6, "tables", old);
                 TalentRaw raw;
-                try { raw = ReadCasc(root, flavor); }
+                try { raw = ReadCasc(root, flavor, (n, t) => GameDataProgress.Report(JobId, n, t, 0, 0.6)); GameDataProgress.Step(JobId, "Sorting the talent trees", 0.6); }
                 catch (Exception e) { Util.Log("talent data: game files: " + e.Message); var f = new TalentSet(); f.Problems["all"] = "the game files could not be read: " + e.Message; return f; }
                 return TalentParse.All(raw);
-            }, out var from);
+            }), out var from);
+            if (set.Problems.ContainsKey("all") && old) { Util.Log("talent data: the new game files could not be read (" + set.Problems["all"] + "); the talent trees of the previous game build stay"); return; }
             if (set.Problems.ContainsKey("all")) { Util.Log("talent data: unavailable: " + set.Problems["all"]); Publish(null, State.Unavailable, set.Problems["all"], null); return; }
             foreach (var kv in set.Problems) Util.Log("talent data: " + kv.Key + ": " + kv.Value);
             foreach (var n in set.Notes) Util.Log("talent data: " + n);
             if (set.Trees.Count == 0) { Publish(null, State.Unavailable, set.Problems.Values.FirstOrDefault() ?? "no talent tree was found", null); return; }
-            LastLoadFrom = from;
+            LastLoadFrom = from; Stale = false;
             Publish(set, State.Ready, null, build);
         }
 
@@ -202,16 +210,23 @@ namespace ElansAddonHub.Services.Db2
             return fresh;
         }
 
-        public static TalentRaw ReadCasc(string root, string flavor)
+        public const string JobId = "talents";
+
+        // the data shown is of the previous game build (the new one is being read)
+        public static bool Stale { get; private set; }
+
+        public static TalentRaw ReadCasc(string root, string flavor, Action<int, int> progress = null)
         {
             var raw = new TalentRaw();
-            using (var casc = CascStorage.Open(root, flavor))
+            using (var lease = CascShared.Open(root, flavor))     // shared with the other readers; key-locked parts read as zeros
             {
-                casc.ZeroFillEncrypted = true;
+                var casc = lease.Casc;
                 var all = TalentTables.All;
                 var keys = casc.ResolveFileIds(new HashSet<int>(all.Select(d => d.FileId)));
+                int i = 0;
                 foreach (var def in all)
                 {
+                    progress?.Invoke(i++, all.Length);
                     try { if (keys.TryGetValue(def.FileId, out var ck)) raw.Tables[def.Name] = casc.ReadByContentKey(ck); }
                     catch (Exception e) { Util.Log("talent data: " + def.Name + ".db2: " + e.Message); }
                 }

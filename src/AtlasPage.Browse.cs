@@ -53,6 +53,8 @@ namespace ElansAddonHub
         // ============================================================================================================================ a browse page
         void DrawBrowse(BrowseResult r)
         {
+            // still waiting for the same list's first data: the build stack stays as it is (no fade, no flicker each time another reader reports)
+            var stillWaiting = r.NotFound && browse != null && browse.Id == r.Id ? Body.Children.OfType<GameDataWait>().FirstOrDefault() : null;
             model = null; hosted = null; browse = r; bq = r.Query.Clone(); drawnSig = Signature();
             ReleaseMaps();
             Body.Children.Clear(); bctl.Clear();
@@ -61,9 +63,10 @@ namespace ElansAddonHub
             UpdateNav();
             if (r.NotFound)
             {
-                Body.Children.Add(EmptyCard("", r.Message.Length > 0 ? r.Message : "Nothing to list here.", "Open the start page to see what data Atlas has."));
+                bool waiting = WaitingForData(r.Id);
+                Body.Children.Add(waiting ? stillWaiting ?? WaitCard(r.Id) : EmptyCard("", r.Message.Length > 0 ? r.Message : "Nothing to list here.", "Open the start page to see what data Atlas has."));   // the first read of its data: the build stack
                 browseList = null;
-                Motion.PageIn(Body);
+                if (!(waiting && stillWaiting != null)) Motion.PageIn(Body);
                 return;
             }
             var col = new StackPanel();

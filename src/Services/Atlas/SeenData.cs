@@ -194,6 +194,8 @@ namespace ElansAddonHub.Services
 
         // ---------------------------------------------------------------------------------------------------------------------
         // the service: read in the background, never on the UI thread
+        public const string JobId = "seen";
+
         public static void Start()
         {
             Interlocked.Increment(ref StartCountForTest);
@@ -226,6 +228,7 @@ namespace ElansAddonHub.Services
                 try
                 {
                     if (!SafeEnabled()) { Disable(); continue; }
+                    GameDataProgress.Begin(JobId, "Seen creatures and quests", "Loading what your client has seen", 0.2);
                     LoadOnce();
                 }
                 catch (Exception e)
@@ -234,6 +237,7 @@ namespace ElansAddonHub.Services
                     Publish(null, State.Unavailable, "could not be read: " + e.Message);
                 }
                 LastLoadMs = sw.ElapsedMilliseconds;
+                GameDataProgress.End(JobId, state == State.Ready, state == State.Ready ? null : reason);
             }
         }
 
@@ -260,7 +264,11 @@ namespace ElansAddonHub.Services
             var dir = WdbDir(root, Flavor() ?? "_classic_beta_");
             if (dir == null) { Publish(null, State.Unavailable, "the game has not written its cache yet"); return; }
             Watch(dir);
-            var set = Obtain(SeenIndexFile.TryRead(CacheFile), dir, CacheFile, out var from);
+            var saved = SeenIndexFile.TryRead(CacheFile);
+            // no saved copy (first start, an older Outpost): the strip says so; a cache the game rewrote is read again without a word (that is every play session)
+            if (saved == null || saved.Format != FormatVersion) GameDataProgress.Rebuilding(JobId, GameDataProgress.ReasonFor(CacheFile, null, null), "Reading what your client has seen", 0.5);
+            else GameDataProgress.Step(JobId, "Reading what your client has seen", 0.3);
+            var set = Obtain(saved, dir, CacheFile, out var from);
             if (!set.Ok) { Util.Log("seen data: unavailable: " + set.Problem); Publish(null, State.Unavailable, set.Problem); return; }
             foreach (var n in set.Notes) Util.Log("seen data: " + n);
             LastLoadFrom = from; LastBuild = set.Build;

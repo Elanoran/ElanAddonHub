@@ -358,7 +358,7 @@ namespace ElansAddonHub
             var l = new List<SourceState>();
             bool gameReady = ItemData.Ready && SpellData.Ready && MapData.Ready;
             bool gameOff = ItemData.Status == ItemData.State.Disabled && SpellData.Status == SpellData.State.Disabled && MapData.Status == MapData.State.Disabled;
-            l.Add(new SourceState { Name = "Game data", Text = gameReady ? "Game data ready" : gameOff ? "Game data off" : ItemData.Ready || SpellData.Ready || MapData.Ready ? "Game data partly read" : "Game data not read yet", Level = gameReady ? 2 : gameOff ? 0 : 1 });
+            l.Add(new SourceState { Name = "Game data", Text = gameReady && (ItemData.Stale || SpellData.Stale || MapData.Stale) ? "Game data of the previous WoW version (the new one is being read)" : gameReady ? "Game data ready" : gameOff ? "Game data off" : ItemData.Ready || SpellData.Ready || MapData.Ready ? "Game data partly read" : "Game data not read yet", Level = gameReady ? 2 : gameOff ? 0 : 1 });
             EnsureSetup();
             var cs = ClassicSetup.State;
             l.Add(new SourceState { Name = "Classic", Text = cs == ClassicCardState.Ready ? "Classic baseline ready" : cs == ClassicCardState.Downloading || cs == ClassicCardState.Importing || cs == ClassicCardState.Asking ? "Classic baseline downloading" : cs == ClassicCardState.Failed ? "Classic baseline problem" : "Classic baseline not on this PC", Level = cs == ClassicCardState.Ready ? 2 : cs == ClassicCardState.NotDownloaded ? 0 : 1 });

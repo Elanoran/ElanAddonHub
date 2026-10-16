@@ -63,20 +63,44 @@ namespace ElansAddonHub.Services.WorldMap
             return fwd || rev;
         }
 
-        public static AdtFile Parse(byte[] d)
+        public static AdtFile Parse(byte[] d) => Parse(d, d?.Length ?? 0);
+
+        // the first length bytes of d (a buffer kept between files)
+        public static AdtFile Parse(byte[] d, int length)
         {
             var f = new AdtFile();
-            if (d == null || d.Length < 16) { f.Problem = "the terrain file is empty or cut off"; return f; }
-            for (int p = 0; p + 8 <= d.Length;)
+            if (d == null || length < 16 || length > d.Length) { f.Problem = "the terrain file is empty or cut off"; return f; }
+            for (int p = 0; p + 8 <= length;)
             {
                 int size = BitConverter.ToInt32(d, p + 4);
-                if (size < 0 || (long)p + 8 + size > d.Length) break;       // cut off: what was read stays
+                if (size < 0 || (long)p + 8 + size > length) break;       // cut off: what was read stays
                 if (Is(d, p, "MCNK")) ReadChunk(f, d, p + 8, size);
                 else if (Is(d, p, "MH2O")) { try { ReadLiquids(f, d, p + 8, size); } catch (Exception) { } }
                 p += 8 + size;
             }
             if (f.Found == 0) f.Problem = "this terrain file has no MCNK chunks";
             return f;
+        }
+
+        // Only the area id of every chunk (what Parse(d).Chunks[i].AreaId gives, 0 for a chunk that is not there), for the first `length` bytes of d;
+        // null when the file has no chunk (Parse's Problem). No heights, holes or water are read: the area probe needs nothing else.
+        public static int[] AreaIds(byte[] d, int length)
+        {
+            if (d == null || length < 16 || length > d.Length) return null;
+            var a = new int[256];
+            int found = 0;
+            for (int p = 0; p + 8 <= length;)
+            {
+                int size = BitConverter.ToInt32(d, p + 4);
+                if (size < 0 || (long)p + 8 + size > length) break;
+                if (Is(d, p, "MCNK") && size >= 128)
+                {
+                    int s = p + 8, ix = BitConverter.ToInt32(d, s + 4), iy = BitConverter.ToInt32(d, s + 8);
+                    if (ix >= 0 && ix <= 15 && iy >= 0 && iy <= 15) { a[iy * 16 + ix] = Math.Max(0, BitConverter.ToInt32(d, s + 0x34)); found++; }
+                }
+                p += 8 + size;
+            }
+            return found == 0 ? null : a;
         }
 
         // vertex bytes per format: 0 = float + byte, 1 = float + 2 x ushort, 2 = byte, 3 = float + 2 x ushort + byte

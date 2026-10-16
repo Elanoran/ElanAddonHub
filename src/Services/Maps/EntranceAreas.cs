@@ -42,13 +42,12 @@ namespace ElansAddonHub.Services.Maps
         // the AreaTable id of the chunk of a root ADT that holds the world position (0 = none)
         public static int AreaAt(byte[] adt, double x, double y)
         {
-            var f = AdtFile.Parse(adt);
-            if (!f.Ok) return 0;
+            var ids = AdtFile.AreaIds(adt, adt?.Length ?? 0);     // only the chunks' area ids (no heights or water are needed here)
+            if (ids == null) return 0;
             WorldMapMath.WorldToGrid(x, y, out var c, out var r);
             int col = (int)Math.Floor(c), row = (int)Math.Floor(r);
             int cx = Math.Max(0, Math.Min(15, (int)((c - col) * 16))), cy = Math.Max(0, Math.Min(15, (int)((r - row) * 16)));
-            var ch = f.Chunks[cy * 16 + cx];
-            return ch == null ? 0 : Math.Max(0, ch.AreaId);
+            return ids[cy * 16 + cx];
         }
     }
 }

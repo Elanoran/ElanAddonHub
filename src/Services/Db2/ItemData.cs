@@ -188,6 +188,7 @@ namespace ElansAddonHub.Services.Db2
                 try
                 {
                     if (!SafeEnabled()) { Disable(); continue; }
+                    GameDataProgress.Begin(JobId, "Items", "Loading the item list", 0.3);
                     LoadOnce();
                 }
                 catch (Exception e)
@@ -196,6 +197,7 @@ namespace ElansAddonHub.Services.Db2
                     Publish(null, State.Unavailable, "could not be read: " + e.Message);
                 }
                 LastLoadMs = sw.ElapsedMilliseconds;
+                GameDataProgress.End(JobId, state == State.Ready, state == State.Ready ? null : reason);
             }
         }
 
@@ -214,7 +216,7 @@ namespace ElansAddonHub.Services.Db2
         // test hook: use this snapshot as the loaded data
         public static void SetForTest(ItemSnapshot s, State st = State.Ready, string why = null) { lock (gate) { snap = s; state = st; reason = why; } }
         public static void RaiseChangedForTest() { try { Changed?.Invoke(); } catch { } }
-        public static void ResetForTest() { StopWatching(); lock (gate) { snap = null; state = State.NotStarted; reason = null; running = false; again = false; } }
+        public static void ResetForTest() { Stale = false; StopWatching(); lock (gate) { snap = null; state = State.NotStarted; reason = null; running = false; again = false; } }
 
         // ---------------------------------------------------------------------------------------------------------------------
         // one load: the saved index when it still matches this game build, otherwise the game files
@@ -230,18 +232,35 @@ namespace ElansAddonHub.Services.Db2
             if (adb != null) { try { var fi = new FileInfo(adb); dbSize = fi.Length; dbTicks = fi.LastWriteTimeUtc.Ticks; } catch { adb = null; } }
             WatchAdb(adb);
 
-            var set = Obtain(ItemIndexFile.TryRead(CacheFile), build, dbSize, dbTicks, adb, CacheFile, () =>
+            var saved = ItemIndexFile.TryRead(CacheFile);
+            // the game was patched: the list of the previous build is shown at once (same reader, same format: it only lacks what the patch changed) while
+            // the new game files are read in the background
+            bool old = snap == null && IsPrevious(saved, build);
+            if (old) { LastLoadFrom = "cache file (previous game build)"; Stale = true; Publish(new ItemSnapshot(saved.Set.Client, saved.Set.Cache), State.Ready, null); }
+            var set = Obtain(saved, build, dbSize, dbTicks, adb, CacheFile, CascShared.OneAtATime(JobId, () =>
             {
+                GameDataProgress.Rebuilding(JobId, GameDataProgress.ReasonFor(CacheFile, saved?.Build, build), "Reading items", 1, "tables", old);
                 RawTables raw;
-                try { raw = ReadCasc(root, flavor); }
+                try { raw = ReadCasc(root, flavor, (n, t) => GameDataProgress.Report(JobId, n, t, 0, 0.6)); }
                 catch (Exception e) { Util.Log("item data: game files: " + e.Message); return new ItemSet { Problem = "the game files could not be read: " + e.Message }; }
-                return ParseTables(raw.Sparse, raw.Item, raw.Budget);
-            }, out var from);
+                GameDataProgress.Step(JobId, "Sorting items", 0.6);
+                var parsed = ParseTables(raw.Sparse, raw.Item, raw.Budget);
+                GameDataProgress.Step(JobId, "Saving the item list", 0.9);
+                return parsed;
+            }), out var from);
+            if (!set.Ok && old) { Util.Log("item data: the new game files could not be read (" + set.Problem + "); the list of the previous game build stays"); return; }
             if (!set.Ok) { Util.Log("item data: unavailable: " + set.Problem); Publish(null, State.Unavailable, set.Problem); return; }
             foreach (var n in set.Notes) Util.Log("item data: " + n);
-            LastLoadFrom = from;
+            LastLoadFrom = from; Stale = false;
             Publish(new ItemSnapshot(set.Client, set.Cache), State.Ready, null);
         }
+
+        // a saved list of another game build that this Outpost can still read (a changed format reads as null: that is "no data")
+        static bool IsPrevious(ItemIndexFile.Saved saved, string build)
+            => saved != null && saved.Build != build && saved.Format == FormatVersion && saved.Set.Ok && ItemTables.SparseFor(saved.Set.SparseHash) != null;
+
+        // the data shown is of the previous game build (the new one is being read)
+        public static bool Stale { get; private set; }
 
         // The decision: the saved index is used when the game build is the same (the shipped tables cannot have changed), and only the hotfix cache is
         // read again when DBCache.bin changed (size or time). Anything else = read the game files (readGame) and save the result.
@@ -266,17 +285,23 @@ namespace ElansAddonHub.Services.Db2
         // the game's tables
         public sealed class RawTables { public byte[] Sparse, Item, Budget; }
 
-        public static RawTables ReadCasc(string root, string flavor)
+        public const string JobId = "items";
+
+        public static RawTables ReadCasc(string root, string flavor, Action<int, int> progress = null)
         {
-            using (var casc = CascStorage.Open(root, flavor))
+            using (var lease = CascShared.Open(root, flavor))     // shared with the other readers; key-locked parts read as zeros (the table reader skips those sections)
             {
-                casc.ZeroFillEncrypted = true;     // key-locked parts read as zeros; the table reader skips those sections
+                var casc = lease.Casc;
                 var keys = casc.ResolveFileIds(new HashSet<int> { ItemTables.ItemSparseFileDataId, ItemTables.ItemFileDataId, ItemTables.RandPropPointsFileDataId });
                 byte[] Read(int fid) => keys.TryGetValue(fid, out var ck) ? casc.ReadByContentKey(ck) : null;
+                progress?.Invoke(0, 3);
                 var raw = new RawTables { Sparse = Read(ItemTables.ItemSparseFileDataId) };
                 if (raw.Sparse == null) throw new IOException("ItemSparse.db2 is not in this game install");
+                progress?.Invoke(1, 3);
                 try { raw.Item = Read(ItemTables.ItemFileDataId); } catch (Exception e) { Util.Log("item data: Item.db2: " + e.Message); }
+                progress?.Invoke(2, 3);
                 try { raw.Budget = Read(ItemTables.RandPropPointsFileDataId); } catch (Exception e) { Util.Log("item data: RandPropPoints.db2: " + e.Message); }
+                progress?.Invoke(3, 3);
                 return raw;
             }
         }
@@ -383,8 +408,11 @@ namespace ElansAddonHub.Services.Db2
         // ---------------------------------------------------------------------------------------------------------------------
         // where things are
         // a string that changes when the game is patched: product, version and the build key from .build.info
+        public static Func<string, string, string> BuildForTest;     // self-test: pretend the game is of another build (a patch) - every reader asks here
+
         public static string GameBuild(string root, string flavor)
         {
+            if (BuildForTest != null) return BuildForTest(root, flavor);
             try
             {
                 var info = Path.Combine(root, ".build.info");

@@ -136,6 +136,9 @@
         </DockPanel>
       </Border>
 
+      <!-- game data progress (Controls/GameDataProgressView.cs): a slim chip in the title bar row, only while the game files are being read (first start, after a WoW or Outpost update); it never pushes the page down -->
+      <local:GameDataStrip x:Name="GameDataBar" Grid.Row="0" Grid.Column="1" Margin="272,0,180,0" />
+
       <!-- addon cards -->
       <lodge:LodgeView x:Name="LodgePage" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />
       <local:SettingsPage x:Name="SettingsPage" Grid.Row="3" Grid.Column="1" Visibility="Collapsed" />

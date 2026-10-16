@@ -132,6 +132,7 @@ namespace ElansAddonHub.Services.Atlas
         public int Total;                                            // rows after the filters
         public int InCategory;                                       // rows before the filters
         public bool Capped;
+        public bool LevelsPending;                                   // the zones' level ranges are still being worked out (ZoneLevels): the list is drawn again when they arrive
         public List<string> Notes = new List<string>();
         public BrowseControls Controls = new BrowseControls();
         public string Sort = "name";                                 // the sort in use
@@ -251,6 +252,7 @@ namespace ElansAddonHub.Services.Atlas
             if (hits.Count > MaxRows) { r.Capped = true; hits = hits.Take(MaxRows).ToList(); }
             foreach (var e in hits) r.Rows.Add(RowOf(e, q, ix));
             r.Subtitle = r.CountText + (node != ix.Root && path.Count > 0 ? "" : "");
+            r.LevelsPending = ix.LevelsPending;
             AddNotes(r, ix, q, chr, chars);
             return r;
         }
@@ -443,6 +445,8 @@ namespace ElansAddonHub.Services.Atlas
             }
             else if (ix.Cat == "instances" && !classic && ix.All.Any(e => e.Level <= 0))
                 r.Notes.Add("Some dungeons and raids have no level in your game files; the Classic baseline's creatures would give a range. Download it from the Atlas start page.");
+            else if (ix.Cat == "zones" && ix.LevelsPending && !ix.OldLevels)
+                r.Notes.Add("The level ranges are being worked out from your game files (once after a WoW update); they appear here by themselves.");
             else if (ix.Cat == "zones" && !classic)
                 r.Notes.Add("Level ranges come from the Classic baseline's creatures. Download it from the Atlas start page.");
             if (r.Capped) r.Notes.Add("Only the first " + MaxRows.ToString("N0", CalendarRules.English) + " are listed. Narrow it with the filters.");
