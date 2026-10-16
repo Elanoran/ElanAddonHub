@@ -68,8 +68,10 @@ namespace ElansAddonHub
             bar.VerticalAlignment = VerticalAlignment.Center; bar.Margin = new Thickness(12, 0, 0, 0);
             DockPanel.SetDock(bar, Dock.Right);
             row.Children.Add(bar);
-            var words = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            // the step first; when the title bar is tight (the radio beside the search box, 2.72) the reason is cut short, then the step
+            var words = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center };
             why.Margin = new Thickness(8, 0, 0, 0);
+            DockPanel.SetDock(step, Dock.Left);
             words.Children.Add(step); words.Children.Add(why);
             row.Children.Add(words);
             Child = row;

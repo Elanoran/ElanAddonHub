@@ -25,7 +25,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "addonsgrid", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "gametooltip", "talents", "professions", "profguide", "mapdata", "mapdatareal", "worldmap", "worldmapreal", "instances", "instancesreal", "buildings", "buildingsreal", "dungeonmaps", "dungeonmapsreal", "seendata", "video", "browser", "presence", "profile", "toasts", "dialogs", "inventory", "health", "inputs", "menucolors", "atlasclassic", "atlasclassiclodge", "atlaspage", "atlaspagereal", "atlasbrowse", "atlashosts", "atlasclasses", "zonelore", "zonelorereal", "art", "round3", "idlecpu", "coldstart",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "gametooltip", "talents", "professions", "profguide", "mapdata", "mapdatareal", "worldmap", "worldmapreal", "instances", "instancesreal", "buildings", "buildingsreal", "dungeonmaps", "dungeonmapsreal", "seendata", "video", "browser", "radio", "presence", "profile", "toasts", "dialogs", "inventory", "health", "inputs", "menucolors", "atlasclassic", "atlasclassiclodge", "atlaspage", "atlaspagereal", "atlasbrowse", "atlashosts", "atlasclasses", "zonelore", "zonelorereal", "art", "round3", "idlecpu", "coldstart",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -65,6 +65,7 @@ namespace ElansAddonHub.Services
             ["realms"] = "Lodge realm status (feature realms): the dots at the top of the window (one per realm, labelled by ruleset or name, green up / red down / grey unknown), tooltips (name, ruleset, status, population, queue, checked N min ago, via your Lodge), a change recolours them, hidden without a Lodge, on a server without the feature and when the Forever realms were not found, the Settings switch (on by default), the back-up note (off by default, a quiet toast, silenced by the toast switch), nothing sent to the server",
             ["hubdata"] = "Elan's Hub data layer (Outpost side): ElansHubData parsing (core v1, account modules, a module newer than the app understands = TooNew without data, no ElansHubData, garbage), newest file wins, parse cache, locked file keeps the last good read, shared SavedVariables finder (links skipped)",
             ["video"] = "YouTube preview cards + in-app player",
+            ["radio"] = "Radio Paradise in the title bar (2.72): the published-link allow-list, User-Agent + Icy-MetaData, one connection on Play and none at start, Pause closes it, ICY titles, reconnect waits + Retry, favourite channel, the ducking curve in voice rooms, the Settings switch, the title bar layout at every width (fake local ICY server, never the real stream)",
             ["browser"] = "Browser page: URL/search rules, scheme + ad-host lists, tabs, tiles, WebView2 hardening",
             ["presence"] = "member presence",
             ["profile"] = "profiles and the editor",
@@ -223,6 +224,9 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/Voice\w*\.cs$", "voice", "lodge");
             R(@"^src/Services/Sounds\.cs$", "toasts", "lodge", "voice");
             R(@"^src/SettingsPage", "addons", "profile", "round3", "voice", "lodge", "browser", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "atlaslodge", "lodgefiles", "badges", "realms", "armory", "atlasclassiclodge");
+            // Radio Paradise in the title bar: the player, its window wiring and test; the title bar layout it shares with the search box, the realm dots and the game data chip
+            R(@"^src/(RadioBar\.xaml(\.cs)?|MainWindow\.Radio(Test)?\.cs|SettingsPage\.Radio\.cs|Services/Radio\w*\.cs)$", "radio");
+            R(@"^src/(MainWindow\.(xaml|Search\.cs|Realms\.cs)|Controls/GameDataProgressView\.cs)$", "radio");
             R(@"^src/MainWindow\.ProfileTest\.cs$", "profile");
             R(@"^src/MainWindow\.VideoTest\.cs$", "video");
             R(@"^src/(BrowserPage(\.xaml(\.cs)?)?|MainWindow\.BrowserTest|Services/(WebEngine|BrowserUrl|AdBlock))(\.cs)?$", "browser", "video");

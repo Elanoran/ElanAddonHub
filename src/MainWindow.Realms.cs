@@ -59,13 +59,7 @@ namespace ElansAddonHub
         // the update banner sits at the left of the same bar: keep it clear of the dots
         void ShiftBannerForRealms()
         {
-            double extra = 0;
-            if (RealmStrip.Visibility == Visibility.Visible)
-            {
-                RealmStrip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                extra = RealmStrip.DesiredSize.Width + 8;
-            }
-            HubBanner.Margin = new Thickness(16, 0, 112 + extra, 0);
+            LayoutTitleBar();   // one layout for the whole title bar (MainWindow.Radio.cs)
         }
 
         // ---- for the self-test

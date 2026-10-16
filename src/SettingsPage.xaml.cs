@@ -117,6 +117,7 @@ namespace ElansAddonHub
             StartupBox.IsChecked = s.StartWithWindows;
             LinkBox.IsChecked = !s.NoLinkHandler;
             RealmStatusBox.IsChecked = !s.RealmStatusOff;
+            LoadRadio(s);
             RealmsBackBox.IsChecked = s.RealmsBackNotice;
             AutoUpdateBox.IsChecked = s.AutoUpdate;
             ChannelTest.IsChecked = UpdateChannel.IsTest(s);

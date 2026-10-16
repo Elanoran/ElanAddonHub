@@ -162,6 +162,11 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "notify")] public string NotifyMode { get; set; }          // mentions (default) | all | none
         [DataMember(Name = "displayNameHintShown")] public bool DisplayNameHintShown { get; set; } // the one-time "pick a display name" tip
         [DataMember(Name = "soundsOff")] public bool SoundsOff { get; set; }
+        // ---- Radio Paradise in the title bar (2.72)
+        [DataMember(Name = "radioOff")] public bool RadioOff { get; set; }              // false = the player is in the title bar (it never plays until Play is pressed)
+        [DataMember(Name = "radioChannel")] public string RadioChannel { get; set; }    // the favourite channel (Settings), picked at every start; a pick in the player is for that session only. RadioParadise.Channels id, default main
+        [DataMember(Name = "radioVolume")] public double? RadioVolume { get; set; }     // 0..1, default 0.6
+        [DataMember(Name = "radioDuck")] public double? RadioDuck { get; set; }         // 0..1 of the volume while people talk in my voice room, default 0.3
         [DataMember(Name = "peerVolumes")] public Dictionary<string, double> PeerVolumes { get; set; } // by name, 0..2
         [DataMember(Name = "lastChannel")] public string LastChannel { get; set; }
         [DataMember(Name = "overlayOff")] public bool OverlayOff { get; set; }          // false = overlay on

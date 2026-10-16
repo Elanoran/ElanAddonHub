@@ -41,6 +41,8 @@
                  PreviewMouseDown="TitleSearch_Down" PreviewKeyDown="TitleSearch_KeyDown" PreviewTextInput="TitleSearch_TextInput" />
         <Button x:Name="TitleSearchIcon" Style="{StaticResource IconButton}" HorizontalAlignment="Left" VerticalAlignment="Center" Width="32" Height="32" Margin="16,0,0,0" FontSize="16" Content="&#xE721;"
                 Visibility="Collapsed" ToolTip="Search  (Ctrl+K)" AutomationProperties.Name="Search the Atlas" Click="TitleSearchIcon_Click" />
+        <!-- the Radio Paradise player (2.72, RadioBar.xaml): right of the search box or its icon, placed in code (MainWindow.Radio.cs LayoutTitleBar); a hit-test island like the box -->
+        <local:RadioBar x:Name="RadioPlayerBar" Margin="264,0,0,0" />
         <!-- realm status dots (Lodge feature "realms"): built in code, MainWindow.Realms.cs -->
         <Border x:Name="RealmStrip" Style="{StaticResource Chip}" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,108,0" Padding="4,0" AutomationProperties.Name="Realm status">
           <StackPanel x:Name="RealmItems" Orientation="Horizontal" />
