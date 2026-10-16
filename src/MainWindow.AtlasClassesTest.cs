@@ -329,6 +329,17 @@ namespace ElansAddonHub
                     AtlasView.HeroNameForTest == "Hunter" && ((System.Windows.Media.SolidColorBrush)AtlasView.HeroBrushForTest).Color == (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#AAD372") && AtlasView.HeroTileForTest != null && AtlasView.HeroTileForTest.Width >= 72 && AtlasView.HeroTileForTest.Height == AtlasView.HeroTileForTest.Width && AtlasWalk(AtlasView.HeroTileForTest).OfType<Image>().Any()
                     && AtlasView.HeroChipsForTest.Contains("Damage") && AtlasView.HeroChipsForTest.Contains("Mana, Focus") && AtlasView.TabsForTest.SequenceEqual(new[] { "overview", "related" }) && AtlasView.TabNowForTest == "overview", string.Join(" | ", AtlasView.HeroChipsForTest) + " tabs " + string.Join(",", AtlasView.TabsForTest));
 
+                // the class banner (2.77): the Hunter's painting runs behind the name card like a zone's, first on the page, the full content width
+                bool HeroBanner(string kind, string file)
+                {
+                    var bn = AtlasView.BannerForTest;
+                    return bn != null && bn.Tag as string == kind + "-banner" && bn.IsVisible && bn.ActualHeight > ElansAddonHub.AtlasPage.BannerHeight && Math.Abs(bn.ActualWidth - AtlasView.BodyForTest.ActualWidth) < 1.5
+                        && bn.TranslatePoint(new Point(0, 0), AtlasView.BodyForTest).Y < 1 && AtlasView.HeroForTest != null && AtlasView.HeroForTest.TranslatePoint(new Point(0, 0), bn).Y >= ElansAddonHub.AtlasPage.BannerHeight - 49
+                        && AtlasWalk(bn).OfType<Border>().Any(x => x.Background is System.Windows.Media.ImageBrush ib && ib.ImageSource == ArtLibrary.Load(ArtLibrary.Class(file) ?? ArtLibrary.Race(file, kind == "race" && file == "Orc" ? RaceInfo.Horde : RaceInfo.Alliance)));
+                }
+                string BannerWhy() { var bn = AtlasView.BannerForTest; return bn == null ? "no banner" : bn.Tag + " " + bn.ActualWidth + "x" + bn.ActualHeight + " body " + AtlasView.BodyForTest.ActualWidth; }
+                Check("window: the Hunter page opens with the Hunter's painted banner behind its name card (class-hunter.jpg, full width, first on the page)", HeroBanner("class", "HUNTER") && ArtLibrary.Class("HUNTER").File == "class-hunter.jpg", BannerWhy());
+
                 void ClickTab(string key) { var b = (Button)AtlasView.ClassControlForTest(key); b.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); }
                 ClickTab("tab:163"); await Task.Delay(100); UpdateLayout();
                 Check("window: the Marksmanship chip shows only that tab; the filter is remembered in the card", AtlasView.ClassFilterForTest.SkillId == 163 && AtlasView.ClassRowsForTest.Count > 5 && AtlasView.ClassRowsForTest.All(r => !r.Title.StartsWith("Aspect")) && AtlasView.ClassControlForTest("clear").Visibility == Visibility.Visible);
@@ -369,6 +380,26 @@ namespace ElansAddonHub
                 await AtlasView.Open("race:2"); await AtlasView.WaitForTest(); await Task.Delay(200); UpdateLayout();
                 Snapshot(Path.Combine(dir, "atlas-classes-race.png"));
                 Check("window: the Orc page is drawn - breadcrumb Atlas > Races > Orc, the hero (Orc, Horde), the Racial abilities and Classes tables on Related, the facts on the identity card", AtlasView.CrumbsForTest == "Atlas > Races > Orc" && AtlasView.HeroNameForTest == "Orc" && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Racial abilities") && AtlasTexts(AtlasView).Contains("Blood Fury") && AtlasTexts(AtlasView).Contains("Classes") && AtlasTexts(AtlasView).Contains("Warrior") && await SwitchTab("overview"), AtlasView.CrumbsForTest);
+                Check("window: the Orc page opens with the Orc's painted banner (race-orc.jpg), not the Hunter's", HeroBanner("race", "Orc") && ArtLibrary.Race("Orc", RaceInfo.Horde).File == "race-orc.jpg", BannerWhy());
+                await AtlasView.Open("race:4"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
+                Check("window: the Night Elf page (client file NightElf) has its own banner", AtlasView.BannerForTest?.Tag as string == "race-banner" && ElansAddonHub.AtlasPage.HeroArtOf(AtlasView.Model)?.File == "race-nightelf.jpg", BannerWhy());
+                // fallbacks: a class with no entry, and an entry whose picture is missing, keep the plain name card (no banner, nothing thrown); restored after
+                var mageArt = ArtLibrary.Classes["MAGE"];
+                try
+                {
+                    ArtLibrary.Classes.Remove("MAGE");
+                    await AtlasView.Open("class:8"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
+                    bool noEntry = AtlasView.BannerForTest == null && AtlasView.HeroNameForTest == "Mage" && AtlasView.HeroForTest != null && AtlasView.HeroForTest.TranslatePoint(new Point(0, 0), AtlasView.BodyForTest).Y < 1;
+                    ArtLibrary.Classes["MAGE"] = new ArtPiece("class-nope.jpg", 0.5, 0.5);
+                    await AtlasView.Open("class:3"); await AtlasView.WaitForTest(); await AtlasView.Open("class:8"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
+                    bool noFile = AtlasView.BannerForTest == null && AtlasView.HeroNameForTest == "Mage";
+                    Check("fallback: a class without art, or whose picture cannot be read, opens with the plain name card at the top (no banner, no error)", noEntry && noFile, noEntry + " " + noFile + " " + BannerWhy());
+                }
+                finally { ArtLibrary.Classes["MAGE"] = mageArt; }
+                Check("fallback: no hero art for a not-found page (class:77, the Goblin), a page of another kind, or without class data",
+                    ElansAddonHub.AtlasPage.HeroArtOf(AtlasQuery.Build("class:77")) == null && ElansAddonHub.AtlasPage.HeroArtOf(AtlasQuery.Build("race:9")) == null && ElansAddonHub.AtlasPage.HeroArtOf(AtlasQuery.Build("spell:3044")) == null
+                    && ElansAddonHub.AtlasPage.HeroArtOf(null) == null && ElansAddonHub.AtlasPage.HeroArtOf(new AtlasPageModel { Id = "class:3", Kind = "class", Title = "Hunter" }) == ArtLibrary.Class("HUNTER")
+                    && CcDo(() => { ClassData.SetForTest(null, ClassData.State.Disabled); var a = ElansAddonHub.AtlasPage.HeroArtOf(new AtlasPageModel { Id = "class:3", Kind = "class", Title = "Hunter" }); ClassData.SetForTest(set); return a == null; }));
                 await AtlasView.Open("class:8"); await AtlasView.WaitForTest(); await Task.Delay(250); UpdateLayout();
                 Check("window: another class resets the card (Mage: its own tab Arcane, level 1 first, no Hunter spells)", AtlasView.ClassFilterForTest.SkillId == 0 && AtlasView.ClassControlForTest("tab:237") != null && AtlasView.ClassControlForTest("tab:163") == null && AtlasView.ClassRowsForTest.Any(r => r.Title == "Fireball") && !AtlasView.ClassRowsForTest.Any(r => r.Title == "Arcane Shot"));
 

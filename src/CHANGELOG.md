@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.80.0
+- **Every class and race has its own painting.** The Atlas pages of the nine classes and the ten races (the Skyborne's High Order and Windshapers each their own) now open with a painted banner behind the name, like the zone pages do: a warrior on an old battlefield, a hunter and their wolf above a misty forest, the Skyborne's floating isles and more, in the same style as the rest of the Atlas art.
+
 ## 2.79.0
 - **Radio: pick the sound quality in the player.** The radio's pop-out (click the song) now has a Quality row: Standard, High or Lossless. It is the same setting as in Settings, so changing it in one place changes the other, and while music plays it switches at once. A quality the channel doesn't have is dimmed and says what plays instead (Radio 2050 has no Lossless, so it plays High).
 - **Radio: song titles on Lossless.** We listened closely: Radio Paradise's lossless (FLAC) streams send no song titles and no covers at all, so the player can't show them there. The pop-out now says so plainly; Standard and High show the song and its cover as before.
