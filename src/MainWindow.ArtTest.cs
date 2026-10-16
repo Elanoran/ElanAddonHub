@@ -40,6 +40,8 @@ namespace ElansAddonHub
                 foreach (var x in LogicalWalk(c)) yield return x;
         }
 
+        static IEnumerable<DependencyObject> Ancestors(DependencyObject d) { for (d = d == null ? null : System.Windows.Media.VisualTreeHelper.GetParent(d); d != null; d = System.Windows.Media.VisualTreeHelper.GetParent(d)) yield return d; }
+
         async Task<string> ArtTest(string dir)
         {
             var notes = new List<string>();
@@ -82,7 +84,8 @@ namespace ElansAddonHub
                 var pageHosts = new FrameworkElement[] { AtlasView, InventoryView, BrowserView, TalentsView, SettingsPage, LodgePage };
                 Check("window: no wallpaper - the frame is the Brush.Window gradient (lighter at the top, deeper at the bottom), no picture brush in the window chrome outside the pages",
                     winGrad != null && ReferenceEquals(WindowFrame.Background, winGrad) && winGrad.GradientStops.Count >= 2 && Lum(winGrad.GradientStops[0].Color) > Lum(winGrad.GradientStops.Last().Color)
-                    && !chrome.Any(b => b.Background is System.Windows.Media.ImageBrush && !pageHosts.Any(p => b.IsDescendantOf(p))));
+                    && !chrome.Any(b => b.Background is System.Windows.Media.ImageBrush && !pageHosts.Any(p => b.IsDescendantOf(p))),
+                    string.Join(", ", chrome.Where(b => b.Background is System.Windows.Media.ImageBrush && !pageHosts.Any(p => b.IsDescendantOf(p))).Select(b => (b.Name ?? "") + ":" + (b.Tag ?? "") + " in " + string.Join("<", Ancestors(b).Take(6).Select(a => a.GetType().Name + (a is FrameworkElement fe && fe.Name.Length > 0 ? "#" + fe.Name : ""))))));
                 var panels = PagePanels().ToList();
                 Check("window: the rail and every page panel are solid (alpha 255), the panel lighter than the window's bottom so it reads as a surface (" + panels.Count + " panels)",
                     FindResource("Brush.Rail") is System.Windows.Media.SolidColorBrush rb && rb.Color.A == 255 && FindResource("Brush.Panel") is System.Windows.Media.SolidColorBrush pb && pb.Color.A == 255
@@ -99,21 +102,13 @@ namespace ElansAddonHub
                 ResetAtlasForTest();
                 ShowTab("atlas");
                 await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(200); UpdateLayout();
-                var cards = AtlasView.CategoryTilesForTest;
-                var visible = AtlasCategories.Visible.Select(c => c.Id).ToList();
                 string IconOf(DependencyObject d) => AtlasWalk(d).OfType<Viewbox>().Select(v => v.Tag as string).FirstOrDefault(t => t != null && t.StartsWith("atlas-icon|"));
-                Check("Atlas Home: a tile per visible category (" + visible.Count + "), each with its own line icon (atlas-icon|<id>)",
-                    visible.All(cards.ContainsKey) && cards.All(kv => IconOf(kv.Value) == "atlas-icon|" + kv.Key), string.Join(",", cards.Select(kv => kv.Key + "=" + IconOf(kv.Value))) + " of " + string.Join(",", visible));
-                Check("Atlas Home: no painted art on the tiles (no card-art layer, no picture brush anywhere on a tile)",
-                    !AtlasWalk(AtlasView).OfType<FrameworkElement>().Any(e => e.Tag as string == "card-art") && cards.Values.All(t => !AtlasWalk(t).OfType<Border>().Any(b => b.Background is System.Windows.Media.ImageBrush)));
-                var instCard = cards.TryGetValue("instances", out var ic) ? ic : null;
-                Check("Atlas Home: a tile keeps its title and count, and opens its category",
-                    instCard != null && AtlasTexts(instCard).Contains("Dungeons and raids") && instCard.Tag as string == AtlasCategories.Find("instances")?.OpenId, instCard == null ? "none" : string.Join("|", AtlasTexts(instCard)));
-                if (cards.TryGetValue("skills", out var skillTile))
-                {
-                    var tt = AtlasWalk(skillTile).OfType<TextBlock>().FirstOrDefault(t => t.Text == "Skills");
-                    Check("Atlas Home: a tile's title wraps instead of being cut off (Skills)", tt != null && tt.TextWrapping == TextWrapping.Wrap && tt.TextTrimming == TextTrimming.None);
-                }
+                var hero = AtlasView.HomeHeroForTest;
+                Check("Atlas Home (2.74): no category tiles any more (the side menu has every category); the hero is the one painting on the page, under its fade veil",
+                    !AtlasWalk(AtlasView.BodyForTest).OfType<ContentControl>().Any(c => c.Tag is string t && AtlasCategories.Visible.Any(k => k.OpenId == t) && c.MinHeight == 64)
+                    && !AtlasWalk(AtlasView).OfType<FrameworkElement>().Any(e => e.Tag as string == "card-art") && hero != null
+                    && AtlasWalk(AtlasView.BodyForTest).OfType<FrameworkElement>().Count(e => e.Tag is string t && (t.StartsWith("home-hero-art|") || t.StartsWith("zone-banner-art") || t.StartsWith("browse-banner-art"))) <= 1,
+                    hero == null ? "no hero" : string.Join("|", AtlasTexts(hero)));
                 var entries = AtlasNav.Entries();
                 Check("Atlas side navigation: every category row draws its line icon (" + entries.Count + " rows)", entries.All(e => AtlasIcons.Has(e.Icon)) && entries.Count(e => AtlasWalk(AtlasView).OfType<ContentControl>().Any(r => r.Tag as string == e.Key + "|off" && IconOf(r) == "atlas-icon|" + e.Icon)) == entries.Count,
                     string.Join(",", entries.Select(e => e.Key + ":" + e.Icon)));

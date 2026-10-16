@@ -110,16 +110,16 @@ namespace ElansAddonHub
                 ShowTab("atlas");
                 AtlasView.History.Clear();
                 await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout();
-                FrameworkElement Tile(string openId) => AtlasWalk(AtlasView).OfType<ContentControl>().FirstOrDefault(c => c.Tag is string s && s == openId && c.IsVisible);
-                var tx = AtlasTexts(AtlasView);
-                Check("start page: tiles for Talents and Professions next to Items, Creatures, ... with their blurbs, in the nav's order: Spells, Talents, Professions, Recipes, Skills",
-                    Tile("talents:") != null && Tile("professions:") != null && Tile("browse:items") != null && tx.Contains("Talents") && tx.Contains("Professions") && tx.Any(t => t.StartsWith("Plan a build"))
-                    && tx.IndexOf("Spells") < tx.IndexOf("Talents") && tx.IndexOf("Talents") < tx.IndexOf("Professions") && tx.IndexOf("Professions") < tx.IndexOf("Recipes") && tx.IndexOf("Recipes") < tx.IndexOf("Skills") && !tx.Contains("Skills and professions"), string.Join(" | ", tx.Take(40)));
+                FrameworkElement Tile(string openId) { var en = AtlasNav.Entries().FirstOrDefault(x => x.OpenId == openId); return en == null ? null : AtlasView.NavRowForTest(en.Key); }   // Home has no tiles since 2.74: the side menu row of the category
+                var nr = AtlasView.NavRowsForTest.ToList();
+                Check("side menu (Home has no tiles since 2.74): rows for Talents and Professions next to Items, Creatures, ... in the nav's order: Spells, Talents, Professions, Recipes, Skills",
+                    Tile("talents:") != null && Tile("professions:") != null && Tile("browse:items") != null && nr.Contains("Talents") && nr.Contains("Professions")
+                    && nr.IndexOf("Spells") < nr.IndexOf("Talents") && nr.IndexOf("Talents") < nr.IndexOf("Professions") && nr.IndexOf("Professions") < nr.IndexOf("Recipes") && nr.IndexOf("Recipes") < nr.IndexOf("Skills") && !nr.Contains("Skills and professions"), string.Join(" | ", nr));
                 Snapshot(Path.Combine(dir, "atlas-hosts-start.png"));
 
                 // ============================================================================================================ opening Talents
                 ClickRow(Tile("talents:")); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
-                Check("talents: the tile opens the calculator inside the Atlas - hosted, the page shown and its own title hidden, Hunter (the default class), the id says tree/hunter, one step in the history",
+                Check("talents: the side menu row opens the calculator inside the Atlas - hosted, the page shown and its own title hidden, Hunter (the default class), the id says tree/hunter, one step in the history",
                     AtlasView.IsHosted && ReferenceEquals(AtlasView.HostedForTest, tp) && tp.IsVisible && tp.TitleHiddenForTest && tp.ClassFileNow == "HUNTER" && tp.ClassTitleForTest == "Hunter" && AtlasView.CurrentId == "talents:tree/hunter"
                     && AtlasView.History.Count == 2 && AtlasView.HostSlotVisibleForTest, AtlasView.CurrentId + " " + AtlasView.IsHosted);
                 Check("talents: the breadcrumb reads Atlas > Talents > Hunter (the Atlas header has no title row of its own and no hero: the hosted page names itself), the Atlas page's own scroller is out of the way", AtlasView.HostedCrumbsForTest == "Atlas > Talents > Hunter" && AtlasTexts(AtlasView).Contains("Talents") && AtlasView.TitleRowGoneForTest && AtlasView.HeroForTest == null && AtlasView.PageTitleForTest == "Talents", AtlasView.HostedCrumbsForTest);

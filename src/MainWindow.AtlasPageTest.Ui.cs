@@ -63,7 +63,7 @@ namespace ElansAddonHub
             await AtlasView.GoStart();
             UpdateLayout();
             var st = AtlasTexts(AtlasView);
-            Check("start page: the Browse cards, the Lodge's recent finds and the one status line (no data cards and no search box of its own on it)", !st.Any(t => t.StartsWith("Search items, creatures")) && st.Contains("Browse") && st.Contains("Recent finds in the Lodge") && AtlasView.StatusLineForTest != null && !st.Contains("Your game data") && !st.Contains("Lodge pool"));
+            Check("start page: the hero, the Lodge's recent finds and the one status line (no category tiles, no data cards and no search box of its own on it)", !st.Any(t => t.StartsWith("Search items, creatures")) && !st.Contains("Browse") && AtlasView.HomeHeroForTest != null && st.Contains("Recent finds in the Lodge") && AtlasView.StatusLineForTest != null && !st.Contains("Your game data") && !st.Contains("Lodge pool"));
             Check("start page: recent finds are rows with the item, member and age; newest first (Ruby Ring 10 min ago)", st.Contains("Ruby Ring") && st.Contains("10 min ago") && RowFor("item:105") != null);
             await AtlasView.Open(AtlasNav.DataId);
             UpdateLayout();
