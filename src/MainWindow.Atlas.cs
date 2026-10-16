@@ -48,13 +48,13 @@ namespace ElansAddonHub
             ElansAddonHub.Services.Professions.ProfessionLinks.OpenRequested += OnProfessionLink;
         }
 
-        // The two pages move into the Atlas: a category each. Order puts Talents after Spells and Professions after Recipes.
+        // The two pages move into the Atlas: a category each, a nav row each (2.71.1). Order puts Talents right after Spells and Professions before Recipes and Skills.
         void RegisterAtlasHosts()
         {
             AtlasCategories.Register(new AtlasCategory
             {
-                Id = AtlasHosts.Talents, Title = "Talents", Glyph = "", Blurb = "Plan a build for any class, try recommended builds, share a build code or link", Order = 75,
-                Group = AtlasNav.Character, NavKey = "spells", NavTitle = "Spells and talents", Keywords = "class build tree",
+                Id = AtlasHosts.Talents, Title = "Talents", Glyph = "", Blurb = "Plan a build for any class, try recommended builds, share a build code or link", Order = 77,
+                Group = AtlasNav.Character, Keywords = "class build tree calculator",
                 Host = HostTalents, SubTitle = AtlasHosts.TalentsSubTitle, Search = AtlasHosts.TalentHits,
                 Canonical = sub => sub != null && sub.StartsWith("build/", StringComparison.OrdinalIgnoreCase) ? sub : TalentsSub(TalentsView.ClassFileNow, sub),
             });
@@ -68,8 +68,8 @@ namespace ElansAddonHub
             });
             AtlasCategories.Register(new AtlasCategory
             {
-                Id = AtlasHosts.Professions, Title = "Professions", Glyph = AtlasKinds.Glyph("skill"), Blurb = "Recipes, leveling guides, what you can craft now, camping", Order = 95,
-                Group = AtlasNav.Character, NavKey = "professions", NavTitle = "Professions", NavPrimary = true, Keywords = "crafting leveling guide gathering",
+                Id = AtlasHosts.Professions, Title = "Professions", Glyph = AtlasKinds.Glyph("skill"), Blurb = "Each profession: its recipes by skill, a leveling guide, what you can craft now, camping", Order = 88,
+                Group = AtlasNav.Character, Keywords = "crafting leveling guide gathering alchemy blacksmithing enchanting engineering herbalism leatherworking mining skinning tailoring cooking first aid fishing",
                 Host = HostProfessions, SubTitle = AtlasHosts.ProfessionsSubTitle, Search = AtlasHosts.ProfessionHits,
                 Canonical = sub => ProfessionsSub(ProfessionsView.ProfessionNow, ProfessionsView.TabNow),
             });

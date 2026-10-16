@@ -72,6 +72,69 @@ namespace ElansAddonHub
                 Check("real game files: search finds the Hunter class and the Skyborne races (this client's own)", sHunter.Groups.Any(g => g.Kind == "class" && g.Hits.Any(h => h.Name == "Hunter")) && sSky.Groups.Any(g => g.Kind == "race" && g.Hits.Count == 2));
                 var bc = AtlasBrowse.Run("browse:classes"); var br = AtlasBrowse.Run("browse:races");
                 Check("real game files: browse lists 9 classes and the playable races", bc.Total == 9 && br.Total == races.Count && br.Total >= 8, bc.Total + " " + br.Total);
+                // ---- race icons: every playable race has one, the atlas squares are where the client's own tables say, and they cut out as real portraits
+                var allR = d.PlayableRaces();
+                Check("real game files: every playable race (" + allR.Count + ": the Classic eight, High Order and Windshaper Skyborne) has a race icon, and no two races share one",
+                    allR.Count >= 10 && allR.All(r => RaceIcons.For(r) > 0) && allR.Select(RaceIcons.For).Distinct().Count() == allR.Count, string.Join(",", allR.Select(r => r.Name + "=" + r.ClientFile + ":" + RaceIcons.For(r))));
+                using (var casc = CascStorage.Open(real, "_classic_beta_"))
+                {
+                    var keys = casc.ResolveFileIds(new HashSet<int> { 897532, 897470 });
+                    if (!keys.ContainsKey(897532) || !keys.ContainsKey(897470)) Check("real game files: UiTextureAtlasMember and UiTextureAtlas are in the game data", false);
+                    else
+                    {
+                        var mem = Wdc5.Parse(casc.ReadByContentKey(keys[897532])); var atl = Wdc5.Parse(casc.ReadByContentKey(keys[897470]));
+                        var rowOf = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                        for (int i = 0; i < mem.Count; i++) { string nm = null; try { nm = mem.String(i, 0); } catch (Exception) { } if (!string.IsNullOrEmpty(nm) && !rowOf.ContainsKey(nm)) rowOf[nm] = i; }
+                        var badCrops = new List<string>();
+                        foreach (var c in RaceIcons.All)
+                        {
+                            if (!rowOf.TryGetValue(c.Name, out var row)) { badCrops.Add(c.Name + " not in UiTextureAtlasMember"); continue; }
+                            int atlasId = (int)mem.Field(row, 2);
+                            bool fileOk = atl.TryIndex(atlasId, out var ai) && Enumerable.Range(0, atl.FieldCount).Any(f => { try { return atl.Field(ai, f) == c.AtlasFile; } catch (Exception) { return false; } });
+                            if (!fileOk || mem.Field(row, 3) != c.Size || mem.Field(row, 4) != c.Size || mem.Field(row, 5) != c.Left || mem.Field(row, 7) != c.Top)
+                                badCrops.Add(c.Name + ": atlas " + atlasId + (fileOk ? "" : " (not file " + c.AtlasFile + ")") + " " + mem.Field(row, 3) + "x" + mem.Field(row, 4) + " at " + mem.Field(row, 5) + "," + mem.Field(row, 7));
+                        }
+                        Check("real game files: each race icon square (" + RaceIcons.All.Count + ") is where the client's UiTextureAtlasMember puts it, in the texture its UiTextureAtlas names (" + RaceIcons.ClassicAtlas + ", " + RaceIcons.SkyborneAtlas + ")",
+                            badCrops.Count == 0, string.Join("; ", badCrops));
+                    }
+                }
+                var cut = IconStore.Extract(new HashSet<int>(Enumerable.Range(RaceIcons.Base, RaceIcons.All.Count)), real, "_classic_beta_");
+                var cutBad = new List<string>();
+                foreach (var kv in cut)
+                {
+                    var dec = System.Windows.Media.Imaging.BitmapDecoder.Create(new MemoryStream(kv.Value), System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                    var conv = new System.Windows.Media.Imaging.FormatConvertedBitmap(dec.Frames[0], System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                    var px = new byte[conv.PixelWidth * conv.PixelHeight * 4]; conv.CopyPixels(px, conv.PixelWidth * 4, 0);
+                    int opaque = 0, bright = 0; for (int i = 0; i < px.Length; i += 4) { if (px[i + 3] > 200) opaque++; if (px[i] + px[i + 1] + px[i + 2] > 150) bright++; }
+                    int n = px.Length / 4;
+                    if (conv.PixelWidth != IconStore.CropSize || conv.PixelHeight != IconStore.CropSize || opaque < n * 9 / 10 || bright < n / 5) cutBad.Add(RaceIcons.CropOf(kv.Key).Name + " " + conv.PixelWidth + "px opaque " + opaque + " bright " + bright);
+                }
+                Check("real game files: every race icon cuts out of its atlas as a " + IconStore.CropSize + " px portrait (opaque, not blank) - the 256 px Skyborne ones halved", cut.Count == RaceIcons.All.Count && cutBad.Count == 0, cut.Count + " " + string.Join("; ", cutBad));
+                if (SelfTestClock.ShotsOn)
+                {
+                    // design pictures of the Atlas nav, Home, the races list and a race page with the real icons (they show game art: the scratch folder only, never the repo)
+                    var wasW = Width; var wasH = Height; var wasRoot = IconStore.WowRoot;
+                    try
+                    {
+                        IconStore.WowRoot = () => real; IconStore.ForgetMemory();
+                        Width = 1400; Height = 1000;
+                        ShowTab("atlas"); await Task.Delay(100);
+                        AtlasView.History.Clear();
+                        async Task RShot(string id, string file)
+                        {
+                            if (id == null) { await AtlasView.GoStart(); await AtlasView.StartFillForTest; } else await AtlasView.Open(id);
+                            await AtlasView.WaitForTest(); await Task.Delay(1500); UpdateLayout(); await Task.Delay(300); UpdateLayout();
+                            Snapshot(Path.Combine(dir, file));
+                        }
+                        await RShot(null, "races-atlas-home.png");
+                        await RShot("talents:", "races-atlas-nav-talents.png");
+                        await RShot("browse:races", "races-list.png");
+                        await RShot("race:" + (d.RaceByName("High Order Skyborne")?.Id ?? d.RaceByName("Orc").Id), "races-page-high-order.png");
+                        await RShot("race:" + d.RaceByName("Orc").Id, "races-page-orc.png");
+                        notes.Add("note pictures: " + Path.Combine(dir, "races-*.png"));
+                    }
+                    finally { Width = wasW; Height = wasH; IconStore.WowRoot = wasRoot; }
+                }
                 notes.Add("note real game files: " + d.Classes.Count + " classes, " + d.Races.Count + " race rows (" + races.Count + " playable), " + d.Pairs.Count + " pairs, " + d.SkillRows.Count + " skill rows, " + d.Levels.Count + " spell levels, " + d.Costs.Count + " costs, " + d.Cooldowns.Count + " cooldowns; read in " + ms + " ms; Hunter spellbook " + hunter.Entries.Count + " spells (" + hunter.HiddenHelpers + " helper / variant spells left out)");
                 foreach (var n in cset.Notes) notes.Add("note real game files: " + n);
                 foreach (var p in cset.Problems) notes.Add("note real game files: " + p.Key + ": " + p.Value);

@@ -102,8 +102,8 @@ namespace ElansAddonHub
                     && AtlasHosts.ProfessionsId("First Aid", "recipes") == "professions:first-aid/recipes" && AtlasHosts.ProfessionsId("Cooking", "camp") == "professions:camp" && AtlasHosts.ProfessionsId(null, "craft") == "professions:craft",
                     s1 + t1 + s2 + t2 + s3 + t3);
                 var reg = AtlasCategories.Find("talents"); var regP = AtlasCategories.Find("professions");
-                Check("registry: the window registered Talents (after Spells) and Professions (after Recipes) as hosted categories with a glyph, a blurb, a breadcrumb title and a search",
-                    reg != null && reg.Hosted && regP != null && regP.Hosted && reg.Order > AtlasCategories.Find("spells").Order && reg.Order < AtlasCategories.Find("skills").Order && regP.Order > AtlasCategories.Find("recipes").Order
+                Check("registry: the window registered Talents (right after Spells) and Professions (before Recipes and Skills) as hosted categories with a glyph, a blurb, a breadcrumb title and a search",
+                    reg != null && reg.Hosted && regP != null && regP.Hosted && reg.Order > AtlasCategories.Find("spells").Order && reg.Order < regP.Order && regP.Order < AtlasCategories.Find("recipes").Order && AtlasCategories.Find("recipes").Order < AtlasCategories.Find("skills").Order
                     && reg.Glyph.Length > 0 && regP.Glyph.Length > 0 && reg.Blurb.Length > 0 && reg.SubTitle != null && reg.Search != null && regP.SubTitle != null && regP.Search != null && reg.OpenId == "talents:" && AtlasQuery.NormalizeId("talents:tree/hunter") == "talents:tree/hunter");
 
                 // ============================================================================================================ the start page
@@ -112,9 +112,9 @@ namespace ElansAddonHub
                 await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout();
                 FrameworkElement Tile(string openId) => AtlasWalk(AtlasView).OfType<ContentControl>().FirstOrDefault(c => c.Tag is string s && s == openId && c.IsVisible);
                 var tx = AtlasTexts(AtlasView);
-                Check("start page: tiles for Talents and Professions next to Items, Creatures, ... with their blurbs, Talents between Spells and Skills, Professions after Recipes",
+                Check("start page: tiles for Talents and Professions next to Items, Creatures, ... with their blurbs, in the nav's order: Spells, Talents, Professions, Recipes, Skills",
                     Tile("talents:") != null && Tile("professions:") != null && Tile("browse:items") != null && tx.Contains("Talents") && tx.Contains("Professions") && tx.Any(t => t.StartsWith("Plan a build"))
-                    && tx.IndexOf("Spells") < tx.IndexOf("Talents") && tx.IndexOf("Talents") < tx.IndexOf("Skills and professions") && tx.IndexOf("Recipes") < tx.IndexOf("Professions"), string.Join(" | ", tx.Take(40)));
+                    && tx.IndexOf("Spells") < tx.IndexOf("Talents") && tx.IndexOf("Talents") < tx.IndexOf("Professions") && tx.IndexOf("Professions") < tx.IndexOf("Recipes") && tx.IndexOf("Recipes") < tx.IndexOf("Skills") && !tx.Contains("Skills and professions"), string.Join(" | ", tx.Take(40)));
                 Snapshot(Path.Combine(dir, "atlas-hosts-start.png"));
 
                 // ============================================================================================================ opening Talents
@@ -222,7 +222,8 @@ namespace ElansAddonHub
                 var skillPage = AtlasQuery.Build("skill:171");
                 Check("links: a profession's skill page has a 'Professions page' fact", skillPage.Facts.Any(f => f.Label == "Professions page" && f.Link == "professions:alchemy/recipes"), string.Join(" | ", skillPage.Facts));
                 var skillRows = AtlasBrowse.Run("browse:skills");
-                Check("links: in the Skills list the professions open the Professions page (Alchemy, First Aid), other rows keep their skill page", skillRows.Rows.Count >= 3 && skillRows.Rows.Where(r => r.Title == "Alchemy" || r.Title == "First Aid" || r.Title == "Cooking").All(r => r.Link != null && r.Link.StartsWith("professions:")), string.Join(" | ", skillRows.Rows.Select(r => r.Title + "=" + r.Link)));
+                Check("links: the Skills list leaves the professions out (Alchemy, First Aid, Cooking live on the Professions page since 2.71.1, nothing is listed twice), every row it keeps opens its skill page",
+                    !skillRows.Rows.Any(r => AtlasNav.IsProfessionName(r.Title)) && skillRows.Rows.All(r => r.Link != null && r.Link.StartsWith("skill:")) && !skillRows.Children.Any(k => k.Title == "Professions"), string.Join(" | ", skillRows.Rows.Select(r => r.Title + "=" + r.Link)));
                 var tipLines = tp.TipTextsForTest(10);
                 Check("links: a talent's tooltip says Ctrl+click opens its spell page, and Ctrl+click asks the Atlas for spell:100", tipLines.Any(t => t.Contains("Spell ID 100") && t.Contains("Ctrl+click")), string.Join(" | ", tipLines));
                 ProfessionLinks.Last = null;

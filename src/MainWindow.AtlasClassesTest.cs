@@ -96,9 +96,9 @@ namespace ElansAddonHub
                     && !AtlasIds.TryParse("class:0", out _, out _) && AtlasQuery.NormalizeId("Class 3") == "class:3" && AtlasQuery.NormalizeId("race=2") == "race:2" && AtlasQuery.NormalizeId("spell 133") == "spell:133");
                 Check("ids: the kinds have names, plurals and glyphs and sort after the other kinds", AtlasKinds.Singular("class") == "Class" && AtlasKinds.Plural("race") == "Races" && AtlasKinds.Glyph("class").Length == 1 && AtlasKinds.Glyph("race").Length == 1 && Array.IndexOf(AtlasKinds.Order, "class") > Array.IndexOf(AtlasKinds.Order, "faction"));
                 var cc = AtlasCategories.Find("classes"); var cr = AtlasCategories.Find("races");
-                Check("categories: Classes and Races are in the Character group of the sub-navigation (own rows, after Spells), list categories that open browse:classes / browse:races",
+                Check("categories: Classes and Races are in the Character group of the sub-navigation (own rows, first in it: before Spells), list categories that open browse:classes / browse:races",
                     cc != null && cr != null && cc.Group == AtlasNav.Character && cr.Group == AtlasNav.Character && cc.OpenId == "browse:classes" && cr.OpenId == "browse:races" && cc.Kind == "class" && cr.Kind == "race" && cc.Glyph.Length > 0
-                    && AtlasNav.Entries().Where(e => e.Group == AtlasNav.Character).Select(e => e.Title).ToList() is var navRows && navRows.Contains("Classes") && navRows.Contains("Races") && navRows.IndexOf("Classes") > navRows.IndexOf("Spells and talents") - 1, "");
+                    && AtlasNav.Entries().Where(e => e.Group == AtlasNav.Character).Select(e => e.Title).ToList() is var navRows && navRows.Contains("Classes") && navRows.Contains("Races") && navRows.IndexOf("Classes") < navRows.IndexOf("Races") && navRows.IndexOf("Races") < navRows.IndexOf("Spells"), string.Join(",", AtlasNav.Entries().Select(e => e.Title)));
                 Check("nav: a class page and a race page belong to their nav rows (classes, races) for the highlighted row and the breadcrumb", AtlasNav.KeyFor("class:3") == "classes" && AtlasNav.KeyFor("race:2") == "races" && AtlasNav.CategoryCrumb("class").Title == "Classes" && AtlasNav.CategoryCrumb("race").Link == "browse:races");
                 var dsc = AtlasNav.Describe("class:3"); var dsr = AtlasNav.Describe("race:2");
                 Check("nav: Recent / Pinned / palette describe the pages - the class with its icon, the race with its side", dsc != null && dsc.Title == "Hunter" && dsc.IconId == 626000 && dsc.Detail.StartsWith("Class") && dsr != null && dsr.Title == "Orc" && dsr.Detail.Contains("Horde"), dsc?.Detail + " | " + dsr?.Detail);
@@ -190,6 +190,33 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ the race page
                 var rp = AtlasQuery.Build("race:2");
+                // ---- race icons (2.71.1): the game's character-creation portraits, cut out of the UI atlas (RaceIcons), on every race row, hit and page
+                var brI = AtlasBrowse.Run("browse:races"); var hitsI = AtlasQuery.Search("orc").Groups.FirstOrDefault(g => g.Kind == "race");
+                var clsRaces = AtlasQuery.Build("class:3").Section("races");
+                Check("race icons: the Orc page, the browse:races rows, the race search hit, Describe (Recent / Pinned / palette) and the class page's race rows all carry the race's icon (a RaceIcons id, above any FileDataID)",
+                    rp.IconId == RaceIcons.For("Orc", 2) && RaceIcons.IsCrop(rp.IconId) && brI.Rows.Count == 3 && brI.Rows.All(r => RaceIcons.IsCrop(r.IconId)) && brI.Rows.Select(r => r.IconId).Distinct().Count() == 3
+                    && hitsI != null && hitsI.Hits.All(h => RaceIcons.IsCrop(h.IconId)) && AtlasNav.Describe("race:4").IconId == RaceIcons.For("NightElf", 2) && clsRaces != null && clsRaces.Rows.Count > 0 && clsRaces.Rows.All(r => RaceIcons.IsCrop(r.IconId)),
+                    rp.IconId + " | " + string.Join(",", brI.Rows.Select(r => r.Title + "=" + r.IconId)));
+                var sky = new[] { new RaceInfo { Id = 95, ClientFile = "Skyborne", Side = RaceInfo.Alliance }, new RaceInfo { Id = 96, ClientFile = "Skyborne", Side = RaceInfo.Horde } };
+                Check("race icons: the table covers the eight Classic races, Blood Elf, Draenei and Skyborne, male and female, each square once; Undead is the client's 'Scourge'; High Order (Alliance) and Windshaper (Horde) Skyborne get different portraits; a race the table does not know gets none (its row keeps the letter tile)",
+                    RaceIcons.All.Count == 22 && RaceIcons.All.Select(c => c.Name).Distinct().Count() == 22 && RaceIcons.All.Select(c => c.AtlasFile + ":" + c.Left + "," + c.Top).Distinct().Count() == 22
+                    && new[] { "Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll", "BloodElf", "Draenei", "Skyborne" }.All(f => RaceIcons.For(f, 2) > 0 && RaceIcons.For(f, 3) == RaceIcons.For(f, 2) + 1)
+                    && RaceIcons.For("Undead", 2) == RaceIcons.For("Scourge", 2) && RaceIcons.CropOf(RaceIcons.For("Scourge", 2)).Name == "raceicon128-undead-male" && RaceIcons.CropOf(RaceIcons.For("Skyborne", 3)).Name == "raceicon128-skyborne-female-c60"
+                    && RaceIcons.For(sky[0]) != RaceIcons.For(sky[1]) && RaceIcons.For(sky[0]) > 0 && RaceIcons.For(sky[1]) > 0 && RaceIcons.For("Goblin", 2) == 0 && RaceIcons.For("", 2) == 0 && !RaceIcons.IsCrop(626000) && !RaceIcons.IsCrop(RaceIcons.Base + 22)
+                    && CharPortrait.RaceIcon("Skyborne", 3) == RaceIcons.For("Skyborne", 3) && CharPortrait.RaceIcon("Orc", 2) == 236452);
+                byte[] PxOf(byte[] png, out int pw)
+                {
+                    var dec = System.Windows.Media.Imaging.BitmapDecoder.Create(new MemoryStream(png), System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                    var conv = new System.Windows.Media.Imaging.FormatConvertedBitmap(dec.Frames[0], System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                    pw = conv.PixelWidth; var buf = new byte[conv.PixelWidth * conv.PixelHeight * 4]; conv.CopyPixels(buf, conv.PixelWidth * 4, 0); return buf;
+                }
+                var pic = new byte[4 * 4 * 4];
+                for (int py = 2; py < 4; py++) for (int px = 2; px < 4; px++) { int at = (py * 4 + px) * 4; pic[at] = (byte)(px == 2 ? 100 : 200); pic[at + 1] = 40; pic[at + 2] = 80; pic[at + 3] = 255; }
+                var half = IconStore.CropPng(pic, 4, 4, 2, 2, 2, 1); var same = IconStore.CropPng(pic, 4, 4, 2, 2, 2, 2);
+                var halfPx = half == null ? null : PxOf(half, out int hw); var samePx = same == null ? null : PxOf(same, out int sw0);
+                Check("race icons: IconStore.CropPng cuts the square out (2 x 2 at 2,2) and halves a 2:1 one by averaging (blue 100 and 200 -> 150); a square outside the picture gives nothing",
+                    halfPx != null && halfPx.Length == 4 && halfPx[0] == 150 && halfPx[3] == 255 && samePx != null && samePx.Length == 16 && samePx[0] == 100 && samePx[4] == 200 && IconStore.CropPng(pic, 4, 4, 3, 3, 2, 2) == null,
+                    halfPx == null ? "null" : string.Join(",", halfPx));
                 Check("race page: Orc - title, subtitle with the side, facts (Side Horde, language Orcish, mount skill Wolf Riding, start level)",
                     !rp.NotFound && rp.Title == "Orc" && rp.Subtitle == "Race 2 · Horde" && rp.Facts.Any(f => f.Label == "Side" && f.Value == "Horde")
                     && rp.Facts.Any(f => f.Label == "Language" && f.Value == "Orcish" && f.Link == "skill:109") && rp.Facts.Any(f => f.Label == "Mount skill" && f.Value == "Wolf Riding" && f.Link == "skill:149") && rp.Facts.Any(f => f.Label == "Starts at level" && f.Value == "1"), string.Join(" | ", rp.Facts));

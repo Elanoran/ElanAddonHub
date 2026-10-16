@@ -8,7 +8,8 @@ namespace ElansAddonHub.Services.Atlas
 {
     // ============================================================================================================================
     // The Atlas shell's navigation model (no controls): the sub-navigation is built from the AtlasCategories registry, grouped (Database, World,
-    // Character, Lodge); categories that share a NavKey are ONE row ("Spells and talents", "Professions"), but every id and route still works.
+    // Character, Lodge), one row per category. (Categories that share a NavKey would be ONE row with their members listed under it while open; none of the
+    // built-in ones do since 2.71.1: Spells, Talents, Professions, Recipes and Skills are rows of their own.)
     // KeyFor(id) says which row a page belongs to, for every kind of page (browse, entity, hosted, the data sources page), and Describe(id)
     // turns an id into a title, glyph and icon for the Recent / Pinned lists, the Home cards and the Ctrl+K palette.
     // ============================================================================================================================
@@ -92,13 +93,39 @@ namespace ElansAddonHub.Services.Atlas
             if (IsPage(id)) return "data";
             if (AtlasBrowse.IsBrowseId(id))
             {
+                var up = Upgrade(id);
+                if (up != id) return KeyFor(up);
                 if (!BrowseQuery.TryParse(id, out var q)) return "";
                 if (q.Cat == "items" && q.Src == "lodge" && q.How == "drop" && q.Path.Count == 0) return FindsKey;
                 return KeyOfCategoryId(q.Cat);
             }
             if (AtlasCategories.TryHosted(id, out var hc, out _)) return KeyOfCategory(hc);
-            if (AtlasIds.TryParse(id, out var kind, out _)) return KeyOfCategoryId(CategoryOfKind(kind));
+            if (AtlasIds.TryParse(id, out var kind, out var n))
+            {
+                // a profession's skill page (skill:185 Cooking) belongs to Professions: the Skills list no longer holds the professions
+                if (kind == "skill" && IsProfessionSkill(n) && AtlasCategories.Find(AtlasHosts.Professions)?.Hosted == true) return KeyOfCategoryId(AtlasHosts.Professions);
+                return KeyOfCategoryId(CategoryOfKind(kind));
+            }
             return "";
+        }
+
+        // a skill line the Professions page covers (by name: the client lists some professions twice, under two ids)
+        public static bool IsProfessionSkill(int skillId)
+        {
+            SkillInfo s = null;
+            try { s = SpellData.Skill(skillId); } catch (Exception) { }
+            return s != null && IsProfessionName(s.Name);
+        }
+
+        public static bool IsProfessionName(string name) => !string.IsNullOrEmpty(name) && AtlasHosts.ProfessionNames.Contains(name.Trim(), StringComparer.OrdinalIgnoreCase);
+
+        // ids from before 2.71.1 that name a list which moved: "browse:skills/professions" (the professions left the Skills list for their own page) opens the
+        // Professions page. Every other id comes back as it is.
+        public static string Upgrade(string id)
+        {
+            if (string.IsNullOrEmpty(id) || !AtlasBrowse.IsBrowseId(id) || !BrowseQuery.TryParse(id, out var q)) return id;
+            if (q.Cat == "skills" && q.Path.Count > 0 && q.Path[0] == "professions" && AtlasCategories.Find(AtlasHosts.Professions)?.Hosted == true) return AtlasHosts.Professions + ":";
+            return id;
         }
 
         static string KeyOfCategoryId(string cat)

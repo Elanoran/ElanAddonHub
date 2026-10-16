@@ -1,8 +1,10 @@
+using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
 
 namespace ElansAddonHub
@@ -147,7 +149,19 @@ namespace ElansAddonHub
             var b = new Border { Style = (Style)FindResource("Chip"), Padding = new Thickness(8, 0, 8, 0), MinHeight = 24, Margin = new Thickness(0, 0, 8, 4), Tag = link ?? "race-plain" };
             var t = link != null ? LoreLink(race, link, "Open the " + race + " race page") : Tb(race, "Text.Secondary");
             t.VerticalAlignment = VerticalAlignment.Center;
-            b.Child = t;
+            // the race's portrait in front of the name (the game's race icon, RaceIcons), when the game data has the race as a playable one
+            int iconId = 0;
+            if (link != null) try { iconId = RaceIcons.For(ElansAddonHub.Services.Db2.ClassData.Data?.RaceByName((race ?? "").Trim())); } catch (Exception) { }
+            if (iconId <= 0) { b.Child = t; return b; }
+            var img = new Image { Width = 16, Height = 16, Margin = new Thickness(-4, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, Tag = "race-icon|" + iconId };
+            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+            var clip = new Border { CornerRadius = new CornerRadius(3), Child = img, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
+            var have = IconStore.TryGet(iconId);
+            if (have != null) img.Source = have;
+            else IconStore.Request(iconId, src => img.Dispatcher.BeginInvoke(new Action(() => img.Source = src)));
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            sp.Children.Add(clip); sp.Children.Add(t);
+            b.Child = sp;
             return b;
         }
     }

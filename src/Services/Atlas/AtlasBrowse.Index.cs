@@ -576,17 +576,20 @@ namespace ElansAddonHub.Services.Atlas
 
         static BIndex BuildSkills(Ctx x)
         {
+            // Skills (2.71.1): weapon and armor skills, languages, riding, racials, the class skill lines. The professions have their own page (Professions) and the
+            // Recipes list, so they are left out here - unless that page is not there, then they stay and open their skill page.
             var ix = new BIndex { Noun = "skill" };
+            bool profPage = AtlasCategories.Find(AtlasHosts.Professions)?.Hosted == true;
             foreach (var s in SpellData.Spells.Skills.Values)
             {
                 if (string.IsNullOrEmpty(s.Name)) continue;
+                if (profPage && (s.Category == SkillInfo.CatProfession || AtlasNav.IsProfessionName(s.Name))) continue;
                 var e = Entry("skill", s.Id, s.Name);
                 e.Client = true; e.Icon = s.IconId; e.SubLabel = SkillGroup(s.Category);
                 e.Detail = AtlasQuery.SkillCategory(s.Category);
-                if (s.IsProfession) e.Link = AtlasHosts.RecipesLink(s.Name) ?? "";       // the professions open the Professions page
                 ix.All.Add(e);
             }
-            ix.Root.Title = "Skills and professions";
+            ix.Root.Title = "Skills";
             KidsBy(ix.Root, ix.All, e => e.SubLabel, e => true);
             return ix;
         }
