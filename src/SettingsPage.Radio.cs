@@ -27,7 +27,7 @@ namespace ElansAddonHub
             host.ApplyRadioSettings();
         }
 
-        // covers and song details (2.72.2): off = RadioNowPlaying asks nothing
+        // album covers (2.73: the picture the stream names): off = RadioNowPlaying fetches no picture
         void RadioCovers_Click(object sender, RoutedEventArgs e)
         {
             if (loading || settings == null) return;

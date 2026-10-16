@@ -3,6 +3,15 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.73.0
+- **A smaller radio player.** The player in the title bar is now one small rounded pill: the album cover, "Artist – Song", play / pause, and a tiny bouncing equaliser while music plays (it is only decoration, it does not follow the music). A title that is too long for the pill scrolls slowly from end to end and rests at each end; a short one stays still. If you have turned off animations in Windows, nothing moves: the title is cut off with "..." (point at it to read all of it) and the equaliser stands still.
+- **Click the pill for everything else.** A click on the cover or the title opens a card with a larger cover, the song and the artist, all eight channels as small buttons (the one playing is highlighted, one click switches), the volume slider with mute, any problem with **Retry**, and the links to Radio Paradise and **Support Radio Paradise**.
+- **Covers now come from the stream itself.** Radio Paradise sends the cover of each song along with its title in the music stream, so the cover always belongs to the song you hear. The Outpost fetches that picture (over a secure connection, only from Radio Paradise's picture server, once per song, while you listen) and keeps it on your PC. It no longer asks Radio Paradise's website for song details, so the album name and year are gone: the stream does not carry them. No cover in the stream means a music note. Settings > General > Radio Paradise > **Show album covers (from the stream)** turns the pictures off.
+- **Names with accents show right.** Titles such as "José González" used to come out garbled; they now read correctly.
+- **No skip button, on purpose.** Radio Paradise is a live broadcast, the same music for every listener at the same moment, so there is no next song to skip to. Pick another channel instead.
+- **No green outline after a click.** The focus outline on the player's buttons, chips and slider now only shows when you move with the keyboard (Tab), not after clicking with the mouse.
+- **Narrow windows:** the pill's title gets shorter as the window gets narrower, and on the narrowest windows the pill is just the cover and play / pause.
+
 ## 2.72.3
 - **Album covers in the radio player.** A small cover of the song that is playing now sits before "Artist - Title" in the title bar (a music note when there is none).
 - **Click the song for more.** A click on the cover or the title opens a card with a larger cover, the title, artist, album and year, the channel, and the links to Radio Paradise and **Support Radio Paradise**. If the player shows Retry or a problem, that is there too.

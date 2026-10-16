@@ -13,7 +13,7 @@ namespace ElansAddonHub.Services
     // on Pause / Stop / channel change / exit; there is no muted background streaming. Decoding: the channel's MP3 192k stream, frame by frame
     // (NAudio's Mp3Frame + the Windows ACM MP3 decoder, already part of NAudio.WinMM and Windows: no extra package), into a small buffer that a
     // WaveOutEvent on the default device plays. The volume and the voice-room ducking are a gain on the samples (never the device or the
-    // session volume, which the Lodge voice shares). The ICY metadata gives the title; nothing is recorded or saved.
+    // session volume, which the Lodge voice shares). The ICY metadata gives the title and the cover's address (2.73); nothing is recorded or saved.
     public enum RadioState { Stopped, Connecting, Playing, Waiting, GaveUp, Unsupported, NoDevice }
 
     public sealed class RadioPlayer : IDisposable
@@ -36,6 +36,7 @@ namespace ElansAddonHub.Services
         public event Action Changed;                      // on the UI thread (the context the player was made on)
         public RadioState State { get; private set; }
         public string Title { get; private set; }         // "Artist - Title" from the stream, null until the first one
+        public string CoverUrl { get; private set; }      // the song's StreamUrl from the same metadata block (null = none); RadioNowPlaying checks it
         public int Attempt { get; private set; }           // the reconnect try that is waiting / running (0 = the first connection)
         public TimeSpan NextWait { get; private set; }
         public string LastError { get; private set; }
@@ -63,8 +64,8 @@ namespace ElansAddonHub.Services
             channel = c;
             bool playing;
             lock (gate) playing = current != null;
-            if (playing) { StopCore(false); Title = null; Start(); }   // the old connection is closed before the new one opens
-            else { Title = null; Raise(); }
+            if (playing) { StopCore(false); Title = null; CoverUrl = null; Start(); }   // the old connection is closed before the new one opens
+            else { Title = null; CoverUrl = null; Raise(); }
         }
 
         public void Play() { lock (gate) if (current != null) return; Start(); }
@@ -179,7 +180,7 @@ namespace ElansAddonHub.Services
                     int.TryParse(resp.Headers["icy-metaint"], out var metaInt);
                     using (var icy = new IcyStream(resp.GetResponseStream(), Math.Max(0, metaInt)))
                     {
-                        icy.TitleChanged += t => Set(run, () => Title = t);
+                        icy.MetaChanged += (t, u) => Set(run, () => { Title = t; CoverUrl = u; });
                         BufferedWaveProvider buffer = null;
                         var pcm = new byte[16384 * 4];
                         bool started = false;

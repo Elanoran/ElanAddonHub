@@ -8,9 +8,10 @@ namespace ElansAddonHub.Services
 {
     // --selftest "radio": the Radio Paradise mini player in the title bar (Outpost 2.72). This file holds the rules that come from Radio Paradise's own
     // pages (radioparadise.com/listen/stream-links), the ICY stream reader, the reconnect backoff and the ducking curve; RadioPlayer.cs plays.
-    //   - only the published stream links: https://stream.radioparadise.com/<path>, nothing else (no get_block, no audio.radioparadise.stream); the
-    //     track title comes from the stream's own ICY metadata (Icy-MetaData: 1, icy-metaint, StreamTitle='...';). The cover, album and year (2.72.2)
-    //     come from api.radioparadise.com/api/now_playing, once per song and never polled: see RadioNowPlaying.cs
+    //   - only the published stream links: https://stream.radioparadise.com/<path>, nothing else (no get_block, no audio.radioparadise.stream, no
+    //     api.radioparadise.com); the track title and its cover come from the stream's own ICY metadata (Icy-MetaData: 1, icy-metaint,
+    //     StreamTitle='Artist - Title';StreamUrl='http://img.radioparadise.com/covers/l/<id>.jpg';). 2.73: the cover is fetched by RadioNowPlaying.cs
+    //   - the metadata text is UTF-8 when it is valid UTF-8, otherwise Windows-1252 (Radio Paradise's streams send Latin-1, e.g. "José González")
     //   - one connection, opened only on Play, closed on Pause / Stop / exit; reconnect only while the user wants playback (2, 4, 8 ... s up to 5 min,
     //     with jitter, 10 tries, then Retry)
     //   - attribution "Radio Paradise · <channel>" linked to radioparadise.com and "Support Radio Paradise" (donate); no logo, never called official
@@ -18,7 +19,6 @@ namespace ElansAddonHub.Services
     {
         public string Id, Name, Path;      // Path = the stream link the player uses (MP3 192k; Serenity only has its 64k stream and FLAC)
         public string[] Published;         // every stream link Radio Paradise publishes for this channel
-        public int? ApiChan;               // the channel number of api.radioparadise.com (its list_chan); null = no song details for this channel
         public override string ToString() => Name;
     }
 
@@ -30,23 +30,20 @@ namespace ElansAddonHub.Services
         public const string ProjectUrl = "https://github.com/Elanoran/ElanAddonHub";
         public const string DefaultChannel = "main";
 
-        static RadioChannel Ch(string id, string name, int? api, string path, params string[] published) => new RadioChannel { Id = id, Name = name, ApiChan = api, Path = path, Published = published };
+        static RadioChannel Ch(string id, string name, string path, params string[] published) => new RadioChannel { Id = id, Name = name, Path = path, Published = published };
 
         // the channels and their published links (radioparadise.com/listen/stream-links); the player uses MP3 192k because Windows decodes it without
         // extra components (see RadioPlayer); AAC / FLAC links are listed so the allow-list matches the page exactly.
-        // The API channel numbers are the ones radioparadise.com's own player uses (its list_chan answer, checked 2026-10-16: 0 main-mix, 1 mellow,
-        // 2 rock, 3 global, 5 beyond, 42 serenity, 945 kfat). Radio 2050 ("2050" in the site's code) is a talk-and-music show whose now_playing has
-        // no artist or title, so it gets no song details.
         public static readonly RadioChannel[] Channels =
         {
-            Ch("main", "Main Mix", 0, "mp3-192", "aac-128", "mp3-192", "aac-320", "flacbg"),
-            Ch("mellow", "Mellow", 1, "mellow-192", "mellow-128", "mellow-192", "mellow-320", "mellow-flacbg"),
-            Ch("rock", "Rock", 2, "rock-192", "rock-128", "rock-192", "rock-320", "rock-flacbg"),
-            Ch("global", "Global", 3, "global-192", "global-128", "global-192", "global-320", "global-flacbg"),
-            Ch("beyond", "Beyond", 5, "beyond-192", "beyond-128", "beyond-192", "beyond-320", "beyond-flacbg"),
-            Ch("radio2050", "Radio 2050", null, "radio2050-192", "radio2050-128", "radio2050-192", "radio2050-320"),
-            Ch("kfat", "KFAT", 945, "kfat-192", "kfat-128", "kfat-192", "kfat-320", "kfat-flacbg"),
-            Ch("serenity", "Serenity", 42, "serenity", "serenity", "serenity-flac"),
+            Ch("main", "Main Mix", "mp3-192", "aac-128", "mp3-192", "aac-320", "flacbg"),
+            Ch("mellow", "Mellow", "mellow-192", "mellow-128", "mellow-192", "mellow-320", "mellow-flacbg"),
+            Ch("rock", "Rock", "rock-192", "rock-128", "rock-192", "rock-320", "rock-flacbg"),
+            Ch("global", "Global", "global-192", "global-128", "global-192", "global-320", "global-flacbg"),
+            Ch("beyond", "Beyond", "beyond-192", "beyond-128", "beyond-192", "beyond-320", "beyond-flacbg"),
+            Ch("radio2050", "Radio 2050", "radio2050-192", "radio2050-128", "radio2050-192", "radio2050-320"),
+            Ch("kfat", "KFAT", "kfat-192", "kfat-128", "kfat-192", "kfat-320", "kfat-flacbg"),
+            Ch("serenity", "Serenity", "serenity", "serenity", "serenity-flac"),
         };
 
         public static RadioChannel Channel(string id) => Channels.FirstOrDefault(c => c.Id == id) ?? Channels[0];
@@ -67,12 +64,20 @@ namespace ElansAddonHub.Services
 
         // "Artist - Title" from a metadata block: StreamTitle='...'; (a title may itself hold ' or ;, so the value ends at the "';" that is followed by
         // the next key or the end of the block)
-        public static string ParseStreamTitle(string meta)
+        public static string ParseStreamTitle(string meta) => ParseField(meta, "StreamTitle");
+
+        // the song's cover: StreamUrl='http://img.radioparadise.com/covers/l/11774.jpg'; (RadioNowPlaying checks it against its allow-list)
+        public static string ParseStreamUrl(string meta) => ParseField(meta, "StreamUrl");
+
+        public static string ParseField(string meta, string name)
         {
             if (string.IsNullOrEmpty(meta)) return null;
             meta = meta.TrimEnd('\0');
-            const string key = "StreamTitle='";
-            int s = meta.IndexOf(key, StringComparison.Ordinal);
+            string key = name + "='";
+            int s = -1;
+            // a key starts the block or follows a "';" - the same words inside a title ("... StreamUrl='x' ...") are not a key
+            for (int i = meta.IndexOf(key, StringComparison.Ordinal); i >= 0; i = meta.IndexOf(key, i + 1, StringComparison.Ordinal))
+                if (i == 0 || meta.Substring(0, i).TrimEnd().EndsWith("';", StringComparison.Ordinal)) { s = i; break; }
             if (s < 0) return null;
             s += key.Length;
             int end = -1;
@@ -82,8 +87,20 @@ namespace ElansAddonHub.Services
                 if (rest.Length == 0 || System.Text.RegularExpressions.Regex.IsMatch(rest, @"^[A-Za-z]+=")) { end = i; break; }
             }
             if (end < 0) end = meta.EndsWith("'") ? meta.Length - 1 : meta.Length;
-            var t = meta.Substring(s, end - s).Trim();
+            var t = meta.Substring(s, Math.Max(0, end - s)).Trim();
             return t.Length == 0 ? null : t;
+        }
+
+        // the text of a metadata block (its zero padding cut): UTF-8 when the bytes are valid UTF-8, otherwise Windows-1252, a superset of the
+        // Latin-1 Radio Paradise sends (read as UTF-8, "José González" came out with replacement characters)
+        static readonly Encoding StrictUtf8 = new UTF8Encoding(false, true);
+        public static string DecodeMeta(byte[] b, int count)
+        {
+            if (b == null) return null;
+            count = Math.Min(count, b.Length);
+            while (count > 0 && b[count - 1] == 0) count--;
+            try { return StrictUtf8.GetString(b, 0, count); }
+            catch (DecoderFallbackException) { return Encoding.GetEncoding(1252).GetString(b, 0, count); }
         }
 
         // reconnect waits: 2, 4, 8 ... s, at most 5 minutes, +-20 % jitter so many listeners never come back at the same second
@@ -97,14 +114,16 @@ namespace ElansAddonHub.Services
     }
 
     // The audio part of an ICY stream: every icy-metaint bytes of audio the server puts one metadata block (a length byte * 16, then text). Reads
-    // pass the audio through and take the blocks out; a new StreamTitle raises TitleChanged (on the reading thread).
+    // pass the audio through and take the blocks out; a new StreamTitle or a new StreamUrl (the cover) raises MetaChanged (on the reading thread).
+    // A block without a title (most of them are empty) keeps the song and its cover.
     public sealed class IcyStream : Stream
     {
         readonly Stream inner;
         readonly int metaInt;
         int left;
-        public event Action<string> TitleChanged;
+        public event Action<string, string> MetaChanged;    // the title, the cover address (null when the block names none)
         public string Title { get; private set; }
+        public string CoverUrl { get; private set; }
         public long AudioBytes { get; private set; }
 
         public IcyStream(Stream inner, int metaInt) { this.inner = inner; this.metaInt = metaInt; left = metaInt; }
@@ -134,8 +153,11 @@ namespace ElansAddonHub.Services
             var b = new byte[len * 16];
             int got = 0;
             while (got < b.Length) { int n = inner.Read(b, got, b.Length - got); if (n <= 0) throw new EndOfStreamException(); got += n; }
-            var t = RadioParadise.ParseStreamTitle(Encoding.UTF8.GetString(b));
-            if (t != null && t != Title) { Title = t; TitleChanged?.Invoke(t); }
+            var text = RadioParadise.DecodeMeta(b, b.Length);
+            var t = RadioParadise.ParseStreamTitle(text);
+            if (t == null) return;
+            var u = RadioParadise.ParseStreamUrl(text);
+            if (t != Title || u != CoverUrl) { Title = t; CoverUrl = u; MetaChanged?.Invoke(t, u); }
         }
 
         public override bool CanRead => true;

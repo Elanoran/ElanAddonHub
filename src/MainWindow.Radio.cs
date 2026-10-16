@@ -15,12 +15,12 @@ namespace ElansAddonHub
     public partial class MainWindow
     {
         public RadioPlayer Radio { get; private set; }
-        public RadioNowPlaying RadioSongs { get; private set; }   // the cover, album and year (2.72.2): one request per song, see RadioNowPlaying
+        public RadioNowPlaying RadioSongs { get; private set; }   // the song and its cover, both from the stream (2.73), see RadioNowPlaying
         readonly RadioDucker radioDucker = new RadioDucker();
         DispatcherTimer duckTimer;
         readonly Stopwatch duckClock = Stopwatch.StartNew();
         public Func<bool?> RadioSpeechForTest;          // self-test: who is talking in my voice room (null = not in one)
-        public const double RadioWideFrom = 1100, RadioMediumFrom = 900, GameDataChipRoom = 280, RadioFullRow = 310;
+        public const double RadioWideFrom = 1100, GameDataChipRoom = 280, RadioFullRow = 150;   // below RadioFullRow of room: cover + play only
 
         void InitRadio()
         {
@@ -31,7 +31,7 @@ namespace ElansAddonHub
             RadioPlayerBar.OpenLink = OpenAtlasLink;
             RadioPlayerBar.Init(Radio, settings, RadioSongs);
             Radio.Changed += RadioChanged;
-            RadioSongs.Changed += () => LayoutTitleBar();   // a cover / a longer title can change the chip's width
+            RadioSongs.Changed += () => LayoutTitleBar();   // a longer title can change the pill's width
             RadioPlayerBar.SizeChanged += (s, e) => LayoutTitleBar();
             GameDataBar.IsVisibleChanged += (s, e) => LayoutTitleBar();   // the chip takes its room back from the radio's title while it is up
             ((FrameworkElement)TitleSearch.Parent).SizeChanged += (s, e) => LayoutTitleBar();
@@ -59,8 +59,8 @@ namespace ElansAddonHub
             LayoutTitleBar();
         }
 
-        // the song details: asked for only while it plays and only when Settings allows it (RadioNowPlaying keeps the one-per-song and 15 s rules)
-        void UpdateRadioSong() => RadioSongs?.Update(Radio.Channel, Radio.Title, Radio.State == RadioState.Playing, !settings.RadioOff && !settings.RadioNoCovers);
+        // the song and its cover (the stream's StreamUrl): the picture is fetched only while it plays and only when Settings allows it
+        void UpdateRadioSong() => RadioSongs?.Update(Radio.Channel, Radio.Title, Radio.CoverUrl, Radio.State == RadioState.Playing, !settings.RadioOff && !settings.RadioNoCovers);
 
         // the ducking runs only while the radio wants to play (nothing ticks otherwise)
         void RadioChanged()
@@ -101,13 +101,13 @@ namespace ElansAddonHub
             if (RadioPlayerBar != null)
             {
                 RadioPlayerBar.Margin = new Thickness(left, 0, 0, 0);
-                // the room between the search box and the right side; while the game data chip is up it keeps GameDataChipRoom of it, and the
-                // player gets compact (channel and title in the flyout) when what is left is less than its full row
+                // the room between the search box and the right side; while the game data chip is up it keeps GameDataChipRoom of it; the pill's
+                // title shrinks to the room (SetRoom) and the pill becomes cover + play when less than RadioFullRow is left
                 var bar = (FrameworkElement)TitleSearch.Parent;
                 bool chipUp = GameDataBar.Visibility == Visibility.Visible;
                 double room = bar.ActualWidth <= 0 ? double.PositiveInfinity
                     : chipUp ? bar.ActualWidth - left - Math.Max(180, right + 8) - 8 - GameDataChipRoom : bar.ActualWidth - left - right - 8;
-                int mode = ActualWidth <= 0 || ActualWidth >= RadioWideFrom ? 0 : ActualWidth >= RadioMediumFrom ? 1 : 2;
+                int mode = ActualWidth <= 0 || ActualWidth >= RadioWideFrom ? 0 : 1;   // the title up to 240 / 140; it shrinks further to the room
                 if (room < RadioFullRow) mode = 2;
                 if (mode != RadioPlayerBar.Mode) RadioPlayerBar.SetMode(mode);
                 RadioPlayerBar.SetRoom(room);
