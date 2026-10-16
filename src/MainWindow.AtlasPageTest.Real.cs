@@ -97,6 +97,7 @@ namespace ElansAddonHub
                 Check("real game files: the item's icon is cut out of the game's own files and shown in the tooltip card", ItemData.Get(13446) != null && IconStore.TryGet(ItemData.Get(13446).IconId) != null);
                 Snapshot(Path.Combine(dir, "atlas-page-real-item.png"));
                 await AtlasView.Open(elwHit?.Id ?? "zone:1429");
+                await SwitchTab(AtlasTabs.Map);   // a zone with notes opens on its Overview
                 bool ready = await MapReady(0, 60000);
                 await Task.Delay(500); UpdateLayout();
                 Check("real game files: the zone page shows Elwynn Forest's real map picture", ready && AtlasView.MapsForTest[0].UiMapId == (elwHit != null ? int.Parse(elwHit.Id.Substring(5)) : 1429));
