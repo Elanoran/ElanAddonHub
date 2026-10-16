@@ -189,6 +189,6 @@ namespace ElansAddonHub.Lodge
         public bool PlusMenuOpenForTest => PlusPopup.IsOpen;
         public string PlusMenuForTest => (PlusFile.Visibility == Visibility.Visible ? "file " : "") + (PlusLfg.Visibility == Visibility.Visible ? "lfg" : "");
         public void ClosePlusForTest() => PlusPopup.IsOpen = false;
-        public void ScrollToEndForTest() { MessageScroll.UpdateLayout(); MessageScroll.ScrollToEnd(); }
+        public void ScrollToEndForTest() { if (!window.Live) window.ShowEnd(); MessageScroll.UpdateLayout(); MessageScroll.ScrollToEnd(); }
     }
 }

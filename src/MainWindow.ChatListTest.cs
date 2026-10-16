@@ -107,7 +107,7 @@ namespace ElansAddonHub
                 YouTube.MetaSource = id => Task.FromResult<VideoMeta>(null);
                 Session.SentForTest = ChatPager;
                 await ChatContract(dir, check, late, late2);
-                if (Environment.GetEnvironmentVariable("ELANSHUB_CHATLIST_QUICK") != "1") await ChatPerf(dir, check, perf);
+                if (Environment.GetEnvironmentVariable("ELANSHUB_CHATLIST_QUICK") != "1") await ChatPerf(dir, check, perf);   // (=1: the contract only, while working on the list)
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally

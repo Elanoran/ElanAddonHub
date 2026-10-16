@@ -44,6 +44,7 @@ namespace ElansAddonHub.Lodge
         public LodgeView()
         {
             InitializeComponent();
+            Messages.ItemsSource = window.Shown;   // the rows of the open channel (LodgeView.ChatList.cs)
             foreach (var p in new[] { SearchPopup, PlusPopup, MsgMenu, ReactPopup, PinPopup, StatusPopup, MemberPopup })
             {
                 var pop = p;
@@ -132,7 +133,7 @@ namespace ElansAddonHub.Lodge
                 CancelMode();
                 Composer.Text = s.Selected != null && drafts.TryGetValue(s.Selected.Id, out var draft) ? draft : "";
                 Composer.CaretIndex = Composer.Text.Length;
-                Messages.ItemsSource = s.MessagesOf(s.Selected?.Id);
+                window.Attach(s.MessagesOf(s.Selected?.Id), s.Selected?.Divider);
                 ChannelTitle.Text = s.Selected?.Name ?? "";
                 EmptyText.Text = $"No messages in #{s.Selected?.Name} yet - say hi!";
                 ComposerHint.Text = $"Message #{s.Selected?.Name}";
@@ -289,7 +290,8 @@ namespace ElansAddonHub.Lodge
         public void ServerNoticeCopyForTest() => ServerNoticeCopy_Click(null, null);
         public void ServerNoticeCloseForTest() => ServerNoticeClose_Click(null, null);
 
-        bool AtBottom => MessageScroll.VerticalOffset >= MessageScroll.ScrollableHeight - 60;
+        // at the end of the list, and the newest message has a row
+        bool AtBottom => window.Live && MessageScroll.VerticalOffset >= MessageScroll.ScrollableHeight - 60;
 
         // ---- scrolling, the "jump" button, highlight
         FrameworkElement ContainerOf(MessageVM vm) => Messages.ItemContainerGenerator.ContainerFromItem(vm) as FrameworkElement;
@@ -301,6 +303,7 @@ namespace ElansAddonHub.Lodge
 
         void ScrollToMessage(MessageVM vm, bool flash)
         {
+            window.Include(vm);   // a message without a row: the rows move to it
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 MessageScroll.UpdateLayout();
@@ -320,7 +323,16 @@ namespace ElansAddonHub.Lodge
             t.Start();
         }
 
-        void MessageScroll_Changed(object sender, ScrollChangedEventArgs e) { HoldMessagesInPlace(e); UpdateJump(); MaybeLoadOlder(e); }
+        void MessageScroll_Changed(object sender, ScrollChangedEventArgs e)
+        {
+            HoldMessagesInPlace(e);
+            KeepReaderInPlace(e);
+            UpdateJump();
+            MaybeLoadOlder(e);
+            MaybeGrowWindow(e);
+            NoteReaderPlace();
+            QueueTrim();
+        }
 
         void UpdateJump()
         {
@@ -331,6 +343,7 @@ namespace ElansAddonHub.Lodge
             {
                 var c = ContainerOf(ch.Divider);
                 var y = c == null ? double.NaN : OffsetInView(c);
+                if (c == null) { var at = window.IndexOf(ch.Divider); if (at >= 0 && at < window.Start) y = double.NegativeInfinity; }   // above the rows that are built
                 if (!double.IsNaN(y) && y < -4) mode = "unread";
             }
             if (mode == null && !AtBottom) mode = "present";
@@ -383,7 +396,11 @@ namespace ElansAddonHub.Lodge
         // scroll to a message in this channel and flash it (older ones are loaded first: see LodgeView.History.cs)
         void JumpTo(string id) => _ = JumpToAsync(Session.Selected?.Id, id, 0);
 
-        void ScrollToEnd() => Dispatcher.BeginInvoke(new Action(() => MessageScroll.ScrollToEnd()), DispatcherPriority.Background);
+        void ScrollToEnd()
+        {
+            if (!window.Live) window.ShowEnd();   // the rows were further up (a jump, a long scroll up): back to the newest
+            Dispatcher.BeginInvoke(new Action(() => MessageScroll.ScrollToEnd()), DispatcherPriority.Background);
+        }
 
         // ================================================================ join / connection
 
