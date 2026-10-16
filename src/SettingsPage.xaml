@@ -210,7 +210,7 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Favourite channel" Tag="The player starts on this channel. Picking another one in the player is just for that session.">
                 <ComboBox x:Name="RadioFavBox" Style="{StaticResource Dropdown}" Width="180" SelectionChanged="RadioFav_Changed" AutomationProperties.Name="Favourite channel" />
               </HeaderedContentControl>
-              <HeaderedContentControl x:Name="RadioQualityRow" Style="{StaticResource Setting.Row}" Header="Sound quality" Tag="Data per hour of listening: Standard about 90 MB, High about 145 MB, Lossless up to about 0.5 GB. The lossless streams may come without song titles.">
+              <HeaderedContentControl x:Name="RadioQualityRow" Style="{StaticResource Setting.Row}" Header="Sound quality" Tag="Data per hour of listening: Standard about 90 MB, High about 145 MB, Lossless up to about 0.5 GB. The lossless streams send no song titles or covers. You can also switch it in the player's pop-out.">
                 <Border Style="{StaticResource SegmentHost}">
                   <StackPanel Orientation="Horizontal">
                     <RadioButton x:Name="RadioQualityStd" Style="{StaticResource Segment}" Content="Standard" GroupName="rq" Checked="RadioQuality_Changed" ToolTip="MP3 192 kbit/s (Serenity: AAC 64 kbit/s, the only lossy stream it has)" AutomationProperties.Name="Sound quality standard" />

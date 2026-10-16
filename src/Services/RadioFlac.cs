@@ -9,7 +9,10 @@ namespace ElansAddonHub.Services
     // mapping: a 0x7F "FLAC" header packet with STREAMINFO, metadata packets, then one FLAC frame per packet). The Ogg pages are taken apart here
     // and every frame decoded by a small FLAC decoder written for the Outpost (the format is open and simple: fixed / LPC prediction + Rice
     // coded residuals), so nothing has to be installed. The song comes from the stream's own Vorbis comments (ARTIST / TITLE) when a new Ogg
-    // stream in the chain carries them; Radio Paradise's FLAC streams were seen to start with an empty comment block (no ICY metadata either).
+    // stream in the chain carries them. 2.77, checked on the real flacbg stream (one connection, 8 minutes, 55.7 MB, 1336 Ogg pages): one logical
+    // stream only (one serial, BOS on the first page, no EOS, no new BOS at song changes), its one VORBIS_COMMENT block empty (vendor "reference
+    // libFLAC 1.5.0 20250211", 0 comments), no PICTURE block, and no icy-metaint in the answer even with Icy-MetaData: 1. So Radio Paradise's
+    // Lossless streams name no song and no cover; the pop-out says so. A chained stream with per-song comments (other servers) still works here.
 
     // the pages of an Ogg stream, put back together into packets
     public sealed class OggPacketReader

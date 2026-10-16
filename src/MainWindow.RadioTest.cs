@@ -465,7 +465,7 @@ namespace ElansAddonHub
                     void Recent(InputDevice dev) => mri.GetSetMethod(true).Invoke(InputManager.Current, new object[] { dev });
                     bool Visual(UIElement el) { var layer = AdornerLayer.GetAdornerLayer(el); var ads = layer?.GetAdorners(el); return ads != null && ads.Any(a => a.GetType().Name.Contains("FocusVisual")); }
                     var controls = new FrameworkElement[] { RadioPlayerBar.SongButtonForTest, RadioPlayerBar.PlayButtonForTest, RadioPlayerBar.ChipsForTest[0], RadioPlayerBar.VolumeSliderForTest,
-                        RadioPlayerBar.MuteButtonForTest, RadioPlayerBar.RpLinkForTest, RadioPlayerBar.RetryButtonForTest };
+                        RadioPlayerBar.MuteButtonForTest, RadioPlayerBar.RpLinkForTest, RadioPlayerBar.RetryButtonForTest, RadioPlayerBar.QualitySegmentsForTest[1] };
                     var noStyle = controls.Where(c => c.FocusVisualStyle == null).Select(c => c.Name).ToList();
                     var drawn = controls.Where(c => FindVisible(c, "ring")).Select(c => c.Name).ToList();
                     Check("focus: every radio control draws its ring through FocusVisualStyle (none of them has a ring of its own on keyboard focus)", noStyle.Count == 0 && drawn.Count == 0,
@@ -483,7 +483,7 @@ namespace ElansAddonHub
                         if (FindVisible(c, "ring") || (!cues && Visual(c))) ringed.Add(c.Name);
                     }
                     Check("focus: no ring after a mouse click on the pill, a chip, the slider, the speaker or the link" + (cues ? " (Windows always shows focus here: the own rings are checked)" : ""),
-                        focused >= 6 && ringed.Count == 0, $"focused {focused} ringed {string.Join(",", ringed)} cues {cues}");
+                        focused >= 7 && ringed.Count == 0, $"focused {focused} ringed {string.Join(",", ringed)} cues {cues}");
                     RadioPlayerBar.FlyoutForTest.IsOpen = false; await Settle();
                     var pb = RadioPlayerBar.PlayButtonForTest;
                     // Tab: the next control gets the ring
@@ -750,10 +750,10 @@ namespace ElansAddonHub
                     Check("pop-out: \"Radio Paradise · Main Mix · Lossless\" and the pill shows the song", RadioPlayerBar.RpLinkTextForTest == "Radio Paradise · Main Mix · Lossless"
                         && RadioPlayerBar.NowTextForTest != null && RadioPlayerBar.NowTextForTest.StartsWith("Test Artist – Song "), RadioPlayerBar.RpLinkTextForTest + " | " + RadioPlayerBar.NowTextForTest);
                     Radio.SetChannel("radio2050");
-                    Check("Radio 2050 at Lossless: it has no FLAC, so it plays its AAC 320k link and says so (status, chip tooltip)",
+                    Check("Radio 2050 at Lossless: it has no FLAC, so it plays its AAC 320k link and says so (the quality note, chip tooltip)",
                         await Until(() => Radio.State == RadioState.Playing && LastPath() == "/radio2050-320", 8000) && Radio.Stream?.Quality == RadioQuality.High
-                        && RadioPlayerBar.StatusTextForTest.Contains("Radio 2050 has no lossless stream: playing High.") && (RadioPlayerBar.ChipToolTipForTest("radio2050") ?? "").Contains("has no lossless stream")
-                        && RadioPlayerBar.RpLinkTextForTest == "Radio Paradise · Radio 2050 · High", LastPath() + " | " + RadioPlayerBar.StatusTextForTest);
+                        && RadioPlayerBar.QualityNoteForTest == "Radio 2050 has no lossless stream: it plays High." && (RadioPlayerBar.ChipToolTipForTest("radio2050") ?? "").Contains("has no lossless stream")
+                        && RadioPlayerBar.RpLinkTextForTest == "Radio Paradise · Radio 2050 · High", LastPath() + " | " + RadioPlayerBar.QualityNoteForTest);
                     Radio.SetChannel("serenity");
                     Check("Serenity at Lossless: its FLAC link plays", await Until(() => Radio.State == RadioState.Playing && LastPath() == "/serenity-flac" && Radio.DecodedBytes > 0, 8000), LastPath() + " " + Radio.State + " " + Radio.LastError);
                     await Until(() => Radio.Title != null, 4000);
@@ -789,7 +789,7 @@ namespace ElansAddonHub
                     Radio.Play();
                     Check("no AAC decoder: High on Main Mix falls back to the MP3 link and says why",
                         await Until(() => Radio.State == RadioState.Playing && LastPath() == "/mp3-192", 8000) && Radio.Stream?.Note == "this PC can't play AAC"
-                        && RadioPlayerBar.StatusTextForTest.Contains("This PC can't play AAC: playing Standard."), LastPath() + " | " + RadioPlayerBar.StatusTextForTest);
+                        && RadioPlayerBar.QualityNoteForTest == "This PC can't play AAC: it plays Standard.", LastPath() + " | " + RadioPlayerBar.QualityNoteForTest);
                     Radio.Stop();
                     await Until(() => srv.Open == 0, 4000);
                     // the decoder fails only once the stream is open: straight on with the next lower stream, no wait, one connection at a time
@@ -808,6 +808,67 @@ namespace ElansAddonHub
                     var planned = Radio.Planned;
                     Check("no FLAC decoder (simulated): Lossless steps down to High (AAC 320k), never fails", planned?.Path == "aac-320" && planned.Note == "this PC can't play FLAC", planned?.Path);
                     RadioDecoders.ResetForTest();
+
+                    // ---- 2.77: the pop-out's Quality segments - the same setting as Settings > General > Sound quality
+                    {
+                        string Tip(RadioQuality q) => RadioPlayerBar.QualitySegmentsForTest[(int)q].ToolTip as string ?? "";
+                        SettingsPage.SetRadioQualityForTest(RadioQuality.Standard);
+                        Radio.SetChannel("rock"); await Settle();
+                        var segs = RadioPlayerBar.QualitySegmentsForTest;
+                        Check("pop-out quality: Standard | High | Lossless, Standard checked like Settings; nothing dimmed on Rock, no note",
+                            segs.Count == 3 && (string)segs[0].Content == "Standard" && (string)segs[1].Content == "High" && (string)segs[2].Content == "Lossless"
+                            && RadioPlayerBar.CheckedQualityForTest == RadioQuality.Standard && !RadioPlayerBar.QualityDimmedForTest(RadioQuality.Lossless) && RadioPlayerBar.QualityNoteForTest == ""
+                            && Tip(RadioQuality.Lossless) == "Lossless: FLAC, about 1 Mbit/s.", RadioPlayerBar.CheckedQualityForTest + " | " + Tip(RadioQuality.Lossless) + " | " + RadioPlayerBar.QualityNoteForTest);
+                        int conns = srv.Connections;
+                        RadioPlayerBar.PickQualityForTest(RadioQuality.High); await Settle();
+                        Check("pop-out quality: picking High saves Settings' Sound quality, the Settings row follows, the session's channel stays; nothing connects by itself",
+                            settings.RadioQuality == "high" && SettingsPage.RadioQualityShownForTest == RadioQuality.High && Radio.Quality == RadioQuality.High
+                            && Radio.Channel.Id == "rock" && !Radio.WantsPlayback && srv.Connections == conns,
+                            settings.RadioQuality + " row " + SettingsPage.RadioQualityShownForTest + " ch " + Radio.Channel.Id + " conns " + (srv.Connections - conns));
+                        SettingsPage.SetRadioQualityForTest(RadioQuality.Lossless); await Settle();
+                        Check("pop-out quality: a change in Settings shows in the pop-out", RadioPlayerBar.CheckedQualityForTest == RadioQuality.Lossless && Radio.Quality == RadioQuality.Lossless, RadioPlayerBar.CheckedQualityForTest + "");
+                        Radio.SetChannel("radio2050"); await Settle();
+                        Check("pop-out quality: Radio 2050 dims Lossless (it has none) and says it plays High (tooltip and the note under the row)",
+                            RadioPlayerBar.QualityDimmedForTest(RadioQuality.Lossless) && !RadioPlayerBar.QualityDimmedForTest(RadioQuality.High) && !RadioPlayerBar.QualityDimmedForTest(RadioQuality.Standard)
+                            && Tip(RadioQuality.Lossless) == "Radio 2050 has no lossless stream: it plays High." && RadioPlayerBar.QualityNoteForTest == "Radio 2050 has no lossless stream: it plays High."
+                            && RadioPlayerBar.CheckedQualityForTest == RadioQuality.Lossless, Tip(RadioQuality.Lossless) + " | " + RadioPlayerBar.QualityNoteForTest);
+                        if (SelfTestClock.ShotsOn)
+                        {
+                            Width = 1280; await ShotWait(300);
+                            RadioPlayerBar.FlyoutForTest.IsOpen = true; await ShotWait(400); SnapshotElement(RadioPlayerBar.FlyCardForTest, P("radio-popout-quality-radio2050.png")); RadioPlayerBar.FlyoutForTest.IsOpen = false;
+                            Width = w0;
+                        }
+                        Radio.SetChannel("serenity"); await Settle();
+                        Check("pop-out quality: Serenity dims High (its only lossy stream is AAC 64k), Lossless plays as it is (no note)",
+                            RadioPlayerBar.QualityDimmedForTest(RadioQuality.High) && !RadioPlayerBar.QualityDimmedForTest(RadioQuality.Lossless) && RadioPlayerBar.QualityNoteForTest == ""
+                            && Tip(RadioQuality.High) == "Serenity has no high-quality stream: it plays Standard (AAC 64 kbit/s).", Tip(RadioQuality.High));
+                        RadioPlayerBar.PickQualityForTest(RadioQuality.Standard); await Settle();
+                        Check("pop-out quality: back to Standard is stored as the default (nothing saved for it)", settings.RadioQuality == null && SettingsPage.RadioQualityShownForTest == RadioQuality.Standard, settings.RadioQuality);
+
+                        // while it plays: the old stream closes before the new one opens; a FLAC stream with empty Vorbis comments (as Radio Paradise's
+                        // flacbg sends them) plays and says honestly that it names no song
+                        Radio.SetChannel("main");
+                        RadioPlayerBar.PickQualityForTest(RadioQuality.High);
+                        srv.OggSong = k => TestFlac.Song(k, 12, null, "");
+                        Radio.Play();
+                        await Until(() => Radio.State == RadioState.Playing && LastPath() == "/aac-320", 8000);
+                        RadioPlayerBar.FlyoutForTest.IsOpen = true;
+                        srv.PeakOpen = srv.Open;
+                        RadioPlayerBar.PickQualityForTest(RadioQuality.Lossless);
+                        long dq = Radio.DecodedBytes;
+                        Check("pop-out quality while playing: the AAC stream closes first, then the FLAC link opens (never two at once); Settings says Lossless",
+                            await Until(() => Radio.State == RadioState.Playing && LastPath() == "/flacbg" && Radio.Stream?.Format == RadioFormat.Flac, 8000) && srv.PeakOpen == 1
+                            && settings.RadioQuality == "lossless" && SettingsPage.RadioQualityShownForTest == RadioQuality.Lossless && RadioPlayerBar.CheckedQualityForTest == RadioQuality.Lossless,
+                            $"{Radio.State} {LastPath()} peak {srv.PeakOpen} {settings.RadioQuality}");
+                        Check("FLAC without song comments: it plays, no title or cover is made up, and the pop-out says the stream sends no song titles",
+                            await Until(() => Radio.DecodedBytes > dq + 400000, 8000) && Radio.Title == null && Radio.CoverUrl == null
+                            && RadioPlayerBar.StatusTextForTest.Contains("This stream sends no song titles or covers; Standard and High show them.") && RadioPlayerBar.NowTextForTest == "Radio Paradise · Main Mix" && !RadioPlayerBar.CoverShownForTest,
+                            Radio.Title + " | " + RadioPlayerBar.StatusTextForTest + " | " + RadioPlayerBar.NowTextForTest);
+                        RadioPlayerBar.FlyoutForTest.IsOpen = false;
+                        Radio.Stop();
+                        await Until(() => srv.Open == 0, 4000);
+                        srv.OggSong = k => TestFlac.Song(k, 12);
+                    }
 
                     // ---- the Settings row
                     SettingsPage.SetRadioQualityForTest(RadioQuality.Standard);
@@ -1123,8 +1184,11 @@ namespace ElansAddonHub
                 void Str(string t) { var b = Encoding.UTF8.GetBytes(t); vc.Write(BitConverter.GetBytes(b.Length), 0, 4); vc.Write(b, 0, b.Length); }
                 Str("Elan's Outpost self-test");
                 var tags = new List<string>();
-                if (artist != null) tags.Add("ARTIST=" + artist);
-                tags.Add("TITLE=" + (title ?? "Song " + (n + 1)));
+                if (title != "")   // "" = an empty comment block, as Radio Paradise's FLAC streams send it
+                {
+                    if (artist != null) tags.Add("ARTIST=" + artist);
+                    tags.Add("TITLE=" + (title ?? "Song " + (n + 1)));
+                }
                 vc.Write(BitConverter.GetBytes(tags.Count), 0, 4);
                 foreach (var t in tags) Str(t);
                 var vcb = vc.ToArray();

@@ -29,6 +29,7 @@ namespace ElansAddonHub
             radioDucker.Level = settings.RadioDuck ?? 0.3;
             RadioSongs = new RadioNowPlaying();
             RadioPlayerBar.OpenLink = OpenAtlasLink;
+            RadioPlayerBar.QualityPicked = PickRadioQuality;   // 2.77: the pop-out's quality is Settings' Sound quality
             RadioPlayerBar.Init(Radio, settings, RadioSongs);
             Radio.Changed += RadioChanged;
             RadioSongs.Changed += () => LayoutTitleBar();   // a longer title can change the pill's width
@@ -58,6 +59,17 @@ namespace ElansAddonHub
             RadioPlayerBar.Visibility = settings.RadioOff ? Visibility.Collapsed : Visibility.Visible;
             UpdateRadioSong();
             LayoutTitleBar();
+        }
+
+        // 2.77: the pop-out's Quality segments: saved as Settings > General > Sound quality (the Settings row follows) and applied at once. Only the
+        // quality: not ApplyRadioSettings, which would put a stopped player back on the favourite channel (the session's channel stays)
+        void PickRadioQuality(RadioQuality q)
+        {
+            settings.RadioQuality = q == RadioQuality.Standard ? null : RadioParadise.QualityId(q);
+            SettingsStore.Save(settings);
+            SettingsPage.SyncRadioQuality();
+            Radio.SetQuality(q);   // while it plays: the old stream closes, the new one opens
+            UpdateRadioSong();
         }
 
         // the song and its cover (the stream's StreamUrl): the picture is fetched only while it plays and only when Settings allows it

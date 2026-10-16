@@ -16,12 +16,25 @@ namespace ElansAddonHub
             RadioBox.IsChecked = !s.RadioOff;
             RadioFavBox.SelectedItem = RadioParadise.Channel(s.RadioChannel);
             RadioCoversBox.IsChecked = !s.RadioNoCovers;
+            ShowRadioQuality(s);
+            RadioDuckSlider.Value = s.RadioDuck ?? 0.3;
+            RadioDuckText.Text = Math.Round(RadioDuckSlider.Value * 100) + " %";
+        }
+
+        void ShowRadioQuality(Settings s)
+        {
             var q = RadioParadise.ParseQuality(s.RadioQuality);
             RadioQualityStd.IsChecked = q == RadioQuality.Standard;
             RadioQualityHigh.IsChecked = q == RadioQuality.High;
             RadioQualityLossless.IsChecked = q == RadioQuality.Lossless;
-            RadioDuckSlider.Value = s.RadioDuck ?? 0.3;
-            RadioDuckText.Text = Math.Round(RadioDuckSlider.Value * 100) + " %";
+        }
+
+        // 2.77: the radio pop-out changed the quality: the row shows it (without saving or applying it a second time)
+        public void SyncRadioQuality()
+        {
+            if (settings == null) return;
+            bool was = loading; loading = true;
+            try { ShowRadioQuality(settings); } finally { loading = was; }
         }
 
         void Radio_Click(object sender, RoutedEventArgs e)
@@ -74,6 +87,7 @@ namespace ElansAddonHub
         public void SetRadioDuckForTest(double v) => RadioDuckSlider.Value = v;
         public void SetRadioQualityForTest(RadioQuality q) => (q == RadioQuality.Lossless ? RadioQualityLossless : q == RadioQuality.High ? RadioQualityHigh : RadioQualityStd).IsChecked = true;
         public FrameworkElement RadioQualityRowForTest => RadioQualityRow;
+        public RadioQuality RadioQualityShownForTest => RadioQualityLossless.IsChecked == true ? RadioQuality.Lossless : RadioQualityHigh.IsChecked == true ? RadioQuality.High : RadioQualityStd.IsChecked == true ? RadioQuality.Standard : (RadioQuality)(-1);
         public string RadioFavouriteForTest => (RadioFavBox.SelectedItem as RadioChannel)?.Id;
     }
 }
