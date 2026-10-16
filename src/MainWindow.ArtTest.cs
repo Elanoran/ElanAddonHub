@@ -21,22 +21,6 @@ namespace ElansAddonHub
     // scratch folder); pictures with ELANSHUB_SHOTS=1.
     public partial class MainWindow
     {
-        static TalentSet ArtTestTalents()
-        {
-            TalentTreeDef Tree(int id, int classId, string name, string file, params string[] specs)
-            {
-                var t = new TalentTreeDef { Id = id, ClassId = classId, ClassName = name, ClassFile = file, SpecNames = specs };
-                // the ids of the Characters fixture (HubCharsLua): 1-9 the first tree, 10-18 the second, 19-27 the third
-                for (int n = 1; n <= 27; n++) t.Nodes.Add(new TalentNode { Id = n, Spec = (n - 1) / 9, Col = ((n - 1) % 9) / 3, Row = (n - 1) % 3 });
-                t.Reindex();
-                return t;
-            }
-            var set = new TalentSet();
-            set.Trees.Add(Tree(1, 1, "Warrior", "WARRIOR", "Arms", "Fury", "Protection"));
-            set.Trees.Add(Tree(2, 3, "Hunter", "HUNTER", "Beast Mastery", "Marksmanship", "Survival"));
-            return set;
-        }
-
         async Task<string> ArtTest(string dir)
         {
             var notes = new List<string>();
@@ -111,15 +95,19 @@ namespace ElansAddonHub
                 Check("a page of another kind: no banner", AtlasView.BannerForTest == null);
                 MapData.ResetForTest();
 
-                // ---- Characters > Talents
+                // ---- Characters > Talents (full-size trees: the shape of the game's Hunter and Warrior data, a 51-point build each)
                 if (Directory.Exists(root)) Util.DeleteDir(root);
                 Check("fixture: the WoW folder of this test is under the scratch folder (never the real game)", Path.GetFullPath(root).StartsWith(Path.GetFullPath(dir), StringComparison.OrdinalIgnoreCase));
                 var sv = Path.Combine(root, "_classic_beta_", "WTF", "Account", "ART", "SavedVariables");
                 Directory.CreateDirectory(sv);
                 Directory.CreateDirectory(Path.Combine(root, "_classic_beta_", "Interface", "AddOns"));
                 var hubFile = Path.Combine(sv, "ElansHub.lua");
-                File.WriteAllText(hubFile, HubCharsLua(now, now - 60), new UTF8Encoding(false));
-                TalentData.SetForTest(ArtTestTalents());
+                var full = FullTalents();
+                var hunterDef = full.ForClassFile("HUNTER"); var warriorDef = full.ForClassFile("WARRIOR");
+                var hunterLua = HubCharsLua(now, now - 60, "60", FullHubTalents(hunterDef, FullHunterBuild, now - 300));
+                File.WriteAllText(hubFile, hunterLua, new UTF8Encoding(false));
+                if (SelfTestClock.ShotsOn) CopyShotIcons(hunterDef, warriorDef);
+                TalentData.SetForTest(full);
                 HubData.ResetCache();
                 InventoryView.Init(() => root);
                 TabInventory.IsChecked = true;
@@ -131,36 +119,62 @@ namespace ElansAddonHub
                 Check("hunter talents: the tree headers are the spec names from the game's talent data", new[] { "treehead|1|Beast Mastery|0", "treehead|2|Marksmanship|1", "treehead|3|Survival|2" }.All(tl.Contains), string.Join(" | ", tl.Where(x => x.StartsWith("tree"))));
                 Check("hunter talents: each tree has its spec's art behind it (BM, MM, SV) under the veil", new[] { "treeart|1|talent-hunter-bm.jpg", "treeart|2|talent-hunter-1.jpg", "treeart|3|talent-hunter-sv.jpg" }.All(tl.Contains)
                     && InventoryView.TalentCardsForTest.All(c => c.Tag as string == "tree-painted"), string.Join(" | ", tl.Where(x => x.StartsWith("tree"))));
-                Check("hunter talents: the trees and nodes are as before (three 3x3 trees, 29 nodes with the loose ones)", tl.Count(x => x.StartsWith("tree|")) == 3 && tl.Contains("loose|2") && InventoryView.TalentNodesForTest == 29);
+                Check("hunter talents: placed from the game data, 51 spent, three 4 x 7 trees (16 / 17 / 18 talents) with 31 / 20 / 0 points, no talent apart (the hidden Lightning Reflexes copy 104982 counts as 110859, Improved Serpent Sting's y 39300 does not matter)",
+                    tl.Contains("talentsource|game data|Hunter") && tl.Contains("talentinfo|51|0|3|0") && tl.Contains("tree|1|4x7|31|16") && tl.Contains("tree|2|4x7|20|17") && tl.Contains("tree|3|4x7|0|18") && !tl.Any(x => x.StartsWith("loose|")),
+                    string.Join(" | ", tl.Where(x => x.StartsWith("t") || x.StartsWith("loose"))));
+                Check("hunter talents: headers 'Beast Mastery 31 / 51', 'Marksmanship 20 / 51', 'Survival 0 / 51' with the spec icons of the game data",
+                    new[] { "treepoints|1|31 / 51", "treepoints|2|20 / 51", "treepoints|3|0 / 51" }.All(tl.Contains) && InventoryView.TalentPanelsForTest.Select(p => p.Model.HeaderText).SequenceEqual(new[] { "Beast Mastery 31 / 51", "Marksmanship 20 / 51", "Survival 0 / 51" })
+                    && InventoryView.TalentPanelsForTest.Select(p => p.Model.IconId).SequenceEqual(new[] { 132164, 132222, 132215 }) && InventoryView.TalentPanelsForTest.All(p => p.SpecIcon.Visibility == Visibility.Visible));
+                Check("hunter arrows: one per prerequisite pair (the pair written both ways is one arrow, pointing down), lit when the prerequisite is full",
+                    new[] { "arrow|1|104964>104961|lit", "arrow|1|104967>104962|lit", "arrow|1|104970>104964|lit", "arrow|2|105004>104997|dim", "arrow|2|105005>104999|lit", "arrow|2|105008>105002|lit", "arrow|3|104985>104984|dim", "arrow|3|104986>104989|dim" }.All(tl.Contains)
+                    && tl.Count(x => x.StartsWith("arrow|")) == 8, string.Join(" | ", tl.Where(x => x.StartsWith("arrow"))));
+                Check("hunter grid: every talent sits on its game cell, the 4 columns spread evenly over the panel, the arrows drawn from under the prerequisite to above the talent",
+                    GridMatches(InventoryView.TalentPanelsForTest, hunterDef, out var why), why);
+                Check("hunter talents: ranks, dimming (rank 0 behind a closed gate dimmed, rank 0 that could be taken not), the highest talent of BM lit", RanksMatch(InventoryView.TalentPanelsForTest, hunterDef, FullHunterBuild, out var why2), why2);
                 var cardsT = InventoryView.TalentCardsForTest;
-                double colA = cardsT[0].ActualWidth, gridA = InventoryView.TalentGridsForTest[0].ActualWidth;
+                double colA = cardsT[0].ActualWidth, iconA = InventoryView.TalentPanelsForTest[0].Grid.IconSize;
                 Check("layout at 1400: three equal columns side by side, at least " + InventoryPage.TreeMinWidth + " wide", InventoryView.TalentTreesSideBySideForTest && cardsT.All(c => Math.Abs(c.ActualWidth - colA) < 1) && colA >= InventoryPage.TreeMinWidth - 0.5, string.Join(",", cardsT.Select(c => c.ActualWidth)));
-                await ShotWait(500);
+                await ShotWait(800);
                 Snapshot(P("art-04-talents-hunter.png"));
                 Width = 900; await Task.Delay(300); UpdateLayout();
                 bool stacked = !InventoryView.TalentTreesSideBySideForTest && cardsT[1].TranslatePoint(new Point(0, 0), cardsT[0]).Y > cardsT[0].ActualHeight;
                 Width = 1200; await Task.Delay(300); UpdateLayout();
                 bool sideN = InventoryView.TalentTreesSideBySideForTest;
-                double colN = cardsT[0].ActualWidth, gridN = InventoryView.TalentGridsForTest[0].ActualWidth;
+                double colN = cardsT[0].ActualWidth, iconN = InventoryView.TalentPanelsForTest[0].Grid.IconSize;
                 Width = 1800; await Task.Delay(300); UpdateLayout();
-                double colW = cardsT[0].ActualWidth, gridW = InventoryView.TalentGridsForTest[0].ActualWidth;
-                var natural = InventoryView.TalentGridNaturalWidthForTest(0);
+                double colW = cardsT[0].ActualWidth, iconW = InventoryView.TalentPanelsForTest[0].Grid.IconSize;
+                bool gridW = GridMatches(InventoryView.TalentPanelsForTest, hunterDef, out var whyW);
                 Check("layout: at 900 the trees go one under the other", stacked);
                 Check("layout: the columns grow with the window (1200 < 1400 < 1800) and stop at " + InventoryPage.TreeMaxWidth, sideN && colN < colA && colA < colW && colW <= InventoryPage.TreeMaxWidth + 0.5 && InventoryView.TalentTreesSideBySideForTest, colN + " / " + colA + " / " + colW);
-                Check("layout: the icons grow with the column (32 px at the narrowest, 44 px at the widest; the grid keeps its shape)", gridN < gridA - 0.5 && gridA <= gridW + 0.5 && gridN >= natural * 32.0 / 38 - 1 && gridW <= natural * 44.0 / 38 + 1.5
-                    && InventoryPage.TalentIconFor(InventoryPage.TreeMinWidth) == 32 && InventoryPage.TalentIconFor(InventoryPage.TreeMaxWidth) == 44 && InventoryPage.TalentIconFor(9999) == 44 && InventoryPage.TalentIconFor(0) == 32,
-                    gridN + " / " + gridA + " / " + gridW + " natural " + natural + " cards " + colN + " / " + colA + " / " + colW + " max " + InventoryView.TalentGridsForTest[0].MaxWidth);
+                Check("layout: the icons follow the panel (36 to 48 px, never smaller at a wider panel) and the grid still fills the panel at 1800",
+                    iconN >= TalentGridPanel.IconMin && iconW <= TalentGridPanel.IconMax && iconN <= iconA && iconA <= iconW && iconW > iconN && gridW
+                    && TalentGridPanel.IconFor(10) == 36 && TalentGridPanel.IconFor(1000) == 48, iconN + " / " + iconA + " / " + iconW + " " + whyW);
                 Width = 1400; await Task.Delay(200); UpdateLayout();
 
-                // without the talent data: "Tree N", the art still follows the order of the three trees
+                // without the talent data: "Tree N", the Hub's positions (the copy left out, the extra-digit position placed), the art still by tree order
                 TalentData.SetForTest(null, TalentData.State.Unavailable, "test");
                 InventoryView.SelectTabForTest("overview"); InventoryView.SelectTabForTest("talents");
                 tl = InventoryView.CharTabLinesForTest();
-                Check("hunter talents without the game's talent data: 'Tree 1..3' as before, the art still by tree order", new[] { "treehead|1|Tree 1|0", "treehead|3|Tree 3|2" }.All(tl.Contains) && tl.Contains("treeart|1|talent-hunter-bm.jpg"), string.Join(" | ", tl.Where(x => x.StartsWith("tree"))));
-                TalentData.SetForTest(ArtTestTalents());
+                Check("hunter talents without the game's talent data: 'Tree 1..3', '31 points', the art still by tree order, the copy left out and nothing apart",
+                    new[] { "treehead|1|Tree 1|0", "treehead|3|Tree 3|2", "treepoints|1|31 points", "talentsource|positions", "copies|104982", "talentinfo|51|0|3|0" }.All(tl.Contains) && tl.Contains("treeart|1|talent-hunter-bm.jpg") && !tl.Any(x => x.StartsWith("loose|"))
+                    && tl.Count(x => x.StartsWith("tree|") && x.Contains("|4x7|")) == 3, string.Join(" | ", tl.Where(x => x.StartsWith("t") || x.StartsWith("c") || x.StartsWith("loose"))));
+                TalentData.SetForTest(full);
 
-                // the same trees on a warrior: Arms / Fury / Protection and no art
-                File.WriteAllText(hubFile, HubCharsLua(now, now - 60).Replace("class='Hunter',classFile='HUNTER'", "class='Warrior',classFile='WARRIOR'"), new UTF8Encoding(false));
+                // a talent with ranks the class' trees do not have: listed apart, with what it is
+                File.WriteAllText(hubFile, HubCharsLua(now, now - 60, "60", FullHubTalents(hunterDef, FullHunterBuild, now - 300).Replace("nodes={\n", "nodes={\n[999]={id=424242,r=2,m=3,x=1020,y=2130,s=987654,n=\"Forgotten Talent\",ic=0},\n")), new UTF8Encoding(false));
+                File.SetLastWriteTimeUtc(hubFile, DateTime.UtcNow.AddSeconds(2));
+                for (int i = 0; i < 40; i++)
+                {
+                    await Task.Delay(200);
+                    InventoryView.FilterForTest("Forever-Elan"); InventoryView.SelectTabForTest("talents");
+                    if (InventoryView.CharTabLinesForTest().Any(x => x.StartsWith("loose|"))) break;
+                }
+                tl = InventoryView.CharTabLinesForTest();
+                Check("a talent with ranks that is in none of the class' trees is listed apart under 'Not in the Hunter talent trees' (the trees stay as they are)",
+                    tl.Contains("loose|1|Not in the Hunter talent trees") && tl.Contains("tree|1|4x7|31|16"), string.Join(" | ", tl.Where(x => x.StartsWith("t") || x.StartsWith("loose"))));
+
+                // the same build idea on a warrior: Arms / Fury / Protection, no art
+                File.WriteAllText(hubFile, HubCharsLua(now, now - 60, "60", FullHubTalents(warriorDef, FullWarriorBuild, now - 300)).Replace("class='Hunter',classFile='HUNTER'", "class='Warrior',classFile='WARRIOR'"), new UTF8Encoding(false));
                 File.SetLastWriteTimeUtc(hubFile, DateTime.UtcNow.AddSeconds(5));
                 for (int i = 0; i < 40; i++)
                 {
@@ -170,10 +184,33 @@ namespace ElansAddonHub
                 }
                 UpdateLayout();
                 tl = InventoryView.CharTabLinesForTest();
-                Check("warrior talents: headers Arms / Fury / Protection, each tree with the warrior's own art (Arms, Fury, Protection)", new[] { "treehead|1|Arms|0", "treehead|2|Fury|1", "treehead|3|Protection|2", "treeart|1|talent-warrior-0.jpg", "treeart|2|talent-warrior-1.jpg", "treeart|3|talent-warrior-2.jpg" }.All(tl.Contains)
-                    && InventoryView.TalentCardsForTest.All(c => c.Tag as string == "tree-painted"), string.Join(" | ", tl.Where(x => x.StartsWith("tree"))));
-                await ShotWait(500);
+                Check("warrior talents: headers Arms / Fury / Protection with 31 / 20 / 0 of 51, each tree with the warrior's own art, nothing apart",
+                    new[] { "treehead|1|Arms|0", "treehead|2|Fury|1", "treehead|3|Protection|2", "treepoints|1|31 / 51", "treepoints|2|20 / 51", "treepoints|3|0 / 51", "talentinfo|51|0|3|0", "treeart|1|talent-warrior-0.jpg", "treeart|2|talent-warrior-1.jpg", "treeart|3|talent-warrior-2.jpg" }.All(tl.Contains)
+                    && InventoryView.TalentCardsForTest.All(c => c.Tag as string == "tree-painted"), string.Join(" | ", tl.Where(x => x.StartsWith("t"))));
+                Check("warrior arrows: 8, lit where the prerequisite is full (Arms' four), dim otherwise",
+                    new[] { "arrow|1|105945>105941|lit", "arrow|1|105950>105947|lit", "arrow|1|105956>105950|lit", "arrow|1|105954>105951|lit", "arrow|2|105927>105928|dim", "arrow|2|105931>113569|dim", "arrow|3|105965>105959|dim", "arrow|3|105976>105971|dim" }.All(tl.Contains)
+                    && tl.Count(x => x.StartsWith("arrow|")) == 8, string.Join(" | ", tl.Where(x => x.StartsWith("arrow"))));
+                Check("warrior grid: every talent on its game cell, evenly spread", GridMatches(InventoryView.TalentPanelsForTest, warriorDef, out var why3), why3);
+                await ShotWait(800);
                 Snapshot(P("art-05-talents-warrior.png"));
+
+                // the planner (Atlas > Talents) on the same data: the same renderer, the hunter's spec art behind its trees, a character's build loaded
+                var hunterChar = HubData.Parse(hunterLua).Char("Forever-Elan");
+                ShowTab("talents"); await Task.Delay(300);
+                var page = TalentsView;
+                page.SelectClass("HUNTER"); await Task.Delay(200); UpdateLayout();
+                Check("planner: one panel per hunter tree with the spec art behind it (same treatment as Characters)", page.PanelsForTest.Count == 3 && page.PanelsForTest.All(p => p.Painted && p.Tag as string == "tree-painted")
+                    && page.InfoForTest.Contains("treeart|0|talent-hunter-bm.jpg") && page.InfoForTest.Contains("treeart|2|talent-hunter-sv.jpg"), string.Join(" | ", page.InfoForTest.Where(x => x.StartsWith("treeart"))));
+                Check("planner: 'Load from my character' lays the 51 points on the trees, headers 31 / 51 and 20 / 51, the BM arrows lit",
+                    page.UseCharacter(new InvChar { Key = "Forever-Elan", Name = "Elan", Realm = "Forever", Class = "HUNTER", Level = 60, Hub = hunterChar }) && page.SessionForTest.State.Total == 51
+                    && page.PanelsForTest[0].Model.HeaderText == "Beast Mastery 31 / 51" && page.PanelsForTest[1].Model.HeaderText == "Marksmanship 20 / 51" && page.PanelsForTest[0].Model.Arrows.All(a => a.Lit),
+                    page.StatusForTest + " " + string.Join(", ", page.PanelsForTest.Select(p => p.Model.HeaderText)));
+                UpdateLayout();
+                Check("planner grid: every talent on its game cell, evenly spread", GridMatches(page.PanelsForTest, hunterDef, out var why4), why4);
+                page.ScrollTopForTest();
+                await ShotWait(800);
+                Snapshot(P("art-06-talents-planner.png"));
+                ShowTab("addons");
             }
             catch (Exception ex) { ok = false; notes.Add("FAIL exception: " + ex); }
             finally

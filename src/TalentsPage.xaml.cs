@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using Path = System.Windows.Shapes.Path;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,9 +18,6 @@ namespace ElansAddonHub
     // game's own rules (TalentRules), recommended builds (Hunter Helper's list, read from the installed addon), saved builds and shareable build codes.
     public partial class TalentsPage : UserControl
     {
-        // layout of the trees on the canvas (device independent pixels)
-        const double Node = 40, Step = 52, Gutter = 36, SpecGap = 24, HeaderH = 32, Top = HeaderH + 8;
-
         // hooks (the self-test replaces them)
         public static Func<TalentNode, string> NameOf = n => TalentData.NodeName(n);
         public Func<InvData> CharactersSource;                 // null = read the saved variables
@@ -36,11 +32,8 @@ namespace ElansAddonHub
         TalentSession session;
         string classFile;                                      // the chosen class
         string lastClassFile;
-        readonly Dictionary<int, NodeView> views = new Dictionary<int, NodeView>();
-        readonly List<Path> edgePaths = new List<Path>();
-        readonly List<TalentEdge> edgeList = new List<TalentEdge>();
-        readonly List<TextBlock> specHeads = new List<TextBlock>();
-        readonly List<GateView> gates = new List<GateView>();
+        readonly Dictionary<int, TalentNodeView> views = new Dictionary<int, TalentNodeView>();
+        readonly List<TalentTreePanel> panels = new List<TalentTreePanel>();
         SavedBuilds saved = new SavedBuilds();
         List<RecBuild> recBuilds = new List<RecBuild>();
         string recProblem;
@@ -48,18 +41,6 @@ namespace ElansAddonHub
         BuildApplication openApplication;
         bool building, loadedOnce;
         readonly List<string> info = new List<string>();       // self-test breadcrumbs
-
-        sealed class NodeView
-        {
-            public TalentNode Node;
-            public Border Box;
-            public Image Img;
-            public TextBlock Letter, Rank;
-            public Border Badge;
-            public int IconId;
-        }
-
-        sealed class GateView { public int Spec, Row, Need; public TextBlock Label; public TextBlock Lock; }
 
         public TalentsPage()
         {
@@ -195,101 +176,26 @@ namespace ElansAddonHub
         }
 
         // ------------------------------------------------------------------------------------------------------------------------------ the trees
+        // one TalentTreePanel per tree (the shared renderer): the game's grid, the arrows, the row gates in a narrow gutter, the spec art behind it
         void BuildTree()
         {
-            TreeCanvas.Children.Clear(); views.Clear(); edgePaths.Clear(); edgeList.Clear(); specHeads.Clear(); gates.Clear();
-            int specs = tree.SpecCount;
-            int cols = Math.Max(1, tree.Nodes.Max(n => n.Col) + 1), rows = Math.Max(1, tree.Nodes.Max(n => n.Row) + 1);
-            double specW = Gutter + cols * Step;
-            TreeCanvas.Width = specs * specW + (specs - 1) * SpecGap;
-            TreeCanvas.Height = Top + rows * Step;
-            double X(TalentNode n) => n.Spec * (specW + SpecGap) + Gutter + n.Col * Step;
-            double Y(TalentNode n) => Top + n.Row * Step;
-
-            for (int s = 0; s < specs; s++)
+            views.Clear(); panels.Clear();
+            var models = TalentTreeModels.FromDef(tree, session.State, NameOf, IconOf, n => TalentRules.Available(tree, session.State, n));
+            var cards = new List<FrameworkElement>();
+            foreach (var m in models)
             {
-                double x0 = s * (specW + SpecGap);
-                var head = new TextBlock { Text = tree.SpecNames.Length > s ? tree.SpecNames[s] : "Tree " + (s + 1), Style = (Style)FindResource("Text.RowTitle"), Foreground = Res("Brush.Text.Primary") };
-                Canvas.SetLeft(head, x0 + Gutter); Canvas.SetTop(head, 4);
-                TreeCanvas.Children.Add(head); specHeads.Add(head);
-                var rule = new Border { Width = cols * Step - (Step - Node), Height = 1, Background = Res("Brush.Divider") };
-                Canvas.SetLeft(rule, x0 + Gutter); Canvas.SetTop(rule, HeaderH);
-                TreeCanvas.Children.Add(rule);
-                // the gate of each row (what the rows above must hold), in the gutter
-                for (int r = 1; r < rows; r++)
-                {
-                    int need = tree.Nodes.Where(n => n.Spec == s && n.Row == r).Select(n => TalentRules.GateNeeded(tree, n)).DefaultIfEmpty(0).Max();
-                    if (need <= 0) continue;
-                    var g = new GateView { Spec = s, Row = r, Need = need };
-                    g.Lock = new TextBlock { Text = "", FontFamily = (FontFamily)Application.Current.Resources["Font.Icons"], FontSize = 12, Foreground = Res("Brush.Text.Tertiary") };
-                    g.Label = new TextBlock { Text = need.ToString(CultureInfo.InvariantCulture), Style = (Style)FindResource("Text.Caption"), Foreground = Res("Brush.Text.Tertiary") };
-                    var sp = new StackPanel { Orientation = Orientation.Horizontal, ToolTip = need + " points in the rows above open this row" };
-                    sp.Children.Add(g.Lock); sp.Children.Add(new TextBlock { Text = " ", FontSize = 11 }); sp.Children.Add(g.Label);
-                    Canvas.SetLeft(sp, x0); Canvas.SetTop(sp, Top + r * Step + (Node - 16) / 2);
-                    TreeCanvas.Children.Add(sp);
-                    gates.Add(g);
-                }
+                var p = new TalentTreePanel(m, true, true, "Brush.Surface2", id => TipFor(id));
+                p.NodeClicked += (id, right) => Click(id, right);
+                p.NodeCtrlClicked += OpenSpell;
+                foreach (var kv in p.Views) views[kv.Key] = kv.Value;
+                panels.Add(p); cards.Add(p);
+                if (p.Painted) info.Add("treeart|" + m.Spec + "|" + m.Art.File);
             }
-
-            // arrows first, so the nodes sit on top of them
-            foreach (var e in tree.Edges.Where(e => e.Type == TalentEdge.Required || e.Type == TalentEdge.Sufficient || e.Type == TalentEdge.Visual))
-            {
-                var a = tree.Node(e.From); var b = tree.Node(e.To);
-                if (a == null || b == null || a.Spec != b.Spec) continue;
-                double ax = X(a) + Node / 2, ay = Y(a) + Node / 2, bx = X(b) + Node / 2, by = Y(b) + Node / 2;
-                double dx = bx - ax, dy = by - ay, len = Math.Sqrt(dx * dx + dy * dy);
-                if (len < 1) continue;
-                double ux = dx / len, uy = dy / len;
-                // from the border of one node to the border of the other
-                double sx = ax + ux * (Node / 2), sy = ay + uy * (Node / 2), ex = bx - ux * (Node / 2 + 2), ey = by - uy * (Node / 2 + 2);
-                var geo = new PathGeometry();
-                var fig = new PathFigure { StartPoint = new Point(sx, sy) };
-                fig.Segments.Add(new LineSegment(new Point(ex, ey), true));
-                if (e.Type != TalentEdge.Visual)
-                {
-                    double px = -uy, py = ux;
-                    var h1 = new Point(ex - ux * 8 + px * 4, ey - uy * 8 + py * 4); var h2 = new Point(ex - ux * 8 - px * 4, ey - uy * 8 - py * 4);
-                    fig.Segments.Add(new LineSegment(h1, true)); fig.Segments.Add(new LineSegment(new Point(ex, ey), false)); fig.Segments.Add(new LineSegment(h2, true));
-                }
-                geo.Figures.Add(fig);
-                var path = new Path { Data = geo, Stroke = Res("Brush.Text.Tertiary"), StrokeThickness = 2, StrokeLineJoin = PenLineJoin.Round, IsHitTestVisible = false };
-                TreeCanvas.Children.Add(path); edgePaths.Add(path); edgeList.Add(e);
-            }
-
-            foreach (var n in tree.Nodes)
-            {
-                var v = new NodeView { Node = n };
-                var box = new Border
-                {
-                    Width = Node, Height = Node, CornerRadius = new CornerRadius(8), Background = Res("Brush.Surface2"), BorderThickness = new Thickness(2), BorderBrush = Brushes.Transparent,
-                    Cursor = Cursors.Hand, Focusable = true, SnapsToDevicePixels = true, Tag = n.Id,
-                };
-                var grid = new Grid();
-                v.Letter = new TextBlock { Text = "?", Style = (Style)FindResource("Text.Section"), Foreground = Res("Brush.Text.Secondary"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                grid.Children.Add(v.Letter);
-                v.Img = new Image { Margin = new Thickness(2), Stretch = Stretch.Uniform };
-                RenderOptions.SetBitmapScalingMode(v.Img, System.Windows.Media.BitmapScalingMode.HighQuality);
-                grid.Children.Add(v.Img);
-                v.Rank = new TextBlock { Style = (Style)FindResource("Text.Caption"), Foreground = Res("Brush.Text.Primary") };
-                v.Badge = new Border { Background = Res("Brush.Surface3"), CornerRadius = new CornerRadius(8), Padding = new Thickness(4, 0, 4, 0), Child = v.Rank, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -6, -8), IsHitTestVisible = false };
-                grid.Children.Add(v.Badge);
-                box.Child = grid;
-                box.MouseLeftButtonDown += NodeLeft;
-                box.MouseRightButtonDown += NodeRight;
-                box.KeyDown += (s, e) => { int id = (int)((Border)s).Tag; if (e.Key == Key.Enter || e.Key == Key.Space || e.Key == Key.Add) { Click(id, false); e.Handled = true; } else if (e.Key == Key.Delete || e.Key == Key.Back || e.Key == Key.Subtract) { Click(id, true); e.Handled = true; } };
-                var tip = GameTooltip.Wrap(null);
-                int nodeId = n.Id;
-                tip.Opened += (s, e) => tip.Content = TipFor(nodeId);
-                box.ToolTip = tip;
-                ToolTipService.SetInitialShowDelay(box, 150);
-                Canvas.SetLeft(box, X(n)); Canvas.SetTop(box, Y(n));
-                TreeCanvas.Children.Add(box);
-                v.Box = box; views[n.Id] = v;
-            }
+            TreeHost.Content = TalentTreePanel.Columns(cards, TreeHost, () => CalcCard.ActualWidth - 32);
             RefreshStates();
         }
 
-        static ImageSource IconNow(int id) => id > 0 ? IconStore.TryGet(id) : null;
+        static int IconOf(TalentNode n) => n.Entry?.IconOverride > 0 ? n.Entry.IconOverride : (n.SpellId > 0 ? SpellData.Spell(n.SpellId)?.IconId ?? 0 : 0);
 
         void BindIcon(int id, Image img)
         {
@@ -299,47 +205,16 @@ namespace ElansAddonHub
             IconStore.Request(id, src => { try { img.Dispatcher.BeginInvoke(new Action(() => img.Source = src)); } catch { } });
         }
 
-        // colours, ranks, icons, arrows, gates and the points line: everything that follows from the current ranks
+        // ranks, icons, arrows, gates and the points: everything that follows from the current ranks
         void RefreshStates()
         {
             if (tree == null || session == null) return;
             var st = session.State;
-            foreach (var v in views.Values)
+            foreach (var p in panels)
             {
-                var n = v.Node;
-                int rank = st.Rank(n.Id);
-                bool avail = TalentRules.Available(tree, st, n) && session.Left >= tree.CostPerRank;
-                bool availNow = TalentRules.Available(tree, st, n);
-                bool maxed = rank >= n.MaxRanks;
-                v.Rank.Text = rank + "/" + n.MaxRanks;
-                v.Badge.Background = rank > 0 ? Res(maxed ? "Brush.Accent" : "Brush.Accent.Tint") : Res("Brush.Surface3");
-                v.Rank.Foreground = rank > 0 && maxed ? Res("Brush.OnAccent") : Res("Brush.Text.Primary");
-                v.Box.BorderBrush = rank > 0 ? Res("Brush.Accent") : availNow ? Res("Brush.Text.Tertiary") : Brushes.Transparent;
-                v.Box.Opacity = rank > 0 || availNow ? 1 : 0.45;
-                var name = NameOf(n);
-                v.Letter.Text = string.IsNullOrEmpty(name) ? "?" : name.Substring(0, 1).ToUpperInvariant();
-                int icon = n.Entry?.IconOverride > 0 ? n.Entry.IconOverride : (n.SpellId > 0 ? SpellData.Spell(n.SpellId)?.IconId ?? 0 : 0);
-                if (icon > 0 && icon != v.IconId) { v.IconId = icon; BindIcon(icon, v.Img); }
-                else if (icon > 0 && v.Img.Source == null) BindIcon(icon, v.Img);
-                _ = avail;
-            }
-            // arrows: lit when the node they come from is full
-            for (int i = 0; i < edgePaths.Count; i++)
-            {
-                var e = edgeList[i]; var from = tree.Node(e.From);
-                bool full = from != null && st.Rank(e.From) >= from.MaxRanks;
-                edgePaths[i].Stroke = Res(full ? "Brush.Text.Secondary" : "Brush.Text.Tertiary");
-            }
-            var spec = TalentRules.SpentPerSpec(tree, st);
-            for (int s = 0; s < specHeads.Count; s++)
-                specHeads[s].Text = (tree.SpecNames.Length > s ? tree.SpecNames[s] : "Tree " + (s + 1)) + (s < spec.Length && spec[s] > 0 ? "  " + spec[s] : "");
-            foreach (var g in gates)
-            {
-                // open when the first node of the row (of that tree) is available as far as its gate goes
-                var nodes = tree.Nodes.Where(n => n.Spec == g.Spec && n.Row == g.Row).ToList();
-                bool open = nodes.Count > 0 && nodes.All(n => TalentRules.GateMissing(tree, st, n) == 0);
-                g.Lock.Visibility = open ? Visibility.Hidden : Visibility.Visible;
-                g.Label.Foreground = Res(open ? "Brush.Text.Secondary" : "Brush.Text.Tertiary");
+                foreach (var c in p.Model.Cells) { var n = tree.Node(c.Id); if (n != null) { c.Name = NameOf(n) ?? ""; c.IconId = IconOf(n); } }
+                TalentTreeModels.Apply(p.Model, tree, st);
+                p.Update();
             }
             UpdatePointsLine();
         }
@@ -362,20 +237,13 @@ namespace ElansAddonHub
         }
 
         // ------------------------------------------------------------------------------------------------------------------------------ clicks
-        void NodeLeft(object sender, MouseButtonEventArgs e)
-        {
-            var b = (Border)sender; b.Focus(); e.Handled = true;
-            if (Keyboard.Modifiers == ModifierKeys.Control) { OpenSpell((int)b.Tag); return; }      // Ctrl+click: the talent's spell page in the Atlas, no point spent
-            Click((int)b.Tag, false);
-        }
-
+        // click +1, right-click -1 (TalentTreePanel.NodeClicked); Ctrl+click: the talent's spell page in the Atlas, no point spent (NodeCtrlClicked)
         // the talent's spell page (spell:<id>); the Atlas page opens it in place, with history
         public void OpenSpell(int nodeId)
         {
             int id = tree?.Node(nodeId)?.SpellId ?? 0;
             if (id > 0) ElansAddonHub.Services.Professions.ProfessionLinks.Open(AtlasIds.Spell(id));
         }
-        void NodeRight(object sender, MouseButtonEventArgs e) { var b = (Border)sender; b.Focus(); Click((int)b.Tag, true); e.Handled = true; }
 
         public Why Click(int nodeId, bool right)
         {
@@ -735,8 +603,9 @@ namespace ElansAddonHub
         public bool EmptyVisibleForTest => EmptyBox.Visibility == Visibility.Visible;
         public string EmptyTextForTest => EmptyTitle.Text + " | " + EmptyText.Text;
         public int NodeCountForTest => views.Count;
-        public int EdgeCountForTest => edgePaths.Count;
-        public int GateCountForTest => gates.Count;
+        public int EdgeCountForTest => panels.Sum(p => p.Model.Arrows.Count);
+        public int GateCountForTest => panels.Sum(p => p.GateCount);
+        public IReadOnlyList<TalentTreePanel> PanelsForTest => panels;
         public string BuildsNoteForTest => BuildsNote.Text;
         public List<string> InfoForTest => info;
         public List<string> ClassNamesForTest => ClassBar.Children.OfType<RadioButton>().Select(r => (string)r.Tag).ToList();

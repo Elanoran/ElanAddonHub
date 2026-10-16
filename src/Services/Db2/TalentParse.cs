@@ -57,8 +57,8 @@ namespace ElansAddonHub.Services.Db2
             var cls = req["ChrClasses"].T;
             for (int i = 0; i < cls.Count; i++) classes[cls.IdAt(i)] = new[] { cls.String(i, TalentTables.ClassName), cls.String(i, TalentTables.ClassFile) };
             var sl = req["SkillLine"].T;
-            var skillName = new Dictionary<int, string>(); var skillCat = new Dictionary<int, int>();
-            for (int i = 0; i < sl.Count; i++) { skillName[sl.IdAt(i)] = sl.String(i, 0); skillCat[sl.IdAt(i)] = I(sl, i, 6); }
+            var skillName = new Dictionary<int, string>(); var skillCat = new Dictionary<int, int>(); var skillIcon = new Dictionary<int, int>();
+            for (int i = 0; i < sl.Count; i++) { skillName[sl.IdAt(i)] = sl.String(i, 0); skillCat[sl.IdAt(i)] = I(sl, i, 6); skillIcon[sl.IdAt(i)] = sl.FieldCount > 7 ? I(sl, i, 7) : 0; }
             var sla = req["SkillLineAbility"].T;
             var skillMask = new Dictionary<int, long>();                  // skill -> OR of the class masks of its abilities
             var spellSkills = new Dictionary<int, List<int>>();            // spell -> skill lines
@@ -338,6 +338,7 @@ namespace ElansAddonHub.Services.Db2
                 // names of the three trees side by side: the class skill line most of a band's talents belong to
                 int specs = tree.Nodes.Count == 0 ? 0 : tree.Nodes.Max(n => n.Spec) + 1;
                 var names = new string[specs];
+                var icons = new int[specs];
                 var usedSkill = new HashSet<int>();
                 for (int s = 0; s < specs; s++)
                 {
@@ -346,10 +347,11 @@ namespace ElansAddonHub.Services.Db2
                         if (spellSkills.TryGetValue(n.SpellId, out var sks))
                             foreach (var sk in sks) if (skillCat.TryGetValue(sk, out int cat) && cat == 7 && !(skillName.TryGetValue(sk, out var nm) && nm.StartsWith("Pet", StringComparison.Ordinal))) votes[sk] = (votes.TryGetValue(sk, out var v) ? v : 0) + 1;
                     var best = votes.OrderByDescending(v => v.Value).ThenBy(v => v.Key).Select(v => v.Key).FirstOrDefault(k => !usedSkill.Contains(k));
-                    if (best != 0) { usedSkill.Add(best); names[s] = skillName[best]; }
+                    if (best != 0) { usedSkill.Add(best); names[s] = skillName[best]; icons[s] = skillIcon.TryGetValue(best, out var ic) && ic > 0 ? ic : 0; }
                     else names[s] = "Tree " + (s + 1);
                 }
                 tree.SpecNames = names;
+                tree.SpecIcons = icons;
                 tree.Nodes = tree.Nodes.OrderBy(n => n.Spec).ThenBy(n => n.Row).ThenBy(n => n.Col).ThenBy(n => n.Id).ToList();
                 tree.Reindex();
                 set.Trees.Add(tree);
@@ -365,7 +367,7 @@ namespace ElansAddonHub.Services.Db2
     public static class TalentIndexFile
     {
         public sealed class Saved { public int Format; public string Build; public TalentSet Set; }
-        public const int FormatVersion = 1;       // bump when the parsing, the table layouts or the cache file change meaning
+        public const int FormatVersion = 2;       // bump when the parsing, the table layouts or the cache file change meaning
         const int Magic = 0x4C544554;       // "TETL"
 
         public static bool TryWrite(string path, string build, TalentSet set)
@@ -429,6 +431,7 @@ namespace ElansAddonHub.Services.Db2
         {
             w.Write(t.Id); w.Write(t.ClassId); w.Write(t.CurrencyId); w.Write(t.CostPerRank); w.Write(t.MaxPoints); w.Write(t.ClassName); w.Write(t.ClassFile); w.Write(t.ClassIconId);
             w.Write(t.SpecNames.Length); foreach (var s in t.SpecNames) w.Write(s ?? "");
+            w.Write(t.SpecIcons.Length); foreach (var i in t.SpecIcons) w.Write(i);
             w.Write(t.Notes.Count); foreach (var s in t.Notes) w.Write(s);
             w.Write(t.Aliases.Count); foreach (var kv in t.Aliases) { w.Write(kv.Key); w.Write(kv.Value); }
             w.Write(t.Sources.Count); foreach (var s in t.Sources) { w.Write(s.Level); w.Write(s.Amount); w.Write(s.EntryRank); }
@@ -453,6 +456,7 @@ namespace ElansAddonHub.Services.Db2
         {
             var t = new TalentTreeDef { Id = r.ReadInt32(), ClassId = r.ReadInt32(), CurrencyId = r.ReadInt32(), CostPerRank = r.ReadInt32(), MaxPoints = r.ReadInt32(), ClassName = r.ReadString(), ClassFile = r.ReadString(), ClassIconId = r.ReadInt32() };
             int n = r.ReadInt32(); Count(n, 16); t.SpecNames = new string[n]; for (int i = 0; i < n; i++) t.SpecNames[i] = r.ReadString();
+            n = r.ReadInt32(); Count(n, 16); t.SpecIcons = new int[n]; for (int i = 0; i < n; i++) t.SpecIcons[i] = r.ReadInt32();
             n = r.ReadInt32(); Count(n, 10000); for (int i = 0; i < n; i++) t.Notes.Add(r.ReadString());
             n = r.ReadInt32(); Count(n, 10000); for (int i = 0; i < n; i++) t.Aliases[r.ReadInt32()] = r.ReadInt32();
             n = r.ReadInt32(); Count(n, 10000); for (int i = 0; i < n; i++) t.Sources.Add(new PointSource { Level = r.ReadInt32(), Amount = r.ReadInt32(), EntryRank = r.ReadInt32() });

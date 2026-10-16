@@ -276,6 +276,7 @@ namespace ElansAddonHub
                 if (has) tabsShown.Add(t);
             }
             tabDefault = tabsShown.Contains(AtlasTabs.DefaultFor(m.Kind)) ? AtlasTabs.DefaultFor(m.Kind) : AtlasTabs.Overview;
+            if (m.Kind == "zone" && ZoneLore.For(ZoneIdOf(m)) != null && tabsShown.Contains(AtlasTabs.Overview)) tabDefault = AtlasTabs.Overview;   // a zone with notes opens on them (the map is one click away)
         }
 
         static IEnumerable<AtlasSection> SectionsOn(AtlasPageModel m, string tab) => m.Sections.Where(s => s.Open && AtlasTabs.OfSection(s.Key) == tab && !(m.Kind == "item" && s.Key == "owned"));

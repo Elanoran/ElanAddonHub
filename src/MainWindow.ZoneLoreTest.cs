@@ -190,7 +190,7 @@ namespace ElansAddonHub
                 await AtlasView.Open("zone:11"); await AtlasView.WaitForTest(); UpdateLayout();
                 AtlasView.SelectTab(AtlasTabs.Overview, false); await Task.Delay(100); UpdateLayout();
                 Check("Greenvale (no notes): no card, nothing named 'About' on the Overview", AtlasView.LoreCardForTest == null && !AtlasWalk(AtlasView.TabHostForTest).OfType<FrameworkElement>().Any(f => f.Tag as string == "zone-lore") && !AtlasTexts(AtlasView.TabHostForTest).Any(t => t.StartsWith("About ")));
-                Check("a zone with notes still opens on its Map tab (the notes are on the Overview)", await OpenTabOf(1411) == AtlasTabs.Map);
+                Check("a zone with notes opens on its Overview (the notes), the map one click away", await OpenTabOf(1411) == AtlasTabs.Overview);
             }
             catch (Exception e) { Check("zone notes test ran to the end", false, e.ToString()); }
             finally

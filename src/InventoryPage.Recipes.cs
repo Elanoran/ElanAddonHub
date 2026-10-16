@@ -174,8 +174,16 @@ namespace ElansAddonHub
             }
         }
 
-        ToolTip TalentTileTip(int spellId) =>
-            Descend(CharHost).OfType<Border>().Select(b => b.ToolTip as ToolTip).FirstOrDefault(t => t != null && t.Content is GameTooltip gt && gt.Texts().Contains("Spell ID " + spellId));
+        // a tree's talent builds its tooltip when it opens: built here the same way; the talents listed apart carry theirs
+        ToolTip TalentTileTip(int spellId)
+        {
+            foreach (var p in talentPanels)
+            {
+                var c = p.Model.Cells.FirstOrDefault(x => x.SpellId == spellId);
+                if (c != null) { var gt = TalentTip(talentTipData(c.Id)); return gt == null ? null : GameTooltip.Wrap(gt); }
+            }
+            return Descend(CharHost).OfType<Border>().Select(b => b.ToolTip as ToolTip).FirstOrDefault(t => t != null && t.Content is GameTooltip gt && gt.Texts().Contains("Spell ID " + spellId));
+        }
 
         public List<string> TalentTipForTest(int spellId) => Texts(TalentTileTip(spellId)?.Content);
         public FrameworkElement TalentTipSheetForTest(int spellId) { var t = TalentTileTip(spellId); return t == null ? null : TipSheet(t); }

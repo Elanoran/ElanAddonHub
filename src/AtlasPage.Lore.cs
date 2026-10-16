@@ -129,10 +129,11 @@ namespace ElansAddonHub
 
         TextBlock Sub(string text) => Tb(text, "Text.RowTitle", null, 16);
 
-        // an Atlas link in running text: Body, underlined on hover (like the facts' links)
+        // an Atlas link in the notes: Body in the accent colour, underlined on hover
         TextBlock LoreLink(string text, string link, string tip)
         {
             var t = new TextBlock { Text = text, Style = (Style)FindResource("Text.Body"), Cursor = Cursors.Hand, Tag = link, ToolTip = tip };
+            t.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Accent");   // the notes' links stand out from the prose
             t.MouseEnter += (s, a) => t.TextDecorations = TextDecorations.Underline;
             t.MouseLeave += (s, a) => t.TextDecorations = null;
             t.MouseLeftButtonUp += Row_Click;

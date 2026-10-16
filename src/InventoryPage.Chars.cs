@@ -538,6 +538,9 @@ namespace ElansAddonHub
         }
 
         // ---- Talents
+        // The trees are drawn by the shared renderer (TalentTreePanel, the one the Atlas planner uses): with the game's talent data the class' own trees
+        // (every talent on its cell, the arrows, "26 / 51"), the character's ranks laid on them (CharacterTalents); without it the Hub's raw positions
+        // grouped into trees (TalentGrid), no arrows. Only a talent with ranks that the class' trees really do not have is listed apart, and says so.
         void RenderTalents(InvChar c)
         {
             if (!Gate(c, "talents", "talents", "No talents saved for " + c.Name + " yet")) return;
@@ -546,76 +549,106 @@ namespace ElansAddonHub
             ViewInfo.Text = spent + " points spent" + (m.Unspent > 0 ? " · " + m.Unspent + " unspent" : "") + " · " + UpdatedLine(m.At, SrcLabel);
             if (lodgeView && !string.IsNullOrEmpty(lodgeBuild)) CharHost.Children.Add(BuildCodeCard(lodgeBuild));
             if (m.Nodes.Count == 0) { ShowEmptyTab(c.Name + " has no talents to show yet.", null); return; }
-            var layout = TalentGrid.Group(m.Nodes);
-            charTabInfo.Add("talentinfo|" + spent + "|" + m.Unspent + "|" + layout.Trees.Count + "|" + layout.Loose.Count);
-            var wrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 0) };
-            talentCards.Clear(); talentBoxes.Clear();
+            talentCards.Clear(); talentPanels.Clear();
             var def = Services.Db2.TalentData.Ready ? Services.Db2.TalentData.ForClassFile(c.Class) : null;
-            foreach (var tree in layout.Trees)
+            List<TalentTreeModel> models;
+            var apart = new List<HubTalentNode>();
+            string apartTitle, apartWhy;
+            if (def != null)
             {
-                int spec = SpecOfTree(tree, def, layout.Trees.Count);
-                var name = def != null && spec >= 0 && spec < def.SpecNames.Length && !string.IsNullOrWhiteSpace(def.SpecNames[spec]) ? def.SpecNames[spec] : "Tree " + tree.Index;
-                var sp = new StackPanel();
-                // the header: the spec's own name (the game's talent tab, read from its files; "Tree N" until they are read), the points at the right
-                var head = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-                var pts = new TextBlock { Text = tree.Points + (tree.Points == 1 ? " point" : " points"), Style = TextStyle("Text.Caption"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
-                DockPanel.SetDock(pts, Dock.Right);
-                head.Children.Add(pts);
-                head.Children.Add(new TextBlock { Text = name, Style = TextStyle("Text.RowTitle"), TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
-                sp.Children.Add(head);
-                var grid = new Grid();
-                for (int i = 0; i < tree.Cols; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                for (int i = 0; i < tree.Rows; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto, MinHeight = SlotSize + 3 });
-                foreach (var cell in tree.Cells)
+                var loaded = Services.Talents.CharacterTalents.Load(def, m, c.Level, Services.Db2.TalentData.NodeName);
+                // the Hub's own name and icon of each talent (the game's, as the character saw them), else the game data's
+                var hubOf = new Dictionary<int, HubTalentNode>();
+                foreach (var hn in m.Nodes.OrderByDescending(n => n.R))
                 {
-                    var stack = new StackPanel { Orientation = Orientation.Horizontal };
-                    foreach (var n in cell.Nodes) stack.Children.Add(TalentNodeBox(n));
-                    Grid.SetColumn(stack, cell.Col);
-                    Grid.SetRow(stack, cell.Row);
-                    grid.Children.Add(stack);
+                    int id = def.Resolve(hn.Id);
+                    if (!hubOf.ContainsKey(id)) hubOf[id] = hn;
                 }
-                // the grid scales as one piece with the column (its shape and spacing stay): 32 px icons at the narrowest column, 44 px at the widest
-                grid.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                double natural = grid.DesiredSize.Width;
-                var box = new Viewbox { Child = grid, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.Both, HorizontalAlignment = HorizontalAlignment.Center, MaxWidth = Math.Ceiling(natural) };
-                sp.Children.Add(box);
-                talentBoxes.Add(box);
-                var card = TreeCard(sp, ArtLibrary.Spec(c.Class, spec), out bool painted);
-                card.SizeChanged += (s, e) => box.MaxWidth = Math.Ceiling(natural * TalentIconFor(e.NewSize.Width) / SlotSize);
-                talentCards.Add(card);
-                charTabInfo.Add("tree|" + tree.Index + "|" + tree.Cols + "x" + tree.Rows + "|" + tree.Points + "|" + tree.Cells.Sum(x => x.Nodes.Count));
-                charTabInfo.Add("treehead|" + tree.Index + "|" + name + "|" + spec);
-                if (painted) charTabInfo.Add("treeart|" + tree.Index + "|" + ArtLibrary.Spec(c.Class, spec).File);
+                string NameOf(Services.Talents.TalentNode n) => hubOf.TryGetValue(n.Id, out var hn) && !string.IsNullOrEmpty(hn.N) ? hn.N : Services.Db2.TalentData.NodeName(n) ?? "";
+                int IconOf(Services.Talents.TalentNode n) => hubOf.TryGetValue(n.Id, out var hn) && hn.Ic > 0 ? hn.Ic : n.Entry?.IconOverride > 0 ? n.Entry.IconOverride : n.SpellId > 0 ? Services.Db2.SpellData.Spell(n.SpellId)?.IconId ?? 0 : 0;
+                models = TalentTreeModels.FromDef(def, loaded.State, NameOf, IconOf);
+                talentTipData = id => { var n = def.Node(id); return n == null ? null : new HubTalentNode { Id = id, R = loaded.State.Rank(id), M = n.MaxRanks, S = n.SpellId, N = NameOf(n), Ic = IconOf(n) }; };
+                apart = loaded.UnplacedNodes;
+                apartTitle = "Not in the " + def.ClassName + " talent trees";
+                apartWhy = "These talents have ranks on " + c.Name + ", but the game's " + def.ClassName + " trees have no such talent (by id, spell or name), so they have no place in them. They may come from an older game version.";
+                charTabInfo.Add("talentsource|game data|" + def.ClassName);
             }
-            if (talentCards.Count > 0) CharHost.Children.Add(TreeColumns());
-            if (layout.Loose.Count > 0)
+            else
             {
-                var sp = new StackPanel { MaxWidth = 420 };
-                sp.Children.Add(new TextBlock { Text = "Other talents", Style = TextStyle("Text.Caption"), Margin = new Thickness(0, 0, 0, 8) });
+                var layout = TalentGrid.Group(m.Nodes);
+                models = new List<TalentTreeModel>();
+                var byId = new Dictionary<int, HubTalentNode>();
+                foreach (var tree in layout.Trees)
+                {
+                    int spec = SpecOfTree(tree, null, layout.Trees.Count);
+                    var tm = new TalentTreeModel { Spec = spec, Title = "Tree " + tree.Index, Cols = tree.Cols, Rows = tree.Rows, Spent = tree.Points, Art = ArtLibrary.Spec(c.Class, spec) };
+                    foreach (var cell in tree.Cells)
+                    {
+                        // one talent per cell (the game's grid has one); a second one on the same spot is listed apart
+                        foreach (var n in cell.Nodes.Skip(1)) apart.Add(n);
+                        var hn = cell.Nodes[0];
+                        byId[hn.Id] = hn;
+                        tm.Cells.Add(new TalentCellModel { Id = hn.Id, Col = cell.Col, Row = cell.Row, Rank = hn.R, Max = hn.M > 0 ? hn.M : Math.Max(1, hn.R), Name = hn.N ?? "", IconId = hn.Ic, SpellId = hn.S });
+                    }
+                    models.Add(tm);
+                }
+                apart.AddRange(layout.Loose);
+                var apartNow = apart.ToList();
+                talentTipData = id => byId.TryGetValue(id, out var hn) ? hn : apartNow.FirstOrDefault(x => x.Id == id);
+                apartTitle = "Talents without a place in the trees";
+                apartWhy = "The game gave no usable position for these talents. Once the game's talent data is read (Settings > General: read item data from my WoW installation), every talent is placed on its tree.";
+                charTabInfo.Add("talentsource|positions");
+                if (layout.Copies.Count > 0) charTabInfo.Add("copies|" + string.Join(",", layout.Copies.Select(x => x.Id)));
+            }
+            charTabInfo.Add("talentinfo|" + spent + "|" + m.Unspent + "|" + models.Count + "|" + apart.Count);
+            // the talents whose spell the game data knows (their tooltips carry its text)
+            foreach (var sid in models.SelectMany(t => t.Cells).Select(x => x.SpellId).Concat(apart.Select(x => x.S)).Where(x => x > 0).Distinct())
+            {
+                var sp = Services.Db2.SpellData.Spell(sid);
+                if (sp != null) charTabInfo.Add("talentspell|" + sid + "|" + sp.Name);
+            }
+            int idx = 1;
+            foreach (var tm in models)
+            {
+                var panel = new TalentTreePanel(tm, false, false, "Brush.Surface1", id => TalentTip(talentTipData(id)));
+                talentPanels.Add(panel); talentCards.Add(panel);
+                talentNodes += tm.Cells.Count; talentIcons += tm.Cells.Count(x => x.IconId > 0);
+                charTabInfo.Add("tree|" + idx + "|" + tm.Cols + "x" + tm.Rows + "|" + tm.Spent + "|" + tm.Cells.Count);
+                charTabInfo.Add("treehead|" + idx + "|" + tm.Title + "|" + tm.Spec);
+                charTabInfo.Add("treepoints|" + idx + "|" + tm.PointsText);
+                foreach (var a in tm.Arrows) charTabInfo.Add("arrow|" + idx + "|" + a.From + ">" + a.To + "|" + (a.Lit ? "lit" : "dim"));
+                if (panel.Painted) charTabInfo.Add("treeart|" + idx + "|" + tm.Art.File);
+                idx++;
+            }
+            if (talentCards.Count > 0)
+            {
+                var cols = TalentTreePanel.Columns(talentCards, CharHost, () => BagsScroll.ActualWidth);
+                cols.Margin = new Thickness(0, 0, 0, 12);
+                CharHost.Children.Add(cols);
+            }
+            if (apart.Count > 0)
+            {
+                var sp = new StackPanel { MaxWidth = 560 };
+                sp.Children.Add(new TextBlock { Text = apartTitle, Style = TextStyle("Text.RowTitle"), Margin = new Thickness(0, 0, 0, 4) });
+                var why = Line(apartWhy, "Text.Caption", null, 0);
+                why.TextWrapping = TextWrapping.Wrap; why.Margin = new Thickness(0, 0, 0, 12);
+                sp.Children.Add(why);
                 var w = new WrapPanel();
-                foreach (var n in layout.Loose) w.Children.Add(TalentNodeBox(n));
+                foreach (var n in apart) w.Children.Add(TalentNodeBox(n));
                 sp.Children.Add(w);
                 var card = CardBox(sp);
-                card.Margin = new Thickness(0, 0, 12, 12);
-                card.VerticalAlignment = VerticalAlignment.Top;
-                wrap.Children.Add(card);
-                charTabInfo.Add("loose|" + layout.Loose.Count);
+                card.HorizontalAlignment = HorizontalAlignment.Left;
+                CharHost.Children.Add(card);
+                charTabInfo.Add("loose|" + apart.Count + "|" + apartTitle);
             }
-            CharHost.Children.Add(wrap);
         }
 
-        // ---- the talent trees side by side: equal columns that grow with the window between TreeMinWidth and TreeMaxWidth (one under the other when
-        // the page is too narrow for all of them), each tree's spec art behind it under a veil when there is art for it (ArtLibrary.Specs)
-        public const double TreeMinWidth = 220, TreeMaxWidth = 440, TreeGap = 12;
-        public const double TalentIconMin = 32, TalentIconMax = 44;
-        // the icon size for a tree card this wide: 32 px at TreeMinWidth, growing evenly to 44 px at TreeMaxWidth (the Viewbox still shrinks a tree too wide for its card)
-        public static double TalentIconFor(double cardWidth) => TalentIconMin + (TalentIconMax - TalentIconMin) * Math.Max(0, Math.Min(1, (cardWidth - TreeMinWidth) / (TreeMaxWidth - TreeMinWidth)));
+        Func<int, HubTalentNode> talentTipData = id => null;
         readonly List<FrameworkElement> talentCards = new List<FrameworkElement>();
-        readonly List<Viewbox> talentBoxes = new List<Viewbox>();
-        SizeChangedEventHandler talentResize;
+        readonly List<TalentTreePanel> talentPanels = new List<TalentTreePanel>();
+        public const double TreeMinWidth = TalentTreePanel.TreeMinWidth, TreeMaxWidth = TalentTreePanel.TreeMaxWidth;
         public IReadOnlyList<FrameworkElement> TalentCardsForTest => talentCards;
-        public IReadOnlyList<FrameworkElement> TalentGridsForTest => talentBoxes;
-        public double TalentGridNaturalWidthForTest(int i) => i >= 0 && i < talentBoxes.Count && talentBoxes[i].Child is FrameworkElement fe ? fe.ActualWidth : 0;
+        public IReadOnlyList<TalentTreePanel> TalentPanelsForTest => talentPanels;
 
         // which of the class' trees (0-based, left to right as the game lays them out) this group of nodes is: the game's own tree of its nodes when the
         // talent data is read; else the order, when all three are there; else where its nodes sit on the game's grid. -1 = not known.
@@ -634,59 +667,7 @@ namespace ElansAddonHub
             return x < 500 || x > 13000 ? -1 : x < 4000 ? 0 : x < 8000 ? 1 : 2;
         }
 
-        Border TreeCard(UIElement content, ArtPiece art, out bool painted)
-        {
-            var radius = (CornerRadius)FindResource("Radius.Card");
-            var layers = new Grid();
-            var back = art == null ? null : ArtLibrary.Backdrop(art, "Brush.Art.Veil", radius, "tree-art");
-            painted = back != null;
-            if (back != null) layers.Children.Add(back);
-            layers.Children.Add(new Border { Padding = new Thickness(16), Child = content });
-            return new Border { Background = Res("Brush.Surface1"), CornerRadius = radius, Child = layers, Tag = painted ? "tree-painted" : "tree-plain" };
-        }
-
-        FrameworkElement TreeColumns()
-        {
-            var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 12) };
-            var cards = talentCards.ToList();
-            foreach (var card in cards) grid.Children.Add(card);
-            int mode = -1;
-            void Place(double width)
-            {
-                int n = cards.Count;
-                int want = width <= 0 || width >= n * TreeMinWidth + (n - 1) * TreeGap ? 1 : 0;      // 1 = side by side, 0 = one under the other
-                // the width is set (not left to a left-aligned grid, whose star columns would shrink to their content): the page width, up to the cap of the mode
-                double cap = want == 1 ? n * TreeMaxWidth + (n - 1) * TreeGap : TreeMaxWidth;
-                if (width > 0) grid.Width = Math.Min(width, cap);
-                if (want == mode) return;
-                mode = want;
-                grid.ColumnDefinitions.Clear(); grid.RowDefinitions.Clear();
-                if (want == 1)
-                {
-                    for (int i = 0; i < n; i++)
-                    {
-                        if (i > 0) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(TreeGap) });
-                        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = TreeMinWidth, MaxWidth = TreeMaxWidth });
-                        Grid.SetColumn(cards[i], i * 2); Grid.SetRow(cards[i], 0); cards[i].Margin = new Thickness(0);
-                    }
-                }
-                else
-                {
-                    grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    for (int i = 0; i < n; i++)
-                    {
-                        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                        Grid.SetColumn(cards[i], 0); Grid.SetRow(cards[i], i); double below = i < n - 1 ? TreeGap : 0; cards[i].Margin = new Thickness(0, 0, 0, below);
-                    }
-                }
-            }
-            if (talentResize != null) CharHost.SizeChanged -= talentResize;
-            talentResize = (s, e) => { if (grid.Parent != null) Place(CharHost.ActualWidth); };
-            CharHost.SizeChanged += talentResize;
-            Place(CharHost.ActualWidth > 0 ? CharHost.ActualWidth : BagsScroll.ActualWidth);
-            return grid;
-        }
-        public bool TalentTreesSideBySideForTest => talentCards.Count > 1 && Grid.GetRow(talentCards[0]) == Grid.GetRow(talentCards[1]) && Grid.GetColumn(talentCards[0]) != Grid.GetColumn(talentCards[1]);
+        public bool TalentTreesSideBySideForTest => TalentTreePanel.SideBySide(talentCards);
 
         // ---- Pet (hunters only; Hunter Helper hands the data to Elan's Hub as hunter.pets)
         Border Chip(string text)
