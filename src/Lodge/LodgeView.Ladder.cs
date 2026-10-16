@@ -50,7 +50,7 @@ namespace ElansAddonHub.Lodge
             if (!on && ladderShown) HideLadder();
             if (!on && BadgesOverlay.Visibility == Visibility.Visible) CloseBadges();
             PopBadges.Visibility = on && popMember != null && !popMember.Guest ? Visibility.Visible : Visibility.Collapsed;
-            if (ladderShown) LadderRow.SetResourceReference(BackgroundProperty, "Brush.Accent.Tint"); else LadderRow.ClearValue(BackgroundProperty);
+            if (ladderShown) { LadderRow.SetResourceReference(BackgroundProperty, "Brush.Section.Ladder.Tint"); LadderRow.SetResourceReference(BorderBrushProperty, "Brush.Section.Ladder"); } else { LadderRow.ClearValue(BackgroundProperty); LadderRow.ClearValue(BorderBrushProperty); }
             LadderRowText.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, ladderShown ? "Brush.Text.Primary" : "Brush.Text.Secondary");
         }
 

@@ -53,7 +53,7 @@ namespace ElansAddonHub.Lodge
             bool on = s.SupportsFiles && s.Selected != null;
             FilesRow.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
             if (!on && filesShown) HideFiles();
-            if (filesShown) FilesRow.SetResourceReference(BackgroundProperty, "Brush.Accent.Tint"); else FilesRow.ClearValue(BackgroundProperty);
+            if (filesShown) { FilesRow.SetResourceReference(BackgroundProperty, "Brush.Section.Files.Tint"); FilesRow.SetResourceReference(BorderBrushProperty, "Brush.Section.Files"); } else { FilesRow.ClearValue(BackgroundProperty); FilesRow.ClearValue(BorderBrushProperty); }
             FilesRowText.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, filesShown ? "Brush.Text.Primary" : "Brush.Text.Secondary");
             int n = on ? s.Slots.Count(x => x.Badge.Length > 0) : 0;
             FilesBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;

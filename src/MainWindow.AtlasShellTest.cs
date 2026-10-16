@@ -47,9 +47,9 @@ namespace ElansAddonHub
 
                 // ============================================================================================================ the sub-navigation
                 var rows = AtlasView.NavRowsForTest;
-                Check("nav: the 216 px sub-navigation lists Home and Search on top, the groups Database, World, Character and Lodge (the Lodge has finds here) with the registry's rows, and Data sources at the bottom",
+                Check("nav: the 216 px sub-navigation lists Home on top (no Search row since 2.71.1: the title bar box and Ctrl+K are the search), the groups Database, World, Character and Lodge (the Lodge has finds here) with the registry's rows, and Data sources at the bottom",
                     !AtlasView.NavCollapsedForTest && Math.Abs(AtlasView.NavWidthForTest - 216) < 1 && AtlasView.NavGroupsForTest.SequenceEqual(new[] { "Database", "World", "Character", "Lodge" })
-                    && new[] { "Home", "Search", "Items", "Creatures", "Objects", "Quests", "World map", "Zones", "Dungeons and raids", "Spells and talents", "Professions", "Factions", "Finds", "Data sources" }.All(rows.Contains),
+                    && !rows.Contains("Search") && new[] { "Home", "Items", "Creatures", "Objects", "Quests", "World map", "Zones", "Dungeons and raids", "Spells and talents", "Professions", "Factions", "Finds", "Data sources" }.All(rows.Contains),
                     string.Join(" | ", rows) + " groups=" + string.Join(",", AtlasView.NavGroupsForTest));
                 Check("nav: Skills, Recipes and Talents are not rows of their own (merged into Spells and talents / Professions: nav grouping only)", !rows.Contains("Skills and professions") && !rows.Contains("Recipes") && !rows.Contains("Talents") && !rows.Contains("Spells"));
                 var order = AtlasNav.Entries().Select(e => e.Group + "/" + e.Title).ToList();
@@ -167,8 +167,8 @@ namespace ElansAddonHub
                 // ============================================================================================================ Home
                 await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout();
                 var homeTx = AtlasTexts(AtlasView.BodyForTest);
-                Check("home: hero search (it says what to type, Ctrl K), Continue with the pages opened last as cards with icons, Browse with the categories in their groups, the shortcuts, the Lodge's finds and one status line, in that order",
-                    AtlasView.HeroSearchForTest != null && homeTx.Contains("Continue") && homeTx.Contains("Browse") && AtlasView.ContinueIdsForTest.Count > 0 && homeTx.IndexOf("Continue") < homeTx.IndexOf("Browse") && homeTx.IndexOf("Browse") < homeTx.IndexOf("Recent finds in the Lodge") && homeTx.IndexOf("Recent finds in the Lodge") < homeTx.LastIndexOf("Data sources") && AtlasView.StatusLineForTest != null && homeTx.LastIndexOf("Data sources") == homeTx.Count - 1, string.Join(" | ", homeTx.Where(t => t.Length > 1)) + " idx " + homeTx.IndexOf("Continue") + "," + homeTx.IndexOf("Browse") + "," + homeTx.IndexOf("Recent finds in the Lodge") + "," + homeTx.IndexOf("Data sources"));
+                Check("home: no search box of its own (2.71.1), Continue with the pages opened last as cards with icons, Browse with the categories in their groups, the shortcuts, the Lodge's finds and one status line, in that order",
+                    !homeTx.Any(t => t.StartsWith("Search items")) && homeTx.Contains("Continue") && homeTx.Contains("Browse") && AtlasView.ContinueIdsForTest.Count > 0 && homeTx.IndexOf("Continue") < homeTx.IndexOf("Browse") && homeTx.IndexOf("Browse") < homeTx.IndexOf("Recent finds in the Lodge") && homeTx.IndexOf("Recent finds in the Lodge") < homeTx.LastIndexOf("Data sources") && AtlasView.StatusLineForTest != null && homeTx.LastIndexOf("Data sources") == homeTx.Count - 1, string.Join(" | ", homeTx.Where(t => t.Length > 1)) + " idx " + homeTx.IndexOf("Continue") + "," + homeTx.IndexOf("Browse") + "," + homeTx.IndexOf("Recent finds in the Lodge") + "," + homeTx.IndexOf("Data sources"));
                 Check("home: Continue shows the recents (up to 6) as cards whose names come from the data, and a click opens the page", AtlasView.ContinueIdsForTest.SequenceEqual(st.Recents.Take(6)) && homeTx.Contains(AtlasNav.Describe(AtlasView.ContinueIdsForTest[0]).Title), string.Join(",", AtlasView.ContinueIdsForTest) + " vs " + string.Join(",", st.Recents));
                 var firstCard = AtlasView.ContinueIdsForTest[0];
                 ClickRow(AtlasWalk(AtlasView.BodyForTest).OfType<ContentControl>().First(c => c.Tag as string == "continue|" + firstCard)); await AtlasView.WaitForTest();
@@ -196,8 +196,10 @@ namespace ElansAddonHub
                 ClickRow(AtlasView.StatusLineForTest); await AtlasView.WaitForTest(); await Task.Delay(100);
                 Check("home: the status line opens the Data sources page, which holds the cards (Your game data, Classic baseline, Lodge pool, World map cache)", AtlasView.CurrentId == AtlasNav.DataId && AtlasTexts(AtlasView).Contains("Your game data") && AtlasTexts(AtlasView).Contains("World map cache"));
                 await AtlasView.GoStart(); await AtlasView.StartFillForTest; UpdateLayout();
-                ClickRow(AtlasView.HeroSearchForTest); await Task.Delay(50);
-                Check("home: a click on the hero search opens the palette", AtlasView.PaletteOpen);
+                AtlasView.ModifiersForTest = ModifierKeys.Control;
+                RaiseKey(AtlasView, Key.K, Keyboard.PreviewKeyDownEvent);
+                AtlasView.ModifiersForTest = savedModifiers; await AtlasView.PaletteOpenWaitForTest();
+                Check("home: Ctrl+K opens the palette from Home (the title bar box and Ctrl+K are the one search)", AtlasView.PaletteOpen && AtlasView.IsStart);
                 AtlasView.ClosePalette();
                 await ShotWait(300); Snapshot(Path.Combine(dir, "atlas-shell-home.png"));
                 await AtlasView.Open("browse:items/weapons"); await ShotWait(400); UpdateLayout(); Snapshot(Path.Combine(dir, "atlas-shell-browse.png"));

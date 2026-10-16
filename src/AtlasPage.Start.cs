@@ -37,8 +37,9 @@ namespace ElansAddonHub
         }
 
         // ============================================================================================================================ Home
-        // The start page is a launchpad: the Classic call to action (only while the baseline is missing), the hero search (opens the palette), Continue (recent pages),
-        // every category as a card in its group, shortcuts for your characters, the Lodge's latest finds, and ONE line for the state of the data (opens "Data sources").
+        // The start page is a launchpad: the Classic call to action (only while the baseline is missing), Continue (recent pages), every category as a card in its
+        // group, shortcuts for your characters, the Lodge's latest finds, and ONE line for the state of the data (opens "Data sources"). It has no search box of its
+        // own (2.71.1): the title bar box and Ctrl+K are the one way to search, on every page.
         void DrawStart()
         {
             model = null; browse = null; hosted = null; browseList = null; drawnSig = Signature();
@@ -50,9 +51,9 @@ namespace ElansAddonHub
             var col = new StackPanel();
             Body.Children.Add(col);
 
-            col.Children.Add(ClassicBannerView());
-            col.Children.Add(ClassicOfferView());
-            col.Children.Add(HeroSearch());
+            // the banners keep the 24 between sections to what follows (they used to sit on the search box's 24)
+            var banner = ClassicBannerView(); banner.Margin = new Thickness(0, 0, 0, 24); col.Children.Add(banner);
+            var offer = ClassicOfferView(); offer.Margin = new Thickness(0, 0, 0, 24); col.Children.Add(offer);
             var cont = ContinueBlock();
             if (cont != null) col.Children.Add(cont);
             col.Children.Add(BrowseBlock());
@@ -80,7 +81,7 @@ namespace ElansAddonHub
             Body.Children.Add(col);
             var intro = Tb("Where the Atlas gets what it knows. Everything is read on this PC; nothing is uploaded without your say.", "Text.Secondary"); intro.TextWrapping = TextWrapping.Wrap; intro.MaxWidth = ReadWidth; intro.HorizontalAlignment = HorizontalAlignment.Left; intro.Margin = new Thickness(0, 0, 0, 12);
             col.Children.Add(intro);
-            col.Children.Add(ClassicOfferView());
+            var offerD = ClassicOfferView(); offerD.Margin = new Thickness(0, 0, 0, 12); col.Children.Add(offerD);
             // the cards sit side by side when the window is wide (see LayoutStart) and stack when it is narrow
             startCards.Clear();
             startCards.Add(Card(GameDataBlock()));
@@ -138,33 +139,6 @@ namespace ElansAddonHub
                 Grid.SetColumn(sp, i * 2);
                 startInfo.Children.Add(sp);
             }
-        }
-
-        // ---- the hero search: it is the palette's front door (a click, Enter or any typing opens it)
-        public ContentControl HeroSearchForTest { get; private set; }
-
-        FrameworkElement HeroSearch()
-        {
-            var hero = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(16, 0, 16, 0), MinHeight = 48, Margin = new Thickness(0, 0, 0, 24), Focusable = true, IsTabStop = true, Cursor = Cursors.IBeam };
-            hero.SetResourceReference(Control.BackgroundProperty, "Brush.Surface2");
-            hero.ToolTip = "Search the Atlas  (Ctrl+K)";
-            System.Windows.Automation.AutomationProperties.SetName(hero, "Search the Atlas");
-            var g = new Grid();
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            g.Children.Add(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("Font.Icons"), FontSize = 20, Foreground = Res("Brush.Text.Tertiary"), VerticalAlignment = VerticalAlignment.Center });
-            var t = Tb("Search items, creatures, zones, quests, or paste a link", "Text.Body", Res("Brush.Text.Secondary")); t.VerticalAlignment = VerticalAlignment.Center; t.TextTrimming = TextTrimming.CharacterEllipsis;
-            Grid.SetColumn(t, 1); g.Children.Add(t);
-            var chip = new Border { Style = (Style)FindResource("Chip"), Padding = new Thickness(8, 0, 8, 0), MinHeight = 24, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-            chip.Child = Tb("Ctrl K", "Text.Caption"); ((TextBlock)chip.Child).VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(chip, 2); g.Children.Add(chip);
-            hero.Content = g;
-            hero.MouseLeftButtonUp += (s, e) => { e.Handled = true; _ = OpenPalette(); };
-            hero.PreviewKeyDown += (s, e) => { if (e.Key == Key.Enter || e.Key == Key.Space || e.Key == Key.Down) { e.Handled = true; _ = OpenPalette(); } };
-            hero.PreviewTextInput += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Text)) { e.Handled = true; _ = OpenPalette(e.Text); } };
-            HeroSearchForTest = hero;
-            return hero;
         }
 
         TextBlock SectionHead(string text, double top = 0, double bottom = 8)

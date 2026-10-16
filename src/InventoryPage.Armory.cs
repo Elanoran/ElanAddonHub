@@ -50,6 +50,7 @@ namespace ElansAddonHub
             public string Initial => InventoryPage.Initial(Entry.Name);
             public Brush ClassBrush => ClassBrushOf(Entry.Class);
             public Brush ClassTint => TintOf(Entry.Class);
+            public Brush SelectTint => SelectTintOf(Entry.Class);
             public int PortraitId => CharPortrait.IconFor(Entry.RaceFile, Entry.Sex, Entry.Class);
             public Brush PortraitBrush { get { return portraitBrush; } private set { portraitBrush = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("PortraitBrush")); } }
 

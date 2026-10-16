@@ -3,9 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:ElansAddonHub">
   <UserControl.Resources>
-    <!-- character list row (DESIGN 8, like the Settings nav): 48 high pill, hover veil, selected = accent tint; the content is the portrait + two lines -->
+    <!-- character list row (DESIGN 8, like the Settings nav): 48 high pill, hover veil; selected = the row's own tint (Background: a character's class
+         colour at 16 %, "All characters" the neutral section tint) + a 4 px bar in its colour (BorderBrush); the content is the portrait + two lines -->
     <Style x:Key="SideRow" TargetType="RadioButton">
       <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}" />
+      <Setter Property="Background" Value="{StaticResource Brush.Section.Neutral.Tint}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Brush.Section.Neutral}" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
       <Setter Property="GroupName" Value="inv-char" />
@@ -16,6 +19,7 @@
             <Grid Height="48" Background="Transparent">
               <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource Radius.Control}" />
               <Border x:Name="hv" Background="{StaticResource Brush.Overlay.Hover}" CornerRadius="{StaticResource Radius.Control}" Opacity="0" IsHitTestVisible="False" />
+              <Border x:Name="ind" Width="4" Height="16" CornerRadius="2" Background="{TemplateBinding BorderBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False" />
               <ContentPresenter Margin="8,0,12,0" VerticalAlignment="Center" />
               <Border x:Name="ring" Margin="-2" CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Brush.Focus}" Visibility="Collapsed" IsHitTestVisible="False" />
             </Grid>
@@ -25,7 +29,8 @@
                 <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource Motion.HoverOut}" /></Trigger.ExitActions>
               </Trigger>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Accent.Tint}" />
+                <Setter TargetName="bd" Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+                <Setter TargetName="ind" Property="Visibility" Value="Visible" />
               </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ring" Property="Visibility" Value="Visible" /></Trigger>
             </ControlTemplate.Triggers>
@@ -83,6 +88,8 @@
         <ColumnDefinition Width="240" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
+      <!-- the faint menu fill behind the character list (Brush.Section.Panel): the list reads apart from the page -->
+      <Border x:Name="ListBackdrop" Grid.Column="0" Margin="-8,-8,0,-8" Background="{StaticResource Brush.Section.Panel}" CornerRadius="{StaticResource Radius.Control}" IsHitTestVisible="False" />
       <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
         <StackPanel>
           <!-- the Lodge view: filters, then the characters the Lodge shares (same rows as my own) -->
@@ -95,6 +102,7 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <RadioButton Style="{StaticResource SideRow}" GroupName="inv-armory" IsChecked="{Binding Selected, Mode=OneWay}" Tag="{Binding Id}" Click="ArmoryRow_Click" ToolTip="{Binding Tip}"
+                               Background="{Binding SelectTint}" BorderBrush="{Binding ClassBrush}"
                                AutomationProperties.Name="{Binding Name}">
                     <Grid>
                       <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -164,6 +172,7 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <RadioButton Style="{StaticResource SideRow}" IsChecked="{Binding Selected, Mode=OneWay}" Tag="{Binding Key}" Click="Char_Click" ToolTip="{Binding Tip}"
+                             Background="{Binding SelectTint}" BorderBrush="{Binding ClassBrush}"
                              AutomationProperties.Name="{Binding Name}">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>

@@ -65,8 +65,9 @@ foreach ($f in $files) {
             foreach ($m in [regex]::Matches($line, 'CornerRadius="([0-9.,\s]+)"|new CornerRadius\(([0-9.,\s]+)\)')) {
                 $val = if ($m.Groups[1].Success) { $m.Groups[1].Value } else { $m.Groups[2].Value }
                 foreach ($p in ($val -split '[,\s]+' | Where-Object { $_ -ne '' })) {
-                    # a pill / circle: radius = half the height (or width = height)
+                    # a pill / circle: radius = half the height (or width = height); a standing pill (a selection bar): radius = half the width
                     if ($hh.Success -and ((Num $hh.Groups[1].Value) -le 2 * (Num $p) -or ($ww.Success -and $hh.Groups[1].Value -eq $ww.Groups[1].Value))) { continue }
+                    if ($ww.Success -and (Num $ww.Groups[1].Value) -le 2 * (Num $p)) { continue }
                     if ($radiusOk -notcontains (Num $p)) { Hit 'radius' $f $n $val $t; break }
                 }
             }

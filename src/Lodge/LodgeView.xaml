@@ -276,7 +276,7 @@
               </TextBlock.Style>
             </TextBlock>
             <TextBlock Text="{Binding Count}" DockPanel.Dock="Right" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}" />
-            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Caption}" />
+            <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Section.People}" />
           </DockPanel>
         </ContentControl>
         <Border app:Motion.Expand="{Binding Expanded}" Visibility="Collapsed" Opacity="{Binding ListOpacity}">
@@ -296,7 +296,8 @@
       </StackPanel>
     </DataTemplate>
 
-    <!-- sidebar section headers (Text channels / Voice rooms): quiet Text.Caption, no colour, no bold, no capitals -->
+    <!-- sidebar section headers (Text channels / Voice rooms): quiet Text.Caption in the section's hue (Brush.Section.Channels / .Voice; DESIGN 4,
+         "Section colours"), no bold, no capitals -->
     <Style x:Key="SectionHeader" TargetType="TextBlock" BasedOn="{StaticResource Text.Caption}" />
 
     <!-- a popover card (search, menus, status, profile card): Surface3 + hairline + Elevation.2; the 24 px margin holds the shadow, popups give the offset back -->
@@ -381,8 +382,8 @@
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
 
-      <!-- ===== sidebar: on the panel, no card of its own (like the Settings nav and the Bags character list) ===== -->
-      <Border x:Name="SidebarBox" Grid.Column="0" Margin="0,0,16,0">
+      <!-- ===== sidebar: on the faint menu fill (Brush.Section.Panel, like the Settings menu, the Atlas navigation and the Characters list); each section in its hue ===== -->
+      <Border x:Name="SidebarBox" Grid.Column="0" Margin="-8,-8,8,-8" Padding="8" Background="{StaticResource Brush.Section.Panel}" CornerRadius="{StaticResource Radius.Control}">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -421,7 +422,7 @@
                   <Border x:Name="CalendarBadge" DockPanel.Dock="Right" Style="{StaticResource Chip}" Padding="8,0" MinWidth="24" Visibility="Collapsed" VerticalAlignment="Center" ToolTip="Events today">
                     <TextBlock x:Name="CalendarBadgeText" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                   </Border>
-                  <TextBlock Text="&#xE787;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16" VerticalAlignment="Center" />
+                  <TextBlock Text="&#xE787;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Section.Calendar}" Width="16" VerticalAlignment="Center" />
                   <TextBlock x:Name="CalendarRowText" Text="Calendar" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
                 </DockPanel>
               </ContentControl>
@@ -432,7 +433,7 @@
                   <Border x:Name="FilesBadge" DockPanel.Dock="Right" Style="{StaticResource Chip}" Padding="8,0" MinWidth="24" Visibility="Collapsed" VerticalAlignment="Center" ToolTip="Files that are new or updated">
                     <TextBlock x:Name="FilesBadgeText" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                   </Border>
-                  <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16" VerticalAlignment="Center" />
+                  <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Section.Files}" Width="16" VerticalAlignment="Center" />
                   <TextBlock x:Name="FilesRowText" Text="Files" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
                 </DockPanel>
               </ContentControl>
@@ -440,15 +441,15 @@
               <ContentControl x:Name="LadderRow" Style="{StaticResource Side.Row}" Padding="12,0" MinHeight="36" Margin="0,2,0,0" Visibility="Collapsed"
                               MouseLeftButtonUp="LadderRow_Click" ToolTip="Who shares the most with the lodge, and their badges" AutomationProperties.Name="Ladder">
                 <DockPanel>
-                  <TextBlock Text="&#xE734;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16" VerticalAlignment="Center" />
+                  <TextBlock Text="&#xE734;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Section.Ladder}" Width="16" VerticalAlignment="Center" />
                   <TextBlock x:Name="LadderRowText" Text="Ladder" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Secondary}" Margin="4,0,0,0" VerticalAlignment="Center" />
                 </DockPanel>
               </ContentControl>
-              <TextBlock x:Name="TextHeader" Text="Text channels" Style="{StaticResource SectionHeader}" Margin="12,8,0,4" />
+              <TextBlock x:Name="TextHeader" Text="Text channels" Style="{StaticResource SectionHeader}" Foreground="{StaticResource Brush.Section.Channels}" Margin="12,8,0,4" />
               <ItemsControl x:Name="TextList">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <ContentControl Style="{StaticResource Side.Row}" Background="{Binding RowBrush}" Padding="12,0" MinHeight="36" Margin="0,0,0,2" Tag="{Binding}"
+                    <ContentControl Style="{StaticResource Side.Row}" Background="{Binding RowBrush}" BorderBrush="{Binding MarkBrush}" Padding="12,0" MinHeight="36" Margin="0,0,0,2" Tag="{Binding}"
                                     MouseLeftButtonUp="Channel_Click">
                       <DockPanel>
                         <!-- @ badge: someone mentioned me here -->
@@ -461,7 +462,7 @@
                                 Visibility="{Binding UnreadVisibility}" VerticalAlignment="Center" ToolTip="Unread messages">
                           <TextBlock Text="{Binding UnreadText}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
-                        <TextBlock Text="#" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16" VerticalAlignment="Center" />
+                        <TextBlock Text="#" Style="{StaticResource Text.Body}" Foreground="{StaticResource Brush.Section.Channels}" Width="16" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding LockText}" DockPanel.Dock="Right" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}"
                                    VerticalAlignment="Center" Margin="4,0,4,0" Visibility="{Binding LockVisibility}" />
                         <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Body}" Foreground="{Binding NameBrush}" FontWeight="{Binding NameWeight}"
@@ -472,17 +473,17 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
 
-              <TextBlock x:Name="VoiceHeader" Text="Voice rooms" Style="{StaticResource SectionHeader}" Margin="12,16,0,4" />
+              <TextBlock x:Name="VoiceHeader" Text="Voice rooms" Style="{StaticResource SectionHeader}" Foreground="{StaticResource Brush.Section.Voice}" Margin="12,16,0,4" />
               <ItemsControl x:Name="RoomList">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
                     <StackPanel>
-                      <ContentControl Style="{StaticResource Side.Row}" Padding="12,0" MinHeight="36" Margin="0,0,0,2" Tag="{Binding}" MouseLeftButtonUp="Room_Click" ToolTip="Click to join">
+                      <ContentControl Style="{StaticResource Side.Row}" Background="{Binding RoomBrush}" BorderBrush="{Binding RoomMarkBrush}" Padding="12,0" MinHeight="36" Margin="0,0,0,2" Tag="{Binding}" MouseLeftButtonUp="Room_Click" ToolTip="Click to join">
                         <DockPanel>
                           <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" ToolTip="{Binding CountTip}" />
                           <TextBlock DockPanel.Dock="Right" Text="{Binding LockText}" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Text.Tertiary}"
                                      VerticalAlignment="Center" Margin="4,0,8,0" Visibility="{Binding LockVisibility}" />
-                          <TextBlock Text="&#xE767;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Text.Tertiary}" Width="16"
+                          <TextBlock Text="&#xE767;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Section.Voice}" Width="16"
                                      Margin="0,0,0,0" VerticalAlignment="Center" />
                           <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Body}" Foreground="{Binding NameBrush}" Margin="4,0,0,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         </DockPanel>

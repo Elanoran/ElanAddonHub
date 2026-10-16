@@ -96,7 +96,9 @@
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
 
-      <!-- sub-navigation: Home, Search, the groups of the registry, Recent, Pinned (built in AtlasPage.Nav.cs) -->
+      <!-- sub-navigation: Home, the groups of the registry, Pinned, Recent (built in AtlasPage.Nav.cs), on the faint menu fill (Brush.Section.Panel) that sets it
+           apart from the page; each group carries its section colour (DESIGN 4, "Section colours") -->
+      <Border x:Name="NavBackdrop" Grid.Column="0" Margin="-8,-8,-4,-8" Background="{StaticResource Brush.Section.Panel}" CornerRadius="{StaticResource Radius.Control}" IsHitTestVisible="False" />
       <Grid x:Name="NavPanel" Grid.Column="0">
         <Grid.RowDefinitions>
           <RowDefinition Height="*" />

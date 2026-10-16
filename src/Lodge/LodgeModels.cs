@@ -78,21 +78,26 @@ namespace ElansAddonHub.Lodge
         int mentions, unreadCount;
         public string FirstUnreadId { get; set; }   // the first message I haven't read (the "New messages" line goes above it)
         public MessageVM Divider { get; set; }      // the message currently carrying the line (cleared when I leave the channel)
-        public bool Selected { get => selected; set { if (Set(ref selected, value)) { Raise(nameof(RowBrush)); Raise(nameof(NameBrush)); } } }
+        public bool Selected { get => selected; set { if (Set(ref selected, value)) { Raise(nameof(RowBrush)); Raise(nameof(MarkBrush)); Raise(nameof(NameBrush)); } } }
         public bool Unread { get => unread; set { if (Set(ref unread, value)) { Raise(nameof(NameBrush)); Raise(nameof(NameWeight)); Raise(nameof(UnreadVisibility)); } } }
         public int Mentions { get => mentions; set { if (Set(ref mentions, value)) { Raise(nameof(MentionVisibility)); Raise(nameof(MentionText)); Raise(nameof(UnreadVisibility)); } } }
         public int UnreadCount { get => unreadCount; set { if (Set(ref unreadCount, value)) { Raise(nameof(UnreadText)); Raise(nameof(UnreadVisibility)); } } }
         public string MentionText => "@" + (mentions > 99 ? "99+" : mentions.ToString());
         public string UnreadText => unreadCount > 99 ? "99+" : unreadCount.ToString();
-        public bool IAmHere { get => here; set { if (Set(ref here, value)) { Raise(nameof(NameBrush)); Raise(nameof(InvisibleHintVisibility)); } } } // the voice room I'm in
+        public bool IAmHere { get => here; set { if (Set(ref here, value)) { Raise(nameof(NameBrush)); Raise(nameof(InvisibleHintVisibility)); Raise(nameof(RoomBrush)); Raise(nameof(RoomMarkBrush)); } } } // the voice room I'm in
         bool invisibleHint;
         // while I appear offline, joining a voice room shows me in it: say so on the room
         public bool InvisibleHint { get => invisibleHint; set { if (Set(ref invisibleHint, value)) Raise(nameof(InvisibleHintVisibility)); } }
         public Visibility InvisibleHintVisibility => invisibleHint && IsVoice && !here ? Visibility.Visible : Visibility.Collapsed;
 
         public static bool CalendarShown;                    // the calendar page has the chat's place: no channel looks selected then
-        public void RaiseRow() { Raise(nameof(RowBrush)); Raise(nameof(NameBrush)); }
-        public Brush RowBrush => selected && !CalendarShown ? Avatar.Res("Brush.Accent.Tint") : Brushes.Transparent;
+        public void RaiseRow() { Raise(nameof(RowBrush)); Raise(nameof(MarkBrush)); Raise(nameof(NameBrush)); }
+        // the selected text channel: the Text channels section's tint + its 4 px bar (DESIGN 4, "Section colours"); the voice room I am in: the same in the Voice rooms hue
+        bool RowOn => selected && !CalendarShown;
+        public Brush RowBrush => RowOn ? Avatar.Res("Brush.Section.Channels.Tint") : Brushes.Transparent;
+        public Brush MarkBrush => RowOn ? Avatar.Res("Brush.Section.Channels") : Brushes.Transparent;
+        public Brush RoomBrush => here ? Avatar.Res("Brush.Section.Voice.Tint") : Brushes.Transparent;
+        public Brush RoomMarkBrush => here ? Avatar.Res("Brush.Section.Voice") : Brushes.Transparent;
         public Brush NameBrush => (selected && !CalendarShown) || unread || here ? Avatar.Res("Brush.Text.Primary") : Avatar.Res("Brush.Text.Secondary");
         public FontWeight NameWeight => unread ? FontWeights.SemiBold : FontWeights.Normal;
         public Visibility MentionVisibility => mentions > 0 ? Visibility.Visible : Visibility.Collapsed;
