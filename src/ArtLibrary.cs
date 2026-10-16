@@ -83,19 +83,19 @@ namespace ElansAddonHub
         // Atlas Home's tiles carry line icons (AtlasIcons), no painting.
         public static readonly Dictionary<string, ArtPiece> Banners = new Dictionary<string, ArtPiece>(StringComparer.OrdinalIgnoreCase)
         {
-            ["items"] = new ArtPiece("banner-items.jpg", 0.6, 0.4),
-            ["creatures"] = new ArtPiece("banner-creatures.jpg", 0.6, 0.4),
-            ["objects"] = new ArtPiece("banner-objects.jpg", 0.6, 0.4),
-            ["quests"] = new ArtPiece("banner-quests.jpg", 0.6, 0.4),
-            ["zones"] = new ArtPiece("banner-zones.jpg", 0.6, 0.4),
-            ["instances"] = new ArtPiece("banner-instances.jpg", 0.6, 0.4),
-            ["spells"] = new ArtPiece("banner-spells.jpg", 0.6, 0.4),
-            ["classes"] = new ArtPiece("banner-classes.jpg", 0.6, 0.4),
-            ["races"] = new ArtPiece("banner-races.jpg", 0.6, 0.4),
-            ["skills"] = new ArtPiece("banner-skills.jpg", 0.6, 0.4),
-            ["recipes"] = new ArtPiece("banner-recipes.jpg", 0.6, 0.4),
-            ["factions"] = new ArtPiece("banner-factions.jpg", 0.6, 0.4),
-            ["finds"] = new ArtPiece("banner-finds.jpg", 0.6, 0.4),
+            ["items"] = new ArtPiece("banner-items.jpg", 0.75, 0.45),
+            ["creatures"] = new ArtPiece("banner-creatures.jpg", 0.75, 0.45),
+            ["objects"] = new ArtPiece("banner-objects.jpg", 0.4, 0.45),
+            ["quests"] = new ArtPiece("banner-quests.jpg", 0.67, 0.45),
+            ["zones"] = new ArtPiece("banner-zones.jpg", 0.65, 0.45),
+            ["instances"] = new ArtPiece("banner-instances.jpg", 0.42, 0.45),
+            ["spells"] = new ArtPiece("banner-spells.jpg", 0.45, 0.45),
+            ["classes"] = new ArtPiece("banner-classes.jpg", 0.4, 0.45),
+            ["races"] = new ArtPiece("banner-races.jpg", 0.65, 0.45),
+            ["skills"] = new ArtPiece("banner-skills.jpg", 0.75, 0.45),
+            ["recipes"] = new ArtPiece("banner-recipes.jpg", 0.4, 0.45),
+            ["factions"] = new ArtPiece("banner-factions.jpg", 0.5, 0.45),
+            ["finds"] = new ArtPiece("banner-finds.jpg", 0.6, 0.45),
         };
 
         // talent trees: "CLASSFILE|spec index" (0-based, the trees left to right as the game lays them out) -> the spec art
