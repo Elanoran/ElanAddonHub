@@ -21,6 +21,7 @@ namespace ElansAddonHub.Lodge
 
         void MessageScroll_Wheel(object sender, MouseWheelEventArgs e)
         {
+            if (GrowAtEdge(e)) return;   // rows the channel already has come first (LodgeView.ChatList.cs)
             if (!AutoLoadOlder) return;
             // at the very top the wheel no longer scrolls, so no ScrollChanged: ask for more here
             if (e.Delta > 0 && MessageScroll.VerticalOffset <= 0.5) _ = LoadOlderFromTop();
@@ -28,7 +29,7 @@ namespace ElansAddonHub.Lodge
 
         void MaybeLoadOlder(ScrollChangedEventArgs e)
         {
-            if (AutoLoadOlder && e.VerticalChange < 0 && MessageScroll.VerticalOffset <= 60) _ = LoadOlderFromTop();
+            if (AutoLoadOlder && window.Start == 0 && e.VerticalChange < 0 && MessageScroll.VerticalOffset <= 60) _ = LoadOlderFromTop();
         }
 
         async Task LoadOlderFromTop()
@@ -44,8 +45,8 @@ namespace ElansAddonHub.Lodge
         MessageVM FirstVisible(out double y)
         {
             y = 0;
-            var list = Session?.MessagesOf(Session.Selected?.Id);
-            if (list == null || list.Count == 0) return null;
+            var list = window.Shown;   // the rows that are built
+            if (list.Count == 0) return null;
             int lo = 0, hi = list.Count - 1, found = -1;
             double foundY = 0;
             while (lo <= hi)
@@ -85,7 +86,7 @@ namespace ElansAddonHub.Lodge
                     }
                 }
             }
-            finally { anchorVm = null; UpdateOlderNote(); }
+            finally { anchorVm = null; UpdateOlderNote(); NoteReaderPlace(); TrimFar(); }
         }
 
         // the quiet line at the top of the list: loading / scroll up for more / the start of the channel

@@ -400,6 +400,7 @@ namespace ElansAddonHub
             if (Begin("lodgefeatures")) { result += "\r\n" + await LodgeFeaturesTest(dir); End(); }
             if (Begin("lodgehardening")) { result += "\r\n" + await HardeningTest(dir); End(); }
             if (Begin("lodgefun")) { result += "\r\n" + await LodgeFunTest(dir); End(); }
+            if (Begin("chatlist")) { result += "\r\n" + await ChatListTest(dir); End(); }
             if (Begin("invites")) { result += "\r\n" + await InvitesTest(dir); End(); }
             if (Begin("invites2")) { result += "\r\n" + await Invites2Test(dir); End(); }
             if (Begin("linkopen")) { result += "\r\n" + await LinkOpenTest(dir); End(); }
