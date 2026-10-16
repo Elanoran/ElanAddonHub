@@ -52,6 +52,12 @@
     <EmbeddedResource Include="WorldMap\LICENSE-three.txt" LogicalName="WorldMap.LICENSE-three.txt" />
   </ItemGroup>
 
+  <!-- the public version history for Settings > About > What's new (Changelog.cs): the same CHANGELOG.md release.py reads for the release notes, and the companion addon's -->
+  <ItemGroup>
+    <EmbeddedResource Include="CHANGELOG.md" LogicalName="Changelog.outpost.md" />
+    <EmbeddedResource Include="..\addon\ElansHub\CHANGELOG.txt" LogicalName="Changelog.companion.txt" Condition="Exists('..\addon\ElansHub\CHANGELOG.txt')" />
+  </ItemGroup>
+
   <!-- the zone notes of the Atlas zone pages (ZoneLore.cs), written for the Outpost -->
   <ItemGroup>
     <EmbeddedResource Include="Assets\Data\zonelore.json" LogicalName="Data.zonelore.json" />

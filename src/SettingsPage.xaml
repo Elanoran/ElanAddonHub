@@ -919,14 +919,31 @@
           <!-- ========== About ========== -->
           <StackPanel x:Name="SecAbout" Visibility="Collapsed">
             <TextBlock Text="About" Style="{StaticResource PageTitle}" />
-            <Viewbox Stretch="Uniform" MaxWidth="480" HorizontalAlignment="Left"><Border x:Name="AboutHost" Width="480" Height="300" /></Viewbox>
-            <Button x:Name="ReplayLink" Style="{StaticResource GhostButton}" Content="Replay" HorizontalAlignment="Left" Margin="0,4,0,16" Click="Replay_Click" />
+            <!-- tabs (EntityTab, like an Atlas page): About | What's new. Left / Right move between them. -->
+            <Grid Margin="0,0,0,16">
+              <Border Height="1" VerticalAlignment="Bottom" Background="{StaticResource Brush.Divider}" />
+              <StackPanel x:Name="AboutTabs" Orientation="Horizontal" Margin="4,0,0,0" KeyboardNavigation.DirectionalNavigation="Cycle" KeyboardNavigation.TabNavigation="Once">
+                <RadioButton x:Name="AboutTabAbout" Style="{StaticResource EntityTab}" GroupName="abouttab" Content="About" IsChecked="True" Checked="AboutTab_Checked" />
+                <RadioButton x:Name="AboutTabNews" Style="{StaticResource EntityTab}" GroupName="abouttab" Checked="AboutTab_Checked" ToolTip="The changes in each version">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="What's new" />
+                    <Ellipse x:Name="AboutNewsDot" Width="8" Height="8" Fill="{StaticResource Brush.Accent}" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" />
+                  </StackPanel>
+                </RadioButton>
+              </StackPanel>
+            </Grid>
+
+            <!-- About: the campfire (centred), the buttons, credits, the trademark line -->
+            <StackPanel x:Name="AboutPaneAbout">
+            <Viewbox x:Name="AboutVideo" Stretch="Uniform" MaxWidth="480" HorizontalAlignment="Center"><Border x:Name="AboutHost" Width="480" Height="300" /></Viewbox>
+            <Button x:Name="ReplayLink" Style="{StaticResource GhostButton}" Content="Replay" HorizontalAlignment="Center" Margin="0,4,0,16" Click="Replay_Click" />
             <TextBlock x:Name="AboutVersion" Visibility="Collapsed" />
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
-              <Button Style="{StaticResource Button.M}" Content="Open log folder" Click="LogFolder_Click" />
-              <Button Style="{StaticResource Button.M}" Content="GitHub page" Margin="8,0,0,0" Click="GitHub_Click" />
-              <Button x:Name="WelcomeButton" Style="{StaticResource Button.M}" Content="Show welcome guide" Margin="8,0,0,0" Click="Welcome_Click" ToolTip="The short first-run tour" />
-            </StackPanel>
+            <WrapPanel x:Name="AboutButtons" HorizontalAlignment="Center" Margin="0,0,0,16">
+              <Button Style="{StaticResource Button.M}" Content="View log" Margin="4,0,4,8" Click="ViewLog_Click" ToolTip="The Outpost's own log, with errors and warnings picked out (personal details hidden)" />
+              <Button Style="{StaticResource Button.M}" Content="What's new" Margin="4,0,4,8" Click="WhatsNew_Click" ToolTip="The changes in each version" />
+              <Button Style="{StaticResource Button.M}" Content="GitHub page" Margin="4,0,4,8" Click="GitHub_Click" />
+              <Button x:Name="WelcomeButton" Style="{StaticResource Button.M}" Content="Show welcome guide" Margin="4,0,4,8" Click="Welcome_Click" ToolTip="The short first-run tour" />
+            </WrapPanel>
             <TextBlock Text="Credits" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Group}" Margin="0,0,0,16">
               <StackPanel Margin="16,12">
@@ -960,8 +977,24 @@
                   <TextBlock Text="Splash and artwork" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}">Original, made for this project</TextBlock></Grid>
               </StackPanel>
             </ContentControl>
-            <TextBlock Style="{StaticResource Text.Caption}" TextWrapping="Wrap" MaxWidth="480" HorizontalAlignment="Left" Margin="4,0,0,0"
+            <!-- one line when the page is wide enough, wrapping (centred) when it is not -->
+            <TextBlock x:Name="AboutDisclaimer" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Margin="4,0,4,0"
                        Text="World of Warcraft is a trademark of Blizzard Entertainment. Elan's Outpost is a fan project and not affiliated with Blizzard." />
+            </StackPanel>
+
+            <!-- What's new: the version history (the Outpost's CHANGELOG.md inside the exe; the addons' notes from the update manifest) -->
+            <StackPanel x:Name="AboutPaneNews" Visibility="Collapsed">
+              <DockPanel Margin="0,0,0,16">
+                <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="All releases on GitHub" VerticalAlignment="Center" Click="Releases_Click" />
+                <Border x:Name="NewsPickHost" Style="{StaticResource SegmentHost}"><StackPanel x:Name="NewsPick" Orientation="Horizontal" /></Border>
+              </DockPanel>
+              <Border x:Name="NewsBanner" Background="{StaticResource Brush.Info.Tint}" CornerRadius="{StaticResource Radius.Card}" Padding="16,12" Margin="0,0,0,16" Visibility="Collapsed">
+                <TextBlock x:Name="NewsBannerText" Style="{StaticResource Text.Body}" TextWrapping="Wrap" />
+              </Border>
+              <StackPanel x:Name="NewsList" />
+              <Button x:Name="NewsMore" Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="0,0,0,8" Click="NewsMore_Click" Visibility="Collapsed" />
+              <TextBlock x:Name="NewsEmpty" Style="{StaticResource Note}" Visibility="Collapsed" />
+            </StackPanel>
           </StackPanel>
         </Grid>
       </ScrollViewer>
