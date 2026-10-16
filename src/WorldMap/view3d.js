@@ -691,11 +691,11 @@
     Object.keys(pointLayers).forEach(function (k) { placePoints(pointLayers[k]); });
     Object.keys(lineLayers).forEach(function (k) { placeLines(lineLayers[k]); });
     Object.keys(ringLayers).forEach(function (k) { placeRings(ringLayers[k]); });
-    placeDom(); dirty = true;
+    placeDom(); if (meLive()) meDrawLines(); dirty = true;
   }
 
   // ---------------------------------------------------------------- DOM overlays: labels and flight masters follow their ground spot
-  var tmpV = new THREE.Vector3();
+  var tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
   function updateOverlays() {
     var w = window.innerWidth, h = window.innerHeight, shown = 0;
     var eye = camera.position, far = cam.dist;
@@ -709,12 +709,18 @@
         if (tmpV.z >= 0) show = false;
         else {
           if (it.kind === 'label') { show = it.sm ? dist < 14000 && dist > 120 : dist > 1800 && dist < 90000; }
-          else show = dist < 60000;
+          else show = it.kind === 'me' || dist < 60000;
           tmpV.applyMatrix4(camera.projectionMatrix);
           var sx = (tmpV.x * .5 + .5) * w, sy = (-tmpV.y * .5 + .5) * h;
           if (sx < -80 || sx > w + 80 || sy < -40 || sy > h + 40) show = false;
           if (show && it.lab) { var near = dist < 9000; if (near !== it.near) { it.lab.classList.toggle('near', near); it.near = near; } }
-          if (show) { e.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px)'; e.style.zIndex = String(Math.round(100000 - dist / 2)); e.style.opacity = it.kind === 'label' ? String(clamp(1.4 - dist / (it.sm ? 14000 : 70000), .35, 1)) : '1'; shown++; }
+          if (show && it.arrow && it.prev) {
+            // the heading arrow points along your last step as it looks from this camera
+            tmpV2.set(it.prev[0], it.y + 12, it.prev[1]).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix);
+            var px = (tmpV2.x * .5 + .5) * w, py = (-tmpV2.y * .5 + .5) * h, ang = Math.atan2(sx - px, -(sy - py)) * 180 / Math.PI;
+            it.arrow.style.transform = 'rotate(' + Math.round(ang) + 'deg)';
+          }
+          if (show) { e.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px)'; e.style.zIndex = it.kind === 'me' ? '150000' : String(Math.round(100000 - dist / 2)); e.style.opacity = it.kind === 'label' ? String(clamp(1.4 - dist / (it.sm ? 14000 : 70000), .35, 1)) : it.op != null ? String(it.op.toFixed(2)) : '1'; shown++; }
         }
       }
       if (show !== it.vis) { e.style.display = show ? '' : 'none'; it.vis = show; }
@@ -788,11 +794,12 @@
   function setOn(id, v) {
     on[id] = !!v;
     if (v && defs[id] && !defs[id].child) { var kids = Object.keys(panelRows).filter(function (k) { return panelRows[k].parent === id; }); if (kids.length && !kids.some(function (k) { return on[k]; })) kids.forEach(function (k) { on[k] = true; }); } var def = defs[id];
-    if (v && def && !def.child && !layers[id] && !requested[id]) { requested[id] = true; send({ t: 'need', layer: id }); setCount(id, '...'); }
+    if (v && def && !def.child && !def.live && !layers[id] && !requested[id]) { requested[id] = true; send({ t: 'need', layer: id }); setCount(id, '...'); }
     refresh(); sendLayers();
+    if (def && def.live && meLive()) { meDraw(); meRow(); }
   }
   var layersTimer = 0;
-  function sendLayers() { clearTimeout(layersTimer); layersTimer = setTimeout(function () { var l = []; Object.keys(on).forEach(function (k) { if (on[k]) l.push(k); }); send({ t: 'layers', on: l }); }, 250); }
+  function sendLayers() { clearTimeout(layersTimer); layersTimer = setTimeout(function () { var l = []; Object.keys(on).forEach(function (k) { if (on[k] && k.indexOf('__') !== 0) l.push(k); }); send({ t: 'layers', on: l }); }, 250); }      // the page's own marks (__pin, __me) are not layers
   function setCount(id, text) { if (panelRows[id]) panelRows[id].ct.textContent = text == null ? '' : text; }
 
   function layer(m) {
@@ -822,6 +829,7 @@
       if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 4) drag.moved = true;
       if (drag.moved) {
         drag.x = e.clientX; drag.y = e.clientY;
+        if (follow) setFollow(false, true);      // dragging (orbit or pan) stops following, like the flat map
         if (drag.pan) {
           var k = cam.dist * 0.0017, a = cam.az * Math.PI / 180;
           cam.tx -= (Math.cos(a) * dx + Math.sin(a) * dy) * k;
@@ -878,7 +886,7 @@
     e.preventDefault(); flight = null;
     var f = Math.exp(clamp(e.deltaY, -200, 200) * 0.0011), nd = clamp(cam.dist * f, 40, 42000);
     if (nd !== cam.dist) {
-      var gp = pickGround(e.clientX, e.clientY);
+      var gp = follow ? null : pickGround(e.clientX, e.clientY);      // following: zoom on you, not on the cursor
       if (gp) { var r = nd / cam.dist; cam.tx = clamp(gp.x + (cam.tx - gp.x) * Math.pow(r, 0.8), 0, 64 * TY); cam.tz = clamp(gp.z + (cam.tz - gp.z) * Math.pow(r, 0.8), 0, 64 * TY); }
       cam.dist = nd;
     }
@@ -893,7 +901,7 @@
       { text: 'Fly here', run: function () { setView(ll[0], ll[1], Math.max(cam.dist * 0.4, 200), null, null, false); sendView(); } }
     ]);
   }
-  function onDbl(e) { var gp = pickGround(e.clientX, e.clientY); if (gp) { var ll = xz2ll(gp.x, gp.z); setView(ll[0], ll[1], Math.max(cam.dist * 0.45, 120), null, null, false); sendView(); } }
+  function onDbl(e) { var gp = pickGround(e.clientX, e.clientY); if (gp) { if (follow) setFollow(false, true); var ll = xz2ll(gp.x, gp.z); setView(ll[0], ll[1], Math.max(cam.dist * 0.45, 120), null, null, false); sendView(); } }
   function onKey(e) {
     var k = e.key, step = cam.dist * 0.08, a = cam.az * Math.PI / 180, used = true;
     if (k === 'ArrowUp' || k === 'w') { cam.tx -= Math.sin(a) * step; cam.tz -= Math.cos(a) * step; }
@@ -906,6 +914,7 @@
     else if (k === 'PageUp') cam.tilt = clamp(cam.tilt - 5, 8, 88); else if (k === 'PageDown') cam.tilt = clamp(cam.tilt + 5, 8, 88);
     else if (k === 'Escape') { hideMenu(); used = false; }
     else used = false;
+    if (used && follow && !(k === '+' || k === '=' || k === '-' || k === '_')) setFollow(false, true);      // moving or turning the camera yourself stops following
     if (used) { e.preventDefault(); flight = null; cam.tx = clamp(cam.tx, 0, 64 * TY); cam.tz = clamp(cam.tz, 0, 64 * TY); dirty = true; sendView(); }
   }
 
@@ -924,6 +933,8 @@
   function tick(now) {
     if (!renderer || !inited) return;
     stepFlight(now);
+    stepFollow();
+    if (meLines && meLineDist > 0 && Math.abs(Math.log(cam.dist / meLineDist)) > 0.3) meDrawLines();      // the ribbon keeps a few pixels wide as you zoom
     if (benching) { var t = (now - benching.t0) / 1000; if (benching.last) { var dt = now - benching.last; if (dt > benching.maxDt) benching.maxDt = dt; if (dt > 33.4) benching.slow++; benching.n++; } benching.last = now; cam.az = benching.az0 + t * 24; cam.tilt = 38 + 14 * Math.sin(t * 0.9); dirty = true; }
     if (heightGen !== lastHeightGen && now - lastRefresh > 700) { lastHeightGen = heightGen; lastRefresh = now; refreshHeights(); }
     var need = dirty || inFlight > 0;
@@ -1278,6 +1289,164 @@
     return out.slice(0, max || 10);
   }
 
+  // ---------------------------------------------------------------- the live position layer ("me") in 3D: the trail draped over the ground, your dot, the events, Follow me
+  // The same message and rules as the flat page (worldmap.js "the live position layer"): only drawn while the app sends it, nothing stored here. The trail is a ribbon a few
+  // pixels wide (its width follows the camera distance), cut into one-minute bands that fade over the 10 minutes; the dot and the event marks are DOM marks on the ground.
+  // Follow me keeps the camera's target on you, easing to each new position; dragging (orbit or pan) or the arrow / rotate keys stop it, zooming does not.
+  var ME_STATES = { off: 1, none: 1, ok: 1, elsewhere: 1, unavailable: 1, notshared: 1, oldhub: 1 };
+  var me = null, meTrail = [], meAt = 0, meLines = null, meLineDist = 0, meCard = null, follow = false, followTo = null, meDotIt = null, meEvIts = [];
+  function finN(v) { return typeof v === 'number' && isFinite(v); }
+  function llOk(a) { return a && a.length === 2 && finN(a[0]) && finN(a[1]) && a[0] <= 0 && a[0] >= -256 && a[1] >= 0 && a[1] <= 256; }
+  function meEvents(list) {
+    var out = [], kinds = (window.WmIcons && window.WmIcons.evKinds) || {};
+    (Array.isArray(list) ? list.slice(0, 200) : []).forEach(function (e) {
+      if (!e || !llOk([e.lat, e.lng]) || !finN(e.age) || !kinds[e.k]) return;
+      out.push({ ll: [e.lat, e.lng], age: Math.max(0, Math.min(600, e.age)), k: e.k, name: String(e.name || '').slice(0, 80), line: String(e.line || '').slice(0, 80),
+        c: /^#[0-9a-fA-F]{6}$/.test(e.c || '') ? e.c : '#e8e6e3', link: typeof e.link === 'string' ? e.link.slice(0, 40) : '', at: String(e.at || '').slice(0, 5) });
+    });
+    return out;
+  }
+  function evWhen(e, extra) { var a = e.age + (extra || 0), mins = Math.round(a / 60); return (e.at ? e.at + ' · ' : '') + (a < 60 ? 'just now' : mins + ' min ago') + (e.link ? ' · click to open' : ''); }
+  function evOpacity(age) { return Math.max(0.3, 1 - Math.min(600, age) / 600 * 0.7); }
+  function meLive() { return !!(me && me.state !== 'off' && me.state !== 'none'); }
+  function meRow() {
+    var r = panelRows.trailevents; if (!r) return;
+    r.row.style.display = meLive() ? '' : 'none';
+    setCount('trailevents', meLive() && me.events ? String(me.events.length) : '');
+  }
+  function meMsg(m) {
+    var st = ME_STATES[m.state] ? m.state : 'none';
+    if (st === 'off' || st === 'none') { me = { state: st }; meClear(); meRow(); return; }
+    var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [];
+    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && finN(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1 }); }
+    me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
+      howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events) };
+    meTrail = pts; meAt = Date.now();
+    meDraw(); meCardDraw(); meRow();
+    if (follow) followAim();
+  }
+  function meDropLines() { if (meLines) { meLines.children.forEach(function (c) { c.geometry.dispose(); c.material.dispose(); }); scene.remove(meLines); meLines = null; } }
+  function meDropDom() {
+    domItems = domItems.filter(function (it) { if (it.layer === '__me' || it.layer === 'trailevents') { if (it.el.parentNode) it.el.parentNode.removeChild(it.el); return false; } return true; });
+    meDotIt = null; meEvIts = [];
+  }
+  function meClear() {
+    if (scene) meDropLines();
+    meDropDom(); meTrail = [];
+    if (meCard && meCard.parentNode) meCard.parentNode.removeChild(meCard);
+    meCard = null; dirty = true;
+  }
+  // a ribbon over the ground along one run of the trail (`ll` points), `w` yards wide
+  function meRibbon(ll, w, color, op) {
+    var flat = []; ll.forEach(function (p) { flat.push(p[0], p[1]); });
+    var dr = drape(flat, 10, 0), n = dr.x.length; if (n < 2) return null;
+    var pos = new Float32Array(n * 6), idx = [];
+    for (var i = 0; i < n; i++) {
+      var a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1), dx = dr.x[b] - dr.x[a], dz = dr.z[b] - dr.z[a], l = Math.hypot(dx, dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
+      var y = surfaceYE(dr.x[i], dr.z[i]) + 2.5;
+      pos[i * 6] = dr.x[i] + nx; pos[i * 6 + 1] = y; pos[i * 6 + 2] = dr.z[i] + nz;
+      pos[i * 6 + 3] = dr.x[i] - nx; pos[i * 6 + 4] = y; pos[i * 6 + 5] = dr.z[i] - nz;
+      if (i + 1 < n) { var k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+    }
+    var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(idx);
+    var mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, fog: true }));
+    mesh.frustumCulled = false; mesh.renderOrder = 5;
+    return mesh;
+  }
+  function meDrawLines() {
+    if (!scene) return;
+    meDropLines();
+    if (!me || !meLive()) return;
+    var extra = (Date.now() - meAt) / 1000, BAND = 60, run = [], band = -1, grp = new THREE.Group(), w = clamp(cam.dist * 0.0035, 1.2, 80);
+    meLineDist = cam.dist;
+    function flush() {
+      if (run.length < 2) return;
+      var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600));
+      var casing = meRibbon(run, w * 1.9, '#000000', op * 0.45), line = meRibbon(run, w, me.color, op);
+      if (casing) { casing.renderOrder = 4; grp.add(casing); } if (line) grp.add(line);
+    }
+    for (var i = 0; i < meTrail.length; i++) {
+      var p = meTrail[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
+      if (p.brk) { flush(); run = []; band = b; }
+      if (b !== band) { flush(); run = run.length ? [run[run.length - 1]] : []; band = b; }
+      run.push(p.ll);
+    }
+    if (me.state === 'ok' && me.here && run.length) run.push(me.here);
+    flush();
+    scene.add(grp); meLines = grp; dirty = true;
+  }
+  function meDraw() {
+    meDrawLines();
+    meDropDom();
+    if (!me || !meLive()) return;
+    var extra = (Date.now() - meAt) / 1000;
+    // the events (under the dot)
+    var fan = on.trailevents && me.events && window.WmIcons ? window.WmIcons.evFan(me.events, me.state === 'ok' ? me.here : null) : [];
+    if (on.trailevents && me.events && window.WmIcons) me.events.forEach(function (e, ei) {
+      var p = ll2xz(e.ll[0], e.ll[1]), d = el('div', 'm3 me3ev', window.WmIcons.ev(e.k, e.c, null, fan[ei]));
+      var tipf = function (ev) { showTip(ev.clientX, ev.clientY, e.name, e.line, evWhen(e, (Date.now() - meAt) / 1000)); };
+      d.addEventListener('mouseenter', tipf); d.addEventListener('mousemove', tipf); d.addEventListener('mouseleave', hideTip);
+      d.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+      if (e.link) d.addEventListener('click', function (ev) { ev.stopPropagation(); hideTip(); openLink(e.link); });
+      $('ov').appendChild(d);
+      var it = { el: d, x: p[0], z: p[1], y: groundYE(p[0], p[1]), kind: 'marker', layer: 'trailevents', name: e.name, op: evOpacity(e.age + extra), ev: e };
+      domItems.push(it); meEvIts.push(it);
+    });
+    // the dot: class colour with a heading arrow; grey with a label where the position is not available
+    var at = me.state === 'ok' ? me.here : me.state === 'unavailable' ? me.last : null;
+    if (at) {
+      var grey = me.state !== 'ok', pp = ll2xz(at[0], at[1]), prev = null;
+      if (!grey && meTrail.length) { var a = meTrail[meTrail.length - 1].ll; if (Math.abs(a[0] - at[0]) + Math.abs(a[1] - at[1]) < 1e-9 && meTrail.length >= 2) a = meTrail[meTrail.length - 2].ll; if (Math.abs(a[0] - at[0]) + Math.abs(a[1] - at[1]) >= 1e-6) prev = ll2xz(a[0], a[1]); }
+      var html = '<div class="me-dot' + (grey ? ' grey' : '') + '" style="--c:' + me.color + '">' + (prev ? '<i class="me-arrow"></i>' : '') + '</div>' + (grey ? '<div class="me-lab">' + esc(me.notice || 'Position unavailable here') + '</div>' : '');
+      var dd = el('div', 'm3 me3', html);
+      var tip2 = function (ev) { showTip(ev.clientX, ev.clientY, me.name || 'You', grey ? (me.notice || 'Position unavailable here') : 'You are here', grey ? 'The trail pauses here' : 'Live from Elan\'s Hub (display only)'); };
+      dd.addEventListener('mouseenter', tip2); dd.addEventListener('mousemove', tip2); dd.addEventListener('mouseleave', hideTip);
+      dd.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+      $('ov').appendChild(dd);
+      meDotIt = { el: dd, x: pp[0], z: pp[1], y: groundYE(pp[0], pp[1]), kind: 'me', layer: '__me', name: 'me', prev: prev, arrow: dd.querySelector('.me-arrow') };
+      on.__me = true; domItems.push(meDotIt);
+    }
+    dirty = true;
+  }
+  // the card at the bottom right: name, notice, How to turn it on, Follow me (the same texts as the flat page)
+  function meCardDraw() {
+    if (!meLive()) { if (meCard && meCard.parentNode) meCard.parentNode.removeChild(meCard); meCard = null; return; }
+    if (!meCard) {
+      meCard = el('div', 'wm-me v3me');
+      ['mousedown', 'wheel', 'click', 'dblclick', 'contextmenu'].forEach(function (ev) { meCard.addEventListener(ev, function (e) { e.stopPropagation(); }); });
+      document.body.appendChild(meCard);
+    }
+    var d = meCard; d.innerHTML = '';
+    var head = el('div', 'me-h'); var sw = el('span', 'me-sw'); sw.style.background = me.color; head.appendChild(sw); head.appendChild(el('b', '', esc(me.name || 'You')));
+    d.appendChild(head);
+    if (me.state !== 'ok' && me.notice) d.appendChild(el('div', 'me-n' + (me.state === 'unavailable' ? '' : ' calm'), esc(me.notice)));
+    if (me.howto) { var a = el('button', 'me-link', esc(me.howtoText)); a.type = 'button'; a.addEventListener('click', function () { send({ t: 'howto' }); }); d.appendChild(a); }
+    if (me.state === 'ok' || me.state === 'unavailable') {
+      var f = el('button', 'me-follow' + (follow ? ' on' : ''), follow ? 'Following you' : 'Follow me'); f.type = 'button'; f.setAttribute('aria-pressed', String(follow));
+      f.addEventListener('click', function () { setFollow(!follow, true); });
+      d.appendChild(f);
+    }
+  }
+  function followAim() {
+    if (me && me.state === 'ok' && me.here) { var p = ll2xz(me.here[0], me.here[1]); followTo = { x: clamp(p[0], 0, 64 * TY), z: clamp(p[1], 0, 64 * TY) }; flight = null; dirty = true; }
+  }
+  function setFollow(v, tell) {
+    follow = !!v; followTo = null;
+    if (tell) send({ t: 'follow', on: follow });
+    if (follow) followAim();
+    if (me) meCardDraw();
+  }
+  // one frame of Follow me: the camera's target eases to you (about a third of a second), the bearing, tilt and distance stay yours
+  function stepFollow() {
+    if (!follow || !followTo || drag) return;
+    var dx = followTo.x - cam.tx, dz = followTo.z - cam.tz;
+    if (Math.abs(dx) + Math.abs(dz) < 0.3) { cam.tx = followTo.x; cam.tz = followTo.z; followTo = null; sendView(); return; }
+    var far = Math.hypot(dx, dz) > 3000, k = far ? 1 : 0.14;
+    cam.tx += dx * k; cam.tz += dz * k; dirty = true;
+  }
+  // the trail keeps fading while nothing new arrives
+  setInterval(function () { if (me && meLive() && meTrail.length && inited) meDraw(); }, 15000);
+
   // ---------------------------------------------------------------- the messages from the app
   // vseq: the last place the app sent the camera to; every view3 report names it (see worldmap.js)
   var vseq = -1;
@@ -1293,6 +1462,7 @@
       case 'toast': toast(m.text, m.ok); break;
       case 'bstate': bldState(m); break;
       case 'on': (m.on || []).forEach(function (k) { on[k] = true; }); refresh(); break;
+      case 'me': if (inited) meMsg(m); break;
     }
   }
   if (wv) wv.addEventListener('message', function (e) { handle(e.data); });
@@ -1315,6 +1485,7 @@
     Object.keys(pointLayers).forEach(function (k) { scene.remove(pointLayers[k].obj); pointLayers[k].obj.geometry.dispose(); }); pointLayers = {};
     Object.keys(lineLayers).forEach(function (k) { scene.remove(lineLayers[k].group); }); lineLayers = {};
     Object.keys(ringLayers).forEach(function (k) { ringLayers[k].zones.forEach(function (z) { scene.remove(z.obj); z.obj.geometry.dispose(); }); }); ringLayers = {};
+    meDropLines(); if (meCard && meCard.parentNode) meCard.parentNode.removeChild(meCard); meCard = null; me = null; meTrail = []; meDotIt = null; meEvIts = []; follow = m.follow === true; followTo = null;
     $('ov').innerHTML = ''; domItems = []; layers = {}; requested = {}; counts = {}; panelRows = {}; defs = {}; on = {}; hoverZone = null;
     tileList = []; tileMap = {}; heightsLoaded = 0; heightsFailed = 0; heightGen = 0; ready = false; frameN = 0; built = 0;
     var tl = terrain.tiles || [];
@@ -1332,7 +1503,8 @@
     // the first view
     if (m.view) { var d = m.view.dist ? m.view.dist : zToDist(m.view.z == null ? 5 : m.view.z); setView(m.view.lat, m.view.lng, d, 0, 52, true); setPin(m.view); } else fitView(true);
     inited = true; refresh(); loadHeights();
-    (m.layers || []).forEach(function (d) { if (on[d.id]) { requested[d.id] = true; send({ t: 'need', layer: d.id }); setCount(d.id, '...'); } });
+    (m.layers || []).forEach(function (d) { if (on[d.id] && !d.live) { requested[d.id] = true; send({ t: 'need', layer: d.id }); setCount(d.id, '...'); } });
+    meRow();
     setTimeout(function () { if (!ready && inited) { ready = true; send({ t: 'ready', tiles: selStats.meshes, errors: texErrors }); } }, 9000);
     send({ t: 'inited' }); dirty = true;
   }
@@ -1342,6 +1514,36 @@
     // self-test: points of a layer currently drawn (after the kind filters), a layer fed directly, and a layer switch
     shownPoints: function (id) { var L = pointLayers[id]; if (!L || !L.obj.visible) return 0; var a = L.obj.geometry.attributes.show.array, n = 0; for (var i = 0; i < L.n; i++) if (a[i] > 0) n++; return n; },
     feedForTest: function (m) { layer(m); return 1; },
+    feed: function (m) { handle(m); return 1; },
+    // the live layer (test): state, dot (grey? on screen?), trail ribbons, events drawn, the card, Follow me and whether the camera is on you; `click` = 'howto' | 'follow'
+    me: function (click) {
+      var d = meCard;
+      if (click && d) { var b = d.querySelector(click === 'howto' ? '.me-link' : '.me-follow'); if (b) b.click(); }
+      var h = me && me.here ? ll2xz(me.here[0], me.here[1]) : null, de = meDotIt && meDotIt.el;
+      return JSON.stringify({ state: me ? me.state : null, layer: !!meLines || !!meDotIt, dot: !!meDotIt, dotShown: !!(meDotIt && meDotIt.vis), grey: !!(de && de.querySelector('.me-dot.grey')),
+        label: de && de.querySelector('.me-lab') ? de.querySelector('.me-lab').textContent : '', arrow: !!(de && de.querySelector('.me-arrow')), lines: meLines ? meLines.children.length : 0, points: meTrail.length,
+        panel: !!d, notice: d && d.querySelector('.me-n') ? d.querySelector('.me-n').textContent : '', link: d && d.querySelector('.me-link') ? d.querySelector('.me-link').textContent : '',
+        followBtn: !!(d && d.querySelector('.me-follow')), follow: follow, centered: !!(h && Math.abs(cam.tx - h[0]) < 3 && Math.abs(cam.tz - h[1]) < 3), off: h ? Math.round(Math.hypot(cam.tx - h[0], cam.tz - h[1])) : -1,
+        ribbonLift: (function () { if (!meLines || !meLines.children.length) return null; var a = meLines.children[meLines.children.length - 1].geometry.attributes.position.array; return Math.round((a[1] - surfaceYE(a[0], a[2])) * 10) / 10; })() });
+    },
+    // the events on the trail (test): drawn count, row, kinds; `tip` = index -> point at it and read the tooltip; `open` = index -> click it
+    ev: function (tip, open) {
+      var r = { drawn: meEvIts.length, shown: meEvIts.filter(function (it) { return it.vis; }).length, have: me && me.events ? me.events.length : 0, on: !!on.trailevents,
+        row: !!(panelRows.trailevents && panelRows.trailevents.row.style.display !== 'none'), count: panelRows.trailevents ? panelRows.trailevents.ct.textContent : '',
+        kinds: meEvIts.map(function (it) { var q = it.el.querySelector('.me-ev'); return q ? q.getAttribute('data-k') : ''; }), ops: meEvIts.map(function (it) { return it.op; }) };
+      if (tip != null && meEvIts[tip]) { meEvIts[tip].el.dispatchEvent(new MouseEvent('mouseenter', { clientX: 220, clientY: 220 })); var t = $('tip'); r.tip = t.hidden ? '' : t.textContent; r.tipHtml = t.innerHTML; hideTip(); }
+      if (open != null && meEvIts[open]) meEvIts[open].el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 220, clientY: 220 }));
+      return JSON.stringify(r);
+    },
+    // a drag on the canvas as the person would do it (test): from the middle, dx / dy pixels, orbit (or pan with shift)
+    drag: function (dx, dy, pan) {
+      var r = canvas.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, shiftKey: !!pan }));
+      window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x + dx / 2, clientY: y + dy / 2 }));
+      window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x + dx, clientY: y + dy }));
+      window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: x + dx, clientY: y + dy, button: 0 }));
+      return follow;
+    },
     setOnForTest: function (id, v) { setOn(id, v); return 1; },
     state: function () {
       var inf = renderer ? renderer.info : { render: {}, memory: {} };

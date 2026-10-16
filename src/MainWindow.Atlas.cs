@@ -121,6 +121,7 @@ namespace ElansAddonHub
             if (liveWired) return;
             liveWired = true;
             Session.Presence.PositionChanged += () => Dispatcher.BeginInvoke(new Action(UpdateLive));
+            Session.Presence.TrailEvent += ev => { try { LivePos.AddEvent(settings.WorldMapLivePos, ev, DateTime.UtcNow); } catch (Exception e) { Util.Log("live position event: " + e.Message); } };
             UpdateLive();
         }
         // also called by Settings when the switch changes (off clears the trail at once)

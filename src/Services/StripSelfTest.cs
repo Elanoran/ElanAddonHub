@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -142,6 +143,56 @@ namespace ElansAddonHub.Services
                     && cho.HasLive && !cho.PosSupported && !cho.PosValid && cho.PosMapId == 0);
                 var i1 = Dec(v3row); var i2 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 3, 3, x + 300, y));
                 Check("a move alone is a position change, not a presence change (no Lodge update, no file poll)", i1.V2Equals(i2) && !i1.PosEquals(i2));
+            }
+            // ---- v4 (companion 1.16.0+): one trail event at a time in bytes 15-21; seq dedupe at a 1 Hz read; older rows never carry one
+            {
+                int x = (int)Math.Round(0.25 * 65535), y = (int)Math.Round(0.75 * 65535);
+                StripCodec.Info Dec(byte[] row, int cell = 4, int noise = 10, double tint = 1.0)
+                {
+                    var px = Render(v2p, cell, 0, 0, 300, 40, noise, tint, rnd, row);
+                    return StripCodec.Decode(px, 300, 40, 1200, out _);
+                }
+                foreach (var (cell, noise, tint) in new[] { (4, 0, 1.0), (4, 14, 0.85), (3, 10, 1.0), (8, 12, 0.9) })
+                {
+                    var e4 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 4, 3, x, y, evSeq: 200, evKind: 2, evId: 0xABCDEF, evExtra: 19, evAge: 7), cell, noise, tint);
+                    Check($"v4 strip: the trail event decodes with the position (cell={cell} noise=+-{noise} tint={tint})", e4 != null && e4.RowVersion == 4 && e4.PosValid && e4.PosX == x && e4.HasEvent
+                        && e4.EvSeq == 200 && e4.EvKind == 2 && e4.EvId == 0xABCDEF && e4.EvExtra == 19 && e4.EvAge == 7, e4 == null ? "null" : $"v={e4.RowVersion} seq={e4.EvSeq} k={e4.EvKind} id={e4.EvId} x={e4.EvExtra} age={e4.EvAge}");
+                }
+                var none4 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 4, 3, x, y));
+                Check("v4 strip without an event: no event (seq 0), position as before", none4 != null && none4.RowVersion == 4 && !none4.HasEvent && none4.PosValid);
+                var v3ev = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 3, 3, x, y, evSeq: 9, evKind: 1, evId: 6));
+                Check("v3 strip (Hub 1.15.3): whatever is in bytes 15-21 is not an event", v3ev != null && v3ev.RowVersion == 3 && !v3ev.HasEvent && v3ev.EvSeq == 0 && v3ev.PosValid);
+                var v2ev = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 2, 0, 0, 0, evSeq: 9, evKind: 1, evId: 6));
+                Check("v2 strip: never an event", v2ev != null && v2ev.HasV2 && !v2ev.HasEvent);
+                var ev4row = StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 4, 3, x, y, evSeq: 5, evKind: 1, evId: 6);
+                var bad4 = Render(v2p, 4, 0, 0, 300, 40, 0, 1.0, rnd, ev4row);
+                for (int yy = 4; yy < 8; yy++) for (int xx = 4 * 22; xx < 4 * 23; xx++) for (int ch = 0; ch < 3; ch++) bad4[(yy * 300 + xx) * 4 + ch] ^= 0x80;   // a cell of the event id
+                var b4 = StripCodec.Decode(bad4, 300, 40, 1200, out var w5);
+                Check("v4 strip with a corrupted event cell: row 1 fails its checksum, no event", b4 != null && !b4.HasV2 && !b4.HasEvent, w5);
+                var a4 = Dec(ev4row); var a4b = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 4, 3, x, y, evSeq: 6, evKind: 2, evId: 774, evExtra: 2));
+                Check("an event alone is not a presence or position change (no Lodge update, no file poll)", a4.V2Equals(a4b) && a4.PosEquals(a4b));
+                var one4 = Render(v2p, 4, 0, 0, 300, 4, 0, 1.0, rnd, ev4row);
+                var o4 = StripCodec.Decode(one4, 300, 4, 1200, out var w6);
+                Check("old-hub view of a v4 strip (row 0 only): v1 fields intact", o4 != null && o4.Name == "Elan" && !o4.HasV2, w6);
+
+                // the filter: each event once at a 1 Hz read, a repeat long after (a /reload restarts the numbers) is new, older Hubs give nothing
+                var f = new StripEventFilter(); var t0 = new DateTime(2026, 10, 16, 12, 0, 0, DateTimeKind.Utc);
+                StripCodec.Info Ev(int seq, int kind, int id, int extra = 0, int age = 0, string who = "Elan") => new StripCodec.Info { Name = who, HasV2 = true, RowVersion = 4, EvSeq = seq, EvKind = kind, EvId = id, EvExtra = extra, EvAge = age };
+                var got = new System.Collections.Generic.List<StripEvent>();
+                void Read(StripCodec.Info i, double s) { var e = f.Take(i, t0.AddSeconds(s)); if (e != null) got.Add(e); }
+                Read(Ev(1, 1, 6, age: 2), 0); Read(Ev(1, 1, 6, age: 2), 1); Read(Ev(1, 1, 6, age: 2), 2);           // shown for 3 s: read three times
+                Read(Ev(2, 2, 774, 2), 3); Read(Ev(2, 2, 774, 2), 4);
+                Read(new StripCodec.Info { Name = "Elan", HasV2 = true, RowVersion = 4 }, 5);                         // nothing on the strip
+                Read(Ev(3, 2, 774, 2), 6);                                                                          // the same item again: a new seq, a new event
+                Check("filter: read at 1 Hz, each event passes once (3 events from 8 reads), with kind, id, extra and the time it happened (read time - age)",
+                    got.Count == 3 && got[0].Kind == TrailKind.Kill && got[0].Id == 6 && got[0].At == t0.AddSeconds(-2) && got[1].Kind == TrailKind.Loot && got[1].Extra == 2 && got[2].Seq == 3 && got[2].Who == "Elan",
+                    string.Join(",", got.Select(g => g.Seq + ":" + g.Kind + ":" + g.Id)));
+                got.Clear();
+                Read(Ev(3, 2, 774, 2), 6 + 30);                                                                     // the same seq much later: a /reload numbered it again
+                Read(Ev(3, 2, 774, 2, who: "Other"), 37);                                                           // another character
+                Read(Ev(4, 11, 5), 38);                                                                             // a kind this Outpost does not know
+                Read(new StripCodec.Info { Name = "Elan", HasV2 = true, RowVersion = 3, EvSeq = 9, EvKind = 1, EvId = 6 }, 39);   // a v3 row never has one
+                Check("filter: the same seq after 20 s counts again, another character's counts, unknown kinds and older rows never", got.Count == 2 && got[1].Who == "Other", got.Count + "");
             }
             // names for the ids: open-world uiMapID, dungeon instance id, unknown -> nothing
             var ch1 = new GamePresence.Character();

@@ -189,7 +189,9 @@ namespace ElansAddonHub.Services.WorldMap
         //   state: off (no layer) | none (not playing) | ok | elsewhere (a position on another continent) | unavailable | notshared | oldhub
         public const double TrailBreakYards = 200, TrailBreakSeconds = 30;
         static readonly Regex HexColor = new Regex(@"^#[0-9A-Fa-f]{6}\z", RegexOptions.CultureInvariant);
-        public static string Me(LiveState state, string name, string color, LiveTrail.Point? here, IList<LiveTrail.Point> trail, int viewMapId, DateTime now, string elsewhere = null)
+        //   events (companion 1.16.0+): [{lat, lng, age, k, name, line, c, link, at}] - the marks on this continent's trail, oldest first, at most LiveTrail.MaxMarks;
+        //   k = kill | loot | herb | ore | skin | level | died | quest | area | flight, name / line from TrailEventText (the Outpost's own data), c = #rrggbb, at = local "HH:mm"
+        public static string Me(LiveState state, string name, string color, LiveTrail.Point? here, IList<LiveTrail.Point> trail, int viewMapId, DateTime now, string elsewhere = null, IList<LiveTrail.Mark> marks = null)
         {
             string st;
             switch (state)
@@ -230,6 +232,27 @@ namespace ElansAddonHub.Services.WorldMap
             d["trail"] = list;
             // unavailable: the dot greys out where you were last seen on this map (if anywhere)
             if ((string)d["state"] == "unavailable" && list.Count >= 4) d["last"] = new List<object> { list[list.Count - 4], list[list.Count - 3] };
+            var evs = new List<object>();
+            if (marks != null)
+            {
+                foreach (var mk in marks.Skip(Math.Max(0, marks.Count - LiveTrail.MaxMarks)))
+                {
+                    if (mk.MapId != viewMapId) continue;
+                    double age = (now - mk.At).TotalSeconds;
+                    if (age > LiveTrail.Keep.TotalSeconds) continue;
+                    WorldMapMath.WorldToLatLng(mk.X, mk.Y, out var la, out var ln);
+                    if (!InPlane(la, ln)) continue;
+                    var info = TrailEventText.Describe(mk);
+                    if (string.IsNullOrEmpty(info.Key)) continue;
+                    evs.Add(new Dictionary<string, object>
+                    {
+                        ["lat"] = R6(la), ["lng"] = R6(ln), ["age"] = Math.Round(Math.Max(0, age), 1), ["k"] = info.Key, ["name"] = Clean(info.Title ?? "", 80), ["line"] = Clean(info.Line ?? "", 80),
+                        ["c"] = info.Color != null && HexColor.IsMatch(info.Color) ? info.Color : WorldMapLayers.EventFallbackColor, ["link"] = info.Link ?? "",
+                        ["at"] = mk.At.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture),
+                    });
+                }
+            }
+            d["events"] = evs;
             return Json.Write(d);
         }
         static double R6(double v) => Math.Round(v, 6);

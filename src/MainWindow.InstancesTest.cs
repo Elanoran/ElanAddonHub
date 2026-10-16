@@ -252,7 +252,7 @@ namespace ElansAddonHub
                     && Why("{\"t\":\"layers\",\"on\":[\"instances.\"]}") != null && Why("{\"t\":\"layers\",\"on\":[\"instancesx\"]}") != null && WorldMapProtocol.IsOpenId("instance:98") && !WorldMapProtocol.IsOpenId("instance:x"));
                 var mig0 = WorldMapLayers.WithNewDefaults(new List<string> { "zones", "fm" }, 0); var mig2 = WorldMapLayers.WithNewDefaults(new List<string> { "zones" }, WorldMapLayers.LayersVersion);
                 Check("settings: a layer list saved before this catalog gets Dungeons & raids switched on once (with both kinds); a list already at this version, and the defaults (null), are left alone",
-                    mig0.SequenceEqual(new[] { "zones", "fm", "instances", "instances.dungeons", "instances.raids", "fm.horde", "fm.alliance", "fm.neutral", "seen", "seen.met", "seen.rares" }) && mig2.SequenceEqual(new[] { "zones" }) && WorldMapLayers.WithNewDefaults(null, 0) == null && new Settings().WorldMapLayersVersion == 0 && WorldMapLayers.LayersVersion >= 2);
+                    mig0.SequenceEqual(new[] { "zones", "fm", "instances", "instances.dungeons", "instances.raids", "fm.horde", "fm.alliance", "fm.neutral", "seen", "seen.met", "seen.rares", "trailevents" }) && mig2.SequenceEqual(new[] { "zones" }) && WorldMapLayers.WithNewDefaults(null, 0) == null && new Settings().WorldMapLayersVersion == 0 && WorldMapLayers.LayersVersion >= 2);
 
                 // ---------------------------------------------------------------- Atlas pages
                 ClassicAtlas.Use(AtlasTestClassic());

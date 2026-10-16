@@ -15,7 +15,9 @@ namespace ElansAddonHub.Services
     // Version 2 (companion 1.5+) adds a second row of 32 data cells directly below the first (same cell size, decoded with
     // row 0's calibration): 24 bytes = magic B2, version 2, uiMapID (2), instanceID (2), flags1, flags2, xp %, group size,
     // 12 reserved, 2 checksum bytes. Version 3 (companion 1.15.3+) uses reserved bytes 10-14 for the OPT-IN map position: posFlags
-    // (1 sharing on, 2 position valid), x (2 bytes), y (2 bytes) = 0..65535 of the uiMap in bytes 2-3. Older hubs ignore them. Row 0 is unchanged except that flags bit 8 says "row 1 is present". An older hub reads
+    // (1 sharing on, 2 position valid), x (2 bytes), y (2 bytes) = 0..65535 of the uiMap in bytes 2-3. Older hubs ignore them.
+    // Version 4 (companion 1.16.0+) uses bytes 15-21 for one trail event at a time (same opt-in): seq (1-255, 0 = none), kind, id (3 bytes),
+    // extra, age in seconds; each event stays a few seconds, so a reader at 1 Hz sees it at least twice (StripEventFilter passes it once). Row 0 is unchanged except that flags bit 8 says "row 1 is present". An older hub reads
     // row 0 only and never looks below it, so v1 and v2 hubs/companions mix in every combination: a v2 decoder without row 1
     // (old companion, or a failed checksum there) simply returns the v1 fields.
     //   flags1: 1 combat, 2 dead/ghost, 4 AFK, 8 resting, 16 in instance, 32 raid instance, 64 party instance, 128 in group
@@ -48,6 +50,9 @@ namespace ElansAddonHub.Services
             public double PosFx => PosX / 65535.0;
             public double PosFy => PosY / 65535.0;
             public bool PosEquals(Info o) => o != null && RowVersion == o.RowVersion && PosFlags == o.PosFlags && PosX == o.PosX && PosY == o.PosY;
+            // ---- row 1 version 4 (companion 1.16.0+): one trail event at a time (bytes 15-21). EvSeq 0 = none; an older Hub never has one.
+            public int EvSeq, EvKind, EvId, EvExtra, EvAge;
+            public bool HasEvent => HasV2 && RowVersion >= 4 && EvSeq > 0 && EvKind > 0;
             public string ClassFile => ClassFiles.TryGetValue(ClassId, out var c) ? c : null;
             public string ClassName => ClassNames.TryGetValue(ClassId, out var c) ? c : null;
             public string RaceFile => RaceFiles.TryGetValue(RaceId, out var c) ? c : null;
@@ -99,10 +104,12 @@ namespace ElansAddonHub.Services
 
         public const int V2Bytes = 24;
 
-        public static byte[] BuildPayloadV2(int mapId, int instanceId, int flags1, int flags2, int xpPercent, int groupSize, int version = 2, int posFlags = 0, int posX = 0, int posY = 0)
+        public static byte[] BuildPayloadV2(int mapId, int instanceId, int flags1, int flags2, int xpPercent, int groupSize, int version = 2, int posFlags = 0, int posX = 0, int posY = 0,
+            int evSeq = 0, int evKind = 0, int evId = 0, int evExtra = 0, int evAge = 0)
         {
             var q = new byte[V2Bytes];
             q[0] = 0xB2; q[1] = (byte)version;
+            if (version >= 4 || evSeq != 0) { q[15] = (byte)evSeq; q[16] = (byte)evKind; q[17] = (byte)(evId >> 16); q[18] = (byte)(evId >> 8); q[19] = (byte)evId; q[20] = (byte)evExtra; q[21] = (byte)evAge; }
             if (version >= 3) { q[10] = (byte)posFlags; q[11] = (byte)(posX >> 8); q[12] = (byte)posX; q[13] = (byte)(posY >> 8); q[14] = (byte)posY; } q[2] = (byte)(mapId >> 8); q[3] = (byte)mapId; q[4] = (byte)(instanceId >> 8); q[5] = (byte)instanceId;
             q[6] = (byte)flags1; q[7] = (byte)flags2; q[8] = (byte)xpPercent; q[9] = (byte)groupSize;
             Checksum(q, out q[22], out q[23], 22);
@@ -228,9 +235,48 @@ namespace ElansAddonHub.Services
                         info.PosFlags = (q[10] & 1) != 0 ? q[10] & 3 : 0;
                         if ((info.PosFlags & 2) != 0) { info.PosX = q[11] * 256 + q[12]; info.PosY = q[13] * 256 + q[14]; }
                     }
+                    if (q[1] >= 4 && q[15] != 0 && q[16] != 0)
+                    {
+                        // a trail event (only a version 4 Hub writes these bytes; before that they were reserved and zero)
+                        info.EvSeq = q[15]; info.EvKind = q[16]; info.EvId = (q[17] << 16) | (q[18] << 8) | q[19]; info.EvExtra = q[20]; info.EvAge = q[21];
+                    }
                 }
             }
             return info;
+        }
+    }
+
+    // One trail event from the strip (companion 1.16.0+). At = when it happened (the read time minus the age the Hub sent).
+    public enum TrailKind { Kill = 1, Loot = 2, Herb = 3, Ore = 4, Skin = 5, Level = 6, Died = 7, Quest = 8, Area = 9, Flight = 10 }
+    public sealed class StripEvent
+    {
+        public TrailKind Kind;
+        public int Id, Extra, Seq;
+        public DateTime At;
+        public string Who = "";                                    // the character it came from (the strip's name)
+        public static bool KnownKind(int k) => k >= 1 && k <= 10;
+    }
+
+    // The Hub shows each event for a few seconds and numbers them (seq 1-255): a reader that looks once a second sees it two or three times.
+    // This passes each one once: a different seq (or kind / id) is a new event; the same one again is new only after a long gap (a /reload starts
+    // the numbers again, so a repeat after StaleAfter is a new event, never the old one). Strips without events (older Hubs) pass nothing.
+    public sealed class StripEventFilter
+    {
+        public static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(20);
+        int lastSeq = -1, lastKind, lastId; DateTime lastSeen = DateTime.MinValue; string lastWho = "";
+        readonly object gate = new object();
+        public StripEvent Take(StripCodec.Info info, DateTime nowUtc)
+        {
+            if (info == null || !info.HasEvent || !StripEvent.KnownKind(info.EvKind)) return null;
+            lock (gate)
+            {
+                var who = info.Name ?? "";
+                bool same = info.EvSeq == lastSeq && info.EvKind == lastKind && info.EvId == lastId && who == lastWho && nowUtc - lastSeen < StaleAfter;
+                lastSeen = nowUtc;
+                if (same) return null;
+                lastSeq = info.EvSeq; lastKind = info.EvKind; lastId = info.EvId; lastWho = who;
+                return new StripEvent { Kind = (TrailKind)info.EvKind, Id = info.EvId, Extra = info.EvExtra, Seq = info.EvSeq, At = nowUtc.AddSeconds(-info.EvAge), Who = who };
+            }
         }
     }
 
@@ -249,6 +295,8 @@ namespace ElansAddonHub.Services
         public string Status { get; private set; } = "idle";
         public event Action Changed;
         public event Action PositionChanged;                       // only the opt-in map position changed: no presence change, no SavedVariables poll
+        public event Action<StripEvent> TrailEvent;                // a new trail event (each one once; worker thread)
+        public readonly StripEventFilter Events = new StripEventFilter();
         public IntPtr TestHwnd;                                  // self-test: read this window instead of WoW
         public StripCodec.Info Probe(out string why) => ReadOnce(out why);
 
@@ -277,6 +325,8 @@ namespace ElansAddonHub.Services
                         || !old.V2Equals(info))
                         Changed?.Invoke();
                     else if (!old.PosEquals(info)) PositionChanged?.Invoke();
+                    var ev = Events.Take(info, DateTime.UtcNow);
+                    if (ev != null) TrailEvent?.Invoke(ev);
                 }
             }
             catch (Exception e) { Status = "error " + e.Message; }

@@ -24,7 +24,9 @@ function fn.IsShown(s) return s.__shown end
 function fn.SetScript(s, e, f) scripts[s] = scripts[s] or {} scripts[s][e] = f end
 function fn.GetScript(s, e) return scripts[s] and scripts[s][e] end
 function fn.HookScript(s, e, f) scripts[s] = scripts[s] or {} local old = scripts[s][e] scripts[s][e] = function(...) if old then old(...) end f(...) end end
-function fn.RegisterEvent(s, e) EVENTS[#EVENTS + 1] = e end
+function fn.RegisterEvent(s, e) EVENTS[#EVENTS + 1] = e s.__events = s.__events or {} s.__events[e] = true end
+function fn.RegisterUnitEvent(s, e, u) s.__events = s.__events or {} s.__events[e] = u end
+function fn.UnregisterAllEvents(s) s.__events = {} end
 function fn.RegisterForClicks() end
 function fn.SetPoint(s, ...) s.__pts[#s.__pts + 1] = { ... } end
 function fn.ClearAllPoints(s) s.__pts = {} end
@@ -88,6 +90,21 @@ time = os.time
 date = os.date
 function UnitName(u) if u == "target" then return TARGET end return "Elan" end
 function UnitExists(u) return u == "player" or (u == "target" and TARGET ~= nil) end
+TARGET_DEAD, TARGET_GUID, TARGET_PLAYER = false, nil, false
+function UnitIsDead(u) if u == "target" then return TARGET_DEAD end return false end
+function UnitIsPlayer(u) if u == "target" then return TARGET_PLAYER end return u == "player" end
+function UnitGUID(u) if u == "target" then return TARGET_GUID end return "Player-1-0000ABCD" end
+ITEMQ, ITEMCLASS = {}, {}
+function GetItemInfo(id) if ITEMQ[id] == nil then return nil end return "Item" .. id, "link", ITEMQ[id] end
+function GetItemInfoInstant(id) return id, "Type", "Sub", "", 134400, ITEMCLASS[id] or 0, 0 end
+SPELLNAMES = { [2366] = "Herb Gathering", [2575] = "Mining", [8613] = "Skinning", [32605] = "Herb Gathering", [133] = "Fireball" }
+function GetSpellInfo(id) if SECRET_SPELL then return SECRET end return SPELLNAMES[id] end
+LOOT_ITEM_SELF = "You receive loot: %s."
+LOOT_ITEM_SELF_MULTIPLE = "You receive loot: %sx%d."
+LOOT_ITEM = "%s receives loot: %s."
+ERR_ZONE_EXPLORED = "Discovered: %s"
+ERR_ZONE_EXPLORED_XP = "Discovered %s: %d experience gained"
+ERR_NEWTAXIPATH = "New flight path discovered!"
 function UnitClass() return "Hunter", "HUNTER", 3 end
 function UnitRace() return "Orc", "Orc", 2 end
 function UnitSex() return 2 end
@@ -610,6 +627,7 @@ local function decode()
   r.f1 = row1[7] r.f2 = row1[8] r.xp = row1[9] r.group = row1[10]
   r.pf = row1[11] r.px = row1[12] * 256 + row1[13] r.py = row1[14] * 256 + row1[15]
   r.rest = 0 for i = 16, 22 do r.rest = r.rest + row1[i] end
+  r.es, r.ek, r.ei, r.ex, r.ea = row1[16], row1[17], row1[18] * 65536 + row1[19] * 256 + row1[20], row1[21], row1[22]
   return r
 end
 local function band(a, n) return math.floor(a / n) % 2 * n end
@@ -620,7 +638,7 @@ evt("PLAYER_ENTERING_WORLD")
 local d = decode()
 ok("v1 row still valid (name/class/race/level)", d.v1 and d.name == "Elan" and d.class == 3 and d.race == 2 and d.level == 60)
 ok("v1 flags: sex bits kept, v2-present bit (8) set", d.flags == 1 + 2 * 2 + 8)
-ok("v2 row valid: version 3 (1.15.3: position bytes), uiMapID 1413", d.v2 and d.ver == 3 and d.map == 1413)
+ok("v2 row valid: version 4 (1.16.0: trail event bytes), uiMapID 1413", d.v2 and d.ver == 4 and d.map == 1413)
 ok("v2 xp 33%, not in combat, combat flag valid", d.xp == 33 and d.f1 == 0 and band(d.f2, 1) == 1 and band(d.f2, 2) == 2)
 ok("old hub view: marker+calibration cells intact", strip.__textures[1].__rgb[1] == 1 and strip.__textures[1].__rgb[3] == 1 and strip.__textures[1].__rgb[2] == 0)
 
@@ -698,7 +716,7 @@ do
   tick() evt("ZONE_CHANGED")
   local d = decode()
   ok("position: off by default (db.position nil, PositionOn false)", db.position == nil and not E.PositionOn())
-  ok("position off: row 1 version 3, posFlags 0, x/y and the rest of the reserved bytes zero", d.v2 and d.ver == 3 and d.pf == 0 and d.px == 0 and d.py == 0 and d.rest == 0)
+  ok("position off: row 1 version 4, posFlags 0, x/y and the event bytes zero", d.v2 and d.ver == 4 and d.pf == 0 and d.px == 0 and d.py == 0 and d.rest == 0)
   ok("position off: the position was never asked for and no timer runs", POSCALLS == 0 and not E.PositionTimerRunning())
   local t0 = E.posTicks tick() tick()
   ok("position off: no position ticks", E.posTicks == t0)
@@ -765,7 +783,7 @@ do
   for i = 1, 8 do tick() end evt("ZONE_CHANGED")
   ok("position off: no ticks, never asked for again", POSCALLS == pc and E.posTicks == t0)
   -- the settings page: the check and its description, verbatim
-  local DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes. The Hub draws your map position into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there. It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere unless you also turn on sharing with your Lodge. Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there."
+  local DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there. It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there."
   ok("setting label and description verbatim", E.POSITION_LABEL == "Share my map position with Elan's Outpost" and E.POSITION_DESC == DESC)
   SlashCmdList.ELANSHUB("settings")
   if not _G.ElansHubSettings.__shown then SlashCmdList.ELANSHUB("settings") end
@@ -781,9 +799,158 @@ do
   -- the strip tooltip says so
   Fire(strip.hit, "OnEnter")
   local tip = table.concat(GameTooltip.lines, " | ")
-  ok("strip tooltip mentions the optional position, verbatim", tip:find("and (if you turned it on) your map position for its world map. It is read by the Outpost on this PC only; it never controls the game.", 1, true) ~= nil)
+  ok("strip tooltip mentions the optional position, verbatim", tip:find("and (if you turned it on) your map position, with small marks for what happened along your trail, for its world map. It is read by the Outpost on this PC only; it never controls the game.", 1, true) ~= nil)
   Fire(strip.hit, "OnLeave")
   ST.pos = nil ST.map = 1426
+end
+-- ================= trail events (1.16.0): part of the opt-in position option; plain events only, secrets guarded, one at a time on the strip
+do
+  local fr = E.evFrame
+  local function fire(e, ...) Fire(fr, "OnEvent", e, ...) end
+  local function link(id, color) return "|c" .. (color or "ff1eff00") .. "|Hitem:" .. id .. "::::::::60:::::|h[Thing " .. id .. "]|h|r" end
+  -- what a reader that looks once a second sees: each event once (by seq), in order
+  local function collect(n)
+    local seen, out = {}, {}
+    for i = 1, n or 40 do
+      tick()
+      local d = decode()
+      if d.v2 and d.es > 0 and not seen[d.es] then seen[d.es] = true out[#out + 1] = d end
+    end
+    return out
+  end
+  local function one(n) local l = collect(n or 6) return l[1], #l end
+  ST.pos, ST.px, ST.py = "ok", 0.3, 0.3
+  local dbKeys = {} for k in pairs(db) do dbKeys[#dbKeys + 1] = k end
+  -- off: nothing listens, nothing is queued, the bytes stay zero
+  SlashCmdList.ELANSHUB("position off")
+  collect(5)
+  ok("events: position option off -> not listening (no events registered on the event frame)", not E.TrailEventsListening() and not (fr.__events and next(fr.__events)))
+  TARGET, TARGET_DEAD, TARGET_GUID = "Kobold Vermin", true, "Creature-0-4372-0-14-6-00002B5A1C"
+  fire("CHAT_MSG_COMBAT_XP_GAIN", "Kobold Vermin dies, you gain 45 experience.")
+  fire("PLAYER_DEAD") fire("QUEST_TURNED_IN", 7)
+  ok("events: off -> an event that still arrives is ignored, nothing queued or drawn", E.EventShown() == nil and E.EventsQueued() == 0 and decode().es == 0 and decode().rest == 0)
+  ok("events: off -> PushEvent refuses", E.PushEvent(1, 5, 0) == false)
+  -- on: listening to plain events only
+  SlashCmdList.ELANSHUB("position on")
+  local ev = fr.__events or {}
+  ok("events: on -> listening to XP, loot, own casts (player only), level up, death, quests, info / system messages", E.TrailEventsListening() and ev.CHAT_MSG_COMBAT_XP_GAIN and ev.CHAT_MSG_LOOT
+     and ev.UNIT_SPELLCAST_SUCCEEDED == "player" and ev.PLAYER_LEVEL_UP and ev.PLAYER_DEAD and ev.QUEST_TURNED_IN and ev.UI_INFO_MESSAGE and ev.CHAT_MSG_SYSTEM)
+  local cl = false for k in pairs(ev) do if k:find("COMBAT_LOG") then cl = true end end
+  ok("events: no combat log event among them", not cl)
+  collect(4)
+  -- kill: the targeted, dead creature named in the XP message
+  fire("CHAT_MSG_COMBAT_XP_GAIN", "Kobold Vermin dies, you gain 45 experience.")
+  local d, n = one()
+  ok("kill: kind 1, the creature id (6) from the target's GUID, extra 0, age 0, seen exactly once", d and d.ek == 1 and d.ei == 6 and d.ex == 0 and d.ea == 0 and n == 1)
+  local seq1 = d and d.es or 0
+  for _, case in ipairs({
+    { "quest XP (message does not name the target)", "You gain 500 experience.", true, false, "Creature-0-4372-0-14-6-00002B5A1C" },
+    { "target still alive", "Kobold Vermin dies, you gain 45 experience.", false, false, "Creature-0-4372-0-14-6-00002B5A1C" },
+    { "target is a player", "Kobold Vermin dies, you gain 45 experience.", true, true, "Player-1-00000001" },
+    { "a pet / player GUID", "Kobold Vermin dies, you gain 45 experience.", true, false, "Pet-0-4372-0-14-6-00002B5A1C" },
+    { "secret message", SECRET, true, false, "Creature-0-4372-0-14-6-00002B5A1C" },
+    { "secret GUID", "Kobold Vermin dies, you gain 45 experience.", true, false, SECRET } }) do
+    TARGET_DEAD, TARGET_PLAYER, TARGET_GUID = case[3], case[4], case[5]
+    fire("CHAT_MSG_COMBAT_XP_GAIN", case[2])
+    local _, m = one()
+    ok("kill not marked: " .. case[1], m == 0)
+  end
+  TARGET_PLAYER, TARGET_DEAD = false, true
+  TARGET = SECRET
+  fire("CHAT_MSG_COMBAT_XP_GAIN", "Kobold Vermin dies, you gain 45 experience.")
+  ok("kill not marked: secret target name", select(2, one()) == 0)
+  TARGET = nil
+  -- loot: own loot only, notable only (uncommon+ or quest items), quality from the item info or the link colour
+  ITEMQ[2589], ITEMQ[774], ITEMQ[5056], ITEMCLASS[5056] = 1, 2, 1, 12
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(2589, "ffffffff") .. "x2.")
+  ok("loot: a common item gets no mark", select(2, one()) == 0)
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(774) .. ".")
+  d = one()
+  ok("loot: an uncommon item -> kind 2, item 774, extra = quality 2", d and d.ek == 2 and d.ei == 774 and d.ex == 2)
+  ok("loot: the seq moved on from the kill's", d and d.es ~= seq1)
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(5056, "ffffffff") .. ".")
+  d = one()
+  ok("loot: a quest item -> extra = quality 1 + 16", d and d.ek == 2 and d.ei == 5056 and d.ex == 17)
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(13444, "ff0070dd") .. "x3.")
+  d = one()
+  ok("loot: no item info yet -> the quality from the link colour (rare = 3); a stack of 3 still one mark", d and d.ei == 13444 and d.ex == 3)
+  fire("CHAT_MSG_LOOT", "Bob receives loot: " .. link(774) .. ".")
+  fire("CHAT_MSG_LOOT", SECRET)
+  ok("loot: someone else's loot and a secret message get no mark", select(2, one()) == 0)
+  -- gathering: your own Herb Gathering / Mining / Skinning cast, then the item you loot
+  fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-1", 2366)
+  ok("gather: the cast alone waits for the loot", E.GatherPending() ~= nil and E.EventsQueued() == 0 and E.EventShown() == nil)
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(2447, "ffffffff") .. "x2.")
+  local l = collect(8)
+  ok("gather: herb -> kind 3 with the item gathered (2447), and no separate loot mark for it", #l == 1 and l[1].ek == 3 and l[1].ei == 2447)
+  fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-2", 32605)
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(2770, "ffffffff") .. ".")
+  d = one()
+  ok("gather: another rank of Herb Gathering is known by its name in this client's language", d and d.ek == 3 and d.ei == 2770)
+  fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-3", 2575)
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(774) .. ".")
+  l = collect(10)
+  ok("gather: mining that yields an uncommon gem -> the ore mark carries it, and it gets no second mark (only rare and better do)", #l == 1 and l[1].ek == 4 and l[1].ei == 774)
+  fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-4", 8613)
+  l = collect(14)
+  ok("gather: skinning with nothing looted -> after a few seconds kind 5 without an item", #l == 1 and l[1].ek == 5 and l[1].ei == 0 and E.GatherPending() == nil)
+  fire("UNIT_SPELLCAST_SUCCEEDED", "party1", "Cast-5", 2366)
+  fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-6", 133)
+  fire("UNIT_SPELLCAST_SUCCEEDED", SECRET, "Cast-7", 2366)
+  ok("gather: someone else's cast, another spell and a secret unit start nothing", E.GatherPending() == nil and select(2, one()) == 0)
+  SECRET_SPELL = true
+  fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-8", 999999)
+  ok("gather: a secret spell name is not compared", E.GatherPending() == nil)
+  SECRET_SPELL = nil
+  -- level up, death, quest, discoveries
+  fire("PLAYER_LEVEL_UP", 61, 5, 0)
+  d = one()
+  ok("level up: kind 6, id = the new level", d and d.ek == 6 and d.ei == 61)
+  fire("PLAYER_DEAD")
+  d = one()
+  ok("death: kind 7", d and d.ek == 7 and d.ei == 0)
+  fire("QUEST_TURNED_IN", 783, 450, 0)
+  d = one()
+  ok("quest turned in: kind 8, the quest id", d and d.ek == 8 and d.ei == 783)
+  fire("QUEST_TURNED_IN", SECRET, 0, 0)
+  ok("quest turned in: a secret id gets no mark", select(2, one()) == 0)
+  fire("UI_INFO_MESSAGE", 0, "Discovered Goldshire: 85 experience gained")
+  fire("CHAT_MSG_SYSTEM", "Discovered Goldshire: 85 experience gained")
+  l = collect(8)
+  ok("new area: kind 9, id = the hash of its name (" .. E.AreaHash("Goldshire") .. "); the same message in chat counts once", #l == 1 and l[1].ek == 9 and l[1].ei == E.AreaHash("Goldshire") and E.AreaHash("Goldshire") == 9837803)
+  fire("UI_INFO_MESSAGE", "Discovered: Elwynn Forest")
+  d = one()
+  ok("new area without XP (\"Discovered: %s\")", d and d.ek == 9 and d.ei == E.AreaHash("Elwynn Forest"))
+  fire("UI_INFO_MESSAGE", 0, "New flight path discovered!")
+  d = one()
+  ok("new flight path: kind 10", d and d.ek == 10)
+  fire("UI_INFO_MESSAGE", 0, SECRET) fire("UI_INFO_MESSAGE", 0, "You are too far away.")
+  ok("info: a secret or unrelated message gets no mark", select(2, one()) == 0)
+  -- a burst: one at a time, each held a few seconds, in order, the age says how long it waited
+  for i = 1, 4 do E.PushEvent(E.EV.quest, 1000 + i, 0) end
+  l = collect(20)
+  ok("burst of 4: a 1 Hz reader sees all 4 once, in order, with new seq numbers", #l == 4 and l[1].ei == 1001 and l[4].ei == 1004 and l[1].es ~= l[2].es)
+  ok("burst: the ones that waited carry their age (" .. (l[4] and l[4].ea or -1) .. " s)", l[4] and l[4].ea >= 3 * 3 - 1 and l[1].ea == 0)
+  for i = 1, 12 do E.PushEvent(E.EV.quest, 2000 + i, 0) end
+  l = collect(50)
+  ok("queue: at most 8 waiting (the oldest are dropped), never an endless backlog", #l <= 9 and l[#l].ei == 2012)
+  -- turning the option off clears everything at once
+  fire("PLAYER_DEAD")
+  SlashCmdList.ELANSHUB("position off")
+  tick()
+  d = decode()
+  ok("off again: not listening, the queue is empty, the event bytes are zero", not E.TrailEventsListening() and E.EventShown() == nil and E.EventsQueued() == 0 and d.es == 0 and d.rest == 0)
+  -- the pixel strip off stops it as well
+  SlashCmdList.ELANSHUB("position on")
+  SlashCmdList.ELANSHUB("pixel off")
+  ok("pixel strip off: not listening", not E.TrailEventsListening() and E.PushEvent(1, 6, 0) == false)
+  SlashCmdList.ELANSHUB("pixel on")
+  SlashCmdList.ELANSHUB("position off")
+  -- never saved
+  local keys = {} for k in pairs(db) do keys[#keys + 1] = k end
+  local extra = {} for _, k in ipairs(keys) do local had = false for _, k2 in ipairs(dbKeys) do if k2 == k then had = true end end if not had and k ~= "position" and k ~= "positionHinted" then extra[#extra + 1] = k end end
+  ok("events are never saved (no new SavedVariables keys: " .. table.concat(extra, ",") .. ")", #extra == 0)
+  ST.pos = nil
 end
 -- state for the hub's cross-check (STRIP_DUMP): in combat, AFK, level 60 Orc hunter "Elan", zone 1426, party instance 43, group 5
 ST.combat = true ST.afk = true ST.inst = true ST.itype = "party" ST.iid = 43 ST.group = 5 ST.exh = 10 ST.xp = 2250
@@ -1156,9 +1323,12 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.16.0", "## Version: 1.16.0" in toc and "1.16.0" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
-check("toc Notes verbatim (optional live map position, off by default)", "## Notes: Shares your character, zone and status with Elan's Outpost (and your Lodge, if you join one). Optional: your live map position for the Outpost's world map — display only, no automation; everything optional is off by default.\n" in toc)
-_cl153 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.15.3")[-1]
+check("toc version is 1.16.0", "## Version: 1.16.0" in toc and "\n1.16.0 " in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc Notes verbatim (optional live map position, off by default)", "## Notes: Shares your character, zone and status with Elan's Outpost (and your Lodge, if you join one). Optional: your live map position and trail events for the Outpost's world map — display only, no automation; everything optional is off by default.\n" in toc)
+_cl153 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.15.3 ")[1].split("\n1.16.0 ")[0]
+_cl160 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.16.0 ")[-1]
+check("changelog 1.16.0: trail events, same opt-in option, no combat events, nothing saved or sent, honest about the Lodge", "OFF-by-default" in _cl160 and "Share my map position" in _cl160
+      and "never combat events" in _cl160 and "not saved and nothing is sent anywhere" in _cl160 and "does not exist yet" in _cl160 and "/reload" in _cl160)
 check("changelog 1.15.3: opt-in, off by default, honest wording", "OFF by default" in _cl153 and "nothing presses keys or plays the game for you" in _cl153 and "/ehub position on|off" in _cl153)
 # the map position is read in ONE place only (ElansHub.lua's readPosition), behind the opt-in
 _pos_files = [f for f in files if "GetPlayerMapPosition" in open(os.path.join(ADDON, f), encoding="utf-8").read()]
@@ -1166,6 +1336,12 @@ _hub = open(os.path.join(ADDON, "ElansHub.lua"), encoding="utf-8").read()
 check("GetPlayerMapPosition only in ElansHub.lua, only in readPosition, behind positionOn()", _pos_files == ["ElansHub.lua"] and _hub.count("C_Map.GetPlayerMapPosition, mapId") == 1
       and "if not positionOn() or inInstance" in _hub.split("local function readPosition")[1].split("C_Map.GetPlayerMapPosition, mapId")[0])
 check("position code never hooks or touches protected things", not _re.search(r"hooksecurefunc\(\s*C_Map|SetAttribute|Secure", _hub.split("-- ---- map position")[1].split("local lastSig")[0]))
+# trail events: read only in ElansHub.lua behind the position option, from plain events; no hooks, no combat events
+_tev = _hub.split("-- ---- trail events")[1].split("local lastSig")[0]
+check("trail events never hook anything or touch protected / combat-log code", not _re.search(r"hooksecurefunc|HookScript|SetAttribute|Secure|COMBAT_LOG|CombatLog", _tev))
+check("trail events only run while the position option and the strip are on (eventsOn gates push, the handler and the registration)", "local function eventsOn() return positionOn() and pixelsOn() end" in _tev
+      and "if not eventsOn() then return false end" in _tev and "if not eventsOn() then return end" in _tev and "local want = eventsOn()" in _tev)
+check("trail events never write to the saved variables", "ElansHubDB" not in _tev)
 check("changelog says a one-time WoW restart is needed", "ONE-TIME" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.12.0")[1])
 check("Data.lua is in the toc right after ElansHub.lua and ElansHubData is a saved variable", files[:2] == ["ElansHub.lua", "Data.lua"] and "ElansHubData" in toc)
 check("Collect.lua is in the toc right after Data.lua", files[:3] == ["ElansHub.lua", "Data.lua", "Collect.lua"])

@@ -50,8 +50,8 @@ local function buildGeneral(page)
   pd:ClearAllPoints()
   pd:SetPoint("TOPLEFT", page, "TOPLEFT", 24, y)
   page.positionNote = pd
-  y = y - 84
-  note(page, "The pixel strip only carries who you play and what you are doing (class, level, zone, group, combat flag), and your map position only if you turn that on. It never reads health, buffs or cooldowns.", y)
+  y = y - 118
+  note(page, "The pixel strip only carries who you play and what you are doing (class, level, zone, group, combat flag), and your map position (with marks for kills, notable loot, gathering, level ups, deaths, quests and discoveries along your trail) only if you turn that on. It never reads health, buffs, cooldowns or combat events.", y)
 end
 
 local function buildWheel(page)
