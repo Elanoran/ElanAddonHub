@@ -1156,7 +1156,7 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.15.3", "## Version: 1.15.3" in toc and "1.15.3" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc version is 1.16.0", "## Version: 1.16.0" in toc and "1.16.0" in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
 check("toc Notes verbatim (optional live map position, off by default)", "## Notes: Shares your character, zone and status with Elan's Outpost (and your Lodge, if you join one). Optional: your live map position for the Outpost's world map — display only, no automation; everything optional is off by default.\n" in toc)
 _cl153 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("1.15.3")[-1]
 check("changelog 1.15.3: opt-in, off by default, honest wording", "OFF by default" in _cl153 and "nothing presses keys or plays the game for you" in _cl153 and "/ehub position on|off" in _cl153)

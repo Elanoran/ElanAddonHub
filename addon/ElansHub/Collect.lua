@@ -1,4 +1,4 @@
--- Elan's Hub data collectors: bags, bank, guild bank, gear, talents and professions, handed to ElansHub.Publish
+-- Elan's Hub data collectors: bags, bank, guild bank, gear, talents, professions and reputations, handed to ElansHub.Publish
 -- (schemas in ARCHITECTURE.md). Event driven, never in combat, every job throttled with C_Timer.After (no OnUpdate).
 -- Nothing is sent anywhere by the addon; the Outpost reads the saved variables. No Blizzard UI function is called or hooked.
 
@@ -557,6 +557,95 @@ local function scanRecipes()
   publishProfessions(list)
 end
 
+-- ============================================================ reputations
+-- reps = { at, partial, list = { { id = factionId, s = standing 1 Hated .. 8 Exalted, v = value, min, max, n = name } } }. Read from the
+-- reputation list exactly as the client offers it: a header is never expanded or collapsed (that would change the player's window), so
+-- factions under a collapsed header are not readable; such a read is partial and the stored values of the hidden factions are kept.
+-- Kept on this PC like everything else; the Outpost shares it with a Lodge only when its user switched that on.
+local MAX_REPS = 300
+local repsCache
+
+local function repEntry(id, s, v, lo, hi, name)
+  id, s, v = num(id), num(s), num(v)
+  if not (id and id > 0 and id == math.floor(id) and s and s >= 1 and s <= 8 and v) then return nil end
+  local e = { id = id, s = s, v = v, min = num(lo), max = num(hi) }
+  name = str(name)
+  if name and name ~= "" then e.n = name:sub(1, 48) end
+  return e
+end
+
+-- -> { [id] = entry }, partial ; nil when the client has no reputation API (or nothing to read yet)
+local function readReps()
+  local out, partial, n = {}, false, 0
+  local CR = rawget(_G, "C_Reputation")
+  if type(CR) == "table" and CR.GetNumFactions and CR.GetFactionDataByIndex then
+    n = num(rd(CR.GetNumFactions)) or 0
+    for i = 1, math.min(n, 500) do
+      local ok, f = pcall(CR.GetFactionDataByIndex, i)
+      f = ok and clean(f) or nil
+      if type(f) == "table" then
+        local header, withRep = clean(f.isHeader) == true, clean(f.isHeaderWithRep) == true
+        if header and clean(f.isCollapsed) == true then partial = true end
+        if not header or withRep then
+          local e = repEntry(f.factionID, f.reaction, f.currentStanding, f.currentReactionThreshold, f.nextReactionThreshold, f.name)
+          if e then out[e.id] = e elseif not header then partial = true end
+        end
+      else
+        partial = true
+      end
+    end
+    if n > 0 then return out, partial end
+  end
+  if GetNumFactions and GetFactionInfo then
+    n = num(rd(GetNumFactions)) or 0
+    for i = 1, math.min(n, 500) do
+      -- name, description, standingID, barMin, barMax, barValue, atWarWith, canToggleAtWar, isHeader, isCollapsed, hasRep, isWatched, isChild, factionID
+      local r = { pcall(GetFactionInfo, i) }
+      if r[1] then
+        local header, collapsed, hasRep = clean(r[10]) and true or false, clean(r[11]) and true or false, clean(r[12]) and true or false
+        if header and collapsed then partial = true end
+        if not header or hasRep then
+          local e = repEntry(r[15], r[4], r[7], r[5], r[6], r[2])
+          if e then out[e.id] = e elseif not header then partial = true end
+        end
+      else
+        partial = true
+      end
+    end
+    if n > 0 then return out, partial end
+  end
+  return nil
+end
+
+-- pure merge: stored list (or nil) + a read -> the list to store. A partial read never drops a faction it could not see.
+local function mergeReps(old, read, partial)
+  local byId = {}
+  if partial and type(old) == "table" then
+    for _, e in ipairs(old) do if type(e) == "table" and type(e.id) == "number" then byId[e.id] = e end end
+  end
+  for id, e in pairs(read) do byId[id] = e end
+  local list = {}
+  for _, e in pairs(byId) do list[#list + 1] = e end
+  table.sort(list, function(a, b) return a.id < b.id end)
+  while #list > MAX_REPS do list[#list] = nil end
+  return list
+end
+EHUB.MergeReps = mergeReps
+
+local function scanReps()
+  local read, partial = readReps()
+  if not read then return end
+  if not repsCache then
+    local H = rawget(_G, "ElansHub")
+    local d = H and H.Get and H.Get("reps")
+    repsCache = type(d) == "table" and type(d.list) == "table" and d.list or {}
+  end
+  local list = mergeReps(repsCache, read, partial)
+  if #list == 0 then return end
+  repsCache = list
+  publish("reps", { at = now(), partial = partial or nil, list = list })
+end
+
 -- ============================================================ guild bank (account scope, merged into the stored module)
 local guildOpen = false
 local gbScanTab = false -- a GUILDBANKBAGSLOTS_CHANGED is waiting to be scanned
@@ -660,8 +749,9 @@ local JOBS = {
   talents = { interval = 2, run = scanTalents },
   professions = { interval = 2, run = scanProfessions },
   recipes = { interval = 2, run = scanRecipes, gate = function() return tradeOpen end },
+  reps = { interval = 5, run = scanReps },
 }
-local ORDER = { "bags", "bank", "guildbank", "gear", "talents", "professions", "recipes" }
+local ORDER = { "bags", "bank", "guildbank", "gear", "talents", "professions", "recipes", "reps" }
 for _, n in ipairs(ORDER) do JOBS[n].name = n JOBS[n].last = -1000 end
 
 local function execute(job)
@@ -729,8 +819,9 @@ end
 
 local HANDLERS = {
   PLAYER_ENTERING_WORLD = function()
-    request("bags") request("gear") request("talents") request("professions")
+    request("bags") request("gear") request("talents") request("professions") request("reps")
   end,
+  UPDATE_FACTION = function() request("reps") end,
   BAG_UPDATE_DELAYED = function() request("bags") request("bank") end,
   BANKFRAME_OPENED = openBank,
   BANKFRAME_CLOSED = closeBank,
@@ -810,6 +901,8 @@ local function countOf(module, d)
     local r = 0
     for _, e in pairs(d.known or {}) do r = r + #(type(e) == "table" and e.ids or {}) end
     return #(d.list or {}) .. " professions" .. (r > 0 and (", " .. r .. " recipes") or "")
+  elseif module == "reps" then
+    return #(d.list or {}) .. " reputations" .. (d.partial and " (some headers collapsed)" or "")
   end
   return "ok"
 end
@@ -818,7 +911,7 @@ function EHUB.DataCommand()
   local H = rawget(_G, "ElansHub")
   if not (H and H.Get) then print("|cffabd473Elan's Hub|r: data layer not loaded") return end
   local acct = { guildbank = true }
-  for _, module in ipairs({ "core", "bags", "bank", "guildbank", "gear", "talents", "professions" }) do
+  for _, module in ipairs({ "core", "bags", "bank", "guildbank", "gear", "talents", "professions", "reps" }) do
     local d, v, at = H.Get(module, acct[module] and "account" or nil)
     if d then
       print(string.format("|cffabd473Hub data|r %s v%s, %s ago, %s", module, tostring(v), ago(now() - (at or 0)), countOf(module, d)))

@@ -177,7 +177,7 @@ namespace ElansAddonHub.Services.Atlas
             var inst = idx.Instance(mapId);
             if (inst == null || inst.Placeholder) return NotFoundPage("instance", mapId, "Your game has no instance with this id.");
             string F = AtlasLabel.Forever, C = AtlasLabel.Classic;
-            var m = new AtlasPageModel { Id = "instance:" + mapId, Kind = "instance", Title = inst.Name, MapFirst = true };
+            var m = new AtlasPageModel { Id = "instance:" + mapId, Kind = "instance", Title = inst.Name, MapFirst = true, IconId = InstanceIcons.For(inst.MapId, inst.Name, inst.InstanceType) };
             AddLayer(m, "maps");
             m.Facts.Add(new AtlasFact("Type", inst.Kind, F));
             if (inst.MaxPlayers > 0) m.Facts.Add(new AtlasFact("Players", inst.MaxPlayers.ToString(CultureInfo.InvariantCulture), F));

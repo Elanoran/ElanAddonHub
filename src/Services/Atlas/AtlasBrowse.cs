@@ -31,6 +31,7 @@ namespace ElansAddonHub.Services.Atlas
         public string For = "";                             // items: a character key (level and proficiency)
         public string Zone = "";                            // creatures, objects, quests: a UiMap id
         public string Rank = "";                            // creatures: elite | rare | boss
+        public string Side = "";                            // factions: alliance | horde | shared (FactionData.SideOf)
         public string Learn = "";                           // recipes: "can" = recipes of my characters' professions that they have not learned yet and have the skill for (needs the Hub's profession-window reads)
         public string Sort = "";                            // "" = the category's own order
 
@@ -67,6 +68,7 @@ namespace ElansAddonHub.Services.Atlas
                     case "zone": if (int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out n) && n > 0) q.Zone = n.ToString(CultureInfo.InvariantCulture); break;
                     case "rank": v = v.ToLowerInvariant(); if (v == "elite" || v == "rare" || v == "boss") q.Rank = v; break;
                     case "learn": v = v.ToLowerInvariant(); if (v == "can") q.Learn = v; break;
+                    case "side": v = v.ToLowerInvariant(); if (v == FactionData.Alliance || v == FactionData.Horde || v == FactionData.Shared) q.Side = v; break;
                     case "sort": q.Sort = v.Trim().ToLowerInvariant(); break;
                 }
             }
@@ -85,13 +87,13 @@ namespace ElansAddonHub.Services.Atlas
             if (MinLevel > 0) Add("minlvl", MinLevel.ToString(CultureInfo.InvariantCulture));
             if (MaxLevel > 0) Add("maxlvl", MaxLevel.ToString(CultureInfo.InvariantCulture));
             if (Quality >= 0) Add("q", Quality.ToString(CultureInfo.InvariantCulture));
-            Add("slot", Slot); Add("src", Src); Add("how", How); Add("for", For); Add("zone", Zone); Add("rank", Rank); Add("learn", Learn); Add("sort", Sort);
+            Add("slot", Slot); Add("src", Src); Add("how", How); Add("for", For); Add("zone", Zone); Add("rank", Rank); Add("side", Side); Add("learn", Learn); Add("sort", Sort);
             if (qs.Count > 0) sb.Append('?').Append(string.Join("&", qs));
             return sb.ToString();
         }
 
         public BrowseQuery WithPath(params string[] slugs) { var q = Clone(); q.Path = slugs.ToList(); return q; }
-        public bool HasFilters => Name.Length > 0 || MinLevel > 0 || MaxLevel > 0 || Quality >= 0 || Slot.Length > 0 || Src.Length > 0 || How.Length > 0 || For.Length > 0 || Zone.Length > 0 || Rank.Length > 0 || Learn.Length > 0;
+        public bool HasFilters => Name.Length > 0 || MinLevel > 0 || MaxLevel > 0 || Quality >= 0 || Slot.Length > 0 || Src.Length > 0 || How.Length > 0 || For.Length > 0 || Zone.Length > 0 || Rank.Length > 0 || Side.Length > 0 || Learn.Length > 0;
         public override string ToString() => ToId();
     }
 
@@ -127,6 +129,7 @@ namespace ElansAddonHub.Services.Atlas
         public bool Hosted;                                          // set by the page when the id was a hosted category
         public List<AtlasCrumb> Crumbs = new List<AtlasCrumb>();
         public List<BrowseChild> Children = new List<BrowseChild>();
+        public List<BrowseChild> Sides = new List<BrowseChild>();       // factions: the All | Alliance | Horde | Shared chips (Slug = the side, "" = all), counts after the other filters
         public bool ChildrenAreSiblings;                             // the page has no children of its own: these are its neighbours
         public List<AtlasRow> Rows = new List<AtlasRow>();
         public int Total;                                            // rows after the filters
@@ -246,6 +249,7 @@ namespace ElansAddonHub.Services.Atlas
             var chr = string.IsNullOrEmpty(q.For) ? null : chars.FirstOrDefault(c => c.Key == q.For);
             var inNode = node == ix.Root ? ix.All : ix.All.Where(node.Pred).ToList();
             r.InCategory = inNode.Count;
+            if (ix.Cat == "factions") SideChips(r, Filter(inNode, q.WithSide(""), chr, ix), q);
             var hits = Filter(inNode, q, chr, ix);
             r.Sort = string.IsNullOrEmpty(q.Sort) || !r.Controls.Sorts.Any(s => s.Value == q.Sort) ? r.Controls.DefaultSort : q.Sort;
             hits = Sort(hits, r.Sort, ix);
@@ -261,7 +265,7 @@ namespace ElansAddonHub.Services.Atlas
         static BrowseQuery WithFiltersOf(this BrowseQuery to, BrowseQuery from)
         {
             to.Name = from.Name; to.MinLevel = from.MinLevel; to.MaxLevel = from.MaxLevel; to.Quality = from.Quality; to.Slot = from.Slot; to.Src = from.Src; to.How = from.How;
-            to.For = from.For; to.Zone = from.Zone; to.Rank = from.Rank; to.Learn = from.Learn; to.Sort = from.Sort;
+            to.For = from.For; to.Zone = from.Zone; to.Rank = from.Rank; to.Side = from.Side; to.Learn = from.Learn; to.Sort = from.Sort;
             return to;
         }
 
@@ -304,6 +308,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (how != 0 && (e.Src & how) == 0) continue;
                 if (zone != 0 && e.Zone != zone) continue;
                 if (q.Rank.Length > 0 && !RankMatches(e, q.Rank)) continue;
+                if (q.Side.Length > 0 && ix.Cat == "factions" && e.Group != q.Side) continue;
                 if (chr != null && e.Kind == "item" && !ItemProficiency.CanUse(chr.Class, chr.Level, e)) continue;
                 res.Add(e);
             }
@@ -341,6 +346,20 @@ namespace ElansAddonHub.Services.Atlas
                 }
                 return false;
             };
+        }
+
+        static BrowseQuery WithSide(this BrowseQuery q, string side) { var c = q.Clone(); c.Side = side; return c; }
+
+        // the side chips of the Factions list: All, then each side that has a faction, with the counts after every other filter
+        static void SideChips(BrowseResult r, List<BEntry> pre, BrowseQuery q)
+        {
+            void Add(string side, int n)
+            {
+                var cq = q.Clone(); cq.Side = side;
+                r.Sides.Add(new BrowseChild { Slug = side, Title = FactionData.SideTitle(side), Count = n, Id = cq.ToId(), Current = q.Side == side });
+            }
+            Add("", pre.Count);
+            foreach (var s in new[] { FactionData.Alliance, FactionData.Horde, FactionData.Shared }) Add(s, pre.Count(e => e.Group == s));
         }
 
         static bool RankMatches(BEntry e, string rank)

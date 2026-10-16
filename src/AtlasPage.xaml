@@ -28,6 +28,7 @@
             <TextBlock Text="{Binding Title}" Style="{StaticResource Text.RowTitle}" Foreground="{Binding TitleBrush}" TextTrimming="CharacterEllipsis" />
             <TextBlock x:Name="detail" local:MoneyText.Source="{Binding Detail}" Style="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
             <TextBlock x:Name="extra" local:MoneyText.Source="{Binding Extra}" Style="{StaticResource Text.Caption}" TextTrimming="CharacterEllipsis" />
+            <ProgressBar x:Name="bar" Style="{StaticResource ThinProgress}" Minimum="0" Maximum="1" Value="{Binding Progress, Mode=OneWay}" Width="200" HorizontalAlignment="Left" Margin="0,4,0,0" IsHitTestVisible="False" Visibility="Collapsed" />
           </StackPanel>
           <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
             <TextBlock x:Name="right" local:MoneyText.Source="{Binding Right}" Style="{StaticResource Text.Body}" HorizontalAlignment="Right" />
@@ -50,6 +51,9 @@
         </DataTrigger>
         <DataTrigger Binding="{Binding Extra}" Value="">
           <Setter TargetName="extra" Property="Visibility" Value="Collapsed" />
+        </DataTrigger>
+        <DataTrigger Binding="{Binding HasProgress}" Value="True">
+          <Setter TargetName="bar" Property="Visibility" Value="Visible" />
         </DataTrigger>
         <DataTrigger Binding="{Binding Right}" Value="">
           <Setter TargetName="right" Property="Visibility" Value="Collapsed" />

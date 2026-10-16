@@ -127,6 +127,23 @@ namespace ElansAddonHub.Services
         public Dictionary<int, HubKnownScan> Known = new Dictionary<int, HubKnownScan>();     // empty before the Hub 1.14.0 or before a profession window was opened
     }
 
+    // one faction of the reputation list as Elan's Hub (1.16.0) read it: standing 1 Hated .. 8 Exalted, the value and the bounds of the current standing
+    public class HubRep
+    {
+        public int Id, Standing;
+        public int Value, Min, Max;
+        public string Name;                            // as the game named it (the Outpost prefers its own game data)
+    }
+
+    // reps: { at, partial, list = { { id, s, v, min, max, n } } }
+    public class HubRepsModule
+    {
+        public long At;
+        public bool Partial;                           // some headers were collapsed when it was read: the hidden factions keep older values
+        public Dictionary<int, HubRep> ById = new Dictionary<int, HubRep>();
+        public const int MaxReps = 300;
+    }
+
     public class HubPetAbility
     {
         public string Id, Name;
@@ -433,6 +450,32 @@ namespace ElansAddonHub.Services
                     if (string.IsNullOrEmpty(kv.Key) || kv.Key.Length > MaxText || !(kv.Value is double r) || double.IsNaN(r) || r < 1) continue;
                     res.Known[kv.Key] = Clamp(r, 1, 100);
                 }
+            return res;
+        }
+
+        // reps v1 (Elan's Hub 1.16.0): every number is checked again here; an entry with an odd id or standing is left out
+        public static HubRepsModule RepsOf(HubChar c)
+        {
+            var m = Mod(c, "reps");
+            if (!Usable(m)) return null;
+            var d = m.Data;
+            var res = new HubRepsModule { At = AtOf(m, d), Partial = d.TryGetValue("partial", out var pv) && pv is bool pb && pb };
+            var list = d.Child("list");
+            if (list == null) return res;
+            foreach (var kv in list)
+            {
+                if (res.ById.Count >= HubRepsModule.MaxReps) break;
+                if (!(kv.Value is Dictionary<string, object> e)) continue;
+                double id = Num(e, "id"), st = Num(e, "s");
+                if (id < 1 || id > 1000000 || id != Math.Floor(id) || st < 1 || st > 8) continue;
+                var r = new HubRep
+                {
+                    Id = (int)id, Standing = (int)st, Value = (int)Math.Max(-1e8, Math.Min(1e8, Num(e, "v"))),
+                    Min = (int)Math.Max(-1e8, Math.Min(1e8, Num(e, "min"))), Max = (int)Math.Max(-1e8, Math.Min(1e8, Num(e, "max"))), Name = e.Str("n"),
+                };
+                if (r.Name != null && r.Name.Length > 48) r.Name = r.Name.Substring(0, 48);
+                res.ById[r.Id] = r;
+            }
             return res;
         }
 

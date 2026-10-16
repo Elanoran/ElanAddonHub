@@ -460,6 +460,7 @@ namespace ElansAddonHub
             if (Begin("atlasclasses")) { result += "\r\n" + await AtlasClassesTest(dir); End(); }
             if (Begin("atlasdata")) { result += "\r\n" + await AtlasDataTest(dir); End(); }
             await RealSec("atlasdatareal", AtlasDataRealTest);
+            if (Begin("factions")) { result += "\r\n" + await FactionsTest(dir); End(); }
             if (Begin("zonelore")) { result += "\r\n" + await ZoneLoreTest(dir); End(); }
             await RealSec("zonelorereal", ZoneLoreRealTest);
             if (Begin("about")) { result += "\r\n" + await AboutTest(dir); End(); }

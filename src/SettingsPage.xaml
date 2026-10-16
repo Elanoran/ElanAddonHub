@@ -351,6 +351,9 @@
                 <CheckBox x:Name="ArmoryShareBox" Style="{StaticResource Switch}" Click="Armory_Click" AutomationProperties.Name="Share my characters with the Lodge" />
               </HeaderedContentControl>
               <StackPanel x:Name="ArmoryCharsPanel" Visibility="Collapsed">
+                <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Also share their reputations" Tag="Off until you turn it on. Then the characters you tick below also tell the Lodge their standing with each faction (Hated to Exalted, and how far along), so friends see it on the Atlas faction pages. Only the faction, the standing and the progress - nothing else. Needs Elan's Hub 1.16.0 and a Lodge that supports it. Turning it off removes them from the Lodge again.">
+                  <CheckBox x:Name="ArmoryRepsBox" Style="{StaticResource Switch}" Click="ArmoryReps_Click" AutomationProperties.Name="Also share their reputations" />
+                </HeaderedContentControl>
                 <StackPanel x:Name="ArmoryCharsHost" />
                 <TextBlock x:Name="ArmoryCharsNote" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="16,8,16,12" />
               </StackPanel>

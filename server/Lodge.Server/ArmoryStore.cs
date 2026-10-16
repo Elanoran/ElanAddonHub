@@ -49,7 +49,7 @@ public sealed class ArmoryStore
             {
                 if (ow.Chars.Count >= Armory.MaxCharsPerMember || total >= Armory.MaxCharsTotal) break;
                 if (!Armory.ValidKey(key) || node is not JsonObject e || e["c"] is not JsonObject c) continue;
-                var clean = Armory.Clean(c, out _);
+                var clean = Armory.Clean(c, out _, true);       // reputations stay on disk; whether they are served is the module's call (feature switch)
                 if (clean == null) continue;
                 long up = e["up"] is JsonValue uv && uv.TryGetValue<long>(out var ul) && ul > 0 ? ul : 0;
                 ow.Chars[key] = new Entry { C = clean, Up = up };
@@ -147,6 +147,24 @@ public sealed class ArmoryStore
                 }
         var arr = new JsonArray();
         foreach (var x in rows.OrderByDescending(x => x.skill).ThenBy(x => x.name, StringComparer.Ordinal).Take(Armory.MaxCrafterRows)) arr.Add(x.row);
+        return arr;
+    }
+
+    // "standing with a faction" (the caller holds Gate): one row per shared character that has a reputation with it, best standing first, capped
+    public JsonArray Standings(int faction, Func<string, string, string> shown, string me)
+    {
+        var rows = new List<(int s, int v, string name, JsonObject row)>();
+        foreach (var (id, ow) in owners.OrderBy(k => k.Key, StringComparer.Ordinal))
+            foreach (var (key, e) in ow.Chars.OrderBy(k => k.Key, StringComparer.Ordinal))
+            {
+                var r = Armory.StandingOf(e.C, faction);
+                if (r == null) continue;
+                r["owner"] = id; r["by"] = shown(id, ow.Name); r["key"] = key;
+                if (id == me) r["mine"] = true;
+                rows.Add(((int)r["s"]!, (int)r["v"]!, (string)r["name"]!, r));
+            }
+        var arr = new JsonArray();
+        foreach (var x in rows.OrderByDescending(x => x.s).ThenByDescending(x => x.v).ThenBy(x => x.name, StringComparer.Ordinal).Take(Armory.MaxStandingRows)) arr.Add(x.row);
         return arr;
     }
 

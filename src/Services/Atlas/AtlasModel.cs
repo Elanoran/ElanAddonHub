@@ -101,6 +101,8 @@ namespace ElansAddonHub.Services.Atlas
         public double Sort { get; set; }                  // within a tier, higher first
         public string Zone { get; set; } = "";            // the zone name when known
         public string Key { get; set; } = "";             // identity for merging rows of the same source ("npc:123")
+        public double Progress { get; set; } = -1;        // 0..1: a thin bar under the text (a reputation inside its standing); -1 = none
+        public bool HasProgress => Progress >= 0;
         public bool Forever => Label == AtlasLabel.Forever;
 
         ImageSource icon;

@@ -586,7 +586,7 @@ check("recipe code never expands, collapses, selects or filters the window", all
 # ---------------------------------------------------------------- /ehub data
 L.execute("CHAT = {}; EHUB.DataCommand()")
 chat = [L.eval("CHAT[%d]" % (i + 1)) for i in range(int(L.eval("#CHAT")))]
-check("/ehub data prints one line per module (7)", len(chat) == 7)
+check("/ehub data prints one line per module (8, reputations included)", len(chat) == 8)
 check("line shows module, v, age and a count", any("bags v1" in c and "ago" in c and "items" in c for c in chat))
 check("lines for bank/guildbank/gear/talents/professions", all(any(m in c for c in chat) for m in ["bank v1", "guildbank v1", "gear v1", "talents v1", "professions v1"]))
 check("core was never published here -> 'not collected yet'", any("core: not collected yet" in c for c in chat))
@@ -600,6 +600,76 @@ check("a full bank fits Publish's 20000-value cap", lua("""
   local links = {} for i = 1, 98 do links[i] = '|cffffffff|Hitem:' .. i .. '::::::|h[Item]|h|r' end
   local ok = ElansHub.Publish('bank_big', 1, { at = 1, cont = cont, links = links })
   return ok == true"""))
+
+# ---------------------------------------------------------------- reputations
+check("registers UPDATE_FACTION", lua("for _, e in ipairs(EVENTS) do if e == 'UPDATE_FACTION' then return true end end return false"))
+check("never expands or collapses a reputation header", "ExpandFactionHeader" not in code and "CollapseFactionHeader" not in code and "SetWatchedFactionIndex" not in code)
+L.execute("""
+C_Reputation = nil
+-- classic GetFactionInfo: name, description, standingID, barMin, barMax, barValue, atWarWith, canToggleAtWar, isHeader, isCollapsed, hasRep, isWatched, isChild, factionID
+FACTIONS = {
+  { "Alliance", "", 4, 0, 3000, 0, false, false, true, false, false, false, false, 469 },
+  { "Stormwind", "", 6, 9000, 21000, 12500, false, false, false, false, false, false, true, 72 },
+  { "Ironforge", "", 5, 3000, 9000, 4200, false, false, false, false, false, false, true, 47 },
+  { "Steamwheedle Cartel", "", 4, 0, 3000, 0, false, false, true, true, false, false, false, 169 },
+}
+function GetNumFactions() return #FACTIONS end
+function GetFactionInfo(i) local f = FACTIONS[i] return f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9], f[10], f[11], f[12], f[13], f[14] end
+TIMERS = {}; CLOCK = CLOCK + 100
+""")
+L.execute("Fire('UPDATE_FACTION')")
+check("reputations: deferred through a timer", lua("return ElansHub.Get('reps') == nil and #TIMERS >= 1"))
+L.execute("RunTimers()")
+check("reps v1: the factions with a bar, headers without rep left out, sorted by id", lua("local d, v = ElansHub.Get('reps') local l = d.list return v == 1 and #l == 2 and l[1].id == 47 and l[1].s == 5 and l[1].v == 4200 and l[1].min == 3000 and l[1].max == 9000 and l[1].n == 'Ironforge' and l[2].id == 72 and l[2].s == 6"))
+check("reps: a collapsed header makes the read partial", lua("return ElansHub.Get('reps').partial == true"))
+# the header stays collapsed: Ironforge is no longer listed, but a partial read keeps it; Stormwind moves on
+L.execute("""
+FACTIONS = {
+  { "Alliance", "", 4, 0, 3000, 0, false, false, true, true, false, false, false, 469 },
+  { "Gadgetzan", "", 5, 3000, 9000, 3100, false, false, false, false, false, false, true, 369 },
+}
+TIMERS = {}; CLOCK = CLOCK + 100
+""")
+L.execute("Fire('UPDATE_FACTION') RunTimers()")
+check("reps: a partial read keeps factions it could not see and adds the new one", lua("local l = ElansHub.Get('reps').list local s = {} for _, e in ipairs(l) do s[e.id] = e end return #l == 3 and s[47] and s[72] and s[369] and s[369].v == 3100"))
+# a full read (nothing collapsed) replaces: factions not listed go
+L.execute("""
+FACTIONS = {
+  { "Stormwind", "", 7, 21000, 42000, 22000, false, false, false, false, false, false, true, 72 },
+}
+TIMERS = {}; CLOCK = CLOCK + 100
+""")
+L.execute("Fire('UPDATE_FACTION') RunTimers()")
+check("reps: a full read replaces the list", lua("local d = ElansHub.Get('reps') return #d.list == 1 and d.list[1].id == 72 and d.list[1].s == 7 and d.partial == nil"))
+# secret values: the entry is skipped and the read is partial
+L.execute("""
+FACTIONS = {
+  { "Stormwind", "", SECRET, 21000, 42000, 23000, false, false, false, false, false, false, true, 72 },
+  { "Darnassus", "", 5, 3000, 9000, 5000, false, false, false, false, false, false, true, 69 },
+}
+TIMERS = {}; CLOCK = CLOCK + 100
+""")
+L.execute("Fire('UPDATE_FACTION') RunTimers()")
+check("reps: a secret standing is skipped, the read is partial, nothing is lost", lua("local l = ElansHub.Get('reps').list local s = {} for _, e in ipairs(l) do s[e.id] = e end return #l == 2 and s[72].s == 7 and s[69].v == 5000 and ElansHub.Get('reps').partial == true"))
+# modern C_Reputation
+L.execute("""
+C_Reputation = {
+  GetNumFactions = function() return 2 end,
+  GetFactionDataByIndex = function(i)
+    if i == 1 then return { factionID = 1118, name = 'Classic', isHeader = true, isCollapsed = false, isHeaderWithRep = false } end
+    return { factionID = 529, name = 'Argent Dawn', reaction = 6, currentReactionThreshold = 9000, nextReactionThreshold = 21000, currentStanding = 15000, isHeader = false }
+  end,
+}
+TIMERS = {}; CLOCK = CLOCK + 100
+""")
+L.execute("Fire('UPDATE_FACTION') RunTimers()")
+check("reps via C_Reputation (modern API first)", lua("local l = ElansHub.Get('reps').list return #l == 1 and l[1].id == 529 and l[1].s == 6 and l[1].v == 15000 and l[1].max == 21000 and l[1].n == 'Argent Dawn'"))
+check("reps: merge helper caps at 300", lua("local read = {} for i = 1, 400 do read[i] = { id = i, s = 4, v = 0 } end return #EHUB.MergeReps(nil, read, false) == 300"))
+L.execute("MOCK_COMBAT = true; TIMERS = {}; CLOCK = CLOCK + 100; C_Reputation.GetNumFactions = function() return 0 end; GetNumFactions = function() return 0 end")
+L.execute("Fire('UPDATE_FACTION')")
+check("reps: nothing is read in combat", lua("return #TIMERS == 0"))
+L.execute("MOCK_COMBAT = false; Fire('PLAYER_REGEN_ENABLED') RunTimers()")
+check("reps: an empty list from the client keeps what was stored", lua("return #ElansHub.Get('reps').list == 1"))
 
 # ---------------------------------------------------------------- robustness: unknown events on this client
 check("source never calls a Blizzard UI function or reads chat/mail/played", all(w not in code for w in ["RequestTimePlayed", "GetInboxItem", "ChatFrame", "MailFrame", "hooksecurefunc"]))

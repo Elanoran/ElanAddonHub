@@ -465,6 +465,54 @@ namespace ElansAddonHub.Services
             pc = c; pb = b;
         }
 
+        // FileDataIDs for the wanted name hashes (one pass over the root): a file named in the root is found by its path, and the icon pipeline (IconStore) takes it by id.
+        // A name that is not in the root (or only in blocks without names) is simply absent.
+        public Dictionary<ulong, int> ResolveNameHashesToFileIds(HashSet<ulong> wanted)
+        {
+            if (disposed) throw new ObjectDisposedException("CascStorage", "the game storage is closed");
+            var res = new Dictionary<ulong, int>();
+            var ek = EncodingKeyFor(rootCKey);
+            if (ek == null) throw new IOException("root file is not in the encoding table");
+            using (var root = OpenEKey(ek))
+            {
+                var hd = new byte[24];
+                root.ReadAt(0, hd, 0, 24);
+                if (hd[0] != 'T' || hd[1] != 'S' || hd[2] != 'F' || hd[3] != 'M') throw new IOException("unknown root format");
+                uint hdrSize = BitConverter.ToUInt32(hd, 4), ver = BitConverter.ToUInt32(hd, 8);
+                bool v2 = hdrSize == 0x18 && (ver == 1 || ver == 2);
+                long pos = v2 ? hdrSize : 12;
+                ver = v2 ? ver : 0;
+                long len = root.Length;
+                var bh = new byte[17];
+                while (pos + 12 < len)
+                {
+                    root.ReadAt(pos, bh, 0, 12);
+                    int nr = (int)BitConverter.ToUInt32(bh, 0);
+                    uint cf;
+                    if (ver == 2) { root.ReadAt(pos + 12, bh, 12, 5); cf = BitConverter.ToUInt32(bh, 8) | BitConverter.ToUInt32(bh, 12) | ((uint)bh[16] << 17); pos += 17; }
+                    else { cf = BitConverter.ToUInt32(bh, 4); pos += 12; }
+                    long ckPos = pos + (long)nr * 4, nhPos = ckPos + (long)nr * 16;
+                    bool hasNames = (cf & 0x10000000) == 0;
+                    if (hasNames && nr > 0)
+                    {
+                        var ids = new byte[nr * 4];
+                        root.ReadAt(pos, ids, 0, ids.Length);
+                        var names = new byte[nr * 8];
+                        root.ReadAt(nhPos, names, 0, names.Length);
+                        int cur = -1;
+                        for (int i = 0; i < nr; i++)
+                        {
+                            cur = i == 0 ? BitConverter.ToInt32(ids, 0) : cur + 1 + BitConverter.ToInt32(ids, i * 4);
+                            var h = BitConverter.ToUInt64(names, i * 8);
+                            if (wanted.Contains(h) && !res.ContainsKey(h)) res[h] = cur;
+                        }
+                    }
+                    pos = nhPos + (hasNames ? (long)nr * 8 : 0);
+                }
+            }
+            return res;
+        }
+
         // content keys for the wanted name hashes (one pass over the root; the best-scored entry per name, like ResolveFileIds)
         public Dictionary<ulong, byte[]> ResolveNameHashes(HashSet<ulong> wanted)
         {
