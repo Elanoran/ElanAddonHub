@@ -78,26 +78,24 @@ namespace ElansAddonHub
             [2665] = new ArtPiece("zone-2521.jpg", 0.5, 0.36),    // Zephras Isle, the flight-map copy of 2521
         };
 
-        // Atlas Home: the category id (AtlasCategories / AtlasHosts) -> its card art
-        public static readonly Dictionary<string, ArtPiece> Categories = new Dictionary<string, ArtPiece>(StringComparer.OrdinalIgnoreCase)
+        // category browse pages (2.71): the category id -> its 4:1 banner, shown like a zone's (the painting behind the page header, fading into the page).
+        // The finds page ("finds") has its own. The hosted pages (world map, talents, professions) have no header of their own, so no banner.
+        // Atlas Home's tiles carry line icons (AtlasIcons), no painting.
+        public static readonly Dictionary<string, ArtPiece> Banners = new Dictionary<string, ArtPiece>(StringComparer.OrdinalIgnoreCase)
         {
-            ["items"] = new ArtPiece("card-items.jpg", 0.5, 0.5, 640),
-            ["creatures"] = new ArtPiece("card-npcs.jpg", 0.5, 0.5, 640),
-            ["objects"] = new ArtPiece("card-objects.jpg", 0.5, 0.5, 640),
-            ["quests"] = new ArtPiece("card-quests.jpg", 0.5, 0.5, 640),
-            ["zones"] = new ArtPiece("card-zones.jpg", 0.5, 0.5, 640),
-            ["instances"] = new ArtPiece("card-dungeons.jpg", 0.5, 0.5, 640),
-            ["spells"] = new ArtPiece("card-spells.jpg", 0.5, 0.5, 640),
-            ["skills"] = new ArtPiece("card-professions.jpg", 0.5, 0.5, 640),
-            ["recipes"] = new ArtPiece("card-recipes.jpg", 0.5, 0.5, 640),
-            ["factions"] = new ArtPiece("card-factions.jpg", 0.5, 0.5, 640),
-            ["classes"] = new ArtPiece("card-classes.jpg", 0.5, 0.5, 640),
-            ["races"] = new ArtPiece("card-races.jpg", 0.5, 0.5, 640),
-            ["talents"] = new ArtPiece("card-talents.jpg", 0.5, 0.5, 640),
-            ["professions"] = new ArtPiece("card-professions.jpg", 0.5, 0.5, 640),
-            ["worldmap"] = new ArtPiece("card-worldmap.jpg", 0.5, 0.5, 640),
-            ["map"] = new ArtPiece("card-worldmap.jpg", 0.5, 0.5, 640),
-            ["finds"] = new ArtPiece("card-finds.jpg", 0.5, 0.5, 640),
+            ["items"] = new ArtPiece("banner-items.jpg", 0.75, 0.45),
+            ["creatures"] = new ArtPiece("banner-creatures.jpg", 0.75, 0.45),
+            ["objects"] = new ArtPiece("banner-objects.jpg", 0.4, 0.45),
+            ["quests"] = new ArtPiece("banner-quests.jpg", 0.67, 0.45),
+            ["zones"] = new ArtPiece("banner-zones.jpg", 0.65, 0.45),
+            ["instances"] = new ArtPiece("banner-instances.jpg", 0.42, 0.45),
+            ["spells"] = new ArtPiece("banner-spells.jpg", 0.45, 0.45),
+            ["classes"] = new ArtPiece("banner-classes.jpg", 0.4, 0.45),
+            ["races"] = new ArtPiece("banner-races.jpg", 0.65, 0.45),
+            ["skills"] = new ArtPiece("banner-skills.jpg", 0.75, 0.45),
+            ["recipes"] = new ArtPiece("banner-recipes.jpg", 0.4, 0.45),
+            ["factions"] = new ArtPiece("banner-factions.jpg", 0.5, 0.45),
+            ["finds"] = new ArtPiece("banner-finds.jpg", 0.6, 0.45),
         };
 
         // talent trees: "CLASSFILE|spec index" (0-based, the trees left to right as the game lays them out) -> the spec art
@@ -133,13 +131,13 @@ namespace ElansAddonHub
         };
 
         public static ArtPiece Zone(int uiMapId) => Zones.TryGetValue(uiMapId, out var a) ? a : null;
-        public static ArtPiece Category(string id) => !string.IsNullOrEmpty(id) && Categories.TryGetValue(id, out var a) ? a : null;
+        public static ArtPiece Banner(string categoryId) => !string.IsNullOrEmpty(categoryId) && Banners.TryGetValue(categoryId, out var a) ? a : null;
         public static ArtPiece Spec(string classFile, int spec) => !string.IsNullOrEmpty(classFile) && spec >= 0 && Specs.TryGetValue(classFile + "|" + spec, out var a) ? a : null;
 
         public static IEnumerable<ArtPiece> All()
         {
             foreach (var a in Zones.Values) yield return a;
-            foreach (var a in Categories.Values) yield return a;
+            foreach (var a in Banners.Values) yield return a;
             foreach (var a in Specs.Values) yield return a;
         }
 

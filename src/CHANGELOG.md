@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.71.0
+- **World map 3D: true height by default.** The height slider now starts at 1x (the land as it really is), in the middle of a 0.5x - 1.5x range, so you can flatten or raise it from there. Saved choices start again at 1x.
+- **Atlas Home: an icon for every category.** The tiles show a clear line drawing instead of a tiny piece of a painting: a sword for Items, a paw for Creatures, a chest for Objects, a scroll for Quests, a globe for the World map, a map pin for Zones, a gate for Dungeons and raids, a spark for Spells, a crest for Classes, two figures for Races, a branching tree for Talents, an anvil for Skills, a book with a flask for Recipes, crossed tools for Professions, a banner for Factions and a gem for the Lodge's finds. The same icons are in the Atlas side navigation and in the Ctrl+K results. Long names such as "Skills and professions" now go onto two lines instead of being cut off.
+- **Category pages have a banner.** Opening Items, Creatures, Quests and the other lists now starts with a wide painting behind the page title, like the zone pages, fading into the page. The Lodge's finds have their own.
+- **Pick who the shortcuts are for.** Under the tiles, "Recommended for" shows your characters (hidden ones left out) with their portrait, name and level. Click one (or use Enter) and the shortcuts below are worked out for that character: vendor items and quest rewards for its level and class, and the recipes it can learn. It starts on the character you played last, and the Outpost remembers your pick.
+
 ## 2.70.1
 - **The browser is last in the side bar.** The order is now Addons, Lodge, Characters, Atlas, Browser; Ctrl+4 opens the Atlas and Ctrl+5 the browser (Talents stays Ctrl+6).
 - **Atlas links open in the Outpost's own browser** (zone note sources, the Classic data's home page). Your system browser is only used when the built-in one can't run.

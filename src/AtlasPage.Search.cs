@@ -383,7 +383,7 @@ namespace ElansAddonHub
             if (h.Kind == "page")
             {
                 var d = AtlasNav.Describe(h.Id);
-                item.Glyph = d?.Glyph ?? "";
+                item.Glyph = d?.Glyph ?? ""; item.Icon = d?.Icon ?? "";
                 if (item.Glyph.Length == 0 && AtlasCategories.TryHosted(h.Id, out var pc, out _)) item.Glyph = pc.Glyph;
                 item.Quality = -1; item.IconId = 0;
             }
@@ -452,7 +452,7 @@ namespace ElansAddonHub
             var item = new AtlasNavItem { Id = h.Id, Title = h.Name, Quality = h.Quality, IconId = h.IconId, Kind = h.Kind, Glyph = AtlasKinds.Glyph(h.Kind) };
             if (h.Kind == "page")
             {
-                var d = AtlasNav.Describe(h.Id); item.Glyph = d?.Glyph ?? ""; item.Quality = -1; item.IconId = 0;
+                var d = AtlasNav.Describe(h.Id); item.Glyph = d?.Glyph ?? ""; item.Icon = d?.Icon ?? ""; item.Quality = -1; item.IconId = 0;
                 if (item.Glyph.Length == 0 && AtlasCategories.TryHosted(h.Id, out var pc, out _)) item.Glyph = pc.Glyph;
             }
             if (h.Kind == "item" && AtlasIds.TryParse(h.Id, out _, out var itemNo) && Services.Db2.ItemData.Get(itemNo) != null)

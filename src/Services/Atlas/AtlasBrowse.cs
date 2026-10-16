@@ -283,7 +283,7 @@ namespace ElansAddonHub.Services.Atlas
             int zone = q.Zone.Length > 0 ? int.Parse(q.Zone, CultureInfo.InvariantCulture) : 0;
             int how = q.How.Length > 0 ? 1 << Array.IndexOf(Hows, q.How) : 0;
             var res = new List<BEntry>();
-            var canLearn = q.Learn == "can" ? LearnFilter() : null;
+            var canLearn = q.Learn == "can" ? LearnFilter(chr) : null;
             foreach (var e in src)
             {
                 if (words != null && !words.All(w => e.Lower.Contains(w))) continue;
@@ -317,11 +317,12 @@ namespace ElansAddonHub.Services.Atlas
             return false;
         }
 
-        static Func<BEntry, bool> LearnFilter()
+        static Func<BEntry, bool> LearnFilter(InvChar only = null)
         {
             var mods = new List<HubProfessionsModule>();
             foreach (var c in AtlasQuery.Characters())
             {
+                if (only != null && c.Key != only.Key) continue;       // "for=": that character's professions only
                 if (c.Hub == null) continue;
                 var pm = HubModules.ProfessionsOf(c.Hub);
                 if (pm != null && pm.Known.Count > 0) mods.Add(pm);        // never-read characters are unknown, not "has not learned"

@@ -54,18 +54,20 @@ namespace ElansAddonHub
                 // ---- the pictures themselves
                 var all = ArtLibrary.All().ToList();
                 var bad = all.Where(a => ArtLibrary.Load(a) == null).Select(a => a.File).ToList();
-                // nothing lost (at least the 95 pieces of 2.70: 51 zone banners, 17 category cards, 27 talent trees; the window background is gone) and every one loads; more art is fine
-                Check("resources: all " + all.Count + " pictures load from the exe (at least 51 zone banners, 17 category cards, 27 talent trees), and no window wallpaper is listed or built in",
-                    all.Count >= 95 && bad.Count == 0 && !all.Any(a => a.File == "background.jpg") && ArtLibrary.Load(new ArtPiece("background.jpg", 0.5, 0.5)) == null, string.Join(", ", bad));
+                // nothing lost (51 zone banners, 13 category banners since 2.71, 27 talent trees; the window background and the Home card art are gone) and every one loads; more art is fine
+                Check("resources: all " + all.Count + " pictures load from the exe (at least 51 zone banners, 13 category banners, 27 talent trees), no window wallpaper and no Home card art (card-*.jpg) is listed or built in",
+                    all.Count >= 91 && !all.Any(a => a.File.StartsWith("card-")) && ArtLibrary.Load(new ArtPiece("card-items.jpg", 0.5, 0.5)) == null && bad.Count == 0 && !all.Any(a => a.File == "background.jpg") && ArtLibrary.Load(new ArtPiece("background.jpg", 0.5, 0.5)) == null, string.Join(", ", bad));
                 var banner = ArtLibrary.Load(ArtLibrary.Zone(1411)); var specPic = ArtLibrary.Load(ArtLibrary.Spec("HUNTER", 0));
+                var catBanners = ArtLibrary.Banners.Values.Select(ArtLibrary.Load).ToList();
                 // shapes, not the files' pixel counts: a repainted picture of another size must not fail this
-                Check("resources: a zone banner is 4:1, a spec picture is decoded at no more than 720 wide (no full-size bitmaps for small slots)",
-                    banner != null && Math.Abs((double)banner.PixelWidth / banner.PixelHeight - 4) < 0.08 && specPic != null && specPic.PixelWidth <= 720 && specPic.PixelWidth >= 360,
+                Check("resources: a zone banner and every category banner is 4:1, a spec picture is decoded at no more than 720 wide (no full-size bitmaps for small slots)",
+                    banner != null && Math.Abs((double)banner.PixelWidth / banner.PixelHeight - 4) < 0.08 && catBanners.All(b => b != null && Math.Abs((double)b.PixelWidth / b.PixelHeight - 4) < 0.08) && specPic != null && specPic.PixelWidth <= 720 && specPic.PixelWidth >= 360,
                     "banner " + banner?.PixelWidth + "x" + banner?.PixelHeight + " spec " + specPic?.PixelWidth);
                 Check("resources: a missing picture is null, never an exception (the slot stays plain)", ArtLibrary.Load(new ArtPiece("nope.jpg", 0.5, 0.5)) == null);
-                Check("mapping: every game zone has a banner (2665 shares 2521's), zone 11 none; the Atlas Home categories have art; every class has three trees of art, no fourth",
-                    ArtLibrary.Zone(1411) != null && ArtLibrary.Zone(1438) != null && ArtLibrary.Zone(1429) != null && ArtLibrary.Zone(11) == null && ArtLibrary.Zone(2665)?.File == ArtLibrary.Zone(2521)?.File && ArtLibrary.Category("instances") != null && ArtLibrary.Category("professions") != null
-                    && ArtLibrary.Category("items") != null && ArtLibrary.Category("finds") != null && ArtLibrary.Spec("HUNTER", 0) != null && ArtLibrary.Spec("hunter", 2) != null && ArtLibrary.Spec("HUNTER", 3) == null && ArtLibrary.Spec("WARRIOR", 0) != null && ArtLibrary.Spec("DRUID", 2) != null && ArtLibrary.Spec("HUNTER", -1) == null);
+                var listCats = AtlasCategories.All.Where(c => !c.Hosted).Select(c => c.Id).ToList();
+                Check("mapping: every game zone has a banner (2665 shares 2521's), zone 11 none; every list category (" + listCats.Count + ") and the Lodge's finds have a browse banner, the hosted pages (no header) none; every class has three trees of art, no fourth",
+                    ArtLibrary.Zone(1411) != null && ArtLibrary.Zone(1438) != null && ArtLibrary.Zone(1429) != null && ArtLibrary.Zone(11) == null && ArtLibrary.Zone(2665)?.File == ArtLibrary.Zone(2521)?.File
+                    && listCats.Count >= 12 && listCats.All(c => ArtLibrary.Banner(c) != null) && ArtLibrary.Banner("finds") != null && ArtLibrary.Banner("talents") == null && ArtLibrary.Banner("worldmap") == null && ArtLibrary.Banner(null) == null && ArtLibrary.Spec("HUNTER", 0) != null && ArtLibrary.Spec("hunter", 2) != null && ArtLibrary.Spec("HUNTER", 3) == null && ArtLibrary.Spec("WARRIOR", 0) != null && ArtLibrary.Spec("DRUID", 2) != null && ArtLibrary.Spec("HUNTER", -1) == null);
                 var wide = ArtLibrary.Crop(2.4, 6, 0.5, 0.66); var tall = ArtLibrary.Crop(0.62, 1.0, 0.5, 0.72); var edge = ArtLibrary.Crop(2.4, 6, 0.5, 0.98);
                 Check("crop: a banner keeps the full width and slides down to its focal point; a spec picture keeps its lower part; the crop never leaves the picture",
                     Math.Abs(wide.Width - 1) < 1e-9 && Math.Abs(wide.Height - 0.4) < 1e-9 && Math.Abs(wide.Y - 0.46) < 1e-9 && Math.Abs(tall.Height - 0.62) < 1e-9 && Math.Abs(tall.Y - 0.38) < 1e-9 && Math.Abs(edge.Bottom - 1) < 1e-9,
@@ -97,15 +99,28 @@ namespace ElansAddonHub
                 ResetAtlasForTest();
                 ShowTab("atlas");
                 await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(200); UpdateLayout();
-                var cards = AtlasView.ArtCardsForTest;
+                var cards = AtlasView.CategoryTilesForTest;
                 var visible = AtlasCategories.Visible.Select(c => c.Id).ToList();
-                var painted = AtlasWalk(AtlasView).OfType<FrameworkElement>().Count(e => e.Tag as string == "card-art");
-                Check("Atlas Home: the Dungeons and raids card carries its art" + (visible.Contains("professions") ? ", so does Professions" : ""),
-                    cards.ContainsKey("instances") && (!visible.Contains("professions") || cards.ContainsKey("professions")), string.Join(",", cards.Keys) + " of " + string.Join(",", visible));
-                Check("Atlas Home: only the cards with art are painted (no other category card has a picture)", painted == cards.Count && cards.Keys.All(k => ArtLibrary.Category(k) != null), painted + " painted, " + cards.Count + " art cards");
+                string IconOf(DependencyObject d) => AtlasWalk(d).OfType<Viewbox>().Select(v => v.Tag as string).FirstOrDefault(t => t != null && t.StartsWith("atlas-icon|"));
+                Check("Atlas Home: a tile per visible category (" + visible.Count + "), each with its own line icon (atlas-icon|<id>)",
+                    visible.All(cards.ContainsKey) && cards.All(kv => IconOf(kv.Value) == "atlas-icon|" + kv.Key), string.Join(",", cards.Select(kv => kv.Key + "=" + IconOf(kv.Value))) + " of " + string.Join(",", visible));
+                Check("Atlas Home: no painted art on the tiles (no card-art layer, no picture brush anywhere on a tile)",
+                    !AtlasWalk(AtlasView).OfType<FrameworkElement>().Any(e => e.Tag as string == "card-art") && cards.Values.All(t => !AtlasWalk(t).OfType<Border>().Any(b => b.Background is System.Windows.Media.ImageBrush)));
                 var instCard = cards.TryGetValue("instances", out var ic) ? ic : null;
-                Check("Atlas Home: a painted card keeps its title and count on top of the veil, and opens its category like the others",
+                Check("Atlas Home: a tile keeps its title and count, and opens its category",
                     instCard != null && AtlasTexts(instCard).Contains("Dungeons and raids") && instCard.Tag as string == AtlasCategories.Find("instances")?.OpenId, instCard == null ? "none" : string.Join("|", AtlasTexts(instCard)));
+                if (cards.TryGetValue("skills", out var skillTile))
+                {
+                    var tt = AtlasWalk(skillTile).OfType<TextBlock>().FirstOrDefault(t => t.Text == "Skills and professions");
+                    Check("Atlas Home: a long title ('Skills and professions') wraps instead of being cut off", tt != null && tt.TextWrapping == TextWrapping.Wrap && tt.TextTrimming == TextTrimming.None);
+                }
+                var entries = AtlasNav.Entries();
+                Check("Atlas side navigation: every category row draws its line icon (" + entries.Count + " rows)", entries.All(e => AtlasIcons.Has(e.Icon)) && entries.Count(e => AtlasWalk(AtlasView).OfType<ContentControl>().Any(r => r.Tag as string == e.Key + "|off" && IconOf(r) == "atlas-icon|" + e.Icon)) == entries.Count,
+                    string.Join(",", entries.Select(e => e.Key + ":" + e.Icon)));
+                Check("icons: every category (lists and hosted pages) and the Lodge's finds has an icon; the same drawing for the world map's two ids; an unknown id has none; every drawing stays inside its 24 x 24 grid",
+                    AtlasCategories.All.All(c => AtlasIcons.Has(c.Id)) && AtlasIcons.Has("finds") && AtlasIcons.Has("worldmap") && ReferenceEquals(AtlasIcons.For("map"), AtlasIcons.For("worldmap")) && !AtlasIcons.Has("nope") && !AtlasIcons.Has(null)
+                    && AtlasIcons.Keys.Count() >= 16 && AtlasIcons.Keys.All(k => AtlasIcons.For(k) is System.Windows.Media.Geometry g && g.IsFrozen && !g.Bounds.IsEmpty && g.Bounds.Left >= 0 && g.Bounds.Top >= 0 && g.Bounds.Right <= 24 && g.Bounds.Bottom <= 24),
+                    string.Join(",", AtlasCategories.All.Where(c => !AtlasIcons.Has(c.Id)).Select(c => c.Id)));
                 await ShotWait(400);
                 Snapshot(P("art-02-atlas-home.png"));
 
@@ -125,6 +140,16 @@ namespace ElansAddonHub
                 Check("zone 11 (no art): no banner, the page starts with its name card as before", AtlasView.BannerForTest == null && AtlasView.PageTitleForTest == "Greenvale");
                 await AtlasView.Open("npc:1"); await AtlasView.WaitForTest(); UpdateLayout();
                 Check("a page of another kind: no banner", AtlasView.BannerForTest == null);
+                // the category browse pages the synthetic world can list (zones, dungeons): the category's banner behind the header, like a zone's
+                foreach (var cat in new[] { "zones", "instances" })
+                {
+                    await AtlasView.Open("browse:" + cat); await AtlasView.WaitForTest(); await Task.Delay(200); UpdateLayout();
+                    var b = AtlasView.BannerForTest;
+                    Check("browse:" + cat + ": its banner runs behind the header card (taller than the " + ElansAddonHub.AtlasPage.BannerHeight + " banner part), the full content width, first on the page, with the category's icon",
+                        AtlasView.IsBrowse && b != null && b.Tag as string == "browse-banner|" + cat && b.IsVisible && b.ActualHeight > ElansAddonHub.AtlasPage.BannerHeight && Math.Abs(b.ActualWidth - AtlasView.BodyForTest.ActualWidth) < 1.5
+                        && b.TranslatePoint(new Point(0, 0), AtlasView.BodyForTest).Y < 1 && IconOf(b) == "atlas-icon|" + cat, b == null ? "none" : b.Tag + " " + b.ActualWidth + "x" + b.ActualHeight);
+                    if (cat == "zones") { await ShotWait(500); Snapshot(P("art-03-browse-zones.png")); }
+                }
                 MapData.ResetForTest();
 
                 // ---- Characters > Talents (full-size trees: the shape of the game's Hunter and Warrior data, a 51-point build each)
@@ -259,7 +284,7 @@ namespace ElansAddonHub
                 }
                 catch { }
             }
-            notes.Insert(0, "art (2.70.0): " + (ok ? "all ok" : "FAILURES"));
+            notes.Insert(0, "art (2.71.0): " + (ok ? "all ok" : "FAILURES"));
             return string.Join("\r\n", notes);
         }
     }

@@ -109,6 +109,7 @@ namespace ElansAddonHub.Services
         // ---- gathering routes and the leveling guide in game (Atlas / Professions)
         [DataMember(Name = "atlasRecents")] public List<string> AtlasRecents { get; set; }        // the Atlas pages opened last (ids only, newest first, at most 8)
         [DataMember(Name = "atlasPins")] public List<string> AtlasPins { get; set; }              // the Atlas pages the person pinned, in their order (ids only)
+        [DataMember(Name = "atlasHomeChar")] public string AtlasHomeChar { get; set; }             // the character Atlas Home recommends for (its key, "Realm-Name"); null / gone = the one played last
         [DataMember(Name = "worldMapLayers")] public List<string> WorldMapLayers { get; set; }       // the layers switched on in the Atlas world map (null = the defaults)
         [DataMember(Name = "worldMapLayersV")] public int WorldMapLayersVersion { get; set; }          // which layer catalog the saved list was made for (a layer added later is switched on once, see WorldMapLayers.WithNewDefaults)
         [DataMember(Name = "worldMapLast")] public string WorldMapLast { get; set; }                  // the continent shown last (its slug)

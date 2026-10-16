@@ -183,7 +183,7 @@ namespace ElansAddonHub
             if (last != null && !(last.Cursor == Cursors.Hand)) last.Foreground = b;
         }
 
-        FrameworkElement NavRow(string key, string title, string glyph, string openId, string count, bool selected, string tag = null, double indent = 0, string kbd = null)
+        FrameworkElement NavRow(string key, string title, string glyph, string openId, string count, bool selected, string tag = null, double indent = 0, string kbd = null, string icon = null)
         {
             var row = new ContentControl { Style = (Style)FindResource("Side.Row"), Padding = new Thickness(8, 4, 8, 4), MinHeight = indent > 0 ? 28 : 32, Margin = new Thickness(0, 0, 0, 2), Focusable = false, Cursor = Cursors.Hand };
             row.Tag = (tag ?? key) + (selected ? "|on" : "|off");
@@ -194,8 +194,10 @@ namespace ElansAddonHub
             if (!navCollapsed) { g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); }
             var gl = new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("Font.Icons"), FontSize = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             gl.Foreground = selected ? Res("Brush.Text.Primary") : Res("Brush.Text.Secondary");
+            // a category row draws its own line icon (AtlasIcons) in place of the font glyph
+            var drawn = indent > 0 ? null : AtlasIcons.Make(icon, 20, selected ? "Brush.Text.Primary" : "Brush.Text.Secondary");
             if (indent > 0) { gl.Visibility = Visibility.Hidden; }
-            g.Children.Add(gl);
+            g.Children.Add(drawn ?? (FrameworkElement)gl);
             if (!navCollapsed)
             {
                 var t = Tb(title, "Text.Body"); t.TextTrimming = TextTrimming.CharacterEllipsis; t.VerticalAlignment = VerticalAlignment.Center; t.Margin = new Thickness(indent > 0 ? 4 : 8, 0, 0, 0);
@@ -238,9 +240,9 @@ namespace ElansAddonHub
             if (sig == navSig) return;
             navSig = sig;
             NavStack.Children.Clear(); navRows.Clear();
-            void AddRow(string k, string title, string glyph, string openId, string count = "", string kbd = null)
+            void AddRow(string k, string title, string glyph, string openId, string count = "", string kbd = null, string icon = null)
             {
-                var r = (ContentControl)NavRow(k, title, glyph, openId, count, key == k, null, 0, kbd);
+                var r = (ContentControl)NavRow(k, title, glyph, openId, count, key == k, null, 0, kbd, icon);
                 navRows[k] = r; NavStack.Children.Add(r);
             }
             AddRow("home", "Home", "", AtlasBrowse.HomeLink);
@@ -253,7 +255,7 @@ namespace ElansAddonHub
                 NavStack.Children.Add(GroupLabel(grp));
                 foreach (var e in list)
                 {
-                    AddRow(e.Key, e.Title, e.Glyph, e.OpenId, CountText(e));
+                    AddRow(e.Key, e.Title, e.Glyph, e.OpenId, CountText(e), null, e.Icon);
                     // a shared row ("Professions": skills, recipes, the hosted page) lists its members while you are in it
                     if (key == e.Key && e.Members.Count > 1 && !navCollapsed)
                     {
@@ -270,7 +272,7 @@ namespace ElansAddonHub
             foreach (var e in entries.Where(e => Array.IndexOf(AtlasNav.Groups, e.Group) < 0))
             {
                 if (!NavStack.Children.OfType<TextBlock>().Any(t => t.Text == e.Group)) NavStack.Children.Add(GroupLabel(e.Group));
-                AddRow(e.Key, e.Title, e.Glyph, e.OpenId, CountText(e));
+                AddRow(e.Key, e.Title, e.Glyph, e.OpenId, CountText(e), null, e.Icon);
             }
             // Pinned and Recent
             var pins = NavState.Pins.Select(AtlasNav.Describe).Where(x => x != null).ToList();
@@ -393,6 +395,8 @@ namespace ElansAddonHub
             tile.SetResourceReference(Border.BackgroundProperty, "Brush.Surface2");
             var row = new AtlasRow { Link = it.Id, Title = it.Title, Quality = it.Quality, IconId = it.IconId };
             var tg = new Grid();
+            var drawn = it.IconId <= 0 && it.Quality < 0 ? AtlasIcons.Make(it.Icon, size >= 40 ? 24 : size >= 28 ? 16 : 12, "Brush.Text.Secondary") : null;
+            if (drawn != null) { tile.Child = drawn; return tile; }
             bool glyph = it.IconId <= 0 && it.Quality < 0 && it.Glyph.Length > 0;
             var letter = new TextBlock { Text = glyph ? it.Glyph : row.Initial, FontSize = fontSize, Foreground = glyph ? Res("Brush.Text.Tertiary") : row.TileBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             if (glyph) letter.FontFamily = (FontFamily)FindResource("Font.Icons"); else letter.FontWeight = FontWeights.SemiBold;

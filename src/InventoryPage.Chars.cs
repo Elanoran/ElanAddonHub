@@ -101,7 +101,10 @@ namespace ElansAddonHub
         static string Fmt(double v) => v.ToString("0.#", CultureInfo.InvariantCulture);
         static string UpdatedLine(long at, string from) => "Updated " + InventoryReader.Ago(at) + (from != null ? " · " + from : "");
 
-        FrameworkElement Portrait(InvChar c, double size)
+        FrameworkElement Portrait(InvChar c, double size) => PortraitOf(c, size);
+
+        // the character's portrait (race and sex icon from the game, else the class-coloured initial on a class tint); also the Atlas Home character chips
+        internal static FrameworkElement PortraitOf(InvChar c, double size)
         {
             var g = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Top };
             g.Children.Add(new Ellipse { Fill = TintOf(c.Class) });
@@ -113,7 +116,7 @@ namespace ElansAddonHub
             {
                 var have = IconStore.TryGet(id);
                 if (have != null) top.Fill = CharRow.MakeBrush(have);
-                else IconStore.Request(id, src => Dispatcher.BeginInvoke(new Action(() => top.Fill = CharRow.MakeBrush(src))));
+                else IconStore.Request(id, src => g.Dispatcher.BeginInvoke(new Action(() => top.Fill = CharRow.MakeBrush(src))));
             }
             return g;
         }

@@ -271,11 +271,12 @@ namespace ElansAddonHub
                 ShowTab("atlas");
                 AtlasView.History.Clear();
                 await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout();
+                var wStart0 = Width;
                 FrameworkElement Tile(string openId) => AtlasWalk(AtlasView).OfType<ContentControl>().FirstOrDefault(c => c.Tag is string s && s == openId && c.IsVisible);
                 var tx = AtlasTexts(AtlasView);
                 Check("start page: a card for each category ('Items', 'Creatures', ... 'Factions', and the hosted 'Labs') under the group it belongs to (Database, World, Character), with a count from the data; no intro card (the header and the search box already say it)",
                     cats.Where(c => Tile(c.OpenId) != null).Count() == 12 && Tile("labs:") != null && tx.Contains("Browse") && tx.Contains("Database") && tx.Contains("World") && tx.Contains("Character") && !tx.Contains("Browse or search") && !tx.Any(t => t.Contains("Alt+Left goes back")) && tx.Contains("28"), string.Join(" | ", tx.Take(30)));
-                Check("start page: the shortcuts under the cards - 'For <character>' (or 'Where to get things') with Vendor items for my level, Herbs by zone, Dungeons by level ... as buttons, none for Rare creatures", (tx.Contains("Where to get things") || tx.Any(t => t.StartsWith("For "))) && tx.Contains("Vendor items for my level") && tx.Contains("Herbs by zone") && tx.Contains("Dungeons by level") && !tx.Contains("Rare creatures"));
+                Check("start page: the shortcuts under the cards - 'Recommended for' and the character chips (or 'Where to get things') with Vendor items for my level, Herbs by zone, Dungeons by level ... as buttons, none for Rare creatures", (tx.Contains("Where to get things") || tx.Contains("Recommended for")) && tx.Contains("Vendor items for my level") && tx.Contains("Herbs by zone") && tx.Contains("Dungeons by level") && !tx.Contains("Rare creatures"));
                 Check("start page: the hero search says what to type and the header box's tooltip says you can paste a link", tx.Any(t => t.StartsWith("Search items, creatures")) && TitleSearchForTest.Tag.ToString().Contains("Search") && TitleSearchForTest.ToolTip.ToString().Contains("item:2589"), TitleSearchForTest.Tag.ToString());
                 Check("start page: one status line for the data (game data, Classic baseline, Lodge, world map) and no data cards on the page itself", AtlasView.StatusLineForTest != null && AtlasTexts(AtlasView.StatusLineForTest).Count >= 5 && !tx.Contains("Your game data") && !tx.Contains("Lodge pool") && AtlasView.SourceStates().Count == 4, string.Join(" | ", AtlasTexts(AtlasView.StatusLineForTest)));
                 {
@@ -312,6 +313,71 @@ namespace ElansAddonHub
                     Snapshot(Path.Combine(dir, "atlas-data-wide.png"));
                     Width = wStart; Height = h0; await Task.Delay(300); UpdateLayout();
                     AtlasView.History.Clear(); await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout();
+                }
+                {
+                    // ---- "Recommended for": the characters as chips, the shortcuts for the selected one, the choice kept in the settings
+                    var mira = new InvChar { Key = "Forever-Mira", Name = "Mira", Realm = "Forever", Class = "HUNTER", Level = 18, Updated = 1_790_000_500 };
+                    var ghost = new InvChar { Key = "Forever-Ghost", Name = "Ghost", Realm = "Forever", Class = "ROGUE", Level = 60, Hidden = true, Updated = 1_790_000_900 };
+                    hunter.Updated = 1_790_000_000;
+                    chars.Add(mira); chars.Add(ghost);
+                    var ns = new Settings(); int nsSaves = 0;
+                    AtlasView.UseNavSettings(ns, () => nsSaves++);
+                    string VendorId() => AtlasView.PresetIdsForTest.FirstOrDefault(i => i.Contains("how=vendor") && i.Contains("for=")) ?? "";
+                    async Task Home() { AtlasView.History.Clear(); await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout(); }
+                    await Home();
+                    var keys = AtlasView.HomeCharChipsForTest;
+                    Check("recommended for: a chip per character (Elan, Mira), the hidden one (Ghost) left out, each with its name and level",
+                        keys.Count == 2 && keys.Contains("Forever-Elan") && keys.Contains("Forever-Mira") && !keys.Contains("Forever-Ghost") && AtlasView.HomeCharChipTextsForTest("Forever-Mira").Contains("Mira") && AtlasView.HomeCharChipTextsForTest("Forever-Mira").Contains("Level 18")
+                        && AtlasTexts(AtlasView).Contains("Recommended for") && !AtlasTexts(AtlasView).Any(t => t.StartsWith("For ")), string.Join(",", keys) + " / " + string.Join("|", AtlasView.HomeCharChipTextsForTest("Forever-Mira")));
+                    Check("recommended for: nothing chosen yet - the character played last (Mira, level 18, not the highest) is selected and the shortcuts are hers (from level 13, for=Forever-Mira)",
+                        AtlasView.HomeCharForTest == "Forever-Mira" && AtlasView.HomeCharChipSelectedForTest("Forever-Mira") && !AtlasView.HomeCharChipSelectedForTest("Forever-Elan") && VendorId().Contains("minlvl=13") && VendorId().Contains("for=Forever-Mira"), VendorId());
+                    Width = 1300; await Task.Delay(200); UpdateLayout();
+                    async Task ShowChips() { (AtlasWalk(AtlasView).OfType<ScrollViewer>().FirstOrDefault(v => v.Tag as string == "home-chars")?.Parent as FrameworkElement)?.BringIntoView(); await Task.Delay(250); UpdateLayout(); }
+                    await ShowChips();
+                    Snapshot(Path.Combine(dir, "atlas-home-chars-mira.png"));
+                    await AtlasView.SelectHomeCharForTest("Forever-Elan"); await Task.Delay(50); UpdateLayout();
+                    Check("recommended for: picking Elan's chip selects it and rebuilds the shortcuts for him (level 20: from 15, for=Forever-Elan); the choice goes to the settings",
+                        AtlasView.HomeCharForTest == "Forever-Elan" && AtlasView.HomeCharChipSelectedForTest("Forever-Elan") && !AtlasView.HomeCharChipSelectedForTest("Forever-Mira") && VendorId() == "browse:items?minlvl=15&how=vendor&for=Forever-Elan&sort=level" && ns.AtlasHomeChar == "Forever-Elan",
+                        VendorId() + " / " + ns.AtlasHomeChar);
+                    await ShowChips();
+                    Snapshot(Path.Combine(dir, "atlas-home-chars-elan.png"));
+                    AtlasView.FlushNav();
+                    await Home();
+                    Check("recommended for: the choice is remembered - Home opens with Elan selected again (and the settings were written)", AtlasView.HomeCharForTest == "Forever-Elan" && AtlasView.HomeCharChipSelectedForTest("Forever-Elan") && nsSaves >= 1, AtlasView.HomeCharForTest + " saves " + nsSaves);
+                    ns.AtlasHomeChar = "Forever-Gone";
+                    await Home();
+                    Check("recommended for: a remembered character that is gone falls back to the one played last (Mira)", AtlasView.HomeCharForTest == "Forever-Mira" && VendorId().Contains("for=Forever-Mira"), AtlasView.HomeCharForTest);
+                    var chip = AtlasWalk(AtlasView).OfType<ContentControl>().FirstOrDefault(c => c.Tag as string == "char|Forever-Elan|off");
+                    chip?.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, PresentationSource.FromVisual(chip), 0, System.Windows.Input.Key.Enter) { RoutedEvent = System.Windows.Input.Keyboard.PreviewKeyDownEvent });
+                    await AtlasView.SelectHomeCharForTest(AtlasView.HomeCharForTest); UpdateLayout();
+                    Check("recommended for: Enter on a chip selects it (keyboard)", chip != null && chip.Focusable && AtlasView.HomeCharForTest == "Forever-Elan" && ns.AtlasHomeChar == "Forever-Elan", AtlasView.HomeCharForTest);
+                    chars.Remove(mira); chars.Remove(ghost); hunter.Updated = 0;
+                    AtlasView.UseNavSettings(settings, () => SettingsStore.Save(settings));
+                    Width = wStart0; await Home();
+                }
+                {
+                    // ---- every category browse page with data opens with its banner (ArtLibrary.Banners) behind the header: the category's icon, title and a line about it
+                    var missing = new List<string>();
+                    Width = 1300; await Task.Delay(200);
+                    foreach (var c in cats)
+                    {
+                        await AtlasView.Open(c.OpenId); await AtlasView.WaitForTest(); await Task.Delay(60); UpdateLayout();
+                        var b = AtlasView.BannerForTest;
+                        bool good = AtlasView.IsBrowse && !AtlasView.BrowseModel.NotFound && b != null && b.Tag as string == "browse-banner|" + c.Id && b.IsVisible && b.ActualHeight > ElansAddonHub.AtlasPage.BannerHeight
+                            && AtlasWalk(b).OfType<Viewbox>().Any(v => v.Tag as string == "atlas-icon|" + c.Id) && AtlasTexts(b).Contains(AtlasView.BrowseModel.Title);
+                        if (!good && AtlasView.BrowseModel?.NotFound != true) missing.Add(c.Id + (AtlasView.BrowseModel?.NotFound == true ? "(empty)" : "") + "=" + (b?.Tag ?? "none"));
+                        if (c.Id == "items" || c.Id == "creatures") { await Task.Delay(300); UpdateLayout(); Snapshot(Path.Combine(dir, "atlas-browse-banner-" + c.Id + ".png")); }
+                    }
+                    Check("banners: every category browse page with data (" + cats.Count + " categories; an empty one is the plain empty card) opens with its banner behind a header with the category's icon and the page title", missing.Count == 0, string.Join(", ", missing));
+                    await AtlasView.Open("browse:items/weapons?name=sword"); await AtlasView.WaitForTest(); await Task.Delay(60); UpdateLayout();
+                    Check("banners: a sub-category with a filter keeps its category's banner, titled by the page", AtlasView.BannerForTest?.Tag as string == "browse-banner|items" && AtlasTexts(AtlasView.BannerForTest).Contains(AtlasView.BrowseModel.Title), AtlasView.BrowseModel?.Title);
+                    await AtlasView.Open(AtlasNav.FindsId); await AtlasView.WaitForTest(); await Task.Delay(60); UpdateLayout();
+                    Check("banners: the Lodge's finds page has its own banner and icon (not the items one)", AtlasView.BrowseModel.NotFound || AtlasView.BannerForTest?.Tag as string == "browse-banner|finds", AtlasView.BannerForTest?.Tag as string);
+                    await AtlasView.Open("labs:"); await Task.Delay(60); UpdateLayout();
+                    Check("banners: a hosted page (no header) and the data sources page have none", AtlasView.BannerForTest == null);
+                    await AtlasView.Open(AtlasNav.DataId); await Task.Delay(60); UpdateLayout();
+                    Check("banners: the data sources page has none", AtlasView.BannerForTest == null);
+                    Width = wStart0; AtlasView.History.Clear(); await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout();
                 }
                 Snapshot(Path.Combine(dir, "atlas-browse-start.png"));
                 ClickRow(Tile("browse:items"));
