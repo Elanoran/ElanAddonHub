@@ -114,19 +114,32 @@ namespace ElansAddonHub
                     AtlasWalkTexts(Card(0)).Any(t => t.StartsWith("VERSION HISTORY") || t.StartsWith("WHAT'S NEW")) && FindDown<Button>(Card(0), b => (b.Content as string) == "All releases on GitHub")?.IsVisible == true);
                 Snapshot(Path.Combine(dir, "addons-grid-expanded.png"));
                 cards[0].Expanded = false;
-                await Task.Delay(800); UpdateLayout();
-                var back = new[] { PosIn(Card(0), AddonsRoot), PosIn(Card(1), AddonsRoot), PosIn(Card(2), AddonsRoot) };
+                await Task.Delay(90); UpdateLayout();
+                Check("closing (mid-animation): the neighbour keeps its own height (not stretched to the closing card)", Math.Abs(Card(1).ActualHeight - h1) < 0.5, Card(1).ActualHeight + " vs " + h1 + ", closing card " + Card(0).ActualHeight);
+                await Task.Delay(710); UpdateLayout();
+                var back =new[] { PosIn(Card(0), AddonsRoot), PosIn(Card(1), AddonsRoot), PosIn(Card(2), AddonsRoot) };
                 Check("collapsing puts the grid back exactly", Math.Abs(Card(0).ActualHeight - h0) < 0.5 && Enumerable.Range(0, 3).All(i => Math.Abs(back[i].X - before[i].X) < 1 && Math.Abs(back[i].Y - before[i].Y) < 1));
                 if (others.Count >= 3)
                 {
                     var ob = new[] { PosIn(CardVisual(OtherCards, 1), AddonsRoot), PosIn(CardVisual(OtherCards, 2), AddonsRoot) };
                     var first = (ThirdPartyCard)CardVisual(OtherCards, 0).DataContext;
+                    double oh1 = CardVisual(OtherCards, 1).ActualHeight, oh0 = CardVisual(OtherCards, 0).ActualHeight;
                     first.Expanded = true;
                     await Task.Delay(800); UpdateLayout();
                     var oa = new[] { PosIn(CardVisual(OtherCards, 1), AddonsRoot), PosIn(CardVisual(OtherCards, 2), AddonsRoot) };
                     Check("an other addon opens in place too: its neighbour stays, the row below moves down", Math.Abs(oa[0].Y - ob[0].Y) < 1 && Math.Abs(oa[0].X - ob[0].X) < 24 && oa[1].Y > ob[1].Y + 20, oa[0] + " " + oa[1]);
+                    Check("an other addon opens: only it grows - the neighbour in its row keeps its own height and stays closed",
+                        CardVisual(OtherCards, 0).ActualHeight > oh0 + 20 && Math.Abs(CardVisual(OtherCards, 1).ActualHeight - oh1) < 0.5 && !((ThirdPartyCard)CardVisual(OtherCards, 1).DataContext).Expanded,
+                        oh0 + "->" + CardVisual(OtherCards, 0).ActualHeight + ", neighbour " + oh1 + "->" + CardVisual(OtherCards, 1).ActualHeight);
                     first.Expanded = false;
-                    await Task.Delay(600); UpdateLayout();
+                    await Task.Delay(90); UpdateLayout();
+                    Check("an other addon closing (mid-animation): the neighbour keeps its own height", Math.Abs(CardVisual(OtherCards, 1).ActualHeight - oh1) < 0.5, CardVisual(OtherCards, 1).ActualHeight + " vs " + oh1);
+                    await Task.Delay(510); UpdateLayout();
+                    Check("an other addon closed: back to its own height", Math.Abs(CardVisual(OtherCards, 0).ActualHeight - oh0) < 0.5, CardVisual(OtherCards, 0).ActualHeight + " vs " + oh0);
+                    // rows of different natural heights: each card keeps its own (a taller neighbour never stretches the shorter one)
+                    var conts = Enumerable.Range(0, Math.Min(others.Count, 6)).Select(i => OtherCards.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement).Where(x => x != null).ToList();
+                    Check("other addons: every row card is at its own measured height (top-aligned, not stretched)",
+                        conts.Count > 1 && conts.All(v => Math.Abs(v.ActualHeight - v.DesiredSize.Height) < 0.5), string.Join(" ", conts.Select(v => v.ActualHeight.ToString("0.#") + "/" + v.DesiredSize.Height.ToString("0.#"))));
                 }
 
                 // ---- the skeleton cards are where the real cards come

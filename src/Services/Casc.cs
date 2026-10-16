@@ -427,6 +427,98 @@ namespace ElansAddonHub.Services
             return res;
         }
 
+        // ---- files by NAME (e.g. "Interface\Icons\Trade_Mining.blp", what an addon's toc IconTexture can point at). The root keeps, per entry
+        // and unless the block's flag 0x10000000 says otherwise, an 8-byte name hash after the content keys: Jenkins lookup3 hashlittle2 over the
+        // upper-case path with backslashes, pc = 0 and pb = 0 in, stored as (pc << 32) | pb (the same as CascLib's CalcFileNameHash).
+        public static ulong NameHash(string path)
+        {
+            var norm = (path ?? "").Replace('/', '\\').ToUpperInvariant();
+            var k = System.Text.Encoding.ASCII.GetBytes(norm);
+            uint c = 0, b = 0;
+            HashLittle2(k, ref c, ref b);
+            return ((ulong)c << 32) | b;
+        }
+
+        static uint Rot(uint x, int r) => (x << r) | (x >> (32 - r));
+
+        // Bob Jenkins' lookup3.c hashlittle2 (public domain), byte-wise reading of the little-endian words
+        public static void HashLittle2(byte[] k, ref uint pc, ref uint pb)
+        {
+            int length = k.Length, o = 0;
+            uint a, b, c;
+            a = b = c = 0xdeadbeef + (uint)length + pc;
+            c += pb;
+            while (length > 12)
+            {
+                a += BitConverter.ToUInt32(k, o); b += BitConverter.ToUInt32(k, o + 4); c += BitConverter.ToUInt32(k, o + 8);
+                a -= c; a ^= Rot(c, 4); c += b; b -= a; b ^= Rot(a, 6); a += c; c -= b; c ^= Rot(b, 8); b += a;
+                a -= c; a ^= Rot(c, 16); c += b; b -= a; b ^= Rot(a, 19); a += c; c -= b; c ^= Rot(b, 4); b += a;
+                length -= 12; o += 12;
+            }
+            if (length == 0) { pc = c; pb = b; return; }
+            uint K(int i) => i < length ? k[o + i] : 0u;
+            c += K(8) | K(9) << 8 | K(10) << 16 | K(11) << 24;
+            b += K(4) | K(5) << 8 | K(6) << 16 | K(7) << 24;
+            a += K(0) | K(1) << 8 | K(2) << 16 | K(3) << 24;
+            c ^= b; c -= Rot(b, 14); a ^= c; a -= Rot(c, 11); b ^= a; b -= Rot(a, 25); c ^= b; c -= Rot(b, 16);
+            a ^= c; a -= Rot(c, 4); b ^= a; b -= Rot(a, 14); c ^= b; c -= Rot(b, 24);
+            pc = c; pb = b;
+        }
+
+        // content keys for the wanted name hashes (one pass over the root; the best-scored entry per name, like ResolveFileIds)
+        public Dictionary<ulong, byte[]> ResolveNameHashes(HashSet<ulong> wanted)
+        {
+            if (disposed) throw new ObjectDisposedException("CascStorage", "the game storage is closed");
+            var res = new Dictionary<ulong, byte[]>();
+            var score = new Dictionary<ulong, int>();
+            var ek = EncodingKeyFor(rootCKey);
+            if (ek == null) throw new IOException("root file is not in the encoding table");
+            using (var root = OpenEKey(ek))
+            {
+                var hd = new byte[24];
+                root.ReadAt(0, hd, 0, 24);
+                if (hd[0] != 'T' || hd[1] != 'S' || hd[2] != 'F' || hd[3] != 'M') throw new IOException("unknown root format");
+                uint hdrSize = BitConverter.ToUInt32(hd, 4), ver = BitConverter.ToUInt32(hd, 8);
+                bool v2 = hdrSize == 0x18 && (ver == 1 || ver == 2);
+                long pos = v2 ? hdrSize : 12;
+                ver = v2 ? ver : 0;
+                long len = root.Length;
+                var bh = new byte[17];
+                while (pos + 12 < len)
+                {
+                    root.ReadAt(pos, bh, 0, 12);
+                    int nr = (int)BitConverter.ToUInt32(bh, 0);
+                    uint locale, cf;
+                    if (ver == 2)
+                    {
+                        root.ReadAt(pos + 12, bh, 12, 5);
+                        locale = BitConverter.ToUInt32(bh, 4);
+                        cf = BitConverter.ToUInt32(bh, 8) | BitConverter.ToUInt32(bh, 12) | ((uint)bh[16] << 17);
+                        pos += 17;
+                    }
+                    else { cf = BitConverter.ToUInt32(bh, 4); locale = BitConverter.ToUInt32(bh, 8); pos += 12; }
+                    long ckPos = pos + (long)nr * 4, nhPos = ckPos + (long)nr * 16;
+                    bool hasNames = (cf & 0x10000000) == 0;
+                    if (hasNames && nr > 0)
+                    {
+                        var names = new byte[nr * 8];
+                        root.ReadAt(nhPos, names, 0, names.Length);
+                        int sc = ((cf & 0x80) == 0 ? 4 : 0) + ((cf & 0x100) == 0 ? 2 : 0) + ((locale & 0x2) != 0 ? 1 : 0);
+                        for (int i = 0; i < nr; i++)
+                        {
+                            var h = BitConverter.ToUInt64(names, i * 8);
+                            if (!wanted.Contains(h) || (score.TryGetValue(h, out var old) && old >= sc)) continue;
+                            var one = new byte[16];
+                            root.ReadAt(ckPos + (long)i * 16, one, 0, 16);
+                            res[h] = one; score[h] = sc;
+                        }
+                    }
+                    pos = nhPos + (hasNames ? (long)nr * 8 : 0);
+                }
+            }
+            return res;
+        }
+
         // the decoded bytes of a file by content key, or null when the storage does not hold it
         public byte[] ReadByContentKey(byte[] ckey)
         {

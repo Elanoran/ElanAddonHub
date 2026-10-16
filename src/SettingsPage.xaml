@@ -232,6 +232,11 @@
                 <TextBlock x:Name="CfStatusText" Style="{StaticResource Text.Body}" TextWrapping="Wrap" VerticalAlignment="Center" />
               </DockPanel>
             </ContentControl>
+            <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Update CurseForge addons directly (recommended)" Tag="The Outpost downloads the update CurseForge lists from CurseForge's own download server, checks its size and checksum, keeps a backup and swaps the folders - no 'Select game instance' window. Addons whose author only allows updates through CurseForge, or that need another addon first, still go through the CurseForge app. Off = always ask the CurseForge app.">
+                <CheckBox x:Name="CfDirectBox" Style="{StaticResource Switch}" Click="General_Click" />
+              </HeaderedContentControl>
+            </StackPanel></ContentControl>
             <StackPanel Orientation="Horizontal">
               <Button Style="{StaticResource Button.M}" Content="Check for updates now" Click="CheckNow_Click" />
               <Button Style="{StaticResource Button.M}" Content="Open backups folder" Margin="8,0,0,0" Click="Backups_Click" />

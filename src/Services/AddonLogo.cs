@@ -9,7 +9,7 @@ using System.Windows.Media.Imaging;
 
 namespace ElansAddonHub.Services
 {
-    // An addon's own logo for its row in "Other addons": a .blp / .tga that ships inside the addon's folder, decoded once to a PNG in
+    // An addon's own logo for its row in "Other addons": a .blp / .tga / .png / .jpg that ships inside the addon's folder, decoded once to a PNG in
     // %LOCALAPPDATA%\ElansAddonHub\cache\addon-logos. Local files only: no network, nothing outside Interface\AddOns, nothing written to the WoW folder.
     //   1. the toc's "## IconTexture:" path (relative to Interface\) when it points inside one of the addon's folders;
     //   2. else a small search in those folders (max 3 levels deep) for files named *logo* / *icon*, preferring 64 x 64, then 128 x 128, then the
@@ -24,7 +24,9 @@ namespace ElansAddonHub.Services
 
         public static string Dir => Path.Combine(Util.DataDir, "cache", "addon-logos");
 
-        static bool IsPicture(string path) { var x = Path.GetExtension(path).ToLowerInvariant(); return x == ".blp" || x == ".tga"; }
+        static bool IsPicture(string path) { var x = Path.GetExtension(path).ToLowerInvariant(); return x == ".blp" || x == ".tga" || IsWic(path); }
+        // .png / .jpg: newer clients load them too (e.g. BetterNamePlates' "IconTexture: ...icon.png"); decoded by WPF, not by our own readers
+        static bool IsWic(string path) { var x = Path.GetExtension(path).ToLowerInvariant(); return x == ".png" || x == ".jpg" || x == ".jpeg"; }
 
         // a folder, or anything on the way from the addon's folder to a file, that is a junction / symlink could lead out of AddOns
         static bool Plain(string root, string path)
@@ -66,7 +68,7 @@ namespace ElansAddonHub.Services
                 {
                     var root = FolderRoot(addOnsDir, f);
                     if (root == null || !full.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase)) continue;
-                    var tries = IsPicture(full) ? new[] { full } : new[] { full + ".blp", full + ".tga" };
+                    var tries = IsPicture(full) ? new[] { full } : new[] { full + ".blp", full + ".tga", full + ".png", full + ".jpg" };
                     foreach (var c in tries)
                         if (File.Exists(c) && new FileInfo(c).Length <= MaxBytes && Plain(root, c)) return c;
                 }
@@ -83,6 +85,15 @@ namespace ElansAddonHub.Services
             w = h = 0;
             try
             {
+                if (IsWic(path))
+                {
+                    using (var fs = File.OpenRead(path))
+                    {
+                        var fr = BitmapDecoder.Create(fs, BitmapCreateOptions.DelayCreation | BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.None).Frames[0];
+                        w = fr.PixelWidth; h = fr.PixelHeight;
+                    }
+                    return w > 0 && h > 0 && w <= MaxSide && h <= MaxSide;
+                }
                 var buf = new byte[20];
                 int n;
                 using (var fs = File.OpenRead(path)) n = fs.Read(buf, 0, 20);
@@ -182,6 +193,7 @@ namespace ElansAddonHub.Services
                 var data = File.ReadAllBytes(src);
                 int w, h; byte[] bgra;
                 if (Path.GetExtension(src).Equals(".blp", StringComparison.OrdinalIgnoreCase)) bgra = Blp.Decode(data, out w, out h);
+                else if (IsWic(src)) bgra = Wic(data, out w, out h);
                 else bgra = Tga(data, out w, out h);
                 var bmp = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, bgra, w * 4);
                 bmp.Freeze();
@@ -225,6 +237,21 @@ namespace ElansAddonHub.Services
         {
             var png = Resolve(addOnsDir, folders, iconTexture, modified);
             return png == null ? null : IconStore.Load(png);
+        }
+
+        // ---- PNG / JPEG (and anything else WPF reads): the first frame as BGRA, at most 1024 px a side
+        public static byte[] Wic(byte[] d, out int w, out int h)
+        {
+            using (var ms = new MemoryStream(d))
+            {
+                var fr = BitmapDecoder.Create(ms, BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+                w = fr.PixelWidth; h = fr.PixelHeight;
+                if (w <= 0 || h <= 0 || w > 1024 || h > 1024) throw new InvalidDataException("odd picture size " + w + " x " + h);
+                var conv = new FormatConvertedBitmap(fr, PixelFormats.Bgra32, null, 0);
+                var px = new byte[w * h * 4];
+                conv.CopyPixels(px, w * 4, 0);
+                return px;
+            }
         }
 
         // ---- TGA: uncompressed or RLE, 24 / 32 bit true colour
