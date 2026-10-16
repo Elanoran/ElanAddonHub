@@ -147,7 +147,7 @@ namespace ElansAddonHub
                 text.Children.Add(Tb("Atlas", "Text.Title"));
                 var l = Tb("The world from your own game files, the Classic baseline and your Lodge.", "Text.Secondary", null, 2); l.TextWrapping = TextWrapping.Wrap; text.Children.Add(l);
                 var hint = Tb("Install Elan's Hub (Addons page) and log in to a character once: Home then shows where you are and what fits your level there.", "Text.Secondary", null, 8);
-                hint.TextWrapping = TextWrapping.Wrap; hint.MaxWidth = ReadWidth; hint.Tag = "home-hub-hint"; text.Children.Add(hint);
+                hint.TextWrapping = TextWrapping.Wrap; hint.MaxWidth = ReadWidth; hint.HorizontalAlignment = HorizontalAlignment.Left; hint.Tag = "home-hub-hint"; text.Children.Add(hint);
             }
             else
             {
@@ -167,7 +167,7 @@ namespace ElansAddonHub
                 else line = h.ZoneId > 0 ? AtlasHome.OneLiner(ZoneLore.For(h.ZoneId)?.Summary) : "";
                 if (h.Place.Length == 0) line = h.Live ? "Elan's Hub does not know this place yet." : "Elan's Hub has not saved a zone for " + h.Name + " yet.";
                 if (!h.Live && h.SeenAt > 0) line = (line.Length > 0 ? line + " " : "") + "Saved by Elan's Hub " + AtlasFormat.Ago(h.SeenAt, AtlasQuery.Context.NowUtc()) + ".";
-                if (line.Length > 0) { var l = Tb(line, "Text.Secondary", null, 4); l.TextWrapping = TextWrapping.Wrap; l.MaxWidth = ReadWidth; l.Tag = "home-line"; text.Children.Add(l); }
+                if (line.Length > 0) { var l = Tb(line, "Text.Secondary", null, 4); l.TextWrapping = TextWrapping.Wrap; l.MaxWidth = ReadWidth; l.HorizontalAlignment = HorizontalAlignment.Left; l.Tag = "home-line"; text.Children.Add(l); }
                 // the chips: the fit of the zone, then what the strip says now
                 homeChipWrap = new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Tag = "home-chips" };
                 text.Children.Add(homeChipWrap);

@@ -81,7 +81,7 @@ namespace ElansAddonHub
                 await Task.Delay(200); UpdateLayout();
                 var winGrad = FindResource("Brush.Window") as System.Windows.Media.LinearGradientBrush;
                 var chrome = AtlasWalk(WindowFrame).OfType<Border>().ToList();
-                var pageHosts = new FrameworkElement[] { AtlasView, InventoryView, BrowserView, TalentsView, SettingsPage, LodgePage };
+                var pageHosts = new FrameworkElement[] { AtlasView, InventoryView, BrowserView, TalentsView, SettingsPage, LodgePage, RadioPlayerBar };   // the radio's album cover (2.72.3) is the song's picture, not wallpaper
                 Check("window: no wallpaper - the frame is the Brush.Window gradient (lighter at the top, deeper at the bottom), no picture brush in the window chrome outside the pages",
                     winGrad != null && ReferenceEquals(WindowFrame.Background, winGrad) && winGrad.GradientStops.Count >= 2 && Lum(winGrad.GradientStops[0].Color) > Lum(winGrad.GradientStops.Last().Color)
                     && !chrome.Any(b => b.Background is System.Windows.Media.ImageBrush && !pageHosts.Any(p => b.IsDescendantOf(p))),
