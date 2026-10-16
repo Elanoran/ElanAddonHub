@@ -432,6 +432,7 @@ namespace ElansAddonHub
 
                 // ---- optional: the real game files, read-only
                 SmokeReal(Check, notes);
+                CascSharedStress(work, Check, notes);
             }
             catch (Exception ex) { ok = false; notes.Add("FAIL exception: " + ex); }
             finally
@@ -595,6 +596,100 @@ namespace ElansAddonHub
             {
                 notes.Add("skip real game files: " + e.Message);
             }
+        }
+
+        // The shared game storage (CascShared) under many readers at once, against the real game files: leases, reads, idle closes, a folder that is no
+        // game, a game patch (another build key) in the middle, and the real spell and item readers alongside. No exception may reach a reader and every
+        // read returns data. 2.70.0 failed now and then (a NullReferenceException in SpellData.ReadCasc): an open of another folder that failed left the
+        // closed storage as the current one, and the next reader of the game folder got a lease without a storage.
+        void CascSharedStress(string work, CheckFn Check, List<string> notes)
+        {
+            var real = Environment.GetEnvironmentVariable("ELANSHUB_WOW");
+            if (string.IsNullOrEmpty(real)) real = WowLocator.Find();
+            if (string.IsNullOrEmpty(real) || !Directory.Exists(Path.Combine(real, "Data", "data")) || !Directory.Exists(Path.Combine(real, "_classic_beta_")))
+            {
+                notes.Add("skip shared storage stress: no WoW install with the Forever beta client on this PC");
+                return;
+            }
+            const string F = "_classic_beta_";
+            var bogus = Path.Combine(work, "not-a-game");
+            Directory.CreateDirectory(bogus);
+            File.WriteAllText(Path.Combine(bogus, ".build.info"), "Branch!STRING:0|Active!DEC:1|Build Key!HEX:16|Version!STRING:0|Product!STRING:0\r\nus|1|00000000000000000000000000000000|1.0.0.1|wow_classic_beta\r\n");
+            var probe = SpellTables.SpellRange.FileId;
+            bool ReadOne(CascStorage c)
+            {
+                var k = c.ResolveFileIds(new HashSet<int> { probe });
+                if (!k.TryGetValue(probe, out var ck)) return false;
+                var b = c.ReadByContentKey(ck);
+                return b != null && b.Length > 4 && b[0] == 'W' && b[1] == 'D' && b[2] == 'C';
+            }
+            int savedIdle = CascShared.IdleMs; var savedBuild = ItemData.BuildForTest;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            int opens0 = CascShared.OpensForTest;
+            try
+            {
+                CascShared.CloseIdle();
+                // the 2.70.0 failure, step by step
+                using (var l = CascShared.Open(real, F)) { }
+                bool threw = false;
+                try { using (CascShared.Open(bogus, F)) { } } catch (Exception) { threw = true; }
+                string after;
+                try { using (var l = CascShared.Open(real, F)) after = l.Casc == null ? "lease without a storage" : ReadOne(l.Casc) ? "ok" : "no data"; }
+                catch (Exception e) { after = e.GetType().Name + ": " + e.Message; }
+                Check("cascshared: an open of a folder that is no game fails, and the next reader of the game folder still gets an open storage (2.70.0: a lease without one, NullReferenceException)", threw && after == "ok", threw + " " + after);
+                using (var l = CascShared.Open(real, F))
+                {
+                    bool refused = !CascShared.CloseIdle();
+                    Check("cascshared: closing it is refused while a reader holds it, and that reader keeps reading", refused && CascShared.IsOpenForTest && ReadOne(l.Casc));
+                }
+                bool disposedThrows = false;
+                var gone = CascShared.Open(real, F); gone.Dispose();
+                try { var x = gone.Casc; } catch (ObjectDisposedException) { disposedThrows = true; }
+                Check("cascshared: a lease given back says so (ObjectDisposedException), it never hands out a null storage", disposedThrows);
+
+                // many at once
+                CascShared.IdleMs = 40;
+                var errors = new System.Collections.Concurrent.ConcurrentQueue<string>();
+                int reads = 0, empty = 0, bogusOpened = 0;
+                var realBuild = ItemData.GameBuild(real, F);
+                var threads = new List<System.Threading.Thread>();
+                for (int ti = 0; ti < 8; ti++)
+                {
+                    int seed = ti;
+                    threads.Add(new System.Threading.Thread(() =>
+                    {
+                        var rnd = new Random(seed * 7919 + 1);
+                        for (int i = 0; i < 30; i++)
+                        {
+                            try
+                            {
+                                if (seed == 0 && i % 10 == 5) { try { using (CascShared.Open(bogus, F)) System.Threading.Interlocked.Increment(ref bogusOpened); } catch (IOException) { } }
+                                else if (seed == 1 && i % 7 == 3) CascShared.CloseIdle();
+                                else if (seed == 2 && i == 15) { ItemData.BuildForTest = (r, f) => r == real ? realBuild + "-patched" : null; System.Threading.Thread.Sleep(80); ItemData.BuildForTest = savedBuild; }
+                                else using (var l = CascShared.Open(real, F)) { if (ReadOne(l.Casc)) System.Threading.Interlocked.Increment(ref reads); else System.Threading.Interlocked.Increment(ref empty); }
+                                if (rnd.Next(5) == 0) System.Threading.Thread.Sleep(rnd.Next(70));
+                            }
+                            catch (Exception e) { errors.Enqueue(e.GetType().Name + ": " + e.Message); }
+                        }
+                    }) { IsBackground = true });
+                }
+                int spellTables = -1; bool itemTables = false;
+                threads.Add(new System.Threading.Thread(() => { try { spellTables = SpellData.ReadCasc(real, F).Tables.Count(t => t.Value != null); } catch (Exception e) { errors.Enqueue("SpellData.ReadCasc " + e); } }) { IsBackground = true });
+                threads.Add(new System.Threading.Thread(() => { try { var r = ItemData.ReadCasc(real, F); itemTables = r.Sparse != null && r.Item != null; } catch (Exception e) { errors.Enqueue("ItemData.ReadCasc " + e); } }) { IsBackground = true });
+                foreach (var t in threads) t.Start();
+                bool done = threads.All(t => t.Join(120000));
+                ItemData.BuildForTest = savedBuild;
+                int allTables = SpellTables.All.Length + WorldTables.All.Length;
+                Check("cascshared stress: 8 readers x 30 leases + idle closes (40 ms) + a folder that is no game + a game patch in the middle + the spell and item readers: no exception, every read returned data",
+                    done && errors.IsEmpty && empty == 0 && reads > 150 && bogusOpened == 0 && spellTables == allTables && itemTables,
+                    "done " + done + ", reads " + reads + ", empty " + empty + ", spell tables " + spellTables + "/" + allTables + ", items " + itemTables + ", errors: " + string.Join(" | ", errors.Take(3)));
+                CascShared.IdleMs = savedIdle;
+                bool closed = CascShared.CloseIdle();
+                Check("cascshared: afterwards no lease is left and it closes", closed && !CascShared.IsOpenForTest && CascShared.LeasesForTest == 0);
+                notes.Add("note cascshared stress: " + reads + " reads, " + (CascShared.OpensForTest - opens0) + " storage opens, " + sw.ElapsedMilliseconds + " ms");
+            }
+            catch (Exception e) { Check("cascshared: no exception", false, e.ToString()); }
+            finally { CascShared.IdleMs = savedIdle; ItemData.BuildForTest = savedBuild; CascShared.CloseIdle(); }
         }
     }
 }

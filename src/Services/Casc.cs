@@ -164,6 +164,7 @@ namespace ElansAddonHub.Services
         // the BLTE file behind an encoding key
         BlteFile OpenEKey(byte[] ekey)
         {
+            if (disposed) throw new ObjectDisposedException("CascStorage", "the game storage is closed");
             if (!TryFind(ekey, out var loc)) throw new FileNotFoundException("file is not in the local storage (ekey " + BitConverter.ToString(ekey, 0, 9).Replace("-", "") + ")");
             return new BlteFile(Archive(loc.Archive), loc.Offset + 30, loc.Size - 30, ZeroFillEncrypted);
         }
@@ -227,24 +228,29 @@ namespace ElansAddonHub.Services
         // every later lookup is a binary search. Same answers as the walk: per FileDataID the entry with the best score, the first one on a tie.
         public bool UseRootIndex;
         readonly object rootGate = new object();
-        int[] rootIds;          // sorted, unique
-        byte[] rootKeys;        // 16 bytes per id, same order
-        public int RootIndexCount => rootIds?.Length ?? 0;
+        sealed class RootTable { public int[] Ids; public byte[] Keys; }     // Ids sorted, unique; Keys 16 bytes per id, same order
+        RootTable rootTable;    // under rootGate (set once)
+        volatile bool disposed;
+        public int RootIndexCount { get { lock (rootGate) return rootTable?.Ids.Length ?? 0; } }
         public long RootIndexMs { get; private set; }
 
         // FileDataID -> content key, for all wanted ids in one pass over the root file (TSFM, versions 1 and 2)
         public Dictionary<int, byte[]> ResolveFileIds(HashSet<int> wanted)
         {
+            if (disposed) throw new ObjectDisposedException("CascStorage", "the game storage is closed");
             if (UseRootIndex)
             {
-                lock (rootGate) { if (rootIds == null) BuildRootIndex(); }
+                // built once, by the first caller; the others wait for it here. ids and keys are taken together (one object), so a reader never sees
+                // the ids of the new table with the keys of none
+                RootTable t;
+                lock (rootGate) { if (rootTable == null) BuildRootIndex(); t = rootTable; }
                 var hit = new Dictionary<int, byte[]>();
                 foreach (var fid in wanted)
                 {
-                    int i = Array.BinarySearch(rootIds, fid);
+                    int i = Array.BinarySearch(t.Ids, fid);
                     if (i < 0) continue;
                     var k = new byte[16];
-                    Buffer.BlockCopy(rootKeys, i * 16, k, 0, 16);
+                    Buffer.BlockCopy(t.Keys, i * 16, k, 0, 16);
                     hit[fid] = k;
                 }
                 return hit;
@@ -287,7 +293,7 @@ namespace ElansAddonHub.Services
                 Buffer.BlockCopy(keys, (int)(order[i] & 0x0FFFFFFF) * 16, uKeys, w * 16, 16);
                 w++;
             }
-            rootIds = uIds; rootKeys = uKeys;
+            rootTable = new RootTable { Ids = uIds, Keys = uKeys };
             RootIndexMs = sw.ElapsedMilliseconds;
         }
 
@@ -478,6 +484,7 @@ namespace ElansAddonHub.Services
 
         public void Dispose()
         {
+            disposed = true;
             encoding?.Dispose();
             foreach (var a in archives.Values) { try { a.Dispose(); } catch { } }
             archives.Clear();
