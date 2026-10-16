@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.77.0
+- **Talents: a cleaner top.** The "Plan a build for any class" line above the talent trees is gone; the class buttons say it all.
+- **Talents: the hint under the trees is right now.** It reads: click a talent to add a point, right-click to take one back, Ctrl+click to open its spell page. With the keyboard, Enter or + adds a point and Delete or - takes one back (the + and - keys next to Backspace work too now, not only the ones on the number pad).
+- **Talents: Open in Seemeta.** A new button opens the class and the build on screen in Seemeta's WoW Forever talent calculator, in the Outpost browser. Only the class and the talent ranks go into the address.
+
 ## 2.76.1
 - **No more jumping between Atlas lists.** Going from Creatures to Objects, Items and the other lists, the page's own scroll bar no longer pops up for a moment and goes again (the list was first given a guessed height that was too tall). The list now fits the window before it is shown.
 

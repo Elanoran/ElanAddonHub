@@ -63,11 +63,8 @@
   <Border x:Name="Panel" Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
     <ScrollViewer VerticalScrollBarVisibility="Auto" local:Motion.EdgeFade="True" x:Name="PageScroll">
       <StackPanel Margin="0,0,8,0">
-        <StackPanel Margin="0,0,0,16">
-          <TextBlock x:Name="TitleBlock" Text="Talents" Style="{StaticResource Text.Title}" />
-          <TextBlock x:Name="Summary" Style="{StaticResource Text.Secondary}" Margin="0,2,0,0" TextWrapping="Wrap"
-                     Text="Plan a build for any class from the talent trees in your game, try recommended builds, and share it as a code." />
-        </StackPanel>
+        <!-- the class chips say what the page is: no summary line (the Atlas draws the title when the page is embedded) -->
+        <TextBlock x:Name="TitleBlock" Text="Talents" Style="{StaticResource Text.Title}" Margin="0,0,0,16" />
 
         <!-- class picker -->
         <WrapPanel x:Name="ClassBar" Margin="0,0,0,12" />
@@ -106,8 +103,7 @@
             <!-- the trees (TalentTreePanel, the renderer Characters > Talents uses too): side by side, one under the other in a narrow window -->
             <ContentControl x:Name="TreeHost" HorizontalContentAlignment="Stretch" Focusable="False" />
 
-            <TextBlock x:Name="HintLine" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" TextWrapping="Wrap"
-                       Text="Click a talent for +1, right-click for -1. A row opens when enough points are spent in the rows above it." />
+            <TextBlock x:Name="HintLine" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" TextWrapping="Wrap" />
 
             <!-- actions -->
             <WrapPanel Margin="0,12,0,0">
@@ -115,6 +111,8 @@
               <Button x:Name="ResetButton" Style="{StaticResource Button.M}" Content="Reset" Margin="0,0,8,8" Click="Reset_Click" />
               <Button x:Name="CharButton" Style="{StaticResource Button.M}" Content="Load from my character" Margin="0,0,8,8" Click="Char_Click" />
               <Button x:Name="CopyButton" Style="{StaticResource Button.M}" Content="Copy build code" Margin="0,0,8,8" Click="Copy_Click" />
+              <Button x:Name="SeemetaButton" Style="{StaticResource Button.M}" Content="Open in Seemeta" Margin="0,0,8,8" Click="Seemeta_Click"
+                      ToolTip="Opens this class and build in Seemeta's WoW Forever talent calculator, in the Outpost browser" />
             </WrapPanel>
             <Popup x:Name="CharPopup" StaysOpen="False" Placement="Bottom" PlacementTarget="{Binding ElementName=CharButton}" AllowsTransparency="True">
               <Border Background="{StaticResource Brush.Surface3}" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Radius.ControlLg}" Padding="4" Margin="8">

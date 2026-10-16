@@ -382,8 +382,8 @@ namespace ElansAddonHub
                 box.MouseRightButtonDown += (s, e) => { box.Focus(); e.Handled = true; NodeClicked?.Invoke(c.Id, true); };
                 box.KeyDown += (s, e) =>
                 {
-                    if (e.Key == Key.Enter || e.Key == Key.Space || e.Key == Key.Add) { NodeClicked?.Invoke(c.Id, false); e.Handled = true; }
-                    else if (e.Key == Key.Delete || e.Key == Key.Back || e.Key == Key.Subtract) { NodeClicked?.Invoke(c.Id, true); e.Handled = true; }
+                    if (e.Key == Key.Enter || e.Key == Key.Space || e.Key == Key.Add || e.Key == Key.OemPlus) { NodeClicked?.Invoke(c.Id, false); e.Handled = true; }
+                    else if (e.Key == Key.Delete || e.Key == Key.Back || e.Key == Key.Subtract || e.Key == Key.OemMinus) { NodeClicked?.Invoke(c.Id, true); e.Handled = true; }
                 };
             }
             if (tipFor != null)

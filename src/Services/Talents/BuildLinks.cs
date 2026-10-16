@@ -199,6 +199,28 @@ namespace ElansAddonHub.Services.Talents
             return d;
         }
 
+        // the other way: a Seemeta link for a build on OUR trees, in the format ReadSeemeta reads (checked on the live site, October 2026: ?build=1 is one
+        // point in the first Beast Mastery talent, ?build=55-05-5 shows "20 of 51, 10/5/5"). Digits in SiteNodes order, trailing zeros cut, empty trees at the
+        // end left out; no build at all gives the class page alone. Only the class and the ranks go into the address.
+        public const string SeemetaBase = "https://seemeta.com/en/wow-forever/talent-calculator/";
+
+        public static string SeemetaUrl(TalentTreeDef tree, TalentState state)
+        {
+            if (tree == null || string.IsNullOrEmpty(tree.ClassFile)) return null;
+            var slug = tree.ClassFile.ToLowerInvariant();
+            if (!ClassFiles.ContainsKey(slug)) return null;
+            var parts = new List<string>();
+            for (int s = 0; s < tree.SpecCount; s++)
+            {
+                var sb = new StringBuilder();
+                foreach (var n in SiteNodes(tree, s, false)) sb.Append((char)('0' + Math.Max(0, Math.Min(9, state?.Rank(n.Id) ?? 0))));
+                parts.Add(sb.ToString().TrimEnd('0'));
+            }
+            while (parts.Count > 0 && parts[parts.Count - 1].Length == 0) parts.RemoveAt(parts.Count - 1);
+            var url = SeemetaBase + slug;
+            return parts.Count == 0 ? url : url + "?build=" + string.Join("-", parts);
+        }
+
         // ============================================================================================================================ wowforevertalent.com
         // https://wowforevertalent.com/hunter/#b=1~beta-20261008-cc66e694~hunter~60~0000000000000000-0000000000000000-000000000000000000
         static readonly Regex WftHash = new Regex(@"^#?b=(\d+)~([a-z0-9-]+)~([a-z]+)~(\d{2})~([0-9]+)-([0-9]+)-([0-9]+)$", RegexOptions.IgnoreCase);

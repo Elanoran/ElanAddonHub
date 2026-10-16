@@ -45,6 +45,7 @@ namespace ElansAddonHub
         public TalentsPage()
         {
             InitializeComponent();
+            HintLine.Text = Hint;
             for (int l = 10; l <= 60; l++) LevelBox.Items.Add(l);
             for (int r = 0; r <= 5; r++) LegacyBox.Items.Add(r);
             LevelBox.SelectedItem = 60; LegacyBox.SelectedItem = 0;
@@ -362,6 +363,26 @@ namespace ElansAddonHub
             return gt;
         }
 
+        // ------------------------------------------------------------------------------------------------------------------------------ the hint under the trees
+        // Says exactly what TalentTreePanel does with a talent (the self-test presses each of these and compares): left click / Enter / Space / + add a
+        // point, right click / Delete / Backspace / - take one back, Ctrl+click opens the talent's spell page. No Shift shortcut exists, so none is named.
+        public const string Hint = "Click a talent to add a point, right-click to take one back, Ctrl+click to open its spell page. "
+            + "Keyboard: Enter or + adds a point, Delete or - takes one back. A row opens once enough points are spent in the rows above it.";
+
+        // ------------------------------------------------------------------------------------------------------------------------------ online calculator
+        // Seemeta's WoW Forever calculator with this class and build (BuildLinks.SeemetaUrl, the format the page reads), in the Outpost browser.
+        // Only the class and the ranks go into the address: nothing about the person or their characters.
+        public static Action<string> OpenWebLink;
+        public string SeemetaUrlNow => tree == null || session == null ? null : BuildLinks.SeemetaUrl(tree, session.State);
+
+        void Seemeta_Click(object sender, RoutedEventArgs e)
+        {
+            var url = SeemetaUrlNow;
+            if (url == null) return;
+            info.Add("seemeta|" + url);
+            if (OpenWebLink != null) OpenWebLink(url); else WebEngine.OpenExternal(url);
+        }
+
         // ------------------------------------------------------------------------------------------------------------------------------ build code
         public string ExportCode() => session == null ? null : BuildCode.Encode(tree, session.State);
 
@@ -611,6 +632,14 @@ namespace ElansAddonHub
         // ------------------------------------------------------------------------------------------------------------------------------ self-test hooks
         public TalentSession SessionForTest => session;
         public TalentTreeDef TreeForTest => tree;
+        public string HintForTest => HintLine.Text;
+        public void SeemetaClickForTest() => Seemeta_Click(null, null);
+        public bool SummaryGoneForTest => FindName("Summary") == null && !AllText(this).Any(t => t.StartsWith("Plan a build", StringComparison.OrdinalIgnoreCase));
+        static IEnumerable<string> AllText(DependencyObject d)
+        {
+            if (d is TextBlock tb && tb.Visibility == Visibility.Visible) yield return tb.Text ?? "";
+            foreach (var c in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>()) foreach (var t in AllText(c)) yield return t;
+        }
         public bool TitleHiddenForTest => TitleBlock.Visibility != Visibility.Visible;
         public string StatusForTest => StatusLine.Visibility == Visibility.Visible ? StatusLine.Text : "";
         public bool StatusIsErrorForTest => StatusLine.Visibility == Visibility.Visible && StatusLine.Foreground == Res("Brush.Danger");

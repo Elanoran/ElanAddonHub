@@ -41,6 +41,7 @@ namespace ElansAddonHub
             if (Session != null) Session.Changed += () => Dispatcher.BeginInvoke(new Action(() => AtlasView.PoolChanged()));
             ProfessionsView.UseCrafters(spells => Session?.CraftersFor(spells));
             AtlasView.OpenLinkOverride = url => OpenAtlasLink(url);
+            TalentsPage.OpenWebLink = OpenAtlasLink;                        // Talents > Open in Seemeta: the Outpost browser
             // the Lodge can hand out the Classic data (server 2.17): fetched automatically for members, shareable by the owner and officers
             ClassicSync = new ClassicLodgeSync(Session, () => Dispatcher.CheckAccess() ? AtlasView.EnsureClassicSetup() : Dispatcher.Invoke(() => AtlasView.EnsureClassicSetup()), settings);
             AtlasView.UseLodgeSync(ClassicSync);
