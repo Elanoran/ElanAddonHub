@@ -324,7 +324,7 @@ namespace ElansAddonHub.Services
         }
 
         // ------------------------------------------------------------------ install / rollback
-        static readonly string BackupRoot = Path.Combine(Util.DataDir, "backups", "addons");
+        internal static readonly string BackupRoot = Path.Combine(Util.DataDir, "backups", "addons");
 
         public static string SafeName(string s) => Regex.Replace(s, @"[^A-Za-z0-9_.-]", "_");
 
@@ -487,7 +487,7 @@ namespace ElansAddonHub.Services
             }
         }
 
-        static void Prune(string key, int keep)
+        internal static void Prune(string key, int keep)
         {
             foreach (var old in Backups(key).Skip(keep)) try { Util.DeleteDir(old); } catch { }
         }

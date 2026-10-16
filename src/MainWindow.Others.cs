@@ -27,6 +27,7 @@ namespace ElansAddonHub
 
         void InitOthers()
         {
+            CurseForgeDirect.IsOn = () => !settings.CfDirectOff;
             OtherCards.ItemsSource = others;
             othersView = CollectionViewSource.GetDefaultView(others);
             othersView.Filter = o =>
@@ -197,7 +198,7 @@ namespace ElansAddonHub
                 try { CfChipIcon.Source = SourceIcons.CurseForge(); } catch { }
                 CfChipIcon.Visibility = CfChipIcon.Source != null ? Visibility.Visible : Visibility.Collapsed;
                 var full = (cfStatus != null ? cfStatus + "\n" : "") + $"CurseForge manages {n} addon{(n == 1 ? "" : "s")} here; last checked {CurseForgeLocal.Ago(cfInst.LastRefresh)}"
-                    + (stale ? " (old - press the refresh button to check now)" : "") + ".\nThe Outpost only asks CurseForge to install or check - it never touches those folders.";
+                    + (stale ? " (old - press the refresh button to check now)" : "") + ".\n" + (settings.CfDirectOff ? "The Outpost asks CurseForge to install updates." : "The Outpost installs their updates from CurseForge's download server (checked, with a backup), or asks CurseForge when the author wants that.");
                 CfChip.ToolTip = Tip(full);
                 AutomationProperties.SetName(CfChip, "CurseForge status");
                 CfChipText.ToolTip = null;
@@ -327,6 +328,8 @@ namespace ElansAddonHub
             if (cf == null || addOnsDir == null || c.IsBusy) return;
             var key = c.Entry.Key; var dir = addOnsDir;
             c.Message = null;
+            var plan = CurseForgeDirect.Decide(cf, cfInst, CurseForgeDirect.IsOn());
+            if (plan.Direct) { await InstallCfDirect(c, cf, key, dir); return; }
             c.SetBusy(true, "CurseForge...");
             string msg; bool pendingRetry = false;
             try
@@ -339,6 +342,7 @@ namespace ElansAddonHub
                 else
                     msg = "Something went wrong: CurseForge didn't start the install. Open CurseForge and update it there, or click Retry.";
                 pendingRetry = res == CurseForgeLocal.CfInstallResult.NotStarted;
+                if (plan.Reason != null && !msg.StartsWith("CurseForge installed")) msg = plan.Reason + " " + msg;
             }
             catch (Exception ex) { Util.Log($"curseforge update {key} failed: {ex}"); msg = "Something went wrong: " + ex.Message; }
             c.SetBusy(false);
@@ -349,6 +353,22 @@ namespace ElansAddonHub
                 if (pendingRetry) card.RetryTip = "CurseForge didn't start the install - open CurseForge and update it there, or click to try again";
                 card.Message = msg;
             }
+            UpdateOthersHeader();
+        }
+
+        // The direct path (CurseForgeDirect): CurseForge's own latest file from forgecdn, checked, backed up, swapped - no CurseForge window.
+        async Task InstallCfDirect(ThirdPartyCard c, CfAddon cf, string key, string dir)
+        {
+            var running = GamePresence.WowRunningNow();
+            c.SetBusy(true, "Updating...");
+            string msg;
+            var res = await CurseForgeDirect.Update(dir, key, cf, new Progress<double>(p => c.Progress = p));
+            if (res.Ok) msg = "Updated to " + cf.LatestFileName + ". In game, type /reload" + (running ? " (WoW is running; if the addon looks unchanged, restart it)." : ".") + " CurseForge picks the new files up on its next scan.";
+            else msg = "Something went wrong: " + res.Error;
+            c.SetBusy(false);
+            await RefreshOthers();
+            var card = others.FirstOrDefault(x => x.Entry.Key == key);
+            if (card != null) card.Message = msg;
             UpdateOthersHeader();
         }
 
@@ -473,7 +493,25 @@ namespace ElansAddonHub
                 Ck("not offered GitHub/WoWI link or suggestion", m != null && m.LinkVisibility == Visibility.Collapsed && !m.ShowSuggestion && m.Remote == null);
                 Ck("unmanaged addon unaffected", others.Any(c => c.Entry.Key == "Plain" && c.Entry.Cf == null));
                 Ck("CurseForge chip shown", CfChip.Visibility == Visibility.Visible && CfCheckButton.Visibility == Visibility.Visible, CfChipText.Text);
+                // the direct update (CurseForgeDirect): the fixture's file has no allowModDistribution = the author's choice, the link is kept
+                Ck("no distribution permission: card says so and keeps the CurseForge link", m != null && m.ButtonText == "Update via CurseForge" && m.VersionLine.Contains(CurseForgeDirect.AuthorOnlyText), m?.VersionLine);
+                var off0 = settings.CfDirectOff;
+                try
+                {
+                    var okCf = new CfAddon { Id = 4242, Name = "CfOk", InstalledId = 1, LatestId = 2, LatestFileName = "CfOk-2.zip", AllowDistribution = true, Folders = new List<string> { "CfOk" },
+                        LatestUrl = "https://edge.forgecdn.net/files/1/2/CfOk-2.zip", LatestLength = 10, LatestModules = new List<string> { "CfOk" } };
+                    okCf.LatestHashes.Add(new KeyValuePair<string, string>("sha1", "00"));
+                    var okCard = new ThirdPartyCard(new AddonEntry { Key = "CfOk", Title = "CfOk", Folders = new List<string> { "CfOk" }, Cf = okCf });
+                    settings.CfDirectOff = false; okCard.Refresh();
+                    var onText = okCard.ButtonText;
+                    settings.CfDirectOff = true; okCard.Refresh();
+                    Ck("setting on = Update (direct), off = Update via CurseForge", onText == "Update" && okCard.ButtonText == "Update via CurseForge", onText + " / " + okCard.ButtonText);
+                    okCf.MissingDeps.Add(99); settings.CfDirectOff = false; okCard.Refresh();
+                    Ck("missing dependency = Update via CurseForge", okCard.ButtonText == "Update via CurseForge");
+                }
+                finally { settings.CfDirectOff = off0; }
             }
+            sb.AppendLine(await CurseForgeDirect.SelfTest());
             sb.AppendLine($"addons dir={addOnsDir} interface={clientInterface} cards={others.Count}");
             foreach (var c in others)
                 sb.AppendLine($"  [{c.Entry.Key}] title='{c.Entry.Title}' ver={c.Entry.Version} author={c.Entry.Author} folders={string.Join("+", c.Entry.Folders)} dev={c.Entry.IsDev} src={c.Source} state={c.State} remote={c.Remote?.Version} asset={c.Remote?.Asset} choices={c.Remote?.Choices.Count}");

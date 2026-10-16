@@ -145,7 +145,7 @@ namespace ElansAddonHub
             {
                 Source = "CurseForge"; SetBadge("Accent"); WebsiteText = "CurseForge page";
                 WebsiteUrl = Entry.Cf.Url != null && Entry.Cf.Url.StartsWith("https://") ? Entry.Cf.Url : null;
-                LinkedTo = "Managed by the CurseForge app: updates are installed by CurseForge, the hub never changes these folders.";
+                LinkedTo = "Managed by the CurseForge app: updates come from CurseForge (installed by the Outpost from CurseForge's download server, or by the CurseForge app).";
             }
             else if (!string.IsNullOrEmpty(gh)) { Source = "GitHub"; SetBadge("Accent"); WebsiteUrl = "https://github.com/" + gh; WebsiteText = "Open GitHub"; LinkedTo = "Updates from github.com/" + gh; }
             else if (!string.IsNullOrEmpty(wid)) { Source = "WoWInterface"; SetBadge("Accent"); WebsiteUrl = $"https://www.wowinterface.com/downloads/info{wid}"; WebsiteText = "Open WoWInterface"; LinkedTo = "Updates from WoWInterface #" + wid; }
@@ -163,9 +163,20 @@ namespace ElansAddonHub
                 var seen = $"checked {CurseForgeLocal.Ago(CfChecked)}" + (CurseForgeLocal.IsStale(CfChecked) ? " - old, press Check CurseForge now" : "");
                 if (State == TpState.UpdateAvailable)
                 {
-                    VersionLine = $"Update available: {cf.LatestFileName}" + (cf.LatestDate > DateTime.MinValue.AddDays(2) ? ", " + cf.LatestDate.ToLocalTime().ToString("d MMM yyyy", Lodge.CalendarRules.English) : "") + $" ({seen})";
-                    ButtonText = "Update via CurseForge"; ButtonEnabled = true;
-                    SetPill("Update via CurseForge", PillKind.Action, "Ask the CurseForge app to install the update (the hub never changes CurseForge-managed folders itself)", true);
+                    var plan = CurseForgeDirect.Decide(cf, null, CurseForgeDirect.IsOn());
+                    VersionLine = $"Update available: {cf.LatestFileName}" + (cf.LatestDate > DateTime.MinValue.AddDays(2) ? ", " + cf.LatestDate.ToLocalTime().ToString("d MMM yyyy", Lodge.CalendarRules.English) : "") + $" ({seen})"
+                        + (plan.AuthorOnly ? " - " + CurseForgeDirect.AuthorOnlyText : "");
+                    ButtonEnabled = true;
+                    if (plan.Direct)
+                    {
+                        ButtonText = "Update";
+                        SetPill("Update", PillKind.Action, $"Install {cf.LatestFileName} from CurseForge's download server (size and checksum checked, a backup is kept). CurseForge picks the new files up on its next scan.", true);
+                    }
+                    else
+                    {
+                        ButtonText = "Update via CurseForge";
+                        SetPill("Update via CurseForge", PillKind.Action, (plan.Reason != null ? plan.Reason + " " : "") + "Asks the CurseForge app to install the update.", true);
+                    }
                 }
                 else { SetPill("Up to date", PillKind.Quiet, "You have the latest version", false); VersionLine = $"Up to date ({seen})"; ButtonText = ""; ButtonEnabled = false; }
                 Notify(string.Empty);
@@ -210,12 +221,20 @@ namespace ElansAddonHub
         public Visibility LetterVis => Logo == null ? Visibility.Visible : Visibility.Collapsed;
         public System.Threading.Tasks.Task LogoTask = System.Threading.Tasks.Task.CompletedTask;   // the self-test waits for it
         string logoKey; int logoGen;
+        public IconKind LogoKind { get; private set; }     // where the picture came from (the self-test reads it)
 
         public void LoadLogo(string addOnsDir)
         {
             if (string.IsNullOrEmpty(addOnsDir)) return;
             var e = Entry;
-            var key = addOnsDir + "|" + e.Key + "|" + string.Join("+", e.Folders) + "|" + e.Modified.Ticks + "|" + e.IconTexture;
+            // the discovery chain (Services/AddonIcon.cs): toc IconTexture (own folder, then a game icon), a logo file in the folders,
+            // CurseForge's project logo, the GitHub owner's avatar, else the letter
+            var src = new IconSources
+            {
+                AddOnsDir = addOnsDir, Folders = e.Folders.ToList(), IconTexture = e.IconTexture, Modified = e.Modified,
+                CfThumb = e.Cf?.ThumbnailUrl, GithubRepo = e.Cf != null ? null : (Link?.Github ?? e.GithubRepo),
+            };
+            var key = addOnsDir + "|" + e.Key + "|" + string.Join("+", e.Folders) + "|" + e.Modified.Ticks + "|" + e.IconTexture + "|" + src.CfThumb + "|" + src.GithubRepo;
             if (key == logoKey) return;
             logoKey = key;
             var gen = ++logoGen;
@@ -223,12 +242,12 @@ namespace ElansAddonHub
             if (disp == null) return;
             LogoTask = System.Threading.Tasks.Task.Run(() =>
             {
-                ImageSource img = null;
-                try { img = AddonLogo.Load(addOnsDir, e.Folders.ToList(), e.IconTexture, e.Modified); } catch (Exception ex) { Util.Log("addon logo failed: " + ex.Message); }
+                ImageSource img = null; var kind = IconKind.None;
+                try { img = AddonIcon.Load(src, out kind); } catch (Exception ex) { Util.Log("addon logo failed: " + ex.Message); }
                 disp.BeginInvoke(new Action(() =>
                 {
                     if (gen != logoGen) return;
-                    Logo = img; Notify(nameof(Logo)); Notify(nameof(LogoVis)); Notify(nameof(LetterVis));
+                    Logo = img; LogoKind = kind; Notify(nameof(Logo)); Notify(nameof(LogoVis)); Notify(nameof(LetterVis));
                 }));
             });
         }

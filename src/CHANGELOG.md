@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.71.1
+- **CurseForge addons update without the "Select game instance" window.** Clicking Update on a CurseForge addon now installs the new version straight from CurseForge's own download server: the Outpost checks the file's size and checksum against what CurseForge lists, keeps a backup of the old folders and puts everything back if anything fails. Your settings (SavedVariables) are never touched, and CurseForge picks up the new files on its next scan. Addons whose author only allows updates through CurseForge, or that need another addon installed first, still go through the CurseForge app, and the card says why. You can switch this off in Settings > Addons > CurseForge.
+- **Fixed: missing addon icons.** Addons such as Better Name Plates and GatherMemory showed a letter instead of their icon. The Outpost now also reads .png icons, game icons the addon points to (like the mining pick), and CurseForge's own picture of the addon.
+- **Fixed: opening one addon's details made its neighbours grow.** In the grid, only the card you open gets taller now; the cards next to it keep their size, also while it closes.
+
 ## 2.71.0
 - **World map 3D: true height by default.** The height slider now starts at 1x (the land as it really is), in the middle of a 0.5x - 1.5x range, so you can flatten or raise it from there. Saved choices start again at 1x.
 - **Atlas Home: an icon for every category.** The tiles show a clear line drawing instead of a tiny piece of a painting: a sword for Items, a paw for Creatures, a chest for Objects, a scroll for Quests, a globe for the World map, a map pin for Zones, a gate for Dungeons and raids, a spark for Spells, a crest for Classes, two figures for Races, a branching tree for Talents, an anvil for Skills, a book with a flask for Recipes, crossed tools for Professions, a banner for Factions and a gem for the Lodge's finds. The same icons are in the Atlas side navigation and in the Ctrl+K results. Long names such as "Skills and professions" now go onto two lines instead of being cut off.

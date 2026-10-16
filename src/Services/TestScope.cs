@@ -251,10 +251,10 @@ namespace ElansAddonHub.Services
             R(@"^server/", "lodge", "lodgefeatures", "presence", "profile", "invites", "invites2", "lodgefiles", "badges", "realms", "atlaslodge", "atlasclassiclodge");
             // ---- addons
             R(@"^src/(AddonCard|ThirdPartyCard)\.cs$", "addons", "thirdparty", "startup", "selfupdated");
-            R(@"^src/(MainWindow\.SelfUpdatedTest|Services/(AddonLogo|DevVersion))\.cs$", "selfupdated", "thirdparty");
+            R(@"^src/(MainWindow\.SelfUpdatedTest|Services/(AddonLogo|AddonIcon|DevVersion))\.cs$", "selfupdated", "thirdparty");
             R(@"^src/MainWindow\.DesignTest\.SelfUpdated\.cs$");   // screenshot-only design run
             R(@"^src/(MainWindow\.Startup(ShiftTest(\.Checks)?)?\.cs|Skeleton\.cs)$", "startup", "addons");
-            R(@"^src/Services/(AddonScanner|AddonSuggest|AddonSources|CurseForgeLocal|GitHubStats)\.cs$", "thirdparty", "addons", "selfupdated");
+            R(@"^src/Services/(AddonScanner|AddonSuggest|AddonSources|CurseForgeLocal|CurseForgeDirect|GitHubStats)\.cs$", "thirdparty", "addons", "selfupdated");
             R(@"^src/Services/(Installer|SelfUpdater|PathSafety)\.cs$", "update", "addons");
             R(@"^src/Services/UpdateChannel\.cs$", "update", "round3");
             R(@"^addon/", "addons");

@@ -122,6 +122,7 @@ namespace ElansAddonHub
             ChannelTest.IsChecked = UpdateChannel.IsTest(s);
             ChannelStable.IsChecked = !UpdateChannel.IsTest(s);
             CfAutoBox.IsChecked = s.CfAutoCheck;
+            CfDirectBox.IsChecked = !s.CfDirectOff;
             PaintedBox.IsChecked = s.PaintedArt;
             SplashBox.IsChecked = !s.NoSplash;
             AutoConnectBox.IsChecked = !s.LodgeManualConnect;
@@ -346,6 +347,8 @@ namespace ElansAddonHub
             settings.RunInBackground = BackgroundBox.IsChecked == true;
             settings.AutoUpdate = AutoUpdateBox.IsChecked == true;
             settings.CfAutoCheck = CfAutoBox.IsChecked == true;
+            bool cfDirectChanged = settings.CfDirectOff != (CfDirectBox.IsChecked != true);
+            settings.CfDirectOff = CfDirectBox.IsChecked != true;
             settings.NoSplash = SplashBox.IsChecked != true;
             bool realmsChanged = settings.RealmStatusOff != (RealmStatusBox.IsChecked != true);
             settings.RealmStatusOff = RealmStatusBox.IsChecked != true; settings.RealmsBackNotice = RealmsBackBox.IsChecked == true;
@@ -367,6 +370,7 @@ namespace ElansAddonHub
             SettingsStore.Save(settings);
             if (artChanged) host.CardArtChanged();
             if (realmsChanged) host.RefreshRealms();
+            if (cfDirectChanged) _ = host.RecheckCurseForge();          // the CurseForge cards say "Update" or "Update via CurseForge"
             if (itemDataChanged) { if (itemDataOff) { ElansAddonHub.Services.Db2.ItemData.Disable(); ElansAddonHub.Services.SeenData.Disable(); ElansAddonHub.Services.Maps.MapData.Disable(); } else { ElansAddonHub.Services.Db2.ItemData.Start(); ElansAddonHub.Services.SeenData.Start(); ElansAddonHub.Services.Maps.MapData.Start(); } UpdateItemDataLine(); }
             if (sender == AutoUpdateBox && settings.AutoUpdate) host.AutoUpdateTurnedOn();
         }

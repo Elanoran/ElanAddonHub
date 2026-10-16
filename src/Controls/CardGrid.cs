@@ -6,8 +6,9 @@ namespace ElansAddonHub
 {
     // The panel of the Addons page lists: as many columns as fit the width (each at least MinColumnWidth wide, at most MaxColumns), the cards
     // placed row by row in the order of the list. Used by the real cards (ItemsPanel) and by the skeleton cards, so both sit at the same
-    // places. The rows are as tall as their tallest card and every card of a row is stretched to that height, except while one of them is open
-    // (CardGrid.Open): it then grows in its own column and the others keep their height, so nothing else in the grid is reshuffled.
+    // places. The rows are as tall as their tallest card; every card is top-aligned at its OWN height (never stretched to the row), so opening
+    // one card's details (or the animation closing them again) only makes its row taller - its neighbours keep their size and place.
+    // (CardGrid.Open is still set by the item containers; the layout no longer needs it.)
     // Each card brings its own bottom margin (Card.Raised: Gap.Card); the gap between the columns is Gap.
     public class CardGrid : Panel
     {
@@ -73,14 +74,12 @@ namespace ElansAddonHub
             double y = 0;
             for (int row = 0; row * cols < n; row++)
             {
-                bool open = false;
-                for (int i = row * cols; i < Math.Min(n, row * cols + cols); i++) open |= GetOpen(InternalChildren[i]);
                 double rh = row < rowHeights.Length ? rowHeights[row] : 0;
                 for (int i = row * cols; i < Math.Min(n, row * cols + cols); i++)
                 {
                     var c = InternalChildren[i];
                     double x = (i - row * cols) * (colWidth + Gap);
-                    c.Arrange(new Rect(x, y, colWidth, open ? c.DesiredSize.Height : rh));
+                    c.Arrange(new Rect(x, y, colWidth, c.DesiredSize.Height));      // top-aligned at its own height, never stretched to the row
                 }
                 y += rh;
             }

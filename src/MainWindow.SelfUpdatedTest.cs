@@ -271,6 +271,68 @@ namespace ElansAddonHub
                 await Task.Delay(300);
                 Check("rows: asking again for the same addon neither decodes nor reloads", AddonLogo.Decodes == dn && Row("RXPGuides").Logo != null);
 
+                // ================= 6b. the icon discovery chain (AddonIcon): toc in-folder -> toc game icon -> folder logo -> CurseForge thumbnail -> GitHub avatar -> letter
+                {
+                    var iao = Path.Combine(dir, "selfupd-icons", "_classic_beta_", "Interface", "AddOns");
+                    if (Directory.Exists(Path.GetDirectoryName(iao))) Directory.Delete(Path.GetDirectoryName(iao), true);
+                    Directory.CreateDirectory(iao);
+                    byte[] Png(int s, int r, int g, int b) => IconStore.ToPng(MakeBlp(s, s, RingLogo(s, r, g, b)));
+                    PutToc(iao, "TgaTex", "## Title: Tga\n## IconTexture: Interface\\AddOns\\TgaTex\\Media\\icon\n");
+                    Put(iao, "TgaTex\\Media\\icon.tga", MakeTga(32, 32, RingLogo(32, 10, 200, 30)));
+                    Put(iao, "TgaTex\\Media\\other_logo-64.blp", MakeBlp(64, 64, RingLogo(64, 1, 2, 3)));
+                    PutToc(iao, "PngTex", "## Title: Png\n## IconTexture: Interface\\AddOns\\PngTex\\icon.png\n");             // like BetterNamePlates
+                    Put(iao, "PngTex\\icon.png", Png(48, 30, 60, 220));
+                    PutToc(iao, "GameTex", "## Title: Game\n## IconTexture: Interface\\Icons\\Trade_Mining\n");                 // like GatherMemory
+                    PutToc(iao, "FolderOnly", "## Title: Folder\n");
+                    Put(iao, "FolderOnly\\Art\\folder_logo-64.blp", MakeBlp(64, 64, RingLogo(64, 220, 40, 40)));
+                    PutToc(iao, "Bare", "## Title: Bare\n");
+                    var gameAsked = new List<string>(); var fetched = new List<string>();
+                    var oGame = AddonIcon.GamePng; var oFetch = AddonIcon.FetchRemote;
+                    bool gameHas = true;
+                    AddonIcon.GamePng = (d, t) => { gameAsked.Add(t); return gameHas && t.Equals("Interface\\Icons\\Trade_Mining", StringComparison.OrdinalIgnoreCase) ? Png(64, 200, 160, 20) : null; };
+                    AddonIcon.FetchRemote = u => { fetched.Add(u); return u.Contains("forgecdn.net/avatars/") || u.StartsWith("https://github.com/") ? Png(64, 90, 90, 250) : null; };
+                    try
+                    {
+                        AddonIcon.ForgetSession();
+                        IconSources S(string f, string cf = null, string gh = null) => new IconSources
+                        {
+                            AddOnsDir = iao, Folders = new List<string> { f }, IconTexture = AddonScanner.ParseToc(Path.Combine(iao, f, f + ".toc")).Get("IconTexture"),
+                            Modified = DateTime.UtcNow.Date, CfThumb = cf, GithubRepo = gh,
+                        };
+                        const string thumb = "https://media.forgecdn.net/avatars/thumbnails/2069/688/256/256/x.png";
+                        IconKind K(IconSources s) { AddonIcon.Resolve(s, out var k); return k; }
+                        Check("icons: a TGA IconTexture in its own folder wins over the folder logo, CurseForge and GitHub", K(S("TgaTex", thumb, "example/x")) == IconKind.Toc && fetched.Count == 0);
+                        var pPng = AddonIcon.Resolve(S("PngTex", thumb), out var kPng);
+                        Check("icons: a .png IconTexture is used (the BetterNamePlates case)", kPng == IconKind.Toc && pPng != null && new BitmapImage(new Uri(pPng)).PixelWidth == 48 && fetched.Count == 0, kPng.ToString());
+                        var pGame = AddonIcon.Resolve(S("GameTex", thumb), out var kGame);
+                        Check("icons: a game-icon IconTexture comes from the game data (the GatherMemory case)", kGame == IconKind.Game && pGame != null && gameAsked.Contains("Interface\\Icons\\Trade_Mining") && fetched.Count == 0, kGame + " " + string.Join(",", gameAsked));
+                        AddonIcon.ForgetSession(); gameHas = false;
+                        foreach (var f in Directory.GetFiles(AddonLogo.Dir, "game-*.png")) File.Delete(f);
+                        var pCf = AddonIcon.Resolve(S("GameTex", thumb), out var kCf);
+                        Check("icons: no game data -> CurseForge's thumbnail", kCf == IconKind.CurseForge && pCf != null && fetched.SequenceEqual(new[] { thumb }), kCf + " " + string.Join(",", fetched));
+                        Check("icons: a logo file in the folders beats CurseForge's thumbnail", K(S("FolderOnly", thumb)) == IconKind.Folder && fetched.Count == 1);
+                        Check("icons: GitHub owner avatar after CurseForge", K(S("Bare", null, "someone/repo")) == IconKind.GitHub && fetched.Last() == "https://github.com/someone.png?size=128");
+                        int n0 = fetched.Count;
+                        Check("icons: nothing found -> the letter", K(S("Bare")) == IconKind.None && fetched.Count == n0);
+                        Check("icons: a thumbnail on another host is never fetched", K(S("Bare", "https://evil.example.com/avatars/x.png")) == IconKind.None && K(S("Bare", "http://media.forgecdn.net/avatars/x.png")) == IconKind.None && fetched.Count == n0);
+                        AddonIcon.ForgetSession();
+                        Check("icons: a remote picture is downloaded once (disk cache)", K(S("GameTex", thumb)) == IconKind.CurseForge && fetched.Count == n0);
+                        Check("icons: game paths vs addon paths", AddonIcon.IsGamePath("Interface\\Icons\\Trade_Mining") && AddonIcon.IsGamePath("134400") && !AddonIcon.IsGamePath("Interface\\AddOns\\X\\icon")
+                            && !AddonIcon.IsGamePath("..\\x") && !AddonIcon.IsGamePath("C:\\x.blp") && !AddonIcon.IsGamePath("Interface\\..\\x") && !AddonIcon.IsGamePath(""));
+                        Check("icons: remote hosts", AddonIcon.CfThumbProblem(thumb) == null && AddonIcon.CfThumbProblem("https://forgecdn.net.evil.com/a.png") != null && AddonIcon.GithubProblem("https://avatars.githubusercontent.com/u/1") == null
+                            && AddonIcon.GithubProblem("https://github.com.evil.com/a.png") != null && AddonIcon.GithubAvatarUrl("a b/c") == null && AddonIcon.GithubAvatarUrl("../x") == null);
+                        // the game-file name hash (Bob Jenkins' lookup3 test vectors, then CASC's (c << 32) | b over the upper-case path)
+                        uint c0 = 0, b0 = 0; CascStorage.HashLittle2(new byte[0], ref c0, ref b0);
+                        uint c1 = 0, bb1 = 0xdeadbeef; CascStorage.HashLittle2(new byte[0], ref c1, ref bb1);
+                        uint c2 = 0, b2 = 0; CascStorage.HashLittle2(Encoding.ASCII.GetBytes("Four score and seven years ago"), ref c2, ref b2);
+                        uint c3 = 1, b3 = 0; CascStorage.HashLittle2(Encoding.ASCII.GetBytes("Four score and seven years ago"), ref c3, ref b3);
+                        Check("icons: Jenkins hashlittle2 test vectors", c0 == 0xdeadbeef && b0 == 0xdeadbeef && c1 == 0xbd5b7dde && bb1 == 0xdeadbeef && c2 == 0x17770551 && b2 == 0xce7226e6 && c3 == 0xcd628161 && b3 == 0x6cbea4b3,
+                            $"{c0:x8} {b0:x8} {c1:x8} {bb1:x8} {c2:x8} {b2:x8} {c3:x8} {b3:x8}");
+                        Check("icons: the name hash ignores case and slash direction", CascStorage.NameHash("Interface/Icons/Trade_Mining.blp") == CascStorage.NameHash("INTERFACE\\ICONS\\TRADE_MINING.BLP"));
+                    }
+                    finally { AddonIcon.GamePng = oGame; AddonIcon.FetchRemote = oFetch; AddonIcon.ForgetSession(); }
+                }
+
                 // ================= 7. nothing written to the addons folder, nothing from the network
                 var after = Directory.GetFiles(ao, "*", SearchOption.AllDirectories).Select(f => f + "|" + new FileInfo(f).Length + "|" + File.GetLastWriteTimeUtc(f).Ticks).OrderBy(x => x).ToList();
                 var changedByTest = before.Except(after).Select(x => x.Split('|')[0]).Where(f => !f.EndsWith("rxp_logo-64.blp")).ToList();   // the one file the cache test rewrote on purpose

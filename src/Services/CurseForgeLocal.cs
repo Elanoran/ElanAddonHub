@@ -9,7 +9,9 @@ using System.Threading.Tasks;
 namespace ElansAddonHub.Services
 {
     // One addon the CurseForge app manages (read from its local AddonGameInstance.json - the hub never calls CurseForge's
-    // web API, never reads its download links and never writes to its files or to these addon folders itself).
+    // web API and never writes to its files). Updates: by default the Outpost installs CurseForge's own latest file itself
+    // (Services/CurseForgeDirect.cs: forgecdn.net only, size + hash checked, backup, swap, roll back); otherwise, or when the
+    // author / CurseForge says no, it asks the CurseForge app with its install deep link.
     public class CfAddon
     {
         public long Id, InstalledId, LatestId;
@@ -17,6 +19,15 @@ namespace ElansAddonHub.Services
         public DateTime LatestDate;                          // UTC, 0 = unknown
         public List<string> Folders = new List<string>();
         public bool UpdateAvailable => LatestId > 0 && InstalledId > 0 && LatestId != InstalledId;
+        // what the direct update needs (all from the addon's entry / its latestFile in CurseForge's file)
+        public bool AllowDistribution, IsLocked, IsIgnored, IsWorkingCopy;
+        public string LatestUrl;                             // latestFile.downloadUrl
+        public string ThumbnailUrl;                          // the project logo CurseForge shows (https://media.forgecdn.net/avatars/thumbnails/...)
+        public long LatestLength;                            // latestFile.fileLength
+        public List<KeyValuePair<string, string>> LatestHashes = new List<KeyValuePair<string, string>>();   // ("sha1" | "md5" | "typeN", lower-case hex)
+        public List<string> LatestModules = new List<string>(), InstalledModules = new List<string>();      // foldername of latestFile / installedFile modules
+        public List<long> RequiredDeps = new List<long>();   // latestFile.dependencies with type 3 (RequiredDependency)
+        public List<long> MissingDeps = new List<long>();    // the required ones that are not in the same CurseForge instance
     }
 
     public class CfInstance
@@ -24,6 +35,7 @@ namespace ElansAddonHub.Services
         public string Path, Name;
         public DateTime LastRefresh;                         // UTC, MinValue = unknown
         public List<CfAddon> Addons = new List<CfAddon>();
+        public HashSet<long> InstalledIds = new HashSet<long>();   // every addonID of the instance (also ones without a folder here)
     }
 
     // Read-only view of the CurseForge desktop app's state, plus the two things the app lets other programs ask for:
@@ -94,19 +106,49 @@ namespace ElansAddonHub.Services
                         };
                         foreach (var m in (ins ?? lat).List("modules").OfType<Dictionary<string, object>>())
                             if (m.Str("foldername") is string fn && fn.Length > 0 && !add.Folders.Contains(fn, StringComparer.OrdinalIgnoreCase)) add.Folders.Add(fn);
+                        ReadDirectFields(a, ins, lat, add);
+                        if (add.Id > 0) res.InstalledIds.Add(add.Id);
                         foreach (var fp in a.List("filePaths").OfType<string>())
                         {
                             // only folders directly inside AddOns
                             if (Norm(Path.GetDirectoryName(fp)) == wantAdd && Path.GetFileName(fp) is string n && n.Length > 0
                                 && !add.Folders.Contains(n, StringComparer.OrdinalIgnoreCase) && Directory.Exists(fp)) add.Folders.Add(n);
                         }
+                        CurseForgeDirect.ApplyLocalInstall(add, addOnsDir);     // installed by the Outpost itself and CurseForge hasn't re-scanned yet
                         if (add.Id > 0 && add.Folders.Count > 0) res.Addons.Add(add);
                     }
+                    foreach (var add in res.Addons) add.MissingDeps = add.RequiredDeps.Where(d => !res.InstalledIds.Contains(d)).ToList();
                     return res;
                 }
             }
             catch (Exception e) { LastLoadError = e is IOException || e is UnauthorizedAccessException ? e.Message : "the file looks damaged (" + e.Message + ")"; Util.Log("curseforge file unreadable: " + e.Message); }
             return null;
+        }
+
+        // The fields of CurseForge's file the direct update uses. Format verified read-only on the user's CurseForge 1.3x data (October 2026):
+        // latestFile.hashes = [{"type":1,"value":sha1hex},{"type":2,"value":md5hex}] (CurseForge HashAlgo 1 = Sha1, 2 = Md5; an "algo" field
+        // is accepted too), latestFile.dependencies = [{"addonId":n,"type":t}] (FileRelationType 3 = RequiredDependency, 1 = embedded
+        // library, 2 = optional), downloadUrl = https://edge.forgecdn.net/files/<a>/<b>/<name>.zip, fileLength = bytes of that zip.
+        static void ReadDirectFields(Dictionary<string, object> a, Dictionary<string, object> ins, Dictionary<string, object> lat, CfAddon add)
+        {
+            add.AllowDistribution = a.TryGetValue("allowModDistribution", out var ad) && ad is bool adb && adb;   // missing = treated as not allowed
+            add.IsLocked = a.Bool("isLocked"); add.IsIgnored = a.Bool("preferenceIsIgnored"); add.IsWorkingCopy = a.Bool("isWorkingCopy");
+            add.LatestUrl = lat.Str("downloadUrl"); add.LatestLength = lat.Long("fileLength");
+            add.ThumbnailUrl = a.Str("thumbnailUrl");
+            foreach (var h in lat.List("hashes").OfType<Dictionary<string, object>>())
+            {
+                var v = h.Str("value"); if (string.IsNullOrEmpty(v)) continue;
+                var algo = h.Str("algo")?.ToLowerInvariant();
+                if (algo == null) { var t = h.TryGetValue("algo", out var ao) && ao is double an ? (int)an : h.Int("type"); algo = t == 1 ? "sha1" : t == 2 ? "md5" : "type" + t; }
+                add.LatestHashes.Add(new KeyValuePair<string, string>(algo, v.Trim().ToLowerInvariant()));
+            }
+            foreach (var m in lat.List("modules").OfType<Dictionary<string, object>>()) if (m.Str("foldername") is string fn && fn.Length > 0) add.LatestModules.Add(fn);
+            foreach (var m in ins.List("modules").OfType<Dictionary<string, object>>()) if (m.Str("foldername") is string fn && fn.Length > 0) add.InstalledModules.Add(fn);
+            foreach (var d in lat.List("dependencies").OfType<Dictionary<string, object>>())
+            {
+                var id = d.Long("addonId"); if (id == 0) id = d.Long("addonID");
+                if (id > 0 && d.Int("type") == 3 && !add.RequiredDeps.Contains(id)) add.RequiredDeps.Add(id);
+            }
         }
 
         // ---- Settings > Addons: "CurseForge integration: OK (found Forever, 6 addons, checked 12m ago)". Local files only, nothing is started.
