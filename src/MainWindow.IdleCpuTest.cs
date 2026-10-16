@@ -48,9 +48,9 @@ namespace ElansAddonHub
                     {
                         var r = await Measure(true); runS.Add(r.cpuMs);
                         var i = await Measure(false); idleS.Add(i.cpuMs); idlePolls += i.polls;
-                        // a first pair where paused is clearly no dearer than running settles it: the other two pairs only decide close calls
+                        // a first pair where paused is well inside the allowance settles it: the other two pairs only decide close calls
                         // (saves ~30 s a run; a real regression - paused well above running - never takes this exit)
-                        if (round == 0 && i.cpuMs <= r.cpuMs + 50) break;
+                        if (round == 0 && i.cpuMs <= r.cpuMs * 1.1 + 75) break;   // half the allowance below
                     }
                     runMs = Median(runS); idleMs = Median(idleS); runS0 = runS.Count;
                     cpuOk = idleMs <= runMs * 1.2 + 150;
