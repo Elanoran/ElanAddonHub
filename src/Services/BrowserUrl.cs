@@ -37,6 +37,7 @@ namespace ElansAddonHub.Services
             new QuickLink { Name = "Talent calculator", Url = "https://www.wowhead.com/classic/talent-calc" },
             new QuickLink { Name = "Forever Tools", Url = "https://wowforevertools.com" },
             new QuickLink { Name = "Petopia Forever", Url = "https://www.wow-petopia.com/forever/" },
+            new QuickLink { Name = "Radio Paradise", Url = "https://radioparadise.com" },
         };
 
         // ---------------------------------------------------------------- typed text -> address

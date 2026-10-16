@@ -196,9 +196,17 @@ namespace ElansAddonHub
         // Ctrl+<key> -> rail page
         public static string TabForKey(Key k) =>
             k == Key.D1 || k == Key.NumPad1 ? "addons" : k == Key.D2 || k == Key.NumPad2 ? "lodge" : k == Key.D3 || k == Key.NumPad3 ? "inventory"
-            : k == Key.D4 || k == Key.NumPad4 ? "browser" : k == Key.D5 || k == Key.NumPad5 ? "atlas" : k == Key.D6 || k == Key.NumPad6 ? "talents" : k == Key.OemComma ? "settings" : null;
+            : k == Key.D4 || k == Key.NumPad4 ? "atlas" : k == Key.D5 || k == Key.NumPad5 ? "browser" : k == Key.D6 || k == Key.NumPad6 ? "talents" : k == Key.OemComma ? "settings" : null;
 
         // a non-YouTube link clicked in Lodge chat: the Browser page when "Open links from chat in the Outpost browser" is on, otherwise the default browser
+        // the Atlas' outside links (sources, the Classic data's home): the Outpost's own browser when it can run, else the system browser
+        void OpenAtlasLink(string url)
+        {
+            if (!BrowserUrl.IsAllowedScheme(url)) return;
+            if (!BrowserView.Unavailable) { ShowTab("browser"); BrowserView.OpenUrl(url); }
+            else WebEngine.OpenExternal(url);
+        }
+
         void OpenChatLink(string url)
         {
             if (!BrowserUrl.IsAllowedScheme(url)) return;

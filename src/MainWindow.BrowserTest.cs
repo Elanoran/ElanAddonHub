@@ -80,8 +80,8 @@ namespace ElansAddonHub
                 Check("settings: ad blocking on, chat links in the default browser, DuckDuckGo, default tiles", !fresh.BrowserAdsOff && !fresh.BrowserFromChat && fresh.BrowserTiles == null
                     && BrowserUrl.EngineById(fresh.BrowserSearch).Id == "duckduckgo");
                 var tiles = BrowserUrl.DefaultTiles();
-                Check("tiles: defaults are Wowhead and the talent calculator (+ the two Forever sites)", tiles.Count >= 2 && tiles[0].Url == "https://www.wowhead.com/classic" && tiles[1].Url.Contains("wowhead.com") && tiles[1].Url.Contains("talent")
-                    && tiles.All(t => BrowserUrl.IsAllowedScheme(t.Url) && !string.IsNullOrEmpty(t.Name)));
+                Check("tiles: defaults are Wowhead and the talent calculator (+ the two Forever sites and Radio Paradise)", tiles.Count >= 2 && tiles[0].Url == "https://www.wowhead.com/classic" && tiles[1].Url.Contains("wowhead.com") && tiles[1].Url.Contains("talent")
+                    && tiles.Any(t => t.Url == "https://radioparadise.com") && tiles.All(t => BrowserUrl.IsAllowedScheme(t.Url) && !string.IsNullOrEmpty(t.Name)));
                 var round = Util.FromJson<Settings>(Util.ToJson(new Settings { BrowserSearch = "brave", BrowserRemember = true, BrowserAdsOff = true, BrowserFromChat = true, BrowserTiles = new List<QuickLink> { new QuickLink { Name = "A", Url = "https://a.com/" } } }));
                 Check("settings: they survive a save / load", round.BrowserSearch == "brave" && round.BrowserRemember && round.BrowserAdsOff && round.BrowserFromChat && round.BrowserTiles.Count == 1 && round.BrowserTiles[0].Name == "A");
 
@@ -106,13 +106,13 @@ namespace ElansAddonHub
                 Check("error page: DNS failure and offline each get their own calm text", BrowserPage.Describe(CoreWebView2WebErrorStatus.HostNameNotResolved, "nope.example").Item1 == "Can't find nope.example"
                     && BrowserPage.Describe(CoreWebView2WebErrorStatus.Disconnected, "x.com").Item1.Contains("offline")
                     && BrowserPage.Describe(CoreWebView2WebErrorStatus.CertificateExpired, "x.com").Item1.Contains("isn't secure") && BrowserPage.Describe(CoreWebView2WebErrorStatus.Timeout, "").Item1.StartsWith("This page"));
-                Check("shortcut: Ctrl+4 is the Browser page, Ctrl+5 the Atlas, Ctrl+6 Talents (1-3 unchanged)", TabForKey(Key.D4) == "browser" && TabForKey(Key.NumPad4) == "browser" && TabForKey(Key.D1) == "addons" && TabForKey(Key.D3) == "inventory" && TabForKey(Key.D5) == "atlas" && TabForKey(Key.D6) == "talents" && TabForKey(Key.D7) == null);
+                Check("shortcut: Ctrl+4 is the Atlas, Ctrl+5 the Browser page (last on the rail), Ctrl+6 Talents (1-3 unchanged)", TabForKey(Key.D5) == "browser" && TabForKey(Key.NumPad5) == "browser" && TabForKey(Key.D1) == "addons" && TabForKey(Key.D3) == "inventory" && TabForKey(Key.D4) == "atlas" && TabForKey(Key.D6) == "talents" && TabForKey(Key.D7) == null);
                 Check("engine: player and browser keep separate profiles under the data folder", WebEngine.UserDataFolder(WebProfile.Browser) == Path.Combine(WebEngine.DataFolder, "browser")
                     && WebEngine.UserDataFolder(WebProfile.Player) == WebEngine.DataFolder && WebEngine.DataFolder.StartsWith(Util.DataDir));
 
                 // ---- UI: the page opens
                 ShowTab("addons");
-                Check("ui: the rail has a Browser button", TabBrowser != null && TabBrowser.ToolTip.ToString().Contains("Ctrl+4"));
+                Check("ui: the rail has a Browser button", TabBrowser != null && TabBrowser.ToolTip.ToString().Contains("Ctrl+5"));
                 ShowTab("browser");
                 await Task.Delay(500);
                 Check("ui: Browser page opens, the others close", BrowserView.Visibility == Visibility.Visible && AddonsPage.Visibility == Visibility.Collapsed && LodgePage.Visibility == Visibility.Collapsed

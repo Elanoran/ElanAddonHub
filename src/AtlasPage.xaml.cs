@@ -14,7 +14,7 @@ using ElansAddonHub.Services.Maps;
 
 namespace ElansAddonHub
 {
-    // The Atlas page (rail item 5, Ctrl+5): one search box, and a page for every id (item, NPC, object, quest, zone, instance, spell, skill, faction).
+    // The Atlas page (rail item 4, Ctrl+4): one search box, and a page for every id (item, NPC, object, quest, zone, instance, spell, skill, faction).
     // AtlasQuery builds the page models on a worker thread; the page only draws them (AtlasPage.View.cs), keeps the history (back / forward) and the
     // start page with the data status, the Classic baseline card and the Lodge (AtlasPage.Start.cs, AtlasPage.Classic.cs). Every reference is a link.
     public partial class AtlasPage : UserControl

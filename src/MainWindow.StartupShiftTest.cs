@@ -134,6 +134,10 @@ namespace ElansAddonHub
             {
                 for (int i = 0; i < 100 && (checking || scanning || checkingOthers || suggesting); i++) await Task.Delay(100);
                 ShowTab("addons");
+                // another section may have left a different tab open: ShowTab then slides the page in (Motion.PageIn, 8 px). Let it finish
+                // and drop its transform, so the measurement starts from the page at rest (the slide is not a startup shift).
+                for (int i = 0; i < 40 && !(AddonsPage.RenderTransform == null || AddonsPage.RenderTransform == Transform.Identity || AddonsPage.RenderTransform.Value.IsIdentity); i++) await Task.Delay(25);
+                AddonsPage.BeginAnimation(UIElement.OpacityProperty, null); AddonsPage.Opacity = 1; AddonsPage.RenderTransform = Transform.Identity;
                 AddonsPage.ScrollToTop();
                 ResetColdState();
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);

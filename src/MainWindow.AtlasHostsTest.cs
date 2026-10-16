@@ -197,10 +197,10 @@ namespace ElansAddonHub
                 var railNames = AtlasWalk(this).OfType<RadioButton>().Where(r => r.GroupName == "tabs").Select(r => System.Windows.Automation.AutomationProperties.GetName(r)).ToList();
                 Check("rail: no Talents and no Professions button any more, the page hosts are gone from the window; the other buttons are all there",
                     FindName("TabTalents") == null && FindName("TabProfessions") == null && FindName("TalentsView") == null && !railNames.Contains("Talents") && !railNames.Contains("Professions") && railNames.Contains("Atlas") && railNames.Contains("Addons") && railNames.Contains("Browser"), string.Join(",", railNames));
-                Check("rail: the Atlas button's tooltip names Ctrl+5 and Talents Ctrl+6", TabAtlas.ToolTip.ToString().Contains("Ctrl+5") && TabAtlas.ToolTip.ToString().Contains("Ctrl+6"));
+                Check("rail: the Atlas button's tooltip names Ctrl+4 and Talents Ctrl+6", TabAtlas.ToolTip.ToString().Contains("Ctrl+4") && TabAtlas.ToolTip.ToString().Contains("Ctrl+6"));
                 ShowTab("addons"); await Task.Delay(50);
                 Check("shortcut: with the Addons page open, Ctrl+6 means the Atlas on Talents (the Addons page is showing before)",
-                    TabForKey(Key.D6) == "talents" && TabForKey(Key.NumPad6) == "talents" && TabForKey(Key.D5) == "atlas" && AddonsPage.Visibility == Visibility.Visible);
+                    TabForKey(Key.D6) == "talents" && TabForKey(Key.NumPad6) == "talents" && TabForKey(Key.D4) == "atlas" && AddonsPage.Visibility == Visibility.Visible);
                 ShowTab(TabForKey(Key.D6)); await Task.Delay(200); UpdateLayout();
                 Check("shortcut: Ctrl+6 opens the Atlas on Talents, the calculator showing, the Addons page away", TabAtlas.IsChecked == true && AtlasView.Visibility == Visibility.Visible && AddonsPage.Visibility != Visibility.Visible && AtlasView.IsHosted && AtlasView.CurrentId.StartsWith("talents:") && tp.IsVisible, AtlasView.CurrentId);
                 string keepId = AtlasView.CurrentId; int keepSteps = AtlasView.History.Count;

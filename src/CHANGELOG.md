@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.70.1
+- **The browser is last in the side bar.** The order is now Addons, Lodge, Characters, Atlas, Browser; Ctrl+4 opens the Atlas and Ctrl+5 the browser (Talents stays Ctrl+6).
+- **Atlas links open in the Outpost's own browser** (zone note sources, the Classic data's home page). Your system browser is only used when the built-in one can't run.
+- **Radio Paradise** is a new tile on the browser's new-tab page.
+
 ## 2.70.0
 - **You can see what the Outpost is doing with your game files.** While it reads them (the first start, and once after a WoW or Outpost update) a small bar sits at the top of the window: what it is reading right now ("Reading spells", "Reading the zone borders from the terrain: 120 of 841 terrain tiles"), how far it is, and why ("WoW was updated: reading the new game files in the background"). Hover over it for every part and how long each took. It says "Game data ready" for a moment and then goes away. Loading the saved copy on a normal start does not show it.
 - **After a WoW update you keep working.** The Atlas, the talent planner and the other pages show the data of the previous WoW version at once, and the new game files are read in the background. When the new data would change the page you are reading, it is not swapped in under you: a small "Updated with the new game data" note with a **Show** button appears at the bottom of the page (opening another page shows the new data anyway). A saved copy from an older Outpost that it cannot read is never shown; that data is read fresh.
