@@ -98,6 +98,37 @@ namespace ElansAddonHub
             ["finds"] = new ArtPiece("banner-finds.jpg", 0.6, 0.45),
         };
 
+        // class and race pages (2.77): a 4:1 banner like a zone's, keyed by the game's own names so no id is assumed: the class file (ChrClasses
+        // Filename: "HUNTER") and the race's client file (ChrRaces: "NightElf", "Scourge"). Forever's two Skyborne races share the client file
+        // "Skyborne", so they are told apart by side: "Skyborne|Alliance" (High Order) and "Skyborne|Horde" (Windshaper). A class or race with no
+        // entry (a race a later patch adds) keeps the plain name card.
+        public static readonly Dictionary<string, ArtPiece> Classes = new Dictionary<string, ArtPiece>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["WARRIOR"] = new ArtPiece("class-warrior.jpg", 0.62, 0.4),
+            ["PALADIN"] = new ArtPiece("class-paladin.jpg", 0.45, 0.4),
+            ["HUNTER"] = new ArtPiece("class-hunter.jpg", 0.57, 0.4),
+            ["ROGUE"] = new ArtPiece("class-rogue.jpg", 0.62, 0.4),
+            ["PRIEST"] = new ArtPiece("class-priest.jpg", 0.6, 0.4),
+            ["SHAMAN"] = new ArtPiece("class-shaman.jpg", 0.6, 0.4),
+            ["MAGE"] = new ArtPiece("class-mage.jpg", 0.6, 0.4),
+            ["WARLOCK"] = new ArtPiece("class-warlock.jpg", 0.62, 0.4),
+            ["DRUID"] = new ArtPiece("class-druid.jpg", 0.6, 0.4),
+        };
+
+        public static readonly Dictionary<string, ArtPiece> Races = new Dictionary<string, ArtPiece>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Human"] = new ArtPiece("race-human.jpg", 0.6, 0.4),
+            ["Orc"] = new ArtPiece("race-orc.jpg", 0.62, 0.4),
+            ["Dwarf"] = new ArtPiece("race-dwarf.jpg", 0.45, 0.4),
+            ["NightElf"] = new ArtPiece("race-nightelf.jpg", 0.62, 0.4),
+            ["Scourge"] = new ArtPiece("race-undead.jpg", 0.6, 0.4),
+            ["Tauren"] = new ArtPiece("race-tauren.jpg", 0.62, 0.4),
+            ["Gnome"] = new ArtPiece("race-gnome.jpg", 0.62, 0.4),
+            ["Troll"] = new ArtPiece("race-troll.jpg", 0.65, 0.4),
+            ["Skyborne|Alliance"] = new ArtPiece("race-skyborne-highorder.jpg", 0.58, 0.4),
+            ["Skyborne|Horde"] = new ArtPiece("race-skyborne-windshaper.jpg", 0.55, 0.4),
+        };
+
         // talent trees: "CLASSFILE|spec index" (0-based, the trees left to right as the game lays them out) -> the spec art
         public static readonly Dictionary<string, ArtPiece> Specs = new Dictionary<string, ArtPiece>(StringComparer.OrdinalIgnoreCase)
         {
@@ -132,12 +163,25 @@ namespace ElansAddonHub
 
         public static ArtPiece Zone(int uiMapId) => Zones.TryGetValue(uiMapId, out var a) ? a : null;
         public static ArtPiece Banner(string categoryId) => !string.IsNullOrEmpty(categoryId) && Banners.TryGetValue(categoryId, out var a) ? a : null;
+        public static ArtPiece Class(string classFile) => !string.IsNullOrEmpty(classFile) && Classes.TryGetValue(classFile, out var a) ? a : null;
+        // the race's own side first (the Skyborne pair), then its client file alone; "Undead" is the client's "Scourge"; spaces do not matter ("Night Elf")
+        public static ArtPiece Race(string clientFile, int side)
+        {
+            if (string.IsNullOrEmpty(clientFile)) return null;
+            var f = clientFile.Replace(" ", "");
+            if (string.Equals(f, "Undead", StringComparison.OrdinalIgnoreCase)) f = "Scourge";
+            var sideName = side == 0 ? "Alliance" : side == 1 ? "Horde" : "";
+            if (sideName.Length > 0 && Races.TryGetValue(f + "|" + sideName, out var a)) return a;
+            return Races.TryGetValue(f, out a) ? a : null;
+        }
         public static ArtPiece Spec(string classFile, int spec) => !string.IsNullOrEmpty(classFile) && spec >= 0 && Specs.TryGetValue(classFile + "|" + spec, out var a) ? a : null;
 
         public static IEnumerable<ArtPiece> All()
         {
             foreach (var a in Zones.Values) yield return a;
             foreach (var a in Banners.Values) yield return a;
+            foreach (var a in Classes.Values) yield return a;
+            foreach (var a in Races.Values) yield return a;
             foreach (var a in Specs.Values) yield return a;
         }
 

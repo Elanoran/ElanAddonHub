@@ -57,8 +57,8 @@ namespace ElansAddonHub
                 var all = ArtLibrary.All().ToList();
                 var bad = all.Where(a => ArtLibrary.Load(a) == null).Select(a => a.File).ToList();
                 // nothing lost (51 zone banners, 13 category banners since 2.71, 27 talent trees; the window background and the Home card art are gone) and every one loads; more art is fine
-                Check("resources: all " + all.Count + " pictures load from the exe (at least 51 zone banners, 13 category banners, 27 talent trees), no window wallpaper and no Home card art (card-*.jpg) is listed or built in",
-                    all.Count >= 91 && !all.Any(a => a.File.StartsWith("card-")) && ArtLibrary.Load(new ArtPiece("card-items.jpg", 0.5, 0.5)) == null && bad.Count == 0 && !all.Any(a => a.File == "background.jpg") && ArtLibrary.Load(new ArtPiece("background.jpg", 0.5, 0.5)) == null, string.Join(", ", bad));
+                Check("resources: all " + all.Count + " pictures load from the exe (at least 51 zone banners, 13 category banners, 19 class and race banners, 27 talent trees), no window wallpaper and no Home card art (card-*.jpg) is listed or built in",
+                    all.Count >= 110 && !all.Any(a => a.File.StartsWith("card-")) && ArtLibrary.Load(new ArtPiece("card-items.jpg", 0.5, 0.5)) == null && bad.Count == 0 && !all.Any(a => a.File == "background.jpg") && ArtLibrary.Load(new ArtPiece("background.jpg", 0.5, 0.5)) == null, string.Join(", ", bad));
                 var banner = ArtLibrary.Load(ArtLibrary.Zone(1411)); var specPic = ArtLibrary.Load(ArtLibrary.Spec("HUNTER", 0));
                 var catBanners = ArtLibrary.Banners.Values.Select(ArtLibrary.Load).ToList();
                 // shapes, not the files' pixel counts: a repainted picture of another size must not fail this
@@ -70,6 +70,17 @@ namespace ElansAddonHub
                 Check("mapping: every game zone has a banner (2665 shares 2521's), zone 11 none; every list category (" + listCats.Count + ") and the Lodge's finds have a browse banner, the hosted pages (no header) none; every class has three trees of art, no fourth",
                     ArtLibrary.Zone(1411) != null && ArtLibrary.Zone(1438) != null && ArtLibrary.Zone(1429) != null && ArtLibrary.Zone(11) == null && ArtLibrary.Zone(2665)?.File == ArtLibrary.Zone(2521)?.File
                     && listCats.Count >= 12 && listCats.All(c => ArtLibrary.Banner(c) != null) && ArtLibrary.Banner("finds") != null && ArtLibrary.Banner("talents") == null && ArtLibrary.Banner("worldmap") == null && ArtLibrary.Banner(null) == null && ArtLibrary.Spec("HUNTER", 0) != null && ArtLibrary.Spec("hunter", 2) != null && ArtLibrary.Spec("HUNTER", 3) == null && ArtLibrary.Spec("WARRIOR", 0) != null && ArtLibrary.Spec("DRUID", 2) != null && ArtLibrary.Spec("HUNTER", -1) == null);
+                // class and race banners (2.77): the nine classes and the ten playable races of Forever (the Classic eight, High Order and Windshaper Skyborne), each its own 4:1 picture
+                var classFiles = new[] { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID" };
+                var raceKeys = new[] { "Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll" }.Select(f => ArtLibrary.Race(f, 0)).Concat(new[] { ArtLibrary.Race("Skyborne", RaceInfo.Alliance), ArtLibrary.Race("Skyborne", RaceInfo.Horde) }).ToList();
+                var crPics = classFiles.Select(ArtLibrary.Class).Concat(raceKeys).ToList();
+                Check("mapping: every class (9) and every playable race (10, the two Skyborne apart) has its own banner, 4:1, that loads; Undead = the client's Scourge, 'Night Elf' = NightElf; an unknown class or race (Death Knight, Goblin, none) has none",
+                    crPics.All(a => a != null) && crPics.Select(a => a.File).Distinct().Count() == 19 && crPics.Select(ArtLibrary.Load).All(b => b != null && Math.Abs((double)b.PixelWidth / b.PixelHeight - 4) < 0.08)
+                    && ArtLibrary.Class("hunter") == ArtLibrary.Class("HUNTER") && ArtLibrary.Race("Undead", 1) == ArtLibrary.Race("Scourge", 1) && ArtLibrary.Race("Night Elf", 0) == ArtLibrary.Race("NightElf", 0)
+                    && ArtLibrary.Race("Skyborne", RaceInfo.Alliance) != ArtLibrary.Race("Skyborne", RaceInfo.Horde) && ArtLibrary.Race("Orc", RaceInfo.Horde) == ArtLibrary.Race("Orc", RaceInfo.Alliance)
+                    && ArtLibrary.Class("DEATHKNIGHT") == null && ArtLibrary.Class(null) == null && ArtLibrary.Race("Goblin", 1) == null && ArtLibrary.Race("", 0) == null && ArtLibrary.Race(null, 0) == null
+                    && crPics.All(a => all.Contains(a)) && ArtLibrary.Banner("classes") != null && ArtLibrary.Banner("races") != null,
+                    string.Join(",", crPics.Select(a => a?.File ?? "null")));
                 var wide = ArtLibrary.Crop(2.4, 6, 0.5, 0.66); var tall = ArtLibrary.Crop(0.62, 1.0, 0.5, 0.72); var edge = ArtLibrary.Crop(2.4, 6, 0.5, 0.98);
                 Check("crop: a banner keeps the full width and slides down to its focal point; a spec picture keeps its lower part; the crop never leaves the picture",
                     Math.Abs(wide.Width - 1) < 1e-9 && Math.Abs(wide.Height - 0.4) < 1e-9 && Math.Abs(wide.Y - 0.46) < 1e-9 && Math.Abs(tall.Height - 0.62) < 1e-9 && Math.Abs(tall.Y - 0.38) < 1e-9 && Math.Abs(edge.Bottom - 1) < 1e-9,

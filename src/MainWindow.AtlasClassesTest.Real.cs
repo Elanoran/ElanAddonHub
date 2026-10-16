@@ -76,6 +76,13 @@ namespace ElansAddonHub
                 var allR = d.PlayableRaces();
                 Check("real game files: every playable race (" + allR.Count + ": the Classic eight, High Order and Windshaper Skyborne) has a race icon, and no two races share one",
                     allR.Count >= 10 && allR.All(r => RaceIcons.For(r) > 0) && allR.Select(RaceIcons.For).Distinct().Count() == allR.Count, string.Join(",", allR.Select(r => r.Name + "=" + r.ClientFile + ":" + RaceIcons.For(r))));
+                // ---- class and race banners (2.77): keyed by the game's own class file / race client file (+ side for the Skyborne pair), so check them against the real tables
+                var allC = d.Classes.Values.ToList();
+                Check("real game files: every class (" + allC.Count + ") and every playable race (" + allR.Count + ") has a painted banner that loads, the two Skyborne races different ones, and their pages show it",
+                    allC.Count == 9 && allC.All(c => ArtLibrary.Load(ArtLibrary.Class(c.File)) != null) && allR.All(r => ArtLibrary.Load(ArtLibrary.Race(r.ClientFile, r.Side)) != null)
+                    && allR.Select(r => ArtLibrary.Race(r.ClientFile, r.Side).File).Distinct().Count() == allR.Count
+                    && allC.All(c => ElansAddonHub.AtlasPage.HeroArtOf(AtlasQuery.Build(AtlasIds.Class(c.Id))) == ArtLibrary.Class(c.File)) && allR.All(r => ElansAddonHub.AtlasPage.HeroArtOf(AtlasQuery.Build(AtlasIds.Race(r.Id))) == ArtLibrary.Race(r.ClientFile, r.Side)),
+                    string.Join(",", allC.Where(c => ArtLibrary.Class(c.File) == null).Select(c => c.File).Concat(allR.Where(r => ArtLibrary.Race(r.ClientFile, r.Side) == null).Select(r => r.ClientFile + "|" + r.SideName))));
                 using (var casc = CascStorage.Open(real, "_classic_beta_"))
                 {
                     var keys = casc.ResolveFileIds(new HashSet<int> { 897532, 897470 });
@@ -131,6 +138,10 @@ namespace ElansAddonHub
                         await RShot("browse:races", "races-list.png");
                         await RShot("race:" + (d.RaceByName("High Order Skyborne")?.Id ?? d.RaceByName("Orc").Id), "races-page-high-order.png");
                         await RShot("race:" + d.RaceByName("Orc").Id, "races-page-orc.png");
+                        if (d.RaceByName("Windshaper Skyborne") != null) await RShot("race:" + d.RaceByName("Windshaper Skyborne").Id, "races-page-windshaper.png");
+                        await RShot("class:3", "classes-page-hunter.png");
+                        await RShot("class:9", "classes-page-warlock.png");
+                        await RShot("browse:classes", "classes-list.png");
                         notes.Add("note pictures: " + Path.Combine(dir, "races-*.png"));
                     }
                     finally { Width = wasW; Height = wasH; IconStore.WowRoot = wasRoot; }

@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
+using ElansAddonHub.Services.Db2;
 using ElansAddonHub.Services.Maps;
 
 namespace ElansAddonHub
@@ -173,8 +174,8 @@ namespace ElansAddonHub
             return Card(grid, 12);
         }
 
-        // a zone with painted art (ArtLibrary.Zones) opens with a wide banner: the full width of the page, 176 high, the picture cropped around its focal
-        // point and fading into the page at the bottom. Other pages (and zones with no art) have none.
+        // a zone with painted art (ArtLibrary.Zones), and since 2.77 a class or a race (ArtLibrary.Classes / Races), opens with a wide banner: the full width
+        // of the page, 176 high, the picture cropped around its focal point and fading into the page at the bottom. Other pages (and those with no art) have none.
         public const double BannerHeight = 176;
         public static int ZoneIdOf(AtlasPageModel m)
         {
@@ -185,12 +186,27 @@ namespace ElansAddonHub
 
         // The painting does not stop at the banner: it runs on behind the name card (made see-through) and fades into the page below it, so the
         // name, the subtitle and the chips sit on a subtle continuation of the picture. Null = no art for this page (the plain name card is used).
+        // the painting of a page: a zone's banner, a class's (by its class file) or a race's (by its client file and side); null = none
+        public static ArtPiece HeroArtOf(AtlasPageModel m)
+        {
+            if (m == null || m.NotFound) return null;
+            if (m.Kind == "zone") return ArtLibrary.Zone(ZoneIdOf(m));
+            if ((m.Kind != "class" && m.Kind != "race") || !AtlasIds.TryParse(m.Id, out var kind, out var id)) return null;
+            ClassSnapshot snap;
+            try { snap = ClassData.Data; } catch (Exception) { return null; }
+            if (snap == null) return null;
+            if (kind == "class") return ArtLibrary.Class(snap.Class(id)?.File);
+            var r = kind == "race" ? snap.Race(id) : null;
+            return r == null ? null : ArtLibrary.Race(r.ClientFile, r.Side);
+        }
+
         FrameworkElement ZoneHero(AtlasPageModel m, FrameworkElement hero)
         {
-            var art = ArtLibrary.Zone(ZoneIdOf(m));
-            var back = art == null ? null : ArtLibrary.Backdrop(art, "Brush.Art.HeroFade", (CornerRadius)FindResource("Radius.Card"), "zone-banner-art");
+            var art = HeroArtOf(m);
+            var tag = m.Kind == "zone" ? "zone" : m.Kind;   // "zone-banner", "class-banner", "race-banner"
+            var back = art == null ? null : ArtLibrary.Backdrop(art, "Brush.Art.HeroFade", (CornerRadius)FindResource("Radius.Card"), tag + "-banner-art");
             if (back == null) return null;
-            var g = new Grid { Tag = "zone-banner", Margin = new Thickness(0, 0, 0, 12) };
+            var g = new Grid { Tag = tag + "-banner", Margin = new Thickness(0, 0, 0, 12) };
             g.Children.Add(back);
             var stack = new StackPanel();
             stack.Children.Add(new Border { Height = BannerHeight - 48, IsHitTestVisible = false });

@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version.
 
+## 2.77.0
+- **Every class and race has its own painting.** The Atlas pages of the nine classes and the ten races (the Skyborne's High Order and Windshapers each their own) now open with a painted banner behind the name, like the zone pages do: a warrior on an old battlefield, a hunter and their wolf above a misty forest, the Skyborne's floating isles and more, in the same style as the rest of the Atlas art.
+
 ## 2.76.0
 - **Atlas Home is about you now.** When you play, Home opens with where you are: "You are in Durotar" on the zone's painting, your character with level and class, the first line of the zone's notes, and whether the zone fits your level ("Good for your level", "A bit high for you", "Low for you, little XP"). Small tags show what Elan's Hub sees right now: in combat, resting, grouped, in a dungeon. Your XP bar and a Rested tag sit below. Click it to open the zone (or the dungeon you are in).
 - **When WoW is not running** Home shows where your last character was ("Last seen in Greenvale", saved 3 h ago). With no character at all it shows a calm Atlas picture and how to get Elan's Hub.
