@@ -11,11 +11,31 @@ WorkingDirectory=/var/lib/lodge
 ExecStart=/opt/lodge/lodge
 Restart=always
 RestartSec=3
-# hardening: the server only needs its data folder
+UMask=0027
+# hardening: the server only needs its data folder and the network (no capabilities, no new privileges, only the system
+# calls a normal service makes). MemoryDenyWriteExecute stays off: the .NET JIT needs writable+executable memory.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 ReadWritePaths=/var/lib/lodge
 
 [Install]
