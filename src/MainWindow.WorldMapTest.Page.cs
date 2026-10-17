@@ -457,6 +457,7 @@ namespace ElansAddonHub
                     Check("screenshot: the page was captured", png != null && png.Length > 5000, (png?.Length ?? 0) + "");
                     WorldMapLiveUnitTest(Check);
                     await WorldMapLiveTest(Check, P);
+                    await WorldMapIslandPageTest(Check, P, taxi, lidx);      // 2.91: islands (Zephras Isle) as world maps of their own
 
                     await WorldMapPage3dTest(dir, notes, Check, P, taxi, lidx);
                     ShowTab("atlas"); AtlasView.History.Clear();

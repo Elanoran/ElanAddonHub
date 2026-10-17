@@ -1327,7 +1327,7 @@
     for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && finN(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, h: meZ(ev[i / 2], ev[i / 2 + 1]) }); }
     me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
       howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events),
-      hh: Array.isArray(m.hz) ? meZ(m.hz[0], m.hz[1]) : null, lh: Array.isArray(m.lz) ? meZ(m.lz[0], m.lz[1]) : null };
+      hh: Array.isArray(m.hz) ? meZ(m.hz[0], m.hz[1]) : null, lh: Array.isArray(m.lz) ? meZ(m.lz[0], m.lz[1]) : null, show: st === 'elsewhere' ? String(m.show || '').slice(0, 72) : '' };
     meTrail = pts; meAt = Date.now();
     meDraw(); meCardDraw(); meRow();
     if (follow) followAim();
@@ -1444,6 +1444,7 @@
     var head = el('div', 'me-h'); var sw = el('span', 'me-sw'); sw.style.background = me.color; head.appendChild(sw); head.appendChild(el('b', '', esc(me.name || 'You')));
     d.appendChild(head);
     if (me.state !== 'ok' && me.notice) d.appendChild(el('div', 'me-n' + (me.state === 'unavailable' ? '' : ' calm'), esc(me.notice)));
+    if (me.show) { var sb = el('button', 'me-show', esc(me.show)); sb.type = 'button'; sb.addEventListener('click', function () { send({ t: 'showmap' }); }); d.appendChild(sb); }      // 2.91: open the world map of the map you are on
     if (me.howto) { var a = el('button', 'me-link', esc(me.howtoText)); a.type = 'button'; a.addEventListener('click', function () { send({ t: 'howto' }); }); d.appendChild(a); }
     if (me.state === 'ok' || me.state === 'unavailable') {
       var f = el('button', 'me-follow' + (follow ? ' on' : ''), follow ? 'Following you' : 'Follow me'); f.type = 'button'; f.setAttribute('aria-pressed', String(follow));
@@ -1542,12 +1543,12 @@
     // the live layer (test): state, dot (grey? on screen?), trail ribbons, events drawn, the card, Follow me and whether the camera is on you; `click` = 'howto' | 'follow'
     me: function (click) {
       var d = meCard;
-      if (click && d) { var b = d.querySelector(click === 'howto' ? '.me-link' : '.me-follow'); if (b) b.click(); }
+      if (click && d) { var b = d.querySelector(click === 'howto' ? '.me-link' : click === 'show' ? '.me-show' : '.me-follow'); if (b) b.click(); }
       var h = me && me.here ? ll2xz(me.here[0], me.here[1]) : null, de = meDotIt && meDotIt.el;
       return JSON.stringify({ state: me ? me.state : null, layer: !!meLines || !!meDotIt, dot: !!meDotIt, dotShown: !!(meDotIt && meDotIt.vis), grey: !!(de && de.querySelector('.me-dot.grey')),
         label: de && de.querySelector('.me-lab') ? de.querySelector('.me-lab').textContent : '', arrow: !!(de && de.querySelector('.me-arrow')), lines: meLines ? meLines.children.length : 0, points: meTrail.length,
         panel: !!d, notice: d && d.querySelector('.me-n') ? d.querySelector('.me-n').textContent : '', link: d && d.querySelector('.me-link') ? d.querySelector('.me-link').textContent : '',
-        followBtn: !!(d && d.querySelector('.me-follow')), follow: follow, centered: !!(h && Math.abs(cam.tx - h[0]) < 3 && Math.abs(cam.tz - h[1]) < 3), off: h ? Math.round(Math.hypot(cam.tx - h[0], cam.tz - h[1])) : -1,
+        followBtn: !!(d && d.querySelector('.me-follow')), follow: follow, show: d && d.querySelector('.me-show') ? d.querySelector('.me-show').textContent : '', centered: !!(h && Math.abs(cam.tx - h[0]) < 3 && Math.abs(cam.tz - h[1]) < 3), off: h ? Math.round(Math.hypot(cam.tx - h[0], cam.tz - h[1])) : -1,
         ribbonLift: (function () { if (!meLines || !meLines.children.length) return null; var a = meLines.children[meLines.children.length - 1].geometry.attributes.position.array; return Math.round((a[1] - surfaceYE(a[0], a[2])) * 10) / 10; })(),
         // the heights (2.82): the dot's height and the ground under it (exaggerated scene yards), its own solved height (yards, null = the ground), and the ribbons' highest lift over the ground
         dotY: meDotIt ? Math.round(meDotIt.y * 10) / 10 : null, dotGround: meDotIt ? Math.round(groundYE(meDotIt.x, meDotIt.z) * 10) / 10 : null, dotZ: meDotIt && meDotIt.zs != null ? meDotIt.zs : null, exag: prefs.exag,

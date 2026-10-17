@@ -10,13 +10,14 @@ using ElansAddonHub.Services.Maps;
 namespace ElansAddonHub.Services.WorldMap
 {
     // A continent the client has a world table (WDT) and minimaps for: Kalimdor and the Eastern Kingdoms, plus any other continent-type map the
-    // client's UiMap tree lists.
+    // client's UiMap tree lists, and (2.91) the open-world maps that are an island or zone of their own (Zephras Isle).
     public sealed class WorldContinent
     {
-        public int MapId;                 // the world map id (0 Eastern Kingdoms, 1 Kalimdor ...)
-        public int UiMapId;               // the continent's UiMap
+        public int MapId;                 // the world map id (0 Eastern Kingdoms, 1 Kalimdor, 2991 Zephras Isle ...)
+        public int UiMapId;               // the continent's UiMap (for an island: its own zone map)
         public string Name = "", Slug = "";
         public int WdtFileDataId;
+        public bool IsContinent;          // a continent-type UiMap shows it; false = an island / zone map of its own
     }
 
     // What a build of one continent is doing right now
@@ -73,24 +74,50 @@ namespace ElansAddonHub.Services.WorldMap
         public static event Action<int> BuildChanged;       // on a worker thread: progress, done, failed
 
         // ---- which continents
-        public static List<WorldContinent> Continents(MapIndex idx)
+        // The open-world maps a player can stand on (Map.db2: no instance, world map type, a world table):
+        //  1. the ones a continent-type UiMap shows (Kalimdor, the Eastern Kingdoms), named after that UiMap;
+        //  2. 2.91: the others whose top map in the game's own map tree is a zone or an orphan map hung under the world (WoW Forever's Zephras Isle, the
+        //     Skyborne start: map 2991, UiMap 2521 "Zephras Isle", a Zone whose parent is Azeroth 947; there is no continent UiMap for it). The top map is the
+        //     normal (System 0) map assigned to it whose parent is not assigned to it too; of several, the one with the largest rectangle.
+        //     A map no normal UiMap shows (Azshara Crater, Dalaran City, Hyjal Crater, Eastern Kingdoms Preserved, the Scarlet raid phase copy of the
+        //     Plaguelands ...) is left out: the game's own map cannot show it, and a live position there has no map to come from. Leftovers (test names
+        //     and folders, "nothing to see here") are left out by name.
+        public static List<WorldContinent> Continents(MapIndex idx) => idx == null ? new List<WorldContinent>() : ComputeContinents(idx);
+
+        static bool OpenWorld(GameMapInfo gm) => gm != null && gm.WdtFileDataId > 0 && gm.InstanceType == 0 && gm.MapType == 1;
+
+        static List<WorldContinent> ComputeContinents(MapIndex idx)
         {
             var res = new List<WorldContinent>();
-            if (idx == null) return res;
             var seen = new HashSet<int>();
             foreach (var ui in idx.UiMaps.Where(m => m.Type == UiMapInfo.Continent && m.System == 0).OrderBy(m => m.Id))
             {
                 foreach (var mapId in idx.Set.Assignments.Where(a => a.UiMapId == ui.Id).Select(a => a.MapId).Distinct().OrderBy(i => i))
                 {
                     var gm = idx.GameMap(mapId);
-                    if (gm == null || gm.WdtFileDataId <= 0 || gm.InstanceType != 0 || gm.MapType != 1 || !seen.Add(mapId)) continue;
+                    if (!OpenWorld(gm) || !seen.Add(mapId)) continue;
                     var name = !string.IsNullOrWhiteSpace(ui.Name) ? ui.Name : gm.Name;
-                    res.Add(new WorldContinent { MapId = mapId, UiMapId = ui.Id, Name = name, Slug = AtlasHosts.Slug(name), WdtFileDataId = gm.WdtFileDataId });
+                    res.Add(new WorldContinent { MapId = mapId, UiMapId = ui.Id, Name = name, Slug = AtlasHosts.Slug(name), WdtFileDataId = gm.WdtFileDataId, IsContinent = true });
                 }
             }
+            // the open-world maps with no continent UiMap: an island or a zone of its own (2.91)
+            var byMap = idx.Set.Assignments.GroupBy(a => a.MapId).ToDictionary(g => g.Key, g => g.ToList());
+            foreach (var gm in idx.Set.Maps.OrderBy(m => m.Id))
+            {
+                if (!OpenWorld(gm) || seen.Contains(gm.Id) || !byMap.TryGetValue(gm.Id, out var asg)) continue;
+                if (MapIndex.IsPlaceholderName(gm.Name) || MapIndex.IsTestDirectory(gm.Directory)) continue;
+                var mine = new HashSet<int>(asg.Select(a => a.UiMapId));
+                var top = asg.Select(a => new { a, m = idx.Get(a.UiMapId) })
+                    .Where(h => h.m != null && h.m.System == 0 && (h.m.Type == UiMapInfo.Zone || h.m.Type == UiMapInfo.Orphan) && !MapIndex.IsPlaceholderName(h.m.Name) && !mine.Contains(h.m.ParentId))
+                    .OrderByDescending(h => h.a.Area).ThenBy(h => h.m.Id).FirstOrDefault();
+                if (top == null) continue;
+                seen.Add(gm.Id);
+                res.Add(new WorldContinent { MapId = gm.Id, UiMapId = top.m.Id, Name = top.m.Name.Trim(), Slug = AtlasHosts.Slug(top.m.Name), WdtFileDataId = gm.WdtFileDataId });
+            }
+            // two maps of the same name keep apart by their map id in the slug
+            foreach (var g in res.GroupBy(c => c.Slug).Where(g => g.Count() > 1)) foreach (var c in g.Skip(1)) c.Slug = c.Slug + "-" + c.MapId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             return res.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
-
         public static WorldContinent Continent(MapIndex idx, int mapId) => Continents(idx).FirstOrDefault(c => c.MapId == mapId);
 
         // ---- state
@@ -225,7 +252,7 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     st.Phase = p.Phase; st.Done = p.Done; st.Total = p.Total;
                     Fire(st.MapId);
-                });
+                }, !cont.IsContinent);      // 2.91: an island floating in the sky (Zephras Isle): the chunks with no ground are open sea
                 st.TerrainResult = res; st.Complete = res.Complete; st.Running = false; st.Ms = sw.ElapsedMilliseconds;
                 lock (gate) tretried.Add(cont.MapId);
                 Util.Log("world map: " + cont.Name + " terrain built: " + res.Tiles + " tiles (" + res.Written + " read, " + res.Reused + " reused, " + res.Missing + " missing, " + res.Failed + " failed" + (res.Pending.Count > 0 ? "; " + res.LowDetail + " at low detail, " + res.Holes + " placeholders for now" : "") + "), " + res.Zones + " zones, " + (res.Bytes / 1024) + " KB in " + st.Ms + " ms");
@@ -242,7 +269,7 @@ namespace ElansAddonHub.Services.WorldMap
         }
 
         // The work itself, no state: reads the WDT, the root ADT of each tile and writes the height grids + borders under mapDir\terrain.
-        public static TerrainResult BuildTerrain(int mapId, string name, int wdtFdid, string key, string mapDir, Func<WdtTile, bool> filter, ZoneResolver zr, CancellationToken ct, Action<PyramidProgress> progress)
+        public static TerrainResult BuildTerrain(int mapId, string name, int wdtFdid, string key, string mapDir, Func<WdtTile, bool> filter, ZoneResolver zr, CancellationToken ct, Action<PyramidProgress> progress, bool sky = false)
         {
             CascStorage casc = null;
             try
@@ -295,7 +322,7 @@ namespace ElansAddonHub.Services.WorldMap
                 if (filter != null) tiles = tiles.Where(filter).ToList();
                 if (tiles.Count == 0) throw new InvalidDataException(name + " has no terrain tiles");
                 var w = wdl != null && wdl.Ok ? wdl : null;
-                return WorldMapTerrain.Build(mapId, key, tiles, load, mapDir, zr, progress, ct, kinds, w == null ? (Func<WdtTile, TerrainTile>)null : t => w.Tile(t.Col, t.Row), WorldMapPending.StorageStamp(WowRoot()));
+                return WorldMapTerrain.Build(mapId, key, tiles, load, mapDir, zr, progress, ct, kinds, w == null ? (Func<WdtTile, TerrainTile>)null : t => w.Tile(t.Col, t.Row), WorldMapPending.StorageStamp(WowRoot()), sky);
             }
             finally { casc?.Dispose(); }
         }
@@ -480,7 +507,7 @@ namespace ElansAddonHub.Services.WorldMap
                         if (t != null && t.Pending.Count > 0)
                         {
                             r.Ran = true;
-                            var res = BuildTerrain(cont.MapId, cont.Name, cont.WdtFileDataId, key, WorldMapCache.MapDir(key, cont.MapId), null, zr, CancellationToken.None, null);
+                            var res = BuildTerrain(cont.MapId, cont.Name, cont.WdtFileDataId, key, WorldMapCache.MapDir(key, cont.MapId), null, zr, CancellationToken.None, null, !cont.IsContinent);
                             r.Recovered += res.Recovered; r.StillPending += res.Pending.Count;
                             Util.Log("world map: " + cont.Name + ": retried " + t.Pending.Count + " terrain tile(s): " + res.Recovered + " read now, " + res.Pending.Count + " still not readable");
                         }

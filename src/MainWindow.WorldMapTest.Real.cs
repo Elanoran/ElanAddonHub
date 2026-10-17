@@ -167,6 +167,7 @@ namespace ElansAddonHub
             await WorldMapTerrainRealChecks(idx, real, rw, notes, Check);
             await WorldMapWaterRealChecks(idx, real, rw, notes, Check);
             WorldMapCache.RootOverride = Path.Combine(rw, "cache");
+            await WorldMapIslandsRealChecks(idx, real, notes, Check, engine, P);      // 2.91: Zephras Isle and the other open-world maps
 
             if (engine)
             {

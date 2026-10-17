@@ -873,6 +873,9 @@ namespace ElansAddonHub
                 case WorldMapMessageType.Follow:
                     if (Settings != null && Settings.WorldMapFollow != m.Ok) { Settings.WorldMapFollow = m.Ok; SaveSettings?.Invoke(); }
                     break;
+                case WorldMapMessageType.ShowMap:
+                    ShowLiveMap(false);
+                    break;
                 case WorldMapMessageType.Ready:
                     if ((Ignore2dReadyForTest && loadedPage == "2d") || (Ignore3dReadyForTest && loadedPage == "3d")) break;
                     PageReady = true; PageInited = true;
@@ -962,13 +965,30 @@ namespace ElansAddonHub
             var now = DateTime.UtcNow;
             if (live == null || !LiveOn) return WorldMapProtocol.Me(LiveState.Off, null, null, null, null, mapId, now);
             var here = live.Here;
-            string elsewhere = null;
-            if (live.State == LiveState.Ok && here.HasValue && here.Value.MapId != mapId)
-            {
-                var idx = MapData.Index;
-                try { elsewhere = idx == null ? null : WorldMapService.Continent(idx, here.Value.MapId)?.Name; } catch (Exception) { }
-            }
-            return WorldMapProtocol.Me(live.State, live.Name, LivePosition.ColorOf(live.ClassFile), here, live.Trail.Points(now), mapId, now, elsewhere, live.Trail.Marks(now));
+            var other = LiveOtherMap();
+            return WorldMapProtocol.Me(live.State, live.Name, LivePosition.ColorOf(live.ClassFile), here, live.Trail.Points(now), mapId, now, other?.Name, live.Trail.Marks(now), other != null);
+        }
+
+        // 2.91: the world map of the map you are on when it is not the one shown (another continent, an island such as Zephras Isle); null = none
+        WorldContinent LiveOtherMap()
+        {
+            if (live == null || !LiveOn || live.State != LiveState.Ok || !live.Here.HasValue || live.Here.Value.MapId == mapId) return null;
+            try { var idx = MapData.Index; return idx == null ? null : WorldMapService.Continent(idx, live.Here.Value.MapId); } catch (Exception) { return null; }
+        }
+
+        // "Show <map>" on the live card, and Follow me across maps: the world map of the map you are on, centred on you (the zoom you had)
+        public int ShowMapsForTest { get; private set; }
+        int autoShownFor = -1, liveMapSeen = -1;
+        void ShowLiveMap(bool auto)
+        {
+            var c = LiveOtherMap(); if (c == null) return;
+            var h = live.Here.Value;
+            if (auto) { if (autoShownFor == c.MapId) return; autoShownFor = c.MapId; }
+            ShowMapsForTest++;
+            Util.Log("world map: " + (auto ? "following you to " : "showing ") + c.Name + " (you are on it)");
+            target = new WorldMapTarget { MapId = c.MapId, HasView = true, X = h.X, Y = h.Y, Z = hasView && vz > 0 ? vz : 5 };
+            hasView = false;
+            Resolve();
         }
 
         // force: send now (a new page, the setting changed); else at most once per LiveInterval, the newest state wins
@@ -982,6 +1002,10 @@ namespace ElansAddonHub
                 if (!liveTimer.IsEnabled) { liveTimer.Interval = wait; liveTimer.Start(); }
                 return;
             }
+            // Follow me follows you onto another map that has a world map (a boat to Kalimdor, the Skyborne start on Zephras Isle): once per change of map
+            // (once per map you arrive on: switching back yourself while you are still there is left alone)
+            if (live != null && live.State == LiveState.Ok && live.Here.HasValue && live.Here.Value.MapId != liveMapSeen) { liveMapSeen = live.Here.Value.MapId; autoShownFor = -1; }
+            if (Settings != null && Settings.WorldMapFollow && LiveOtherMap() is WorldContinent oc && autoShownFor != oc.MapId) { ShowLiveMap(true); return; }
             var json = LiveJson();
             if (json == lastMe) return;
             lastMe = json; lastLivePost = DateTime.UtcNow; LivePostsForTest++;

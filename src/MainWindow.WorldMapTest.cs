@@ -405,6 +405,7 @@ namespace ElansAddonHub
                 WorldMapLayers.FlightTimes = () => new Dictionary<string, double> { ["Horde|23>80"] = 130.4 };
                 WorldMapLayers.SavedRoutes = () => new[] { new SavedRoute { Id = "r1", Name = "Herb loop", Zone = 11, Points = new List<double> { 0.2, 0.2, 0.5, 0.3, 0.4, 0.7 } }, new SavedRoute { Id = "r2", Name = "Elsewhere", Zone = 20, Points = new List<double> { 0.1, 0.1, 0.2, 0.2 } } };
                 var conts = WorldMapService.Continents(lidx);
+                WorldMapIslandsUnitTest(Check);      // 2.91: islands (Zephras Isle) as world maps of their own
                 Check("layers: the continents are the continent-type UiMaps with a world map (a WDT and a world map type) and a slug each", conts.Count == 1 && conts[0].MapId == 0 && conts[0].Name == "Northland" && conts[0].Slug == "northland" && conts[0].WdtFileDataId == 7001, string.Join(",", conts.Select(c => c.Name)));
                 var zonesL = WorldMapLayers.Build("zones", 0); var zd = Json.Obj(zonesL.Json);
                 Check("layers: zone names are labels at the middle of each zone's map on this continent (Greenvale, Redmoor, Highkeep as a small city label); no creature data = no level range, and the note says where it would come from",

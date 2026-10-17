@@ -29,7 +29,7 @@ namespace ElansAddonHub.Services
         public static readonly Def[] Defs =
         {
             new Def { Name = "mapdatareal", Parent = "mapdata", Readers = @"^src/(" + Core + @"|Services/Db2/\w+\.cs|Controls/AtlasMap\.cs)$", Tests = @"^src/MainWindow\.MapDataTest(\.Control|\.Real)?\.cs$" },
-            new Def { Name = "worldmapreal", Parent = "worldmap", Readers = @"^src/(" + Core + "|" + Wm + @"|Services/Atlas/Classic/\w+\.cs)$", Tests = @"^src/MainWindow\.WorldMapTest\.(Real|Terrain|Water|Page3d)\.cs$" },
+            new Def { Name = "worldmapreal", Parent = "worldmap", Readers = @"^src/(" + Core + "|" + Wm + @"|Services/Atlas/Classic/\w+\.cs)$", Tests = @"^src/MainWindow\.WorldMapTest\.(Real|Terrain|Water|Page3d|Islands)\.cs$" },
             new Def { Name = "instancesreal", Parent = "instances", Readers = @"^src/(" + Core + "|" + Wm + @"|Services/Atlas/(AtlasInstances|AtlasObs\.Entrances)\.cs)$", Tests = @"^src/MainWindow\.InstancesTest\.(Real|Audit)\.cs$" },
             new Def { Name = "buildingsreal", Parent = "buildings", Readers = @"^src/(" + Core + "|" + Wm + ")$", Tests = @"^src/MainWindow\.BuildingsTest\.Real\.cs$" },
             new Def { Name = "dungeonmapsreal", Parent = "dungeonmaps", Readers = @"^src/(" + Core + "|" + Wm + @"|Services/DungeonMaps/\w+\.cs|Controls/AtlasMap\.\w+\.cs|Services/Atlas/(AtlasInstances|AtlasObs\.Entrances)\.cs)$", Tests = @"^src/MainWindow\.DungeonMapsTest\.Real\.cs$" },
