@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.87.0
+- **Orgrimmar and Stormwind in the 3D world map.** With "All buildings" switched on, Orgrimmar now shows its city in the canyon - The Drag, the Valleys, the huts and the gates - instead of bare rock, and Stormwind gets its streets, canals and districts, not only its walls and castle. These two cities are built as one large model whose open-air streets the game marks as "inside" the city; the 3D map used to leave all of those out. Rooms and halls you only see from inside (and Ironforge and the Undercity, which are under ground) still stay out. Thunder Bluff, Darnassus and the towns are unchanged.
+- **Your buildings update themselves once.** If you already made the buildings, the next time the 3D map opens with buildings on it remakes just the few models that changed (a few seconds in the background, no question asked); everything else is kept.
+- **Better heights for your live dot in these cities.** The live position's building floors use the same models, so walking through Orgrimmar's streets now follows the city's own ground.
+
 ## 2.86.0
 - **The Cairn: open Atlas numbers from many lodges.** The Atlas can now also show the Cairn, an open dataset that merges what many lodges observed: drop rates of creatures, objects, fishing and gathering, vendor items and prices, spawn points, gathering nodes and flight times. It holds ids and counts only - no names of people or characters - and is free for everyone (CC0). A number only gets in when at least two independent lodges saw it, and numbers far off from the rest are left out.
 - **Labelled "Cairn", below your own lodge.** On item and creature pages the Cairn's rows carry the label "Cairn" and sort below your lodge's own observations. Where your lodge already shows a source, the Cairn's figure rides along as a second line.

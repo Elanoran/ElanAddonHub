@@ -179,6 +179,14 @@ namespace ElansAddonHub
                 await View(hx, hy, 700, 20, 55); var bMem2 = await Bld(2500);
                 Check("memory: with the cap far below what the shapes need and the camera elsewhere, the shapes not used for a moment are let go (" + bMem1?.Int("evicted") + " evicted, " + bMem1?.Int("modelsReady") + " left, " + Dbl(bMem1, "memMb") + " MB); back over the houses they are fetched again (" + (bMem2?.Int("requests") - req0) + " requests) and drawn (" + bMem2?.Int("drawn") + ")",
                     bMem0 != null && bMem0.Int("modelsReady") >= 2 && bMem1 != null && bMem1.Int("evicted") >= 2 && bMem1.Int("modelsReady") == 0 && Dbl(bMem1, "memMb") == 0 && bMem2 != null && bMem2.Int("drawn") >= 100 && bMem2.Int("requests") > req0, bMem1 == null ? "?" : Json.Write(bMem1));
+                // 2.89: a shape made again while the page shows it (the big cities, once, after the group rule changed) is fetched again when the app announces it, not kept from before
+                {
+                    int reqR = bMem2?.Int("requests") ?? 0;
+                    WorldMapView.PostForTest(WorldMapBuildingsHost.StateJson(0, "all", BuildingsService.StateOf(0), new[] { BldWorld.House }, null));
+                    await WmEval("window.wm3.step(4,130)"); var bRe = await Bld(1500);
+                    Check("remade shape: when the app announces a shape the page has already drawn (fresh " + BldWorld.House + "), the page fetches it again (" + (bRe?.Int("requests") - reqR) + " request) and keeps drawing (" + bRe?.Int("drawn") + ")",
+                        bRe != null && bRe.Int("requests") > reqR && bRe.Int("drawn") >= 100 && bRe.Int("errors") == 0, bRe == null ? "?" : Json.Write(bRe));
+                }
                 var stN = await Wm3State(); var lastStats = WorldMapView.LastStats;
 
                 // ---------------------------------------------------------------- junk from the page, nothing from the internet

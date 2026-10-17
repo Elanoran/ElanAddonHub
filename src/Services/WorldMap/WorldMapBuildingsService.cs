@@ -18,7 +18,7 @@ namespace ElansAddonHub.Services.WorldMap
     {
         public static Func<IBuildingSource> SourceForTest;                   // self-test: the files of a synthetic install
         public static Func<int, IGroundSampler> GroundForTest;               // self-test: the ground of a continent
-        public static int BuildCountForTest, ScanCountForTest;
+        public static int BuildCountForTest, ScanCountForTest, UpgradeCountForTest;
         public static double ModelDelayMsForTest;                            // self-test: a pause between models so Pause / Cancel can be tried
         public static event Action<int> Changed;                              // on a worker thread
 
@@ -79,6 +79,7 @@ namespace ElansAddonHub.Services.WorldMap
             var m = WorldMapBuildings.ReadManifest(DirOf(mapId));
             if (m == null || !m.Valid || m.MapId != mapId || m.BuildKey != WorldMapCache.BuildKey) return false;
             if (!File.Exists(WorldMapBuildings.PlacementsPath(DirOf(mapId)))) return false;
+            if (m.Rules < WorldMapBuildings.Rules) return false;        // made by an older group rule: Prepare remakes the models that changed
             return mode == "bridges" ? (m.BridgesDone || m.AllDone) : m.AllDone;
         }
 
@@ -96,6 +97,11 @@ namespace ElansAddonHub.Services.WorldMap
             }
             j.Dir = DirOf(mapId);
             if (IsReady(mapId, mode)) { var m = WorldMapBuildings.ReadManifest(j.Dir); j.State.Phase = "done"; j.State.Done = j.State.Total = mode == "bridges" ? m.Bridges : m.Placements; j.State.BytesOnDisk = WorldMapBuildings.SizeBytes(j.Dir); Fire(mapId); return Task.FromResult(0); }
+            // 2.89: a folder finished under an older group rule (WorldMapBuildings.Rules) for this mode is brought up to date without asking again: the few models
+            // the new rule makes differently (the big cities) are removed and made again
+            var old = WorldMapBuildings.ReadManifest(j.Dir);
+            bool upgrade = old != null && old.Valid && old.MapId == mapId && old.BuildKey == WorldMapCache.BuildKey && old.Rules < WorldMapBuildings.Rules
+                && File.Exists(WorldMapBuildings.PlacementsPath(j.Dir)) && (mode == "bridges" ? (old.BridgesDone || old.AllDone) : old.AllDone);
             j.State.Phase = "scanning"; Fire(mapId);
             return Task.Run(() =>
             {
@@ -103,6 +109,18 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     Interlocked.Increment(ref ScanCountForTest);
                     EnsureScan(j, CancellationToken.None);
+                    if (upgrade)
+                    {
+                        int removed = WorldMapBuildings.RemoveStale(j.Scan, j.Dir, old.Rules);
+                        Interlocked.Increment(ref UpgradeCountForTest);
+                        Util.Log("world map buildings " + j.Name + ": made by group rule " + old.Rules + ", " + removed + " models are made again under rule " + WorldMapBuildings.Rules);
+                        FillEstimate(j);
+                        // a folder with every building made is remade as such (a "bridges" run would leave the removed city models missing under a manifest that says all are done)
+                        var t = Start(mapId, old.AllDone ? "all" : mode);
+                        Fire(mapId);
+                        t?.Wait();
+                        return;
+                    }
                     FillEstimate(j);
                     j.State.Phase = "ask";
                 }
@@ -301,7 +319,7 @@ namespace ElansAddonHub.Services.WorldMap
                 // finished: the measured costs, then the manifest (last)
                 var man = new WorldMapBuildings.Manifest
                 {
-                    Version = WorldMapBuildings.Version, MapId = j.MapId, BuildKey = WorldMapCache.BuildKey, Placements = scan.Placements.Count, Models = scan.Models.Count(kv => !kv.Value.RootMissing), Tiles = scan.Tiles,
+                    Version = WorldMapBuildings.Version, Rules = WorldMapBuildings.Rules, MapId = j.MapId, BuildKey = WorldMapCache.BuildKey, Placements = scan.Placements.Count, Models = scan.Models.Count(kv => !kv.Value.RootMissing), Tiles = scan.Tiles,
                     Bridges = scan.Bridge.Count(b => b), BridgeModels = scan.Models.Values.Count(m => m.Bridge), ModelsBuilt = WorldMapBuildings.BuiltModels(dir).Count, Ms = sw.ElapsedMilliseconds,
                 };
                 var prev = WorldMapBuildings.ReadManifest(dir);
