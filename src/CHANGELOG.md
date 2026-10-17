@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.85.0
+- **A Professions list.** The Atlas menu's **Professions** now opens a list in the style of the Recipes list, with its own painted banner: one row per profession, with Primary and Secondary chips, the skill range and ranks (for example "skill 1-300 · Apprentice to Artisan"), how many recipes it has and, when the Classic data or your game knows them, how many trainers teach it. Click a row to open that profession's page (recipes, craft now, leveling guide, camping) as before. Old links to Professions open the list.
+- **Spells get their own tab on class pages.** "Spells by level" moved from the Overview to a new **Spells** tab (Overview | Spells | Related), so the Overview is the class itself. Links can point at it (class:3?tab=spells).
+- **Racial abilities get their own tab on race pages.** The racial abilities moved to a new **Racial abilities** tab (Overview | Racial abilities | Related), together with the class spells only that race gets (for example a race-only priest spell). The Overview keeps a short line of them under "At a glance".
+- **Thinner, darker scroll bars on the world map.** The layers panel (and any other list that scrolls) in the 2D and 3D world map now has a slim dark scroll bar like the rest of the Outpost, a little brighter when you point at it.
+
 ## 2.84.1
 - **"How we look at it" in Settings > About.** A short, honest note on how the Outpost and its addons play fair, that only Blizzard decides what is allowed, and that it is a free fan project you use at your own risk.
 

@@ -134,7 +134,7 @@ namespace ElansAddonHub
                 Check("frame: the page's own scroll bar never shows on a class or race page, not for a frame while it opens (from a spell page that scrolls as a whole too), at 3 window heights (700, 900, 1200)", flips.Count == 0, string.Join(" | ", flips));
                 Check("frame: scrolling the content moves the content and leaves the hero and the tab strip exactly where they are on screen, at 3 window heights", still.Count == 0, string.Join(" | ", still));
             }
-            Height = 700; await OpenPage("class:3");
+            Height = 700; await OpenPage("class:3?tab=spells");      // 2.85: the long spellbook is on its own tab
             {
                 var cs = AtlasView.ContentScrollerForTest;
                 bool canScroll = cs != null && cs.ScrollableHeight > 20;
@@ -155,7 +155,7 @@ namespace ElansAddonHub
                 cs.ScrollToVerticalOffset(200); UpdateLayout();
                 await SwitchTab("related");
                 Check("frame: choosing another tab shows it from its top (the content scroller goes back up), still under the same fixed head", cs.VerticalOffset == 0 && AtlasView.FixedHeadOnForTest && ReferenceEquals(cs, AtlasView.ContentScrollerForTest), cs.VerticalOffset + "");
-                await SwitchTab("overview");
+                await SwitchTab("spells");
             }
             Height = 900;
             await OpenPage("spell:3044");
@@ -165,9 +165,11 @@ namespace ElansAddonHub
             // ---- screenshots (ELANSHUB_SHOTS=1): a class page and a race page with the About card; one scrolled to show the top staying put
             Width = 1300; Height = 1000;
             await OpenPage("class:3"); await ShotWait(300); Snapshot(Path.Combine(dir, "atlas-classpage-hunter.png"));
+            await OpenPage("class:3?tab=spells"); await ShotWait(300); Snapshot(Path.Combine(dir, "atlas-classpage-hunter-spells.png"));
             if (AtlasView.ContentScrollerForTest != null) { AtlasView.ContentScrollerForTest.ScrollToVerticalOffset(520); UpdateLayout(); }
             await ShotWait(300); Snapshot(Path.Combine(dir, "atlas-classpage-hunter-scrolled.png"));
             await OpenPage("race:2"); await ShotWait(300); Snapshot(Path.Combine(dir, "atlas-racepage-orc.png"));
+            await OpenPage("race:2?tab=abilities"); await ShotWait(300); Snapshot(Path.Combine(dir, "atlas-racepage-orc-abilities.png"));
             Width = 1300; Height = 900;
         }
     }

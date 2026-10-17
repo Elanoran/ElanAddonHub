@@ -120,6 +120,7 @@ namespace ElansAddonHub.Services.Atlas
                 case "factions": if (SpellData.Factions == null) return null; ix = BuildFactions(x); break;
                 case "classes": if (ClassData.Data == null) return null; ix = BuildClasses(x); break;
                 case "races": if (ClassData.Data == null) return null; ix = BuildRaces(x); break;
+                case "professions": if (SpellData.Spells == null) return null; ix = BuildProfessions(x); break;
                 default: return null;
             }
             ix.Cat = cat; ix.Token = tok;

@@ -115,6 +115,7 @@ namespace ElansAddonHub
         public bool PinnedNowForTest => IsPinnedNow;
         public string CrumbsForTest => CrumbHost.Content is DependencyObject d ? string.Join(" > ", AtlasWalk(d).OfType<TextBlock>().Where(t => t.Text != "›").Select(t => t.Text)) : "";
         public FrameworkElement CrumbHostForTest => CrumbHost;
+        public List<string> CrumbLinksForTest() => CrumbsFor(history.Current ?? "").Select(c => c.Link ?? "").ToList();
 
         bool IsPinnedNow => !string.IsNullOrEmpty(history.Current) && NavState.IsPinned(history.Current);
 
@@ -172,7 +173,7 @@ namespace ElansAddonHub
             {
                 string last = "";
                 try { last = hc.SubTitle?.Invoke(sub) ?? ""; } catch (Exception) { }
-                l.Add(new AtlasCrumb(hc.Title, last.Length > 0 ? hc.Id + ":" : ""));
+                l.Add(new AtlasCrumb(hc.Title, last.Length > 0 || hc.Listed ? hc.OpenId : ""));      // a listed category's crumb opens its list (Professions > Cooking: the professions)
                 if (last.Length > 0) l.Add(new AtlasCrumb(last, ""));
                 return l;
             }

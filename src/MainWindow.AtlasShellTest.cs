@@ -62,7 +62,7 @@ namespace ElansAddonHub
                     && AtlasTexts(AtlasView.NavRowForTest("professions")).Any(t => t.Length > 0 && char.IsDigit(t[0])) && !AtlasTexts(AtlasView.NavRowForTest("talents")).Any(t => t.Length > 0 && char.IsDigit(t[0])));
                 var ents = AtlasNav.Entries(); string OpenOf(string k) => ents.FirstOrDefault(e => e.Key == k)?.OpenId ?? "-"; string IconOf(string k) => ents.FirstOrDefault(e => e.Key == k)?.Icon ?? "-";
                 Check("nav: each Character row opens its own page with its own icon - Spells the spell list (spark), Talents the calculator (tree), Professions the guides page, Recipes and Skills their lists",
-                    OpenOf("spells") == "browse:spells" && OpenOf("talents") == "talents:" && OpenOf("professions") == "professions:" && OpenOf("recipes") == "browse:recipes" && OpenOf("skills") == "browse:skills"
+                    OpenOf("spells") == "browse:spells" && OpenOf("talents") == "talents:" && OpenOf("professions") == "browse:professions" && OpenOf("recipes") == "browse:recipes" && OpenOf("skills") == "browse:skills"
                     && new[] { "spells", "talents", "professions", "recipes", "skills" }.All(k => IconOf(k) == k && AtlasIcons.Has(k)),
                     string.Join(" ", ents.Select(e => e.Key + "=" + e.OpenId + "/" + e.Icon)));
                 Check("nav: the shared-row machinery is idle - no sub-rows under any row", AtlasView.NavSubRowsForTest.Count == 0, string.Join(",", AtlasView.NavSubRowsForTest));
@@ -92,10 +92,10 @@ namespace ElansAddonHub
                 await AtlasView.Open("skill:" + skillProf); await Task.Delay(60); UpdateLayout();
                 Check("nav: no sub-rows on a skill page either (Professions, Recipes and Skills are rows of their own)", AtlasView.NavSubRowsForTest.Count == 0, string.Join(",", AtlasView.NavSubRowsForTest));
                 // ids from before 2.71.1 still work: the old 'Skills and professions > Professions' list opens the Professions page
-                Check("nav: an old link browse:skills/professions opens the Professions page (KeyFor and Upgrade agree), browse:skills/secondary-skills stays a Skills list (Other skills since 2.77)",
-                    AtlasNav.Upgrade("browse:skills/professions") == "professions:" && AtlasNav.KeyFor("browse:skills/professions") == "professions" && AtlasNav.Upgrade("browse:skills/secondary-skills") == "browse:skills/other-skills" && AtlasNav.KeyFor("browse:skills/secondary-skills") == "skills");
+                Check("nav: an old link browse:skills/professions opens the Professions list (2.85: browse:professions; KeyFor and Upgrade agree), browse:skills/secondary-skills stays a Skills list (Other skills since 2.77)",
+                    AtlasNav.Upgrade("browse:skills/professions") == "browse:professions" && AtlasNav.Upgrade("professions:") == "browse:professions" && AtlasNav.Upgrade("professions:cooking/guide") == "professions:cooking/guide" && AtlasNav.KeyFor("browse:skills/professions") == "professions" && AtlasNav.Upgrade("browse:skills/secondary-skills") == "browse:skills/other-skills" && AtlasNav.KeyFor("browse:skills/secondary-skills") == "skills");
                 await AtlasView.Open("browse:skills/professions"); await Task.Delay(60);
-                Check("nav: ... opening it lands on professions: with the Professions row lit", AtlasView.CurrentId.StartsWith("professions:") && AtlasView.NavSelectedForTest.SequenceEqual(new[] { "professions" }), AtlasView.CurrentId);
+                Check("nav: ... opening it lands on the Professions list with the Professions row lit", AtlasView.CurrentId == "browse:professions" && AtlasView.NavSelectedForTest.SequenceEqual(new[] { "professions" }), AtlasView.CurrentId);
                 // a row opens its page
                 ClickRow(AtlasView.NavRowForTest("zones")); await AtlasView.WaitForTest(); await Task.Delay(100);
                 Check("nav: clicking a row opens its page (Zones -> browse:zones); Home goes to the start page", AtlasView.CurrentId == "browse:zones" && AtlasView.NavSelectedForTest.SequenceEqual(new[] { "zones" }));
@@ -308,7 +308,7 @@ namespace ElansAddonHub
 
                 // pages scope
                 await AtlasView.OpenPalette("", "pages"); await AtlasView.PaletteWaitForTest(); UpdateLayout();
-                Check("palette: the Pages scope with an empty box lists the pages of the Atlas (every category, the data sources)", AtlasView.PaletteIdsForTest.Contains("browse:items") && AtlasView.PaletteIdsForTest.Contains("browse:zones") && AtlasView.PaletteIdsForTest.Contains("professions:") && AtlasView.PaletteIdsForTest.Contains("talents:") && AtlasView.PaletteIdsForTest.Contains(AtlasNav.DataId) && AtlasView.PaletteIdsForTest.Contains("worldmap:"), string.Join(",", AtlasView.PaletteIdsForTest));
+                Check("palette: the Pages scope with an empty box lists the pages of the Atlas (every category, the data sources)", AtlasView.PaletteIdsForTest.Contains("browse:items") && AtlasView.PaletteIdsForTest.Contains("browse:zones") && AtlasView.PaletteIdsForTest.Contains("browse:professions") && !AtlasView.PaletteIdsForTest.Contains("professions:") && AtlasView.PaletteIdsForTest.Contains("talents:") && AtlasView.PaletteIdsForTest.Contains(AtlasNav.DataId) && AtlasView.PaletteIdsForTest.Contains("worldmap:"), string.Join(",", AtlasView.PaletteIdsForTest));
                 AtlasView.PaletteTextForTest = "herb"; await WaitFor(() => AtlasView.PaletteResultForTest != null && AtlasView.PaletteResultForTest.Query == "herb", 5000); await AtlasView.PaletteWaitForTest();
                 Check("palette: Pages by a keyword ('herb' finds Objects, which holds herbs)", AtlasView.PaletteIdsForTest.Contains("browse:objects"), string.Join(",", AtlasView.PaletteIdsForTest));
                 AtlasView.PaletteTextForTest = "data"; await WaitFor(() => AtlasView.PaletteResultForTest != null && AtlasView.PaletteResultForTest.Query == "data", 5000); await AtlasView.PaletteWaitForTest();

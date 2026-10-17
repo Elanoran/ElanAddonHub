@@ -170,7 +170,7 @@ namespace ElansAddonHub.Services.Atlas
         // how many entries a category has in all (the tiles of the start page); builds the index when it is not there yet
         public static int Count(AtlasCategory c)
         {
-            if (c == null || c.Hosted) return -1;
+            if (c == null || !c.HasList) return -1;
             try { return Index(c.Id)?.All.Count ?? 0; } catch (Exception e) { Util.Log("atlas browse count " + c.Id + ": " + e.Message); return 0; }
         }
 
@@ -193,7 +193,7 @@ namespace ElansAddonHub.Services.Atlas
         {
             var cat = AtlasCategories.Find(q.Cat);
             var r = new BrowseResult { Query = q, Id = q.ToId() };
-            if (cat == null || cat.Hosted)
+            if (cat == null || !cat.HasList)
             {
                 r.NotFound = true; r.Title = "Browse"; r.Message = "There is no category called \"" + q.Cat + "\".";
                 return r;
@@ -275,7 +275,7 @@ namespace ElansAddonHub.Services.Atlas
             {
                 case "items": return ItemData.Status == ItemData.State.Disabled ? "Game data is switched off (Settings > General), so there is no item list. The Classic baseline fills it when it is downloaded." : "The item list is read from your game files and is not ready yet.";
                 case "zones": case "instances": return MapData.Status == MapData.State.Disabled ? "Game data is switched off (Settings > General), so there are no maps." : "The maps are read from your game files and are not ready yet.";
-                case "spells": case "skills": case "recipes": case "factions": return SpellData.Status == SpellData.State.Disabled ? "Game data is switched off (Settings > General), so there are no spells." : "Spells, skills and recipes are read from your game files and are not ready yet.";
+                case "spells": case "skills": case "recipes": case "factions": case "professions": return SpellData.Status == SpellData.State.Disabled ? "Game data is switched off (Settings > General), so there are no spells." : "Spells, skills and recipes are read from your game files and are not ready yet.";
                 case "classes": case "races": return ClassData.Status == ClassData.State.Disabled ? "Game data is switched off (Settings > General), so there are no classes or races." : "Classes and races are read from your game files and are not ready yet.";
                 default: return "Nothing is known yet. Creatures, objects and quests come from your game's cache and the Classic baseline (get it from the Atlas start page).";
             }
@@ -386,6 +386,7 @@ namespace ElansAddonHub.Services.Atlas
                 case "zone": o = list.OrderBy(e => e.Zone == 0 ? 1 : 0).ThenBy(e => e.ZoneName, StringComparer.OrdinalIgnoreCase); break;
                 case "continent": o = list.OrderBy(e => e.Group, StringComparer.OrdinalIgnoreCase); break;
                 case "price": o = list.OrderBy(e => e.Price); break;
+                case "recipes": o = list.OrderByDescending(e => e.Type); break;          // professions: the most recipes first
                 default: o = list.OrderBy(e => 0); break;
             }
             return o.ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.Id).ToList();
@@ -422,6 +423,9 @@ namespace ElansAddonHub.Services.Atlas
                     c.Level = true; c.LevelLabel = "Level"; c.Zone = true;
                     S("level", "Level"); S("name", "Name"); S("zone", "Entrance zone"); c.DefaultSort = "level";
                     break;
+                case "professions":
+                    S("name", "Name"); S("recipes", "Most recipes");
+                    break;
                 case "recipes":
                     c.Level = true; c.LevelLabel = "Skill level"; c.Learn = HasLearnData();
                     S("level", "Skill level"); S("name", "Name"); c.DefaultSort = "level";
@@ -449,6 +453,11 @@ namespace ElansAddonHub.Services.Atlas
                     ? "Recipes of your characters' professions that the character has not learned and has the skill for (the estimated start of the recipe). Only characters whose profession window Elan's Hub has read are counted: open each profession window in game once."
                     : "Nothing to compare yet: open each profession window in game once (Elan's Hub 1.14.0 or newer) so the Outpost knows which recipes your characters have learned.");
             bool classic = ClassicAtlas.IsReady, lodge = AtlasQuery.LodgeHasData();
+            if (ix.Cat == "professions")
+            {
+                r.Notes.Add("Each profession opens its own page: the recipes by skill, what your characters can craft now, a leveling guide and camping.");
+                if (ix.All.All(e => e.Rank < 0)) r.Notes.Add("How many trainers teach a profession comes from the Classic baseline and the creatures your game has seen; neither knows a trainer yet, so no trainer counts are shown.");
+            }
             if (ix.Cat == "items")
             {
                 if (!classic && (q.How.Length > 0 || r.Sort == "chance")) r.Notes.Add("Download the Classic baseline for drop and vendor sources (Atlas start page).");

@@ -123,10 +123,15 @@ namespace ElansAddonHub.Services.Atlas
         // Professions page. Every other id comes back as it is.
         // 2.77 (AtlasSkillModel): the groups that moved between Spells and Skills - browse:spells/weapon-skills opens browse:skills/weapon-skills,
         // browse:skills/class-abilities opens browse:spells/class-abilities, the old "Secondary skills" / "Attributes" open Other skills (filters kept).
+        // 2.85: Professions is a list (browse:professions, one row per profession) in front of its page: the bare "professions:" (old links, pins, the old
+        // Professions rail tab) opens that list; "professions:<profession>/<tab>" still opens the profession's page.
         public static string Upgrade(string id)
         {
+            var prof = AtlasCategories.Find(AtlasHosts.Professions);
+            string profRoot = prof?.Hosted == true ? prof.OpenId : null;
+            if (profRoot != null && prof.Listed && string.Equals((id ?? "").Trim().TrimEnd('/'), AtlasHosts.Professions + ":", StringComparison.OrdinalIgnoreCase)) return profRoot;
             if (string.IsNullOrEmpty(id) || !AtlasBrowse.IsBrowseId(id) || !BrowseQuery.TryParse(id, out var q)) return id;
-            if (q.Cat == "skills" && q.Path.Count > 0 && q.Path[0] == "professions" && AtlasCategories.Find(AtlasHosts.Professions)?.Hosted == true) return AtlasHosts.Professions + ":";
+            if (q.Cat == "skills" && q.Path.Count > 0 && q.Path[0] == "professions" && profRoot != null) return profRoot;
             var moved = q.Path.Count > 0 ? AtlasSkillModel.Moved(q.Cat, q.Path[0]) : null;
             if (moved != null)
             {

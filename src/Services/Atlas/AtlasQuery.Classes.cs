@@ -131,8 +131,8 @@ namespace ElansAddonHub.Services.Atlas
                 if (book != null)
                 {
                     m.Custom = book;
-                    foreach (var n in book.Notes) m.Notes.Add(n);
-                    if (!book.HasTrainerData) m.Notes.Add("What a spell costs to learn from a trainer is not in your game files, and the Classic baseline in this version carries no trainer table, so no learning costs are shown.");
+                    if (!book.HasTrainerData) book.Notes.Add("What a spell costs to learn from a trainer is not in your game files, and the Classic baseline in this version carries no trainer table, so no learning costs are shown.");
+                    foreach (var n in book.Notes) m.Notes.Add(n);       // the page's notes; the Spells tab shows these (book.Notes) and the Overview leaves them out
                 }
             }
             AddClassLore(m, c);
@@ -192,6 +192,18 @@ namespace ElansAddonHub.Services.Atlas
                         s.Rows.Add(new AtlasRow { Key = AtlasIds.Spell(a.Spell), Link = AtlasIds.Spell(a.Spell), Title = sp.Name, IconId = sp.IconId, Detail = RacialDetail(snap, sp.Rank, a.ClassMask), Extra = desc.Length > 160 ? desc.Substring(0, 157).TrimEnd() + "…" : desc, Label = F, Tier = 1, Type = "Spell" });
                     }
                 if (s.Rows.Count > 0) s.Note = AtlasFormat.Count(s.Rows.Count, "ability", "abilities") + " from " + string.Join(", ", racial.Where(x => spells.Skills.ContainsKey(x)).Select(x => spells.Skills[x].Name)) + ".";
+
+                // the class spells only this race gets (2.85, on the Racial abilities tab with the racials): the class pages' "Race-only spells", from the race's side
+                var only = Section(m, "raceonly", "Class spells for " + r.Name + " only");
+                foreach (var c in classes)
+                    foreach (var x in RaceOnlySpells(c).Where(x => x.Race.Id == r.Id))
+                    {
+                        var sp = spells.Get(x.Spell);
+                        var view = SpellData.Spell(x.Spell);
+                        var desc = view == null ? "" : (!string.IsNullOrWhiteSpace(view.Description) ? view.Description : view.AuraDescription ?? "");
+                        only.Rows.Add(new AtlasRow { Key = AtlasIds.Spell(x.Spell) + "@" + c.Id.ToString(CultureInfo.InvariantCulture), Link = AtlasIds.Spell(x.Spell), Title = x.Name, IconId = sp?.IconId ?? 0, Detail = c.Name + (x.Level > 0 ? " · from level " + x.Level.ToString(CultureInfo.InvariantCulture) : ""), Extra = desc.Length > 160 ? desc.Substring(0, 157).TrimEnd() + "…" : desc, Label = F, Tier = 1, Type = "Spell" });
+                    }
+                if (only.Rows.Count > 0) only.Note = AtlasFormat.Count(only.Rows.Count, "class spell", "class spells") + " your game gives to " + r.Name + " characters only (the class pages list them as race-only spells).";
             }
             else m.Notes.Add(SpellData.Spells == null ? "Spell data is read from your game files and is not ready yet, so the racial abilities are not listed." : "The skill lines of the races are not in the game data this Outpost can read, so the racial abilities are not listed.");
             AddStartZone(m, r);

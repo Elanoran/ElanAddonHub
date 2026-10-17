@@ -14,7 +14,7 @@ namespace ElansAddonHub
 {
     // The entity page template (Atlas refresh, step 2): ONE page for every kind (item, creature, object, quest, zone, instance, spell, skill, faction, class, race).
     //   hero      a card: the big icon or the kind's glyph tile, the name in its colour (an item's quality, a class' colour), the subtitle, the key-fact chips
-    //   tabs      Overview | Sources | Map | Related | Lodge - AtlasSection.Key says which tab a table lives on (AtlasTabs.OfSection); a tab with nothing in it is not there, and a
+    //   tabs      Overview | Spells | Racial abilities | Sources | Map | Related | Lodge - Spells = a class page's spellbook (ClassSpellBook), AtlasSection.Key says which tab a table lives on (AtlasTabs.OfSection); a tab with nothing in it is not there, and a
     //             page with only an Overview has no tab strip. The selected tab is in the id (item:100?tab=sources) but is not a history step.
     //   rail      340 wide at the right from RailFrom px: a thumbnail of the map (opens the Map tab) and the quick facts (what links somewhere); below it, narrower, the facts sit
     //             in the Overview and the map is its tab
@@ -299,9 +299,9 @@ namespace ElansAddonHub
         {
             tabsShown.Clear();
             tabsShown.Add(AtlasTabs.Overview);
-            foreach (var t in new[] { AtlasTabs.Sources, AtlasTabs.Map, AtlasTabs.Related, AtlasTabs.Lodge })
+            foreach (var t in new[] { AtlasTabs.Spells, AtlasTabs.Abilities, AtlasTabs.Sources, AtlasTabs.Map, AtlasTabs.Related, AtlasTabs.Lodge })
             {
-                bool has = t == AtlasTabs.Map ? HasMapTab(m) : SectionsOn(m, t).Any();
+                bool has = t == AtlasTabs.Map ? HasMapTab(m) : t == AtlasTabs.Spells ? m.Custom is ClassSpellBook : SectionsOn(m, t).Any();
                 if (has) tabsShown.Add(t);
             }
             tabDefault = tabsShown.Contains(AtlasTabs.DefaultFor(m.Kind)) ? AtlasTabs.DefaultFor(m.Kind) : AtlasTabs.Overview;
@@ -314,6 +314,7 @@ namespace ElansAddonHub
         {
             if (model == null) return 0;
             if (tab == AtlasTabs.Overview || tab == AtlasTabs.Map) return 0;
+            if (tab == AtlasTabs.Spells) return model.Custom is ClassSpellBook book ? book.Entries.Count(e => !e.Pet && !e.Talent) : 0;     // the "All" chip of the spellbook
             return SectionsOn(model, tab).Sum(s => s.Rows.Count + s.Hidden.Count);
         }
 
@@ -368,7 +369,6 @@ namespace ElansAddonHub
                         if (m.ClassLore != null) col.Children.Add(ClassLoreCard(m));     // a class or race: the game's own words and the Outpost's notes, "About <class>"
                         overviewLead = col.Children.Count;                       // the facts go after these when the rail is off
                         if (!railOn && factsCard != null) col.Children.Add(factsCard);
-                        if (m.Custom is ClassSpellBook classSpells) col.Children.Add(ClassSpellsCard(classSpells));
                         if (m.Custom is QuestChainInfo chain) col.Children.Add(QuestChainCard(chain));
                         if (m.Entrance != null) col.Children.Add(EntranceCard(m));
                         var owned = m.Kind == "item" ? m.Section("owned") : null;
@@ -380,12 +380,20 @@ namespace ElansAddonHub
                         foreach (var s in m.Sections)
                             if (!s.Open && s.Empty.Length > 0 && !(m.Kind == "item" && s.Key == "owned")) col.Children.Add(SectionCard(s));
                         if (!HasMapTab(m) && MapWanted(m)) col.Children.Add(MapCard(m));       // no map tab: the page says what it knows about its places (or that it knows none) right here
-                        foreach (var n in m.Notes) col.Children.Add(Note(n));
+                        var bookNotes = (m.Custom as ClassSpellBook)?.Notes;
+                        foreach (var n in m.Notes) if (bookNotes == null || !bookNotes.Contains(n)) col.Children.Add(Note(n));     // what the spellbook is missing is said on the Spells tab
                         if (col.Children.Count == 0) col.Children.Add(Note("Everything about " + m.Title + " is on its tabs" + (tabsShown.Count > 1 ? ": " + string.Join(", ", tabsShown.Where(x => x != AtlasTabs.Overview).Select(AtlasTabs.Title)) : "") + "."));
                         break;
                     }
                 case AtlasTabs.Map:
                     col.Children.Add(MapCard(m, 480));
+                    break;
+                case AtlasTabs.Spells:      // a class page: "Spells by level" (2.85: its own tab, it was the long end of the Overview)
+                    if (m.Custom is ClassSpellBook book)
+                    {
+                        col.Children.Add(ClassSpellsCard(book));
+                        foreach (var n in book.Notes) col.Children.Add(Note(n));
+                    }
                     break;
                 default:
                     foreach (var s in SectionsOn(m, tab)) col.Children.Add(SectionCard(s));

@@ -16,6 +16,20 @@ html, body { margin: 0; height: 100%; background: var(--sea); overflow: hidden; 
 .leaflet-container { background: var(--sea); font: inherit; }
 .leaflet-tile { image-rendering: auto; }
 
+/* thin dark overlay-like scrollbars (layers panel and any other scroll box), like the app's own
+   ScrollViewer (Theme.xaml ScrollThumb: transparent track, light thumb at low opacity, brighter on hover) */
+:root { --sb-thumb: rgba(236, 239, 244, .22); --sb-thumb-hover: rgba(236, 239, 244, .42); }
+/* Chromium (WebView2) ignores ::-webkit-scrollbar once scrollbar-width/-color are set (and an @supports selector() test of the
+   pseudo-element is not reliable there), so the standard pair is only for an engine that has no ::-webkit-scrollbar (Gecko) */
+@supports (-moz-appearance: none) { * { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; } }
+/* every element's bar (the panels' and any list's), 6 px like the app's ScrollViewer thumb area */
+*::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--sb-thumb-hover); }
+*::-webkit-scrollbar-thumb:active { background: var(--accent); }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
 /* controls */
 .leaflet-bar { border: 1px solid var(--panel-line); box-shadow: none; border-radius: 8px; overflow: hidden; }
 .leaflet-bar a, .leaflet-bar a:hover { background: var(--panel); color: var(--text); border-bottom: 1px solid var(--panel-line); }
