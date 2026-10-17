@@ -12,11 +12,11 @@ namespace Lodge.Tests;
 // proxy (and loopback) may set the visitor IP - otherwise anyone could dodge the wrong-code lockout with a fake X-Forwarded-For.
 public class TrustedProxyTests
 {
-    static async Task<(string Ip, string Scheme)> Through(string[] trusted, string remote, string xff, string proto = null)
+    static async Task<(string Ip, string Scheme)> Through(string[] trusted, string remote, string xff, string? proto = null)
     {
         var o = new ForwardedHeadersOptions();
         TrustedProxies.Configure(o, trusted);
-        string ip = null, scheme = null;
+        string? ip = null, scheme = null;
         var mw = new ForwardedHeadersMiddleware(ctx => { ip = ctx.Connection.RemoteIpAddress?.ToString(); scheme = ctx.Request.Scheme; return Task.CompletedTask; },
             NullLoggerFactory.Instance, Options.Create(o));
         var c = new DefaultHttpContext();

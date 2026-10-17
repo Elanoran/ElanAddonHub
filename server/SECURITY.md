@@ -306,11 +306,13 @@ The Outpost side (same release train): manifest folders, ids and game versions m
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 591 unit tests (fake clock, temp folders)
-dotnet build -c Release server/Lodge.Server
+cd server                                                       # server/global.json: the .NET 10 SDK (the repo root pins 8 for the Outpost)
+dotnet test Lodge.Tests                                          # 705 unit tests (fake clock, temp folders)
+dotnet build -c Release Lodge.Server
+cd ..
 python server/tests/security_integration.py                     # 150 checks against local servers (python -X utf8 on Windows)
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 70 checks
-sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, 41 checks
+sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, SDK check, 49 checks
 ```
 
 All use synthetic codes and temp folders; none talks to a real lodge.
