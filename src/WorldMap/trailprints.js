@@ -1,5 +1,6 @@
 // Elan's Outpost - world map: the paw-print trail (2.88). Shared by the flat page (worldmap.js) and the 3D page (view3d.js).
-// Your live trail, drawn as little prints in your class colour once you zoom in far enough (zoomed out it stays the plain line):
+// Your live trail, drawn as little prints in your class colour once you zoom in far enough (zoomed out it stays the plain line; where the prints show there
+// is no line under them since 2.93 - the prints are the trail, and the flight's dots draw its way):
 //   on foot   alternating left / right prints along the way you went (paws; hooves for tauren, bony prints for the undead, tiny ones for gnomes)
 //   mounted   bigger hoofprints, further apart
 //   flight    a light dotted line with now and then a small feather
@@ -17,7 +18,7 @@
   var BASE = 2.5, MAXS = 20, MINPX = 16; // the spacing ladder: 2.5, 5, 10, 20 yards; wider than 20 = zoomed out, the line stays
   var MINPX3 = 24;                       // 3D: a little roomier (the prints are seen at a slant)
   var MAX = 5000;                        // prints at most (newest kept)
-  var LINE_K = 0.3;                      // the trail line's opacity while prints are shown (a faint guide under them)
+  var LINE_K = 0;                        // the trail line's opacity while prints are shown: none (2.93) - the prints are the trail; zoomed out (no prints) it is the line again
   var BIT = { taxi: 4, indoors: 8, swim: 16, mount: 32, pet: 64, dead: 128 };
   // shape ids (also the atlas cells of the 3D page)
   var SH = { paw: 0, hoof: 1, bone: 2, shoe: 3, dot: 4, feather: 5, ripple: 6, wisp: 7 };
@@ -45,6 +46,17 @@
     return out;
   }
 
+  // the streams per mode and pet bit, built once per style (layout runs per segment, so nothing is allocated there)
+  var MI = { walk: 0, mount: 1, taxi: 2, swim: 3, ghost: 4 }, SC = { foot: null, hunter: null, petKnown: null, t: [] };
+  function streamsOf(mode, style, bits) {
+    var foot = style.foot || 'paw', hu = !!style.hunter, pk = !!style.petKnown;
+    if (SC.foot !== foot || SC.hunter !== hu || SC.petKnown !== pk) {
+      SC.foot = foot; SC.hunter = hu; SC.petKnown = pk; SC.t = [];
+      var st = { foot: foot, hunter: hu, petKnown: pk };
+      for (var m = 0; m < MODES.length; m++) { SC.t[m * 2] = streams(MODES[m], st, 0); SC.t[m * 2 + 1] = streams(MODES[m], st, BIT.pet); }
+    }
+    return SC.t[MI[mode] * 2 + ((bits & BIT.pet) ? 1 : 0)];
+  }
   // the step of the ladder for `ppy` pixels per yard (0 = too far out: no prints)
   function ladder(ppy, minpx) {
     if (!(ppy > 0) || !isFinite(ppy)) return 0;
@@ -55,7 +67,7 @@
   // ---- the layout (pure, shared by both pages). Input arrays (reused): planar yards x right / y down, odometer, move bits, age (s), run break, height (NaN = ground)
   var IN = { x: [], y: [], od: [], bits: [], age: [], brk: [], h: [], n: 0 };
   // output arrays (reused): position, angle (0 = facing up / north, clockwise), shape, size (yards), opacity factor, age, odometer, ghost, pet, segment + fraction
-  var OUT = { x: [], y: [], a: [], sh: [], sz: [], al: [], age: [], od: [], gh: [], pet: [], seg: [], f: [], side: [], mode: [], n: 0 };
+  var OUT = { x: [], y: [], a: [], sh: [], sz: [], al: [], age: [], od: [], gh: [], pet: [], seg: [], f: [], side: [], mode: [], n: 0, lineFrom: -Infinity };
   var MODES = ['walk', 'mount', 'taxi', 'swim', 'ghost'];
   function layout(s, style) {
     var o = OUT, inp = IN, n = 0;
@@ -68,7 +80,7 @@
       var x0 = inp.x[i - 1], y0 = inp.y[i - 1], dx = inp.x[i] - x0, dy = inp.y[i] - y0, len = Math.sqrt(dx * dx + dy * dy);
       if (!(len > 1e-6)) continue;
       var fx = dx / len, fy = dy / len, ang = Math.atan2(fx, -fy), rx = -fy, ry = fx;
-      var bits = inp.bits[i], mode = modeOf(bits), list = streams(mode, style, bits);
+      var bits = inp.bits[i], mode = modeOf(bits), list = streamsOf(mode, style, bits);
       for (var q = 0; q < list.length && n < MAX; q++) {
         var st = list[q], step = s * st.m;
         // the multiples of the step inside (oa, ob], newest first
@@ -81,12 +93,15 @@
           if (st.taxi && k % 10 === 0) { sh = SH.feather; sz = 0.55 * s; al = 0.9; a = ang + ((k / 10) & 1 ? 0.5 : -0.5); }
           o.x[n] = x0 + dx * f + rx * off; o.y[n] = y0 + dy * f + ry * off; o.a[n] = a; o.sh[n] = sh; o.sz[n] = sz; o.al[n] = al;
           o.age[n] = inp.age[i - 1] + (inp.age[i] - inp.age[i - 1]) * f; o.od[n] = d; o.gh[n] = st.ghost ? 1 : 0; o.pet[n] = st.pet ? 1 : 0;
-          o.seg[n] = i; o.f[n] = f; o.side[n] = side; o.mode[n] = MODES.indexOf(mode);
+          o.seg[n] = i; o.f[n] = f; o.side[n] = side; o.mode[n] = MI[mode];
           n++;
         }
       }
     }
     o.n = n;
+    // capped (a long flight far zoomed in): the older part of the trail has no prints, so the line still draws there (lineFrom)
+    var lo = Infinity; if (n >= MAX) for (var j = 0; j < n; j++) if (o.od[j] < lo) lo = o.od[j];
+    o.lineFrom = n >= MAX ? lo : -Infinity;
     return n;
   }
   // fill the input from the page's trail points ({ll:[lat,lng], age, brk, k, h}) + the app's mv / od, and the stretch from the last point to you
@@ -198,7 +213,7 @@
       if (R2.map !== map) return;
       var s = R2.on ? ladder(ppy2d(map)) : 0;
       if ((s > 0) !== (R2.s > 0) && R2.redraw) { R2.redraw(); return; }      // prints appear / go: the line changes too
-      if (s !== R2.s) { R2.s = s; relayout2d(); }
+      if (s !== R2.s) { var lf = OUT.lineFrom; R2.s = s; relayout2d(); if (OUT.lineFrom !== lf && R2.redraw) { R2.redraw(); return; } }      // capped: the line's part moved
       paint2d();
     });
   }
@@ -208,6 +223,13 @@
   }
   // the line's opacity factor (worldmap.js: 1 = as before; LINE_K = prints are shown, the line is a faint guide)
   function lineK2d(map, on, me) { return map && on && on.trailprints && me && me.prints ? (ladder(ppy2d(map)) > 0 ? LINE_K : 1) : 1; }
+  // where the prints show the line is not drawn (LINE_K 0); only a capped layout (MAX prints, the newest kept) leaves the older way without prints, and there
+  // the line stays: lineFrom() = the odometer below which it is drawn (-Infinity = nowhere), lineHas(me, p, from) = trail point p is on that part
+  function lineFrom() { return OUT.n > 0 ? OUT.lineFrom : -Infinity; }
+  function lineHas(me, p, from) {
+    var od = me && me.prints && me.prints.od && p && p.k != null ? me.prints.od[p.k] : NaN;
+    return typeof od === 'number' && isFinite(od) && od < from;
+  }
   function draw2d(map, me, trail, extra, on, redraw) {
     attach2d(map, redraw);
     R2.on = !!(on && on.trailprints) && !!(me && me.prints);
@@ -259,7 +281,7 @@
   function row(panelRows, live) { var r = panelRows && panelRows.trailprints; if (r) r.row.style.display = live ? '' : 'none'; }
 
   // ================================================================ the 3D page (three.js)
-  var R3 = { mesh: null, scene: null, s: 0, n: 0, on: false, lastOd: -1, newFrom: Infinity, t0: 0, raf: 0, frames: 0, ctx: null, cap: MAX, lift: 0.5 };
+  var R3 = { mesh: null, scene: null, s: 0, n: 0, on: false, lastOd: -1, newFrom: Infinity, t0: 0, raf: 0, frames: 0, ctx: null, cap: MAX, lift: 0.5, refade: false, relayouts: 0, zoomCalls: 0 };
   function atlas() {
     var cv = document.createElement('canvas'), C = 128; cv.width = cv.height = C * 4;
     var g = cv.getContext('2d'), P = paths();
@@ -307,24 +329,45 @@
     R3.n = n;
     var mx = -1; for (var i = 0; i < n; i++) if (OUT.od[i] > mx) mx = OUT.od[i];
     R3.newFrom = R3.lastOd >= 0 && animOn() ? R3.lastOd : Infinity; if (mx > R3.lastOd || n === 0 || mx < R3.lastOd - 400) R3.lastOd = mx;
-    R3.t0 = Date.now();
+    R3.t0 = R3.at = Date.now(); R3.refade = false;
     place3d(0);
     mesh.visible = n > 0;
     if (R3.newFrom !== Infinity && n && !R3.raf) R3.raf = requestAnimationFrame(anim3d);
   }
   function anim3d() {
     R3.raf = 0; R3.frames++;
-    var t = (Date.now() - R3.t0) / FADE_MS;
+    var t = (Date.now() - R3.t0) / (R3.refade ? REFADE_MS : FADE_MS);
     alpha3d(t);
-    if (t < 1 && animOn()) R3.raf = requestAnimationFrame(anim3d); else { R3.newFrom = Infinity; alpha3d(1); }
+    if (t < 1 && animOn()) R3.raf = requestAnimationFrame(anim3d); else { R3.newFrom = Infinity; R3.refade = false; alpha3d(1); }
+  }
+  // every frame of the 3D page (2.93): the spacing ladder follows the camera distance at once (before, the prints were laid out again only when the distance
+  // had changed about 35 %, so a slow zoom left the spacing off for a moment). Nothing happens while the step stays; a new step lays the prints out again in
+  // the arrays already there (no allocation) and they ease in from 40 % over a quarter second (at once with Windows animations off).
+  // Returns 0 = nothing to do, 1 = laid out again, 2 = prints appear or go: the page redraws (the trail line comes or goes with them).
+  var REFADE_MS = 260;
+  function zoom3d(dist, viewH) {
+    R3.zoomCalls++;
+    var ctx = R3.ctx; if (!ctx || !R3.on || !R3.mesh) return 0;
+    var s = ladder(ppy3d(dist, viewH), MINPX3);
+    if (s === R3.s) return 0;
+    var was = R3.s; R3.s = s; ctx.dist = dist; ctx.viewH = viewH;
+    if ((s > 0) !== (was > 0)) return 2;
+    var me = ctx.me; input(me, ctx.trail, ctx.extra);
+    R3.n = layout(s, me.prints.style); R3.relayouts++;
+    var anim = animOn(); R3.newFrom = anim ? -Infinity : Infinity; R3.refade = anim; R3.t0 = Date.now();
+    place3d();
+    R3.mesh.visible = R3.n > 0;
+    if (anim && R3.n && !R3.raf) R3.raf = requestAnimationFrame(anim3d);
+    return 1;
   }
   // the heights of a print: the solved height (a floor, the water, the air) between its two trail points, else the ground (or the water surface when swimming)
+  var Y3 = { y: 0, ground: false };      // y3d's answer (one object, reused: place3d runs per print)
   function y3d(ctx, i, x, z) {
     var sg = OUT.seg[i], f = OUT.f[i], ha = IN.h[sg - 1], hb = IN.h[sg], ex = ctx.exag;
-    if (isNaN(ha) && isNaN(hb)) return { y: OUT.mode[i] === 3 ? ctx.surfaceYE(x, z) : ctx.groundYE(x, z), ground: OUT.mode[i] !== 3 };
+    if (isNaN(ha) && isNaN(hb)) { Y3.y = OUT.mode[i] === MI.swim ? ctx.surfaceYE(x, z) : ctx.groundYE(x, z); Y3.ground = OUT.mode[i] !== MI.swim; return Y3; }
     var ax = IN.x[sg - 1], az = IN.y[sg - 1], bx = IN.x[sg], bz = IN.y[sg];
     var ya = !isNaN(ha) ? ha * ex : ctx.surfaceYE(ax, az), yb = !isNaN(hb) ? hb * ex : ctx.surfaceYE(bx, bz);
-    return { y: ya * (1 - f) + yb * f, ground: false };
+    Y3.y = ya * (1 - f) + yb * f; Y3.ground = false; return Y3;
   }
   var NRM = [0, 1, 0];
   function normalAt(ctx, x, z) {
@@ -359,7 +402,7 @@
   }
   function alpha3d(t) {
     var mesh = R3.mesh, n = R3.n; if (!mesh) return;
-    var al = mesh.geometry.attributes.aAlpha.array, k = popK(t), extraNow = (Date.now() - R3.t0) / 1000;
+    var al = mesh.geometry.attributes.aAlpha.array, k = R3.refade ? 0.4 + 0.6 * popK(t) : popK(t), extraNow = (Date.now() - (R3.at || R3.t0)) / 1000;
     for (var i = 0; i < n; i++) { var a = fade(OUT.age[i] + extraNow) * OUT.al[i]; if (OUT.od[i] > R3.newFrom) a *= k; al[i] = a; }
     mesh.geometry.attributes.aAlpha.needsUpdate = true;
     if (R3.ctx && R3.ctx.dirty) R3.ctx.dirty();
@@ -378,7 +421,7 @@
     return out;
   }
   window.WmPrints = {
-    take: take, draw2d: draw2d, clear2d: clear2d, lineK2d: lineK2d, row: row, draw3d: draw3d, hide3d: hide3d, lineK3d: lineK3d,
+    take: take, draw2d: draw2d, clear2d: clear2d, lineK2d: lineK2d, row: row, draw3d: draw3d, hide3d: hide3d, lineK3d: lineK3d, zoom3d: zoom3d, lineFrom: lineFrom, lineHas: lineHas,
     // test: the layout of a made-up trail. pts = [{x, y, od, bits, age, brk}] (planar yards), style = {foot, hunter, petKnown}
     layoutForTest: function (pts, s, style) {
       IN.n = 0;
@@ -387,6 +430,8 @@
       return JSON.stringify(list(n));
     },
     ladderForTest: function (ppy) { return ladder(ppy); },
+    ladder3dForTest: function (dist, viewH) { return ladder(ppy3d(dist, viewH), MINPX3); },
+    lineFromForTest: function () { return OUT.lineFrom === -Infinity ? null : OUT.lineFrom; },
     pathsForTest: function () { return paths(); },
     zoomForTest: function (z) { return ladder(Math.pow(2, z) / YU); },
     setAnimForTest: function (v) { forceAnim = v === null || v === undefined ? null : !!v; return animOn(); },
@@ -429,7 +474,8 @@
           } else if (y - ctx.groundYE(x, z) > 20) air++;
         }
       }
-      var r = { on: R3.on, s: R3.s, n: R3.n, count: R3.mesh ? R3.mesh.count : 0, visible: !!(R3.mesh && R3.mesh.visible), inScene: !!(R3.mesh && R3.scene && R3.mesh.parent === R3.scene), kinds: m.kinds, modes: m.modes, pets: m.pets,
+      var r = { on: R3.on, s: R3.s, n: R3.n, count: R3.mesh ? R3.mesh.count : 0, relayouts: R3.relayouts, zoomCalls: R3.zoomCalls, refade: R3.refade, lineFrom: OUT.lineFrom === -Infinity ? null : OUT.lineFrom,
+        want: R3.ctx ? ladder(ppy3d(R3.ctx.dist, R3.ctx.viewH), MINPX3) : null, visible: !!(R3.mesh && R3.mesh.visible), inScene: !!(R3.mesh && R3.scene && R3.mesh.parent === R3.scene), kinds: m.kinds, modes: m.modes, pets: m.pets,
         worstY: Math.round(worstY * 1000) / 1000, worstNormalDeg: Math.round(worstN * 100) / 100, maxTiltDeg: Math.round(maxTilt * 100) / 100, air: air, ground: ground, anim: animOn(), frames: R3.frames,
         color: R3.mesh && R3.n ? [R3.mesh.geometry.attributes.aCol.array[0], R3.mesh.geometry.attributes.aCol.array[1], R3.mesh.geometry.attributes.aCol.array[2]].map(function (v) { return Math.round(srgb(v) * 255); }) : null };
       if (withList) r.list = list(R3.n);

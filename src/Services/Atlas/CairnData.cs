@@ -303,6 +303,11 @@ namespace ElansAddonHub.Services.Atlas
         public IReadOnlyList<VendorItem> Stock(int npc) => vendorsByNpc.TryGetValue(npc, out var l) ? (IReadOnlyList<VendorItem>)l : NoVendors;
         public IReadOnlyList<Spot> Spawns(int npc) => spawns.TryGetValue(npc, out var l) ? (IReadOnlyList<Spot>)l : NoSpots;
         public IReadOnlyList<Spot> Nodes(int obj) => nodes.TryGetValue(obj, out var l) ? (IReadOnlyList<Spot>)l : NoSpots;
+        // for the maps (2.93): every creature / object with places, and the vendors (their place is in Spawns)
+        public IEnumerable<KeyValuePair<int, List<Spot>>> AllSpawns => spawns;
+        public IEnumerable<KeyValuePair<int, List<Spot>>> AllNodes => nodes;
+        public IEnumerable<int> VendorNpcIds => vendorsByNpc.Keys;
+        public IEnumerable<KeyValuePair<string, (double T, long N, int M)>> AllFlights => flights;
         public bool Flight(string leg, out double seconds, out int lodges) { seconds = 0; lodges = 0; if (!flights.TryGetValue(leg ?? "", out var f)) return false; seconds = f.T; lodges = f.M; return true; }
 
         static bool Id(string k, int max, out int id) => int.TryParse(k, NumberStyles.None, CultureInfo.InvariantCulture, out id) && id >= 1 && id <= max;

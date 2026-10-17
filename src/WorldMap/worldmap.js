@@ -374,21 +374,25 @@
     meGroup.clearLayers(); meDot = null;
     // the trail: runs of points (a break starts a new run), cut into age bands that fade out over the 10 minutes
     var extra = (Date.now() - meAt) / 1000, BAND = 60, run = [], band = -1;
+    // the paw prints first (trailprints.js): where they show, the trail has no line under them (2.93) - only the older part a capped layout left without
+    // prints keeps it (lineFrom); zoomed out, with no prints, it is the clean line with its casing
+    if (window.WmPrints) window.WmPrints.draw2d(map, me, meTrail, extra, on, meDraw);
+    var pk = window.WmPrints ? window.WmPrints.lineK2d(map, on, me) : 1, lf = pk === 0 ? window.WmPrints.lineFrom() : Infinity;
     function flush() {
       if (run.length < 2) return;
-      var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600)), pk = window.WmPrints ? window.WmPrints.lineK2d(map, on, me) : 1;      // pk < 1: paw prints are shown, the line is a faint guide
-      if (pk === 1) meGroup.addLayer(L.polyline(run, { color: '#000', weight: 6, opacity: op * 0.45, interactive: false, lineCap: 'round', lineJoin: 'round' }));      // a dark casing: readable on any tile
-      meGroup.addLayer(L.polyline(run, { color: me.color, weight: pk === 1 ? 3 : 1.5, opacity: op * pk, interactive: false, lineCap: 'round', lineJoin: 'round', className: 'me-trail' }));
+      var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600));
+      meGroup.addLayer(L.polyline(run, { color: '#000', weight: 6, opacity: op * 0.45, interactive: false, lineCap: 'round', lineJoin: 'round' }));      // a dark casing: readable on any tile
+      meGroup.addLayer(L.polyline(run, { color: me.color, weight: 3, opacity: op, interactive: false, lineCap: 'round', lineJoin: 'round', className: 'me-trail' }));
     }
     for (var i = 0; i < meTrail.length; i++) {
       var p = meTrail[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
+      if (pk === 0 && !window.WmPrints.lineHas(me, p, lf)) { if (run.length && !p.brk) { run.push(p.ll); flush(); } run = []; break; }      // from here on the way has prints
       if (p.brk) { flush(); run = []; band = b; }
       if (b !== band) { flush(); run = run.length ? [run[run.length - 1]] : []; band = b; }
       run.push(p.ll);
     }
-    if (me.state === 'ok' && me.here && run.length) run.push(me.here);
+    if (pk !== 0 && me.state === 'ok' && me.here && run.length) run.push(me.here);
     flush();
-    if (window.WmPrints) window.WmPrints.draw2d(map, me, meTrail, extra, on, meDraw);
     // the events: small marks on the trail, fading with it; point at one for what and when, click it for its Atlas page
     meEvMarkers = [];
     var fan = on.trailevents && me.events && window.WmIcons ? window.WmIcons.evFan(me.events, me.state === 'ok' ? me.here : null) : [];

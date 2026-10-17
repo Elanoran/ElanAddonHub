@@ -92,6 +92,66 @@ namespace ElansAddonHub.Services.Atlas
             }
         }
 
+        // ---------------------------------------------------------------- the Cairn's places on the maps (2.93)
+        // Spawn points (where members of the Cairn's Lodges killed or met a creature), gathering nodes and flight times, labelled "Cairn" and merged with what
+        // your own Lodge (and you) saw: the Lodge's own places come first and a Cairn place that is the same spot (inside the node merge distance) is left out,
+        // since the Cairn's numbers include your Lodge's. Only there while CairnAtlas.Current is - for members who share.
+        public const double CairnSameSpot = AtlasObs.NodeMerge;
+
+        static bool Near(double ax, double ay, double bx, double by) => (ax - bx) * (ax - bx) + (ay - by) * (ay - by) <= CairnSameSpot * CairnSameSpot + 1e-12;
+
+        // "Seen 12 times · 3 lodges · Cairn" (spawns) / "Looted 12 times · 3 lodges · Cairn" (nodes)
+        public static string CairnSpotTip(CairnSet.Spot s, bool node)
+        {
+            string n = s.N <= 1 ? (node ? "Looted once" : "Seen once") : (node ? "Looted " : "Seen ") + s.N.ToString("N0", CultureInfo.InvariantCulture) + " times";
+            return n + " · " + Lodges(s.M) + " · " + AtlasLabel.Cairn;
+        }
+
+        // the Cairn's spawn points of a creature that are not already one of `have` (uiMap, x, y), most seen first
+        public static List<CairnSet.Spot> CairnSpawns(int npc, IEnumerable<(int Map, double X, double Y)> have = null)
+        {
+            var c = CairnAtlas.Current; if (c == null) return new List<CairnSet.Spot>();
+            var h = have?.ToList() ?? new List<(int, double, double)>();
+            return c.Spawns(npc).Where(s => !h.Any(o => o.Item1 == s.Map && Near(o.Item2, o.Item3, s.X, s.Y))).OrderByDescending(s => s.N).ToList();
+        }
+
+        // the Cairn's nodes of an object on one map that are not one of `have` (your own / the Lodge's nodes there)
+        public static List<CairnSet.Spot> CairnNodes(int obj, int uiMap, IEnumerable<GNode> have = null)
+        {
+            var c = CairnAtlas.Current; if (c == null) return new List<CairnSet.Spot>();
+            var h = have?.ToList() ?? new List<GNode>();
+            return c.Nodes(obj).Where(s => s.Map == uiMap && !h.Any(o => Near(o.X, o.Y, s.X, s.Y))).OrderByDescending(s => s.N).ToList();
+        }
+
+        // the maps the Cairn has nodes of an object on (most first)
+        public static List<int> CairnNodeMaps(int obj)
+        {
+            var c = CairnAtlas.Current; if (c == null) return new List<int>();
+            return c.Nodes(obj).GroupBy(s => s.Map).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).Select(g => g.Key).ToList();
+        }
+
+        // the objects the Cairn has nodes of on one map, with how many
+        public static List<KeyValuePair<int, int>> CairnObjectsOnMap(int uiMap)
+        {
+            var c = CairnAtlas.Current; var res = new List<KeyValuePair<int, int>>();
+            if (c == null) return res;
+            foreach (var kv in c.AllNodes) { int n = kv.Value.Count(s => s.Map == uiMap); if (n > 0) res.Add(new KeyValuePair<int, int>(kv.Key, n)); }
+            return res.OrderByDescending(k => k.Value).ThenBy(k => k.Key).ToList();
+        }
+
+        // a flight leg's time from the Cairn ("Horde|11>22", either way round); 0 = none
+        public static double CairnFlight(string faction, int a, int b, out int lodges)
+        {
+            lodges = 0;
+            var c = CairnAtlas.Current; if (c == null) return 0;
+            foreach (var fac in faction == null ? new[] { "Alliance", "Horde" } : new[] { faction })
+            {
+                if (c.Flight(fac + "|" + a.ToString(CultureInfo.InvariantCulture) + ">" + b.ToString(CultureInfo.InvariantCulture), out var t, out lodges) && t > 0) return t;
+                if (c.Flight(fac + "|" + b.ToString(CultureInfo.InvariantCulture) + ">" + a.ToString(CultureInfo.InvariantCulture), out t, out lodges) && t > 0) return t;
+            }
+            lodges = 0; return 0;
+        }
+
         // creature / object / container loot tables: the Cairn's items of that source
         // looted / lodges: what the Cairn's rows are based on (the section's coverage line says it, DataHonesty)
         static void AddCairnLoot(AtlasPageModel m, AtlasSection s, string lodgeKind, int id, List<AtlasRow> rows, List<AtlasRow> tiny, Dictionary<int, AtlasRow> by, out long looted, out int lodges)

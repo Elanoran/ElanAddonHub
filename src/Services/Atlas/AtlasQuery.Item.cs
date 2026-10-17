@@ -375,6 +375,19 @@ namespace ElansAddonHub.Services.Atlas
                     plan.Spot(f.Zone, f.X, f.Y, MarkerKind.Find, (string.IsNullOrEmpty(f.By) ? "A member" : f.By) + " found it", row.Detail + " · " + F, row.Link);
                 }
             }
+            // the Cairn's places of the dropping creatures and the vendors (2.93): labelled Cairn, after the Lodge's, a spot the Lodge has is not drawn twice
+            if (CairnAtlas.Current != null)
+                foreach (var r in src.Rows.Where(x => x.Tier <= 1))
+                {
+                    bool vend = r.Key.StartsWith("vendor:", StringComparison.Ordinal);
+                    if (!(r.Key.StartsWith("npc:", StringComparison.Ordinal) || vend) || !int.TryParse(r.Key.Substring(vend ? 7 : 4), out var cid)) continue;
+                    var have = new List<(int, double, double)>();
+                    if (L != null) { foreach (var sp in L.Spawns(cid)) have.Add((sp.Zone, sp.X, sp.Y)); var lv = L.Vendor(cid); if (lv != null) have.Add((lv.Zone, lv.X, lv.Y)); }
+                    var cs = CairnSpawns(cid, have);
+                    foreach (var sp in cs.Take(vend ? 3 : MaxSpawnsPerSource / 2))
+                        plan.Spot(sp.Map, sp.X, sp.Y, vend ? MarkerKind.Vendor : MarkerKind.Spawn, r.Title, (vend ? "Sells it · " : "") + CairnSpotTip(sp, false), r.Link);
+                    if (cs.Count > 0) AddLayer(m, "cairn");
+                }
             // the baseline's spawn points: the fewer sources there are, the more of each is drawn - a dozen sources would bury the Lodge's own markers
             int classicSources = src.Rows.Count(r => r.Tier != 0 || r.Extra.Contains(C));
             int per = classicSources <= 1 ? MaxSpawnsPerSource : classicSources <= 4 ? 16 : 6;

@@ -10,7 +10,7 @@
     <AssemblyName>ElansAddonHub</AssemblyName>
     <RootNamespace>ElansAddonHub</RootNamespace>
     <ApplicationIcon>Assets\hub.ico</ApplicationIcon>
-    <Version>2.91.0</Version>
+    <Version>2.93.0</Version>
     <!-- a 64-bit process on 64-bit Windows: the world map builders need more than the 32-bit address space (WebView2Loader is picked per architecture) -->
     <Prefer32Bit>false</Prefer32Bit>
     <PlatformTarget>AnyCPU</PlatformTarget>      <!-- the SDK would pick x86 for a .NET Framework exe -->

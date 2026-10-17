@@ -224,7 +224,7 @@
   // file <col>_<row>.wmw: "WMW1" | int col | int row | int layers | layers x { u8 chunk, u8 kind, u8 flags (1 flat), u8, u16 type, u16, u64 cell mask, f32 height | f32 height[9 x 9] }
   // chunk = row * 16 + column in the tile, mask bit cy * 8 + cx (cy north -> south, cx west -> east), kind 1 water, 2 ocean, 3 magma, 4 slime
   var waterMats = [null, null, null, null, null], waterBase = [null, { c: 0x3a93c4, o: 0.55 }, { c: 0x103f6e, o: 0.68 }, { c: 0xff5a12, o: 0.9 }, { c: 0x58c43a, o: 0.74 }];
-  var waterActive = 0, waterLoaded = 0, waterFailed = 0, waterMeshCount = 0, outerSea = null;
+  var waterActive = 0, waterLoaded = 0, waterFailed = 0, waterMeshCount = 0, outerSea = null, outerFloor = null, outerFloorMat = null, OUTER_FLOOR_Y = -2;      // yards: the island's sky floor (WorldMapTerrain.SkyFloor), so no tile edge shows a step
   function parseWater(buf, c, r) {
     if (!buf || buf.byteLength < 16) return null;
     var dv = new DataView(buf), len = buf.byteLength;
@@ -310,6 +310,7 @@
   // open sea where the world table has no tile (the tile grid outside the continent): one flat plane at sea level made of runs of missing tiles
   function buildOuterSea() {
     if (outerSea) { scene.remove(outerSea); outerSea.geometry.dispose(); outerSea = null; }
+    if (outerFloor) { scene.remove(outerFloor); outerFloor = null; }
     var a = [], big = 130000, N = 64 * TY;
     addQuad(a, -big, -big, big, 0, 0, 0, 0, 0); addQuad(a, -big, N, big, big, 0, 0, 0, 0);
     addQuad(a, -big, 0, 0, N, 0, 0, 0, 0); addQuad(a, N, 0, big, N, 0, 0, 0, 0);
@@ -323,6 +324,12 @@
     }
     var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(a), 3));
     outerSea = new THREE.Mesh(g, waterMats[2]); outerSea.renderOrder = 2; outerSea.frustumCulled = false; scene.add(outerSea);
+    // 2.93: a sea floor under the open sea, lit like a map tile's empty floor (the same colour and material), so the open sea and the sea inside the tiles
+    // (an island's sky chunks, the deep water off a coast) are the same blue - before, the open sea showed the scene background through the water
+    // the tile pictures are sRGB textures: the floor's colour is the map's sea colour (the pictures' empty sea) taken to linear the same way
+    if (!outerFloorMat) outerFloorMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    outerFloorMat.color.set((cfg && /^#[0-9a-fA-F]{6}$/.test(cfg.sea || '')) ? cfg.sea : '#081110').convertSRGBToLinear();
+    outerFloor = new THREE.Mesh(g, outerFloorMat); outerFloor.position.y = OUTER_FLOOR_Y * prefs.exag; outerFloor.renderOrder = 1; outerFloor.frustumCulled = false; outerFloor.name = 'outerFloor'; scene.add(outerFloor);
     buildHoles();
   }
   // tiles whose terrain could not be read yet and that have no low-detail heights either (the app's "holes"): a flat hatched placeholder at sea level in
@@ -604,7 +611,7 @@
     domItems = domItems.filter(function (it) { if (it.layer === id) { if (it.el.parentNode) it.el.parentNode.removeChild(it.el); return false; } return true; });
   }
   // a mark with its own height (the live dot and events in the air, on a floor or on the water: it.zs, yards) keeps it; everything else stands on the ground
-  function placeDom() { domItems.forEach(function (it) { it.y = it.zs != null ? it.zs * prefs.exag : groundYE(it.x, it.z); }); }
+  function placeDom() { domItems.forEach(function (it) { it.y = it.zs != null ? it.zs * prefs.exag : it.water ? surfaceYE(it.x, it.z) : groundYE(it.x, it.z); }); }
 
   // draped polylines: densified to at most `step` yards between points, each lifted over the ground
   function drape(flatLL, step, lift) {
@@ -694,19 +701,23 @@
     Object.keys(pointLayers).forEach(function (k) { placePoints(pointLayers[k]); });
     Object.keys(lineLayers).forEach(function (k) { placeLines(lineLayers[k]); });
     Object.keys(ringLayers).forEach(function (k) { placeRings(ringLayers[k]); });
-    placeDom(); if (meLive()) meDrawLines(); dirty = true;
+    placeDom(); if (meLive()) meDrawLines(); if (outerFloor) outerFloor.position.y = OUTER_FLOOR_Y * prefs.exag; dirty = true;
   }
 
   // ---------------------------------------------------------------- DOM overlays: labels and flight masters follow their ground spot
   var tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
+  // the lift of your own dot (2.93): close by it sits on its solved height like the paw prints (half a yard up, as they are), further out it rises to the
+  // other markers' 12 yards so a hill in front does not hide it; the other markers keep their 12 yards (labels 40)
+  function meLift(dist) { return dist <= 400 ? 0.5 : Math.min(12, 0.5 + (dist - 400) * 0.0072); }
   function updateOverlays() {
     var w = window.innerWidth, h = window.innerHeight, shown = 0;
-    var eye = camera.position, far = cam.dist;
+    var eye = camera.position, far = cam.dist, ml = meLift(cam.dist);
     for (var i = 0; i < domItems.length; i++) {
       var it = domItems[i], e = it.el;
       var show = !!on[it.layer] && (!it.g || !!on[it.g]);
       if (show) {
-        tmpV.set(it.x, it.y + (it.kind === 'label' ? 40 : 12), it.z);
+        var lift = it.kind === 'label' ? 40 : it.kind === 'me' ? ml : 12; it.lift = lift;
+        tmpV.set(it.x, it.y + lift, it.z);
         var dx = tmpV.x - eye.x, dy = tmpV.y - eye.y, dz = tmpV.z - eye.z, dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         tmpV.applyMatrix4(camera.matrixWorldInverse);
         if (tmpV.z >= 0) show = false;
@@ -719,7 +730,7 @@
           if (show && it.lab) { var near = dist < 9000; if (near !== it.near) { it.lab.classList.toggle('near', near); it.near = near; } }
           if (show && it.arrow && it.prev) {
             // the heading arrow points along your last step as it looks from this camera
-            tmpV2.set(it.prev[0], it.y + 12, it.prev[1]).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix);
+            tmpV2.set(it.prev[0], it.y + lift, it.prev[1]).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix);
             var px = (tmpV2.x * .5 + .5) * w, py = (-tmpV2.y * .5 + .5) * h, ang = Math.atan2(sx - px, -(sy - py)) * 180 / Math.PI;
             it.arrow.style.transform = 'rotate(' + Math.round(ang) + 'deg)';
           }
@@ -938,6 +949,7 @@
     stepFlight(now);
     stepFollow();
     if (meLines && meLineDist > 0 && Math.abs(Math.log(cam.dist / meLineDist)) > 0.3) meDrawLines();      // the ribbon keeps a few pixels wide as you zoom
+    else if (meLines && window.WmPrints && window.WmPrints.zoom3d(cam.dist, window.innerHeight) === 2) meDrawLines();      // 2.93: the prints' spacing follows the zoom at once; prints on / off redraws the ribbon
     if (benching) { var t = (now - benching.t0) / 1000; if (benching.last) { var dt = now - benching.last; if (dt > benching.maxDt) benching.maxDt = dt; if (dt > 33.4) benching.slow++; benching.n++; } benching.last = now; cam.az = benching.az0 + t * 24; cam.tilt = 38 + 14 * Math.sin(t * 0.9); dirty = true; }
     if (heightGen !== lastHeightGen && now - lastRefresh > 700) { lastHeightGen = heightGen; lastRefresh = now; refreshHeights(); }
     var need = dirty || inFlight > 0;
@@ -1385,22 +1397,26 @@
     var extra = (Date.now() - meAt) / 1000, BAND = 60, run = [], band = -1, grp = new THREE.Group(), w = clamp(cam.dist * 0.0035, 1.2, 80);
     var pk = window.WmPrints ? window.WmPrints.lineK3d(on, me, cam.dist, window.innerHeight) : 1;
     meLineDist = cam.dist;
+    // the prints first: where they show there is no ribbon (2.93), only on the older part a capped layout left without prints (lineFrom)
+    if (window.WmPrints) window.WmPrints.draw3d({ THREE: THREE, scene: scene, me: me, trail: meTrail, extra: extra, on: on, groundYE: groundYE, surfaceYE: surfaceYE, exag: prefs.exag, dist: cam.dist, viewH: window.innerHeight, dirty: function () { dirty = true; } });
+    var lf = pk < 1 && window.WmPrints ? window.WmPrints.lineFrom() : Infinity;
     function flush() {
       if (run.length < 2) return;
+      if (pk === 0) { var op0 = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600)), c0 = meRibbon(run, w * 1.9, '#000000', op0 * 0.45), l0 = meRibbon(run, w, me.color, op0); if (c0) { c0.renderOrder = 4; grp.add(c0); } if (l0) grp.add(l0); return; }
       var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600));
       var casing = pk === 1 ? meRibbon(run, w * 1.9, '#000000', op * 0.45) : null, line = meRibbon(run, pk === 1 ? w : w * 0.6, me.color, op * pk);      // pk < 1: paw prints, a faint guide
       if (casing) { casing.renderOrder = 4; grp.add(casing); } if (line) grp.add(line);
     }
     for (var i = 0; i < meTrail.length; i++) {
       var p = meTrail[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
+      if (pk === 0 && !window.WmPrints.lineHas(me, p, lf)) { if (run.length && !p.brk) { run.push(p); flush(); } run = []; break; }      // from here on the way has prints
       if (p.brk) { flush(); run = []; band = b; }
       if (b !== band) { flush(); run = run.length ? [run[run.length - 1]] : []; band = b; }
       run.push(p);
     }
-    if (me.state === 'ok' && me.here && run.length) run.push({ ll: me.here, h: me.hh });
+    if (pk !== 0 && me.state === 'ok' && me.here && run.length) run.push({ ll: me.here, h: me.hh });
     flush();
     scene.add(grp); meLines = grp; dirty = true;
-    if (window.WmPrints) window.WmPrints.draw3d({ THREE: THREE, scene: scene, me: me, trail: meTrail, extra: extra, on: on, groundYE: groundYE, surfaceYE: surfaceYE, exag: prefs.exag, dist: cam.dist, viewH: window.innerHeight, dirty: function () { dirty = true; } });
   }
   function meDraw() {
     meDrawLines();
@@ -1431,7 +1447,9 @@
       dd.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
       $('ov').appendChild(dd);
       var hz = grey ? me.lh : me.hh;
-      meDotIt = { el: dd, x: pp[0], z: pp[1], zs: hz, y: hz != null ? hz * prefs.exag : groundYE(pp[0], pp[1]), kind: 'me', layer: '__me', name: 'me', prev: prev, arrow: dd.querySelector('.me-arrow') };
+      // swimming with no height from the app: on the water's surface, like the ripple prints (not on the sea floor)
+      var wet = !grey && hz == null && !!(me.prints && (me.prints.hmv & 16));
+      meDotIt = { el: dd, x: pp[0], z: pp[1], zs: hz, water: wet, y: hz != null ? hz * prefs.exag : wet ? surfaceYE(pp[0], pp[1]) : groundYE(pp[0], pp[1]), kind: 'me', layer: '__me', name: 'me', prev: prev, arrow: dd.querySelector('.me-arrow') };
       on.__me = true; domItems.push(meDotIt);
     }
     dirty = true;
@@ -1555,6 +1573,8 @@
         followBtn: !!(d && d.querySelector('.me-follow')), follow: follow, show: d && d.querySelector('.me-show') ? d.querySelector('.me-show').textContent : '', centered: !!(h && Math.abs(cam.tx - h[0]) < 3 && Math.abs(cam.tz - h[1]) < 3), off: h ? Math.round(Math.hypot(cam.tx - h[0], cam.tz - h[1])) : -1,
         ribbonLift: (function () { if (!meLines || !meLines.children.length) return null; var a = meLines.children[meLines.children.length - 1].geometry.attributes.position.array; return Math.round((a[1] - surfaceYE(a[0], a[2])) * 10) / 10; })(),
         // the heights (2.82): the dot's height and the ground under it (exaggerated scene yards), its own solved height (yards, null = the ground), and the ribbons' highest lift over the ground
+        dotLift: meDotIt && meDotIt.lift != null ? Math.round(meDotIt.lift * 100) / 100 : null, liftAt: [140, 400, 900, 2000, 6000].map(function (d) { return Math.round(meLift(d) * 100) / 100; }), camDist: Math.round(cam.dist),
+        dotWater: !!(meDotIt && meDotIt.water), dotSurface: meDotIt ? Math.round(surfaceYE(meDotIt.x, meDotIt.z) * 10) / 10 : null,
         dotY: meDotIt ? Math.round(meDotIt.y * 10) / 10 : null, dotGround: meDotIt ? Math.round(groundYE(meDotIt.x, meDotIt.z) * 10) / 10 : null, dotZ: meDotIt && meDotIt.zs != null ? meDotIt.zs : null, exag: prefs.exag,
         ribbonMaxLift: (function () { if (!meLines || !meLines.children.length) return null; var mx = -1e9; meLines.children.forEach(function (c) { var a = c.geometry.attributes.position.array; for (var i = 0; i + 2 < a.length; i += 3) mx = Math.max(mx, a[i + 1] - surfaceYE(a[i], a[i + 2])); }); return Math.round(mx * 10) / 10; })(),
         evY: meEvIts.map(function (it) { return Math.round((it.y - groundYE(it.x, it.z)) * 10) / 10; }),
@@ -1592,7 +1612,37 @@
       var byKind = {}, tiles = 0; Object.keys(meshes).forEach(function (k) { var m = meshes[k]; if (m.wm && m.wm.length) { tiles++; m.wm.forEach(function (w) { byKind[w.userData.kind] = (byKind[w.userData.kind] || 0) + 1; }); } });
       var withFile = 0, layersN = 0; tileList.forEach(function (t) { if (t.W) { withFile++; layersN += t.W.length; } });
       var bare = []; tileList.forEach(function (t) { if (t.W && t.W.length === 0 && t.H && t.max < 0 && bare.length < 12) bare.push(t.c + '_' + t.r); });
-      return JSON.stringify({ pending: pendingBuilds, bare: bare, meshes: waterMeshCount, tiles: tiles, files: withFile, layers: layersN, terrainMeshes: selStats.meshes, byKind: byKind, loaded: waterLoaded, none: waterFailed, active: waterActive, outer: !!outerSea, flatSea: false });
+      return JSON.stringify({ pending: pendingBuilds, bare: bare, meshes: waterMeshCount, tiles: tiles, files: withFile, layers: layersN, terrainMeshes: selStats.meshes, byKind: byKind, loaded: waterLoaded, none: waterFailed, active: waterActive, outer: !!outerSea, flatSea: false,
+        outerFloor: !!(outerFloor && outerFloor.parent), outerFloorY: outerFloor ? outerFloor.position.y : null, outerFloorColor: outerFloor ? '#' + outerFloor.material.color.getHexString() : null, tileFloorColor: '#' + new THREE.Color((cfg && cfg.sea) || '#081110').convertSRGBToLinear().getHexString(),
+        outerFloorLit: !!(outerFloor && outerFloor.material.isMeshLambertMaterial) });
+    },
+    // the sea's colour on screen (test, 2.93): one frame is drawn and read back at a point of the sea inside a map tile (ocean over a floor below sea level)
+    // and at a point of the open sea outside the tiles, both on screen and as near the middle as can be found; {tile: 0 / outer: 0} when one is not in view
+    seaPixels: function () {
+      if (!renderer) return 'null';
+      updateCamera();
+      var w = window.innerWidth, h = window.innerHeight, best = { tile: null, outer: null }, v = new THREE.Vector3();
+      function onScreen(x, z) { v.set(x, 0, z).applyMatrix4(camera.matrixWorldInverse); if (v.z >= 0) return null; v.applyMatrix4(camera.projectionMatrix); var sx = (v.x * .5 + .5) * w, sy = (-v.y * .5 + .5) * h; return sx > 20 && sx < w - 300 && sy > 20 && sy < h - 20 ? [sx, sy, Math.hypot(sx - w / 2, sy - h / 2)] : null; }
+      // a point the land in front hides is no use: the first terrain hit along the ray must be at the point (within a few yards)
+      var rc = new THREE.Raycaster(), land = []; Object.keys(meshes).forEach(function (k) { if (meshes[k].mesh) land.push(meshes[k].mesh); });
+      function hidden(x, z, sx, sy) {
+        rc.setFromCamera(new THREE.Vector2(sx / w * 2 - 1, -(sy / h) * 2 + 1), camera);
+        var hit = rc.intersectObjects(land, false)[0], far = Math.hypot(x - camera.position.x, 0 - camera.position.y, z - camera.position.z);
+        return !!(hit && hit.distance < far - 8);
+      }
+      function keep(k, x, z) { var s2 = onScreen(x, z); if (s2 && (!best[k] || s2[2] < best[k].d) && !hidden(x, z, s2[0], s2[1])) best[k] = { x: x, z: z, sx: s2[0], sy: s2[1], d: s2[2] }; }
+      for (var c = 0; c < 64; c++) for (var r = 0; r < 64; r++) {
+        var t = tileMap[c * 64 + r], mm = meshes[c * 64 + r];
+        if (!t && !holeMap[c * 64 + r]) { for (var q = 0; q < 4; q++) keep('outer', (c + 0.25 + (q & 1) * 0.5) * TY, (r + 0.25 + (q >> 1) * 0.5) * TY); continue; }
+        if (!t || !t.H || !t.W || !mm || !mm.wm || !mm.wm.length) continue;
+        for (var ch = 0; ch < 256; ch += 3) { var x = (c + ((ch & 15) + 0.5) / 16) * TY, z = (r + ((ch >> 4) + 0.5) / 16) * TY, wa = waterAtXZ(x, z); if (wa !== null && Math.abs(wa) < 0.5 && groundY(x, z) < -1) keep('tile', x, z); }
+      }
+      if (!best.tile || !best.outer) return JSON.stringify({ tile: best.tile ? 1 : 0, outer: best.outer ? 1 : 0 });
+      renderer.render(scene, camera);
+      var gl = renderer.getContext(), px = new Uint8Array(4), dpr = renderer.getPixelRatio(), out = {};
+      ['tile', 'outer'].forEach(function (k) { var b = best[k]; gl.readPixels(Math.round(b.sx * dpr), Math.round((h - b.sy) * dpr), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); out[k] = [px[0], px[1], px[2]]; out[k + 'At'] = [Math.round(b.sx), Math.round(b.sy), Math.round(Math.hypot(b.x - camera.position.x, b.z - camera.position.z))]; });
+      dirty = true;
+      return JSON.stringify(out);
     },
     waterAt: function (lat, lng) { var p = ll2xz(lat, lng); var h = waterAtXZ(p[0], p[1]); return h === null ? 'null' : String(h); },
     ground: function (lat, lng) { var p = ll2xz(lat, lng); return groundY(p[0], p[1]); },
