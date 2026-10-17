@@ -113,7 +113,7 @@ namespace ElansAddonHub
                 FrameworkElement Tile(string openId) { var en = AtlasNav.Entries().FirstOrDefault(x => x.OpenId == openId); return en == null ? null : AtlasView.NavRowForTest(en.Key); }   // Home has no tiles since 2.74: the side menu row of the category
                 var nr = AtlasView.NavRowsForTest.ToList();
                 Check("side menu (Home has no tiles since 2.74): rows for Talents and Professions next to Items, Creatures, ... in the nav's order: Spells, Talents, Professions, Recipes, Skills",
-                    Tile("talents:") != null && Tile("professions:") != null && Tile("browse:items") != null && nr.Contains("Talents") && nr.Contains("Professions")
+                    Tile("talents:") != null && Tile("browse:professions") != null && Tile("browse:items") != null && nr.Contains("Talents") && nr.Contains("Professions")
                     && nr.IndexOf("Spells") < nr.IndexOf("Talents") && nr.IndexOf("Talents") < nr.IndexOf("Professions") && nr.IndexOf("Professions") < nr.IndexOf("Recipes") && nr.IndexOf("Recipes") < nr.IndexOf("Skills") && !nr.Contains("Skills and professions"), string.Join(" | ", nr));
                 Snapshot(Path.Combine(dir, "atlas-hosts-start.png"));
 
@@ -161,6 +161,10 @@ namespace ElansAddonHub
                 Check("professions: a profession the data does not have is not an error - the page stays as it was", AtlasView.IsHosted && pp.ProfessionNow == "Cooking", pp.ProfessionNow);
                 await AtlasView.Open("professions:cooking/recipes"); await Task.Delay(300); UpdateLayout();
                 Snapshot(Path.Combine(dir, "atlas-hosts-professions.png"));
+                Check("professions: the breadcrumb's Professions opens the list of professions (2.85: browse:professions)", AtlasView.CrumbLinksForTest().Contains("browse:professions"), string.Join(",", AtlasView.CrumbLinksForTest()));
+
+                // 2.85: the Professions list in front of the page (its own world for a moment: a secondary profession, ranks, trainers)
+                await ProfessionListChecks(Check, dir, sset, pp);
 
                 // ============================================================================================================ history: item page -> Talents -> Professions and back
                 AtlasView.History.Clear();
@@ -207,7 +211,7 @@ namespace ElansAddonHub
                 ShowTab("addons"); ShowTab("talents"); await Task.Delay(100);
                 Check("shortcut: Ctrl+6 again does not reset what the calculator shows (same id, no new history step)", AtlasView.CurrentId == keepId && AtlasView.History.Count == keepSteps, AtlasView.CurrentId);
                 ShowTab("addons"); ShowTab("professions"); await Task.Delay(300); UpdateLayout();
-                Check("ShowTab('professions') lands in the Atlas on the Professions page (old callers keep working)", TabAtlas.IsChecked == true && AtlasView.IsHosted && ReferenceEquals(AtlasView.HostedForTest, pp) && AtlasView.CurrentId.StartsWith("professions:") && pp.IsVisible && AddonsPage.Visibility != Visibility.Visible && RefreshBar.Visibility != Visibility.Visible, AtlasView.CurrentId);
+                Check("ShowTab('professions') lands in the Atlas on the Professions list (2.85: browse:professions; old callers keep working)", TabAtlas.IsChecked == true && AtlasView.IsBrowse && AtlasView.CurrentId == "browse:professions" && !pp.IsVisible && AddonsPage.Visibility != Visibility.Visible && RefreshBar.Visibility != Visibility.Visible, AtlasView.CurrentId);
 
                 // ============================================================================================================ links the entity pages give
                 var item = AtlasQuery.Build("item:108");
@@ -232,7 +236,7 @@ namespace ElansAddonHub
                 await Task.Delay(200); await AtlasView.WaitForTest(); UpdateLayout();
                 Check("links: ... and the Atlas page shows that spell, with Back returning to the page the calculator was on", AtlasView.Model != null && AtlasView.Model.Id == "spell:100" && !AtlasView.IsHosted, AtlasView.CurrentId);
                 await AtlasView.Back(); await Task.Delay(200);
-                Check("links: Back from the talent's spell page returns to the page the user was on", AtlasView.IsHosted && AtlasView.CurrentId.StartsWith("professions:"), AtlasView.CurrentId);
+                Check("links: Back from the talent's spell page returns to the page the user was on (the Professions list)", AtlasView.IsBrowse && AtlasView.CurrentId == "browse:professions", AtlasView.CurrentId);
 
                 // ============================================================================================================ search
                 var s_cook = AtlasQuery.Search("cooking");

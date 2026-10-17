@@ -79,7 +79,8 @@ namespace ElansAddonHub
         };
 
         // category browse pages (2.71): the category id -> its 4:1 banner, shown like a zone's (the painting behind the page header, fading into the page).
-        // The finds page ("finds") has its own. The hosted pages (world map, talents, professions) have no header of their own, so no banner.
+        // The finds page ("finds") has its own. The hosted pages (world map, talents, a profession's page) have no header of their own, so no banner;
+        // the Professions LIST in front of them (browse:professions, 2.85) is a browse page and has one.
         // Atlas Home's tiles carry line icons (AtlasIcons), no painting.
         public static readonly Dictionary<string, ArtPiece> Banners = new Dictionary<string, ArtPiece>(StringComparer.OrdinalIgnoreCase)
         {
@@ -94,6 +95,7 @@ namespace ElansAddonHub
             ["races"] = new ArtPiece("banner-races.jpg", 0.65, 0.45),
             ["skills"] = new ArtPiece("banner-skills.jpg", 0.75, 0.45),
             ["recipes"] = new ArtPiece("banner-recipes.jpg", 0.4, 0.45),
+            ["professions"] = new ArtPiece("banner-professions.jpg", 0.6, 0.45),
             ["factions"] = new ArtPiece("banner-factions.jpg", 0.5, 0.45),
             ["finds"] = new ArtPiece("banner-finds.jpg", 0.6, 0.45),
         };

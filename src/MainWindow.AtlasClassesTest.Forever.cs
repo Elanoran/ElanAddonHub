@@ -81,6 +81,11 @@ namespace ElansAddonHub
                 Check("forever: the Priest's At a glance has 'Race-only spells' from the client - Confounding Flash (Gnome), Divine Grace (Human) in the races' order, each linking to its spell; not Fear Ward (every priest), not a dwarf spell in a world without dwarf priests, not a rune without a learn level",
                     only != null && only.Text == "Confounding Flash (Gnome), Divine Grace (Human)" && only.Items[1].Value == "spell:1277370" && only.Source == AtlasLabel.Forever,
                     only == null ? "none" : only.Text);
+                var gOnly = gnome.Section("raceonly"); var hOnly = AtlasQuery.Build("race:1").Section("raceonly");
+                Check("forever (2.85): the race page's Racial abilities tab also lists the class spells only that race gets - the Gnome: Confounding Flash (Priest), the Human: Divine Grace (Priest); both on the Abilities tab, linking to the spell",
+                    gOnly != null && gOnly.Rows.Select(r => r.Title).SequenceEqual(new[] { "Confounding Flash" }) && gOnly.Rows[0].Link == "spell:1277455" && gOnly.Rows[0].Detail.StartsWith("Priest") && gOnly.Note.Contains("Gnome")
+                    && hOnly != null && hOnly.Rows.Select(r => r.Title).SequenceEqual(new[] { "Divine Grace" }) && AtlasTabs.OfSection(gOnly.Key) == AtlasTabs.Abilities,
+                    string.Join(" | ", gOnly?.Rows.Select(r => r.Title + ":" + r.Detail) ?? new string[0]) + " / " + string.Join(" | ", hOnly?.Rows.Select(r => r.Title) ?? new string[0]));
                 Check("forever: a spell a whole side shares (a mage teleport for Humans and Gnomes) is not race-only, so the Mage has no such line",
                     mage.ClassLore != null && !mage.ClassLore.Glance.Any(g => g.Label == "Race-only spells"), string.Join(" | ", mage.ClassLore?.Glance.Select(g => g.Label) ?? new string[0]));
                 var file = Path.Combine(dir, "forever-spells.cache");

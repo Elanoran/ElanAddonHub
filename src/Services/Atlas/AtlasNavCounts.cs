@@ -191,7 +191,7 @@ namespace ElansAddonHub.Services.Atlas
             if (e.Key == AtlasNav.FindsKey) { var r = AtlasBrowse.Run(AtlasNav.FindsId); return r == null || r.NotFound ? -1 : r.Total; }
             if (e.Extra || e.Members.Count != 1) return -1;
             var c = e.Members[0];
-            if (c.Hosted) return c.NavCount == null ? -1 : c.NavCount();
+            if (!c.HasList) return c.NavCount == null ? -1 : c.NavCount();     // a listed category (Professions) counts its list
             return AtlasBrowse.Count(c);
         }
     }

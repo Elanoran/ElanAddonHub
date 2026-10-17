@@ -318,6 +318,18 @@ namespace ElansAddonHub
                 await AtlasView.Open("browse:classes"); await AtlasView.WaitForTest(); await Task.Delay(100); UpdateLayout();
                 Check("window: browse:classes shows the three classes as rows; clicking one opens its page", AtlasView.IsBrowse && AtlasView.BrowseListForTest != null && AtlasView.BrowseListForTest.Items.Count == 3, AtlasView.IsBrowse + "");
                 await AtlasView.Open("class:3"); await AtlasView.WaitForTest(); await Task.Delay(250); UpdateLayout();
+                // 2.85: the spellbook is its own tab, Overview | Spells | Related; the Overview no longer carries it (nor what the spellbook is missing)
+                var ovTexts = AtlasTexts(AtlasView);
+                Check("window (2.85): the Hunter page's tabs are Overview | Spells | Related, it opens on the Overview, and the Overview has no 'Spells by level' card, no spell filters and no trainer-cost note (they are on Spells)",
+                    AtlasView.TabsForTest.SequenceEqual(new[] { "overview", "spells", "related" }) && AtlasView.TabNowForTest == "overview" && AtlasView.CurrentId == "class:3" && !ovTexts.Contains("Spells by level") && !AtlasView.TabBuiltForTest("spells")
+                    && !ovTexts.Any(t => t.Contains("learn from a trainer")) && AtlasView.TabCountForTest("spells") == ((ClassSpellBook)AtlasView.Model.Custom).Entries.Count(e => !e.Pet && !e.Talent) && AtlasView.TabCountForTest("spells") > 0
+                    && System.Windows.Automation.AutomationProperties.GetName(AtlasView.TabButtonForTest("spells")).StartsWith("Spells "), string.Join(",", AtlasView.TabsForTest) + " now " + AtlasView.TabNowForTest);
+                // the tab is chosen with the keyboard like the others (a RadioButton in the strip: focus it, Space checks it)
+                var spTab = AtlasView.TabButtonForTest("spells");
+                spTab.Focus(); spTab.IsChecked = true; UpdateLayout(); await Task.Delay(60);
+                Check("window (2.85): choosing the Spells tab shows 'Spells by level' with its filters and the trainer note, the id is class:3?tab=spells (no new history step), the content starts at the top",
+                    AtlasView.TabNowForTest == "spells" && AtlasView.CurrentId == "class:3?tab=spells" && AtlasTexts(AtlasView).Contains("Spells by level") && AtlasTexts(AtlasView).Any(t => t.Contains("learn from a trainer")) && AtlasView.ClassControlForTest("search") != null
+                    && AtlasView.Model.Id == "class:3" && (AtlasView.ContentScrollerForTest?.VerticalOffset ?? 0) == 0 && spTab.Focusable, AtlasView.CurrentId);
                 Check("window: the Hunter page is drawn - title Hunter, the breadcrumb Atlas > Classes > Hunter, the 'Spells by level' card with its tabs and filters, the spells in groups",
                     AtlasView.Model != null && AtlasView.Model.Id == "class:3" && AtlasView.CrumbsForTest == "Atlas > Classes > Hunter" && AtlasTexts(AtlasView).Contains("Spells by level") && AtlasView.ClassControlForTest("tab:163") != null && AtlasView.ClassControlForTest("search") != null
                     && AtlasView.ClassHeadersForTest.Any() && AtlasView.ClassHeadersForTest.First() == "Level 1", AtlasView.CrumbsForTest + " " + string.Join(",", AtlasView.ClassHeadersForTest.Take(4)));
@@ -325,9 +337,9 @@ namespace ElansAddonHub
                     AtlasView.ClassControlForTest("tab:0") != null && AtlasView.ClassControlForTest("tab:50") != null && AtlasView.ClassControlForTest("tab:261") != null && AtlasView.ClassControlForTest("tab:51") == null && AtlasTexts(AtlasView).Contains("Beast Training (pet)")
                     && AtlasView.ClassCountTextForTest.Contains("spells at 11 levels"), AtlasView.ClassCountTextForTest);
                 Snapshot(Path.Combine(dir, "atlas-classes-hunter.png"));
-                Check("window: the Hunter hero - the name in the class colour (#AAD372), the class icon in the square tile (at least 72 px), the chips Damage and Mana, Focus; the tabs are Overview (the spells by level) and Related (the races)",
+                Check("window: the Hunter hero - the name in the class colour (#AAD372), the class icon in the square tile (at least 72 px), the chips Damage and Mana, Focus; the tabs are Overview, Spells (the spells by level) and Related (the races)",
                     AtlasView.HeroNameForTest == "Hunter" && ((System.Windows.Media.SolidColorBrush)AtlasView.HeroBrushForTest).Color == (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#AAD372") && AtlasView.HeroTileForTest != null && AtlasView.HeroTileForTest.Width >= 72 && AtlasView.HeroTileForTest.Height == AtlasView.HeroTileForTest.Width && AtlasWalk(AtlasView.HeroTileForTest).OfType<Image>().Any()
-                    && AtlasView.HeroChipsForTest.Contains("Damage") && AtlasView.HeroChipsForTest.Contains("Mana, Focus") && AtlasView.TabsForTest.SequenceEqual(new[] { "overview", "related" }) && AtlasView.TabNowForTest == "overview", string.Join(" | ", AtlasView.HeroChipsForTest) + " tabs " + string.Join(",", AtlasView.TabsForTest));
+                    && AtlasView.HeroChipsForTest.Contains("Damage") && AtlasView.HeroChipsForTest.Contains("Mana, Focus") && AtlasView.TabsForTest.SequenceEqual(new[] { "overview", "spells", "related" }) && AtlasView.TabNowForTest == "spells", string.Join(" | ", AtlasView.HeroChipsForTest) + " tabs " + string.Join(",", AtlasView.TabsForTest));
 
                 // the class banner (2.77): the Hunter's painting runs behind the name card like a zone's, first on the page, the full content width
                 bool HeroBanner(string kind, string file)
@@ -365,12 +377,13 @@ namespace ElansAddonHub
                 Check("window: hovering a spell row gives the game tooltip with the cost and cooldown", rowTip.Texts().Contains("25 Mana") && rowTip.Texts().Contains("6 sec cooldown"), string.Join(" | ", rowTip.Texts()));
                 var classLinks = AtlasWalk(AtlasView).OfType<TextBlock>().Where(t => t.Tag is string s && s.StartsWith("race:")).ToList();
                 var racesCard = AtlasView.Model.Section("races");
-                Check("window: the Races table of the class page is on its Related tab with a row per race (the Overview keeps the spells by level)", racesCard != null && AtlasView.TabsForTest.Contains("related") && AtlasView.ClassRowsForTest.Count > 0 && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Races") && AtlasTexts(AtlasView).Contains("Night Elf") && await SwitchTab("overview"));
+                Check("window: the Races table of the class page is on its Related tab with a row per race (the Spells tab keeps the spells by level)", racesCard != null && AtlasView.TabsForTest.Contains("related") && AtlasView.ClassRowsForTest.Count > 0 && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Races") && AtlasTexts(AtlasView).Contains("Night Elf") && await SwitchTab("spells"));
                 await AtlasView.Open("spell:14281"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
                 var learned = AtlasWalk(AtlasView).OfType<TextBlock>().FirstOrDefault(t => t.Tag is string s && s == "class:3");
                 Check("window: the spell page shows 'Learned by' as a link; clicking it opens the Hunter page (and Back returns to the spell)", learned != null && learned.Text.StartsWith("Hunter, level 12"), learned?.Text);
                 if (learned != null) ClickRow(learned);
                 await AtlasView.WaitForTest(); await Task.Delay(250); UpdateLayout();
+                await SwitchTab("spells");
                 Check("window: ... the Hunter page is open again, its spells drawn from the top", AtlasView.Model != null && AtlasView.Model.Id == "class:3" && AtlasView.ClassHeadersForTest.Any(), AtlasView.CurrentId);
                 await AtlasView.Back(); await AtlasView.WaitForTest(); await Task.Delay(100);
                 Check("window: Back returns to the spell page", AtlasView.Model != null && AtlasView.Model.Id == "spell:14281");
@@ -379,7 +392,22 @@ namespace ElansAddonHub
                 AtlasView.NavState.Unpin("class:3");
                 await AtlasView.Open("race:2"); await AtlasView.WaitForTest(); await Task.Delay(200); UpdateLayout();
                 Snapshot(Path.Combine(dir, "atlas-classes-race.png"));
-                Check("window: the Orc page is drawn - breadcrumb Atlas > Races > Orc, the hero (Orc, Horde), the Racial abilities and Classes tables on Related, the facts on the identity card", AtlasView.CrumbsForTest == "Atlas > Races > Orc" && AtlasView.HeroNameForTest == "Orc" && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Racial abilities") && AtlasTexts(AtlasView).Contains("Blood Fury") && AtlasTexts(AtlasView).Contains("Classes") && AtlasTexts(AtlasView).Contains("Warrior") && await SwitchTab("overview"), AtlasView.CrumbsForTest);
+                var orcTabs = AtlasView.TabsForTest.ToList(); var orcOverview = AtlasTexts(AtlasView);
+                Check("window (2.85): the Orc page's tabs are Overview | Racial abilities | Related; the Overview keeps only the short 'At a glance' line of the racials (no Racial abilities table)",
+                    orcTabs.SequenceEqual(new[] { "overview", "abilities", "related" }) && AtlasView.TabNowForTest == "overview" && AtlasView.Model.Section("racial") != null && AtlasTabs.OfSection("racial") == AtlasTabs.Abilities && AtlasTabs.OfSection("raceonly") == AtlasTabs.Abilities
+                    && !orcOverview.Any(t => t.Contains("abilities from")) && AtlasView.TabCountForTest("abilities") == AtlasView.Model.Section("racial").Rows.Count + (AtlasView.Model.Section("raceonly")?.Rows.Count ?? 0) && AtlasTabs.Title("abilities") == "Racial abilities", string.Join(",", orcTabs));
+                Check("window: the Orc page is drawn - breadcrumb Atlas > Races > Orc, the hero (Orc, Horde), the Racial abilities on their own tab (race:2?tab=abilities), the Classes table on Related (without the racials), the facts on the identity card",
+                    AtlasView.CrumbsForTest == "Atlas > Races > Orc" && AtlasView.HeroNameForTest == "Orc" && await SwitchTab("abilities") && AtlasView.CurrentId == "race:2?tab=abilities" && AtlasTexts(AtlasView).Contains("Racial abilities") && AtlasTexts(AtlasView).Contains("Blood Fury")
+                    && await SwitchTab("related") && AtlasTexts(AtlasView).Contains("Classes") && AtlasTexts(AtlasView).Contains("Warrior") && !AtlasTexts(AtlasView).Contains("Blood Fury") && await SwitchTab("overview"), AtlasView.CrumbsForTest + " " + AtlasView.CurrentId);
+                // a link straight to a tab (chat, Copy link, pins): race:2?tab=abilities and class:3?tab=spells open the page on that tab
+                await AtlasView.Open("class:1"); await AtlasView.WaitForTest(); await AtlasView.Open("race:2?tab=abilities"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
+                bool deepRace = AtlasView.TabNowForTest == "abilities" && AtlasView.CurrentId == "race:2?tab=abilities" && AtlasTexts(AtlasView).Contains("Blood Fury") && AtlasView.FixedHeadOnForTest;
+                await AtlasView.Open("class:3?tab=spells"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
+                bool deepClass = AtlasView.TabNowForTest == "spells" && AtlasView.CurrentId == "class:3?tab=spells" && AtlasTexts(AtlasView).Contains("Spells by level") && AtlasView.FixedHeadOnForTest;
+                await AtlasView.Open("race:2?tab=spells"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
+                bool noSuch = AtlasView.TabNowForTest == "overview" && AtlasView.CurrentId == "race:2";
+                Check("window (2.85): deep links - race:2?tab=abilities and class:3?tab=spells open on that tab under the fixed head; a race has no Spells tab (race:2?tab=spells opens its Overview and the id says race:2)", deepRace && deepClass && noSuch, deepRace + " " + deepClass + " " + noSuch + " " + AtlasView.CurrentId);
+                await AtlasView.Open("race:2"); await AtlasView.WaitForTest(); await Task.Delay(100); UpdateLayout();
                 Check("window: the Orc page opens with the Orc's painted banner (race-orc.jpg), not the Hunter's", HeroBanner("race", "Orc") && ArtLibrary.Race("Orc", RaceInfo.Horde).File == "race-orc.jpg", BannerWhy());
                 await AtlasView.Open("race:4"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
                 Check("window: the Night Elf page (client file NightElf) has its own banner", AtlasView.BannerForTest?.Tag as string == "race-banner" && ElansAddonHub.AtlasPage.HeroArtOf(AtlasView.Model)?.File == "race-nightelf.jpg", BannerWhy());
@@ -402,7 +430,7 @@ namespace ElansAddonHub
                     ElansAddonHub.AtlasPage.HeroArtOf(AtlasQuery.Build("class:77")) == null && ElansAddonHub.AtlasPage.HeroArtOf(AtlasQuery.Build("race:9")) == null && ElansAddonHub.AtlasPage.HeroArtOf(AtlasQuery.Build("spell:3044")) == null
                     && ElansAddonHub.AtlasPage.HeroArtOf(null) == null && ElansAddonHub.AtlasPage.HeroArtOf(new AtlasPageModel { Id = "class:3", Kind = "class", Title = "Hunter" }) == ArtLibrary.Class("HUNTER")
                     && CcDo(() => { ClassData.SetForTest(null, ClassData.State.Disabled); var a = ElansAddonHub.AtlasPage.HeroArtOf(new AtlasPageModel { Id = "class:3", Kind = "class", Title = "Hunter" }); ClassData.SetForTest(set); return a == null; }));
-                await AtlasView.Open("class:8"); await AtlasView.WaitForTest(); await Task.Delay(250); UpdateLayout();
+                await AtlasView.Open("class:8"); await AtlasView.WaitForTest(); await Task.Delay(250); UpdateLayout(); await SwitchTab("spells");
                 Check("window: another class resets the card (Mage: its own tab Arcane, level 1 first, no Hunter spells)", AtlasView.ClassFilterForTest.SkillId == 0 && AtlasView.ClassControlForTest("tab:237") != null && AtlasView.ClassControlForTest("tab:163") == null && AtlasView.ClassRowsForTest.Any(r => r.Title == "Fireball") && !AtlasView.ClassRowsForTest.Any(r => r.Title == "Arcane Shot"));
 
                 // 2.83: checked against WoW Forever - the race mask of a shared racial line, race-only class spells (an invented world of its own; the usual one put back)

@@ -31,8 +31,10 @@ namespace ElansAddonHub.Services.Atlas
         public bool NavPrimary;                         // in a shared nav row: this category is where the row opens (default: the first by Order)
         public string Keywords = "";
         public string PageLine = "";                    // a line the list page shows under its count (Spells / Skills: what belongs where), "" = none                    // extra words the Ctrl+K palette matches the page by ("herbs ore fishing")
+        public bool Listed;                             // hosted AND a list (2.85, Professions): "browse:<id>" is its list page, where the nav row, the palette and a bare "<id>:" open; "<id>:<sub>" stays the hosted page
         public bool Hosted => Host != null;
-        public string OpenId => Hosted ? Id + ":" : "browse:" + Id;
+        public bool HasList => Host == null || Listed;
+        public string OpenId => HasList ? "browse:" + Id : Id + ":";
     }
 
     public static class AtlasCategories

@@ -76,7 +76,8 @@ namespace ElansAddonHub
             });
             AtlasCategories.Register(new AtlasCategory
             {
-                Id = AtlasHosts.Professions, Title = "Professions", Glyph = AtlasKinds.Glyph("skill"), Blurb = "Each profession: its recipes by skill, a leveling guide, what you can craft now, camping", Order = 88,
+                Id = AtlasHosts.Professions, Title = "Professions", Glyph = AtlasKinds.Glyph("skill"), Blurb = "Every profession, primary and secondary: its recipes by skill, a leveling guide, what you can craft now, camping", Order = 88,
+                Listed = true,      // 2.85: the row opens the list of professions (browse:professions); a profession opens its page (professions:cooking/recipes)
                 Group = AtlasNav.Character, Keywords = "crafting leveling guide gathering alchemy blacksmithing enchanting engineering herbalism leatherworking mining skinning tailoring cooking first aid fishing",
                 Host = HostProfessions, SubTitle = AtlasHosts.ProfessionsSubTitle, Search = AtlasHosts.ProfessionHits, NavCount = AtlasHosts.ProfessionCount,
                 Canonical = sub => ProfessionsSub(ProfessionsView.ProfessionNow, ProfessionsView.TabNow),

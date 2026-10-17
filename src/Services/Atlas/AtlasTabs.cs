@@ -5,7 +5,8 @@ using System.Linq;
 namespace ElansAddonHub.Services.Atlas
 {
     // ============================================================================================================================
-    // The tabs of an entity page (Overview | Sources | Map | Related | Lodge) and what they do to an id.
+    // The tabs of an entity page (Overview | Spells | Racial abilities | Sources | Map | Related | Lodge) and what they do to an id. Spells is a class page's
+    // spellbook (2.85, it was a card on the Overview), Racial abilities a race page's racials and race-only class spells (2.85, they were on Related).
     //   item:100                 the page, on the tab the kind opens on (a zone on Map, everything else on Overview)
     //   item:100?tab=sources     the SAME page, on its Sources tab (a link can point at a tab: chat, Copy link, pins, recents)
     // The tab is a way of looking at the page, not another page: for identity (recents, pins, the breadcrumb, Follow, "is this the page I am on")
@@ -15,8 +16,8 @@ namespace ElansAddonHub.Services.Atlas
     // ============================================================================================================================
     public static class AtlasTabs
     {
-        public const string Overview = "overview", Sources = "sources", Map = "map", Related = "related", Lodge = "lodge";
-        public static readonly string[] Order = { Overview, Sources, Map, Related, Lodge };
+        public const string Overview = "overview", Spells = "spells", Abilities = "abilities", Sources = "sources", Map = "map", Related = "related", Lodge = "lodge";
+        public static readonly string[] Order = { Overview, Spells, Abilities, Sources, Map, Related, Lodge };
         const string Query = "?tab=";
 
         public static string Title(string tab)
@@ -24,6 +25,8 @@ namespace ElansAddonHub.Services.Atlas
             switch (tab)
             {
                 case Overview: return "Overview";
+                case Spells: return "Spells";
+                case Abilities: return "Racial abilities";
                 case Sources: return "Sources";
                 case Map: return "Map";
                 case Related: return "Related";
@@ -86,6 +89,7 @@ namespace ElansAddonHub.Services.Atlas
             {
                 case "sources": case "drops": case "givers": case "enders": case "nodes": return Sources;
                 case "finds": case "crafters": case "lodgenotes": case "standing-lodge": return Lodge;
+                case "racial": case "raceonly": return Abilities;      // a race page: its racial abilities and the class spells only it gets (2.85)
                 case "owned": case "rewards": case "choices": case "objectives": case "standing-mine": return Overview;      // what a quest gives and asks for is the quest; a faction: where your characters stand
                 default: return Related;
             }

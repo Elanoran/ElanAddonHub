@@ -61,9 +61,9 @@ namespace ElansAddonHub
                 Check("numbers: Items, Zones, World map and Professions show a number (Zones, World map and Professions had none before 2.77)",
                     new[] { "items", "zones", "worldmap", "professions" }.All(k => Digits(AtlasView.NavCountForTest(k))), Nums() + " | zones='" + AtlasView.NavCountForTest("zones") + "' worldmap='" + AtlasView.NavCountForTest("worldmap") + "' professions='" + AtlasView.NavCountForTest("professions") + "'");
                 widthsNote = "continents=" + ElansAddonHub.Services.WorldMap.WorldMapService.Continents(Services.Maps.MapData.Index).Count;
-                Check("numbers: World map counts its continents, Professions its professions (the twelve by name, as many as the game data has)",
+                Check("numbers: World map counts its continents, Professions its professions (2.85: the rows of its list, browse:professions)",
                     snap.TryGetValue("worldmap", out var wm) && wm == ElansAddonHub.Services.WorldMap.WorldMapService.Continents(Services.Maps.MapData.Index).Count
-                    && snap.TryGetValue("professions", out var pf) && pf == AtlasHosts.ProfessionCount() && pf > 0, widthsNote + " " + Nums());
+                    && snap.TryGetValue("professions", out var pf) && pf == AtlasBrowse.Count(AtlasCategories.Find(AtlasHosts.Professions)) && pf > 0, widthsNote + " " + Nums());
                 Check("numbers: every list row has its list's number (the same as the list says), Talents / Home / Data sources none",
                     AtlasNav.Entries().Where(e => !e.Extra && e.Members.Count == 1 && !e.Members[0].Hosted).All(e => AtlasNavCounts.Get(e.Key) == AtlasBrowse.Count(e.Members[0]) || AtlasBrowse.Count(e.Members[0]) <= 0)
                     && string.IsNullOrEmpty(AtlasView.NavCountForTest("talents")) && AtlasView.NavCountForTest("home") == null, Nums());
