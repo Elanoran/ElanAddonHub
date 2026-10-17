@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.82.1
+- **"Your game was updated" instead of "the first time".** When a game update means a world map continent or its 3D terrain has to be made again, the card now says so, instead of saying it is the first time.
+
 ## 2.82.0
 - **Class and race pages match WoW Forever.** The notes on every class and race page were checked against Forever itself (your game's own data first, then Blizzard's Forever pages) instead of Classic. They now tell you about Forever's new pairs - Human Hunter, Orc Mage, Dwarf Shaman, Gnome Priest, Undead Paladin and Troll Warlock - and that the Skyborne can be druids on both sides. Each page has an **On Forever** line saying what changed, with a link to Blizzard's page.
 - **The right racial abilities.** The High Order and Windshaper Skyborne each show only their own abilities now: Read Leyline is the High Order's, Skysight the Windshapers'. Before, both pages listed both. Racials that Forever gives in a version for each class (such as the Gnome's Eureka!) say which class each version is for.

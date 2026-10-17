@@ -430,11 +430,21 @@ namespace ElansAddonHub
             overlay.Visibility = Visibility.Visible;
         }
 
+        // why the map is being made: the first time, or again because the game was updated (the older version's map is of no use with the new files)
+        public static string BuildHint(int mapId, bool terrain)
+        {
+            const string tail = " Nothing is uploaded and nothing is written to the WoW folder.";
+            bool again = WorldMapCache.MadeForOlderGame(mapId, terrain);
+            if (terrain)
+                return (again ? "Your game was updated, so the Outpost reads the shape of the land again from the new game files, in the background. This happens once per game version."
+                              : "The 3D view needs the shape of the land. The first time, the Outpost reads it from your game files, in the background. This happens once per game version.") + tail;
+            return (again ? "Your game was updated, so the Outpost makes this continent's map again from the new game files, in the background. This happens once per game version; later you open it at once."
+                          : "The first time you open a continent, the Outpost makes its map from your game files, in the background. This happens once per game version; later you open it at once.") + tail;
+        }
+
         void ShowBuild(WorldBuildState st, string name, bool terrain = false)
         {
-            Show("", st != null && st.Running ? st.Text : terrain ? "Building " + name + " terrain..." : "Building " + name + "...",
-                terrain ? "The 3D view needs the shape of the land. The first time, the Outpost reads it from your game files, in the background. This happens once per game version. Nothing is uploaded and nothing is written to the WoW folder."
-                        : "The first time you open a continent, the Outpost makes its map from your game files, in the background. This happens once per game version; later you open it at once. Nothing is uploaded and nothing is written to the WoW folder.", true);
+            Show("", st != null && st.Running ? st.Text : terrain ? "Building " + name + " terrain..." : "Building " + name + "...", BuildHint(mapId, terrain), true);
             overlayBar.Visibility = Visibility.Visible;
             overlayBar.Value = st != null && st.Total > 0 ? Math.Min(1, st.Done / (double)st.Total) : 0;
             overlayButton.Content = "Cancel"; overlayButton.Visibility = Visibility.Visible;

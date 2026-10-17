@@ -146,6 +146,32 @@ namespace ElansAddonHub
                 WorldMapCache.RootOverride = Path.Combine(work, "cache");
                 WorldMapService.ResetForTest();
 
+                // ---------------------------------------------------------------- made gAgain after a game update (2.82.1): the build card says so, not "the first time"
+                {
+                    WorldMapCache.RootOverride = Path.Combine(work, "older");
+                    string gOldKey = "1.60.0.1-aaaa_p" + WorldMapPyramid.Version, gNewKey = "1.60.1.2-bbbb_p" + WorldMapPyramid.Version;
+                    bool gFirstNew = !WorldMapCache.MadeForOlderGame(1, false, gNewKey) && !WorldMapCache.MadeForOlderGame(1, true, gNewKey);
+                    var gOldDir = WorldMapCache.MapDir(gOldKey, 1); Directory.CreateDirectory(gOldDir);
+                    File.WriteAllText(WorldMapPyramid.ManifestPath(gOldDir), "{\"v\":" + WorldMapPyramid.Version + ",\"mapId\":1,\"adt\":4,\"files\":9}");
+                    Directory.CreateDirectory(WorldMapCache.MapDir(gOldKey, 2));   // a map folder without a finished map: not "made before"
+                    bool gSeen = WorldMapCache.MadeForOlderGame(1, false, gNewKey), gNotTerrain = !WorldMapCache.MadeForOlderGame(1, true, gNewKey), gNotOther = !WorldMapCache.MadeForOlderGame(2, false, gNewKey);
+                    int gRemoved = WorldMapCache.RemoveOtherBuilds(gNewKey);
+                    bool gRemembered = gRemoved == 1 && !Directory.Exists(WorldMapCache.MapDir(gOldKey, 1)) && WorldMapCache.MadeForOlderGame(1, false, gNewKey) && !WorldMapCache.MadeForOlderGame(2, false, gNewKey);
+                    Check("game update: a continent made for an older game build counts as made gAgain (its 3D terrain and an unfinished map do not), and that is gRemembered after the old folder is removed",
+                        gFirstNew && gSeen && gNotTerrain && gNotOther && gRemembered, gFirstNew + " " + gSeen + " " + gNotTerrain + " " + gNotOther + " " + gRemembered);
+                    WorldMapCache.RootOverride = Path.Combine(work, "older2");
+                    string gFirst = WorldMapView.BuildHint(1, false), gFirstT = WorldMapView.BuildHint(1, true);
+                    WorldMapCache.RootOverride = Path.Combine(work, "older");
+                    // BuildHint reads the current build key; note the map under it as made before
+                    var gCur = WorldMapCache.BuildKey; Directory.CreateDirectory(Path.Combine(WorldMapCache.Root, gCur));
+                    File.WriteAllLines(Path.Combine(WorldMapCache.Root, gCur, "older-maps.txt"), new[] { "1", "t1" });
+                    string gAgain = WorldMapView.BuildHint(1, false), gAgainT = WorldMapView.BuildHint(1, true);
+                    Check("game update: the build card says \"Your game was updated\" for a map and terrain made before, \"The first time\" otherwise",
+                        gFirst.StartsWith("The first time") && gFirstT.Contains("The first time") && gAgain.StartsWith("Your game was updated") && gAgainT.StartsWith("Your game was updated") && !gAgain.Contains("first time"),
+                        gFirst + " | " + gAgain);
+                    WorldMapCache.RootOverride = Path.Combine(work, "cache");
+                }
+
                 // ---------------------------------------------------------------- the math
                 WorldMapMath.WorldToGrid(0, 0, out var c0, out var r0);
                 WorldMapMath.WorldToGrid(WorldMapIds.MaxCoord, WorldMapIds.MaxCoord, out var cNW, out var rNW);
