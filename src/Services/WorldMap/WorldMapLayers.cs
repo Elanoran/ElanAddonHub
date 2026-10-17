@@ -58,17 +58,17 @@ namespace ElansAddonHub.Services.WorldMap
                 L("borders", "Zone borders", "#7dd3fc", "Outlines of the zones, from the game's terrain data (the first time it is switched on the terrain is read from your game files, once per game version); point at a zone to tint it"),
                 L("fm", "Flight masters", "#5aa9ff", "Flight masters of the Alliance (blue), the Horde (red) and both (gold)",
                     L("fm.horde", "Horde", "#ff6b5e", ""), L("fm.alliance", "Alliance", "#5aa9ff", ""), L("fm.neutral", "Neutral", "#f0b429", "Both factions")),
-                L("routes", "Flight routes", "#ff9f43", "Flight paths between flight masters, by faction (a route is Horde or Alliance when both its ends are, else neutral); the flight time is shown when you or the Lodge have flown it. A solid teal line is a learned route: WoW Forever flies that leg differently from the game files, so the line your flights (or your Lodge's) really took is drawn instead. It needs your live position on; Settings > General can clear them",
+                L("routes", "Flight routes", "#ff9f43", "Flight paths between flight masters, by faction (a route is Horde or Alliance when both its ends are, else neutral); the flight time is shown when you or the Lodge have flown it (or the Cairn's Lodges, for members who share). A solid teal line is a learned route: WoW Forever flies that leg differently from the game files, so the line your flights (or your Lodge's) really took is drawn instead. It needs your live position on; Settings > General can clear them",
                     L("routes.horde", "Horde", "#ff6b5e", ""), L("routes.alliance", "Alliance", "#5aa9ff", ""), L("routes.neutral", "Neutral", "#f0b429", "")),
                 L("instances", "Dungeons & raids", "#e879f9", "Dungeon and raid entrances with their level and group size; click one for its page, right-click to navigate there",
                     L("instances.dungeons", "Dungeons", "#e879f9", ""), L("instances.raids", "Raids", "#f97316", "")),
-                L("nodes", "Gathering nodes", "#4ade80", "Herbs, ore, chests and fishing holes: what players looted (Forever) and the Classic baseline's spawn points",
+                L("nodes", "Gathering nodes", "#4ade80", "Herbs, ore, chests and fishing holes: what players looted (Forever: yours, your Lodge's, then the Cairn's) and the Classic baseline's spawn points",
                     L("nodes.herbs", "Herbs", "#4ade80", ""), L("nodes.ore", "Ore", "#d08a4e", ""), L("nodes.chests", "Chests", "#f0b429", ""), L("nodes.fishing", "Fishing", "#5aa9ff", "")),
                 L("saved", "Saved routes", "#22d3ee", "The gathering loops you saved in the Atlas"),
-                L("vendors", "Vendors", "#f0b429", "Merchants (Classic baseline and what the Lodge saw)"),
+                L("vendors", "Vendors", "#f0b429", "Merchants (Classic baseline, what the Lodge saw and the Cairn)"),
                 L("trainers", "Trainers", "#a78bfa", "Class and profession trainers (Classic baseline)"),
                 L("quests", "Quest givers", "#fde047", "Creatures that give quests (Classic baseline)"),
-                L("rares", "Rare creatures", "#e5e7eb", "Rare and rare elite creatures (Classic baseline and what the Lodge saw)"),
+                L("rares", "Rare creatures", "#e5e7eb", "Rare and rare elite creatures (Classic baseline, what the Lodge saw and the Cairn)"),
                 L("seen", "NPCs seen by Lodge members", "#34d399", "Where Lodge members (and you) met NPCs at their windows, killed creatures and saw rares on the minimap, noted by Elan's Toolkit: Forever's own places, ahead of the Classic baseline",
                     L("seen.met", "Met at their window", "#34d399", "Vendors, trainers, quest givers, flight masters ... where a window opened for them"), L("seen.killed", "Killed", "#f87171", "Where creatures were looted"), L("seen.rares", "Rares", "#e5e7eb", "Rares the minimap marked")),
                 L("finds", "Lodge finds", "#f472b6", "Items of green quality and better that Lodge members found, and where"),
@@ -282,7 +282,7 @@ namespace ElansAddonHub.Services.WorldMap
             var times = SafeTimes();
             LearnedFlights lf = null; try { lf = Learned?.Invoke(); } catch (Exception) { }
             var items = new List<object>(); var seen = new HashSet<long>();
-            int timed = 0, learned = 0;
+            int timed = 0, learned = 0, cairnTimed = 0;
             // the learned line of a leg, either way round (a route A -> B learned is drawn for the pair A <-> B; B -> A is turned round)
             LearnedRoute LearnedOf(int a, int b)
             {
@@ -304,9 +304,11 @@ namespace ElansAddonHub.Services.WorldMap
                 double t = LegTime(times, fac, a, b); if (t <= 0) t = LegTime(times, fac, b, a);
                 if (t <= 0 && lr != null && lr.Seconds > 0) t = lr.Seconds;          // the learned route's own flights
                 if (t <= 0) t = OwnSeconds(a.Id, b.Id);                              // recorded flights of the leg (live position)
+                int cairnLodges = 0;
+                if (t <= 0) { t = AtlasQuery.CairnFlight(fac == Neutral ? null : FactionName(fac), a.Id, b.Id, out cairnLodges); if (t > 0) cairnTimed++; }      // 2.93: the Cairn's, after yours and your Lodge's
                 var label = TimeText(t); if (label.Length > 0) timed++;
                 int mid = (line.Count / 4) * 2;
-                var tip = label.Length > 0 ? "Flight time " + label : "No flight time known yet";
+                var tip = label.Length > 0 ? "Flight time " + label + (cairnLodges > 0 ? " · " + AtlasFormat.Count(cairnLodges, "lodge", "lodges") + " · " + AtlasLabel.Cairn : "") : "No flight time known yet";
                 var it = new Dictionary<string, object>
                 {
                     ["pts"] = line, ["g"] = "routes." + FactionKey(fac), ["c"] = fac == Alliance ? "#5aa9ff" : fac == Horde ? "#ff6b5e" : "#f0b429", ["w"] = 2.0, ["o"] = 0.8, ["d"] = "6 5",
@@ -344,7 +346,7 @@ namespace ElansAddonHub.Services.WorldMap
                 }
             }
             return Message("routes", "lines", new Dictionary<string, object> { ["items"] = items }, items.Count,
-                items.Count == 0 ? "No flight routes on this continent." : timed == 0 ? "No flight times yet: Elan's Hunter Helper measures them as you fly, and the Lodge shares them." : "");
+                items.Count == 0 ? "No flight routes on this continent." : timed == 0 ? "No flight times yet: Elan's Hunter Helper measures them as you fly, and the Lodge shares them." : cairnTimed > 0 ? "Flight times: yours and your Lodge's first, then the Cairn's." : "");
         }
 
         static string ShortName(string n) { var i = (n ?? "").IndexOf(','); return i > 0 ? n.Substring(0, i) : n; }
@@ -419,8 +421,10 @@ namespace ElansAddonHub.Services.WorldMap
                 styles.Add(Style(colors[g], shapes[g], false, GatherNodes.GroupTitle(groups[g]) + " · " + AtlasLabel.Classic, "nodes." + groups[g]));
             }
             styles.Add(Style("#38bdf8", "circle", true, "Fishing spots · " + AtlasLabel.Forever, "nodes.fishing"));
+            int cairnStyle = styles.Count;      // 2.93: the Cairn's nodes, one style per group after the others (style index = cairnStyle + group)
+            for (int g = 0; g < groups.Length; g++) styles.Add(Style(colors[g], shapes[g], true, GatherNodes.GroupTitle(groups[g]) + " · " + AtlasLabel.Cairn, "nodes." + groups[g]));
             var ps = new PointSet();
-            int forever = 0, classic = 0;
+            int forever = 0, classic = 0, cairn = 0;
             var src = new LiveNodeSource();
             // where players stood when a catch was looted (the Lodge's merged spots and this PC's own)
             foreach (var ui in GatherNodes.FishSpotMaps())
@@ -445,6 +449,22 @@ namespace ElansAddonHub.Services.WorldMap
                         ps.Add(w.Value.X, w.Value.Y, name, AtlasQuery.NodeTip(nd.N), gi * 2, "obj:" + oid); forever++;
                     }
             }
+            // the Cairn's nodes (only for members who share: it is only there for them), after yours and your Lodge's; the same spot is not drawn twice
+            var cs = CairnAtlas.Current;
+            if (cs != null)
+                foreach (var kv in cs.AllNodes.OrderBy(k => k.Key))
+                {
+                    int gi = Array.IndexOf(groups, GroupOf(kv.Key)); if (gi < 0) continue;
+                    var name = AtlasQuery.ObjectName(kv.Key);
+                    foreach (var ui in kv.Value.Select(p => p.Map).Distinct())
+                        foreach (var c in AtlasQuery.CairnNodes(kv.Key, ui, src.Forever(kv.Key, ui)))
+                        {
+                            if (ps.Full) break;
+                            var w = idx.MapToWorld(ui, c.X, c.Y);
+                            if (w == null || w.Value.MapId != mapId) continue;
+                            ps.Add(w.Value.X, w.Value.Y, name, AtlasQuery.CairnSpotTip(c, true), cairnStyle + gi, "obj:" + kv.Key); cairn++;
+                        }
+                }
             // the Classic baseline's spawn points (world positions as they are)
             var cl = ClassicAtlas.Current;
             if (cl != null)
@@ -456,7 +476,7 @@ namespace ElansAddonHub.Services.WorldMap
                     foreach (var s in sp) { if (s.Map != mapId) continue; ps.Add(s.X, s.Y, o.Name, AtlasLabel.Classic, gi * 2 + 1, "obj:" + o.Id); classic++; }
                 }
             string note = ps.Full ? "Showing the first " + MaxPointsPerLayer.ToString("N0", CultureInfo.InvariantCulture) + " places." : "";
-            if (ps.Count == 0) note = cl == null ? "No nodes yet: looted nodes come from this PC and the Lodge, the other spawn points from the Classic baseline (Atlas start page)." : "No nodes known on this continent.";
+            if (ps.Count == 0) note = cl == null ? "No nodes yet: looted nodes come from this PC, the Lodge and the Cairn, the other spawn points from the Classic baseline (Atlas start page)." : "No nodes known on this continent.";
             else if (cl == null) note = "Looted nodes only; the Classic baseline's spawn points need the Classic data (Atlas start page).";
             return PointMessage("nodes", ps, styles, note);
         }
@@ -561,6 +581,33 @@ namespace ElansAddonHub.Services.WorldMap
                                 ps.Add(w.Value.X, w.Value.Y, AtlasQuery.NpcName(nt.Id), ntip, 0, "npc:" + nt.Id); have.Add(nt.Id);
                             }
                     }
+            }
+            styles.Add(Style(color, shape, true, label + " · " + AtlasLabel.Cairn));      // style 2: the Cairn's (2.93)
+            // the Cairn's places (2.93): vendors it knows the stock of and rares, where its Lodges saw them; after your Lodge's, a spot it has is not drawn twice
+            int cairnShown = 0;
+            var cs = CairnAtlas.Current;
+            if (cs != null && (kind == "vendors" || kind == "rares"))
+            {
+                IEnumerable<int> ids = kind == "vendors" ? cs.VendorNpcIds : cs.AllSpawns.Select(k => k.Key);
+                foreach (var id in ids.OrderBy(i => i))
+                {
+                    if (ps.Full) break;
+                    if (kind == "vendors" && have.Contains(id)) continue;      // your Lodge's vendor stands where it saw it
+                    int rank = SeenData.Npc(id)?.Rank ?? lodge?.Npc(id)?.Rank ?? ClassicAtlas.NpcInfo(id)?.Rank ?? 0;
+                    if (kind == "rares" && rank != 2 && rank != 4) continue;
+                    var known = new List<(int, double, double)>();
+                    if (lodge != null) { foreach (var sp in lodge.Spawns(id)) known.Add((sp.Zone, sp.X, sp.Y)); var lv = lodge.Vendor(id); if (lv != null) known.Add((lv.Zone, lv.X, lv.Y)); }
+                    if (seenAll.TryGetValue(id, out var sv)) foreach (var v in sv) known.Add((v.UiMapId, v.X, v.Y));
+                    string tip = kind == "vendors" ? "Vendor" : rank == 2 ? "Rare elite" : "Rare";
+                    bool placed = false;
+                    foreach (var c in AtlasQuery.CairnSpawns(id, known).Take(kind == "vendors" ? 1 : 8))
+                    {
+                        var w = idx.MapToWorld(c.Map, c.X, c.Y);
+                        if (w == null || w.Value.MapId != mapId) continue;
+                        ps.Add(w.Value.X, w.Value.Y, AtlasQuery.NpcName(id), JoinTip(tip, AtlasQuery.CairnSpotTip(c, false)), 2, "npc:" + id); cairnShown++; placed = true;
+                    }
+                    if (placed) have.Add(id);      // Forever's place (the Cairn's) instead of the baseline's, as for the Lodge's
+                }
             }
             if (cl != null)
                 foreach (var n in cl.Npcs.Values.OrderBy(n => n.Id))

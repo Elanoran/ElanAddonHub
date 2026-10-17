@@ -212,6 +212,10 @@ namespace ElansAddonHub.Services.Atlas
             // spawn points in the zones where members fixed its place
             foreach (var sp in seenAt) plan.Spot(sp.UiMapId, sp.X, sp.Y, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, NpcSpotTip(sp), "npc:" + id);
             if (spots != null && seenAt.Count == 0) foreach (var sp in spots) plan.Spot(sp.Zone, sp.X, sp.Y, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, "Seen by the Lodge · " + F, "npc:" + id);
+            // the Cairn's places (2.93): after your Lodge's; a spot your Lodge already has is not drawn twice
+            var cairnSpots = CairnSpawns(id, seenAt.Select(s => (s.UiMapId, s.X, s.Y)).Concat((spots ?? new AtlasObs.Spot[0]).Select(s => (s.Zone, s.X, s.Y))));
+            foreach (var sp in cairnSpots.Take(MaxSpawnsPerSource)) plan.Spot(sp.Map, sp.X, sp.Y, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, CairnSpotTip(sp, false), "npc:" + id);
+            if (cairnSpots.Count > 0) AddLayer(m, "cairn");
             int classicDropped = 0;
             var classicSpawns = cn != null ? ClassicOutside(cn.Spawns, FixedZones(seenAt), out classicDropped) : null;
             if (cn != null) plan.Classic(classicSpawns, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, tip + C, "npc:" + id);

@@ -3,6 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.92.0
+- **The paw prints are the trail.** Zoomed in, your trail on the world map is now just the prints, with no line under them, in 2D and 3D. Zoomed out, where the prints switch off, it is the clean line as before; on a flight the light dotted line with its feathers shows the way.
+- **Your dot on the ground in 3D.** Close up, your own dot and its arrow now sit on the ground (or the floor, the water) at the end of your prints instead of floating above them. Further out it rises a little, like the other markers, so a hill in front does not hide it.
+- **Smoother prints when you zoom in 3D.** The prints' spacing follows the camera at once while you zoom, instead of catching up after a bigger zoom step.
+- **One sea around islands.** In 3D the sea around Zephras Isle is one blue now: the sea inside the island's map tiles matches the open sea around it.
+- **The Cairn's places on the maps.** For members who share, the Cairn's spawn points, gathering nodes and flight times now show on the world map (Gathering nodes, Vendors, Rare creatures, Flight routes) and on the Atlas maps of creatures, objects, items and zones, labelled "Cairn". Your own Lodge's places come first, and a spot your Lodge already has is not drawn twice.
+
 ## 2.91.0
 - **Where the Atlas's data comes from.** A short, plain explainer at the top of Data sources (and once on Atlas Home, until you press Got it): items, spells, talents, quests, maps and zones come from your own game files; drops, vendors, spawn points, nodes and flight times are learned as people play on Forever - from your own game, your Lodge and the Cairn - so that part is still growing; and where nobody has seen something on Forever yet, the Atlas falls back on the Classic baseline, which may differ.
 - **Honest pages.** A creature's loot, a vendor's prices, an item's sources and a map now say in one line what they are based on ("Seen on Forever: 340 looted kills by 3 members of your Lodge and 200 looted kills by 3 of the Cairn's Lodges"), or that nobody has seen it on Forever yet and the Classic baseline is shown instead.

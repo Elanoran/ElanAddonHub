@@ -32,6 +32,23 @@ namespace ElansAddonHub.Services.Atlas
                     plan.Spot(map, n.X, n.Y, MarkerKind.Node, title, NodeTip(n.N), "obj:" + objectId);
                     total++;
                 }
+            total += AddCairnNodes(plan, src, objectId, title, null);
+            return total;
+        }
+
+        // the Cairn's nodes of an object (2.93), after yours and your Lodge's: on one map (uiMapId > 0) or on every map it has; the same spot is not drawn twice
+        static int AddCairnNodes(PlanBuilder plan, INodeSource src, int objectId, string title, int? uiMapId)
+        {
+            int total = 0;
+            foreach (var map in uiMapId.HasValue ? new List<int> { uiMapId.Value } : CairnNodeMaps(objectId))
+            {
+                var have = src.Forever(objectId, map);
+                foreach (var c in CairnNodes(objectId, map, have).Take(Math.Max(0, MaxNodeMarkersPerObject - have.Count)))
+                {
+                    plan.Spot(map, c.X, c.Y, MarkerKind.Node, title, CairnSpotTip(c, true), "obj:" + objectId);
+                    total++;
+                }
+            }
             return total;
         }
 
@@ -41,9 +58,10 @@ namespace ElansAddonHub.Services.Atlas
             var src = new LiveNodeSource();
             var objs = GatherNodes.ObjectsOnMap(uiMapId);
             var spots = GatherNodes.FishSpotsOn(uiMapId);
-            if (objs.Count == 0 && spots.Count == 0) return 0;
+            var cairnObjs = CairnObjectsOnMap(uiMapId).Where(k => !objs.Any(o => o.Key == k.Key)).ToList();      // 2.93: objects only the Cairn has here
+            if (objs.Count == 0 && spots.Count == 0 && cairnObjs.Count == 0) return 0;
             var s = Section(m, "nodes", "Gathering nodes");
-            s.Note = "Where players looted herbs, veins, chests and pools on this map. " + AtlasLabel.Forever + " positions come first; the Classic baseline's are listed under each object's page.";
+            s.Note = "Where players looted herbs, veins, chests and pools on this map. " + AtlasLabel.Forever + " positions come first (yours and your Lodge's, then the " + AtlasLabel.Cairn + "'s); the Classic baseline's are listed under each object's page.";
             int total = 0;
             if (spots.Count > 0)
             {
@@ -59,7 +77,15 @@ namespace ElansAddonHub.Services.Atlas
                     plan.Spot(uiMapId, n.X, n.Y, MarkerKind.Node, name, NodeTip(n.N), "obj:" + kv.Key);
                     total++;
                 }
+                total += AddCairnNodes(plan, src, kv.Key, name, uiMapId);
             }
+            foreach (var kv in cairnObjs.Take(Math.Max(0, MaxZoneRows - objs.Count)))
+            {
+                string name = ObjectName(kv.Key);
+                s.Rows.Add(new AtlasRow { Key = "obj:" + kv.Key, Link = "obj:" + kv.Key, Title = name, Label = AtlasLabel.Cairn, Tier = 1, Type = "Object", Detail = AtlasFormat.Count(kv.Value, "node", "nodes") });
+                total += AddCairnNodes(plan, src, kv.Key, name, uiMapId);
+            }
+            if (cairnObjs.Count > 0 || total > 0 && CairnAtlas.Current != null) AddLayer(m, "cairn");
             return total;
         }
     }

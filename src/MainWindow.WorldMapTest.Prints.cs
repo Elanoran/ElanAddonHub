@@ -14,7 +14,9 @@ namespace ElansAddonHub
     // the layer row) without a page; then the flat page (the layout of made-up trails: spacing, left / right, facing the way you went, one kind per
     // mode, the hunter's pet line, the zoom threshold; then a real trail: the class colour, fading, the row switch, animations on / off) and the 3D
     // page (prints on the ground at its height and tilted to the slope, flight dots in the air, the far camera keeps the line). Pictures with
-    // ELANSHUB_SHOTS=1: worldmap-prints-*.png.
+    // ELANSHUB_SHOTS=1: worldmap-prints-*.png. 2.93: no trail line where the prints show (2D and 3D; only the older part of a capped layout keeps it),
+    // the 3D prints follow the camera distance every frame (the spacing ladder, no 35 % lag, nothing done while the step stays), your dot sits on its
+    // height close by (half a yard up, like the prints) and rises to 12 yards far out.
     public partial class MainWindow
     {
         static readonly CultureInfo PI = CultureInfo.InvariantCulture;
@@ -161,7 +163,11 @@ namespace ElansAddonHub
                 var brk = await Lay("[{x:0,y:0,od:0},{x:20,y:0,od:20},{x:500,y:0,od:20,brk:1},{x:520,y:0,od:40}]", 5, "{foot:'paw'}");
                 Check("prints 2D layout: no prints across a break in the trail (a teleport)", brk.Count == 8 && brk.All(d => PD(d, "x") <= 20 || PD(d, "x") >= 500), brk.Count + "");
                 var big = await Lay("[" + string.Join(",", Enumerable.Range(0, 600).Select(i => string.Format(PI, "{{x:{0},y:0,od:{0}}}", i * 30))) + "]", 2.5, "{foot:'paw',hunter:true}");
-                Check("prints 2D layout: at most 5000 prints (a long ride zoomed far in), the newest kept", big.Count == 5000 && Math.Abs(big.Max(d => PD(d, "od")) - 599 * 30) < 1e-6, big.Count + "");
+                var bigFrom = await WpJs("window.WmPrints.lineFromForTest()");
+                Check("prints 2D layout: at most 5000 prints (a long ride zoomed far in), the newest kept; the older way they leave out keeps the trail line (lineFrom = the oldest print's odometer)",
+                    big.Count == 5000 && Math.Abs(big.Max(d => PD(d, "od")) - 599 * 30) < 1e-6 && bigFrom != null && Math.Abs(Convert.ToDouble(bigFrom, PI) - big.Min(d => PD(d, "od"))) < 1e-6, big.Count + " " + bigFrom);
+                await Lay(Pts(east), 5, "{foot:'paw'}");
+                Check("prints 2D layout: a layout under the cap leaves no line anywhere (lineFrom none)", await WpJs("window.WmPrints.lineFromForTest()") == null);
                 // the zoom: a print every 16-32 pixels, steps of 2.5 / 5 / 10 / 20 yards; zoomed out further the trail stays a clean line
                 var zs = new List<double>(); foreach (var z in new[] { 9.0, 8.0, 7.0, 6.75, 6.5, 5.0 }) zs.Add(Convert.ToDouble(await WpJs("window.WmPrints.zoomForTest(" + z.ToString(PI) + ")"), PI));
                 Check("prints 2D: the step follows the zoom (zoom 9: 5 yards, 8: 10, 7: 20, 6.75: 20) and below about zoom 6.7 there are no prints, only the line",
@@ -181,12 +187,15 @@ namespace ElansAddonHub
                 async Task Shot(string name) { if (!SelfTestClock.ShotsOn) return; await Task.Delay(300); var png = await view.CaptureForTest(); if (png != null) File.WriteAllBytes(P(name), png); }
                 await Goto(9);
                 var s9 = await S2();
-                Check("prints 2D: zoomed in (zoom 9) your walk is drawn as paw prints (a 5 yard step) with the pet's paws beside them, on the canvas between the line and the marks (pane 450), the line a faint guide",
-                    s9 != null && s9.Bool("on") && PD(s9, "s") == 5 && s9.Int("n") > 40 && s9.Int("painted") > 20 && s9.Child("kinds")?.Int("paw") > 0 && s9.Int("pets") > 0 && PD(s9, "lineK") < 0.5 && s9.Int("paneZ") == 450, PTxt(s9));
+                var me9 = await WmMe();
+                Check("prints 2D: zoomed in (zoom 9) your walk is drawn as paw prints (a 5 yard step) with the pet's paws beside them, on the canvas below the marks (pane 450), and no trail line under them (2.93: the prints are the trail)",
+                    s9 != null && s9.Bool("on") && PD(s9, "s") == 5 && s9.Int("n") > 40 && s9.Int("painted") > 20 && s9.Child("kinds")?.Int("paw") > 0 && s9.Int("pets") > 0 && PD(s9, "lineK") == 0 && s9.Int("paneZ") == 450
+                    && me9 != null && me9.Int("lines") == 0 && me9.Bool("dot"), PTxt(s9) + " | lines " + me9?.Int("lines"));
                 await Shot("worldmap-prints-walk-z9.png");
                 await Goto(8); await Shot("worldmap-prints-walk-z8.png");
                 var s8 = await S2();
-                Check("prints 2D: one zoom step out the step doubles (10 yards) - about the same spacing on screen", s8 != null && PD(s8, "s") == 10 && s8.Int("n") > 15 && s8.Int("n") < s9.Int("n"), PTxt(s8));
+                var me8 = await WmMe();
+                Check("prints 2D: one zoom step out the step doubles (10 yards) - about the same spacing on screen, still no line", s8 != null && PD(s8, "s") == 10 && s8.Int("n") > 15 && s8.Int("n") < s9.Int("n") && me8?.Int("lines") == 0, PTxt(s8));
                 await Goto(6); await Shot("worldmap-prints-walk-z6-line.png");
                 var s6 = await S2(); var me6 = await WmMe();
                 Check("prints 2D: zoomed out (zoom 6) no prints, the trail is the clean line again (full opacity, with its casing)", s6 != null && s6.Int("n") == 0 && s6.Int("painted") == 0 && PD(s6, "lineK") == 1 && me6 != null && me6.Int("lines") >= 2, PTxt(s6));
@@ -263,7 +272,8 @@ namespace ElansAddonHub
                 var ss = await Mode("swim", i => PawChar(0, 0, LiveMove.Swimming), 40, 4.7);
                 Check("prints 2D: swimming - little ripple rings", ss != null && ss.Child("kinds")?.Int("ripple") > 5 && ss.Int("pets") == 0, PTxt(ss));
                 var sf = await Mode("flight", i => PawChar(0, 0, LiveMove.Taxi), 30, 25, 8);
-                Check("prints 2D: on a flight - a light dotted line with now and then a feather", sf != null && sf.Child("kinds")?.Int("dot") > 20 && sf.Child("kinds")?.Int("feather") > 0, PTxt(sf));
+                var mf = await WmMe();
+                Check("prints 2D: on a flight - a light dotted line with now and then a feather, and no solid line under it", sf != null && sf.Child("kinds")?.Int("dot") > 20 && sf.Child("kinds")?.Int("feather") > 0 && mf?.Int("lines") == 0, PTxt(sf));
                 var sg = await Mode("ghost", i => PawChar(0, 0, 0, dead: true), 40, 9);
                 Check("prints 2D: as a ghost - faint wisps in a paler colour", sg != null && sg.Child("kinds")?.Int("wisp") > 5 && sg.Str("ghost") != sg.Str("color"), PTxt(sg));
                 var sx = await Mode("mixed", i => PawChar(0, 0, i < 15 ? 0 : i < 28 ? LiveMove.Mounted | LiveMove.PetOut : i < 40 ? LiveMove.Swimming : 0, race: "Tauren"), 52, 8);
@@ -306,8 +316,14 @@ namespace ElansAddonHub
                 await Walk(i => PawChar(0, 0, 0, v6: false), 50, 7);
                 await View(140);
                 var w3 = await S3();
-                Check("prints 3D: close to you the walk is paw prints (and the pet's) as flat quads in one instanced mesh",
-                    w3 != null && w3.Bool("on") && w3.Bool("visible") && w3.Bool("inScene") && w3.Int("n") > 30 && w3.Int("count") == w3.Int("n") && w3.Child("kinds")?.Int("paw") > 0 && w3.Int("pets") > 0, PTxt(w3));
+                var me3 = await Wm3Me();
+                Check("prints 3D: close to you the walk is paw prints (and the pet's) as flat quads in one instanced mesh, with no ribbon under them (2.93)",
+                    w3 != null && w3.Bool("on") && w3.Bool("visible") && w3.Bool("inScene") && w3.Int("n") > 30 && w3.Int("count") == w3.Int("n") && w3.Child("kinds")?.Int("paw") > 0 && w3.Int("pets") > 0
+                    && me3 != null && me3.Int("lines") == 0, PTxt(w3) + " | ribbons " + me3?.Int("lines"));
+                // your dot (2.93): close by on its height like the prints (half a yard up), far out 12 yards up so a hill in front does not hide it
+                var la = me3?.List("liftAt")?.Select(o => Convert.ToDouble(o, PI)).ToList();
+                Check("prints 3D: your dot sits on the ground at a close camera (" + me3?["dotLift"] + " yards up, like the prints' half a yard; it was 12) and its height is the ground's; it rises with the distance (" + (la == null ? "?" : string.Join(" / ", la)) + " at 140 / 400 / 900 / 2000 / 6000)",
+                    me3 != null && PD(me3, "dotLift") <= 0.6 && Math.Abs(PD(me3, "dotY") - PD(me3, "dotGround")) < 0.05 && la != null && la.Count == 5 && la[0] <= 0.6 && la[1] <= 0.6 && la[2] > 2 && la[2] < 8 && la[3] == 12 && la[4] == 12, me3 == null ? "null" : Json.Write(me3));
                 Check("prints 3D: each lies on the ground at its height (" + PD(w3, "worstY") + " yards off at worst) and is tilted to the slope under it (up vector within " + PD(w3, "worstNormalDeg") + " degrees of the ground's normal; the steepest " + PD(w3, "maxTiltDeg") + " degrees)",
                     w3 != null && PD(w3, "worstY") < 0.01 && PD(w3, "worstNormalDeg") < 4 && w3.Int("ground") == w3.Int("n"), PTxt(w3));
                 var col = w3?.List("color")?.Select(o => Convert.ToInt32(o)).ToList();
@@ -316,7 +332,28 @@ namespace ElansAddonHub
                 await View(70, 35); await Shot("worldmap-prints-3d-walk-close.png");
                 await View(3500);
                 var far = await S3(); var meFar = await Wm3Me();
-                Check("prints 3D: from far away no prints, the trail is the ribbon as before", far != null && far.Int("n") == 0 && !far.Bool("visible") && meFar != null && meFar.Int("lines") >= 2, PTxt(far));
+                Check("prints 3D: from far away no prints, the trail is the ribbon as before, and your dot is lifted like the other markers (12 yards)", far != null && far.Int("n") == 0 && !far.Bool("visible") && meFar != null && meFar.Int("lines") >= 2 && PD(meFar, "dotLift") == 12, PTxt(far) + " | lift " + meFar?["dotLift"]);
+                await Shot("worldmap-prints-3d-far-line.png");
+                // the refresh (2.93): a slow zoom out, 6 % a frame - the spacing step is the ladder's for the distance at every frame (no wait for a 35 % change),
+                // laid out again only when the step changes; frames with the camera still do nothing
+                await View(140);
+                {
+                    var h = lp.Here.Value; WorldMapMath.WorldToLatLng(h.X, h.Y, out var zla, out var zln);
+                    var rows = new List<Dictionary<string, object>>(); double d = 140;
+                    while (d < 820)
+                    {
+                        d *= 1.06;
+                        var r = await WpJs(string.Format(PI, "(function(){{window.wm3.setView({0},{1},{2},20,52);window.wm3.step(1);var s=JSON.parse(window.WmPrints.state3d());return JSON.stringify({{d:{2},s:s.s,want:window.WmPrints.ladder3dForTest({2},window.innerHeight),n:s.n,rel:s.relayouts,vis:s.visible}});}})()", zla, zln, d)) as Dictionary<string, object>;
+                        if (r != null) rows.Add(r);
+                    }
+                    var steps = rows.Select(r => PD(r, "want")).Distinct().ToList();
+                    bool allRight = rows.Count > 20 && rows.All(r => PD(r, "s") == PD(r, "want") && (PD(r, "want") == 0 || r.Int("n") > 0));
+                    double rel0 = rows.Count > 0 ? PD(rows[0], "rel") : 0, rel1 = rows.Count > 0 ? PD(rows.Last(), "rel") : 0;
+                    var still0 = await S3(); await WmEval("window.wm3.step(12)"); var still1 = await S3();
+                    Check("prints 3D: zooming out slowly (6 % a frame, " + rows.Count + " frames) the spacing is the ladder's for the camera's distance at every frame (" + string.Join(" > ", steps) + " yards), laid out again on each step change (" + (rel1 - rel0) + " times), and 12 frames with the camera still lay out nothing",
+                        allRight && steps.Count >= 2 && rel1 > rel0 && still1 != null && PD(still1, "relayouts") == PD(still0, "relayouts") && PD(still1, "zoomCalls") >= PD(still0, "zoomCalls") + 12,
+                        string.Join(" ", rows.Select(r => Math.Round(PD(r, "d")) + ":" + PD(r, "s") + "/" + PD(r, "want"))));
+                }
                 await View(140);
                 // a slope: the invented landscape's hills - find a stretch that is not flat and walk across it
                 await Walk(i => PawChar(0, 0, LiveMove.Mounted | LiveMove.PetOut), 40, 14, 2.2);
@@ -331,8 +368,8 @@ namespace ElansAddonHub
                 await Shot("worldmap-prints-3d-ghost.png");
                 await Walk(i => PawChar(0, 0, LiveMove.Swimming), 40, 4.7);
                 await View(120);
-                var s3 = await S3();
-                Check("prints 3D: swimming - ripple rings", s3 != null && s3.Child("kinds")?.Int("ripple") > 5, PTxt(s3));
+                var s3 = await S3(); var ms3 = await Wm3Me();
+                Check("prints 3D: swimming - ripple rings, and your dot on the water's surface like them (not on the floor under it)", s3 != null && s3.Child("kinds")?.Int("ripple") > 5 && ms3 != null && (ms3["dotZ"] != null || ms3.Bool("dotWater") && Math.Abs(PD(ms3, "dotY") - PD(ms3, "dotSurface")) < 0.05), PTxt(s3) + " | " + (ms3 == null ? "" : ms3["dotY"] + "/" + ms3["dotSurface"]));
                 await Shot("worldmap-prints-3d-swim.png");
                 // a flight: the dots in the air, along the flight's own height (a route 120 yards up)
                 var fw = new FixtureWorld { G = (x, y) => double.NaN };

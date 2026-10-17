@@ -344,6 +344,9 @@ namespace ElansAddonHub
                         Check("3D liquids: the sea along the south edge is drawn as ocean meshes (" + (w2 == null ? "?" : Json.Write(w2.Child("byKind"))) + ", surface " + seaAt + " = sea level), the open sea outside the continent's tiles is one flat plane (" + (w2 != null && w2.Bool("outer")) + "), and the old global sea plane is gone from the page (no 260000-yard plane)",
                             w2 != null && w2.Child("byKind").Int("2") > 0 && seaAt == "0" && w2.Bool("outer") && !js.Contains("260000") && !js.Contains("sea.position"), seaAt + " " + (w2 == null ? "" : Json.Write(w2)));
                         if (SelfTestClock.ShotsOn) { var pngS = await WorldMapView.CaptureForTest(); if (pngS != null) File.WriteAllBytes(P("worldmap-3d-water-sea-synthetic.png"), pngS); }
+                        // 2.93: the open sea has a floor under it, lit like a tile's empty sea floor (the same colour taken to linear, the same lit material), so its blue is the tiles' sea blue
+                        Check("3D liquids: under the open sea lies a floor in the tiles' empty-sea colour (" + w2?.Str("outerFloorColor") + " = " + w2?.Str("tileFloorColor") + "), lit like the terrain and below sea level (" + w2?["outerFloorY"] + "), so the open sea and the sea inside the tiles are one blue",
+                            w2 != null && w2.Bool("outerFloor") && w2.Str("outerFloorColor") == w2.Str("tileFloorColor") && w2.Bool("outerFloorLit") && Convert.ToDouble(w2["outerFloorY"], I) < -1, w2 == null ? "null" : Json.Write(w2));
                         var s5 = await Wm3State();
                         Check("3D liquids: no script error while the liquids load and rebuild (" + (s5?.List("errs")?.Count ?? -1) + " errors)", s5 != null && (s5.List("errs") ?? new List<object>()).Count == 0, s5 == null ? "?" : Json.Write(s5.List("errs")));
                     }

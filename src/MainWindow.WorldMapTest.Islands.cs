@@ -264,10 +264,17 @@ namespace ElansAddonHub
             bool r3 = await WaitFor(() => WorldMapView.PageReady && WorldMapView.MapId == 2991 && WorldMapView.LoadedPage == "3d", 150000);
             notes.Add("note real islands: the 3D page on Zephras Isle: ready " + r3 + ", WebGL " + WorldMapView.GlOk + (WorldMapView.GlFallbackReason != null ? " (" + WorldMapView.GlFallbackReason + ")" : ""));
             Check("real islands: the 3D view of the island opens (or falls back to the flat map with a reason where this PC has no WebGL)", r3 || WorldMapView.GlFallbackReason != null, "ready=" + r3);
-            if (r3 && SelfTestClock.ShotsOn)
+            if (r3)
             {
                 await WmEval("window.wm3 && window.wm3.setView ? window.wm3.setView(" + LatLng(w.Value.X, w.Value.Y) + ",5200,30,48" + ") : 0");
-                await Task.Delay(4000); var p3 = await WorldMapView.CaptureForTest(); if (p3 != null) File.WriteAllBytes(P("worldmap-zephras-3d.png"), p3);
+                await Task.Delay(4000);
+                if (SelfTestClock.ShotsOn) { var p3 = await WorldMapView.CaptureForTest(); if (p3 != null) File.WriteAllBytes(P("worldmap-zephras-3d.png"), p3); }
+                // 2.93: the sea inside the island's tiles (its sky chunks: ocean over a floor below sea level) and the open sea around them are one blue
+                var sp = Json.Obj(Json.Parse(await WmEval("window.wm3.seaPixels()")) as string);
+                var ta = sp?.List("tile")?.Select(o => Convert.ToInt32(o)).ToList(); var oa = sp?.List("outer")?.Select(o => Convert.ToInt32(o)).ToList();
+                int diff = ta != null && oa != null && ta.Count == 3 && oa.Count == 3 ? Enumerable.Range(0, 3).Max(i => Math.Abs(ta[i] - oa[i])) : 999;
+                Check("real islands: in 3D the sea inside the island's tiles is the same blue as the open sea around them (tile " + (ta == null ? "?" : string.Join(",", ta)) + " / open " + (oa == null ? "?" : string.Join(",", oa)) + ": " + diff + " apart at most, was 11)",
+                    diff <= 4, sp == null ? "null" : Json.Write(sp));
             }
             // back to the flat view the next checks expect (the 3D link switched the remembered mode on)
             await AtlasView.Open("worldmap:2991" + at + "&z=3&m=2");
