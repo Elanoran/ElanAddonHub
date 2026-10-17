@@ -1,4 +1,4 @@
-// Elan's Outpost - world map: the paw-print trail (2.90). Shared by the flat page (worldmap.js) and the 3D page (view3d.js).
+// Elan's Outpost - world map: the paw-print trail (2.88). Shared by the flat page (worldmap.js) and the 3D page (view3d.js).
 // Your live trail, drawn as little prints in your class colour once you zoom in far enough (zoomed out it stays the plain line):
 //   on foot   alternating left / right prints along the way you went (paws; hooves for tauren, bony prints for the undead, tiny ones for gnomes)
 //   mounted   bigger hoofprints, further apart

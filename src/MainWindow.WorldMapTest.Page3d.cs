@@ -263,7 +263,7 @@ namespace ElansAddonHub
                     double dTarget = Math.Sqrt(Math.Pow(cam.Num("tx") - gc * WorldMapMath.TileYards, 2) + Math.Pow(cam.Num("tz") - gr * WorldMapMath.TileYards, 2));
                     Check("3D: the camera looks at the spot the flat map showed (x 250, y 500, " + dTarget.ToString("0.0", I) + " yards off) from " + cam.Num("dist").ToString("0", I) + " yards, the distance of zoom 4.5", dTarget < 5 && Math.Abs(cam.Num("dist") - 106666 / Math.Pow(2, 4.5)) < 5, Json.Write(cam));
                     await WorldMapLive3dTest(Check, P);      // (after the camera check: Follow me moves the camera) the live position layer in 3D (MainWindow.WorldMapTest.Live.cs)
-                    await WorldMapPrints3dTest(Check, P);    // 2.90: the paw prints in 3D (MainWindow.WorldMapTest.Prints.cs)
+                    await WorldMapPrints3dTest(Check, P);    // 2.88: the paw prints in 3D (MainWindow.WorldMapTest.Prints.cs)
                     // markers on the ground: the flight masters sit on the height grid (the page's own grid against the invented landscape the ADTs were made from)
                     var mk = Json.Parse(await WmEval("window.wm3.markers()")) as string; var marks = Json.Parse(mk) as List<object>;
                     double worstG = 0, worstY = 0; int nm = 0;

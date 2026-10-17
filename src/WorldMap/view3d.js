@@ -1330,7 +1330,7 @@
       howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events),
       hh: Array.isArray(m.hz) ? meZ(m.hz[0], m.hz[1]) : null, lh: Array.isArray(m.lz) ? meZ(m.lz[0], m.lz[1]) : null };
     meTrail = pts; meAt = Date.now();
-    if (window.WmPrints) me.prints = window.WmPrints.take(m);      // 2.90: the paw prints (trailprints.js)
+    if (window.WmPrints) me.prints = window.WmPrints.take(m);      // 2.88: the paw prints (trailprints.js)
     meDraw(); meCardDraw(); meRow();
     if (follow) followAim();
   }

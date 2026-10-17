@@ -356,7 +356,7 @@
     me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
       howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events) };
     meTrail = pts; meAt = Date.now();
-    if (window.WmPrints) me.prints = window.WmPrints.take(m);      // 2.90: the paw prints (trailprints.js)
+    if (window.WmPrints) me.prints = window.WmPrints.take(m);      // 2.88: the paw prints (trailprints.js)
     meDraw(); meRow();
     if (follow && map && me.state === 'ok' && me.here) map.panTo(me.here, { animate: false });
   }

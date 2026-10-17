@@ -105,7 +105,7 @@ namespace ElansAddonHub.Services.WorldMap
             if (version < 4) foreach (var id in new[] { "seen", "seen.met", "seen.rares" }) if (!l.Contains(id)) l.Add(id);
             // 5 added the events on your live trail (on by default; they only show while the live position is on)
             if (version < 5 && !l.Contains("trailevents")) l.Add("trailevents");
-            // 6 (2.90) added the paw prints of your live trail (on by default; like the events they only show while the live position is on)
+            // 6 (2.88) added the paw prints of your live trail (on by default; like the events they only show while the live position is on)
             if (version < 6 && !l.Contains("trailprints")) l.Add("trailprints");
             return l;
         }

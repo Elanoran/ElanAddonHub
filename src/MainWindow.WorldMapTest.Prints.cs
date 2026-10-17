@@ -10,7 +10,7 @@ using ElansAddonHub.Services.WorldMap;
 
 namespace ElansAddonHub
 {
-    // --selftest "worldmap" (2.90): the paw-print trail. The app side (how you moved per trail point, the odometer, the foot by race, the "me" message,
+    // --selftest "worldmap" (2.88): the paw-print trail. The app side (how you moved per trail point, the odometer, the foot by race, the "me" message,
     // the layer row) without a page; then the flat page (the layout of made-up trails: spacing, left / right, facing the way you went, one kind per
     // mode, the hunter's pet line, the zoom threshold; then a real trail: the class colour, fading, the row switch, animations on / off) and the 3D
     // page (prints on the ground at its height and tilted to the slope, flight dots in the air, the far camera keeps the line). Pictures with

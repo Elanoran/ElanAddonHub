@@ -266,7 +266,7 @@ namespace ElansAddonHub.Services.WorldMap
         public string Name { get; private set; } = "";
         public string ClassFile { get; private set; }
         public LiveTrail.Point? Here { get; private set; }          // the current world position (Ok only)
-        public readonly TrailPrints.Owner Prints = new TrailPrints.Owner();     // 2.90: race and whether the Hub says if your pet is out, for the trail's prints
+        public readonly TrailPrints.Owner Prints = new TrailPrints.Owner();     // 2.88: race and whether the Hub says if your pet is out, for the trail's prints
         public int UiMapId { get; private set; }
         public event Action Changed;
         // tests: the world position of a zone fraction (null = MapData.Index)

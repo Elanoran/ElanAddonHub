@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace ElansAddonHub.Services.WorldMap
 {
     // ============================================================================================================================
-    // 2.90: the paw-print trail. The live trail (LivePosition) is drawn by the world map pages as footprints in your class colour when you zoom in
+    // 2.88: the paw-print trail. The live trail (LivePosition) is drawn by the world map pages as footprints in your class colour when you zoom in
     // (trailprints.js draws them; zoomed out it stays the plain line). What the app adds for it is small and lives here:
     //   - how you moved at each trail point (LiveMove bits: on a flight, indoors, swimming, mounted, pet out, dead / ghost), from the strip;
     //   - an odometer per point: yards along the trail so far, so the pages can put a print every few yards at fixed distances of it (the prints
