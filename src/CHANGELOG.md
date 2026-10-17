@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.81.0
+- **Class and race pages: the story behind them.** Every class and race page in the Atlas now opens with an **About** card. It starts with the game's own description (the text from the character creation screen, marked "From the game"), followed by notes written for the Outpost (marked "Outpost notes"): a short history, the capital and leader, notable figures (with a link when the Atlas has that character), things worth knowing, and where the facts come from. An **At a glance** list adds what your game data says: the races a class can be (or the classes a race can be), armor and weapons, racial abilities and the starting zone, each a link. The Skyborne's High Order and Windshapers have notes too, written only from what the game itself says about them, and they say so.
+- **The top of a class or race page stays put.** The painting, the name and the tabs stay where they are, and only the content below them scrolls, like the Spells list. The page no longer gets a scroll bar of its own; the mouse wheel over the top and Page Up / Page Down still scroll the content.
+- **No duplicate box on class and race pages.** The small tooltip-style box under the tabs (name, roles, resource, starting level) is gone: the top of the page already shows all of it.
+- **One clean line beside the Atlas menu.** The extra thin line between the Atlas side menu and the page is gone, so the Atlas looks like Settings, the Lodge and Characters.
+
 ## 2.80.2
 - **A gold frame around each talent tree.** The talent trees (in the Atlas and on the Characters page) now have a thin gold border, in the same colour as the Talents icon in the Atlas menu.
 

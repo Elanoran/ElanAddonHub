@@ -250,6 +250,7 @@ namespace ElansAddonHub
             else if (mods == ModifierKeys.Control && (e.Key == Key.F || e.Key == Key.K)) { e.Handled = true; if (PaletteOpen) { PaletteBox.Focus(); PaletteBox.SelectAll(); } else _ = OpenPalette(); }
             else if (e.Key == Key.Oem2 && mods == ModifierKeys.None && !(Keyboard.FocusedElement is TextBox)) { e.Handled = true; _ = OpenPalette(); }   // "/" like the web
             else if (e.Key == Key.Escape && PaletteOpen) { e.Handled = true; ClosePalette(); }
+            else if (FixedHeadKey(e, mods)) e.Handled = true;      // a class or race page: the keys scroll the content under the fixed top (AtlasPage.FixedHead.cs)
         }
 
         void Page_PreviewMouseUp(object sender, MouseButtonEventArgs e)

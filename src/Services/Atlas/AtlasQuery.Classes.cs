@@ -135,6 +135,7 @@ namespace ElansAddonHub.Services.Atlas
                     if (!book.HasTrainerData) m.Notes.Add("What a spell costs to learn from a trainer is not in your game files, and the Classic baseline in this version carries no trainer table, so no learning costs are shown.");
                 }
             }
+            AddClassLore(m, c);
             return m;
         }
 
@@ -195,6 +196,7 @@ namespace ElansAddonHub.Services.Atlas
             else m.Notes.Add(SpellData.Spells == null ? "Spell data is read from your game files and is not ready yet, so the racial abilities are not listed." : "The skill lines of the races are not in the game data this Outpost can read, so the racial abilities are not listed.");
             AddStartZone(m, r);
             AddStartFromLore(m, r);
+            AddRaceLore(m, r);
             return m;
         }
 

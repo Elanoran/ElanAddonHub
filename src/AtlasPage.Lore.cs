@@ -74,45 +74,11 @@ namespace ElansAddonHub
                 sp.Children.Add(g);
             }
 
-            if (e.Mentions.Count > 0)
-            {
-                sp.Children.Add(Sub("Worth knowing"));
-                var g = new Grid { Margin = new Thickness(0, 4, 0, 0), Tag = "lore-mentions" };
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                foreach (var t in e.Mentions)
-                {
-                    g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                    int row = g.RowDefinitions.Count - 1;
-                    var dot = Tb("•", "Text.Body", Res("Brush.Text.Tertiary"), row == 0 ? 0 : 4);
-                    Grid.SetRow(dot, row); g.Children.Add(dot);
-                    var x = Tb(t, "Text.Body", null, row == 0 ? 0 : 4); x.TextWrapping = TextWrapping.Wrap;
-                    Grid.SetRow(x, row); Grid.SetColumn(x, 1); g.Children.Add(x);
-                }
-                sp.Children.Add(g);
-            }
+            if (e.Mentions.Count > 0) { sp.Children.Add(Sub("Worth knowing")); sp.Children.Add(Bullets(e.Mentions, "lore-mentions")); }
 
             if (e.Forever.Length > 0) { sp.Children.Add(Sub("On Forever")); sp.Children.Add(Tagged(Para(e.Forever, 4), "lore-forever")); }
 
-            if (e.Sources.Count > 0)
-            {
-                var w = new WrapPanel { Margin = new Thickness(0, 16, 0, 0), Tag = "lore-sources" };
-                w.Children.Add(Tb("Sources ", "Text.Caption", Res("Brush.Text.Tertiary")));
-                int i = 0;
-                foreach (var url in e.Sources)
-                {
-                    if (i++ > 0) w.Children.Add(Tb(" · ", "Text.Caption", Res("Brush.Text.Tertiary")));
-                    var u = url;
-                    var l = new TextBlock { Text = ZoneLore.SourceLabel(u, e.Sources), Style = (Style)FindResource("Text.Caption"), Cursor = Cursors.Hand, Tag = u, ToolTip = u };
-                    l.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text.Secondary");
-                    l.MouseEnter += (s, a) => l.TextDecorations = TextDecorations.Underline;
-                    l.MouseLeave += (s, a) => l.TextDecorations = null;
-                    l.MouseLeftButtonUp += (s, a) => { a.Handled = true; OpenWeb(u); };
-                    System.Windows.Automation.AutomationProperties.SetName(l, "Source: " + u);
-                    w.Children.Add(l);
-                }
-                sp.Children.Add(w);
-            }
+            if (e.Sources.Count > 0) sp.Children.Add(SourcesLine(e.Sources, "lore-sources"));
 
             var card = Card(outer);
             card.Tag = "zone-lore";
@@ -122,6 +88,45 @@ namespace ElansAddonHub
         }
 
         static T Tagged<T>(T fe, string tag) where T : FrameworkElement { fe.Tag = tag; return fe; }
+
+        // "Worth knowing": a bullet per line
+        Grid Bullets(System.Collections.Generic.IList<string> lines, string tag)
+        {
+            var g = new Grid { Margin = new Thickness(0, 4, 0, 0), Tag = tag };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            foreach (var t in lines)
+            {
+                g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                int row = g.RowDefinitions.Count - 1;
+                var dot = Tb("•", "Text.Body", Res("Brush.Text.Tertiary"), row == 0 ? 0 : 4);
+                Grid.SetRow(dot, row); g.Children.Add(dot);
+                var x = Tb(t, "Text.Body", null, row == 0 ? 0 : 4); x.TextWrapping = TextWrapping.Wrap;
+                Grid.SetRow(x, row); Grid.SetColumn(x, 1); g.Children.Add(x);
+            }
+            return g;
+        }
+
+        // the quiet line of sources under the notes: each opens in the browser
+        WrapPanel SourcesLine(System.Collections.Generic.IList<string> sources, string tag)
+        {
+            var w = new WrapPanel { Margin = new Thickness(0, 16, 0, 0), Tag = tag };
+            w.Children.Add(Tb("Sources ", "Text.Caption", Res("Brush.Text.Tertiary")));
+            int i = 0;
+            foreach (var url in sources)
+            {
+                if (i++ > 0) w.Children.Add(Tb(" · ", "Text.Caption", Res("Brush.Text.Tertiary")));
+                var u = url;
+                var l = new TextBlock { Text = ZoneLore.SourceLabel(u, sources), Style = (Style)FindResource("Text.Caption"), Cursor = Cursors.Hand, Tag = u, ToolTip = u };
+                l.SetResourceReference(TextBlock.ForegroundProperty, "Brush.Text.Secondary");
+                l.MouseEnter += (s, a) => l.TextDecorations = TextDecorations.Underline;
+                l.MouseLeave += (s, a) => l.TextDecorations = null;
+                l.MouseLeftButtonUp += (s, a) => { a.Handled = true; OpenWeb(u); };
+                System.Windows.Automation.AutomationProperties.SetName(l, "Source: " + u);
+                w.Children.Add(l);
+            }
+            return w;
+        }
 
         TextBlock Para(string text, double top)
         {
