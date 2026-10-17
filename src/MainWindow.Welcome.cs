@@ -36,6 +36,8 @@ namespace ElansAddonHub
                 Install = ids => { if (GuideInstalledForTest != null) GuideInstalledForTest.AddRange(ids); else _ = GuideInstall(ids); },
                 Join = link => { if (GuideJoinedForTest != null) GuideJoinedForTest.Add(link); else { ShowTab("lodge"); LodgePage.JoinWithLink(link); } },
                 Finished = done => CloseGuide(done),
+                SharingOn = () => !settings.AtlasShareOff,
+                SetSharing = SetAtlasSharing,   // the same setting as Settings > Lodge (MainWindow.SharingInvite.cs)
             };
             guide = new WelcomeGuide(host);
             GuideHost.Child = guide;

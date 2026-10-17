@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace ElansAddonHub.Services.Atlas
 {
-    // The Cairn's open numbers on the Atlas pages (self-test section "cairn"). Label "Cairn", tier 1: below the user's own Lodge's rows
+    // The Cairn's numbers (from the user's Lodge, give to get) on the Atlas pages (self-test section "cairn"). Label "Cairn", tier 1: below the user's own Lodge's rows
     // (tier 0), above the Classic baseline (tier 2). A source the Lodge already shows gets the Cairn's figure as a second line instead
     // of a row of its own, the way the Classic baseline rides along.
     public static partial class AtlasQuery
@@ -32,6 +32,15 @@ namespace ElansAddonHub.Services.Atlas
         {
             foreach (var k in CairnSet.Kinds) if (CairnLodgeKind(k) == lodgeKind) return k;
             return null;
+        }
+
+        // 2.87 give to get: where the Cairn's rows would show for a member who doesn't share - one quiet line per page, not one per row
+        public const string CairnShareNote = "The Cairn's numbers are for members who share - turn on sharing to get them from your Lodge.";
+        static void AddCairnShareNote(AtlasPageModel m)
+        {
+            bool needs = false;
+            try { needs = CairnAtlas.Current == null && Context.CairnNeedsSharing?.Invoke() == true; } catch { }
+            if (needs && !m.Notes.Contains(CairnShareNote)) m.Notes.Add(CairnShareNote);
         }
 
         static string Lodges(int m) => AtlasFormat.Count(Math.Max(1, m), "lodge", "lodges");
@@ -99,7 +108,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (!AtlasObs.LowSample(d.Kills) && d.Chance < TinyChance) tiny.Add(r); else rows.Add(r);
                 by[d.Item] = r;
             }
-            var line = "The Cairn (open data merged from " + Lodges(c.Lodges) + "): " + AtlasFormat.Count(src.N, "looted " + what, "looted " + what + "s") + " from " + Lodges(src.M) + ".";
+            var line = "The Cairn (merged from " + Lodges(c.Lodges) + "): " + AtlasFormat.Count(src.N, "looted " + what, "looted " + what + "s") + " from " + Lodges(src.M) + ".";
             s.Note = s.Note.Length == 0 ? line : s.Note + " " + line;
             AddLayer(m, "cairn");
         }

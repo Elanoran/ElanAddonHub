@@ -641,9 +641,8 @@ namespace ElansAddonHub
             PvInvisible.IsEnabled = session.Me != null;
             PrivacyLodgeLine.Text = (string.IsNullOrEmpty(settings.LodgeUrl) ? "You are not in a lodge, so nothing from the first group is sent anywhere."
                 : (session.Online ? "Connected to " : "Your lodge: ") + settings.LodgeUrl)
-                + (session.ContributesToCairn ? " Your lodge's owner sends the lodge's pooled Atlas numbers (ids and counts of what members shared, no names) to the Cairn's open dataset." : "");
-            PvCairn.IsChecked = !settings.CairnOff;
-            PvCairnStatus.Text = Services.Atlas.CairnAtlas.StatusText(!settings.CairnOff);
+                + (session.ContributesToCairn ? " Your lodge's owner sends the lodge's pooled Atlas numbers (ids and counts of what members shared, no names) to the Cairn." : "");
+            PvCairnStatus.Text = CairnStatusLine();
         }
 
         void Privacy_Click(object sender, RoutedEventArgs e)
@@ -668,16 +667,6 @@ namespace ElansAddonHub
                 return;
             }
             if (cb == PvCfAuto) { CfAutoBox.IsChecked = cb.IsChecked; General_Click(CfAutoBox, e); return; }
-            if (cb == PvCairn)
-            {
-                // the Cairn's open data: off deletes the downloaded copy and stops fetching; on fetches now
-                settings.CairnOff = cb.IsChecked != true;
-                SettingsStore.Save(settings);
-                if (settings.CairnOff) Services.Atlas.CairnAtlas.Clear();
-                else _ = Services.Atlas.CairnAtlas.Refresh(() => !settings.CairnOff, force: true).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(() => PvCairnStatus.Text = Services.Atlas.CairnAtlas.StatusText(!settings.CairnOff))));
-                PvCairnStatus.Text = Services.Atlas.CairnAtlas.StatusText(!settings.CairnOff);
-                return;
-            }
             var share = settings.ShareGameOff; var px = settings.PixelOff; var zone = settings.ShareZoneOff; var xp = settings.ShareXpOff;
             bool on = cb.IsChecked == true;
             if (cb == PvShareGame) settings.ShareGameOff = !on;
@@ -701,6 +690,11 @@ namespace ElansAddonHub
         }
 
         void PrivacyProfile_Click(object sender, RoutedEventArgs e) => Show("profile");
+        void PrivacyAtlasShare_Click(object sender, RoutedEventArgs e) => Show("lodge");
+
+        // the Cairn's data follows the Atlas sharing switch (give to get): one calm line, no switch of its own
+        string CairnStatusLine() => Services.Atlas.CairnAtlas.StatusText(!string.IsNullOrEmpty(settings.LodgeUrl), session.Online || session.TestFedForView, session.SupportsCairnData, (session.Online || session.TestFedForView) && session.IsGuestNow, !settings.AtlasShareOff);
+        public string CairnStatusForTest => PvCairnStatus.Text;
         public void ScrollEndForTest() { Scroll.UpdateLayout(); Scroll.ScrollToEnd(); }
         public Task CfRecheckForTest() { CfRecheck_Click(null, null); return Task.Delay(1500); }
         public void WelcomeClickForTest() => Welcome_Click(null, null);

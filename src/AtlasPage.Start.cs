@@ -57,6 +57,7 @@ namespace ElansAddonHub
             // the banners keep the 24 between sections to what follows
             var banner = ClassicBannerView(); banner.Margin = new Thickness(0, 0, 0, 24); col.Children.Add(banner);
             var offer = ClassicOfferView(); offer.Margin = new Thickness(0, 0, 0, 24); col.Children.Add(offer);
+            col.Children.Add(SharingInviteView());              // 2.87: a member whose Atlas sharing is off is asked once, calmly (AtlasPage.SharingInvite.cs)
             col.Children.Add(HomeHeroBlock());
             col.Children.Add(RecommendBlock());
             _ = FillHome();

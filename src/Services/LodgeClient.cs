@@ -466,6 +466,31 @@ namespace ElansAddonHub.Services
                 return res;
             }
         }
+
+        // ---- the Cairn's data from this Lodge (give to get, feature "cairn2"): GET /cairn/manifest (ETag) and GET /cairn/dataset. Only GETs.
+        // A refusal carries {error, reason}: share / guest / lodge / disabled (not for this user) or not-yet / rate (try later).
+        public async Task<Atlas.CairnAtlas.Response> GetCairn(string path, string etag)
+        {
+            if (path != Atlas.CairnAtlas.ManifestPath && path != Atlas.CairnAtlas.DatasetPath) throw new InvalidOperationException("Not a Cairn path");
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+            using (var req = Request(HttpMethod.Get, path))
+            {
+                if (!string.IsNullOrEmpty(etag)) req.Headers.TryAddWithoutValidation("If-None-Match", etag);
+                using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token))
+                {
+                    var r = new Atlas.CairnAtlas.Response { Status = (int)resp.StatusCode, ETag = resp.Headers.ETag?.ToString() };
+                    long cap = path == Atlas.CairnAtlas.DatasetPath ? Atlas.CairnAtlas.MaxGzBytes : Atlas.CairnAtlas.MaxManifestBytes;
+                    if (resp.Content.Headers.ContentLength > cap) throw new System.IO.InvalidDataException("too large");
+                    if (r.Status == 304) return r;
+                    byte[] body;
+                    using (var s = await resp.Content.ReadAsStreamAsync()) body = Atlas.CairnAtlas.ReadCapped(s, r.Status == 200 ? cap : 64 * 1024);
+                    if (r.Status == 200) { r.Body = body; return r; }
+                    try { var o = Json.Obj(Encoding.UTF8.GetString(body)); r.Reason = o?.Str("reason"); r.Error = o?.Str("error"); } catch { }
+                    return r;
+                }
+            }
+        }
+
         public class DownloadException : InvalidOperationException
         {
             public int Status { get; }

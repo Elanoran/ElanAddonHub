@@ -16,6 +16,7 @@ namespace Lodge;
 //   Chat history    the messages STAY (a conversation with one side cut out makes no sense) with the author shown as "(former member)"; their reactions and
 //                   sign-up card places are removed; pins keep their text
 //   Files           uploaded files (chat and shared Files) STAY - they belong to the lodge - but no longer name the uploader
+//   Cairn sharing   their "Atlas sharing is on" note (cairn-sharing.json, 2.27) is forgotten
 // Backups keep what they held when they were taken until they rotate out.
 public partial class LodgeHub
 {
@@ -39,6 +40,7 @@ public partial class LodgeHub
         if (string.IsNullOrWhiteSpace(name)) return s;
         s.Atlas = AtlasPool.Purge(name).Total;
         if (atlasOnly) return s;
+        CairnIn.Sharing.Forget(ProfileRules.Key(name));       // 2.27: their "sharing is on" note for the Cairn's data
         s.Flights = Flight.Purge(name);
         var (signups, organised) = await Calendar.Purge(name, FormerMember);
         s.Signups = signups; s.Organised = organised;

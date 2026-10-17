@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
@@ -34,9 +35,12 @@ namespace ElansAddonHub
             AtlasQuery.Context.OwnFieldNotes = () => AtlasObs.Read(settings.WowRoot)?.FieldNotes;   // Hunter Helper's field notes on this PC
             AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
             AtlasView.LodgeState = LodgeAtlasState;
-            // the Cairn's open dataset (Settings > Privacy, on by default: no personal data, download only): the copy on disk now, the Cairn later
+            // the Cairn's data (give to get, 2.87): only from the user's own Lodge (feature "cairn2"), only while Atlas sharing is on
             CairnAtlas.Changed += () => Dispatcher.BeginInvoke(new Action(() => AtlasView.PoolChanged()));
-            CairnAtlas.Start(() => !settings.CairnOff);
+            CairnAtlas.Fetch = (path, etag) => Session != null ? Session.CairnFetchAsync(path, etag) : Task.FromResult(new CairnAtlas.Response { Reason = "disabled" });
+            if (Session != null) Session.CairnStatusChanged += () => Dispatcher.BeginInvoke(new Action(OnCairnStatus));
+            CairnAtlas.Start(CairnWanted, CairnReachable);
+            InitSharingInvite();           // 2.87: the calm sharing card, the quiet line on item / creature pages
             InitAtlasHome();
             // "Who in the Lodge can craft this?" (Armory, server 2.19): cached answers; an answer that arrives redraws the recipe / item page and the Professions rows
             AtlasQuery.Context.Crafters = spells => Session?.CraftersFor(spells);
@@ -247,6 +251,25 @@ namespace ElansAddonHub
             if (Session == null || !Session.Online) return "Not connected to a Lodge";
             if (!Session.SupportsAtlas) return "Connected, but this Lodge's server has no Atlas pool yet (it needs server 2.15)";
             return settings.AtlasShareOff ? "Connected · receiving the Lodge's observations, not sharing yours (Settings > Lodge)" : "Connected · sharing your observations and receiving the Lodge's";
+        }
+
+        // ---- the Cairn's data (give to get): wanted = sharing on and a Lodge set (the copy on disk may stay); reachable = the Lodge hands it out now
+        bool CairnWanted() => !settings.AtlasShareOff && !string.IsNullOrEmpty(settings.LodgeUrl);
+        bool CairnReachable() => CairnWanted() && Session != null && Session.SupportsCairnData && !Session.IsGuestNow;
+
+        // what the Lodge said: yes -> fetch (at once when it holds a newer dataset); not for you (sharing off, guest, the Lodge not entitled,
+        // an older Lodge without "cairn2") -> the copy goes; "not yet" -> the copy stays
+        void OnCairnStatus()
+        {
+            if (Session == null) return;
+            if (!CairnWanted()) { CairnAtlas.Clear(settings.AtlasShareOff ? "share" : null); return; }
+            if (!Session.SupportsCairnData) { CairnAtlas.Clear("disabled"); return; }
+            if (Session.CairnEntitled)
+            {
+                bool newer = CairnAtlas.Current == null || Session.CairnSeq != CairnAtlas.Current.Seq;
+                _ = CairnAtlas.Refresh(CairnReachable, force: newer);
+            }
+            else if (CairnAtlas.NotEntitled(Session.CairnWhy)) CairnAtlas.Clear(Session.CairnWhy);
         }
     }
 }

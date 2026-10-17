@@ -99,8 +99,12 @@ namespace ElansAddonHub
                 g.LinkText = "https://example.com/lodge#invite=ABCDEF123456";
                 g.Next();
                 await Task.Delay(250);
-                Check("guide: a good link goes on to step 4", g.Step == 3 && g.ErrorText == "");
-                Snapshot(P("21-guide-4-done.png"));
+                Check("guide: a good link goes on to step 4 (sharing, 2.87)", g.Step == WelcomeGuide.SharingStep && g.ErrorText == "" && g.SharingSwitchForTest != null);
+                Snapshot(P("21-guide-4-sharing.png"));
+                g.Next();
+                await Task.Delay(250);
+                Check("guide: step 5 is the tips", g.Step == 4);
+                Snapshot(P("21-guide-5-done.png"));
                 g.Back(); g.Next();
                 g.Next();   // Get started
                 await Task.Delay(200);

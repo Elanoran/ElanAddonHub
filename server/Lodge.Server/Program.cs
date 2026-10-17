@@ -303,6 +303,39 @@ app.MapGet("/datasets/{name}", (HttpContext ctx, string name) =>
     }
     catch (DatasetException e) { return DatasetFail(e); }
 });
+// 2.27 give to get (feature "cairn2"): the Cairn's dataset as this Lodge received it, for MEMBERS whose Atlas sharing is on (atlas.sharing), only
+// while the Lodge itself is in good standing at the Cairn. Same credential headers as every route. The manifest revalidates with its ETag.
+IResult CairnFail((int status, string reason, string error) d) => Results.Json(new { error = d.error, reason = d.reason }, statusCode: d.status);
+
+app.MapGet("/cairn/manifest", (HttpContext ctx) =>
+{
+    var deny = GateReq(ctx, out var who);
+    if (deny != null) return deny;
+    if (lodge.CairnIn.Check(who.Name, who.Personal, who.Role) is { } no) return CairnFail(no);
+    var h = lodge.CairnIn.Receiver.Current;
+    if (h == null) return CairnFail((503, "not-yet", "This Lodge has no copy of the Cairn's data yet - try again later"));
+    var etag = CairnReceiver.ETagOf(h);
+    ctx.Response.Headers["Cache-Control"] = "private, no-cache";
+    ctx.Response.Headers["ETag"] = etag;
+    if (ctx.Request.Headers["If-None-Match"].ToString() == etag) return Results.StatusCode(304);
+    return Results.Json(lodge.CairnIn.Receiver.ManifestJson(h));
+});
+
+app.MapGet("/cairn/dataset", (HttpContext ctx) =>
+{
+    var deny = GateReq(ctx, out var who);
+    if (deny != null) return deny;
+    if (lodge.CairnIn.Check(who.Name, who.Personal, who.Role) is { } no) return CairnFail(no);
+    try { lodge.CairnIn.CheckDownloadRate(who.Name); }
+    catch (DatasetException e) { return DatasetFail(e); }
+    var fs = lodge.CairnIn.Receiver.OpenDataset(out var h);
+    if (fs == null) return CairnFail((503, "not-yet", "This Lodge has no copy of the Cairn's data yet - try again later"));
+    ctx.Response.Headers["Cache-Control"] = "private, no-store";
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    ctx.Response.Headers["X-Sha256"] = h.Sha256;
+    return Results.File(fs, "application/gzip", h.File, enableRangeProcessing: false);
+});
+
 files.StartCleanup(app.Lifetime.ApplicationStopping);
 lodge.StartRevalidation(app.Lifetime.ApplicationStopping);
 // restart/stop: say goodbye properly (clients reconnect at once, see LodgeHub.CloseAllForShutdown)
@@ -317,7 +350,7 @@ app.Lifetime.ApplicationStopping.Register(() =>
 if (cfg.CairnEnabled)
 {
     // the URL's host only (never the key); a bad URL or key keeps it off
-    if (lodge.Cairn.Enabled) app.Logger.LogInformation("Cairn contribution on: {Host}, every {Minutes} min", new Uri(cfg.CairnUrl).Host, cfg.CairnEveryMinutes);
+    if (lodge.Cairn.Enabled) app.Logger.LogInformation("Cairn contribution on: {Host}, every {Minutes} min; its dataset is checked every {Hours} h and handed to members who share (give to get)", new Uri(cfg.CairnUrl).Host, cfg.CairnEveryMinutes, cfg.CairnFetchHours);
     else app.Logger.LogWarning("Cairn contribution stays off: LODGE_CAIRN_URL must be https (or http to this machine) and LODGE_CAIRN_KEY a Cairn key{Atlas}", cfg.AtlasEnabled ? "" : ", and the Atlas must be on");
 }
 if (cfg.RealmsConfigured)

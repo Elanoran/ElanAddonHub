@@ -471,11 +471,13 @@ namespace ElansAddonHub.Lodge
             SupportsAtlasExtras = SupportsAtlas && features.Contains("atlas9") && (v == null || v >= AtlasObs.CounterExtrasServerVersion);
             ContributesToCairn = SupportsAtlas && features.Contains("cairn");
             atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasFetching = false;
+            ReadCairnFeatures(features);                  // give to get (2.87): the Cairn's data from this Lodge, for members who share
         }
 
         void ResetAtlas()
         {
             SaveAtlasCache(true);
+            ResetCairn();
             SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; SupportsAtlasFish = false; SupportsAtlasNotes = false; SupportsAtlasEntrances = false; SupportsAtlasNpcSpots = false; SupportsAtlasExtras = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
             atlasLocal = null; atlasSent = null; atlasNextShare = DateTime.MinValue; atlasLastGet = DateTime.MinValue;
         }
@@ -680,6 +682,7 @@ namespace ElansAddonHub.Lodge
         // "Share my Atlas observations with this Lodge" was switched
         public void AtlasSettingsChanged()
         {
+            CairnSharingChanged();                        // the Cairn's data is for those who share: off deletes the copy, the Lodge is told
             if (SupportsAtlas) AtlasSync();
         }
 
