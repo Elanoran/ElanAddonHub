@@ -35,7 +35,7 @@ namespace ElansAddonHub.Services.WorldMap
         public const string HowToTitle = "Share your map position";
         public const string HubSettingLabel = "Share my map position with Elan's Outpost";
         // the in-game setting's description, verbatim (ElansHub.lua EHUB.POSITION_DESC): what it really does
-        public const string HubDescription = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there, together with whether you are on a flight, indoors or swimming (so its 3D map shows you at the right height). It is only shown on a map — nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there.";
+        public const string HubDescription = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there, together with whether you are on a flight, on a mount, indoors or swimming and whether your pet is out (so its 3D map shows you at the right height and your trail can show paw and hoof prints). It is only shown on a map — nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there.";
         public static readonly string[] HowToSteps =
         {
             "In game: type /ehub position on (or open Elan's Hub settings > Share my map position with Elan's Outpost).",
@@ -76,7 +76,9 @@ namespace ElansAddonHub.Services.WorldMap
     public sealed class LiveTrail
     {
         // world position (continent map id, x north, y west, yards); Z / Src = the height worked out for the 3D view (LiveElevation), HasZ false = none
-        public struct Point { public DateTime At; public int MapId; public double X, Y; public double Z; public ElevSrc Src; public bool HasZ; }
+        public struct Point { public DateTime At; public int MapId; public double X, Y; public double Z; public ElevSrc Src; public bool HasZ; public int Move; public double Odo; }
+        // Move (2.90, the trail's prints): how you moved there (LiveMove bits: flight, indoors, swimming, mounted, pet out, dead); Odo = yards walked along the trail
+        // so far (set by Add: the prints are placed at fixed distances of it, so they stay put while old points drop off)
         public static readonly TimeSpan Keep = TimeSpan.FromMinutes(10);
         public const double MinSeconds = 1.0, MinYards = 3.0;
         public const int MaxPoints = 600;                           // 10 minutes at one a second
@@ -108,6 +110,7 @@ namespace ElansAddonHub.Services.WorldMap
                     if ((at - l.At).TotalSeconds < MinSeconds) return false;
                     if (l.MapId == mapId && Dist(l.X, l.Y, x, y) < MinYards) return false;
                 }
+                p.Odo = TrailPrints.NextOdo(pts.Count > 0 ? pts[pts.Count - 1] : (Point?)null, p);
                 pts.Add(p);
                 while (pts.Count > MaxPoints) pts.RemoveAt(0);
                 return true;
@@ -263,6 +266,7 @@ namespace ElansAddonHub.Services.WorldMap
         public string Name { get; private set; } = "";
         public string ClassFile { get; private set; }
         public LiveTrail.Point? Here { get; private set; }          // the current world position (Ok only)
+        public readonly TrailPrints.Owner Prints = new TrailPrints.Owner();     // 2.90: race and whether the Hub says if your pet is out, for the trail's prints
         public int UiMapId { get; private set; }
         public event Action Changed;
         // tests: the world position of a zone fraction (null = MapData.Index)
@@ -314,7 +318,8 @@ namespace ElansAddonHub.Services.WorldMap
                     else
                     {
                         State = LiveState.Ok; UiMapId = c.PosMapId;
-                        var pt = new LiveTrail.Point { At = nowUtc, MapId = w.Value.MapId, X = w.Value.X, Y = w.Value.Y };
+                        var pt = new LiveTrail.Point { At = nowUtc, MapId = w.Value.MapId, X = w.Value.X, Y = w.Value.Y, Move = TrailPrints.MoveOf(c) };
+                        Prints.Take(c);
                         try
                         {
                             var e = Elev.Solve(pt.MapId, pt.X, pt.Y, c.PosMoveKnown ? c.PosMove : 0, nowUtc);

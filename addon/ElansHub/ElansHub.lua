@@ -95,6 +95,8 @@ end
 -- Row 1 version 4 (companion 1.16.0+) also uses bytes 15-21 for one trail event at a time (see "trail events" below); all zero = none.
 -- Row 1 version 5 (companion 1.16.1+) adds three bits to posFlags, only while the position is valid: 4 on a flight (UnitOnTaxi), 8 indoors
 -- (IsIndoors), 16 swimming (IsSwimming), so the Outpost's 3D map can show you at the right height. An older Outpost only looks at bits 1 and 2.
+-- Row 1 version 6 (companion 1.17.0+) adds two more, same rules: 32 on a mount (IsMounted), 64 your pet is out (UnitExists("pet")), for the paw and
+-- hoof prints on the Outpost's trail. An Outpost that knows version 5 only masks them off.
 -- An old hub reads row 0 only and ignores row 1; a new hub without row 1 (old companion) falls back to v1.
 -- Turn it off with /ehub pixel off.
 local CELL, NCELLS, NDATA = 4, 32, 27
@@ -272,7 +274,8 @@ EHUB.POSITION_LABEL = "Share my map position with Elan's Outpost"
 EHUB.POSITION_DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened "
   .. "there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). "
   .. "The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads "
-  .. "it from there, together with whether you are on a flight, indoors or swimming (so its 3D map shows you at the right height). "
+  .. "it from there, together with whether you are on a flight, on a mount, indoors or swimming and whether your pet is out (so its 3D map shows you "
+  .. "at the right height and your trail can show paw and hoof prints). "
   .. "It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing "
   .. "with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the "
   .. "trail pauses there."
@@ -302,7 +305,7 @@ local function readPosition(mapId, inInstance)
 end
 EHUB.ReadPosition = readPosition
 
--- how you move (row 1 version 5): only asked for right after a valid position, each through rd() (pcall + issecretvalue); a secret, an error or
+-- how you move (row 1 version 5, version 6 adds mounted / pet out): only asked for right after a valid position, each through rd() (pcall + issecretvalue); a secret, an error or
 -- an unknown answer simply leaves the bit off. Older clients answer 1 / nil instead of true / false.
 local function yes(v) return v == true or v == 1 end
 local function readMove()
@@ -310,6 +313,8 @@ local function readMove()
   if yes(rd(UnitOnTaxi, "player")) then b = b + 4 end
   if yes(rd(IsIndoors)) then b = b + 8 end
   if yes(rd(IsSwimming)) then b = b + 16 end
+  if yes(rd(IsMounted)) then b = b + 32 end                -- row 1 version 6 (1.17.0): on a mount (the Outpost's trail draws hoofprints)
+  if yes(rd(UnitExists, "pet")) then b = b + 64 end      -- ... and your pet is out (a hunter's trail gets the pet's paws beside it)
   return b
 end
 EHUB.ReadMove = readMove
@@ -617,7 +622,7 @@ local function drawStrip()
   local q
   if P then
     local m, ins = P.mapId % 65536, P.instanceId % 65536
-    q = { 0xB2, 5, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
+    q = { 0xB2, 6, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
           P.xp % 256, P.group % 256 }
     for i = 11, 22 do q[i] = 0 end
     local okPos, pf, px, py = pcall(positionForStrip, P)

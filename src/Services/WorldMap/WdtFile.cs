@@ -38,7 +38,7 @@ namespace ElansAddonHub.Services.WorldMap
             var a = new[] { (char)d[p], (char)d[p + 1], (char)d[p + 2], (char)d[p + 3] };
             var s = new string(a);
             if (s == "MAID" || s == "MAIN" || s == "MPHD" || s == "MODF") return s;
-            return new string(Enumerable.Reverse(a).ToArray());
+            return new string(Enumerable.Reverse(a).ToArray());      // Enumerable: with C# 14 (SDK 10) a.Reverse() binds to the in-place span Reverse
         }
 
         public static WdtFile Parse(byte[] d)

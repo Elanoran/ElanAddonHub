@@ -193,7 +193,9 @@ namespace ElansAddonHub.Services.WorldMap
         //   k = kill | loot | herb | ore | skin | level | died | quest | area | flight, name / line from TrailEventText (the Outpost's own data), c = #rrggbb, at = local "HH:mm"
         //   2.82, the height for the 3D view (LiveElevation): elev:[z, s, ...] one pair per trail point (in the trail's order), hz:[z, s] for here, lz for last, z / zs on an event;
         //   z = yards (world height, not exaggerated), s = 0 terrain (the page drapes it over its own ground) | 1 a building's floor | 2 water | 3 in the air (a flight) | -1 unknown
-        public static string Me(LiveState state, string name, string color, LiveTrail.Point? here, IList<LiveTrail.Point> trail, int viewMapId, DateTime now, string elsewhere = null, IList<LiveTrail.Mark> marks = null)
+        //   2.90, the paw prints (TrailPrints): mv:[bits, ...] how you moved at each trail point (LiveMove), od:[yards, ...] the trail's odometer, hmv = here's bits,
+        //   prints:{foot: paw | hoof | bone | tiny, hunter, petKnown} (only when `prints` is given)
+        public static string Me(LiveState state, string name, string color, LiveTrail.Point? here, IList<LiveTrail.Point> trail, int viewMapId, DateTime now, string elsewhere = null, IList<LiveTrail.Mark> marks = null, Dictionary<string, object> prints = null)
         {
             string st;
             switch (state)
@@ -214,7 +216,7 @@ namespace ElansAddonHub.Services.WorldMap
             d["howto"] = LivePositionText.HasHowTo(state);
             d["howtoText"] = LivePositionText.HowToLink;
             if (st == "ok") { WorldMapMath.WorldToLatLng(here.Value.X, here.Value.Y, out var la, out var ln); if (InPlane(la, ln)) { d["here"] = new List<object> { R6(la), R6(ln) }; d["hz"] = ZOf(here.Value.HasZ, here.Value.Z, here.Value.Src); } else { d["state"] = "unavailable"; d["notice"] = LivePositionText.Unavailable; } }
-            var list = new List<object>(); var elev = new List<object>();
+            var list = new List<object>(); var elev = new List<object>(); var mv = new List<object>(); var od = new List<object>();
             if (trail != null)
             {
                 int start = Math.Max(0, trail.Count - LiveTrail.MaxPoints);
@@ -229,11 +231,13 @@ namespace ElansAddonHub.Services.WorldMap
                     double age = Math.Max(0, Math.Min(LiveTrail.Keep.TotalSeconds, (now - p.At).TotalSeconds));
                     list.Add(R6(la)); list.Add(R6(ln)); list.Add(Math.Round(age, 1)); list.Add(brk ? 1 : 0);
                     elev.AddRange(ZOf(p.HasZ, p.Z, p.Src));
+                    mv.Add(p.Move & 0xFF); od.Add(Math.Round(p.Odo, 1));
                     brk = false; prev = p;
                 }
             }
             d["trail"] = list;
             d["elev"] = elev;
+            if (prints != null) { d["mv"] = mv; d["od"] = od; d["hmv"] = here.HasValue ? here.Value.Move & 0xFF : 0; d["prints"] = prints; }
             // unavailable: the dot greys out where you were last seen on this map (if anywhere)
             if ((string)d["state"] == "unavailable" && list.Count >= 4) { d["last"] = new List<object> { list[list.Count - 4], list[list.Count - 3] }; d["lz"] = new List<object> { elev[elev.Count - 2], elev[elev.Count - 1] }; }
             var evs = new List<object>();

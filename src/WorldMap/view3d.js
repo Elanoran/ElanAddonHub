@@ -1319,20 +1319,22 @@
     var r = panelRows.trailevents; if (!r) return;
     r.row.style.display = meLive() ? '' : 'none';
     setCount('trailevents', meLive() && me.events ? String(me.events.length) : '');
+    if (window.WmPrints) window.WmPrints.row(panelRows, meLive());
   }
   function meMsg(m) {
     var st = ME_STATES[m.state] ? m.state : 'none';
     if (st === 'off' || st === 'none') { me = { state: st }; meClear(); meRow(); return; }
     var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [], ev = Array.isArray(m.elev) ? m.elev : [];
-    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && finN(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, h: meZ(ev[i / 2], ev[i / 2 + 1]) }); }
+    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && finN(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, h: meZ(ev[i / 2], ev[i / 2 + 1]), k: i / 4 }); }
     me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
       howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events),
       hh: Array.isArray(m.hz) ? meZ(m.hz[0], m.hz[1]) : null, lh: Array.isArray(m.lz) ? meZ(m.lz[0], m.lz[1]) : null };
     meTrail = pts; meAt = Date.now();
+    if (window.WmPrints) me.prints = window.WmPrints.take(m);      // 2.90: the paw prints (trailprints.js)
     meDraw(); meCardDraw(); meRow();
     if (follow) followAim();
   }
-  function meDropLines() { if (meLines) { meLines.children.forEach(function (c) { c.geometry.dispose(); c.material.dispose(); }); scene.remove(meLines); meLines = null; } }
+  function meDropLines() { if (window.WmPrints) window.WmPrints.hide3d(); if (meLines) { meLines.children.forEach(function (c) { c.geometry.dispose(); c.material.dispose(); }); scene.remove(meLines); meLines = null; } }
   function meDropDom() {
     domItems = domItems.filter(function (it) { if (it.layer === '__me' || it.layer === 'trailevents') { if (it.el.parentNode) it.el.parentNode.removeChild(it.el); return false; } return true; });
     meDotIt = null; meEvIts = [];
@@ -1381,11 +1383,12 @@
     meDropLines();
     if (!me || !meLive()) return;
     var extra = (Date.now() - meAt) / 1000, BAND = 60, run = [], band = -1, grp = new THREE.Group(), w = clamp(cam.dist * 0.0035, 1.2, 80);
+    var pk = window.WmPrints ? window.WmPrints.lineK3d(on, me, cam.dist, window.innerHeight) : 1;
     meLineDist = cam.dist;
     function flush() {
       if (run.length < 2) return;
       var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600));
-      var casing = meRibbon(run, w * 1.9, '#000000', op * 0.45), line = meRibbon(run, w, me.color, op);
+      var casing = pk === 1 ? meRibbon(run, w * 1.9, '#000000', op * 0.45) : null, line = meRibbon(run, pk === 1 ? w : w * 0.6, me.color, op * pk);      // pk < 1: paw prints, a faint guide
       if (casing) { casing.renderOrder = 4; grp.add(casing); } if (line) grp.add(line);
     }
     for (var i = 0; i < meTrail.length; i++) {
@@ -1397,6 +1400,7 @@
     if (me.state === 'ok' && me.here && run.length) run.push({ ll: me.here, h: me.hh });
     flush();
     scene.add(grp); meLines = grp; dirty = true;
+    if (window.WmPrints) window.WmPrints.draw3d({ THREE: THREE, scene: scene, me: me, trail: meTrail, extra: extra, on: on, groundYE: groundYE, surfaceYE: surfaceYE, exag: prefs.exag, dist: cam.dist, viewH: window.innerHeight, dirty: function () { dirty = true; } });
   }
   function meDraw() {
     meDrawLines();

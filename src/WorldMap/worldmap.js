@@ -337,6 +337,7 @@
     var live = !!(me && me.state !== 'off' && me.state !== 'none');
     r.row.style.display = live ? '' : 'none';
     setCount('trailevents', live && me.events ? String(me.events.length) : '');
+    if (window.WmPrints) window.WmPrints.row(panelRows, live);
   }
   function fin(v) { return typeof v === 'number' && isFinite(v); }
   function llOk(a) { return a && a.length === 2 && fin(a[0]) && fin(a[1]) && a[0] <= 0 && a[0] >= -256 && a[1] >= 0 && a[1] <= 256; }
@@ -345,15 +346,17 @@
     meGroup = null; meDot = null; meTrail = [];
     if (meCtrl && map) map.removeControl(meCtrl);
     meCtrl = null; meEvMarkers = [];
+    if (window.WmPrints) window.WmPrints.clear2d();
   }
   function meMsg(m) {
     var st = ME_STATES[m.state] ? m.state : 'none';
     if (st === 'off' || st === 'none') { me = { state: st }; meClear(); meRow(); return; }
     var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [];
-    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && fin(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1 }); }
+    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && fin(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, k: i / 4 }); }
     me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
       howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events) };
     meTrail = pts; meAt = Date.now();
+    if (window.WmPrints) me.prints = window.WmPrints.take(m);      // 2.90: the paw prints (trailprints.js)
     meDraw(); meRow();
     if (follow && map && me.state === 'ok' && me.here) map.panTo(me.here, { animate: false });
   }
@@ -373,9 +376,9 @@
     var extra = (Date.now() - meAt) / 1000, BAND = 60, run = [], band = -1;
     function flush() {
       if (run.length < 2) return;
-      var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600));
-      meGroup.addLayer(L.polyline(run, { color: '#000', weight: 6, opacity: op * 0.45, interactive: false, lineCap: 'round', lineJoin: 'round' }));      // a dark casing: readable on any tile
-      meGroup.addLayer(L.polyline(run, { color: me.color, weight: 3, opacity: op, interactive: false, lineCap: 'round', lineJoin: 'round', className: 'me-trail' }));
+      var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600)), pk = window.WmPrints ? window.WmPrints.lineK2d(map, on, me) : 1;      // pk < 1: paw prints are shown, the line is a faint guide
+      if (pk === 1) meGroup.addLayer(L.polyline(run, { color: '#000', weight: 6, opacity: op * 0.45, interactive: false, lineCap: 'round', lineJoin: 'round' }));      // a dark casing: readable on any tile
+      meGroup.addLayer(L.polyline(run, { color: me.color, weight: pk === 1 ? 3 : 1.5, opacity: op * pk, interactive: false, lineCap: 'round', lineJoin: 'round', className: 'me-trail' }));
     }
     for (var i = 0; i < meTrail.length; i++) {
       var p = meTrail[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
@@ -385,6 +388,7 @@
     }
     if (me.state === 'ok' && me.here && run.length) run.push(me.here);
     flush();
+    if (window.WmPrints) window.WmPrints.draw2d(map, me, meTrail, extra, on, meDraw);
     // the events: small marks on the trail, fading with it; point at one for what and when, click it for its Atlas page
     meEvMarkers = [];
     var fan = on.trailevents && me.events && window.WmIcons ? window.WmIcons.evFan(me.events, me.state === 'ok' ? me.here : null) : [];
