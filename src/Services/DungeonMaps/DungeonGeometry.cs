@@ -37,6 +37,7 @@ namespace ElansAddonHub.Services.DungeonMaps
         public PlanUnitKind Kind;
         public string Name = "";                 // the WMO group's name (MOGN), "" for terrain
         public int Wmo;                          // the WMO's FileDataID (0 = terrain)
+        public int Place = -1, Group = -1;       // which placement (PlanGeometry.Places) and which of its groups (WmoRoot.GroupInfos) the triangles are from; -1 = terrain / unknown
         public bool Interior;                    // a building group flagged interior (MOGP 0x2000): inside walls and under a roof
         public List<float> Tri = new List<float>();   // 9 floats per triangle: x, y, z of its three corners (world axes)
         public int TriCount => Tri.Count / 9;
@@ -52,6 +53,8 @@ namespace ElansAddonHub.Services.DungeonMaps
     public sealed class PlanGeometry
     {
         public List<PlanUnit> Units = new List<PlanUnit>();
+        public List<WmoPlacement> Places = new List<WmoPlacement>();          // the buildings, as PlanUnit.Place indexes them
+        public Dictionary<int, WmoRoot> Roots = new Dictionary<int, WmoRoot>(); // their roots by FileDataID (group boxes, MOHD's wmoID: the game's minimap pictures, DungeonMinimap)
         public bool GlobalWmo;                   // the map is one building
         public int Buildings, Groups, Tiles, TerrainChunks, MissingFiles;
         public bool TerrainUsed;
@@ -233,13 +236,17 @@ namespace ElansAddonHub.Services.DungeonMaps
             var groupCache = new Dictionary<int, WmoWalkGroup>();
             int id = 0;
             var buildingUnits = new List<PlanUnit>();
-            foreach (var p in places)
+            geo.Places = places;
+            foreach (var kv in roots) if (kv.Value != null && kv.Value.Ok) geo.Roots[(int)kv.Key] = kv.Value;
+            for (int pi = 0; pi < places.Count; pi++)
             {
+                var p = places[pi];
                 var r = roots[p.NameId];
                 if (r == null || !r.Ok) continue;
                 geo.Buildings++;
-                foreach (var gi in r.GroupInfos)
+                for (int gx = 0; gx < r.GroupInfos.Count; gx++)
                 {
+                    var gi = r.GroupInfos[gx];
                     if (gi.Fdid == 0) continue;
                     ct.ThrowIfCancellationRequested();
                     done++;
@@ -254,7 +261,7 @@ namespace ElansAddonHub.Services.DungeonMaps
                     if (g == null || !g.Ok || g.Tris.Count == 0) continue;
                     if ((g.Flags & (GroupUnreachable | GroupAntiportal)) != 0) continue;
                     geo.Groups++;
-                    var u = new PlanUnit { Id = id++, Kind = PlanUnitKind.Building, Name = gi.Name ?? "", Wmo = (int)p.NameId, Interior = (g.Flags & WmoRoot.GroupInterior) != 0 };
+                    var u = new PlanUnit { Id = id++, Kind = PlanUnitKind.Building, Name = gi.Name ?? "", Wmo = (int)p.NameId, Place = pi, Group = gx, Interior = (g.Flags & WmoRoot.GroupInterior) != 0 };
                     int nv = g.Pos.Length / 3;
                     var wx = new double[nv]; var wy = new double[nv]; var wz = new double[nv];
                     var done1 = new bool[nv];

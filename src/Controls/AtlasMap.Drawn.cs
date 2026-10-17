@@ -16,6 +16,9 @@ namespace ElansAddonHub
     // Segment, the floor picture fitted like any map, and a quiet caption bottom-left ("Drawn from your game files", or "Minimap from your game files" for the
     // Outside picture of a map whose terrain is part of the instance). A drawn floor is a role picture coloured here from the theme's tokens, so it follows the
     // theme. When no plan can be drawn the card says what it always said: "<name> has no map in the game files".
+    // A drawn floor the game's own minimap pictures cover (DungeonMinimap: the inside of the buildings as the in-game minimap shows it) opens with them laid
+    // over the plan, captioned "Game minimap from your game files"; a two-button Segment "Game minimap | Plan" left of the zoom buttons switches the look (for the
+    // whole session, every instance). Both looks share the floor's frame, so markers stay where they are.
     public sealed partial class AtlasMap
     {
         int drawnMap, drawnFloor = -1;
@@ -36,6 +39,13 @@ namespace ElansAddonHub
         readonly Button stateButton = new Button { Margin = new Thickness(0, 12, 0, 0), Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Center, Content = "Draw the map" };
         readonly Border caption = new Border { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(12), Padding = new Thickness(8, 2, 8, 2), CornerRadius = new CornerRadius(12), IsHitTestVisible = false };
         readonly TextBlock captionText = new TextBlock();
+        readonly Border lookHost = new Border { Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        readonly RadioButton lookGame = new RadioButton { Content = "Game minimap", Tag = "map-look-game" }, lookPlan = new RadioButton { Content = "Plan", Tag = "map-look-plan" };
+        public const string LookGame = "game", LookPlan = "plan";
+        public static string DrawnLook = LookGame;                             // the look of drawn floors that have the game's pictures, for the session
+        public bool LookShownForTest => lookHost.Visibility == Visibility.Visible;
+        public string LookShownNowForTest { get; private set; } = "";        // what the floor on screen shows: "game" or "plan"
+        public void SelectLookForTest(string look) { (look == LookGame ? lookGame : lookPlan).IsChecked = true; }
 
         void BuildDrawnParts()
         {
@@ -47,9 +57,34 @@ namespace ElansAddonHub
             caption.SetResourceReference(Border.BackgroundProperty, "Brush.Surface2");
             caption.Child = captionText;
             stage.Children.Add(caption);
+            // the look switch, between the floors and the zoom buttons
+            var look = new StackPanel { Orientation = Orientation.Horizontal };
+            string grp = group + "look";
+            foreach (var rb in new[] { lookGame, lookPlan }) { rb.GroupName = grp; StyleOf(rb, "Segment"); look.Children.Add(rb); }
+            System.Windows.Automation.AutomationProperties.SetName(lookGame, "Show the game's own minimap pictures");
+            System.Windows.Automation.AutomationProperties.SetName(lookPlan, "Show the drawn plan");
+            lookHost.Child = look;
+            StyleOf(lookHost, "SegmentHost");
+            if (toolbar != null)
+            {
+                toolbar.ColumnDefinitions.Insert(3, new ColumnDefinition { Width = GridLength.Auto });
+                foreach (UIElement c in toolbar.Children) if (Grid.GetColumn(c) == 3) Grid.SetColumn(c, 4);
+                Grid.SetColumn(lookHost, 3); toolbar.Children.Add(lookHost);
+            }
+            lookGame.Checked += (s, e) => SetLook(LookGame);
+            lookPlan.Checked += (s, e) => SetLook(LookPlan);
         }
 
-        void LeaveDrawn() { drawnMap = 0; drawnInst = null; plan = null; drawnFloor = -1; caption.Visibility = Visibility.Collapsed; }
+        void SetLook(string look)
+        {
+            if (DrawnLook == look) return;
+            DrawnLook = look;
+            if (plan != null && drawnFloor >= 0 && drawnFloor < plan.Floors.Count && plan.Floors[drawnFloor].HasGame) ReloadDrawnFloor();
+        }
+
+        void ReloadDrawnFloor() { var keep = userMoved; var z = (scale, ox, oy); SelectDrawnFloor(drawnFloor, () => { if (keep) { scale = z.scale; ox = z.ox; oy = z.oy; userMoved = true; Reclamp(); } }); }
+
+        void LeaveDrawn() { drawnMap = 0; drawnInst = null; plan = null; drawnFloor = -1; caption.Visibility = Visibility.Collapsed; lookHost.Visibility = Visibility.Collapsed; LookShownNowForTest = ""; }
 
         void ShowDrawn(InstanceInfo inst)
         {
@@ -137,7 +172,9 @@ namespace ElansAddonHub
             SelectDrawnFloor(0);
         }
 
-        public void SelectDrawnFloor(int i)
+        public void SelectDrawnFloor(int i) => SelectDrawnFloor(i, null);
+
+        void SelectDrawnFloor(int i, Action after)
         {
             if (plan == null || i < 0 || i >= plan.Floors.Count) return;
             int my = ++gen;
@@ -146,12 +183,24 @@ namespace ElansAddonHub
             var f = plan.Floors[i];
             var path = plan.FloorPath(i);
             var colors = f.IsPicture ? null : ThemeColors();
+            bool game = !f.IsPicture && f.HasGame && DrawnLook == LookGame;
+            var gamePath = f.HasGame ? System.IO.Path.Combine(plan.Dir ?? "", f.GameFile) : null;
+            lookHost.Visibility = !f.IsPicture && f.HasGame ? Visibility.Visible : Visibility.Collapsed;
+            if (lookGame.IsChecked != (DrawnLook == LookGame)) lookGame.IsChecked = DrawnLook == LookGame;
+            if (lookPlan.IsChecked != (DrawnLook == LookPlan)) lookPlan.IsChecked = DrawnLook == LookPlan;
             if (State != ViewState.Ready) SetState(ViewState.Loading, "", "");
             Task.Run(() =>
             {
                 if (f.IsPicture) return MapRender.Load(path);
                 var px = DungeonPlanImage.ReadPng(path, out var w, out var h);
-                return px == null ? null : (ImageSource)DungeonPlanImage.Colour(px, w, h, colors);
+                if (px == null) return null;
+                if (game)
+                {
+                    var g = DungeonMinimap.ReadPng(gamePath, w, h);
+                    if (g != null) return (ImageSource)DungeonMinimap.Blend(px, g, w, h, colors);
+                    game = false;                                              // damaged or gone: the plan
+                }
+                return (ImageSource)DungeonPlanImage.Colour(px, w, h, colors);
             }).ContinueWith(t =>
             {
                 Dispatcher.BeginInvoke(new Action(() =>
@@ -159,8 +208,10 @@ namespace ElansAddonHub
                     if (my != gen) return;
                     if (t.IsFaulted || t.Result == null) { NoArtText(" The drawn plan could not be read."); return; }
                     ApplyPicture(t.Result, true);
-                    captionText.Text = f.IsPicture ? "Minimap from your game files" : "Drawn from your game files";
+                    captionText.Text = f.IsPicture ? "Minimap from your game files" : game ? "Game minimap from your game files" : "Drawn from your game files";
                     caption.Visibility = Visibility.Visible;
+                    LookShownNowForTest = f.IsPicture ? "" : game ? LookGame : LookPlan;
+                    after?.Invoke();
                     DrawnFloorChanged?.Invoke(i);
                 }));
             });

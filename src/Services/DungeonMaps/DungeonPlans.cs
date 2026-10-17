@@ -34,6 +34,9 @@ namespace ElansAddonHub.Services.DungeonMaps
     public sealed class DungeonPlanFloor
     {
         public string Name = "", File = "", Kind = "plan";      // plan = a role picture coloured by the theme; picture = game art shown as it is
+        public string GameFile = "";                            // a drawn floor: the game's own minimap pictures laid onto it (DungeonMinimap; "" = none)
+        public double GameCoverage;                             // how much of the floor they cover (0..1)
+        public bool HasGame => GameFile.Length > 0;
         public double MinZ, MaxZ, MeanZ, Area;
         public int Triangles;
         public double MaxX, MaxY, Scale;                        // the frame: world x (north) and y (west) of the top-left corner, pixels per yard
@@ -45,7 +48,7 @@ namespace ElansAddonHub.Services.DungeonMaps
 
     public sealed class DungeonPlan
     {
-        public const int Format = 1;
+        public const int Format = 2;           // 2: the game's minimap pictures per drawn floor
         public int MapId;
         public string Name = "", Build = "", Source = "", TerrainRule = "";
         public int Buildings, Groups, Tiles, Islands;
@@ -132,7 +135,7 @@ namespace ElansAddonHub.Services.DungeonMaps
                 ["buildings"] = Buildings, ["groups"] = Groups, ["tiles"] = Tiles, ["islands"] = Islands, ["ms"] = Ms, ["bytes"] = Bytes,
                 ["floors"] = Floors.Select(f => (object)new Dictionary<string, object>
                 {
-                    ["name"] = f.Name, ["file"] = f.File, ["kind"] = f.Kind, ["minZ"] = f.MinZ, ["maxZ"] = f.MaxZ, ["meanZ"] = f.MeanZ, ["area"] = f.Area, ["triangles"] = f.Triangles,
+                    ["name"] = f.Name, ["file"] = f.File, ["kind"] = f.Kind, ["minZ"] = f.MinZ, ["maxZ"] = f.MaxZ, ["meanZ"] = f.MeanZ, ["area"] = f.Area, ["triangles"] = f.Triangles, ["game"] = f.GameFile, ["gameCoverage"] = f.GameCoverage,
                     ["maxX"] = f.MaxX, ["maxY"] = f.MaxY, ["scale"] = f.Scale, ["width"] = f.Width, ["height"] = f.Height,
                 }).ToList(),
             });
@@ -159,8 +162,10 @@ namespace ElansAddonHub.Services.DungeonMaps
                         Name = fo.Str("name") ?? "", File = fo.Str("file") ?? "", Kind = fo.Str("kind") == "picture" ? "picture" : "plan", MinZ = D(fo, "minZ"), MaxZ = D(fo, "maxZ"), MeanZ = D(fo, "meanZ"),
                         Area = D(fo, "area"), Triangles = fo.Int("triangles"), MaxX = D(fo, "maxX"), MaxY = D(fo, "maxY"), Scale = D(fo, "scale"), Width = fo.Int("width"), Height = fo.Int("height"),
                     };
+                    f.GameFile = fo.Str("game") ?? ""; var gc = D(fo, "gameCoverage"); f.GameCoverage = double.IsNaN(gc) ? 0 : gc;
                     if (f.Width <= 0 || f.Height <= 0 || !(f.Scale > 0) || double.IsNaN(f.MaxX) || double.IsNaN(f.MaxY)) return null;
                     if (string.IsNullOrEmpty(f.File) || f.File.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || !File.Exists(Path.Combine(dir, f.File))) return null;
+                    if (f.GameFile.Length > 0 && (f.IsPicture || f.GameFile.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || !File.Exists(Path.Combine(dir, f.GameFile)))) return null;
                     p.Floors.Add(f);
                 }
                 return p.Floors.Count == 0 ? null : p;
@@ -378,6 +383,11 @@ namespace ElansAddonHub.Services.DungeonMaps
             Interlocked.Increment(ref BuildCountForTest);
             var geo = DungeonGeometry.Collect(o.Wdt, o.Src, CancellationToken.None, progress);
             if (!geo.Ok) throw new InvalidDataException(geo.Problem ?? "nothing to draw");
+            // the game's own minimap pictures of the buildings (when the install has them): laid onto the drawn floors
+            var mini = DungeonMinimap.Index(o.Src);
+            if (!DungeonMinimap.Any(geo, mini)) mini = null;
+            var pics = new Dictionary<int, DungeonMinimap.Picture>();
+            DungeonMinimap.Picture Tex(int fdid) { if (!pics.TryGetValue(fdid, out var t)) pics[fdid] = t = DungeonMinimap.Decode(o.Src.Read(fdid)); return t; }
             var dir = DirOf(mapId);
             if (Directory.Exists(dir)) Util.DeleteDir(dir);
             Directory.CreateDirectory(dir);
@@ -389,15 +399,15 @@ namespace ElansAddonHub.Services.DungeonMaps
                 // the minimap shows the grounds; the interiors are drawn when they are a real part of the instance
                 var inside = geo.Units.Where(u => u.Kind == PlanUnitKind.Building && u.Interior).ToList();
                 double all = geo.Units.Where(u => u.Kind == PlanUnitKind.Building).Sum(u => u.Area), inArea = inside.Sum(u => u.Area);
-                var sub = new PlanGeometry { Units = inside, Buildings = geo.Buildings, Groups = geo.Groups, Tiles = geo.Tiles, TerrainUsed = true, TerrainRule = geo.TerrainRule };
-                plan = inside.Count > 0 && inArea >= all * InteriorShare && inArea >= InteriorArea ? Make(mapId, name, sub, dir, outside) : Make(mapId, name, null, dir, outside);
+                var sub = new PlanGeometry { Units = inside, Buildings = geo.Buildings, Groups = geo.Groups, Tiles = geo.Tiles, TerrainUsed = true, TerrainRule = geo.TerrainRule, Places = geo.Places, Roots = geo.Roots };
+                plan = inside.Count > 0 && inArea >= all * InteriorShare && inArea >= InteriorArea ? Make(mapId, name, sub, dir, outside, mini, Tex) : Make(mapId, name, null, dir, outside);
                 plan.Source = plan.Floors.Count > 1 ? "minimap and buildings" : "minimap";
             }
-            else plan = Make(mapId, name, geo, dir);
+            else plan = Make(mapId, name, geo, dir, null, mini, Tex);
             plan.Buildings = geo.Buildings; plan.Groups = geo.Groups; plan.Tiles = geo.Tiles; plan.TerrainRule = geo.TerrainRule; plan.Islands = geo.Islands;
             plan.Ms = sw.ElapsedMilliseconds;
             File.WriteAllText(Path.Combine(dir, "plan.json"), plan.ToJson());
-            Util.Log("dungeon plan " + name + ": " + plan.Floors.Count + " floors (" + string.Join(", ", plan.Floors.Select(f => f.Name + " " + f.Width + " x " + f.Height)) + "), " + plan.Groups + " groups, " + plan.Tiles + " tiles, " + geo.TerrainRule + ", " + plan.Ms + " ms, " + plan.Bytes + " bytes");
+            Util.Log("dungeon plan " + name + ": " + plan.Floors.Count + " floors (" + string.Join(", ", plan.Floors.Select(f => f.Name + " " + f.Width + " x " + f.Height)) + "), " + plan.Groups + " groups, " + plan.Tiles + " tiles, " + geo.TerrainRule + ", " + plan.Ms + " ms, " + plan.Bytes + " bytes; the game's minimap pictures on " + plan.Floors.Count(f => f.HasGame) + " floors (" + string.Join(", ", plan.Floors.Where(f => f.HasGame).Select(f => Math.Round(f.GameCoverage * 100) + " %")) + ")");
             return plan;
         }
 
@@ -482,7 +492,8 @@ namespace ElansAddonHub.Services.DungeonMaps
         }
 
         // the drawn floors of collected geometry (null = none), after an optional picture floor, written to dir (also used by the self-test on synthetic geometry)
-        public static DungeonPlan Make(int mapId, string name, PlanGeometry geo, string dir, DungeonPlanFloor first = null)
+        // mini / tex: the game's minimap pictures (DungeonMinimap) to lay onto each drawn floor that they cover at least MinCoverage of (null = none)
+        public static DungeonPlan Make(int mapId, string name, PlanGeometry geo, string dir, DungeonPlanFloor first = null, WmoMinimapIndex mini = null, Func<int, DungeonMinimap.Picture> tex = null)
         {
             Directory.CreateDirectory(dir);
             var plan = new DungeonPlan
@@ -508,11 +519,23 @@ namespace ElansAddonHub.Services.DungeonMaps
                         DungeonPlanImage.WritePng(path, pics[i], fr.Width, fr.Height);
                         bytes += new FileInfo(path).Length;
                         var f = floors[i];
-                        plan.Floors.Add(new DungeonPlanFloor
+                        var pf = new DungeonPlanFloor
                         {
                             Name = f.Name, File = file, MinZ = f.MinZ, MaxZ = f.MaxZ, MeanZ = f.MeanZ, Area = Math.Round(f.Area), Triangles = f.Triangles,
                             MaxX = fr.MaxX, MaxY = fr.MaxY, Scale = fr.Scale, Width = fr.Width, Height = fr.Height,
-                        });
+                        };
+                        if (mini != null && tex != null)
+                        {
+                            var g = DungeonMinimap.Compose(f, fr, pics[i], geo, mini, tex);
+                            pf.GameCoverage = Math.Round(g.Coverage, 4);
+                            if (g.Coverage >= DungeonMinimap.MinCoverage)
+                            {
+                                pf.GameFile = "floor" + (i + 1).ToString(CultureInfo.InvariantCulture) + "-game.png";
+                                DungeonMinimap.WritePng(Path.Combine(dir, pf.GameFile), g);
+                                bytes += new FileInfo(Path.Combine(dir, pf.GameFile)).Length;
+                            }
+                        }
+                        plan.Floors.Add(pf);
                     }
                 }
             }

@@ -93,6 +93,68 @@ namespace ElansAddonHub
                 Check("real Molten Core: where Lucifron stands (1000.2, -955.4, -179.6) is ground on the floor FloorAt picks (the global WMO turned half way round)", mc != null && Ground(mc, 1000.2, -955.4, -179.6, out flc), flc + "");
                 var zg = await Draw(309);
                 Check("real Zul'Gurub: the buildings stand on the terrain, so the first floor is the game's minimap of its tiles (\"Outside\")", zg != null && zg.Floors.Count >= 1 && zg.Floors[0].IsPicture && zg.Floors[0].Name == "Outside" && zg.TerrainRule.Contains("stand on"), zg == null ? DungeonPlans.StateOf(309)?.Error : string.Join(",", zg.Floors.Select(f => f.Name + "/" + f.Kind)));
+                // ---- the game's own minimap pictures of the buildings (WMOMinimapTexture), laid onto the drawn floors
+                void Shots(DungeonPlan p)
+                {
+                    if (p == null || !(SelfTestClock.ShotsOn || !string.IsNullOrEmpty(shotEnv))) return;
+                    var safe = new string(p.Name.Where(char.IsLetterOrDigit).ToArray());
+                    for (int i = 0; i < p.Floors.Count; i++)
+                    {
+                        var f = p.Floors[i]; if (!f.HasGame) continue;
+                        var roles = DungeonPlanImage.ReadPng(p.FloorPath(i), out var w, out var h);
+                        var game = DungeonMinimap.ReadPng(Path.Combine(p.Dir, f.GameFile), w, h);
+                        if (roles == null || game == null) continue;
+                        var bmp = DungeonMinimap.Blend(roles, game, w, h, colors);
+                        var dv = new DrawingVisual();
+                        using (var dc = dv.RenderOpen()) { dc.DrawRectangle(new SolidColorBrush(bg), null, new System.Windows.Rect(0, 0, w, h)); dc.DrawImage(bmp, new System.Windows.Rect(0, 0, w, h)); }
+                        var rt = new System.Windows.Media.Imaging.RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32); rt.Render(dv);
+                        var enc = new System.Windows.Media.Imaging.PngBitmapEncoder(); enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rt));
+                        using (var fs = File.Create(Path.Combine(shots, "dungeonmap-" + safe + "-" + (i + 1) + "-game.png"))) enc.Save(fs);
+                    }
+                }
+                string GameLine(DungeonPlan p) => p == null ? "none" : string.Join(", ", p.Floors.Select(f => f.Name + (f.IsPicture ? " (minimap of the tiles)" : f.HasGame ? " " + Math.Round(f.GameCoverage * 100) + " %" : " plan only (" + Math.Round(f.GameCoverage * 100) + " %)")));
+                Check("real game minimaps: Molten Core's drawn floors get the game's own pictures, covering nearly all of each floor", mc != null && mc.Floors.All(f => f.HasGame && f.GameCoverage > 0.9), GameLine(mc));
+                Check("real game minimaps: the Deadmines' cave floors get them (its surface buildings have none: the plan shows there)", dm != null && dm.Floors.Count(f => f.HasGame) >= 2 && dm.Floors.Where(f => f.HasGame).All(f => f.GameCoverage >= DungeonMinimap.MinCoverage), GameLine(dm));
+                var brd = await Draw(230);
+                Check("real game minimaps: every floor of Blackrock Depths gets them", brd != null && brd.Floors.Count >= 2 && brd.Floors.All(f => f.HasGame && f.GameCoverage > 0.9), GameLine(brd));
+                notes.Add("note real game minimaps: Molten Core " + GameLine(mc) + "; the Deadmines " + GameLine(dm) + "; Blackrock Depths " + GameLine(brd) + "; Zul'Gurub " + GameLine(zg));
+                Shots(mc); Shots(dm); Shots(brd); Shots(zg);
+                // alignment: the same composition with the frame moved 10 yards covers clearly less of the floor
+                using (var casc = CascStorage.Open(real, "_classic_beta_"))
+                using (var src = new Services.WorldMap.CascBuildingSource(casc))
+                {
+                    var mi = DungeonMinimap.Index(src);
+                    var cov = new List<string>(); int with = 0, without = 0; var missing = new List<string>();
+                    foreach (var inst in idx.Instances.Where(i => !i.Placeholder && !i.HasMap && (i.InstanceType == 1 || i.InstanceType == 2)))
+                    {
+                        var gm = idx.GameMap(inst.MapId);
+                        var wb = gm == null || gm.WdtFileDataId <= 0 ? null : src.Read(gm.WdtFileDataId);
+                        if (wb == null) { without++; missing.Add(inst.Name + " (no world table)"); continue; }
+                        var places = DungeonGeometry.Buildings(Services.WorldMap.WdtFile.Parse(wb), src, out _);
+                        int models = 0, mm = 0;
+                        foreach (var fd in places.Select(x => (int)x.NameId).Distinct()) { var r = Services.WorldMap.WmoRoot.Parse(src.Read(fd)); if (!r.Ok) continue; models++; if (mi != null && mi.Has(r.WmoId)) mm++; }
+                        if (mm > 0) with++; else { without++; missing.Add(inst.Name); }
+                        cov.Add(inst.Name + " " + mm + "/" + models);
+                    }
+                    Check("real game minimaps: WMOMinimapTexture (layout 01230A50) is read: " + (mi?.Rows ?? 0) + " blocks of " + (mi?.Wmos ?? 0) + " models; " + with + " of " + (with + without) + " dungeons and raids with no map art have pictures for their buildings",
+                        mi != null && mi.Rows > 50000 && with >= 40, (mi?.Problem ?? "") + " missing: " + string.Join(", ", missing));
+                    notes.Add("note real game minimaps per instance (buildings with pictures / buildings): " + string.Join("; ", cov) + " | without any: " + string.Join(", ", missing));
+                    var mcMap = idx.GameMap(409);
+                    var geo = DungeonGeometry.Collect(Services.WorldMap.WdtFile.Parse(src.Read(mcMap.WdtFileDataId)), src, System.Threading.CancellationToken.None);
+                    var floors = DungeonFloors.Split(geo, "Molten Core");
+                    var fr = DungeonPlanImage.FrameOf(floors);
+                    var roles = DungeonPlanImage.DrawAll(floors, fr);
+                    var texs = new Dictionary<int, DungeonMinimap.Picture>();
+                    DungeonMinimap.Picture Tex(int fd) { if (!texs.TryGetValue(fd, out var t)) texs[fd] = t = DungeonMinimap.Decode(src.Read(fd)); return t; }
+                    var at = DungeonMinimap.Compose(floors[0], fr, roles[0], geo, mi, Tex);
+                    var moved = new DungeonPlanImage.Frame { MaxX = fr.MaxX + 10, MaxY = fr.MaxY, Scale = fr.Scale, Width = fr.Width, Height = fr.Height };
+                    var off = DungeonMinimap.Compose(floors[0], moved, roles[0], geo, mi, Tex);
+                    var moved2 = new DungeonPlanImage.Frame { MaxX = fr.MaxX, MaxY = fr.MaxY - 10, Scale = fr.Scale, Width = fr.Width, Height = fr.Height };
+                    var off2 = DungeonMinimap.Compose(floors[0], moved2, roles[0], geo, mi, Tex);
+                    Check("real game minimaps: the pictures sit on Molten Core's floor (" + Math.Round(at.Coverage * 100) + " % covered); moved 10 yards north or east they cover clearly less (" + Math.Round(off.Coverage * 100) + " %, " + Math.Round(off2.Coverage * 100) + " %)",
+                        at.Coverage > 0.9 && off.Coverage < at.Coverage - 0.05 && off2.Coverage < at.Coverage - 0.05 && at.MissingBlocks == 0, at.Coverage + " " + off.Coverage + " " + off2.Coverage + " missing " + at.MissingBlocks);
+                }
+
                 DungeonPlans.ResetForTest();
                 await DungeonPlans.Request(36);
                 Check("real: the second look comes from the data folder", DungeonPlans.StateOf(36)?.Phase == "done" && DungeonPlans.BuildCountForTest == 0);

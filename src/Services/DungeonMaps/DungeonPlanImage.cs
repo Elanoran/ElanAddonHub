@@ -105,7 +105,7 @@ namespace ElansAddonHub.Services.DungeonMaps
         static float Hi(float a, float b) => float.IsNaN(a) ? b : float.IsNaN(b) ? a : Math.Max(a, b);
 
         // a square of (2r+1) around every set pixel, rows then columns, by running counts
-        static bool[] Grow(bool[] m, int w, int h, int r)
+        internal static bool[] Grow(bool[] m, int w, int h, int r)
         {
             var a = new bool[w * h]; var b = new bool[w * h];
             for (int y = 0; y < h; y++)
