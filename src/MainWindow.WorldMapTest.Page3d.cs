@@ -161,6 +161,7 @@ namespace ElansAddonHub
                 {
                     // the page is up
                     await WaitFor(() => WorldMapView.LastStats != null, 20000);
+                    await FlightLearnPage3d(Check, P);      // 2.88: the learned flight path in 3D (MainWindow.FlightLearnTest.Page.cs)
                     // the kind filters (Herbs, Ore ...) hide their points in 3D too, and a layer switched on with every kind off shows all kinds
                     await WmEval("window.wm3.setOnForTest('nodes', true); window.wm3.setOnForTest('nodes.herbs', true); window.wm3.setOnForTest('nodes.ore', true)");
                     // the app answers the layer switch with its own node data: wait for it, so the fed test layer is not replaced afterwards

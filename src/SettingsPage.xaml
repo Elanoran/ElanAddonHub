@@ -153,11 +153,14 @@
                   </StackPanel>
                 </Border>
               </HeaderedContentControl>
-              <HeaderedContentControl x:Name="LivePosRow" Style="{StaticResource Setting.Row}" Header="Show my live position on the world map" Tag="Needs the matching option in Elan's Hub in game. The trail keeps the last 10 minutes and is never saved.">
+              <HeaderedContentControl x:Name="LivePosRow" Style="{StaticResource Setting.Row}" Header="Show my live position on the world map" Tag="Needs the matching option in Elan's Hub in game. The trail keeps the last 10 minutes and is never saved (only the simplified line of a flight is kept, for Learned flight routes).">
                 <StackPanel Orientation="Horizontal">
                   <Button x:Name="LivePosHowToButton" Style="{StaticResource GhostButton}" Content="How to turn it on" Height="28" Padding="8,0" Margin="0,0,8,0" Click="LivePosHowTo_Click" AutomationProperties.Name="How to turn on live position" />
                   <CheckBox x:Name="LivePosBox" Style="{StaticResource Switch}" Click="LivePos_Click" VerticalAlignment="Center" AutomationProperties.Name="Show my live position on the world map" />
                 </StackPanel>
+              </HeaderedContentControl>
+              <HeaderedContentControl x:Name="LearnedFlightsRow" Style="{StaticResource Setting.Row}" Header="Learned flight routes">
+                <Button x:Name="ClearLearnedFlightsButton" Style="{StaticResource Button.M}" Content="Clear learned routes" Click="ClearLearnedFlights_Click" AutomationProperties.Name="Clear learned flight routes" />
               </HeaderedContentControl>
               <HeaderedContentControl x:Name="WorldMap3dRow" Style="{StaticResource Setting.Row}" Header="World map 3D detail" Tag="How much terrain and texture detail the 3D view draws. Low is easiest on the graphics card.">
                 <Border Style="{StaticResource SegmentHost}">
@@ -335,7 +338,7 @@
             </StackPanel></ContentControl>
             <TextBlock Text="Flight times" Style="{StaticResource Head}" />
             <ContentControl Style="{StaticResource Card.Rows}"><StackPanel>
-              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share flight times with the lodge" Tag="Your learned flight-path times are shared; you get everyone's. Times only, nothing else. With this off nothing is uploaded, but you still receive everyone's.">
+              <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Share flight times with the lodge" Tag="Your learned flight-path times are shared, and so are the flight routes your flights learned (the simplified line between two flight masters, where WoW Forever flies differently from the game files); you get everyone's. Nothing else. With this off nothing is uploaded, but you still receive everyone's.">
                 <CheckBox x:Name="FlightShareBox" Style="{StaticResource Switch}" Click="Lodge_Click" AutomationProperties.Name="Share flight times with the lodge" />
               </HeaderedContentControl>
             </StackPanel></ContentControl>

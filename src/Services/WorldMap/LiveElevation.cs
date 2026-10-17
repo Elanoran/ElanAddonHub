@@ -51,6 +51,7 @@ namespace ElansAddonHub.Services.WorldMap
     {
         public int Id, From, To, MapId;
         public double[] X, Y, Z, S;
+        public bool Learned;          // 2.88: a learned flight path (LearnedFlights) in place of the game's route; Z may be NaN where no height is known
         public double Length => S.Length > 0 ? S[S.Length - 1] : 0;
 
         public static TaxiRoute Make(int id, int from, int to, int mapId, IList<double[]> pts)
@@ -233,7 +234,8 @@ namespace ElansAddonHub.Services.WorldMap
                 foreach (var l in best.Legs) { double dd = l.Project(x, y, out _, out var z); if (dd < bd) { bd = dd; bz = z; leg = l.Id; } }
                 if (bd <= TaxiFitYards * 1.5)
                 {
-                    r.Z = Math.Max(bz, g); r.RouteId = leg; r.Why = "flight route " + string.Join(">", best.Legs.Select(l => l.Id));
+                    // a learned line without a height there (2.88): a little above the ground, like a flight no route fits
+                    r.Z = double.IsNaN(bz) ? g + NoRouteLift : Math.Max(bz, g); r.RouteId = leg; r.Why = "flight route " + string.Join(">", best.Legs.Select(l => l.Id));
                     return r;
                 }
             }
@@ -415,7 +417,9 @@ namespace ElansAddonHub.Services.WorldMap
             {
                 var set = MapData.Index?.Set;
                 if (set != routesOf) { routesOf = set; routes = TaxiRoute.FromSet(set); }
-                return routes != null && routes.TryGetValue(mapId, out var l) ? l : (IReadOnlyList<TaxiRoute>)new TaxiRoute[0];
+                var game = routes != null && routes.TryGetValue(mapId, out var l) ? l : (IReadOnlyList<TaxiRoute>)new TaxiRoute[0];
+                // 2.88: learned flight paths take the place of the game's routes they replace (Forever flies them differently), so the dot follows the real line
+                try { return LearnedFlights.Shared.MergeRoutes(mapId, game); } catch (Exception) { return game; }
             }
         }
     }

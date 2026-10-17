@@ -1003,9 +1003,21 @@ namespace ElansAddonHub
 
         void PostLayerInfo(string layer, string state, string note) => Post(Json.Write(new Dictionary<string, object> { ["t"] = "layerinfo", ["id"] = layer, ["state"] = state, ["count"] = 0, ["note"] = note ?? "" }));
 
+        // 2.88: a layer whose data changed while the page shows it (learned flight paths: a new learned route, the Lodge's, cleared) is built and sent again;
+        // only one the page asked for in this view (an unrequested layer stays unbuilt until it is switched on)
+        readonly Dictionary<string, int> askedLayers = new Dictionary<string, int>();
+        public int RebuildsForTest { get; private set; }
+        public void LayerDataChanged(string layer)
+        {
+            if (!PageInited || mapId < 0 || !askedLayers.TryGetValue(layer, out var g) || g != initGen) return;
+            RebuildsForTest++;
+            BuildAndPost(layer, mapId, initGen);
+        }
+
         void NeedLayer(string layer)
         {
             int my = mapId, g = initGen;
+            askedLayers[layer] = g;
             // zone borders come from the terrain: read it first (once per game version), the layer arrives when it is done
             if (layer == "borders" && !WorldMapService.TerrainBuilt(my))
             {

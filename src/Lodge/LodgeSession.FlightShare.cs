@@ -34,12 +34,14 @@ namespace ElansAddonHub.Lodge
             var v = ParseVersion(ServerVersion);
             SupportsFlights = features.Contains("flights") && (v == null || v >= FlightServer);
             flightInflight = null; flightGuest = false;
+            ReadFlightRouteFeatures(features);           // 2.88: learned flight paths (LodgeSession.FlightRoutes.cs)
         }
 
         void ResetFlights()
         {
             SupportsFlights = false; flightInflight = null; flightGuest = false; flightBacklog = false;
             flightLocal = null; flightSent = null; flightNextShare = DateTime.MinValue; flightLastGet = DateTime.MinValue;
+            ResetFlightRoutes();
         }
 
         // what the lodge already has from me. The file names the server, so another lodge starts from nothing.
@@ -83,6 +85,7 @@ namespace ElansAddonHub.Lodge
         // `connect` = just signed in (always asks for the table).
         public void FlightSync(bool connect = false)
         {
+            FlightRouteSync(connect);
             if (!SupportsFlights) return;
             bool changedFile = false;
             try
@@ -160,6 +163,7 @@ namespace ElansAddonHub.Lodge
         // every 2 s with the other ticks: look for a changed saved-variables file about every 30 s; send a waiting batch when its slot comes
         void FlightTick()
         {
+            FlightRouteTick();
             if (!SupportsFlights) return;
             if (flightPollTick++ % 15 == 0 || (flightBacklog && flightInflight == null && Clock() >= flightNextShare)) FlightSync();
         }
@@ -167,7 +171,7 @@ namespace ElansAddonHub.Lodge
         // "Share flight times with the lodge" was switched
         public void FlightSettingsChanged()
         {
-            if (SupportsFlights) FlightSync();
+            FlightSync();                                // also the learned routes (a no-op without either feature)
         }
 
         // test hooks

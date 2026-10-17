@@ -344,6 +344,7 @@ namespace ElansAddonHub
                             Check("page: the fixture picture of the three emblems on the map is taken (instances-fm-icons-2d.png)", pngE != null && pngE.Length > 2000);
                         }
                     }
+                    await FlightLearnPage2d(Check, P);      // 2.88: a learned flight path drawn in place of the game's route (MainWindow.FlightLearnTest.Page.cs)
                     // a toggle in the panel: Vendors on -> need -> "none" (no Classic data here), saved in the settings
                     var before = WorldMapView.ReceivedForTest.Count(x => x == "need");
                     await WmEval("(function(){ var r=[].slice.call(document.querySelectorAll('.wm-row')).filter(function(e){return e.textContent.indexOf('Vendors')===0})[0]; r.querySelector('input').click(); return 1; })()");

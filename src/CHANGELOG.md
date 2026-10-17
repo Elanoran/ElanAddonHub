@@ -3,6 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.88.0
+- **Learned flight paths.** WoW Forever flies some flight paths differently from the game files, so the world map's flight routes (and the 3D dot on a flight) could follow the wrong line. While your live position is on, the Outpost now notes the line each flight really takes, from the flight master you took off at to the one you land at (a flight with stops is cut at the masters it passes).
+- **Two flights that agree win.** When two of your flights of the same leg agree with each other and both clearly differ from the game files, that line becomes a learned route. One odd flight (a /reload in the air, missing samples, a teleport) is never enough. If a later flight follows the game files again, the learned route is dropped - Forever may change it back.
+- **On the map.** The Flight routes layer draws a learned route as a solid teal line instead of the game's dashed one, with the tooltip "Learned from your flights: differs from the game files". The 3D dot follows it on a flight, and the leg's flight time comes from your recorded flights when nobody else measured it.
+- **Shared with your Lodge.** With "Share flight times with the lodge" on, your learned routes are shared too (only the simplified line between two flight masters, its flight time and how many flights agree). Routes your Lodge's members agree on show up for everyone as "Learned by your Lodge". Your own newest flight always counts first.
+- **Kept small.** Only the simplified line, its flight time and the game version are kept on your PC - no times of day, no names. Settings > General > Learned flight routes shows what was learned and has a **Clear learned routes** button.
+
 ## 2.86.0
 - **The Cairn: open Atlas numbers from many lodges.** The Atlas can now also show the Cairn, an open dataset that merges what many lodges observed: drop rates of creatures, objects, fishing and gathering, vendor items and prices, spawn points, gathering nodes and flight times. It holds ids and counts only - no names of people or characters - and is free for everyone (CC0). A number only gets in when at least two independent lodges saw it, and numbers far off from the rest are left out.
 - **Labelled "Cairn", below your own lodge.** On item and creature pages the Cairn's rows carry the label "Cairn" and sort below your lodge's own observations. Where your lodge already shows a source, the Cairn's figure rides along as a second line.

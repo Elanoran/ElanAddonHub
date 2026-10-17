@@ -27,7 +27,7 @@ namespace ElansAddonHub.Services.WorldMap
     public static class LivePositionText
     {
         public const string SettingLabel = "Show my live position on the world map";
-        public const string SettingNote = "Needs the matching option in Elan's Hub in game. The trail keeps the last 10 minutes and is never saved.";
+        public const string SettingNote = "Needs the matching option in Elan's Hub in game. The trail keeps the last 10 minutes and is never saved (only the simplified line of a flight is kept, for Learned flight routes).";
         public const string NotShared = "Your position isn't shared from the game yet";
         public const string OldHub = "Your Elan's Hub is too old to share positions — update it";
         public const string Unavailable = "Position unavailable here";
@@ -274,17 +274,33 @@ namespace ElansAddonHub.Services.WorldMap
         public ElevResult? LastElevForTest { get; private set; }
         string lastElevWhy;
         LiveElevation Elev => elev ?? (elev = new LiveElevation(elevWorld ?? GameElevationWorld.Shared));
+        // learned flight paths (2.88): the line of each flight is recorded (memory) and its legs handed to the store (null = LearnedFlights.Shared)
+        public readonly FlightRecorder Recorder = new FlightRecorder();
+        public LearnedFlights Learned;
+        void Record(LiveTrail.Point pt, ElevResult? e, GamePresence.Character c, DateTime now)
+        {
+            try
+            {
+                if (!c.PosMoveKnown) { Recorder.Break("the Hub sends no flight bit"); return; }
+                bool taxi = (c.PosMove & LiveMove.Taxi) != 0;
+                // the height is kept only where the solver had a route under the flight (else it is a guess over the ground)
+                double z = e.HasValue && e.Value.Src == ElevSrc.Air && e.Value.RouteId != 0 && pt.HasZ ? pt.Z : double.NaN;
+                var legs = Recorder.Sample(pt.MapId, pt.X, pt.Y, z, taxi, now);
+                if (legs != null && legs.Count > 0) (Learned ?? LearnedFlights.Shared).Add(legs);
+            }
+            catch (Exception ex) { Util.Log("learned flights: " + ex.Message); }
+        }
 
         // the newest strip state. enabled = the Outpost setting; c = the character shown (null = none)
         public void Update(bool enabled, bool playing, GamePresence.Character c, DateTime nowUtc)
         {
             var before = Sig();
-            if (!enabled) { State = LiveState.Off; Trail.Clear(); Here = null; elev?.Reset(); }
-            else if (!playing || c == null || string.IsNullOrEmpty(c.Name)) { State = LiveState.NotPlaying; Trail.Clear(); Here = null; Name = ""; ClassFile = null; elev?.Reset(); }
+            if (!enabled) { State = LiveState.Off; Trail.Clear(); Here = null; elev?.Reset(); Recorder.Break("live position off"); }
+            else if (!playing || c == null || string.IsNullOrEmpty(c.Name)) { State = LiveState.NotPlaying; Trail.Clear(); Here = null; Name = ""; ClassFile = null; elev?.Reset(); Recorder.Break("not playing"); }
             else
             {
                 var key = (c.Realm ?? "") + "-" + c.Name;
-                if (Trail.Claim(key)) { Here = null; elev?.Reset(); }      // another character: a new trail
+                if (Trail.Claim(key)) { Here = null; elev?.Reset(); Recorder.Break("another character"); }      // another character: a new trail
                 Name = c.Name; ClassFile = c.ClassFile;
                 if (!c.HasLive) State = LiveState.NotShared;               // no live strip (strip off in the game, or a Hub before 1.5)
                 else if (!c.PosSupported) State = LiveState.OldHub;
@@ -292,7 +308,7 @@ namespace ElansAddonHub.Services.WorldMap
                 else if (!c.PosValid) State = LiveState.Unavailable;
                 else
                 {
-                    WorldPoint? w = null;
+                    WorldPoint? w = null; ElevResult? er = null;
                     try { w = ToWorld != null ? ToWorld(c.PosMapId, c.PosFx, c.PosFy) : MapData.Index?.MapToWorld(c.PosMapId, c.PosFx, c.PosFy); } catch (Exception) { }
                     if (w == null) State = LiveState.Unavailable;              // a map the Outpost has no place for
                     else
@@ -303,7 +319,7 @@ namespace ElansAddonHub.Services.WorldMap
                         {
                             var e = Elev.Solve(pt.MapId, pt.X, pt.Y, c.PosMoveKnown ? c.PosMove : 0, nowUtc);
                             if (!double.IsNaN(e.Z) && !double.IsInfinity(e.Z)) { pt.Z = e.Z; pt.Src = e.Src; pt.HasZ = true; }
-                            LastElevForTest = e;
+                            LastElevForTest = e; er = e;
                             // one log line when what the height is based on changes (the Hub's move bits, a flight and its matched route), so a
                             // dot that stays on the ground on a flight can be explained from the log
                             var why = (c.PosMoveKnown ? "hub sends move bits " + c.PosMove : "hub sends no move bits (older Hub, or no /reload since the update)")
@@ -313,9 +329,10 @@ namespace ElansAddonHub.Services.WorldMap
                         catch (Exception ex) { Util.Log("live elevation: " + ex.Message); }
                         Here = pt;
                         Trail.Add(key, pt);
+                        Record(pt, er, c, nowUtc);
                     }
                 }
-                if (State != LiveState.Ok) Here = null;
+                if (State != LiveState.Ok) { Here = null; Recorder.Break("position unavailable"); }
             }
             if (Sig() != before) Changed?.Invoke();
         }

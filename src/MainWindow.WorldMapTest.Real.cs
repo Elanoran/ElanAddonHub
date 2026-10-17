@@ -112,6 +112,7 @@ namespace ElansAddonHub
                         n >= 20 && onRoute >= n - 2 && worst < 4 && rt.Z.Max() - rt.Z.Min() > 10, rt.Id + " " + onRoute + "/" + n);
                 }
             }
+            try { FlightLearnReal(set, Check, notes); } catch (Exception e) { Check("real learned flights crashed", false, e.ToString()); }   // 2.88 (MainWindow.FlightLearnTest.Page.cs)
             // the WDTs, straight from the game
             WdtFile kw, ew; List<WdtTile> strayK = new List<WdtTile>(), strayE = new List<WdtTile>();
             using (var casc = CascStorage.Open(real, "_classic_beta_"))

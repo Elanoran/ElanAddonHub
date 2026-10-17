@@ -412,6 +412,7 @@ namespace ElansAddonHub
             if (Begin("calendar")) { result += "\r\n" + await CalendarTest(dir); End(); }
             if (Begin("wowevents")) { result += "\r\n" + await WowEventsTest(dir); End(); }
             if (Begin("flightshare")) { result += "\r\n" + await FlightShareTest(dir); End(); }
+            if (Begin("flightlearn")) { result += "\r\n" + await FlightLearnTest(dir); End(); }
             if (Begin("atlaslodge")) { result += "\r\n" + await AtlasLodgeTest(dir); End(); }
             if (Begin("lodgefiles")) { result += "\r\n" + await LodgeFilesTest(dir); End(); }
             if (Begin("badges")) { result += "\r\n" + await BadgesTest(dir); End(); }
