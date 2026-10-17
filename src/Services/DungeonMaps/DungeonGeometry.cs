@@ -37,6 +37,7 @@ namespace ElansAddonHub.Services.DungeonMaps
         public PlanUnitKind Kind;
         public string Name = "";                 // the WMO group's name (MOGN), "" for terrain
         public int Wmo;                          // the WMO's FileDataID (0 = terrain)
+        public int Place = -1, Group = -1;       // which placement (PlanGeometry.Places) and which of its groups (WmoRoot.GroupInfos) the triangles are from; -1 = terrain / unknown
         public bool Interior;                    // a building group flagged interior (MOGP 0x2000): inside walls and under a roof
         public List<float> Tri = new List<float>();   // 9 floats per triangle: x, y, z of its three corners (world axes)
         public int TriCount => Tri.Count / 9;
@@ -52,11 +53,14 @@ namespace ElansAddonHub.Services.DungeonMaps
     public sealed class PlanGeometry
     {
         public List<PlanUnit> Units = new List<PlanUnit>();
+        public List<WmoPlacement> Places = new List<WmoPlacement>();          // the buildings, as PlanUnit.Place indexes them
+        public Dictionary<int, WmoRoot> Roots = new Dictionary<int, WmoRoot>(); // their roots by FileDataID (group boxes, MOHD's wmoID: the game's minimap pictures, DungeonMinimap)
         public bool GlobalWmo;                   // the map is one building
         public int Buildings, Groups, Tiles, TerrainChunks, MissingFiles;
         public bool TerrainUsed;
         public int Islands; public double IslandArea;        // walkable islands left out by DungeonFloors.Reachable (rooftops, ledges)
         public string TerrainRule = "";          // why the terrain was or was not drawn (a note for the self-test and the log)
+        public List<float> Walls = new List<float>();   // the buildings' walls in world axes, 9 floats per triangle (DungeonNav keeps routes off them)
         public string Problem;
         public bool Ok => Problem == null && Units.Count > 0;
         public double Area => Units.Sum(u => u.Area);
@@ -68,6 +72,7 @@ namespace ElansAddonHub.Services.DungeonMaps
         public uint Flags;                       // MOGP flags
         public float[] Pos = new float[0];       // 3 per vertex (model axes: x, y, z up)
         public List<int> Tris = new List<int>(); // walkable triangles, 3 vertex indices each, wound so the normal faces up
+        public List<int> Walls = new List<int>(); // the other triangles a character collides with (walls, pillars, steep rock): what a route must go around
         public int Triangles, Collidable;        // all the group's triangles, those a character collides with
         public int UnderLiquid;                  // walkable-looking triangles left out because they lie deep under the group's liquid
         public string Problem;
@@ -126,6 +131,7 @@ namespace ElansAddonHub.Services.DungeonMaps
                 Normal(g.Pos, a, b, c, out var nx, out var ny, out var nz, out var len);
                 if (len < 1e-6) continue;
                 nx /= len; ny /= len; nz /= len;
+                if (Math.Abs(nz) < MinUpNormal) { g.Walls.Add(a); g.Walls.Add(b); g.Walls.Add(c); continue; }
                 if (normals)
                 {
                     // the side the artist's vertex normals point to is the front
@@ -233,13 +239,17 @@ namespace ElansAddonHub.Services.DungeonMaps
             var groupCache = new Dictionary<int, WmoWalkGroup>();
             int id = 0;
             var buildingUnits = new List<PlanUnit>();
-            foreach (var p in places)
+            geo.Places = places;
+            foreach (var kv in roots) if (kv.Value != null && kv.Value.Ok) geo.Roots[(int)kv.Key] = kv.Value;
+            for (int pi = 0; pi < places.Count; pi++)
             {
+                var p = places[pi];
                 var r = roots[p.NameId];
                 if (r == null || !r.Ok) continue;
                 geo.Buildings++;
-                foreach (var gi in r.GroupInfos)
+                for (int gx = 0; gx < r.GroupInfos.Count; gx++)
                 {
+                    var gi = r.GroupInfos[gx];
                     if (gi.Fdid == 0) continue;
                     ct.ThrowIfCancellationRequested();
                     done++;
@@ -254,7 +264,7 @@ namespace ElansAddonHub.Services.DungeonMaps
                     if (g == null || !g.Ok || g.Tris.Count == 0) continue;
                     if ((g.Flags & (GroupUnreachable | GroupAntiportal)) != 0) continue;
                     geo.Groups++;
-                    var u = new PlanUnit { Id = id++, Kind = PlanUnitKind.Building, Name = gi.Name ?? "", Wmo = (int)p.NameId, Interior = (g.Flags & WmoRoot.GroupInterior) != 0 };
+                    var u = new PlanUnit { Id = id++, Kind = PlanUnitKind.Building, Name = gi.Name ?? "", Wmo = (int)p.NameId, Place = pi, Group = gx, Interior = (g.Flags & WmoRoot.GroupInterior) != 0 };
                     int nv = g.Pos.Length / 3;
                     var wx = new double[nv]; var wy = new double[nv]; var wz = new double[nv];
                     var done1 = new bool[nv];
@@ -275,6 +285,13 @@ namespace ElansAddonHub.Services.DungeonMaps
                         u.Add(wx[a], wy[a], wz[a], wx[b], wy[b], wz[b], wx[c], wy[c], wz[c]);
                     }
                     if (u.TriCount > 0) buildingUnits.Add(u);
+                    for (int k = 0; k + 2 < g.Walls.Count; k += 3)
+                        for (int j = 0; j < 3; j++)
+                        {
+                            int v = g.Walls[k + j];
+                            ToWorld(p, g.Pos[v * 3], g.Pos[v * 3 + 1], g.Pos[v * 3 + 2], out var ax, out var ay, out var az);
+                            geo.Walls.Add((float)ax); geo.Walls.Add((float)ay); geo.Walls.Add((float)az);
+                        }
                 }
             }
 

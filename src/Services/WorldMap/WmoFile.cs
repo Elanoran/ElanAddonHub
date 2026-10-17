@@ -26,6 +26,7 @@ namespace ElansAddonHub.Services.WorldMap
     public sealed class WmoRoot
     {
         public int Materials, Groups, Portals, NumLod = 1;
+        public int WmoId;                                      // MOHD's wmoID (offset 32): the key of the model's rows in WMOAreaTable and WMOMinimapTexture
         public ushort Flags;
         public float MinX, MinY, MinZ, MaxX, MaxY, MaxZ;       // the model's bounding box, WoW world axes (x north, y west, z up)
         public uint[] TextureFdid = new uint[0];               // per material: the main texture
@@ -55,6 +56,7 @@ namespace ElansAddonHub.Services.WorldMap
             if (mohd < 0) { r.Problem = "this building has no MOHD chunk"; return r; }
             r.Materials = BitConverter.ToInt32(d, mohd); r.Groups = BitConverter.ToInt32(d, mohd + 4); r.Portals = BitConverter.ToInt32(d, mohd + 8);
             r.MinX = F(d, mohd + 36); r.MinY = F(d, mohd + 40); r.MinZ = F(d, mohd + 44); r.MaxX = F(d, mohd + 48); r.MaxY = F(d, mohd + 52); r.MaxZ = F(d, mohd + 56);
+            r.WmoId = BitConverter.ToInt32(d, mohd + 32);
             r.Flags = BitConverter.ToUInt16(d, mohd + 60); r.NumLod = Math.Max(1, (int)BitConverter.ToUInt16(d, mohd + 62));
             if (r.Groups < 0 || r.Groups > 4096 || r.Materials < 0 || r.Materials > 8192) { r.Problem = "this building header is not plausible"; return r; }
             if (momt >= 0)

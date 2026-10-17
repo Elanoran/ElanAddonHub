@@ -40,6 +40,9 @@ namespace ElansAddonHub
                 DmEventChecks(Check);
                 DmEntranceChecks(Check);
                 await DmServiceChecks(work, Check, notes, dir);
+                await DmMinimapChecks(work, Check, notes, dir);
+                await DmMobChecks(work, Check, notes, dir);
+                DmAgainChecks(work, Check);
             }
             catch (Exception e) { Check("dungeonmaps test crashed", false, e.ToString()); }
             finally
@@ -71,15 +74,16 @@ namespace ElansAddonHub
         }
 
         // a WMO root with named groups (MOGI name offsets into MOGN)
-        static byte[] DmRoot(int[] groupFdids, string[] names, uint[] flags = null)
+        // boxes: per group the MOGI box (min x, y, z, max x, y, z, model axes; null = zeros); wmoId: MOHD's model id (the key of the minimap pictures)
+        static byte[] DmRoot(int[] groupFdids, string[] names, uint[] flags = null, int wmoId = 0, float[][] boxes = null)
         {
             int ng = groupFdids.Length;
             var mohd = new byte[64];
-            Array.Copy(BitConverter.GetBytes(0), 0, mohd, 0, 4); Array.Copy(BitConverter.GetBytes(ng), 0, mohd, 4, 4);
+            Array.Copy(BitConverter.GetBytes(0), 0, mohd, 0, 4); Array.Copy(BitConverter.GetBytes(ng), 0, mohd, 4, 4); Array.Copy(BitConverter.GetBytes(wmoId), 0, mohd, 32, 4);
             var mogn = new MemoryStream(); mogn.WriteByte(0); var offs = new int[ng];
             for (int i = 0; i < ng; i++) { offs[i] = (int)mogn.Length; var b = Encoding.ASCII.GetBytes(names[i] + "\0"); mogn.Write(b, 0, b.Length); }
             var mogi = new MemoryStream(); var g = new BinaryWriter(mogi);
-            for (int i = 0; i < ng; i++) { g.Write(flags != null ? flags[i] : 0x2000u); for (int k = 0; k < 6; k++) g.Write(0f); g.Write(names[i].Length == 0 ? 0 : offs[i]); }
+            for (int i = 0; i < ng; i++) { g.Write(flags != null ? flags[i] : 0x2000u); for (int k = 0; k < 6; k++) g.Write(boxes != null && boxes[i] != null ? boxes[i][k] : 0f); g.Write(names[i].Length == 0 ? 0 : offs[i]); }
             g.Flush();
             var gfid = groupFdids.SelectMany(f => BitConverter.GetBytes((uint)f)).ToArray();
             return DmCat(DmChunk("MVER", BitConverter.GetBytes(17)), DmChunk("MOHD", mohd), DmChunk("MOGN", mogn.ToArray()), DmChunk("MOGI", mogi.ToArray()), DmChunk("GFID", gfid));

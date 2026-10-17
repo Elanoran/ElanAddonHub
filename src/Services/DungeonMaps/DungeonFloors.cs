@@ -145,7 +145,7 @@ namespace ElansAddonHub.Services.DungeonMaps
             for (int k = 0; k < units.Count; k++)
             {
                 var u = units[k];
-                var s = new PlanUnit { Id = u.Id, Kind = u.Kind, Name = u.Name, Wmo = u.Wmo };
+                var s = new PlanUnit { Id = u.Id, Kind = u.Kind, Name = u.Name, Wmo = u.Wmo, Place = u.Place, Group = u.Group, Interior = u.Interior };
                 for (int i = 0; i < u.TriCount; i++)
                 {
                     int o = i * 9;
@@ -225,7 +225,7 @@ namespace ElansAddonHub.Services.DungeonMaps
                     if (votes.Count == 0) continue;
                     int fl = votes.OrderByDescending(v => v.Value).ThenBy(v => v.Key).First().Key;
                     if (!parts.TryGetValue(fl, out var byUnit)) parts[fl] = byUnit = new Dictionary<int, PlanUnit>();
-                    if (!byUnit.TryGetValue(k, out var part)) byUnit[k] = part = new PlanUnit { Id = u.Id, Kind = u.Kind, Name = u.Name, Wmo = u.Wmo };
+                    if (!byUnit.TryGetValue(k, out var part)) byUnit[k] = part = new PlanUnit { Id = u.Id, Kind = u.Kind, Name = u.Name, Wmo = u.Wmo, Place = u.Place, Group = u.Group, Interior = u.Interior };
                     part.Add(t[o], t[o + 1], t[o + 2], t[o + 3], t[o + 4], t[o + 5], t[o + 6], t[o + 7], t[o + 8]);
                 }
             }

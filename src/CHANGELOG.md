@@ -3,6 +3,17 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.84.0
+- **Dungeon maps say why they are drawn again.** When a game update (or a new Outpost version that draws more) means a dungeon map has to be drawn again, the card says so ("Your game was updated, so the Outpost draws this map again ...") instead of "The first time only".
+- **Dungeon and raid maps in the game's own look.** For dungeons and raids that have no map picture in the game, the Atlas draws a plan of each floor. Now it lays the game's own minimap pictures of the rooms over that plan - the same pictures the in-game minimap shows inside the instance - so Molten Core, Blackrock Depths, the Deadmines and most others look like they do in the game. Where the game has no picture for a part (the Deadmines' surface buildings, for example), the plan shows there as before.
+- **Game minimap or plan, your pick.** A new **Game minimap | Plan** switch next to the zoom buttons changes the look. Your choice stays while the Outpost is open, and the zoom stays where it was. Markers sit in the same place in both looks.
+- The pictures are read from your own game files the first time you open a map and kept until the game updates. If a picture is damaged or missing, the plan is shown instead.
+- **Creatures on the dungeon maps.** If you have the Classic data (the Classic baseline: the Atlas page's **Get Classic data**, or from your Lodge), the drawn dungeon and raid maps now show who stands where: the bosses as red markers numbered in the route's order, the other creatures grouped into pulls (the number in the dot says how many), rares in gold and patrols with a dashed line of their walk. Point at a marker for the names and levels; click it for the creature's page. The positions are where the creatures stand in Classic, so this server can differ here and there.
+- **Warnings in plain words.** A small "!" marks creatures that change how a pull goes: they fear, mind control, silence, heal, summon help, are stealthed, or run or call for help. The hover text names the spell (for example "Fears: Terrify" or "Runs for help at low health"). Only what the game data says is shown.
+- **A suggested route.** A line runs from where the entrance puts you past every boss, in the order that walks the least, going around pulls where it can. Where it crosses a ramp, bridge or water the map has no floor for, it is dashed; where it changes floor, a small tag says to which floor. It is a suggestion worked out from the map, not a guide: doors, levers and events are not in it.
+- **Pick what you see.** The chips at the top left of the map (Bosses, Pulls, Rares, Route) turn each part on or off, for every dungeon while the Outpost is open.
+- The creature data is read once from the Classic baseline files already on your PC (a few seconds) and kept until the baseline changes. Maps drawn before this version are drawn again once, to add where you can walk.
+
 ## 2.83.1
 - **Easier to see why your dot is not flying.** The Outpost's log (Settings > About > View log) now notes what the 3D height of your dot is based on: whether Elan's Hub sends the new flight / indoors / swimming signals (it needs a /reload after the Hub update), and on a flight which route it matched.
 

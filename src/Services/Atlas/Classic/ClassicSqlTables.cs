@@ -126,15 +126,26 @@ namespace ElansAddonHub.Services.Atlas.Classic
 
         static readonly Regex ContentCol = new Regex(@"^content_(\d+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-        public ClassicSqlExec()
+        readonly IDictionary<string, ClassicSchema.Spec> schema;
+
+        public ClassicSqlExec() : this(null) { }
+
+        // another set of tables (the dungeon mob layer reads its own from the same dump); null = the Classic baseline's
+        internal ClassicSqlExec(IDictionary<string, ClassicSchema.Spec> tables)
         {
-            foreach (var s in ClassicSchema.Tables.Values) Tables[s.Name] = new ClassicSqlTable(s);
+            schema = tables ?? ClassicSchema.Tables;
+            foreach (var s in schema.Values) Tables[s.Name] = new ClassicSqlTable(s);
         }
+
+        // true: the statement is worth reading for this exec's tables
+        public bool Want(string head) => WantHead(head, schema);
 
         public void ResetVars() { vars.Clear(); }
 
         // true: the statement is worth reading (decided from its first ~120 characters)
-        public static bool WantHead(string head)
+        public static bool WantHead(string head) => WantHead(head, ClassicSchema.Tables);
+
+        static bool WantHead(string head, IDictionary<string, ClassicSchema.Spec> tables)
         {
             try
             {
@@ -145,38 +156,38 @@ namespace ElansAddonHub.Services.Atlas.Classic
                     lx.Next();
                     while (lx.IsWord("LOW_PRIORITY") || lx.IsWord("DELAYED") || lx.IsWord("HIGH_PRIORITY") || lx.IsWord("IGNORE")) lx.Next();
                     lx.AcceptWord("INTO");
-                    return Kept(lx);
+                    return Kept(lx, tables);
                 }
                 if (lx.IsWord("UPDATE"))
                 {
                     lx.Next();
                     while (lx.IsWord("LOW_PRIORITY") || lx.IsWord("IGNORE")) lx.Next();
-                    return Kept(lx);
+                    return Kept(lx, tables);
                 }
                 if (lx.IsWord("DELETE"))
                 {
                     lx.Next();
                     while (lx.IsWord("LOW_PRIORITY") || lx.IsWord("QUICK") || lx.IsWord("IGNORE")) lx.Next();
                     if (!lx.AcceptWord("FROM")) return true;
-                    return Kept(lx);
+                    return Kept(lx, tables);
                 }
                 if (lx.IsWord("CREATE") || lx.IsWord("ALTER"))
                 {
                     lx.Next();
                     if (!lx.AcceptWord("TABLE")) return false;
                     if (lx.AcceptWord("IF")) { lx.AcceptWord("NOT"); lx.AcceptWord("EXISTS"); }
-                    return Kept(lx, true);
+                    return Kept(lx, tables, true);
                 }
                 return false;
             }
             catch (ClassicSqlUnsupported) { return true; }
         }
 
-        static bool Kept(ClassicSqlLexer lx, bool allowDbVersion = false)
+        static bool Kept(ClassicSqlLexer lx, IDictionary<string, ClassicSchema.Spec> tables, bool allowDbVersion = false)
         {
             if (lx.Kind != SqlTok.Ident) return true;
             var name = TableName(lx);
-            return ClassicSchema.Tables.ContainsKey(name) || (allowDbVersion && name == "db_version");
+            return tables.ContainsKey(name) || (allowDbVersion && name == "db_version");
         }
 
         static string TableName(ClassicSqlLexer lx)

@@ -113,11 +113,11 @@ namespace ElansAddonHub.Services.Atlas.Classic
             return BuildIndex(exec, rep, provenance);
         }
 
-        static void Run(TextReader tr, ClassicSqlExec exec, string origin, CancellationToken ct, Action tick, ClassicImportReport rep, bool isDump)
+        internal static void Run(TextReader tr, ClassicSqlExec exec, string origin, CancellationToken ct, Action tick, ClassicImportReport rep, bool isDump)
         {
             var rd = new ClassicSqlReader(tr);
             long n = 0;
-            while (rd.Next(ClassicSqlExec.WantHead, out var stmt, out var skipped))
+            while (rd.Next(exec.Want, out var stmt, out var skipped))
             {
                 if (skipped) continue;
                 exec.Execute(stmt, origin);
@@ -135,7 +135,7 @@ namespace ElansAddonHub.Services.Atlas.Classic
         }
 
         // update scripts: numbered files above the dump's content version, in number order (ties by name), each in its own variable scope
-        static void ApplyUpdates(ClassicSqlExec exec, List<KeyValuePair<string, Func<TextReader>>> files, ClassicImportReport rep, IProgress<ClassicProgress> progress, CancellationToken ct, double from, double to)
+        internal static void ApplyUpdates(ClassicSqlExec exec, List<KeyValuePair<string, Func<TextReader>>> files, ClassicImportReport rep, IProgress<ClassicProgress> progress, CancellationToken ct, double from, double to)
         {
             rep.UpdateFiles = files.Count;
             var ordered = files.Select(f => new { f, num = Leading.Match(f.Key) is Match m && m.Success ? long.Parse(m.Groups[1].Value) : -1L })

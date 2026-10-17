@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace ElansAddonHub.Services.Maps
 {
-    public enum MarkerKind { Spawn, Find, Vendor, Node, Quest, Entrance }
+    public enum MarkerKind { Spawn, Find, Vendor, Node, Quest, Entrance, Boss, Pull, Rare }   // the last three: the dungeon map's creatures (AtlasMap.Mobs.cs)
 
     // One marker on an AtlasMap. Fx / Fy are the fractions of the shown map's picture (0..1 from the left / top), the same numbers the game's own
     // map coordinates use (GetPlayerMapPosition x / y), so an observation and a converted Classic position meet on one map.
@@ -15,6 +15,11 @@ namespace ElansAddonHub.Services.Maps
         public string Label;        // the marker's name ("Defias Pillager", "Copper Vein")
         public string Tooltip;      // the second line of the hover text ("Level 18 · 4 % drop", "Sells ...")
         public string LinkId;       // an Atlas link id ("npc:456", "obj:789", "quest:12") raised by AtlasMap.LinkClicked; null = not clickable
+        public int Number;          // a boss's place in the route (drawn in the marker); 0 = none
+        public int Count;           // creatures in a pull (drawn in the marker when more than one)
+        public bool Warn;           // a "!" badge: the creature does something that changes the pull (AtlasMap.Mobs.cs)
+        public bool Alone;          // never merged with nearby markers into a cluster
+        public string Layer;        // who added it (null = the page; "mobs" = the dungeon map's creature layer)
 
         public AtlasMarker() { }
         public AtlasMarker(double fx, double fy, MarkerKind kind, string label = null, string tooltip = null, string linkId = null)
@@ -43,6 +48,7 @@ namespace ElansAddonHub.Services.Maps
             foreach (var m in markers)
             {
                 var p = toScreen(m);
+                if (m.Alone) { var own = new MarkerCluster { X = p.Key, Y = p.Value }; own.Members.Add(m); result.Add(own); continue; }
                 int cx = (int)Math.Floor(p.Key / cell), cy = (int)Math.Floor(p.Value / cell);
                 MarkerCluster hit = null; double hitD = double.MaxValue;
                 for (int dx = -1; dx <= 1; dx++)
