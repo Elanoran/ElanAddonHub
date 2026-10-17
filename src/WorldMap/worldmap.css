@@ -146,6 +146,7 @@ body.v3 #hud { position: absolute; top: 10px; right: 10px; z-index: 5; }
 .wm-me .me-link { display: block; margin-top: 6px; padding: 0; background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .wm-me .me-follow { display: block; margin-top: 8px; padding: 4px 10px; background: transparent; border: 1px solid var(--panel-line); border-radius: 6px; color: var(--text); font: inherit; cursor: pointer; }
 .wm-me .me-follow.on { border-color: var(--accent); color: var(--accent); }
+.wm-me .me-show { display: block; margin-top: 8px; padding: 4px 10px; background: transparent; border: 1px solid var(--accent); border-radius: 6px; color: var(--accent); font: inherit; cursor: pointer; }
 .wm-me button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* the events on your live trail (kill, loot, gathering ...): an 18 px mark from icons.js, fading with the trail; the 3D card sits at the bottom right like the flat map's */
 .me-ev { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; cursor: pointer; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .65)); }

@@ -54,18 +54,50 @@ namespace ElansAddonHub.Services.WorldMap
             return t;
         }
 
+        // 2.91, the sky around a floating island (Zephras Isle): a terrain chunk whose 64 cells are all holes has no ground at all (the game draws nothing there; its heights
+        // are leftovers, -3,350 .. +1,207 yards on Zephras Isle, which the 3D view drew as black spikes). With `sky` such a chunk is drawn as open sea: its samples
+        // (the ones no ground chunk touches) go to SkyFloor, just under the sea surface (WorldMapTerrain adds the sea), and it belongs to no area (so the zone border
+        // follows the island). Only for maps that are not continents: on Kalimdor and the Eastern Kingdoms a whole-hole chunk is rare (33 in 1,724 tiles, under
+        // Undercity and the like) and sits under a building, where the sea would be wrong.
+        public const float SkyFloor = -2f;
+        public static bool SkyChunk(AdtChunk c) => c != null && c.Holes == ulong.MaxValue;
+        public static bool AllSky(AdtFile f) { foreach (var c in f.Chunks) if (!SkyChunk(c)) return false; return true; }
+
         // the 129 x 129 lattice of outer vertices of the whole tile (null entry = chunk missing) and the 65 x 65 grid from it
-        public static TerrainTile FromAdt(int col, int row, AdtFile f)
+        public static TerrainTile FromAdt(int col, int row, AdtFile f, bool sky = false)
         {
             const int N = 129;
             var lat = new float[N * N];
             var have = new bool[N * N];
             var t = new TerrainTile { Col = col, Row = row };
+            bool[] skyCh = null;
+            if (sky) { skyCh = new bool[256]; for (int i = 0; i < 256; i++) skyCh[i] = SkyChunk(f.Chunks[i]); }
             for (int iy = 0; iy < 16; iy++)
                 for (int ix = 0; ix < 16; ix++)
                 {
                     var c = f.Chunks[iy * 16 + ix];
                     if (c == null || c.Heights == null) { t.MissingChunks++; continue; }
+                    if (skyCh != null && skyCh[iy * 16 + ix])
+                    {
+                        // no ground: the floor under the sea, unless a neighbouring ground chunk sets the shared edge vertices (written after, or kept from before)
+                        for (int k = 0; k < 9; k++)
+                            for (int i = 0; i < 9; i++)
+                            {
+                                int R = iy * 8 + k, C = ix * 8 + i;
+                                if (have[R * N + C]) continue;
+                                // the chunks that share the vertex: rows (R-1)/8 .. R/8 and columns (C-1)/8 .. C/8, inside the tile
+                                bool ground = false;
+                                for (int cy = Math.Max(0, R - 1) / 8; cy <= Math.Min(15, R / 8) && !ground; cy++)
+                                    for (int cx = Math.Max(0, C - 1) / 8; cx <= Math.Min(15, C / 8) && !ground; cx++)
+                                    {
+                                        var nc = f.Chunks[cy * 16 + cx];
+                                        if (!skyCh[cy * 16 + cx] && nc != null && nc.Heights != null) ground = true;
+                                    }
+                                if (ground) continue;
+                                lat[R * N + C] = SkyFloor; have[R * N + C] = true;
+                            }
+                        continue;
+                    }
                     t.Area[iy * 16 + ix] = c.AreaId;
                     for (int k = 0; k < 9; k++)
                         for (int i = 0; i < 9; i++)
@@ -105,6 +137,7 @@ namespace ElansAddonHub.Services.WorldMap
         public float MinZ, MaxZ;
         public bool Complete;
         public int LowDetail, Holes, Recovered;      // 2.70: tiles drawn from the WDL at low detail, tiles with no heights at all (a flat placeholder), stand-ins that read now
+        public int Sky;                              // 2.91: tiles with no ground at all (the sky around a floating island): no height grid, the page draws open sea there
         public List<PendingTile> Pending = new List<PendingTile>();
     }
 
@@ -185,6 +218,14 @@ namespace ElansAddonHub.Services.WorldMap
             File.Move(tmp, path);
         }
 
+        // 2.91: the open sea over the chunks with no ground (TerrainTile.SkyChunk), a flat ocean surface at sea level (0) like the sea the page draws outside the map
+        public static void AddSkySea(WaterTile wt, AdtFile adt)
+        {
+            for (int i = 0; i < 256; i++)
+                if (TerrainTile.SkyChunk(adt.Chunks[i]) && !wt.Layers.Any(l => l.Chunk == i))
+                    wt.Layers.Add(new WaterLayer { Chunk = i, Kind = LiquidKind.Ocean, TypeId = 0, Mask = ulong.MaxValue, Height = 0 });
+        }
+
         // ---- build
         // `load` gives the bytes of the root ADT of a tile (null = the source does not have it). Throws OperationCanceledException when `ct` is cancelled.
         // `zones` (may be null) turns the area ids into zones for borders.json. A cancelled or crashed build leaves its finished tile files; the next
@@ -193,7 +234,7 @@ namespace ElansAddonHub.Services.WorldMap
         // ".low" marker (read again by every later build), so the 3D view shows the land's shape instead of a hole. With none, only the marker: the page draws a
         // flat hatched placeholder there. A finished terrain's manifest stays while it is built again (a retry) and is replaced at the end.
         public static TerrainResult Build(int mapId, string buildKey, IList<WdtTile> tiles, Func<WdtTile, byte[]> load, string mapDir, ZoneResolver zones,
-            Action<PyramidProgress> progress, CancellationToken ct, LiquidKinds kinds = null, Func<WdtTile, TerrainTile> lowDetail = null, string stamp = "")
+            Action<PyramidProgress> progress, CancellationToken ct, LiquidKinds kinds = null, Func<WdtTile, TerrainTile> lowDetail = null, string stamp = "", bool sky = false)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var res = new TerrainResult { Tiles = tiles.Count };
@@ -227,11 +268,18 @@ namespace ElansAddonHub.Services.WorldMap
                         adt = AdtFile.Parse(bytes);
                         if (!adt.Ok || adt.WithHeights == 0) { res.Failed++; why = "unreadable"; detail = adt.Ok ? "no heights in the terrain file" : WorldMapReport.Redact(adt.Problem ?? "damaged terrain file"); adt = null; }
                     }
-                    if (adt != null)
+                    if (adt != null && sky && TerrainTile.AllSky(adt))
+                    {
+                        // no ground anywhere in the tile (2.91): no height grid, so the page draws the open sea there like outside the map
+                        try { if (File.Exists(file)) File.Delete(file); if (File.Exists(wfile)) File.Delete(wfile); } catch (Exception) { }
+                        if (wasStandIn) WorldMapPending.RemoveMarker(marker);
+                        tt = null; wt = null; res.Sky++;
+                    }
+                    else if (adt != null)
                     {
                         if (wasStandIn) { tt = null; wt = null; }
-                        if (tt == null) { tt = TerrainTile.FromAdt(t.Col, t.Row, adt); WriteAtomic(file, tt.ToBytes()); res.Written++; }
-                        if (wt == null) { wt = WaterTile.FromAdt(t.Col, t.Row, adt, kinds); WriteAtomic(wfile, wt.ToBytes()); res.WaterWritten++; }
+                        if (tt == null) { tt = TerrainTile.FromAdt(t.Col, t.Row, adt, sky); WriteAtomic(file, tt.ToBytes()); res.Written++; }
+                        if (wt == null) { wt = WaterTile.FromAdt(t.Col, t.Row, adt, kinds); if (sky) AddSkySea(wt, adt); WriteAtomic(wfile, wt.ToBytes()); res.WaterWritten++; }
                         if (wasStandIn) { WorldMapPending.RemoveMarker(marker); res.Recovered++; Util.Log("world map terrain: tile " + t.Col + "," + t.Row + " reads now; the low-detail stand-in is replaced"); }
                     }
                     else

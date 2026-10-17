@@ -354,7 +354,7 @@
     var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [];
     for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && fin(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, k: i / 4 }); }
     me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
-      howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events) };
+      howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events), show: st === 'elsewhere' ? String(m.show || '').slice(0, 72) : '' };
     meTrail = pts; meAt = Date.now();
     if (window.WmPrints) me.prints = window.WmPrints.take(m);      // 2.88: the paw prints (trailprints.js)
     meDraw(); meRow();
@@ -420,6 +420,11 @@
     d.appendChild(head);
     var showNotice = me.state !== 'ok';
     if (showNotice && me.notice) d.appendChild(el('div', 'me-n' + (me.state === 'unavailable' ? '' : ' calm'), esc(me.notice)));
+    if (me.show) {      // 2.91: the map you are on has a world map of its own: open it (the app picks it from your position)
+      var sb = el('button', 'me-show', esc(me.show)); sb.type = 'button';
+      sb.addEventListener('click', function () { send({ t: 'showmap' }); });
+      d.appendChild(sb);
+    }
     if (me.howto) {
       var a = el('button', 'me-link', esc(me.howtoText)); a.type = 'button';
       a.addEventListener('click', function () { send({ t: 'howto' }); });
@@ -602,14 +607,14 @@
     },
     me: function (click) {
       var d = meCtrl && meCtrl._d;
-      if (click && d) { var b = d.querySelector(click === 'howto' ? '.me-link' : '.me-follow'); if (b) b.click(); }
+      if (click && d) { var b = d.querySelector(click === 'howto' ? '.me-link' : click === 'show' ? '.me-show' : '.me-follow'); if (b) b.click(); }
       var lines = 0; if (meGroup) meGroup.eachLayer(function (l) { if (l.getLatLngs) lines++; });
       var de = meDot && meDot.getElement && meDot.getElement();
       var c = map ? map.getCenter() : null, h = me && me.here;
       return JSON.stringify({ state: me ? me.state : null, layer: !!(meGroup && map && map.hasLayer(meGroup)), dot: !!meDot, grey: !!(de && de.querySelector('.me-dot.grey')),
         label: de && de.querySelector('.me-lab') ? de.querySelector('.me-lab').textContent : '', arrow: !!(de && de.querySelector('.me-arrow')), heading: heading(),
         lines: lines, points: meTrail.length, panel: !!d, notice: d && d.querySelector('.me-n') ? d.querySelector('.me-n').textContent : '',
-        link: d && d.querySelector('.me-link') ? d.querySelector('.me-link').textContent : '', followBtn: !!(d && d.querySelector('.me-follow')), follow: follow,
+        link: d && d.querySelector('.me-link') ? d.querySelector('.me-link').textContent : '', followBtn: !!(d && d.querySelector('.me-follow')), follow: follow, show: d && d.querySelector('.me-show') ? d.querySelector('.me-show').textContent : '',
         centered: !!(c && h && Math.abs(c.lat - h[0]) < 0.05 && Math.abs(c.lng - h[1]) < 0.05) });
     },
     lines: function (id) {

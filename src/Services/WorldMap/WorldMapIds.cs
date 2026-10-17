@@ -143,7 +143,7 @@ namespace ElansAddonHub.Services.WorldMap
             {
                 int cr = Math.Min(Atlas.AtlasQuery.MatchRank(c.Name + " map", q) < 0 ? 99 : Atlas.AtlasQuery.MatchRank(c.Name + " map", q), Atlas.AtlasQuery.MatchRank(c.Name, q) < 0 ? 99 : Atlas.AtlasQuery.MatchRank(c.Name, q));
                 if (cr >= 99) continue;
-                hits.Add(new Atlas.AtlasHit { Id = Category + ":" + c.Slug, Kind = "page", Name = c.Name + " map", Detail = "The whole continent, zoomable", Label = "World map", Rank = Math.Max(1, cr) });
+                hits.Add(new Atlas.AtlasHit { Id = Category + ":" + c.Slug, Kind = "page", Name = c.Name + " map", Detail = c.IsContinent ? "The whole continent, zoomable" : "The whole map of " + c.Name + ", zoomable", Label = "World map", Rank = Math.Max(1, cr) });
             }
             return hits;
         }

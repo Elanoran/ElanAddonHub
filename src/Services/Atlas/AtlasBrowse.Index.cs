@@ -505,11 +505,20 @@ namespace ElansAddonHub.Services.Atlas
             // is built without them now and ZoneLevels works them out in the background (the list is built again when they are there)
             bool levels = x.Derived == null || ZoneLevels.ReadyOrCheap(x.Map, x.Derived, ZoneLevels.ZoneIds(x.Map));
             ix.LevelsPending = !levels;
+            // 2.91: a zone that is a world map of its own (Zephras Isle: no continent above it) is grouped under its own map's name, not "no continent"
+            var own = new Dictionary<int, string>();
+            try { foreach (var c in ElansAddonHub.Services.WorldMap.WorldMapService.Continents(x.Map)) if (!c.IsContinent) own[c.UiMapId] = c.Name; } catch (Exception) { }
             foreach (var m in x.Map.UiMaps)
             {
                 if (m.System != 0 || m.Type != UiMapInfo.Zone || string.IsNullOrEmpty(m.Name) || MapIndex.IsPlaceholderName(m.Name)) continue;
                 var e = Entry("zone", m.Id, m.Name);
                 e.Client = true; e.Group = ContinentOf(x, m.Id);
+                if (e.Group.Length == 0 && own.Count > 0)
+                {
+                    var seen = new HashSet<int>();
+                    for (var u = m; u != null && seen.Add(u.Id); u = u.ParentId > 0 ? x.Map.Get(u.ParentId) : null)
+                        if (own.TryGetValue(u.Id, out var ownName)) { e.Group = ownName; break; }
+                }
                 // while new ones are worked out, the levels last worked out (the previous game build's) stand in
                 var zc = levels ? x.Derived?.Zone(x.Map, m.Id) : x.Derived?.ZoneAny(m.Id);
                 if (!levels && zc != null && zc.MinLevel > 0) ix.OldLevels = true;

@@ -3,6 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.89.0
+- **Zephras Isle on the world map.** The Skyborne starting island now has its own world map next to Kalimdor and the Eastern Kingdoms: pick it in the map switch at the top. It is made from your game files like the continents (the first time takes a second or two), in 2D and 3D, with the zone name, its buildings and the other layers.
+- **A floating island in 3D.** The sky around Zephras Isle is drawn as open sea under the island, instead of a black floor with spikes.
+- **"Show Zephras Isle" on the live card.** When you play on a map the world map is not showing, the card says "You are on another map: Zephras Isle" (or the continent's name) with a button that opens that map, centred on you. With Follow me on, the map follows you there by itself when you arrive; if you switch back yourself, it stays where you put it.
+- **In the Atlas, too.** Zephras Isle's zone page has "Show on world map", the island has its own group in the Zones list, and searching "Zephras" offers its map.
+- Only maps the game itself draws a map of are added: event copies, test maps and maps without a map of their own (such as Dalaran City or Hyjal Crater) stay out.
+
 ## 2.88.0
 - **Learned flight paths.** WoW Forever flies some flight paths differently from the game files, so the world map's flight routes (and the 3D dot on a flight) could follow the wrong line. While your live position is on, the Outpost now notes the line each flight really takes, from the flight master you took off at to the one you land at (a flight with stops is cut at the masters it passes).
 - **Two flights that agree win.** When two of your flights of the same leg agree with each other and both clearly differ from the game files, that line becomes a learned route. One odd flight (a /reload in the air, missing samples, a teleport) is never enough. If a later flight follows the game files again, the learned route is dropped - Forever may change it back.

@@ -29,10 +29,11 @@ namespace ElansAddonHub.Services.WorldMap
     //                 error {msg}                         a script error in the page (logged and kept for "Copy details"; at most a few per page)
     //                 howto                               the live layer's "How to turn it on" link: the app opens its how-to card
     //                 follow {on}                         the live layer's "Follow me" switch (remembered in the settings)
+//                 showmap                             the live card's "Show <map>" button: the app opens the world map of the map you are on (2.91)
     //   app -> page   init | goto | layer | layerinfo | toast | on     (built by WorldMapView, see worldmap.js for the shapes)
     //                 me {state, ...}                      the live position layer (see Me below), at most once a second
     // ============================================================================================================================
-    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow }
+    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow, ShowMap }
 
     public sealed class WorldMapMessage
     {
@@ -152,6 +153,7 @@ namespace ElansAddonHub.Services.WorldMap
                 case "bresume": m.Type = WorldMapMessageType.BResume; return m;
                 case "bcancel": m.Type = WorldMapMessageType.BCancel; return m;
                 case "howto": m.Type = WorldMapMessageType.HowTo; return m;
+                case "showmap": m.Type = WorldMapMessageType.ShowMap; return m;
                 case "follow":
                     {
                         if (!d.TryGetValue("on", out var fo) || !(fo is bool fb)) { refusal = "follow needs on true or false"; return null; }
@@ -187,6 +189,7 @@ namespace ElansAddonHub.Services.WorldMap
         // only points inside the plane (a dropped point breaks the line), at most LiveTrail.MaxPoints, ages 0..600 s. The page checks the shapes again.
         //   {t:'me', state, name, color, notice, howto, here:[lat,lng], last:[lat,lng], trail:[lat,lng,age,brk, ...], where}
         //   state: off (no layer) | none (not playing) | ok | elsewhere (a position on another continent) | unavailable | notshared | oldhub
+        //   show: "Show <map>" when elsewhere and that map has a world map of its own (2.91)
         public const double TrailBreakYards = 200, TrailBreakSeconds = 30;
         static readonly Regex HexColor = new Regex(@"^#[0-9A-Fa-f]{6}\z", RegexOptions.CultureInvariant);
         //   events (companion 1.16.0+): [{lat, lng, age, k, name, line, c, link, at}] - the marks on this continent's trail, oldest first, at most LiveTrail.MaxMarks;
@@ -195,7 +198,7 @@ namespace ElansAddonHub.Services.WorldMap
         //   z = yards (world height, not exaggerated), s = 0 terrain (the page drapes it over its own ground) | 1 a building's floor | 2 water | 3 in the air (a flight) | -1 unknown
         //   2.90, the paw prints (TrailPrints): mv:[bits, ...] how you moved at each trail point (LiveMove), od:[yards, ...] the trail's odometer, hmv = here's bits,
         //   prints:{foot: paw | hoof | bone | tiny, hunter, petKnown} (only when `prints` is given)
-        public static string Me(LiveState state, string name, string color, LiveTrail.Point? here, IList<LiveTrail.Point> trail, int viewMapId, DateTime now, string elsewhere = null, IList<LiveTrail.Mark> marks = null, Dictionary<string, object> prints = null)
+        public static string Me(LiveState state, string name, string color, LiveTrail.Point? here, IList<LiveTrail.Point> trail, int viewMapId, DateTime now, string elsewhere = null, IList<LiveTrail.Mark> marks = null, Dictionary<string, object> prints = null, bool canShow = false)
         {
             string st;
             switch (state)
@@ -213,6 +216,8 @@ namespace ElansAddonHub.Services.WorldMap
             d["name"] = LivePositionText.CleanName(name);
             d["color"] = color != null && HexColor.IsMatch(color) ? color : "#E8E6E3";
             d["notice"] = st == "elsewhere" ? "You are on another map" + (string.IsNullOrEmpty(elsewhere) ? "" : ": " + Clean(elsewhere, 60)) : LivePositionText.NoticeFor(state) ?? "";
+            // 2.91: the map you are on has a world map of its own (another continent, an island): the card offers "Show <map>" (the page sends showmap; the app picks the map from your position, never from the page)
+            if (st == "elsewhere" && canShow && !string.IsNullOrEmpty(elsewhere)) d["show"] = "Show " + Clean(elsewhere, 60);
             d["howto"] = LivePositionText.HasHowTo(state);
             d["howtoText"] = LivePositionText.HowToLink;
             if (st == "ok") { WorldMapMath.WorldToLatLng(here.Value.X, here.Value.Y, out var la, out var ln); if (InPlane(la, ln)) { d["here"] = new List<object> { R6(la), R6(ln) }; d["hz"] = ZOf(here.Value.HasZ, here.Value.Z, here.Value.Src); } else { d["state"] = "unavailable"; d["notice"] = LivePositionText.Unavailable; } }

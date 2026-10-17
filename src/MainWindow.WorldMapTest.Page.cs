@@ -459,6 +459,7 @@ namespace ElansAddonHub
                     WorldMapLiveUnitTest(Check);
                     await WorldMapLiveTest(Check, P);
                     WorldMapPrintsUnitTest(Check); await WorldMapPrints2dTest(Check, P);      // 2.88: the paw-print trail (MainWindow.WorldMapTest.Prints.cs)
+                    await WorldMapIslandPageTest(Check, P, taxi, lidx);      // 2.89: islands (Zephras Isle) as world maps of their own
 
                     await WorldMapPage3dTest(dir, notes, Check, P, taxi, lidx);
                     ShowTab("atlas"); AtlasView.History.Clear();
