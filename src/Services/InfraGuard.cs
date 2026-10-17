@@ -9,7 +9,7 @@ namespace ElansAddonHub.Services
 {
     // Always-run self-test check (MainWindow's self-test driver, next to the scope check): this repository is public, so the details of the
     // maintainers' own hosting - private addresses of the server network, host and VM names, the hypervisor, the reverse proxy box, the private
-    // ops repository - must never land in a tracked file. Generic how-to text (e.g. "a reverse proxy such as Nginx Proxy Manager") is allowed
+    // ops repository - must never land in a tracked file. Generic how-to text (a reverse proxy product named in a how-to) is allowed
     // where it is listed below. The markers are built from parts so this file does not match itself.
     public static class InfraGuard
     {
@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services
         // (path, marker) pairs that are fine: generic documentation that names a product, not our setup
         static readonly HashSet<string> Allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "server/deploy/reverse-proxy.md|" + "proxy " + "manager",   // "Proxy running in Docker (Nginx Proxy Manager, Traefik, ...)" - generic
+            "server/deploy/reverse-proxy.md|" + "proxy " + "manager",   // its "Proxy running in Docker" how-to names products - generic
         };
 
         public sealed class Hit { public string Path, Marker; public int Line; public override string ToString() => Path + ":" + Line + " (" + Marker + ")"; }
