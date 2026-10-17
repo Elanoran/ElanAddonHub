@@ -93,6 +93,8 @@ end
 --   bytes 11-12 x, bytes 13-14 y: the position on the uiMap of bytes 2-3, 0..65535 for 0..1 (big-endian); all zero unless valid
 -- An Outpost that only knows version 2 ignores these bytes (they were always zero); version 2 = an older Hub that can't send positions.
 -- Row 1 version 4 (companion 1.16.0+) also uses bytes 15-21 for one trail event at a time (see "trail events" below); all zero = none.
+-- Row 1 version 5 (companion 1.16.1+) adds three bits to posFlags, only while the position is valid: 4 on a flight (UnitOnTaxi), 8 indoors
+-- (IsIndoors), 16 swimming (IsSwimming), so the Outpost's 3D map can show you at the right height. An older Outpost only looks at bits 1 and 2.
 -- An old hub reads row 0 only and ignores row 1; a new hub without row 1 (old companion) falls back to v1.
 -- Turn it off with /ehub pixel off.
 local CELL, NCELLS, NDATA = 4, 32, 27
@@ -270,7 +272,8 @@ EHUB.POSITION_LABEL = "Share my map position with Elan's Outpost"
 EHUB.POSITION_DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened "
   .. "there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). "
   .. "The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads "
-  .. "it from there. It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing "
+  .. "it from there, together with whether you are on a flight, indoors or swimming (so its 3D map shows you at the right height). "
+  .. "It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing "
   .. "with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the "
   .. "trail pauses there."
 
@@ -299,12 +302,25 @@ local function readPosition(mapId, inInstance)
 end
 EHUB.ReadPosition = readPosition
 
+-- how you move (row 1 version 5): only asked for right after a valid position, each through rd() (pcall + issecretvalue); a secret, an error or
+-- an unknown answer simply leaves the bit off. Older clients answer 1 / nil instead of true / false.
+local function yes(v) return v == true or v == 1 end
+local function readMove()
+  local b = 0
+  if yes(rd(UnitOnTaxi, "player")) then b = b + 4 end
+  if yes(rd(IsIndoors)) then b = b + 8 end
+  if yes(rd(IsSwimming)) then b = b + 16 end
+  return b
+end
+EHUB.ReadMove = readMove
+
 -- what the strip shows now: changes only on a real move, every POS_EVERY s, or when the map / validity changes
-local posShown = { valid = false, map = 0, x = 0, y = 0, at = -100 }
+local posShown = { valid = false, map = 0, x = 0, y = 0, at = -100, move = 0 }
 EHUB.posShown = posShown
-local function positionDue(map, x, y)
+local function positionDue(map, x, y, move)
   local valid = x ~= nil
   if valid ~= posShown.valid or (valid and map ~= posShown.map) then return true end
+  if valid and (move or 0) ~= posShown.move then return true end -- taking off, landing, going inside or into the water shows at once
   if not valid then return false end
   local dx, dy = math.abs(x - posShown.x), math.abs(y - posShown.y)
   if dx > POS_MOVE or dy > POS_MOVE then return true end
@@ -313,12 +329,14 @@ end
 local function positionForStrip(P)
   if not positionOn() or not P then return 0, 0, 0 end
   local x, y = readPosition(P.mapId, P.inInstance)
-  if positionDue(P.mapId, x, y) then
-    posShown.valid, posShown.map, posShown.x, posShown.y, posShown.at = x ~= nil, P.mapId, x or 0, y or 0, GetTime()
+  local move = 0
+  if x then local ok, m = pcall(readMove) if ok and type(m) == "number" then move = m end end
+  if positionDue(P.mapId, x, y, move) then
+    posShown.valid, posShown.map, posShown.x, posShown.y, posShown.at, posShown.move = x ~= nil, P.mapId, x or 0, y or 0, GetTime(), x and move or 0
   end
   if not posShown.valid then return 1, 0, 0 end
   local function u16(v) return math.max(0, math.min(65535, math.floor(v * 65535 + 0.5))) end
-  return 3, u16(posShown.x), u16(posShown.y)
+  return 3 + posShown.move, u16(posShown.x), u16(posShown.y)
 end
 
 -- ---- trail events (part of the OPT-IN "Share my map position", companion 1.16.0+). Display only: small marks on the Outpost's trail.
@@ -599,7 +617,7 @@ local function drawStrip()
   local q
   if P then
     local m, ins = P.mapId % 65536, P.instanceId % 65536
-    q = { 0xB2, 4, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
+    q = { 0xB2, 5, math.floor(m / 256), m % 256, math.floor(ins / 256), ins % 256, P.flags1 % 256, P.flags2 % 256,
           P.xp % 256, P.group % 256 }
     for i = 11, 22 do q[i] = 0 end
     local okPos, pf, px, py = pcall(positionForStrip, P)
@@ -672,7 +690,9 @@ local function posTick(gen)
   pcall(function()
     local P = readPresence()
     local x, y = readPosition(P.mapId, P.inInstance)
-    if positionDue(P.mapId, x, y) then requestDraw() end
+    local move = 0
+    if x then local ok, m = pcall(readMove) if ok and type(m) == "number" then move = m end end
+    if positionDue(P.mapId, x, y, move) then requestDraw() end
   end)
   C_Timer.After(POS_TICK, function() posTick(gen) end)
 end

@@ -87,6 +87,31 @@ namespace ElansAddonHub
             var orgr = set.TaxiNodes.FirstOrDefault(n => n.Name == "Orgrimmar, Durotar");
             Check("real game files: the flight tables of the verified layouts are read: " + set.TaxiNodes.Count + " nodes, " + set.TaxiPaths.Count + " paths, " + set.TaxiPoints.Count + " path points; Orgrimmar's flight master is on Kalimdor at x 1677.6, y -4315.7",
                 set.HasTaxi && set.TaxiNodes.Count >= 50 && set.TaxiPaths.Count >= 100 && set.TaxiPoints.Count >= 1000 && orgr != null && orgr.MapId == 1 && Math.Abs(orgr.X - 1677.6) < 1 && Math.Abs(orgr.Y + 4315.7) < 1 && !MapData.StatusSuffix.Contains("unavailable"));
+            // 2.82: the live dot's height on a real flight - Orgrimmar to the Crossroads, matched from the take-off and followed along TaxiPathNode's own heights
+            {
+                var xr = set.TaxiNodes.FirstOrDefault(n => n.MapId == 1 && (n.Name ?? "").StartsWith("Crossroads"));
+                var tp = orgr != null && xr != null ? set.TaxiPaths.FirstOrDefault(p => p.FromNode == orgr.Id && p.ToNode == xr.Id) : null;
+                var routes = TaxiRoute.FromSet(set);
+                var rt = tp != null && routes.TryGetValue(1, out var kr) ? kr.FirstOrDefault(r => r.Id == tp.Id) : null;
+                if (rt == null) Check("real flight heights: the route Orgrimmar -> Crossroads is in the flight tables", false, (orgr?.Name ?? "no Orgrimmar") + " / " + (xr?.Name ?? "no Crossroads") + " / path " + (tp?.Id ?? 0));
+                else
+                {
+                    var fw = new FixtureWorld { G = (x, y) => 0, R = routes[1] };
+                    var el = new LiveElevation(fw); var at = DateTime.UtcNow; var rn = new Random(3);
+                    el.Solve(1, orgr.X + 2, orgr.Y - 2, 0, at);
+                    int n = 0, onRoute = 0; double worst = 0, top = -1e9;
+                    for (double sAt = 40; sAt < rt.Length - 40; sAt += 60)
+                    {
+                        int i = 0; while (i + 2 < rt.S.Length && rt.S[i + 1] < sAt) i++;
+                        double f = (sAt - rt.S[i]) / Math.Max(1e-6, rt.S[i + 1] - rt.S[i]), x = rt.X[i] + (rt.X[i + 1] - rt.X[i]) * f + (rn.NextDouble() - 0.5) * 12, y = rt.Y[i] + (rt.Y[i + 1] - rt.Y[i]) * f + (rn.NextDouble() - 0.5) * 12;
+                        at = at.AddSeconds(2); var r = el.Solve(1, x, y, LiveMove.Taxi, at); n++;
+                        rt.Project(x, y, out _, out var want); worst = Math.Max(worst, Math.Abs(r.Z - Math.Max(0, want))); if (r.RouteId == rt.Id) onRoute++; top = Math.Max(top, r.Z);
+                    }
+                    notes.Add("note real flight heights: Orgrimmar -> Crossroads is TaxiPath " + rt.Id + ", " + rt.X.Length + " points over " + Math.Round(rt.Length) + " yards, heights " + Math.Round(rt.Z.Min()) + " .. " + Math.Round(rt.Z.Max()) + " (Orgrimmar's flight master at " + Math.Round(orgr.Z) + ", the Crossroads' at " + Math.Round(xr.Z) + ")");
+                    Check("real flight heights: flying Orgrimmar -> Crossroads (" + n + " points along TaxiPath " + rt.Id + ", 6 yards of jitter) the dot is matched to that route on " + onRoute + " and its height follows the route's own points (worst " + Math.Round(worst, 1) + " yards off, highest " + Math.Round(top) + ")",
+                        n >= 20 && onRoute >= n - 2 && worst < 4 && rt.Z.Max() - rt.Z.Min() > 10, rt.Id + " " + onRoute + "/" + n);
+                }
+            }
             // the WDTs, straight from the game
             WdtFile kw, ew; List<WdtTile> strayK = new List<WdtTile>(), strayE = new List<WdtTile>();
             using (var casc = CascStorage.Open(real, "_classic_beta_"))

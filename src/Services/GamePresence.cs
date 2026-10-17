@@ -30,6 +30,8 @@ namespace ElansAddonHub.Services
             public bool PosSupported, PosEnabled, PosValid;
             public int PosMapId;                                  // the uiMap the fractions are on
             public double PosFx, PosFy;                           // 0..1 on that map
+            public int PosMove;                                   // companion 1.16.1+: 4 on a flight, 8 indoors, 16 swimming (0 = none, or an older Hub)
+            public bool PosMoveKnown;                             // the Hub sends those bits (strip row 1 version 5)
             public Character Copy() => (Character)MemberwiseClone();
             public bool InCombat => (Flags & 1) != 0;
             public bool Dead => (Flags & 2) != 0;
@@ -168,6 +170,7 @@ namespace ElansAddonHub.Services
             c.PosSupported = info.PosSupported; c.PosEnabled = info.PosEnabled; c.PosValid = info.PosValid;
             c.PosMapId = info.PosValid ? info.MapId : 0;
             c.PosFx = info.PosValid ? info.PosFx : 0; c.PosFy = info.PosValid ? info.PosFy : 0;
+            c.PosMove = info.PosValid ? info.PosMove : 0; c.PosMoveKnown = info.PosMoveKnown;
         }
 
         // only the position moved on the strip: the character shown stays (no poll of the files, no Changed for the Lodge), its position is updated
@@ -199,7 +202,7 @@ namespace ElansAddonHub.Services
 
         static bool SamePos(Character a, Character b) =>
             ReferenceEquals(a, b) || (a != null && b != null && a.PosSupported == b.PosSupported && a.PosEnabled == b.PosEnabled && a.PosValid == b.PosValid
-                && a.PosMapId == b.PosMapId && a.PosFx == b.PosFx && a.PosFy == b.PosFy);
+                && a.PosMapId == b.PosMapId && a.PosFx == b.PosFx && a.PosFy == b.PosFy && a.PosMove == b.PosMove && a.PosMoveKnown == b.PosMoveKnown);
 
         static DateTime SafeStamp(string f) { try { return File.GetLastWriteTimeUtc(f); } catch { return DateTime.MinValue; } }
 

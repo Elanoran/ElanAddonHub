@@ -54,7 +54,7 @@ namespace ElansAddonHub.Services.Db2
         // CanLink(8) ParentSkillLineID(9) ParentTierIndex(10) Flags(11) SpellBookSpellID(12) ...   (the id is a stored column here)
         public static readonly Def SkillLine = D("SkillLine", 1240935, 0xB53DC9D6, 0x6763217C);
         // SkillLineAbility: AbilityVerb_lang(0) AbilityAllVerb_lang(1) ID(2) SkillLine(3) Spell(4) MinSkillLineRank(5) ClassMask(6) SupercedesSpell(7) AcquireMethod(8)
-        // TrivialSkillLineRankHigh(9) TrivialSkillLineRankLow(10) Flags(11) NumSkillUps(12) ...
+        // TrivialSkillLineRankHigh(9) TrivialSkillLineRankLow(10) Flags(11) NumSkillUps(12) ... RaceMask[2](17: low and high 32 bits, 0 = every race)
         public static readonly Def SkillLineAbility = D("SkillLineAbility", 1266278, 0xFF4446F6, 0x224F7EA0);
 
         // ---- factions

@@ -135,6 +135,7 @@ namespace ElansAddonHub.Services.Atlas
                     if (!book.HasTrainerData) m.Notes.Add("What a spell costs to learn from a trainer is not in your game files, and the Classic baseline in this version carries no trainer table, so no learning costs are shown.");
                 }
             }
+            AddClassLore(m, c);
             return m;
         }
 
@@ -182,19 +183,20 @@ namespace ElansAddonHub.Services.Atlas
                 var s = Section(m, "racial", "Racial abilities", "The game data holds no racial abilities for this race.");
                 var seen = new HashSet<int>();
                 foreach (var skill in racial)
-                    foreach (var a in spells.AbilitiesOf(skill))
+                    foreach (var a in SpellOrigins.RacialAbilities(spells, skill, r))
                     {
                         var sp = spells.Get(a.Spell);
                         if (sp == null || string.IsNullOrEmpty(sp.Name) || !seen.Add(a.Spell)) continue;
                         var view = SpellData.Spell(a.Spell);
                         var desc = view == null ? "" : (!string.IsNullOrWhiteSpace(view.Description) ? view.Description : view.AuraDescription ?? "");
-                        s.Rows.Add(new AtlasRow { Key = AtlasIds.Spell(a.Spell), Link = AtlasIds.Spell(a.Spell), Title = sp.Name, IconId = sp.IconId, Detail = sp.Rank ?? "", Extra = desc.Length > 160 ? desc.Substring(0, 157).TrimEnd() + "…" : desc, Label = F, Tier = 1, Type = "Spell" });
+                        s.Rows.Add(new AtlasRow { Key = AtlasIds.Spell(a.Spell), Link = AtlasIds.Spell(a.Spell), Title = sp.Name, IconId = sp.IconId, Detail = RacialDetail(snap, sp.Rank, a.ClassMask), Extra = desc.Length > 160 ? desc.Substring(0, 157).TrimEnd() + "…" : desc, Label = F, Tier = 1, Type = "Spell" });
                     }
                 if (s.Rows.Count > 0) s.Note = AtlasFormat.Count(s.Rows.Count, "ability", "abilities") + " from " + string.Join(", ", racial.Where(x => spells.Skills.ContainsKey(x)).Select(x => spells.Skills[x].Name)) + ".";
             }
             else m.Notes.Add(SpellData.Spells == null ? "Spell data is read from your game files and is not ready yet, so the racial abilities are not listed." : "The skill lines of the races are not in the game data this Outpost can read, so the racial abilities are not listed.");
             AddStartZone(m, r);
             AddStartFromLore(m, r);
+            AddRaceLore(m, r);
             return m;
         }
 
@@ -344,6 +346,13 @@ namespace ElansAddonHub.Services.Atlas
                 catch (Exception e) { Util.Log("race starts file: " + e.Message); }
             }
             return false;
+        }
+
+        // "Racial Passive", or "Racial Passive · Rogue" for a variant the line gives one class only (Forever's Eureka! / Expansive Mind / Touch of the Grave)
+        static string RacialDetail(ClassSnapshot snap, string rank, int classMask)
+        {
+            var cls = classMask == 0 || classMask == -1 ? "" : string.Join(", ", snap.ClassList().Where(c => (classMask & c.Mask) != 0).Select(c => c.Name));
+            return string.Join(" · ", new[] { rank ?? "", cls }.Where(x => x.Length > 0));
         }
 
         static bool StartsWithVowel(string s) => !string.IsNullOrEmpty(s) && "AEIOUaeiou".IndexOf(s[0]) >= 0;

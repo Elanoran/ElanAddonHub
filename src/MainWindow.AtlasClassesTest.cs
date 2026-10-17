@@ -333,11 +333,11 @@ namespace ElansAddonHub
                 bool HeroBanner(string kind, string file)
                 {
                     var bn = AtlasView.BannerForTest;
-                    return bn != null && bn.Tag as string == kind + "-banner" && bn.IsVisible && bn.ActualHeight > ElansAddonHub.AtlasPage.BannerHeight && Math.Abs(bn.ActualWidth - AtlasView.BodyForTest.ActualWidth) < 1.5
+                    return bn != null && bn.Tag as string == kind + "-banner" && bn.IsVisible && bn.ActualHeight > ElansAddonHub.AtlasPage.BannerHeight && Math.Abs(bn.ActualWidth - AtlasView.PageWidthForTest) < 1.5
                         && bn.TranslatePoint(new Point(0, 0), AtlasView.BodyForTest).Y < 1 && AtlasView.HeroForTest != null && AtlasView.HeroForTest.TranslatePoint(new Point(0, 0), bn).Y >= ElansAddonHub.AtlasPage.BannerHeight - 49
                         && AtlasWalk(bn).OfType<Border>().Any(x => x.Background is System.Windows.Media.ImageBrush ib && ib.ImageSource == ArtLibrary.Load(ArtLibrary.Class(file) ?? ArtLibrary.Race(file, kind == "race" && file == "Orc" ? RaceInfo.Horde : RaceInfo.Alliance)));
                 }
-                string BannerWhy() { var bn = AtlasView.BannerForTest; return bn == null ? "no banner" : bn.Tag + " " + bn.ActualWidth + "x" + bn.ActualHeight + " body " + AtlasView.BodyForTest.ActualWidth; }
+                string BannerWhy() { var bn = AtlasView.BannerForTest; return bn == null ? "no banner" : bn.Tag + " " + bn.ActualWidth + "x" + bn.ActualHeight + " page " + AtlasView.PageWidthForTest; }
                 Check("window: the Hunter page opens with the Hunter's painted banner behind its name card (class-hunter.jpg, full width, first on the page)", HeroBanner("class", "HUNTER") && ArtLibrary.Class("HUNTER").File == "class-hunter.jpg", BannerWhy());
 
                 void ClickTab(string key) { var b = (Button)AtlasView.ClassControlForTest(key); b.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); }
@@ -383,6 +383,8 @@ namespace ElansAddonHub
                 Check("window: the Orc page opens with the Orc's painted banner (race-orc.jpg), not the Hunter's", HeroBanner("race", "Orc") && ArtLibrary.Race("Orc", RaceInfo.Horde).File == "race-orc.jpg", BannerWhy());
                 await AtlasView.Open("race:4"); await AtlasView.WaitForTest(); await Task.Delay(150); UpdateLayout();
                 Check("window: the Night Elf page (client file NightElf) has its own banner", AtlasView.BannerForTest?.Tag as string == "race-banner" && ElansAddonHub.AtlasPage.HeroArtOf(AtlasView.Model)?.File == "race-nightelf.jpg", BannerWhy());
+                // 2.81: no tooltip card, the About card (the game's words + the Outpost's notes), the fixed top
+                await ClassPagesChecks(Check, dir);
                 // fallbacks: a class with no entry, and an entry whose picture is missing, keep the plain name card (no banner, nothing thrown); restored after
                 var mageArt = ArtLibrary.Classes["MAGE"];
                 try
@@ -402,6 +404,9 @@ namespace ElansAddonHub
                     && CcDo(() => { ClassData.SetForTest(null, ClassData.State.Disabled); var a = ElansAddonHub.AtlasPage.HeroArtOf(new AtlasPageModel { Id = "class:3", Kind = "class", Title = "Hunter" }); ClassData.SetForTest(set); return a == null; }));
                 await AtlasView.Open("class:8"); await AtlasView.WaitForTest(); await Task.Delay(250); UpdateLayout();
                 Check("window: another class resets the card (Mage: its own tab Arcane, level 1 first, no Hunter spells)", AtlasView.ClassFilterForTest.SkillId == 0 && AtlasView.ClassControlForTest("tab:237") != null && AtlasView.ClassControlForTest("tab:163") == null && AtlasView.ClassRowsForTest.Any(r => r.Title == "Fireball") && !AtlasView.ClassRowsForTest.Any(r => r.Title == "Arcane Shot"));
+
+                // 2.83: checked against WoW Forever - the race mask of a shared racial line, race-only class spells (an invented world of its own; the usual one put back)
+                ClassesForeverFixture(Check, dir, () => { ClassData.SetForTest(set); SpellData.SetForTest(CcSpellSet(spellList)); AtlasBrowse.ForgetForTest(); });
 
                 // ============================================================================================================ no data
                 ClassData.SetForTest(null, ClassData.State.Unavailable, "game updated: ChrRaces layout 12345678 is not known to this Outpost yet");
@@ -426,7 +431,7 @@ namespace ElansAddonHub
                 try
                 {
                     AtlasQuery.Context.Lodge = savedLodge; ClassData.AutoStart = savedAuto; ClassData.CacheFile = savedCache; ClassicTrainers.Source = savedTrainers;
-                    ClassData.ResetForTest(); TalentData.ResetForTest(); SpellData.ResetForTest(); ItemData.ResetForTest(); SeenData.ResetForTest(); ClassicAtlas.Use(null); AtlasBrowse.ForgetForTest();
+                    ClassData.ResetForTest(); ClassLore.ResetForTest(); TalentData.ResetForTest(); SpellData.ResetForTest(); ItemData.ResetForTest(); SeenData.ResetForTest(); ClassicAtlas.Use(null); AtlasBrowse.ForgetForTest();
                     Width = savedWidth; Height = savedHeight;
                     ShowTab("addons"); ResetAtlasForTest();
                 }

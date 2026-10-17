@@ -155,12 +155,14 @@ namespace ElansAddonHub
                 var widths = new List<string>();
                 double menuW = (double)FindResource("Size.SideMenu");
                 var edges = new Dictionary<string, Tuple<double, double>>();
+                var seps = new Dictionary<string, List<string>>();
                 void Edge(string name, FrameworkElement el)
                 {
                     if (el == null || !el.IsVisible || el.ActualWidth <= 0) { widths.Add(name + "=not shown"); return; }
                     var p = el.TranslatePoint(new Point(0, 0), this);
                     edges[name] = Tuple.Create(p.X, p.X + el.ActualWidth);
                     widths.Add(name + "=" + p.X.ToString("0.#") + ".." + (p.X + el.ActualWidth).ToString("0.#"));
+                    if (name != "search") seps[name] = MenuSeparators(el);
                 }
                 ShowTab("atlas"); await AtlasView.GoStart(); await Settle();
                 Edge("atlas", AtlasView.NavBackdropForTest);
@@ -202,6 +204,9 @@ namespace ElansAddonHub
                     Check("side menus: all four are the same width (Size.SideMenu, " + menuW + " px) and start and end at the same x", menus.All(m => Math.Abs(edges[m].Item2 - edges[m].Item1 - menuW) < 0.6 && Math.Abs(edges[m].Item1 - a.Item1) < 0.6 && Math.Abs(edges[m].Item2 - a.Item2) < 0.6), string.Join(" ", widths));
                     Check("side menus: the title bar search box ends where the menus end", edges.ContainsKey("search") && Math.Abs(edges["search"].Item2 - a.Item2) < 0.6, string.Join(" ", widths));
                 }
+                // 2.81: the Atlas had a 1 px hairline 4 px right of its menu fill, so the menu ended in two lines; the fill's own edge is the one separation, on every page
+                Check("side menus: between the menu and the page there is no extra vertical line - the menu fill's own edge is the one separation (Atlas, Settings, Characters, Lodge: 0 separators each)",
+                    menus.All(seps.ContainsKey) && menus.All(m => seps[m].Count == 0), string.Join(" | ", seps.Select(kv => kv.Key + ": " + kv.Value.Count + (kv.Value.Count > 0 ? " (" + string.Join(", ", kv.Value) + ")" : ""))));
                 Width = 1000; await Settle(); UpdateLayout();
                 Check("side menus: the search box still lines up at another window width", Math.Abs(TitleSearch.TranslatePoint(new Point(TitleSearch.ActualWidth, 0), this).X - (edges.ContainsKey("atlas") ? edges["atlas"].Item2 : -1)) < 0.6);
             }
@@ -218,6 +223,36 @@ namespace ElansAddonHub
                 catch (Exception) { }
             }
             return string.Join("\r\n", notes) + "\r\natlasmenu: " + (ok ? "PASSED" : "FAILED");
+        }
+
+        // the thin vertical lines (1-2 px wide, at least half as tall as the menu fill) standing in the strip just right of a side menu's fill, outside it:
+        // a divider Border, a Rectangle, a Separator or a Line drawn between the menu and its page
+        List<string> MenuSeparators(FrameworkElement fill)
+        {
+            var found = new List<string>();
+            var f0 = fill.TranslatePoint(new Point(0, 0), this);
+            double right = f0.X + fill.ActualWidth, top = f0.Y, bottom = f0.Y + fill.ActualHeight;
+            var stack = new Stack<DependencyObject>(); stack.Push(this);
+            while (stack.Count > 0)
+            {
+                var d = stack.Pop();
+                for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(d); i++) stack.Push(System.Windows.Media.VisualTreeHelper.GetChild(d, i));
+                if (!(d is FrameworkElement fe) || !fe.IsVisible || ReferenceEquals(fe, fill) || fe.ActualWidth <= 0 || fe.ActualWidth > 2.5 || fe.ActualHeight < fill.ActualHeight * 0.5) continue;
+                bool drawn = fe is System.Windows.Shapes.Shape || fe is Separator
+                    || (fe is Border b && ((b.Background is System.Windows.Media.SolidColorBrush sb && sb.Color.A > 0 && sb.Opacity > 0) || b.BorderThickness.Left + b.BorderThickness.Right > 0));
+                if (!drawn || IsUnder(fe, fill)) continue;
+                var p = fe.TranslatePoint(new Point(0, 0), this);
+                double cx = p.X + fe.ActualWidth / 2;
+                if (cx < right - 1 || cx > right + 12 || p.Y + fe.ActualHeight < top || p.Y > bottom) continue;
+                found.Add(fe.GetType().Name + (fe.Name.Length > 0 ? " " + fe.Name : "") + " at x " + cx.ToString("0.#") + " (menu ends at " + right.ToString("0.#") + ")");
+            }
+            return found;
+        }
+
+        static bool IsUnder(DependencyObject d, DependencyObject root)
+        {
+            for (; d != null; d = System.Windows.Media.VisualTreeHelper.GetParent(d)) if (ReferenceEquals(d, root)) return true;
+            return false;
         }
 
         // spells and skill lines for the spells / skills rule: one of each kind

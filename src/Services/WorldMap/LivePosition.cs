@@ -35,7 +35,7 @@ namespace ElansAddonHub.Services.WorldMap
         public const string HowToTitle = "Share your map position";
         public const string HubSettingLabel = "Share my map position with Elan's Outpost";
         // the in-game setting's description, verbatim (ElansHub.lua EHUB.POSITION_DESC): what it really does
-        public const string HubDescription = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there. It is only shown on a map — nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there.";
+        public const string HubDescription = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there, together with whether you are on a flight, indoors or swimming (so its 3D map shows you at the right height). It is only shown on a map — nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there.";
         public static readonly string[] HowToSteps =
         {
             "In game: type /ehub position on (or open Elan's Hub settings > Share my map position with Elan's Outpost).",
@@ -75,13 +75,14 @@ namespace ElansAddonHub.Services.WorldMap
     // the trail: memory only, the last 10 minutes, at most one point a second, points closer than a few yards dropped
     public sealed class LiveTrail
     {
-        public struct Point { public DateTime At; public int MapId; public double X, Y; }   // world position (continent map id, x north, y west, yards)
+        // world position (continent map id, x north, y west, yards); Z / Src = the height worked out for the 3D view (LiveElevation), HasZ false = none
+        public struct Point { public DateTime At; public int MapId; public double X, Y; public double Z; public ElevSrc Src; public bool HasZ; }
         public static readonly TimeSpan Keep = TimeSpan.FromMinutes(10);
         public const double MinSeconds = 1.0, MinYards = 3.0;
         public const int MaxPoints = 600;                           // 10 minutes at one a second
         readonly List<Point> pts = new List<Point>();
         // the events on the trail (companion 1.16.0+): where and when, what (kind + the game's id), never saved; they go with the trail
-        public struct Mark { public DateTime At; public int MapId; public double X, Y; public TrailKind Kind; public int Id, Extra; }
+        public struct Mark { public DateTime At; public int MapId; public double X, Y; public TrailKind Kind; public int Id, Extra; public double Z; public ElevSrc Src; public bool HasZ; }
         public const int MaxMarks = 200;
         readonly List<Mark> marks = new List<Mark>();
         string owner = "";
@@ -91,8 +92,10 @@ namespace ElansAddonHub.Services.WorldMap
         public string Owner { get { lock (gate) return owner; } }
 
         // false = dropped (too soon, too close, or another character, which starts a new trail first)
-        public bool Add(string charKey, DateTime at, int mapId, double x, double y)
+        public bool Add(string charKey, DateTime at, int mapId, double x, double y) => Add(charKey, new Point { At = at, MapId = mapId, X = x, Y = y });
+        public bool Add(string charKey, Point p)
         {
+            DateTime at = p.At; int mapId = p.MapId; double x = p.X, y = p.Y;
             if (double.IsNaN(x + y) || double.IsInfinity(x + y)) return false;
             lock (gate)
             {
@@ -105,7 +108,7 @@ namespace ElansAddonHub.Services.WorldMap
                     if ((at - l.At).TotalSeconds < MinSeconds) return false;
                     if (l.MapId == mapId && Dist(l.X, l.Y, x, y) < MinYards) return false;
                 }
-                pts.Add(new Point { At = at, MapId = mapId, X = x, Y = y });
+                pts.Add(p);
                 while (pts.Count > MaxPoints) pts.RemoveAt(0);
                 return true;
             }
@@ -264,17 +267,23 @@ namespace ElansAddonHub.Services.WorldMap
         public event Action Changed;
         // tests: the world position of a zone fraction (null = MapData.Index)
         public Func<int, double, double, WorldPoint?> ToWorld;
+        // the height for the 3D view (2.82): the solver keeps a little memory (the last point, the flight under way), like the trail never saved.
+        // Tests set their own world; null = the Outpost's terrain cache, buildings and flight routes (GameElevationWorld.Shared).
+        IElevationWorld elevWorld; LiveElevation elev;
+        public IElevationWorld ElevationWorld { get => elevWorld; set { elevWorld = value; elev = null; } }
+        public ElevResult? LastElevForTest { get; private set; }
+        LiveElevation Elev => elev ?? (elev = new LiveElevation(elevWorld ?? GameElevationWorld.Shared));
 
         // the newest strip state. enabled = the Outpost setting; c = the character shown (null = none)
         public void Update(bool enabled, bool playing, GamePresence.Character c, DateTime nowUtc)
         {
             var before = Sig();
-            if (!enabled) { State = LiveState.Off; Trail.Clear(); Here = null; }
-            else if (!playing || c == null || string.IsNullOrEmpty(c.Name)) { State = LiveState.NotPlaying; Trail.Clear(); Here = null; Name = ""; ClassFile = null; }
+            if (!enabled) { State = LiveState.Off; Trail.Clear(); Here = null; elev?.Reset(); }
+            else if (!playing || c == null || string.IsNullOrEmpty(c.Name)) { State = LiveState.NotPlaying; Trail.Clear(); Here = null; Name = ""; ClassFile = null; elev?.Reset(); }
             else
             {
                 var key = (c.Realm ?? "") + "-" + c.Name;
-                if (Trail.Claim(key)) Here = null;                         // another character: a new trail
+                if (Trail.Claim(key)) { Here = null; elev?.Reset(); }      // another character: a new trail
                 Name = c.Name; ClassFile = c.ClassFile;
                 if (!c.HasLive) State = LiveState.NotShared;               // no live strip (strip off in the game, or a Hub before 1.5)
                 else if (!c.PosSupported) State = LiveState.OldHub;
@@ -288,8 +297,16 @@ namespace ElansAddonHub.Services.WorldMap
                     else
                     {
                         State = LiveState.Ok; UiMapId = c.PosMapId;
-                        Here = new LiveTrail.Point { At = nowUtc, MapId = w.Value.MapId, X = w.Value.X, Y = w.Value.Y };
-                        Trail.Add(key, nowUtc, w.Value.MapId, w.Value.X, w.Value.Y);
+                        var pt = new LiveTrail.Point { At = nowUtc, MapId = w.Value.MapId, X = w.Value.X, Y = w.Value.Y };
+                        try
+                        {
+                            var e = Elev.Solve(pt.MapId, pt.X, pt.Y, c.PosMoveKnown ? c.PosMove : 0, nowUtc);
+                            if (!double.IsNaN(e.Z) && !double.IsInfinity(e.Z)) { pt.Z = e.Z; pt.Src = e.Src; pt.HasZ = true; }
+                            LastElevForTest = e;
+                        }
+                        catch (Exception ex) { Util.Log("live elevation: " + ex.Message); }
+                        Here = pt;
+                        Trail.Add(key, pt);
                     }
                 }
                 if (State != LiveState.Ok) Here = null;
@@ -297,7 +314,7 @@ namespace ElansAddonHub.Services.WorldMap
             if (Sig() != before) Changed?.Invoke();
         }
 
-        string Sig() => State + "|" + Name + "|" + (Here.HasValue ? Here.Value.MapId + ":" + Here.Value.X + ":" + Here.Value.Y : "-") + "|" + Trail.Count + "|" + Trail.MarkCount;
+        string Sig() => State + "|" + Name + "|" + (Here.HasValue ? Here.Value.MapId + ":" + Here.Value.X + ":" + Here.Value.Y + ":" + Math.Round(Here.Value.Z, 1) : "-") + "|" + Trail.Count + "|" + Trail.MarkCount;
 
         // A trail event from the strip: put on the trail where you were at that moment. Only while the setting is on, a position is shown (Ok) and the
         // event comes from the character the trail belongs to; false = dropped (it has no place on the map). Memory only, like the trail.
@@ -310,7 +327,7 @@ namespace ElansAddonHub.Services.WorldMap
             if (p == null && Here.HasValue && (Here.Value.At - at).Duration() <= TimeSpan.FromSeconds(10)) p = Here;
             if (p == null) { EventsDroppedForTest++; return false; }
             var before = Sig();
-            bool ok = Trail.AddMark(new LiveTrail.Mark { At = at, MapId = p.Value.MapId, X = p.Value.X, Y = p.Value.Y, Kind = ev.Kind, Id = ev.Id, Extra = ev.Extra }, nowUtc);
+            bool ok = Trail.AddMark(new LiveTrail.Mark { At = at, MapId = p.Value.MapId, X = p.Value.X, Y = p.Value.Y, Kind = ev.Kind, Id = ev.Id, Extra = ev.Extra, Z = p.Value.Z, Src = p.Value.Src, HasZ = p.Value.HasZ }, nowUtc);
             if (!ok) { EventsDroppedForTest++; return false; }
             if (Sig() != before) Changed?.Invoke();
             return true;

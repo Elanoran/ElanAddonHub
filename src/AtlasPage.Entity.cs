@@ -116,13 +116,14 @@ namespace ElansAddonHub
             tabHost = new ContentControl { Focusable = false, IsTabStop = false, HorizontalContentAlignment = HorizontalAlignment.Stretch };
             railStack = new StackPanel();
             entityGrid.Children.Add(tabHost); entityGrid.Children.Add(railStack);
-            col.Children.Add(entityGrid);
+            if (FixedHeadFor(m)) PlaceFixedHead(col, entityGrid);     // a class or race page: the hero and the tabs stay, the tab's content scrolls under them (AtlasPage.FixedHead.cs)
+            else col.Children.Add(entityGrid);
             columnMode = -1;
             tabHost.Content = TabContentFor(tabNow);
             ApplyLayout(mode);
             // a link named a tab the page does not have: the id says what the page shows
             if (AtlasTabs.TabOf(history.Current).Length > 0 && AtlasTabs.TabOf(history.Current) != tabNow) SyncIdToTab(false);
-            Scroller.ScrollToTop();
+            Scroller.ScrollToTop(); contentScroller?.ScrollToTop();
             Motion.PageIn(Body);
         }
 
@@ -136,7 +137,8 @@ namespace ElansAddonHub
 
         void ResetEntity()
         {
-            entityGrid = null; tabHost = null; railStack = null; factsCard = null; railMapHost = null; heroEl = null; heroName = null; tabStrip = null; bannerEl = null; loreCard = null;
+            entityGrid = null; tabHost = null; railStack = null; factsCard = null; railMapHost = null; heroEl = null; heroName = null; tabStrip = null; bannerEl = null; loreCard = null; classLoreCard = null; overviewLead = 0;
+            LeaveFixedHead();
             railMap?.ClearMarkers(); railMap = null;
             tabsShown.Clear(); tabButtons.Clear(); tabContent.Clear();
             tabNow = ""; tabDefault = AtlasTabs.Overview; columnMode = -1; railOn = false; wide = false;
@@ -361,8 +363,10 @@ namespace ElansAddonHub
             {
                 case AtlasTabs.Overview:
                     {
-                        if (!HeaderCarriesFacts(m)) col.Children.Add(ItemCard(m));       // every kind but a zone: the game tooltip is the page's main card (a zone's header already says it all)
+                        if (!HeaderCarriesFacts(m) && !HeroIsTheCard(m)) col.Children.Add(ItemCard(m));       // most kinds: the game tooltip is the page's main card (a zone's header already says it all; a class's or race's hero too)
                         if (m.Lore != null) col.Children.Add(LoreCard(m));       // a zone with the Outpost's notes: "About <zone>"
+                        if (m.ClassLore != null) col.Children.Add(ClassLoreCard(m));     // a class or race: the game's own words and the Outpost's notes, "About <class>"
+                        overviewLead = col.Children.Count;                       // the facts go after these when the rail is off
                         if (!railOn && factsCard != null) col.Children.Add(factsCard);
                         if (m.Custom is ClassSpellBook classSpells) col.Children.Add(ClassSpellsCard(classSpells));
                         if (m.Custom is QuestChainInfo chain) col.Children.Add(QuestChainCard(chain));
@@ -422,6 +426,11 @@ namespace ElansAddonHub
         // what the game tooltip card and the rail's "In <continent>" fact card would repeat, so neither is drawn on any of its tabs (2.70)
         public static bool HeaderCarriesFacts(AtlasPageModel m) => m != null && m.Kind == "zone";
 
+        // a class or race page (2.81): its hero already says what the game-tooltip card said (the name, roles, resource, start level as chips), so the
+        // Overview has no tooltip card; the "About" card (AtlasPage.ClassLore.cs) comes first. Its facts card (the links) stays.
+        public static bool HeroIsTheCard(AtlasPageModel m) => m != null && (m.Kind == "class" || m.Kind == "race");
+        int overviewLead;
+
         // the quick facts (what links somewhere); an item's own facts (crafted by ...) are all shown. Null when there is none (and on a zone: its header has them).
         FrameworkElement FactsFor(AtlasPageModel m)
         {
@@ -448,7 +457,7 @@ namespace ElansAddonHub
             UpdateRailMap();
             ApplyRailWidth();
             SyncIdToTab(true);
-            Scroller.ScrollToTop();
+            Scroller.ScrollToTop(); contentScroller?.ScrollToTop();
             if (animate) Motion.PageIn(tabHost);
             return true;
         }
@@ -511,7 +520,7 @@ namespace ElansAddonHub
                 if (factsCard != null) railStack.Children.Add(factsCard);
             }
             else if (factsCard != null && tabContent.TryGetValue(AtlasTabs.Overview, out var ov) && ov is StackPanel sp)
-                sp.Children.Insert(Math.Min(loreCard != null && sp.Children.Contains(loreCard) ? 2 : 1, sp.Children.Count), factsCard);
+                sp.Children.Insert(Math.Min(overviewLead, sp.Children.Count), factsCard);
             ApplyRailWidth();
         }
 

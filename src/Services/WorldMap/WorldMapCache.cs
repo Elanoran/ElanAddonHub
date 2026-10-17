@@ -37,6 +37,59 @@ namespace ElansAddonHub.Services.WorldMap
             return m != null && m.Valid && m.MapId == mapId ? m : null;
         }
 
+        // ---- "made again after a game update" (2.82.1): before the folders of an older game build go, the maps and terrains that were made there are
+        // noted in the new build's folder (older-maps.txt: "123" = the map pictures, "t123" = the 3D terrain), so the build card can say the game was
+        // updated instead of "the first time"
+        const string OlderFile = "older-maps.txt";
+
+        static IEnumerable<string> MadeIn(string otherKey)
+        {
+            var res = new List<string>();
+            try
+            {
+                foreach (var md in Directory.GetDirectories(Path.Combine(Root, otherKey)))
+                {
+                    if (!int.TryParse(Path.GetFileName(md), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)) continue;
+                    if (Built(id, otherKey) != null) res.Add(id.ToString(CultureInfo.InvariantCulture));
+                    if (TerrainBuilt(id, otherKey) != null) res.Add("t" + id.ToString(CultureInfo.InvariantCulture));
+                }
+            }
+            catch (Exception) { }
+            return res;
+        }
+
+        static IEnumerable<string> OlderMaps(string key)
+        {
+            try { var p = Path.Combine(Root, key, OlderFile); return File.Exists(p) ? File.ReadAllLines(p).Select(l => l.Trim()).Where(l => l.Length > 0).ToList() : new List<string>(); }
+            catch (Exception) { return new List<string>(); }
+        }
+
+        static void WriteOlderMaps(string key, IEnumerable<string> maps)
+        {
+            try { var dir = Path.Combine(Root, key); Directory.CreateDirectory(dir); File.WriteAllLines(Path.Combine(dir, OlderFile), maps.OrderBy(x => x, StringComparer.Ordinal)); }
+            catch (Exception) { }
+        }
+
+        // this map (or its 3D terrain) was made for an older game build: it is being made again because the game was updated, not for the first time
+        public static bool MadeForOlderGame(int mapId, bool terrain, string key = null)
+        {
+            key = key ?? BuildKey;
+            var id = (terrain ? "t" : "") + mapId.ToString(CultureInfo.InvariantCulture);
+            if (OlderMaps(key).Contains(id)) return true;
+            try
+            {
+                if (!Directory.Exists(Root)) return false;
+                foreach (var d in Directory.GetDirectories(Root))
+                {
+                    var name = Path.GetFileName(d);
+                    if (string.Equals(name, PageFolder, StringComparison.OrdinalIgnoreCase) || string.Equals(name, key, StringComparison.Ordinal)) continue;
+                    if (MadeIn(name).Contains(id)) return true;
+                }
+            }
+            catch (Exception) { }
+            return false;
+        }
+
         // folders of other game builds are of no use any more
         public static int RemoveOtherBuilds(string key)
         {
@@ -44,12 +97,15 @@ namespace ElansAddonHub.Services.WorldMap
             try
             {
                 if (!Directory.Exists(Root)) return 0;
+                var older = new HashSet<string>(OlderMaps(key));
                 foreach (var d in Directory.GetDirectories(Root))
                 {
                     var name = Path.GetFileName(d);
                     if (string.Equals(name, PageFolder, StringComparison.OrdinalIgnoreCase) || string.Equals(name, key, StringComparison.Ordinal)) continue;
+                    foreach (var m in MadeIn(name)) older.Add(m);
                     try { Util.DeleteDir(d); n++; } catch (Exception) { }
                 }
+                if (older.Count > 0) WriteOlderMaps(key, older);
             }
             catch (Exception) { }
             return n;
@@ -81,7 +137,7 @@ namespace ElansAddonHub.Services.WorldMap
                 foreach (var d in Directory.GetDirectories(Root))
                 {
                     if (string.Equals(Path.GetFileName(d), PageFolder, StringComparison.OrdinalIgnoreCase)) continue;
-                    foreach (var f in Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories)) { if (InBuildings(f)) continue; try { total += new FileInfo(f).Length; } catch (Exception) { } }
+                    foreach (var f in Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories)) { if (InBuildings(f) || string.Equals(Path.GetFileName(f), OlderFile, StringComparison.OrdinalIgnoreCase)) continue; try { total += new FileInfo(f).Length; } catch (Exception) { } }
                 }
             }
             catch (Exception) { }

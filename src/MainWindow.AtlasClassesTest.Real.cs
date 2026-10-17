@@ -72,6 +72,14 @@ namespace ElansAddonHub
                 Check("real game files: search finds the Hunter class and the Skyborne races (this client's own)", sHunter.Groups.Any(g => g.Kind == "class" && g.Hits.Any(h => h.Name == "Hunter")) && sSky.Groups.Any(g => g.Kind == "race" && g.Hits.Count == 2));
                 var bc = AtlasBrowse.Run("browse:classes"); var br = AtlasBrowse.Run("browse:races");
                 Check("real game files: browse lists 9 classes and the playable races", bc.Total == 9 && br.Total == races.Count && br.Total >= 8, bc.Total + " " + br.Total);
+                // ---- 2.81: the About card - the game's own character creation text for every class and race, and the Outpost's notes for each (the Skyborne pair marked as written from the game's data)
+                var lorePages = d.ClassList().Select(c => AtlasQuery.Build(AtlasIds.Class(c.Id))).Concat(d.PlayableRaces().Select(r => AtlasQuery.Build(AtlasIds.Race(r.Id)))).ToList();
+                var noLore = lorePages.Where(pg => pg.ClassLore == null || pg.ClassLore.Official.Length < 80 || pg.ClassLore.Notes == null || !pg.ClassLore.Notes.HasText).Select(pg => pg.Title + (pg.ClassLore == null ? " (none)" : pg.ClassLore.Official.Length < 80 ? " (no game text)" : " (no notes)")).ToList();
+                Check("real game files: every class (9) and playable race (" + d.PlayableRaces().Count + ") has the game's own description and the Outpost's notes on its page; the Skyborne pair's notes now cite Blizzard's Forever pages (2.83), so no entry is 'from the game's data only'",
+                    noLore.Count == 0 && lorePages.Count == 9 + d.PlayableRaces().Count && lorePages.Where(pg => pg.Kind == "race" && pg.Title.Contains("Skyborne")).All(pg => !pg.ClassLore.Notes.FromGameDataOnly && pg.ClassLore.Notes.Sources.Any(u => u.Contains("news.blizzard.com"))) && lorePages.Count(pg => pg.Kind == "race" && pg.Title.Contains("Skyborne")) == 2
+                    && lorePages.All(pg => !pg.ClassLore.Notes.FromGameDataOnly), string.Join(", ", noLore));
+                // ---- 2.83: the pages and the notes against the Forever client itself
+                ClassesForeverReal(Check, d);
                 // ---- race icons: every playable race has one, the atlas squares are where the client's own tables say, and they cut out as real portraits
                 var allR = d.PlayableRaces();
                 Check("real game files: every playable race (" + allR.Count + ": the Classic eight, High Order and Windshaper Skyborne) has a race icon, and no two races share one",
@@ -141,6 +149,8 @@ namespace ElansAddonHub
                         if (d.RaceByName("Windshaper Skyborne") != null) await RShot("race:" + d.RaceByName("Windshaper Skyborne").Id, "races-page-windshaper.png");
                         await RShot("class:3", "classes-page-hunter.png");
                         await RShot("class:9", "classes-page-warlock.png");
+                        await RShot("class:5", "classes-page-priest.png");
+                        await RShot("race:" + d.RaceByName("Dwarf").Id, "races-page-dwarf.png");
                         await RShot("browse:classes", "classes-list.png");
                         notes.Add("note pictures: " + Path.Combine(dir, "races-*.png"));
                     }
@@ -177,6 +187,9 @@ namespace ElansAddonHub
                         await Shot("class:1", "classes-warrior.png");
                         await Shot("browse:races", "classes-races-list.png");
                         await Shot("race:" + d.RaceByName("Orc").Id, "classes-race-orc.png");
+                        await Shot("class:5", "classes-priest.png");
+                        var skyHigh = d.PlayableRaces().FirstOrDefault(r => r.Name.Contains("High Order"));
+                        if (skyHigh != null) await Shot("race:" + skyHigh.Id, "classes-race-skyborne-high-order.png");
                         await Shot("spell:14281", "classes-spell-arcane-shot.png");
                     }
                     finally { Width = wasW; Height = wasH; }

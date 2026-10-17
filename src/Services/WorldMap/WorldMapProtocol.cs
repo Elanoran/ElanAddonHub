@@ -191,6 +191,8 @@ namespace ElansAddonHub.Services.WorldMap
         static readonly Regex HexColor = new Regex(@"^#[0-9A-Fa-f]{6}\z", RegexOptions.CultureInvariant);
         //   events (companion 1.16.0+): [{lat, lng, age, k, name, line, c, link, at}] - the marks on this continent's trail, oldest first, at most LiveTrail.MaxMarks;
         //   k = kill | loot | herb | ore | skin | level | died | quest | area | flight, name / line from TrailEventText (the Outpost's own data), c = #rrggbb, at = local "HH:mm"
+        //   2.82, the height for the 3D view (LiveElevation): elev:[z, s, ...] one pair per trail point (in the trail's order), hz:[z, s] for here, lz for last, z / zs on an event;
+        //   z = yards (world height, not exaggerated), s = 0 terrain (the page drapes it over its own ground) | 1 a building's floor | 2 water | 3 in the air (a flight) | -1 unknown
         public static string Me(LiveState state, string name, string color, LiveTrail.Point? here, IList<LiveTrail.Point> trail, int viewMapId, DateTime now, string elsewhere = null, IList<LiveTrail.Mark> marks = null)
         {
             string st;
@@ -211,8 +213,8 @@ namespace ElansAddonHub.Services.WorldMap
             d["notice"] = st == "elsewhere" ? "You are on another map" + (string.IsNullOrEmpty(elsewhere) ? "" : ": " + Clean(elsewhere, 60)) : LivePositionText.NoticeFor(state) ?? "";
             d["howto"] = LivePositionText.HasHowTo(state);
             d["howtoText"] = LivePositionText.HowToLink;
-            if (st == "ok") { WorldMapMath.WorldToLatLng(here.Value.X, here.Value.Y, out var la, out var ln); if (InPlane(la, ln)) d["here"] = new List<object> { R6(la), R6(ln) }; else { d["state"] = "unavailable"; d["notice"] = LivePositionText.Unavailable; } }
-            var list = new List<object>();
+            if (st == "ok") { WorldMapMath.WorldToLatLng(here.Value.X, here.Value.Y, out var la, out var ln); if (InPlane(la, ln)) { d["here"] = new List<object> { R6(la), R6(ln) }; d["hz"] = ZOf(here.Value.HasZ, here.Value.Z, here.Value.Src); } else { d["state"] = "unavailable"; d["notice"] = LivePositionText.Unavailable; } }
+            var list = new List<object>(); var elev = new List<object>();
             if (trail != null)
             {
                 int start = Math.Max(0, trail.Count - LiveTrail.MaxPoints);
@@ -226,12 +228,14 @@ namespace ElansAddonHub.Services.WorldMap
                     if (prev.HasValue && (LiveTrail.Dist(prev.Value.X, prev.Value.Y, p.X, p.Y) > TrailBreakYards || (p.At - prev.Value.At).TotalSeconds > TrailBreakSeconds)) brk = true;
                     double age = Math.Max(0, Math.Min(LiveTrail.Keep.TotalSeconds, (now - p.At).TotalSeconds));
                     list.Add(R6(la)); list.Add(R6(ln)); list.Add(Math.Round(age, 1)); list.Add(brk ? 1 : 0);
+                    elev.AddRange(ZOf(p.HasZ, p.Z, p.Src));
                     brk = false; prev = p;
                 }
             }
             d["trail"] = list;
+            d["elev"] = elev;
             // unavailable: the dot greys out where you were last seen on this map (if anywhere)
-            if ((string)d["state"] == "unavailable" && list.Count >= 4) d["last"] = new List<object> { list[list.Count - 4], list[list.Count - 3] };
+            if ((string)d["state"] == "unavailable" && list.Count >= 4) { d["last"] = new List<object> { list[list.Count - 4], list[list.Count - 3] }; d["lz"] = new List<object> { elev[elev.Count - 2], elev[elev.Count - 1] }; }
             var evs = new List<object>();
             if (marks != null)
             {
@@ -249,6 +253,7 @@ namespace ElansAddonHub.Services.WorldMap
                         ["lat"] = R6(la), ["lng"] = R6(ln), ["age"] = Math.Round(Math.Max(0, age), 1), ["k"] = info.Key, ["name"] = Clean(info.Title ?? "", 80), ["line"] = Clean(info.Line ?? "", 80),
                         ["c"] = info.Color != null && HexColor.IsMatch(info.Color) ? info.Color : WorldMapLayers.EventFallbackColor, ["link"] = info.Link ?? "",
                         ["at"] = mk.At.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture),
+                        ["z"] = ZOf(mk.HasZ, mk.Z, mk.Src)[0], ["zs"] = ZOf(mk.HasZ, mk.Z, mk.Src)[1],
                     });
                 }
             }
@@ -256,6 +261,8 @@ namespace ElansAddonHub.Services.WorldMap
             return Json.Write(d);
         }
         static double R6(double v) => Math.Round(v, 6);
+        // a height for the page: [yards rounded to 0.1, source], or [0, -1] when there is none (or it is not a sane number)
+        static List<object> ZOf(bool has, double z, ElevSrc s) => has && !double.IsNaN(z) && !double.IsInfinity(z) && Math.Abs(z) < 20000 ? new List<object> { Math.Round(z, 1), (int)s } : new List<object> { 0.0, -1 };
 
         public static string Goto(double lat, double lng, double z, string pinName = null, string pinTip = null, int seq = -1)
         {

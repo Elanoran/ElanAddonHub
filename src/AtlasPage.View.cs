@@ -245,7 +245,7 @@ namespace ElansAddonHub
                     var sv = FindScroll(lb);
                     if (sv == null) return;
                     bool atTop = sv.VerticalOffset <= 0 && e.Delta > 0, atBottom = sv.VerticalOffset >= sv.ScrollableHeight && e.Delta < 0;
-                    if (atTop || atBottom) { e.Handled = true; Scroller.ScrollToVerticalOffset(Scroller.VerticalOffset - e.Delta); }
+                    if (atTop || atBottom) { e.Handled = true; OuterScroll.ScrollToVerticalOffset(OuterScroll.VerticalOffset - e.Delta); }
                 };
                 return lb;
             }
