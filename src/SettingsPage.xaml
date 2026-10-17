@@ -614,6 +614,10 @@
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="Show video previews" Tag="A YouTube link in the Lodge chat shows its thumbnail, title and channel, and plays in a window here. To do that the Outpost asks youtube.com and i.ytimg.com (YouTube sees your IP address). Off = links stay plain text, nothing is fetched, and a click opens the link in your browser.">
                 <CheckBox x:Name="PvVideo" Style="{StaticResource Switch}" Click="Privacy_Click" />
               </HeaderedContentControl>
+              <HeaderedContentControl x:Name="PvCairnRow" Style="{StaticResource Setting.Row}" Header="Cairn open Atlas data" Tag="About twice a day the Outpost downloads the Cairn's open dataset: drop rates, vendor items, spawn points, gathering nodes and flight times merged from many lodges - ids and counts only, free for everyone (CC0). It is only downloaded, never uploaded to (the site sees your IP address). Its numbers show as &quot;Cairn&quot; in the Atlas, below your own lodge's. Off = nothing is fetched and the downloaded copy is deleted.">
+                <CheckBox x:Name="PvCairn" Style="{StaticResource Switch}" Click="Privacy_Click" />
+              </HeaderedContentControl>
+              <TextBlock x:Name="PvCairnStatus" Style="{StaticResource Note}" Margin="16,0,16,12" TextWrapping="Wrap" />
             </StackPanel></ContentControl>
             <TextBlock Text="Outpost browser" Style="{StaticResource HeadTight}" />
             <TextBlock Text="The Browser page in the left rail. Permission requests (camera, location, notifications...) are always refused, and no password is ever saved." Style="{StaticResource Note}" />

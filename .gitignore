@@ -5,3 +5,6 @@ obj/
 
 # design screenshots stay on the PC (made by the self-test); never published
 docs/design/
+
+# operator runbooks and our own hosting notes never enter this public repo
+ops/

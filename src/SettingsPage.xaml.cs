@@ -639,8 +639,11 @@ namespace ElansAddonHub
             PvBrSearch.SelectedIndex = Array.IndexOf(BrowserUrl.Engines, BrowserUrl.EngineById(settings.BrowserSearch));
             PvInvisible.IsChecked = session.Invisible;
             PvInvisible.IsEnabled = session.Me != null;
-            PrivacyLodgeLine.Text = string.IsNullOrEmpty(settings.LodgeUrl) ? "You are not in a lodge, so nothing from the first group is sent anywhere."
-                : (session.Online ? "Connected to " : "Your lodge: ") + settings.LodgeUrl;
+            PrivacyLodgeLine.Text = (string.IsNullOrEmpty(settings.LodgeUrl) ? "You are not in a lodge, so nothing from the first group is sent anywhere."
+                : (session.Online ? "Connected to " : "Your lodge: ") + settings.LodgeUrl)
+                + (session.ContributesToCairn ? " Your lodge's owner sends the lodge's pooled Atlas numbers (ids and counts of what members shared, no names) to the Cairn's open dataset." : "");
+            PvCairn.IsChecked = !settings.CairnOff;
+            PvCairnStatus.Text = Services.Atlas.CairnAtlas.StatusText(!settings.CairnOff);
         }
 
         void Privacy_Click(object sender, RoutedEventArgs e)
@@ -665,6 +668,16 @@ namespace ElansAddonHub
                 return;
             }
             if (cb == PvCfAuto) { CfAutoBox.IsChecked = cb.IsChecked; General_Click(CfAutoBox, e); return; }
+            if (cb == PvCairn)
+            {
+                // the Cairn's open data: off deletes the downloaded copy and stops fetching; on fetches now
+                settings.CairnOff = cb.IsChecked != true;
+                SettingsStore.Save(settings);
+                if (settings.CairnOff) Services.Atlas.CairnAtlas.Clear();
+                else _ = Services.Atlas.CairnAtlas.Refresh(() => !settings.CairnOff, force: true).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(() => PvCairnStatus.Text = Services.Atlas.CairnAtlas.StatusText(!settings.CairnOff))));
+                PvCairnStatus.Text = Services.Atlas.CairnAtlas.StatusText(!settings.CairnOff);
+                return;
+            }
             var share = settings.ShareGameOff; var px = settings.PixelOff; var zone = settings.ShareZoneOff; var xp = settings.ShareXpOff;
             bool on = cb.IsChecked == true;
             if (cb == PvShareGame) settings.ShareGameOff = !on;

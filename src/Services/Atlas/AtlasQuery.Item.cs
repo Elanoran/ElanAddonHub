@@ -63,7 +63,7 @@ namespace ElansAddonHub.Services.Atlas
             AddUpgradeFact(m, ci);
 
             // ---- what Lodge members found inside it (a clam, a lockbox, a bag; Toolkit 0.5.10)
-            if ((Lodge()?.Loot("item", id)?.N ?? 0) > 0) LootSection(m, "contains", "Contains", "item", id, null, "");
+            if ((Lodge()?.Loot("item", id)?.N ?? 0) > 0 || CairnAtlas.Current?.Loot("contained", id) != null) LootSection(m, "contains", "Contains", "item", id, null, "");
 
             // ---- sources
             var src = Section(m, "sources", "Where it comes from", "Nothing is known yet about where this item comes from.");
@@ -111,6 +111,9 @@ namespace ElansAddonHub.Services.Atlas
                     AddLayer(m, "lodge");
                 }
             }
+
+            // the Cairn: the open numbers of many Lodges, below this Lodge's own (a source the Lodge shows gets the Cairn's figure as its second line)
+            AddCairnItemRows(m, id, AddRow, tiny, byKey);
 
             // Classic baseline
             var needs = new List<AtlasRow>();                    // quests that want the item

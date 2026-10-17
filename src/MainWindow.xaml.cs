@@ -336,6 +336,7 @@ namespace ElansAddonHub
             result += "\r\n" + (dataInside ? "ok   " : "FAIL ") + "isolation: data folder is inside the test dir (" + Util.DataDir + ")";
             result += "\r\n" + (Services.Sounds.Muted ? "ok   " : "FAIL ") + "isolation: sound is muted (a hidden test must not be heard)";
             result += "\r\n" + TestScope.SelfTest();
+            result += "\r\n" + InfraGuard.SelfTest(Environment.GetCommandLineArgs());   // the public repo never names our own hosting
             result += "\r\n" + SelfTestCache.SelfTest(dir);
             if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
             if (Begin("strip")) { result += "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live(); End(); }
@@ -451,6 +452,7 @@ namespace ElansAddonHub
             if (Begin("menucolors")) { result += "\r\n" + await MenuColorsTest(dir); End(); }
             if (Begin("atlasclassic")) { result += "\r\n" + await AtlasClassicTest(dir); End(); }
             if (Begin("atlasclassiclodge")) { result += "\r\n" + await AtlasClassicLodgeTest(dir); End(); }
+            if (Begin("cairn")) { result += "\r\n" + await CairnTest(dir); End(); }
             if (Begin("atlaspage")) { result += "\r\n" + await AtlasPageTest(dir); End(); }
             await RealSec("atlaspagereal", AtlasPageRealTest);
             if (Begin("atlasbrowse")) { result += "\r\n" + await AtlasBrowseTest(dir); End(); }

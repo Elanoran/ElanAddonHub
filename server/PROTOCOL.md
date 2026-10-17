@@ -445,3 +445,45 @@ Feature `reputations` in the welcome `features`, next to `armory` (absent when t
 - `armory.put`'s `char` may carry `reps: {at, list: [{id, s, v, min?, max?}]}` - `id` a faction id (1-1000000), `s` the standing 1 Hated .. 8 Exalted, `v` the reputation value, `min` / `max` the bounds of the current standing (whole numbers within +-100,000,000). At most 300 per character, sorted by id, one per faction (the first wins); names are never stored (every client names factions from its own game data). An entry that fails a check is left out; garbage never fails the put. Reputations are the first part dropped when a snapshot would exceed 48 KB. `armory.list` summaries are unchanged; `armory.get` returns `reps` as stored.
 - `armory.standing` `{faction}` (Page budget; members and up) -> `armory.standing` `{faction, who: [{faction, owner, by, key, name, class, level, s, v, min?, max?, at, mine?}]}`: every shared character with a reputation for that faction, best standing first (then the higher value), at most 80 rows. Nothing else of the character is in a row. Errors: `invalid` (no usable faction id), `guest`, `disabled` (the Armory is off), `noreps` (reputations are off), `rate`.
 - Switching the feature off keeps what is stored on disk but never serves it (`armory.get` leaves `reps` out, `armory.standing` answers `noreps`); new snapshots are stored without it. Taking a character out, `armory.delete {all}`, leaving and the purge take its reputations with it.
+
+## The Cairn (open Atlas commons; Lodge feature `cairn`, opt-in; Outpost 2.86)
+
+The Cairn is a separate service that merges the pooled Atlas numbers of many Lodges into one open daily dataset (CC0-1.0). Lodge servers
+contribute (opt-in, each with its own revocable key from the Cairn's admin); every Outpost may download the dataset; an Outpost never posts to
+the Cairn. Paths below are relative to the Cairn's base URL (e.g. `https://cairn.example.org/cairn`); nothing about any particular Cairn is built
+into the Lodge server.
+
+**Members are told**: a Lodge that contributes lists `cairn` in the welcome `features` (only while `LODGE_CAIRN_ENABLED=1` with a valid https
+URL and key, and the Atlas is on). The Outpost says so in Settings > Privacy.
+
+### Lodge -> Cairn (`server/Lodge.Server/Cairn.cs`; settings `LODGE_CAIRN_*` in deploy/lodge.env.example)
+
+- `GET /v1/status` with `Authorization: Bearer <key>` -> `{ok, id, epoch, lastSeq, minLodges, maxBodyBytes, maxJsonBytes, maxRecords, dataset, server}`.
+  A different `epoch` than the one the Lodge remembers = the Cairn forgot this Lodge's data: everything is sent again. The Lodge's `seq`
+  continues after `lastSeq`.
+- `POST /v1/contribute` with the same header, `Content-Type: application/json`, `Content-Encoding: gzip`; body
+  `{ v: 1, seq, gb, drops?: { <kind>: { "<id>": { n, i?: { "<itemId>": [times, count] } } | null } }, vendors?: { "<npcId>": { "<itemId>": [price, stack, limit, extended] } | null },
+  spawns?: { "<npcId>": [[uiMapId, x, y, n]] | null }, nodes?: { "<objectId>": [[uiMapId, x, y, n]] | null }, flights?: { "<Horde|Alliance>|<nodeId>><nodeId>": [seconds, samples] | null } }`.
+  Kinds: `kill object fishing pickpocket skinning mining herbalism salvage contained` (fishing keys are uiMapIds, contained keys item ids).
+  Every record carries the Lodge's CURRENT total (resends never count twice; a lower total takes data back out); `null` = the Lodge no
+  longer has it. `seq` grows with every try. Answer `{ok, seq, duplicate, accepted, unchanged, rejected, epoch}`; 401 `key` / `revoked`,
+  413, 415, 429 (`rate`, `budget`, `blocked`, with `Retry-After`). A record that fails a check is rejected alone; an unknown field refuses
+  the whole post (400 `schema`).
+- What a Lodge sends is built from its pool's guest view: no names, no characters, no members, no finds, notes, quests, seen tables or
+  revealed items; flight legs only between numbered taxi nodes; coordinates rounded to 4 decimals; posts of about 1.5 MB of JSON.
+
+### Outpost <- Cairn (`src/Services/Atlas/CairnData.cs`)
+
+- `GET /v1/manifest.json` (ETag; `public, max-age=600`) -> `{format: "elans-cairn-manifest", v: 1, license, kid, latest: {day, seq, file,
+  bytes, contentBytes, sha256, contentSha256, sig, kid, built}, history: [...]}`.
+- `GET /v1/datasets/<file>` (`cairn-YYYY-MM-DD-<seq>.json.gz`, immutable) -> gzip of
+  `{format: "elans-cairn", v: 1, license: "CC0-1.0", day, seq, minLodges, lodges, builds: [...],
+  drops: { <kind>: { "<id>": { n, m, b, i: { "<itemId>": [times, count, m, kills?] } } } }, vendors: { "<npcId>": { m, i: { "<itemId>": [price, stack, limit, extended, m] } } },
+  spawns: { "<npcId>": [[uiMapId, x, y, n, m]] }, nodes: { "<objectId>": [[uiMapId, x, y, n, m]] }, flights: { "<leg>": [seconds, samples, m] }}`.
+  `m` = the number of Lodges behind a figure; `kills` (4th item number) only when that item's rate stands on fewer kills than the record's `n`.
+  Readers ignore unknown keys.
+- Checks: `sha256` of the file, `contentSha256` of the JSON inside, and - when the client pins the Cairn's key (`GET /v1/key`:
+  `{alg: "ES256", crv: "P-256", kid, x, y}`) - `sig` = ECDSA P-256 / SHA-256 (IEEE P1363, base64) over `"elans-cairn/1\n<day>\n<seq>\n<contentSha256>"`.
+- Merging on the Cairn: a record and every item / vendor item / spot / leg in it needs `minLodges` independent Lodges (2 by default);
+  outliers (drop rates far from the median across Lodges, flight times > 40 % off) are left out; no Lodge weighs more than all others
+  together; records are kept per game build and old builds age out.
