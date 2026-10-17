@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.83.0
+- **Class and race pages match WoW Forever.** The notes on every class and race page were checked against Forever itself (your game's own data first, then Blizzard's Forever pages) instead of Classic. They now tell you about Forever's new pairs - Human Hunter, Orc Mage, Dwarf Shaman, Gnome Priest, Undead Paladin and Troll Warlock - and that the Skyborne can be druids on both sides. Each page has an **On Forever** line saying what changed, with a link to Blizzard's page.
+- **The right racial abilities.** The High Order and Windshaper Skyborne each show only their own abilities now: Read Leyline is the High Order's, Skysight the Windshapers'. Before, both pages listed both. Racials that Forever gives in a version for each class (such as the Gnome's Eureka!) say which class each version is for.
+- **Race-only spells on class pages.** A class's At a glance now lists the spells only one race of that class learns. For example, Forever's priests learn two spells per race, such as Chastise for dwarves and Divine Grace for humans. Fear Ward is no longer only for dwarves.
+- **Tidier At a glance lists.** A long list no longer starts a line with a stray comma.
+
 ## 2.81.0
 - **Class and race pages: the story behind them.** Every class and race page in the Atlas now opens with an **About** card. It starts with the game's own description (the text from the character creation screen, marked "From the game"), followed by notes written for the Outpost (marked "Outpost notes"): a short history, the capital and leader, notable figures (with a link when the Atlas has that character), things worth knowing, and where the facts come from. An **At a glance** list adds what your game data says: the races a class can be (or the classes a race can be), armor and weapons, racial abilities and the starting zone, each a link. The Skyborne's High Order and Windshapers have notes too, written only from what the game itself says about them, and they say so.
 - **The top of a class or race page stays put.** The painting, the name and the tabs stay where they are, and only the content below them scrolls, like the Spells list. The page no longer gets a scroll bar of its own; the mouse wheel over the top and Page Up / Page Down still scroll the content.

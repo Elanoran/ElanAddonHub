@@ -22,7 +22,7 @@ namespace ElansAddonHub.Services.Db2
     {
         public enum State { NotStarted, Disabled, Loading, Ready, Unavailable }
 
-        public const int FormatVersion = 3;          // bump when the parsing, the table layouts or the cache file change meaning (2: + WorldLookups, 3: + SpellLookups for the hotfix overlay)
+        public const int FormatVersion = 4;          // bump when the parsing, the table layouts or the cache file change meaning (2: + WorldLookups, 3: + SpellLookups for the hotfix overlay, 4: + SkillLineAbility.RaceMask)
 
         public static bool AutoStart = true;         // off in the self-test (it must not read the real game)
         public static string CacheFile = Path.Combine(Util.DataDir, "cache", "spelldata.bin");
@@ -427,7 +427,7 @@ namespace ElansAddonHub.Services.Db2
             w.Write(s.Skills.Count);
             foreach (var k in s.Skills.Values) { w.Write(k.Id); w.Write(k.Name ?? ""); w.Write(k.Description ?? ""); w.Write(k.Category); w.Write(k.IconId); w.Write(k.ParentId); w.Write(k.Flags); w.Write(k.CanLink); }
             w.Write(s.Abilities.Count);
-            foreach (var a in s.Abilities) { w.Write(a.Id); w.Write(a.Skill); w.Write(a.Spell); w.Write(a.MinRank); w.Write(a.Green); w.Write(a.Gray); w.Write(a.Acquire); w.Write(a.Flags); w.Write(a.ClassMask); w.Write(a.Supersedes); }
+            foreach (var a in s.Abilities) { w.Write(a.Id); w.Write(a.Skill); w.Write(a.Spell); w.Write(a.MinRank); w.Write(a.Green); w.Write(a.Gray); w.Write(a.Acquire); w.Write(a.Flags); w.Write(a.ClassMask); w.Write(a.Supersedes); w.Write(a.RaceMask); }
             w.Write(s.Reagents.Count);
             foreach (var kv in s.Reagents) { w.Write(kv.Key); w.Write((byte)kv.Value.Length); foreach (var v in kv.Value) w.Write(v); }
             var lk = s.Lookups;
@@ -464,7 +464,7 @@ namespace ElansAddonHub.Services.Db2
             for (int i = 0; i < n; i++) skills.Add(new SkillInfo { Id = r.ReadInt32(), Name = r.ReadString(), Description = r.ReadString(), Category = r.ReadInt32(), IconId = r.ReadInt32(), ParentId = r.ReadInt32(), Flags = r.ReadInt32(), CanLink = r.ReadInt32() });
             n = r.ReadInt32(); Count(n, 5000000);
             var abil = new List<SkillAbility>(n);
-            for (int i = 0; i < n; i++) abil.Add(new SkillAbility { Id = r.ReadInt32(), Skill = r.ReadInt32(), Spell = r.ReadInt32(), MinRank = r.ReadInt32(), Green = r.ReadInt32(), Gray = r.ReadInt32(), Acquire = r.ReadInt32(), Flags = r.ReadInt32(), ClassMask = r.ReadInt32(), Supersedes = r.ReadInt32() });
+            for (int i = 0; i < n; i++) abil.Add(new SkillAbility { Id = r.ReadInt32(), Skill = r.ReadInt32(), Spell = r.ReadInt32(), MinRank = r.ReadInt32(), Green = r.ReadInt32(), Gray = r.ReadInt32(), Acquire = r.ReadInt32(), Flags = r.ReadInt32(), ClassMask = r.ReadInt32(), Supersedes = r.ReadInt32(), RaceMask = r.ReadUInt64() });
             n = r.ReadInt32(); Count(n, 5000000);
             var rg = new Dictionary<int, int[]>(n);
             for (int i = 0; i < n; i++) { int id = r.ReadInt32(); int c = r.ReadByte(); var a = new int[c]; for (int k = 0; k < c; k++) a[k] = r.ReadInt32(); rg[id] = a; }

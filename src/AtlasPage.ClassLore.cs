@@ -90,7 +90,12 @@ namespace ElansAddonHub
                     foreach (var it in gl.Items)
                     {
                         string sep = ++i < gl.Items.Count ? ", " : "";
-                        if (it.Value != null) { var link = LoreLink(it.Key, it.Value, "Open " + it.Key); w.Children.Add(link); if (sep.Length > 0) w.Children.Add(Tb(sep, "Text.Body")); }
+                        if (it.Value != null)
+                        {
+                            var link = LoreLink(it.Key, it.Value, "Open " + it.Key);
+                            if (sep.Length == 0) w.Children.Add(link);
+                            else { var pair = new StackPanel { Orientation = Orientation.Horizontal }; pair.Children.Add(link); pair.Children.Add(Tb(sep, "Text.Body")); w.Children.Add(pair); }   // the comma wraps with its item, never to the start of a line
+                        }
                         else w.Children.Add(Tb(it.Key + sep, "Text.Body"));
                     }
                     Row(gl.Label, w);

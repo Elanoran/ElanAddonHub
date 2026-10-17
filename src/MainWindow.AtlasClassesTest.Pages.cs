@@ -32,8 +32,8 @@ namespace ElansAddonHub
             Check("class notes: each one has a summary, a history, at least two facts, notable figures and 'Worth knowing' lines", thin.Count == 0, string.Join(",", thin));
             var sky = raceNames.Skip(8).Select(ClassLore.ForRace).ToList();
             var others = allNotes.Where(e => !sky.Contains(e)).ToList();
-            Check("class notes: the Skyborne pair is written from the game's own data only (basis 'game', no outside source, an 'On Forever' line saying so); every other entry names its sources",
-                sky.All(e => e.FromGameDataOnly && e.Sources.Count == 0 && e.Forever.Contains("not from an outside source")) && others.All(e => !e.FromGameDataOnly && e.Sources.Count > 0 && e.Sources.All(u => ZoneLore.SourceName(u).Length > 0)),
+            Check("class notes (2.83): the Skyborne pair is now written from the game's own text and Blizzard's Forever pages (no 'game data only' basis, a news.blizzard.com source); every entry names its sources and has an 'On Forever' line",
+                sky.All(e => !e.FromGameDataOnly && e.Sources.Any(u => ZoneLore.SourceName(u) == "news.blizzard.com") && e.Forever.Contains("Blizzard")) && allNotes.All(e => !e.FromGameDataOnly && e.Sources.Count > 0 && e.Sources.All(u => ZoneLore.SourceName(u).Length > 0) && e.Forever.Length > 0),
                 string.Join(",", allNotes.Select(e => e.Name + ":" + e.Basis + ":" + e.Sources.Count)));
             Check("class notes: a broken file is a calm problem (nothing thrown, no entries); keys are the class file and the race name, any case",
                 !ClassLore.Parse("{", out _, out _, out var why) && why.Contains("do not read") && !ClassLore.Parse("{\"classes\":[]}", out _, out _, out _)
@@ -82,10 +82,11 @@ namespace ElansAddonHub
                     chips.SequenceEqual(new[] { ClassLore.GameLabel, ClassLore.Label }) && new[] { "classlore-official", "classlore-summary", "classlore-glance", "classlore-history", "classlore-figures", "classlore-mentions", "classlore-sources" }.All(tags.Contains)
                     && !tags.Contains("classlore-basis") && AtlasTexts(card).Contains("In the game's own words: the character creation text of your client."), string.Join(",", chips) + " / " + string.Join(",", tags.Distinct()));
             }
-            // a race written from the game's data only is marked so on its card (a fixture model: the world has no Skyborne)
+            // a race written from the game's data only is marked so on its card (a fixture entry: since 2.83 no shipped entry is, the Skyborne cite Blizzard)
             {
                 var m = AtlasQuery.Build("race:2");
-                m.ClassLore.Notes = ClassLore.ForRace("High Order Skyborne"); m.ClassLore.Title = "High Order Skyborne";
+                m.ClassLore.Notes = new ClassLoreEntry { Key = "test race", Name = "Test Race", Kind = "race", Basis = "game", Summary = "A race known only from the game's own data.", Forever = "Written from the game's data only." };
+                m.ClassLore.Title = "Test Race";
                 var built = AtlasView.ClassLoreCardForTestBuild(m);
                 var chips = AtlasWalk(built).OfType<Border>().Where(b => (b.Tag as string ?? "").EndsWith("-label")).Select(b => (b.Child as TextBlock)?.Text).ToList();
                 Check("window: notes written from the in-game data only carry 'Outpost notes, from the game's data' and a line under them saying there is no outside source",

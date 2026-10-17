@@ -343,7 +343,7 @@ namespace ElansAddonHub.Services.Atlas
             }
             foreach (var r in snap.PlayableRaces())
                 foreach (var skill in RacialSkills(snap, spells, r))
-                    foreach (var a in spells.AbilitiesOf(skill))
+                    foreach (var a in RacialAbilities(spells, skill, r))
                     {
                         var sp = spells.Get(a.Spell);
                         if (sp == null || string.IsNullOrEmpty(sp.Name)) continue;
@@ -361,6 +361,10 @@ namespace ElansAddonHub.Services.Atlas
                 .Where(id => spells.Skills.TryGetValue(id, out var s) && s.Name.IndexOf("Racial", StringComparison.OrdinalIgnoreCase) >= 0)
                 .ToList();
         }
+
+        // the abilities of a racial skill line this race gets: Forever shares one line between races and splits it with SkillLineAbility.RaceMask
+        // (the Skyborne line: Read Leyline for the High Order only, Skysight for the Windshapers only)
+        public static IEnumerable<SkillAbility> RacialAbilities(SpellSnapshot spells, int skill, RaceInfo race) => spells.AbilitiesOf(skill).Where(a => a.ForRace(race.BitMask));
 
         public static string Describe(SpellOrigin o)
         {
