@@ -5,6 +5,7 @@
 ## Version: 1.16.1
 ## IconTexture: Interface\Icons\Ability_Hunter_BeastTaming
 ## SavedVariables: ElansHubDB, ElansHubData
+## X-License: MIT
 
 ElansHub.lua
 Data.lua

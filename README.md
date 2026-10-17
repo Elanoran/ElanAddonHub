@@ -214,6 +214,15 @@ The Outpost and its addons stand on the work of others. Thank you!
 If you are one of these authors and want something credited differently or removed, please
 [open an issue](https://github.com/Elanoran/ElanAddonHub/issues).
 
+## License
+
+- **The Outpost, the Lodge server and Elan's Hub** (this repository's code): [MIT](LICENSE).
+- **Elan's Hunter Helper, Toolkit, Paladin Helper and Bags**: [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html),
+  because some of their data is built from GPL-3.0 sources (QuestieDB); each addon ships its licence in its folder.
+- **Artwork** (logos, icons, paintings, banners): © Elanoran, all rights reserved - see [ARTWORK.md](ARTWORK.md).
+- Third-party parts keep their own licences (see Credits); World of Warcraft game data, icons and maps belong to Blizzard
+  Entertainment and are not in this repository.
+
 ---
 
 <sub>World of Warcraft is a trademark of Blizzard Entertainment. Elan's Outpost is a fan project and not affiliated with Blizzard.</sub>
