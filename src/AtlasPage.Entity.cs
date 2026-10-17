@@ -145,6 +145,8 @@ namespace ElansAddonHub
         }
 
         // ============================================================================================================================ the hero
+        public const string TitleNoteTag = "title-note";
+        public string TitleNoteForTest => AtlasWalk(Body).OfType<TextBlock>().FirstOrDefault(t => Equals(t.Tag, TitleNoteTag))?.Text;
         FrameworkElement HeroView(AtlasPageModel m, out TextBlock name)
         {
             var grid = new Grid();
@@ -159,6 +161,7 @@ namespace ElansAddonHub
             col.Children.Add(name);
             var sub = m.NotFound ? AtlasKinds.Singular(m.Kind) : m.Subtitle;
             if (!string.IsNullOrEmpty(sub)) { var s = Tb(sub, "Text.Secondary", null, 2); s.TextTrimming = TextTrimming.CharacterEllipsis; col.Children.Add(s); }
+            if (!m.NotFound && !string.IsNullOrEmpty(m.TitleNote)) { var tn = Tb(m.TitleNote, "Text.Caption", Res("Brush.Text.Tertiary"), 4); tn.TextWrapping = TextWrapping.Wrap; tn.Tag = TitleNoteTag; col.Children.Add(tn); }
             var chips = m.NotFound ? new List<KeyValuePair<string, Brush>>() : HeroChips(m);
             if (chips.Count > 0)
             {

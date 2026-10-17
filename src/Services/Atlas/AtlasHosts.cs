@@ -91,7 +91,7 @@ namespace ElansAddonHub.Services.Atlas
             var sp = SpellData.Spells;
             if (SpellData.Ready && sp?.Skills != null)
             {
-                var names = sp.Skills.Values.Where(s => s.IsProfession && !string.IsNullOrEmpty(s.Name)).Select(s => s.Name).Distinct().OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+                var names = sp.Skills.Values.Where(s => s.IsProfession && !string.IsNullOrEmpty(s.Name) && !AtlasHidden.IsHiddenSkill(s)).Select(s => s.Name).Distinct().OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
                 if (names.Count > 0) return names;
             }
             return ProfessionNames.ToList();

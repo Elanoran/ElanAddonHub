@@ -105,6 +105,11 @@ namespace ElansAddonHub.Services.Atlas
         public double Progress { get; set; } = -1;        // 0..1: a thin bar under the text (a reputation inside its standing); -1 = none
         public bool HasProgress => Progress >= 0;
         public bool Forever => Label == AtlasLabel.Forever;
+        // 2.92: which of the five sources (DataSources: game, you, lodge, cairn, classic) the row is from - its chip carries that source's colour, the same as on the
+        // Data sources page. "" = worked out from the label (Forever = your game, Classic baseline, Cairn, Your characters = you); the Lodge's own rows say "lodge".
+        public string Source { get; set; } = "";
+        public string SourceKey => DataSources.KeyOf(Label, Source);
+        public Brush SourceBrush => SourceKey.Length > 0 ? Avatar.Res(DataSources.BrushKey(SourceKey)) : Brushes.Transparent;
 
         ImageSource icon;
         bool asked;
@@ -207,6 +212,7 @@ namespace ElansAddonHub.Services.Atlas
     {
         public string Id = "", Kind = "";
         public string Title = "", Subtitle = "";
+        public string TitleNote = "";                                // one quiet line under the subtitle ("The name appears after you close the game ...")
         public int Quality = -1, IconId;
         public bool NotFound;
         public string Message = "";                                  // NotFound: what to say

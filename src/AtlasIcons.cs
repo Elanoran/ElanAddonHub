@@ -59,6 +59,19 @@ namespace ElansAddonHub
             ["factions"] = "M4,3.5 L20,3.5 M6,3.5 L6,20 L12,16.5 L18,20 L18,3.5 M12,7.5 L14,10 L12,12.5 L10,10 Z",
             // a cut gem
             ["finds"] = "M7,4 L17,4 L21,9 L12,20.5 L3,9 Z M3,9 L21,9 M9.5,9 L12,20.5 L14.5,9 M7,4 L9.5,9 L12,4 L14.5,9 L17,4",
+            // ---- where the data comes from (2.92, the Data sources page and its strip; the same hue as the source chips on Atlas rows: Brush.Source.*)
+            // your game: a screen with its stand (read from the WoW install on this PC)
+            ["src-game"] = "M3.5,5 L20.5,5 L20.5,15.5 L3.5,15.5 Z M12,15.5 L12,19.5 M8,19.5 L16,19.5 M6.5,8.5 L10,8.5 M6.5,11.5 L13,11.5",
+            // you: a person
+            ["src-you"] = C(12, 8, 3.6) + " M4.5,20.5 C4.5,15.8 7.9,13.6 12,13.6 C16.1,13.6 19.5,15.8 19.5,20.5",
+            // your Lodge: a lodge with its door and a smoke of the hearth
+            ["src-lodge"] = "M3,11.5 L12,4 L21,11.5 M5.5,9.5 L5.5,20 L18.5,20 L18.5,9.5 M10,20 L10,15 L14,15 L14,20 M16,6.5 L16,4",
+            // the Cairn: three stacked stones
+            ["src-cairn"] = "M4,18.5 C4,16.9 7.6,15.8 12,15.8 C16.4,15.8 20,16.9 20,18.5 C20,20.1 16.4,21 12,21 C7.6,21 4,20.1 4,18.5 Z "
+                + "M6.5,12.8 C6.5,11.3 9,10.4 12,10.4 C15,10.4 17.5,11.3 17.5,12.8 C17.5,14.3 15,15.8 12,15.8 C9,15.8 6.5,14.3 6.5,12.8 Z "
+                + "M9,7.4 C9,5.9 10.3,4.6 12,4.6 C13.7,4.6 15,5.9 15,7.4 C15,8.9 13.7,10.4 12,10.4 C10.3,10.4 9,8.9 9,7.4 Z",
+            // the Classic baseline: an archive box (old data, kept as a fallback)
+            ["src-classic"] = "M3.5,5 L20.5,5 L20.5,9.5 L3.5,9.5 Z M5,9.5 L5,19.5 L19,19.5 L19,9.5 M10,13 L14,13",
         };
         static readonly Dictionary<string, string> alias = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["map"] = "worldmap" };
         static readonly Dictionary<string, Geometry> cache = new Dictionary<string, Geometry>(StringComparer.OrdinalIgnoreCase);

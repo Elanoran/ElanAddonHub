@@ -202,7 +202,7 @@ namespace ElansAddonHub
             if (c.For) panel.Children.Add(Combo("for", "Usable by anyone", c.Chars, bq.For, v => bq.For = v, "Only what this character can wear or wield at their level"));
             if (c.Learn) panel.Children.Add(Combo("learn", "Any recipe", new[] { new BrowseChoice("can", "Ones my characters can learn") }, bq.Learn, v => bq.Learn = v, "Recipes of the professions your characters have, that they have not learned yet and have the skill for"));
             if (c.Src)
-                panel.Children.Add(Combo("src", "Any data source", new[] { new BrowseChoice("game", "Your game data"), new BrowseChoice("classic", "Classic baseline"), new BrowseChoice("lodge", "Seen by the Lodge") }, bq.Src, v => bq.Src = v));
+                panel.Children.Add(Combo("src", "Any data source", new[] { new BrowseChoice("game", "Your game data"), new BrowseChoice("classic", "Classic baseline"), new BrowseChoice("lodge", "Seen by the Lodge"), new BrowseChoice("cairn", "In the Cairn's data"), new BrowseChoice("forever", "Seen on Forever") }, bq.Src, v => bq.Src = v));
             if (c.How)
                 panel.Children.Add(Combo("how", "Any way to get it", AtlasBrowse.Hows.Select(h => new BrowseChoice(h, AtlasBrowse.HowText(h))), bq.How, v => bq.How = v, "How to get it: drops, vendor, quest reward, crafted, fishing, containers, gathering"));
             if (c.Zone) panel.Children.Add(Combo("zone", "Any zone", c.Zones, bq.Zone, v => bq.Zone = v));

@@ -50,10 +50,34 @@ namespace ElansAddonHub
             return sp;
         }
 
-        // the Data sources page: first, before the cards of each source
+        // the Data sources page: first, before the cards of each source. 2.92: the same words, the three kinds side by side (one column when narrow), each
+        // with the icon and colour of its source (Brush.Source.*: your game; your Lodge for "Seen on Forever"; the Classic baseline), the way to help below
         FrameworkElement SourcesExplainerCard()
         {
-            var c = Card(ExplainerBody());
+            var sp = new StackPanel { Tag = ExplainerTag };
+            sp.Children.Add(Tb(DataHonesty.Title, "Text.Section"));
+            explainerGrid = new System.Windows.Controls.Primitives.UniformGrid { Columns = (Scroller.ActualWidth > 0 ? Scroller.ActualWidth : 760) >= InfoTwoColumns ? 3 : 1, Margin = new Thickness(0, 12, -16, 0), Tag = ExplainerGridTag };
+            void Kind(string key, string lead, string text)
+            {
+                var k = new DockPanel { Margin = new Thickness(0, 0, 16, 12) };
+                var tile = SourceTile(key, 32); tile.Margin = new Thickness(0, 0, 12, 0);
+                DockPanel.SetDock(tile, Dock.Left); k.Children.Add(tile);
+                var col = new StackPanel();
+                col.Children.Add(Tb(lead, "Text.RowTitle", Res(Services.Atlas.DataSources.BrushKey(key))));
+                var t = Tb(text, "Text.Secondary", null, 2); t.TextWrapping = TextWrapping.Wrap; col.Children.Add(t);
+                k.Children.Add(col);
+                explainerGrid.Children.Add(k);
+            }
+            Kind(Services.Atlas.DataSources.Game, DataHonesty.GameLead, DataHonesty.GameText);
+            Kind(Services.Atlas.DataSources.Lodge, DataHonesty.ForeverLead, DataHonesty.ForeverText);
+            Kind(Services.Atlas.DataSources.Classic, DataHonesty.ClassicLead, DataHonesty.ClassicText);
+            sp.Children.Add(explainerGrid);
+            var help = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 8, 12, 8) };
+            help.SetResourceReference(Border.BackgroundProperty, "Brush.Surface2");
+            var ht = Tb(DataHonesty.HelpText, "Text.Secondary", Res("Brush.Text.Primary")); ht.TextWrapping = TextWrapping.Wrap;
+            help.Child = ht;
+            sp.Children.Add(help);
+            var c = Card(sp);
             System.Windows.Automation.AutomationProperties.SetName(c, DataHonesty.Title);
             return c;
         }

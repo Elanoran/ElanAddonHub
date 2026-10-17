@@ -297,6 +297,12 @@ namespace ElansAddonHub.Services.Atlas
         public int SourceCount => sources.Count;
         public int VendorNpcCount => vendorsByNpc.Count;
         public int FlightCount => flights.Count;
+        // 2.92: what the Data sources page counts (ids only)
+        public IEnumerable<Source> AllSources => sources.Values;
+        public IEnumerable<int> VendorNpcIds => vendorsByNpc.Keys;
+        public IEnumerable<int> SpawnNpcIds => spawns.Keys;
+        public IEnumerable<int> NodeObjectIds => nodes.Keys;
+        public IEnumerable<string> FlightLegs => flights.Keys;
         public Source Loot(string kind, int id) => sources.TryGetValue(kind + ":" + id.ToString(CultureInfo.InvariantCulture), out var s) ? s : null;
         public IReadOnlyList<Drop> DropsOf(int item) => byItem.TryGetValue(item, out var l) ? (IReadOnlyList<Drop>)l : NoDrops;
         public IReadOnlyList<VendorItem> VendorsOf(int item) => vendorsByItem.TryGetValue(item, out var l) ? (IReadOnlyList<VendorItem>)l : NoVendors;

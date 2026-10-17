@@ -31,7 +31,7 @@ namespace ElansAddonHub
             ResetEntity(); startInfo = null;
             classBook = null; classGroups = null; classShown.Clear();
             tileGrids.Clear(); presetHost = null; presetLabel = null; presetWrap = null; homeChips.Clear(); ResetHome();
-            classicBanner = null; classicOffer = null; classicCard = null; classicBody = null; sourcesCard = null;
+            classicBanner = null; classicOffer = null; classicCard = null; classicBody = null; sourcesCard = null; ResetSourcesPage();
             ClassicBannerGetForTest = ClassicBannerNotNowForTest = null; ClassicBannerProgressForTest = null;
             ClassicPrimaryForTest = ClassicCancelForTest = ClassicRemoveForTest = null;
         }
@@ -75,7 +75,8 @@ namespace ElansAddonHub
         }
 
         // ============================================================================================================================ Data sources
-        // The cards the start page used to open with, on a page of their own: game data, the Classic baseline (with its Get / Remove / licence), the Lodge pool, the world map cache.
+        // 2.92: who owns what and how complete it is (AtlasPage.DataSources.cs), then the cards the start page used to open with: game data, the Classic baseline
+        // (with its Get / Remove / licence), the Lodge pool, the world map cache.
         void DrawData()
         {
             model = null; browse = null; hosted = null; browseList = null; drawnSig = Signature();
@@ -86,9 +87,7 @@ namespace ElansAddonHub
             UpdateNav();
             var col = new StackPanel();
             Body.Children.Add(col);
-            col.Children.Add(SourcesExplainerCard());          // 2.91: the three kinds of data first, in plain words (AtlasPage.DataHonesty.cs)
-            var intro = Tb("Everything is read on this PC; nothing is uploaded without your say. Here is each source and its state.", "Text.Secondary"); intro.TextWrapping = TextWrapping.Wrap; intro.MaxWidth = ReadWidth; intro.HorizontalAlignment = HorizontalAlignment.Left; intro.Margin = new Thickness(0, 0, 0, 12);
-            col.Children.Add(intro);
+            DrawSourcesPage(col);                               // 2.92: the explainer, the source strip, the coverage bars, growth and the Cairn (AtlasPage.DataSources.cs)
             var offerD = ClassicOfferView(); offerD.Margin = new Thickness(0, 0, 0, 12); col.Children.Add(offerD);
             // the cards sit side by side when the window is wide (see LayoutStart) and stack when it is narrow
             startCards.Clear();
@@ -119,6 +118,7 @@ namespace ElansAddonHub
         {
             if (startInfo == null && tileGrids.Count == 0 && homeCardGrid == null) return;
             double w = Scroller.ActualWidth > 0 ? Scroller.ActualWidth : 760;
+            LayoutSources(w);
             if (homeCardGrid != null) { int hc = CardColumnsFor(w, homeCardGrid.Children.Count); if (homeCardGrid.Columns != hc) homeCardGrid.Columns = hc; }
             if (tileGrids.Count > 0)
             {

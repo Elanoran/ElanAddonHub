@@ -26,7 +26,7 @@ namespace ElansAddonHub.Services.Atlas
         public int MinLevel, MaxLevel;                      // 0 = open
         public int Quality = -1;                            // items: exactly this quality
         public string Slot = "";                            // items: a slot name ("Head")
-        public string Src = "";                             // "game" | "classic" | "lodge"
+        public string Src = "";                             // "game" | "classic" | "lodge" | "cairn" | "forever" (2.92: the Data sources page's cards)
         public string How = "";                             // items: drop | vendor | quest | crafted | fishing | container | gathered
         public string For = "";                             // items: a character key (level and proficiency)
         public string Zone = "";                            // creatures, objects, quests: a UiMap id
@@ -62,7 +62,7 @@ namespace ElansAddonHub.Services.Atlas
                     case "maxlvl": if (int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out n)) q.MaxLevel = n; break;
                     case "q": if (int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out n) && n < 8) q.Quality = n; break;
                     case "slot": q.Slot = v.Trim(); break;
-                    case "src": v = v.ToLowerInvariant(); if (v == "game" || v == "classic" || v == "lodge") q.Src = v; break;
+                    case "src": v = v.ToLowerInvariant(); if (v == "game" || v == "classic" || v == "lodge" || v == "cairn" || v == "forever") q.Src = v; break;
                     case "how": v = v.ToLowerInvariant(); if (AtlasBrowse.Hows.Contains(v)) q.How = v; break;
                     case "for": q.For = v.Trim(); break;
                     case "zone": if (int.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out n) && n > 0) q.Zone = n.ToString(CultureInfo.InvariantCulture); break;
@@ -307,6 +307,8 @@ namespace ElansAddonHub.Services.Atlas
                 if (q.Src == "game" && !e.Client) continue;
                 if (q.Src == "classic" && !e.Classic) continue;
                 if (q.Src == "lodge" && !e.Lodge) continue;
+                if (q.Src == "cairn" && !e.Cairn) continue;
+                if (q.Src == "forever" && !e.Forever) continue;
                 if (how != 0 && (e.Src & how) == 0) continue;
                 if (zone != 0 && e.Zone != zone) continue;
                 if (q.Rank.Length > 0 && !RankMatches(e, q.Rank)) continue;
@@ -465,6 +467,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (!classic && (q.How.Length > 0 || r.Sort == "chance")) r.Notes.Add("Download the Classic baseline for drop and vendor sources (Atlas start page).");
                 else if (!classic) r.Notes.Add("The Classic baseline is not on this PC: sources (drops, vendors, quests) show only what your game's recipes and the Lodge know.");
                 if (q.Src == "lodge" && !lodge) r.Notes.Add("No Lodge observations yet: items the Lodge has seen will show here.");
+                if (q.Src == "cairn" && CairnAtlas.Current == null) r.Notes.Add("No Cairn data on this PC: it comes through your Lodge, to members who share (Settings > Lodge).");
                 if (q.For.Length > 0 && chr == null) r.Notes.Add("That character is not found any more, so the list is not narrowed to what they can use.");
                 if (chr != null) r.Notes.Add("Showing what " + chr.Name + " can use: required level up to " + chr.Level + (ItemProficiency.Known(chr.Class) ? " and the armor and weapons the class can wear or wield" : "") + ". Skills learned later (mail and plate at 40) are applied by level.");
                 if (!ItemData.Ready) r.Notes.Add("Item details come from your game files and are not ready yet; only the Classic baseline's items are listed.");

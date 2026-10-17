@@ -26,6 +26,7 @@ namespace ElansAddonHub.Services.Atlas
         public Func<Dictionary<int, List<AtlasObs.NpcSpot>>> OwnNpcSpots = () => null;   // where this PC's Toolkit met, killed or saw npcs: npc -> spots
         public Func<IReadOnlyDictionary<int, AtlasObs.FieldNote>> OwnFieldNotes = () => null;   // Hunter Helper's field notes on this PC: npc -> note
         public Func<Dictionary<int, Dictionary<int, List<AtlasObs.NodePt>>>> OwnNodes = () => null;   // gathering nodes this PC's Hub observed: object -> uiMapId -> nodes
+        public Func<bool> WowRunning = () => WowWatch.Shared.Running;         // 2.92: is the game running now (the app's 2 s watch)? A creature it has not named yet is "Not named yet" then
     }
 
     // ============================================================================================================================
@@ -97,8 +98,16 @@ namespace ElansAddonHub.Services.Atlas
             var s = SeenData.Npc(id);
             if (s != null && !string.IsNullOrEmpty(s.Name)) return s.Name;
             var c = ClassicAtlas.NpcInfo(id);
-            return c != null && !string.IsNullOrEmpty(c.Name) ? c.Name : "NPC " + id.ToString(CultureInfo.InvariantCulture);
+            return c != null && !string.IsNullOrEmpty(c.Name) ? c.Name : NamelessNpc(id);
         }
+
+        // 2.92: a creature nobody's data names yet. New Forever creatures get their name in the game's creature cache, which WoW writes when it closes;
+        // while it runs, the page and the lists call it "Not named yet" (with the line why), after that the real name shows - or "NPC <id>" if the
+        // cache still has none. Self-test section "atlasnameless".
+        public const string NotNamedYet = "Not named yet";
+        public const string NotNamedLine = "The name appears after you close the game (WoW saves its cache then).";
+        public static bool WowRunningNow() { try { return Context.WowRunning?.Invoke() == true; } catch (Exception) { return false; } }
+        public static string NamelessNpc(int id) => WowRunningNow() ? NotNamedYet : "NPC " + id.ToString(CultureInfo.InvariantCulture);
         public static string ObjectName(int id)
         {
             var s = SeenData.Object(id);
@@ -176,6 +185,7 @@ namespace ElansAddonHub.Services.Atlas
             void Add(string kind, List<AtlasHit> hits)
             {
                 ct.ThrowIfCancellationRequested();
+                hits.RemoveAll(AtlasHidden.IsHidden);           // 2.92: test and placeholder entries are not offered (AtlasHidden)
                 if (hits.Count == 0) return;
                 hits.Sort(CompareHits);
                 var g = new AtlasGroup { Kind = kind, Title = AtlasKinds.Plural(kind), Total = hits.Count };

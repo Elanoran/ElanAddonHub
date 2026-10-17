@@ -340,15 +340,15 @@ namespace ElansAddonHub
 
                 // 24,000 items
                 var savedItems = ItemData.Count;
-                var bigItems = new List<ClientItem>(); for (int i = 0; i < 24000; i++) bigItems.Add(CItem(5000 + i, (i % 7 == 0 ? "Sword of " : "Staff of ") + "Test " + i, i % 6, 10 + i % 50, 1 + i % 60, 13, 2, 7));
+                var bigItems = new List<ClientItem>(); for (int i = 0; i < 24000; i++) bigItems.Add(CItem(5000 + i, (i % 7 == 0 ? "Sword of " : "Staff of ") + "Valor " + i, i % 6, 10 + i % 50, 1 + i % 60, 13, 2, 7));
                 bigItems.Add(CItem(99000, "Gnarlfang's Claw", 3, 14, 10, 13, 2, 7, 12050));
                 ItemData.SetForTest(new ItemSnapshot(bigItems.ToArray(), new ClientItem[0]), ItemData.State.Ready);
                 var swBig = Stopwatch.StartNew();
-                var big = await Task.Run(() => AtlasPaletteSearch.Run("sword of test 12", "all", CancellationToken.None));
+                var big = await Task.Run(() => AtlasPaletteSearch.Run("sword of valor 12", "all", CancellationToken.None));
                 swBig.Stop();
                 var swNav = Stopwatch.StartNew(); await AtlasView.GoStart(); UpdateLayout(); swNav.Stop();
                 await AtlasView.StartFillForTest;
-                Check("performance: with 24,000 items the palette searches in well under a second (" + swBig.ElapsedMilliseconds + " ms, " + big.Total + " hits) and Home draws from the caches without waiting (" + swNav.ElapsedMilliseconds + " ms)", swBig.ElapsedMilliseconds < 1500 && big.Total > 0 && big.All.First().Name.StartsWith("Sword of Test 12") && swNav.ElapsedMilliseconds < 2000, swBig.ElapsedMilliseconds + " ms / " + swNav.ElapsedMilliseconds + " ms");
+                Check("performance: with 24,000 items the palette searches in well under a second (" + swBig.ElapsedMilliseconds + " ms, " + big.Total + " hits) and Home draws from the caches without waiting (" + swNav.ElapsedMilliseconds + " ms)", swBig.ElapsedMilliseconds < 1500 && big.Total > 0 && big.All.First().Name.StartsWith("Sword of Valor 12") && swNav.ElapsedMilliseconds < 2000, swBig.ElapsedMilliseconds + " ms / " + swNav.ElapsedMilliseconds + " ms");
                 var swNav2 = Stopwatch.StartNew(); AtlasView.UpdateNavForTest(); swNav2.Stop();
                 Check("performance: building the nav again takes a few milliseconds (" + swNav2.ElapsedMilliseconds + " ms): it only reads the registry, the counts of finished lists and the two id lists", swNav2.ElapsedMilliseconds < 100);
                 ItemData.SetForTest(AtlasTestItems(), ItemData.State.Ready);
