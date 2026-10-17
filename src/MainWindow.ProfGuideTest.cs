@@ -450,7 +450,7 @@ namespace ElansAddonHub
             var eve = PChar("Eve", "ROGUE", "Tailoring", 10, 75);           // not from the Hub: her key is not the game's
             page.SetProfCharsForTest(new[] { alice, dora, eve });
             page.SetSourcesForTest(PSources(), PgWorld());
-            ShowTab("professions");
+            ShowTab("professions"); await AtlasView.Open("professions:tailoring");   // 2.85: the menu opens the list; the page is a profession's
             await Task.Delay(100);
 
             // ---- crafting guide
@@ -470,6 +470,7 @@ namespace ElansAddonHub
             Check("follow: the steps are the page's guide: craft steps with the recipe spell, suggested crafts, reagents; a train step where the rank cap is reached (75)",
                 firstCraft != null && firstCraft.Int("spell") > 0 && firstCraft.Int("n") >= 1 && firstCraft.Child("r") != null && firstCraft.Child("r").Count >= 1 && asteps.Select(kv => kv.Value).OfType<Dictionary<string, object>>().Any(s => s.Str("k") == "train" && s.Int("from") == 75 && s.Str("t") == "Journeyman Tailoring"),
                 asteps == null ? "no steps" : string.Join(",", asteps.Select(kv => ((Dictionary<string, object>)kv.Value).Str("k") + ((Dictionary<string, object>)kv.Value).Int("from"))));
+            await Until(() => !page.FollowStatusForTest.EndsWith("..."), 8000);   // the status is set after the file write finishes (on a busy PC a moment later)
             Check("follow: the page says when it shows in game, and which Toolkit it needs", page.FollowStatusForTest.Contains("Shows in game after /reload or your next login") && page.FollowStatusForTest.Contains("Toolkit 0.4.0"), page.FollowStatusForTest);
             Check("follow: the button now says 'Stop following'", page.FollowButtonForTest != null && (string)page.FollowButtonForTest.Content == "Stop following");
             // a second profession of the same character; a skill change of a followed character remakes the guide
@@ -483,6 +484,7 @@ namespace ElansAddonHub
             await page.FollowTaskForTest; await Task.Delay(50);
             var sh2 = PgShared(dest);
             Check("stop: 'Stop following' takes the guide out of the file (the flights stay) and out of the settings", sh2.Child("profGuides") == null && sh2.Child("flights").Child("legs").Count == 1 && settings.FollowedGuides.Count == 0 && SharedDataFile.Current == null);
+            await Until(() => !page.FollowStatusForTest.EndsWith("..."), 8000);   // the status is set after the file write finishes (on a busy PC a moment later)
             Check("stop: the button is 'Follow in game' again; the status says the game shows the change after /reload", (string)page.FollowButtonForTest.Content == "Follow in game" && page.FollowStatusForTest.Contains("/reload"), page.FollowStatusForTest);
             // a character the Hub never saved cannot be followed
             page.ShowForTest("guide", "Tailoring", "Eve");
@@ -493,6 +495,7 @@ namespace ElansAddonHub
             page.ShowForTest("guide", "Tailoring", "Alice");
             page.FollowButtonForTest.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await page.FollowTaskForTest; await Task.Delay(50);
+            await Until(() => !page.FollowStatusForTest.EndsWith("..."), 8000);   // the status is set after the file write finishes (on a busy PC a moment later)
             Check("follow: an old Elan's Hub (toc without SharedData.lua) is never written to; the page says no Hub folder was found", !File.Exists(dest) && page.FollowStatusForTest.Contains("no Elan's Hub addon folder was found"), page.FollowStatusForTest);
             page.FollowButtonForTest.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await page.FollowTaskForTest;
@@ -562,7 +565,7 @@ namespace ElansAddonHub
             Check("stop: stopping the last guide leaves a plain flights file again", PgShared(dest).Child("profGuides") == null && settings.FollowedGuides.Count == 0);
 
             // ---- a screenshot of the Guide tab with the follow row
-            ShowTab("professions"); page.ShowForTest("guide", "Tailoring", "Alice"); page.GuideRangeForTest(null, null, "char");
+            ShowTab("professions"); await AtlasView.Open("professions:tailoring");   // 2.85: the menu opens the list; the page is a profession's page.ShowForTest("guide", "Tailoring", "Alice"); page.GuideRangeForTest(null, null, "char");
             page.SetFollow(alice, ProfessionBookFor("Tailoring"), true); await page.FollowTaskForTest; await Task.Delay(300); UpdateLayout();
             Snapshot(Path.Combine(dir, "profguide-follow.png"));
             page.SetFollow(alice, ProfessionBookFor("Tailoring"), false); await page.FollowTaskForTest;

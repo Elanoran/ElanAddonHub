@@ -84,7 +84,7 @@ namespace ElansAddonHub
                 foreach (var cl in camp.All) foreach (var g0 in cl.Recipe.Reagents.Take(2)) pc[1].Add(g0.ItemId, g0.Count);
                 page.SetProfCharsForTest(pc);
                 page.SetSourcesForTest(fs, new FixedGatherWorld());
-                ShowTab("professions");
+                ShowTab("professions"); await AtlasView.Open("professions:tailoring");   // 2.85: the menu opens the list; the page is a profession's
                 page.ShowForTest("recipes", "Cooking", "Elanoran");
                 await ShotWait(300);
                 Snapshot(Path.Combine(dir, "professions-recipes.png"));

@@ -314,7 +314,9 @@ namespace ElansAddonHub
             page.SetSourcesForTest(PSources(), new FixedGatherWorld());
             ShowTab("professions");
             await Task.Delay(100);
-            Check("page: ShowTab opens it inside the Atlas (hosted category); the book has the 4 professions and 2 characters", TabAtlas.IsChecked == true && AtlasView.IsHosted && AtlasView.CurrentId.StartsWith("professions:") && page.IsVisible && page.BookForTest.Professions.Count == 4 && page.CharsForTest.Count == 2);
+            Check("page: ShowTab(\"professions\") opens the Professions list in the Atlas (2.85)", TabAtlas.IsChecked == true && AtlasView.CurrentId == "browse:professions", AtlasView.CurrentId);
+            await AtlasView.Open("professions:tailoring"); await Task.Delay(100);
+            Check("page: a profession's page opens inside the Atlas (hosted category); the book has the 4 professions and 2 characters", TabAtlas.IsChecked == true && AtlasView.IsHosted && AtlasView.CurrentId.StartsWith("professions:") && page.IsVisible && page.BookForTest.Professions.Count == 4 && page.CharsForTest.Count == 2);
 
             page.ShowForTest("recipes", "Tailoring", "Bob");
             var names = page.RecipeRowNamesForTest();
