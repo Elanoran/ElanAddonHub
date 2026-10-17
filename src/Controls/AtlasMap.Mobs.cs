@@ -217,7 +217,8 @@ namespace ElansAddonHub
             if (m.Warn)
             {
                 var bc = new Point(c.X + r * 0.75, c.Y - r * 0.75);
-                dc.DrawEllipse(Res<Brush>("Brush.Warn") ?? Brushes.Orange, halo, bc, 4.5, 4.5);
+                var badge = Res<Brush>("Brush.Warn") ?? Brushes.Orange;           // the warning badge (not a coin)
+                dc.DrawEllipse(badge, halo, bc, 4.5, 4.5);
                 var ft = new FormattedText("!", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 8, Brushes.Black, dpi);
                 dc.DrawText(ft, new Point(bc.X - ft.Width / 2, bc.Y - ft.Height / 2));
             }
