@@ -457,6 +457,7 @@ namespace ElansAddonHub
                     Check("screenshot: the page was captured", png != null && png.Length > 5000, (png?.Length ?? 0) + "");
                     WorldMapLiveUnitTest(Check);
                     await WorldMapLiveTest(Check, P);
+                    WorldMapPrintsUnitTest(Check); await WorldMapPrints2dTest(Check, P);      // 2.90: the paw-print trail (MainWindow.WorldMapTest.Prints.cs)
 
                     await WorldMapPage3dTest(dir, notes, Check, P, taxi, lidx);
                     ShowTab("atlas"); AtlasView.History.Clear();

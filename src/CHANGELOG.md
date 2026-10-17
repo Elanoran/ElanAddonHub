@@ -3,6 +3,13 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.90.0
+- **Paw prints on your live trail.** Zoom in on the world map (2D or 3D) and your trail of the last 10 minutes turns into little footprints in your class colour, left and right along the way you went, fading with age like the trail. Zoomed out it stays the clean line it was.
+- **Prints for how you travel.** On foot you leave paws (hooves for tauren, bony prints for the undead, tiny prints for gnomes), on a mount bigger hoofprints further apart, on a flight a light dotted line with now and then a feather, swimming little ripple rings, and as a ghost faint wisps. Hunters get a second, smaller line of their pet's paws trotting beside them.
+- **Lying on the ground in 3D.** In the 3D view the prints lie on the ground and follow its slopes, on the floor of a building or on the water when that is where you were, and the flight's dots float in the air along the route.
+- **Your choice.** "Paw prints" is a new row in the map's layer list (on by default; it only shows while your live position is on). New prints fade in gently, unless animations are switched off in Windows.
+- **Elan's Hub 1.17.0** tells the Outpost whether you are mounted and whether your pet is out (part of the same off-by-default "Share my map position" option). With an older Hub the trail shows paws while riding, and a hunter's pet line is always drawn.
+
 ## 2.86.0
 - **The Cairn: open Atlas numbers from many lodges.** The Atlas can now also show the Cairn, an open dataset that merges what many lodges observed: drop rates of creatures, objects, fishing and gathering, vendor items and prices, spawn points, gathering nodes and flight times. It holds ids and counts only - no names of people or characters - and is free for everyone (CC0). A number only gets in when at least two independent lodges saw it, and numbers far off from the rest are left out.
 - **Labelled "Cairn", below your own lodge.** On item and creature pages the Cairn's rows carry the label "Cairn" and sort below your lodge's own observations. Where your lodge already shows a source, the Cairn's figure rides along as a second line.

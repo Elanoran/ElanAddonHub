@@ -215,6 +215,20 @@ namespace ElansAddonHub.Services
                 var cm = new GamePresence.Character(); GamePresence.ApplyLive(cm, b5);
                 var co = new GamePresence.Character(); GamePresence.ApplyLive(co, v4m);
                 Check("presence: the move bits reach the character (flight from a v5 Hub; nothing known from a v4 Hub)", cm.PosMove == 4 && cm.PosMoveKnown && co.PosMove == 0 && !co.PosMoveKnown);
+                // ---- v6 (companion 1.17.0+): 32 mounted, 64 pet out (the trail's paw / hoof prints); a v5 strip's high bits are never read as those
+                var t6 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 6, 3 + 32 + 64, x, y));
+                Check("v6 strip: mounted with the pet out decode with the position", t6 != null && t6.RowVersion == 6 && t6.PosMountKnown && t6.Mounted && t6.PetOut && !t6.OnTaxi && t6.PosFlags == 3 && t6.PosX == x,
+                    t6 == null ? "null" : $"v={t6.RowVersion} f={t6.PosFlags} m={t6.PosMove}");
+                var v5hi = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 5, 3 + 4 + 32 + 64, x, y));
+                Check("v5 strip (Hub 1.16.1): bits 32 / 64 are not mounted / pet (masked off), the flight bit still reads", v5hi != null && v5hi.OnTaxi && !v5hi.Mounted && !v5hi.PetOut && !v5hi.PosMountKnown && v5hi.PosMoveKnown && v5hi.PosMove == 4);
+                var inv6 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 6, 1 + 32 + 64, 0, 0));
+                Check("v6 strip: without a valid position the mounted / pet bits are not trusted", inv6 != null && !inv6.PosValid && inv6.PosMove == 0 && !inv6.PosMountKnown);
+                var c6 = new GamePresence.Character(); GamePresence.ApplyLive(c6, t6);
+                var c5 = new GamePresence.Character(); GamePresence.ApplyLive(c5, v5hi);
+                Check("presence: mounted / pet out reach the character from a v6 Hub and the trail point's bits keep them (from a v5 Hub they are masked off)",
+                    c6.PosMountKnown && (c6.PosMove & 96) == 96 && (WorldMap.TrailPrints.MoveOf(c6) & 96) == 96 && !c5.PosMountKnown && (WorldMap.TrailPrints.MoveOf(c5) & 96) == 0 && (WorldMap.TrailPrints.MoveOf(c5) & 4) == 4);
+                var a6 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 6, 3, x, y));
+                Check("mounting up is a position change (the Outpost redraws), not a presence change", a6.V2Equals(t6) && !a6.PosEquals(t6));
             }
             // names for the ids: open-world uiMapID, dungeon instance id, unknown -> nothing
             var ch1 = new GamePresence.Character();

@@ -32,7 +32,7 @@ namespace ElansAddonHub.Services.WorldMap
         public const double MaxZoom = 9;
 
         // the layer ids the page and the app agree on (messages naming any other are refused)
-        public static readonly string[] LayerIds = { "zones", "borders", "fm", "routes", "instances", "nodes", "saved", "vendors", "trainers", "quests", "rares", "seen", "finds", "trailevents" };
+        public static readonly string[] LayerIds = { "zones", "borders", "fm", "routes", "instances", "nodes", "saved", "vendors", "trainers", "quests", "rares", "seen", "finds", "trailevents", "trailprints" };
         public static readonly string[] NodeGroups = { "herbs", "ore", "chests", "fishing" };
         public static readonly string[] InstanceGroups = { "dungeons", "raids" };
         public static readonly string[] FactionGroups = { "horde", "alliance", "neutral" };

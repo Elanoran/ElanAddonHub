@@ -17,7 +17,7 @@ namespace ElansAddonHub.Services
     // 12 reserved, 2 checksum bytes. Version 3 (companion 1.15.3+) uses reserved bytes 10-14 for the OPT-IN map position: posFlags
     // (1 sharing on, 2 position valid), x (2 bytes), y (2 bytes) = 0..65535 of the uiMap in bytes 2-3. Older hubs ignore them.
     // Version 4 (companion 1.16.0+) uses bytes 15-21 for one trail event at a time (same opt-in): seq (1-255, 0 = none), kind, id (3 bytes),
-    // extra, age in seconds; version 5 (companion 1.16.1+) adds posFlags bits 4 on a flight, 8 indoors, 16 swimming (with a valid position only; older Outposts mask them off); each event stays a few seconds, so a reader at 1 Hz sees it at least twice (StripEventFilter passes it once). Row 0 is unchanged except that flags bit 8 says "row 1 is present". An older hub reads
+    // extra, age in seconds; version 5 (companion 1.16.1+) adds posFlags bits 4 on a flight, 8 indoors, 16 swimming (with a valid position only; older Outposts mask them off); version 6 (companion 1.17.0+) adds 32 on a mount, 64 your pet is out (same rules); each event stays a few seconds, so a reader at 1 Hz sees it at least twice (StripEventFilter passes it once). Row 0 is unchanged except that flags bit 8 says "row 1 is present". An older hub reads
     // row 0 only and never looks below it, so v1 and v2 hubs/companions mix in every combination: a v2 decoder without row 1
     // (old companion, or a failed checksum there) simply returns the v1 fields.
     //   flags1: 1 combat, 2 dead/ghost, 4 AFK, 8 resting, 16 in instance, 32 raid instance, 64 party instance, 128 in group
@@ -57,6 +57,10 @@ namespace ElansAddonHub.Services
             public bool OnTaxi => (PosMove & 4) != 0;
             public bool Indoors => (PosMove & 8) != 0;
             public bool Swimming => (PosMove & 16) != 0;
+            // ---- row 1 version 6 (companion 1.17.0+): two more bits, same rules: 32 on a mount, 64 your pet is out (for the trail's paw and hoof prints)
+            public bool PosMountKnown => PosValid && RowVersion >= 6;
+            public bool Mounted => (PosMove & 32) != 0;
+            public bool PetOut => (PosMove & 64) != 0;
             // ---- row 1 version 4 (companion 1.16.0+): one trail event at a time (bytes 15-21). EvSeq 0 = none; an older Hub never has one.
             public int EvSeq, EvKind, EvId, EvExtra, EvAge;
             public bool HasEvent => HasV2 && RowVersion >= 4 && EvSeq > 0 && EvKind > 0;
@@ -242,7 +246,7 @@ namespace ElansAddonHub.Services
                         info.PosFlags = (q[10] & 1) != 0 ? q[10] & 3 : 0;
                         if ((info.PosFlags & 2) != 0) { info.PosX = q[11] * 256 + q[12]; info.PosY = q[13] * 256 + q[14]; }
                         // how you move (version 5 only; before that the bits were always zero): flight, indoors, swimming, with a valid position only
-                        if (q[1] >= 5 && (info.PosFlags & 2) != 0) info.PosMove = q[10] & 0x1C;
+                        if (q[1] >= 5 && (info.PosFlags & 2) != 0) info.PosMove = q[10] & (q[1] >= 6 ? 0x7C : 0x1C);     // version 6 adds 32 mounted, 64 pet out
                     }
                     if (q[1] >= 4 && q[15] != 0 && q[16] != 0)
                     {

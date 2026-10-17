@@ -26,6 +26,8 @@ namespace ElansAddonHub.Services.WorldMap
     public static class LiveMove
     {
         public const int Taxi = 4, Indoors = 8, Swimming = 16;      // the bits of the strip's posFlags (row 1 version 5)
+        public const int Mounted = 32, PetOut = 64;                  // row 1 version 6 (companion 1.17.0+): on a mount, your pet is out (the trail's prints)
+        public const int Dead = 128;                                 // the Outpost's own bit on a trail point: dead or a ghost (from the strip's presence flags, not posFlags)
     }
 
     public struct ElevResult
