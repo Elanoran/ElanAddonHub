@@ -123,7 +123,7 @@ namespace ElansAddonHub
             v.Live = LivePos;
             // learned flight paths (2.88): a new learned route, the Lodge's, or Clear redraws the Flight routes layer
             ElansAddonHub.Services.WorldMap.LearnedFlights.AnyChanged += () => Dispatcher.BeginInvoke(new Action(() => v.LayerDataChanged("routes")));
-            // the Cairn's data (2.93: its nodes, vendors, rares and flight times are on the world map) arrived, was replaced or deleted: those layers again
+            // the Cairn's data (2.92: its nodes, vendors, rares and flight times are on the world map) arrived, was replaced or deleted: those layers again
             CairnAtlas.Changed += () => Dispatcher.BeginInvoke(new Action(() => { foreach (var l in new[] { "routes", "nodes", "vendors", "rares" }) v.LayerDataChanged(l); }));
             return v;
         }

@@ -428,7 +428,7 @@ namespace ElansAddonHub
                 var nodesL = WorldMapLayers.Build("nodes", 0); var vendL = WorldMapLayers.Build("vendors", 0); var findL = WorldMapLayers.Build("finds", 0);
                 Check("layers: with no Classic baseline and no Lodge, nodes / vendors / finds report \"none\" with a note that says where the data would come from (no markers invented)",
                     nodesL.Empty && vendL.Empty && findL.Empty && nodesL.Json.Length > 0 && Json.Obj(nodesL.Json).Str("kind") == "points" && vendL.Note.Contains("Classic") && findL.Note.Contains("Lodge"), nodesL.Note + " | " + vendL.Note + " | " + findL.Note);
-                WorldMapCairnMapsTest(Check);      // 2.93: the Cairn's spawn points, nodes and flight times on the maps
+                WorldMapCairnMapsTest(Check);      // 2.92: the Cairn's spawn points, nodes and flight times on the maps
                 AtlasQuery.Context.Lodge = () => null;
                 var bogus = WorldMapLayers.Build("coal", 0);
                 Check("layers: an unknown layer builds nothing", bogus.Json.Length == 0 && bogus.Empty);

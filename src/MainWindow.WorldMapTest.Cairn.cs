@@ -9,7 +9,7 @@ using ElansAddonHub.Services.WorldMap;
 
 namespace ElansAddonHub
 {
-    // --selftest "worldmap" (2.93): the Cairn's numbers on the maps - its spawn points, gathering nodes and flight times on the world map's layers and on
+    // --selftest "worldmap" (2.92): the Cairn's numbers on the maps - its spawn points, gathering nodes and flight times on the world map's layers and on
     // the Atlas pages' maps, labelled "Cairn", after your own Lodge's (a spot the Lodge already has is not drawn twice), and nothing of it for a member who
     // does not share (CairnAtlas.Current is null then). Runs on the invented continent (Northland, Greenvale = UiMap 11) with the Classic test baseline.
     public partial class MainWindow
