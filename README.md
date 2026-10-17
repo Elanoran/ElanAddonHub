@@ -59,9 +59,12 @@ plans your way from 1 to 300. Press **Ctrl+K** anywhere to search it.
 
 ### The world map
 
-A seamless map of each continent, drawn from your game files, in 2D or as real 3D terrain. Turn on layers for
-flight paths, dungeon entrances, herbs and ore, vendors, trainers and quest givers. If you like, your own position
-shows as a dot with a fading trail of the last ten minutes, also on flights and indoors.
+A seamless map of each continent (and islands such as Zephras Isle), drawn from your game files, in 2D or as real
+3D terrain with the cities' buildings. Turn on layers for flight paths, dungeon entrances, herbs and ore, vendors,
+trainers and quest givers. If you like, your own position shows as a dot with a fading trail of the last ten minutes:
+paw prints in your class colour (hoofprints when mounted, ripples when swimming), small marks for what happened along
+the way (a kill, notable loot, a herb or ore you gathered, a level-up), and on flights the dot follows the real route
+in the air. Flight paths that Forever changed are learned from your own flights.
 
 <p align="center"><img src="docs/readme/worldmap-3d.jpg" width="860" alt="The 3D world map over Orgrimmar and Durotar, with flight routes, zone borders and the layer list"></p>
 
@@ -71,6 +74,15 @@ A small, private Discord for you and your friends, running on a server one of yo
 replies, reactions, pictures and item links; voice rooms with push-to-talk and an in-game overlay that shows who is
 talking; a raid and event calendar with sign-ups per role; shared files; a ladder with badges; and an armory of the
 characters members choose to share. Names show in class colours with level and zone, straight from the game.
+
+**Sharing what you see.** Members who turn it on share what they see in the world with their Lodge: which creatures drop
+what, vendors, spawn points, gathering nodes, flight times and learned flight routes. Only ids and counts, never character
+names. Everyone's Atlas gets better from it.
+
+**The Cairn.** Lodges can also pool their numbers in the Cairn, a shared commons of many Lodges, so every Lodge's Atlas
+learns from the others. It works as give to get: a Lodge only receives the Cairn's numbers while it contributes, and inside
+a Lodge only members who share get them. The Cairn only ever sees Lodge totals (no members, no names), publishes an
+observation only once enough independent Lodges agree on it, and drops outliers. Joining the Cairn is by invitation for now.
 
 <p align="center"><img src="docs/readme/lodge-chat.png" width="640" alt="Lodge chat: a channel with a few messages and a reply"></p>
 
@@ -145,8 +157,13 @@ your addons automatically. It can sit in the tray and start with Windows if you 
   (you can turn that off). The Classic database is only downloaded when you ask for it.
 - **The Lodge is opt-in.** Nothing goes to a Lodge unless you join one. Then it gets your messages, your status and
   the character you play and your zone (each can be switched off); your characters' gear and reputations only if you
-  switch that on; and, unless you switch it off, your learned flight times and what Elan's Toolkit noticed in the
-  world (drops, vendors, spawn points), without character names.
+  switch that on; and, unless you switch it off, your flight times and learned flight routes and what Elan's Toolkit
+  noticed in the world (drops, vendors, spawn points), without character names.
+- **The Cairn only talks to Lodges.** The Outpost never contacts the Cairn. If your Lodge's owner turns on contributing,
+  the Lodge sends its pooled totals (ids and counts, nothing per member) and gets the Cairn's numbers back, which it hands
+  only to members who share. The data is signed by the Cairn and checked by the Outpost before it is used.
+- **Your live position stays on your PC.** The map position Elan's Hub draws into its pixel strip (only when you turn
+  it on, in the game and in the Outpost) is read by the Outpost on your PC and not sent anywhere.
 - **Your Lodge key** is stored encrypted for your Windows user and only sent in a request header to your own Lodge.
 - **Unsigned.** The exe is not code-signed (signing costs money every year). Every release is built from this
   repository, and the app checks the checksum of every update it downloads.
@@ -161,9 +178,11 @@ So please use it at your own risk. It is a free fan project, given as it is, and
 
 ## Hosting a Lodge
 
-A Lodge is one small .NET 8 service on a Linux server (Ubuntu with systemd), behind a web server you already have
-(nginx, Caddy, Apache) on HTTPS. One install script sets it up, with daily backups and a one-command update; the
-first start prints a one-time owner link that makes you the Guild Master. See
+A Lodge is one small .NET 10 service on a Linux server (Ubuntu with systemd; the .NET 10 SDK comes from Ubuntu's own
+archive), behind a web server you already have (nginx, Caddy, Apache) on HTTPS. One install script sets it up, with
+daily backups, a one-command update and a locked-down service; the first start prints a one-time owner link that makes
+you the Guild Master. Contributing to the Cairn is off by default; a Lodge owner who has been given a Cairn key turns it
+on in the Lodge's settings file (`LODGE_CAIRN_*`). See
 [server/deploy/README.md](server/deploy/README.md) to get started, and [server/SECURITY.md](server/SECURITY.md)
 and [server/PROTOCOL.md](server/PROTOCOL.md) for the details.
 
@@ -177,6 +196,11 @@ decides - see [How we look at it](#how-we-look-at-it).
 **Does it work with other WoW versions?**
 It is made for WoW Forever. Other addons still show up on the Addons page, but the Atlas, the map and the addons are
 built and tested for Forever.
+
+**What is the Cairn, and do I have to share?**
+The Cairn pools the Atlas numbers of many Lodges. Sharing is your choice: the Outpost asks once, in plain words, and
+"Not now" is as good an answer as "Share". Without sharing you keep your own game data, your Lodge's own numbers and the
+Classic database; the Cairn's numbers come to those who share.
 
 **Do I need a Lodge?**
 No. Addons, the Atlas, the world map, the Characters page and the radio all work on their own. The Lodge is for

@@ -548,7 +548,13 @@ is not part of this repository.
 - **What** (`server/Lodge.Server/Cairn.cs`, `CairnRules.Records`): from the pool's guest view (no names) - drops per creature / object /
   fishing zone / gathering kind / container (kills + item times and counts), vendor items (price, stack, limit, extended cost), spawn points +
   npc spots, gathering nodes, flight legs between NUMBERED taxi nodes (a leg keyed by a node name is game text and never sent), the game build
-  (newest find's `gb`). No finds, field notes, quests, seen tables, revealed items, member counts or names.
+  (newest find's `gb`), and (Lodge 2.27, when the Cairn lists `outposts`) per ISO week two plain numbers: how many members share and how
+  many received the dataset (counted from salted hashes whose salt is thrown away each week). No finds, field notes, quests, seen tables,
+  revealed items, member lists or names.
+- **Agreement**: an observation (and each drop, vendor item, spot or flight leg in it) is published only when enough independent Lodges
+  report it. The Cairn works the threshold out by itself from the Lodges in good standing: 1 while at most one Lodge is active, 2 from two,
+  3 from ten (a fixed number can be set instead); each Lodge's weight is capped and outlying drop rates / flight times are dropped once
+  three Lodges can judge.
 - **How**: every record carries the Lodge's CURRENT total (never increments); the Cairn adds what grew to the post's game-build bucket and takes
   what shrank back out, so resends never double-count and a member purged from the Lodge pool is purged from the Cairn too. The Lodge keeps a
   hash per confirmed record (`data/cairn-sent.json`), posts only changes (null for gone records), gzip, chunks of about 1.5 MB, a new `seq` per
