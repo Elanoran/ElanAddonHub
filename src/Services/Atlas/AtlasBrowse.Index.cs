@@ -21,6 +21,7 @@ namespace ElansAddonHub.Services.Atlas
         public int Quality = -1, ILvl, Cls = -1, Sub = -1, Inv, Icon, Zone, Rank, Type, Flags, Skill;
         public int Spell, Start;                  // recipes: the recipe spell, and the skill it is learnable from (estimated from its colour band)
         public bool Client, Classic, Lodge;       // which layers know it: the player's game, the Classic baseline, the Lodge's observations
+        public bool Forever;                      // Forever players saw what only the server knows (creatures: loot; items: a drop or vendor; objects: loot or nodes) - the Lodge or the Cairn (DataHonesty)
         public int Src;                           // items: bit per AtlasBrowse.Hows
         public double Chance; public bool ChanceLodge;
         public long Price;
@@ -71,7 +72,7 @@ namespace ElansAddonHub.Services.Atlas
         {
             string R(object o) => o == null ? "-" : RuntimeHelpers.GetHashCode(o).ToString(CultureInfo.InvariantCulture);
             var L = AtlasQuery.LodgeOrNull();
-            return string.Join("|", GatherNodes.OwnToken(), R(ItemData.Snapshot), R(SpellData.Data), R(ClassData.Set), R(SeenData.Snapshot), R(MapData.Index), R(ClassicAtlas.Current), L == null ? "-" : R(L) + "," + L.Rev + "," + L.Updated + "," + L.FindCount);
+            return string.Join("|", GatherNodes.OwnToken(), R(ItemData.Snapshot), R(SpellData.Data), R(ClassData.Set), R(SeenData.Snapshot), R(MapData.Index), R(ClassicAtlas.Current), R(CairnAtlas.Current), L == null ? "-" : R(L) + "," + L.Rev + "," + L.Updated + "," + L.FindCount);
         }
 
         // what every index is built from (the Atlas side menu's numbers are worked out again when it changes)
@@ -96,6 +97,7 @@ namespace ElansAddonHub.Services.Atlas
         sealed class Ctx
         {
             public ClassicIndex Classic; public AtlasDerived Derived; public LodgeAtlas L; public MapIndex Map;
+            public CairnSet Cairn = CairnAtlas.Current;
             public readonly Dictionary<int, int> ObjCats = new Dictionary<int, int>();
             public readonly Dictionary<int, string> ContinentOf = new Dictionary<int, string>();
             public const int Herb = 1, Ore = 2, Chest = 3, Fishing = 4, Other = 5;
@@ -306,15 +308,17 @@ namespace ElansAddonHub.Services.Atlas
             {
                 foreach (var d in L.Drops(id))
                 {
-                    e.Lodge = true;
+                    e.Lodge = true; e.Forever = true;
                     if (d.Kind == "fish") bits |= 1 << 4;
                     else if (d.Kind == "obj") Obj(d.Id);
                     else { bits |= 1; drops.Add(d.Id); if (d.Chance > lodgeChance) lodgeChance = d.Chance; }
                 }
-                foreach (var v in L.Vendors(id)) { e.Lodge = true; vend.Add(v.NpcId); }
+                foreach (var v in L.Vendors(id)) { e.Lodge = true; e.Forever = true; vend.Add(v.NpcId); }
                 foreach (var q in L.QuestsRewarding(id)) { e.Lodge = true; quests.Add(q.QuestId); }
                 if (L.Finds(id).Count > 0 || L.Revealed(id) != null) e.Lodge = true;
             }
+            var cairn = CairnAtlas.Current;
+            if (cairn != null && (cairn.DropsOf(id).Count > 0 || cairn.VendorsOf(id).Count > 0)) e.Forever = true;
             if (x.Classic != null)
                 foreach (var s in x.Classic.SourcesOf(id))
                 {
@@ -387,6 +391,7 @@ namespace ElansAddonHub.Services.Atlas
                 e.Zone = ZoneOfSpawns(x, c?.Spawns);
                 if (e.Zone == 0 && x.L != null) { var sp = x.L.Spawns(id); if (sp.Count > 0) e.Zone = sp[0].Zone; }
                 if (x.L != null && (x.L.Npc(id) != null || x.L.Spawns(id).Count > 0 || x.L.Loot("npc", id) != null)) e.Lodge = true;
+                e.Forever = (x.L != null && new[] { "npc", "skin", "pick" }.Any(k => (x.L.Loot(k, id)?.N ?? 0) > 0)) || (x.Cairn != null && new[] { "kill", "skinning", "pickpocket" }.Any(k => x.Cairn.Loot(k, id) != null));
                 e.ZoneName = e.Zone > 0 ? x.Map?.Name(e.Zone) ?? "" : "";
                 var title = !string.IsNullOrEmpty(s?.Title) ? s.Title : c?.SubName ?? "";
                 e.Detail = string.Join(" · ", new[] { e.Level > 0 ? "Level " + AtlasFormat.Levels(e.Level, e.Level2) : "", AtlasFormat.RankName(e.Rank), title.Length > 0 ? "<" + title + ">" : "", AtlasFormat.CreatureType(e.Type) }.Where(t => t.Length > 0));
@@ -446,6 +451,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (nodeObjs.Contains(id)) { var fm = foreverZone.ForeverMaps(id); if (fm.Count > 0) { e.Zone = fm[0]; forever = true; e.Lodge = true; } }
                 e.ZoneName = e.Zone > 0 ? x.Map?.Name(e.Zone) ?? "" : "";
                 if (x.L != null && (x.L.Object(id) != null || x.L.Loot("obj", id) != null)) e.Lodge = true;
+                e.Forever = forever || (x.L?.Loot("obj", id)?.N ?? 0) > 0 || x.Cairn?.Loot("object", id) != null;
                 e.Detail = ObjCatTitle(e.Skill);
                 e.Extra = e.ZoneName + (forever && e.ZoneName.Length > 0 ? " (" + AtlasLabel.Forever + ")" : "");
                 ix.All.Add(e);

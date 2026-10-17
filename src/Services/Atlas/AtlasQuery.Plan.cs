@@ -67,6 +67,19 @@ namespace ElansAddonHub.Services.Atlas
             }
         }
 
+        // the one line under a creature's / object's / item's map (DataHonesty): places Forever players saw, or the Classic baseline's
+        static void MapCoverage(AtlasMapPlan plan)
+        {
+            int forever = 0, classic = plan.InInstances.Sum(k => k.Value);
+            foreach (var z in plan.Zones)
+                foreach (var mk in z.Markers)
+                {
+                    var tip = mk.Tooltip ?? "";
+                    if (tip.Contains(AtlasLabel.Forever) || tip.Contains(AtlasLabel.Cairn)) forever++; else classic++;
+                }
+            plan.Coverage = DataHonesty.PlacesLine(forever, classic);
+        }
+
         // the zone most of an npc's spawn points are in, for a table row ("Elwynn Forest"); "" when unknown or inside an instance
         internal static string ZoneOfSpawns(IReadOnlyList<ClassicSpawn> spawns)
         {

@@ -114,6 +114,25 @@ saved by Elan's Hub whenever you /reload or log out. Search every bag at once.
 
 <p align="center"><img src="docs/readme/radio.png" width="280" alt="The radio card: song, cover, channels, sound quality and volume"></p>
 
+## Where the data comes from
+
+The Atlas mixes three kinds of data, and every row says which one it is:
+
+- **From your game.** Items, spells, talents, quests, maps, zones, flight paths and the creatures and objects your game
+  has met are read from your own game files. They are complete for everything your game contains.
+- **Seen on Forever.** Some things only the server knows: what drops where and how often, what vendors sell and for how
+  much, where creatures spawn, gathering nodes, flight times and learned flight routes. These are learned as people
+  play, from your own game, your Lodge (members who share) and the Cairn. This part is still growing and has gaps: a
+  creature nobody has killed yet has no Forever drop data, and the Atlas says so on its page ("Not seen on Forever yet")
+  instead of looking complete. Where it does have data, it says what it is based on ("340 looted kills by 3 members
+  of your Lodge").
+- **Classic baseline.** Optional: the Classic database of the cMaNGOS project (classic-db), downloaded once if you want
+  it. These are old Classic numbers, used as a fallback where nobody has seen something on Forever yet, and Forever may
+  differ from them. They are always labelled "Classic baseline".
+
+The more people share with their Lodge, the faster the Forever part fills in for everyone. The Atlas's **Data sources**
+page shows each source and its state.
+
 ## A little history
 
 It started as **Elan's Hunter Helper**, a hunter addon for WoW Forever: which beasts teach which pet abilities,

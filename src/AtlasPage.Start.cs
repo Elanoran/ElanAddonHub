@@ -31,7 +31,7 @@ namespace ElansAddonHub
             ResetEntity(); startInfo = null;
             classBook = null; classGroups = null; classShown.Clear();
             tileGrids.Clear(); presetHost = null; presetLabel = null; presetWrap = null; homeChips.Clear(); ResetHome();
-            classicBanner = null; classicOffer = null; classicCard = null; classicBody = null;
+            classicBanner = null; classicOffer = null; classicCard = null; classicBody = null; sourcesCard = null;
             ClassicBannerGetForTest = ClassicBannerNotNowForTest = null; ClassicBannerProgressForTest = null;
             ClassicPrimaryForTest = ClassicCancelForTest = ClassicRemoveForTest = null;
         }
@@ -59,6 +59,7 @@ namespace ElansAddonHub
             var offer = ClassicOfferView(); offer.Margin = new Thickness(0, 0, 0, 24); col.Children.Add(offer);
             col.Children.Add(SharingInviteView());              // 2.87: a member whose Atlas sharing is off is asked once, calmly (AtlasPage.SharingInvite.cs)
             col.Children.Add(HomeHeroBlock());
+            col.Children.Add(SourcesHomeCard());                // 2.91: where the Atlas's data comes from, once (AtlasPage.DataHonesty.cs)
             col.Children.Add(RecommendBlock());
             _ = FillHome();
             col.Children.Add(HomeLodgeBlock());
@@ -85,7 +86,8 @@ namespace ElansAddonHub
             UpdateNav();
             var col = new StackPanel();
             Body.Children.Add(col);
-            var intro = Tb("Where the Atlas gets what it knows. Everything is read on this PC; nothing is uploaded without your say.", "Text.Secondary"); intro.TextWrapping = TextWrapping.Wrap; intro.MaxWidth = ReadWidth; intro.HorizontalAlignment = HorizontalAlignment.Left; intro.Margin = new Thickness(0, 0, 0, 12);
+            col.Children.Add(SourcesExplainerCard());          // 2.91: the three kinds of data first, in plain words (AtlasPage.DataHonesty.cs)
+            var intro = Tb("Everything is read on this PC; nothing is uploaded without your say. Here is each source and its state.", "Text.Secondary"); intro.TextWrapping = TextWrapping.Wrap; intro.MaxWidth = ReadWidth; intro.HorizontalAlignment = HorizontalAlignment.Left; intro.Margin = new Thickness(0, 0, 0, 12);
             col.Children.Add(intro);
             var offerD = ClassicOfferView(); offerD.Margin = new Thickness(0, 0, 0, 12); col.Children.Add(offerD);
             // the cards sit side by side when the window is wide (see LayoutStart) and stack when it is narrow

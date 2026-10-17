@@ -278,7 +278,7 @@ namespace ElansAddonHub
                 var loot = npc.Sections.FirstOrDefault(s => s.Key == "loot");
                 var lootRows = loot == null ? new List<AtlasRow>() : loot.Rows.Concat(loot.Hidden).ToList();
                 Check("creature page: the Cairn's loot table with rates and the lodges behind them, labelled Cairn",
-                    lootRows.Count(r => r.Label == "Cairn") == 2 && lootRows.Any(r => r.Detail.Contains("10 of 400 kills")) && loot.Note.Contains("The Cairn"), loot?.Note);
+                    lootRows.Count(r => r.Label == "Cairn") == 2 && lootRows.Any(r => r.Detail.Contains("10 of 400 kills")) && loot.Coverage.Contains("the Cairn's Lodges"), loot?.Coverage);
                 var skin = npc.Sections.FirstOrDefault(s => s.Key == "skin");
                 Check("creature page: gathering from the corpse (skinning) from the Cairn too, also when neither the Lodge nor the Classic baseline has it",
                     skin != null && skin.Rows.Concat(skin.Hidden).Any(r => r.Label == "Cairn" && r.Type == "Skinning" && r.Detail.Contains("70 of 80 corpses")), skin?.ToString());

@@ -21,7 +21,7 @@ namespace ElansAddonHub
         FrameworkElement hosted;
         string hostedId = "";
         ListBox browseList;
-        TextBlock browseCount, browseEmpty;
+        TextBlock browseCount, browseEmpty, browseCoverage;
         StackPanel browseNotes;
         Button browseClear;
         BrowseQuery bq = new BrowseQuery();
@@ -40,6 +40,7 @@ namespace ElansAddonHub
         public Task BrowseWaitForTest() => filterTask;
         public int FilterDebounceMsForTest { get => (int)filterDebounce.Interval.TotalMilliseconds; set => filterDebounce.Interval = TimeSpan.FromMilliseconds(value); }
         public string BrowseCountTextForTest => browseCount?.Text ?? "";
+        public string BrowseCoverageTextForTest => browseCoverage != null && browseCoverage.Visibility == Visibility.Visible ? browseCoverage.Text : "";
         public IReadOnlyList<string> BrowseNotesForTest => browseNotes == null ? new List<string>() : AtlasWalk(browseNotes).OfType<TextBlock>().Select(t => t.Text).ToList();
 
         static IEnumerable<DependencyObject> AtlasWalk(DependencyObject d)
@@ -81,6 +82,9 @@ namespace ElansAddonHub
             col.Children.Add(FilterBar(r));
             browseCount = Tb(r.CountText, "Text.Caption", Res("Brush.Text.Tertiary"), 4);
             col.Children.Add(browseCount);
+            browseCoverage = Tb("", "Text.Caption", Res("Brush.Text.Tertiary"), 2); browseCoverage.TextWrapping = TextWrapping.Wrap; browseCoverage.Tag = CoverageTag;   // 2.91: how much of the list Forever players have seen (DataHonesty)
+            SetBrowseCoverage(r);
+            col.Children.Add(browseCoverage);
             browseNotes = new StackPanel();
             col.Children.Add(browseNotes);
             FillNotes(r);
@@ -102,6 +106,13 @@ namespace ElansAddonHub
             Scroller.ScrollToTop();
             Motion.PageIn(Body);
             Dispatcher.BeginInvoke(new Action(SizeBrowseList), DispatcherPriority.Loaded);   // after layout, before the frame is drawn
+        }
+
+        void SetBrowseCoverage(BrowseResult r)
+        {
+            if (browseCoverage == null) return;
+            browseCoverage.Text = r.Coverage ?? "";
+            browseCoverage.Visibility = string.IsNullOrEmpty(r.Coverage) ? Visibility.Collapsed : Visibility.Visible;
         }
 
         double browseListTop;   // where the list started on the last browse page (the hero, chips and filters above it)
@@ -278,6 +289,7 @@ namespace ElansAddonHub
             browseList.Visibility = r.Rows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
             browseEmpty.Visibility = r.Rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             browseCount.Text = r.CountText;
+            SetBrowseCoverage(r);
             UpdateSideSwitch(r);
             FillNotes(r);
             browseClear.Visibility = r.Query.HasFilters ? Visibility.Visible : Visibility.Collapsed;

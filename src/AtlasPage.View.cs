@@ -210,6 +210,7 @@ namespace ElansAddonHub
             }
             head.Children.Add(Tb(s.Title, "Text.Section"));
             sp.Children.Add(head);
+            if (!string.IsNullOrEmpty(s.Coverage) && s.Open) sp.Children.Add(CoverageLine(s.Coverage));     // what the rows are based on (an empty section says it in its one line)
             if (!string.IsNullOrEmpty(s.Note)) { var n = Tb(s.Note, "Text.Secondary", null, 2); n.TextWrapping = TextWrapping.Wrap; n.MaxWidth = ReadWidth; n.HorizontalAlignment = HorizontalAlignment.Left; sp.Children.Add(n); }
             if (s.Rows.Count == 0 && s.Hidden.Count == 0)
             {
@@ -240,6 +241,16 @@ namespace ElansAddonHub
             }
             else if (!string.IsNullOrEmpty(s.HiddenText)) sp.Children.Add(Tb(s.HiddenText, "Text.Caption", Res("Brush.Text.Tertiary"), 4));
             return Card(sp);
+        }
+
+        // the one line of where a section's rows come from (DataHonesty): quiet, under the title, at reading width
+        public const string CoverageTag = "coverage";
+        public IReadOnlyList<string> CoverageLinesForTest => AtlasWalk(Body).OfType<TextBlock>().Where(t => Equals(t.Tag, CoverageTag)).Select(t => t.Text).ToList();
+        TextBlock CoverageLine(string text)
+        {
+            var t = Tb(text, "Text.Caption", Res("Brush.Text.Secondary"), 2);
+            t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = ReadWidth; t.HorizontalAlignment = HorizontalAlignment.Left; t.Tag = CoverageTag;
+            return t;
         }
 
         // short tables are plain; long ones are a virtualised list with its own scroll
@@ -285,6 +296,7 @@ namespace ElansAddonHub
             head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             head.Children.Add(Tb("Map", "Text.Section"));
             sp.Children.Add(head);
+            if (!string.IsNullOrEmpty(plan.Coverage)) sp.Children.Add(CoverageLine(plan.Coverage));
 
             if (!plan.Any)
             {

@@ -170,13 +170,15 @@ namespace ElansAddonHub
                     var savedHook = AtlasQuery.BuildHookForTest;
                     AtlasQuery.BuildHookForTest = id => { if (id != null && id.StartsWith("browse:", StringComparison.Ordinal)) System.Threading.Thread.Sleep(100); };
                     List<string> before, now;
+                    var savedCard = settings.AtlasSourcesCardDismissed;
+                    settings.AtlasSourcesCardDismissed = true;              // the heights below are tuned to the page without the "Where this comes from" card (2.91; a fixed block drawn with the page, it cannot pop a bar up)
                     try
                     {
                         ElansAddonHub.AtlasPage.HomeHoldOffForTest = true;
                         try { before = await Sweep(); } finally { ElansAddonHub.AtlasPage.HomeHoldOffForTest = false; }
                         now = await Sweep();
                     }
-                    finally { AtlasQuery.BuildHookForTest = savedHook; }
+                    finally { AtlasQuery.BuildHookForTest = savedHook; settings.AtlasSourcesCardDismissed = savedCard; }
                     Check("opening Home: the check sees the 2.73 behaviour (shown at once, then the parts fill in): the scroll bar popped up after the page showed in " + before.Count + " of 10 openings", before.Count > 0, string.Join(" || ", before));
                     Check("opening Home: once it shows, the page keeps its left edge and width and the scroll bar neither pops up nor away while the parts fill in (10 openings, 700-1500 high, from a page and from the Addons tab)", now.Count == 0, string.Join(" || ", now));
                     Check("opening Home: the page is shown (not held back) once its parts are in", !AtlasView.HomeHeldForTest && AtlasView.BodyForTest.Opacity > 0.99 && AtlasView.ScrollerForTest.VerticalScrollBarVisibility == ScrollBarVisibility.Auto);
