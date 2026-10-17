@@ -102,6 +102,27 @@ namespace ElansAddonHub
                         stB2?.Phase == "done" && stA?.Phase == "done" && man != null && man.Valid && man.AllDone && man.BridgesDone && man.ModelsBuilt >= scan.Models.Count && !Directory.EnumerateFiles(BuildingsService.DirOf(c.MapId), "*.tmp", SearchOption.AllDirectories).Any() && bytesA > bytesB && bytesA > 2 * 1024 * 1024, stA?.Phase + " " + stA?.Error);
                 }
                 foreach (var kv in perCont) notes.Add("note real buildings: " + kv.Value);
+                // 2.82, the live dot's floors (LiveElevation): the real buildings' walkable surfaces against an independent height, the game's own for its capital flight
+                // masters (TaxiNodes z). Within 30 yards of each, the floor nearest to that height; only the WMOs' outside groups are made, so a master standing indoors
+                // (Ironforge, the Undercity) or on a doodad has none - the solver then uses the ground.
+                {
+                    var gw = new GameElevationWorld(); var fl = new List<double>(); var lines = new List<string>(); int masters = 0, matched = 0, withFloors = 0;
+                    foreach (var nm in new[] { "Orgrimmar, Durotar", "Thunder Bluff, Mulgore", "Stormwind, Elwynn", "Ironforge, Dun Morogh", "Undercity, Tirisfal" })
+                    {
+                        var nd = idx.Set.TaxiNodes.FirstOrDefault(t => t.Name == nm); if (nd == null) continue;
+                        masters++; double best = double.NaN, bestD = 0; int hits = 0;
+                        for (double dx = -30; dx <= 30; dx += 3) for (double dy = -30; dy <= 30; dy += 3)
+                        {
+                            fl.Clear(); gw.Floors(nd.MapId, nd.X + dx, nd.Y + dy, fl); hits += fl.Count;
+                            foreach (var f in fl) if (double.IsNaN(best) || Math.Abs(f - nd.Z) < Math.Abs(best - nd.Z)) { best = f; bestD = Math.Sqrt(dx * dx + dy * dy); }
+                        }
+                        if (hits > 0) withFloors++; if (!double.IsNaN(best) && Math.Abs(best - nd.Z) < 1.5) matched++;
+                        lines.Add(nm + ": node z " + Math.Round(nd.Z, 1) + ", ground " + Math.Round(gw.Ground(nd.MapId, nd.X, nd.Y), 1) + ", " + hits + " floor hits within 30 yards" + (double.IsNaN(best) ? "" : ", the nearest to the node's height " + Math.Round(best, 1) + " (" + Math.Round(bestD) + " yards away)"));
+                    }
+                    foreach (var l in lines) notes.Add("note real floors: " + l);
+                    Check("real floors: the buildings' walkable surfaces meet the game's own height of its flight masters - " + matched + " of " + masters + " capitals have a floor within 1.5 yards of it nearby (" + withFloors + " have floors at all; indoor halls are not in the 3D buildings)",
+                        masters >= 4 && matched >= 2, string.Join(" | ", lines));
+                }
                 // the placement transform against the game's own extents: the box of each building, turned and moved by our rule, is the box the file stores for it
                 {
                     var scanE = scanOf[0];

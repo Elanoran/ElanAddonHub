@@ -130,6 +130,13 @@ C_Map = { GetBestMapForUnit = function(u) return ST.map end, GetPlayerMapPositio
   if ST.pos == nil or m ~= ST.map or u ~= "player" then return nil end
   return { GetXY = function(self) return ST.px, ST.py end }
 end }
+-- how you move (row 1 version 5): counted, so the tests can check they are only asked for with a valid position while the option is on
+MOVECALLS = 0
+ST.taxi, ST.indoors, ST.swim = false, false, false
+local function mv(v) MOVECALLS = MOVECALLS + 1 if v == "secret" then return SECRET end if v == "error" then error("no") end return v end
+function UnitOnTaxi(u) if u ~= "player" then return false end return mv(ST.taxi) end
+function IsIndoors() return mv(ST.indoors) end
+function IsSwimming() return mv(ST.swim) end
 function UnitAffectingCombat() if ST.secretCombat then return SECRET end return ST.combat end
 function UnitIsDeadOrGhost() return ST.dead end
 function UnitIsAFK() return ST.afk end
@@ -638,7 +645,7 @@ evt("PLAYER_ENTERING_WORLD")
 local d = decode()
 ok("v1 row still valid (name/class/race/level)", d.v1 and d.name == "Elan" and d.class == 3 and d.race == 2 and d.level == 60)
 ok("v1 flags: sex bits kept, v2-present bit (8) set", d.flags == 1 + 2 * 2 + 8)
-ok("v2 row valid: version 4 (1.16.0: trail event bytes), uiMapID 1413", d.v2 and d.ver == 4 and d.map == 1413)
+ok("v2 row valid: version 5 (1.16.1: how you move, in posFlags), uiMapID 1413", d.v2 and d.ver == 5 and d.map == 1413)
 ok("v2 xp 33%, not in combat, combat flag valid", d.xp == 33 and d.f1 == 0 and band(d.f2, 1) == 1 and band(d.f2, 2) == 2)
 ok("old hub view: marker+calibration cells intact", strip.__textures[1].__rgb[1] == 1 and strip.__textures[1].__rgb[3] == 1 and strip.__textures[1].__rgb[2] == 0)
 
@@ -716,8 +723,9 @@ do
   tick() evt("ZONE_CHANGED")
   local d = decode()
   ok("position: off by default (db.position nil, PositionOn false)", db.position == nil and not E.PositionOn())
-  ok("position off: row 1 version 4, posFlags 0, x/y and the event bytes zero", d.v2 and d.ver == 4 and d.pf == 0 and d.px == 0 and d.py == 0 and d.rest == 0)
+  ok("position off: row 1 version 5, posFlags 0, x/y and the event bytes zero", d.v2 and d.ver == 5 and d.pf == 0 and d.px == 0 and d.py == 0 and d.rest == 0)
   ok("position off: the position was never asked for and no timer runs", POSCALLS == 0 and not E.PositionTimerRunning())
+  ok("position off: flight / indoors / swimming were never asked for", MOVECALLS == 0)
   local t0 = E.posTicks tick() tick()
   ok("position off: no position ticks", E.posTicks == t0)
   -- turn it on (slash): the one chat line, verbatim, once
@@ -740,6 +748,29 @@ do
   dr = NS.draws
   tick() tick() tick() tick() tick() tick()
   ok("standing still: no repaint for 6 s", NS.draws == dr)
+  -- how you move (row 1 version 5): flight / indoors / swimming bits in posFlags, shown at once when they change
+  dr = NS.draws
+  ST.taxi = true tick()
+  ok("move: on a flight -> posFlags 3 + 4, shown at the next tick without moving", decode().pf == 7 and NS.draws == dr + 1 and decode().px == u16(0.26))
+  ST.taxi = false ST.indoors = 1 tick()
+  ok("move: indoors (an older client's 1) -> posFlags 3 + 8", decode().pf == 11)
+  ST.indoors = nil ST.swim = true tick()
+  ok("move: swimming -> posFlags 3 + 16 (nil = not indoors)", decode().pf == 19)
+  ST.swim = false ST.taxi = true ST.indoors = true tick()
+  ok("move: two at once add up (flight + indoors = 15)", decode().pf == 15)
+  for _, c in ipairs({ "secret", "error" }) do
+    ST.taxi, ST.indoors, ST.swim = c, c, c tick()
+    ok("move: " .. (c == "error" and "an error" or "a secret") .. " answer leaves the bits off (posFlags 3), the position still shows", decode().pf == 3 and decode().px == u16(0.26) and decode().v2)
+  end
+  ST.taxi, ST.indoors, ST.swim = false, false, false tick()
+  ok("move: back on foot outside -> posFlags 3", decode().pf == 3)
+  do
+    ST.taxi = true local mc = MOVECALLS ST.pos = nil tick()
+    ok("move: without a valid position no bits are sent and they are not even asked for", decode().pf == 1 and MOVECALLS == mc)
+    ST.pos = "ok" tick()
+    ok("move: ... with the position back, the flight bit is back", decode().pf == 7)
+    ST.taxi = false tick()
+  end
   -- invalid positions: nil, secret object, secret coordinates, out of range, an error: flag "on" stays, "valid" clears, x/y zero
   for _, case in ipairs({ { "nil", nil, 0.3, 0.3 }, { "secret object", "secret", 0.3, 0.3 }, { "secret x", "ok", SECRET, 0.3 }, { "secret y", "ok", 0.3, SECRET },
                           { "out of range", "ok", 1.2, 0.3 }, { "zero", "ok", 0, 0 }, { "error", "error", 0.3, 0.3 } }) do
@@ -780,10 +811,13 @@ do
   d = decode()
   ok("position off: db.position nil, posFlags 0, x/y 0, timer stopped", db.position == nil and d.pf == 0 and d.px == 0 and d.py == 0 and not E.PositionTimerRunning())
   pc, t0 = POSCALLS, E.posTicks
+  local mc0 = MOVECALLS
+  ST.taxi = true
   for i = 1, 8 do tick() end evt("ZONE_CHANGED")
-  ok("position off: no ticks, never asked for again", POSCALLS == pc and E.posTicks == t0)
+  ok("position off: no ticks, never asked for again (neither the position nor how you move)", POSCALLS == pc and E.posTicks == t0 and MOVECALLS == mc0 and decode().pf == 0)
+  ST.taxi = false
   -- the settings page: the check and its description, verbatim
-  local DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there. It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there."
+  local DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there, together with whether you are on a flight, indoors or swimming (so its 3D map shows you at the right height). It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there."
   ok("setting label and description verbatim", E.POSITION_LABEL == "Share my map position with Elan's Outpost" and E.POSITION_DESC == DESC)
   SlashCmdList.ELANSHUB("settings")
   if not _G.ElansHubSettings.__shown then SlashCmdList.ELANSHUB("settings") end
@@ -1323,10 +1357,13 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.16.0", "## Version: 1.16.0" in toc and "\n1.16.0 " in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc version is 1.16.1", "## Version: 1.16.1" in toc and "\n1.16.1 " in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
 check("toc Notes verbatim (optional live map position, off by default)", "## Notes: Shares your character, zone and status with Elan's Outpost (and your Lodge, if you join one). Optional: your live map position and trail events for the Outpost's world map — display only, no automation; everything optional is off by default.\n" in toc)
 _cl153 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.15.3 ")[1].split("\n1.16.0 ")[0]
-_cl160 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.16.0 ")[-1]
+_cl160 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.16.0 ")[-1].split("\n1.16.1 ")[0]
+_cl161 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.16.1 ")[-1]
+check("changelog 1.16.1: the flight / indoors / swimming bits, part of the same OFF-by-default option, honest", "Share my map position" in _cl161 and "OFF by default" in _cl161
+      and "flight" in _cl161 and "indoors" in _cl161 and "swimming" in _cl161 and "nothing is sent anywhere" in _cl161 and "/reload" in _cl161 and "Older Outposts ignore" in _cl161)
 check("changelog 1.16.0: trail events, same opt-in option, no combat events, nothing saved or sent, honest about the Lodge", "OFF-by-default" in _cl160 and "Share my map position" in _cl160
       and "never combat events" in _cl160 and "not saved and nothing is sent anywhere" in _cl160 and "does not exist yet" in _cl160 and "/reload" in _cl160)
 check("changelog 1.15.3: opt-in, off by default, honest wording", "OFF by default" in _cl153 and "nothing presses keys or plays the game for you" in _cl153 and "/ehub position on|off" in _cl153)
@@ -1335,6 +1372,10 @@ _pos_files = [f for f in files if "GetPlayerMapPosition" in open(os.path.join(AD
 _hub = open(os.path.join(ADDON, "ElansHub.lua"), encoding="utf-8").read()
 check("GetPlayerMapPosition only in ElansHub.lua, only in readPosition, behind positionOn()", _pos_files == ["ElansHub.lua"] and _hub.count("C_Map.GetPlayerMapPosition, mapId") == 1
       and "if not positionOn() or inInstance" in _hub.split("local function readPosition")[1].split("C_Map.GetPlayerMapPosition, mapId")[0])
+_mv = _hub.split("local function readMove()")[1].split("EHUB.ReadMove")[0]
+check("flight / indoors / swimming are read only in readMove, each through rd() (pcall + issecretvalue), and readMove only runs after a valid position",
+      all(_hub.count("rd(" + f) == 1 and ("rd(" + f) in _mv and (f + "(") not in _hub for f in ("UnitOnTaxi", "IsIndoors", "IsSwimming")) and _hub.count("pcall(readMove)") == 2
+      and _hub.count("if x then local ok, m = pcall(readMove)") == 2)
 check("position code never hooks or touches protected things", not _re.search(r"hooksecurefunc\(\s*C_Map|SetAttribute|Secure", _hub.split("-- ---- map position")[1].split("local lastSig")[0]))
 # trail events: read only in ElansHub.lua behind the position option, from plain events; no hooks, no combat events
 _tev = _hub.split("-- ---- trail events")[1].split("local lastSig")[0]

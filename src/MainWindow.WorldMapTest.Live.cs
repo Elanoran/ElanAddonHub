@@ -119,6 +119,7 @@ namespace ElansAddonHub
                 && meOld.Str("notice") == LivePositionText.OldHub && meOld.Bool("howto") && meOff.Count == 2 && meOff.Str("state") == "off");
 
             WorldMapLiveEventsUnitTest(Check);
+            WorldMapLiveElevationUnitTest(Check);
 
             // the how-to card (not shown here): the steps and the honest description
             var card = HelpPages.Create(HelpPages.LivePosition);
@@ -453,6 +454,9 @@ namespace ElansAddonHub
                     e3 != null && e3.Int("shown") >= 1 && ops != null && ops.Count > 0 && ops.All(o => Convert.ToDouble(o) > 0.95), EvText(e3));
                 await Wm3Me("follow");
                 await WaitFor(() => !settings.WorldMapFollow, 3000);
+
+                // the height (2.82): in the air on a flight, back on the ground after landing, on a building's floor indoors
+                await WorldMapLiveElevation3dTest(Check, P, lp, view);
 
                 // in an instance: a grey dot with the label, the card says so
                 lp.Update(true, true, LiveChar(valid: false), DateTime.UtcNow); view.PushLive(true);
