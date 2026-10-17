@@ -445,6 +445,8 @@
   function updateCamera() {
     var t = cam.tilt * Math.PI / 180, a = cam.az * Math.PI / 180, ex = prefs.exag;
     var gy = surfaceYE(cam.tx, cam.tz);
+    // following you in the air (a flight, a high floor): the camera looks at your dot, not at the ground under it
+    if (follow && meDotIt && meDotIt.zs != null && meDotIt.y > gy && Math.abs(cam.tx - meDotIt.x) + Math.abs(cam.tz - meDotIt.z) < 60) gy = meDotIt.y;
     cam.ty += (gy - cam.ty) * (Math.abs(gy - cam.ty) > 400 ? 1 : 0.25);
     var ex_ = cam.tx + cam.dist * Math.sin(a) * Math.cos(t), ey = cam.ty + cam.dist * Math.sin(t), ez = cam.tz + cam.dist * Math.cos(a) * Math.cos(t);
     var eg = surfaceYE(ex_, ez) + 8; if (ey < eg) ey = eg;
@@ -601,7 +603,8 @@
   function clearDom(id) {
     domItems = domItems.filter(function (it) { if (it.layer === id) { if (it.el.parentNode) it.el.parentNode.removeChild(it.el); return false; } return true; });
   }
-  function placeDom() { domItems.forEach(function (it) { it.y = groundYE(it.x, it.z); }); }
+  // a mark with its own height (the live dot and events in the air, on a floor or on the water: it.zs, yards) keeps it; everything else stands on the ground
+  function placeDom() { domItems.forEach(function (it) { it.y = it.zs != null ? it.zs * prefs.exag : groundYE(it.x, it.z); }); }
 
   // draped polylines: densified to at most `step` yards between points, each lifted over the ground
   function drape(flatLL, step, lift) {
@@ -1296,12 +1299,14 @@
   var ME_STATES = { off: 1, none: 1, ok: 1, elsewhere: 1, unavailable: 1, notshared: 1, oldhub: 1 };
   var me = null, meTrail = [], meAt = 0, meLines = null, meLineDist = 0, meCard = null, follow = false, followTo = null, meDotIt = null, meEvIts = [];
   function finN(v) { return typeof v === 'number' && isFinite(v); }
+  // the height the app worked out (LiveElevation): yards when it is not the terrain (a floor, the water, the air), else null = the page's own ground
+  function meZ(z, s) { return finN(z) && (s === 1 || s === 2 || s === 3) && Math.abs(z) < 20000 ? z : null; }
   function llOk(a) { return a && a.length === 2 && finN(a[0]) && finN(a[1]) && a[0] <= 0 && a[0] >= -256 && a[1] >= 0 && a[1] <= 256; }
   function meEvents(list) {
     var out = [], kinds = (window.WmIcons && window.WmIcons.evKinds) || {};
     (Array.isArray(list) ? list.slice(0, 200) : []).forEach(function (e) {
       if (!e || !llOk([e.lat, e.lng]) || !finN(e.age) || !kinds[e.k]) return;
-      out.push({ ll: [e.lat, e.lng], age: Math.max(0, Math.min(600, e.age)), k: e.k, name: String(e.name || '').slice(0, 80), line: String(e.line || '').slice(0, 80),
+      out.push({ ll: [e.lat, e.lng], h: meZ(e.z, e.zs), age: Math.max(0, Math.min(600, e.age)), k: e.k, name: String(e.name || '').slice(0, 80), line: String(e.line || '').slice(0, 80),
         c: /^#[0-9a-fA-F]{6}$/.test(e.c || '') ? e.c : '#e8e6e3', link: typeof e.link === 'string' ? e.link.slice(0, 40) : '', at: String(e.at || '').slice(0, 5) });
     });
     return out;
@@ -1317,10 +1322,11 @@
   function meMsg(m) {
     var st = ME_STATES[m.state] ? m.state : 'none';
     if (st === 'off' || st === 'none') { me = { state: st }; meClear(); meRow(); return; }
-    var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [];
-    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && finN(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1 }); }
+    var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [], ev = Array.isArray(m.elev) ? m.elev : [];
+    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && finN(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, h: meZ(ev[i / 2], ev[i / 2 + 1]) }); }
     me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
-      howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events) };
+      howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events),
+      hh: Array.isArray(m.hz) ? meZ(m.hz[0], m.hz[1]) : null, lh: Array.isArray(m.lz) ? meZ(m.lz[0], m.lz[1]) : null };
     meTrail = pts; meAt = Date.now();
     meDraw(); meCardDraw(); meRow();
     if (follow) followAim();
@@ -1336,14 +1342,30 @@
     if (meCard && meCard.parentNode) meCard.parentNode.removeChild(meCard);
     meCard = null; dirty = true;
   }
-  // a ribbon over the ground along one run of the trail (`ll` points), `w` yards wide
-  function meRibbon(ll, w, color, op) {
-    var flat = []; ll.forEach(function (p) { flat.push(p[0], p[1]); });
-    var dr = drape(flat, 10, 0), n = dr.x.length; if (n < 2) return null;
+  // a ribbon along one run of the trail (points {ll, h}), `w` yards wide: over the ground where both ends are on the terrain, else from height to height
+  // (a flight in the air along its route, a floor of a building, the water), a little above it
+  function meRibbonPath(run) {
+    var x = [], z = [], y = [], ex = prefs.exag;
+    for (var k = 0; k < run.length; k++) {
+      var a = run[k], pa = ll2xz(a.ll[0], a.ll[1]), b = k + 1 < run.length ? run[k + 1] : null;
+      var ya = a.h != null ? a.h * ex : null;
+      x.push(pa[0]); z.push(pa[1]); y.push(ya != null ? ya : surfaceYE(pa[0], pa[1]));
+      if (!b) break;
+      var pb = ll2xz(b.ll[0], b.ll[1]), yb = b.h != null ? b.h * ex : null, len = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]), n = Math.min(400, Math.floor(len / 10));
+      for (var j = 1; j <= n; j++) {
+        var f = j / (n + 1), xx = pa[0] + (pb[0] - pa[0]) * f, zz = pa[1] + (pb[1] - pa[1]) * f;
+        x.push(xx); z.push(zz);
+        y.push(ya == null && yb == null ? surfaceYE(xx, zz) : (ya != null ? ya : surfaceYE(pa[0], pa[1])) * (1 - f) + (yb != null ? yb : surfaceYE(pb[0], pb[1])) * f);
+      }
+    }
+    return { x: x, z: z, y: y };
+  }
+  function meRibbon(run, w, color, op) {
+    var dr = meRibbonPath(run), n = dr.x.length; if (n < 2) return null;
     var pos = new Float32Array(n * 6), idx = [];
     for (var i = 0; i < n; i++) {
       var a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1), dx = dr.x[b] - dr.x[a], dz = dr.z[b] - dr.z[a], l = Math.hypot(dx, dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
-      var y = surfaceYE(dr.x[i], dr.z[i]) + 2.5;
+      var y = dr.y[i] + 2.5;
       pos[i * 6] = dr.x[i] + nx; pos[i * 6 + 1] = y; pos[i * 6 + 2] = dr.z[i] + nz;
       pos[i * 6 + 3] = dr.x[i] - nx; pos[i * 6 + 4] = y; pos[i * 6 + 5] = dr.z[i] - nz;
       if (i + 1 < n) { var k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
@@ -1369,9 +1391,9 @@
       var p = meTrail[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
       if (p.brk) { flush(); run = []; band = b; }
       if (b !== band) { flush(); run = run.length ? [run[run.length - 1]] : []; band = b; }
-      run.push(p.ll);
+      run.push(p);
     }
-    if (me.state === 'ok' && me.here && run.length) run.push(me.here);
+    if (me.state === 'ok' && me.here && run.length) run.push({ ll: me.here, h: me.hh });
     flush();
     scene.add(grp); meLines = grp; dirty = true;
   }
@@ -1389,7 +1411,7 @@
       d.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
       if (e.link) d.addEventListener('click', function (ev) { ev.stopPropagation(); hideTip(); openLink(e.link); });
       $('ov').appendChild(d);
-      var it = { el: d, x: p[0], z: p[1], y: groundYE(p[0], p[1]), kind: 'marker', layer: 'trailevents', name: e.name, op: evOpacity(e.age + extra), ev: e };
+      var it = { el: d, x: p[0], z: p[1], zs: e.h, y: e.h != null ? e.h * prefs.exag : groundYE(p[0], p[1]), kind: 'marker', layer: 'trailevents', name: e.name, op: evOpacity(e.age + extra), ev: e };
       domItems.push(it); meEvIts.push(it);
     });
     // the dot: class colour with a heading arrow; grey with a label where the position is not available
@@ -1403,7 +1425,8 @@
       dd.addEventListener('mouseenter', tip2); dd.addEventListener('mousemove', tip2); dd.addEventListener('mouseleave', hideTip);
       dd.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
       $('ov').appendChild(dd);
-      meDotIt = { el: dd, x: pp[0], z: pp[1], y: groundYE(pp[0], pp[1]), kind: 'me', layer: '__me', name: 'me', prev: prev, arrow: dd.querySelector('.me-arrow') };
+      var hz = grey ? me.lh : me.hh;
+      meDotIt = { el: dd, x: pp[0], z: pp[1], zs: hz, y: hz != null ? hz * prefs.exag : groundYE(pp[0], pp[1]), kind: 'me', layer: '__me', name: 'me', prev: prev, arrow: dd.querySelector('.me-arrow') };
       on.__me = true; domItems.push(meDotIt);
     }
     dirty = true;
@@ -1524,7 +1547,12 @@
         label: de && de.querySelector('.me-lab') ? de.querySelector('.me-lab').textContent : '', arrow: !!(de && de.querySelector('.me-arrow')), lines: meLines ? meLines.children.length : 0, points: meTrail.length,
         panel: !!d, notice: d && d.querySelector('.me-n') ? d.querySelector('.me-n').textContent : '', link: d && d.querySelector('.me-link') ? d.querySelector('.me-link').textContent : '',
         followBtn: !!(d && d.querySelector('.me-follow')), follow: follow, centered: !!(h && Math.abs(cam.tx - h[0]) < 3 && Math.abs(cam.tz - h[1]) < 3), off: h ? Math.round(Math.hypot(cam.tx - h[0], cam.tz - h[1])) : -1,
-        ribbonLift: (function () { if (!meLines || !meLines.children.length) return null; var a = meLines.children[meLines.children.length - 1].geometry.attributes.position.array; return Math.round((a[1] - surfaceYE(a[0], a[2])) * 10) / 10; })() });
+        ribbonLift: (function () { if (!meLines || !meLines.children.length) return null; var a = meLines.children[meLines.children.length - 1].geometry.attributes.position.array; return Math.round((a[1] - surfaceYE(a[0], a[2])) * 10) / 10; })(),
+        // the heights (2.82): the dot's height and the ground under it (exaggerated scene yards), its own solved height (yards, null = the ground), and the ribbons' highest lift over the ground
+        dotY: meDotIt ? Math.round(meDotIt.y * 10) / 10 : null, dotGround: meDotIt ? Math.round(groundYE(meDotIt.x, meDotIt.z) * 10) / 10 : null, dotZ: meDotIt && meDotIt.zs != null ? meDotIt.zs : null, exag: prefs.exag,
+        ribbonMaxLift: (function () { if (!meLines || !meLines.children.length) return null; var mx = -1e9; meLines.children.forEach(function (c) { var a = c.geometry.attributes.position.array; for (var i = 0; i + 2 < a.length; i += 3) mx = Math.max(mx, a[i + 1] - surfaceYE(a[i], a[i + 2])); }); return Math.round(mx * 10) / 10; })(),
+        evY: meEvIts.map(function (it) { return Math.round((it.y - groundYE(it.x, it.z)) * 10) / 10; }),
+        trailH: meTrail.slice(-40).map(function (p) { return p.h == null ? null : Math.round(p.h * 10) / 10; }) });
     },
     // the events on the trail (test): drawn count, row, kinds; `tip` = index -> point at it and read the tooltip; `open` = index -> click it
     ev: function (tip, open) {

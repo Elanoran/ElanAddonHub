@@ -102,6 +102,23 @@ namespace ElansAddonHub
                         stB2?.Phase == "done" && stA?.Phase == "done" && man != null && man.Valid && man.AllDone && man.BridgesDone && man.ModelsBuilt >= scan.Models.Count && !Directory.EnumerateFiles(BuildingsService.DirOf(c.MapId), "*.tmp", SearchOption.AllDirectories).Any() && bytesA > bytesB && bytesA > 2 * 1024 * 1024, stA?.Phase + " " + stA?.Error);
                 }
                 foreach (var kv in perCont) notes.Add("note real buildings: " + kv.Value);
+                // 2.82, the live dot's floors (LiveElevation): what the real buildings and terrain say under a few flight masters and in a few towns
+                {
+                    var probes = new List<(string name, int map, double x, double y, double z)>();
+                    foreach (var nm in new[] { "Orgrimmar, Durotar", "Thunder Bluff, Mulgore", "Stormwind, Elwynn", "Ironforge, Dun Morogh", "Undercity, Tirisfal" })
+                    { var nd = idx.Set.TaxiNodes.FirstOrDefault(t => t.Name == nm); if (nd != null) probes.Add((nm + " (flight master)", nd.MapId, nd.X, nd.Y, nd.Z)); }
+                    var gw = new GameElevationWorld(); var fl = new List<double>(); var lines = new List<string>(); int withFloors = 0, onFloor = 0, masters = 0;
+                    foreach (var pr in probes)
+                    {
+                        fl.Clear(); gw.Floors(pr.map, pr.x, pr.y, fl);
+                        double g = gw.Ground(pr.map, pr.x, pr.y), wq = gw.Water(pr.map, pr.x, pr.y);
+                        bool near = fl.Any(f => Math.Abs(f - pr.z) < 3); masters++; if (fl.Count > 0) withFloors++; if (near || Math.Abs(g - pr.z) < 3) onFloor++;
+                        lines.Add(pr.name + ": node z " + Math.Round(pr.z, 1) + ", ground " + Math.Round(g, 1) + (double.IsNaN(wq) ? "" : ", water " + Math.Round(wq, 1)) + ", floors [" + string.Join(", ", fl.OrderBy(f => f).Select(f => Math.Round(f, 1))) + "]");
+                    }
+                    foreach (var l in lines) notes.Add("note real floors: " + l);
+                    Check("real floors: the walkable surfaces of the real buildings and the terrain under " + masters + " capital flight masters - " + withFloors + " stand in a building with floors, and " + onFloor + " have the ground or a floor within 3 yards of the game's own height for the flight master",
+                        masters >= 4 && withFloors >= 2 && onFloor >= masters - 1, string.Join(" | ", lines));
+                }
                 // the placement transform against the game's own extents: the box of each building, turned and moved by our rule, is the box the file stores for it
                 {
                     var scanE = scanOf[0];

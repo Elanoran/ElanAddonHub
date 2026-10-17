@@ -194,6 +194,28 @@ namespace ElansAddonHub.Services
                 Read(new StripCodec.Info { Name = "Elan", HasV2 = true, RowVersion = 3, EvSeq = 9, EvKind = 1, EvId = 6 }, 39);   // a v3 row never has one
                 Check("filter: the same seq after 20 s counts again, another character's counts, unknown kinds and older rows never", got.Count == 2 && got[1].Who == "Other", got.Count + "");
             }
+            // ---- v5 (companion 1.16.1+): how you move in posFlags bits 4 / 8 / 16 (flight, indoors, swimming), with a valid position only; older Outposts mask them off
+            {
+                int x = (int)Math.Round(0.25 * 65535), y = (int)Math.Round(0.75 * 65535);
+                StripCodec.Info Dec(byte[] row, int cell = 4, int noise = 10, double tint = 1.0) => StripCodec.Decode(Render(v2p, cell, 0, 0, 300, 40, noise, tint, rnd, row), 300, 40, 1200, out _);
+                foreach (var (cell, noise, tint) in new[] { (4, 0, 1.0), (4, 14, 0.85), (3, 10, 1.0) })
+                {
+                    var t5 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 5, 3 + 4 + 8, x, y), cell, noise, tint);
+                    Check($"v5 strip: on a flight and indoors decode with the position (cell={cell} noise=+-{noise} tint={tint})", t5 != null && t5.RowVersion == 5 && t5.PosValid && t5.PosX == x && t5.PosMoveKnown && t5.OnTaxi && t5.Indoors && !t5.Swimming && t5.PosFlags == 3,
+                        t5 == null ? "null" : $"v={t5.RowVersion} f={t5.PosFlags} m={t5.PosMove}");
+                }
+                var s5 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 5, 3 + 16, x, y));
+                Check("v5 strip: swimming alone", s5 != null && s5.Swimming && !s5.OnTaxi && !s5.Indoors && s5.PosMoveKnown);
+                var inv5 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 5, 1 + 4, 0, 0));
+                Check("v5 strip: without a valid position the move bits are not trusted", inv5 != null && inv5.PosEnabled && !inv5.PosValid && inv5.PosMove == 0 && !inv5.PosMoveKnown);
+                var v4m = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 4, 3 + 4, x, y));
+                Check("v4 strip (Hub 1.16.0): whatever is in the high posFlags bits is not a move; the position reads as before (an older Outpost's view of a v5 strip)", v4m != null && v4m.PosValid && v4m.PosMove == 0 && !v4m.PosMoveKnown && v4m.PosFlags == 3 && v4m.PosX == x);
+                var a5 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 5, 3, x, y)); var b5 = Dec(StripCodec.BuildPayloadV2(1413, 0, 0, 1, 50, 0, 5, 3 + 4, x, y));
+                Check("taking off is a position change (the Outpost redraws), not a presence change", a5.V2Equals(b5) && !a5.PosEquals(b5));
+                var cm = new GamePresence.Character(); GamePresence.ApplyLive(cm, b5);
+                var co = new GamePresence.Character(); GamePresence.ApplyLive(co, v4m);
+                Check("presence: the move bits reach the character (flight from a v5 Hub; nothing known from a v4 Hub)", cm.PosMove == 4 && cm.PosMoveKnown && co.PosMove == 0 && !co.PosMoveKnown);
+            }
             // names for the ids: open-world uiMapID, dungeon instance id, unknown -> nothing
             var ch1 = new GamePresence.Character();
             GamePresence.ApplyLive(ch1, StripCodec.Decode(Render(v2p, 4, 0, 0, 300, 40, 0, 1.0, rnd, v2row), 300, 40, 1200, out _));
