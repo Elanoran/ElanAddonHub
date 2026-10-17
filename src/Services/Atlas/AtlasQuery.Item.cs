@@ -11,6 +11,22 @@ namespace ElansAddonHub.Services.Atlas
 {
     public static partial class AtlasQuery
     {
+        // the one line over "Where it comes from" (DataHonesty): the drop and vendor rows Forever players saw, or that the Classic baseline's are shown
+        static void ItemCoverage(AtlasSection src)
+        {
+            int lodge = 0, cairn = 0, classic = 0, other = 0;
+            foreach (var r in src.Rows.Concat(src.Hidden))
+            {
+                if (r.Type == "Quest" || r.Type == "Recipe") { other++; continue; }
+                if (r.Label == AtlasLabel.Cairn) cairn++;
+                else if (r.Label == AtlasLabel.Forever) lodge++;
+                else if (r.Label == AtlasLabel.Classic) classic++;
+                else other++;
+            }
+            src.Coverage = DataHonesty.ItemSourcesLine(lodge, cairn, classic, other);
+            if (!src.Open && src.Coverage.Length > 0) src.Empty = src.Empty + " " + src.Coverage;
+        }
+
         static AtlasPageModel BuildItem(int id)
         {
             var m = new AtlasPageModel { Id = AtlasIds.Item(id), Kind = "item" };
@@ -218,6 +234,7 @@ namespace ElansAddonHub.Services.Atlas
 
             // the table: Lodge-observed rows, then the client's, then the Classic baseline; tiny chances folded
             FoldTiny(src, rows, tiny);
+            ItemCoverage(src);
 
             // ---- the map: where the sources are
             AddItemMarkers(m, id, src, L, plan, byKey);
@@ -269,6 +286,7 @@ namespace ElansAddonHub.Services.Atlas
             }
 
             m.Map = plan.Build();
+            MapCoverage(m.Map);
             LayerNotes(m, !ClassicAtlas.IsReady, !LodgeHas(L), true);
             bool known = ci != null || cl != null || rev != null;
             if (!known && m.Sections.All(s => s.Key == "owned" || (s.Rows.Count == 0 && s.Hidden.Count == 0)))

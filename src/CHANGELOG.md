@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.91.0
+- **Where the Atlas's data comes from.** A short, plain explainer at the top of Data sources (and once on Atlas Home, until you press Got it): items, spells, talents, quests, maps and zones come from your own game files; drops, vendors, spawn points, nodes and flight times are learned as people play on Forever - from your own game, your Lodge and the Cairn - so that part is still growing; and where nobody has seen something on Forever yet, the Atlas falls back on the Classic baseline, which may differ.
+- **Honest pages.** A creature's loot, a vendor's prices, an item's sources and a map now say in one line what they are based on ("Seen on Forever: 340 looted kills by 3 members of your Lodge and 200 looted kills by 3 of the Cairn's Lodges"), or that nobody has seen it on Forever yet and the Classic baseline is shown instead.
+- **How much is covered.** The Creatures, Items and Objects lists say under their count how many of the listed ones have Forever data so far ("1 of these has drop data from Forever players so far").
+- You can help: share what you see with your Lodge (Settings > Lodge), and everyone's Atlas fills in faster.
+
 ## 2.89.2
 - **The Cairn is live.** The Outpost now knows the Cairn's signing key, so the shared numbers your Lodge passes on are checked to really come from the Cairn before they are used.
 

@@ -137,6 +137,7 @@ namespace ElansAddonHub.Services.Atlas
         public bool Capped;
         public bool LevelsPending;                                   // the zones' level ranges are still being worked out (ZoneLevels): the list is drawn again when they arrive
         public List<string> Notes = new List<string>();
+        public string Coverage = "";                                 // creatures / items / objects: how many of the listed ones Forever players have seen so far (DataHonesty)
         public BrowseControls Controls = new BrowseControls();
         public string Sort = "name";                                 // the sort in use
         public string CountText => Capped ? AtlasFormat.Count(Total, Noun, Noun + "s") + ", the first " + Rows.Count.ToString("N0", CalendarRules.English) + " shown" : AtlasFormat.Count(Total, Noun, Plural(Noun));
@@ -254,6 +255,7 @@ namespace ElansAddonHub.Services.Atlas
             r.Sort = string.IsNullOrEmpty(q.Sort) || !r.Controls.Sorts.Any(s => s.Value == q.Sort) ? r.Controls.DefaultSort : q.Sort;
             hits = Sort(hits, r.Sort, ix);
             r.Total = hits.Count;
+            r.Coverage = DataHonesty.BrowseLine(ix.Cat, hits.Count(e => e.Forever), hits.Count);     // how much of this list Forever players have seen (DataHonesty)
             if (hits.Count > MaxRows) { r.Capped = true; hits = hits.Take(MaxRows).ToList(); }
             foreach (var e in hits) r.Rows.Add(RowOf(e, q, ix));
             r.Subtitle = r.CountText + (node != ix.Root && path.Count > 0 ? "" : "");

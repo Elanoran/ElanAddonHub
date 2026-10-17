@@ -588,6 +588,15 @@ is not part of this repository.
   `AtlasPage.SharingInvite.cs` draws): the answer is remembered per offer (`settings.SharingInviteAnswered`: "atlas" < "atlas+cairn") and the
   card comes back only when the Lodge offers more; never for guests or without a Lodge. Where the Cairn's rows would be, a non-sharing member
   gets one note per page (`AtlasQuery.CairnShareNote`) with a Turn on sharing link to Settings > Lodge.
+- **Where the data comes from** (2.91, `Services/Atlas/DataHonesty.cs`, `AtlasPage.DataHonesty.cs`): every text that says where Atlas data comes from is
+  defined once in `DataHonesty` (three kinds: your game files / seen on Forever - own game, Lodge pool, Cairn - / the Classic baseline as a fallback).
+  Data sources opens with the explainer; Atlas Home shows it as a card until "Got it" (`settings.AtlasSourcesCardDismissed`). The models carry one
+  line: `AtlasSection.Coverage` (loot tables: `LootSection` from the Lodge counter's unique kills and members and the Cairn source's N / M;
+  a vendor's Sells; an item's sources by row label, quests and recipes not counted) and `AtlasMapPlan.Coverage` (`MapCoverage`: markers whose
+  tip says Forever or Cairn vs the rest and the instance-only places). No Forever data = "Not seen on Forever yet - showing the Classic baseline"
+  (or "Nobody has seen ..." when there is nothing at all, as the empty section's line). Browse: `BEntry.Forever` (creatures: Lodge or Cairn loot of
+  kill / skinning / pickpocketing; items: a Lodge or Cairn drop or vendor; objects: loot or Forever nodes) counted over the filtered list into
+  `BrowseResult.Coverage`; the index token includes the Cairn's set, so the counts follow it. Self-test section `datahonesty`.
 - **Guard**: the public repo must never name the maintainers' own hosting: `Services/InfraGuard.cs` scans the tracked files in every self-test run.
 
 ### Release and update trust (decided 2026-10-15)

@@ -41,6 +41,9 @@ namespace ElansAddonHub
             if (Session != null) Session.CairnStatusChanged += () => Dispatcher.BeginInvoke(new Action(OnCairnStatus));
             CairnAtlas.Start(CairnWanted, CairnReachable);
             InitSharingInvite();           // 2.87: the calm sharing card, the quiet line on item / creature pages
+            // 2.91: "Where this comes from" on Atlas Home, dismissed once and remembered (it stays on the Data sources page)
+            AtlasView.SourcesCardDismissed = () => settings.AtlasSourcesCardDismissed;
+            AtlasView.DismissSourcesCard = () => { settings.AtlasSourcesCardDismissed = true; SettingsStore.Save(settings); };
             InitAtlasHome();
             // "Who in the Lodge can craft this?" (Armory, server 2.19): cached answers; an answer that arrives redraws the recipe / item page and the Professions rows
             AtlasQuery.Context.Crafters = spells => Session?.CraftersFor(spells);

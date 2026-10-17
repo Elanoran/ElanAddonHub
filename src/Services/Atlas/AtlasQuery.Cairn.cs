@@ -93,8 +93,10 @@ namespace ElansAddonHub.Services.Atlas
         }
 
         // creature / object / container loot tables: the Cairn's items of that source
-        static void AddCairnLoot(AtlasPageModel m, AtlasSection s, string lodgeKind, int id, List<AtlasRow> rows, List<AtlasRow> tiny, Dictionary<int, AtlasRow> by)
+        // looted / lodges: what the Cairn's rows are based on (the section's coverage line says it, DataHonesty)
+        static void AddCairnLoot(AtlasPageModel m, AtlasSection s, string lodgeKind, int id, List<AtlasRow> rows, List<AtlasRow> tiny, Dictionary<int, AtlasRow> by, out long looted, out int lodges)
         {
+            looted = 0; lodges = 0;
             var c = CairnAtlas.Current;
             var kind = CairnKindOf(lodgeKind);
             var src = kind != null ? c?.Loot(kind, id) : null;
@@ -108,8 +110,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (!AtlasObs.LowSample(d.Kills) && d.Chance < TinyChance) tiny.Add(r); else rows.Add(r);
                 by[d.Item] = r;
             }
-            var line = "The Cairn (merged from " + Lodges(c.Lodges) + "): " + AtlasFormat.Count(src.N, "looted " + what, "looted " + what + "s") + " from " + Lodges(src.M) + ".";
-            s.Note = s.Note.Length == 0 ? line : s.Note + " " + line;
+            looted = Math.Max(1, src.N); lodges = Math.Max(1, src.M);
             AddLayer(m, "cairn");
         }
     }

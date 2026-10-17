@@ -73,6 +73,7 @@ namespace ElansAddonHub.Services.Atlas
             var rows = new List<AtlasRow>(); var tiny = new List<AtlasRow>(); var by = new Dictionary<int, AtlasRow>();
             var counter = lodgeKind != null ? L?.Loot(lodgeKind, id) : null;
             string what = LootWord(lodgeKind);
+            long lodgeN = 0; int lodgeM = 0; bool classicRows = false;
             if (counter != null && counter.N > 0)
             {
                 foreach (var kv in counter.Items)
@@ -83,12 +84,13 @@ namespace ElansAddonHub.Services.Atlas
                     rows.Add(r); by[kv.Key] = r;
                 }
                 long unique = AtlasObs.UniqueKills(counter), dup = counter.X?.Dup ?? 0;
-                s.Note = AtlasFormat.Count(unique, "looted " + what, "looted " + what + "s") + " seen by " + AtlasFormat.Count(Math.Max(1, counter.Members), "member", "members") + " of the Lodge"
-                    + (dup > 0 ? " (" + AtlasFormat.Count(dup, "corpse", "corpses") + " that several members looted counted once)" : "") + "."
-                    + (AtlasObs.LowSample(unique) ? " Fewer than " + AtlasObs.LowSampleKills + " so far: these are counts, not drop rates yet." : "");
+                lodgeN = unique; lodgeM = Math.Max(1, counter.Members);
+                // what the rows are based on is the section's coverage line (DataHonesty); the note keeps the fine print
+                s.Note = ((dup > 0 ? AtlasFormat.Count(dup, "corpse", "corpses") + " that several members looted counted once." : "")
+                    + (AtlasObs.LowSample(unique) ? " Fewer than " + AtlasObs.LowSampleKills + " so far: these are counts, not drop rates yet." : "")).Trim();
                 AddLayer(m, "lodge");
             }
-            AddCairnLoot(m, s, lodgeKind, id, rows, tiny, by);   // the Cairn's numbers (tier 1) between the Lodge's and the Classic baseline's
+            AddCairnLoot(m, s, lodgeKind, id, rows, tiny, by, out var cairnN, out var cairnM);   // the Cairn's numbers (tier 1) between the Lodge's and the Classic baseline's
             AddCairnShareNote(m);                              // a member who does not share: one quiet line instead
             var dv = ck != null ? AtlasDerived.For(ClassicAtlas.Current) : null;
             if (dv != null)
@@ -101,13 +103,15 @@ namespace ElansAddonHub.Services.Atlas
                     var r = ItemRow(e.ItemId, txt, AtlasLabel.Classic);
                     r.Type = "Drop"; r.Tier = 2; r.Sort = src.Chance;
                     if (src.Chance < TinyChance) tiny.Add(r); else rows.Add(r);
+                    classicRows = true;
                 }
-                if (s.Note.Length == 0) s.Note = "From the Classic baseline's loot table.";
-                else s.Note += " Classic baseline figures ride along on the same row.";
+                if (lodgeN > 0 || cairnN > 0) s.Note = (s.Note + " Classic baseline figures ride along on the same row.").Trim();
                 AddLayer(m, "classic");
             }
+            s.Coverage = DataHonesty.LootLine(lodgeN, lodgeM, cairnN, cairnM, what, classicRows);
             FoldTiny(s, rows, tiny, 8);
             if (s.Hidden.Count > 0) s.HiddenText = s.HiddenText.Replace("world-drop sources", "drops").Replace("world-drop source", "drop");
+            if (!s.Open && s.Empty.Length > 0) s.Empty = s.Coverage;          // nothing at all: the one line is the honest one
         }
 
         static void VendorSection(AtlasPageModel m, int npcId)
@@ -128,7 +132,7 @@ namespace ElansAddonHub.Services.Atlas
                     r.Type = "Vendor"; r.Tier = 0; r.Sort = 0;
                     rows.Add(r); by[kv.Key] = r;
                 }
-                s.Note = "Prices were seen in a Lodge member's game " + AtlasFormat.Ago(lv.At, Context.NowUtc()) + ".";
+                s.Coverage = DataHonesty.VendorLine(true, AtlasFormat.Ago(lv.At, Context.NowUtc()), false);
                 AddLayer(m, "lodge");
             }
             foreach (var v in cv)
@@ -139,7 +143,7 @@ namespace ElansAddonHub.Services.Atlas
                 r.Type = "Vendor"; r.Tier = 2;
                 rows.Add(r);
             }
-            if (cv.Count > 0) { AddLayer(m, "classic"); if (s.Note.Length == 0) s.Note = "Prices are not in the Classic baseline."; }
+            if (cv.Count > 0) { AddLayer(m, "classic"); if (lv == null) { s.Coverage = DataHonesty.VendorLine(false, "", true); s.Note = "Prices are not in the Classic baseline."; } }
             SortRows(rows);
             s.Rows.AddRange(rows);
         }
@@ -213,6 +217,7 @@ namespace ElansAddonHub.Services.Atlas
             if (cn != null) plan.Classic(classicSpawns, vendor ? MarkerKind.Vendor : MarkerKind.Spawn, m.Title, tip + C, "npc:" + id);
             NoteFacts(m, id, L, plan);                                  // hunter field notes: Seen by Lodge hunters / by you, abilities taught, places seen
             m.Map = plan.Build();
+            MapCoverage(m.Map);
             AddFoundIn(m, cn?.Spawns, spots);
             NpcSpotSection(m, seenAt, classicDropped);
 
@@ -323,6 +328,7 @@ namespace ElansAddonHub.Services.Atlas
             if (co != null) plan.Classic(co.Spawns, MarkerKind.Node, m.Title, kind + " · " + C, "obj:" + id);
             AddObjectNodes(plan, id, m.Title);                         // Forever nodes (players looted here) above the Classic baseline's positions
             m.Map = plan.Build();
+            MapCoverage(m.Map);
             AddFoundIn(m, co?.Spawns, null);
             LootSection(m, "loot", "Loot", "obj", id, ClassicSourceKind.ObjectLoot, "No loot is known for this object.");
             SeenGoalQuests(m, 2, id, null);

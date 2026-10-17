@@ -150,6 +150,7 @@ namespace ElansAddonHub.Services.Atlas
     public sealed class AtlasSection
     {
         public string Key, Title, Note = "", Empty = "";
+        public string Coverage = "";                            // one line: what the Forever rows are based on, or that Forever has not seen it yet (DataHonesty)
         public List<AtlasRow> Rows = new List<AtlasRow>();
         public List<AtlasRow> Hidden = new List<AtlasRow>();   // folded rows
         public string HiddenText = "";                          // the line that stands for them
@@ -183,6 +184,7 @@ namespace ElansAddonHub.Services.Atlas
         public int Unplaced;                    // spawn points no map shows (inside an instance with no picture, outside every zone)
         public List<KeyValuePair<int, int>> InInstances = new List<KeyValuePair<int, int>>();   // instance id -> spawn points inside it
         public string Note = "";
+        public string Coverage = "";            // one line: the places seen on Forever, or that the Classic baseline's are shown (DataHonesty)
         public bool Any => Zones.Count > 0 || InstanceId > 0 || ShowZone > 0;
         public int MarkerCount => Zones.Sum(z => z.Markers.Count);
         public AtlasMapZone Best => Zones.OrderByDescending(z => z.Forever).ThenByDescending(z => z.Markers.Count).FirstOrDefault();
