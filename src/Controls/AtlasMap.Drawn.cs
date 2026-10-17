@@ -73,6 +73,7 @@ namespace ElansAddonHub
             }
             lookGame.Checked += (s, e) => SetLook(LookGame);
             lookPlan.Checked += (s, e) => SetLook(LookPlan);
+            BuildMobParts();
         }
 
         void SetLook(string look)
@@ -84,7 +85,7 @@ namespace ElansAddonHub
 
         void ReloadDrawnFloor() { var keep = userMoved; var z = (scale, ox, oy); SelectDrawnFloor(drawnFloor, () => { if (keep) { scale = z.scale; ox = z.ox; oy = z.oy; userMoved = true; Reclamp(); } }); }
 
-        void LeaveDrawn() { drawnMap = 0; drawnInst = null; plan = null; drawnFloor = -1; caption.Visibility = Visibility.Collapsed; lookHost.Visibility = Visibility.Collapsed; LookShownNowForTest = ""; }
+        void LeaveDrawn() { drawnMap = 0; drawnInst = null; plan = null; drawnFloor = -1; caption.Visibility = Visibility.Collapsed; lookHost.Visibility = Visibility.Collapsed; LookShownNowForTest = ""; LeaveMobs(); }
 
         void ShowDrawn(InstanceInfo inst)
         {
@@ -212,6 +213,7 @@ namespace ElansAddonHub
                     caption.Visibility = Visibility.Visible;
                     LookShownNowForTest = f.IsPicture ? "" : game ? LookGame : LookPlan;
                     after?.Invoke();
+                    ShowMobs();
                     DrawnFloorChanged?.Invoke(i);
                 }));
             });

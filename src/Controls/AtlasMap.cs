@@ -544,7 +544,7 @@ namespace ElansAddonHub
             }
         }
 
-        static double RadiusOf(MarkerCluster c) => c.Single ? 6 : (c.Count >= 100 ? 14 : c.Count >= 10 ? 12 : 10);
+        static double RadiusOf(MarkerCluster c) => c.Single ? (c.Members[0].Layer == MobLayer ? MobRadius(c.Members[0]) : 6) : (c.Count >= 100 ? 14 : c.Count >= 10 ? 12 : 10);
 
         public MarkerCluster HitTestMarker(Point p)
         {
@@ -643,6 +643,9 @@ namespace ElansAddonHub
                 case MarkerKind.Vendor: return "Vendor";
                 case MarkerKind.Node: return "Node";
                 case MarkerKind.Entrance: return "Entrance";
+                case MarkerKind.Boss: return "Boss";
+                case MarkerKind.Pull: return "Pull";
+                case MarkerKind.Rare: return "Rare";
                 default: return "Quest";
             }
         }
@@ -657,6 +660,9 @@ namespace ElansAddonHub
                 case MarkerKind.Vendor: key = "Brush.Info"; break;
                 case MarkerKind.Node: key = "Brush.Cal.Holiday.3"; break;
                 case MarkerKind.Entrance: key = "Brush.Accent"; break;
+                case MarkerKind.Boss: key = "Brush.Danger"; break;
+                case MarkerKind.Pull: key = "Brush.Info"; break;
+                case MarkerKind.Rare: key = "Brush.Badge.Gold"; break;
                 default: key = "Brush.Cal.Holiday.4"; break;
             }
             return Res<Brush>(key) ?? Brushes.White;
@@ -736,6 +742,7 @@ namespace ElansAddonHub
                 var rect = new Rect(o.ox, o.oy, o.pw * o.scale, o.ph * o.scale);
                 RenderOptions.SetBitmapScalingMode(this, o.scale < 1 ? BitmapScalingMode.HighQuality : BitmapScalingMode.Linear);
                 dc.DrawImage(o.picture, rect);
+                o.DrawMobsUnder(dc, VisualTreeHelper.GetDpi(this).PixelsPerDip);
                 DrawRouteLine(dc);
                 if (o.markers.Count == 0) { DrawRouteStops(dc); return; }
 
@@ -753,7 +760,8 @@ namespace ElansAddonHub
                     var ctr = new Point(c.X, c.Y);
                     double r = RadiusOf(c);
                     if (c == o.hover) dc.DrawEllipse(null, ring, ctr, r + 4, r + 4);
-                    if (c.Single)
+                    if (c.Single && c.Members[0].Layer == MobLayer) DrawMobGlyph(dc, c.Members[0], ctr, r, haloPen, face, dpi);
+                    else if (c.Single)
                     {
                         var fill = KindBrush(c.Kind);
                         DrawGlyph(dc, c.Kind, ctr, r, fill, haloPen, onKind);

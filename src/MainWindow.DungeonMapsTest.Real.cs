@@ -155,6 +155,82 @@ namespace ElansAddonHub
                         at.Coverage > 0.9 && off.Coverage < at.Coverage - 0.05 && off2.Coverage < at.Coverage - 0.05 && at.MissingBlocks == 0, at.Coverage + " " + off.Coverage + " " + off2.Coverage + " missing " + at.MissingBlocks);
                 }
 
+                // ---- the creatures on the map (the Classic baseline the player downloaded: read-only; skipped when it is not on this PC)
+                {
+                    var cdir = Environment.GetEnvironmentVariable("ELANSHUB_CLASSICDB");      // as atlasdatareal: the player's own download, read only
+                    if (string.IsNullOrEmpty(cdir)) cdir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ElansAddonHub", "atlas", "classic");
+                    var dump = Directory.Exists(cdir) ? Directory.GetFiles(cdir, "ClassicDB_*.sql.gz").OrderBy(x => x, StringComparer.Ordinal).LastOrDefault() : null;
+                    if (dump == null) notes.Add("skip real creatures: no Classic baseline on this PC");
+                    else
+                    {
+                        var msw = System.Diagnostics.Stopwatch.StartNew();
+                        var mobs = DungeonMobData.Read(dump, Services.Atlas.Classic.ClassicPaths.UpdatesDir(cdir), "real", System.Threading.CancellationToken.None);
+                        long readMs = msw.ElapsedMilliseconds;
+                        var mobFile = Path.Combine(rw, "mobs.bin"); mobs.Save(mobFile);
+                        Check("real creatures: the baseline's instance tables read (" + mobs.SpawnsByMap.Sum(k => k.Value.Count) + " spawns on " + mobs.SpawnsByMap.Count + " maps, " + mobs.Encounters.Count + " encounters, " + mobs.Entrances.Count + " entrances, " + mobs.Spells.Count + " spells) in " + readMs + " ms; saved " + new FileInfo(mobFile).Length / 1024 + " KB",
+                            mobs.SpawnsByMap.Sum(k => k.Value.Count) > 5000 && mobs.SpawnsByMap.Count >= 25 && mobs.Encounters.Count >= 300 && mobs.Entrances.Count >= 30 && DungeonMobData.Load(mobFile)?.Templates.Count == mobs.Templates.Count);
+                        var wc = await Draw(43);
+                        bool OnGrid(DungeonMobLayer l, DungeonPlan p) { var nv = p.Nav(); return nv != null && l.Route.All(pt => nv.Nearest(pt.X, pt.Y, pt.Z, 1.5, 1) >= 0); }
+                        string Bosses(DungeonMobLayer l) => string.Join(", ", l.Bosses.Select(b => b.Order + ". " + b.Name + " (" + FloorNameOf(l, b) + ")"));
+                        string FloorNameOf(DungeonMobLayer l, MobPack b) => b.Floor.ToString(CultureInfo.InvariantCulture);
+                        msw.Restart();
+                        var dml = dm == null ? null : DungeonMobLayers.Build(36, dm, mobs, DungeonMobLayers.FriendlyToAll);
+                        long dmMs = msw.ElapsedMilliseconds;
+                        var dmNames = new[] { "Rhahk'Zor", "Gilnid", "Mr. Smite", "Cookie", "Captain Greenskin", "Edwin VanCleef" };
+                        Check("real creatures, the Deadmines: " + (dml?.Packs.Count ?? 0) + " pulls (" + (dml?.Packs.Count(p => p.Patrol) ?? 0) + " patrols) from " + (dml?.Spawns ?? 0) + " spawns; the six bosses with a spawn, in the route's order: " + (dml == null ? "" : Bosses(dml)) + "; Sneed comes with his shredder (not placed)",
+                            dml != null && dmNames.All(n => dml.Bosses.Any(b => string.Equals(b.Name, n, StringComparison.OrdinalIgnoreCase))) && dml.BossesWithoutPlace.Contains("Sneed") && dml.Packs.Count > 80);
+                        Check("real creatures, the Deadmines: the route walks from the entrance past every boss (" + (dml?.RouteYards ?? 0) + " yards, " + dmMs + " ms), every point on the walkable grid" + (dml != null && dml.Route.Any(x => x.Passage) ? ", " + dml.Route.Count(x => x.Passage) + " passages the plan has no floor for" : ""),
+                            dml != null && dml.Unreached.Count == 0 && dml.Route.Count > 10 && dml.RouteYards > 500 && OnGrid(dml, dm), dml?.RouteNote);
+                        int vf = -1;
+                        var van = dml?.Bosses.FirstOrDefault(b => b.Name == "Edwin VanCleef");
+                        Check("real creatures, the Deadmines: Edwin VanCleef is on the floor whose plan shows ground where he stands", van != null && Ground(dm, van.X, van.Y, van.Z, out vf) && vf == van.Floor, van?.Floor + " / " + vf);
+                        var allW = dml == null ? new List<string>() : dml.Packs.SelectMany(p => p.Warnings.Select(w => w.Text)).Distinct().ToList();
+                        Check("real creatures, the Deadmines: warnings from the data (the miners run for help, VanCleef calls his allies, the Blackguards are stealthed)", allW.Any(w => w.Contains("Runs for help")) && allW.Any(w => w.Contains("VanCleef") && w.Contains("Summons")) && allW.Any(w => w.Contains("Stealthed")), string.Join(" | ", allW.Take(12)));
+                        msw.Restart();
+                        var wcl = wc == null ? null : DungeonMobLayers.Build(43, wc, mobs, DungeonMobLayers.FriendlyToAll);
+                        long wcMs = msw.ElapsedMilliseconds;
+                        var wcW = wcl == null ? new List<string>() : wcl.Packs.SelectMany(p => p.Warnings.Select(w => w.Text)).Distinct().ToList();
+                        Check("real creatures, Wailing Caverns: " + (wcl?.Packs.Count ?? 0) + " pulls, bosses " + (wcl == null ? "" : Bosses(wcl)) + "; the route reaches every placed boss (" + (wcl?.RouteYards ?? 0) + " yards, " + wcMs + " ms), on the grid",
+                            wcl != null && wcl.Bosses.Count >= 5 && wcl.Unreached.Count == 0 && wcl.Route.Count > 10 && OnGrid(wcl, wc), wcl?.RouteNote);
+                        Check("real creatures, Wailing Caverns: the Deviate Dreadfang fears (Terrify); the druids' Serpent Form (it only changes the caster) is not called a silence", wcW.Any(w => w.Contains("Fears: Terrify")) && !wcW.Any(w => w.Contains("Silences: Serpent Form")), string.Join(" | ", wcW.Take(12)));
+                        notes.Add("note real creatures: Deadmines " + (dml == null ? "none" : dml.Packs.Count + " pulls, route " + dml.RouteYards + " yd, " + dmMs + " ms, plan " + WorldMapCacheSize(dm.Bytes)) + "; Wailing Caverns " + (wcl == null ? "none" : wcl.Packs.Count + " pulls, route " + wcl.RouteYards + " yd, " + wcMs + " ms, plan " + WorldMapCacheSize(wc.Bytes)) + (wcl?.RouteNote.Length > 0 ? " (" + wcl.RouteNote + ")" : ""));
+                        // the map card with the real creatures (pictures only)
+                        if (SelfTestClock.ShotsOn || !string.IsNullOrEmpty(shotEnv))
+                        {
+                            var savedData = DungeonMobs.DataForTest; var savedFriendly = DungeonMobs.FriendlyForTest;
+                            DungeonMobs.DataForTest = () => mobs; DungeonMobs.FriendlyForTest = null; DungeonMobs.ResetForTest();
+                            try
+                            {
+                                var map = new AtlasMap();
+                                var host = new System.Windows.Controls.Border { Width = 1192, Height = 832, Padding = new System.Windows.Thickness(16) };
+                                host.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "Brush.Surface1");
+                                host.Child = map;
+                                var win = new System.Windows.Window { Width = 1200, Height = 860, WindowStyle = System.Windows.WindowStyle.None, ShowInTaskbar = false, ShowActivated = false, Left = -4000, Top = -4000, Content = host, ResizeMode = System.Windows.ResizeMode.NoResize };
+                                win.Show();
+                                try
+                                {
+                                    foreach (var inst in new[] { Tuple.Create(36, dm), Tuple.Create(43, wc) })
+                                    {
+                                        if (inst.Item2 == null) continue;
+                                        map.ShowInstance(inst.Item1);
+                                        for (int fi = 0; fi < inst.Item2.Floors.Count; fi++)
+                                        {
+                                            if (fi > 0) map.SelectFloorForTest(fi);
+                                            int want = fi;
+                                            await WaitFor(() => map.State == AtlasMap.ViewState.Ready && map.DrawnFloor == want && map.MobLayerForTest != null, 60000);
+                                            await System.Threading.Tasks.Task.Delay(200);
+                                            RenderHost(host);
+                                            SnapshotSheet(host, Path.Combine(shots, "dungeonmap-mobs-" + new string(inst.Item2.Name.Where(char.IsLetterOrDigit).ToArray()) + "-" + (fi + 1) + ".png"));
+                                        }
+                                    }
+                                }
+                                finally { win.Close(); }
+                            }
+                            finally { DungeonMobs.DataForTest = savedData; DungeonMobs.FriendlyForTest = savedFriendly; DungeonMobs.ResetForTest(); }
+                        }
+                    }
+                }
+
                 DungeonPlans.ResetForTest();
                 await DungeonPlans.Request(36);
                 Check("real: the second look comes from the data folder", DungeonPlans.StateOf(36)?.Phase == "done" && DungeonPlans.BuildCountForTest == 0);

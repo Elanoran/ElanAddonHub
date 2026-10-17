@@ -41,6 +41,7 @@ namespace ElansAddonHub
                 DmEntranceChecks(Check);
                 await DmServiceChecks(work, Check, notes, dir);
                 await DmMinimapChecks(work, Check, notes, dir);
+                await DmMobChecks(work, Check, notes, dir);
             }
             catch (Exception e) { Check("dungeonmaps test crashed", false, e.ToString()); }
             finally

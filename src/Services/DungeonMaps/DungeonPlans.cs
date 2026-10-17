@@ -48,13 +48,16 @@ namespace ElansAddonHub.Services.DungeonMaps
 
     public sealed class DungeonPlan
     {
-        public const int Format = 2;           // 2: the game's minimap pictures per drawn floor
+        public const int Format = 3;           // 2: the game's minimap pictures per drawn floor; 3: where a character can walk (nav.bin, DungeonNav)
         public int MapId;
         public string Name = "", Build = "", Source = "", TerrainRule = "";
         public int Buildings, Groups, Tiles, Islands;
         public long Ms, Bytes;
         public List<DungeonPlanFloor> Floors = new List<DungeonPlanFloor>();
         public string Dir;
+        public string NavFile = "";            // the walkable grid of the drawn floors ("" = none: a map of the game's own pictures only)
+        DungeonNav nav; bool navRead;
+        public DungeonNav Nav() { if (!navRead) { navRead = true; nav = NavFile.Length > 0 ? DungeonNav.Load(Path.Combine(Dir ?? "", NavFile)) : null; } return nav; }
 
         // a world position (x north, y west) as fractions of a floor's picture (0..1 from the left / top); outside the picture is < 0 or > 1
         public System.Windows.Point WorldToFraction(int floor, double x, double y) => Floors[floor].WorldToFraction(x, y);
@@ -132,7 +135,7 @@ namespace ElansAddonHub.Services.DungeonMaps
             return Json.Write(new Dictionary<string, object>
             {
                 ["format"] = Format, ["mapId"] = MapId, ["name"] = Name, ["build"] = Build, ["source"] = Source, ["terrainRule"] = TerrainRule,
-                ["buildings"] = Buildings, ["groups"] = Groups, ["tiles"] = Tiles, ["islands"] = Islands, ["ms"] = Ms, ["bytes"] = Bytes,
+                ["buildings"] = Buildings, ["groups"] = Groups, ["tiles"] = Tiles, ["islands"] = Islands, ["ms"] = Ms, ["bytes"] = Bytes, ["nav"] = NavFile,
                 ["floors"] = Floors.Select(f => (object)new Dictionary<string, object>
                 {
                     ["name"] = f.Name, ["file"] = f.File, ["kind"] = f.Kind, ["minZ"] = f.MinZ, ["maxZ"] = f.MaxZ, ["meanZ"] = f.MeanZ, ["area"] = f.Area, ["triangles"] = f.Triangles, ["game"] = f.GameFile, ["gameCoverage"] = f.GameCoverage,
@@ -154,7 +157,9 @@ namespace ElansAddonHub.Services.DungeonMaps
                 {
                     MapId = o.Int("mapId"), Name = o.Str("name") ?? "", Build = o.Str("build") ?? "", Source = o.Str("source") ?? "", TerrainRule = o.Str("terrainRule") ?? "",
                     Buildings = o.Int("buildings"), Groups = o.Int("groups"), Tiles = o.Int("tiles"), Islands = o.Int("islands"), Ms = o.Long("ms"), Bytes = o.Long("bytes"), Dir = dir,
+                    NavFile = o.Str("nav") ?? "",
                 };
+                if (p.NavFile.Length > 0 && (p.NavFile.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || !File.Exists(Path.Combine(dir, p.NavFile)))) return null;
                 foreach (var fo in o.List("floors").OfType<Dictionary<string, object>>())
                 {
                     var f = new DungeonPlanFloor
@@ -399,7 +404,7 @@ namespace ElansAddonHub.Services.DungeonMaps
                 // the minimap shows the grounds; the interiors are drawn when they are a real part of the instance
                 var inside = geo.Units.Where(u => u.Kind == PlanUnitKind.Building && u.Interior).ToList();
                 double all = geo.Units.Where(u => u.Kind == PlanUnitKind.Building).Sum(u => u.Area), inArea = inside.Sum(u => u.Area);
-                var sub = new PlanGeometry { Units = inside, Buildings = geo.Buildings, Groups = geo.Groups, Tiles = geo.Tiles, TerrainUsed = true, TerrainRule = geo.TerrainRule, Places = geo.Places, Roots = geo.Roots };
+                var sub = new PlanGeometry { Units = inside, Buildings = geo.Buildings, Groups = geo.Groups, Tiles = geo.Tiles, TerrainUsed = true, TerrainRule = geo.TerrainRule, Places = geo.Places, Roots = geo.Roots, Walls = geo.Walls };
                 plan = inside.Count > 0 && inArea >= all * InteriorShare && inArea >= InteriorArea ? Make(mapId, name, sub, dir, outside, mini, Tex) : Make(mapId, name, null, dir, outside);
                 plan.Source = plan.Floors.Count > 1 ? "minimap and buildings" : "minimap";
             }
@@ -536,6 +541,15 @@ namespace ElansAddonHub.Services.DungeonMaps
                             }
                         }
                         plan.Floors.Add(pf);
+                    }
+                    // where a character can walk on the drawn floors (the suggested route of the mob layer)
+                    int off = first != null ? 1 : 0;
+                    var nav = DungeonNav.Build(floors.Select((f, i) => new KeyValuePair<int, IList<PlanUnit>>(i + off, f.Units)).ToList(), geo.Walls);
+                    if (nav.Count > 0)
+                    {
+                        plan.NavFile = "nav.bin";
+                        nav.Save(Path.Combine(dir, plan.NavFile));
+                        bytes += new FileInfo(Path.Combine(dir, plan.NavFile)).Length;
                     }
                 }
             }

@@ -60,6 +60,7 @@ namespace ElansAddonHub.Services.DungeonMaps
         public bool TerrainUsed;
         public int Islands; public double IslandArea;        // walkable islands left out by DungeonFloors.Reachable (rooftops, ledges)
         public string TerrainRule = "";          // why the terrain was or was not drawn (a note for the self-test and the log)
+        public List<float> Walls = new List<float>();   // the buildings' walls in world axes, 9 floats per triangle (DungeonNav keeps routes off them)
         public string Problem;
         public bool Ok => Problem == null && Units.Count > 0;
         public double Area => Units.Sum(u => u.Area);
@@ -71,6 +72,7 @@ namespace ElansAddonHub.Services.DungeonMaps
         public uint Flags;                       // MOGP flags
         public float[] Pos = new float[0];       // 3 per vertex (model axes: x, y, z up)
         public List<int> Tris = new List<int>(); // walkable triangles, 3 vertex indices each, wound so the normal faces up
+        public List<int> Walls = new List<int>(); // the other triangles a character collides with (walls, pillars, steep rock): what a route must go around
         public int Triangles, Collidable;        // all the group's triangles, those a character collides with
         public int UnderLiquid;                  // walkable-looking triangles left out because they lie deep under the group's liquid
         public string Problem;
@@ -129,6 +131,7 @@ namespace ElansAddonHub.Services.DungeonMaps
                 Normal(g.Pos, a, b, c, out var nx, out var ny, out var nz, out var len);
                 if (len < 1e-6) continue;
                 nx /= len; ny /= len; nz /= len;
+                if (Math.Abs(nz) < MinUpNormal) { g.Walls.Add(a); g.Walls.Add(b); g.Walls.Add(c); continue; }
                 if (normals)
                 {
                     // the side the artist's vertex normals point to is the front
@@ -282,6 +285,13 @@ namespace ElansAddonHub.Services.DungeonMaps
                         u.Add(wx[a], wy[a], wz[a], wx[b], wy[b], wz[b], wx[c], wy[c], wz[c]);
                     }
                     if (u.TriCount > 0) buildingUnits.Add(u);
+                    for (int k = 0; k + 2 < g.Walls.Count; k += 3)
+                        for (int j = 0; j < 3; j++)
+                        {
+                            int v = g.Walls[k + j];
+                            ToWorld(p, g.Pos[v * 3], g.Pos[v * 3 + 1], g.Pos[v * 3 + 2], out var ax, out var ay, out var az);
+                            geo.Walls.Add((float)ax); geo.Walls.Add((float)ay); geo.Walls.Add((float)az);
+                        }
                 }
             }
 
