@@ -34,6 +34,9 @@ namespace ElansAddonHub
             AtlasQuery.Context.OwnFieldNotes = () => AtlasObs.Read(settings.WowRoot)?.FieldNotes;   // Hunter Helper's field notes on this PC
             AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
             AtlasView.LodgeState = LodgeAtlasState;
+            // the Cairn's open dataset (Settings > Privacy, on by default: no personal data, download only): the copy on disk now, the Cairn later
+            CairnAtlas.Changed += () => Dispatcher.BeginInvoke(new Action(() => AtlasView.PoolChanged()));
+            CairnAtlas.Start(() => !settings.CairnOff);
             InitAtlasHome();
             // "Who in the Lodge can craft this?" (Armory, server 2.19): cached answers; an answer that arrives redraws the recipe / item page and the Professions rows
             AtlasQuery.Context.Crafters = spells => Session?.CraftersFor(spells);

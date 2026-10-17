@@ -275,6 +275,14 @@ The Outpost side (same release train): manifest folders, ids and game versions m
 - Per member, the stored note only grows, so a resend or an old upload can never count twice. The merge is rebuilt from the members' notes, so a revert / leave (2.22) removes a member's part exactly (`PurgeResult.FieldNotes`).
 - Privacy: the merge shows how many members saw a beast; members and up also get up to five Lodge display names (never the login when a display name is set, never a character name); guests get the counts, levels and positions, no names, and a time rounded down to the UTC day.
 
+## Contribute to the Cairn (opt-in, feature `cairn`)
+
+- Off by default. On only with `LODGE_CAIRN_ENABLED=1`, an https URL (plain http only to this machine; no user, query or fragment in it) and a key that looks like a Cairn key; otherwise it stays off and the log says why (the host only, never the key).
+- What leaves the server is built from the Atlas pool's guest view and an allow-list of fields (`CairnRules.Records`): ids, counts, prices and map fractions. No names (member, character, display or login), no finds, notes, quests, seen tables or revealed items, no member counts; flight legs keyed by a node name are dropped (game text).
+- The key travels only in the `Authorization` header over https, is never logged (tests check the log lines and `data/cairn-sent.json`), and can be kept in a separate file (`LODGE_CAIRN_KEY_FILE`).
+- Members are told: the welcome lists `cairn` while the server contributes, and the Outpost shows it in Settings > Privacy. Members who switched Atlas sharing off contribute nothing (their data never reaches the pool); a purge lowers the totals, and the next contribution takes the difference back out of the Cairn.
+- A failed or refused post changes nothing locally (only confirmed records are remembered); 401 / 429 stop the run until the next one.
+
 ## Tests
 
 ```bash

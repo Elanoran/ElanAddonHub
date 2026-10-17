@@ -424,6 +424,7 @@ namespace ElansAddonHub.Lodge
         public bool SupportsAtlasNotes { get; private set; }                  // the server also takes `fieldnotes` (feature "atlas5", server 2.23)
         public bool SupportsAtlasEntrances { get; private set; }              // the server also takes `entrances` (feature "atlas6", server 2.24)
         public bool SupportsAtlasNpcSpots { get; private set; }               // the server also takes `npcspots` (feature "atlas8", server 2.26)
+        public bool ContributesToCairn { get; private set; }                  // the lodge's owner sends the pooled Atlas numbers (ids and counts, no names) to the Cairn (feature "cairn"); shown in Settings > Privacy
         public bool SupportsAtlasExtras { get; private set; }                 // ... counter extras and pickpocket / gathering / contained counters (feature "atlas9", server 2.26)
         public bool SupportsAtlasSeen { get; private set; }                   // the server also takes seenNpcs / seenObjects / seenQuests (feature "atlas2")
         public bool SupportsAtlasSeenDetails { get; private set; }            // ... with their verified details and the game build (feature "atlas7", server 2.25)
@@ -468,6 +469,7 @@ namespace ElansAddonHub.Lodge
             SupportsAtlasEntrances = SupportsAtlas && features.Contains("atlas6") && (v == null || v >= AtlasObs.EntrancesServerVersion);
             SupportsAtlasNpcSpots = SupportsAtlas && features.Contains("atlas8") && (v == null || v >= AtlasObs.NpcSpotsServerVersion);
             SupportsAtlasExtras = SupportsAtlas && features.Contains("atlas9") && (v == null || v >= AtlasObs.CounterExtrasServerVersion);
+            ContributesToCairn = SupportsAtlas && features.Contains("cairn");
             atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasFetching = false;
         }
 

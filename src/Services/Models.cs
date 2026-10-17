@@ -105,6 +105,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "calHideResets")] public bool CalHideResets { get; set; }
         [DataMember(Name = "calHideMine")] public bool CalHideMine { get; set; }
         [DataMember(Name = "flightShareOff")] public bool FlightShareOff { get; set; }      // false (default) = my learned flight-path times are uploaded to the lodge (times only); off = nothing is uploaded, downloading still works
+        [DataMember(Name = "cairnOff")] public bool CairnOff { get; set; }                  // false (default) = the Cairn's open Atlas dataset (ids and counts merged from many Lodges, no personal data) is downloaded about twice a day; off = nothing is fetched and the copy is deleted. Nothing is ever uploaded to it.
         [DataMember(Name = "atlasShareOff")] public bool AtlasShareOff { get; set; }        // false (default) = what Elan's Toolkit observed (loot, vendors, finds, spawn points; no character names) is shared with the lodge, guests never share; off = nothing is uploaded, the lodge's Atlas is still received
         // ---- gathering routes and the leveling guide in game (Atlas / Professions)
         [DataMember(Name = "atlasRecents")] public List<string> AtlasRecents { get; set; }        // the Atlas pages opened last (ids only, newest first, at most 8)

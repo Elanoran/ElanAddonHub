@@ -346,7 +346,7 @@ namespace ElansAddonHub
         public string Signature()
         {
             var L = AtlasQuery.Context.Lodge?.Invoke();
-            return string.Join("|", ItemData.Count, ItemData.Status, SpellData.SpellCount, MapData.MapCount, SeenData.NpcCount + SeenData.QuestCount, Services.Atlas.Classic.ClassicAtlas.IsReady, L == null ? "-" : L.Rev + "," + L.Updated + "," + L.FindCount, ClassicSetup?.State);
+            return string.Join("|", ItemData.Count, ItemData.Status, SpellData.SpellCount, MapData.MapCount, SeenData.NpcCount + SeenData.QuestCount, Services.Atlas.Classic.ClassicAtlas.IsReady, Services.Atlas.CairnAtlas.Current?.Seq ?? 0, L == null ? "-" : L.Rev + "," + L.Updated + "," + L.FindCount, ClassicSetup?.State);
         }
 
         // the page itself asks to be shown again after the Lodge pool or the Classic data changed

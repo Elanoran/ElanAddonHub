@@ -56,6 +56,12 @@ public class LodgeConfig
     public string[] RealmsNamespaces { get; set; } = Array.Empty<string>();   // optional override of the namespaces probed
     public string[] RealmsMatch { get; set; } = new[] { "forever" };          // words / realm names / slugs that mark a WoW Forever realm (LODGE_REALMS_MATCH)
     public bool RealmsConfigured => BnetClientId.Length > 0 && BnetClientSecret.Length > 0;
+    // ---- contribute to the Cairn (opt-in, off by default; Cairn.cs): the Lodge's pooled Atlas numbers (ids and counts only) go to an open commons
+    public bool CairnEnabled { get; set; }                  // LODGE_CAIRN_ENABLED=1, and only with a valid URL and key
+    public string CairnUrl { get; set; } = "";              // the Cairn's base URL (https), e.g. https://example.org/cairn - nothing is built in
+    public string CairnKey { get; set; } = "";              // this Lodge's Cairn key (LODGE_CAIRN_KEY, or a file named by LODGE_CAIRN_KEY_FILE); never logged
+    public int CairnEveryMinutes { get; set; } = 60;        // 15 - 1440
+    public int CairnGameBuild { get; set; }                 // 0 = the newest build the members' finds report
 
     static string Env(string key, string fallback)
     {
@@ -119,6 +125,11 @@ public class LodgeConfig
             BnetRegion = CleanRegion(Env("LODGE_BNET_REGION", "eu")),
             RealmsPollSeconds = Int("LODGE_REALMS_POLL_SECONDS", 120, 60, 900),
             RealmsNamespaces = Env("LODGE_REALMS_NAMESPACES", "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            CairnEnabled = Env("LODGE_CAIRN_ENABLED", "0") is "1" or "true" or "yes" or "on",
+            CairnUrl = Env("LODGE_CAIRN_URL", ""),
+            CairnKey = CairnKeyFromEnv(),
+            CairnEveryMinutes = Int("LODGE_CAIRN_EVERY_MINUTES", 60, 15, 1440),
+            CairnGameBuild = Int("LODGE_CAIRN_GAME_BUILD", 0, 0, 9_999_999),
             RealmsMatch = Env("LODGE_REALMS_MATCH", "forever").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is { Length: > 0 } rm ? rm : new[] { "forever" },
         };
         Directory.CreateDirectory(c.DataDir);
@@ -130,6 +141,14 @@ public class LodgeConfig
             c.CodesFile = File.Exists(inData) || !File.Exists("/etc/lodge/codes") ? inData : "/etc/lodge/codes";
         }
         return c;
+    }
+
+    static string CairnKeyFromEnv()
+    {
+        var k = Env("LODGE_CAIRN_KEY", "");
+        var file = Env("LODGE_CAIRN_KEY_FILE", "");
+        if (k.Length == 0 && file.Length > 0) { try { k = File.ReadAllText(file).Trim(); } catch { k = ""; } }
+        return k;
     }
 
     // tests build configs directly

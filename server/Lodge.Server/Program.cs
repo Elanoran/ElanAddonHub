@@ -314,6 +314,12 @@ app.Lifetime.ApplicationStopping.Register(() =>
     try { lodge.AtlasPool.Flush(); } catch { }             // atlas changes not yet written
     try { lodge.Badges.Flush(); } catch { }                // badge tallies not yet written
 });
+if (cfg.CairnEnabled)
+{
+    // the URL's host only (never the key); a bad URL or key keeps it off
+    if (lodge.Cairn.Enabled) app.Logger.LogInformation("Cairn contribution on: {Host}, every {Minutes} min", new Uri(cfg.CairnUrl).Host, cfg.CairnEveryMinutes);
+    else app.Logger.LogWarning("Cairn contribution stays off: LODGE_CAIRN_URL must be https (or http to this machine) and LODGE_CAIRN_KEY a Cairn key{Atlas}", cfg.AtlasEnabled ? "" : ", and the Atlas must be on");
+}
 if (cfg.RealmsConfigured)
     app.Logger.LogInformation("Realm status on: region {Region}, every {Seconds} s", lodge.Realms.Region, cfg.RealmsPollSeconds);
 app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}",

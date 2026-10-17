@@ -88,6 +88,7 @@ namespace ElansAddonHub.Services.Atlas
                     + (AtlasObs.LowSample(unique) ? " Fewer than " + AtlasObs.LowSampleKills + " so far: these are counts, not drop rates yet." : "");
                 AddLayer(m, "lodge");
             }
+            AddCairnLoot(m, s, lodgeKind, id, rows, tiny, by);   // the Cairn's open numbers (tier 1) between the Lodge's and the Classic baseline's
             var dv = ck != null ? AtlasDerived.For(ClassicAtlas.Current) : null;
             if (dv != null)
             {
@@ -152,7 +153,9 @@ namespace ElansAddonHub.Services.Atlas
             var spots = L?.Spawns(id);
             var seenAt = NpcSpots(id);                                  // where members (and you) met it, killed it, saw it as a rare (Toolkit npcspots)
             bool lodgeKnows = (loot != null && loot.N > 0) || (spots != null && spots.Count > 0) || L?.Vendor(id) != null || L?.Note(id) != null || seenAt.Count > 0;
-            if (seen == null && cn == null && !lodgeKnows)
+            var cs = CairnAtlas.Current;
+            bool cairnKnows = cs != null && (cs.Spawns(id).Count > 0 || cs.Stock(id).Count > 0 || new[] { "kill", "pickpocket", "skinning", "mining", "herbalism", "salvage" }.Any(k => cs.Loot(k, id) != null));   // the Cairn's open data
+            if (seen == null && cn == null && !lodgeKnows && !cairnKnows)
             {
                 var nf = NotFoundPage("npc", id, SeenData.Ready || ClassicAtlas.IsReady ? "No layer knows this NPC. Your game has not met it yet." : "Nothing is read yet that could know this NPC (the game's creature cache and the Classic baseline are both missing).");
                 LayerNotes(nf, true, false);
@@ -218,7 +221,8 @@ namespace ElansAddonHub.Services.Atlas
             foreach (var (gk, gt, gc) in new (string, string, ClassicSourceKind?)[] { ("skin", "Skinning", ClassicSourceKind.NpcSkin), ("pick", "Pickpocketing", ClassicSourceKind.NpcPickpocket), ("mine", "Mining", null), ("herb", "Herbalism", null), ("salvage", "Salvage", null) })
             {
                 bool lodgeHas = (L?.Loot(gk, id)?.N ?? 0) > 0, classicHas = gc != null && dvc != null && dvc.LootOf(gc.Value, id).Count > 0;
-                if (lodgeHas || classicHas) LootSection(m, gk, gt, gk, id, gc, "");
+                bool cairnHas = CairnAtlas.Current?.Loot(CairnKindOf(gk), id) != null;
+                if (lodgeHas || classicHas || cairnHas) LootSection(m, gk, gt, gk, id, gc, "");
             }
             if (vendor) VendorSection(m, id);
             var dv = AtlasDerived.For(ClassicAtlas.Current);
@@ -295,7 +299,7 @@ namespace ElansAddonHub.Services.Atlas
             var seen = SeenData.Object(id);
             var co = ClassicAtlas.ObjectInfo(id);
             var loot = L?.Loot("obj", id);
-            if (seen == null && co == null && (loot == null || loot.N == 0) && !new LiveNodeSource().ForeverMaps(id).Any())
+            if (seen == null && co == null && (loot == null || loot.N == 0) && CairnAtlas.Current?.Loot("object", id) == null && !new LiveNodeSource().ForeverMaps(id).Any())
             {
                 var nf = NotFoundPage("obj", id, "No layer knows this object. Your game has not met it yet.");
                 LayerNotes(nf, true, false);

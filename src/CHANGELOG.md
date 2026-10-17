@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.86.0
+- **The Cairn: open Atlas numbers from many lodges.** The Atlas can now also show the Cairn, an open dataset that merges what many lodges observed: drop rates of creatures, objects, fishing and gathering, vendor items and prices, spawn points, gathering nodes and flight times. It holds ids and counts only - no names of people or characters - and is free for everyone (CC0). A number only gets in when at least two independent lodges saw it, and numbers far off from the rest are left out.
+- **Labelled "Cairn", below your own lodge.** On item and creature pages the Cairn's rows carry the label "Cairn" and sort below your lodge's own observations. Where your lodge already shows a source, the Cairn's figure rides along as a second line.
+- **Your choice in Settings > Privacy.** "Cairn open Atlas data" is on by default because it contains no personal data: the Outpost downloads the file about twice a day and checks it before using it. It only downloads - nothing is ever uploaded to the Cairn. Switch it off and nothing is fetched and the downloaded copy is deleted. If your lodge's owner contributes the lodge's pooled Atlas numbers to the Cairn, the Privacy page tells you so.
+- **For lodge owners: "Contribute to the Cairn"** is a new opt-in server setting, off by default. When switched on with the Cairn's address and a key from the Cairn's admin, the server sends the lodge's pooled Atlas totals about once an hour - ids and counts only, and only what members already share with the lodge's Atlas.
+
 ## 2.84.1
 - **"How we look at it" in Settings > About.** A short, honest note on how the Outpost and its addons play fair, that only Blizzard decides what is allowed, and that it is a free fan project you use at your own risk.
 
