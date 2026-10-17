@@ -544,7 +544,15 @@ Lodge key in good standing (an accepted contribution within its grace period, 14
 Atlas sharing is on; the Outpost shows it as the "Cairn" layer: below the user's own Lodge (tier 0), above the Classic baseline (tier 2).
 Not peer-to-peer (NAT, poisoning, IP exposure). The wire format is public (server/PROTOCOL.md "The Cairn"); the Cairn service itself is run by the maintainers and
 is not part of this repository.
-- **Who sends**: Lodge SERVERS only, each with its own revocable Cairn key, invite-only to start. An Outpost never uploads to the Cairn.
+- **Who sends**: Lodge SERVERS only. An Outpost never uploads to the Cairn. Since Lodge 2.28 / Cairn 1.4 each Lodge joins with its OWN
+  ECDSA P-256 key pair (`server/Lodge.Server/CairnLink.cs`; the private key in `data/cairn-key.pem`, 0600, never leaves the server) and signs
+  every request (method, path, body hash, time, nonce); the Cairn stores public keys only. The Guild Master turns it on in the Outpost
+  (`admin.cairn`, Settings > Guild Master > The Cairn, `SettingsPage.CairnJoin.cs` / `LodgeSession.CairnJoin.cs`; officers see `cairn.join`),
+  the Lodge asks (`POST /v1/join`), the Cairn calls back `GET <publicUrl>/cairn/challenge` (SSRF-safe: https, public addresses only, no
+  redirects) and then admits it - during the beta with an operator's invite code (no waiting list), later from a waiting list a few per
+  day. Probation: a new Lodge receives after its first contribution but counts toward agreement only after 7 days. The pre-2.28 way (a
+  bearer key in `LODGE_CAIRN_*`) still works and registers its key pair once by itself (`POST /v1/keys`). Default Cairn URL: the public one;
+  `LODGE_CAIRN_URL` overrides. Self-tests: server `CairnJoinTests`, Outpost section `cairnjoin`.
 - **What** (`server/Lodge.Server/Cairn.cs`, `CairnRules.Records`): from the pool's guest view (no names) - drops per creature / object /
   fishing zone / gathering kind / container (kills + item times and counts), vendor items (price, stack, limit, extended cost), spawn points +
   npc spots, gathering nodes, flight legs between NUMBERED taxi nodes (a leg keyed by a node name is game text and never sent), the game build

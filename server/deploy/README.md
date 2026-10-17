@@ -162,6 +162,14 @@ Members can choose characters to share with the lodge (Outpost > Settings > Lodg
 
 ## The Atlas pool (2.15)
 
+**Joining the Cairn (2.28).** Nothing to set up on the server: the Guild Master switches it on in the Outpost (Settings > Guild Master >
+The Cairn) with the Lodge's public address and, during the Cairn's beta, an invite code from the Cairn's operator. The server makes its own key
+pair (`data/cairn-key.pem`, mode 600 - `lodge-backup` keeps it; keep your backups private), asks the Cairn, answers its check at
+`<public address>/cairn/challenge` (so that path must reach the Lodge through your reverse proxy, which it does when everything under the
+Lodge's path is forwarded), and contributes and receives once admitted. Optional settings: `LODGE_PUBLIC_URL` (the address suggested to the
+Guild Master) and `LODGE_CAIRN_URL` (another, self-hosted Cairn). A Lodge set up the old way (`LODGE_CAIRN_ENABLED` + `LODGE_CAIRN_KEY`) keeps
+working after `sudo lodge-update` and moves to its own key pair by itself (the log says "signs its requests with its own key pair now").
+
 Members who run Elan's Toolkit pool what it saw in game - which mobs dropped what (and how often), vendor stock, who found which item and where, mob spawn
 points, item details the game client revealed - and everybody in the lodge gets the totals in the Outpost's Atlas. The server keeps one record set per member
 and shows the sum, so a member re-sending data never counts twice. Guests can read, not share; every member can switch sharing off in the Outpost

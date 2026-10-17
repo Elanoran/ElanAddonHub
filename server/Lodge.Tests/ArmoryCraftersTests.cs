@@ -50,7 +50,7 @@ public class ArmoryCraftersTests
         Assert.Contains("armory2", r.Hub.FeatureList());
         using var off = new FunRig(c => c.ArmoryEnabled = false);
         Assert.DoesNotContain("armory2", off.Hub.FeatureList());
-        Assert.Equal("2.27.0", LodgeHub.Version);
+        Assert.Equal("2.28.0", LodgeHub.Version);
     }
 
     [Fact]

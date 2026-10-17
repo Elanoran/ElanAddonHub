@@ -206,6 +206,7 @@ namespace ElansAddonHub
             InitArmory();
             InitClassic();
             InitBadges();
+            InitCairnJoin();
         }
 
         // ================================================================ navigation

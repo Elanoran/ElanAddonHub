@@ -842,6 +842,42 @@
               </StackPanel>
             </ContentControl>
 
+            <!-- 2.90: the Cairn (Lodge feature "cairnjoin"): the Guild Master's switch, officers see the status (SettingsPage.CairnJoin.cs) -->
+            <StackPanel x:Name="CairnJoinSection" Visibility="Collapsed">
+              <Border x:Name="CairnJoinCard" Background="{StaticResource Brush.Info.Tint}" CornerRadius="{StaticResource Radius.Card}" Padding="16,12" Margin="0,12,0,12" Visibility="Collapsed">
+                <StackPanel>
+                  <TextBlock Text="Your Lodge can join the Cairn" Style="{StaticResource Text.RowTitle}" />
+                  <TextBlock Style="{StaticResource Text.Body}" TextWrapping="Wrap" Margin="0,4,0,8"
+                             Text="The Cairn pools what many Lodges have seen - drop rates, vendor prices, spawn points, gathering nodes, flight times - and gives it back to the Lodges that take part. Your members who share would see it in their Atlas. Nothing is shared until you switch it on." />
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="CairnCardLater" Style="{StaticResource Button.M}" Content="Not now" Margin="0,0,8,0" Click="CairnCardLater_Click" />
+                    <Button x:Name="CairnCardOn" Style="{StaticResource Button.Primary.M}" Content="Turn on" Click="CairnCardOn_Click" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+              <TextBlock Text="The Cairn" Style="{StaticResource Head}" Margin="4,12,0,8" />
+              <ContentControl Style="{StaticResource Card.Rows}" Margin="0,0,0,12"><StackPanel>
+                <HeaderedContentControl x:Name="CairnJoinRow" Style="{StaticResource Setting.Row}" Header="Join the Cairn"
+                    Tag="Your Lodge sends the Cairn the pooled totals of the members who share with it: ids and counts only (what dropped and how often, vendor prices, spawn points, gathering nodes, flight times), never names, characters or messages. Give to get: in return your Lodge receives the Cairn's numbers from other Lodges and hands them to members who share. Joining sends the Cairn your Lodge's name and its public address, and the Cairn checks that address. Each member's own sharing switch (Settings &gt; Lodge) stays as it is.">
+                  <CheckBox x:Name="CairnJoinBox" Style="{StaticResource Switch}" Click="CairnJoin_Click" AutomationProperties.Name="Join the Cairn" />
+                </HeaderedContentControl>
+                <StackPanel x:Name="CairnJoinForm" Margin="16,0,16,12" Visibility="Collapsed">
+                  <TextBlock Text="Your Lodge's public address" Style="{StaticResource Text.Caption}" />
+                  <TextBox x:Name="CairnUrlBox" Style="{StaticResource Input}" Height="36" Margin="0,4,0,0" MaxLength="200" Tag="https://example.org/lodge"
+                           AutomationProperties.Name="Your Lodge's public address" />
+                  <TextBlock Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" Text="The address members connect to. The Cairn calls it once to check that it is really your Lodge." />
+                  <StackPanel x:Name="CairnCodeArea" Visibility="Collapsed">
+                    <TextBlock Text="Invite code" Style="{StaticResource Text.Caption}" Margin="0,12,0,0" />
+                    <TextBox x:Name="CairnCodeBox" Style="{StaticResource Input}" Height="36" Margin="0,4,0,0" MaxLength="32" Tag="CAIRN-XXXX-XXXX"
+                             AutomationProperties.Name="Invite code" />
+                    <TextBlock Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" Text="During the beta, Lodges join with an invite code from the Cairn's operator. It works once." />
+                  </StackPanel>
+                  <Button x:Name="CairnJoinSave" Style="{StaticResource Button.Primary.M}" Content="Ask to join" HorizontalAlignment="Right" Margin="0,12,0,0" Click="CairnJoinSave_Click" />
+                </StackPanel>
+                <TextBlock x:Name="CairnJoinStatusText" Style="{StaticResource Note}" Margin="16,0,16,12" TextWrapping="Wrap" />
+              </StackPanel></ContentControl>
+            </StackPanel>
+
             <StackPanel x:Name="GmOwnerOnly">
             <TextBlock Text="Your lodge" Style="{StaticResource Head}" Margin="4,12,0,8" />
             <ContentControl Style="{StaticResource Card.Group}" Margin="0,0,0,12">

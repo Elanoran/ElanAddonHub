@@ -63,6 +63,9 @@ public class LodgeConfig
     public int CairnEveryMinutes { get; set; } = 60;        // 15 - 1440
     public int CairnGameBuild { get; set; }                 // 0 = the newest build the members' finds report
     public int CairnFetchHours { get; set; } = 6;
+    // 2.28: this Lodge's public address as members reach it (e.g. https://example.org/lodge). Optional: it is only the suggestion the Guild
+    // Master sees when switching "Join the Cairn" on (otherwise the Outpost suggests the address it is connected to).
+    public string PublicUrl { get; set; } = "";
     // ---- operator stats (/admin/stats, LodgeAdmin.cs): loopback only, with this token in X-Lodge-Admin; empty = off. Never logged.
     public string AdminToken { get; set; } = "";           // give to get: how often the Cairn's manifest is checked (2 - 48 hours; the file only when it changed)
 
@@ -134,6 +137,7 @@ public class LodgeConfig
             CairnEveryMinutes = Int("LODGE_CAIRN_EVERY_MINUTES", 60, 15, 1440),
             CairnGameBuild = Int("LODGE_CAIRN_GAME_BUILD", 0, 0, 9_999_999),
             CairnFetchHours = Int("LODGE_CAIRN_FETCH_HOURS", 6, 2, 48),
+            PublicUrl = Env("LODGE_PUBLIC_URL", ""),
             AdminToken = Env("LODGE_ADMIN_TOKEN", ""),
             RealmsMatch = Env("LODGE_REALMS_MATCH", "forever").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is { Length: > 0 } rm ? rm : new[] { "forever" },
         };

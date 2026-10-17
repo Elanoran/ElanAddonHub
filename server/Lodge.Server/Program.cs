@@ -340,6 +340,15 @@ app.MapGet("/cairn/dataset", (HttpContext ctx) =>
     return Results.File(fs, "application/gzip", h.File, enableRangeProcessing: false);
 });
 
+// 2.28: the Cairn's call back while this Lodge asks to join (CairnLink.ChallengeAnswer): public (the Cairn has no credentials here), answers only
+// while the Guild Master's switch is on and a key pair exists, at most 30 a minute. Signs "elans-cairn-challenge/1\n<nonce>\n<publicUrl>".
+app.MapGet("/cairn/challenge", (HttpContext ctx) =>
+{
+    ctx.Response.Headers["Cache-Control"] = "no-store";
+    var a = lodge.Cairn.Link.ChallengeAnswer(ctx.Request.Query["nonce"].ToString());
+    return a == null ? Results.NotFound() : Results.Json(a);
+});
+
 // read-only numbers for the server's operator (lodge-admin stats, or an operator's tool through an ssh tunnel): members, online, active in 7 days, messages, files, Cairn.
 // Only from loopback without proxy headers AND with X-Lodge-Admin = LODGE_ADMIN_TOKEN (>= 24 characters; empty = off). Anything else: 404.
 app.MapGet("/admin/stats", (HttpContext ctx) =>
@@ -367,6 +376,8 @@ if (cfg.CairnEnabled)
     if (lodge.Cairn.Enabled) app.Logger.LogInformation("Cairn contribution on: {Host}, every {Minutes} min; its dataset is checked every {Hours} h and handed to members who share (give to get)", new Uri(cfg.CairnUrl).Host, cfg.CairnEveryMinutes, cfg.CairnFetchHours);
     else app.Logger.LogWarning("Cairn contribution stays off: LODGE_CAIRN_URL must be https (or http to this machine) and LODGE_CAIRN_KEY a Cairn key{Atlas}", cfg.AtlasEnabled ? "" : ", and the Atlas must be on");
 }
+else if (lodge.Cairn.Link.Join.On)
+    app.Logger.LogInformation("Cairn: joining switched on by the Guild Master ({Host}, {State})", lodge.Cairn.Link.Host, lodge.Cairn.Link.Join.State.Length > 0 ? lodge.Cairn.Link.Join.State : "not asked yet");
 if (cfg.RealmsConfigured)
     app.Logger.LogInformation("Realm status on: region {Region}, every {Seconds} s", lodge.Realms.Region, cfg.RealmsPollSeconds);
 app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}, admin stats {Admin}",

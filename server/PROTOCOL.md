@@ -456,21 +456,72 @@ Feature `reputations` in the welcome `features`, next to `armory` (absent when t
 
 ## The Cairn (Atlas commons; Lodge features `cairn` and `cairn2`, opt-in; Outpost 2.86, give to get 2.87)
 
-The Cairn is a separate service that merges the pooled Atlas numbers of many Lodges into one daily dataset. Lodge servers contribute (opt-in,
-each with its own revocable key from the Cairn's admin). **Give to get**: the dataset is not public - it is for the Lodges that contribute and,
-through them, for their members who share. The Cairn serves it only to a Lodge key in good standing (an accepted contribution within the
+The Cairn is a separate service that merges the pooled Atlas numbers of many Lodges into one daily dataset. Lodge servers contribute (opt-in).
+Since Lodge 2.28 a Lodge joins with its own key pair (below, "Joining"); before, each had a revocable bearer key from the Cairn's admin (still
+works). **Give to get**: the dataset is not public - it is for the Lodges that contribute and,
+through them, for their members who share. The Cairn serves it only to a Lodge in good standing (an accepted contribution within the
 Cairn's grace period, 14 days by default); the Lodge hands it on only to its own members whose Atlas sharing is on, never to guests. An Outpost
-never talks to the Cairn and has no Cairn address. Paths in "Lodge <-> Cairn" are relative to the Cairn's base URL (e.g.
-`https://cairn.example.org/cairn`); nothing about any particular Cairn is built into the Lodge server or the Outpost.
+never talks to the Cairn and has no Cairn address. Paths in "Lodge <-> Cairn" are relative to the Cairn's base URL. The Lodge server knows
+the public Cairn's base URL (`https://nasferatu.dk/cairn`) as its default; `LODGE_CAIRN_URL` points it at another (self-hosted) Cairn.
 
-**Members are told**: a Lodge that contributes lists `cairn` in the welcome `features` (only while `LODGE_CAIRN_ENABLED=1` with a valid https
-URL and key, and the Atlas is on) and `cairn2` next to it (it receives the dataset and hands it to members who share). The Outpost says so in
-Settings > Privacy.
+**Members are told**: a Lodge that contributes lists `cairn` in the welcome `features` (while it contributes - the Guild Master's switch with
+the Cairn's admission, or `LODGE_CAIRN_ENABLED=1` with a valid https URL and key - and the Atlas is on) and `cairn2` next to it (it receives
+the dataset and hands it to members who share). The Outpost says so in Settings > Privacy.
+
+### Joining (Lodge 2.28 / Cairn 1.4; Lodge feature `cairnjoin`; `server/Lodge.Server/CairnLink.cs`)
+
+**The Lodge's key pair.** On first need the Lodge makes an ECDSA P-256 key pair, keeps the private key in `data/cairn-key.pem` (PKCS#8 PEM,
+mode 600, never logged; `lodge-backup` takes it along with the data folder) and sends only the public key: SubjectPublicKeyInfo DER,
+base64url. Its key id is the first 16 hex characters of SHA-256(SPKI DER). There is no shared secret: the Cairn stores public keys only.
+
+**Signed requests.** Every Lodge -> Cairn request of a joined Lodge carries `X-Cairn-Key: <key id>`, `X-Cairn-Time: <unix seconds>`,
+`X-Cairn-Nonce: <16..64 base64url characters, random>`, `X-Cairn-Signature: <ES256, IEEE P1363 (64 bytes), base64url>` over
+`"elans-cairn-req/1\n<METHOD>\n<path?query>\n<time>\n<nonce>\n<sha256 hex of the body as sent>"`; `<path?query>` is below the Cairn's base
+URL (`/v1/contribute`), the body hash is over the bytes on the wire (the gzip for a contribution; the empty string for a GET). The Cairn takes
+a time within 300 s of its clock (401 `clock` with `serverTime` otherwise) and each nonce once per key within that window (401 `replay`); a
+wrong signature is 401 `signature` and counts like a wrong key. No `Authorization` header is sent with a signed request.
+
+**The Guild Master's switch.** Officers and the Guild Master ask `cairn.join.get`; the Lodge answers (and announces to them on every change)
+`cairn.join {on, env, atlas, cairnHost, contributing, signed, suggestedUrl, publicUrl, state, reason, error, mode, place, of, estDay,
+betaOpenSlots, hasCode, admitted, probationUntil, settled, lastPost, checked, standing, receiveUntil, serving}` - never the key, never a code.
+`state`: `""` (not asked) / `waiting` / `admitted` / `refused` / `revoked` / `error` (then `reason`: `invite-needed`, `beta-full`, `code-invalid`,
+`code-expired`, `code-used`, `code-revoked`, `code-blocked`, `unverified`, `duplicate-url`, `waiting-full`, `address`, `network`, `unsupported`,
+...). `env: true` = the Lodge contributes through `LODGE_CAIRN_*` (the switch is locked). The Guild Master (only) sends
+`admin.cairn {on, publicUrl?, code?}`: `publicUrl` must be https, a public host, port 443 or >= 1024, no user / query / fragment (normalized:
+lowercase host, no trailing `/`); errors come as `error` with `code` `address` / `locked` / `atlas`. The address can't be changed once the
+Cairn has it (waiting or admitted). The code is kept in `data/cairn-join.json` (mode 600) only until the Cairn took or refused it. Off = no
+contribution and no data; the key pair and the admission stay, so switching on again resumes. `suggestedUrl` = `LODGE_PUBLIC_URL` when set
+(otherwise the Outpost suggests the address it connects to).
+
+**Asking** (Lodge -> Cairn):
+- `GET /v1/join/info` (public) -> `{ok, mode: "beta"|"open", open, probationDays, server, betaOpenSlots? (beta), waiting?, admitPerDay? (open)}`.
+  In the beta without a code the Lodge doesn't ask at all (state `error`, reason `invite-needed`).
+- `POST /v1/join` `{name, publicUrl, publicKey, code?}`, signed by that key (at most 4 KB). The Cairn then calls the Lodge back:
+  `GET <publicUrl>/cairn/challenge?nonce=<random>` -> `{v: 1, keyId, publicUrl, nonce, sig}` with `sig` = ES256 (P1363, base64url) over
+  `"elans-cairn-challenge/1\n<nonce>\n<publicUrl>"`. The Lodge answers only while the switch is on and its key pair exists (404 otherwise; at
+  most 30 a minute); the prefix and a nonce without line breaks keep an answer from ever passing for a request signature. The Cairn checks the
+  key id, that the address the Lodge names is the one it was given, and the signature. Answers: 200 with the state (as `/v1/join/status`);
+  403 `invite-needed` ("beta: an invite code from the Cairn's operator is needed"), `beta-full`, `code-invalid` / `code-expired` / `code-used`
+  / `code-revoked`, `refused`; 429 `code-blocked` / `join-rate` (`Retry-After`); 409 `duplicate-url` / `duplicate-key`; 422 `unverified`
+  (`error` says why); 503 `waiting-full`; 400 `address` / `join`; 404 `closed`.
+- `GET /v1/join/status` (signed) -> `{state: "waiting", place, of, asked, estDay?, admitPerDay?}` / `{state: "admitted", id, admitted, standing,
+  lastContribution, receiveUntil, probationDays, probationUntil, settled, lastPost}` / `{state: "refused"}` / `{state: "revoked"}`; 404 `unknown`.
+  The Lodge polls it hourly while waiting, every 6 hours once admitted.
+- Beta (the Cairn's default): a code admits at once (after the check), up to the beta's cap; there is no waiting list. Open: a verified request
+  waits; a few are admitted automatically per UTC day, oldest first; a code is a fast lane past the list.
+- Probation: an admitted Lodge receives right after its first accepted contribution (give to get as before), but its numbers count toward the
+  Cairn's agreement rule and its "active Lodges" only after `probationDays` (7) of contributing (`probationUntil` = first contribution + 7 days).
+
+**The bearer-key Lodge moves over** (`LODGE_CAIRN_*`, nothing to change in lodge.env): when `/v1/status` lists `"keys"` in `features`, the Lodge
+sends `POST /v1/keys {publicKey}` with its bearer key AND signed by the new key, once. From then on it signs; the Cairn answers the old key with
+401 `retired` (not counted as a wrong key). A Lodge that gets `retired` while it still sends the bearer key switches to signing; a signed
+env-path Lodge the Cairn does not know (401 `key`) falls back to the bearer key and registers again. `admin/stats` shows `cairn.via`:
+`env` / `env-signed` / `guild-master` / `off`.
 
 ### Lodge -> Cairn (`server/Lodge.Server/Cairn.cs`; settings `LODGE_CAIRN_*` in deploy/lodge.env.example)
 
-- `GET /v1/status` with `Authorization: Bearer <key>` -> `{ok, id, epoch, lastSeq, minLodges, maxBodyBytes, maxJsonBytes, maxRecords, dataset, server,
-  standing, lastContribution, receiveUntil, graceDays}`. `standing`: `good` (receives), `new` (no accepted contribution yet), `lapsed` (the last
+- `GET /v1/status` signed (or with `Authorization: Bearer <key>`) -> `{ok, id, epoch, lastSeq, minLodges, maxBodyBytes, maxJsonBytes, maxRecords, dataset, server,
+  standing, lastContribution, receiveUntil, graceDays, features, signed, probationUntil, settled}`. `standing`: `good` (receives), `new` (no accepted contribution yet), `lapsed` (the last
   one is older than `graceDays`); a revoked key gets 401 `revoked`.
   A different `epoch` than the one the Lodge remembers = the Cairn forgot this Lodge's data: everything is sent again. The Lodge's `seq`
   continues after `lastSeq`.
