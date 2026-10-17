@@ -21,6 +21,7 @@ namespace ElansAddonHub.Services.Atlas
         public int Quality = -1, ILvl, Cls = -1, Sub = -1, Inv, Icon, Zone, Rank, Type, Flags, Skill;
         public int Spell, Start;                  // recipes: the recipe spell, and the skill it is learnable from (estimated from its colour band)
         public bool Client, Classic, Lodge;       // which layers know it: the player's game, the Classic baseline, the Lodge's observations
+        public bool Cairn;                        // 2.92: the Cairn's dataset has it (a drop, a vendor, loot of the creature or object): the Data sources page's "Items in the Cairn's data"
         public bool Forever;                      // Forever players saw what only the server knows (creatures: loot; items: a drop or vendor; objects: loot or nodes) - the Lodge or the Cairn (DataHonesty)
         public int Src;                           // items: bit per AtlasBrowse.Hows
         public double Chance; public bool ChanceLodge;
@@ -126,8 +127,16 @@ namespace ElansAddonHub.Services.Atlas
                 default: return null;
             }
             ix.Cat = cat; ix.Token = tok;
+            // 2.92: test and placeholder entries are not listed (AtlasHidden, the one rule); a chip left with nothing under it goes with them
+            if (ix.All.RemoveAll(AtlasHidden.IsHidden) > 0) Prune(ix.Root, ix.All);
             ix.Zones = ix.All.Where(e => e.Zone > 0).Select(e => e.Zone).Distinct().Select(z => new KeyValuePair<int, string>(z, x.Map?.Name(z) ?? "Zone " + z)).OrderBy(z => z.Value, StringComparer.OrdinalIgnoreCase).ToList();
             return ix;
+        }
+
+        static void Prune(BNode n, List<BEntry> all)
+        {
+            n.Kids.RemoveAll(k => AtlasHidden.IsHiddenName(k.Title) || !all.Any(k.Pred));
+            foreach (var k in n.Kids) Prune(k, all);
         }
 
         static string Slugify(string s)
@@ -318,7 +327,7 @@ namespace ElansAddonHub.Services.Atlas
                 if (L.Finds(id).Count > 0 || L.Revealed(id) != null) e.Lodge = true;
             }
             var cairn = CairnAtlas.Current;
-            if (cairn != null && (cairn.DropsOf(id).Count > 0 || cairn.VendorsOf(id).Count > 0)) e.Forever = true;
+            if (cairn != null && (cairn.DropsOf(id).Count > 0 || cairn.VendorsOf(id).Count > 0)) e.Forever = e.Cairn = true;
             if (x.Classic != null)
                 foreach (var s in x.Classic.SourcesOf(id))
                 {
@@ -391,7 +400,8 @@ namespace ElansAddonHub.Services.Atlas
                 e.Zone = ZoneOfSpawns(x, c?.Spawns);
                 if (e.Zone == 0 && x.L != null) { var sp = x.L.Spawns(id); if (sp.Count > 0) e.Zone = sp[0].Zone; }
                 if (x.L != null && (x.L.Npc(id) != null || x.L.Spawns(id).Count > 0 || x.L.Loot("npc", id) != null)) e.Lodge = true;
-                e.Forever = (x.L != null && new[] { "npc", "skin", "pick" }.Any(k => (x.L.Loot(k, id)?.N ?? 0) > 0)) || (x.Cairn != null && new[] { "kill", "skinning", "pickpocket" }.Any(k => x.Cairn.Loot(k, id) != null));
+                e.Cairn = x.Cairn != null && new[] { "kill", "skinning", "pickpocket" }.Any(k => x.Cairn.Loot(k, id) != null);
+                e.Forever = (x.L != null && new[] { "npc", "skin", "pick" }.Any(k => (x.L.Loot(k, id)?.N ?? 0) > 0)) || e.Cairn;
                 e.ZoneName = e.Zone > 0 ? x.Map?.Name(e.Zone) ?? "" : "";
                 var title = !string.IsNullOrEmpty(s?.Title) ? s.Title : c?.SubName ?? "";
                 e.Detail = string.Join(" · ", new[] { e.Level > 0 ? "Level " + AtlasFormat.Levels(e.Level, e.Level2) : "", AtlasFormat.RankName(e.Rank), title.Length > 0 ? "<" + title + ">" : "", AtlasFormat.CreatureType(e.Type) }.Where(t => t.Length > 0));
@@ -451,7 +461,8 @@ namespace ElansAddonHub.Services.Atlas
                 if (nodeObjs.Contains(id)) { var fm = foreverZone.ForeverMaps(id); if (fm.Count > 0) { e.Zone = fm[0]; forever = true; e.Lodge = true; } }
                 e.ZoneName = e.Zone > 0 ? x.Map?.Name(e.Zone) ?? "" : "";
                 if (x.L != null && (x.L.Object(id) != null || x.L.Loot("obj", id) != null)) e.Lodge = true;
-                e.Forever = forever || (x.L?.Loot("obj", id)?.N ?? 0) > 0 || x.Cairn?.Loot("object", id) != null;
+                e.Cairn = x.Cairn?.Loot("object", id) != null;
+                e.Forever = forever || (x.L?.Loot("obj", id)?.N ?? 0) > 0 || e.Cairn;
                 e.Detail = ObjCatTitle(e.Skill);
                 e.Extra = e.ZoneName + (forever && e.ZoneName.Length > 0 ? " (" + AtlasLabel.Forever + ")" : "");
                 ix.All.Add(e);

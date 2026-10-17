@@ -35,6 +35,7 @@ namespace ElansAddonHub.Services
             new Def { Name = "dungeonmapsreal", Parent = "dungeonmaps", Readers = @"^src/(" + Core + "|" + Wm + @"|Services/DungeonMaps/\w+\.cs|Controls/AtlasMap\.\w+\.cs|Services/Atlas/(AtlasInstances|AtlasObs\.Entrances)\.cs)$", Tests = @"^src/MainWindow\.DungeonMapsTest\.Real\.cs$" },
             new Def { Name = "atlaspagereal", Parent = "atlaspage", Readers = @"^src/(" + Core + @"|Services/Db2/\w+\.cs|Services/Atlas/\w+(\.\w+)?\.cs|Services/Atlas/Classic/\w+\.cs|Services/(IconStore|IconSheet)\.cs|Controls/AtlasMap\.cs|Controls/GameTooltip\w*\.cs)$", Tests = @"^src/MainWindow\.AtlasPageTest\.Real\.cs$" },
             new Def { Name = "atlasdatareal", Parent = "atlasdata", Readers = @"^src/(Services/Atlas/(ObjectKinds|QuestChains|SeenView|AtlasBrowse\.Index)\.cs|Services/Atlas/Classic/\w+\.cs|Services/Db2/(WorldLookups|WdbSeen)\.cs)$", Tests = @"^src/MainWindow\.AtlasDataTest\.Real\.cs$" },
+            new Def { Name = "atlashiddenreal", Parent = "atlashidden", Readers = @"^src/(Services/Atlas/AtlasHidden\.cs|Services/Db2/(SpellModel|SpellTables|ClassModel|ClassTables|ItemTables)\.cs)$", Tests = @"^src/MainWindow\.AtlasHiddenTest\.Real\.cs$" },
             new Def { Name = "zonelorereal", Parent = "zonelore", Readers = @"^src/(Services/Atlas/ZoneLore(\.\w+)?\.cs|Assets/Data/zonelore\.json)$", Tests = @"^src/MainWindow\.ZoneLoreTest\.Real\.cs$" },
         };
 

@@ -103,7 +103,7 @@ namespace ElansAddonHub.Services.Atlas
                     if (sx.Length > 0) parts.Add(sx);
                     var r = new AtlasRow
                     {
-                        Key = key, Link = fish ? "zone:" + d.Id : inItem ? "item:" + d.Id : d.Kind == "obj" ? key : "npc:" + d.Id, Label = AtlasLabel.Forever, Tier = 0,
+                        Key = key, Link = fish ? "zone:" + d.Id : inItem ? "item:" + d.Id : d.Kind == "obj" ? key : "npc:" + d.Id, Label = AtlasLabel.Forever, Tier = 0, Source = DataSources.Lodge,
                         Sort = (AtlasObs.LowSample(d.Kills) ? d.Chance / 1000 : d.Chance) + Math.Min(d.Kills, 100000) / 1e7,
                         Type = LootTypeOf(d.Kind),
                         Title = fish ? "Fishing in " + ZoneName(d.Id) : obj ? ObjectName(d.Id) : inItem ? ItemName(d.Id) : NpcName(d.Id),
@@ -118,7 +118,7 @@ namespace ElansAddonHub.Services.Atlas
                 {
                     var key = "vendor:" + v.NpcId;
                     var detail = (v.Extended ? (v.Price > 0 ? AtlasFormat.Money(v.Price) + " + " : "") + "special cost" : v.Price > 0 ? AtlasFormat.Money(v.Price) : "free") + (v.Stack > 1 ? " · stack of " + v.Stack : "") + (v.Limit >= 0 ? " · limit " + v.Limit : "");
-                    AddRow(new AtlasRow { Key = key, Link = "npc:" + v.NpcId, Label = AtlasLabel.Forever, Tier = 0, Type = "Vendor", Title = NpcName(v.NpcId), Detail = detail, Zone = v.Zone > 0 ? ZoneName(v.Zone) : "", Sort = 1e6 - v.Price });
+                    AddRow(new AtlasRow { Key = key, Link = "npc:" + v.NpcId, Label = AtlasLabel.Forever, Tier = 0, Source = DataSources.Lodge, Type = "Vendor", Title = NpcName(v.NpcId), Detail = detail, Zone = v.Zone > 0 ? ZoneName(v.Zone) : "", Sort = 1e6 - v.Price });
                     AddLayer(m, "lodge");
                 }
                 foreach (var q in L.QuestsRewarding(id))
@@ -345,7 +345,7 @@ namespace ElansAddonHub.Services.Atlas
             var zone = f.Zone > 0 ? ZoneName(f.Zone) : "";
             return new AtlasRow
             {
-                Key = "find:" + f.Seq, Link = link, Label = AtlasLabel.Forever, Tier = 0, Type = "Find", Title = string.IsNullOrEmpty(f.By) ? "a member" : f.By,
+                Key = "find:" + f.Seq, Link = link, Label = AtlasLabel.Forever, Tier = 0, Source = DataSources.Lodge, Type = "Find", Title = string.IsNullOrEmpty(f.By) ? "a member" : f.By,
                 Detail = f.Count + "× " + from + (zone.Length > 0 ? " · " + zone : ""), Right = AtlasFormat.Ago(f.At, Context.NowUtc()), Zone = zone, Sort = f.Seq,
                 Extra = FindVersions.Text(f.Build),            // which game version it was found in ("unknown version" for a find from before the build was stamped)
             };

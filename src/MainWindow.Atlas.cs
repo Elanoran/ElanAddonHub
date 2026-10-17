@@ -41,6 +41,20 @@ namespace ElansAddonHub
             if (Session != null) Session.CairnStatusChanged += () => Dispatcher.BeginInvoke(new Action(OnCairnStatus));
             CairnAtlas.Start(CairnWanted, CairnReachable);
             InitSharingInvite();           // 2.87: the calm sharing card, the quiet line on item / creature pages
+            // 2.92: the Data sources page's facts - this PC's own observations and flight times, the Lodge's flight times, where the user stands with the Cairn
+            AtlasView.OwnObservations = () => AtlasObs.Read(settings.WowRoot);
+            AtlasView.OwnFlightLegs = () => FlightShare.ReadCached(settings.WowRoot, out _)?.Legs.Keys.ToList();
+            AtlasView.LodgeFlightLegs = () => Session?.FlightData?.Legs.Keys.ToList();
+            AtlasView.CairnFactsSource = () =>
+            {
+                var j = Session?.CairnJoin;
+                return new CairnFacts
+                {
+                    HasLodge = !string.IsNullOrEmpty(settings.LodgeUrl), Online = Session != null && Session.Online, Sharing = !settings.AtlasShareOff, Guest = Session != null && Session.IsGuestNow,
+                    LodgeHandsOut = Session != null && Session.SupportsCairnData, Refused = CairnAtlas.RefusedWhy ?? "",
+                    JoinKnown = j != null, JoinOn = j != null && (j.On || j.Env), JoinStanding = j?.Standing ?? "",
+                };
+            };
             // 2.91: "Where this comes from" on Atlas Home, dismissed once and remembered (it stays on the Data sources page)
             AtlasView.SourcesCardDismissed = () => settings.AtlasSourcesCardDismissed;
             AtlasView.DismissSourcesCard = () => { settings.AtlasSourcesCardDismissed = true; SettingsStore.Save(settings); };

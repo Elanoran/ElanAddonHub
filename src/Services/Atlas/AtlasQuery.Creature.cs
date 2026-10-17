@@ -80,7 +80,7 @@ namespace ElansAddonHub.Services.Atlas
                 {
                     ObservedRate(counter, kv.Key, what, out var detail, out var extra, out var chance, out var low);
                     var r = ItemRow(kv.Key, detail, AtlasLabel.Forever);
-                    r.Type = LootTypeOf(lodgeKind); r.Tier = 0; r.Sort = low ? chance / 1000 : chance; r.Extra = extra;
+                    r.Type = LootTypeOf(lodgeKind); r.Tier = 0; r.Source = DataSources.Lodge; r.Sort = low ? chance / 1000 : chance; r.Extra = extra;
                     rows.Add(r); by[kv.Key] = r;
                 }
                 long unique = AtlasObs.UniqueKills(counter), dup = counter.X?.Dup ?? 0;
@@ -129,7 +129,7 @@ namespace ElansAddonHub.Services.Atlas
                 {
                     var p = kv.Value;
                     var r = ItemRow(kv.Key, (p[0] > 0 ? AtlasFormat.Money(p[0]) : "free") + (p[1] > 1 ? " · stack of " + p[1] : "") + (p[2] >= 0 ? " · limit " + p[2] : ""), AtlasLabel.Forever);
-                    r.Type = "Vendor"; r.Tier = 0; r.Sort = 0;
+                    r.Type = "Vendor"; r.Tier = 0; r.Source = DataSources.Lodge; r.Sort = 0;
                     rows.Add(r); by[kv.Key] = r;
                 }
                 s.Coverage = DataHonesty.VendorLine(true, AtlasFormat.Ago(lv.At, Context.NowUtc()), false);
@@ -166,7 +166,8 @@ namespace ElansAddonHub.Services.Atlas
                 LayerNotes(nf, true, false);
                 return nf;
             }
-            m.Title = seen != null && seen.Name.Length > 0 ? seen.Name : cn?.Name ?? "NPC " + id;
+            m.Title = seen != null && seen.Name.Length > 0 ? seen.Name : !string.IsNullOrEmpty(cn?.Name) ? cn.Name : NamelessNpc(id);
+            if (m.Title == NotNamedYet) m.TitleNote = NotNamedLine;          // 2.92: while WoW runs (its cache is written when it closes)
             string F = AtlasLabel.Forever, C = AtlasLabel.Classic;
             string title = seen != null && seen.Title.Length > 0 ? seen.Title : cn?.SubName ?? "";
             if (seen != null) AddLayer(m, "seen");

@@ -363,6 +363,8 @@ namespace ElansAddonHub.Lodge
         // the nodes of an object the lodge merged, per map (empty: none known); the lists are shared, read only
         public IReadOnlyDictionary<int, List<AtlasObs.NodePt>> NodesOf(int objectId) { return nodes.TryGetValue(objectId, out var d) ? d : NoNodes; }
         public IEnumerable<int> NodeObjectIds => nodes.Keys;
+        public IEnumerable<int> KillIds => kills.Keys;             // 2.92: the creatures / objects with observed loot (the Data sources page counts them)
+        public IEnumerable<int> ObjectLootIds => objects.Keys;
         public IReadOnlyList<AtlasObs.NodePt> Nodes(int objectId, int uiMapId) { return nodes.TryGetValue(objectId, out var d) && d.TryGetValue(uiMapId, out var l) ? l : NoNodePts; }
         static readonly Dictionary<int, List<AtlasObs.NodePt>> NoNodes = new Dictionary<int, List<AtlasObs.NodePt>>();
         static readonly IReadOnlyList<AtlasObs.NodePt> NoNodePts = new AtlasObs.NodePt[0];

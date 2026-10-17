@@ -177,7 +177,7 @@ namespace ElansAddonHub.Services.Professions
 
             foreach (var sk in sn.Skills.Values.OrderBy(s => s.Id))
             {
-                if (!sk.IsProfession || sk.ParentId != 0 || string.IsNullOrEmpty(sk.Name) || sk.Name.Contains("[DNT]")) continue;
+                if (!sk.IsProfession || sk.ParentId != 0 || string.IsNullOrEmpty(sk.Name) || Atlas.AtlasHidden.IsHiddenSkill(sk, sn, itemEffects)) continue;     // 2.92: test / placeholder lines (AtlasHidden)
                 bool gathering = GatheringNames.Contains(sk.Name, StringComparer.OrdinalIgnoreCase);
                 var recipes = new List<ProfRecipe>();
                 foreach (var a in sn.AbilitiesOf(sk.Id))
@@ -186,6 +186,7 @@ namespace ElansAddonHub.Services.Professions
                     if (r == null || r.SkillId != sk.Id) continue;
                     var sp = sn.Get(r.SpellId);
                     var it = r.ItemId > 0 ? item?.Invoke(r.ItemId) : null;
+                    if (Atlas.AtlasHidden.IsHiddenName(sp?.Name) || Atlas.AtlasHidden.IsHiddenName(it?.Name)) continue;     // "Smelt Copper (Test)"
                     var pr = new ProfRecipe
                     {
                         SpellId = r.SpellId, SkillId = sk.Id, ItemId = r.ItemId, Low = r.Green, High = r.Gray, Acquire = a.Acquire, Rank = sp?.Rank ?? "",
