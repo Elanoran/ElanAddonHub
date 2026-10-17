@@ -1,155 +1,247 @@
-<p align="center"><img src="src/Assets/hub.png" width="96" alt="Elan's Outpost"></p>
+<p align="center"><img src="src/Assets/hub.png" width="112" alt="Elan's Outpost logo"></p>
 
 <h1 align="center">Elan's Outpost</h1>
-<p align="center"><em>formerly Elan's Addon Hub</em></p>
 
-<p align="center">Installs and updates <b>Elan's Hunter Helper</b> for WoW Forever, with one click.</p>
+<p align="center"><b>A home base for WoW Forever players and their friends:</b><br>
+addons kept up to date, a game database built from your own client, a 3D world map, and a private Lodge to chat, talk and plan raids in.</p>
+
+<p align="center">
+  <a href="https://github.com/Elanoran/ElanAddonHub/releases/latest"><b>⬇ Download the latest version</b></a>
+  &nbsp;·&nbsp; Windows 10 / 11 &nbsp;·&nbsp; one exe, no installer
+</p>
+
+<p align="center">
+  <a href="https://github.com/Elanoran/ElanAddonHub/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Elanoran/ElanAddonHub?label=latest&color=7fb04a"></a>
+</p>
+
+<p align="center"><img src="docs/readme/addons.png" width="860" alt="The Addons page: Elan's addons with install and update buttons, and the other addons in your AddOns folder with suggested sources"></p>
 
 ---
 
-## Get started
+## What it is
 
-1. Download **`ElansAddonHub.exe`** from the [latest release](https://github.com/Elanoran/ElanAddonHub/releases/latest).
-2. Run it. Windows may say *"Windows protected your PC"* because the app isn't code-signed:
-   click **More info → Run anyway** (only the first time).
-3. The hub finds your World of Warcraft folder by itself (or press **Change** and pick any `Wow*.exe`).
-4. Press **Install**. In game, type `/reload`.
+Elan's Outpost is a small Windows app that sits next to World of Warcraft (WoW Forever). It installs and updates
+your addons, shows you what your own game files know about items, creatures, quests and the world, and gives you
+and your friends a private place to hang out: text chat, voice rooms, a calendar and shared files.
 
-From then on the hub sits in the tray, checks for updates every 30 minutes and tells you when
-there's a new version. Turn on **Update automatically** (gear icon) and you never have to think about it.
+It never touches the game itself: it reads the game's files, and the only things it writes are the addon folders
+it installs for you.
 
-No installer, no runtime to download - it's one small file (~150 KB) that runs on any Windows 10/11 PC.
+## A short tour
 
-## What it does
+### Addons
 
-- **Install / update in one click**, with a short "what's new" list before you update.
-- **Safe updates**: every download is checksum-verified, the previous version is backed up
-  (last 3 kept in `%LOCALAPPDATA%\ElansAddonHub\backups`) and restored if anything goes wrong.
-- **Manages your other addons too**: lists everything in `Interface\AddOns` (multi-folder addons grouped, flavor-specific
-  `.toc` files handled) and updates them without any account or API key: GitHub releases (BigWigs `release.json` aware)
-  and WoWInterface. Paste a link on the addon's card to connect it. Wago-only addons just get a link.
-  **CurseForge-managed addons** (the CurseForge desktop app on this PC) get a *CurseForge* badge, are grouped by CurseForge's own
-  folder lists and show "Update available: <file>" / "Up to date" with when CurseForge last checked. **Update** asks the CurseForge
-  app to install that file (its `curseforge://install` link) - the hub never touches those folders, calls CurseForge's web API or
-  downloads from it. **Check CurseForge now** (or the optional automatic daily / on-WoW-start check) starts CurseForge minimized,
-  waits for its refresh and closes it again; if it is already running the hub just reads its data.
-  Addons without a source get a **suggested WoWInterface match** (by folder names, title, author and game version,
-  from WoWInterface's public file list cached for 24 h): one click on **Use this** links it, **Not this** hides it for good;
-  nothing is ever linked or installed on its own.
-  Multi-folder addons (Details + plugins, Questie + QuestieDB, HealBot + HealBot_*, DBM-*, `X-Part-Of`, folders that one
-  WoWInterface file ships together) are grouped on one card; shared libraries (LibStub, Ace3, !BugGrabber) stay separate.
-  **WoW Forever is its own flavor, not Classic** (Interface 16001, `_Camelot` / `_Forever` tocs, release.json flavor
-  `forever`): Classic/Era downloads are never picked automatically, only by hand with a warning, and WoWInterface matches
-  not marked for Forever are flagged and left out of **Link all exact matches**.
-  Each update backs up the old folders (last 2 kept, one-click **Roll back**) and never touches `WTF`/SavedVariables.
-- **Tray & notifications**, optional **start with Windows** and **automatic updates**.
-- **Updates itself** when a new hub version is released.
-- Never touches a development copy (a folder with `.git`).
+One click installs or updates Elan's addons, with a short "what's new" first, a checksum check on every download
+and a backup to roll back to. Your other addons are listed too: link them to GitHub or WoWInterface and they update
+the same way, addons managed by the CurseForge app update from CurseForge's own downloads, and addons without a source get a
+suggested match you can accept or ignore.
 
-## The Lodge: chat, voice and files
+The addons that come with it:
 
-The **Lodge** tab is a small private Discord for you and your friends:
+| Addon | What it does |
+|---|---|
+| **Elan's Hub** (required) | A tiny companion that tells the Outpost (and your Lodge, if you join one) which character you play, where you are and what you carry. |
+| **Elan's Toolkit** | For every class: a movable HUD with cast bar, threat bar and flight timer, trainer pins for your professions, gathering pins and a waypoint arrow. |
+| **Elan's Hunter Helper** | Where it all started: pet abilities and where to tame them, Beast Finder, Auto Shot timer, range and dead zone, feeding, stable and more. |
+| **Elan's Paladin Helper** | Seal, aura and blessing reminders, a Seal and Judgement bar, party blessing timers. |
+| **Elan's Bags** | One tidy bag window with search, categories and a junk seller. |
 
-- **Channels and voice rooms** - text channels and voice rooms in a sidebar, with unread dots and @mention
-  badges; rooms show who's inside. Ranks decide who sees which channel (e.g. an Officers channel).
-- **Chat** - history per channel, replies, edit (or press Up) and delete your own messages, @mentions
-  (highlighted, with a notification while you're in WoW), "is typing", paste screenshots with Ctrl+V.
-- **Voice** - click a room to join; mute/deafen, voice activation with a level meter or push-to-talk (any key or
-  mouse button, works while WoW has focus), per-person volume, join/leave chimes. Opus codec, ~30 kbit/s.
-- **Files** - drop a file into the chat (up to 25 MB); pictures show inline, everything else downloads in one click.
-- **Shared files** (server 2.14) - the **Files** page: officers and the owner keep named files for everyone (newest 3 versions, Replace and Roll back); anyone can Save them, checked and marked as downloaded. No programs or scripts.
-- **Atlas pool** (server 2.15) - members who run Elan's Toolkit pool what they saw (drops per mob, vendors, finds, spawn points) and the Outpost's Atlas shows the lodge's totals. Sharing is on by default and can be switched off per member; guests only read; no character names are sent.
-- **Status** - Online, AFK, Busy, In a dungeon or Looking for group, plus a short note; AFK automatically after
-  10 minutes idle.
-- **Ranks** - Guild Master, Officer, Veteran, Member and Initiate (guest), shown as WoW item-quality frames.
-  Officers can mute or kick lower ranks and delete messages; Initiates can't share files.
-- **Guild Master panel** (Settings) - create one-time invite links (copied for you, listed and revocable), change ranks, remove people, see and sign out devices, add and remove channels.
-- **What you're playing** - names in WoW class colours with level, and a game icon while you're in WoW. Comes
-  from the small **Elan's Hub** companion addon (installed by the hub for everyone; WoW saves it on /reload and logout).
-- **In-game overlay** - the people in your voice room on top of WoW, whoever talks lights up. A click-through
-  window (Windowed/Fullscreen mode) - nothing is injected into the game.
+### The Atlas
 
-Join with the **invite link** you were sent (`elanshub://lodge/join#<site>/lodge|...`; older `https://<site>/lodge#invite=...`
-links work too). The link works once: the Outpost trades it for a key that belongs to this PC (Settings, Lodge, Your devices lets
-you sign a PC out). A lodge runs on someone's own server - see [`server/`](server/): one small .NET service behind an existing
-web server. Your key is stored encrypted for your Windows user and only ever sent in a request header, never in a URL.
+A game database built from **your own game files**, so it matches the version you actually play: items, creatures,
+objects, quests (with the whole chain and what comes before and after), zones, dungeons and raids, spells, skills,
+factions, every class and race with its own painting and notes, a talent calculator and a professions guide that
+plans your way from 1 to 300. Press **Ctrl+K** anywhere to search it.
 
-## Elan's Hunter Helper
+<p align="center"><img src="docs/readme/atlas-race.jpg" width="860" alt="An Atlas race page: the Orc, with a painted banner, the game's own description, history and racial abilities"></p>
 
-The hunter toolkit for WoW Forever: pet abilities and where to tame them, Beast Finder with spawn
-points, pet training builds, stable, Auto Shot timer, range and dead zone, rare radar, feeding with
-food sources, ammo vendors, hunter skills by level, talent builds, threat bar, pet spell bar, macros,
-tips, and a quiet Lua error catcher (Bug Trap).
+<p align="center"><img src="docs/readme/talents.png" width="640" alt="The talent calculator with the Hunter's Beast Mastery tree"></p>
+
+### The world map
+
+A seamless map of each continent, drawn from your game files, in 2D or as real 3D terrain. Turn on layers for
+flight paths, dungeon entrances, herbs and ore, vendors, trainers and quest givers. If you like, your own position
+shows as a dot with a fading trail of the last ten minutes, also on flights and indoors.
+
+<p align="center"><img src="docs/readme/worldmap-3d.jpg" width="860" alt="The 3D world map over Orgrimmar and Durotar, with flight routes, zone borders and the layer list"></p>
+
+### The Lodge
+
+A small, private Discord for you and your friends, running on a server one of you hosts. Text channels with
+replies, reactions, pictures and item links; voice rooms with push-to-talk and an in-game overlay that shows who is
+talking; a raid and event calendar with sign-ups per role; shared files; a ladder with badges; and an armory of the
+characters members choose to share. Names show in class colours with level and zone, straight from the game.
+
+<p align="center"><img src="docs/readme/lodge-chat.png" width="640" alt="Lodge chat: a channel with a few messages and a reply"></p>
+
+<p align="center"><img src="docs/readme/calendar.png" width="860" alt="The Lodge calendar: a month with raid nights and the next day's events with Going, Maybe and Can't buttons"></p>
+
+### Characters
+
+All your characters in one place: bags, bank, guild bank, gear with upgrade suggestions, talents and professions,
+saved by Elan's Hub whenever you /reload or log out. Search every bag at once.
+
+<p align="center"><img src="docs/readme/characters.png" width="640" alt="The Characters page: a list of characters and one character's bags"></p>
+
+### And a few small things
+
+- **Radio.** Radio Paradise in the title bar: eight listener-supported channels, no ads. It only connects when you
+  press Play, and the music steps back when people talk in voice.
+- **In-game overlay.** The people in your voice room on top of WoW, whoever talks lights up. It is a separate
+  window that lets clicks through; nothing is injected into the game.
+- **Built-in browser** for Wowhead and the Forever sites, private by default, with an ad and tracker blocker.
+- **Realm status** dots in the title bar (when your Lodge supports it).
+
+<p align="center"><img src="docs/readme/radio.png" width="280" alt="The radio card: song, cover, channels, sound quality and volume"></p>
+
+## A little history
+
+It started as **Elan's Hunter Helper**, a hunter addon for WoW Forever: which beasts teach which pet abilities,
+where to find them, and the small things a hunter keeps an eye on. Installing and updating it by hand got old
+quickly, so a one-click installer followed: **Elan's Addon Hub**.
+
+Then friends wanted to talk while playing, and the Hub got the Lodge: chat, voice and file sharing on a small
+server of our own. Calendars, profiles, the characters page, the Atlas, the world map and the radio came after,
+and the "addon hub" had become a place you hang out in. So it got a new name: **Elan's Outpost**.
+
+Every change since is in the [changelog](src/CHANGELOG.md), also readable inside the app under Settings > About > What's new.
+
+## Install
+
+1. **Download** `ElansAddonHub.exe` from the [latest release](https://github.com/Elanoran/ElanAddonHub/releases/latest)
+   and put it wherever you like (for example a folder in your user folder). It is one file of about 20 MB.
+2. **Start it.** The app is not code-signed, so Windows SmartScreen may say *"Windows protected your PC"*.
+   Click **More info**, then **Run anyway**. You only have to do this once.
+3. **First start.** A short guide finds your World of Warcraft folder by itself (or press **Change** and pick any
+   `Wow*.exe` in it) and uses the WoW Forever install inside it. Tick the addons you want; Elan's Hub is always included.
+4. **In game**, type `/reload` (or restart WoW if it was running when a new addon was installed).
+5. **Join a Lodge** (optional): click the invite link a friend sent you. Each link works once and signs in only this PC.
+
+**Requirements:** Windows 10 or 11. The app runs on .NET Framework 4.8, which comes with Windows. The browser,
+the world map and video previews use Microsoft Edge WebView2, which is part of Windows 11 and of an up-to-date
+Windows 10; without it the Atlas falls back to its flat maps.
+
+**Updates.** The Outpost checks for new versions of itself and of your addons every 30 minutes, shows what is new,
+and updates itself with one click (every download is checked against its checksum first). You can also let it update
+your addons automatically. It can sit in the tray and start with Windows if you want.
+
+**Uninstall.**
+1. In Settings > General, turn off **Start with Windows** and **Open elanshub:// links with the Outpost**.
+2. Quit the Outpost from its tray icon and delete `ElansAddonHub.exe`.
+3. Delete its data folder: `%LOCALAPPDATA%\ElansAddonHub` (settings, caches, the world map pictures and the log).
+4. To remove the addons too, delete their folders in your WoW Forever `Interface\AddOns` folder
+   (`ElansHub`, `ElansToolkit`, `ElansHunterHelper`, `ElansPaladinHelper`, `ElansBags`).
+
+## Privacy and safety
+
+- **Your game is read-only to the Outpost.** It reads the game's files (items, maps, icons) and the addon data
+  Elan's Hub saves. It writes nothing in the WoW folder except the addon folders it installs for you and one
+  shared file inside Elan's Hub's folder. Your addon settings (SavedVariables) are never touched.
+- **No memory reading, no automation.** Live character info comes from a tiny strip of coloured pixels Elan's Hub
+  draws in the corner of the game window, which the Outpost reads on your own PC. Nothing presses keys or plays
+  for you. You can turn the strip off.
+- **No telemetry, no account.** The Outpost asks GitHub for updates (and WoWInterface for addon matches), the
+  sources of addons you linked, Radio Paradise only while you listen, and YouTube for previews of links in chat
+  (you can turn that off). The Classic database is only downloaded when you ask for it.
+- **The Lodge is opt-in.** Nothing goes to a Lodge unless you join one. Then it gets your messages, your status and
+  the character you play and your zone (each can be switched off); your characters' gear and reputations only if you
+  switch that on; and, unless you switch it off, your learned flight times and what Elan's Toolkit noticed in the
+  world (drops, vendors, spawn points), without character names.
+- **Your Lodge key** is stored encrypted for your Windows user and only sent in a request header to your own Lodge.
+- **Unsigned.** The exe is not code-signed (signing costs money every year). Every release is built from this
+  repository, and the app checks the checksum of every update it downloads.
+
+Everything the Outpost may contact, and the switches for it, is listed in Settings > Privacy.
+
+## Hosting a Lodge
+
+A Lodge is one small .NET 8 service on a Linux server (Ubuntu with systemd), behind a web server you already have
+(nginx, Caddy, Apache) on HTTPS. One install script sets it up, with daily backups and a one-command update; the
+first start prints a one-time owner link that makes you the Guild Master. See
+[server/deploy/README.md](server/deploy/README.md) to get started, and [server/SECURITY.md](server/SECURITY.md)
+and [server/PROTOCOL.md](server/PROTOCOL.md) for the details.
+
+## FAQ
+
+**Is this allowed? Can it get me banned?**
+The Outpost never reads game memory, never injects anything into the game and never plays for you. The in-game part
+is ordinary addons that use the normal addon interface. As with any third-party tool, use it at your own judgement.
+
+**Does it work with other WoW versions?**
+It is made for WoW Forever. Other addons still show up on the Addons page, but the Atlas, the map and the addons are
+built and tested for Forever.
+
+**Do I need a Lodge?**
+No. Addons, the Atlas, the world map, the Characters page and the radio all work on their own. The Lodge is for
+playing together.
+
+**Why does Windows warn me when I start it?**
+Because the exe is not code-signed. Click **More info > Run anyway** once. If you want to be sure, the source is all
+here.
+
+**Where are my settings?**
+In `%LOCALAPPDATA%\ElansAddonHub`. Your Lodge sign-in in there is encrypted for your Windows user.
+
+**Something is wrong. How do I report it?**
+Settings > About > **View log** shows the log with personal details hidden; copy the lines and
+[open an issue](https://github.com/Elanoran/ElanAddonHub/issues).
 
 ## Credits
 
-The addon stands on the work of others - thank you!
+The Outpost and its addons stand on the work of others. Thank you!
 
-- **[Petopia Forever](https://www.wow-petopia.com/forever/)** - pet families, abilities and ranks, which beasts teach
-  them, and beast spawn locations. The Beast Finder, family pages and teacher tooltips are built from Petopia's data.
-- **[Questie](https://github.com/Questie/Questie) / QuestieDB** (GPL-3.0) - NPC and item data: food and ammo vendors,
-  food drops, hunter and pet trainers, Stable Masters and their coordinates.
-- **[WoW Forever Tools](https://wowforevertools.com)** - hunter trainer spells, ranks, levels and costs.
-- **talentsforever.com** (CC BY 4.0) - hunter talent trees used for the builds.
-- **classic-hunter Forever wiki** - Forever-specific hunter mechanics behind several tips.
-- **[HereBeDragons](https://github.com/Nevcairiel/HereBeDragons)** - the map-to-world math the minimap pins follow.
-- **[NAudio](https://github.com/naudio/NAudio)** (MIT) - microphone and speaker audio for the Lodge voice chat.
-- **[Concentus](https://github.com/lostromb/concentus)** (BSD) - the Opus voice codec in pure C#.
-- **[Leaflet](https://leafletjs.com)** 1.9.4 (BSD-2-Clause, Copyright (c) 2010-2023 Volodymyr Agafonkin, 2010-2011 CloudMade; licence text in `src/WorldMap/LICENSE-leaflet.txt`) - the zoomable map engine of the Atlas World map. One pinned copy rides inside the Outpost's exe; the map page never loads anything from the internet.
-- **[three.js](https://threejs.org)** r149 (MIT, Copyright 2010-2023 three.js authors; licence text in `src/WorldMap/LICENSE-three.txt`) - the 3D engine of the Atlas World map's terrain view. One pinned copy (the classic non-module build) rides inside the Outpost's exe; the 3D page never loads anything from the internet.
-- **Item icons (Inventory page)** - read at runtime, read-only, from the user's own WoW install by a small CASC/BLTE/BLP reader
-  written for this project from the public format notes on [wowdev.wiki](https://wowdev.wiki). No library or game file is
-  bundled or downloaded; icons are cached as PNG in the hub's data folder only.
-- **[WoWInterface](https://www.wowinterface.com)** - its public file list feeds the suggested addon matches.
-- **Splash and artwork** - original, drawn for this project (shown on the About page too).
-- **[Costura](https://github.com/Fody/Costura)** (MIT) - packs everything into the one exe.
-- **[Octicons](https://github.com/primer/octicons)** (MIT) - the GitHub mark on third-party addon cards. The GitHub and
-  CurseForge marks (the latter read at runtime from the user's own installed CurseForge app, never bundled) are
-  trademarks of their owners and only show where an addon comes from. WoWInterface and Wago show text chips; the
-  Local folder glyph is our own drawing.
-- World of Warcraft, its icons and names belong to Blizzard Entertainment. This is a fan project, not affiliated
-  with Blizzard.
+- **[Petopia Forever](https://www.wow-petopia.com/forever/)**: pet families, abilities and where beasts are found.
+- **[Questie / QuestieDB](https://github.com/Questie/Questie)** (GPL-3.0): NPC and item data for vendors and trainers.
+- **[WoW Forever Tools](https://wowforevertools.com)**: hunter and paladin trainer spells.
+- **[talentsforever.com](https://talentsforever.com)** (CC BY 4.0): talent builds.
+- **[cMaNGOS classic-db](https://github.com/cmangos/classic-db)** (GPL-3.0): the optional Classic database (drop rates,
+  vendors, spawns, quests), downloaded only on request and always labelled "Classic baseline".
+- **[HereBeDragons](https://github.com/Nevcairiel/HereBeDragons)**: the map math for minimap pins.
+- **[WoWInterface](https://www.wowinterface.com)**: its public file list feeds the suggested addon matches.
+- **[Radio Paradise](https://radioparadise.com)**: the music. It is listener-supported and plays without ads; if you
+  enjoy it, please [support them](https://radioparadise.com/donate).
+- **[NAudio](https://github.com/naudio/NAudio)** (MIT) and **[Concentus](https://github.com/lostromb/concentus)** (BSD):
+  voice chat audio and the Opus codec.
+- **[Leaflet](https://leafletjs.com)** 1.9.4 (BSD-2-Clause) and **[three.js](https://threejs.org)** r149 (MIT): the 2D
+  and 3D world map engines, built into the app (licence texts in `src/WorldMap/`); the map never loads anything from
+  the internet.
+- **[Costura](https://github.com/Fody/Costura)** (MIT): packs everything into one exe.
+- **[Octicons](https://github.com/primer/octicons)** (MIT): the GitHub mark on addon cards.
+- **Paintings and splash art**: original, made by the author for this project with ComfyUI.
+- Item icons, maps and game data are read at runtime from your own WoW install; none of them are in this repository.
+  The screenshots above show them as the app does.
 
-If you're one of these authors and want something credited differently or removed, please
-[open an issue](https://github.com/Elanoran/ElanAddonHub/issues) and it will be fixed.
-
-## Live character and avatars
-
-- **Status strip.** The Elan's Hub addon draws a tiny strip (32 coloured 4x4-pixel squares) in the top-left corner of the
-  game. It encodes your class, race, sex, level and name, and the Hub reads that corner of the screen about every 2 seconds,
-  so friends see your character without a /reload. Nothing is sent to WoW and no game memory is read - it only looks at
-  pixels. Turn it off with `/ehub pixel off` in game, or the "Detect my character live" switch in the Hub settings.
-  Without it, the Hub falls back to the addon's SavedVariables (updated on /reload and logout).
-- **Avatars.** No Blizzard art is included in this repository. Class portraits are loaded at run time from your own
-  WoW folder when an installed addon ships them (currently HealBot's class icons under `Interface\AddOns\HealBot\Images\class`);
-  otherwise the avatar is the class colour with a race code.
+If you are one of these authors and want something credited differently or removed, please
+[open an issue](https://github.com/Elanoran/ElanAddonHub/issues).
 
 ---
 
-## For developers
+<sub>World of Warcraft is a trademark of Blizzard Entertainment. Elan's Outpost is a fan project and not affiliated with Blizzard.</sub>
 
-Built with WPF on .NET Framework 4.8 (ships with Windows, so the exe stays tiny).
+<details>
+<summary><b>For developers</b></summary>
+
+Built with WPF on .NET Framework 4.8 (ships with Windows, so there is no runtime to install). How the addons, Elan's
+Hub, the Outpost and the Lodge fit together is in [ARCHITECTURE.md](ARCHITECTURE.md); the look and feel rules are in
+[DESIGN.md](DESIGN.md).
 
     cd src
     dotnet build -c Release            -> src/bin/Release/ElansAddonHub.exe
 
 Releases are made from the addon repo with `Tools/release.py`:
 
-    python Tools/release.py            build addon zip + hub exe + manifest.json (nothing uploaded)
+    python Tools/release.py            build addon zips + hub exe + manifest.json (nothing uploaded)
     python Tools/release.py --local    manifest with local paths, for testing the hub
     python Tools/release.py --publish  upload as a GitHub release here
 
-The hub reads `releases/latest/download/manifest.json`, which lists the newest addon and hub versions
-with download links, SHA-256 checksums and the changelog.
-
-Testing without clicking: `ElansAddonHub.exe --selftest <dir>` renders the window to PNGs, installs the
-first addon that needs it, writes `result.txt` and quits. Log: `%LOCALAPPDATA%\ElansAddonHub\hub.log`.
+The app reads `releases/latest/download/manifest.json`, which lists the newest addon and app versions with download
+links, SHA-256 checksums and the changelog.
 
 ### Running the self-test
 
-Use the wrapper, not the bare exe. It builds Release, uses a fresh scratch folder under `%TEMP%` (never the
-real `%LOCALAPPDATA%\ElansAddonHub`), prints the FAIL lines and the per-section timing, and exits non-zero on
-new failures:
+`ElansAddonHub.exe --selftest <dir>` runs the built-in checks and writes `result.txt`. Use the wrapper, not the bare
+exe: it builds Release, uses a fresh scratch folder under `%TEMP%` (never the real `%LOCALAPPDATA%\ElansAddonHub`),
+prints the FAIL lines and the per-section timing, and exits non-zero on new failures:
 
     Tools\selftest.ps1                          what this branch changed vs origin/main (the default)
     Tools\selftest.ps1 -Changed v2.33.0         ...vs a tag or any ref
@@ -180,19 +272,17 @@ unknown file by that.
   `mapdata worldmap instances buildings dungeonmaps atlaspage`. They run in `-Full`, with `-Only`, and in changed mode
   only when a game-data reader (`Casc`, `Blp`, `Db2/`, `Maps/`, `WorldMap/`, `DungeonMaps/`, the Atlas data layer) or their
   own test file changed; the patterns are `SelfTestCache.Defs`. Changed mode (and `-UseCache`) also skips one that already
-  passed with the same game build (`.build.info`: `1.60.1.70374` ...) and the same reader and test files: it prints
-  `worldmapreal: skipped (game 1.60.1.70374 and readers unchanged since a passing run on <date>)`. The pass is stored in
+  passed with the same game build (`.build.info`) and the same reader and test files. The pass is stored in
   `%LOCALAPPDATA%\ElansAddonHub-selftest-cache` (never the app's data folder); a FAIL is never stored, a new game patch
   or an edit of a reader re-runs them, `-NoCache` forces.
 - `idlecpu` is the idle-CPU measurement (20 s when the first pair is clear, up to a minute); it runs when something
   that ticks changes (`WowWatch`, the pixel strip, presence, `LodgeSession.cs` / `.History.cs`) or for a shared file.
-- Pictures (`1-before.png` ... and the world map / buildings WebView captures, for docs/design) are not assertions:
-  they are only taken with `ELANSHUB_SHOTS=1` (not in `-Full` any more), together with the waits that only serve them.
-
-- Sections: `addons thirdparty viewer voice update strip lodge lodgefeatures presence profile toasts dialogs
-  inventory health round3`. The exe takes `--only a,b`, `--changed <base> [--repo <dir>]` and `--list`; no flag
-  runs everything. Unselected sections are logged as `skipped <name>` in `result.txt`, each run section as
-  `section <name>: 12.3 s`, plus `total:`. `scope.txt` says why each file chose its sections.
+- Pictures (`1-before.png` ... and the world map / buildings WebView captures) are not assertions: they are only taken
+  with `ELANSHUB_SHOTS=1` (not in `-Full`), together with the waits that only serve them. Design pictures go to
+  `docs/design/`, which is git-ignored; the README's pictures in `docs/readme/` are the only ones committed.
+- The exe takes `--only a,b`, `--changed <base> [--repo <dir>]` and `--list`; no flag runs everything. Unselected
+  sections are logged as `skipped <name>` in `result.txt`, each run section as `section <name>: 12.3 s`, plus `total:`.
+  `scope.txt` says why each file chose its sections.
 - The path -> section table, the section dependencies and their unit checks are in `src/Services/TestScope.cs`.
   Shared files (App, Brand, Util, SettingsStore, Models, Json, Net, SelfTestFixture) and unknown files without a
   section in their header select ALL: add a new test block to `TestScope.All`/`Info` and the table when you add one.
@@ -200,5 +290,9 @@ unknown file by that.
   on screen or takes focus; `-Visible` shows it. Checks that need the real desktop (the live pixel-strip screen
   capture) report `skipped (hidden desktop)` there (`ELANSHUB_HIDDEN_DESKTOP=1`). Do not run two visible
   self-tests at once: they steal each other's focus and the unread-marker checks fail.
-- A clean run has ZERO FAIL lines, so any FAIL is real. The update check talks to a local fake server (`Services/FakeUpdateServer.cs`, never GitHub; `ELANSHUB_FAKE_UPDATE=0` turns it off), and WoW running on the PC is ignored (`ELANSHUB_FAKE_WOW=0` is set for the self-test).
+- A clean run has ZERO FAIL lines, so any FAIL is real. The update check talks to a local fake server
+  (`Services/FakeUpdateServer.cs`, never GitHub; `ELANSHUB_FAKE_UPDATE=0` turns it off), and WoW running on the PC is
+  ignored (`ELANSHUB_FAKE_WOW=0` is set for the self-test).
 - `ELANSHUB_TEST_LODGE=url|code|name` still enables the live Lodge session (`lodge` section).
+
+</details>
