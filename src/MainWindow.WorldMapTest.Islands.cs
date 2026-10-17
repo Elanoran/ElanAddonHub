@@ -78,10 +78,10 @@ namespace ElansAddonHub
             // the card: "You are on another map: Gale Isle" with "Show Gale Isle" when that map has a world map; without one, the notice only
             var now = DateTime.UtcNow;
             var here = new LiveTrail.Point { At = now, MapId = 7, X = 10, Y = 20 };
-            var withShow = Json.Obj(WorldMapProtocol.Me(LiveState.Ok, "Ashlain", "#ABD473", here, new List<LiveTrail.Point> { here }, 0, now, "Gale Isle", null, true));
-            var noShow = Json.Obj(WorldMapProtocol.Me(LiveState.Ok, "Ashlain", "#ABD473", here, new List<LiveTrail.Point> { here }, 0, now, null, null, false));
-            var onIt = Json.Obj(WorldMapProtocol.Me(LiveState.Ok, "Ashlain", "#ABD473", here, new List<LiveTrail.Point> { here }, 7, now, "Gale Isle", null, true));
-            var evil = Json.Obj(WorldMapProtocol.Me(LiveState.Ok, "Ashlain", "#ABD473", here, null, 0, now, "Gale\n" + new string('x', 200), null, true));
+            var withShow = Json.Obj(WorldMapProtocol.Me(LiveState.Ok, "Ashlain", "#ABD473", here, new List<LiveTrail.Point> { here }, 0, now, "Gale Isle", null, canShow: true));
+            var noShow = Json.Obj(WorldMapProtocol.Me(LiveState.Ok, "Ashlain", "#ABD473", here, new List<LiveTrail.Point> { here }, 0, now, null, null, canShow: false));
+            var onIt = Json.Obj(WorldMapProtocol.Me(LiveState.Ok, "Ashlain", "#ABD473", here, new List<LiveTrail.Point> { here }, 7, now, "Gale Isle", null, canShow: true));
+            var evil = Json.Obj(WorldMapProtocol.Me(LiveState.Ok, "Ashlain", "#ABD473", here, null, 0, now, "Gale\n" + new string('x', 200), null, canShow: true));
             Check("islands: the card on another map says \"You are on another map: Gale Isle\" and offers \"Show Gale Isle\"; a map with no world map says only that you are elsewhere; on the island itself there is no button; the name is one clean line",
                 withShow.Str("state") == "elsewhere" && withShow.Str("notice") == "You are on another map: Gale Isle" && withShow.Str("show") == "Show Gale Isle"
                 && noShow.Str("state") == "elsewhere" && noShow.Str("notice") == "You are on another map" && !noShow.ContainsKey("show")
