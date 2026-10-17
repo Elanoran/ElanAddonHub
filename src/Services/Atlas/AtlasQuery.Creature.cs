@@ -167,7 +167,7 @@ namespace ElansAddonHub.Services.Atlas
                 return nf;
             }
             m.Title = seen != null && seen.Name.Length > 0 ? seen.Name : !string.IsNullOrEmpty(cn?.Name) ? cn.Name : NamelessNpc(id);
-            if (m.Title == NotNamedYet) m.TitleNote = NotNamedLine;          // 2.92: while WoW runs (its cache is written when it closes)
+            if (m.Title == NotNamedYet) m.TitleNote = NotNamedLine;          // 2.93: while WoW runs (its cache is written when it closes)
             string F = AtlasLabel.Forever, C = AtlasLabel.Classic;
             string title = seen != null && seen.Title.Length > 0 ? seen.Title : cn?.SubName ?? "";
             if (seen != null) AddLayer(m, "seen");

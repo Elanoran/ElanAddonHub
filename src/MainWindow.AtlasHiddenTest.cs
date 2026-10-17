@@ -13,10 +13,10 @@ using ElansAddonHub.Services.Professions;
 
 namespace ElansAddonHub
 {
-    // --selftest "atlashidden" (2.92): the test / placeholder rule (AtlasHidden) on fixture data - the name rule (what it takes and what it leaves), skill lines
+    // --selftest "atlashidden" (2.93): the test / placeholder rule (AtlasHidden) on fixture data - the name rule (what it takes and what it leaves), skill lines
     // nobody can learn (a Survival-like old line hidden; a Comprehension-like line with an ability that comes with it, and a line taught by an item, kept),
     // and every place it applies: the browse lists, their chips and counts, search, the Professions list; a page opened by its id still opens.
-    // --selftest "atlasnameless" (2.92): a creature the game has not named yet is "Not named yet" (with the line why) while WoW runs, "NPC <id>" after.
+    // --selftest "atlasnameless" (2.93): a creature the game has not named yet is "Not named yet" (with the line why) while WoW runs, "NPC <id>" after.
     public partial class MainWindow
     {
         static AtlasSet HiddenTestSpells(bool withEffects = true)

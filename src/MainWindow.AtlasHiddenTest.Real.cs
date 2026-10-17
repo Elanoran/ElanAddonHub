@@ -13,7 +13,7 @@ using ElansAddonHub.Services.Professions;
 
 namespace ElansAddonHub
 {
-    // --selftest "atlashiddenreal" (2.92): the test / placeholder rule (AtlasHidden) on the player's own game files, read-only. Lists EVERYTHING the rule
+    // --selftest "atlashiddenreal" (2.93): the test / placeholder rule (AtlasHidden) on the player's own game files, read-only. Lists EVERYTHING the rule
     // hides (hidden-audit.txt in the scratch folder, and the notes), checks that real names stay (Zzarc' Vul, Test of Lore ...), and writes the evidence on
     // the skill lines in doubt (Comprehension, Survival). Skips without a WoW install with the Forever client.
     public partial class MainWindow
@@ -126,7 +126,7 @@ namespace ElansAddonHub
             Check("real: the Professions list has no hidden line", book.Professions.All(p => !AtlasHidden.IsHiddenSkill(p.Skill)), string.Join(",", book.Professions.Select(p => p.Name)));
             var srch = AtlasQuery.Search("test profession");
             Check("real: search leaves the test profession out", !srch.All.Any(h => h.Name.Contains("[DNT]")), string.Join(",", srch.All.Select(h => h.Name)));
-            // the evidence decided (2.92): Survival 142 is the old pre-release line (no ability that comes with it, no teaching item, its one recipe makes
+            // the evidence decided (2.93): Survival 142 is the old pre-release line (no ability that comes with it, no teaching item, its one recipe makes
             // no item, and no trainer of the Classic baseline teaches it) - hidden; Comprehension 3012 is the Mage's scroll skill (an ability that comes
             // with the line, Forever's own spell ids, 10+ scrolls that need it) - kept
             var surv = sn.Skills.TryGetValue(142, out var s142) ? s142 : null; var comp = sn.Skills.TryGetValue(3012, out var s3012) ? s3012 : null;

@@ -26,7 +26,7 @@ namespace ElansAddonHub.Services.Atlas
         public int MinLevel, MaxLevel;                      // 0 = open
         public int Quality = -1;                            // items: exactly this quality
         public string Slot = "";                            // items: a slot name ("Head")
-        public string Src = "";                             // "game" | "classic" | "lodge" | "cairn" | "forever" (2.92: the Data sources page's cards)
+        public string Src = "";                             // "game" | "classic" | "lodge" | "cairn" | "forever" (2.93: the Data sources page's cards)
         public string How = "";                             // items: drop | vendor | quest | crafted | fishing | container | gathered
         public string For = "";                             // items: a character key (level and proficiency)
         public string Zone = "";                            // creatures, objects, quests: a UiMap id

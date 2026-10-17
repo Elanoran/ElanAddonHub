@@ -6,13 +6,13 @@ using ElansAddonHub.Services.Db2;
 
 namespace ElansAddonHub.Services.Atlas
 {
-    // Test and placeholder entries (2.92): the game files carry developer leftovers - "Test Profession [DNT]", "[PH] Placeholder Item", "zzOLD Shoulders",
+    // Test and placeholder entries (2.93): the game files carry developer leftovers - "Test Profession [DNT]", "[PH] Placeholder Item", "zzOLD Shoulders",
     // "Deprecated ..." - that nobody can get in the live game. ONE rule decides what the Atlas leaves out of its lists, chips, counts, search, the side menu's
     // numbers and the Professions list; a page opened by its id (a link, a pasted "item:123") still opens, because a real spell can trigger a [DNT] helper.
     //   1. the name: a developer tag in brackets ([DNT] [PH] [NYI] [DND] [UNUSED] [OLD] [TEST] [QA] [DEPRECATED], any [CAPITALS]), the words UNUSED /
     //      DEPRECATED / PLACEHOLDER / DEBUG / (OLD), DNT / DND / NYI / DUMMY in capitals, a "zz" / "ZZ" / "zzOLD" / "OLD " / "QA " prefix, or the word "test"
     //      ("Test Profession", "TEST SWORD", "Level 60 Test Gear") - but not the real "Test of Lore", "Test of Faith", "The Test of Righteousness" or "High
-    //      Test Eternium Fishing Line" (checked on the real game files and the Classic baseline, 2.92);
+    //      Test Eternium Fishing Line" (checked on the real game files and the Classic baseline, 2.93);
     //   2. a skill line that nobody can learn: no race / class row in SkillRaceClassInfo, no ability a player gets with it, no teaching item for any of
     //      its recipes (LearnableSkill); its recipes go with it.
     // Self-test sections "atlashidden" (fixtures) and "atlashiddenreal" (lists everything the rule hides in the real game files).

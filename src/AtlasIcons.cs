@@ -59,7 +59,7 @@ namespace ElansAddonHub
             ["factions"] = "M4,3.5 L20,3.5 M6,3.5 L6,20 L12,16.5 L18,20 L18,3.5 M12,7.5 L14,10 L12,12.5 L10,10 Z",
             // a cut gem
             ["finds"] = "M7,4 L17,4 L21,9 L12,20.5 L3,9 Z M3,9 L21,9 M9.5,9 L12,20.5 L14.5,9 M7,4 L9.5,9 L12,4 L14.5,9 L17,4",
-            // ---- where the data comes from (2.92, the Data sources page and its strip; the same hue as the source chips on Atlas rows: Brush.Source.*)
+            // ---- where the data comes from (2.93, the Data sources page and its strip; the same hue as the source chips on Atlas rows: Brush.Source.*)
             // your game: a screen with its stand (read from the WoW install on this PC)
             ["src-game"] = "M3.5,5 L20.5,5 L20.5,15.5 L3.5,15.5 Z M12,15.5 L12,19.5 M8,19.5 L16,19.5 M6.5,8.5 L10,8.5 M6.5,11.5 L13,11.5",
             // you: a person

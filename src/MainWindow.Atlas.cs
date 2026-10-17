@@ -41,7 +41,7 @@ namespace ElansAddonHub
             if (Session != null) Session.CairnStatusChanged += () => Dispatcher.BeginInvoke(new Action(OnCairnStatus));
             CairnAtlas.Start(CairnWanted, CairnReachable);
             InitSharingInvite();           // 2.87: the calm sharing card, the quiet line on item / creature pages
-            // 2.92: the Data sources page's facts - this PC's own observations and flight times, the Lodge's flight times, where the user stands with the Cairn
+            // 2.93: the Data sources page's facts - this PC's own observations and flight times, the Lodge's flight times, where the user stands with the Cairn
             AtlasView.OwnObservations = () => AtlasObs.Read(settings.WowRoot);
             AtlasView.OwnFlightLegs = () => FlightShare.ReadCached(settings.WowRoot, out _)?.Legs.Keys.ToList();
             AtlasView.LodgeFlightLegs = () => Session?.FlightData?.Legs.Keys.ToList();

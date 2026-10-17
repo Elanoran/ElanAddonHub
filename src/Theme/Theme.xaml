@@ -197,7 +197,7 @@
   <SolidColorBrush x:Key="Brush.Section.GuildMaster.Tint" Color="{StaticResource Color.Section.Orange}" Opacity="0.16" />
   <SolidColorBrush x:Key="Brush.Section.About" Color="{StaticResource Color.Section.Neutral}" />
   <SolidColorBrush x:Key="Brush.Section.About.Tint" Color="{StaticResource Color.Section.Neutral}" Opacity="0.16" />
-  <!-- where Atlas data comes from (2.92): one hue per source, shared by the Data sources page (strip, icons, bars) and the source chips on Atlas rows.
+  <!-- where Atlas data comes from (2.93): one hue per source, shared by the Data sources page (strip, icons, bars) and the source chips on Atlas rows.
        Your game = teal, You (this PC's own observations) = amber, Your Lodge = violet, the Cairn = blue, the Classic baseline = the neutral grey (old data,
        a fallback). Same muted hues as the section colours; .Tint = 16 % for a card's fill. -->
   <SolidColorBrush x:Key="Brush.Source.Game" Color="{StaticResource Color.Section.Teal}" />

@@ -13,7 +13,7 @@ using ElansAddonHub.Services.Db2;
 
 namespace ElansAddonHub
 {
-    // The Data sources page (atlas:data, 2.92): who owns each part of the Atlas's data and how complete the Forever part is, at a glance.
+    // The Data sources page (atlas:data, 2.93): who owns each part of the Atlas's data and how complete the Forever part is, at a glance.
     //   1. "Where this comes from" (2.91, AtlasPage.DataHonesty.cs), restyled: the three kinds side by side with their source's icon
     //   2. the source strip: Your game / You / Your Lodge / The Cairn / Classic baseline - each its own line icon (AtlasIcons src-*) and colour (Brush.Source.*,
     //      the same as the source chips on Atlas rows), one figure, "who owns it" in one line; a card with a list of its own opens it (filtered Atlas lists)
@@ -76,7 +76,7 @@ namespace ElansAddonHub
         void DrawSourcesPage(StackPanel col)
         {
             var f = GatherSourcesFacts();
-            col.Children.Add(SourcesExplainerCard());          // 2.91's words, 2.92's look (AtlasPage.DataHonesty.cs)
+            col.Children.Add(SourcesExplainerCard());          // 2.91's words, 2.93's look (AtlasPage.DataHonesty.cs)
             col.Children.Add(SourcesHead("Who owns what", "Five sources, each in its own colour - the same colour as the source chip on every Atlas row."));
             col.Children.Add(SourceStripView(f));
             col.Children.Add(SourcesHead("How complete is the Forever data", "What only the server knows is learned as people play. Each thing is counted once, for the first source that has it."));

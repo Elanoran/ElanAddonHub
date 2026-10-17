@@ -26,7 +26,7 @@ namespace ElansAddonHub.Services.Atlas
         public Func<Dictionary<int, List<AtlasObs.NpcSpot>>> OwnNpcSpots = () => null;   // where this PC's Toolkit met, killed or saw npcs: npc -> spots
         public Func<IReadOnlyDictionary<int, AtlasObs.FieldNote>> OwnFieldNotes = () => null;   // Hunter Helper's field notes on this PC: npc -> note
         public Func<Dictionary<int, Dictionary<int, List<AtlasObs.NodePt>>>> OwnNodes = () => null;   // gathering nodes this PC's Hub observed: object -> uiMapId -> nodes
-        public Func<bool> WowRunning = () => WowWatch.Shared.Running;         // 2.92: is the game running now (the app's 2 s watch)? A creature it has not named yet is "Not named yet" then
+        public Func<bool> WowRunning = () => WowWatch.Shared.Running;         // 2.93: is the game running now (the app's 2 s watch)? A creature it has not named yet is "Not named yet" then
     }
 
     // ============================================================================================================================
@@ -101,7 +101,7 @@ namespace ElansAddonHub.Services.Atlas
             return c != null && !string.IsNullOrEmpty(c.Name) ? c.Name : NamelessNpc(id);
         }
 
-        // 2.92: a creature nobody's data names yet. New Forever creatures get their name in the game's creature cache, which WoW writes when it closes;
+        // 2.93: a creature nobody's data names yet. New Forever creatures get their name in the game's creature cache, which WoW writes when it closes;
         // while it runs, the page and the lists call it "Not named yet" (with the line why), after that the real name shows - or "NPC <id>" if the
         // cache still has none. Self-test section "atlasnameless".
         public const string NotNamedYet = "Not named yet";
@@ -185,7 +185,7 @@ namespace ElansAddonHub.Services.Atlas
             void Add(string kind, List<AtlasHit> hits)
             {
                 ct.ThrowIfCancellationRequested();
-                hits.RemoveAll(AtlasHidden.IsHidden);           // 2.92: test and placeholder entries are not offered (AtlasHidden)
+                hits.RemoveAll(AtlasHidden.IsHidden);           // 2.93: test and placeholder entries are not offered (AtlasHidden)
                 if (hits.Count == 0) return;
                 hits.Sort(CompareHits);
                 var g = new AtlasGroup { Kind = kind, Title = AtlasKinds.Plural(kind), Total = hits.Count };

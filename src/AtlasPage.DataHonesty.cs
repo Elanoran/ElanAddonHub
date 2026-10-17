@@ -50,7 +50,7 @@ namespace ElansAddonHub
             return sp;
         }
 
-        // the Data sources page: first, before the cards of each source. 2.92: the same words, the three kinds side by side (one column when narrow), each
+        // the Data sources page: first, before the cards of each source. 2.93: the same words, the three kinds side by side (one column when narrow), each
         // with the icon and colour of its source (Brush.Source.*: your game; your Lodge for "Seen on Forever"; the Classic baseline), the way to help below
         FrameworkElement SourcesExplainerCard()
         {

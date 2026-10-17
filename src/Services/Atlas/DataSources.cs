@@ -9,7 +9,7 @@ using ElansAddonHub.Services.Db2;
 
 namespace ElansAddonHub.Services.Atlas
 {
-    // The five sources of the Atlas (2.92) as the Data sources page shows them, and the numbers behind its pictures. No UI here (AtlasPage.DataSources.cs
+    // The five sources of the Atlas (2.93) as the Data sources page shows them, and the numbers behind its pictures. No UI here (AtlasPage.DataSources.cs
     // draws it), nothing guessed: every figure is counted from data on this PC.
     //   Your game        the player's own game files (items, spells, quests, maps ...): read from the WoW install, stays on this PC
     //   You              what this PC's own game noted (Elan's Toolkit / Hunter Helper / Hub SavedVariables): drops, vendors, spawn points, nodes, flight times

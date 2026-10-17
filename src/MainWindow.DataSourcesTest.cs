@@ -15,7 +15,7 @@ using ElansAddonHub.Services.Maps;
 
 namespace ElansAddonHub
 {
-    // --selftest "datasources" (2.92): the Data sources page on the invented world of the Atlas page test (AtlasTestLodge, the fixture Cairn, the Classic
+    // --selftest "datasources" (2.93): the Data sources page on the invented world of the Atlas page test (AtlasTestLodge, the fixture Cairn, the Classic
     // fixture) plus an own-observations snapshot and flight legs made here. The numbers of every coverage bar are worked out by hand below, so a change in
     // how a source is counted fails a check. Also the source colours shared with the row chips, the source cards' lists, the Cairn card's standings, growth,
     // layout at three widths, keyboard and the text equivalents; screenshots with ELANSHUB_SHOTS=1 (datasources-*.png).

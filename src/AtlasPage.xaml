@@ -34,7 +34,7 @@
             <TextBlock x:Name="right" local:MoneyText.Source="{Binding Right}" Style="{StaticResource Text.Body}" HorizontalAlignment="Right" />
             <Border x:Name="chip" Style="{StaticResource Chip}" Padding="8,0" MinHeight="20" HorizontalAlignment="Right" Margin="0,2,0,0">
               <StackPanel Orientation="Horizontal">
-                <!-- 2.92: the source's colour (Brush.Source.*), the same as on the Data sources page -->
+                <!-- 2.93: the source's colour (Brush.Source.*), the same as on the Data sources page -->
                 <Ellipse x:Name="srcdot" Width="6" Height="6" Fill="{Binding SourceBrush}" Margin="0,0,4,0" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding Label}" Style="{StaticResource Text.Caption}" VerticalAlignment="Center" />
               </StackPanel>

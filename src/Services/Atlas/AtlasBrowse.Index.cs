@@ -21,7 +21,7 @@ namespace ElansAddonHub.Services.Atlas
         public int Quality = -1, ILvl, Cls = -1, Sub = -1, Inv, Icon, Zone, Rank, Type, Flags, Skill;
         public int Spell, Start;                  // recipes: the recipe spell, and the skill it is learnable from (estimated from its colour band)
         public bool Client, Classic, Lodge;       // which layers know it: the player's game, the Classic baseline, the Lodge's observations
-        public bool Cairn;                        // 2.92: the Cairn's dataset has it (a drop, a vendor, loot of the creature or object): the Data sources page's "Items in the Cairn's data"
+        public bool Cairn;                        // 2.93: the Cairn's dataset has it (a drop, a vendor, loot of the creature or object): the Data sources page's "Items in the Cairn's data"
         public bool Forever;                      // Forever players saw what only the server knows (creatures: loot; items: a drop or vendor; objects: loot or nodes) - the Lodge or the Cairn (DataHonesty)
         public int Src;                           // items: bit per AtlasBrowse.Hows
         public double Chance; public bool ChanceLodge;
@@ -127,7 +127,7 @@ namespace ElansAddonHub.Services.Atlas
                 default: return null;
             }
             ix.Cat = cat; ix.Token = tok;
-            // 2.92: test and placeholder entries are not listed (AtlasHidden, the one rule); a chip left with nothing under it goes with them
+            // 2.93: test and placeholder entries are not listed (AtlasHidden, the one rule); a chip left with nothing under it goes with them
             if (ix.All.RemoveAll(AtlasHidden.IsHidden) > 0) Prune(ix.Root, ix.All);
             ix.Zones = ix.All.Where(e => e.Zone > 0).Select(e => e.Zone).Distinct().Select(z => new KeyValuePair<int, string>(z, x.Map?.Name(z) ?? "Zone " + z)).OrderBy(z => z.Value, StringComparer.OrdinalIgnoreCase).ToList();
             return ix;

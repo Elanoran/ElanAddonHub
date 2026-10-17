@@ -75,7 +75,7 @@ namespace ElansAddonHub
         }
 
         // ============================================================================================================================ Data sources
-        // 2.92: who owns what and how complete it is (AtlasPage.DataSources.cs), then the cards the start page used to open with: game data, the Classic baseline
+        // 2.93: who owns what and how complete it is (AtlasPage.DataSources.cs), then the cards the start page used to open with: game data, the Classic baseline
         // (with its Get / Remove / licence), the Lodge pool, the world map cache.
         void DrawData()
         {
@@ -87,7 +87,7 @@ namespace ElansAddonHub
             UpdateNav();
             var col = new StackPanel();
             Body.Children.Add(col);
-            DrawSourcesPage(col);                               // 2.92: the explainer, the source strip, the coverage bars, growth and the Cairn (AtlasPage.DataSources.cs)
+            DrawSourcesPage(col);                               // 2.93: the explainer, the source strip, the coverage bars, growth and the Cairn (AtlasPage.DataSources.cs)
             var offerD = ClassicOfferView(); offerD.Margin = new Thickness(0, 0, 0, 12); col.Children.Add(offerD);
             // the cards sit side by side when the window is wide (see LayoutStart) and stack when it is narrow
             startCards.Clear();

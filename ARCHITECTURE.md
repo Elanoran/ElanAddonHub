@@ -605,19 +605,19 @@ is not part of this repository.
 - **Where the data comes from** (2.91, `Services/Atlas/DataHonesty.cs`, `AtlasPage.DataHonesty.cs`): every text that says where Atlas data comes from is
   defined once in `DataHonesty` (three kinds: your game files / seen on Forever - own game, Lodge pool, Cairn - / the Classic baseline as a fallback).
   Data sources opens with the explainer; Atlas Home shows it as a card until "Got it" (`settings.AtlasSourcesCardDismissed`).
-  2.92: the Data sources page (`AtlasPage.DataSources.cs`) is drawn from a `SourcesFacts` the page gathers on the UI thread (the main window
+  2.93: the Data sources page (`AtlasPage.DataSources.cs`) is drawn from a `SourcesFacts` the page gathers on the UI thread (the main window
   supplies this PC's own observations `AtlasObs.Read`, the own and Lodge flight legs, and a `CairnFacts` from the session and settings); the
   pure `DataSources` class counts it: `Coverage` (per kind every id once, for the first source that has it: you, Lodge, Cairn, then the Classic
   baseline - the baseline's ids per kind are worked out once per index), `LodgeGrowth` (finds per day from the finds' own dates), `CairnCard`
   (standing), `Owner` / `Figure` lines. `CairnSet` and `LodgeAtlas` expose their id lists for it (ids only). The five source keys also colour the
   row chips: `AtlasRow.Source` ("lodge" on the Lodge's own rows) / `SourceKey` / `SourceBrush`. Browse `src=` takes `cairn` and `forever` too
   (`BEntry.Cairn`, `BEntry.Forever`).
-- **Test / placeholder entries** (2.92, `Services/Atlas/AtlasHidden.cs`): one rule for what the Atlas does not list - developer names ([DNT], [PH],
+- **Test / placeholder entries** (2.93, `Services/Atlas/AtlasHidden.cs`): one rule for what the Atlas does not list - developer names ([DNT], [PH],
   Deprecated, zzOLD, the word test outside "Test of ..." ...) and crafting lines nobody can learn (no ability that comes with the line, no teaching
   item, not a profession by name). Applied where lists are made, never to the data: `AtlasBrowse.Build` drops the entries and prunes the chips
   left empty (so counts and the side menu agree), `AtlasQuery.Search` drops the hits, `ProfessionBook.Build` and `AtlasHosts.ProfessionList` skip
   the lines and test recipes; a page opened by its id still builds. `atlashiddenreal` writes everything it hides on the real files to hidden-audit.txt.
-- **Nameless creatures** (2.92): `AtlasQuery.NamelessNpc` - "Not named yet" while `Context.WowRunning` (the app's `WowWatch`), else "NPC <id>";
+- **Nameless creatures** (2.93): `AtlasQuery.NamelessNpc` - "Not named yet" while `Context.WowRunning` (the app's `WowWatch`), else "NPC <id>";
   an npc page then carries `TitleNote` (the line under the hero's subtitle). The name arrives when WoW closes and SeenData re-reads its cache. The models carry one
   line: `AtlasSection.Coverage` (loot tables: `LootSection` from the Lodge counter's unique kills and members and the Cairn source's N / M;
   a vendor's Sells; an item's sources by row label, quests and recipes not counted) and `AtlasMapPlan.Coverage` (`MapCoverage`: markers whose

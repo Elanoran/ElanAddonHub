@@ -177,7 +177,7 @@ namespace ElansAddonHub.Services.Professions
 
             foreach (var sk in sn.Skills.Values.OrderBy(s => s.Id))
             {
-                if (!sk.IsProfession || sk.ParentId != 0 || string.IsNullOrEmpty(sk.Name) || Atlas.AtlasHidden.IsHiddenSkill(sk, sn, itemEffects)) continue;     // 2.92: test / placeholder lines (AtlasHidden)
+                if (!sk.IsProfession || sk.ParentId != 0 || string.IsNullOrEmpty(sk.Name) || Atlas.AtlasHidden.IsHiddenSkill(sk, sn, itemEffects)) continue;     // 2.93: test / placeholder lines (AtlasHidden)
                 bool gathering = GatheringNames.Contains(sk.Name, StringComparer.OrdinalIgnoreCase);
                 var recipes = new List<ProfRecipe>();
                 foreach (var a in sn.AbilitiesOf(sk.Id))

@@ -297,7 +297,7 @@ namespace ElansAddonHub.Services.Atlas
         public int SourceCount => sources.Count;
         public int VendorNpcCount => vendorsByNpc.Count;
         public int FlightCount => flights.Count;
-        // 2.92: what the Data sources page counts (ids only)
+        // 2.93: what the Data sources page counts (ids only)
         public IEnumerable<Source> AllSources => sources.Values;
         public IEnumerable<int> VendorNpcIds => vendorsByNpc.Keys;
         public IEnumerable<int> SpawnNpcIds => spawns.Keys;
@@ -312,7 +312,6 @@ namespace ElansAddonHub.Services.Atlas
         // for the maps (2.93): every creature / object with places, and the vendors (their place is in Spawns)
         public IEnumerable<KeyValuePair<int, List<Spot>>> AllSpawns => spawns;
         public IEnumerable<KeyValuePair<int, List<Spot>>> AllNodes => nodes;
-        public IEnumerable<int> VendorNpcIds => vendorsByNpc.Keys;
         public IEnumerable<KeyValuePair<string, (double T, long N, int M)>> AllFlights => flights;
         public bool Flight(string leg, out double seconds, out int lodges) { seconds = 0; lodges = 0; if (!flights.TryGetValue(leg ?? "", out var f)) return false; seconds = f.T; lodges = f.M; return true; }
 

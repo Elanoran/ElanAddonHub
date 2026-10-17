@@ -105,7 +105,7 @@ namespace ElansAddonHub.Services.Atlas
         public double Progress { get; set; } = -1;        // 0..1: a thin bar under the text (a reputation inside its standing); -1 = none
         public bool HasProgress => Progress >= 0;
         public bool Forever => Label == AtlasLabel.Forever;
-        // 2.92: which of the five sources (DataSources: game, you, lodge, cairn, classic) the row is from - its chip carries that source's colour, the same as on the
+        // 2.93: which of the five sources (DataSources: game, you, lodge, cairn, classic) the row is from - its chip carries that source's colour, the same as on the
         // Data sources page. "" = worked out from the label (Forever = your game, Classic baseline, Cairn, Your characters = you); the Lodge's own rows say "lodge".
         public string Source { get; set; } = "";
         public string SourceKey => DataSources.KeyOf(Label, Source);
