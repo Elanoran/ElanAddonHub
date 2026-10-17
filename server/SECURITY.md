@@ -283,6 +283,22 @@ The Outpost side (same release train): manifest folders, ids and game versions m
 - Members are told: the welcome lists `cairn` while the server contributes, and the Outpost shows it in Settings > Privacy. Members who switched Atlas sharing off contribute nothing (their data never reaches the pool); a purge lowers the totals, and the next contribution takes the difference back out of the Cairn.
 - A failed or refused post changes nothing locally (only confirmed records are remembered); 401 / 429 stop the run until the next one.
 
+## Joining the Cairn (2.28, feature `cairnjoin`)
+
+- Off by default. Only the Guild Master switches it on (`admin.cairn`, checked on the server against the rank, not just hidden in the app);
+  officers see the status. Nothing about the switch needs server settings; `LODGE_CAIRN_*` still wins when set (the switch is then locked).
+- The Lodge's own key pair: ECDSA P-256, made on first need (never by an unauthenticated request), the private key in `data/cairn-key.pem`
+  written 0600 from its first byte, never logged, never sent; it is part of the data folder, so `lodge-backup` keeps it (the archives are
+  root-only). Losing it only means the Lodge has to ask to join again. No shared secret leaves the server: the Cairn keeps the public key.
+- Every request to the Cairn is signed (method, path, body hash, time, a random nonce) - a captured request can't be replayed or changed,
+  and nothing a proxy logs (headers included) lets anyone act as the Lodge.
+- `GET /cairn/challenge` is public on purpose (the Cairn calls it to check the Lodge's address). It answers only while the switch is on and
+  the key pair exists, at most 30 times a minute, and signs only `"elans-cairn-challenge/1\n<nonce>\n<publicUrl>"` with a nonce of base64url
+  characters (no line breaks): a different prefix and shape than a request signature, so it can't be used to forge one.
+- The public address the Guild Master enters goes to the Cairn (that is how it checks the Lodge); it must be https and a public host. The
+  invite code is kept (mode 600, `data/cairn-join.json`) only until the Cairn took or refused it, never logged, never sent to any member.
+- The Cairn's answers are read with a size cap; its error texts are shown to officers and the Guild Master as text only.
+
 ## Receiving the Cairn's data (give to get, feature `cairn2`)
 
 - Only a Lodge that contributes receives: the receiver is on exactly while the contributor is, and the Cairn itself serves the dataset only

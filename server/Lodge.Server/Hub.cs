@@ -102,7 +102,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public partial class LodgeHub
 {
-    public const string Version = "2.27.0";
+    public const string Version = "2.28.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -243,6 +243,7 @@ public partial class LodgeHub
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); f.Add("atlas4"); f.Add("atlas5"); f.Add("atlas6"); f.Add("atlas7"); f.Add("atlas8"); f.Add("atlas9"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests (atlas7: with their verified details and the game build, 2.25); atlas3: gathering node positions (nodes); atlas4: fishing spots (fishspots); atlas5: hunter field notes (fieldnotes); atlas6: instance entrances seen by members (entrances); atlas8: where members met, killed or saw npcs (npcspots, 2.26); atlas9: counter extras, pickpocket / gathering / contained counters, corpse dedupe (2.26)
         if (Cairn.Enabled) f.Add("cairn");                         // the owner contributes the pooled Atlas numbers (ids and counts, no names) to the Cairn: members are told so
         if (CairnIn.Enabled) f.Add("cairn2");                      // give to get: members who share get the Cairn's dataset from this Lodge (atlas.sharing, cairn.status, GET /cairn/...)
+        if (Cfg.AtlasEnabled) f.Add("cairnjoin");                  // 2.28: the Guild Master can switch "Join the Cairn" on (admin.cairn, cairn.join.get -> cairn.join)
         if (Badges.Enabled) f.Add("badges");                       // badges and the ladder: both the server setting and the Guild Master switch are on
         if (Cfg.RealmsConfigured) f.Add("realms");                  // realm status: only while the Blizzard API credentials are set
         foreach (var k in DatasetKinds.All) if (k.Enabled(Cfg)) f.Add(k.Feature);   // 2.17: hosted datasets ("classic")

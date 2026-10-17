@@ -82,7 +82,15 @@ names. Everyone's Atlas gets better from it.
 **The Cairn.** Lodges can also pool their numbers in the Cairn, a shared commons of many Lodges, so every Lodge's Atlas
 learns from the others. It works as give to get: a Lodge only receives the Cairn's numbers while it contributes, and inside
 a Lodge only members who share get them. The Cairn only ever sees Lodge totals (no members, no names), publishes an
-observation only once enough independent Lodges agree on it, and drops outliers. Joining the Cairn is by invitation for now.
+observation only once enough independent Lodges agree on it, and drops outliers.
+
+**Joining the Cairn.** A Lodge's Guild Master turns it on in the Outpost (Settings > Guild Master > Join the Cairn) - no
+keys to pass around, nothing to edit on the server. The Lodge makes its own key pair and keeps the private half to itself,
+asks the Cairn to join with its name and public address, and the Cairn calls that address back once to check it really is
+that Lodge. During the beta, Lodges join with an invite code from the Cairn's operator; later anyone can ask to join and
+is admitted automatically from a waiting list (a few Lodges a day, first come first served). A new Lodge receives the
+Cairn's numbers right after its first contribution, but its own numbers only count toward the agreement rule after a week
+of contributing.
 
 <p align="center"><img src="docs/readme/lodge-chat.png" width="640" alt="Lodge chat: a channel with a few messages and a reply"></p>
 
@@ -159,9 +167,10 @@ your addons automatically. It can sit in the tray and start with Windows if you 
   the character you play and your zone (each can be switched off); your characters' gear and reputations only if you
   switch that on; and, unless you switch it off, your flight times and learned flight routes and what Elan's Toolkit
   noticed in the world (drops, vendors, spawn points), without character names.
-- **The Cairn only talks to Lodges.** The Outpost never contacts the Cairn. If your Lodge's owner turns on contributing,
-  the Lodge sends its pooled totals (ids and counts, nothing per member) and gets the Cairn's numbers back, which it hands
-  only to members who share. The data is signed by the Cairn and checked by the Outpost before it is used.
+- **The Cairn only talks to Lodges.** The Outpost never contacts the Cairn. If your Lodge's Guild Master turns on joining
+  the Cairn, the Lodge sends its pooled totals (ids and counts, nothing per member), its name and its public address, and
+  gets the Cairn's numbers back, which it hands only to members who share. Every request is signed with the Lodge's own
+  key; the data is signed by the Cairn and checked by the Outpost before it is used.
 - **Your live position stays on your PC.** The map position Elan's Hub draws into its pixel strip (only when you turn
   it on, in the game and in the Outpost) is read by the Outpost on your PC and not sent anywhere.
 - **Your Lodge key** is stored encrypted for your Windows user and only sent in a request header to your own Lodge.
@@ -181,8 +190,9 @@ So please use it at your own risk. It is a free fan project, given as it is, and
 A Lodge is one small .NET 10 service on a Linux server (Ubuntu with systemd; the .NET 10 SDK comes from Ubuntu's own
 archive), behind a web server you already have (nginx, Caddy, Apache) on HTTPS. One install script sets it up, with
 daily backups, a one-command update and a locked-down service; the first start prints a one-time owner link that makes
-you the Guild Master. Contributing to the Cairn is off by default; a Lodge owner who has been given a Cairn key turns it
-on in the Lodge's settings file (`LODGE_CAIRN_*`). See
+you the Guild Master. Joining the Cairn is off by default; the Guild Master turns it on in the Outpost (during the beta
+with an invite code from the Cairn's operator). A Lodge that was set up with a Cairn key in its settings file
+(`LODGE_CAIRN_*`) keeps working and moves to its own key pair by itself. See
 [server/deploy/README.md](server/deploy/README.md) to get started, and [server/SECURITY.md](server/SECURITY.md)
 and [server/PROTOCOL.md](server/PROTOCOL.md) for the details.
 

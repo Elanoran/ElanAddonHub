@@ -3,6 +3,14 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.90.0
+- **Join the Cairn from the Outpost.** A Lodge's Guild Master can now switch on joining the Cairn in Settings > Guild Master > The Cairn - no keys to pass around and nothing to edit on the server. It needs Lodge server 2.28.
+- **Honest about what is shared.** The switch says it plainly: your Lodge sends the pooled totals of the members who share with it (ids and counts only, never names), its name and its public address; in return it receives the Cairn's numbers for the members who share. Each member's own sharing switch stays as it is.
+- **The beta needs an invite code.** While the Cairn is in its beta, a Lodge joins with an invite code from the Cairn's operator; type it under the switch. Later Lodges can simply ask and are admitted from a waiting list.
+- **Where your Lodge stands.** One line shows it: waiting (and your place), admitted, on probation for its first week, in good standing with the last contribution, lapsed, or what is wrong with a code. Officers see it too; only the Guild Master can switch it.
+- **A one-time suggestion.** A Guild Master whose Lodge can join sees one small card with "Turn on" and "Not now" - it does not come back once answered.
+- **Knows Lodge server 2.28.** A Lodge's Guild Master and officers see the update notice for it.
+
 ## 2.89.2
 - **The Cairn is live.** The Outpost now knows the Cairn's signing key, so the shared numbers your Lodge passes on are checked to really come from the Cairn before they are used.
 

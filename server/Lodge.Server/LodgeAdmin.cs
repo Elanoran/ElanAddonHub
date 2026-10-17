@@ -60,6 +60,13 @@ public static class LodgeAdminApi
             ["problem"] = rx.Problem.Length > 0 ? rx.Problem : null,
             ["sharingOn"] = hub.CairnIn.Sharing.CountOn(),
             ["outposts"] = hub.CairnIn.Weekly.Report(),
+            // 2.28: how it reaches the Cairn (env key / signed env / the Guild Master's switch) and where the join stands - never the key or a code
+            ["via"] = hub.Cairn.Link.EnvPath ? (hub.Cairn.Link.Signs ? "env-signed" : "env") : hub.Cairn.Link.Join.On ? "guild-master" : "off",
+            ["join"] = hub.Cairn.Link.EnvPath ? null : new JsonObject
+            {
+                ["on"] = hub.Cairn.Link.Join.On, ["state"] = hub.Cairn.Link.Join.State, ["reason"] = hub.Cairn.Link.Join.Reason,
+                ["place"] = hub.Cairn.Link.Join.Place, ["probationUntil"] = hub.Cairn.Link.Join.ProbationUntil, ["settled"] = hub.Cairn.Link.Join.Settled,
+            },
         };
         return new JsonObject
         {

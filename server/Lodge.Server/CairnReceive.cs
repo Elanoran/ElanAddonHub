@@ -173,12 +173,10 @@ public sealed partial class CairnReceiver
 
     HttpClient Http() => http ??= handler != null ? new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(120) } : new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
 
+    // 2.28: signed or bearer, the same way the contribution goes (CairnLink)
     HttpRequestMessage Req(string path, string etag = null)
     {
-        CairnRules.ValidUrl(cfg.CairnUrl, out var baseUri);
-        var r = new HttpRequestMessage(HttpMethod.Get, baseUri.ToString().TrimEnd('/') + path);
-        r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cfg.CairnKey);
-        r.Headers.UserAgent.ParseAdd("ElansLodge/" + LodgeHub.Version);
+        var r = contributor.Link.Request(HttpMethod.Get, path);
         if (!string.IsNullOrEmpty(etag)) r.Headers.TryAddWithoutValidation("If-None-Match", etag);
         return r;
     }
@@ -385,6 +383,7 @@ public sealed class CairnModule : IModule
     public readonly CairnReceiver Receiver;
     public readonly CairnSharing Sharing;
     public readonly CairnWeekly Weekly;              // connected outposts: the anonymous weekly counts sent with the contribution
+    public readonly CairnJoiner Joiner;              // 2.28: the Guild Master's "Join the Cairn" (CairnLink.cs)
     readonly ConcurrentDictionary<string, Queue<DateTime>> recent = new();
 
     public CairnModule(LodgeHub hub, CairnReceiver receiver)
@@ -395,7 +394,80 @@ public sealed class CairnModule : IModule
         // the contribution carries the weekly numbers (when the Cairn understands them)
         hub.Cairn.Outposts = () => Weekly.Report();
         // a new dataset, or serving stopped: the members who share hear it at once (their Outpost fetches, or drops its copy)
-        Receiver.Changed += () => _ = TellSharers();
+        Receiver.Changed += () => { _ = TellSharers(); _ = TellLeaders(); };
+        Joiner = new CairnJoiner(hub.Cfg, hub.Cairn.Link, hub.Log, hub.Clock) { LodgeName = () => hub.Info?.DisplayName ?? "" };
+        Joiner.Changed += () =>
+        {
+            if (hub.Cairn.Link.JoinPath) hub.Cairn.Soon();      // admitted: the first contribution soon (give to get: then the data)
+            _ = TellLeaders();
+        };
+    }
+
+    // ---------------------------------------------------------------- 2.28: the Guild Master's "Join the Cairn"
+
+    static bool Leader(Member m) => m != null && m.Personal && Roles.Can(m.Role, Perm.Moderate);   // officers and the Guild Master see the status
+
+    public Task TellLeaders() => Task.WhenAll(hub.Members.Where(Leader).ToList().Select(m => hub.Send(m, JoinJson())));
+
+    public JsonObject JoinJson()
+    {
+        var link = hub.Cairn.Link;
+        var j = link.Join;
+        var o = new JsonObject
+        {
+            ["t"] = "cairn.join", ["env"] = link.EnvPath, ["atlas"] = hub.Cfg.AtlasEnabled, ["cairnHost"] = link.Host, ["contributing"] = hub.Cairn.Enabled,
+            ["suggestedUrl"] = CairnSign.TryNormalizeUrl(hub.Cfg.PublicUrl, out var su, out _) ? su : "",
+            ["standing"] = Receiver.Standing.Length > 0 ? Receiver.Standing : (hub.Cairn.Enabled ? "unknown" : "off"),
+            ["receiveUntil"] = Receiver.ReceiveUntil, ["serving"] = Receiver.Serving,
+        };
+        lock (j.Gate)
+        {
+            o["on"] = link.EnvPath || j.On; o["publicUrl"] = j.PublicUrl; o["state"] = link.EnvPath ? "admitted" : j.State; o["reason"] = j.Reason; o["error"] = j.Error;
+            o["mode"] = j.Mode; o["place"] = j.Place; o["of"] = j.Of; o["estDay"] = j.EstDay; o["betaOpenSlots"] = j.BetaOpenSlots; o["hasCode"] = j.Code.Length > 0;
+            o["admitted"] = j.Admitted; o["probationUntil"] = j.ProbationUntil; o["settled"] = link.EnvPath || j.Settled; o["lastPost"] = j.LastPost; o["checked"] = j.Checked;
+            o["signed"] = link.Signs;
+        }
+        return o;
+    }
+
+    // an invite code as typed: letters, digits, '-' and spaces only, at most 32 characters (the Cairn checks it; this only keeps junk out)
+    public static string CleanCode(string s)
+    {
+        var r = new string((s ?? "").Trim().ToUpperInvariant().Where(ch => ch is >= 'A' and <= 'Z' or >= '0' and <= '9' or '-' or ' ').ToArray());
+        return r.Length > 32 ? r[..32] : r;
+    }
+
+    async Task SetJoin(Member me, JsonObject m)
+    {
+        if (!Roles.Can(me.Role, Perm.ManageMembers)) { await hub.Error(me, "Only the Guild Master can do that"); return; }
+        var link = hub.Cairn.Link;
+        var j = link.Join;
+        if (link.EnvPath) { await hub.Error(me, "The Cairn is switched on in the server's own settings (lodge.env), so it can't be changed here", "locked"); return; }
+        if (!hub.Cfg.AtlasEnabled) { await hub.Error(me, "The Atlas is switched off on this server, so there is nothing to share with the Cairn", "atlas"); return; }
+        bool on = J.Bool(m, "on");
+        if (on)
+        {
+            var given = J.Str(m, "publicUrl");
+            string url = j.PublicUrl;
+            if (given != null || url.Length == 0)
+            {
+                if (!CairnSign.TryNormalizeUrl(given ?? hub.Cfg.PublicUrl, out url, out var why)) { await hub.Error(me, why, "address"); return; }
+            }
+            if (j.State is "waiting" or "admitted" && j.PublicUrl.Length > 0 && !string.Equals(url, j.PublicUrl, StringComparison.OrdinalIgnoreCase))
+            { await hub.Error(me, "This Lodge already asked the Cairn with " + j.PublicUrl + " - a new address needs the Cairn's operator", "address"); return; }
+            var code = CleanCode(J.Str(m, "code"));
+            lock (j.Gate)
+            {
+                j.On = true; j.PublicUrl = url;
+                if (code.Length > 0) j.Code = code;
+                if (j.State == "error") { j.State = ""; j.Reason = ""; j.Error = ""; }
+            }
+        }
+        else lock (j.Gate) j.On = false;
+        j.Save();
+        hub.Log.LogInformation("{By} switched joining the Cairn {State}", me.Name, on ? "on" : "off");   // never the code
+        if (on) { Joiner.Soon(); hub.Cairn.Soon(); }
+        await TellLeaders();
     }
 
     public bool Enabled => Receiver.Enabled;
@@ -457,6 +529,19 @@ public sealed class CairnModule : IModule
     {
         switch (type)
         {
+            case "cairn.join.get":
+            {
+                if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
+                if (!Leader(me)) { await hub.Error(me, "Your rank can't see that"); return true; }
+                await hub.Send(me, JoinJson());
+                return true;
+            }
+            case "admin.cairn":
+            {
+                if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
+                await SetJoin(me, m);
+                return true;
+            }
             case "atlas.sharing":
             {
                 if (!Enabled) return false;
@@ -484,6 +569,7 @@ public sealed class CairnModule : IModule
 
     public void Tick()
     {
+        Joiner.Tick();
         Receiver.Tick();
         // members online with sharing on count for this week (numbers only; see CairnWeekly)
         if (Enabled) foreach (var m in hub.Members.Where(m => m.Personal).ToList()) if (Sharing.IsOn(Identity(m.Name))) Weekly.NoteSharing(Identity(m.Name));

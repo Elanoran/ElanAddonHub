@@ -188,7 +188,7 @@ public sealed class CairnContributor
     readonly FlightStore flights;
     readonly ILogger log;
     readonly IClock clock;
-    readonly HttpMessageHandler handler;
+    HttpMessageHandler handler;
     readonly string statePath;
     readonly object gate = new();
     HttpClient http;
@@ -200,10 +200,21 @@ public sealed class CairnContributor
         this.cfg = cfg; this.atlas = atlas; this.flights = flights; this.log = log; this.clock = clock; this.handler = handler;
         statePath = Path.Combine(cfg.DataDir, "cairn-sent.json");
         nextRun = clock.UtcNow + TimeSpan.FromMinutes(2);   // not right at start-up
+        Link = new CairnLink(cfg);
     }
 
-    // on only when the owner switched it on AND gave a valid URL and key AND the Atlas is on
-    public bool Enabled => cfg.CairnEnabled && cfg.AtlasEnabled && CairnRules.ValidUrl(cfg.CairnUrl, out _) && CairnRules.ValidKey(cfg.CairnKey);
+    // 2.28: how this Lodge reaches the Cairn (env key, or the Guild Master's switch and its own key pair; CairnLink.cs)
+    public readonly CairnLink Link;
+
+    // tests: a fake Cairn (no network)
+    public void UseHandlerForTests(HttpMessageHandler h) { handler = h; http = null; }
+
+    // on when the Atlas is on AND either the owner's env (LODGE_CAIRN_ENABLED + a valid URL and key) or the Guild Master's switch with the
+    // Cairn's admission (2.28)
+    public bool Enabled => Link.Contributing;
+
+    // the next run as soon as possible (the Guild Master's switch, an admission)
+    public void Soon() => nextRun = clock.UtcNow;
 
     public sealed class State
     {
@@ -261,13 +272,22 @@ public sealed class CairnContributor
 
     HttpClient Http() => http ??= handler != null ? new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(60) } : new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
-    HttpRequestMessage Req(HttpMethod m, string path)
+    HttpRequestMessage Req(HttpMethod m, string path) => Link.Request(m, path);
+
+    // 2.28, env path: the Cairn offers "keys" - register this Lodge's own key pair once (bearer + signed by the new key). From then on every
+    // request is signed and the bearer key is retired at the Cairn (nothing to change in lodge.env; the key there is simply no longer used).
+    async Task<bool> RegisterKeys(CancellationToken ct)
     {
-        CairnRules.ValidUrl(cfg.CairnUrl, out var baseUri);
-        var r = new HttpRequestMessage(m, baseUri.ToString().TrimEnd('/') + path);
-        r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cfg.CairnKey);
-        r.Headers.UserAgent.ParseAdd("ElansLodge/" + LodgeHub.Version);
-        return r;
+        Link.Keys.Get();
+        var body = Encoding.UTF8.GetBytes(new JsonObject { ["publicKey"] = Link.Keys.PublicKey }.ToJsonString());
+        var req = Link.Request(HttpMethod.Post, "/v1/keys", body, forceSign: true);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cfg.CairnKey);
+        using var r = await Http().SendAsync(req, ct);
+        if (!r.IsSuccessStatusCode) { log?.LogWarning("Cairn: registering this Lodge's key pair was refused (HTTP {Code}) - the bearer key stays in use", (int)r.StatusCode); return false; }
+        lock (Link.Join.Gate) Link.Join.Migrated = true;
+        Link.Join.Save();
+        log?.LogInformation("Cairn: this Lodge signs its requests with its own key pair now; the Cairn retired its bearer key (key id {Kid})", Link.Keys.KeyId);
+        return true;
     }
 
     // what the pool holds now, as Cairn records (all atlas.data pages merged; guest view: no names)
@@ -327,11 +347,25 @@ public sealed class CairnContributor
                 {
                     string reason = "";
                     try { reason = (string)(JsonNode.Parse(await sr.Content.ReadAsStringAsync(ct)) as JsonObject)?["reason"] ?? ""; } catch { }
+                    // 2.28: the bearer key was retired (the key pair is registered): sign from now on. A signed env-path Lodge the Cairn does not
+                    // know (its database restored from before the move): back to the bearer key, which registers the key pair again.
+                    if (reason == "retired" && Link.EnvPath && Link.Keys.Exists && !Link.Join.Migrated)
+                    { lock (Link.Join.Gate) Link.Join.Migrated = true; Link.Join.Save(); res.Stopped = "signing from the next run"; nextRun = clock.UtcNow; return res; }
+                    if (reason == "key" && Link.EnvPath && Link.Join.Migrated)
+                    { lock (Link.Join.Gate) Link.Join.Migrated = false; Link.Join.Save(); res.Stopped = "the Cairn does not know this key pair - back to the bearer key"; nextRun = clock.UtcNow; return res; }
+                    if (reason == "revoked" && Link.JoinPath) { lock (Link.Join.Gate) Link.Join.State = "revoked"; Link.Join.Save(); }
                     res.Standing = reason == "revoked" ? "revoked" : "key"; receiveUntil = null;
                 }
                 res.Stopped = Refused(sr.StatusCode, "status"); return res;
             }
             var so = JsonNode.Parse(await sr.Content.ReadAsStringAsync(ct)) as JsonObject;
+            if (Link.EnvPath && !Link.Join.Migrated && so?["features"] is JsonArray kf && kf.Any(f => f is JsonValue fv && fv.TryGetValue<string>(out var fs) && fs == "keys"))
+            {
+                try { await RegisterKeys(ct); }
+                catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { log?.LogWarning("Cairn: registering the key pair failed ({Error}) - tried again next run", e.GetType().Name); }
+            }
+            if (Link.JoinPath)
+                lock (Link.Join.Gate) { Link.Join.ProbationUntil = LongOf(so?["probationUntil"]); Link.Join.Settled = (bool?)so?["settled"] ?? Link.Join.Settled; }
             if ((string)so?["standing"] is { Length: > 0 } sst) { res.Standing = sst; receiveUntil = LongOf(so["receiveUntil"]); }
             sendOutposts = Outposts != null && so?["features"] is JsonArray fa && fa.Any(f => f is JsonValue fv && fv.TryGetValue<string>(out var fs) && fs == "outposts");
             var epoch = (string)so?["epoch"] ?? "";
@@ -366,12 +400,10 @@ public sealed class CairnContributor
             var bytes = Encoding.UTF8.GetBytes(body.ToJsonString());
             using var ms = new MemoryStream();
             using (var gz = new GZipStream(ms, CompressionLevel.Optimal, true)) gz.Write(bytes);
-            var req = Req(HttpMethod.Post, "/v1/contribute");
-            req.Content = new ByteArrayContent(ms.ToArray());
-            req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-            req.Content.Headers.ContentEncoding.Add("gzip");
+            var req = Link.Request(HttpMethod.Post, "/v1/contribute", ms.ToArray(), "application/json", "gzip");
             using var pr = await Http().SendAsync(req, ct);
             if (!pr.IsSuccessStatusCode) { res.Stopped = Refused(pr.StatusCode, "contribute"); break; }
+            lock (Link.Join.Gate) Link.Join.LastPost = new DateTimeOffset(clock.UtcNow).ToUnixTimeSeconds();
             var po = JsonNode.Parse(await pr.Content.ReadAsStringAsync(ct)) as JsonObject;
             res.Posts++; res.Records += keys.Count;
             if (body["outposts"] != null) { st.OutpostsSent = outpostsHash; res.OutpostsSent = true; }
@@ -382,6 +414,7 @@ public sealed class CairnContributor
                 if (changed[k] == null) st.Sent.Remove(k); else st.Sent[k] = CairnRules.Hash(changed[k]);
             Save(st);
         }
+        if (res.Posts > 0) Link.Join.Save();
         // counts only - never content, never the key
         log?.LogInformation("Cairn: {Posts} post(s), {Records} record(s) sent, {Accepted} accepted, {Rejected} rejected{Full}{Stop}",
             res.Posts, res.Records, res.Accepted, res.Rejected, res.Full ? " (full resend)" : "", res.Stopped.Length > 0 ? ", stopped: " + res.Stopped : "");
