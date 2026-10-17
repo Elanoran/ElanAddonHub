@@ -345,6 +345,7 @@ public sealed class CairnSharing
     }
 
     public bool IsOn(string identity) { lock (gate) return identity != null && map.TryGetValue(identity, out var e) && e.on; }
+    public int CountOn() { lock (gate) return map.Values.Count(e => e.on); }
 
     // true = it changed
     public bool Set(string identity, bool on, long at)
@@ -383,12 +384,16 @@ public sealed class CairnModule : IModule
     readonly LodgeHub hub;
     public readonly CairnReceiver Receiver;
     public readonly CairnSharing Sharing;
+    public readonly CairnWeekly Weekly;              // connected outposts: the anonymous weekly counts sent with the contribution
     readonly ConcurrentDictionary<string, Queue<DateTime>> recent = new();
 
     public CairnModule(LodgeHub hub, CairnReceiver receiver)
     {
         this.hub = hub; Receiver = receiver;
         Sharing = new CairnSharing(hub.Cfg.DataDir, hub.Log);
+        Weekly = new CairnWeekly(hub.Cfg.DataDir, hub.Clock, hub.Log);
+        // the contribution carries the weekly numbers (when the Cairn understands them)
+        hub.Cairn.Outposts = () => Weekly.Report();
         // a new dataset, or serving stopped: the members who share hear it at once (their Outpost fetches, or drops its copy)
         Receiver.Changed += () => _ = TellSharers();
     }
@@ -408,8 +413,12 @@ public sealed class CairnModule : IModule
         if (!Sharing.IsOn(Identity(login))) return (403, "share", "Share to receive: switch on sharing your Atlas observations with this Lodge, and the Lodge gives you the Cairn's numbers too");
         if (Receiver.Standing is "new" or "lapsed" or "revoked" or "key") return (403, "lodge", "This Lodge isn't receiving the Cairn's data right now (it has to contribute to receive)");
         if (!Receiver.Serving) return (503, "not-yet", "This Lodge has no copy of the Cairn's data yet - try again later");
+        Weekly.NoteSharing(Identity(login));
         return null;
     }
+
+    // the dataset went out to this member (GET /cairn/dataset answered 200)
+    public void NoteReceived(string login) => Weekly.NoteReceived(Identity(login));
 
     public void CheckDownloadRate(string login)
     {
@@ -455,6 +464,7 @@ public sealed class CairnModule : IModule
                 if (me.Personal && Roles.Can(me.Role, Perm.AtlasShare))
                 {
                     bool on = m["on"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+                    if (on) Weekly.NoteSharing(Identity(me.Name));
                     if (Sharing.Set(Identity(me.Name), on, new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeSeconds()))
                         hub.Log.LogInformation("{Name} switched Atlas sharing {State} (Cairn data {Access})", me.Name, on ? "on" : "off", on ? "on" : "off");
                 }
@@ -475,6 +485,8 @@ public sealed class CairnModule : IModule
     public void Tick()
     {
         Receiver.Tick();
+        // members online with sharing on count for this week (numbers only; see CairnWeekly)
+        if (Enabled) foreach (var m in hub.Members.Where(m => m.Personal).ToList()) if (Sharing.IsOn(Identity(m.Name))) Weekly.NoteSharing(Identity(m.Name));
         var now = hub.Clock.UtcNow;
         foreach (var kv in recent) lock (kv.Value) if (kv.Value.Count == 0 || now - kv.Value.Peek() > TimeSpan.FromHours(1)) recent.TryRemove(kv.Key, out _);
     }

@@ -14,6 +14,13 @@ sudo /opt/lodge-src/server/deploy/install.sh
 daily `lodge-backup.timer` (04:15 plus up to 20 minutes random delay). systemd drop-ins in
 `/etc/systemd/system/lodge.service.d/` are never touched.
 
+**.NET:** the build needs the **.NET 10 SDK** (`dotnet-sdk-10.0`; Lodge 2.26 and older: .NET 8). `install.sh` installs it with apt
+when it is missing - Ubuntu 26.04 has it in its own archive; on a release that doesn't, add the .NET backports
+(`sudo add-apt-repository ppa:dotnet/backports`) or Microsoft's feed first, otherwise `install.sh` stops with that message before
+changing anything. The result is **self-contained** (`/opt/lodge/lodge`, one file): the service needs no .NET runtime on the
+machine, so removing or upgrading the system's .NET never affects the running Lodge - only the next build. The SDK is picked by
+`server/global.json` (any 10.0.x), which is why `install.sh` builds from `server/`.
+
 ## Starting a lodge: the owner link (2.12)
 
 A fresh install has no Guild Master. At the end of `install.sh` it prints an **OWNER LINK** (once, to the console only; valid 1 hour, works once):
@@ -85,6 +92,9 @@ from `lodge.env`). If the new version does not come up healthy the checkout goes
 `install.sh` runs again and the command exits non-zero with `ROLLED BACK`. It prints `old -> new` server version
 (read from the source, because `/health` only shows the version to a logged-in invite code, which the script never uses).
 A rollback restores the code only; if a new version changed data, restore it with `lodge-backup restore`.
+Before changing anything it checks that the SDK the new version builds with is installed or available from apt (exit 4 with a
+clear message if not). It keeps a copy of the running build (`/opt/lodge.before-update`) until the end: if even the old commit
+can't be rebuilt (say an OS upgrade removed its SDK), that copy is put back and restarted as it was.
 
 ## Backups: `lodge-backup`
 

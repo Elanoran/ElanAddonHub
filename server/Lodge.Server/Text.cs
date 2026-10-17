@@ -159,7 +159,7 @@ public static partial class Names
         }
         if (r.Length == 0) return "file";
         var stem = (r.Contains('.') ? r[..r.IndexOf('.')] : r).TrimEnd();
-        bool device = Devices.Contains(stem, StringComparer.OrdinalIgnoreCase)
+        bool device = Enumerable.Contains(Devices, stem, StringComparer.OrdinalIgnoreCase)
             || (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.OrdinalIgnoreCase) || stem.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) && char.IsDigit(stem[3]));
         return device ? "_" + r : r;
     }

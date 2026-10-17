@@ -486,6 +486,14 @@ Settings > Privacy.
 - What a Lodge sends is built from its pool's guest view: no names, no characters, no members, no finds, notes, quests, seen tables or
   revealed items; flight legs only between numbered taxi nodes; coordinates rounded to 4 decimals; posts of about 1.5 MB of JSON.
 
+- **Connected outposts** (`server/Lodge.Server/CairnOutposts.cs`): the Cairn never sees an Outpost, so the Lodge tells it two numbers per ISO
+  week - `s` = members whose Atlas sharing is on and who were here that week (online, `atlas.sharing {on}`, or fetched the manifest), `r` =
+  members who received the dataset from this Lodge that week (`GET /cairn/dataset` answered 200). They go with the contribution as
+  `outposts: [{w: "2026-W42", s, r}]` (the week that just ended once more, then the current one), and only when the Cairn's `/v1/status`
+  lists `"outposts"` in `features` (an older Cairn would refuse the unknown field) and the numbers changed since the Cairn last took them
+  (alone in a post of their own when no record changed - such a post is not a contribution). Who was counted is kept only as HMAC-SHA-256
+  hashes with a random per-week salt in `data/cairn-week.json`; the salt and the hashes are dropped when the week ends, a purge takes the
+  member out. No names, no ids, no Outpost addresses ever leave the Lodge.
 ### Lodge <- Cairn (`server/Lodge.Server/CairnReceive.cs`, give to get)
 
 - The same key, only while the standing is `good`; otherwise 403 `{reason: "contribute", standing: "new"|"lapsed", graceDays, error}` (or 401
@@ -531,3 +539,15 @@ Guests never get the data.
   copy on `share`, `guest`, `lodge`, `disabled` (and 401); on `not-yet`, 429 or a network error it keeps it. It also deletes it at once when
   the user switches sharing off, has no Lodge, or the Lodge doesn't list `cairn2`. It checks both SHA-256s and, once it pins the Cairn's key,
   the signature; it asks at most every 12 hours, and at once when `cairn.status` names a newer `seq`.
+
+## Operator stats (read-only; `GET /admin/stats`, `sudo lodge-admin stats`)
+
+Off unless `LODGE_ADMIN_TOKEN` (>= 24 characters) is set. Answers only a connection whose own address is loopback (checked before the
+forwarded headers are applied) with no `X-Forwarded-For` / `Forwarded` / `X-Real-IP` header, carrying `X-Lodge-Admin: <token>`; anything
+else gets 404 (like an unknown path). `no-store`. For the server's operator on the server itself (`lodge-admin stats`) or through an ssh
+tunnel to `127.0.0.1:<port>` - never through the reverse proxy.
+
+`{server, now, startedAt, uptimeSeconds, members: {total, roles: {owner, officer, ...}, online, guestsOnline, connections, active7d, maxUsers},
+devices, invitesPending, messages: {channels, kept}, files: {uploads, uploadBytes, slots, slotBytes}, features: [...], cairn: {enabled,
+standing, serving, receiveUntil, dataset: {day, seq, bytes}, lastCheck, problem, sharingOn, outposts: [{w, s, r}]}}`. Counts only: no names,
+codes, tokens, IPs or message text. `active7d` = members online now or with a device seen in the last 7 days.

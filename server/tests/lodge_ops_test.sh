@@ -40,6 +40,7 @@ LODGE_URLS=http://127.0.0.1:5999
 LODGE_PATHBASE=/lodge
 EOF
 export LODGE_ENV_FILE="$T/lodge.env" LODGE_DATA="$T/data" LODGE_BACKUP_DIR="$T/backups" LODGE_OWNER="root:lodgetest"
+export LODGE_APP_DIR="$T/app"
 export LODGE_SYSTEMCTL="$T/bin/systemctl" LODGE_CURL="$T/bin/curl" LODGE_HEALTH_TRIES=3 LODGE_HEALTH_SLEEP=0
 unset LODGE_BACKUP_KEEP LODGE_BACKUP_FILES
 BK="$DEPLOY/lodge-backup"; UP="$DEPLOY/lodge-update"
@@ -123,11 +124,23 @@ setver 1.0.0; git -C "$T/work" add -A; git -C "$T/work" commit -qm v1; git -C "$
 git clone -q -b main "$T/origin.git" "$SRC" 2>/dev/null
 cat > "$T/install.sh" <<'EOF'
 #!/bin/bash
+# "$T/nosdk": the SDK for anything but the BROKEN version is gone (like an OS upgrade removing .NET 8)
+if [ -f "$NOSDK" ] && ! grep -q BROKEN "$SRC/server/Lodge.Server/Hub.cs"; then echo "nobuild" >> "$LOG"; exit 1; fi
 echo "install $(git -C "$SRC" rev-parse --short HEAD)" >> "$LOG"
+mkdir -p "$LODGE_APP_DIR"; git -C "$SRC" rev-parse --short HEAD > "$LODGE_APP_DIR/lodge"
 echo running > "$STATE"
 EOF
 chmod +x "$T/install.sh"
-export LODGE_SRC="$SRC" LODGE_INSTALL_SH="$T/install.sh" LODGE_BACKUP_BIN="$BK"
+export LODGE_SRC="$SRC" LODGE_INSTALL_SH="$T/install.sh" LODGE_BACKUP_BIN="$BK" NOSDK="$T/nosdk"
+# fake dotnet / apt-cache for the SDK check (only commits with a Lodge.Server.csproj are checked)
+printf '#!/bin/bash
+echo "10.0.100 [/fake/sdk]"
+' > "$T/bin/dotnet"
+printf '#!/bin/bash
+if [ "$2" = dotnet-sdk-11.0 ]; then printf "%%s:\n  Installed: (none)\n  Candidate: 11.0.1\n" "$2"; else printf "%%s:\n  Installed: (none)\n  Candidate: (none)\n" "$2"; fi
+' > "$T/bin/apt-cache"
+chmod +x "$T/bin/dotnet" "$T/bin/apt-cache"
+export LODGE_DOTNET="$T/bin/dotnet" LODGE_APT_CACHE="$T/bin/apt-cache"
 rm -rf "$T"/backups/* "$T"/data.before-restore-*
 
 # up to date
@@ -169,6 +182,32 @@ git -C "$T/work" reset -q --hard HEAD~1; setver 1.3.0; git -C "$T/work" commit -
 printf '#!/bin/bash\nexit 1\n' > "$T/badbackup"; chmod +x "$T/badbackup"; before="$(git -C "$SRC" rev-parse HEAD)"; : > "$LOG"
 echo yes | LODGE_BACKUP_BIN="$T/badbackup" bash "$UP" --reset >"$T/up.out" 2>&1 && bad "update continued after backup failure" || ok "update: failing backup aborts the update"
 [ "$(git -C "$SRC" rev-parse HEAD)" = "$before" ] && ! grep -q '^install' "$LOG" && ok "update: aborted before moving the checkout or installing" || bad "abort state"
+
+# SDK check: a version that needs an SDK neither installed nor in apt is refused before anything changes
+setcsproj() { printf '<Project><PropertyGroup><TargetFramework>%s</TargetFramework></PropertyGroup></Project>
+' "$1" > "$T/work/server/Lodge.Server/Lodge.Server.csproj"; }
+git -C "$SRC" reset -q --hard origin/main; git -C "$T/work" reset -q --hard origin/main
+setver 1.4.0; setcsproj net99.0; git -C "$T/work" add -A; git -C "$T/work" commit -qm v14; git -C "$T/work" push -q origin HEAD:main 2>/dev/null
+before="$(git -C "$SRC" rev-parse HEAD)"; : > "$LOG"; nb="$(ls "$T"/backups | wc -l)"
+bash "$UP" >"$T/up.out" 2>&1; rc=$?
+[ "$rc" -eq 4 ] && grep -q 'NET 99 SDK is not installed' "$T/up.out" && grep -q 'Nothing was changed' "$T/up.out" && ok "update: missing SDK (not in apt) -> clear message, exit 4" || bad "sdk missing" "rc=$rc $(tail -3 "$T/up.out")"
+[ "$(git -C "$SRC" rev-parse HEAD)" = "$before" ] && ! grep -q '^install' "$LOG" && [ "$(ls "$T"/backups | wc -l)" -eq "$nb" ] && ok "update: missing SDK -> no backup, checkout and build untouched" || bad "sdk abort state"
+setcsproj net11.0; git -C "$T/work" commit -qam v14b; git -C "$T/work" push -q origin HEAD:main 2>/dev/null
+bash "$UP" >"$T/up.out" 2>&1 && grep -q 'install.sh will install dotnet-sdk-11.0' "$T/up.out" && ok "update: SDK installable from apt -> goes ahead" || bad "sdk installable" "$(tail -3 "$T/up.out")"
+setcsproj net10.0; setver 1.5.0; git -C "$T/work" commit -qam v15; git -C "$T/work" push -q origin HEAD:main 2>/dev/null
+bash "$UP" >"$T/up.out" 2>&1 && ! grep -q 'will install' "$T/up.out" && ok "update: installed SDK major -> no SDK message" || bad "sdk present" "$(tail -3 "$T/up.out")"
+[ ! -e "$T/app.before-update" ] && ok "update: the pre-update build copy is removed after success" || bad "before-update left"
+
+# the old commit can't be rebuilt (its SDK is gone) -> the pre-update build is put back as it was
+good="$(git -C "$SRC" rev-parse --short HEAD)"
+[ "$(cat "$T/app/lodge")" = "$good" ] || bad "setup: app not at good build"
+setver BROKEN; git -C "$T/work" commit -qam broken2; git -C "$T/work" push -q origin HEAD:main 2>/dev/null
+touch "$T/nosdk"; : > "$LOG"
+bash "$UP" >"$T/up.out" 2>&1; rc=$?
+[ "$rc" -eq 1 ] && grep -q 'restored as it was' "$T/up.out" && ok "update: rebuild of the old version fails -> previous build restored, exit 1" || bad "restore build" "rc=$rc $(tail -4 "$T/up.out")"
+[ "$(cat "$T/app/lodge")" = "$good" ] && ok "update: the running build is the pre-update one again" || bad "app content" "$(cat "$T/app/lodge")"
+grep -q 'nobuild' "$LOG" && grep -q 'systemctl restart lodge' "$LOG" && ok "update: tried the rebuild first, then restarted the restored build" || bad "restore order" "$(cat "$LOG")"
+rm -f "$T/nosdk"
 
 echo "lodge-backup / lodge-update: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

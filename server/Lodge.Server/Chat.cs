@@ -80,6 +80,19 @@ public partial class ChatModule : IModule
 
     HistoryStore Store(string channel) => stores.GetOrAdd(channel, ch => new HistoryStore(dir, ch, hub.Cfg.HistoryMaxBytes, hub.Log, hub.Cfg.HistoryMax));
 
+    // operator stats: text channels and the messages kept in their history (counts only)
+    public (int channels, long messages) Counts()
+    {
+        int c = 0; long n = 0;
+        foreach (var ch in hub.Channels.All.Where(x => x.Type == "text"))
+        {
+            var s = Store(ch.Id);
+            lock (s) n += s.Messages.Count;
+            c++;
+        }
+        return (c, n);
+    }
+
     public JsonArray HistoryFor(string channel)
     {
         var s = Store(channel);

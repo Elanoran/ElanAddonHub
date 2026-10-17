@@ -208,6 +208,7 @@ public sealed class CairnContributor
     public sealed class State
     {
         public string Epoch = ""; public long Seq; public long FullAt; public Dictionary<string, string> Sent = new(StringComparer.Ordinal);
+        public string OutpostsSent = "";   // connected outposts: hash of the last weekly numbers the Cairn took
     }
 
     public State Load()
@@ -217,7 +218,7 @@ public sealed class CairnContributor
         {
             if (!File.Exists(statePath) || new FileInfo(statePath).Length > 64L * 1024 * 1024) return s;
             if (JsonNode.Parse(File.ReadAllText(statePath)) is not JsonObject o) return s;
-            s.Epoch = (string)o["epoch"] ?? ""; s.Seq = (long?)o["seq"] ?? 0; s.FullAt = (long?)o["fullAt"] ?? 0;
+            s.Epoch = (string)o["epoch"] ?? ""; s.Seq = (long?)o["seq"] ?? 0; s.FullAt = (long?)o["fullAt"] ?? 0; s.OutpostsSent = (string)o["outposts"] ?? "";
             if (o["sent"] is JsonObject so) foreach (var (k, v) in so) if (v is JsonValue jv && jv.TryGetValue<string>(out var h)) s.Sent[k] = h;
         }
         catch (Exception e) { log?.LogWarning("Cairn: state unreadable ({Error}), everything is sent again", e.GetType().Name); }
@@ -228,7 +229,7 @@ public sealed class CairnContributor
     {
         var so = new JsonObject();
         foreach (var kv in s.Sent.OrderBy(k => k.Key, StringComparer.Ordinal)) so[kv.Key] = kv.Value;
-        var o = new JsonObject { ["v"] = 1, ["epoch"] = s.Epoch, ["seq"] = s.Seq, ["fullAt"] = s.FullAt, ["sent"] = so };
+        var o = new JsonObject { ["v"] = 1, ["epoch"] = s.Epoch, ["seq"] = s.Seq, ["fullAt"] = s.FullAt, ["outposts"] = s.OutpostsSent, ["sent"] = so };
         var tmp = statePath + ".tmp";
         File.WriteAllText(tmp, o.ToJsonString());
         File.Move(tmp, statePath, true);
@@ -247,7 +248,10 @@ public sealed class CairnContributor
         });
     }
 
-    public sealed class RunResult { public int Posts, Records, Accepted, Rejected; public string Stopped = ""; public bool Full; public string Standing = ""; }
+    public sealed class RunResult { public int Posts, Records, Accepted, Rejected; public string Stopped = ""; public bool Full; public string Standing = ""; public bool OutpostsSent; }
+
+    // connected outposts: the weekly numbers (CairnWeekly.Report), sent only to a Cairn whose /v1/status lists "outposts" in "features"
+    public Func<JsonArray> Outposts;
 
     // give to get: what the Cairn said about this Lodge's standing (good / new / lapsed / revoked / key) and until when it receives; the
     // receiver (CairnReceive.cs) fetches or stops on it
@@ -312,6 +316,7 @@ public sealed class CairnContributor
     {
         var res = new RunResult();
         if (!Enabled) { res.Stopped = "disabled"; return res; }
+        bool sendOutposts = false;
         var st = Load();
         // 1. where the Cairn stands: its epoch for us (another one = it forgot our data) and the last seq it took
         using (var sr = await Http().SendAsync(Req(HttpMethod.Get, "/v1/status"), ct))
@@ -328,6 +333,7 @@ public sealed class CairnContributor
             }
             var so = JsonNode.Parse(await sr.Content.ReadAsStringAsync(ct)) as JsonObject;
             if ((string)so?["standing"] is { Length: > 0 } sst) { res.Standing = sst; receiveUntil = LongOf(so["receiveUntil"]); }
+            sendOutposts = Outposts != null && so?["features"] is JsonArray fa && fa.Any(f => f is JsonValue fv && fv.TryGetValue<string>(out var fs) && fs == "outposts");
             var epoch = (string)so?["epoch"] ?? "";
             long lastSeq = (long?)so?["lastSeq"] ?? 0;
             if (epoch != st.Epoch) { st.Sent.Clear(); st.Epoch = epoch; res.Full = true; }
@@ -342,10 +348,18 @@ public sealed class CairnContributor
         var changed = new SortedDictionary<string, JsonNode>(StringComparer.Ordinal);
         foreach (var (k, v) in cur) if (!st.Sent.TryGetValue(k, out var h) || h != CairnRules.Hash(v)) changed[k] = v;
         foreach (var k in st.Sent.Keys) if (!cur.ContainsKey(k)) changed[k] = null;
-        if (changed.Count == 0) { Save(st); res.Stopped = "nothing-new"; return res; }
+        // the weekly numbers ride along when they changed since the Cairn last took them (alone, in a post of their own, when no record changed)
+        JsonArray outposts = null; string outpostsHash = "";
+        if (sendOutposts) { outposts = Outposts(); outpostsHash = CairnRules.Hash(outposts); if (outpostsHash == st.OutpostsSent) outposts = null; }
+        if (changed.Count == 0 && outposts == null) { Save(st); res.Stopped = "nothing-new"; return res; }
 
         // 3. post in chunks; a chunk counts as sent only after the Cairn took it
         var chunks = CairnRules.Chunks(changed, gb, () => ++st.Seq);
+        if (outposts != null)
+        {
+            if (chunks.Count == 0) chunks.Add((new JsonObject { ["v"] = 1, ["seq"] = ++st.Seq, ["gb"] = gb }, new List<string>()));
+            chunks[0].body["outposts"] = outposts;
+        }
         Save(st);   // the seq numbers are used up now, whatever happens next
         foreach (var (body, keys) in chunks)
         {
@@ -360,6 +374,7 @@ public sealed class CairnContributor
             if (!pr.IsSuccessStatusCode) { res.Stopped = Refused(pr.StatusCode, "contribute"); break; }
             var po = JsonNode.Parse(await pr.Content.ReadAsStringAsync(ct)) as JsonObject;
             res.Posts++; res.Records += keys.Count;
+            if (body["outposts"] != null) { st.OutpostsSent = outpostsHash; res.OutpostsSent = true; }
             res.Accepted += (int?)po?["accepted"] ?? 0; res.Rejected += (int?)po?["rejected"] ?? 0;
             if ((string)po?["standing"] is { Length: > 0 } pst) { res.Standing = pst; receiveUntil = LongOf(po["receiveUntil"]); }
             if ((string)po?["epoch"] is { } ep && ep != st.Epoch) { st.Sent.Clear(); st.Epoch = ep; Save(st); res.Stopped = "epoch-changed"; break; }

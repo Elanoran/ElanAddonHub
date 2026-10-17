@@ -62,7 +62,9 @@ public class LodgeConfig
     public string CairnKey { get; set; } = "";              // this Lodge's Cairn key (LODGE_CAIRN_KEY, or a file named by LODGE_CAIRN_KEY_FILE); never logged
     public int CairnEveryMinutes { get; set; } = 60;        // 15 - 1440
     public int CairnGameBuild { get; set; }                 // 0 = the newest build the members' finds report
-    public int CairnFetchHours { get; set; } = 6;           // give to get: how often the Cairn's manifest is checked (2 - 48 hours; the file only when it changed)
+    public int CairnFetchHours { get; set; } = 6;
+    // ---- operator stats (/admin/stats, LodgeAdmin.cs): loopback only, with this token in X-Lodge-Admin; empty = off. Never logged.
+    public string AdminToken { get; set; } = "";           // give to get: how often the Cairn's manifest is checked (2 - 48 hours; the file only when it changed)
 
     static string Env(string key, string fallback)
     {
@@ -132,6 +134,7 @@ public class LodgeConfig
             CairnEveryMinutes = Int("LODGE_CAIRN_EVERY_MINUTES", 60, 15, 1440),
             CairnGameBuild = Int("LODGE_CAIRN_GAME_BUILD", 0, 0, 9_999_999),
             CairnFetchHours = Int("LODGE_CAIRN_FETCH_HOURS", 6, 2, 48),
+            AdminToken = Env("LODGE_ADMIN_TOKEN", ""),
             RealmsMatch = Env("LODGE_REALMS_MATCH", "forever").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is { Length: > 0 } rm ? rm : new[] { "forever" },
         };
         Directory.CreateDirectory(c.DataDir);

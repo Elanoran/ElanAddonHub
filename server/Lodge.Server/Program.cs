@@ -16,16 +16,8 @@ builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSe
 // ASP.NET's per-request logs contain full URLs (a 1.x client puts its code in ?code=): keep them out of the journal
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 // the real visitor IP comes from the reverse proxy (needed for the wrong-code lockout)
-builder.Services.Configure<ForwardedHeadersOptions>(o =>
-{
-    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    foreach (var net in cfg.TrustedProxies)
-    {
-        var parts = net.Split('/');
-        if (IPAddress.TryParse(parts[0], out var ip))
-            o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(ip, parts.Length > 1 ? int.Parse(parts[1]) : 32));
-    }
-});
+var rejectedProxies = new List<string>();
+builder.Services.Configure<ForwardedHeadersOptions>(o => TrustedProxies.Configure(o, cfg.TrustedProxies, rejectedProxies));
 // a general per-IP request limit, separate from the wrong-code lockout, so floods can't overwhelm the code checks
 builder.Services.AddRateLimiter(o =>
 {
@@ -35,7 +27,18 @@ builder.Services.AddRateLimiter(o =>
             _ => new FixedWindowRateLimiterOptions { PermitLimit = cfg.HttpPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 var app = builder.Build();
+// the options are built lazily: resolve them now so a malformed LODGE_TRUSTED_PROXIES entry is reported at start, not on the first request
+_ = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ForwardedHeadersOptions>>().Value;
+foreach (var bad in rejectedProxies) app.Logger.LogWarning("LODGE_TRUSTED_PROXIES: ignoring '{Entry}' (not an IP address or CIDR network)", bad);
 
+// owner/admin stats (/admin/stats): the connection's own address, before the proxy headers replace it - admin answers only a direct
+// loopback connection (the operator's ssh tunnel or lodge-admin on the server itself), never anything that came through the reverse proxy
+app.Use(async (ctx, next) =>
+{
+    ctx.Items[LodgeAdminApi.DirectKey] = ctx.Connection.RemoteIpAddress;
+    ctx.Items[LodgeAdminApi.ProxiedKey] = LodgeAdminApi.HasProxyHeaders(ctx.Request.Headers);
+    await next();
+});
 app.UseForwardedHeaders();
 if (!string.IsNullOrEmpty(cfg.PathBase)) app.UsePathBase(cfg.PathBase);
 app.UseRateLimiter();
@@ -330,10 +333,21 @@ app.MapGet("/cairn/dataset", (HttpContext ctx) =>
     catch (DatasetException e) { return DatasetFail(e); }
     var fs = lodge.CairnIn.Receiver.OpenDataset(out var h);
     if (fs == null) return CairnFail((503, "not-yet", "This Lodge has no copy of the Cairn's data yet - try again later"));
+    lodge.CairnIn.NoteReceived(who.Name);   // connected outposts: counted for this week's anonymous "received" number (see CairnWeekly)
     ctx.Response.Headers["Cache-Control"] = "private, no-store";
     ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
     ctx.Response.Headers["X-Sha256"] = h.Sha256;
     return Results.File(fs, "application/gzip", h.File, enableRangeProcessing: false);
+});
+
+// read-only numbers for the server's operator (lodge-admin stats, or an operator's tool through an ssh tunnel): members, online, active in 7 days, messages, files, Cairn.
+// Only from loopback without proxy headers AND with X-Lodge-Admin = LODGE_ADMIN_TOKEN (>= 24 characters; empty = off). Anything else: 404.
+app.MapGet("/admin/stats", (HttpContext ctx) =>
+{
+    ctx.Response.Headers["Cache-Control"] = "no-store";
+    if (!LodgeAdminApi.Allowed(cfg.AdminToken, ctx.Items[LodgeAdminApi.DirectKey] as IPAddress, ctx.Items[LodgeAdminApi.ProxiedKey] is true, ctx.Request.Headers["X-Lodge-Admin"].ToString()))
+        return Results.NotFound();
+    return Results.Json(LodgeAdminApi.Stats(lodge));
 });
 
 files.StartCleanup(app.Lifetime.ApplicationStopping);
@@ -355,6 +369,7 @@ if (cfg.CairnEnabled)
 }
 if (cfg.RealmsConfigured)
     app.Logger.LogInformation("Realm status on: region {Region}, every {Seconds} s", lodge.Realms.Region, cfg.RealmsPollSeconds);
-app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}",
-    LodgeHub.Version, cfg.Urls, cfg.PathBase, cfg.DataDir, cfg.AllowQueryCode ? "allowed" : "off");
+app.Logger.LogInformation("Lodge {Version} listening on {Urls}, path base '{Base}', data {Data}, query codes {Query}, admin stats {Admin}",
+    LodgeHub.Version, cfg.Urls, cfg.PathBase, cfg.DataDir, cfg.AllowQueryCode ? "allowed" : "off",
+    string.IsNullOrEmpty(cfg.AdminToken) ? "off" : cfg.AdminToken.Length < LodgeAdminApi.MinTokenLength ? "off (token shorter than 24)" : "loopback only");
 app.Run();

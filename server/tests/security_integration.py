@@ -1,6 +1,6 @@
 """Lodge security integration test - runs two local server processes on synthetic codes in temp folders.
 
-    dotnet build -c Release server/Lodge.Server
+    cd server && dotnet build -c Release Lodge.Server && cd ..   (from server/, so server/global.json picks the .NET 10 SDK)
     python server/tests/security_integration.py
 
 Never uses real codes, never talks to a real lodge. Client IPs are simulated with X-Forwarded-For (localhost is a
@@ -10,7 +10,7 @@ import asyncio, json, os, re, shutil, subprocess, sys, tempfile, time
 import aiohttp
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXE = os.path.join(HERE, "..", "Lodge.Server", "bin", "Release", "net8.0", "lodge.exe" if os.name == "nt" else "lodge")
+EXE = os.path.join(HERE, "..", "Lodge.Server", "bin", "Release", "net10.0", "lodge.exe" if os.name == "nt" else "lodge")
 ELAN, BOB, GUEST = "synthetic0elan0code0000000000001", "synthetic0bob00code0000000000002", "synthetic0guest0code00000000003"
 results = []
 SECRETS = []   # invites and tokens made during the run (synthetic): none may reach a log
@@ -332,7 +332,7 @@ async def suite_f(base):
         b = await ws_open(s, base, BOB, "192.0.2.82"); await recv(b, "welcome")
         g = await ws_open(s, base, GUEST, "192.0.2.83", name="Pilgrim9"); await recv(g, "welcome")
         feats = w["features"]
-        check("2.9: welcome announces lfg, history2 and search; version 2.1x", {"lfg", "history2", "search"} <= set(feats) and w["server"].startswith("2.1"), (feats, w["server"]))
+        check("2.9: welcome announces lfg, history2 and search; version 2.x", {"lfg", "history2", "search"} <= set(feats) and w["server"].startswith("2."), (feats, w["server"]))
 
         # ---- sign-up cards
         await e.send_str(json.dumps({"t": "msg", "channel": "general", "kind": "lfg", "text": "ignored", "lfg": {"title": "Wailing Caverns", "now": True, "slots": {"tank": 1, "healer": 1, "dps": 3}, "note": "bring water"}}))
@@ -400,7 +400,7 @@ async def suite_g(base):
     async with aiohttp.ClientSession() as s:
         r = await s.get(base + "/features", headers=H(ip="198.51.100.80"))
         j = await r.json()
-        check("features: public, announces tokens + invites + the version", r.status == 200 and {"tokens", "invites"} <= set(j["features"]) and j["server"].startswith("2.1"), j)
+        check("features: public, announces tokens + invites + the version", r.status == 200 and {"tokens", "invites"} <= set(j["features"]) and j["server"].startswith("2."), j)
 
         a = await ws_open(s, base, ELAN, "192.0.2.50"); w = await recv(a, "welcome")
         check("owner welcome: canInvite + tokens feature", w and w.get("canInvite") is True and "tokens" in w["features"], w and w["features"])

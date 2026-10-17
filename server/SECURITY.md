@@ -295,14 +295,24 @@ The Outpost side (same release train): manifest folders, ids and game versions m
   guests, never anonymously, `private` caching only, 4 downloads per member per hour. The member's own statement is trusted as far as the
   Lodge can know it (a client that says "on" and uploads nothing is a matter for the owner, as with any member).
 
+## Operator stats and connected outposts
+
+- `GET /admin/stats` is off unless `LODGE_ADMIN_TOKEN` (>= 24 characters) is set; it answers only a direct loopback connection without proxy
+  headers (the client's own address is recorded before `UseForwardedHeaders`, so a forwarded request from the reverse proxy - even one on the
+  same machine - never qualifies) and compares the token in constant time. Every refusal is a 404. The token is never logged; `lodge-admin
+  stats` passes it to curl through a pipe (`-H @-`), so it is not in `ps`. The answer is counts only.
+- Connected outposts: two numbers per week leave the Lodge (members who share, members who received); the per-week member hashes use a random
+  salt that is discarded with the week, so neither the Cairn nor a later reader of `cairn-week.json` can tie a count to a person.
 ## Tests
 
 ```bash
-dotnet test server/Lodge.Tests                                   # 591 unit tests (fake clock, temp folders)
-dotnet build -c Release server/Lodge.Server
+cd server                                                       # server/global.json: the .NET 10 SDK (the repo root pins 8 for the Outpost)
+dotnet test Lodge.Tests                                          # 705 unit tests (fake clock, temp folders)
+dotnet build -c Release Lodge.Server
+cd ..
 python server/tests/security_integration.py                     # 150 checks against local servers (python -X utf8 on Windows)
 sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 70 checks
-sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, 41 checks
+sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, SDK check, 49 checks
 ```
 
 All use synthetic codes and temp folders; none talks to a real lodge.
@@ -312,7 +322,9 @@ All use synthetic codes and temp folders; none talks to a real lodge.
 - Homoglyphs from other scripts (e.g. Cyrillic "а" for Latin "a") are not folded by NFKC; guests still carry the
   Initiate frame and "guest" flag, so they can't take a rank, only a similar-looking name.
 - The wrong-code lockout and rate limits trust the client IP from the reverse proxy; if the proxy allows spoofed
-  `X-Forwarded-For`, per-IP limits weaken. Proxy/NPM settings are host-side and outside this repo.
+  `X-Forwarded-For`, per-IP limits weaken. Proxy/NPM settings are host-side and outside this repo. The server itself takes
+  `X-Forwarded-For`/`-Proto` only from loopback and the `LODGE_TRUSTED_PROXIES` networks (`TrustedProxies`, tested with the real
+  ASP.NET middleware in `TrustedProxyTests`: a neighbour of the proxy, an outsider and a spoofed chain keep their own address).
 - Budgets are in memory: a restart resets them (and the strike table).
 - The shared guest code, if enabled, is only as private as the people who have it; prefer personal codes or guest invites.
 - Permanent codes that were never retired stay valid (that is the compatibility promise). Retire them (`lodge-admin retire-code <name>`) once a person's PCs have their own keys.

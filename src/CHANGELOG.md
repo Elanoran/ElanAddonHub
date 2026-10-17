@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.89.1
+- **Knows Lodge server 2.27.** A Lodge's Guild Master and officers see the update notice for it (the server now runs on .NET 10).
+
 ## 2.89.0
 - **Zephras Isle on the world map.** The Skyborne starting island now has its own world map next to Kalimdor and the Eastern Kingdoms: pick it in the map switch at the top. It is made from your game files like the continents (the first time takes a second or two), in 2D and 3D, with the zone name, its buildings and the other layers.
 - **A floating island in 3D.** The sky around Zephras Isle is drawn as open sea under the island, instead of a black floor with spikes.

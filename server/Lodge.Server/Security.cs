@@ -146,3 +146,41 @@ public sealed class StrikeTable
         return dead.Count;
     }
 }
+
+// LODGE_TRUSTED_PROXIES -> the networks whose X-Forwarded-For/-Proto the server believes (besides loopback, the ASP.NET default).
+// Anyone else's forwarded headers are ignored, so a visitor can't pick the IP the wrong-code lockout counts against.
+// "a.b.c.d" alone means that one address (/32, or /128 for IPv6); host bits after the prefix are cleared ("10.0.0.5/24" = 10.0.0.0/24,
+// as the old ASP.NET IPNetwork treated it - System.Net.IPNetwork would refuse it). A malformed entry is skipped and reported.
+public static class TrustedProxies
+{
+    public static List<System.Net.IPNetwork> Parse(IEnumerable<string> entries, List<string> rejected = null)
+    {
+        var list = new List<System.Net.IPNetwork>();
+        foreach (var raw in entries ?? Array.Empty<string>())
+        {
+            var entry = (raw ?? "").Trim();
+            if (entry.Length == 0) continue;
+            var parts = entry.Split('/');
+            if (parts.Length > 2 || !System.Net.IPAddress.TryParse(parts[0], out var ip)) { rejected?.Add(entry); continue; }
+            var bits = ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? 128 : 32;
+            var prefix = bits;
+            if (parts.Length == 2 && (!int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out prefix) || prefix > bits))
+            { rejected?.Add(entry); continue; }
+            var bytes = ip.GetAddressBytes();
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                var keep = Math.Clamp(prefix - i * 8, 0, 8);
+                bytes[i] &= (byte)(0xFF << (8 - keep));
+            }
+            list.Add(new System.Net.IPNetwork(new System.Net.IPAddress(bytes), prefix));
+        }
+        return list;
+    }
+
+    // the one place the forwarded-headers rule is set up (Program.cs uses it; the tests run the real middleware through it)
+    public static void Configure(Microsoft.AspNetCore.Builder.ForwardedHeadersOptions o, IEnumerable<string> entries, List<string> rejected = null)
+    {
+        o.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+        foreach (var net in Parse(entries, rejected)) o.KnownIPNetworks.Add(net);
+    }
+}
