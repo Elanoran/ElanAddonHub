@@ -446,19 +446,24 @@ Feature `reputations` in the welcome `features`, next to `armory` (absent when t
 - `armory.standing` `{faction}` (Page budget; members and up) -> `armory.standing` `{faction, who: [{faction, owner, by, key, name, class, level, s, v, min?, max?, at, mine?}]}`: every shared character with a reputation for that faction, best standing first (then the higher value), at most 80 rows. Nothing else of the character is in a row. Errors: `invalid` (no usable faction id), `guest`, `disabled` (the Armory is off), `noreps` (reputations are off), `rate`.
 - Switching the feature off keeps what is stored on disk but never serves it (`armory.get` leaves `reps` out, `armory.standing` answers `noreps`); new snapshots are stored without it. Taking a character out, `armory.delete {all}`, leaving and the purge take its reputations with it.
 
-## The Cairn (open Atlas commons; Lodge feature `cairn`, opt-in; Outpost 2.86)
+## The Cairn (Atlas commons; Lodge features `cairn` and `cairn2`, opt-in; Outpost 2.86, give to get 2.87)
 
-The Cairn is a separate service that merges the pooled Atlas numbers of many Lodges into one open daily dataset (CC0-1.0). Lodge servers
-contribute (opt-in, each with its own revocable key from the Cairn's admin); every Outpost may download the dataset; an Outpost never posts to
-the Cairn. Paths below are relative to the Cairn's base URL (e.g. `https://cairn.example.org/cairn`); nothing about any particular Cairn is built
-into the Lodge server.
+The Cairn is a separate service that merges the pooled Atlas numbers of many Lodges into one daily dataset. Lodge servers contribute (opt-in,
+each with its own revocable key from the Cairn's admin). **Give to get**: the dataset is not public - it is for the Lodges that contribute and,
+through them, for their members who share. The Cairn serves it only to a Lodge key in good standing (an accepted contribution within the
+Cairn's grace period, 14 days by default); the Lodge hands it on only to its own members whose Atlas sharing is on, never to guests. An Outpost
+never talks to the Cairn and has no Cairn address. Paths in "Lodge <-> Cairn" are relative to the Cairn's base URL (e.g.
+`https://cairn.example.org/cairn`); nothing about any particular Cairn is built into the Lodge server or the Outpost.
 
 **Members are told**: a Lodge that contributes lists `cairn` in the welcome `features` (only while `LODGE_CAIRN_ENABLED=1` with a valid https
-URL and key, and the Atlas is on). The Outpost says so in Settings > Privacy.
+URL and key, and the Atlas is on) and `cairn2` next to it (it receives the dataset and hands it to members who share). The Outpost says so in
+Settings > Privacy.
 
 ### Lodge -> Cairn (`server/Lodge.Server/Cairn.cs`; settings `LODGE_CAIRN_*` in deploy/lodge.env.example)
 
-- `GET /v1/status` with `Authorization: Bearer <key>` -> `{ok, id, epoch, lastSeq, minLodges, maxBodyBytes, maxJsonBytes, maxRecords, dataset, server}`.
+- `GET /v1/status` with `Authorization: Bearer <key>` -> `{ok, id, epoch, lastSeq, minLodges, maxBodyBytes, maxJsonBytes, maxRecords, dataset, server,
+  standing, lastContribution, receiveUntil, graceDays}`. `standing`: `good` (receives), `new` (no accepted contribution yet), `lapsed` (the last
+  one is older than `graceDays`); a revoked key gets 401 `revoked`.
   A different `epoch` than the one the Lodge remembers = the Cairn forgot this Lodge's data: everything is sent again. The Lodge's `seq`
   continues after `lastSeq`.
 - `POST /v1/contribute` with the same header, `Content-Type: application/json`, `Content-Encoding: gzip`; body
@@ -466,24 +471,55 @@ URL and key, and the Atlas is on). The Outpost says so in Settings > Privacy.
   spawns?: { "<npcId>": [[uiMapId, x, y, n]] | null }, nodes?: { "<objectId>": [[uiMapId, x, y, n]] | null }, flights?: { "<Horde|Alliance>|<nodeId>><nodeId>": [seconds, samples] | null } }`.
   Kinds: `kill object fishing pickpocket skinning mining herbalism salvage contained` (fishing keys are uiMapIds, contained keys item ids).
   Every record carries the Lodge's CURRENT total (resends never count twice; a lower total takes data back out); `null` = the Lodge no
-  longer has it. `seq` grows with every try. Answer `{ok, seq, duplicate, accepted, unchanged, rejected, epoch}`; 401 `key` / `revoked`,
+  longer has it. `seq` grows with every try. Answer `{ok, seq, duplicate, accepted, unchanged, rejected, epoch, contribution, standing, receiveUntil}`
+  (`contribution`: this post counted as an accepted contribution - not a duplicate `seq`, at least one valid record); 401 `key` / `revoked`,
   413, 415, 429 (`rate`, `budget`, `blocked`, with `Retry-After`). A record that fails a check is rejected alone; an unknown field refuses
   the whole post (400 `schema`).
 - What a Lodge sends is built from its pool's guest view: no names, no characters, no members, no finds, notes, quests, seen tables or
   revealed items; flight legs only between numbered taxi nodes; coordinates rounded to 4 decimals; posts of about 1.5 MB of JSON.
 
-### Outpost <- Cairn (`src/Services/Atlas/CairnData.cs`)
+### Lodge <- Cairn (`server/Lodge.Server/CairnReceive.cs`, give to get)
 
-- `GET /v1/manifest.json` (ETag; `public, max-age=600`) -> `{format: "elans-cairn-manifest", v: 1, license, kid, latest: {day, seq, file,
-  bytes, contentBytes, sha256, contentSha256, sig, kid, built}, history: [...]}`.
-- `GET /v1/datasets/<file>` (`cairn-YYYY-MM-DD-<seq>.json.gz`, immutable) -> gzip of
-  `{format: "elans-cairn", v: 1, license: "CC0-1.0", day, seq, minLodges, lodges, builds: [...],
+- The same key, only while the standing is `good`; otherwise 403 `{reason: "contribute", standing: "new"|"lapsed", graceDays, error}` (or 401
+  `key` / `revoked`). Answers are `private` (never for a shared cache).
+- `GET /v1/manifest.json` (ETag, `If-None-Match` -> 304; `private, no-cache`) -> `{format: "elans-cairn-manifest", v: 1, license: "contributors",
+  kid, latest: {day, seq, file, bytes, contentBytes, sha256, contentSha256, sig, kid, built}, history: [...]}`. The Lodge asks at most every
+  `LODGE_CAIRN_FETCH_HOURS` (6), and soon after a contribution that (re)opened its access.
+- `GET /v1/datasets/<file>` (`cairn-YYYY-MM-DD-<seq>.json.gz`; a few downloads per Lodge per day, then 429 `downloads`) -> gzip of
+  `{format: "elans-cairn", v: 1, license: "contributors", day, seq, minLodges, lodges, builds: [...],
   drops: { <kind>: { "<id>": { n, m, b, i: { "<itemId>": [times, count, m, kills?] } } } }, vendors: { "<npcId>": { m, i: { "<itemId>": [price, stack, limit, extended, m] } } },
   spawns: { "<npcId>": [[uiMapId, x, y, n, m]] }, nodes: { "<objectId>": [[uiMapId, x, y, n, m]] }, flights: { "<leg>": [seconds, samples, m] }}`.
   `m` = the number of Lodges behind a figure; `kills` (4th item number) only when that item's rate stands on fewer kills than the record's `n`.
   Readers ignore unknown keys.
-- Checks: `sha256` of the file, `contentSha256` of the JSON inside, and - when the client pins the Cairn's key (`GET /v1/key`:
-  `{alg: "ES256", crv: "P-256", kid, x, y}`) - `sig` = ECDSA P-256 / SHA-256 (IEEE P1363, base64) over `"elans-cairn/1\n<day>\n<seq>\n<contentSha256>"`.
+- The Lodge checks `sha256` of the file and `contentSha256` of the JSON inside, keeps one copy (`data/cairn/dataset.json.gz` + `held.json`),
+  and on a 401 / 403 deletes it and stops serving (the log says why; the owner sees it in `cairn.status`, below). It starts again with the next
+  accepted contribution.
+- Signature: `sig` = ECDSA P-256 / SHA-256 (IEEE P1363, base64) over `"elans-cairn/1\n<day>\n<seq>\n<contentSha256>"`, by the Cairn's key
+  (`GET /v1/key`: `{alg: "ES256", crv: "P-256", kid, x, y}`, public). The Lodge passes it on unchanged, so an Outpost that pins the key can
+  tell that its Lodge did not change the numbers.
 - Merging on the Cairn: a record and every item / vendor item / spot / leg in it needs `minLodges` independent Lodges (2 by default);
   outliers (drop rates far from the median across Lodges, flight times > 40 % off) are left out; no Lodge weighs more than all others
   together; records are kept per game build and old builds age out.
+
+### Outpost <- its own Lodge (feature `cairn2`; `src/Lodge/LodgeSession.Cairn.cs`, `src/Services/Atlas/CairnData.cs`)
+
+Only for a Lodge that lists `cairn2`; an older Lodge (or one that doesn't contribute) gets none of this, and an older Outpost never sends it.
+Guests never get the data.
+
+- `atlas.sharing {on}` (client -> server, members and up, Page budget): the member's Atlas sharing switch ("Share my Atlas observations with
+  this Lodge"). The Lodge can't see the switch otherwise (sharing off simply means nothing is uploaded), so the Outpost says it after every
+  welcome and whenever the switch changes. Stored per identity in `data/cairn-sharing.json` (unknown = off; a full purge forgets it). A guest's
+  message is answered but never stored. Answer: `cairn.status`.
+- `cairn.status` (client -> server: ask; server -> client: the answer, and sent unasked to the members who share - and the owner - when a new
+  dataset arrives or serving stops) `{entitled, sharing, why?, text?, day?, seq?, lodge?}`. `why` when not entitled: `share` (sharing is off:
+  "Share to receive"), `guest`, `lodge` (this Lodge is not receiving: it has to contribute to receive), `disabled` (not handed out), `not-yet`
+  (no copy on hand yet - try later). `day` / `seq` of the dataset on hand when entitled. `lodge` only for the owner: `{standing, serving,
+  receiveUntil?, checked?, why?, problem?}` - the Lodge's own standing at the Cairn and why it receives nothing.
+- `GET /cairn/manifest` (the usual credential headers, like `/datasets/...`) -> the manifest of the copy on hand `{format:
+  "elans-cairn-manifest", v: 1, license: "contributors", kid, latest: {day, seq, file, bytes, contentBytes, sha256, contentSha256, sig, kid,
+  built}}` (no history, no Cairn address), `ETag` = `"<first 32 hex of contentSha256>"`, `If-None-Match` -> 304, `private, no-cache`.
+- `GET /cairn/dataset` -> the `.json.gz` as received (`X-Sha256`; `private, no-store`); 4 per member per hour, then 429 `rate`.
+- Refusals of both routes: `{error, reason}` with 404 `disabled`, 403 `guest`, 403 `share`, 403 `lodge`, 503 `not-yet`. The Outpost deletes its
+  copy on `share`, `guest`, `lodge`, `disabled` (and 401); on `not-yet`, 429 or a network error it keeps it. It also deletes it at once when
+  the user switches sharing off, has no Lodge, or the Lodge doesn't list `cairn2`. It checks both SHA-256s and, once it pins the Cairn's key,
+  the signature; it asks at most every 12 hours, and at once when `cairn.status` names a newer `seq`.

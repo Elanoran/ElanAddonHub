@@ -3,6 +3,12 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.87.0
+- **The Cairn's data is for those who share.** The Cairn's numbers from other lodges now come only from your own Lodge, and only while "Share my Atlas observations with this Lodge" is on (Settings > Lodge). Like a fair deal: lodges that contribute receive, and members who share get it from their lodge. The Outpost no longer downloads anything from the internet for the Cairn.
+- **Sharing off means no Cairn data.** Turn sharing off and the Cairn's copy on your PC is deleted at once; your lodge is told, and nothing more comes until you switch it on again. Guests and players without a lodge don't get the Cairn's data. If your lodge itself stops contributing, it stops handing the data out, and your copy is deleted too.
+- **Settings > Privacy explains it.** The "Cairn open Atlas data" switch is gone. In its place a short note says how it works, with a button to the sharing switch and a line saying where your Cairn data came from (or why there is none). Rows labelled "Cairn" in the Atlas stay as they were.
+- **For lodge owners:** a lodge that contributes to the Cairn now also receives the Cairn's data and hands it to its members who share. If the lodge has not contributed for a while, the Cairn stops sending it until the next contribution, and the server log says why.
+
 ## 2.86.0
 - **The Cairn: open Atlas numbers from many lodges.** The Atlas can now also show the Cairn, an open dataset that merges what many lodges observed: drop rates of creatures, objects, fishing and gathering, vendor items and prices, spawn points, gathering nodes and flight times. It holds ids and counts only - no names of people or characters - and is free for everyone (CC0). A number only gets in when at least two independent lodges saw it, and numbers far off from the rest are left out.
 - **Labelled "Cairn", below your own lodge.** On item and creature pages the Cairn's rows carry the label "Cairn" and sort below your lodge's own observations. Where your lodge already shows a source, the Cairn's figure rides along as a second line.

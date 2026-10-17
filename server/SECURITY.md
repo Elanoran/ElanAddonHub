@@ -283,6 +283,18 @@ The Outpost side (same release train): manifest folders, ids and game versions m
 - Members are told: the welcome lists `cairn` while the server contributes, and the Outpost shows it in Settings > Privacy. Members who switched Atlas sharing off contribute nothing (their data never reaches the pool); a purge lowers the totals, and the next contribution takes the difference back out of the Cairn.
 - A failed or refused post changes nothing locally (only confirmed records are remembered); 401 / 429 stop the run until the next one.
 
+## Receiving the Cairn's data (give to get, feature `cairn2`)
+
+- Only a Lodge that contributes receives: the receiver is on exactly while the contributor is, and the Cairn itself serves the dataset only
+  to a key in good standing (an accepted contribution within its grace period). A 401 / 403 from the Cairn deletes the stored copy at once
+  and stops serving; the log says why (never the key), and the owner sees the Lodge's standing in `cairn.status`.
+- The download is checked (SHA-256 of the file and of the JSON inside, sizes capped before and after gzip) and stored under fixed names in
+  `data/cairn/`; the Lodge never parses or runs it. The signature is passed on unchanged, so members' Outposts can check it themselves.
+- Handed on only to MEMBERS whose Atlas sharing is on (`atlas.sharing`, stored per identity in `data/cairn-sharing.json`; unknown = off),
+  over the usual authenticated routes (`GET /cairn/manifest`, `GET /cairn/dataset`, same credential headers as everything else), never to
+  guests, never anonymously, `private` caching only, 4 downloads per member per hour. The member's own statement is trusted as far as the
+  Lodge can know it (a client that says "on" and uploads nothing is a matter for the owner, as with any member).
+
 ## Tests
 
 ```bash

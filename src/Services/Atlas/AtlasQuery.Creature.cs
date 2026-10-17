@@ -88,7 +88,7 @@ namespace ElansAddonHub.Services.Atlas
                     + (AtlasObs.LowSample(unique) ? " Fewer than " + AtlasObs.LowSampleKills + " so far: these are counts, not drop rates yet." : "");
                 AddLayer(m, "lodge");
             }
-            AddCairnLoot(m, s, lodgeKind, id, rows, tiny, by);   // the Cairn's open numbers (tier 1) between the Lodge's and the Classic baseline's
+            AddCairnLoot(m, s, lodgeKind, id, rows, tiny, by);   // the Cairn's numbers (tier 1) between the Lodge's and the Classic baseline's
             var dv = ck != null ? AtlasDerived.For(ClassicAtlas.Current) : null;
             if (dv != null)
             {

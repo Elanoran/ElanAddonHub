@@ -522,11 +522,13 @@ Sources, loot and vendors cannot be read from the client (its Adventure Guide ta
 decision on where the data comes from, how it is labelled (for example "Classic baseline" versus "seen on Forever") and what its licence
 requires, before any of it enters a release. Until then Atlas answers only what the user's own installation can answer.
 
-### Cairn: a shared commons across Lodges (Outpost 2.86, Lodge server opt-in)
+### Cairn: a shared commons across Lodges (Outpost 2.86, Lodge server opt-in; give to get since 2.87)
 
-Lodges that opt in send their pooled Atlas totals to one Cairn service; it merges them and publishes a daily open file (CC0) that every
-Outpost downloads as the "Cairn" layer: below the user's own Lodge (tier 0), above the Classic baseline (tier 2). Not peer-to-peer (NAT,
-poisoning, IP exposure). The wire format is public (server/PROTOCOL.md "The Cairn"); the Cairn service itself is run by the maintainers and
+Lodges that opt in send their pooled Atlas totals to one Cairn service; it merges them into a daily file. **Give to get** (owner's decision:
+"if people don't share their data they shouldn't get updates, like a contract"): the file is not public. The Cairn serves it only to a
+Lodge key in good standing (an accepted contribution within its grace period, 14 days); that Lodge hands it on only to its own members whose
+Atlas sharing is on; the Outpost shows it as the "Cairn" layer: below the user's own Lodge (tier 0), above the Classic baseline (tier 2).
+Not peer-to-peer (NAT, poisoning, IP exposure). The wire format is public (server/PROTOCOL.md "The Cairn"); the Cairn service itself is run by the maintainers and
 is not part of this repository.
 - **Who sends**: Lodge SERVERS only, each with its own revocable Cairn key, invite-only to start. An Outpost never uploads to the Cairn.
 - **What** (`server/Lodge.Server/Cairn.cs`, `CairnRules.Records`): from the pool's guest view (no names) - drops per creature / object /
@@ -536,15 +538,31 @@ is not part of this repository.
 - **How**: every record carries the Lodge's CURRENT total (never increments); the Cairn adds what grew to the post's game-build bucket and takes
   what shrank back out, so resends never double-count and a member purged from the Lodge pool is purged from the Cairn too. The Lodge keeps a
   hash per confirmed record (`data/cairn-sent.json`), posts only changes (null for gone records), gzip, chunks of about 1.5 MB, a new `seq` per
-  try, a full resend when the Cairn's epoch changes and every 7 days. Feature `cairn` in the welcome tells members their Lodge contributes.
+  try, a full resend when the Cairn's epoch changes and every 7 days (which also keeps an active Lodge in good standing). Feature `cairn` in
+  the welcome tells members their Lodge contributes.
+- **Standing (the Cairn)**: `new` (no accepted contribution yet), `good`, `lapsed` (older than the grace period), `revoked`. An accepted
+  contribution = a new `seq` with at least one valid record. New keys receive right after the first one, lapsed keys again with the next one,
+  revoked keys never. Anonymous / new / lapsed requests for the manifest or files get 401 / 403 `contribute`; answers are `private`.
+- **Receiving (the Lodge, `CairnReceive.cs`, feature `cairn2`)**: while contributing, the Lodge checks the Cairn's manifest with its key (ETag,
+  every `LODGE_CAIRN_FETCH_HOURS`, and right after a contribution that (re)opened access), downloads a changed file, checks both SHA-256s and
+  keeps one copy in `data/cairn/`. A refusal deletes it and stops serving; the log and the owner's `cairn.status` say why.
+- **Handing on (the Lodge)**: members tell the Lodge their Atlas sharing switch (`atlas.sharing {on}`, stored per identity in
+  `data/cairn-sharing.json`; the Lodge can't otherwise tell "sharing off" from "nothing new"). `GET /cairn/manifest` and `GET /cairn/dataset`
+  (the usual credential headers) answer members who share; guests 403 `guest`, sharing off 403 `share` ("share to receive"), a Lodge that is
+  not receiving 403 `lodge`, nothing on hand yet 503 `not-yet`. `cairn.status` tells sharers when a new dataset arrives or serving stops.
 - **Merging (the Cairn)**: a record and every item / vendor item / spot / flight leg needs N independent Lodges (default 2); outlier drop rates
   (far above or below the median, once 3 Lodges can judge) and flight times (> 40 % off the median) are left out; a per-Lodge weight cap (no
   Lodge weighs more than all the others together); records kept per game build, old builds age out. The daily file is deterministic,
   SHA-256 checksummed (the .gz and the JSON inside) and ES256-signed; a small manifest names it.
-- **Outpost** (`Services/Atlas/CairnData.cs`, `AtlasQuery.Cairn.cs`): Settings > Privacy "Cairn open Atlas data", on by default (no personal
-  data, download only); manifest with ETag, at most every 12 hours, both checksums (and the signature once `CairnAtlas.PinnedKeyX/Y` is set),
-  a failed check keeps the copy on hand; off deletes the copy. Item and creature pages show Cairn rows labelled "Cairn"; a source the Lodge
-  already shows gets the Cairn's figure as its second line. Self-test section `cairn` (fake Cairn, no network).
+- **Outpost** (`Lodge/LodgeSession.Cairn.cs`, `Services/Atlas/CairnData.cs`, `AtlasQuery.Cairn.cs`): no Cairn address at all - the data
+  comes only from the user's own Lodge when it lists `cairn2` and the user's "Share my Atlas observations with this Lodge" is on. The Outpost
+  sends `atlas.sharing {on}` after the welcome and on every change of the switch, fetches when `cairn.status` says entitled (at once for a
+  newer `seq`, otherwise at most every 12 hours, manifest ETag), checks both checksums (and the Cairn's signature once `CairnAtlas.PinnedKeyX/Y`
+  is set), and keeps the copy in `<data>/cairn`. The copy is deleted when sharing goes off, without a Lodge, on an older / non-contributing
+  Lodge, for guests, and when the Lodge says `share` / `lodge` / `guest` / `disabled`; `not-yet`, busy and network errors keep it.
+  Settings > Privacy has no Cairn switch of its own: a note ties it to the sharing switch ("The Cairn's shared data is for those who share")
+  and one status line says where the data came from or why there is none. Item and creature pages show Cairn rows labelled "Cairn"; a source
+  the Lodge already shows gets the Cairn's figure as its second line. Self-test section `cairn` (a fake Lodge on 127.0.0.1, no network).
 - **Guard**: the public repo must never name the maintainers' own hosting: `Services/InfraGuard.cs` scans the tracked files in every self-test run.
 
 ### Release and update trust (decided 2026-10-15)

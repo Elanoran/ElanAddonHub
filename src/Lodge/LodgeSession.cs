@@ -516,6 +516,7 @@ namespace ElansAddonHub.Lodge
                 case "flights.data": OnFlightData(m); break;
                 case "atlas.shared": OnAtlasShared(m); break;
                 case "atlas.data": OnAtlasData(m); break;
+                case "cairn.status": OnCairnStatus(m); break;
                 case "armory.saved": OnArmorySaved(m); break;
                 case "armory.deleted": OnArmoryDeleted(m); break;
                 case "armory.chars": OnArmoryChars(m); break;

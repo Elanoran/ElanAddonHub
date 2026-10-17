@@ -22,7 +22,7 @@ namespace ElansAddonHub.Services.Atlas
         public const string Classic = "Classic baseline";
         public const string Mine = "Your characters";
         public const string Hotfix = "Server hotfix";        // rows the server sent the client (DBCache.bin) over the shipped game files
-        public const string Cairn = "Cairn";                 // the open dataset merged from many Lodges (CairnData.cs); below the user's own Lodge
+        public const string Cairn = "Cairn";                 // the dataset merged from many Lodges, handed on by the user's Lodge to members who share (CairnData.cs); below the Lodge's own
     }
 
     // the kinds of thing an id link can name, in the order search groups them

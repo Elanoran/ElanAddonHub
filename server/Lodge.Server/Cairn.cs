@@ -9,8 +9,8 @@ using System.Text.RegularExpressions;
 
 namespace Lodge;
 
-// "Contribute to the Cairn" (opt-in, off by default; PROTOCOL.md "The Cairn"). The Cairn is an open commons that merges the pooled
-// Atlas numbers of many Lodges into one open daily dataset. When the Lodge owner switches it on (LODGE_CAIRN_ENABLED=1 plus the Cairn's
+// "Contribute to the Cairn" (opt-in, off by default; PROTOCOL.md "The Cairn"). The Cairn is a commons that merges the pooled Atlas
+// numbers of many Lodges into one daily dataset - give to get: only contributing Lodges receive it (CairnReceive.cs). When the Lodge owner switches it on (LODGE_CAIRN_ENABLED=1 plus the Cairn's
 // URL and this Lodge's Cairn key), the server posts the Lodge's POOLED totals about once an hour: ids and counts only - drops per creature /
 // object / fishing zone / gathering kind (kills and item counts), vendor items (price, stack, limit), spawn and npc spots, gathering
 // nodes, flight times between numbered taxi nodes, and the game build. Never names, characters, player ids, members, finds, notes, quests
@@ -247,7 +247,13 @@ public sealed class CairnContributor
         });
     }
 
-    public sealed class RunResult { public int Posts, Records, Accepted, Rejected; public string Stopped = ""; public bool Full; }
+    public sealed class RunResult { public int Posts, Records, Accepted, Rejected; public string Stopped = ""; public bool Full; public string Standing = ""; }
+
+    // give to get: what the Cairn said about this Lodge's standing (good / new / lapsed / revoked / key) and until when it receives; the
+    // receiver (CairnReceive.cs) fetches or stops on it
+    public event Action<string, long?> Standing;
+
+    static long? LongOf(JsonNode n) { try { return n == null ? null : (long?)n; } catch (Exception e) when (e is FormatException or InvalidOperationException) { return null; } }
 
     HttpClient Http() => http ??= handler != null ? new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(60) } : new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
@@ -295,14 +301,33 @@ public sealed class CairnContributor
 
     public async Task<RunResult> RunOnce(CancellationToken ct)
     {
+        var res = await RunInner(ct);
+        if (res.Standing.Length > 0) { try { Standing?.Invoke(res.Standing, receiveUntil); } catch (Exception e) { log?.LogWarning("Cairn: {Error} after the contribution", e.GetType().Name); } }
+        return res;
+    }
+
+    long? receiveUntil;
+
+    async Task<RunResult> RunInner(CancellationToken ct)
+    {
         var res = new RunResult();
         if (!Enabled) { res.Stopped = "disabled"; return res; }
         var st = Load();
         // 1. where the Cairn stands: its epoch for us (another one = it forgot our data) and the last seq it took
         using (var sr = await Http().SendAsync(Req(HttpMethod.Get, "/v1/status"), ct))
         {
-            if (!sr.IsSuccessStatusCode) { res.Stopped = Refused(sr.StatusCode, "status"); return res; }
+            if (!sr.IsSuccessStatusCode)
+            {
+                if (sr.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    string reason = "";
+                    try { reason = (string)(JsonNode.Parse(await sr.Content.ReadAsStringAsync(ct)) as JsonObject)?["reason"] ?? ""; } catch { }
+                    res.Standing = reason == "revoked" ? "revoked" : "key"; receiveUntil = null;
+                }
+                res.Stopped = Refused(sr.StatusCode, "status"); return res;
+            }
             var so = JsonNode.Parse(await sr.Content.ReadAsStringAsync(ct)) as JsonObject;
+            if ((string)so?["standing"] is { Length: > 0 } sst) { res.Standing = sst; receiveUntil = LongOf(so["receiveUntil"]); }
             var epoch = (string)so?["epoch"] ?? "";
             long lastSeq = (long?)so?["lastSeq"] ?? 0;
             if (epoch != st.Epoch) { st.Sent.Clear(); st.Epoch = epoch; res.Full = true; }
@@ -336,6 +361,7 @@ public sealed class CairnContributor
             var po = JsonNode.Parse(await pr.Content.ReadAsStringAsync(ct)) as JsonObject;
             res.Posts++; res.Records += keys.Count;
             res.Accepted += (int?)po?["accepted"] ?? 0; res.Rejected += (int?)po?["rejected"] ?? 0;
+            if ((string)po?["standing"] is { Length: > 0 } pst) { res.Standing = pst; receiveUntil = LongOf(po["receiveUntil"]); }
             if ((string)po?["epoch"] is { } ep && ep != st.Epoch) { st.Sent.Clear(); st.Epoch = ep; Save(st); res.Stopped = "epoch-changed"; break; }
             foreach (var k in keys)
                 if (changed[k] == null) st.Sent.Remove(k); else st.Sent[k] = CairnRules.Hash(changed[k]);

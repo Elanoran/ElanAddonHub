@@ -5,7 +5,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -15,27 +14,29 @@ using System.Threading.Tasks;
 namespace ElansAddonHub.Services.Atlas
 {
     // ============================================================================================================================
-    // The Cairn (self-test section "cairn"): an open commons that merges the pooled Atlas numbers of many Lodges into one daily
-    // dataset (CC0) - drop rates per creature / object / fishing zone / gathering kind, vendor items, spawn points, gathering nodes,
-    // flight times; ids and counts only, no names. Every Outpost may DOWNLOAD it (Settings > Privacy, on by default because it holds
-    // no personal data); the Outpost never uploads anything to it. Its numbers are labelled "Cairn" in the Atlas, below the user's
-    // own Lodge's. Wire format: server/PROTOCOL.md "The Cairn".
-    //   <base>/v1/manifest.json  -> latest { day, seq, file, bytes, sha256, contentSha256, sig, kid }
-    //   <base>/v1/datasets/<file> -> the .json.gz
-    // The download is checked: the file's SHA-256, the JSON's SHA-256, and - once a public key is pinned below - the ES256 signature.
-    // A file that fails any check is thrown away and the copy already on disk stays. Checked at most every 12 hours.
+    // The Cairn (self-test section "cairn"): a commons that merges the pooled Atlas numbers of many Lodges into one daily dataset -
+    // drop rates per creature / object / fishing zone / gathering kind, vendor items, spawn points, gathering nodes, flight times; ids
+    // and counts only, no names. Give to get (2.87): the data is for those who share. The Outpost has NO Cairn address and never talks
+    // to the Cairn: it gets the data from the user's own Lodge (feature "cairn2", server/PROTOCOL.md "The Cairn"), and only while the
+    // user's Atlas sharing ("Share my Atlas observations with this Lodge") is on. Its numbers are labelled "Cairn" in the Atlas, below
+    // the Lodge's own.
+    //   <lodge>/cairn/manifest -> { format, v, latest { day, seq, file, bytes, sha256, contentSha256, sig, kid } } (ETag)
+    //   <lodge>/cairn/dataset  -> the .json.gz
+    // The download is checked: the file's SHA-256, the JSON's SHA-256, and - once a public key is pinned below - the ES256 signature
+    // (made by the Cairn, so the Lodge in between can't change the numbers unseen). A file that fails a check is thrown away and the
+    // copy already on disk stays. The copy is deleted when sharing is switched off, when the user has no Lodge, when the Lodge doesn't
+    // hand it out (older Lodge, guest, not contributing) and when the Lodge says the user isn't entitled. Checked at most every 12 hours,
+    // and when the Lodge announces a new dataset.
     // ============================================================================================================================
     public static class CairnAtlas
     {
-        public const string DefaultUrl = "https://nasferatu.dk/cairn";
         // the Cairn's signing key (ES256, the x / y of its GET /v1/key, base64url). Empty = not pinned yet: the checksums are still checked
         public static string PinnedKeyX = "", PinnedKeyY = "";
         public const long MaxGzBytes = 64L * 1024 * 1024, MaxJsonBytes = 256L * 1024 * 1024, MaxManifestBytes = 1024 * 1024;
         public static readonly TimeSpan Every = TimeSpan.FromHours(12);
+        public const string ManifestPath = "/cairn/manifest", DatasetPath = "/cairn/dataset";   // on the user's Lodge
 
-        public static bool AutoStart = true;                       // the self-test switches the automatic download off (it never contacts the real Cairn)
-        public static string UrlOverride;                          // tests: a fake Cairn; null = ELANSHUB_CAIRN_URL or DefaultUrl
-        public static string Url => UrlOverride ?? (Environment.GetEnvironmentVariable("ELANSHUB_CAIRN_URL") is string e && e.Length > 0 ? e : DefaultUrl);
+        public static bool AutoStart = true;                       // the self-test switches the automatic download off
         public static string CacheDirOverride;
         public static string CacheDir => CacheDirOverride ?? Path.Combine(Util.DataDir, "cairn");
 
@@ -43,31 +44,17 @@ namespace ElansAddonHub.Services.Atlas
         public static bool IsReady => Current != null;
         public static event Action Changed;                       // the data on hand changed (arrived, replaced, cleared)
         public static string LastProblem { get; private set; } = "";
+        public static string RefusedWhy { get; private set; } = "";      // the Lodge's last "not for you" reason: share, guest, lodge, disabled
         public static DateTime LastCheck { get; private set; } = DateTime.MinValue;
 
-        // ---- fetching (replaceable for the self-test: a fake Cairn, no network)
-        public sealed class Response { public int Status; public byte[] Body; public string ETag; }
-        public static Func<string, string, Task<Response>> Fetch = DefaultFetch;   // (url, If-None-Match) -> answer; only GET, ever
+        // ---- fetching from the user's Lodge (LodgeSession.CairnFetchAsync; the self-test uses a fake Lodge)
+        public sealed class Response { public int Status; public byte[] Body; public string ETag; public string Reason, Error; }
+        public static Func<string, string, Task<Response>> Fetch;   // (path on the Lodge, If-None-Match) -> answer; only GET, ever. null = no Lodge
 
-        static async Task<Response> DefaultFetch(string url, string etag)
-        {
-            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
-            using (var req = new HttpRequestMessage(HttpMethod.Get, url))
-            {
-                if (!string.IsNullOrEmpty(etag)) req.Headers.TryAddWithoutValidation("If-None-Match", etag);
-                using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token))
-                {
-                    var r = new Response { Status = (int)resp.StatusCode, ETag = resp.Headers.ETag?.ToString() };
-                    if (resp.StatusCode != HttpStatusCode.OK) return r;
-                    long cap = url.EndsWith(".json.gz", StringComparison.Ordinal) ? MaxGzBytes : MaxManifestBytes;
-                    if (resp.Content.Headers.ContentLength > cap) throw new InvalidDataException("too large");
-                    using (var s = await resp.Content.ReadAsStreamAsync()) r.Body = ReadCapped(s, cap);
-                    return r;
-                }
-            }
-        }
+        // the Lodge's refusals that mean "this is not for you (any more)": the copy is deleted. Anything else (busy, not yet, offline) keeps it.
+        public static bool NotEntitled(string reason) => reason == "share" || reason == "guest" || reason == "lodge" || reason == "disabled" || reason == "auth";
 
-        static byte[] ReadCapped(Stream s, long cap)
+        public static byte[] ReadCapped(Stream s, long cap)
         {
             using (var ms = new MemoryStream())
             {
@@ -79,17 +66,6 @@ namespace ElansAddonHub.Services.Atlas
                 }
                 return ms.ToArray();
             }
-        }
-
-        // https only (http just to this PC, for a local test Cairn); nothing with a user, query or fragment
-        public static bool ValidBase(string url, out string clean)
-        {
-            clean = null;
-            if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url.Trim().TrimEnd('/'), UriKind.Absolute, out var u)) return false;
-            if (!string.IsNullOrEmpty(u.UserInfo) || !string.IsNullOrEmpty(u.Query) || !string.IsNullOrEmpty(u.Fragment)) return false;
-            if (u.Scheme != Uri.UriSchemeHttps && !(u.Scheme == Uri.UriSchemeHttp && u.IsLoopback)) return false;
-            clean = u.GetLeftPart(UriPartial.Path).TrimEnd('/');
-            return true;
         }
 
         static readonly Regex FileRx = new Regex(@"^cairn-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{1,9}\.json\.gz$", RegexOptions.CultureInvariant);
@@ -175,36 +151,48 @@ namespace ElansAddonHub.Services.Atlas
             try { if (File.Exists(GzPath)) File.Delete(GzPath); if (File.Exists(MetaPath)) File.Delete(MetaPath); } catch { }
         }
 
-        // switched off in Settings > Privacy: nothing is fetched any more and the copy on disk is deleted
-        public static void Clear()
+        static void DropLocked(string why)
+        {
+            var had = Current != null || File.Exists(GzPath);
+            Delete(); Current = null; LastCheck = DateTime.MinValue; LastProblem = "";
+            if (why != null) RefusedWhy = why;
+            if (had) { Util.Log("cairn: the copy was deleted (" + (why ?? "off") + ")"); Changed?.Invoke(); }
+        }
+
+        // sharing switched off, no Lodge, or the Lodge doesn't hand it out to this user: the copy on disk goes. `why` = the Lodge's reason (or null)
+        public static void Clear(string why = null)
         {
             gate.Wait();
-            try { Delete(); var had = Current != null; Current = null; LastCheck = DateTime.MinValue; LastProblem = ""; if (had) Changed?.Invoke(); }
+            try { DropLocked(why); }
             finally { gate.Release(); }
         }
 
-        // Asks the Cairn for its newest file (at most every 12 hours unless forced). Returns what happened, in a word:
-        // "off", "fresh", "unchanged", "updated", or "failed: <why>" (the copy on hand stays).
+        // Asks the user's Lodge for the newest copy (at most every 12 hours unless forced). Returns what happened, in a word:
+        // "off", "fresh", "unchanged", "updated", "refused: <reason>" (not for this user: the copy is deleted) or "failed: <why>" (the copy stays).
         public static async Task<string> Refresh(Func<bool> enabled, bool force = false)
         {
             if (enabled != null && !enabled()) return "off";
+            var fetch = Fetch;
+            if (fetch == null) return "off";
             await gate.WaitAsync();
             try
             {
                 if (!force && DateTime.UtcNow - LastCheck < Every) return "fresh";
-                if (!ValidBase(Url, out var baseUrl)) return Fail("the Cairn address is not https");
                 var meta = ReadMeta();
-                var m = await Fetch(baseUrl + "/v1/manifest.json", Current != null ? meta?.Str("etag") : null);
+                var m = await fetch(ManifestPath, Current != null ? meta?.Str("etag") : null);
                 LastCheck = DateTime.UtcNow;
-                if (m.Status == 304) { SaveChecked(meta); return "unchanged"; }
-                if (m.Status != 200 || m.Body == null) return Fail("the Cairn answered " + m.Status);
+                if (m.Status == 304) { SaveChecked(meta); RefusedWhy = ""; return "unchanged"; }
+                if (NotEntitled(m.Reason) || m.Status == 401) return Refused(m.Status == 401 ? "auth" : m.Reason);
+                if (m.Status != 200 || m.Body == null) return Fail("the Lodge answered " + m.Status + (string.IsNullOrEmpty(m.Reason) ? "" : " (" + m.Reason + ")"));
                 var mo = Json.Obj(Encoding.UTF8.GetString(m.Body));
                 if (mo?.Str("format") != "elans-cairn-manifest") return Fail("not a Cairn manifest");
                 var e = Entry.From(mo.Child("latest"));
                 if (e == null) return Fail("the manifest names no valid file");
+                RefusedWhy = "";
                 if (Current != null && meta?.Str("contentSha256") == e.ContentSha256) { meta["etag"] = m.ETag; SaveChecked(meta); return "unchanged"; }
                 if (!string.IsNullOrEmpty(PinnedKeyX) && !SignatureOk(e, PinnedKeyX, PinnedKeyY)) return Fail("the signature does not match the Cairn's key");
-                var g = await Fetch(baseUrl + "/v1/datasets/" + e.File, null);
+                var g = await fetch(DatasetPath, null);
+                if (NotEntitled(g.Reason) || g.Status == 401) return Refused(g.Status == 401 ? "auth" : g.Reason);
                 if (g.Status != 200 || g.Body == null) return Fail("the file answered " + g.Status);
                 if (Sha256Hex(g.Body) != e.Sha256) return Fail("the file does not match its checksum");
                 var json = Gunzip(g.Body);
@@ -227,6 +215,12 @@ namespace ElansAddonHub.Services.Atlas
             finally { gate.Release(); }
         }
 
+        static string Refused(string reason)
+        {
+            DropLocked(reason ?? "");
+            return "refused: " + reason;
+        }
+
         static void SaveChecked(Dictionary<string, object> meta)
         {
             if (meta == null) return;
@@ -241,37 +235,42 @@ namespace ElansAddonHub.Services.Atlas
             return "failed: " + why;
         }
 
-        // the background loop: the copy on disk at once, the Cairn 30 s after start and then every 12 hours (while switched on)
+        // the background loop: the copy on disk at once (while sharing is on and there is a Lodge), the Lodge 30 s after start and then
+        // hourly (Refresh itself asks at most every 12 hours). `wanted` = sharing on and a Lodge set; `reachable` = and the Lodge hands it out now.
         static int started;
-        public static void Start(Func<bool> enabled)
+        public static void Start(Func<bool> wanted, Func<bool> reachable)
         {
             if (!AutoStart || LinkOpen.SelfTestRun || Interlocked.Exchange(ref started, 1) == 1) return;
             Task.Run(async () =>
             {
-                if (enabled()) LoadCached();
+                if (wanted()) LoadCached(); else Clear();
                 await Task.Delay(TimeSpan.FromSeconds(30));
                 while (true)
                 {
-                    try { await Refresh(enabled); } catch { }
+                    try { if (!wanted()) Clear(); else await Refresh(reachable); } catch { }
                     await Task.Delay(TimeSpan.FromHours(1));
                 }
             });
         }
 
         public static void SetForTest(CairnSet s) { Current = s; Changed?.Invoke(); }
-        public static void ResetForTest() { Current = null; LastCheck = DateTime.MinValue; LastProblem = ""; }
+        public static void ResetForTest() { Current = null; LastCheck = DateTime.MinValue; LastProblem = ""; RefusedWhy = ""; }
 
-        // one line for Settings > Privacy
-        public static string StatusText(bool on)
+        // one line for Settings > Privacy (where the Cairn would show): calm, and honest about who gets it
+        public static string StatusText(bool hasLodge, bool online, bool lodgeHandsOut, bool guest, bool sharing)
         {
-            if (!on) return "Off: nothing is downloaded.";
+            if (!hasLodge) return "You are not in a Lodge, so there is no Cairn data: it comes only through a Lodge, to members who share.";
+            if (!sharing) return "Sharing is off, so your Lodge doesn't give you the Cairn's numbers (and any copy on this PC was deleted).";
+            if (guest) return "Guests don't get the Cairn's data - it is for Lodge members who share.";
+            if (RefusedWhy == "lodge") return "Your Lodge isn't receiving the Cairn's data right now (a Lodge has to contribute to receive).";
             var c = Current;
-            if (c == null) return LastProblem.Length > 0 ? "Not downloaded yet (" + LastProblem + ")." : "Not downloaded yet.";
-            return "Data of " + c.Day + " from " + c.Lodges.ToString("N0", CultureInfo.InvariantCulture) + " lodge" + (c.Lodges == 1 ? "" : "s") + ".";
+            if (c != null) return "From your Lodge: the Cairn's data of " + c.Day + " from " + c.Lodges.ToString("N0", CultureInfo.InvariantCulture) + " lodge" + (c.Lodges == 1 ? "" : "s") + ".";
+            if (online && !lodgeHandsOut) return "Your Lodge doesn't hand out the Cairn's data.";
+            return LastProblem.Length > 0 ? "Not received yet (" + LastProblem + ")." : "Not received yet - your Lodge sends it when it has a copy.";
         }
     }
 
-    // The open dataset, indexed for the Atlas pages. Numbers only.
+    // The Cairn's dataset, indexed for the Atlas pages. Numbers only.
     public sealed class CairnSet
     {
         public string Day = ""; public long Seq; public int Lodges, MinLodges; public List<int> Builds = new List<int>();

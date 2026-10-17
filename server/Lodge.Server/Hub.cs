@@ -120,6 +120,7 @@ public partial class LodgeHub
     public readonly FlightModule Flight;
     public readonly AtlasModule AtlasPool;
     public readonly CairnContributor Cairn;                // opt-in "Contribute to the Cairn" (off by default)
+    public readonly CairnModule CairnIn;                   // give to get (feature "cairn2"): the Cairn's dataset, for members who share
     public readonly ArmoryModule Armory;
     public readonly FilesModule SharedFiles;
     public readonly DatasetsModule Datasets;
@@ -154,13 +155,15 @@ public partial class LodgeHub
         Flight = new FlightModule(this);
         AtlasPool = new AtlasModule(this);
         Cairn = new CairnContributor(cfg, AtlasPool.Store, Flight.Store, log, Clock);
+        CairnIn = new CairnModule(this, new CairnReceiver(cfg, Cairn, log, Clock));
+        Cairn.Standing += CairnIn.Receiver.AfterContribution;
         Armory = new ArmoryModule(this);
         SharedFiles = new FilesModule(this);
         Datasets = new DatasetsModule(this);
         Badges = new BadgesModule(this);
         Realms = new RealmsModule(this);
         Info = new LodgeInfoStore(cfg.DataDir);
-        modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, Armory, SharedFiles, Datasets, Badges, Realms, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
+        modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, CairnIn, Armory, SharedFiles, Datasets, Badges, Realms, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
     // personal codes: one budget per person; guests (shared code): one per IP, so several friends on one guest
@@ -239,6 +242,7 @@ public partial class LodgeHub
         if (Cfg.ArmoryEnabled) { f.Add("armory"); f.Add("armory2"); if (Cfg.ArmoryRepsEnabled) f.Add("reputations"); }   // reputations (2.27): shared characters may carry reputations (only members who switched it on send them); "standing with a faction"
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); f.Add("atlas4"); f.Add("atlas5"); f.Add("atlas6"); f.Add("atlas7"); f.Add("atlas8"); f.Add("atlas9"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests (atlas7: with their verified details and the game build, 2.25); atlas3: gathering node positions (nodes); atlas4: fishing spots (fishspots); atlas5: hunter field notes (fieldnotes); atlas6: instance entrances seen by members (entrances); atlas8: where members met, killed or saw npcs (npcspots, 2.26); atlas9: counter extras, pickpocket / gathering / contained counters, corpse dedupe (2.26)
         if (Cairn.Enabled) f.Add("cairn");                         // the owner contributes the pooled Atlas numbers (ids and counts, no names) to the Cairn: members are told so
+        if (CairnIn.Enabled) f.Add("cairn2");                      // give to get: members who share get the Cairn's dataset from this Lodge (atlas.sharing, cairn.status, GET /cairn/...)
         if (Badges.Enabled) f.Add("badges");                       // badges and the ladder: both the server setting and the Guild Master switch are on
         if (Cfg.RealmsConfigured) f.Add("realms");                  // realm status: only while the Blizzard API credentials are set
         foreach (var k in DatasetKinds.All) if (k.Enabled(Cfg)) f.Add(k.Feature);   // 2.17: hosted datasets ("classic")
@@ -503,6 +507,7 @@ public partial class LodgeHub
                     Flight.Tick();
                     AtlasPool.Tick();
                     Cairn.Tick();
+                    CairnIn.Tick();
                     Armory.Tick();
                     Datasets.Tick();
                     Badges.Tick();
