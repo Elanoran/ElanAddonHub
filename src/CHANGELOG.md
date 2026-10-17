@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.88.1
+- **Knows Lodge server 2.27.** A Lodge's Guild Master and officers see the update notice for it (the server now runs on .NET 10).
+
 ## 2.88.0
 - **Learned flight paths.** WoW Forever flies some flight paths differently from the game files, so the world map's flight routes (and the 3D dot on a flight) could follow the wrong line. While your live position is on, the Outpost now notes the line each flight really takes, from the flight master you took off at to the one you land at (a flight with stops is cut at the masters it passes).
 - **Two flights that agree win.** When two of your flights of the same leg agree with each other and both clearly differ from the game files, that line becomes a learned route. One odd flight (a /reload in the air, missing samples, a teleport) is never enough. If a later flight follows the game files again, the learned route is dropped - Forever may change it back.
