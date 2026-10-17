@@ -18,8 +18,8 @@ namespace ElansAddonHub
         public Action DismissSourcesCard;                         // the main window: remember that it was
 
         public const string ExplainerTag = "sources-explainer";
-        Border sourcesCard;
-        public bool SourcesCardShownForTest => sourcesCard != null && sourcesCard.Visibility == Visibility.Visible && sourcesCard.Child != null && Body.Children.Count > 0 && IsInBody(sourcesCard);
+        Border sourcesCard; bool sourcesCompact;
+        public bool SourcesCardShownForTest => sourcesCard != null && !sourcesCompact && sourcesCard.Visibility == Visibility.Visible && sourcesCard.Child != null && Body.Children.Count > 0 && IsInBody(sourcesCard);
         public Button SourcesCardDismissForTest { get; private set; }
         public Button SourcesCardMoreForTest { get; private set; }
         public IReadOnlyList<string> ExplainerTextsForTest => AtlasWalk(Body).OfType<FrameworkElement>().Where(f => Equals(f.Tag, ExplainerTag)).SelectMany(f => AtlasWalk(f).OfType<TextBlock>()).Select(t => t.Inlines.Count > 0 ? string.Concat(t.Inlines.OfType<Run>().Select(r => r.Text)) : t.Text).ToList();
@@ -82,7 +82,7 @@ namespace ElansAddonHub
             return c;
         }
 
-        // Atlas Home: the same words with "Data sources" and "Got it"; once dismissed it stays away
+        // Atlas Home: the same words with "Data sources" and "Got it"; once dismissed only the heading and "Data sources" stay
         FrameworkElement SourcesHomeCard()
         {
             sourcesCard = new Border { CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 0, 0, 24) };
@@ -98,16 +98,29 @@ namespace ElansAddonHub
             SourcesCardDismissForTest = SourcesCardMoreForTest = null;
             bool gone = false;
             try { gone = SourcesCardDismissed?.Invoke() == true; } catch { }
-            sourcesCard.Visibility = gone ? Visibility.Collapsed : Visibility.Visible;
-            if (gone) { sourcesCard.Child = null; return; }
+            sourcesCompact = gone;
+            sourcesCard.Visibility = Visibility.Visible;
+            var more = new Button { Content = DataHonesty.MoreLink, Style = (Style)FindResource("Button.M"), MinWidth = 96 };
+            more.Click += (a, e) => { _ = Open(AtlasNav.DataId); };
+            SourcesCardMoreForTest = more;
+            if (gone)
+            {
+                // 2.93: "Got it" only puts the words away - the heading and the way to Data sources stay on Home
+                var g = new Grid();
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var t = Tb(DataHonesty.Title, "Text.Section"); t.VerticalAlignment = VerticalAlignment.Center;
+                g.Children.Add(t);
+                Grid.SetColumn(more, 1); g.Children.Add(more);
+                sourcesCard.Child = g;
+                return;
+            }
             var sp = ExplainerBody();
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
-            var more = new Button { Content = DataHonesty.MoreLink, Style = (Style)FindResource("Button.M"), MinWidth = 96 };
             var ok = new Button { Content = DataHonesty.DismissText, Style = (Style)FindResource("GhostButton"), Height = 32, Margin = new Thickness(8, 0, 0, 0) };
-            more.Click += (a, e) => { _ = Open(AtlasNav.DataId); };
             ok.Click += (a, e) => { DismissSourcesCard?.Invoke(); FillSourcesHomeCard(); };
             row.Children.Add(more); row.Children.Add(ok);
-            SourcesCardMoreForTest = more; SourcesCardDismissForTest = ok;
+            SourcesCardDismissForTest = ok;
             sp.Children.Add(row);
             sourcesCard.Child = sp;
         }

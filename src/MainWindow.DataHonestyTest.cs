@@ -151,6 +151,8 @@ namespace ElansAddonHub
                 Check("Home: \"Got it\" hides the card and remembers it", !AtlasView.SourcesCardShownForTest && settings.AtlasSourcesCardDismissed);
                 await Home();
                 Check("Home: not again on the next visit", !AtlasView.SourcesCardShownForTest && AtlasView.ExplainerTextsForTest.Count == 0);
+                Check("Home: after \"Got it\" the heading and the Data sources button stay (only the words go)", AtlasView.SourcesCardMoreForTest != null && AtlasView.SourcesCardMoreForTest.IsVisible && AtlasView.SourcesCardDismissForTest == null);
+                if (SelfTestClock.ShotsOn) Snapshot(Path.Combine(dir, "datahonesty-home-compact.png"));
                 SettingsStore.Save(settings);
                 Check("Home: the answer is saved with the settings", SettingsStore.Load().AtlasSourcesCardDismissed);
                 await AtlasView.Open(AtlasNav.DataId); await AtlasView.WaitForTest(); await Task.Delay(80);

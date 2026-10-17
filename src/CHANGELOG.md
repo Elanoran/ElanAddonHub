@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.93.1
+- **Data sources stays on Atlas Home.** "Got it" now only puts the explanation away: the heading "Where this comes from" and the Data sources button stay on Home.
+
 ## 2.93.0
 - **A clearer Data sources page.** The Atlas's five sources - your game, you, your Lodge, the Cairn and the Classic baseline - each have their own small icon and colour, and each says in one line who owns it: "Read from your WoW install - stays on this PC", "Shared by 3 members of your Lodge", "Pooled by 4 Lodges (give to get)". The same colour now marks the source chip on every Atlas row. Click a source to see its items.
 - **How complete is the Forever data?** One bar per kind - drops, vendors, spawn points, gathering nodes and flight times - shows how much has been seen on Forever (by you, your Lodge, the Cairn) and how much only the Classic baseline knows, with the same in plain words under each bar.
