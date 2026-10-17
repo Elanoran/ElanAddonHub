@@ -34,6 +34,9 @@
 #                                             `remove` queues this by itself; use `purge` for people removed before 2.22.
 # The server re-reads the files by itself; no restart needed. The hub's Guild Master panel edits the same files.
 #
+# Numbers for the operator (read-only; needs LODGE_ADMIN_TOKEN in /etc/lodge/lodge.env, generate it with: openssl rand -hex 32):
+#   sudo lodge-admin stats             members (total / online / active in 7 days), devices, messages, files, Cairn standing - JSON, counts only
+#
 # Safety: umask 077; every change holds an flock on <codes>.lock (the server takes the same lock); the new file is
 # written to a private mktemp file in the same folder, given its owner and 0640, then renamed over the old one (atomic:
 # nobody ever reads a partial list). Invite secrets and tokens are stored only as SHA-256 hashes; a secret is printed
@@ -388,12 +391,23 @@ case "$cmd" in
       !/^[[:space:]]*#/ && tolower($1)==n { print $1, c, $3; next } { print }' "$FILE" | replace
     echo "$name's permanent code is retired (their devices keep working; a still-connected old client is disconnected within 15 seconds)"
     ;;
+  stats)
+    # GET /admin/stats on this machine (loopback only; the token travels through a pipe, never on the command line - not visible in ps)
+    tok="$(envval LODGE_ADMIN_TOKEN)"
+    if [ "${#tok}" -lt 24 ]; then echo "LODGE_ADMIN_TOKEN in $ENVF is missing or shorter than 24 characters (generate one: openssl rand -hex 32)"; exit 1; fi
+    urls="$(envval LODGE_URLS)"
+    port="$(echo "${urls:-http://127.0.0.1:5280}" | sed -E 's/.*:([0-9]+).*/\1/')"
+    base="$(envval LODGE_PATHBASE)"
+    printf 'X-Lodge-Admin: %s\n' "$tok" | "${LODGE_CURL:-curl}" -fsS -m 10 -H @- "http://127.0.0.1:${port:-5280}${base%/}/admin/stats" \
+      || { echo "The Lodge did not answer (is it running and updated? systemctl status lodge)" >&2; exit 1; }
+    echo
+    ;;
   *)
     echo "Usage: sudo lodge-admin claim-owner [--recover] | recover-owner NAME"
     echo "                       | invite NAME [role] [--days N] | invite --guest [--uses N] | invites | revoke-invite ID"
     echo "                       | devices [NAME] | revoke-device ID | retire-code NAME"
     echo "                       | add NAME [role] | role NAME ROLE | remove NAME | show NAME | list"
-    echo "                       | purge NAME [--atlas-only]"
+    echo "                       | purge NAME [--atlas-only] | stats"
     exit 1
     ;;
 esac

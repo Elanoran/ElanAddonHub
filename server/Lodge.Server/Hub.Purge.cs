@@ -41,6 +41,7 @@ public partial class LodgeHub
         s.Atlas = AtlasPool.Purge(name).Total;
         if (atlasOnly) return s;
         CairnIn.Sharing.Forget(ProfileRules.Key(name));       // 2.27: their "sharing is on" note for the Cairn's data
+        CairnIn.Weekly.Forget(ProfileRules.Key(name));        // connected outposts: and this week's anonymous count
         s.Flights = Flight.Purge(name);
         var (signups, organised) = await Calendar.Purge(name, FormerMember);
         s.Signups = signups; s.Organised = organised;

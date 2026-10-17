@@ -295,6 +295,14 @@ The Outpost side (same release train): manifest folders, ids and game versions m
   guests, never anonymously, `private` caching only, 4 downloads per member per hour. The member's own statement is trusted as far as the
   Lodge can know it (a client that says "on" and uploads nothing is a matter for the owner, as with any member).
 
+## Operator stats and connected outposts
+
+- `GET /admin/stats` is off unless `LODGE_ADMIN_TOKEN` (>= 24 characters) is set; it answers only a direct loopback connection without proxy
+  headers (the client's own address is recorded before `UseForwardedHeaders`, so a forwarded request from the reverse proxy - even one on the
+  same machine - never qualifies) and compares the token in constant time. Every refusal is a 404. The token is never logged; `lodge-admin
+  stats` passes it to curl through a pipe (`-H @-`), so it is not in `ps`. The answer is counts only.
+- Connected outposts: two numbers per week leave the Lodge (members who share, members who received); the per-week member hashes use a random
+  salt that is discarded with the week, so neither the Cairn nor a later reader of `cairn-week.json` can tie a count to a person.
 ## Tests
 
 ```bash
