@@ -185,6 +185,43 @@ namespace ElansAddonHub
             Check("settings: 'Clear world map cache' leaves the buildings alone (they have their own Remove) and the cache row does not count them (" + WorldMapCache.SizeBytes() + " bytes)", Directory.Exists(D()) && Files() == 5 && WorldMapCache.SizeBytes() == 0 && BuildingsService.Rows().Count == 1);
             Check("manifest: the measured cost replaces the estimate's defaults - " + Math.Round(man.SecPerGroup * 1000, 2) + " ms and " + Math.Round(man.BytesPerGroup) + " bytes per group are recorded", WorldMapBuildings.ReadManifest(D()).BytesPerGroup > 0 && WorldMapBuildings.ReadManifest(D()).Models == 5 && WorldMapBuildings.ReadManifest(D()).Placements == world.Placements);
 
+            // ---------------------------------------------------------------- 2.89: a folder made under the old group rule (exterior groups only) is brought up to date without asking
+            {
+                var houseFile = WorldMapBuildings.ModelFile(D(), BldWorld.House); var towerFile = WorldMapBuildings.ModelFile(D(), BldWorld.Tower);
+                var towerTime = File.GetLastWriteTimeUtc(towerFile); var houseBefore = WmoModel.FromBytes(File.ReadAllBytes(houseFile));
+                var savedHouse = world.Files[BldWorld.House];
+                // the house gains a courtyard open to the sky (interior + exterior lit, 0x2040) 30 yards to the side - as Orgrimmar's streets are; the old rule had left such a group out
+                BldBox(-4, 4, 30, 40, 0, 2, out var cv, out var ci);
+                world.Files[BldWorld.House] = BldRoot(new[] { -9f, -9f, 0f, 9f, 40f, 11f }, new uint[] { 8, 8, 0x2000, 0x2040 }, new[] { 6001, 6002, 6003, 6007 }, new uint[] { 7001, 0 });
+                world.Files[6007] = BldGroup(0x2041, cv, ci, new byte[12]);
+                var old = WorldMapBuildings.ReadManifest(D());
+                File.WriteAllText(WorldMapBuildings.ManifestPath(D()), File.ReadAllText(WorldMapBuildings.ManifestPath(D())).Replace("\"rules\":2,", ""));     // a 2.88 manifest has no "rules"
+                var oldRead = WorldMapBuildings.ReadManifest(D());
+                BuildingsService.ResetForTest();
+                bool readyBefore = BuildingsService.IsReady(0, "all");
+                int up0 = BuildingsService.UpgradeCountForTest, b0 = BuildingsService.BuildCountForTest;
+                var upPhases = new List<string>(); void OnUp(int id) { var s2 = BuildingsService.StateOf(id); if (s2 != null) lock (upPhases) { if (upPhases.Count == 0 || upPhases.Last() != s2.Phase) upPhases.Add(s2.Phase); } }
+                BuildingsService.Changed += OnUp;
+                await BuildingsService.Prepare(0, "all");
+                await WaitFor(() => !BuildingsService.IsRunning(0), 20000);
+                BuildingsService.Changed -= OnUp;
+                var manUp = WorldMapBuildings.ReadManifest(D()); var houseAfter = WmoModel.FromBytes(File.ReadAllBytes(houseFile)); var freshUp = BuildingsService.TakeFresh(0);
+                string[] up; lock (upPhases) up = upPhases.ToArray();
+                Check("group rule: a finished folder from before 2.89 (no \"rules\" in its manifest = rule " + oldRead?.Rules + ") is not ready (" + readyBefore + "); Prepare remakes only the models the new rule makes differently, without asking (phases " + string.Join(" > ", up) + "): the house now has its open-air courtyard (box "
+                    + (houseBefore == null ? "?" : (houseBefore.Half[0] * 2).ToString("0", I)) + " -> " + (houseAfter == null ? "?" : (houseAfter.Half[0] * 2).ToString("0", I)) + " yards), the tower was not made again, the page hears of the house (fresh " + string.Join(",", freshUp) + "), the manifest says rule " + manUp?.Rules,
+                    oldRead != null && oldRead.Rules == 1 && !readyBefore && BuildingsService.UpgradeCountForTest == up0 + 1 && BuildingsService.BuildCountForTest == b0 + 1 && !up.Contains("ask") && BuildingsService.StateOf(0).Phase == "done"
+                    && houseBefore != null && houseAfter != null && houseBefore.Half[0] < 10 && houseAfter.Half[0] > 20 && File.GetLastWriteTimeUtc(towerFile) == towerTime && freshUp.SequenceEqual(new[] { BldWorld.House })
+                    && manUp != null && manUp.Rules == WorldMapBuildings.Rules && manUp.AllDone && Files() == 5 && BuildingsService.IsReady(0, "all"), string.Join(" > ", up) + " " + BuildingsService.StateOf(0).Error);
+                await BuildingsService.Prepare(0, "all");
+                Check("group rule: once remade, the folder is ready again - Prepare is 'done' at once and nothing is remade (" + BuildingsService.UpgradeCountForTest + " upgrades)", BuildingsService.StateOf(0).Phase == "done" && BuildingsService.UpgradeCountForTest == up0 + 1);
+                world.Files[BldWorld.House] = savedHouse; world.Files.Remove(6007);
+                // and back to the plain house for what follows (its file removed, an old rule: the upgrade makes the missing one)
+                File.Delete(houseFile);
+                File.WriteAllText(WorldMapBuildings.ManifestPath(D()), File.ReadAllText(WorldMapBuildings.ManifestPath(D())).Replace("\"rules\":2,", "\"rules\":1,"));
+                BuildingsService.ResetForTest(); await BuildingsService.Prepare(0, "all"); await WaitFor(() => !BuildingsService.IsRunning(0), 20000);
+                BuildingsService.TakeFresh(0);
+            }
+
             // ---------------------------------------------------------------- a new game build asks again
             MapData.SetForTest(idx, "wow_classic_beta|1.60.1.70999|ffffffffffffffff");
             BuildingsService.ResetForTest();

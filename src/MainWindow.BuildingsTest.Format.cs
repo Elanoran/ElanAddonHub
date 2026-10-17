@@ -173,6 +173,15 @@ namespace ElansAddonHub
             Check("WMO root: only the groups seen from outside are drawn - the exterior ones (flag 0x8, also when marked interior too); a building with none falls back to the groups that are not interior; interior-only is nothing",
                 og.SequenceEqual(new[] { 601, 603 }) && WmoRoot.Parse(BldRoot(new float[6], new uint[] { 0, 0x2000 }, new[] { 1, 2 }, new uint[0])).OutsideGroups().Select(g => g.Fdid).SequenceEqual(new[] { 1 })
                 && WmoRoot.Parse(BldRoot(new float[6], new uint[] { 0x2000, 0x2000 }, new[] { 1, 2 }, new uint[0])).OutsideGroups().Count == 0);
+            // 2.89: a city built as one WMO (Orgrimmar: 2 exterior groups, 19 open-air streets flagged interior + exterior lit 0x2040, 117 rooms 0x2000) - the streets are drawn,
+            // the rooms are not; before, only 0x8 counted and Orgrimmar was a gate and a canyon wall
+            var city = WmoRoot.Parse(BldRoot(new float[6], new uint[] { 0x80000408, 0x2040, 0x2000, 0x202040, 0x2400, 0x2000 | 0x40 | 0x100 }, new[] { 701, 702, 703, 704, 705, 706 }, new uint[0]));
+            var cityOg = city.OutsideGroups().Select(g => g.Fdid).ToList();
+            Check("WMO root: a whole city in one model (Orgrimmar, Stormwind) - its open-air streets are flagged interior + exterior lit (0x2040) and are drawn with the exterior groups; rooms (interior only, 0x2000 / 0x2400) stay out; ExteriorLitOnlyGroups counts the groups the old exterior-only rule left out ("
+                + string.Join(",", cityOg) + "; " + city.ExteriorLitOnlyGroups() + ")",
+                cityOg.SequenceEqual(new[] { 701, 702, 704, 706 }) && city.ExteriorLitOnlyGroups() == 3 && root.ExteriorLitOnlyGroups() == 0 && WmoRoot.IsOutside(0x2040) && !WmoRoot.IsOutside(0x2000) && WmoRoot.IsOutside(0x8));
+            Check("buildings: the nearest level's triangle budget grows with the triangles a model has, not only its groups - Orgrimmar (21 groups, 234,000 triangles) keeps " + WorldMapBuildings.Lod0Cap(21, 234000) + " (was 26,900), a house keeps 8,900, a huge city never more than 150,000",
+                WorldMapBuildings.Lod0Cap(21, 234000) == 117000 && WorldMapBuildings.Lod0Cap(1, 3000) == 8900 && WorldMapBuildings.Lod0Cap(100, 364000) == 150000 && WorldMapBuildings.Lod0Cap(300, 0) == 150000 && WorldMapBuildings.Lod0Cap(50, 98000) == 53000);
             var lod4 = WmoRoot.Parse(BldRoot(new float[6], new uint[] { 8, 8 }, new[] { 10, 11 }, new uint[0], numLod: 4));
             Check("WMO root: numLod 4 (the GFID holds four lists, the first is the full-detail groups: the other three are not used); wrong roots are a problem, not an exception - no MOHD, an impossible group count, no GFID, cut off, junk",
                 lod4.Ok && lod4.NumLod == 4 && lod4.GroupInfos.Count == 2 && lod4.GroupInfos.All(g => g.Fdid >= 10)

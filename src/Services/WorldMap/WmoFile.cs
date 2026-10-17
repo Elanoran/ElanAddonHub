@@ -19,7 +19,10 @@ namespace ElansAddonHub.Services.WorldMap
     //          MOPY (2 bytes per triangle: flags, material id; 0xFF = no material), MOVI (uint16 indices), MOVT (3 floats per vertex, WoW world axes: x north,
     //          y west, z up), MONR (3 floats per vertex), MOBA (24-byte batches: 6 x int16 bounds, uint32 start index, uint16 count, uint16 min / max index, byte flags,
     //          byte material)
-    // Group flags that matter: 0x8 = exterior (seen from outside), 0x2000 = interior. Only exterior groups are drawn.
+    // Group flags that matter: 0x8 = exterior (seen from outside), 0x40 = exterior lit (open to the sky, lit by the sun), 0x2000 = interior. Drawn: the exterior groups and
+    // the exterior-lit ones. 2.89: the big cities are built as one WMO whose open-air streets are flagged interior + exterior lit (0x2040), not exterior: Orgrimmar has 2
+    // exterior groups and 19 exterior-lit ones (The Drag, the Valleys - 227,000 of its triangles), Stormwind 9 and 91. Before, only 0x8 counted, so Orgrimmar showed
+    // a gate and a canyon wall and Stormwind its walls and castle. Rooms (0x2000 alone: the huts' insides, Ironforge and the Undercity under ground) stay out.
     // ============================================================================================================================
     public sealed class WmoGroupInfo { public uint Flags; public float MinX, MinY, MinZ, MaxX, MaxY, MaxZ; public int Fdid; public string Name = ""; }
 
@@ -35,7 +38,7 @@ namespace ElansAddonHub.Services.WorldMap
         public List<WmoGroupInfo> GroupInfos = new List<WmoGroupInfo>();
         public string Problem;
         public bool Ok => Problem == null;
-        public const uint GroupExterior = 0x8, GroupInterior = 0x2000;
+        public const uint GroupExterior = 0x8, GroupExteriorLit = 0x40, GroupInterior = 0x2000;
 
         public static WmoRoot Parse(byte[] d)
         {
@@ -83,14 +86,18 @@ namespace ElansAddonHub.Services.WorldMap
             return r;
         }
 
-        // the groups to draw: exterior ones; when a model has none (a dungeon shell), the ones that are not flagged interior
+        // the groups to draw: exterior and exterior-lit ones (open to the sky); when a model has none (a dungeon shell), the ones that are not flagged interior
+        public static bool IsOutside(uint flags) => (flags & (GroupExterior | GroupExteriorLit)) != 0;
         public List<WmoGroupInfo> OutsideGroups()
         {
             var res = new List<WmoGroupInfo>();
-            foreach (var g in GroupInfos) if (g.Fdid != 0 && (g.Flags & GroupExterior) != 0) res.Add(g);
+            foreach (var g in GroupInfos) if (g.Fdid != 0 && IsOutside(g.Flags)) res.Add(g);
             if (res.Count == 0) foreach (var g in GroupInfos) if (g.Fdid != 0 && (g.Flags & GroupInterior) == 0) res.Add(g);
             return res;
         }
+
+        // the groups the rule before 2.89 drew (exterior only): a model whose choice differs is made again once (WorldMapBuildings.Rules)
+        public int ExteriorLitOnlyGroups() { int n = 0; foreach (var g in GroupInfos) if (g.Fdid != 0 && (g.Flags & GroupExterior) == 0 && (g.Flags & GroupExteriorLit) != 0) n++; return n; }
 
         internal static bool Is(byte[] d, int p, string want)
         {

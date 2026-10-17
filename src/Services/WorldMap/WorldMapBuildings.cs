@@ -135,6 +135,7 @@ namespace ElansAddonHub.Services.WorldMap
     {
         public int Fdid;
         public int Groups, OutsideGroups;
+        public int ExteriorLitGroups;       // groups open to the sky but not flagged exterior (the big cities' streets): drawn since 2.89 (Rules 2)
         public bool Bridge;                 // at least one placement is a bridge
         public int Placements, BridgePlacements;
         public List<int> GroupFdids = new List<int>();
@@ -261,6 +262,9 @@ namespace ElansAddonHub.Services.WorldMap
     public static class WorldMapBuildings
     {
         public const int Version = 1;
+        // which groups a model is made of: 1 = exterior groups only (before 2.89), 2 = exterior and exterior-lit ones (WmoRoot.OutsideGroups). A finished folder made by an
+        // older rule is not ready: the models it would make differently (ExteriorLitGroups > 0, a handful per continent) are removed and made again, without asking.
+        public const int Rules = 2;
         public const string Folder = "buildings";
         public const int PlacementBytes = 60;
         public static string Dir(string mapDir) => Path.Combine(mapDir, Folder);
@@ -324,7 +328,7 @@ namespace ElansAddonHub.Services.WorldMap
         // ---------------------------------------------------------------- manifest
         public sealed class Manifest
         {
-            public int Version, MapId, Placements, Models, Bridges, BridgeModels, ModelsBuilt, Tiles;
+            public int Version, Rules, MapId, Placements, Models, Bridges, BridgeModels, ModelsBuilt, Tiles;
             public bool BridgesDone, AllDone;       // every building of that mode is on disk
             public string BuildKey = "", Built = "";
             public long Bytes, Ms;
@@ -343,7 +347,7 @@ namespace ElansAddonHub.Services.WorldMap
                 Func<string, double> num = k => d.TryGetValue(k, out var o) && o is double x ? x : 0;
                 return new Manifest
                 {
-                    Version = d.Int("v"), MapId = d.Int("mapId"), BuildKey = d.Str("build") ?? "", Placements = d.Int("placements"), Models = d.Int("models"), Bridges = d.Int("bridges"), BridgeModels = d.Int("bridgeModels"),
+                    Version = d.Int("v"), Rules = d.ContainsKey("rules") ? d.Int("rules") : 1, MapId = d.Int("mapId"), BuildKey = d.Str("build") ?? "", Placements = d.Int("placements"), Models = d.Int("models"), Bridges = d.Int("bridges"), BridgeModels = d.Int("bridgeModels"),
                     ModelsBuilt = d.Int("modelsBuilt"), Tiles = d.Int("tiles"), Bytes = d.Long("bytes"), Ms = d.Long("ms"), Built = d.Str("built") ?? "", SecPerGroup = num("secPerGroup"), BytesPerGroup = num("bytesPerGroup"), SecBase = num("secBase"), BridgesDone = d.Bool("bridgesDone"), AllDone = d.Bool("allDone"),
                 };
             }
@@ -354,7 +358,7 @@ namespace ElansAddonHub.Services.WorldMap
         {
             var d = new Dictionary<string, object>
             {
-                ["v"] = Version, ["mapId"] = m.MapId, ["build"] = m.BuildKey, ["placements"] = m.Placements, ["models"] = m.Models, ["bridges"] = m.Bridges, ["bridgeModels"] = m.BridgeModels, ["modelsBuilt"] = m.ModelsBuilt,
+                ["v"] = Version, ["rules"] = m.Rules, ["mapId"] = m.MapId, ["build"] = m.BuildKey, ["placements"] = m.Placements, ["models"] = m.Models, ["bridges"] = m.Bridges, ["bridgeModels"] = m.BridgeModels, ["modelsBuilt"] = m.ModelsBuilt,
                 ["tiles"] = m.Tiles, ["bytes"] = m.Bytes, ["ms"] = m.Ms, ["secPerGroup"] = Math.Round(m.SecPerGroup, 5), ["bytesPerGroup"] = Math.Round(m.BytesPerGroup, 1), ["secBase"] = Math.Round(m.SecBase, 5),
                 ["bridgesDone"] = m.BridgesDone, ["allDone"] = m.AllDone, ["built"] = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
             };
@@ -396,6 +400,7 @@ namespace ElansAddonHub.Services.WorldMap
                 {
                     roots[id] = r; info.Groups = r.Groups;
                     var og = r.OutsideGroups(); info.OutsideGroups = og.Count; foreach (var g in og) info.GroupFdids.Add(g.Fdid);
+                    info.ExteriorLitGroups = r.ExteriorLitOnlyGroups();
                     info.TextureFdids = r.TextureFdid.Where(f => f != 0 && f <= int.MaxValue).Distinct().ToList();
                 }
                 scan.Models[id] = info;
@@ -530,8 +535,9 @@ namespace ElansAddonHub.Services.WorldMap
                 }
                 TicksTex += sw.ElapsedTicks; sw.Restart();
                 o = o ?? new WmoBuildOptions(); o.Bridge = info.Bridge;
-                // a whole city (Stormwind has 289 groups) keeps more triangles than a farmhouse: the cap grows with the number of groups (up to 150,000)
-                o.Lod0MaxTris = Math.Max(o.Lod0MaxTris, Math.Min(150000, 8000 + 900 * info.OutsideGroups)); o.Lod1MaxTris = Math.Max(o.Lod1MaxTris, o.Lod0MaxTris / 6);
+                // a whole city keeps more triangles than a farmhouse: the cap grows with the number of groups and with the triangles they have (up to 150,000)
+                long rawTris = 0; foreach (var m in meshes) rawTris += m.Idx.Length / 3;
+                o.Lod0MaxTris = Math.Max(o.Lod0MaxTris, Lod0Cap(info.OutsideGroups, rawTris)); o.Lod1MaxTris = Math.Max(o.Lod1MaxTris, o.Lod0MaxTris / 6);
                 model = WmoModel.Build(meshes, mid => rgb.TryGetValue(mid, out var c) ? c : -1, o);
                 TicksMesh += sw.ElapsedTicks; sw.Restart();
             }
@@ -540,6 +546,25 @@ namespace ElansAddonHub.Services.WorldMap
             Directory.CreateDirectory(ModelsDir(dir));
             WriteAtomic(ModelFile(dir, info.Fdid), bytes);
             return model.Stub ? 0 : bytes.Length;
+        }
+
+        // the nearest level's triangle budget of a model: 8,000 + 900 per drawn group, or half of the triangles it has when that is more (Orgrimmar: 21 groups,
+        // 234,000 triangles -> 117,000; before 2.89 only the group count, 26,900), never more than 150,000
+        public const int MaxLod0Tris = 150000;
+        public static int Lod0Cap(int groups, long rawTris) => (int)Math.Min(MaxLod0Tris, Math.Max(8000L + 900L * groups, rawTris / 2));
+
+        // a finished folder made by an older group rule: the models the new rule makes differently are removed (made again by the next build); returns how many
+        public static int RemoveStale(BuildingScan scan, string dir, int oldRules)
+        {
+            int n = 0;
+            if (scan == null || oldRules >= Rules) return 0;
+            foreach (var m in scan.Models.Values)
+            {
+                if (m.RootMissing || m.ExteriorLitGroups == 0) continue;
+                var f = ModelFile(dir, m.Fdid);
+                try { if (File.Exists(f)) { File.Delete(f); n++; } } catch (Exception) { }
+            }
+            return n;
         }
 
         static int Bgr(uint c) => (int)(((c & 0xFF) << 16) | (c & 0xFF00) | ((c >> 16) & 0xFF));

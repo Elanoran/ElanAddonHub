@@ -102,6 +102,31 @@ namespace ElansAddonHub
                         stB2?.Phase == "done" && stA?.Phase == "done" && man != null && man.Valid && man.AllDone && man.BridgesDone && man.ModelsBuilt >= scan.Models.Count && !Directory.EnumerateFiles(BuildingsService.DirOf(c.MapId), "*.tmp", SearchOption.AllDirectories).Any() && bytesA > bytesB && bytesA > 2 * 1024 * 1024, stA?.Phase + " " + stA?.Error);
                 }
                 foreach (var kv in perCont) notes.Add("note real buildings: " + kv.Value);
+                // 2.89, the capitals: the biggest building placed over each city's middle (game x, y), its groups drawn and the shape made of it. Orgrimmar and Stormwind are one WMO each
+                // whose streets are flagged interior + exterior lit; before 2.89 only exterior groups were drawn (Orgrimmar: 2 of 138, a gate and a canyon wall - 7,000 triangles)
+                {
+                    var cityLines = new List<string>(); var city = new Dictionary<string, Tuple<BuildingModelInfo, WmoModel, WmoPlacement>>();
+                    foreach (var cc in new[] { new { n = "Orgrimmar", m = 1, x = 1630.0, y = -4380.0 }, new { n = "Thunder Bluff", m = 1, x = -1280.0, y = 120.0 }, new { n = "Darnassus", m = 1, x = 9950.0, y = 2280.0 },
+                        new { n = "Stormwind", m = 0, x = -8860.0, y = 540.0 }, new { n = "Ironforge", m = 0, x = -4900.0, y = -950.0 }, new { n = "Undercity", m = 0, x = 1800.0, y = 240.0 } })
+                    {
+                        GameElevationWorld.ToScene(cc.x, cc.y, out var csx, out var csz);
+                        var sc = scanOf[cc.m]; var cd = BuildingsService.DirOf(cc.m);
+                        var big = sc.Placements.Where(p => Math.Abs((p.MinX + p.MaxX) / 2 - csx) < 900 && Math.Abs((p.MinZ + p.MaxZ) / 2 - csz) < 900).OrderByDescending(p => (p.MaxX - p.MinX) * (p.MaxZ - p.MinZ)).FirstOrDefault();
+                        if (big == null) { cityLines.Add(cc.n + ": nothing placed"); continue; }
+                        var mi = sc.Models[(int)big.NameId]; var mf = WorldMapBuildings.ModelFile(cd, mi.Fdid);
+                        var wm = File.Exists(mf) ? WmoModel.FromBytes(File.ReadAllBytes(mf)) : null;
+                        city[cc.n] = Tuple.Create(mi, wm, big);
+                        cityLines.Add(cc.n + ": WMO " + mi.Fdid + " (" + Math.Round(big.MaxX - big.MinX) + " x " + Math.Round(big.MaxZ - big.MinZ) + " yards), " + mi.OutsideGroups + " of " + mi.Groups + " groups drawn (" + mi.ExteriorLitGroups + " open-air ones flagged interior), "
+                            + (wm == null ? "no shape" : wm.Stub ? "an empty shape" : wm.Lods[0].TriCount.ToString("N0", I) + " triangles near, " + Math.Round(wm.Half[0] * 2) + " x " + Math.Round(wm.Half[2] * 2) + " yards"));
+                    }
+                    foreach (var l in cityLines) notes.Add("note real cities: " + l);
+                    Func<string, int> Tris = n => city.TryGetValue(n, out var t) && t.Item2 != null && !t.Item2.Stub ? t.Item2.Lods[0].TriCount : 0;
+                    var org = city.TryGetValue("Orgrimmar", out var ot) ? ot : null;
+                    Check("real Orgrimmar: the city's one big WMO is placed over Durotar's capital and drawn with its open-air groups - " + (org == null ? "nothing placed" : org.Item1.OutsideGroups + " groups (" + org.Item1.ExteriorLitGroups + " exterior lit), " + Tris("Orgrimmar").ToString("N0", I) + " triangles, a shape " + Math.Round(org.Item2?.Half[0] * 2 ?? 0) + " yards across"),
+                        org != null && (org.Item3.MaxX - org.Item3.MinX) > 1000 && org.Item1.OutsideGroups >= 15 && org.Item1.ExteriorLitGroups >= 15 && Tris("Orgrimmar") > 60000 && org.Item2 != null && Math.Max(org.Item2.Half[0], org.Item2.Half[2]) * 2 > 900 && Math.Min(org.Item2.Half[0], org.Item2.Half[2]) * 2 > 500, string.Join(" | ", cityLines));
+                    Check("real capitals: Stormwind is drawn with its streets too (" + (city.TryGetValue("Stormwind", out var swt) ? swt.Item1.OutsideGroups : 0) + " groups, " + Tris("Stormwind").ToString("N0", I) + " triangles), Thunder Bluff and Darnassus still show, and every city's shape keeps to the 150,000-triangle cap",
+                        swt != null && swt.Item1.OutsideGroups >= 60 && Tris("Stormwind") > 60000 && Tris("Thunder Bluff") > 1000 && Tris("Darnassus") > 20000 && city.Values.All(t => t.Item2 == null || t.Item2.Stub || t.Item2.Lods[0].TriCount <= WorldMapBuildings.MaxLod0Tris), string.Join(" | ", cityLines));
+                }
                 // 2.82, the live dot's floors (LiveElevation): the real buildings' walkable surfaces against an independent height, the game's own for its capital flight
                 // masters (TaxiNodes z). Within 30 yards of each, the floor nearest to that height; only the WMOs' outside groups are made, so a master standing indoors
                 // (Ironforge, the Undercity) or on a doodad has none - the solver then uses the ground.
@@ -186,6 +211,7 @@ namespace ElansAddonHub
                     new { map = 0, name = "stormwind-far", x = -8870.0, y = 560.0, dist = 2600.0, az = 200.0, tilt = 42.0 },
                     new { map = 1, name = "orgrimmar", x = 1630.0, y = -4380.0, dist = 700.0, az = 0.0, tilt = 68.0 },
                     new { map = 1, name = "orgrimmar-far", x = 1630.0, y = -4380.0, dist = 2600.0, az = 15.0, tilt = 42.0 },
+                    new { map = 1, name = "orgrimmar-city", x = 1600.0, y = -4400.0, dist = 1300.0, az = 0.0, tilt = 25.0 },      // 2.89: from above, into the canyon (the city is one WMO)
                     new { map = 0, name = "lakeshire", x = -9347.0, y = -2281.0, dist = 220.0, az = 35.0, tilt = 30.0 },
                 };
                 int curMap = 0; var fpsBy = new Dictionary<string, double>(); var drawnBy = new Dictionary<string, int>(); Func<string, int> DB = n => drawnBy.TryGetValue(n, out var q) ? q : 0;

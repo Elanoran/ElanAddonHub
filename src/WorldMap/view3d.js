@@ -1102,7 +1102,7 @@
   }
   function bFetchModel(fdid, e) {
     e.state = 'loading'; BLD.fetching++; BLD.requests++;
-    fetch(BLD.base + '/m/' + fdid + '.wmb').then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+    fetch(BLD.base + '/m/' + fdid + '.wmb' + (e.rev ? '?r=' + e.rev : '')).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
       var m = buf ? bParse(buf) : null;
       if (!m) { e.state = 'none'; if (buf) BLD.errors++; }
       else if (m.lods.length === 0) e.state = 'none';
@@ -1258,7 +1258,8 @@
     var mode = m.mode === 'bridges' || m.mode === 'all' ? m.mode : 'off';
     if (mode !== BLD.mode) { BLD.mode = mode; if (mode === 'off') bHideAll(); }
     if (m.all) { BLD.built = {}; m.all.forEach(function (id) { BLD.built[id] = true; }); }
-    if (m.fresh) m.fresh.forEach(function (id) { BLD.built[id] = true; });
+    // a model made again while the page shows it (2.89: the big cities, once, after the group rule changed) is fetched again, past the browser's cache
+    if (m.fresh) m.fresh.forEach(function (id) { BLD.built[id] = true; var e = BLD.models[id]; if (e && e.state !== 'loading') { var rev = (e.rev || 0) + 1; bFree(id, e); e.rev = rev; } });
     if (m.placements && !BLD.pl) bLoadPlacements();
     bSync(); dirty = true; lastSel2 = 0;
   }
