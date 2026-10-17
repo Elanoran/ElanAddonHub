@@ -31,7 +31,8 @@ namespace ElansAddonHub.Services.Atlas
     public static class CairnAtlas
     {
         // the Cairn's signing key (ES256, the x / y of its GET /v1/key, base64url). Empty = not pinned yet: the checksums are still checked
-        public static string PinnedKeyX = "", PinnedKeyY = "";
+        // pinned 2026-10-17 from the live Cairn (kid 17140e4dd7ef6d82); a new signing key on the Cairn needs a new Outpost release
+        public static string PinnedKeyX = "sazP6BaFfEX2YPMeU0-1YOukbcgY5emt857_qyDqz5k", PinnedKeyY = "zU5yG5u2VqavW6jo-ZUFlGSQjB7DPMTtTMyzvDLw9UA";
         public const long MaxGzBytes = 64L * 1024 * 1024, MaxJsonBytes = 256L * 1024 * 1024, MaxManifestBytes = 1024 * 1024;
         public static readonly TimeSpan Every = TimeSpan.FromHours(12);
         public const string ManifestPath = "/cairn/manifest", DatasetPath = "/cairn/dataset";   // on the user's Lodge

@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.89.2
+- **The Cairn is live.** The Outpost now knows the Cairn's signing key, so the shared numbers your Lodge passes on are checked to really come from the Cairn before they are used.
+
 ## 2.89.1
 - **Knows Lodge server 2.27.** A Lodge's Guild Master and officers see the update notice for it (the server now runs on .NET 10).
 

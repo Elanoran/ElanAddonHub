@@ -138,6 +138,11 @@ namespace ElansAddonHub
             var work = Path.Combine(dir, "cairn");
             var savedFetch = CairnAtlas.Fetch; var savedCache = CairnAtlas.CacheDirOverride;
             var savedX = CairnAtlas.PinnedKeyX; var savedY = CairnAtlas.PinnedKeyY; var savedLodge = AtlasQuery.Context.Lodge;
+            {
+                byte[] U(string s) { s = s.Replace('-', '+').Replace('_', '/'); return Convert.FromBase64String(s + new string('=', (4 - s.Length % 4) % 4)); }
+                bool pinned = false; try { pinned = U(savedX).Length == 32 && U(savedY).Length == 32; } catch (Exception) { }
+                Check("the live Cairn's signing key is pinned in the app (two 32-byte P-256 coordinates), so datasets are checked against it", pinned);
+            }
             var savedShareOff = settings.AtlasShareOff; var savedUrl = settings.LodgeUrl; var savedRoot = settings.WowRoot;
             var sent = new List<Dictionary<string, object>>();
             FakeLodgeCairn fake = null;
