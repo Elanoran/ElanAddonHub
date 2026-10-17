@@ -291,6 +291,14 @@ Feature `flights` (welcome `features` and `GET /features`). A client on an older
 - `flights.share` `{legs: {"<Horde|Alliance>|<idA>><idB>": {t: seconds (1-1800), n: samples (1-50)}}, names?: {id: name}}` - member and up, at most 500 legs (and 300 names) per message, at most one per 10 minutes per identity, frame limit 64 KB. Answer `flights.shared` `{ok, accepted, rejected, why?}`; `why` is `guest` (guests cannot contribute), `rate`, `empty` or `save`. Each identity's latest value per leg replaces its previous one.
 - `flights.get` `{}` - answer `flights.data` `{at (unix s), legs: {key: {t, n}}, names: {id: name}}`: per leg the weighted average over contributors with n summed and capped at 50, outliers (+-40 % from an aggregate with n >= 5) held back until another outlier confirms them. Guests may read. Page budget.
 
+### Learned flight paths (feature `flightroutes`; optional for clients; the server version is set at release)
+
+Forever flies some flight paths differently from the client's files; the Outpost records the real line and shares it here. A client sends nothing unless the welcome lists `flightroutes`, and uploads only while the member shares flight times.
+
+- `flights.routes.share` `{routes: {"<fromNode>><toNode>": {m: continent, p: [x, y, z|null, ...] (2-64 points, world yards), t: seconds (0 or 5-1800), n: agreeing flights (1-50)} | {m, g: 1}}}` - member and up, at most 100 routes per message, one per 10 minutes per identity (`why: rate`), frame limit 64 KB. `{m, g: 1}` = "my newest flight of this leg flew the game's route again" (kept only for a leg somebody reported). The server checks: numeric node ids (1-9999999, different), |x|, |y| <= 20000, |z| <= 5000, straight distance >= 50, length <= 3 x straight + 2000 and <= 30000, speed 3-100 yards/s when t > 0. Answer `flights.routes.shared` `{ok, accepted, rejected, why?}` (`guest`, `rate`, `empty`, `save`). Each identity's latest entry per leg replaces its previous one; 3000 legs, 500 per identity, 20 contributors per leg, 120 days.
+- `flights.routes.get` `{}` - answer `flights.routes.data` `{at (unix s), routes: {key: {m, p (48 points), t, n, k}}}`: a leg is published when contributions that agree with each other (both resampled to 32 points; mean distance <= 25 and largest <= 75 yards, both ways) add up to n >= 2 (one member's two agreeing flights, or two members), unless as many members said `g: 1` after the newest of them. `p` = the average of the agreeing lines, `t` = their n-weighted time, `k` = how many members. Guests may read. Page budget. The client checks every route again (the ends near its own flight masters, a sane length, that it differs from its game route) before using it.
+- A member who leaves or is removed takes their routes along (counted with `flights` in `admin.purged`). Not offered to the Cairn (yet).
+
 ## 2.14 additions (shared files; optional for clients)
 
 Feature `files` (welcome `features` and `GET /features`; absent when the owner set `LODGE_FILES_ENABLED=0`). Welcome also carries `canManageFiles` (officer and up) and `filesMaxMb`.
@@ -386,7 +394,7 @@ Fun milestones for what a member shares, and a monthly ladder. **Nothing new is 
 | zones covered | zones in the member's kill, fishing and spawn records |
 | quest rewards, creatures / objects / quests seen | tally of the records a share added (Atlas tables carry no author) |
 | rare drops recorded first | drops under 1 % (source with 200+ kills) that only this member recorded |
-| flight legs | the member's current flight contributions (`flights.json`) |
+| flight legs | the member's current flight contributions (`flights.json`) and learned flight routes (`flightroutes.json`) |
 | characters shared | the Armory |
 | files shared, events created, event sign-ups (once per event), group posts, hosting the Classic data | tally |
 | days active in chat (days with a message, not messages), late nights (00:00-05:00 UTC) | tally |

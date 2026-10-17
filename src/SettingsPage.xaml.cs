@@ -409,6 +409,28 @@ namespace ElansAddonHub
             WorldMapCacheRow.Tag = ElansAddonHub.Services.WorldMap.WorldMapCache.StatusLine() + " Made from your game files, read-only; nothing is uploaded.";
             ClearWorldMapButton.IsEnabled = !busy && ElansAddonHub.Services.WorldMap.WorldMapCache.SizeBytes() > 0;
             UpdateBuildingsLine();
+            UpdateLearnedFlightsLine();
+        }
+
+        // "Learned flight routes" (2.88): what the flights taught the map, and a button that forgets it
+        public static string LearnedFlightsText(int legs, int flights, int learned, int lodge) =>
+            "WoW Forever flies some flight paths differently from the game files. While your live position is on, the Outpost notes the line each flight really takes; when two of your flights agree on a line that differs from the game's, the world map draws that one instead (and the 3D dot follows it). Only the simplified line, its flight time and the game version are kept. "
+            + (flights == 0 ? "Nothing recorded yet." : flights + (flights == 1 ? " flight" : " flights") + " on " + legs + (legs == 1 ? " leg" : " legs") + " recorded, " + learned + (learned == 1 ? " route" : " routes") + " learned.")
+            + (lodge > 0 ? " Your Lodge shares " + lodge + (lodge == 1 ? " learned route." : " learned routes.") : "");
+        public void UpdateLearnedFlightsLine()
+        {
+            try
+            {
+                var lf = ElansAddonHub.Services.WorldMap.LearnedFlights.Shared;
+                LearnedFlightsRow.Tag = LearnedFlightsText(lf.LegCount, lf.FlightCount, lf.LearnedCount, lf.LodgeCount);
+                ClearLearnedFlightsButton.IsEnabled = lf.FlightCount > 0 || lf.LodgeCount > 0;
+            }
+            catch (Exception e) { Util.Log("settings: learned flights " + e.Message); }
+        }
+        void ClearLearnedFlights_Click(object sender, RoutedEventArgs e)
+        {
+            ElansAddonHub.Services.WorldMap.LearnedFlights.Shared.Clear();
+            UpdateLearnedFlightsLine();
         }
 
         // "3D buildings": what is on disk per continent, and a Remove button for each (the shapes are read from the game files again the next time the Buildings switch asks)

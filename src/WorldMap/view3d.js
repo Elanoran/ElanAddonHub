@@ -626,7 +626,7 @@
       var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(dr.x.length * 3), 3));
       var mat = new THREE.LineBasicMaterial({ color: new THREE.Color(it.c || '#ffffff'), transparent: true, opacity: Math.min(1, (it.o || .85) + .1), fog: true });
       var line = new THREE.Line(g, mat); line.frustumCulled = false; grp.add(line);
-      items.push({ line: line, x: dr.x, z: dr.z, lift: 22, g: it.g || null });
+      items.push({ line: line, x: dr.x, z: dr.z, lift: 22, g: it.g || null, learned: it.learned || '' });
     });
     scene.add(grp); lineLayers[id] = { group: grp, items: items }; placeLines(lineLayers[id]);
     return items.length;
@@ -1616,7 +1616,7 @@
       return JSON.stringify(out);
     },
     // the routes of a lines layer (test): kind group and whether the line is drawn now
-    lines: function (id) { var L = lineLayers[id]; return JSON.stringify(L ? L.items.map(function (it) { return { g: it.g || '', shown: !!(L.group.visible && it.line.visible) }; }) : []); },
+    lines: function (id) { var L = lineLayers[id]; return JSON.stringify(L ? L.items.map(function (it) { return { g: it.g || '', learned: it.learned || '', color: '#' + it.line.material.color.getHexString(), shown: !!(L.group.visible && it.line.visible) }; }) : []); },
     zoneAt: function (lat, lng) { var p = ll2xz(lat, lng), z = zoneAtGround(p[0], p[1]); return z ? z.name : ''; },
     areaAt: function (lat, lng) { var p = ll2xz(lat, lng), col = p[0] / TY, row = p[1] / TY, c = Math.floor(col), r = Math.floor(row), t = tileMap[c * 64 + r]; if (!t || !t.A) return -1; return t.A[Math.min(15, Math.floor((row - r) * 16)) * 16 + Math.min(15, Math.floor((col - c) * 16))]; },
     pickCenter: function () { var g = pickGround(window.innerWidth / 2, window.innerHeight / 2); return g ? JSON.stringify(g) : ''; },

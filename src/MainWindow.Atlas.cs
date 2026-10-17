@@ -118,6 +118,8 @@ namespace ElansAddonHub
             ElansAddonHub.Services.WorldMap.WorldMapLayers.FlightTimes = FlightTimesForMap;
             WireLive();
             v.Live = LivePos;
+            // learned flight paths (2.88): a new learned route, the Lodge's, or Clear redraws the Flight routes layer
+            ElansAddonHub.Services.WorldMap.LearnedFlights.AnyChanged += () => Dispatcher.BeginInvoke(new Action(() => v.LayerDataChanged("routes")));
             return v;
         }
 

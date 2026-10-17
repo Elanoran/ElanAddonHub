@@ -235,7 +235,7 @@
       var pl = L.polyline(ll, { color: it.c || '#fff', weight: it.w || 2, opacity: it.o || .85, dashArray: it.d || null, interactive: true, smoothFactor: 1 });
       bindHover(pl, it.name || '', it.tip || '', it.extra || '', it.link);
       g.addLayer(pl);
-      if (it.g) lineKinds[id].push({ layer: pl, g: it.g });
+      if (it.g) lineKinds[id].push({ layer: pl, g: it.g, learned: it.learned || '' });
       if (it.label && it.mid) {
         var ic = L.divIcon({ className: 'rli', html: '<div class="rl">' + esc(it.label) + '</div>', iconSize: [0, 0] });
         var m = L.marker(it.mid, { icon: ic, interactive: false, keyboard: false }); m._minZ = it.labelZ == null ? 3.5 : it.labelZ; m._line = true;
@@ -610,7 +610,7 @@
     },
     lines: function (id) {
       var g = groups[id]; if (!g || !lineKinds[id]) return '[]';
-      return JSON.stringify(lineKinds[id].filter(function (e) { return !e.layer._line; }).map(function (e) { return { g: e.g, shown: !!(map.hasLayer(g) && g.hasLayer(e.layer)) }; }));
+      return JSON.stringify(lineKinds[id].filter(function (e) { return !e.layer._line; }).map(function (e) { return { g: e.g, learned: e.learned || '', dash: e.layer.options.dashArray || '', color: e.layer.options.color || '', shown: !!(map.hasLayer(g) && g.hasLayer(e.layer)) }; }));
     },
     state: function () {
       return JSON.stringify({ mode: '2d', ready: ready, zoom: map ? map.getZoom() : null, center: map ? [map.getCenter().lat, map.getCenter().lng] : null, tiles: tilesLoaded, tileErrors: tileErrors,

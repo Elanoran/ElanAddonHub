@@ -34,6 +34,11 @@ namespace ElansAddonHub.Services.WorldMap
         // hooks (the main window sets them; tests set their own)
         public static Func<IEnumerable<SavedRoute>> SavedRoutes = () => null;
         public static Func<IDictionary<string, double>> FlightTimes = () => null;     // "Horde|11>22" -> seconds
+        // 2.88: learned flight paths: the line Forever really flies for a leg, and the leg's duration from recorded flights (tests set their own store)
+        public static Func<LearnedFlights> Learned = () => LearnedFlights.Shared;
+        public const string LearnedColor = "#2dd4bf";
+        public const string LearnedMineTip = "Learned from your flights: differs from the game files";
+        public const string LearnedLodgeTip = "Learned by your Lodge: differs from the game files";
         public const int MaxPointsPerLayer = 60000;
 
         public const string Alliance = "a", Horde = "h", Neutral = "n";
@@ -53,7 +58,7 @@ namespace ElansAddonHub.Services.WorldMap
                 L("borders", "Zone borders", "#7dd3fc", "Outlines of the zones, from the game's terrain data (the first time it is switched on the terrain is read from your game files, once per game version); point at a zone to tint it"),
                 L("fm", "Flight masters", "#5aa9ff", "Flight masters of the Alliance (blue), the Horde (red) and both (gold)",
                     L("fm.horde", "Horde", "#ff6b5e", ""), L("fm.alliance", "Alliance", "#5aa9ff", ""), L("fm.neutral", "Neutral", "#f0b429", "Both factions")),
-                L("routes", "Flight routes", "#ff9f43", "Flight paths between flight masters, by faction (a route is Horde or Alliance when both its ends are, else neutral); the flight time is shown when you or the Lodge have flown it",
+                L("routes", "Flight routes", "#ff9f43", "Flight paths between flight masters, by faction (a route is Horde or Alliance when both its ends are, else neutral); the flight time is shown when you or the Lodge have flown it. A solid teal line is a learned route: WoW Forever flies that leg differently from the game files, so the line your flights (or your Lodge's) really took is drawn instead. It needs your live position on; Settings > General can clear them",
                     L("routes.horde", "Horde", "#ff6b5e", ""), L("routes.alliance", "Alliance", "#5aa9ff", ""), L("routes.neutral", "Neutral", "#f0b429", "")),
                 L("instances", "Dungeons & raids", "#e879f9", "Dungeon and raid entrances with their level and group size; click one for its page, right-click to navigate there",
                     L("instances.dungeons", "Dungeons", "#e879f9", ""), L("instances.raids", "Raids", "#f97316", "")),
@@ -272,28 +277,68 @@ namespace ElansAddonHub.Services.WorldMap
             var nodes = idx.Set.TaxiNodes.Where(n => IsFlightMaster(n)).GroupBy(n => n.Id).ToDictionary(g => g.Key, g => g.First());
             var pts = idx.Set.TaxiPoints.GroupBy(p => p.PathId).ToDictionary(g => g.Key, g => g.OrderBy(p => p.Index).ToList());
             var times = SafeTimes();
+            LearnedFlights lf = null; try { lf = Learned?.Invoke(); } catch (Exception) { }
             var items = new List<object>(); var seen = new HashSet<long>();
-            int timed = 0;
+            int timed = 0, learned = 0;
+            // the learned line of a leg, either way round (a route A -> B learned is drawn for the pair A <-> B; B -> A is turned round)
+            LearnedRoute LearnedOf(int a, int b)
+            {
+                if (lf == null) return null;
+                try
+                {
+                    var r = lf.Get(mapId, a, b); if (r != null) return r;
+                    r = lf.Get(mapId, b, a);
+                    return r == null ? null : new LearnedRoute { MapId = r.MapId, From = a, To = b, Pts = FlightGeo.Reversed(r.Pts), Seconds = r.Seconds, Flights = r.Flights, Members = r.Members, FromLodge = r.FromLodge, VsGame = r.VsGame, GameHasRoute = r.GameHasRoute };
+                }
+                catch (Exception) { return null; }
+            }
+            double OwnSeconds(int a, int b) { try { if (lf == null) return 0; var s = lf.Seconds(mapId, a, b); return s > 0 ? s : lf.Seconds(mapId, b, a); } catch (Exception) { return 0; } }
+            void Add(TaxiNodeInfo a, TaxiNodeInfo b, List<double> line, LearnedRoute lr)
+            {
+                var fac = RouteFaction(FactionOf(a), FactionOf(b));
+                if (lr != null) { line = new List<double>(); foreach (var p in lr.Pts) { LL(p.X, p.Y, out var la, out var ln); line.Add(la); line.Add(ln); } learned++; }
+                if (line == null || line.Count < 4) { line = new List<double>(); LL(a.X, a.Y, out var la, out var ln); line.Add(la); line.Add(ln); LL(b.X, b.Y, out la, out ln); line.Add(la); line.Add(ln); }
+                double t = LegTime(times, fac, a, b); if (t <= 0) t = LegTime(times, fac, b, a);
+                if (t <= 0 && lr != null && lr.Seconds > 0) t = lr.Seconds;          // the learned route's own flights
+                if (t <= 0) t = OwnSeconds(a.Id, b.Id);                              // recorded flights of the leg (live position)
+                var label = TimeText(t); if (label.Length > 0) timed++;
+                int mid = (line.Count / 4) * 2;
+                var tip = label.Length > 0 ? "Flight time " + label : "No flight time known yet";
+                var it = new Dictionary<string, object>
+                {
+                    ["pts"] = line, ["g"] = "routes." + FactionKey(fac), ["c"] = fac == Alliance ? "#5aa9ff" : fac == Horde ? "#ff6b5e" : "#f0b429", ["w"] = 2.0, ["o"] = 0.8, ["d"] = "6 5",
+                    ["name"] = ShortName(a.Name) + " ↔ " + ShortName(b.Name), ["tip"] = tip, ["extra"] = FactionName(fac),
+                    ["label"] = label, ["mid"] = new List<double> { line[Math.Min(mid, line.Count - 2)], line[Math.Min(mid + 1, line.Count - 1)] },
+                };
+                if (lr != null)
+                {
+                    // a learned line: solid, in its own colour, a little wider; the tooltip says where it comes from
+                    it["c"] = LearnedColor; it["w"] = 2.5; it["o"] = 0.95; it["d"] = null; it["learned"] = lr.FromLodge ? "lodge" : "mine";
+                    it["tip"] = (lr.FromLodge ? LearnedLodgeTip : LearnedMineTip) + " · " + tip;
+                    it["extra"] = FactionName(fac) + " · " + (lr.FromLodge ? lr.Flights + " flights by " + Math.Max(1, lr.Members) + (lr.Members == 1 ? " member" : " members") : lr.Flights + " of your flights agree");
+                }
+                items.Add(it);
+            }
             foreach (var path in idx.Set.TaxiPaths.OrderBy(p => p.Id))
             {
                 if (!nodes.TryGetValue(path.FromNode, out var a) || !nodes.TryGetValue(path.ToNode, out var b) || a.MapId != mapId || b.MapId != mapId) continue;
                 long key = Math.Min(path.FromNode, path.ToNode) * 100000L + Math.Max(path.FromNode, path.ToNode);
                 if (!seen.Add(key)) continue;
-                var fa = FactionOf(a); var fb = FactionOf(b);
-                var fac = RouteFaction(fa, fb);
                 var line = new List<double>();
                 if (pts.TryGetValue(path.Id, out var l) && l.Count > 1)
                     foreach (var p in l.Where(p => p.MapId == mapId)) { LL(p.X, p.Y, out var la, out var ln); line.Add(la); line.Add(ln); }
-                if (line.Count < 4) { LL(a.X, a.Y, out var la, out var ln); line.Add(la); line.Add(ln); LL(b.X, b.Y, out la, out ln); line.Add(la); line.Add(ln); }
-                double t = LegTime(times, fac, a, b); if (t <= 0) t = LegTime(times, fac, b, a);
-                var label = TimeText(t); if (label.Length > 0) timed++;
-                int mid = (line.Count / 4) * 2;
-                items.Add(new Dictionary<string, object>
+                Add(a, b, line, LearnedOf(path.FromNode, path.ToNode));
+            }
+            // learned legs the game files have no route for (a leg only Forever's server knows)
+            if (lf != null)
+            {
+                List<LearnedRoute> extra = null; try { extra = lf.All(mapId); } catch (Exception) { }
+                foreach (var lr in extra ?? new List<LearnedRoute>())
                 {
-                    ["pts"] = line, ["g"] = "routes." + FactionKey(fac), ["c"] = fac == Alliance ? "#5aa9ff" : fac == Horde ? "#ff6b5e" : "#f0b429", ["w"] = 2.0, ["o"] = 0.8, ["d"] = "6 5",
-                    ["name"] = ShortName(a.Name) + " ↔ " + ShortName(b.Name), ["tip"] = label.Length > 0 ? "Flight time " + label : "No flight time known yet", ["extra"] = FactionName(fac),
-                    ["label"] = label, ["mid"] = new List<double> { line[Math.Min(mid, line.Count - 2)], line[Math.Min(mid + 1, line.Count - 1)] },
-                });
+                    long key = Math.Min(lr.From, lr.To) * 100000L + Math.Max(lr.From, lr.To);
+                    if (!nodes.TryGetValue(lr.From, out var a) || !nodes.TryGetValue(lr.To, out var b) || a.MapId != mapId || b.MapId != mapId || !seen.Add(key)) continue;
+                    Add(a, b, null, lr);
+                }
             }
             return Message("routes", "lines", new Dictionary<string, object> { ["items"] = items }, items.Count,
                 items.Count == 0 ? "No flight routes on this continent." : timed == 0 ? "No flight times yet: Elan's Hunter Helper measures them as you fly, and the Lodge shares them." : "");

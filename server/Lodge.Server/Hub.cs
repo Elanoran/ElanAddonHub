@@ -237,7 +237,7 @@ public partial class LodgeHub
     // what this server can do ("files" only while the owner leaves it on); same list in welcome and GET /features
     public string[] FeatureList()
     {
-        var f = new List<string> { "reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights" };
+        var f = new List<string> { "reply", "react", "react2", "pin", "profile", "displayname", "lfg", "history2", "search", "tokens", "invites", "devices", "calendar", "leave", "lodgeinfo", "flights", "flightroutes" };   // flightroutes: learned flight paths, FlightRoutes.cs
         if (Cfg.FilesEnabled) f.Add("files");
         if (Cfg.ArmoryEnabled) { f.Add("armory"); f.Add("armory2"); if (Cfg.ArmoryRepsEnabled) f.Add("reputations"); }   // reputations (2.27): shared characters may carry reputations (only members who switched it on send them); "standing with a faction"
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); f.Add("atlas4"); f.Add("atlas5"); f.Add("atlas6"); f.Add("atlas7"); f.Add("atlas8"); f.Add("atlas9"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests (atlas7: with their verified details and the game build, 2.25); atlas3: gathering node positions (nodes); atlas4: fishing spots (fishspots); atlas5: hunter field notes (fieldnotes); atlas6: instance entrances seen by members (entrances); atlas8: where members met, killed or saw npcs (npcspots, 2.26); atlas9: counter extras, pickpocket / gathering / contained counters, corpse dedupe (2.26)
