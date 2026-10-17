@@ -153,6 +153,12 @@ your addons automatically. It can sit in the tray and start with Windows if you 
 
 Everything the Outpost may contact, and the switches for it, is listed in Settings > Privacy.
 
+## How we look at it
+
+Elan's Outpost and its addons are made with care, and we try hard to play fair: the addons only use the game's normal addon interface, the Outpost only reads your game files and never touches the game while it runs, and nothing ever plays the game for you. We believe that keeps everything well within the rules - but we can't promise it, because only Blizzard decides what is allowed, and the rules can change.
+
+So please use it at your own risk. It is a free fan project, given as it is, and we can't take responsibility for lost settings, a broken interface, action taken on an account or anything else that happens while you use it. If your addon settings matter to you, keep a copy of your WTF folder now and then - and if something feels wrong, tell us. We'd much rather fix it.
+
 ## Hosting a Lodge
 
 A Lodge is one small .NET 8 service on a Linux server (Ubuntu with systemd), behind a web server you already have
@@ -164,8 +170,9 @@ and [server/PROTOCOL.md](server/PROTOCOL.md) for the details.
 ## FAQ
 
 **Is this allowed? Can it get me banned?**
-The Outpost never reads game memory, never injects anything into the game and never plays for you. The in-game part
-is ordinary addons that use the normal addon interface. As with any third-party tool, use it at your own judgement.
+The Outpost never reads game memory, never injects anything into the game and never plays for you; the in-game part
+is ordinary addons that use the normal addon interface. We believe that is well within the rules, but only Blizzard
+decides - see [How we look at it](#how-we-look-at-it).
 
 **Does it work with other WoW versions?**
 It is made for WoW Forever. Other addons still show up on the Addons page, but the Atlas, the map and the addons are

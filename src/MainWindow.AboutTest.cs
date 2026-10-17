@@ -88,6 +88,18 @@ namespace ElansAddonHub
                     var at = v.TranslatePoint(new Point(0, 0), pane);
                     double left = at.X, right = pane.ActualWidth - at.X - v.ActualWidth;
                     Check($"about: the campfire is centred at {w:0} px (left {left:0}, right {right:0}, {v.ActualWidth:0} wide)", v.ActualWidth > 200 && Math.Abs(left - right) <= 2, $"pane {pane.ActualWidth:0}");
+                    if (w == 1400)
+                    {
+                        // "How we look at it": shown above the trademark line, with the honest no-responsibility words, the same text as the README's section
+                        var fp = SettingsPage.FairPlayTextForTest;
+                        string readme = null;
+                        for (var dirUp = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory); dirUp != null && readme == null; dirUp = dirUp.Parent)
+                            if (File.Exists(Path.Combine(dirUp.FullName, "README.md")) && File.Exists(Path.Combine(dirUp.FullName, "ARTWORK.md"))) readme = File.ReadAllText(Path.Combine(dirUp.FullName, "README.md")).Replace("\r\n", "\n");
+                        Check("about: \"How we look at it\" is shown: fair play, own risk, no responsibility, keep a copy of WTF, tell us",
+                            SettingsPage.FairPlayShownForTest && fp.Contains("only Blizzard decides") && fp.Contains("at your own risk") && fp.Contains("can't take responsibility") && fp.Contains("WTF folder") && fp.Contains("tell us"), fp);
+                        Check("about: the README's \"How we look at it\" has the same words (skipped when the source folder is not found)",
+                            readme == null || fp.Split(new[] { SettingsPage.FairPlaySep }, StringSplitOptions.None).All(par => readme.Contains(par)));
+                    }
                     var d = SettingsPage.AboutDisclaimerForTest;
                     var lines = Math.Round(d.ActualHeight / 14.0);
                     if (w >= 1400) Check($"about: the trademark line is one line at {w:0} px ({d.ActualHeight:0} px high)", d.ActualHeight > 0 && d.ActualHeight < 20, d.ActualHeight.ToString("0"));

@@ -228,6 +228,9 @@ namespace ElansAddonHub
         }
 
         // ---------------------------------------------------------------- test hooks
+        public const string FairPlaySep = "||";
+        public string FairPlayTextForTest => string.Join(FairPlaySep, ((StackPanel)AboutFairPlay.Content).Children.OfType<TextBlock>().Select(b => b.Text));
+        public bool FairPlayShownForTest => AboutFairPlay.IsVisible && AboutFairPlay.ActualHeight > 40;
         public bool AboutNewsVisibleForTest => AboutPaneNews.Visibility == Visibility.Visible;
         public StackPanel NewsListForTest => NewsList;
         public string NewsBannerForTest => NewsBanner.Visibility == Visibility.Visible ? NewsBannerText.Text : null;

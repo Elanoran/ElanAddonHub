@@ -980,6 +980,14 @@
                   <TextBlock Text="Splash and artwork" Style="{StaticResource Text.Secondary}" /><TextBlock Grid.Column="1" Style="{StaticResource Text.Body}">Original, made for this project</TextBlock></Grid>
               </StackPanel>
             </ContentControl>
+            <!-- how we look at it: fair play, and no responsibility (the same words as the README's "How we look at it") -->
+            <TextBlock Text="How we look at it" Style="{StaticResource Head}" />
+            <ContentControl x:Name="AboutFairPlay" Style="{StaticResource Card.Group}" Margin="0,0,0,16">
+              <StackPanel Margin="16,12">
+                <TextBlock Style="{StaticResource Text.Body}" TextWrapping="Wrap" Margin="0,4,0,8" Text="Elan's Outpost and its addons are made with care, and we try hard to play fair: the addons only use the game's normal addon interface, the Outpost only reads your game files and never touches the game while it runs, and nothing ever plays the game for you. We believe that keeps everything well within the rules - but we can't promise it, because only Blizzard decides what is allowed, and the rules can change." />
+                <TextBlock Style="{StaticResource Text.Body}" TextWrapping="Wrap" Margin="0,0,0,4" Text="So please use it at your own risk. It is a free fan project, given as it is, and we can't take responsibility for lost settings, a broken interface, action taken on an account or anything else that happens while you use it. If your addon settings matter to you, keep a copy of your WTF folder now and then - and if something feels wrong, tell us. We'd much rather fix it." />
+              </StackPanel>
+            </ContentControl>
             <!-- one line when the page is wide enough, wrapping (centred) when it is not -->
             <TextBlock x:Name="AboutDisclaimer" Style="{StaticResource Text.Caption}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" Margin="4,0,4,0"
                        Text="World of Warcraft is a trademark of Blizzard Entertainment. Elan's Outpost is a fan project and not affiliated with Blizzard." />
