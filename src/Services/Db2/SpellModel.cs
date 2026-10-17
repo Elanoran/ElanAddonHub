@@ -85,6 +85,8 @@ namespace ElansAddonHub.Services.Db2
     public sealed class SkillAbility
     {
         public int Id, Skill, Spell, MinRank, Green, Gray, Acquire, Flags, ClassMask, Supersedes;   // Green / Gray = the ranks where the colour turns (SkillLineAbility's trivial low / high)
+        public ulong RaceMask;                     // SkillLineAbility.RaceMask (ChrRaces.PlayableRaceBit bits); 0 = every race. Forever splits shared lines with it (Skysight: Windshaper only)
+        public bool ForRace(ulong raceBit) => RaceMask == 0 || (RaceMask & raceBit) != 0;
     }
 
     // a crafting recipe: the spell that makes something, the skill and rank it needs, the item it makes and what it uses up
@@ -379,6 +381,7 @@ namespace ElansAddonHub.Services.Db2
                     {
                         Id = t.IdAt(i), Skill = SpellTables.Int(t, i, 3), Spell = SpellTables.Int(t, i, 4), MinRank = SpellTables.Int(t, i, 5), ClassMask = SpellTables.Int(t, i, 6),
                         Supersedes = SpellTables.Int(t, i, 7), Acquire = SpellTables.Int(t, i, 8), Gray = SpellTables.Int(t, i, 9), Green = SpellTables.Int(t, i, 10), Flags = SpellTables.Int(t, i, 11),
+                        RaceMask = t.FieldCount > 17 ? ((ulong)(uint)t.FieldArr(i, 17, 1, 2) << 32) | (uint)t.FieldArr(i, 17, 0, 2) : 0,
                     });
             }
             if (!sl.Ok || !sa.Ok) abilities.Clear();      // abilities without skills (or the other way round) mean nothing

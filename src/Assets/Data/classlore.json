@@ -1,6 +1,6 @@
 {
  "format": 1,
- "note": "Elan's Outpost class and race notes (written for the Outpost, in its own words). The official character creation text is NOT here: it is read from the player's own client (ChrClasses / ChrRaces). Entries with basis 'game' were written from the game's own text and the in-game data only.",
+ "note": "Elan's Outpost class and race notes (written for the Outpost, in its own words). The official character creation text is NOT here: it is read from the player's own client (ChrClasses / ChrRaces). Checked against WoW Forever (2.83): the Forever client's own tables (CharBaseInfo race and class pairs, SkillRaceClassInfo armor and weapon lines, SkillLineAbility racial and race-only spells, SpellLevels) first, Blizzard's own Forever pages second, Classic lore last.",
  "classes": [
   {
    "file": "WARRIOR",
@@ -21,14 +21,14 @@
     "Rage is lost slowly out of combat, so a warrior opens fights with Charge to start with some",
     "Shields block much of the physical damage a tank takes"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Warrior" ]
+   "foreverNotes": "In Forever every playable race can be a warrior, the Skyborne of both sides included (the client's race and class list).",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Warrior", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "file": "PALADIN",
    "name": "Paladin",
    "summary": "A holy warrior in plate who fights in melee and calls on the Light to heal, protect and punish. Paladins buff the whole group with blessings and auras.",
-   "history": "The paladins began after the Second War, when Archbishop Alonsus Faol chose warriors to be trained in the Light. Uther the Lightbringer led the first order, the Knights of the Silver Hand. The order broke during the Third War when Prince Arthas turned and killed Uther. Survivors now serve in Stormwind, Ironforge and the Argent Dawn, while the Scarlet Crusade twisted the cause into fanaticism.",
+   "history": "The paladins began after the Second War, when Archbishop Alonsus Faol chose warriors to be trained in the Light. Uther the Lightbringer led the first order, the Knights of the Silver Hand. The order broke during the Third War when Prince Arthas turned and killed Uther. Survivors now serve in Stormwind, Ironforge and the Argent Dawn, while the Scarlet Crusade twisted the cause into fanaticism. In Forever the Light also answers some of the Forsaken: Undead paladins are one of Forever's new race and class pairs.",
    "facts": [
     { "label": "Fights with", "value": "Mana" },
     { "label": "Order", "value": "The Knights of the Silver Hand" },
@@ -44,14 +44,14 @@
     "A paladin gets a warhorse at 40 and can earn a charger through a long class quest at 60",
     "Redemption, the resurrection spell, comes from a class quest"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Paladin" ]
+   "foreverNotes": "Forever adds the Undead paladin (Horde), so paladins are Human, Dwarf or Undead in this game. Classic had no Horde paladins.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Paladin", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "file": "HUNTER",
    "name": "Hunter",
    "summary": "A ranged fighter with a bow or gun and a tamed beast at their side. Hunters track creatures, set traps and let their pet hold the enemy while they shoot.",
-   "history": "Hunters come from every wild corner of the world: night elf sentinels, dwarven mountaineers, orc and troll beast trackers and tauren braves. Their bond with animals is older than any kingdom, and many of them serve as scouts for their people.",
+   "history": "Hunters come from every wild corner of the world: night elf sentinels, dwarven mountaineers, orc and troll beast trackers and tauren braves. In Forever humans take up the bow as well, and both paths of the Skyborne train hunters. Their bond with animals is older than any kingdom, and many of them serve as scouts for their people.",
    "facts": [
     { "label": "Fights with", "value": "Mana, a ranged weapon and ammunition" },
     { "label": "Pets", "value": "A tamed beast from level 10, after a short class quest" },
@@ -65,8 +65,8 @@
     "A pet needs food and grows loyal over time; each beast family has its own abilities",
     "Ammunition goes in a quiver or ammo pouch, which also makes the hunter shoot faster"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Hunter" ]
+   "foreverNotes": "Forever adds the Human hunter (one of its six new race and class pairs) and hunters of both Skyborne paths. Gnomes and the Forsaken still cannot be hunters.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Hunter", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "file": "ROGUE",
@@ -86,8 +86,8 @@
     "Rogues can pick locks on chests and doors as their skill rises",
     "Stealth makes the rogue the best choice for scouting ahead"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Rogue" ]
+   "foreverNotes": "In Forever both Skyborne paths can be rogues too, alongside every Classic race but the tauren.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Rogue", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "file": "PRIEST",
@@ -104,21 +104,22 @@
     { "name": "Tyrande Whisperwind", "why": "High Priestess of Elune and leader of the night elves" }
    ],
    "mentions": [
-    "Each race's priests learn one or two spells of their own (for example Fear Ward for dwarves and Starshards for night elves)",
+    "Each race's priests learn two spells of their own (for example Chastise and Desperate Prayer for dwarves, Starshards and Elune's Grace for night elves); At a glance lists them all",
+    "Fear Ward and Devouring Plague, the dwarf and Forsaken priest spells of Classic, are open to every priest in Forever",
     "Power Word: Fortitude raises the stamina of the whole group",
     "Shadowform is the last talent of the Shadow tree"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Priest" ]
+   "foreverNotes": "Forever adds the Gnome priest. It also reworks the race-only priest spells: Fear Ward and Devouring Plague are for every priest now, and each race gets a new one (Divine Grace for Humans, Chastise for Dwarves, Confounding Flash and Contingency Plan for Gnomes, Dark Sacrifice for the Forsaken), all from the client's own spell tables. The Skyborne cannot be priests.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Priest", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "file": "SHAMAN",
    "name": "Shaman",
    "summary": "A spiritual leader who calls on the elements. Shaman fight in melee or cast lightning, heal, and place totems that help the group.",
-   "history": "Shamanism is the old faith of the orcs, lost when their warlocks turned to demons and brought back by Thrall. The tauren and the trolls kept their own shamanic ways. Shaman speak with the spirits of earth, fire, water and air, and many of them guide their people as elders.",
+   "history": "Shamanism is the old faith of the orcs, lost when their warlocks turned to demons and brought back by Thrall. The tauren and the trolls kept their own shamanic ways. In Forever some dwarves have taken up the elements too, and the Windshaper Skyborne learned from the wind spirits themselves. Shaman speak with the spirits of earth, fire, water and air, and many of them guide their people as elders.",
    "facts": [
     { "label": "Fights with", "value": "Mana" },
-    { "label": "Totems", "value": "Earth, Fire, Water and Air totems, each opened by a class quest" },
+    { "label": "Totems", "value": "Earth, Fire, Water and Air totems; in Classic each was opened by a class quest" },
     { "label": "Plays as", "value": "Healer, caster damage or melee damage" }
    ],
    "figures": [
@@ -130,14 +131,18 @@
     "Totems work for the group around the shaman, so their place matters",
     "Reincarnation lets a shaman come back to life without help"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Shaman" ]
+   "foreverNotes": "Forever adds the Dwarf shaman, the first Alliance shaman, and the Windshaper Skyborne (Horde) can be shaman as well. The client gives shaman the healer and damage roles, not tank.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Shaman",
+    "https://news.blizzard.com/en-us/article/24304075",
+    "https://news.blizzard.com/en-us/article/24302071"
+   ]
   },
   {
    "file": "MAGE",
    "name": "Mage",
    "summary": "A ranged caster in cloth who deals heavy damage with fire, frost and arcane spells. Mages also make food and water, open portals and turn enemies into sheep.",
-   "history": "The magi of the Eastern Kingdoms learned their craft from the high elves and gathered in Dalaran under the Kirin Tor. Dalaran was ruined in the Third War. Archmage Antonidas fell there, and his apprentice Jaina Proudmoore led many survivors to Theramore in Kalimdor.",
+   "history": "The magi of the Eastern Kingdoms learned their craft from the high elves and gathered in Dalaran under the Kirin Tor. Dalaran was ruined in the Third War. Archmage Antonidas fell there, and his apprentice Jaina Proudmoore led many survivors to Theramore in Kalimdor. In Forever orcs study the arcane again, and the High Order Skyborne come to Azeroth to win back the arcane knowledge their people lost.",
    "facts": [
     { "label": "Fights with", "value": "Mana" },
     { "label": "Schools", "value": "Arcane, Fire and Frost" },
@@ -153,8 +158,12 @@
     "Teleports and portals to the capitals use runes bought from reagent vendors",
     "Mages can wear only cloth"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Mage" ]
+   "foreverNotes": "Forever adds the Orc mage and the High Order Skyborne mage (Alliance). Dwarves, night elves and tauren still cannot be mages.",
+   "sources": [
+    "https://warcraft.wiki.gg/wiki/Mage",
+    "https://news.blizzard.com/en-us/article/24304075",
+    "https://news.blizzard.com/en-us/article/24302071"
+   ]
   },
   {
    "file": "WARLOCK",
@@ -174,14 +183,14 @@
     "Soul shards from Drain Soul are used to summon demons and make healthstones",
     "Ritual of Summoning brings a party member to the warlock"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Warlock" ]
+   "foreverNotes": "Forever adds the Troll warlock. The Skyborne cannot be warlocks.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Warlock", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "file": "DRUID",
    "name": "Druid",
    "summary": "A shapeshifter who heals as a caster, tanks as a bear, fights as a cat and casts nature spells. One druid can fill almost any role.",
-   "history": "The druids are the oldest order of the night elves, taught by the demigod Cenarius. Malfurion Stormrage was the first, and most druids sleep in the Emerald Dream between wars. The tauren learned the way too, and both races meet in the Cenarion Circle at Moonglade.",
+   "history": "The druids are the oldest order of the night elves, taught by the demigod Cenarius. Malfurion Stormrage was the first, and most druids sleep in the Emerald Dream between wars. The tauren learned the way too, and both races meet in the Cenarion Circle at Moonglade. In Forever the Skyborne of both paths are druids as well, with shapeshift forms of their own.",
    "facts": [
     { "label": "Fights with", "value": "Mana as a caster, rage as a bear, energy as a cat" },
     { "label": "Forms", "value": "Bear at 10 and Aquatic at 16 by class quests; Cat at 20; Travel at 30" },
@@ -197,8 +206,8 @@
     "Druids can wear only cloth and leather",
     "Rebirth can bring an ally back to life in the middle of a fight"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Druid" ]
+   "foreverNotes": "In Forever druids are Night Elf, Tauren or Skyborne (both paths), so each side has two druid races. Skyborne druids have their own forms.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Druid", "https://news.blizzard.com/en-us/article/24302071" ]
   }
  ],
  "races": [
@@ -218,10 +227,11 @@
    ],
    "mentions": [
     "King Varian Wrynn went missing on a voyage, which leaves the court in the hands of advisors",
-    "The Defias Brotherhood are stonemasons who were never paid for rebuilding Stormwind"
+    "The Defias Brotherhood are stonemasons who were never paid for rebuilding Stormwind",
+    "Humans can be hunters in Forever, one of its new race and class pairs"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Human" ]
+   "foreverNotes": "Forever lets humans be hunters and reworks their racials. The client lists Perception, The Human Spirit, Ruthless (more critical strike chance with all spells and attacks) and the new Will to Survive, which breaks stuns; Blizzard's race page names Sword Specialization where the client has Ruthless. Human priests learn Feedback and the new Divine Grace.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Human", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "name": "Dwarf",
@@ -237,10 +247,11 @@
     { "name": "Muradin Bronzebeard", "why": "Magni's brother, lost in Northrend" }
    ],
    "mentions": [
-    "The Dark Iron dwarves of Blackrock Depths are the dwarves' bitter enemies"
+    "The Dark Iron dwarves of Blackrock Depths are the dwarves' bitter enemies",
+    "In Forever dwarves can be shaman, the only Alliance shaman among the Classic races"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Dwarf" ]
+   "foreverNotes": "Forever adds the Dwarf shaman. The client gives dwarves Stoneform, Find Treasure and two new passives, Earth Fury and Big Game Hunter (more damage against beasts); Blizzard's race page names Mace Specialization where the client has Earth Fury. Dwarf priests learn Desperate Prayer and the new Chastise; Fear Ward is for every priest now.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Dwarf", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "name": "Night Elf",
@@ -260,8 +271,8 @@
     "Night elves turn into a wisp when they die, which moves faster to the spirit healer",
     "The Sentinels, the night elf army, guard Ashenvale against the Horde's loggers"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Night_elf" ]
+   "foreverNotes": "No new class for night elves in Forever. Their racials gain Elune's Light, a short boost to critical strike chance, next to Shadowmeld, Quickness and Wisp Spirit.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Night_elf", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "name": "Gnome",
@@ -278,10 +289,11 @@
    ],
    "mentions": [
     "Gnomes are the race most tied to engineering",
-    "The Gnomeregan dungeon is the gnomes' fallen city, reached from Dun Morogh"
+    "The Gnomeregan dungeon is the gnomes' fallen city, reached from Dun Morogh",
+    "Gnome priests are new in Forever and have race-only spells of their own (Confounding Flash, Contingency Plan)"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Gnome" ]
+   "foreverNotes": "Forever adds the Gnome priest. The client reworks Expansive Mind (more mana, or more rage or energy for warriors and rogues) and adds Eureka!, which makes the next damaging abilities cheaper and stronger, in a version for each class.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Gnome", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "name": "Orc",
@@ -298,10 +310,11 @@
    ],
    "mentions": [
     "Durotar is named after Durotan, Thrall's father",
-    "The Burning Blade cult still serves the Legion in the hills of Durotar"
+    "The Burning Blade cult still serves the Legion in the hills of Durotar",
+    "Orcs can be mages in Forever, one of its new race and class pairs"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Orc" ]
+   "foreverNotes": "Forever adds the Orc mage. The client lists Blood Fury (attack power and spell power now), Hardiness, Savage (more critical strike chance with all spells and abilities) and the new Shatter Curse, which removes curses and banes; Blizzard's race page names Axe Specialization where the client has Savage.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Orc", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "name": "Undead",
@@ -318,10 +331,11 @@
    ],
    "mentions": [
     "The Royal Apothecary Society works on a new plague in the Undercity",
-    "The client names the race 'Scourge' in its files; the game shows it as Undead, and the Forsaken is its lore name"
+    "The client names the race 'Scourge' in its files; the game shows it as Undead, and the Forsaken is its lore name",
+    "Forever lets the Forsaken be paladins, the only Horde paladins of the game"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Forsaken" ]
+   "foreverNotes": "Forever adds the Undead paladin. The racials gain Touch of the Grave, a chance to drain health with spells and attacks. Forsaken priests keep Touch of Weakness and get the new Dark Sacrifice; Devouring Plague is for every priest now.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Forsaken", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "name": "Tauren",
@@ -337,11 +351,11 @@
     { "name": "Hamuul Runetotem", "why": "Arch druid of Thunder Bluff" }
    ],
    "mentions": [
-    "The tauren are the Horde's druids in this era, with the night elves on the Alliance side",
+    "The tauren and the Windshaper Skyborne are the Horde's druids in Forever, with the night elves and the High Order Skyborne on the Alliance side",
     "Thunder Bluff's mesas are joined by rope bridges and lifts"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Tauren" ]
+   "foreverNotes": "No new class for the tauren in Forever. Their racials gain Plainsrunning, which speeds a tauren up the longer it keeps moving.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Tauren", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "name": "Troll",
@@ -358,16 +372,16 @@
    ],
    "mentions": [
     "Trolls regenerate health faster than other races, even in combat",
-    "Other troll tribes (Gurubashi, Amani, Witherbark) are enemies of the Darkspear"
+    "Other troll tribes (Gurubashi, Amani, Witherbark) are enemies of the Darkspear",
+    "Trolls can be warlocks in Forever, one of its new race and class pairs"
    ],
-   "foreverNotes": "",
-   "sources": [ "https://warcraft.wiki.gg/wiki/Darkspear_tribe" ]
+   "foreverNotes": "Forever adds the Troll warlock. The racials gain Rapid Regeneration, a heal over time while the troll stands still, next to Regeneration, Berserking and Beast Slaying.",
+   "sources": [ "https://warcraft.wiki.gg/wiki/Darkspear_tribe", "https://news.blizzard.com/en-us/article/24304075" ]
   },
   {
    "name": "High Order Skyborne",
-   "basis": "game",
    "summary": "One of the two paths of the Skyborne (shen'dorei), Forever's own race from Zephras Isle in Skywall. The High Order fights for the Alliance.",
-   "history": "Per the game's own text, the High Order descends from the Highborne scholars of Eldre'Thalas. When the wind spirits vanished from Zephras Isle, they saw how much the Skyborne had depended on them, and they now send a new generation to Azeroth to recover lost arcane knowledge so their people can stand on their own.",
+   "history": "The High Order descends from the Highborne scholars of Eldre'Thalas. When the wind spirits vanished from Zephras Isle, they saw how much the Skyborne had depended on them, and they now send a new generation to Azeroth to recover lost arcane knowledge so their people can stand on their own. Long ago Highborne exiles made a pact with the wind spirits and built their home in Skywall, an elemental plane; now the spirits are gone, the old structures are failing and the Skyborne are split.",
    "facts": [
     { "label": "Home", "value": "Zephras Isle, in Skywall (both Skyborne paths start there)" },
     { "label": "Leader", "value": "Supreme Magister Elaadrin Evengale" },
@@ -379,16 +393,16 @@
    ],
    "mentions": [
     "The two Skyborne paths share the same island and first quests; the side is chosen with the path",
-    "The Skyborne race needs the Skyborne Heroic or Epic Pack (from the Outpost's Zephras Isle notes)"
+    "Playing a Skyborne needs the Skyborne Heroic Pack or a bigger Forever edition; game time alone does not unlock the race",
+    "Both paths share Walk on Air, Wind Blessed and Elemental Insight; Read Leyline (more health and mana regeneration, most at a ley line) is for this path only"
    ],
-   "foreverNotes": "A race of WoW Forever only: it is not in World of Warcraft Classic. These notes were written from the game's own description and the in-game data the Outpost has (the Zephras Isle notes and the creatures Forever showed), not from an outside source.",
-   "sources": []
+   "foreverNotes": "A race of WoW Forever only: it is not in World of Warcraft Classic. Classes: Warrior, Hunter, Rogue, Mage, Druid (the client's race and class list, the same as Blizzard's). These notes come from the game's own text and data and Blizzard's Forever pages; the leaders are named in the game's own quests.",
+   "sources": [ "https://news.blizzard.com/en-us/article/24302071", "https://warcraft.wiki.gg/wiki/Skyborne" ]
   },
   {
    "name": "Windshaper Skyborne",
-   "basis": "game",
    "summary": "One of the two paths of the Skyborne (shen'dorei), Forever's own race from Zephras Isle in Skywall. The Windshapers fight for the Horde.",
-   "history": "Per the game's own text, the Windshapers descend from the first shen'dorei high elves to receive the wind spirits' gift of elemental skysight. A new generation comes to Azeroth from Skywall to find out what became of their missing elemental mentors and to bring the wind spirits back.",
+   "history": "The Windshapers descend from the first shen'dorei high elves to receive the wind spirits' gift of elemental skysight. A new generation comes to Azeroth from Skywall to find out what became of their missing elemental mentors and to bring the wind spirits back. Long ago Highborne exiles made a pact with the wind spirits and built their home in Skywall, an elemental plane; now the spirits are gone, the old structures are failing and the Skyborne are split.",
    "facts": [
     { "label": "Home", "value": "Zephras Isle, in Skywall (both Skyborne paths start there)" },
     { "label": "Leader", "value": "Grand Skyseer Ayessa Dawnsinger" },
@@ -400,10 +414,11 @@
    ],
    "mentions": [
     "The two Skyborne paths share the same island and first quests; the side is chosen with the path",
-    "The Skyborne race needs the Skyborne Heroic or Epic Pack (from the Outpost's Zephras Isle notes)"
+    "Playing a Skyborne needs the Skyborne Heroic Pack or a bigger Forever edition; game time alone does not unlock the race",
+    "Both paths share Walk on Air, Wind Blessed and Elemental Insight; Skysight (faster movement, most at an elemental convergence) is for this path only"
    ],
-   "foreverNotes": "A race of WoW Forever only: it is not in World of Warcraft Classic. These notes were written from the game's own description and the in-game data the Outpost has (the Zephras Isle notes and the creatures Forever showed), not from an outside source.",
-   "sources": []
+   "foreverNotes": "A race of WoW Forever only: it is not in World of Warcraft Classic. Classes: Warrior, Hunter, Rogue, Shaman, Druid (the client's race and class list, the same as Blizzard's). These notes come from the game's own text and data and Blizzard's Forever pages; the leaders are named in the game's own quests.",
+   "sources": [ "https://news.blizzard.com/en-us/article/24302071", "https://warcraft.wiki.gg/wiki/Skyborne" ]
   }
  ]
 }

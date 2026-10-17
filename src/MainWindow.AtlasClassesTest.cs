@@ -405,6 +405,9 @@ namespace ElansAddonHub
                 await AtlasView.Open("class:8"); await AtlasView.WaitForTest(); await Task.Delay(250); UpdateLayout();
                 Check("window: another class resets the card (Mage: its own tab Arcane, level 1 first, no Hunter spells)", AtlasView.ClassFilterForTest.SkillId == 0 && AtlasView.ClassControlForTest("tab:237") != null && AtlasView.ClassControlForTest("tab:163") == null && AtlasView.ClassRowsForTest.Any(r => r.Title == "Fireball") && !AtlasView.ClassRowsForTest.Any(r => r.Title == "Arcane Shot"));
 
+                // 2.83: checked against WoW Forever - the race mask of a shared racial line, race-only class spells (an invented world of its own; the usual one put back)
+                ClassesForeverFixture(Check, dir, () => { ClassData.SetForTest(set); SpellData.SetForTest(CcSpellSet(spellList)); AtlasBrowse.ForgetForTest(); });
+
                 // ============================================================================================================ no data
                 ClassData.SetForTest(null, ClassData.State.Unavailable, "game updated: ChrRaces layout 12345678 is not known to this Outpost yet");
                 AtlasBrowse.ForgetForTest();
