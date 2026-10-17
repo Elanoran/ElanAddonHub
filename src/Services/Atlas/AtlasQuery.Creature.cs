@@ -89,6 +89,7 @@ namespace ElansAddonHub.Services.Atlas
                 AddLayer(m, "lodge");
             }
             AddCairnLoot(m, s, lodgeKind, id, rows, tiny, by);   // the Cairn's numbers (tier 1) between the Lodge's and the Classic baseline's
+            AddCairnShareNote(m);                              // a member who does not share: one quiet line instead
             var dv = ck != null ? AtlasDerived.For(ClassicAtlas.Current) : null;
             if (dv != null)
             {
@@ -241,6 +242,7 @@ namespace ElansAddonHub.Services.Atlas
             SeenGoalQuests(m, 0, id, sf != null ? new[] { sf.Kc1, sf.Kc2 } : null);
             LayerNotes(m, !ClassicAtlas.IsReady, !LodgeHas(L));
             if (!SeenData.Ready) m.Notes.Add("What your game has seen (names, ranks) is not read yet.");
+            AddCairnShareNote(m);                              // 2.87: also when no loot table was drawn (the line, once)
             return m;
         }
 

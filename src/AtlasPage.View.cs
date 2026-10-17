@@ -47,6 +47,16 @@ namespace ElansAddonHub
                 row.Children.Add(get); row.Children.Add(t);
                 child = row;
             }
+            else if (text == Services.Atlas.AtlasQuery.CairnShareNote && OpenSharingSettings != null)
+            {
+                // 2.87: the Cairn's rows would be here, but they are for members who share - the way to the switch, once per page
+                var row = new DockPanel();
+                var go = new Button { Content = "Turn on sharing", Style = (Style)FindResource("Button.S"), Tag = "cairn-share", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+                go.Click += (s, e) => OpenSharingSettings();
+                DockPanel.SetDock(go, Dock.Right);
+                row.Children.Add(go); row.Children.Add(t);
+                child = row;
+            }
             var b = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 8), Child = child };
             b.SetResourceReference(Border.BackgroundProperty, "Brush.Surface2");
             return b;

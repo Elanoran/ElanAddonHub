@@ -197,7 +197,7 @@ namespace ElansAddonHub.Services
             R(@"^src/(MainWindow\.ReadersTest|Services/(SavedVarsFiles|GamePresence|InventoryData|WowCalendar|FlightShare|AddonHealth|HealthMonitor|HubData|LuaData))\.cs$", "readers");
             R(@"^src/(MainWindow.AtlasClassicTest.cs|Services/Atlas/Classic/)", "atlasclassic", "atlasclassiclodge", "atlaspage");
             R(@"^src/(MainWindow\.AtlasClassicLodgeTest\.cs|Services/Atlas/ClassicLodge\.cs|SettingsPage\.Classic\.cs)$", "atlasclassiclodge", "atlaspage");
-            R(@"^src/(MainWindow\.CairnTest\.cs|Services/Atlas/(CairnData|AtlasQuery\.Cairn)\.cs|Lodge/LodgeSession\.Cairn\.cs)$", "cairn", "atlaspage");   // the Cairn's data from the Lodge (2.86, give to get 2.87)
+            R(@"^src/(MainWindow\.CairnTest\.cs|Services/Atlas/(CairnData|AtlasQuery\.Cairn)\.cs|Lodge/LodgeSession\.Cairn\.cs|MainWindow\.SharingInvite(Test)?\.cs|AtlasPage\.SharingInvite\.cs|WelcomeGuide\.cs)$", "cairn", "atlaspage");   // the Cairn's data from the Lodge (2.86, give to get 2.87)
             R(@"^src/(Services/Atlas/AtlasQuery\.(Item|Creature)\.cs|SettingsPage\.xaml(\.cs)?|Lodge/LodgeSession\.Atlas\.cs)$", "cairn");
             R(@"^src/Services/InfraGuard\.cs$");   // the hosting guard: its check runs in every run
             R(@"^src/(AtlasPage(\.\w+)?\.(xaml|cs)|MainWindow\.(AtlasPageTest(\.(?!Real\.)\w+)?|Atlas)\.cs|Services/Atlas/(AtlasModel|AtlasQuery(\.\w+)?|AtlasDerived|ClassicSetup)\.cs)$", "atlaspage", "atlasbrowse", "atlashome", "atlashosts", "atlasclassiclodge", "atlasclasses", "upgrades");

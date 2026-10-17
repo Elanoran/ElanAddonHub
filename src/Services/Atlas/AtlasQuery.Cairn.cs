@@ -34,6 +34,15 @@ namespace ElansAddonHub.Services.Atlas
             return null;
         }
 
+        // 2.87 give to get: where the Cairn's rows would show for a member who doesn't share - one quiet line per page, not one per row
+        public const string CairnShareNote = "The Cairn's numbers are for members who share - turn on sharing to get them from your Lodge.";
+        static void AddCairnShareNote(AtlasPageModel m)
+        {
+            bool needs = false;
+            try { needs = CairnAtlas.Current == null && Context.CairnNeedsSharing?.Invoke() == true; } catch { }
+            if (needs && !m.Notes.Contains(CairnShareNote)) m.Notes.Add(CairnShareNote);
+        }
+
         static string Lodges(int m) => AtlasFormat.Count(Math.Max(1, m), "lodge", "lodges");
 
         static string CairnRate(CairnSet.Drop d, string what) => AtlasObs.RateText(d.Times, d.Kills, what, what + "s") + " · " + Lodges(d.M);

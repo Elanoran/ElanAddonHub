@@ -106,6 +106,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "calHideMine")] public bool CalHideMine { get; set; }
         [DataMember(Name = "flightShareOff")] public bool FlightShareOff { get; set; }      // false (default) = my learned flight-path times are uploaded to the lodge (times only); off = nothing is uploaded, downloading still works
         [DataMember(Name = "atlasShareOff")] public bool AtlasShareOff { get; set; }        // false (default) = what Elan's Toolkit observed (loot, vendors, finds, spawn points; no character names) is shared with the lodge, guests never share; off = nothing is uploaded, the lodge's Atlas is still received
+        [DataMember(Name = "sharingInviteAnswered")] public string SharingInviteAnswered { get; set; }   // the sharing invite (Atlas Home) last answered for: "atlas" or "atlas+cairn" - it shows again only when the Lodge offers more (2.87)
         // ---- gathering routes and the leveling guide in game (Atlas / Professions)
         [DataMember(Name = "atlasRecents")] public List<string> AtlasRecents { get; set; }        // the Atlas pages opened last (ids only, newest first, at most 8)
         [DataMember(Name = "atlasPins")] public List<string> AtlasPins { get; set; }              // the Atlas pages the person pinned, in their order (ids only)

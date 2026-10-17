@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using ElansAddonHub.Lodge;
@@ -16,14 +17,16 @@ namespace ElansAddonHub
         public bool Required, Installed, Checked;
     }
 
-    // First-run guide: a short overlay in the main window. 1 WoW folder, 2 addons, 3 join a Lodge (optional), 4 tips.
+    // First-run guide: a short overlay in the main window. 1 WoW folder, 2 addons, 3 join a Lodge (optional), 4 sharing (2.87: what, with whom, why;
+    // the switch right there, "Not now" as weighty as "Share"), 5 tips.
     // Skippable at any step, re-openable from Settings > About. Built in code; the host (MainWindow) supplies what it needs as callbacks.
     // Look (DESIGN 4 / 8): the page dims behind Brush.Scrim, the guide is an overlay card (Surface3, hairline, elevation 2, radius 14,
     // padding 24); steps are Surface2 cards (radius 12, 16 padding, 12 apart); one primary button (Next / Get started); the card opens
     // with Motion.DialogIn and every step fades + slides in with Motion.PageIn.
     public class WelcomeGuide : Border
     {
-        public const int Steps = 4;
+        public const int Steps = 5;
+        public const int SharingStep = 3;
 
         public class Host
         {
@@ -33,6 +36,8 @@ namespace ElansAddonHub
             public Action<List<string>> Install;                 // ids of the ticked addons that are not installed yet
             public Action<string> Join;                          // an invite link (already validated)
             public Action<bool> Finished;                        // true = done, false = skipped
+            public Func<bool> SharingOn;                         // the Atlas sharing setting as it is now
+            public Action<bool> SetSharing;                      // the guide's switch / buttons change that same setting at once
         }
 
         readonly Host host;
@@ -52,6 +57,10 @@ namespace ElansAddonHub
         public string ErrorText => linkError.Text;
         public IEnumerable<string> TickedIds => addons.Where(a => a.Checked && !a.Installed).Select(a => a.Id);
         public FrameworkElement CardForTest => card;
+        public CheckBox SharingSwitchForTest { get; private set; }
+        public Button ShareYesForTest { get; private set; }
+        public Button ShareNotNowForTest { get; private set; }
+        public string SharingTextForTest { get; private set; } = "";
 
         static Brush Res(string key) => (Brush)Application.Current.Resources[key];
         static Style Sty(string key) => (Style)Application.Current.FindResource(key);
@@ -135,6 +144,7 @@ namespace ElansAddonHub
                 case 0: BuildFolder(); break;
                 case 1: BuildAddons(); break;
                 case 2: BuildLodge(); break;
+                case SharingStep: BuildSharing(); break;
                 default: BuildDone(); break;
             }
             Motion.PageIn(body);
@@ -219,7 +229,49 @@ namespace ElansAddonHub
             next.Content = string.IsNullOrWhiteSpace(linkBox.Text) ? "Skip this step" : "Join and continue";
         }
 
-        // ---- 4: done
+        // ---- 4: sharing (honest and calm: exactly what is sent, to whom, why; no pre-ticked surprise - the switch shows the setting as it is)
+        void BuildSharing()
+        {
+            title.Text = "Sharing what you see";
+            sub.Text = "Your choice. The Outpost works the same either way, and you can change it any time in Settings > Lodge.";
+            var list = new StackPanel();
+            body.Children.Add(new Border { Background = Res("Brush.Surface2"), CornerRadius = Rad("Radius.Card"), Padding = Pad("Pad.Card"), Child = list });
+            var texts = new List<string>();
+            void Part(string head, string text, bool first = false)
+            {
+                list.Children.Add(Txt(head, "Text.RowTitle", null, new Thickness(0, first ? 0 : 12, 0, 0)));
+                list.Children.Add(Txt(text, "Text.Secondary", null, new Thickness(0, 2, 0, 0)));
+                texts.Add(head + ": " + text);
+            }
+            Part("What is shared", "What Elan's Toolkit sees in the world while you play: what drops from creatures, chests, fishing and gathering, what vendors sell and for how much, where creatures and gathering nodes are, quests and rare finds. Ids and counts - no character names; your rare finds show your Lodge name to members. Flight times have their own switch, and your characters' gear and reputations are shared only if you choose them.", true);
+            Part("With whom", "The members of your Lodge. If your Lodge contributes to the Cairn, the Lodge's pooled numbers - ids and counts only, no names at all - also go to the Cairn, which merges many Lodges.");
+            Part("Why", "Everyone's Atlas gets better the more people share. And the Cairn's numbers from other Lodges come back to those who share: give to get.");
+            SharingTextForTest = string.Join(" | ", texts);
+
+            var row = new Grid { Margin = new Thickness(0, 16, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(new TextBlock { Text = "Share my Atlas observations with this Lodge", Style = Sty("Text.RowTitle"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
+            var sw = new CheckBox { Style = Sty("Switch"), IsChecked = host.SharingOn?.Invoke() == true, VerticalAlignment = VerticalAlignment.Center };
+            System.Windows.Automation.AutomationProperties.SetName(sw, "Share my Atlas observations with this Lodge");
+            sw.Click += (s, e) => host.SetSharing?.Invoke(sw.IsChecked == true);
+            Grid.SetColumn(sw, 1);
+            row.Children.Add(sw);
+            body.Children.Add(row);
+            SharingSwitchForTest = sw;
+
+            // the two answers weigh the same: same style, same width; either one moves on
+            var answers = new UniformGrid { Columns = 2, Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+            var yes = new Button { Content = "Share", Style = Sty("Button.M"), MinWidth = 120, Margin = new Thickness(0, 0, 8, 0) };
+            var no = new Button { Content = "Not now", Style = Sty("Button.M"), MinWidth = 120 };
+            yes.Click += (s, e) => { host.SetSharing?.Invoke(true); Show(Step + 1); };
+            no.Click += (s, e) => { host.SetSharing?.Invoke(false); Show(Step + 1); };
+            answers.Children.Add(yes); answers.Children.Add(no);
+            body.Children.Add(answers);
+            ShareYesForTest = yes; ShareNotNowForTest = no;
+        }
+
+        // ---- 5: done
         void BuildDone()
         {
             title.Text = "You're all set";

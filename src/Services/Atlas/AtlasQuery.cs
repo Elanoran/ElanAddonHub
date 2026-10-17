@@ -20,6 +20,7 @@ namespace ElansAddonHub.Services.Atlas
         public Func<IReadOnlyCollection<int>, LodgeCrafters> Crafters = null;  // "who in the Lodge can craft these recipe spells" (answers from the Armory; asks the server when it does not know yet)
         public Func<List<InvChar>> Characters = () => null;                  // the user's own characters (for "usable by my character" in the browse lists)
         public Func<DateTime> NowUtc = () => DateTime.UtcNow;
+        public Func<bool> CairnNeedsSharing = () => false;                    // 2.87: the user's Lodge hands out the Cairn's data, but the user's Atlas sharing is off
         public Func<Dictionary<int, List<AtlasObs.FishSpot>>> OwnFishSpots = () => null;   // fishing spots this PC's Hub observed: uiMapId -> spots
         public Func<Dictionary<int, List<AtlasObs.EntranceSpot>>> OwnEntrances = () => null;   // instance entrances this PC's Toolkit noted: instance map id -> spots
         public Func<Dictionary<int, List<AtlasObs.NpcSpot>>> OwnNpcSpots = () => null;   // where this PC's Toolkit met, killed or saw npcs: npc -> spots

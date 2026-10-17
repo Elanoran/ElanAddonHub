@@ -114,6 +114,7 @@ namespace ElansAddonHub.Services.Atlas
 
             // the Cairn: the numbers of many Lodges (from the user's Lodge, for those who share), below this Lodge's own (a source the Lodge shows gets the Cairn's figure as its second line)
             AddCairnItemRows(m, id, AddRow, tiny, byKey);
+            AddCairnShareNote(m);
 
             // Classic baseline
             var needs = new List<AtlasRow>();                    // quests that want the item

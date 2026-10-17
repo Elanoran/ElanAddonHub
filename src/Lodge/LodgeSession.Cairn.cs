@@ -56,6 +56,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!CairnSharingOn) CairnAtlas.Clear("share");
             SendCairnSharing();
+            CairnStatusChanged?.Invoke();                 // the sharing card and Privacy follow the switch at once
         }
 
         LodgeClient CairnHttp => cairnClientOverride ?? client;

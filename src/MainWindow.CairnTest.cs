@@ -347,6 +347,8 @@ namespace ElansAddonHub
 
                 // ---- only GETs, only the two Lodge routes
                 Check("only GETs, only the Lodge's /cairn/manifest and /cairn/dataset", fake.Methods.All(x => x == "GET") && fake.Asked.All(a => a.StartsWith("GET /cairn/manifest", StringComparison.Ordinal) || a.StartsWith("GET /cairn/dataset", StringComparison.Ordinal)));
+
+                await SharingGuideTest(Check, dir);
             }
             catch (Exception e) { Check("cairn test ran without an exception", false, e.ToString()); }
             finally

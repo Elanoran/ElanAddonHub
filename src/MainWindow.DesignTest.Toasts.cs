@@ -63,8 +63,8 @@ namespace ElansAddonHub
                 };
                 ShowWelcomeGuide();
                 var g = guide;
-                var shots = new[] { "w1-folder", "w2-addons", "w3-lodge", "w4-done" };
-                for (int i = 0; i < 4; i++)
+                var shots = new[] { "w1-folder", "w2-addons", "w3-lodge", "w4-sharing", "w5-done" };
+                for (int i = 0; i < shots.Length; i++)
                 {
                     g.Show(i);
                     await Task.Delay(500);

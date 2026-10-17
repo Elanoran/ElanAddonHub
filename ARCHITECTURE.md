@@ -563,6 +563,11 @@ is not part of this repository.
   Settings > Privacy has no Cairn switch of its own: a note ties it to the sharing switch ("The Cairn's shared data is for those who share")
   and one status line says where the data came from or why there is none. Item and creature pages show Cairn rows labelled "Cairn"; a source
   the Lodge already shows gets the Cairn's figure as its second line. Self-test section `cairn` (a fake Lodge on 127.0.0.1, no network).
+- **The way into sharing (2.87)**: the welcome guide's Sharing step (`WelcomeGuide.cs`, step 4 of 5: what / with whom / why, the switch, Share
+  and Not now of equal weight); for a Lodge member with sharing off one card on Atlas Home (`MainWindow.SharingInvite.cs` decides,
+  `AtlasPage.SharingInvite.cs` draws): the answer is remembered per offer (`settings.SharingInviteAnswered`: "atlas" < "atlas+cairn") and the
+  card comes back only when the Lodge offers more; never for guests or without a Lodge. Where the Cairn's rows would be, a non-sharing member
+  gets one note per page (`AtlasQuery.CairnShareNote`) with a Turn on sharing link to Settings > Lodge.
 - **Guard**: the public repo must never name the maintainers' own hosting: `Services/InfraGuard.cs` scans the tracked files in every self-test run.
 
 ### Release and update trust (decided 2026-10-15)
