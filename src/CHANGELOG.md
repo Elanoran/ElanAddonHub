@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.83.1
+- **Easier to see why your dot is not flying.** The Outpost's log (Settings > About > View log) now notes what the 3D height of your dot is based on: whether Elan's Hub sends the new flight / indoors / swimming signals (it needs a /reload after the Hub update), and on a flight which route it matched.
+
 ## 2.83.0
 - **Your live dot flies in 3D.** On a flight, your dot and your trail in the 3D world map now rise into the air and follow the flight path's own heights from the game's flight route data, instead of sliding over the ground. The Outpost finds the route from the flight master you took off from (also when a flight goes on via another flight master, or when the Outpost was started mid-flight).
 - **Indoors, on bridges and in water.** In a building your dot stands on the floor you are on: the Outpost follows you up stairs and ramps, and walking under an upper floor keeps you downstairs. Walking over a bridge keeps you on the deck, walking under it keeps you on the ground. Swimming puts you on the water surface. Floors come from the 3D view's buildings (Buildings: Bridges only or All buildings), so without them you stand on the ground as before.

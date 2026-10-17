@@ -272,6 +272,7 @@ namespace ElansAddonHub.Services.WorldMap
         IElevationWorld elevWorld; LiveElevation elev;
         public IElevationWorld ElevationWorld { get => elevWorld; set { elevWorld = value; elev = null; } }
         public ElevResult? LastElevForTest { get; private set; }
+        string lastElevWhy;
         LiveElevation Elev => elev ?? (elev = new LiveElevation(elevWorld ?? GameElevationWorld.Shared));
 
         // the newest strip state. enabled = the Outpost setting; c = the character shown (null = none)
@@ -303,6 +304,11 @@ namespace ElansAddonHub.Services.WorldMap
                             var e = Elev.Solve(pt.MapId, pt.X, pt.Y, c.PosMoveKnown ? c.PosMove : 0, nowUtc);
                             if (!double.IsNaN(e.Z) && !double.IsInfinity(e.Z)) { pt.Z = e.Z; pt.Src = e.Src; pt.HasZ = true; }
                             LastElevForTest = e;
+                            // one log line when what the height is based on changes (the Hub's move bits, a flight and its matched route), so a
+                            // dot that stays on the ground on a flight can be explained from the log
+                            var why = (c.PosMoveKnown ? "hub sends move bits " + c.PosMove : "hub sends no move bits (older Hub, or no /reload since the update)")
+                                + ", height from " + e.Src + ((c.PosMove & LiveMove.Taxi) != 0 ? ", flight route " + (e.RouteId > 0 ? e.RouteId.ToString() : "none fitted") : "");
+                            if (why != lastElevWhy) { lastElevWhy = why; Util.Log("live elevation: " + why + (string.IsNullOrEmpty(e.Why) ? "" : " (" + e.Why + ")")); }
                         }
                         catch (Exception ex) { Util.Log("live elevation: " + ex.Message); }
                         Here = pt;
