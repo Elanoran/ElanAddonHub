@@ -13,10 +13,21 @@ ENV_FILE=/etc/lodge/lodge.env
 
 if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo"; exit 1; fi
 
-if ! command -v dotnet >/dev/null 2>&1 || ! dotnet --list-sdks 2>/dev/null | grep -q '^8\.'; then
-  echo "== Installing .NET 8 SDK"
-  apt-get update -y
-  apt-get install -y dotnet-sdk-8.0
+# The build needs the .NET SDK whose major version the server targets (Lodge.Server.csproj, net10.0 since Lodge 2.27).
+# The result is self-contained: the service itself needs no .NET runtime on the machine.
+NET_MAJOR="$(grep -oE '<TargetFramework>net[0-9]+' "$REPO_DIR/server/Lodge.Server/Lodge.Server.csproj" | grep -oE '[0-9]+$' || true)"
+NET_MAJOR="${NET_MAJOR:-10}"
+have_sdk() { command -v dotnet >/dev/null 2>&1 && dotnet --list-sdks 2>/dev/null | grep -q "^${NET_MAJOR}\."; }
+if ! have_sdk; then
+  echo "== Installing the .NET ${NET_MAJOR} SDK (dotnet-sdk-${NET_MAJOR}.0)"
+  apt-get update -y || true
+  if ! apt-get install -y "dotnet-sdk-${NET_MAJOR}.0" || ! have_sdk; then
+    echo "install.sh: the .NET ${NET_MAJOR} SDK is missing and 'apt-get install dotnet-sdk-${NET_MAJOR}.0' did not provide it." >&2
+    echo "  Ubuntu 26.04 carries it in its own archive; on an Ubuntu release that doesn't, add the .NET backports" >&2
+    echo "  (sudo add-apt-repository ppa:dotnet/backports) or Microsoft's package feed, then run this again." >&2
+    echo "  Nothing was changed - the running Lodge is untouched." >&2
+    exit 1
+  fi
 fi
 
 id lodge >/dev/null 2>&1 || useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin lodge
@@ -26,6 +37,8 @@ chmod 750 "$DATA_DIR"
 
 echo "== Building"
 rm -rf "$APP_DIR.new"
+# from server/ so its global.json (any 10.0.x SDK) applies, not the repo root's (the Windows app's SDK pin)
+cd "$REPO_DIR/server"
 DOTNET_CLI_TELEMETRY_OPTOUT=1 dotnet publish "$REPO_DIR/server/Lodge.Server" -c Release -r linux-x64 \
   --self-contained true -p:PublishSingleFile=true -o "$APP_DIR.new" --nologo -v q
 rm -rf "$APP_DIR.old"

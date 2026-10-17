@@ -195,7 +195,7 @@ public static partial class Atlas
     public sealed class Quest
     {
         public long At, Rev; public string By = ""; public int[] Rewards = Array.Empty<int>(), Choices = Array.Empty<int>();
-        public bool SameContent(Quest o) => o != null && At == o.At && Rewards.SequenceEqual(o.Rewards) && Choices.SequenceEqual(o.Choices);
+        public bool SameContent(Quest o) => o != null && At == o.At && Enumerable.SequenceEqual(Rewards, o.Rewards) && Enumerable.SequenceEqual(Choices, o.Choices);
     }
 
     static bool ItemList(JsonNode n, out int[] ids)

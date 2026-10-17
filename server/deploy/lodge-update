@@ -8,6 +8,9 @@
 # merged) -> lodge-backup (aborts the update if the backup fails) -> install.sh -> wait for /health.
 # If the new version does not come up healthy, the code goes back to the recorded commit and install.sh runs again.
 # The data folder is never changed by a rollback; restore it with `sudo lodge-backup restore <archive>` if needed.
+# Before anything is changed it checks that the .NET SDK the new version builds with is installed or installable (net10 since
+# Lodge 2.27), and it keeps a copy of the running build: if the old commit can't be rebuilt either (say its SDK was removed by an
+# OS upgrade), that copy is put back as it was.
 set -euo pipefail
 
 SRC="${LODGE_SRC:-/opt/lodge-src}"
@@ -17,6 +20,10 @@ INSTALL="${LODGE_INSTALL_SH:-$SRC/server/deploy/install.sh}"
 BACKUP="${LODGE_BACKUP_BIN:-}"
 ENV_FILE="${LODGE_ENV_FILE:-/etc/lodge/lodge.env}"
 CURL="${LODGE_CURL:-curl}"
+APP_DIR="${LODGE_APP_DIR:-/opt/lodge}"
+SYSTEMCTL="${LODGE_SYSTEMCTL:-systemctl}"
+DOTNET="${LODGE_DOTNET:-dotnet}"
+APT_CACHE="${LODGE_APT_CACHE:-apt-cache}"
 GIT=(git -C "$SRC")
 
 reset=0; yes=0; force=0
@@ -25,7 +32,7 @@ for a in "$@"; do
     --reset) reset=1 ;;
     --yes|-y) yes=1 ;;
     --force) force=1 ;;
-    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "unknown option $a"; exit 64 ;;
   esac
 done
@@ -59,6 +66,22 @@ wait_health() {
 # here), so read it from the checked-out source that the build is made from
 src_version() { grep -hoE 'const string Version = "[^"]+"' "$SRC/server/Lodge.Server/Hub.cs" 2>/dev/null | sed -E 's/.*"([^"]+)"/\1/' || true; }
 label() { echo "$(src_version) ($("${GIT[@]}" rev-parse --short HEAD))"; }
+# the .NET major version a commit builds with (Lodge.Server.csproj); empty when it can't be read
+net_major_of() { "${GIT[@]}" show "$1:server/Lodge.Server/Lodge.Server.csproj" 2>/dev/null | grep -oE '<TargetFramework>net[0-9]+' | grep -oE '[0-9]+$' | head -n1 || true; }
+# install.sh installs a missing SDK with apt; refuse early (nothing changed yet) when apt has no such package either
+check_sdk() {
+  local major; major="$(net_major_of "$1")"
+  [ -n "$major" ] || return 0
+  if "$DOTNET" --list-sdks 2>/dev/null | grep -q "^${major}\."; then return 0; fi
+  if "$APT_CACHE" policy "dotnet-sdk-${major}.0" 2>/dev/null | grep -E '^ *Candidate:' | grep -vq '(none)'; then
+    say "The .NET ${major} SDK is not installed yet - install.sh will install dotnet-sdk-${major}.0"; return 0
+  fi
+  echo "lodge-update: the new version builds with .NET ${major}, but the .NET ${major} SDK is not installed and apt has no" >&2
+  echo "  dotnet-sdk-${major}.0 package. Ubuntu 26.04 has it in its archive; elsewhere add the .NET backports" >&2
+  echo "  (sudo add-apt-repository ppa:dotnet/backports) or Microsoft's feed, then run sudo lodge-update again." >&2
+  echo "  Nothing was changed - the running Lodge is untouched." >&2
+  exit 4
+}
 # an update never prints an owner link (that is for a fresh install, see install.sh)
 run_install() { LODGE_SKIP_CLAIM=1 bash "$INSTALL"; }
 
@@ -95,19 +118,34 @@ if [ "$mode" = reset ] && [ "$yes" -ne 1 ]; then
   [ "$ans" = "yes" ] || die "cancelled - nothing was changed"
 fi
 
+check_sdk "$target"
+
 say "Backing up first"
 "$BACKUP" || die "backup failed - update aborted, nothing was changed"
+# a copy of the running build, for the rollback (install.sh keeps only one older build, and only once it has built the new one)
+rm -rf "$APP_DIR.before-update"
+if [ -d "$APP_DIR" ]; then cp -a "$APP_DIR" "$APP_DIR.before-update" || die "could not copy $APP_DIR (disk full?) - update aborted, nothing was changed"; fi
 
 rollback() {
   echo "lodge-update: $1" >&2
   say "Rolling back to $old_label"
   "${GIT[@]}" reset --hard "$old" >/dev/null
   if run_install && wait_health; then
+    rm -rf "$APP_DIR.before-update"
     echo "lodge-update: ROLLED BACK - the old version ($old_label) is running again. The update was NOT applied." >&2
     exit 1
   fi
+  if [ -d "$APP_DIR.before-update" ]; then
+    say "Rebuilding $old_label failed too - putting back the build that ran before the update"
+    rm -rf "$APP_DIR" && cp -a "$APP_DIR.before-update" "$APP_DIR" && "$SYSTEMCTL" restart lodge || true
+    if wait_health; then
+      echo "lodge-update: ROLLED BACK - the previous build ($old_label) is running again, restored as it was. The update was NOT applied." >&2
+      exit 1
+    fi
+  fi
   echo "lodge-update: ROLLBACK FAILED too. Look at: journalctl -u lodge -n 80" >&2
   echo "  Data backup: sudo lodge-backup list ; restore with: sudo lodge-backup restore <archive>" >&2
+  [ -d "$APP_DIR.before-update" ] && echo "  The build that ran before the update is kept in $APP_DIR.before-update" >&2
   exit 3
 }
 
@@ -122,4 +160,5 @@ if ! run_install; then rollback "install.sh failed for $new_label"; fi
 say "Waiting for the service"
 if ! wait_health; then rollback "the new version did not answer $(health_url)"; fi
 
+rm -rf "$APP_DIR.before-update"
 echo "lodge-update: OK  $old_label -> $new_label"

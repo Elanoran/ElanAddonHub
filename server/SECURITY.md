@@ -312,7 +312,9 @@ All use synthetic codes and temp folders; none talks to a real lodge.
 - Homoglyphs from other scripts (e.g. Cyrillic "а" for Latin "a") are not folded by NFKC; guests still carry the
   Initiate frame and "guest" flag, so they can't take a rank, only a similar-looking name.
 - The wrong-code lockout and rate limits trust the client IP from the reverse proxy; if the proxy allows spoofed
-  `X-Forwarded-For`, per-IP limits weaken. Proxy/NPM settings are host-side and outside this repo.
+  `X-Forwarded-For`, per-IP limits weaken. Proxy/NPM settings are host-side and outside this repo. The server itself takes
+  `X-Forwarded-For`/`-Proto` only from loopback and the `LODGE_TRUSTED_PROXIES` networks (`TrustedProxies`, tested with the real
+  ASP.NET middleware in `TrustedProxyTests`: a neighbour of the proxy, an outsider and a spoofed chain keep their own address).
 - Budgets are in memory: a restart resets them (and the strike table).
 - The shared guest code, if enabled, is only as private as the people who have it; prefer personal codes or guest invites.
 - Permanent codes that were never retired stay valid (that is the compatibility promise). Retire them (`lodge-admin retire-code <name>`) once a person's PCs have their own keys.

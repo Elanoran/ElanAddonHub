@@ -2,7 +2,6 @@
 // One small process behind your existing web server (reverse proxy). Protocol: ../PROTOCOL.md
 // Configuration: environment variables, see ../deploy/lodge.env.example (LodgeConfig.FromEnv).
 
-using System.Net;
 using System.Threading.RateLimiting;
 using Lodge;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -16,16 +15,8 @@ builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSe
 // ASP.NET's per-request logs contain full URLs (a 1.x client puts its code in ?code=): keep them out of the journal
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 // the real visitor IP comes from the reverse proxy (needed for the wrong-code lockout)
-builder.Services.Configure<ForwardedHeadersOptions>(o =>
-{
-    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    foreach (var net in cfg.TrustedProxies)
-    {
-        var parts = net.Split('/');
-        if (IPAddress.TryParse(parts[0], out var ip))
-            o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(ip, parts.Length > 1 ? int.Parse(parts[1]) : 32));
-    }
-});
+var rejectedProxies = new List<string>();
+builder.Services.Configure<ForwardedHeadersOptions>(o => TrustedProxies.Configure(o, cfg.TrustedProxies, rejectedProxies));
 // a general per-IP request limit, separate from the wrong-code lockout, so floods can't overwhelm the code checks
 builder.Services.AddRateLimiter(o =>
 {
@@ -35,6 +26,9 @@ builder.Services.AddRateLimiter(o =>
             _ => new FixedWindowRateLimiterOptions { PermitLimit = cfg.HttpPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 var app = builder.Build();
+// the options are built lazily: resolve them now so a malformed LODGE_TRUSTED_PROXIES entry is reported at start, not on the first request
+_ = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ForwardedHeadersOptions>>().Value;
+foreach (var bad in rejectedProxies) app.Logger.LogWarning("LODGE_TRUSTED_PROXIES: ignoring '{Entry}' (not an IP address or CIDR network)", bad);
 
 app.UseForwardedHeaders();
 if (!string.IsNullOrEmpty(cfg.PathBase)) app.UsePathBase(cfg.PathBase);
