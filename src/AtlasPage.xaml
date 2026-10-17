@@ -90,7 +90,7 @@
     </Style>
   </UserControl.Resources>
 
-  <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art. Inside: the sub-navigation (216 px, icons only at 56 px when the window is narrow), a hairline, and the page
+  <!-- page panel (DESIGN 4): the page sits on a scrim, not on the hero art. Inside: the sub-navigation (216 px, icons only at 56 px when the window is narrow) on its menu fill, a gap, and the page
        (header with breadcrumb + body). The Ctrl+K palette is a layer over the whole panel. -->
   <Border Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}" Margin="16,4,12,12" Padding="16">
     <Grid x:Name="Shell">
@@ -113,7 +113,7 @@
         </ScrollViewer>
         <StackPanel x:Name="NavFooter" Grid.Row="1" Margin="0,8,4,0" />
       </Grid>
-      <Border Grid.Column="1" Width="1" HorizontalAlignment="Center" Background="{StaticResource Brush.Divider}" />
+      <!-- no hairline in the gap (2.81): the menu fill's own edge is the one line between the menu and the page, as on Settings, the Lodge and Characters -->
 
       <Grid Grid.Column="2">
         <Grid.RowDefinitions>
