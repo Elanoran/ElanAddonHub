@@ -323,6 +323,7 @@ namespace ElansAddonHub
                     hunter.Updated = 1_790_000_000;
                     chars.Add(mira); chars.Add(ghost);
                     var ns = new Settings(); int nsSaves = 0;
+                    var savedLiveRf = AtlasView.LiveSource; AtlasView.LiveSource = () => null;   // nobody in game: the "played last" default is under test (another section may leave a live character on the strip)
                     AtlasView.UseNavSettings(ns, () => nsSaves++);
                     string VendorId() => AtlasView.PresetIdsForTest.FirstOrDefault(i => i.Contains("how=vendor") && i.Contains("for=")) ?? "";
                     async Task Home() { AtlasView.History.Clear(); await AtlasView.GoStart(); await AtlasView.StartFillForTest; await Task.Delay(100); UpdateLayout(); }
@@ -355,6 +356,7 @@ namespace ElansAddonHub
                     Check("recommended for: Enter on a chip selects it (keyboard)", chip != null && chip.Focusable && AtlasView.HomeCharForTest == "Forever-Elan" && ns.AtlasHomeChar == "Forever-Elan", AtlasView.HomeCharForTest);
                     chars.Remove(mira); chars.Remove(ghost); hunter.Updated = 0;
                     AtlasView.UseNavSettings(settings, () => SettingsStore.Save(settings));
+                    AtlasView.LiveSource = savedLiveRf;
                     Width = wStart0; await Home();
                 }
                 {
