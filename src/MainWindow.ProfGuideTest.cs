@@ -388,7 +388,8 @@ namespace ElansAddonHub
             Check("write: with nothing left to remove (no profGuides in the file) nothing is written", SharedDataFile.Write(root, null, new ProfGuidesOut(), now.AddMinutes(11)) == null);
             Check("write: the old companion (toc without SharedData.lua) and the flavor without a folder get nothing; the companion's other files are untouched; no temp file is left",
                 !File.Exists(Path.Combine(PgHubDir(root, "_classic_"), "SharedData.lua")) && !Directory.Exists(PgHubDir(root, "_retail_")) && File.ReadAllText(Path.Combine(PgHubDir(root), "Chat.lua")) == "-- canary\n" && !Directory.GetFiles(root, "*.tmp", SearchOption.AllDirectories).Any()
-                && Directory.GetFiles(PgHubDir(root)).Select(Path.GetFileName).OrderBy(x => x).SequenceEqual(new[] { "Chat.lua", "ElansHub.toc", "SharedData.lua" }));
+                && Directory.GetFiles(PgHubDir(root)).Select(Path.GetFileName).OrderBy(x => x).SequenceEqual(new[] { "Chat.lua", "ElansHub.toc", "SharedData.lua" }),
+                string.Join(",", Directory.GetFiles(root, "*", SearchOption.AllDirectories).Select(x => x.Substring(root.Length))));
             Check("write: FileHasGuides sees the section (and not after it was taken out)", !SharedDataFile.FileHasGuides(root) && SharedDataFile.Write(root, null, guides, now.AddMinutes(12)) != null && SharedDataFile.FileHasGuides(root));
             Check("write: a missing or empty WoW folder writes nothing and does not throw", SharedDataFile.Write(null, m, guides, now) != null && SharedDataFile.Write(Path.Combine(work, "nope"), m, guides, now).Written.Count == 0);
             Check("read: ReadFlights re-validates what is in the file (2 legs, names kept); none for a folder without the file", SharedDataFile.ReadFlights(root).Legs.Count == 2 && SharedDataFile.ReadFlights(Path.Combine(work, "nope")) == null);
