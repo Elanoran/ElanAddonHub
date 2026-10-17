@@ -4,6 +4,7 @@ Newest first. `Tools/release.py` (addon repo) reads the sections newer than the 
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
 ## 2.84.0
+- **Dungeon maps say why they are drawn again.** When a game update (or a new Outpost version that draws more) means a dungeon map has to be drawn again, the card says so ("Your game was updated, so the Outpost draws this map again ...") instead of "The first time only".
 - **Dungeon and raid maps in the game's own look.** For dungeons and raids that have no map picture in the game, the Atlas draws a plan of each floor. Now it lays the game's own minimap pictures of the rooms over that plan - the same pictures the in-game minimap shows inside the instance - so Molten Core, Blackrock Depths, the Deadmines and most others look like they do in the game. Where the game has no picture for a part (the Deadmines' surface buildings, for example), the plan shows there as before.
 - **Game minimap or plan, your pick.** A new **Game minimap | Plan** switch next to the zoom buttons changes the look. Your choice stays while the Outpost is open, and the zoom stays where it was. Markers sit in the same place in both looks.
 - The pictures are read from your own game files the first time you open a map and kept until the game updates. If a picture is damaged or missing, the plan is shown instead.

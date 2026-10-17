@@ -53,6 +53,33 @@ namespace ElansAddonHub
             DmSqlRow("spell_template", id, dispel, mechanic, effect, 0, 0, aura, 0, 0, 0, 0, 0, targetA, 0, 0, targetB, 0, 0, name);
         static string DmCasts(int npc, params int[] spells) => DmSqlRow("creature_template_spells", npc, 0, spells.Length > 0 ? spells[0] : 0, spells.Length > 1 ? spells[1] : 0, spells.Length > 2 ? spells[2] : 0, spells.Length > 3 ? spells[3] : 0, spells.Length > 4 ? spells[4] : 0, spells.Length > 5 ? spells[5] : 0, 0, 0, 0, 0);
 
+        // a plan drawn again: "Your game was updated" / "This version of the Outpost draws more" instead of "The first time", remembered after the old folders go
+        void DmAgainChecks(string work, CheckFn Check)
+        {
+            try
+            {
+                DungeonPlans.RootOverride = Path.Combine(work, "cache-again"); DungeonPlans.ResetForTest();
+                MapData.SetForTest(DmIndex(), "wow_classic_beta|1.60.1.70338|0123456789abcdef");
+                var key = DungeonPlans.Key;
+                var olderGame = Path.Combine(DungeonPlans.Root, "1.60.1.70000-aaaaaaaa_v" + DungeonPlan.Format, "900");
+                var olderOutpost = Path.Combine(DungeonPlans.Root, key.Substring(0, key.LastIndexOf("_v", StringComparison.Ordinal)) + "_v1", "901");
+                var halfDone = Path.Combine(DungeonPlans.Root, "1.60.1.70000-aaaaaaaa_v" + DungeonPlan.Format, "902");
+                foreach (var d in new[] { olderGame, olderOutpost, halfDone }) Directory.CreateDirectory(d);
+                File.WriteAllText(Path.Combine(olderGame, "plan.json"), "{}"); File.WriteAllText(Path.Combine(olderOutpost, "plan.json"), "{}");
+                var st900 = new DungeonPlanState { MapId = 900, Seconds = 4, Bytes = 300000 }; var st901 = new DungeonPlanState { MapId = 901, Seconds = 4 }; var st902 = new DungeonPlanState { MapId = 902, Seconds = 4 };
+                string h900 = AtlasMap.DrawingHint(st900), h901 = AtlasMap.DrawingHint(st901), h902 = AtlasMap.DrawingHint(st902);
+                Check("drawn again: a plan drawn for an older game build says the game was updated, one drawn by an older Outpost (this build) says this version draws more; a folder without a finished plan (or none) is the first time",
+                    DungeonPlans.Before(900) == DungeonPlans.DrawnBefore.OlderGame && DungeonPlans.Before(901) == DungeonPlans.DrawnBefore.OlderOutpost && DungeonPlans.Before(902) == DungeonPlans.DrawnBefore.Never && DungeonPlans.Before(903) == DungeonPlans.DrawnBefore.Never
+                    && h900.StartsWith("Your game was updated") && h901.StartsWith("This version of the Outpost draws more") && h902.StartsWith("The first time only"), h900 + " | " + h901 + " | " + h902);
+                Directory.CreateDirectory(Path.Combine(DungeonPlans.Root, key));
+                int removed = DungeonPlans.RemoveOtherBuilds();
+                Check("drawn again: removing the old folders keeps that note (older-plans.txt in the new folder), so the card still says why after they are gone",
+                    removed == 2 && !Directory.Exists(olderGame) && !Directory.Exists(olderOutpost) && File.Exists(Path.Combine(DungeonPlans.Root, key, "older-plans.txt"))
+                    && DungeonPlans.Before(900) == DungeonPlans.DrawnBefore.OlderGame && DungeonPlans.Before(901) == DungeonPlans.DrawnBefore.OlderOutpost && DungeonPlans.Before(902) == DungeonPlans.DrawnBefore.Never, "removed " + removed);
+            }
+            finally { DungeonPlans.ResetForTest(); MapData.ResetForTest(); }
+        }
+
         async Task DmMobChecks(string work, CheckFn Check, List<string> notes, string dir)
         {
             // ---- the baseline's tables

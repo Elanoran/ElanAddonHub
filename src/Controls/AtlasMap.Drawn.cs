@@ -128,7 +128,7 @@ namespace ElansAddonHub
                     if (plan == null && st.Plan != null) ApplyPlan(st.Plan);
                     return;
                 case "ask":
-                    SetState(ViewState.Ask, st.Sentence, "The game has no map of this " + (drawnInst?.Kind ?? "instance").ToLowerInvariant() + ". The Outpost can draw a plan from your game files: " + st.EstimateText + ". Nothing is uploaded and nothing is written to the WoW folder.");
+                    SetState(ViewState.Ask, st.Sentence, AskText(st));
                     stateButton.Content = "Draw the map";
                     stateButton.Visibility = Visibility.Visible; stateBox.IsHitTestVisible = true;
                     return;
@@ -137,11 +137,34 @@ namespace ElansAddonHub
                     NoArtText(st.Phase == "failed" && !string.IsNullOrEmpty(st.Error) ? " A plan could not be drawn from your game files (" + st.Error.TrimEnd('.') + ")." : "");
                     return;
                 default:
-                    SetState(ViewState.Drawing, st.Sentence.Length > 0 ? st.Sentence : "Reading " + name + " from your game files", st.Phase == "drawing" ? "The first time only: " + st.EstimateText + "." : "");
+                    SetState(ViewState.Drawing, st.Sentence.Length > 0 ? st.Sentence : "Reading " + name + " from your game files", st.Phase == "drawing" ? DrawingHint(st) : "");
                     stateBar.Visibility = Visibility.Visible;
                     stateBar.IsIndeterminate = st.Total <= 0;
                     stateBar.Value = st.Total <= 0 ? 0 : Math.Min(1, (double)st.Done / st.Total);
                     return;
+            }
+        }
+
+        // why the plan is drawn: the first time, or again because the game was updated (the older build's plan does not fit the new files) or because this
+        // version of the Outpost draws more (the game's minimap pictures, the walkable grid of the creature layer)
+        public static string DrawingHint(DungeonPlanState st)
+        {
+            switch (DungeonPlans.Before(st.MapId))
+            {
+                case DungeonPlans.DrawnBefore.OlderGame: return "Your game was updated, so the Outpost draws this map again from the new game files: " + st.EstimateText + ". This happens once per game version.";
+                case DungeonPlans.DrawnBefore.OlderOutpost: return "This version of the Outpost draws more on the map, so it draws it again from your game files: " + st.EstimateText + ". This happens once.";
+                default: return "The first time only: " + st.EstimateText + ".";
+            }
+        }
+
+        string AskText(DungeonPlanState st)
+        {
+            const string tail = " Nothing is uploaded and nothing is written to the WoW folder.";
+            switch (DungeonPlans.Before(st.MapId))
+            {
+                case DungeonPlans.DrawnBefore.OlderGame: return "Your game was updated, so the plan of this " + (drawnInst?.Kind ?? "instance").ToLowerInvariant() + " has to be drawn again from the new game files: " + st.EstimateText + "." + tail;
+                case DungeonPlans.DrawnBefore.OlderOutpost: return "This version of the Outpost draws more on the map, so the plan of this " + (drawnInst?.Kind ?? "instance").ToLowerInvariant() + " has to be drawn again from your game files: " + st.EstimateText + "." + tail;
+                default: return "The game has no map of this " + (drawnInst?.Kind ?? "instance").ToLowerInvariant() + ". The Outpost can draw a plan from your game files: " + st.EstimateText + "." + tail;
             }
         }
 

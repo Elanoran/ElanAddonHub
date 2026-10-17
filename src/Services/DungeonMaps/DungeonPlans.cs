@@ -560,14 +560,70 @@ namespace ElansAddonHub.Services.DungeonMaps
             return plan;
         }
 
-        public static int RemoveOtherBuilds()
+        // ---- "drawn again" (2.84): before the folders of an older game build (or of an older plan format) go, the maps drawn there are noted in the new
+        // key's folder (older-plans.txt: "36" = drawn for another game build, "f36" = for this build by an older Outpost), so the card can say why it draws
+        // the plan again instead of "the first time"
+        const string OlderFile = "older-plans.txt";
+        public enum DrawnBefore { Never, OlderGame, OlderOutpost }
+
+        static string BuildOf(string key) { int i = key.LastIndexOf("_v", StringComparison.Ordinal); return i < 0 ? key : key.Substring(0, i); }
+
+        static IEnumerable<string> DrawnIn(string otherKey, string key)
+        {
+            var res = new List<string>();
+            try
+            {
+                bool sameGame = string.Equals(BuildOf(otherKey), BuildOf(key), StringComparison.OrdinalIgnoreCase);
+                foreach (var md in Directory.GetDirectories(Path.Combine(Root, otherKey)))
+                    if (int.TryParse(Path.GetFileName(md), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) && File.Exists(Path.Combine(md, "plan.json")))
+                        res.Add((sameGame ? "f" : "") + id.ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception) { }
+            return res;
+        }
+
+        static List<string> OlderPlans(string key)
+        {
+            try { var p = Path.Combine(Root, key, OlderFile); return File.Exists(p) ? File.ReadAllLines(p).Select(l => l.Trim()).Where(l => l.Length > 0).ToList() : new List<string>(); }
+            catch (Exception) { return new List<string>(); }
+        }
+
+        // was this map's plan drawn before, for an older game build or by an older Outpost (so it is drawn again, not for the first time)?
+        public static DrawnBefore Before(int mapId, string key = null)
+        {
+            key = key ?? Key;
+            var id = mapId.ToString(CultureInfo.InvariantCulture);
+            var seen = new List<string>(OlderPlans(key));
+            try
+            {
+                if (Directory.Exists(Root))
+                    foreach (var d in Directory.GetDirectories(Root))
+                    {
+                        var name = Path.GetFileName(d);
+                        if (!string.Equals(name, key, StringComparison.OrdinalIgnoreCase)) seen.AddRange(DrawnIn(name, key));
+                    }
+            }
+            catch (Exception) { }
+            return seen.Contains(id) ? DrawnBefore.OlderGame : seen.Contains("f" + id) ? DrawnBefore.OlderOutpost : DrawnBefore.Never;
+        }
+
+        public static int RemoveOtherBuilds() => RemoveOtherBuilds(Key);
+
+        public static int RemoveOtherBuilds(string key)
         {
             int n = 0;
             try
             {
                 if (!Directory.Exists(Root)) return 0;
-                foreach (var d in Directory.GetDirectories(Root))
-                    if (!string.Equals(Path.GetFileName(d), Key, StringComparison.OrdinalIgnoreCase)) { Util.DeleteDir(d); n++; }
+                var older = new HashSet<string>(OlderPlans(key));
+                var others = Directory.GetDirectories(Root).Where(d => !string.Equals(Path.GetFileName(d), key, StringComparison.OrdinalIgnoreCase)).ToList();
+                foreach (var d in others) foreach (var m in DrawnIn(Path.GetFileName(d), key)) older.Add(m);
+                if (older.Count > 0)
+                {
+                    try { var dir = Path.Combine(Root, key); Directory.CreateDirectory(dir); File.WriteAllLines(Path.Combine(dir, OlderFile), older.OrderBy(x => x, StringComparer.Ordinal)); }
+                    catch (Exception) { }
+                }
+                foreach (var d in others) { Util.DeleteDir(d); n++; }
             }
             catch (Exception) { }
             return n;
