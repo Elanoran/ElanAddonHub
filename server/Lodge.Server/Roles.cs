@@ -43,8 +43,10 @@ public static class Roles
         Perm.FilesManage => AtLeast(role, "officer"),     // 2.14: upload a slot, replace it with a new version, roll back, delete (officers and the owner only)
         Perm.DatasetRead => AtLeast(role, "member"),     // 2.17: hosted datasets (Classic baseline): members download, guests don't
         Perm.DatasetManage => AtLeast(role, "officer"), // 2.17: upload, replace and delete (officers and the owner)
+        Perm.LivePosShare => AtLeast(role, "member"),     // 2.30: share your live map position (opt-in, personal codes only)
+        Perm.LivePosSee => AtLeast(role, "member"),       // 2.30: see the positions members share (guests never do)
         _ => false,
     };
 }
 
-public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels, SeeInvisible, ResetProfiles, Invite, RetireCodes, CalendarCreate, CalendarManage, FlightShare, FilesRead, FilesManage, AtlasShare, AtlasRead, ArmoryShare, ArmoryRead, DatasetRead, DatasetManage }
+public enum Perm { Chat, Voice, ShareFiles, Moderate, PinMessages, ManageMembers, ManageChannels, SeeInvisible, ResetProfiles, Invite, RetireCodes, CalendarCreate, CalendarManage, FlightShare, FilesRead, FilesManage, AtlasShare, AtlasRead, ArmoryShare, ArmoryRead, DatasetRead, DatasetManage, LivePosShare, LivePosSee }
