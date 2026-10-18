@@ -138,6 +138,8 @@ namespace ElansAddonHub
             {
                 WorldMapFlatOnly.IsChecked = s.WorldMapFlat; WorldMapAuto.IsChecked = !s.WorldMapFlat;
                 LivePosBox.IsChecked = s.WorldMapLivePos;
+                LodgePosBox.IsChecked = s.ShareLivePosWithLodge;
+                LodgePosOfficers.IsChecked = LodgeSession.ScopeOf(s) == "officers"; LodgePosEveryone.IsChecked = !LodgePosOfficers.IsChecked;
                 var det = s.WorldMap3dDetail;
                 Detail3dLow.IsChecked = det == "low"; Detail3dHigh.IsChecked = det == "high"; Detail3dMedium.IsChecked = det != "low" && det != "high";
                 Exag3dSlider.Value = s.WorldMapExag >= 0.5 && s.WorldMapExag <= 1.5 ? s.WorldMapExag : 1;
@@ -197,7 +199,8 @@ namespace ElansAddonHub
             session.LeaveRefused += ShowTransfer;
             session.Left += () => { lodge.SignOut("You left the lodge. Your messages stay, with your name on them."); RefreshSection(); };
             FillLodgeInfo();
-            session.Changed += () => { NavGm.Visibility = session.CanManage || session.CanInvite ? Visibility.Visible : Visibility.Collapsed; UpdateInviteMode(); UpdateDevicesCard(); };
+            session.Changed += () => { NavGm.Visibility = session.CanManage || session.CanInvite ? Visibility.Visible : Visibility.Collapsed; UpdateInviteMode(); UpdateDevicesCard(); UpdateLodgePosRow(); };
+            UpdateLodgePosRow();
             session.AdminMembers += FillAdmin;
             session.AdminPurged += m => GmStatus.Text = m.Int("atlas") > 0 ? $"Took {m.Int("atlas")} Atlas item(s) shared by {m.Str("name")} back out. They stay a member." : $"{m.Str("name")} had nothing in the Atlas.";
             session.DevicesChanged += FillDevices;
@@ -460,6 +463,35 @@ namespace ElansAddonHub
         }
         public void LivePosHowTo_Click(object sender, RoutedEventArgs e) => HelpPages.Open(HelpPages.LivePosition, Window.GetWindow(this));
 
+        // 2.97 "Share my map position with the Lodge" (off by default) and who sees it (everyone | officers): only with a Lodge that has "liveposition"
+        // (2.30+) and for a member, not a guest. Turning it off (or narrowing who sees it) goes to the Lodge at once.
+        void UpdateLodgePosRow()
+        {
+            bool can = session != null && session.SupportsLivePosition && session.Me != null && !session.Me.Guest;
+            LodgePosRow.IsEnabled = can;
+            LodgePosRow.Tag = session != null && session.Online && !session.SupportsLivePosition ? ElansAddonHub.Services.WorldMap.LivePositionText.LodgeSettingOldServer
+                : session != null && session.Me != null && session.Me.Guest ? ElansAddonHub.Services.WorldMap.LivePositionText.LodgeSettingGuest : ElansAddonHub.Services.WorldMap.LivePositionText.LodgeSettingNote;
+        }
+        void LodgePos_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading || settings == null) return;
+            settings.ShareLivePosWithLodge = LodgePosBox.IsChecked == true;
+            SettingsStore.Save(settings);
+            session?.SendPosition();
+        }
+        void LodgePosScope_Click(object sender, RoutedEventArgs e)
+        {
+            if (loading || settings == null) return;
+            settings.LivePosScope = LodgePosOfficers.IsChecked == true ? "officers" : null;
+            SettingsStore.Save(settings);
+            session?.SendPosition();
+        }
+        public void LodgePosForTest(bool on, bool officers)
+        {
+            LodgePosOfficers.IsChecked = officers; LodgePosEveryone.IsChecked = !officers; LodgePosScope_Click(LodgePosOfficers, null);
+            LodgePosBox.IsChecked = on; LodgePos_Click(LodgePosBox, null);
+        }
+
         // World map view: Automatic (3D when picked and it works; flat after a 3D problem, remembered) or Flat only (the 3D view is never started). The map reads it each time it opens.
         void WorldMapView_Click(object sender, RoutedEventArgs e)
         {
@@ -701,7 +733,7 @@ namespace ElansAddonHub
             else if (cb == PvRememberInvis) settings.InvisibleForget = !on;
             else return;
             SettingsStore.Save(settings);
-            if (share != settings.ShareGameOff || zone != settings.ShareZoneOff || xp != settings.ShareXpOff) session.SendGame();
+            if (share != settings.ShareGameOff || zone != settings.ShareZoneOff || xp != settings.ShareXpOff) { session.SendGame(); session.SendPosition(); }
             if (px != settings.PixelOff) session.Presence.Poll();
         }
 

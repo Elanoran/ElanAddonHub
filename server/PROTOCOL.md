@@ -454,6 +454,28 @@ Feature `reputations` in the welcome `features`, next to `armory` (absent when t
 - `armory.standing` `{faction}` (Page budget; members and up) -> `armory.standing` `{faction, who: [{faction, owner, by, key, name, class, level, s, v, min?, max?, at, mine?}]}`: every shared character with a reputation for that faction, best standing first (then the higher value), at most 80 rows. Nothing else of the character is in a row. Errors: `invalid` (no usable faction id), `guest`, `disabled` (the Armory is off), `noreps` (reputations are off), `rate`.
 - Switching the feature off keeps what is stored on disk but never serves it (`armory.get` leaves `reps` out, `armory.standing` answers `noreps`); new snapshots are stored without it. Taking a character out, `armory.delete {all}`, leaving and the purge take its reputations with it.
 
+## 2.30 additions (live map positions between members; feature `liveposition`; optional for clients)
+
+Feature `liveposition` is always in the welcome `features` (no server setting, no Guild Master switch): privacy rests on each member's own
+opt-in, off by default, and the scope they pick. A client sends positions only to a server that lists it; an older server ignores the unknown
+type, an older client ignores `memberpos`. `game` is unchanged.
+
+- Client -> server `position` `{mapId, fx, fy, move?, valid, scope}` about once a second while its member shares (the Outpost's
+  **Share my map position with the Lodge**, off by default), only when it changed. `mapId` is the game's uiMap id (1..100000), `fx` / `fy`
+  the fractions on that map (clamped to 0..1, rounded to 4 places; NaN / Infinity / non-numbers refuse the position), `move` the trail's
+  movement bits (4 flight, 8 indoors, 16 swimming, 32 mounted, 64 pet out, 128 dead; everything else masked off), `scope` `everyone` |
+  `officers` (anything else is `everyone`). `{share:false}` or `valid:false` (or a refused position) withdraws it.
+- Who may share: a personal code of rank member or higher (`Perm.LivePosShare`) whose `game` is shared with `playing` and a `zone`: a
+  position is never looser than the zone. A later `game` without a zone (or `share:false`) withdraws the position. Guests' positions are ignored.
+- Budget: `position` costs a text-message token like any other plus its own bucket (burst 10, 2 per second); over it the position is dropped
+  quietly (it counts as a refused message, no error). A withdrawal is never refused.
+- Server -> client `memberpos` `{id, mapId, fx, fy, move, valid:true}` and `{id, valid:false}` (the dot is gone). The scope is not sent. It goes to:
+  the sharer; for an invisible ("Appear offline") sharer only `Perm.SeeInvisible` (the owner) - not the voice-room viewers who see them masked;
+  otherwise every personal member+ who can see the sharer (`scope: everyone`) or only officers and the owner (`scope: officers`). Never to guests.
+- An unchanged position is not sent again; a newcomer gets the current positions it may see right after its welcome. A viewer who loses the right
+  (the scope narrowed, a rank changed, the sharer opted out or hid their zone) gets `valid:false`; one who loses sight of the member altogether
+  (they went invisible, left) gets the usual `leave`, and clients drop the dot on it. Positions are memory only: never stored, never logged.
+
 ## The Cairn (Atlas commons; Lodge features `cairn` and `cairn2`, opt-in; Outpost 2.86, give to get 2.87)
 
 Lodge 2.29: when the Cairn's manifest offers a "what changed" delta from the dataset this Lodge holds (`latest.deltas[]`, matched by

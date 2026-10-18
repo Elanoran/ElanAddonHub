@@ -244,7 +244,7 @@ namespace ElansAddonHub.Services
             // itself (LodgeSession.cs, LodgeModels.cs, LodgeView.xaml(.cs)) and anything new under Lodge/ still run every Lodge section
             const string lodgeFeature = @"(Calendar\w*|LodgeView\.Calendar|LodgeSession\.(Calendar|WowCalendar)|Badges\w*|LadderView\w*|LodgeView\.Ladder|LodgeSession\.Badges|Files\w*|LodgeFiles|LodgeView\.Files|LodgeSession\.Files|SafeFile"
                 + @"|Invite\w*|CreateLodgeGuide\w*|LodgeInvites|LodgeSession\.(Invites|Leave)|Lfg\w*|LodgeView\.(Lfg|History)|LodgeSession\.History|ItemChipVM|MemberGroups|LodgeSession\.(Realms|Armory|Atlas|Classic|FlightShare)|ArmoryModels"
-                + @"|VideoViewer\w*|YouTube|ImageViewer\w*|Toast\w*|Overlay\w*|Avatar\w*|Profile\w*|AutoStatus)(\.xaml)?(\.cs)?$";
+                + @"|VideoViewer\w*|YouTube|ImageViewer\w*|Toast\w*|Overlay\w*|Avatar\w*|Profile\w*|AutoStatus|LodgeSession\.LivePos)(\.xaml)?(\.cs)?$";
             R(@"^src/Lodge/(?!" + lodgeFeature + ")", lodgeAll);
             R(@"^src/Lodge/(Calendar\w*|LodgeView\.Calendar|LodgeSession\.(Calendar|WowCalendar))(\.xaml)?(\.cs)?$", "calendar", "wowevents", "lodgefeatures");
             R(@"^src/Lodge/(Badges\w*|LadderView\w*|LodgeView\.Ladder|LodgeSession\.Badges)(\.xaml)?(\.cs)?$", "badges", "profile", "lodgefeatures");
@@ -255,6 +255,7 @@ namespace ElansAddonHub.Services
             R(@"^src/Lodge/LodgeSession\.Classic\.cs$", "atlasclassiclodge", "lodgefeatures");
             R(@"^src/Lodge/LodgeSession\.FlightShare\.cs$", "flightshare", "profguide", "lodgefeatures");
             R(@"^src/Lodge/LodgeSession\.Atlas\.cs$", "lodgefeatures");   // its own rules above add atlaslodge / atlaspage / atlasbrowse
+            R(@"^src/Lodge/LodgeSession\.LivePos\.cs$", "worldmap", "presence", "lodgefeatures");   // 2.97: members' live positions (the world map's member dots test them)
             R(@"^src/Lodge/(VideoViewer\w*|YouTube)(\.xaml)?(\.cs)?$", "video", "lodgefeatures");
             R(@"^src/Lodge/ImageViewer(\.xaml)?(\.cs)?$", "viewer", "lodgefeatures");
             R(@"^src/Lodge/(Toast\w*|Overlay\w*)(\.xaml)?(\.cs)?$", "toasts", "round3", "lodgefeatures");

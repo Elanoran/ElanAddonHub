@@ -139,6 +139,9 @@ body.v3 #hud { position: absolute; top: 10px; right: 10px; z-index: 5; }
 .me-dot.grey { background: #6b7280; box-shadow: 0 0 0 2px rgba(0, 0, 0, .6); border-color: #cbd5e1; opacity: .85; }
 .me-arrow { position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin: -19px 0 0 -6px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 9px solid #fff; transform-origin: 6px 19px; filter: drop-shadow(0 0 2px rgba(0, 0, 0, .9)); }
 .me-lab { position: absolute; left: 14px; top: -9px; white-space: nowrap; font-size: 11px; color: var(--text); background: var(--panel); border: 1px solid var(--panel-line); border-radius: 6px; padding: 2px 7px; }
+/* 2.97: the Lodge members who share their position with you - a smaller dot in their class colour, a ring while you follow one */
+.mem-dot { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--c, #e8e6e3); border: 2px solid #1f2937; box-shadow: 0 0 0 1px rgba(255, 255, 255, .8), 0 0 8px var(--c, #e8e6e3); box-sizing: border-box; cursor: pointer; }
+.mem-dot.following { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent, #e8b04b), 0 0 10px var(--c, #e8e6e3); }
 .wm-me { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; color: var(--text); padding: 8px 12px; max-width: 260px; font-size: 12px; }
 .wm-me .me-h { display: flex; align-items: center; gap: 8px; }
 .wm-me .me-sw { width: 10px; height: 10px; border-radius: 50%; flex: none; }

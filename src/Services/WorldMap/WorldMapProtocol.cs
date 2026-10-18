@@ -30,10 +30,12 @@ namespace ElansAddonHub.Services.WorldMap
     //                 howto                               the live layer's "How to turn it on" link: the app opens its how-to card
     //                 follow {on}                         the live layer's "Follow me" switch (remembered in the settings)
 //                 showmap                             the live card's "Show <map>" button: the app opens the world map of the map you are on (2.91)
+    //                 mfollow {id}                        "Follow this member" on a Lodge member's dot (id > 0), or following stopped (0) (2.97; the page pans itself)
     //   app -> page   init | goto | layer | layerinfo | toast | on     (built by WorldMapView, see worldmap.js for the shapes)
     //                 me {state, ...}                      the live position layer (see Me below), at most once a second
+    //                 members {list}                      the Lodge members who share their position with me (see Members below), at most once a second
     // ============================================================================================================================
-    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow, ShowMap }
+    public enum WorldMapMessageType { Hello, Inited, Ready, View, Open, Nav, Layers, Need, Webgl, View3, Stats, Prefs, Buildings, BBuild, BPause, BResume, BCancel, Error, HowTo, Follow, ShowMap, MemberFollow }
 
     public sealed class WorldMapMessage
     {
@@ -50,7 +52,11 @@ namespace ElansAddonHub.Services.WorldMap
         public int Buildings;                                  // stats: building instances drawn
         public int Textures;
         public int Seq = -1;                                   // view / view3: the last place the app sent the page to ("s" of init/goto/fit), -1 when the page names none
+        public int MemberId;                                   // mfollow: the member followed, 0 = none
     }
+
+    // a Lodge member's shared position for the world map (2.97): world coordinates (continent map id, x north, y west, yards), never the viewer's own
+    public struct MemberDot { public int Id; public string Name; public string Color; public int MapId; public double X, Y; }
 
     public static class WorldMapProtocol
     {
@@ -154,6 +160,11 @@ namespace ElansAddonHub.Services.WorldMap
                 case "bcancel": m.Type = WorldMapMessageType.BCancel; return m;
                 case "howto": m.Type = WorldMapMessageType.HowTo; return m;
                 case "showmap": m.Type = WorldMapMessageType.ShowMap; return m;
+                case "mfollow":
+                    {
+                        if (!(d.TryGetValue("id", out var io) && io is double iv) || iv < 0 || iv > int.MaxValue || iv != Math.Floor(iv)) { refusal = "mfollow needs a member id"; return null; }
+                        m.Type = WorldMapMessageType.MemberFollow; m.MemberId = (int)iv; return m;
+                    }
                 case "follow":
                     {
                         if (!d.TryGetValue("on", out var fo) || !(fo is bool fb)) { refusal = "follow needs on true or false"; return null; }
@@ -272,6 +283,30 @@ namespace ElansAddonHub.Services.WorldMap
         static double R6(double v) => Math.Round(v, 6);
         // a height for the page: [yards rounded to 0.1, source], or [0, -1] when there is none (or it is not a sane number)
         static List<object> ZOf(bool has, double z, ElevSrc s) => has && !double.IsNaN(z) && !double.IsInfinity(z) && Math.Abs(z) < 20000 ? new List<object> { Math.Round(z, 1), (int)s } : new List<object> { 0.0, -1 };
+
+        // ---- "members" (2.97): the Lodge members who share their live position with me, on the map shown now only.
+        //   {t:'members', list:[{id, name, color, ll:[lat, lng]}]}  - a clean one-line name, a #rrggbb colour, a point inside the plane; at most MaxMembers.
+        // A dot on another continent or outside the plane is left out (never a dot on the wrong map); an empty list takes every dot away.
+        public const int MaxMembers = 100;
+        public static string Members(IEnumerable<MemberDot> dots, int viewMapId)
+        {
+            var list = new List<object>();
+            var seen = new HashSet<int>();
+            foreach (var m in dots ?? Enumerable.Empty<MemberDot>())
+            {
+                if (list.Count >= MaxMembers) break;
+                if (m.Id <= 0 || m.MapId != viewMapId || !seen.Add(m.Id)) continue;
+                WorldMapMath.WorldToLatLng(m.X, m.Y, out var la, out var ln);
+                if (!InPlane(la, ln)) continue;
+                var name = LivePositionText.CleanName(m.Name);
+                list.Add(new Dictionary<string, object>
+                {
+                    ["id"] = m.Id, ["name"] = name.Length > 0 ? name : "A member", ["color"] = m.Color != null && HexColor.IsMatch(m.Color) ? m.Color : "#E8E6E3",
+                    ["ll"] = new List<object> { R6(la), R6(ln) },
+                });
+            }
+            return Json.Write(new Dictionary<string, object> { ["t"] = "members", ["list"] = list });
+        }
 
         public static string Goto(double lat, double lng, double z, string pinName = null, string pinTip = null, int seq = -1)
         {

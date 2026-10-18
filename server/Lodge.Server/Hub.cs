@@ -21,6 +21,7 @@ public sealed class Budget
     public readonly TokenBucket ArmoryPut;     // armory.put: a burst of 30, then one per 8 seconds
     public readonly TokenBucket AtlasShare;    // atlas.share: a burst of 3, then one per 2 minutes
     public readonly TokenBucket Badges;        // badges.* / ladder.get: a burst of 10, then one per 2 seconds
+    public readonly TokenBucket LivePos;       // position (2.30): a burst of 10, then 2 per second (clients send about one a second)
     public DateTime LastUsed;
 
     public Budget(IClock clock)
@@ -35,6 +36,7 @@ public sealed class Budget
         ArmoryPut = new TokenBucket(Lodge.Armory.PutBurst, 1.0 / Lodge.Armory.PutEvery.TotalSeconds, clock);
         AtlasShare = new TokenBucket(Atlas.ShareBurst, 1.0 / Atlas.ShareEvery.TotalSeconds, clock);
         Badges = new TokenBucket(10, 0.5, clock);
+        LivePos = new TokenBucket(10, 2, clock);
         VoicePackets = new TokenBucket(150, 60, clock);
         VoiceBytes = new TokenBucket(128 * 1024, 24 * 1024, clock);
         LastUsed = clock.UtcNow;
@@ -61,6 +63,10 @@ public class Member
     public string Note = "";
     public JsonObject Game;          // what they're playing (from the hub), null = not shared
     public bool Invisible;           // "Appear offline": connected, but hidden from everyone without Perm.SeeInvisible
+    public JsonObject LivePos;       // 2.30: the live map position they chose to share (mapId, fx, fy, move, scope), null = not shared. See Hub.LivePos.cs
+    public JsonObject LivePosSent;   // the last memberpos sent about them (an unchanged position is not sent again)
+    public readonly HashSet<int> LivePosViewers = new();   // who holds their dot right now (guarded by LivePosLock)
+    public readonly SemaphoreSlim LivePosLock = new(1, 1);
     public Profile Profile = new();  // personal: the stored one (shared by reconnects); guests: session-only
     public Budget Budget;
     public readonly ConcurrentDictionary<string, DateTime> LastTyping = new();
@@ -102,7 +108,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public partial class LodgeHub
 {
-    public const string Version = "2.29.0";
+    public const string Version = "2.30.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -220,6 +226,7 @@ public partial class LodgeHub
             await Send(me, Welcome(me));
             await Realms.SendTo(me);
             await BroadcastJoin(me);
+            await RefreshLivePositions();   // the newcomer gets the positions it may see
             await ReceiveLoop(me, ct);
         }
         catch (Exception e) when (e is WebSocketException or OperationCanceledException or IOException) { }
@@ -243,6 +250,7 @@ public partial class LodgeHub
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); f.Add("atlas4"); f.Add("atlas5"); f.Add("atlas6"); f.Add("atlas7"); f.Add("atlas8"); f.Add("atlas9"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests (atlas7: with their verified details and the game build, 2.25); atlas3: gathering node positions (nodes); atlas4: fishing spots (fishspots); atlas5: hunter field notes (fieldnotes); atlas6: instance entrances seen by members (entrances); atlas8: where members met, killed or saw npcs (npcspots, 2.26); atlas9: counter extras, pickpocket / gathering / contained counters, corpse dedupe (2.26)
         if (Cairn.Enabled) f.Add("cairn");                         // the owner contributes the pooled Atlas numbers (ids and counts, no names) to the Cairn: members are told so
         if (CairnIn.Enabled) f.Add("cairn2");                      // give to get: members who share get the Cairn's dataset from this Lodge (atlas.sharing, cairn.status, GET /cairn/...)
+        f.Add("liveposition");                                      // 2.30: members may share their live map position (opt-in per member, always available)
         if (Cfg.AtlasEnabled) f.Add("cairnjoin");                  // 2.28: the Guild Master can switch "Join the Cairn" on (admin.cairn, cairn.join.get -> cairn.join)
         if (Badges.Enabled) f.Add("badges");                       // badges and the ladder: both the server setting and the Guild Master switch are on
         if (Cfg.RealmsConfigured) f.Add("realms");                  // realm status: only while the Blizzard API credentials are set
@@ -581,6 +589,7 @@ public partial class LodgeHub
     // promotions apply live, removed codes disconnect
     public async Task ApplyCodeChanges()
     {
+        bool rankChanged = false;
         foreach (var m in members.Values.ToList())
         {
             var now = Auth.CheckCredential(m.Code, m.DeviceId != null);
@@ -596,8 +605,10 @@ public partial class LodgeHub
                 if (m.Room != null && Channels.Get(m.Room)?.VisibleTo(m.Role) != true) m.Room = null;
                 await BroadcastUser(m);
                 await Send(m, Welcome(m)); // channels they may see changed
+                rankChanged = true;
             }
         }
+        if (rankChanged) await RefreshLivePositions();   // a rank decides who may share and see positions
     }
 
     // ---------------------------------------------------------------- names (all compared in Names.Normalize form)

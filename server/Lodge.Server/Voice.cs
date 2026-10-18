@@ -69,6 +69,7 @@ public class PresenceModule : IModule
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
         if (type == "game") { await Game(me, m); return true; }
+        if (type == "position") { await Position(me, m); return true; }
         if (type != "status") return false;
         var st = m["status"] is JsonValue sv && sv.TryGetValue<string>(out var s0) ? s0 : null;
         me.Status = st is "online" or "away" or "busy" or "dungeon" or "lfg" ? st : "online";
@@ -87,6 +88,7 @@ public class PresenceModule : IModule
         if (inv == me.Invisible) return false;
         hub.Log.LogInformation("{Name} is now {State}", me.Name, inv ? "invisible" : "visible");
         await hub.Mutate(me, () => me.Invisible = inv);
+        await hub.BroadcastLivePos(me);   // a live position follows the stricter rule of an invisible member at once (and comes back with "visible")
         return true;
     }
 
@@ -161,8 +163,49 @@ public class PresenceModule : IModule
         else me.Game = BuildGame(m);
         NoteCharacter(me);
         bool vis = await ApplyVisibility(me, m);
+        // a live position is never looser than the zone: no game or no zone shared any more = the position is withdrawn
+        if (me.LivePos != null && !LodgeHub.MayShareLivePos(me)) await hub.BroadcastLivePos(me);
         // identical to what everyone already has: nothing to tell them (keeps a chatty addon from costing broadcasts)
         if (!vis && (before == null ? me.Game == null : me.Game != null && JsonNode.DeepEquals(before, me.Game))) return;
         if (!vis) await hub.BroadcastPresence(me);
+    }
+
+    // ---- live map position (2.30, feature "liveposition"). The client sends
+    //   {"t":"position","mapId":1429,"fx":0.41,"fy":0.62,"move":0,"valid":true,"scope":"everyone"|"officers"}
+    // about once a second while its member chose to share, and {"t":"position","share":false} the moment they stop. Only a personal member+ who
+    // shares their zone may share; everything else is ignored. See LodgeHub.BroadcastLivePos for who sees it.
+    public const int MaxMapId = 100000;
+    public const int MoveMask = 4 | 8 | 16 | 32 | 64 | 128;   // flight, indoors, swimming, mounted, pet out, dead (the trail's LiveMove bits)
+
+    static double? Frac(JsonObject m, string key)
+    {
+        try { if (m[key] is JsonValue v && v.TryGetValue<double>(out var d) && double.IsFinite(d)) return Math.Round(Math.Clamp(d, 0, 1), 4); } catch { }
+        return null;
+    }
+
+    // a sanitized position, or null when it is not one (share:false, valid:false, no map, no or broken fractions): null clears
+    public static JsonObject BuildPosition(JsonObject m)
+    {
+        if (m["share"] is JsonValue sv && sv.TryGetValue<bool>(out var share) && !share) return null;
+        if (!(m["valid"] is JsonValue vv && vv.TryGetValue<bool>(out var valid) && valid)) return null;
+        int mapId = Int(m, "mapId", 0, MaxMapId);
+        double? fx = Frac(m, "fx"), fy = Frac(m, "fy");
+        if (mapId <= 0 || fx == null || fy == null) return null;
+        var scope = m["scope"] is JsonValue cv && cv.TryGetValue<string>(out var c) && c == "officers" ? "officers" : "everyone";
+        return new JsonObject { ["mapId"] = mapId, ["fx"] = fx.Value, ["fy"] = fy.Value, ["move"] = Int(m, "move", 0, int.MaxValue) & MoveMask, ["scope"] = scope };
+    }
+
+    async Task Position(Member me, JsonObject m)
+    {
+        var pos = BuildPosition(m);
+        // withdrawing always goes through (it must never be lost to the budget); a new position costs its own small budget, dropped quietly when empty
+        if (pos != null)
+        {
+            if (!LodgeHub.MayShareLivePos(me)) pos = null;
+            else if (!me.Budget.LivePos.TryTake()) { me.CountDrop(hub.Clock); return; }
+        }
+        if (pos == null && me.LivePos == null && me.LivePosViewers.Count == 0) return;
+        me.LivePos = pos;
+        await hub.BroadcastLivePos(me);
     }
 }

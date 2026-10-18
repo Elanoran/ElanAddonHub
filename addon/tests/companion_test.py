@@ -835,7 +835,7 @@ do
   ok("position off: no ticks, never asked for again (neither the position nor how you move)", POSCALLS == pc and E.posTicks == t0 and MOVECALLS == mc0 and decode().pf == 0)
   ST.taxi = false ST.mount = false ST.pet = false
   -- the settings page: the check and its description, verbatim
-  local DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there, together with whether you are on a flight, on a mount, indoors or swimming and whether your pet is out (so its 3D map shows you at the right height and your trail can show paw and hoof prints). It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there."
+  local DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there, together with whether you are on a flight, on a mount, indoors or swimming and whether your pet is out (so its 3D map shows you at the right height and your trail can show paw and hoof prints). It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and the addon itself sends nothing anywhere (sharing with your Lodge is a separate switch in the Outpost, off until you turn it on). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there."
   ok("setting label and description verbatim", E.POSITION_LABEL == "Share my map position with Elan's Outpost" and E.POSITION_DESC == DESC)
   SlashCmdList.ELANSHUB("settings")
   if not _G.ElansHubSettings.__shown then SlashCmdList.ELANSHUB("settings") end
@@ -1435,7 +1435,10 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.18.1", "## Version: 1.18.1" in toc and "\n1.18.1 " in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc version is 1.18.2", "## Version: 1.18.2" in toc and "\n1.18.2 " in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+_cl182 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.18.2 ")[-1]
+check("changelog 1.18.2: only the description changed, the addon still sends nothing, Lodge sharing is the Outpost's own OFF-by-default switch", "Share my map position" in _cl182
+      and "sends nothing" in _cl182 and "off until you turn it on" in _cl182 and "/reload" in _cl182)
 check("toc Notes verbatim (optional live map position, off by default)", "## Notes: Shares your character, zone and status with Elan's Outpost (and your Lodge, if you join one). Optional: your live map position and trail events for the Outpost's world map — display only, no automation; everything optional is off by default.\n" in toc)
 _cl153 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.15.3 ")[1].split("\n1.16.0 ")[0]
 _cl160 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.16.0 ")[-1].split("\n1.16.1 ")[0]

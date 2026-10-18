@@ -324,6 +324,7 @@ namespace ElansAddonHub.Lodge
             ResetBadges();
             ResetRealms();
             ResetClassic();
+            ResetLivePos();
             ResetHistoryState();
             Pending = null;
             failedImages.Clear();
@@ -353,6 +354,7 @@ namespace ElansAddonHub.Lodge
                     var gone = Members.FirstOrDefault(x => x.Id == m.Int("id"));
                     if (gone != null)
                     {
+                        DropLivePos(gone);
                         if (gone.Room != null && gone.Room == MyRoom) Sounds.Leave();
                         Members.Remove(gone);
                         RefreshAuthorAvatars(gone.Name);
@@ -374,6 +376,7 @@ namespace ElansAddonHub.Lodge
                     mem.Room = u.Room; mem.Muted = u.Muted; mem.Deaf = u.Deaf; mem.ServerMuted = u.ServerMuted;
                     mem.Status = u.Status; mem.Note = u.Note; mem.Role = u.Role;
                     mem.Invisible = mem.IsMe ? Invisible : u.Invisible;
+                    if (mem.Invisible && !mem.IsMe && !CanSeeInvisible) DropLivePos(mem);   // never a dot for someone I can't see
                     ApplyGame(mem, m.Child("user").Child("game"));
                     Remember(mem);
                     if (mem.BadgeKey != oldBadge) RefreshAuthorAvatars(mem.Name);
@@ -529,6 +532,7 @@ namespace ElansAddonHub.Lodge
                 case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
                 case "badges.mine": case "badges.member": case "badges.state": case "ladder.data": OnBadgesFrame(m); break;
                 case "realms.status": case "realms.back": OnRealmsFrame(m); break;
+                case "memberpos": OnMemberPos(m); break;
                 case "dataset.data": case "dataset.changed": case "dataset.result": OnDatasetFrame(m); break;
             }
         }
@@ -560,6 +564,7 @@ namespace ElansAddonHub.Lodge
             ReadBadgesFeatures(m, features);
             ReadRealmsFeatures(features);
             ReadClassicFeatures(m, features);
+            ReadLivePosFeatures(features);
             var rs = m.List("reactions").OfType<string>().ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
@@ -680,6 +685,7 @@ namespace ElansAddonHub.Lodge
             if (Auto.Status != "online" || Auto.Note.Length > 0 || Invisible) SendStatus();
             lastGameJson = null;
             SendGame();
+            SendPosition();                                     // after the game (the server needs my shared zone first); a no-op unless I share
             foreach (var r in VoiceRooms) r.InvisibleHint = Invisible;
             FlightSync(connect: true);                          // shared flight times (a no-op without the server feature)
             AtlasSync(connect: true);                          // the Lodge's Atlas pool (a no-op without the server feature)
@@ -795,6 +801,7 @@ namespace ElansAddonHub.Lodge
             if (json == lastGameJson) return;
             lastGameJson = json;
             _ = Send(obj);
+            SendPosition();                                     // sharing the zone (or the game) switched off takes the position with it
         }
 
         // keep each voice room's member list (and my overlay) in step with everyone's Room

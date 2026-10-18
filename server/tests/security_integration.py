@@ -192,6 +192,31 @@ async def suite_a(base):
         await g.close()
 
 
+async def suite_k(base):
+    """2.30: live map positions over a real socket - opt-in, never to guests, withdrawn at once."""
+    async with aiohttp.ClientSession() as s:
+        e = await ws_open(s, base, ELAN, "192.0.2.81"); ew = await recv(e, "welcome")
+        b = await ws_open(s, base, BOB, "192.0.2.82"); bw = await recv(b, "welcome")
+        g = await ws_open(s, base, GUEST, "192.0.2.83", name="Rover"); await recv(g, "welcome")
+        check("2.30: welcome advertises liveposition", ew is not None and "liveposition" in ew.get("features", []), ew and ew.get("features"))
+        bid = bw["you"]
+        pos = {"t": "position", "mapId": 1413, "fx": 0.41, "fy": 0.62, "move": 0, "valid": True, "scope": "everyone"}
+        await b.send_str(json.dumps(pos))
+        check("position: nothing is relayed without a shared zone", (await recv(e, "memberpos", 1)) is None)
+        await b.send_str(json.dumps({"t": "game", "playing": True, "name": "Bob", "zone": "The Barrens", "level": 20}))
+        await b.send_str(json.dumps(pos))
+        p = await recv(e, "memberpos", 2, lambda d: d["id"] == bid)
+        check("position: a member sees the shared dot (no scope in it)", p is not None and p["valid"] and p["fx"] == 0.41 and "scope" not in p, p)
+        check("position: the guest never gets it", (await recv(g, "memberpos", 1)) is None)
+        await g.send_str(json.dumps({"t": "game", "playing": True, "name": "Rover", "zone": "Durotar", "level": 5}))
+        await g.send_str(json.dumps(dict(pos, fx=0.2)))
+        check("position: a guest's position is ignored", (await recv(e, "memberpos", 1, lambda d: d["id"] != bid)) is None)
+        await b.send_str(json.dumps({"t": "position", "share": False}))
+        p = await recv(e, "memberpos", 2, lambda d: d["id"] == bid)
+        check("position: opting out withdraws the dot at once", p is not None and p["valid"] is False and "fx" not in p, p)
+        for w in (e, b, g): await w.close()
+
+
 async def suite_b(base):
     async with aiohttp.ClientSession() as s:
         r = await s.get(base + f"/health?code={ELAN}", headers=H(ip="198.51.100.80"))
@@ -729,6 +754,7 @@ def main():
         asyncio.run(suite_c("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_d("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_e("http://127.0.0.1:5291/lodge"))
+        asyncio.run(suite_k("http://127.0.0.1:5291/lodge"))
         asyncio.run(suite_b("http://127.0.0.1:5292/lodge"))
         asyncio.run(suite_f("http://127.0.0.1:5293/lodge"))
         asyncio.run(suite_g("http://127.0.0.1:5294/lodge"))
