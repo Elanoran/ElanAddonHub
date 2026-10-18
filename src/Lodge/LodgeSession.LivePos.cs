@@ -12,7 +12,8 @@ namespace ElansAddonHub.Lodge
     //   out  position {mapId, fx, fy, move, valid, scope} about once a second while "Share my map position with the Lodge" is on, the game shares a
     //        position (Elan's Hub's own opt-in) and my zone is shared; {share:false} the moment any of that stops. Never from a guest.
     //   in   memberpos {id, mapId, fx, fy, move, valid} - where a member is (the server decides who may see whom: scope, rank, Appear offline)
-    // Nothing of it is ever written to disk; the world map draws the members' dots (MainWindow.Atlas.cs -> WorldMapView.MemberDots).
+    // Nothing of it is ever written to disk; the world map draws the members' dots (MainWindow.Atlas.cs -> WorldMapView.MemberDots), and since 2.98 their
+    // trails like your own (MemberTrails: the last 10 minutes in memory, kept only while "Show my live position on the world map" is on).
     public partial class LodgeSession
     {
         public bool SupportsLivePosition { get; private set; }
@@ -24,6 +25,8 @@ namespace ElansAddonHub.Lodge
         bool posWired;
         public int PositionsSentForTest { get; private set; }
 
+        public readonly MemberTrails Trails = new MemberTrails();
+
         public static string ScopeOf(Settings s) => s?.LivePosScope == "officers" ? "officers" : "everyone";
 
         void ReadLivePosFeatures(List<string> features)
@@ -33,12 +36,14 @@ namespace ElansAddonHub.Lodge
             lastPosJson = null; lastPosSent = DateTime.MinValue;       // a new connection starts with nothing shared
             bool had = false;
             foreach (var m in Members) had |= m.ClearLivePos();         // the server sends the positions I may see right after the welcome
+            Trails.Clear();
             if (had) LivePositionsChanged?.Invoke();
         }
 
         void ResetLivePos()
         {
             SupportsLivePosition = false; lastPosJson = null;
+            Trails.Clear();
             posTimer?.Stop();
             LivePositionsChanged?.Invoke();
         }
@@ -118,6 +123,7 @@ namespace ElansAddonHub.Lodge
             bool was = mem.LiveValid;
             bool changed = m.Bool("valid") && m.TryGetValue("fx", out var fo) && fo is double fx && m.TryGetValue("fy", out var yo) && yo is double fy
                 ? mem.SetLivePos(true, m.Int("mapId"), fx, fy, m.Int("move")) : mem.ClearLivePos();
+            TrailOf(mem);
             if (!mem.IsMe && was != mem.LiveValid)
                 Util.Log("lodge position: " + (mem.LiveValid ? "receiving " + mem.Display + "'s map position (map " + mem.LiveMapId + ")" : mem.Display + " stopped sharing their map position with me"));
             if (changed) LivePositionsChanged?.Invoke();
@@ -126,8 +132,24 @@ namespace ElansAddonHub.Lodge
         // the dot of a member who left, or who I can no longer see (Appear offline) goes at once
         void DropLivePos(MemberVM mem)
         {
-            if (mem != null && mem.ClearLivePos()) LivePositionsChanged?.Invoke();
+            if (mem == null) return;
+            bool had = Trails.Drop(mem.Id);
+            if (mem.ClearLivePos() || had) LivePositionsChanged?.Invoke();
         }
+
+        // 2.98: the member's trail (memory only): a new point while they share and I show live positions, gone the moment they stop; never mine, a guest's,
+        // or an invisible member's I may not see. toWorld: tests (null = the map tables).
+        public Func<int, double, double, WorldPoint?> ToWorldForTest;
+        void TrailOf(MemberVM m)
+        {
+            if (m.IsMe || !m.LiveValid || m.Guest || (m.Invisible && !CanSeeInvisible) || !Settings.WorldMapLivePos) { Trails.Drop(m.Id); return; }
+            WorldPoint? w = null;
+            try { w = ToWorldForTest != null ? ToWorldForTest(m.LiveMapId, m.LiveFx, m.LiveFy) : MapData.Index?.MapToWorld(m.LiveMapId, m.LiveFx, m.LiveFy); } catch (Exception) { }
+            if (w == null) { Trails.Drop(m.Id); return; }
+            Trails.Add(m.Id, m.CharName, w.Value.MapId, w.Value.X, w.Value.Y, m.LiveMove, Clock());
+        }
+        // "Show my live position on the world map" switched off: every member's trail goes at once (MainWindow.UpdateLive)
+        public void ClearMemberTrails() { if (Trails.Count > 0) { Trails.Clear(); LivePositionsChanged?.Invoke(); } }
 
         // the members' dots for the world map: in world coordinates (continent map id, yards), never mine. toWorld: tests (null = the map tables).
         readonly HashSet<int> noPlaceSaid = new HashSet<int>();
@@ -136,7 +158,10 @@ namespace ElansAddonHub.Lodge
         public List<MemberDot> MemberDots(Func<int, double, double, WorldPoint?> toWorld = null)
         {
             var list = new List<MemberDot>();
-            if (!SupportsLivePosition) return list;
+            if (!SupportsLivePosition) { Trails.Clear(); return list; }
+            toWorld = toWorld ?? ToWorldForTest;
+            var now = Clock();
+            var shown = new HashSet<int>();
             foreach (var m in Members.ToList())
             {
                 if (m.IsMe || !m.LiveValid || m.Guest) continue;
@@ -144,8 +169,19 @@ namespace ElansAddonHub.Lodge
                 WorldPoint? w = null;
                 try { w = toWorld != null ? toWorld(m.LiveMapId, m.LiveFx, m.LiveFy) : MapData.Index?.MapToWorld(m.LiveMapId, m.LiveFx, m.LiveFy); } catch (Exception) { }
                 if (w == null) { NoPlace(m.LiveMapId); continue; }      // a map this Outpost has no place for: no dot rather than a wrong one
-                list.Add(new MemberDot { Id = m.Id, Name = m.Display, Color = LivePosition.ColorOf(m.GameClassFile), MapId = w.Value.MapId, X = w.Value.X, Y = w.Value.Y });
+                shown.Add(m.Id);
+                var here = Trails.HereOf(m.Id);
+                if (here.HasValue && (here.Value.MapId != w.Value.MapId || LiveTrail.Dist(here.Value.X, here.Value.Y, w.Value.X, w.Value.Y) > 0.01)) here = null;      // not this position's point
+                string zone = m.ZoneLine;
+                if (string.IsNullOrEmpty(zone)) { try { zone = MapData.Index?.Name(m.LiveMapId); } catch (Exception) { zone = null; } }
+                list.Add(new MemberDot
+                {
+                    Id = m.Id, Name = m.Display, Color = LivePosition.ColorOf(m.GameClassFile), MapId = w.Value.MapId, X = w.Value.X, Y = w.Value.Y,
+                    Zone = zone ?? "", Move = m.LiveMove & 0xFF, Here = here, Trail = Trails.PointsOf(m.Id, now), At = now,
+                    Foot = TrailPrints.FootOf(m.GameRaceFile), Hunter = string.Equals(m.GameClassFile, "HUNTER", StringComparison.OrdinalIgnoreCase),
+                });
             }
+            Trails.KeepOnly(shown);                                     // whoever is no longer shown has no trail left either
             return list;
         }
     }

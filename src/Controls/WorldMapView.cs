@@ -678,6 +678,8 @@ namespace ElansAddonHub
                 ["on"] = OnLayers(),
                 ["follow"] = Settings != null && Settings.WorldMapFollow,
             };
+            // 2.98: following a Lodge member carries over to the new map when they are on it (their row in the card opened it)
+            if (FollowingMember > 0) { if (MemberOn(FollowingMember) is MemberDot fm && fm.MapId == c.MapId) init["mfollow"] = FollowingMember; else FollowingMember = 0; }
             if (is3)
             {
                 var tiles = new List<int>();
@@ -873,12 +875,13 @@ namespace ElansAddonHub
                     break;
                 case WorldMapMessageType.Follow:
                     if (Settings != null && Settings.WorldMapFollow != m.Ok) { Settings.WorldMapFollow = m.Ok; SaveSettings?.Invoke(); }
+                    if (m.Ok) FollowingMember = 0;     // one thing to follow at a time
                     break;
                 case WorldMapMessageType.ShowMap:
                     ShowLiveMap(false);
                     break;
                 case WorldMapMessageType.MemberFollow:
-                    FollowingMember = m.MemberId;      // the page pans to them itself; kept for the test and the log
+                    FollowMember(m.MemberId);
                     break;
                 case WorldMapMessageType.Ready:
                     if ((Ignore2dReadyForTest && loadedPage == "2d") || (Ignore3dReadyForTest && loadedPage == "3d")) break;
@@ -1028,11 +1031,44 @@ namespace ElansAddonHub
         public int MembersPostsForTest { get; private set; }
         public int FollowingMember { get; private set; }
 
-        public string MembersJson()
+        List<MemberDot> CurrentDots()
         {
-            List<MemberDot> dots = null;
-            if (LiveOn && MemberDots != null) { try { dots = MemberDots(); } catch (Exception e) { Util.Log("world map members: " + e.Message); } }
-            return WorldMapProtocol.Members(dots, mapId);
+            if (!LiveOn || MemberDots == null) return new List<MemberDot>();
+            try { return MemberDots() ?? new List<MemberDot>(); } catch (Exception e) { Util.Log("world map members: " + e.Message); return new List<MemberDot>(); }
+        }
+        MemberDot? MemberOn(int id) { foreach (var d in CurrentDots()) if (d.Id == id) return d; return null; }
+        static string ContinentName(int worldMapId)
+        {
+            try { var idx = MapData.Index; return idx == null ? null : WorldMapService.Continent(idx, worldMapId)?.Name; } catch (Exception) { return null; }
+        }
+
+        public string MembersJson() => MembersJson(CurrentDots());
+        string MembersJson(List<MemberDot> dots) => WorldMapProtocol.Members(dots, mapId, FollowingMember, ContinentName);
+
+        // 2.98: follow a member (their dot's menu, or their row in the card's "Lodge, live" list); 0 = stop. Someone on another world map: that map opens
+        // first, centred on them (the zoom you had), and the new page goes on following them. Follow me stops (one thing at a time).
+        public int MemberMapsForTest { get; private set; }
+        int memberMapFor = -1;
+        void FollowMember(int id)
+        {
+            FollowingMember = id;
+            if (id <= 0) return;
+            if (Settings != null && Settings.WorldMapFollow) { Settings.WorldMapFollow = false; SaveSettings?.Invoke(); }
+            var d = MemberOn(id);
+            if (d == null) { FollowingMember = 0; return; }                     // no longer shared with me
+            memberMapFor = d.Value.MapId;
+            if (d.Value.MapId != mapId) ShowMemberMap(d.Value);
+        }
+        void ShowMemberMap(MemberDot d)
+        {
+            WorldContinent c = null;
+            try { var idx = MapData.Index; c = idx == null ? null : WorldMapService.Continent(idx, d.MapId); } catch (Exception) { }
+            if (c == null) { FollowingMember = 0; Post(WorldMapProtocol.Toast("That map has no world map here", false)); return; }
+            MemberMapsForTest++;
+            Util.Log("world map: following a Lodge member to " + c.Name);         // never where they are
+            target = new WorldMapTarget { MapId = c.MapId, HasView = true, X = d.X, Y = d.Y, Z = hasView && vz > 0 ? vz : 5 };
+            hasView = false;
+            Resolve();
         }
 
         public void PushMembers(bool force)
@@ -1045,7 +1081,16 @@ namespace ElansAddonHub
                 if (!membersTimer.IsEnabled) { membersTimer.Interval = wait; membersTimer.Start(); }
                 return;
             }
-            var json = MembersJson();
+            var dots = CurrentDots();
+            if (FollowingMember > 0)
+            {
+                // the member followed stopped sharing or left: following ends (the page sees their row go); they took a boat to another world map: it opens
+                // (once per map they arrive on, like Follow me - switching back yourself is left alone)
+                MemberDot? f = null; foreach (var d in dots) if (d.Id == FollowingMember) f = d;
+                if (f == null) FollowingMember = 0;
+                else if (f.Value.MapId != memberMapFor) { memberMapFor = f.Value.MapId; if (f.Value.MapId != mapId && ContinentName(f.Value.MapId) != null) { ShowMemberMap(f.Value); return; } }
+            }
+            var json = MembersJson(dots);
             if (json == lastMembers) return;
             lastMembers = json; lastMembersPost = DateTime.UtcNow; MembersPostsForTest++;
             Post(json);

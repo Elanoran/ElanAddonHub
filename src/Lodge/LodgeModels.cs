@@ -251,6 +251,7 @@ namespace ElansAddonHub.Lodge
         }
 
         public string GameClassFile => gameClassFile;
+        public string GameRaceFile => gameRaceFile;              // a member's trail prints (hooves for tauren ...), 2.98
 
         // ---- live map position (Lodge 2.30 "memberpos"): where they are on the game's map, only while they share it with me. Memory only.
         public bool LiveValid { get; private set; }

@@ -30,7 +30,8 @@ namespace ElansAddonHub.Services.WorldMap
     //                 howto                               the live layer's "How to turn it on" link: the app opens its how-to card
     //                 follow {on}                         the live layer's "Follow me" switch (remembered in the settings)
 //                 showmap                             the live card's "Show <map>" button: the app opens the world map of the map you are on (2.91)
-    //                 mfollow {id}                        "Follow this member" on a Lodge member's dot (id > 0), or following stopped (0) (2.97; the page pans itself)
+    //                 mfollow {id}                        "Follow this member" on a Lodge member's dot or their row in the card (id > 0), or following stopped (0)
+    //                                                      (2.97; the page pans itself; 2.98: a member on another world map -> the app opens that map first)
     //   app -> page   init | goto | layer | layerinfo | toast | on     (built by WorldMapView, see worldmap.js for the shapes)
     //                 me {state, ...}                      the live position layer (see Me below), at most once a second
     //                 members {list}                      the Lodge members who share their position with me (see Members below), at most once a second
@@ -55,8 +56,14 @@ namespace ElansAddonHub.Services.WorldMap
         public int MemberId;                                   // mfollow: the member followed, 0 = none
     }
 
-    // a Lodge member's shared position for the world map (2.97): world coordinates (continent map id, x north, y west, yards), never the viewer's own
-    public struct MemberDot { public int Id; public string Name; public string Color; public int MapId; public double X, Y; }
+    // a Lodge member's shared position for the world map (2.97): world coordinates (continent map id, x north, y west, yards), never the viewer's own.
+    // 2.98: drawn like your own - Here (the point with its height for 3D, null = none worked out), Trail (the last 10 minutes, MemberTrails), Move (their
+    // move bits now), At (the time the trail's ages count from), Foot / Hunter (the prints), Zone (the list row's hover)
+    public struct MemberDot
+    {
+        public int Id; public string Name; public string Color; public int MapId; public double X, Y;
+        public string Zone; public int Move; public LiveTrail.Point? Here; public List<LiveTrail.Point> Trail; public DateTime At; public string Foot; public bool Hunter;
+    }
 
     public static class WorldMapProtocol
     {
@@ -232,25 +239,7 @@ namespace ElansAddonHub.Services.WorldMap
             d["howto"] = LivePositionText.HasHowTo(state);
             d["howtoText"] = LivePositionText.HowToLink;
             if (st == "ok") { WorldMapMath.WorldToLatLng(here.Value.X, here.Value.Y, out var la, out var ln); if (InPlane(la, ln)) { d["here"] = new List<object> { R6(la), R6(ln) }; d["hz"] = ZOf(here.Value.HasZ, here.Value.Z, here.Value.Src); } else { d["state"] = "unavailable"; d["notice"] = LivePositionText.Unavailable; } }
-            var list = new List<object>(); var elev = new List<object>(); var mv = new List<object>(); var od = new List<object>();
-            if (trail != null)
-            {
-                int start = Math.Max(0, trail.Count - LiveTrail.MaxPoints);
-                bool brk = true; LiveTrail.Point? prev = null;
-                for (int i = start; i < trail.Count; i++)
-                {
-                    var p = trail[i];
-                    if (p.MapId != viewMapId) { brk = true; prev = null; continue; }
-                    WorldMapMath.WorldToLatLng(p.X, p.Y, out var la, out var ln);
-                    if (!InPlane(la, ln)) { brk = true; prev = null; continue; }
-                    if (prev.HasValue && (LiveTrail.Dist(prev.Value.X, prev.Value.Y, p.X, p.Y) > TrailBreakYards || (p.At - prev.Value.At).TotalSeconds > TrailBreakSeconds)) brk = true;
-                    double age = Math.Max(0, Math.Min(LiveTrail.Keep.TotalSeconds, (now - p.At).TotalSeconds));
-                    list.Add(R6(la)); list.Add(R6(ln)); list.Add(Math.Round(age, 1)); list.Add(brk ? 1 : 0);
-                    elev.AddRange(ZOf(p.HasZ, p.Z, p.Src));
-                    mv.Add(p.Move & 0xFF); od.Add(Math.Round(p.Odo, 1));
-                    brk = false; prev = p;
-                }
-            }
+            TrailParts(trail, viewMapId, now, LiveTrail.MaxPoints, false, out var list, out var elev, out var mv, out var od);
             d["trail"] = list;
             d["elev"] = elev;
             if (prints != null) { d["mv"] = mv; d["od"] = od; d["hmv"] = here.HasValue ? here.Value.Move & 0xFF : 0; d["prints"] = prints; }
@@ -280,33 +269,76 @@ namespace ElansAddonHub.Services.WorldMap
             d["events"] = evs;
             return Json.Write(d);
         }
+        // the trail's parts for the page (your own and, 2.98, each member's): [lat, lng, age, brk, ...] on this map only (a point elsewhere or outside the plane
+        // breaks the line), its heights, move bits and odometer. At most `max` points: the newest (yours), or with `thin` a longer trail thinned evenly (every
+        // k-th point, the newest always kept), so a member's 10 minutes stay whole at a fraction of the size; the break rules widen with the step.
+        static void TrailParts(IList<LiveTrail.Point> trail, int viewMapId, DateTime now, int max, bool thin, out List<object> list, out List<object> elev, out List<object> mv, out List<object> od)
+        {
+            list = new List<object>(); elev = new List<object>(); mv = new List<object>(); od = new List<object>();
+            if (trail == null) return;
+            int n = trail.Count, k = thin && n > max ? (n + max - 1) / max : 1;
+            int start = Math.Max(0, n - max * k);
+            bool brk = true; LiveTrail.Point? prev = null;
+            for (int i = start; i < n; i++)
+            {
+                if (k > 1 && (n - 1 - i) % k != 0) continue;
+                var p = trail[i];
+                if (p.MapId != viewMapId) { brk = true; prev = null; continue; }
+                WorldMapMath.WorldToLatLng(p.X, p.Y, out var la, out var ln);
+                if (!InPlane(la, ln)) { brk = true; prev = null; continue; }
+                if (prev.HasValue && (LiveTrail.Dist(prev.Value.X, prev.Value.Y, p.X, p.Y) > TrailBreakYards * k || (p.At - prev.Value.At).TotalSeconds > TrailBreakSeconds * k)) brk = true;
+                double age = Math.Max(0, Math.Min(LiveTrail.Keep.TotalSeconds, (now - p.At).TotalSeconds));
+                list.Add(R6(la)); list.Add(R6(ln)); list.Add(Math.Round(age, 1)); list.Add(brk ? 1 : 0);
+                elev.AddRange(ZOf(p.HasZ, p.Z, p.Src));
+                mv.Add(p.Move & 0xFF); od.Add(Math.Round(p.Odo, 1));
+                brk = false; prev = p;
+            }
+        }
         static double R6(double v) => Math.Round(v, 6);
         // a height for the page: [yards rounded to 0.1, source], or [0, -1] when there is none (or it is not a sane number)
         static List<object> ZOf(bool has, double z, ElevSrc s) => has && !double.IsNaN(z) && !double.IsInfinity(z) && Math.Abs(z) < 20000 ? new List<object> { Math.Round(z, 1), (int)s } : new List<object> { 0.0, -1 };
 
-        // ---- "members" (2.97): the Lodge members who share their live position with me, on the map shown now only.
-        //   {t:'members', list:[{id, name, color, ll:[lat, lng]}]}  - a clean one-line name, a #rrggbb colour, a point inside the plane; at most MaxMembers.
-        // A dot on another continent or outside the plane is left out (never a dot on the wrong map); an empty list takes every dot away.
-        public const int MaxMembers = 100;
-        public static string Members(IEnumerable<MemberDot> dots, int viewMapId)
+        // ---- "members" (2.97): the Lodge members who share their live position with me.
+        //   {t:'members', list:[{id, name, color, ll:[lat, lng], hz, hmv, trail, elev, mv, od, prints}], rows:[{id, name, color, zone, here, map}]}
+        //   list: the members on the map shown now, drawn like your own (2.98): a dot with a heading arrow, the fading trail and its prints, the height in 3D -
+        //         the same shapes as "me" (hz / hmv / trail / elev / mv / od / prints, see Me); at most MaxDrawn (the one followed first, then in the order given), at most
+        //         MaxMemberPoints trail points each; a clean one-line name, a #rrggbb colour, a point inside the plane.
+        //   rows: everyone who shares with me on any map (the card's "Lodge, live" list, 2.98): here = drawn on the map shown now, map = the name of the world
+        //         map they are on when it is another one ("" = none known), zone = their zone for the hover; at most MaxRows, by name.
+        // A dot on another continent or outside the plane is never drawn (never a dot on the wrong map); an empty list takes every dot away.
+        public const int MaxDrawn = 20, MaxMemberPoints = 300, MaxRows = 40;
+        public static string Members(IEnumerable<MemberDot> dots, int viewMapId, int following = 0, Func<int, string> mapName = null)
         {
-            var list = new List<object>();
-            var seen = new HashSet<int>();
-            foreach (var m in dots ?? Enumerable.Empty<MemberDot>())
+            var list = new List<object>(); var rows = new List<object>();
+            var seen = new HashSet<int>(); var drawn = new HashSet<int>();
+            var all = (dots ?? Enumerable.Empty<MemberDot>()).Where(m => m.Id > 0 && seen.Add(m.Id)).ToList();
+            foreach (var m in all.Where(m => m.MapId == viewMapId).OrderBy(m => m.Id == following ? 0 : 1))
             {
-                if (list.Count >= MaxMembers) break;
-                if (m.Id <= 0 || m.MapId != viewMapId || !seen.Add(m.Id)) continue;
+                if (list.Count >= MaxDrawn) break;
                 WorldMapMath.WorldToLatLng(m.X, m.Y, out var la, out var ln);
                 if (!InPlane(la, ln)) continue;
-                var name = LivePositionText.CleanName(m.Name);
-                list.Add(new Dictionary<string, object>
-                {
-                    ["id"] = m.Id, ["name"] = name.Length > 0 ? name : "A member", ["color"] = m.Color != null && HexColor.IsMatch(m.Color) ? m.Color : "#E8E6E3",
-                    ["ll"] = new List<object> { R6(la), R6(ln) },
-                });
+                var d = new Dictionary<string, object> { ["id"] = m.Id, ["name"] = NameOf(m), ["color"] = ColorOf(m), ["ll"] = new List<object> { R6(la), R6(ln) } };
+                var h = m.Here;
+                d["hz"] = h.HasValue ? ZOf(h.Value.HasZ, h.Value.Z, h.Value.Src) : ZOf(false, 0, ElevSrc.Terrain);
+                d["hmv"] = m.Move & 0xFF;
+                TrailParts(m.Trail, viewMapId, m.At == default(DateTime) ? DateTime.UtcNow : m.At, MaxMemberPoints, true, out var tl, out var el, out var mv, out var od);
+                d["trail"] = tl; d["elev"] = el; d["mv"] = mv; d["od"] = od;
+                // the prints: their race's foot; a hunter's pet beside them only while their move bits say it is out (relayed from their Elan's Hub)
+                d["prints"] = new Dictionary<string, object> { ["foot"] = m.Foot == "hoof" || m.Foot == "bone" || m.Foot == "tiny" ? m.Foot : "paw", ["hunter"] = m.Hunter, ["petKnown"] = true };
+                list.Add(d); drawn.Add(m.Id);
             }
-            return Json.Write(new Dictionary<string, object> { ["t"] = "members", ["list"] = list });
+            foreach (var m in all.OrderBy(m => NameOf(m), StringComparer.OrdinalIgnoreCase))
+            {
+                if (rows.Count >= MaxRows) break;
+                bool here = drawn.Contains(m.Id);
+                string map = "";
+                if (m.MapId != viewMapId) { try { map = LivePositionText.CleanName(mapName?.Invoke(m.MapId) ?? ""); } catch (Exception) { map = ""; } }
+                rows.Add(new Dictionary<string, object> { ["id"] = m.Id, ["name"] = NameOf(m), ["color"] = ColorOf(m), ["zone"] = LivePositionText.CleanName(m.Zone), ["here"] = here, ["map"] = map });
+            }
+            return Json.Write(new Dictionary<string, object> { ["t"] = "members", ["list"] = list, ["rows"] = rows });
         }
+        static string NameOf(MemberDot m) { var n = LivePositionText.CleanName(m.Name); return n.Length > 0 ? n : "A member"; }
+        static string ColorOf(MemberDot m) => m.Color != null && HexColor.IsMatch(m.Color) ? m.Color : "#E8E6E3";
 
         public static string Goto(double lat, double lng, double z, string pinName = null, string pinTip = null, int seq = -1)
         {
