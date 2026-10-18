@@ -912,6 +912,64 @@ do
   fire("CHAT_MSG_COMBAT_XP_GAIN", "Kobold Vermin dies, you gain 45 experience.")
   ok("kill not marked: secret target name", select(2, one()) == 0)
   TARGET = nil
+  -- 1.18.0: kills without XP - your target dying while yours, and corpses you loot; each creature once
+  local hev = E.healthFrame.__events or {}
+  ok("kills: listening to the target's health (its own frame), loot windows and combat start / end", hev.UNIT_HEALTH == "target" and ev.LOOT_OPENED and ev.LOOT_READY and ev.PLAYER_REGEN_DISABLED and ev.PLAYER_REGEN_ENABLED)
+  local hf = E.healthFrame
+  local function hp(u) Fire(hf, "OnEvent", "UNIT_HEALTH", u or "target") end
+  TAPDENIED = false
+  function UnitIsTapDenied(u) if u == "target" then return TAPDENIED end return false end
+  TARGET, TARGET_PLAYER, TARGET_DEAD, TARGET_GUID = "Grey Wolf", false, true, "Creature-0-4372-0-14-525-00002B5A99"
+  hp()
+  ok("kills: a dead target outside any fight -> no mark (killed by someone or something else)", select(2, one()) == 0)
+  fire("PLAYER_REGEN_DISABLED")
+  TAPDENIED = true
+  hp()
+  ok("kills: a dead target someone else tapped -> no mark", select(2, one()) == 0)
+  TAPDENIED = SECRET
+  hp()
+  ok("kills: a secret tap answer -> no mark", select(2, one()) == 0)
+  TAPDENIED = false
+  hp("focus")
+  ok("kills: another unit's health -> nothing", select(2, one()) == 0)
+  hp()
+  d, n = one()
+  ok("kills: your own target dies in your fight (a grey one: no XP message) -> kind 1, creature 525, once", d and d.ek == 1 and d.ei == 525 and n == 1)
+  hp() fire("CHAT_MSG_COMBAT_XP_GAIN", "Grey Wolf dies, you gain 5 experience.")
+  ok("kills: the same creature again (health, then an XP message) -> no second mark", select(2, one()) == 0)
+  fire("PLAYER_REGEN_ENABLED")
+  -- loot windows
+  LOOTSRC = {}
+  function GetNumLootItems() return #LOOTSRC end
+  function GetLootSourceInfo(slot) return unpack(LOOTSRC[slot] or {}) end
+  TARGET = nil
+  LOOTSRC = { { "Creature-0-4372-0-14-3099-00002B5A01", 1, "Creature-0-4372-0-14-3100-00002B5A02", 1 }, { "Creature-0-4372-0-14-3099-00002B5A01", 2 } }
+  fire("LOOT_OPENED")
+  local l = collect(10)
+  ok("kills: a loot window marks each creature it comes from once (area loot: two corpses)", #l == 2 and l[1].ei == 3099 and l[2].ei == 3100 and l[1].ek == 1 and l[2].ek == 1)
+  fire("LOOT_READY") fire("LOOT_OPENED")
+  ok("kills: the same corpses again (LOOT_READY + LOOT_OPENED, a second look) -> no new marks", select(2, one()) == 0)
+  LOOTSRC = { { "GameObject-0-4372-0-14-1731-00002B5A03", 1 }, { SECRET, 1 }, { "Item-0-0-0-0-0-00002B5A04", 1 } }
+  fire("LOOT_OPENED")
+  ok("kills: a chest / vein, a secret source, an opened item -> no kill marks", select(2, one()) == 0)
+  -- skinning a corpse is gathering, not a kill (it may be someone else's)
+  LOOTSRC = { { "Creature-0-4372-0-14-3200-00002B5A05", 1 } }
+  fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-7", 8613)
+  fire("LOOT_OPENED")
+  fire("CHAT_MSG_LOOT", "You receive loot: " .. link(2318, "ffffffff") .. ".")
+  l = collect(10)
+  ok("kills: skinning a corpse -> the skin mark only, no kill", #l == 1 and l[1].ek == 5)
+  -- pick pocket: the creature is alive
+  LOOTSRC = { { "Creature-0-4372-0-14-3300-00002B5A06", 1 } }
+  fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-8", 921)
+  fire("LOOT_OPENED")
+  ok("kills: picking pockets -> no kill", select(2, one()) == 0)
+  NOW = NOW + 10
+  fire("LOOT_OPENED")
+  d = one()
+  ok("kills: the same creature's corpse later -> its kill", d and d.ek == 1 and d.ei == 3300)
+  LOOTSRC = {}
+  TAPDENIED = false
   -- loot: own loot only, notable only (uncommon+ or quest items), quality from the item info or the link colour
   ITEMQ[2589], ITEMQ[774], ITEMQ[5056], ITEMCLASS[5056] = 1, 2, 1, 12
   fire("CHAT_MSG_LOOT", "You receive loot: " .. link(2589, "ffffffff") .. "x2.")
@@ -1375,12 +1433,15 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.17.0", "## Version: 1.17.0" in toc and "\n1.17.0 " in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc version is 1.18.0", "## Version: 1.18.0" in toc and "\n1.18.0 " in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
 check("toc Notes verbatim (optional live map position, off by default)", "## Notes: Shares your character, zone and status with Elan's Outpost (and your Lodge, if you join one). Optional: your live map position and trail events for the Outpost's world map — display only, no automation; everything optional is off by default.\n" in toc)
 _cl153 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.15.3 ")[1].split("\n1.16.0 ")[0]
 _cl160 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.16.0 ")[-1].split("\n1.16.1 ")[0]
 _cl161 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.16.1 ")[-1].split("\n1.17.0 ")[0]
-_cl170 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.17.0 ")[-1]
+_cl170 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.17.0 ")[-1].split("\n1.18.0 ")[0]
+_cl180 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.18.0 ")[-1]
+check("changelog 1.18.0: kills from your own target and looted corpses, same OFF-by-default option, honest", "Share my map position" in _cl180 and "OFF by default" in _cl180
+      and "loot" in _cl180 and "Skinning" in _cl180 and "no combat log" in _cl180 and "nothing sent anywhere" in _cl180 and "/reload" in _cl180)
 check("changelog 1.17.0: the mounted / pet out bits, part of the same OFF-by-default option, honest", "Share my map position" in _cl170 and "OFF by default" in _cl170
       and "IsMounted" in _cl170 and "UnitExists" in _cl170 and "pet" in _cl170 and "nothing is sent anywhere" in _cl170 and "no frame is hooked" in _cl170 and "/reload" in _cl170 and "Older Outposts ignore" in _cl170)
 check("changelog 1.16.1: the flight / indoors / swimming bits, part of the same OFF-by-default option, honest", "Share my map position" in _cl161 and "OFF by default" in _cl161

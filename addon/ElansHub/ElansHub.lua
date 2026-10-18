@@ -500,6 +500,28 @@ end
 
 local lootPats, infoPats
 local evHandlers = {}
+
+-- 1.18.0: kills from three plain signals, each creature (by its GUID) marked once: the XP message for your target, your own target dying while it was
+-- yours (not tapped by someone else, you in combat - so grey creatures that give no XP count too), and a corpse you loot (GetLootSourceInfo names the
+-- creature of each loot slot; also the ones you killed with area damage or your pet). Not from loot: a corpse you only skin / gather from, or pick pockets.
+local KILL_KEEP = 300                 -- the GUIDs already marked (the newest ones; a GUID is never reused for another creature)
+local killed, killedOrder = {}, {}
+local lastCombat = 0                  -- GetTime() when you were last in combat (PLAYER_REGEN_DISABLED .. ENABLED)
+local inCombat = false
+local pickAt = 0                      -- Pick Pocket cast: the next loot window is the living target's pockets, no kill
+EHUB.KilledCount = function() return #killedOrder end
+local function markKill(guid)
+  guid = str(guid)
+  if not guid or killed[guid] then return false end
+  local id = npcIdOf(guid)
+  if not id then return false end
+  killed[guid] = true
+  killedOrder[#killedOrder + 1] = guid
+  if #killedOrder > KILL_KEEP then killed[table.remove(killedOrder, 1)] = nil end
+  return pushEvent(EV.kill, id, 0)
+end
+local function inFight() return inCombat or GetTime() - lastCombat < 5 end
+
 -- an XP message right after your target died: the creature you killed (its id from its GUID; the message must name it, so quest XP never counts)
 function evHandlers.CHAT_MSG_COMBAT_XP_GAIN(msg)
   msg = str(msg)
@@ -509,9 +531,32 @@ function evHandlers.CHAT_MSG_COMBAT_XP_GAIN(msg)
   if not name then return end
   local okF, at = pcall(string.find, msg, name, 1, true)
   if not okF or not at then return end
-  local id = npcIdOf(rd(UnitGUID, "target"))
-  if id then pushEvent(EV.kill, id, 0) end
+  markKill(rd(UnitGUID, "target"))
 end
+-- your target died (its health): yours when nobody else tapped it and you were fighting
+function evHandlers.UNIT_HEALTH(unit)
+  if str(unit) ~= "target" then return end
+  if rd(UnitIsDead, "target") ~= true or rd(UnitIsPlayer, "target") == true then return end
+  if rd(UnitIsTapDenied, "target") ~= false then return end      -- someone else's (or an unknown / secret answer): not yours
+  if not inFight() then return end
+  markKill(rd(UnitGUID, "target"))
+end
+evHandlers.UNIT_HEALTH_FREQUENT = evHandlers.UNIT_HEALTH
+function evHandlers.PLAYER_REGEN_DISABLED() inCombat = true lastCombat = GetTime() end
+function evHandlers.PLAYER_REGEN_ENABLED() inCombat = false lastCombat = GetTime() end
+-- a corpse you loot: every creature that one of the loot slots comes from
+function evHandlers.LOOT_OPENED()
+  local now = GetTime()
+  if gatherPending and now - gatherPending.at <= GATHER_WAIT then return end   -- skinning / gathering a corpse (maybe someone else's kill)
+  if now - pickAt < 3 then return end                                         -- picking pockets: the creature lives
+  local n = tonumber(clean(rd(GetNumLootItems))) or 0
+  if not GetLootSourceInfo then return end
+  for slot = 1, math.min(n, 40) do
+    local src = { pcall(GetLootSourceInfo, slot) }
+    if src[1] then for i = 2, #src, 2 do markKill(src[i]) end end
+  end
+end
+evHandlers.LOOT_READY = evHandlers.LOOT_OPENED
 -- your own loot only ("You receive loot: ..."): what you gathered, else only notable items (uncommon and better, or quest items)
 function evHandlers.CHAT_MSG_LOOT(msg)
   msg = str(msg)
@@ -537,6 +582,7 @@ function evHandlers.UNIT_SPELLCAST_SUCCEEDED(unit, _, spellId)
   if str(unit) ~= "player" then return end
   spellId = tonumber(clean(spellId))
   if not spellId then return end
+  if spellId == 921 then pickAt = GetTime() return end    -- Pick Pocket
   local k = gatherKind(spellId)
   if not k then return end
   if gatherPending then pushEvent(gatherPending.kind, 0, 0) end -- the last one never looted anything
@@ -571,13 +617,18 @@ evHandlers.CHAT_MSG_SYSTEM = evHandlers.UI_INFO_MESSAGE
 
 local evFrame = CreateFrame("Frame")
 EHUB.evFrame = evFrame
-local EV_EVENTS = { "CHAT_MSG_COMBAT_XP_GAIN", "CHAT_MSG_LOOT", "PLAYER_LEVEL_UP", "PLAYER_DEAD", "QUEST_TURNED_IN", "UI_INFO_MESSAGE", "CHAT_MSG_SYSTEM" }
+local EV_EVENTS = { "CHAT_MSG_COMBAT_XP_GAIN", "CHAT_MSG_LOOT", "PLAYER_LEVEL_UP", "PLAYER_DEAD", "QUEST_TURNED_IN", "UI_INFO_MESSAGE", "CHAT_MSG_SYSTEM",
+                    "LOOT_OPENED", "LOOT_READY", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }
 local evRegistered = false
-evFrame:SetScript("OnEvent", function(_, event, ...)
+local function onEv(_, event, ...)
   if not eventsOn() then return end
   local h = evHandlers[event]
   if h then pcall(h, ...) end
-end)
+end
+evFrame:SetScript("OnEvent", onEv)
+local healthFrame = CreateFrame("Frame")
+EHUB.healthFrame = healthFrame
+healthFrame:SetScript("OnEvent", onEv)
 -- the listening follows the option: registered only while "Share my map position" and the strip are on
 function EHUB.UpdateTrailEvents()
   local want = eventsOn()
@@ -585,12 +636,16 @@ function EHUB.UpdateTrailEvents()
     for _, e in ipairs(EV_EVENTS) do pcall(evFrame.RegisterEvent, evFrame, e) end
     if evFrame.RegisterUnitEvent then pcall(evFrame.RegisterUnitEvent, evFrame, "UNIT_SPELLCAST_SUCCEEDED", "player")
     else pcall(evFrame.RegisterEvent, evFrame, "UNIT_SPELLCAST_SUCCEEDED") end
+    -- 1.18.0: your target's health (to see it die); a frame of its own, as a unit event registers one unit per frame
+    if healthFrame.RegisterUnitEvent then pcall(healthFrame.RegisterUnitEvent, healthFrame, "UNIT_HEALTH", "target")
+    else pcall(healthFrame.RegisterEvent, healthFrame, "UNIT_HEALTH") end
     evRegistered = true
   elseif not want and evRegistered then
     pcall(evFrame.UnregisterAllEvents, evFrame)
+    pcall(healthFrame.UnregisterAllEvents, healthFrame)
     evRegistered = false
   end
-  if not want then evClear() gatherPending = nil recent = {} end
+  if not want then evClear() gatherPending = nil recent = {} killed, killedOrder = {}, {} inCombat = false end
 end
 function EHUB.TrailEventsListening() return evRegistered end
 
