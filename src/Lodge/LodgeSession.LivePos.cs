@@ -58,6 +58,22 @@ namespace ElansAddonHub.Lodge
         public bool LivePosWanted => SupportsLivePosition && Settings.ShareLivePosWithLodge && !Settings.ShareGameOff && !Settings.ShareZoneOff
             && Me != null && !Me.Guest && MyRole != "guest";
 
+        // 2.97.1: why nothing is shared right now, in plain words (the log says it once per change)
+        public string LivePosWhy()
+        {
+            if (!SupportsLivePosition) return "the Lodge server does not support it (needs Lodge 2.30)";
+            if (!Settings.ShareLivePosWithLodge) return "the switch is off";
+            if (Settings.ShareGameOff || Settings.ShareZoneOff) return "your game or zone is not shared (Settings > Privacy)";
+            if (Me == null || Me.Guest || MyRole == "guest") return "guests can't share it";
+            var c = Presence.Current;
+            if (!Presence.Playing || c == null) return "not in the game";
+            if (!c.PosEnabled) return "Elan's Hub in the game does not share your map position (/ehub position on)";
+            if (!c.PosValid || c.PosMapId <= 0) return "no map position right now (an instance, a loading screen)";
+            return "";
+        }
+        string posNote = "";
+        void NotePos(string note) { if (note == posNote) return; posNote = note; Util.Log("lodge position: " + note); }
+
         public Dictionary<string, object> BuildPositionMessage()
         {
             if (!LivePosWanted) return new Dictionary<string, object> { ["t"] = "position", ["share"] = false };
@@ -78,6 +94,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsLivePosition || (!Online && !TestFed)) return;
             var obj = BuildPositionMessage();
             bool valid = obj.ContainsKey("mapId");
+            NotePos(valid ? "sharing my map position with the Lodge (" + ScopeOf(Settings) + ")" : Settings.ShareLivePosWithLodge ? "not sharing: " + LivePosWhy() : "not sharing (switched off)");
             if (!valid && lastPosJson == null) return;                  // never shared on this connection: nothing to take back
             var json = Json.Write(obj);
             if (json == lastPosJson) return;
@@ -98,8 +115,11 @@ namespace ElansAddonHub.Lodge
         {
             var mem = Members.FirstOrDefault(x => x.Id == m.Int("id"));
             if (mem == null) return;
+            bool was = mem.LiveValid;
             bool changed = m.Bool("valid") && m.TryGetValue("fx", out var fo) && fo is double fx && m.TryGetValue("fy", out var yo) && yo is double fy
                 ? mem.SetLivePos(true, m.Int("mapId"), fx, fy, m.Int("move")) : mem.ClearLivePos();
+            if (!mem.IsMe && was != mem.LiveValid)
+                Util.Log("lodge position: " + (mem.LiveValid ? "receiving " + mem.Display + "'s map position (map " + mem.LiveMapId + ")" : mem.Display + " stopped sharing their map position with me"));
             if (changed) LivePositionsChanged?.Invoke();
         }
 
@@ -110,6 +130,9 @@ namespace ElansAddonHub.Lodge
         }
 
         // the members' dots for the world map: in world coordinates (continent map id, yards), never mine. toWorld: tests (null = the map tables).
+        readonly HashSet<int> noPlaceSaid = new HashSet<int>();
+        void NoPlace(int mapId) { if (noPlaceSaid.Add(mapId)) Util.Log("lodge position: no place on the world map for map " + mapId + " (a member's dot there is not drawn)"); }
+
         public List<MemberDot> MemberDots(Func<int, double, double, WorldPoint?> toWorld = null)
         {
             var list = new List<MemberDot>();
@@ -120,7 +143,7 @@ namespace ElansAddonHub.Lodge
                 if (m.Invisible && !CanSeeInvisible) continue;
                 WorldPoint? w = null;
                 try { w = toWorld != null ? toWorld(m.LiveMapId, m.LiveFx, m.LiveFy) : MapData.Index?.MapToWorld(m.LiveMapId, m.LiveFx, m.LiveFy); } catch (Exception) { }
-                if (w == null) continue;                                // a map this Outpost has no place for: no dot rather than a wrong one
+                if (w == null) { NoPlace(m.LiveMapId); continue; }      // a map this Outpost has no place for: no dot rather than a wrong one
                 list.Add(new MemberDot { Id = m.Id, Name = m.Display, Color = LivePosition.ColorOf(m.GameClassFile), MapId = w.Value.MapId, X = w.Value.X, Y = w.Value.Y });
             }
             return list;

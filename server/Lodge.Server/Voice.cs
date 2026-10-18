@@ -201,11 +201,24 @@ public class PresenceModule : IModule
         // withdrawing always goes through (it must never be lost to the budget); a new position costs its own small budget, dropped quietly when empty
         if (pos != null)
         {
-            if (!LodgeHub.MayShareLivePos(me)) pos = null;
+            if (!LodgeHub.MayShareLivePos(me)) { NotePosition(me, "refused: " + LodgeHub.WhyNoLivePos(me)); pos = null; }
             else if (!me.Budget.LivePos.TryTake()) { me.CountDrop(hub.Clock); return; }
+            else NotePosition(me, "sharing (" + ((string)pos["scope"] ?? "everyone") + ")");
         }
+        else NotePosition(me, "stopped");
         if (pos == null && me.LivePos == null && me.LivePosViewers.Count == 0) return;
         me.LivePos = pos;
         await hub.BroadcastLivePos(me);
+    }
+
+    // 2.30.1: the owner's log says when someone starts or stops sharing their map position, or why the Lodge does not pass it on - once per change,
+    // never a position
+    void NotePosition(Member me, string note)
+    {
+        if (me.LivePosNote == note) return;
+        bool first = me.LivePosNote.Length == 0;
+        me.LivePosNote = note;
+        if (first && note == "stopped") return;          // a client that never shared says nothing
+        hub.Log.LogInformation("{Name}: map position {Note}", me.Name, note);
     }
 }

@@ -394,7 +394,7 @@ public class DatasetsTests
         Assert.Contains("classic", ((JsonArray)r.Hub.Welcome(boss)["features"]!).Select(x => (string)x!));
         Assert.True((bool)r.Hub.Welcome(boss)["canShareClassic"]!);
         Assert.False((bool)r.Hub.Welcome(mem)["canShareClassic"]!);
-        Assert.Equal("2.30.0", LodgeHub.Version);
+        Assert.Equal("2.30.1", LodgeHub.Version);
     }
 
     [Fact]

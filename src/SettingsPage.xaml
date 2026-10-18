@@ -183,7 +183,7 @@
                 </Border>
               </HeaderedContentControl>
               <HeaderedContentControl x:Name="WorldMapBuildingsRow" Style="{StaticResource Setting.Row}" Header="World map 3D buildings" Tag="Building shapes for the 3D world map.">
-                <StackPanel x:Name="WorldMapBuildingsButtons" Orientation="Horizontal" />
+                <StackPanel x:Name="WorldMapBuildingsButtons" Orientation="Vertical" HorizontalAlignment="Right" />
               </HeaderedContentControl>
               <HeaderedContentControl Style="{StaticResource Setting.Row}" Header="World map 3D height" Tag="How tall the land is in the 3D view: 1x is true to the game (the middle), lower flattens it, higher makes the mountains taller.">
                 <StackPanel Orientation="Horizontal">

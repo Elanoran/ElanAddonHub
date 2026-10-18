@@ -67,6 +67,7 @@ public class Member
     public JsonObject LivePosSent;   // the last memberpos sent about them (an unchanged position is not sent again)
     public readonly HashSet<int> LivePosViewers = new();   // who holds their dot right now (guarded by LivePosLock)
     public readonly SemaphoreSlim LivePosLock = new(1, 1);
+    public string LivePosNote = "";  // 2.30.1: the last thing the log said about their sharing (said once per change: started, stopped, refused and why)
     public Profile Profile = new();  // personal: the stored one (shared by reconnects); guests: session-only
     public Budget Budget;
     public readonly ConcurrentDictionary<string, DateTime> LastTyping = new();
@@ -108,7 +109,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public partial class LodgeHub
 {
-    public const string Version = "2.30.0";
+    public const string Version = "2.30.1";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 

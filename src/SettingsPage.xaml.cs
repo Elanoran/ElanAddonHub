@@ -438,6 +438,7 @@ namespace ElansAddonHub
         }
 
         // "3D buildings": what is on disk per continent, and a Remove button for each (the shapes are read from the game files again the next time the Buildings switch asks)
+        public void UpdateBuildingsLineForTest() => UpdateBuildingsLine();
         void UpdateBuildingsLine()
         {
             var rows = ElansAddonHub.Services.WorldMap.BuildingsService.Rows();
@@ -446,7 +447,8 @@ namespace ElansAddonHub
             foreach (var r in rows)
             {
                 var id = r.MapId;
-                var b = new Button { Style = (Style)FindResource("Button.M"), Content = "Remove " + r.Name + " (" + ElansAddonHub.Services.WorldMap.WorldMapCache.SizeText(r.Bytes) + ")", Margin = new Thickness(8, 0, 0, 0) };
+                var b = new Button { Style = (Style)FindResource("Button.M"), Content = "Remove " + r.Name + " (" + ElansAddonHub.Services.WorldMap.WorldMapCache.SizeText(r.Bytes) + ")", HorizontalAlignment = HorizontalAlignment.Right,
+                    Margin = new Thickness(8, WorldMapBuildingsButtons.Children.Count == 0 ? 0 : 6, 0, 0) };   // 2.97.1: one under the other - side by side they crushed the text with several continents
                 System.Windows.Automation.AutomationProperties.SetName(b, "Remove the 3D buildings of " + r.Name);
                 b.Click += (s, e) => { ElansAddonHub.Services.WorldMap.BuildingsService.Remove(id); UpdateBuildingsLine(); };
                 WorldMapBuildingsButtons.Children.Add(b);

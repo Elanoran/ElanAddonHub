@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Maps;
 using ElansAddonHub.Services.WorldMap;
@@ -277,6 +279,31 @@ namespace ElansAddonHub
             await WaitFor(() => !BuildingsService.IsRunning(0), 20000); await Task.Delay(300);
             Check("host: Cancel stops the job, saves Off and tells the page; the shapes made so far stay (" + Files() + " on disk)", settings.WorldMap3dBuildings == null && BuildingsService.StateOf(0).Phase == "ask" && Files() >= 1 && Files() < 5 && Json.Obj(host.PostedForTest.Last()).Str("mode") == "off", settings.WorldMap3dBuildings + " " + BuildingsService.StateOf(0).Phase);
             BuildingsService.ModelDelayMsForTest = 0; host.Detach();
+
+            // ---------------------------------------------------------------- 2.97.1: the Settings row with several continents on disk
+            // (side by side, three "Remove <continent> (size)" buttons crushed the row's text into a one-letter column and ran off the card)
+            BuildingsService.RowsForTest = () => new List<BuildingsService.Row>
+            {
+                new BuildingsService.Row { MapId = 0, Name = "Eastern Kingdoms", Bytes = 9_400_000 },
+                new BuildingsService.Row { MapId = 1, Name = "Kalimdor", Bytes = 8_100_000 },
+                new BuildingsService.Row { MapId = 2840, Name = "Zephras Isle", Bytes = 4_600_000 },
+            };
+            try
+            {
+                ShowTab("settings"); SettingsPage.Show("general");
+                SettingsPage.UpdateBuildingsLineForTest();
+                await Task.Delay(300);
+                SettingsPage.WorldMapBuildingsRow.BringIntoView();
+                await Task.Delay(300);
+                var row = SettingsPage.WorldMapBuildingsRow;
+                var text = Descendants<TextBlock>(row).Where(t => t.IsVisible && t.Text == (row.Tag as string)).OrderByDescending(t => t.ActualWidth).FirstOrDefault();
+                var buttons = SettingsPage.WorldMapBuildingsButtons.Children.OfType<Button>().ToList();
+                bool inside = buttons.All(bt => { var p = bt.TranslatePoint(new Point(bt.ActualWidth, 0), row); return p.X <= row.ActualWidth + 0.5; });
+                Check("settings: three continents' buildings - the row's text keeps a readable width (" + Math.Round(text?.ActualWidth ?? 0) + " px of " + Math.Round(row.ActualWidth) + ") and the three Remove buttons stack inside the card",
+                    text != null && text.ActualWidth >= Math.Max(150, row.ActualWidth * 0.35) && buttons.Count == 3 && inside && buttons[1].TranslatePoint(new Point(0, 0), buttons[0]).Y > 0);
+                if (SelfTestClock.ShotsOn) Snapshot(Path.Combine(work, "settings-buildings-three.png"));
+            }
+            finally { BuildingsService.RowsForTest = null; SettingsPage.UpdateBuildingsLineForTest(); ShowTab("atlas"); await Task.Delay(300); }
 
             // ---------------------------------------------------------------- errors
             BuildingsService.Remove(-1); BuildingsService.ResetForTest();

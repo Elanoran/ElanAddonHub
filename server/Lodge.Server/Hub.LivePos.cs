@@ -18,6 +18,12 @@ public partial class LodgeHub
     public static bool MayShareLivePos(Member m) =>
         m.Personal && Roles.Can(m.Role, Perm.LivePosShare) && m.Game is { } g && g["playing"] is JsonValue p && p.TryGetValue<bool>(out var on) && on && g["zone"] != null;
 
+    // why MayShareLivePos says no, in plain words for the owner's log
+    public static string WhyNoLivePos(Member m) =>
+        !m.Personal ? "a guest or shared login can't share it" : !Roles.Can(m.Role, Perm.LivePosShare) ? "their rank can't share it"
+        : m.Game is not { } g ? "their Outpost shares no game presence" : !(g["playing"] is JsonValue p && p.TryGetValue<bool>(out var on) && on) ? "not in the game"
+        : g["zone"] == null ? "their zone is not shared (Settings > Privacy)" : "";
+
     public bool MaySeeLivePos(Member viewer, Member subject)
     {
         if (subject.LivePos == null) return false;

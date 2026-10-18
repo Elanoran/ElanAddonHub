@@ -419,8 +419,10 @@ namespace ElansAddonHub.Services.WorldMap
         public sealed class Row { public int MapId; public string Name = ""; public long Bytes; public int Models; public bool Complete; public string Mode = ""; }
 
         // per continent of the current game build: what is on disk
+        public static Func<List<Row>> RowsForTest;                           // self-test: what is on disk (the Settings row's layout with several continents)
         public static List<Row> Rows()
         {
+            if (RowsForTest != null) return RowsForTest();
             var res = new List<Row>();
             try
             {
