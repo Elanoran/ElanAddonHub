@@ -248,7 +248,7 @@ namespace ElansAddonHub.Services.Atlas
                 await Task.Delay(TimeSpan.FromSeconds(30));
                 while (true)
                 {
-                    try { if (!wanted()) Clear(); else await Refresh(reachable); } catch { }
+                    try { if (!wanted()) Clear(); else using (Activity.Begin("Fetching the Cairn's data", Activity.Kind.Work)) await Refresh(reachable); } catch { }   // the copy is written in one step: closing need not wait
                     await Task.Delay(TimeSpan.FromHours(1));
                 }
             });

@@ -479,6 +479,7 @@ namespace ElansAddonHub.Lodge
         void ResetAtlas()
         {
             SaveAtlasCache(true);
+            Activity.Release("atlas.share"); Activity.Release("atlas.get");   // the connection is gone: no answer comes
             ResetCairn();
             SupportsAtlas = false; SupportsAtlasSeen = false; SupportsAtlasNodes = false; SupportsAtlasFish = false; SupportsAtlasNotes = false; SupportsAtlasEntrances = false; SupportsAtlasNpcSpots = false; SupportsAtlasExtras = false; atlasInflight = null; atlasGuest = false; atlasDisabled = false; atlasBacklog = false; atlasFetching = false;
             atlasLocal = null; atlasSent = null; atlasNextShare = DateTime.MinValue; atlasLastGet = DateTime.MinValue;
@@ -504,6 +505,7 @@ namespace ElansAddonHub.Lodge
 
         void SaveAtlasSent()
         {
+            using (Activity.Begin("Saving your Atlas finds", Activity.Kind.Save))
             try
             {
                 var sent = AtlasSent();
@@ -543,6 +545,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!atlasCacheDirty || atlasCacheFor == null) return;
             if (!force && Clock() - atlasCacheSaved < TimeSpan.FromSeconds(60)) return;
+            using (Activity.Begin("Saving your Lodge's Atlas", Activity.Kind.Save))
             try
             {
                 var tmp = AtlasCachePath + ".tmp";
@@ -583,6 +586,7 @@ namespace ElansAddonHub.Lodge
             if (batch == null) return false;
             if (Clock() < atlasNextShare) return false;                                // the next slot is not here yet
             atlasInflight = batch;
+            Activity.Hold("atlas.share", "Sharing your Atlas finds with your Lodge", Activity.Kind.Save);   // closing waits for the answer: it marks them as sent
             LogAtlasUpload(batch);
             atlasNextShare = Clock() + AtlasObs.ShareEvery + TimeSpan.FromSeconds(5);
             _ = Send(batch.Frame);
@@ -596,6 +600,7 @@ namespace ElansAddonHub.Lodge
             var o = new Dictionary<string, object> { ["t"] = "atlas.get" };
             if (AtlasData.Rev > 0 && AtlasData.Epoch.Length > 0) { o["since"] = AtlasData.Rev; o["epoch"] = AtlasData.Epoch; }
             atlasFetching = true;
+            Activity.Hold("atlas.get", "Receiving your Lodge's Atlas", Activity.Kind.Work);
             _ = Send(o);
         }
 
@@ -604,6 +609,8 @@ namespace ElansAddonHub.Lodge
             if (!SupportsAtlas) return;
             var batch = atlasInflight;
             atlasInflight = null;
+            try
+            {
             if (m.Bool("ok") && batch != null)
             {
                 var sent = AtlasSent();
@@ -621,16 +628,18 @@ namespace ElansAddonHub.Lodge
                 else if (why == "full") { atlasNextShare = Clock() + TimeSpan.FromMinutes(30); Util.Log("atlas: the lodge's Atlas is full - new contributions are refused until the Guild Master makes room"); }
                 else atlasNextShare = Clock() + TimeSpan.FromMinutes(2);
             }
+            }
+            finally { Activity.Release("atlas.share"); }
             RequestAtlas();
         }
 
         void OnAtlasData(Dictionary<string, object> m)
         {
             if (!SupportsAtlas) return;
-            if (!AtlasData.Apply(m)) { atlasFetching = false; return; }
+            if (!AtlasData.Apply(m)) { atlasFetching = false; Activity.Release("atlas.get"); return; }
             atlasCacheDirty = true;
             if (m.Bool("more")) RequestAtlas();                                        // the next page
-            else { atlasFetching = false; SaveAtlasCache(false); try { AtlasResendMissing(); } catch (Exception) { } RefreshFieldNotesFile(); }
+            else { atlasFetching = false; Activity.Release("atlas.get"); SaveAtlasCache(false); try { AtlasResendMissing(); } catch (Exception) { } RefreshFieldNotesFile(); }
             Util.Log("atlas: " + AtlasData.KillSources + " mobs, " + AtlasData.VendorCount + " vendors, " + AtlasData.FindCount + " finds from the lodge (rev " + AtlasData.Rev + ")");
             Changed?.Invoke();
         }
@@ -676,6 +685,9 @@ namespace ElansAddonHub.Lodge
         void AtlasTick()
         {
             BeastsTick();
+            // the ring and the close guard follow the session's own state: a reconnect (a new welcome) or a lost answer never leaves them waiting
+            if (atlasInflight == null) Activity.Release("atlas.share");
+            if (!atlasFetching) Activity.Release("atlas.get");
             if (!SupportsAtlas) return;
             if (atlasPollTick++ % 15 == 0 || (atlasBacklog && atlasInflight == null && Clock() >= atlasNextShare)) AtlasSync();
             SaveAtlasCache(false);

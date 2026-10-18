@@ -330,6 +330,11 @@ namespace ElansAddonHub.Services
         // Returns null when there is nothing to write (no flights known, no file, no guides): the file is then left alone.
         public static FlightShare.WriteResult Write(string root, FlightShare.Merged flights, ProfGuidesOut guides, DateTime nowUtc, IEnumerable<string> extraSections = null)
         {
+            using (Activity.Begin("Writing data for your add-ons", Activity.Kind.Save)) return WriteNow(root, flights, guides, nowUtc, extraSections);
+        }
+
+        static FlightShare.WriteResult WriteNow(string root, FlightShare.Merged flights, ProfGuidesOut guides, DateTime nowUtc, IEnumerable<string> extraSections)
+        {
             bool haveGuides = guides != null && !guides.IsEmpty;
             if (flights == null && !haveGuides && !(extraSections ?? Enumerable.Empty<string>()).Any(s => !string.IsNullOrEmpty(s)) && string.IsNullOrEmpty(FieldNotesText) && string.IsNullOrEmpty(BeastsText) && !FileHasGuides(root) && !FileHasText(root, "fieldNotes") && !FileHasText(root, "	beasts = {")) return null;
             // guides removed ("Stop following") while no Lodge data is in this session: the guides leave the file, the flights in it stay

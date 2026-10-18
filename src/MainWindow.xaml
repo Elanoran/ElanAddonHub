@@ -57,6 +57,17 @@
       <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0" Background="{StaticResource Brush.Rail}" CornerRadius="13,0,0,13" BorderBrush="{StaticResource Brush.Divider}" BorderThickness="0,0,1,0" MouseLeftButtonDown="TitleBar_MouseDown">
         <DockPanel LastChildFill="False">
           <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,8">
+            <!-- 2.96: background activity (Services/Activity.cs, MainWindow.Activity.cs): a quiet 16 px ring that turns while the Outpost reads, builds,
+                 saves or uploads; the tooltip names what runs. Takes no room while idle; never turns with Windows animations off. -->
+            <Grid x:Name="RailActivity" Width="64" Height="28" Background="Transparent" Visibility="Collapsed" Opacity="0"
+                  ToolTipService.Placement="Right" ToolTipService.InitialShowDelay="200" AutomationProperties.Name="Background activity">
+              <Ellipse Width="16" Height="16" Stroke="{StaticResource Brush.Divider}" StrokeThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <Path x:Name="RailActivityArc" Width="16" Height="16" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Stroke="{StaticResource Brush.Text.Secondary}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                    Data="M 8,1 A 7,7 0 0 1 15,8" RenderTransformOrigin="0.5,0.5">
+                <Path.RenderTransform><RotateTransform x:Name="RailActivityRot" /></Path.RenderTransform>
+              </Path>
+            </Grid>
             <RadioButton x:Name="TabSettings" Style="{StaticResource RailButton}" GroupName="tabs" Checked="Tab_Checked"
                          ToolTip="Settings  (Ctrl+,)" ToolTipService.Placement="Right" AutomationProperties.Name="Settings">
               <TextBlock Text="&#xE713;" FontFamily="{StaticResource Font.Icons}" FontSize="20" />

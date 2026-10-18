@@ -118,6 +118,7 @@ namespace ElansAddonHub
             InitHealth();
             InitWelcome();
             WowWatch.Shared.Changed += OnWowChanged;
+            InitActivity();                // the ring above Settings and the close guard (MainWindow.Activity.cs)
         }
 
         DateTime lastChatNote;
@@ -447,6 +448,7 @@ namespace ElansAddonHub
             if (Begin("profile")) { result += "\r\n" + await ProfileTest(dir); End(); }
             if (Begin("toasts")) { result += "\r\n" + await ToastTest(dir); End(); }
             if (Begin("dialogs")) { result += "\r\n" + await DialogTest(dir); End(); }
+            if (Begin("activity")) { result += "\r\n" + await ActivityTest(dir); End(); }
             if (Begin("inventory")) { result += "\r\n" + await InventoryTest(dir); End(); }
             if (Begin("health")) { result += "\r\n" + await HealthTest(dir); End(); }
             if (Begin("inputs")) { result += "\r\n" + await InputsTest(dir); End(); }
@@ -1010,7 +1012,7 @@ namespace ElansAddonHub
             card.SetBusy(true, wasInstalled ? "Updating..." : "Installing...");
             try
             {
-                await Installer.Install(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p), replaceDev);
+                using (Activity.Begin("Installing " + card.Name, Activity.Kind.Save)) await Installer.Install(settings.WowRoot, card.Info, new Progress<double>(p => card.Progress = p), replaceDev);
                 if (settings.SkipVersions != null && settings.SkipVersions.Remove(card.Info.Id)) SettingsStore.Save(settings);
                 // the update replaced SharedData.lua with the empty shipped file: put the lodge's flight times back (only if some arrived this session)
                 if (string.Equals(card.Info.Id, "ElansHub", StringComparison.OrdinalIgnoreCase)) { try { Session.RewriteSharedData(); } catch (Exception e) { Util.Log("flights: could not restore SharedData.lua after the Hub install (" + e.GetType().Name + ")"); } }
@@ -1042,7 +1044,7 @@ namespace ElansAddonHub
             if (!Dialog.Confirm(this, "Roll back?", $"Put {card.Name} v{b.Version} back?\n\nYour settings (WTF folder) are not touched. The Outpost won't install v{card.Info.Version} again by itself.", "Roll back")) return;
             try
             {
-                await Task.Run(() => Installer.Rollback(settings.WowRoot, card.Info, b));
+                using (Activity.Begin("Putting back " + card.Name, Activity.Kind.Save)) await Task.Run(() => Installer.Rollback(settings.WowRoot, card.Info, b));
                 settings.SkipVersions = settings.SkipVersions ?? new Dictionary<string, string>();
                 settings.SkipVersions[card.Info.Id] = card.Info.Version;
                 SettingsStore.Save(settings);
@@ -1081,7 +1083,7 @@ namespace ElansAddonHub
         {
             HubUpdateButton.IsEnabled = false;
             HubBannerText.Text = "Downloading the new version...";
-            try { await SelfUpdater.UpdateAndRestart(manifest.Hub, null); Quit(); }
+            try { using (Activity.Begin("Downloading the Outpost update", Activity.Kind.Work)) await SelfUpdater.UpdateAndRestart(manifest.Hub, null); Quit(); }
             catch (Exception ex)
             {
                 Util.Log("hub update failed: " + ex);
@@ -1163,9 +1165,11 @@ namespace ElansAddonHub
             tray.BalloonTipClicked += (s, e) => ShowFromTray();
         }
 
-        void Quit()
+        // the last step of quitting (Quit, MainWindow.Activity.cs, waits for the saves first): pending saves are written now, then the Outpost goes
+        void QuitNow()
         {
             quitting = true;
+            try { AtlasView?.FlushNav(); } catch (Exception e) { Util.Log("atlas nav save: " + e.Message); }   // pins / recents still on their 1.5 s timer
             SettingsStore.Save(settings); // window size
             Session.Disconnect();
             Radio?.Dispose();             // the stream closes with the Outpost

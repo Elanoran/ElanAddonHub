@@ -258,7 +258,7 @@ namespace ElansAddonHub
             var gen = ++loadGen;
             var root = wowRoot();
             if (!loadedOnce && !armoryMode) ShowCharSkeleton(true);
-            var read = await Task.Run(() => ReadSafe(root));
+            var read = await Activity.Track("Reading your characters", Activity.Kind.Work, () => Task.Run(() => ReadSafe(root)));
             if (gen != loadGen) return;
             Apply(root, read);
         }

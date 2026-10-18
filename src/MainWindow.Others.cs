@@ -287,7 +287,7 @@ namespace ElansAddonHub
             if (!Dialog.Confirm(this, "Roll back?", $"Put the previous version of {c.Name} back?\n\nYour settings (WTF folder) are not touched.", "Roll back")) return;
             try
             {
-                await Task.Run(() => AddonSources.Rollback(addOnsDir, c.Entry, c.Link));
+                using (Activity.Begin("Putting back " + c.Name, Activity.Kind.Save)) await Task.Run(() => AddonSources.Rollback(addOnsDir, c.Entry, c.Link));
                 c.Message = "Rolled back. In game, type /reload.";
             }
             catch (Exception ex) { c.Message = "Roll back failed: " + ex.Message; }
@@ -417,7 +417,8 @@ namespace ElansAddonHub
             var running = GamePresence.WowRunningNow();
             c.SetBusy(true, "Updating...");
             string msg;
-            var res = await CurseForgeDirect.Update(dir, key, cf, new Progress<double>(p => c.Progress = p));
+            CurseForgeDirect.Result res;
+            using (Activity.Begin("Updating " + c.Name, Activity.Kind.Save)) res = await CurseForgeDirect.Update(dir, key, cf, new Progress<double>(p => c.Progress = p));
             if (res.Ok) msg = "Updated to " + cf.LatestFileName + ". In game, type /reload" + (running ? " (WoW is running; if the addon looks unchanged, restart it)." : ".") + " CurseForge picks the new files up on its next scan.";
             else msg = "Something went wrong: " + res.Error;
             c.SetBusy(false);
@@ -535,7 +536,8 @@ namespace ElansAddonHub
             string msg; bool done = false;
             try
             {
-                var res = await AddonSources.Install(addOnsDir, c.Entry, c.Link, c.Remote, clientInterface, new Progress<double>(p => c.Progress = p));
+                AddonSources.InstallResult res;
+                using (Activity.Begin("Installing " + c.Name, Activity.Kind.Save)) res = await AddonSources.Install(addOnsDir, c.Entry, c.Link, c.Remote, clientInterface, new Progress<double>(p => c.Progress = p));
                 msg = "Updated to " + c.Remote.Version + ". In game, type /reload" + (running ? " (WoW is running; if the addon looks unchanged, restart it)." : ".");
                 if (res.Warning != null) msg += "\n" + res.Warning;
                 else done = true;                       // a warning stays until the next action; a plain "Updated" note clears by itself
