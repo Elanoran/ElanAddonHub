@@ -267,6 +267,47 @@ public sealed class CairnContributor
     // give to get: what the Cairn said about this Lodge's standing (good / new / lapsed / revoked / key) and until when it receives; the
     // receiver (CairnReceive.cs) fetches or stops on it
     public event Action<string, long?> Standing;
+    // 2.31: the notices the Cairn's answers carry (CairnNotices); null = the Cairn sent none (an older Cairn)
+    public event Action<JsonArray> NoticesArrived;
+    void RaiseNotices(JsonObject answer)
+    {
+        if (answer?["notices"] is not JsonArray a) return;
+        try { NoticesArrived?.Invoke(a); } catch (Exception e) { log?.LogWarning("Cairn: {Error} with the notices", e.GetType().Name); }
+    }
+
+    // a light check between contributions (only /v1/status), so a critical notice arrives within about NoticeEvery
+    public static readonly TimeSpan NoticeEvery = TimeSpan.FromMinutes(15);
+    DateTime nextNoticeCheck = DateTime.MinValue;
+    int noticeRunning;
+    public void TickNotices()
+    {
+        if (!Enabled || clock.UtcNow < nextNoticeCheck || Volatile.Read(ref running) != 0 || Interlocked.CompareExchange(ref noticeRunning, 1, 0) != 0) return;
+        nextNoticeCheck = clock.UtcNow + NoticeEvery;
+        _ = Task.Run(async () =>
+        {
+            try { await CheckNotices(CancellationToken.None); }
+            catch (Exception e) { log?.LogDebug("Cairn: notice check failed: {Error}", e.GetType().Name); }
+            finally { Interlocked.Exchange(ref noticeRunning, 0); }
+        });
+    }
+
+    public async Task CheckNotices(CancellationToken ct)
+    {
+        if (!Enabled) return;
+        using var r = await Http().SendAsync(Req(HttpMethod.Get, "/v1/status"), ct);
+        if (!r.IsSuccessStatusCode) return;
+        RaiseNotices(JsonNode.Parse(await r.Content.ReadAsStringAsync(ct)) as JsonObject);
+    }
+
+    // the officers saw these notices: tell the Cairn (true = it took them)
+    public async Task<bool> ReportNoticesSeen(IReadOnlyCollection<long> ids, CancellationToken ct)
+    {
+        if (!Enabled || ids.Count == 0) return false;
+        var body = new JsonObject { ["ids"] = new JsonArray(ids.Select(i => (JsonNode)i).ToArray()) }.ToJsonString();
+        using var req = Link.Request(HttpMethod.Post, "/v1/notices/seen", System.Text.Encoding.UTF8.GetBytes(body));
+        using var r = await Http().SendAsync(req, ct);
+        return r.IsSuccessStatusCode;
+    }
 
     static long? LongOf(JsonNode n) { try { return n == null ? null : (long?)n; } catch (Exception e) when (e is FormatException or InvalidOperationException) { return null; } }
 
@@ -367,6 +408,7 @@ public sealed class CairnContributor
             if (Link.JoinPath)
                 lock (Link.Join.Gate) { Link.Join.ProbationUntil = LongOf(so?["probationUntil"]); Link.Join.Settled = (bool?)so?["settled"] ?? Link.Join.Settled; }
             if ((string)so?["standing"] is { Length: > 0 } sst) { res.Standing = sst; receiveUntil = LongOf(so["receiveUntil"]); }
+            RaiseNotices(so);
             sendOutposts = Outposts != null && so?["features"] is JsonArray fa && fa.Any(f => f is JsonValue fv && fv.TryGetValue<string>(out var fs) && fs == "outposts");
             var epoch = (string)so?["epoch"] ?? "";
             long lastSeq = (long?)so?["lastSeq"] ?? 0;
@@ -409,6 +451,7 @@ public sealed class CairnContributor
             if (body["outposts"] != null) { st.OutpostsSent = outpostsHash; res.OutpostsSent = true; }
             res.Accepted += (int?)po?["accepted"] ?? 0; res.Rejected += (int?)po?["rejected"] ?? 0;
             if ((string)po?["standing"] is { Length: > 0 } pst) { res.Standing = pst; receiveUntil = LongOf(po["receiveUntil"]); }
+            RaiseNotices(po);
             if ((string)po?["epoch"] is { } ep && ep != st.Epoch) { st.Sent.Clear(); st.Epoch = ep; Save(st); res.Stopped = "epoch-changed"; break; }
             foreach (var k in keys)
                 if (changed[k] == null) st.Sent.Remove(k); else st.Sent[k] = CairnRules.Hash(changed[k]);

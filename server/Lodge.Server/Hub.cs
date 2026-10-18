@@ -109,7 +109,7 @@ public interface IModule
 // Connections, routing to the modules, sending. The features live in Chat/Voice/Presence/Admin.
 public partial class LodgeHub
 {
-    public const string Version = "2.30.2";
+    public const string Version = "2.31.0";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
     const int MaxFrame = 64 * 1024;
 
@@ -127,6 +127,7 @@ public partial class LodgeHub
     public readonly FlightModule Flight;
     public readonly AtlasModule AtlasPool;
     public readonly CairnContributor Cairn;                // opt-in "Contribute to the Cairn" (off by default)
+    public readonly LodgeSecurity Security;               // 2.31: security events in the log (LodgeSecurity.cs)
     public readonly CairnModule CairnIn;                   // give to get (feature "cairn2"): the Cairn's dataset, for members who share
     public readonly ArmoryModule Armory;
     public readonly FilesModule SharedFiles;
@@ -153,6 +154,8 @@ public partial class LodgeHub
     public LodgeHub(LodgeConfig cfg, Auth auth, FileStore files, ILogger log, IClock clock = null)
     {
         Cfg = cfg; Auth = auth; Files = files; Log = log; Clock = clock ?? SystemClock.Instance; StartedAt = Clock.UtcNow;
+        Security = new LodgeSecurity(log, Clock);
+        if (auth != null) auth.Security = Security;
         Channels = new Channels(cfg.DataDir);
         Profiles = new ProfileStore(cfg.DataDir, log, Clock);
         ProfileMod = new ProfileModule(this);
@@ -250,7 +253,8 @@ public partial class LodgeHub
         if (Cfg.ArmoryEnabled) { f.Add("armory"); f.Add("armory2"); if (Cfg.ArmoryRepsEnabled) f.Add("reputations"); }   // reputations (2.27): shared characters may carry reputations (only members who switched it on send them); "standing with a faction"
         if (Cfg.AtlasEnabled) { f.Add("atlas"); f.Add("atlas2"); f.Add("atlas3"); f.Add("atlas4"); f.Add("atlas5"); f.Add("atlas6"); f.Add("atlas7"); f.Add("atlas8"); f.Add("atlas9"); }   // atlas2: the pool also takes seenNpcs / seenObjects / seenQuests (atlas7: with their verified details and the game build, 2.25); atlas3: gathering node positions (nodes); atlas4: fishing spots (fishspots); atlas5: hunter field notes (fieldnotes); atlas6: instance entrances seen by members (entrances); atlas8: where members met, killed or saw npcs (npcspots, 2.26); atlas9: counter extras, pickpocket / gathering / contained counters, corpse dedupe (2.26)
         if (Cairn.Enabled) f.Add("cairn");                         // the owner contributes the pooled Atlas numbers (ids and counts, no names) to the Cairn: members are told so
-        if (CairnIn.Enabled) f.Add("cairn2");                      // give to get: members who share get the Cairn's dataset from this Lodge (atlas.sharing, cairn.status, GET /cairn/...)
+        if (CairnIn.Enabled) f.Add("cairn2");
+        if (CairnIn.Enabled) f.Add("cairnnotices");               // 2.31: notices from the Cairn's operator, signed, for the Guild Master and officers                      // give to get: members who share get the Cairn's dataset from this Lodge (atlas.sharing, cairn.status, GET /cairn/...)
         f.Add("liveposition");                                      // 2.30: members may share their live map position (opt-in per member, always available)
         if (Cfg.AtlasEnabled) f.Add("cairnjoin");                  // 2.28: the Guild Master can switch "Join the Cairn" on (admin.cairn, cairn.join.get -> cairn.join)
         if (Badges.Enabled) f.Add("badges");                       // badges and the ladder: both the server setting and the Guild Master switch are on
@@ -340,7 +344,7 @@ public partial class LodgeHub
                 Log.LogWarning("{Name}: dropped a malformed '{Type}' message ({Error})", me.Name, Names.ForLog(type, 16), e.GetType().Name);
                 me.CountDrop(Clock);
             }
-            if (me.RecentDrops(Clock) > FloodDropsPerMinute) { await Disconnect(me, "Too many messages - slow down"); return; }
+            if (me.RecentDrops(Clock) > FloodDropsPerMinute) { Security.Note("flood", me.Ip ?? "?", (me.Personal ? "a member" : "a guest") + " sent too many messages and was disconnected"); await Disconnect(me, "Too many messages - slow down"); return; }
         }
     }
 
@@ -517,6 +521,8 @@ public partial class LodgeHub
                     Flight.Tick();
                     AtlasPool.Tick();
                     Cairn.Tick();
+                    Cairn.TickNotices();
+                    Security.Tick();
                     CairnIn.Tick();
                     Armory.Tick();
                     Datasets.Tick();

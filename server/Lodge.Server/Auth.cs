@@ -100,10 +100,16 @@ public partial class Auth
     // ---- wrong-code lockout (see StrikeTable)
     public bool Blocked(string ip) => Strikes.IsBlocked(ip);
 
+    public LodgeSecurity Security;   // 2.31: set by the hub (LodgeSecurity.cs)
+
     public void Fail(string ip)
     {
+        Security?.Note("wrong-code", ip);
         if (Strikes.Fail(ip))
+        {
             log.LogWarning("Blocked {Ip} for {Minutes} min after too many wrong invite codes", ip, Strikes.BlockFor.TotalMinutes);
+            Security?.Note("lockout", ip, Strikes.BlockFor.TotalMinutes + " minutes after too many wrong invite codes");
+        }
     }
 
     public void Success(string ip) => Strikes.Success(ip);

@@ -190,7 +190,7 @@ public partial class Auth
 
     public ExchangeOutcome ExchangeInvite(string ip, string invite, string deviceName, string clientDeviceId, string typedName = null)
     {
-        if (Blocked(ip)) return Blocked429();
+        if (Blocked(ip)) return BlockedNote(ip);
         if (string.IsNullOrWhiteSpace(invite) || invite.Length > 256) { Fail(ip); return Wrong(); }
         ExchangeOutcome res;
         try { res = Locked(() => ExchangeInviteLocked(HashHex(invite), deviceName, clientDeviceId, ip, typedName)); }
@@ -206,7 +206,7 @@ public partial class Auth
     // the old permanent code, exchanged once for a device token ("Upgrade this device")
     public ExchangeOutcome ExchangeCode(string ip, string code, string deviceName, string clientDeviceId)
     {
-        if (Blocked(ip)) return Blocked429();
+        if (Blocked(ip)) return BlockedNote(ip);
         var who = Check(code);
         if (who == null) { Fail(ip); return new ExchangeOutcome(401, "Wrong invite code", "wrong"); }
         if (!who.Personal) return new ExchangeOutcome(403, "Guests join with an invite link - ask for one", "guest");
@@ -229,6 +229,7 @@ public partial class Auth
     }
 
     ExchangeOutcome Blocked429() => new(429, "Too many wrong invite codes - try again in 15 minutes", "blocked");
+    ExchangeOutcome BlockedNote(string ip) { Security?.Note("blocked", ip); return Blocked429(); }
     static ExchangeOutcome Wrong() => new(401, "This invite isn't valid - check the link", "wrong");
     static ExchangeOutcome Gone() => new(410, "This invite has been used or expired - ask for a new one", "used-or-expired");
 

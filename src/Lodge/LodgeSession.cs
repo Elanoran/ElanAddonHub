@@ -523,6 +523,7 @@ namespace ElansAddonHub.Lodge
                 case "atlas.data": OnAtlasData(m); break;
                 case "cairn.status": OnCairnStatus(m); break;
                 case "cairn.join": OnCairnJoin(m); break;
+                case "cairn.notices": OnCairnNotices(m); break;
                 case "armory.saved": OnArmorySaved(m); break;
                 case "armory.deleted": OnArmoryDeleted(m); break;
                 case "armory.chars": OnArmoryChars(m); break;

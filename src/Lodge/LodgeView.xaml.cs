@@ -165,6 +165,7 @@ namespace ElansAddonHub.Lodge
             }
             UpdateServerNotice();
             UpdateUpgradeNotice();
+            UpdateCairnNotice();
             AttachButton.Visibility = s.CanShareFiles || s.SupportsLfg ? Visibility.Visible : Visibility.Collapsed;
 
             // voice bar
@@ -249,6 +250,27 @@ namespace ElansAddonHub.Lodge
             if (show) { ServerNoticeText.Text = Session.ServerNoticeText; ServerNoticeCopy.Content = "Copy command"; }
         }
         void ServerNoticeClose_Click(object sender, RoutedEventArgs e) => Session.DismissServerNotice();
+
+        // a notice from the Cairn: shown over the other notes (it shares row 0, and wins), the colour says how urgent
+        void UpdateCairnNotice()
+        {
+            var n = Session?.ShownCairnNotice;
+            CairnNotice.Visibility = n != null ? Visibility.Visible : Visibility.Collapsed;
+            if (n == null) return;
+            var key = n.Level == "critical" ? "Brush.Danger" : n.Level == "warning" ? "Brush.Warn" : "Brush.Info";
+            var brush = (System.Windows.Media.Brush)FindResource(key);
+            CairnNotice.BorderBrush = brush; CairnNoticeIcon.Foreground = brush;
+            CairnNoticeIcon.Text = n.Level == "info" ? "\uE946" : "\uE7BA";
+            CairnNoticeTitle.Text = (n.Level == "critical" ? "Important - from the Cairn" : n.Level == "warning" ? "Heads up - from the Cairn" : "From the Cairn") + " \u2713";
+            CairnNoticeText.Text = n.Text;
+            if (ServerNotice.Visibility == Visibility.Visible) ServerNotice.Visibility = Visibility.Collapsed;
+            if (UpgradeNotice.Visibility == Visibility.Visible) UpgradeNotice.Visibility = Visibility.Collapsed;
+        }
+        void CairnNoticeClose_Click(object sender, RoutedEventArgs e) => Session.DismissCairnNotice();
+        public bool CairnNoticeVisibleForTest => CairnNotice.Visibility == Visibility.Visible;
+        public string CairnNoticeTextForTest => CairnNoticeText.Text;
+        public string CairnNoticeTitleForTest => CairnNoticeTitle.Text;
+        public void CairnNoticeCloseForTest() => CairnNoticeClose_Click(null, null);
 
         // "Give this PC its own sign-in": shown once to someone on a permanent code on a 2.10 server; Not now is remembered for this lodge
         void UpdateUpgradeNotice()

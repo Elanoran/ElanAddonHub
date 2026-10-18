@@ -618,6 +618,25 @@ Guests never get the data.
   the user switches sharing off, has no Lodge, or the Lodge doesn't list `cairn2`. It checks both SHA-256s and, once it pins the Cairn's key,
   the signature; it asks at most every 12 hours, and at once when `cairn.status` names a newer `seq`.
 
+### Notices from the Cairn (Lodge 2.31 / Cairn 1.6.2; Lodge feature `cairnnotices`; `server/Lodge.Server/CairnNotices.cs`)
+
+The Cairn's operator can send a short notice (security issue, maintenance, news) to every Lodge or one Lodge. The Cairn adds the notices meant
+for a Lodge to its `/v1/status` and contribution answers (`notices: [{id, created, expires, level, to, text, sig, kid}]`); the Lodge also checks
+`/v1/status` every 15 minutes. `level` is `info`, `warning` or `critical`; `text` is plain text, at most 500 characters; `to` is `*` or the
+Lodge's id. `sig` is ES256 (base64, r||s) with the Cairn's dataset key over
+`"elans-cairn-notice/1\n<id>\n<created>\n<expires>\n<level>\n<to>\n<text>"` (unix seconds). The Lodge keeps the current list in
+`data/cairn-notices.json`, logs each new one, and passes them on unchanged - it can't write or alter one.
+
+- `cairn.notices {list}` (server -> client): after `cairn.notices.get` and whenever the list changes. The Guild Master and officers get every
+  notice, other members only `critical` ones, guests none. An empty list = withdrawn.
+- `cairn.notices.get {}` (client -> server, Page budget): ask for the list; the Outpost sends it after the welcome.
+- `cairn.notice.seen {ids: [..]}` (client -> server, Page budget): the user closed these. Only an officer's or the Guild Master's counts: the
+  Lodge tells the Cairn once (`POST /v1/notices/seen {ids}`, signed like the other Lodge -> Cairn calls), so the operator sees the notice landed.
+  Ids the Cairn did not send are ignored.
+
+The Outpost checks every notice against the Cairn key it pins (`CairnAtlas.PinnedKeyX/Y`) and drops unsigned, wrongly signed, expired or odd
+ones; it shows the most urgent one not closed on this PC.
+
 ## Operator stats (read-only; `GET /admin/stats`, `sudo lodge-admin stats`)
 
 Off unless `LODGE_ADMIN_TOKEN` (>= 24 characters) is set. Answers only a connection whose own address is loopback (checked before the
@@ -629,3 +648,6 @@ tunnel to `127.0.0.1:<port>` - never through the reverse proxy.
 devices, invitesPending, messages: {channels, kept}, files: {uploads, uploadBytes, slots, slotBytes}, features: [...], cairn: {enabled,
 standing, serving, receiveUntil, dataset: {day, seq, bytes}, lastCheck, problem, sharingOn, outposts: [{w, s, r}]}}`. Counts only: no names,
 codes, tokens, IPs or message text. `active7d` = members online now or with a device seen in the last 7 days.
+2.31 adds `security: {day, counts: {kind: n}, recent: [{at, kind, detail?}]}` - today's security events (`wrong-code`, `lockout`, `blocked`,
+`flood`, `too-big`, `admin-refused`, `http-rate`), without addresses. The addresses are only in the server's log (journald), one line per kind
+and address per 10 minutes, then a sum per minute and a summary per day (`security: <kind> from <ip>`).

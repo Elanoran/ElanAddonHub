@@ -28,6 +28,7 @@ namespace ElansAddonHub.Lodge
             CairnWhy = !SupportsCairnData ? "none" : IsGuestNow ? "guest" : "";
             if (SupportsCairnData && !IsGuestNow) SendCairnSharing();
             ReadCairnJoinFeatures(features);              // 2.90: the Guild Master's "Join the Cairn" (LodgeSession.CairnJoin.cs)
+            ReadCairnNoticeFeatures(features);            // 3.0: the Cairn operator's signed notices (LodgeSession.CairnNotices.cs)
             CairnStatusChanged?.Invoke();
         }
 
@@ -35,6 +36,7 @@ namespace ElansAddonHub.Lodge
         {
             SupportsCairnData = false; CairnEntitled = false; CairnSeq = 0; CairnWhy = "";
             ResetCairnJoin();
+            ResetCairnNotices();
         }
 
         // the Lodge can't see the switch otherwise (sharing off simply means nothing is uploaded): say it, so it knows whom the data is for

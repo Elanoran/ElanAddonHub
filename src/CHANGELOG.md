@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.0.0
+- **Notices from the Cairn.** When something important comes up - a security fix for Lodge servers, maintenance, news - the Cairn's operator can now send a short notice to the Lodges, and it shows at the top of the Lodge page. The Guild Master and officers see every notice, other members only the important ones, guests none. Each notice is signed with the Cairn's key and the Outpost checks that signature, so a notice that says "From the Cairn" really is from the Cairn - a Lodge can pass one on but can't write or change one. Close it with the cross; when an officer has seen it, the Cairn is told that the message arrived.
+- **Knows Lodge server 2.31.0.** A Lodge's Guild Master and officers see the update notice for it: the server passes the Cairn's notices on and keeps a log of suspicious requests (wrong invite codes, floods, oversized requests) so its operator can spot trouble early.
+
 ## 2.99.0
 - **Signed updates.** Every release is now signed, and the Outpost checks that signature with keys built into it before it trusts anything in the update information - the update itself and every add-on. An update that is signed wrongly is refused and nothing is installed from it, so a release someone uploaded with a stolen GitHub login alone can't reach you. Older releases had no signature; for now an unsigned one is still accepted (and noted in the log), a later release will refuse those too.
 

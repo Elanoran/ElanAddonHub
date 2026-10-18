@@ -324,6 +324,20 @@
         <TextBlock x:Name="ServerNoticeText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
       </DockPanel>
     </Border>
+    <!-- ===================== a notice from the Cairn's operator (signed; LodgeSession.CairnNotices.cs), coloured by level ===================== -->
+    <Border x:Name="CairnNotice" Grid.Row="0" Visibility="Collapsed" Margin="16,4,12,8" Padding="12,8" Background="{StaticResource Brush.Panel}" CornerRadius="{StaticResource Radius.Card}"
+            BorderThickness="1" BorderBrush="{StaticResource Brush.Info}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="24" Height="24" FontSize="12" Content="&#xE711;" Margin="8,0,0,0" Click="CairnNoticeClose_Click"
+                ToolTip="Got it" AutomationProperties.Name="Dismiss" />
+        <TextBlock x:Name="CairnNoticeIcon" Text="&#xE946;" FontFamily="{StaticResource Font.Icons}" FontSize="16" Foreground="{StaticResource Brush.Info}" VerticalAlignment="Top" Margin="0,2,8,0" />
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock x:Name="CairnNoticeTitle" Style="{StaticResource Text.RowTitle}" Text="From the Cairn &#x2713;"
+                     ToolTip="Signed with the Cairn's key - your Lodge passed it on and could not have written it" />
+          <TextBlock x:Name="CairnNoticeText" Style="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,2,0,0" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
     <!-- ===================== "Upgrade this device": a quiet one-time offer to someone still signing in with a permanent code ===================== -->
     <Border x:Name="UpgradeNotice" Grid.Row="0" Visibility="Collapsed" Margin="16,4,12,8" Padding="16,12" Background="{StaticResource Brush.Surface2}" CornerRadius="12">
       <DockPanel>

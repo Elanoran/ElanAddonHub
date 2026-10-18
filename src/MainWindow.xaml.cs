@@ -457,6 +457,7 @@ namespace ElansAddonHub
             if (Begin("atlasclassiclodge")) { result += "\r\n" + await AtlasClassicLodgeTest(dir); End(); }
             if (Begin("cairn")) { result += "\r\n" + await CairnTest(dir); End(); }
             if (Begin("cairnjoin")) { result += "\r\n" + await CairnJoinTest(dir); End(); }
+            if (Begin("cairnnotices")) { result += "\r\n" + await CairnNoticesTest(dir); End(); }
             if (Begin("atlaspage")) { result += "\r\n" + await AtlasPageTest(dir); End(); }
             await RealSec("atlaspagereal", AtlasPageRealTest);
             if (Begin("atlasbrowse")) { result += "\r\n" + await AtlasBrowseTest(dir); End(); }

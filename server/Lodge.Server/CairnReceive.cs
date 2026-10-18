@@ -436,7 +436,8 @@ public sealed class CairnModule : IModule
     public readonly CairnReceiver Receiver;
     public readonly CairnSharing Sharing;
     public readonly CairnWeekly Weekly;              // connected outposts: the anonymous weekly counts sent with the contribution
-    public readonly CairnJoiner Joiner;              // 2.28: the Guild Master's "Join the Cairn" (CairnLink.cs)
+    public readonly CairnJoiner Joiner;
+    public readonly CairnNotices Notices;            // 2.31: the Cairn's notices for this Lodge              // 2.28: the Guild Master's "Join the Cairn" (CairnLink.cs)
     readonly ConcurrentDictionary<string, Queue<DateTime>> recent = new();
 
     public CairnModule(LodgeHub hub, CairnReceiver receiver)
@@ -448,6 +449,10 @@ public sealed class CairnModule : IModule
         hub.Cairn.Outposts = () => Weekly.Report();
         // a new dataset, or serving stopped: the members who share hear it at once (their Outpost fetches, or drops its copy)
         Receiver.Changed += () => { _ = TellSharers(); _ = TellLeaders(); };
+        // 2.31: notices from the Cairn's operator (CairnNotices.cs): kept, and passed on to the Guild Master and officers (everyone for a critical one)
+        Notices = new CairnNotices(hub.Cfg.DataDir, hub.Log);
+        hub.Cairn.NoticesArrived += a => Notices.Update(a, new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeSeconds());
+        Notices.Changed += () => _ = TellNotices();
         Joiner = new CairnJoiner(hub.Cfg, hub.Cairn.Link, hub.Log, hub.Clock) { LodgeName = () => hub.Info?.DisplayName ?? "" };
         Joiner.Changed += () =>
         {
@@ -525,6 +530,38 @@ public sealed class CairnModule : IModule
 
     public bool Enabled => Receiver.Enabled;
 
+    // ---------------------------------------------------------------- 2.31: the Cairn's notices
+    long NowS => new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeSeconds();
+
+    // who gets which notices: the Guild Master and officers all of them; every other member (never a guest) only the critical ones
+    List<JsonObject> NoticesFor(Member m)
+    {
+        if (m == null || !m.Personal) return new List<JsonObject>();
+        var all = Notices.Current(NowS);
+        return Leader(m) ? all : all.Where(n => (string)n["level"] == "critical").ToList();
+    }
+
+    JsonObject NoticesJson(Member m) => new() { ["t"] = "cairn.notices", ["list"] = new JsonArray(NoticesFor(m).Select(n => (JsonNode)n).ToArray()) };
+
+    public Task TellNotices() => Task.WhenAll(hub.Members.Where(m => m.Personal).ToList().Select(m => hub.Send(m, NoticesJson(m))));
+
+    async Task NoticesSeen(Member me, JsonObject m)
+    {
+        if (!Leader(me)) return;                                         // only an officer's look counts as "seen"
+        var ids = (m["ids"] as JsonArray)?.Select(x => x is JsonValue v && v.TryGetValue<long>(out var id) ? id : 0).Where(id => id > 0).ToList() ?? new List<long>();
+        var todo = Notices.ToReport(ids);
+        if (todo.Count == 0) return;
+        try
+        {
+            if (await hub.Cairn.ReportNoticesSeen(todo, CancellationToken.None))
+            {
+                Notices.MarkReported(todo);
+                hub.Log.LogInformation("Cairn notices {Ids} seen by {Name} - the Cairn was told", string.Join(",", todo), me.Name);
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { hub.Log.LogInformation("Cairn: telling it which notices were seen failed ({Error}) - tried again next time", e.GetType().Name); }
+    }
+
     public Task TellSharers() =>
         Task.WhenAll(hub.Members.Where(m => m.Personal && Sharing.IsOn(Identity(m.Name)) || m.Role == "owner").ToList().Select(m => hub.Send(m, StatusFor(m.Name, m.Personal, m.Role))));
 
@@ -593,6 +630,18 @@ public sealed class CairnModule : IModule
             {
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 await SetJoin(me, m);
+                return true;
+            }
+            case "cairn.notices.get":
+            {
+                if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
+                await hub.Send(me, NoticesJson(me));
+                return true;
+            }
+            case "cairn.notice.seen":
+            {
+                if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); return true; }
+                await NoticesSeen(me, m);
                 return true;
             }
             case "atlas.sharing":

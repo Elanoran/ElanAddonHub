@@ -19,9 +19,11 @@ builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 var rejectedProxies = new List<string>();
 builder.Services.Configure<ForwardedHeadersOptions>(o => TrustedProxies.Configure(o, cfg.TrustedProxies, rejectedProxies));
 // a general per-IP request limit, separate from the wrong-code lockout, so floods can't overwhelm the code checks
+LodgeHub lodgeRef = null;   // 2.31: the limiter's refusals go to the security log (the hub exists by the first request)
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
+    o.OnRejected = (rc, _) => { lodgeRef?.Security.Note("http-rate", rc.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "?"); return ValueTask.CompletedTask; };
     o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
         RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "?",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = cfg.HttpPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
@@ -62,6 +64,7 @@ app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSecond
 var auth = new Auth(cfg, app.Logger);
 var files = new FileStore(cfg);
 var lodge = new LodgeHub(cfg, auth, files, app.Logger);
+lodgeRef = lodge;
 
 // opening an invite link in a browser lands here (see InvitePage: the part after # never reaches the server; the page is the same for everyone)
 app.MapGet("/", (HttpContext ctx) =>
@@ -136,7 +139,7 @@ app.MapGet("/features", () => Results.Json(new { server = LodgeHub.Version, feat
 // The secrets travel in a header/body only, never in a URL. A wrong invite or code counts towards the same lockout as a wrong code.
 app.MapPost("/exchange", async (HttpContext ctx) =>
 {
-    if (ctx.Request.ContentLength > 4096) return Results.Json(new { error = "Request too large" }, statusCode: 413);
+    if (ctx.Request.ContentLength > 4096) { lodgeRef?.Security.Note("too-big", ctx.Connection.RemoteIpAddress?.ToString() ?? "?", ctx.Request.Path.Value); return Results.Json(new { error = "Request too large" }, statusCode: 413); }
     string device = "", deviceId = "", bodyInvite = "", typedName = "";
     try
     {
@@ -146,7 +149,7 @@ app.MapPost("/exchange", async (HttpContext ctx) =>
         while ((n = await ctx.Request.Body.ReadAsync(buf)) > 0)
         {
             ms.Write(buf, 0, n);
-            if (ms.Length > 4096) return Results.Json(new { error = "Request too large" }, statusCode: 413);
+            if (ms.Length > 4096) { lodgeRef?.Security.Note("too-big", ctx.Connection.RemoteIpAddress?.ToString() ?? "?", ctx.Request.Path.Value); return Results.Json(new { error = "Request too large" }, statusCode: 413); }
         }
         if (ms.Length > 0 && System.Text.Json.Nodes.JsonNode.Parse(ms.ToArray()) is System.Text.Json.Nodes.JsonObject o)
         {
@@ -370,8 +373,13 @@ app.MapGet("/admin/stats", (HttpContext ctx) =>
 {
     ctx.Response.Headers["Cache-Control"] = "no-store";
     if (!LodgeAdminApi.Allowed(cfg.AdminToken, ctx.Items[LodgeAdminApi.DirectKey] as IPAddress, ctx.Items[LodgeAdminApi.ProxiedKey] is true, ctx.Request.Headers["X-Lodge-Admin"].ToString()))
+    {
+        lodge.Security.Note("admin-refused", (ctx.Items[LodgeAdminApi.DirectKey] as IPAddress)?.ToString() ?? "?", "GET /admin/stats");
         return Results.NotFound();
-    return Results.Json(LodgeAdminApi.Stats(lodge));
+    }
+    var stats = LodgeAdminApi.Stats(lodge);
+    stats["security"] = lodge.Security.Today();     // 2.31: today's security events (no addresses)
+    return Results.Json(stats);
 });
 
 files.StartCleanup(app.Lifetime.ApplicationStopping);
