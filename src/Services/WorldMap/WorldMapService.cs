@@ -174,6 +174,7 @@ namespace ElansAddonHub.Services.WorldMap
         {
             try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; } catch (Exception) { }
             var sw = System.Diagnostics.Stopwatch.StartNew();
+            using (Activity.Begin("Building the " + cont.Name + " world map", Activity.Kind.Work))   // it resumes next time: closing need not wait
             try
             {
                 Interlocked.Increment(ref BuildCountForTest);
@@ -244,6 +245,7 @@ namespace ElansAddonHub.Services.WorldMap
         {
             try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; } catch (Exception) { }
             var sw = System.Diagnostics.Stopwatch.StartNew();
+            using (Activity.Begin("Building the " + cont.Name + " terrain", Activity.Kind.Work))
             try
             {
                 Interlocked.Increment(ref TerrainBuildCountForTest);

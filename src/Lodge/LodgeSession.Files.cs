@@ -148,8 +148,11 @@ namespace ElansAddonHub.Lodge
             try
             {
                 if (slot != null) { slot.Error = ""; slot.BusyText = "Uploading..."; slot.Progress = 0; }
-                var sha = await Task.Run(() => LodgeFiles.Sha256(path));
-                await http.UploadSlot(slotId, name, path, note, sha, p => { if (slot != null) slot.Progress = p; progress?.Invoke(p); });
+                using (Activity.Begin("Uploading " + name + " to your Lodge", Activity.Kind.Save))
+                {
+                    var sha = await Task.Run(() => LodgeFiles.Sha256(path));
+                    await http.UploadSlot(slotId, name, path, note, sha, p => { if (slot != null) slot.Progress = p; progress?.Invoke(p); });
+                }
                 RequestFiles();
                 return null;
             }

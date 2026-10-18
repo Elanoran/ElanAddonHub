@@ -111,13 +111,13 @@ namespace ElansAddonHub
             else
             {
                 // one hub at a time: a second start just brings the first one to the front.
-                // After a self-update the old hub may still be closing: wait for it instead of giving up.
+                // After a self-update the old hub may still be closing (it finishes its saves first, at most 15 s): wait for it instead of giving up.
                 // a test run with its own data folder gets its own "one hub" lock, so it never meets the real hub
                 var testData = Environment.GetEnvironmentVariable("ELANSHUB_DATA");
                 var lockName = "ElansAddonHub.Single" + (string.IsNullOrEmpty(testData) ? "" : "." + testData.GetHashCode().ToString("x"));
                 single = new Mutex(false, lockName);
                 bool first;
-                try { first = single.WaitOne(e.Args.Contains("--updated") ? 15000 : 0); }
+                try { first = single.WaitOne(e.Args.Contains("--updated") ? 30000 : 0); }
                 catch (AbandonedMutexException) { first = true; } // the old one exited without releasing it
                 showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, lockName.Replace("Single", "Show"));
                 if (!first)

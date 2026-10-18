@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.96.0
+- **See when the Outpost is busy.** A small, quiet wheel now turns in the left rail just above Settings while the Outpost works in the background: reading your game files, building the world map, receiving or sharing Atlas finds with your Lodge, uploading a file, fetching the Cairn's data, installing add-ons. Hover it to see what is running. It stays still when Windows animations are off, and takes no room when nothing runs.
+- **Nothing lost when you close.** If you quit while the Outpost is still saving or sharing something, it now finishes first: a short "Finishing up" note says what is being saved and closes the Outpost by itself when it is done (at most 15 seconds). "Close anyway" is there if you are in a hurry. Pinned and recent Atlas pages are saved on close too.
+
 ## 2.95.1
 - **Knows Lodge server 2.29.** A Lodge's Guild Master and officers see the update notice for it. Lodge 2.29 fetches the Cairn's daily data as "what changed" since the copy it already has - a small download instead of the whole file - and checks the result against the Cairn's signature before handing it on.
 

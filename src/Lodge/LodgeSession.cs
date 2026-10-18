@@ -1314,6 +1314,12 @@ namespace ElansAddonHub.Lodge
             if (!CanShareFiles) throw new InvalidOperationException("Initiates can't share files");
             if (new FileInfo(path).Length > MaxFileMb * 1024L * 1024L)
                 throw new InvalidOperationException($"{Path.GetFileName(path)} is larger than {MaxFileMb} MB");
+            using (Activity.Begin("Uploading " + Path.GetFileName(path) + " to your Lodge", Activity.Kind.Save))
+                await ShareNow(path, text, replyTo, progress);
+        }
+
+        async Task ShareNow(string path, string text, string replyTo, Action<double> progress)
+        {
             var meta = await client.Upload(path, progress);
             await SendMessage(text, replyTo, meta.Str("id"));
         }

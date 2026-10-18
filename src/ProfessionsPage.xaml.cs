@@ -127,7 +127,7 @@ namespace ElansAddonHub
             if (fixedChars) return;
             var gen = ++loadGen;
             var root = wowRoot();
-            var read = await Task.Run(() => ReadSafe(root));
+            var read = await Activity.Track("Reading your characters", Activity.Kind.Work, () => Task.Run(() => ReadSafe(root)));
             if (gen != loadGen) return;
             SetCharacters(read.Chars);
         }

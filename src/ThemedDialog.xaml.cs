@@ -81,7 +81,7 @@ namespace ElansAddonHub
         }
 
         // dims the owner window while the dialog is up
-        void ShowScrim(Window owner)
+        internal void ShowScrim(Window owner)
         {
             try
             {

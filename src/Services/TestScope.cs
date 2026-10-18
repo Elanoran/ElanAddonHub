@@ -25,7 +25,7 @@ namespace ElansAddonHub.Services
         public static readonly string[] All =
         {
             "addons", "thirdparty", "startup", "addonsgrid", "selfupdated", "viewer", "voice", "update", "strip",
-            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "chatlist", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "flightlearn", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "gametooltip", "money", "talents", "professions", "profguide", "mapdata", "mapdatareal", "worldmap", "worldmapreal", "instances", "instancesreal", "buildings", "buildingsreal", "dungeonmaps", "dungeonmapsreal", "seendata", "video", "browser", "radio", "presence", "profile", "toasts", "dialogs", "inventory", "health", "inputs", "menucolors", "atlasclassic", "atlasclassiclodge", "cairn", "cairnjoin", "atlaspage", "atlaspagereal", "atlasbrowse", "atlashome", "atlashosts", "atlasmenu", "atlasclasses", "factions", "atlasdata", "atlasdatareal", "datahonesty", "datasources", "atlashidden", "atlashiddenreal", "atlasnameless", "combatlog", "zonelore", "zonelorereal", "about", "art", "round3", "idlecpu", "coldstart",
+            "lodge", "lodgefeatures", "lodgehardening", "lodgefun", "chatlist", "invites", "invites2", "linkopen", "calendar", "wowevents", "flightshare", "flightlearn", "atlaslodge", "lodgefiles", "badges", "realms", "hubdata", "readers", "characters", "upgrades", "armory", "itemdata", "spelldata", "gametooltip", "money", "talents", "professions", "profguide", "mapdata", "mapdatareal", "worldmap", "worldmapreal", "instances", "instancesreal", "buildings", "buildingsreal", "dungeonmaps", "dungeonmapsreal", "seendata", "video", "browser", "radio", "presence", "profile", "toasts", "dialogs", "activity", "inventory", "health", "inputs", "menucolors", "atlasclassic", "atlasclassiclodge", "cairn", "cairnjoin", "atlaspage", "atlaspagereal", "atlasbrowse", "atlashome", "atlashosts", "atlasmenu", "atlasclasses", "factions", "atlasdata", "atlasdatareal", "datahonesty", "datasources", "atlashidden", "atlashiddenreal", "atlasnameless", "combatlog", "zonelore", "zonelorereal", "about", "art", "round3", "idlecpu", "coldstart",
         };
 
         // section -> sections that must also run because they read state the other one leaves behind. Everything else a section
@@ -73,6 +73,7 @@ namespace ElansAddonHub.Services
             ["profile"] = "profiles and the editor",
             ["toasts"] = "toast notifications",
             ["dialogs"] = "themed dialogs",
+            ["activity"] = "background activity (2.96): the tracker (tokens, keys, counts, names, 8 threads at once, waiting for saves), the ring above Settings (show delay, minimum time, tooltip, turning only with animations on and the window visible, game-file reading folded in), wired jobs, and the close guard with a fake long save (no dialog when nothing waits, a save that ends by itself, the cap, Close anyway)",
             ["inventory"] = "Characters page: bags, bank, guild bank views, search, tooltips with counts across characters, character list (Bags data)",
             ["readers"] = "how the app reads the game's saved files: one folder walk finds the same files as the old per-reader walks (flavors, accounts, links skipped), ElansHub.lua parsed once when presence + calendar + looks + hub + health + flights ask (parses counted), parsed again after a change, last good parse kept for a half-written or locked file, two threads reading at once",
             ["characters"] = "Characters page (Hub data): Hub modules bags / bank / guildbank / gear / talents / professions (parsing, TooNew), merge of Hub and Bags characters (Hub primary, newer wins, realm-exact keys), conversion to the inventory model, talent grouping, Overview / Gear / Talents / Professions tabs, empty states",
@@ -313,7 +314,8 @@ namespace ElansAddonHub.Services
             R(@"^src/Services/(AddonHealth|HealthMonitor|WowWatch)\.cs$", "health", "round3");
             R(@"^src/(Services/(HealthMonitor|WowWatch|PixelStrip|StripSelfTest|GamePresence|LodgeClient|VoiceEngine)|Lodge/LodgeSession(\.History)?|MainWindow\.IdleCpuTest)\.cs$", "idlecpu");   // what ticks while the hub is idle (the session's timers live in LodgeSession.cs / .History.cs)
             R(@"^src/MainWindow\.Round3Test\.cs$", "round3");
-            R(@"^src/ThemedDialog", "dialogs", "invites2");
+            R(@"^src/ThemedDialog", "dialogs", "invites2", "activity");
+            R(@"^src/(MainWindow\.Activity(Test)?|Services/Activity)\.cs$|^src/MainWindow\.xaml$", "activity");   // 2.96: the background activity ring and the close guard
             R(@"^src/Services/(StripSelfTest|PixelStrip)\.cs$", "strip");
             // ---- not exercised by the self-test
             R(@"^(docs/|README\.md$|DESIGN\.md$|ARCHITECTURE\.md$|\.gitignore$|\.gitattributes$|Tools/)");
@@ -590,7 +592,7 @@ namespace ElansAddonHub.Services
                 && BumpLine(Bumps["src/Services/Models.cs"].Item2, "        // ---- gathering routes") && BumpLine(Bumps["src/Services/Models.cs"].Item2, "")
                 && !BumpLine(Bumps["src/Services/Models.cs"].Item2, "    public class QuickLink") && !BumpLine(Bumps["src/Services/Models.cs"].Item2, "        public bool IsOld => Version < 3;"));
             Ck("no changes -> nothing", Map().Count == 0);
-            Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "invites2" || a == "characters" || a == "upgrades" || a == "armory" || a == "itemdata" || a == "spelldata" || a == "inventory" || a == "health" || a == "menucolors" || a == "atlasmenu")));
+            Ck("results are in run order", Map("src/InventoryPage.xaml", "src/HealthDialog.cs", "src/ThemedDialog.xaml").SequenceEqual(All.Where(a => a == "dialogs" || a == "activity" || a == "invites2" || a == "characters" || a == "upgrades" || a == "armory" || a == "itemdata" || a == "spelldata" || a == "inventory" || a == "health" || a == "menucolors" || a == "atlasmenu")));
             Ck("every rule section is a real section", Rules.SelectMany(r => r.Item2).All(s => s == Star || All.Contains(s)));
             Ck("every dependency is a real section", Deps.All(d => All.Contains(d.Key) && d.Value.All(All.Contains)));
             Ck("every section has a description", All.All(Info.ContainsKey));
