@@ -152,6 +152,27 @@ namespace ElansAddonHub
                 Session.FeedForTest("{\"t\":\"error\",\"text\":\"Dungeon group is full (5)\"}");   // a 2.7 server has no code
                 Check("voice: same with the 2.7 wording", Session.MyRoom == null && Session.PendingRoom == null);
 
+                // ---- 3.0.1: back into the voice room after an update restart (saved before the restart, one shot)
+                var nowS = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                s.VoiceResume = new VoiceResume { Room = "dungeon", Muted = true, At = nowS - 20 };
+                Session.FeedForTest(Welcome(h2));
+                Check("update restart: the saved voice room is asked for again after the welcome", Session.PendingRoom == "dungeon" && s.VoiceResume == null);
+                Session.LeaveVoice(false);
+                Session.FeedForTest(Welcome(h2));
+                Check("update restart: only once (a later welcome does not join again)", Session.PendingRoom == null);
+                s.VoiceResume = new VoiceResume { Room = "dungeon", At = nowS - 3600 };
+                Session.FeedForTest(Welcome(h2));
+                Check("update restart: a room saved an hour ago is not rejoined (and is forgotten)", Session.PendingRoom == null && s.VoiceResume == null);
+                s.VoiceResume = new VoiceResume { Room = "dungeon", Url = "https://other.example/lodge", At = nowS - 20 };
+                Session.FeedForTest(Welcome(h2));
+                Check("update restart: a room of another lodge is not rejoined", Session.PendingRoom == null && s.VoiceResume == null);
+                Session.JoinRoom("dungeon");
+                Session.RememberVoiceForRestart();
+                Check("update restart: asking for a room is remembered with its lodge and time", s.VoiceResume != null && s.VoiceResume.Room == "dungeon" && Math.Abs(s.VoiceResume.At - nowS) < 30);
+                Session.LeaveVoice(false);
+                Session.ForgetVoiceResume();
+                Check("update restart: a failed update forgets it", s.VoiceResume == null);
+
                 // ---- notifications
                 s.NotifyMode = "none";
                 Check("notify 'Nothing' silences the toasts too", !Session.Toasts.Enabled(ToastKind.Mention) && !Session.Toasts.Enabled(ToastKind.Reply));

@@ -1104,9 +1104,18 @@ namespace ElansAddonHub
         {
             HubUpdateButton.IsEnabled = false;
             HubBannerText.Text = "Downloading the new version...";
-            try { using (Activity.Begin("Downloading the Outpost update", Activity.Kind.Work)) await SelfUpdater.UpdateAndRestart(manifest.Hub, null); Quit(); }
+            try
+            {
+                using (Activity.Begin("Downloading the Outpost update", Activity.Kind.Work))
+                {
+                    Session.RememberVoiceForRestart();   // 3.0.1: the new version goes back into the voice room
+                    await SelfUpdater.UpdateAndRestart(manifest.Hub, null);
+                }
+                Quit();
+            }
             catch (Exception ex)
             {
+                Session.ForgetVoiceResume();
                 Util.Log("hub update failed: " + ex);
                 HubBannerText.Text = "Update failed: " + ex.Message;
                 HubUpdateButton.IsEnabled = true;

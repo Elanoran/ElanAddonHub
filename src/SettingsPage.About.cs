@@ -64,7 +64,7 @@ namespace ElansAddonHub
 
         static readonly Dictionary<string, string> ShortNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["ElansHunterHelper"] = "Hunter Helper", ["ElansHub"] = "Elan's Hub", ["ElansPaladinHelper"] = "Paladin Helper", ["ElansBags"] = "Bags", ["ElansToolkit"] = "Toolkit",
+            ["ElansHunterHelper"] = "Hunter Helper", ["ElansHub"] = "Elan's Hub", ["ElansPaladinHelper"] = "Paladin Helper", ["ElansPriestHelper"] = "Priest Helper", ["ElansBags"] = "Bags", ["ElansToolkit"] = "Toolkit",
         };
 
         public List<NewsSource> NewsSources()

@@ -299,6 +299,38 @@ namespace ElansAddonHub.Lodge
         string rejoinRoom;
         bool rejoinMuted, rejoinDeaf;
 
+        // 3.0.1: the Outpost restarts for an update while I am in voice: the room (and mute / deafen) is saved, and the new
+        // version goes back in after its welcome - like after a dropped connection. Only for the same lodge, only within
+        // VoiceResumeFor (a normal start later never joins voice by itself), and only once.
+        public static readonly TimeSpan VoiceResumeFor = TimeSpan.FromMinutes(10);
+        public void RememberVoiceForRestart()
+        {
+            var room = MyRoom ?? pendingRoom;
+            Settings.VoiceResume = room == null ? null : new VoiceResume
+            {
+                Room = room, Url = BaseUrl, Muted = voice?.Muted ?? pendingMuted, Deaf = voice?.Deafened ?? pendingDeaf,
+                At = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            };
+            SettingsStore.Save(Settings);
+        }
+        public void ForgetVoiceResume()
+        {
+            if (Settings.VoiceResume == null) return;
+            Settings.VoiceResume = null;
+            SettingsStore.Save(Settings);
+        }
+        // the saved room becomes the room to rejoin (when it is still fresh and for this lodge); the saved one is used up
+        void TakeVoiceResume()
+        {
+            var r = Settings.VoiceResume;
+            if (r == null) return;
+            ForgetVoiceResume();
+            var age = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - r.At;
+            if (string.IsNullOrEmpty(r.Room) || age < 0 || age > VoiceResumeFor.TotalSeconds) return;
+            if (r.Url != null && BaseUrl != null && !string.Equals(NormalizeUrl(r.Url), NormalizeUrl(BaseUrl), StringComparison.OrdinalIgnoreCase)) return;
+            rejoinRoom = r.Room; rejoinMuted = r.Muted; rejoinDeaf = r.Deaf;
+        }
+
         public void Disconnect()
         {
             rejoinRoom = null; // leaving the lodge on purpose
@@ -664,6 +696,7 @@ namespace ElansAddonHub.Lodge
             foreach (var ch in TextChannels) RecomputeUnread(ch);
 
             Select(TextChannels.FirstOrDefault(c => c.Id == keepSelected) ?? TextChannels.FirstOrDefault());
+            if (MyRoom == null && rejoinRoom == null && pendingRoom == null) TakeVoiceResume();   // 3.0.1: back from an update restart
             if (MyRoom != null && VoiceRooms.All(r => r.Id != MyRoom)) LeaveVoice(false);
             else if (MyRoom != null) SendVoice(MyRoom); // resync on the same connection while in voice
             else if (rejoinRoom != null)

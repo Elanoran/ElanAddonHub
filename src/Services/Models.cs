@@ -48,6 +48,17 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "text")] public string Text { get; set; }
     }
 
+    // 3.0.1: the voice room to go back into after the Outpost restarted for an update (LodgeSession.TakeVoiceResume)
+    [DataContract]
+    public class VoiceResume
+    {
+        [DataMember(Name = "room")] public string Room { get; set; }
+        [DataMember(Name = "url")] public string Url { get; set; }        // the lodge it was on (another lodge never rejoins)
+        [DataMember(Name = "muted")] public bool Muted { get; set; }
+        [DataMember(Name = "deaf")] public bool Deaf { get; set; }
+        [DataMember(Name = "at")] public long At { get; set; }            // unix seconds; older than 10 minutes is ignored
+    }
+
     [DataContract]
     public class QuickLink
     {
@@ -189,6 +200,7 @@ namespace ElansAddonHub.Services
         [DataMember(Name = "noLinkHandler")] public bool NoLinkHandler { get; set; }    // false = this PC opens elanshub:// invite links with the Outpost
         [DataMember(Name = "noSplash")] public bool NoSplash { get; set; }              // false = show the campfire splash screen on start
         [DataMember(Name = "lodgeUpdateDismissed")] public string LodgeUpdateDismissed { get; set; } // "server update available" note closed for this server version
+        [DataMember(Name = "voiceResume")] public VoiceResume VoiceResume { get; set; } // 3.0.1: the voice room to go back into after an update restart (one shot)
         [DataMember(Name = "cairnNoticesDismissed")] public List<long> CairnNoticesDismissed { get; set; } // 3.0: Cairn notices closed on this PC (ids; forgotten once the Cairn stops sending them)
         [DataMember(Name = "cairnJoinCardDismissed")] public bool CairnJoinCardDismissed { get; set; } // 2.90: the Guild Master's one-time "Join the Cairn" suggestion was answered (Turn on / Not now)
         [DataMember(Name = "welcomeDone")] public bool WelcomeDone { get; set; }        // the first-run guide was finished or skipped
