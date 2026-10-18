@@ -313,7 +313,7 @@ public class FilesTests
         Assert.Contains("files", r.Hub.FeatureList());
         Assert.True((bool)r.Hub.Welcome(o)["canManageFiles"]!);
         Assert.False((bool)r.Hub.Welcome(m)["canManageFiles"]!);
-        Assert.Equal("2.30.1", LodgeHub.Version);
+        Assert.Equal("2.30.2", LodgeHub.Version);
     }
 
     // ---------------------------------------------------------------- broadcast, download, restart

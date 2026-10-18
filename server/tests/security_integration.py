@@ -689,6 +689,19 @@ async def suite_i(base, data):
         check("leave: the codes entry is gone, the new owner stays", "Aurelia" not in codes and re.search(r"^Nova:.*:owner$", codes, re.M) is not None)
 
 
+async def suite_json_headers(base):
+    # 2.30.2: JSON answers, successes and early errors, say nosniff and no-store
+    async with aiohttp.ClientSession() as s:
+        for path, body, status in [("/health", None, 200), ("/features", None, 200),
+                                   ("/exchange", "{", 400), ("/exchange", "x" * 4097, 413)]:
+            r = await (s.get(base + path) if body is None else s.post(base + path, data=body))
+            check("JSON headers: " + path + " " + str(status), r.status == status
+                  and r.headers.get("X-Content-Type-Options") == "nosniff"
+                  and r.headers.get("Cache-Control") == "no-store",
+                  str(r.status) + " " + str(r.headers.get("X-Content-Type-Options")) + " " + str(r.headers.get("Cache-Control")))
+            await r.read()
+
+
 async def suite_j(base, data):
     """2.13 flight times over real sockets: feature, share/get merge, rate limit, guests read-only, validation, outliers, no data in logs."""
     async with aiohttp.ClientSession() as s:
@@ -761,6 +774,7 @@ def main():
         asyncio.run(suite_h("http://127.0.0.1:5295/lodge"))
         asyncio.run(suite_i("http://127.0.0.1:5296/lodge", di))
         asyncio.run(suite_j("http://127.0.0.1:5295/lodge", dh))
+        asyncio.run(suite_json_headers("http://127.0.0.1:5291/lodge"))
     finally:
         for p in (pa, pb, pc, pg, ph, pi): p.terminate()
         for p in (pa, pb, pc, pg, ph, pi): p.wait(10)

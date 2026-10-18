@@ -41,6 +41,21 @@ app.Use(async (ctx, next) =>
 });
 app.UseForwardedHeaders();
 if (!string.IsNullOrEmpty(cfg.PathBase)) app.UsePathBase(cfg.PathBase);
+// 2.30.2: every JSON answer (successes and early errors alike) says nosniff, and is not kept by a cache unless the route set its own policy
+// (the Cairn manifest's ETag revalidation, the immutable dataset files)
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.OnStarting(() =>
+    {
+        if (ctx.Response.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            if (!ctx.Response.Headers.ContainsKey("Cache-Control")) ctx.Response.Headers["Cache-Control"] = "no-store";
+        }
+        return Task.CompletedTask;
+    });
+    await next();
+});
 app.UseRateLimiter();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 

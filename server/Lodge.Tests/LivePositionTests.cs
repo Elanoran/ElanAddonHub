@@ -98,7 +98,7 @@ public class LivePositionTests
     {
         using var l = new Lodge2();
         Assert.Contains("liveposition", l.Hub.FeatureList());
-        Assert.Equal("2.30.1", LodgeHub.Version);
+        Assert.Equal("2.30.2", LodgeHub.Version);
     }
 
     [Fact]

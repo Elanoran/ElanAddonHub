@@ -439,7 +439,7 @@ public sealed class RealmsTests
         Assert.Contains("realms", on.R.Hub.FeatureList());
         var (m, _) = (on.R.Join("Mia", "member"), 0);
         Assert.Contains("realms", ((JsonArray)on.R.Hub.Welcome(m)["features"]!).Select(x => (string)x!));
-        Assert.Equal("2.30.1", LodgeHub.Version);
+        Assert.Equal("2.30.2", LodgeHub.Version);
     }
 
     [Fact]

@@ -19,7 +19,7 @@ public partial class AtlasTests
         Assert.Contains("atlas3", r.Hub.FeatureList());
         using var off = new FunRig(c => c.AtlasEnabled = false);
         Assert.DoesNotContain("atlas3", off.Hub.FeatureList());
-        Assert.Equal("2.30.1", LodgeHub.Version);
+        Assert.Equal("2.30.2", LodgeHub.Version);
     }
 
     [Fact]
