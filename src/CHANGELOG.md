@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.98.2
+- **Safer network parts.** Two Microsoft libraries the Outpost carried along in old versions (System.Net.Http 4.3.0 and System.Text.RegularExpressions 4.3.0, both with known security problems) are now the fixed versions.
+
 ## 2.98.1
 - **Knows Lodge server 2.30.2.** A Lodge's Guild Master and officers see the update notice for it: the server's answers now tell browsers and caches not to guess their type or keep them.
 
