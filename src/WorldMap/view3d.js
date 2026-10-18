@@ -701,7 +701,7 @@
     Object.keys(pointLayers).forEach(function (k) { placePoints(pointLayers[k]); });
     Object.keys(lineLayers).forEach(function (k) { placeLines(lineLayers[k]); });
     Object.keys(ringLayers).forEach(function (k) { placeRings(ringLayers[k]); });
-    placeDom(); if (meLive()) meDrawLines(); if (outerFloor) outerFloor.position.y = OUTER_FLOOR_Y * prefs.exag; dirty = true;
+    placeDom(); if (meLive()) meDrawLines(); if (mList.length) membersDraw(true); if (outerFloor) outerFloor.position.y = OUTER_FLOOR_Y * prefs.exag; dirty = true;
   }
 
   // ---------------------------------------------------------------- DOM overlays: labels and flight masters follow their ground spot
@@ -711,19 +711,19 @@
   function meLift(dist) { return dist <= 400 ? 0.5 : Math.min(12, 0.5 + (dist - 400) * 0.0072); }
   function updateOverlays() {
     var w = window.innerWidth, h = window.innerHeight, shown = 0;
-    var eye = camera.position, far = cam.dist, ml = meLift(cam.dist);
+    var eye = camera.position, far = cam.dist, ml = meLift(cam.dist);      // a member's dot ('mem', 2.98) sits like yours, just under it
     for (var i = 0; i < domItems.length; i++) {
       var it = domItems[i], e = it.el;
       var show = !!on[it.layer] && (!it.g || !!on[it.g]);
       if (show) {
-        var lift = it.kind === 'label' ? 40 : it.kind === 'me' ? ml : 12; it.lift = lift;
+        var meLike = it.kind === 'me' || it.kind === 'mem', lift = it.kind === 'label' ? 40 : meLike ? ml : 12; it.lift = lift;
         tmpV.set(it.x, it.y + lift, it.z);
         var dx = tmpV.x - eye.x, dy = tmpV.y - eye.y, dz = tmpV.z - eye.z, dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         tmpV.applyMatrix4(camera.matrixWorldInverse);
         if (tmpV.z >= 0) show = false;
         else {
           if (it.kind === 'label') { show = it.sm ? dist < 14000 && dist > 120 : dist > 1800 && dist < 90000; }
-          else show = it.kind === 'me' || dist < 60000;
+          else show = meLike || dist < 60000;
           tmpV.applyMatrix4(camera.projectionMatrix);
           var sx = (tmpV.x * .5 + .5) * w, sy = (-tmpV.y * .5 + .5) * h;
           if (sx < -80 || sx > w + 80 || sy < -40 || sy > h + 40) show = false;
@@ -734,7 +734,7 @@
             var px = (tmpV2.x * .5 + .5) * w, py = (-tmpV2.y * .5 + .5) * h, ang = Math.atan2(sx - px, -(sy - py)) * 180 / Math.PI;
             it.arrow.style.transform = 'rotate(' + Math.round(ang) + 'deg)';
           }
-          if (show) { e.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px)'; e.style.zIndex = it.kind === 'me' ? '150000' : String(Math.round(100000 - dist / 2)); e.style.opacity = it.kind === 'label' ? String(clamp(1.4 - dist / (it.sm ? 14000 : 70000), .35, 1)) : it.op != null ? String(it.op.toFixed(2)) : '1'; shown++; }
+          if (show) { e.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px)'; e.style.zIndex = it.kind === 'me' ? '150000' : it.kind === 'mem' ? '149000' : String(Math.round(100000 - dist / 2)); e.style.opacity = it.kind === 'label' ? String(clamp(1.4 - dist / (it.sm ? 14000 : 70000), .35, 1)) : it.op != null ? String(it.op.toFixed(2)) : '1'; shown++; }
         }
       }
       if (show !== it.vis) { e.style.display = show ? '' : 'none'; it.vis = show; }
@@ -810,7 +810,7 @@
     if (v && defs[id] && !defs[id].child) { var kids = Object.keys(panelRows).filter(function (k) { return panelRows[k].parent === id; }); if (kids.length && !kids.some(function (k) { return on[k]; })) kids.forEach(function (k) { on[k] = true; }); } var def = defs[id];
     if (v && def && !def.child && !def.live && !layers[id] && !requested[id]) { requested[id] = true; send({ t: 'need', layer: id }); setCount(id, '...'); }
     refresh(); sendLayers();
-    if (def && def.live && meLive()) { meDraw(); meRow(); }
+    if (def && def.live) { if (meLive()) { meDraw(); meRow(); } if (mList.length) membersDraw(true); }
   }
   var layersTimer = 0;
   function sendLayers() { clearTimeout(layersTimer); layersTimer = setTimeout(function () { var l = []; Object.keys(on).forEach(function (k) { if (on[k] && k.indexOf('__') !== 0) l.push(k); }); send({ t: 'layers', on: l }); }, 250); }      // the page's own marks (__pin, __me) are not layers
@@ -952,6 +952,9 @@
     stepFollow();
     if (meLines && meLineDist > 0 && Math.abs(Math.log(cam.dist / meLineDist)) > 0.3) meDrawLines();      // the ribbon keeps a few pixels wide as you zoom
     else if (meLines && window.WmPrints && window.WmPrints.zoom3d(cam.dist, window.innerHeight) === 2) meDrawLines();      // 2.93: the prints' spacing follows the zoom at once; prints on / off redraws the ribbon
+    // the members' trails the same way (2.98)
+    if (mList.length && mLineDist > 0 && Math.abs(Math.log(cam.dist / mLineDist)) > 0.3) membersDraw(true);
+    else if (mList.length) mList.forEach(function (x) { var P = mPrints[x.id]; if (x.lines && P && P.zoom3d(cam.dist, window.innerHeight) === 2) memberLines(x); });
     if (benching) { var t = (now - benching.t0) / 1000; if (benching.last) { var dt = now - benching.last; if (dt > benching.maxDt) benching.maxDt = dt; if (dt > 33.4) benching.slow++; benching.n++; } benching.last = now; cam.az = benching.az0 + t * 24; cam.tilt = 38 + 14 * Math.sin(t * 0.9); dirty = true; }
     if (heightGen !== lastHeightGen && now - lastRefresh > 700) { lastHeightGen = heightGen; lastRefresh = now; refreshHeights(); }
     var need = dirty || inFlight > 0;
@@ -1311,18 +1314,21 @@
   // The same message and rules as the flat page (worldmap.js "the live position layer"): only drawn while the app sends it, nothing stored here. The trail is a ribbon a few
   // pixels wide (its width follows the camera distance), cut into one-minute bands that fade over the 10 minutes; the dot and the event marks are DOM marks on the ground.
   // Follow me keeps the camera's target on you, easing to each new position; dragging (orbit or pan) or the arrow / rotate keys stop it, zooming does not.
+  // 2.98: the Lodge members are "walkers" too and go through the same code as you: walkerLines (ribbon + prints at the solved heights), dotItem (the dot with
+  // its heading arrow at your height rules: a floor, the water, a flight).
   var ME_STATES = { off: 1, none: 1, ok: 1, elsewhere: 1, unavailable: 1, notshared: 1, oldhub: 1 };
   var me = null, meTrail = [], meAt = 0, meLines = null, meLineDist = 0, meCard = null, follow = false, followTo = null, meDotIt = null, meEvIts = [];
   function finN(v) { return typeof v === 'number' && isFinite(v); }
   // the height the app worked out (LiveElevation): yards when it is not the terrain (a floor, the water, the air), else null = the page's own ground
   function meZ(z, s) { return finN(z) && (s === 1 || s === 2 || s === 3) && Math.abs(z) < 20000 ? z : null; }
   function llOk(a) { return a && a.length === 2 && finN(a[0]) && finN(a[1]) && a[0] <= 0 && a[0] >= -256 && a[1] >= 0 && a[1] <= 256; }
+  function colorOk(c) { return /^#[0-9a-fA-F]{6}$/.test(c || '') ? c : '#e8e6e3'; }
   function meEvents(list) {
     var out = [], kinds = (window.WmIcons && window.WmIcons.evKinds) || {};
     (Array.isArray(list) ? list.slice(0, 200) : []).forEach(function (e) {
       if (!e || !llOk([e.lat, e.lng]) || !finN(e.age) || !kinds[e.k]) return;
       out.push({ ll: [e.lat, e.lng], h: meZ(e.z, e.zs), age: Math.max(0, Math.min(600, e.age)), k: e.k, name: String(e.name || '').slice(0, 80), line: String(e.line || '').slice(0, 80),
-        c: /^#[0-9a-fA-F]{6}$/.test(e.c || '') ? e.c : '#e8e6e3', link: typeof e.link === 'string' ? e.link.slice(0, 40) : '', at: String(e.at || '').slice(0, 5) });
+        c: colorOk(e.c), link: typeof e.link === 'string' ? e.link.slice(0, 40) : '', at: String(e.at || '').slice(0, 5) });
     });
     return out;
   }
@@ -1330,25 +1336,29 @@
   function evOpacity(age) { return Math.max(0.3, 1 - Math.min(600, age) / 600 * 0.7); }
   function meLive() { return !!(me && me.state !== 'off' && me.state !== 'none'); }
   function meRow() {
-    var r = panelRows.trailevents; if (!r) return;
-    r.row.style.display = meLive() ? '' : 'none';
-    setCount('trailevents', meLive() && me.events ? String(me.events.length) : '');
-    if (window.WmPrints) window.WmPrints.row(panelRows, meLive());
+    var r = panelRows.trailevents;
+    if (r) { r.row.style.display = meLive() ? '' : 'none'; setCount('trailevents', meLive() && me.events ? String(me.events.length) : ''); }
+    if (window.WmPrints) window.WmPrints.row(panelRows, meLive() || mList.length > 0);
+  }
+  // the trail of a "me" message or of a member in "members": points {ll, age, brk, h, k} (k = the index into the app's mv / od)
+  function trailOf(m) {
+    var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [], ev = Array.isArray(m.elev) ? m.elev : [];
+    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && finN(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, h: meZ(ev[i / 2], ev[i / 2 + 1]), k: i / 4 }); }
+    return pts;
   }
   function meMsg(m) {
     var st = ME_STATES[m.state] ? m.state : 'none';
     if (st === 'off' || st === 'none') { me = { state: st }; meClear(); meRow(); return; }
-    var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [], ev = Array.isArray(m.elev) ? m.elev : [];
-    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && finN(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, h: meZ(ev[i / 2], ev[i / 2 + 1]), k: i / 4 }); }
-    me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
+    me = { state: st, name: String(m.name || '').slice(0, 48), color: colorOk(m.color), notice: String(m.notice || '').slice(0, 120),
       howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events),
       hh: Array.isArray(m.hz) ? meZ(m.hz[0], m.hz[1]) : null, lh: Array.isArray(m.lz) ? meZ(m.lz[0], m.lz[1]) : null, show: st === 'elsewhere' ? String(m.show || '').slice(0, 72) : '' };
-    meTrail = pts; meAt = Date.now();
+    meTrail = me.trail = trailOf(m); meAt = me.at = Date.now();
     if (window.WmPrints) me.prints = window.WmPrints.take(m);      // 2.88: the paw prints (trailprints.js)
-    meDraw(); meCardDraw(); meRow();
+    meDraw(); cardDraw(); meRow();
     if (follow) followAim();
   }
-  function meDropLines() { if (window.WmPrints) window.WmPrints.hide3d(); if (meLines) { meLines.children.forEach(function (c) { c.geometry.dispose(); c.material.dispose(); }); scene.remove(meLines); meLines = null; } }
+  function dropGroup(g) { if (g) { g.children.forEach(function (c) { c.geometry.dispose(); c.material.dispose(); }); scene.remove(g); } }
+  function meDropLines() { if (window.WmPrints) window.WmPrints.hide3d(); dropGroup(meLines); meLines = null; }
   function meDropDom() {
     domItems = domItems.filter(function (it) { if (it.layer === '__me' || it.layer === 'trailevents') { if (it.el.parentNode) it.el.parentNode.removeChild(it.el); return false; } return true; });
     meDotIt = null; meEvIts = [];
@@ -1356,8 +1366,7 @@
   function meClear() {
     if (scene) meDropLines();
     meDropDom(); meTrail = [];
-    if (meCard && meCard.parentNode) meCard.parentNode.removeChild(meCard);
-    meCard = null; dirty = true;
+    cardDraw(); dirty = true;
   }
   // a ribbon along one run of the trail (points {ll, h}), `w` yards wide: over the ground where both ends are on the terrain, else from height to height
   // (a flight in the air along its route, a floor of a building, the water), a little above it
@@ -1392,33 +1401,53 @@
     mesh.frustumCulled = false; mesh.renderOrder = 5;
     return mesh;
   }
-  function meDrawLines() {
-    if (!scene) return;
-    meDropLines();
-    if (!me || !meLive()) return;
-    var extra = (Date.now() - meAt) / 1000, BAND = 60, run = [], band = -1, grp = new THREE.Group(), w = clamp(cam.dist * 0.0035, 1.2, 80);
-    var pk = window.WmPrints ? window.WmPrints.lineK3d(on, me, cam.dist, window.innerHeight) : 1;
-    meLineDist = cam.dist;
-    // the prints first: where they show there is no ribbon (2.93), only on the older part a capped layout left without prints (lineFrom)
-    if (window.WmPrints) window.WmPrints.draw3d({ THREE: THREE, scene: scene, me: me, trail: meTrail, extra: extra, on: on, groundYE: groundYE, surfaceYE: surfaceYE, exag: prefs.exag, dist: cam.dist, viewH: window.innerHeight, dirty: function () { dirty = true; } });
-    var lf = pk < 1 && window.WmPrints ? window.WmPrints.lineFrom() : Infinity;
+  // the trail of a walker (you, a member) as a group in the scene: the prints first (P = the walker's own renderer; where they show there is no ribbon, 2.93),
+  // then the ribbon in one-minute bands, only on the older part a capped layout left without prints (lineFrom)
+  function walkerLines(w, P) {
+    var extra = (Date.now() - w.at) / 1000, BAND = 60, run = [], band = -1, grp = new THREE.Group(), wd = clamp(cam.dist * 0.0035, 1.2, 80), tr = w.trail || [];
+    var pk = P ? P.lineK3d(on, w, cam.dist, window.innerHeight) : 1;
+    if (P) P.draw3d({ THREE: THREE, scene: scene, me: w, trail: tr, extra: extra, on: on, groundYE: groundYE, surfaceYE: surfaceYE, exag: prefs.exag, dist: cam.dist, viewH: window.innerHeight, dirty: function () { dirty = true; } });
+    var lf = pk < 1 && P ? P.lineFrom() : Infinity;
     function flush() {
       if (run.length < 2) return;
-      if (pk === 0) { var op0 = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600)), c0 = meRibbon(run, w * 1.9, '#000000', op0 * 0.45), l0 = meRibbon(run, w, me.color, op0); if (c0) { c0.renderOrder = 4; grp.add(c0); } if (l0) grp.add(l0); return; }
+      if (pk === 0) { var op0 = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600)), c0 = meRibbon(run, wd * 1.9, '#000000', op0 * 0.45), l0 = meRibbon(run, wd, w.color, op0); if (c0) { c0.renderOrder = 4; grp.add(c0); } if (l0) grp.add(l0); return; }
       var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600));
-      var casing = pk === 1 ? meRibbon(run, w * 1.9, '#000000', op * 0.45) : null, line = meRibbon(run, pk === 1 ? w : w * 0.6, me.color, op * pk);      // pk < 1: paw prints, a faint guide
+      var casing = pk === 1 ? meRibbon(run, wd * 1.9, '#000000', op * 0.45) : null, line = meRibbon(run, pk === 1 ? wd : wd * 0.6, w.color, op * pk);      // pk < 1: paw prints, a faint guide
       if (casing) { casing.renderOrder = 4; grp.add(casing); } if (line) grp.add(line);
     }
-    for (var i = 0; i < meTrail.length; i++) {
-      var p = meTrail[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
-      if (pk === 0 && !window.WmPrints.lineHas(me, p, lf)) { if (run.length && !p.brk) { run.push(p); flush(); } run = []; break; }      // from here on the way has prints
+    for (var i = 0; i < tr.length; i++) {
+      var p = tr[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
+      if (pk === 0 && !P.lineHas(w, p, lf)) { if (run.length && !p.brk) { run.push(p); flush(); } run = []; break; }      // from here on the way has prints
       if (p.brk) { flush(); run = []; band = b; }
       if (b !== band) { flush(); run = run.length ? [run[run.length - 1]] : []; band = b; }
       run.push(p);
     }
-    if (pk !== 0 && me.state === 'ok' && me.here && run.length) run.push({ ll: me.here, h: me.hh });
+    if (pk !== 0 && w.state === 'ok' && w.here && run.length) run.push({ ll: w.here, h: w.hh });
     flush();
-    scene.add(grp); meLines = grp; dirty = true;
+    scene.add(grp); dirty = true;
+    return grp;
+  }
+  function meDrawLines() {
+    if (!scene) return;
+    meDropLines();
+    if (!me || !meLive()) return;
+    meLineDist = cam.dist;
+    meLines = walkerLines(me, window.WmPrints);
+  }
+  // a walker's dot on the ground: class colour with a heading arrow (cls adds the member's look), grey with a label where the position is not available; at their
+  // solved height (a floor, a flight), on the water's surface when swimming with no height from the app (like the ripple prints, not on the sea floor)
+  function dotItem(w, at, grey, cls, layer, kind, tipf) {
+    var pp = ll2xz(at[0], at[1]), prev = null, tr = w.trail || [];
+    if (!grey && tr.length) { var a = tr[tr.length - 1].ll; if (Math.abs(a[0] - at[0]) + Math.abs(a[1] - at[1]) < 1e-9 && tr.length >= 2) a = tr[tr.length - 2].ll; if (Math.abs(a[0] - at[0]) + Math.abs(a[1] - at[1]) >= 1e-6) prev = ll2xz(a[0], a[1]); }
+    var html = '<div class="me-dot' + (grey ? ' grey' : '') + (cls ? ' ' + cls : '') + '" style="--c:' + w.color + '">' + (prev ? '<i class="me-arrow"></i>' : '') + '</div>' + (grey ? '<div class="me-lab">' + esc(w.notice || 'Position unavailable here') + '</div>' : '');
+    var dd = el('div', 'm3 ' + (kind === 'me' ? 'me3' : 'mem3'), html);
+    dd.addEventListener('mouseenter', tipf); dd.addEventListener('mousemove', tipf); dd.addEventListener('mouseleave', hideTip);
+    dd.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+    $('ov').appendChild(dd);
+    var hz = grey ? w.lh : w.hh, wet = !grey && hz == null && !!(w.prints && (w.prints.hmv & 16));
+    var it = { el: dd, x: pp[0], z: pp[1], zs: hz, water: wet, y: hz != null ? hz * prefs.exag : wet ? surfaceYE(pp[0], pp[1]) : groundYE(pp[0], pp[1]), kind: kind, layer: layer, name: w.name, prev: prev, arrow: dd.querySelector('.me-arrow') };
+    on[layer] = true; domItems.push(it);
+    return it;
   }
   function meDraw() {
     meDrawLines();
@@ -1437,43 +1466,52 @@
       var it = { el: d, x: p[0], z: p[1], zs: e.h, y: e.h != null ? e.h * prefs.exag : groundYE(p[0], p[1]), kind: 'marker', layer: 'trailevents', name: e.name, op: evOpacity(e.age + extra), ev: e };
       domItems.push(it); meEvIts.push(it);
     });
-    // the dot: class colour with a heading arrow; grey with a label where the position is not available
     var at = me.state === 'ok' ? me.here : me.state === 'unavailable' ? me.last : null;
     if (at) {
-      var grey = me.state !== 'ok', pp = ll2xz(at[0], at[1]), prev = null;
-      if (!grey && meTrail.length) { var a = meTrail[meTrail.length - 1].ll; if (Math.abs(a[0] - at[0]) + Math.abs(a[1] - at[1]) < 1e-9 && meTrail.length >= 2) a = meTrail[meTrail.length - 2].ll; if (Math.abs(a[0] - at[0]) + Math.abs(a[1] - at[1]) >= 1e-6) prev = ll2xz(a[0], a[1]); }
-      var html = '<div class="me-dot' + (grey ? ' grey' : '') + '" style="--c:' + me.color + '">' + (prev ? '<i class="me-arrow"></i>' : '') + '</div>' + (grey ? '<div class="me-lab">' + esc(me.notice || 'Position unavailable here') + '</div>' : '');
-      var dd = el('div', 'm3 me3', html);
-      var tip2 = function (ev) { showTip(ev.clientX, ev.clientY, me.name || 'You', grey ? (me.notice || 'Position unavailable here') : 'You are here', grey ? 'The trail pauses here' : 'Live from Elan\'s Hub (display only)'); };
-      dd.addEventListener('mouseenter', tip2); dd.addEventListener('mousemove', tip2); dd.addEventListener('mouseleave', hideTip);
-      dd.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
-      $('ov').appendChild(dd);
-      var hz = grey ? me.lh : me.hh;
-      // swimming with no height from the app: on the water's surface, like the ripple prints (not on the sea floor)
-      var wet = !grey && hz == null && !!(me.prints && (me.prints.hmv & 16));
-      meDotIt = { el: dd, x: pp[0], z: pp[1], zs: hz, water: wet, y: hz != null ? hz * prefs.exag : wet ? surfaceYE(pp[0], pp[1]) : groundYE(pp[0], pp[1]), kind: 'me', layer: '__me', name: 'me', prev: prev, arrow: dd.querySelector('.me-arrow') };
-      on.__me = true; domItems.push(meDotIt);
+      var grey = me.state !== 'ok';
+      meDotIt = dotItem(me, at, grey, '', '__me', 'me', function (ev) { showTip(ev.clientX, ev.clientY, me.name || 'You', grey ? (me.notice || 'Position unavailable here') : 'You are here', grey ? 'The trail pauses here' : 'Live from Elan\'s Hub (display only)'); });
+      meDotIt.name = 'me';
     }
     dirty = true;
   }
-  // the card at the bottom right: name, notice, How to turn it on, Follow me (the same texts as the flat page)
-  function meCardDraw() {
-    if (!meLive()) { if (meCard && meCard.parentNode) meCard.parentNode.removeChild(meCard); meCard = null; return; }
+  // the card at the bottom right (the same texts as the flat page): your name, notice, Show <map>, How to turn it on, Follow me; what is followed; and (2.98)
+  // "Lodge, live": one row per member who shares their position with you, on any map - click to follow them (another map opens first), click again to stop
+  function cardDraw() {
+    var live = meLive();
+    if (!inited || (!live && !mRows.length)) { if (meCard && meCard.parentNode) meCard.parentNode.removeChild(meCard); meCard = null; return; }
     if (!meCard) {
       meCard = el('div', 'wm-me v3me');
       ['mousedown', 'wheel', 'click', 'dblclick', 'contextmenu'].forEach(function (ev) { meCard.addEventListener(ev, function (e) { e.stopPropagation(); }); });
       document.body.appendChild(meCard);
     }
-    var d = meCard; d.innerHTML = '';
-    var head = el('div', 'me-h'); var sw = el('span', 'me-sw'); sw.style.background = me.color; head.appendChild(sw); head.appendChild(el('b', '', esc(me.name || 'You')));
-    d.appendChild(head);
-    if (me.state !== 'ok' && me.notice) d.appendChild(el('div', 'me-n' + (me.state === 'unavailable' ? '' : ' calm'), esc(me.notice)));
-    if (me.show) { var sb = el('button', 'me-show', esc(me.show)); sb.type = 'button'; sb.addEventListener('click', function () { send({ t: 'showmap' }); }); d.appendChild(sb); }      // 2.91: open the world map of the map you are on
-    if (me.howto) { var a = el('button', 'me-link', esc(me.howtoText)); a.type = 'button'; a.addEventListener('click', function () { send({ t: 'howto' }); }); d.appendChild(a); }
-    if (me.state === 'ok' || me.state === 'unavailable') {
-      var f = el('button', 'me-follow' + (follow ? ' on' : ''), follow ? 'Following you' : 'Follow me'); f.type = 'button'; f.setAttribute('aria-pressed', String(follow));
-      f.addEventListener('click', function () { setFollow(!follow, true); });
-      d.appendChild(f);
+    var d = meCard, keep = d.querySelector('.mem-rows'), scroll = keep ? keep.scrollTop : 0; d.innerHTML = '';
+    if (live) {
+      var head = el('div', 'me-h'); var sw = el('span', 'me-sw'); sw.style.background = me.color; head.appendChild(sw); head.appendChild(el('b', '', esc(me.name || 'You')));
+      d.appendChild(head);
+      if (me.state !== 'ok' && me.notice) d.appendChild(el('div', 'me-n' + (me.state === 'unavailable' ? '' : ' calm'), esc(me.notice)));
+      if (me.show) { var sb = el('button', 'me-show', esc(me.show)); sb.type = 'button'; sb.addEventListener('click', function () { send({ t: 'showmap' }); }); d.appendChild(sb); }      // 2.91: open the world map of the map you are on
+      if (me.howto) { var a = el('button', 'me-link', esc(me.howtoText)); a.type = 'button'; a.addEventListener('click', function () { send({ t: 'howto' }); }); d.appendChild(a); }
+      if (me.state === 'ok' || me.state === 'unavailable') {
+        var f = el('button', 'me-follow' + (follow ? ' on' : ''), follow ? 'Following you' : 'Follow me'); f.type = 'button'; f.setAttribute('aria-pressed', String(follow));
+        f.addEventListener('click', function () { setFollow(!follow, true); });
+        d.appendChild(f);
+      }
+    }
+    var fm = mFollow && rowById(mFollow);
+    d.appendChild(el('div', 'me-fl', esc(follow ? 'Following you' : fm ? 'Following ' + fm.name : 'Not following')));
+    if (mRows.length) {
+      d.appendChild(el('div', 'mem-h', 'Lodge, live'));
+      var box = el('div', 'mem-rows');
+      mRows.forEach(function (r) {
+        var b = el('button', 'mem-row' + (r.id === mFollow ? ' on' : '')); b.type = 'button'; b.setAttribute('aria-pressed', String(r.id === mFollow)); b.setAttribute('data-id', String(r.id));
+        var s2 = el('span', 'me-sw'); s2.style.background = r.color; b.appendChild(s2);
+        b.appendChild(el('span', 'nm', esc(r.name)));
+        if (!r.here) b.appendChild(el('span', 'wh', esc(r.map || 'another map')));
+        b.title = (r.zone || '') + (r.zone && !r.here && r.map ? ' · ' : '') + (!r.here && r.map ? r.map : '') + (r.id === mFollow ? ' · click to stop following' : ' · click to follow');
+        b.addEventListener('click', function () { rowClick(r); });
+        box.appendChild(b);
+      });
+      d.appendChild(box); box.scrollTop = scroll;
     }
   }
   function followAim() {
@@ -1484,7 +1522,7 @@
     if (follow && mFollow) setMemberFollow(0);      // following yourself stops following a member
     if (tell) send({ t: 'follow', on: follow });
     if (follow) followAim();
-    if (me) meCardDraw();
+    cardDraw();
   }
   // one frame of Follow me: the camera's target eases to you (about a third of a second), the bearing, tilt and distance stay yours
   function stepFollow() {
@@ -1494,47 +1532,69 @@
     var far = Math.hypot(dx, dz) > 3000, k = far ? 1 : 0.14;
     cam.tx += dx * k; cam.tz += dz * k; dirty = true;
   }
-  // the trail keeps fading while nothing new arrives
-  setInterval(function () { if (me && meLive() && meTrail.length && inited) meDraw(); }, 15000);
+  // the trail keeps fading while nothing new arrives (yours and the members')
+  setInterval(function () { if (!inited) return; if (me && meLive() && meTrail.length) meDraw(); if (mList.length) membersDraw(true); }, 15000);
 
-  // ---------------------------------------------------------------- the Lodge members' dots in 3D (2.97.1; the flat page has them since 2.97.0)
-  // The same message and rules as worldmap.js "members": only members on this map who share with you, nothing kept. A dot on the ground in the
-  // member's class colour; point at it for the name, click it for "Follow this member" (the camera keeps them in the middle until you drag, follow
-  // yourself, or they leave the map).
-  var mList = [], mFollow = 0, mIts = [];
+  // ---------------------------------------------------------------- the Lodge members in 3D (2.97.1 dots; drawn like you since 2.98)
+  // The same message and rules as worldmap.js "members": the members on this map who share with you, each with their trail (ribbon, prints, heights) and a dot
+  // with a heading arrow, and the rows of everyone who shares (any map) for the card; nothing kept. Point at a dot for the name, click it for "Follow this
+  // member" (the camera keeps them in the middle until you drag, follow yourself, or they leave the map). Each member has their own prints renderer.
+  var mList = [], mFollow = 0, mIts = [], mRows = [], mPrints = {}, mLineDist = 0;
   function memberById(id) { for (var i = 0; i < mList.length; i++) if (mList[i].id === id) return mList[i]; return null; }
+  function rowById(id) { for (var i = 0; i < mRows.length; i++) if (mRows[i].id === id) return mRows[i]; return null; }
+  function idOk(v) { return typeof v === 'number' && v > 0 && v % 1 === 0; }
   function membersMsg(m) {
-    var out = [], seen = {};
-    (Array.isArray(m.list) ? m.list.slice(0, 100) : []).forEach(function (x) {
-      if (!x || typeof x.id !== 'number' || !(x.id > 0) || x.id % 1 !== 0 || seen[x.id] || !llOk(x.ll)) return;
+    var out = [], seen = {}, now = Date.now(), old = {};
+    mList.forEach(function (x) { old[x.id] = x; });
+    (Array.isArray(m.list) ? m.list.slice(0, 20) : []).forEach(function (x) {
+      if (!x || !idOk(x.id) || seen[x.id] || !llOk(x.ll)) return;
       seen[x.id] = 1;
-      out.push({ id: x.id, name: String(x.name || 'A member').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(x.color || '') ? x.color : '#e8e6e3', ll: [x.ll[0], x.ll[1]] });
+      var w = { id: x.id, name: String(x.name || 'A member').slice(0, 48), color: colorOk(x.color), ll: [x.ll[0], x.ll[1]], here: [x.ll[0], x.ll[1]], state: 'ok', trail: trailOf(x), at: now,
+        hh: Array.isArray(x.hz) ? meZ(x.hz[0], x.hz[1]) : null };
+      if (window.WmPrints) w.prints = window.WmPrints.take(x);
+      // unchanged since the last message (they stand still): their ribbon and prints stay as they are
+      var tr = w.trail, last = tr.length ? tr[tr.length - 1] : null;
+      w.sig = [tr.length, last ? last.ll.join(',') + ',' + last.age : '', w.here.join(','), w.hh, w.color, w.prints ? w.prints.hmv : ''].join('|');
+      var o = old[x.id]; if (o && o.sig === w.sig && o.lines) { w.lines = o.lines; w.at = o.at; w.trail = o.trail; o.lines = null; }
+      out.push(w);
     });
-    var gone = mFollow && !seen[mFollow] ? (memberById(mFollow) || {}).name : null;
-    mList = out;
-    if (mFollow && !seen[mFollow]) { setMemberFollow(0); toast((gone || 'That member') + ' is no longer on this map', true); }
-    membersDraw();
+    mList.forEach(function (x) { if (x.lines) { dropGroup(x.lines); x.lines = null; } });
+    var rows = [], rs = {};
+    (Array.isArray(m.rows) ? m.rows.slice(0, 40) : []).forEach(function (r) {
+      if (!r || !idOk(r.id) || rs[r.id]) return;
+      rs[r.id] = 1;
+      rows.push({ id: r.id, name: String(r.name || 'A member').slice(0, 48), color: colorOk(r.color), zone: String(r.zone || '').slice(0, 60), here: r.here === true && !!seen[r.id], map: String(r.map || '').slice(0, 60) });
+    });
+    var gone = mFollow && !seen[mFollow] ? (memberById(mFollow) || rowById(mFollow) || {}).name : null;
+    Object.keys(mPrints).forEach(function (k) { if (!seen[k]) { mPrints[k].dispose(); delete mPrints[k]; } });
+    mList = out; mRows = rows;
+    if (mFollow && !seen[mFollow]) { setMemberFollow(0); toast((gone || 'That member') + (rs[mFollow] ? ' is no longer on this map' : ' stopped sharing their position'), true); }
+    membersDraw(false); meRow(); cardDraw();
     memberAim();
   }
-  function membersDraw() {
+  function memberLines(x) {
+    if (x.lines) { dropGroup(x.lines); x.lines = null; }
+    if (!scene) return;
+    var P = window.WmPrints && window.WmPrints.create ? (mPrints[x.id] || (mPrints[x.id] = window.WmPrints.create())) : null;
+    x.lines = walkerLines(x, P);
+  }
+  // all = their trails again too (the fade, a new height scale, the ribbon's width after a zoom); else only the trails that changed
+  function membersDraw(all) {
     domItems = domItems.filter(function (it) { if (it.layer === '__mem') { if (it.el.parentNode) it.el.parentNode.removeChild(it.el); return false; } return true; });
     mIts = [];
     if (!inited) return;
+    mLineDist = cam.dist;
     mList.forEach(function (x) {
-      var p = ll2xz(x.ll[0], x.ll[1]), d = el('div', 'm3 mem3', '<div class="mem-dot' + (x.id === mFollow ? ' following' : '') + '" style="--c:' + x.color + '"></div>');
-      var tipf = function (ev) { showTip(ev.clientX, ev.clientY, x.name, 'Lodge member, live', x.id === mFollow ? 'Following - click to stop' : 'Click to follow'); };
-      d.addEventListener('mouseenter', tipf); d.addEventListener('mousemove', tipf); d.addEventListener('mouseleave', hideTip);
-      d.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+      if (all || !x.lines) memberLines(x);
+      var it = dotItem(x, x.here, false, 'mem-dot' + (x.id === mFollow ? ' following' : ''), '__mem', 'mem', function (ev) { showTip(ev.clientX, ev.clientY, x.name, 'Lodge member, live', x.id === mFollow ? 'Following - click to stop' : 'Click to follow'); });
       function act(ev) {
         ev.stopPropagation(); ev.preventDefault(); hideTip();
         menu(ev.clientX, ev.clientY, x.name, [x.id === mFollow ? { text: 'Stop following', run: function () { setMemberFollow(0); } } : { text: 'Follow this member', run: function () { setMemberFollow(x.id); } }]);
       }
-      d.addEventListener('click', act); d.addEventListener('contextmenu', act);
-      $('ov').appendChild(d);
-      var it = { el: d, x: p[0], z: p[1], y: groundYE(p[0], p[1]), kind: 'marker', layer: '__mem', name: x.name, mid: x.id };
-      domItems.push(it); mIts.push(it);
+      it.el.addEventListener('click', act); it.el.addEventListener('contextmenu', act);
+      it.mid = x.id; mIts.push(it);
     });
-    on.__mem = true; dirty = true;
+    dirty = true;
   }
   function memberAim() {
     var f = mFollow && memberById(mFollow);
@@ -1545,10 +1605,18 @@
     id = memberById(id) ? id : 0;
     if (id === mFollow) return;
     mFollow = id;
-    if (id && follow) { follow = false; followTo = null; send({ t: 'follow', on: false }); if (me) meCardDraw(); }      // one thing to follow at a time
+    if (id && follow) { follow = false; followTo = null; send({ t: 'follow', on: false }); }      // one thing to follow at a time
     send({ t: 'mfollow', id: id });
     if (id) memberAim(); else followTo = null;
-    membersDraw();
+    membersDraw(false); cardDraw();
+  }
+  // a row of the card: follow them here, or (on another map) ask the app to open that map and follow them there; again = stop
+  function rowClick(r) {
+    if (r.id === mFollow) { setMemberFollow(0); return; }
+    if (memberById(r.id)) { setMemberFollow(r.id); return; }
+    if (follow) setFollow(false, true);
+    toast('Opening ' + (r.map || 'their map') + '...', true);
+    send({ t: 'mfollow', id: r.id });
   }
 
   // ---------------------------------------------------------------- the messages from the app
@@ -1591,7 +1659,9 @@
     Object.keys(lineLayers).forEach(function (k) { scene.remove(lineLayers[k].group); }); lineLayers = {};
     Object.keys(ringLayers).forEach(function (k) { ringLayers[k].zones.forEach(function (z) { scene.remove(z.obj); z.obj.geometry.dispose(); }); }); ringLayers = {};
     meDropLines(); if (meCard && meCard.parentNode) meCard.parentNode.removeChild(meCard); meCard = null; me = null; meTrail = []; meDotIt = null; meEvIts = []; follow = m.follow === true; followTo = null;
-    mList = []; mFollow = 0; mIts = [];
+    mList.forEach(function (x) { dropGroup(x.lines); x.lines = null; }); Object.keys(mPrints).forEach(function (k) { mPrints[k].dispose(); }); mPrints = {};
+    mList = []; mIts = []; mRows = [];
+    mFollow = idOk(m.mfollow) ? m.mfollow : 0;      // 2.98: their row opened this map: following them goes on here
     $('ov').innerHTML = ''; domItems = []; layers = {}; requested = {}; counts = {}; panelRows = {}; defs = {}; on = {}; hoverZone = null;
     tileList = []; tileMap = {}; heightsLoaded = 0; heightsFailed = 0; heightGen = 0; ready = false; frameN = 0; built = 0;
     var tl = terrain.tiles || [];
@@ -1622,11 +1692,21 @@
     feedForTest: function (m) { layer(m); return 1; },
     feed: function (m) { handle(m); return 1; },
     // the members' dots in 3D (test, 2.97.1): how many, ids, names, whether followed and centred; `followId` = an id -> Follow this member (0 = stop)
-    members: function (followId) {
+    // 2.98: per member their trail (points, ribbon pieces), arrow, dot height against the ground and their prints renderer; the card's rows; `rowId` clicks a row
+    members: function (followId, rowId) {
       if (followId != null) setMemberFollow(followId);
-      var f = memberById(mFollow), p = f ? ll2xz(f.ll[0], f.ll[1]) : null;
-      return JSON.stringify({ n: mIts.length, ids: mList.map(function (x) { return x.id; }), names: mList.map(function (x) { return x.name; }), following: mFollow, follow: follow,
-        centered: !!(p && Math.abs(cam.tx - p[0]) + Math.abs(cam.tz - p[1]) < 2), dots: mIts.filter(function (it) { return it.el && it.el.querySelector('.mem-dot'); }).length });
+      var clicked = false; if (rowId != null && meCard) { var rb = meCard.querySelector('.mem-row[data-id="' + rowId + '"]'); if (rb) { rb.click(); clicked = true; } }
+      var f = memberById(mFollow), p = f ? ll2xz(f.ll[0], f.ll[1]) : null, cd = meCard;
+      return JSON.stringify({ n: mIts.length, ids: mList.map(function (x) { return x.id; }), names: mList.map(function (x) { return x.name; }), following: mFollow, follow: follow, clicked: clicked,
+        centered: !!(p && Math.abs(cam.tx - p[0]) + Math.abs(cam.tz - p[1]) < 2), dots: mIts.filter(function (it) { return it.el && it.el.querySelector('.mem-dot'); }).length,
+        walkers: mList.map(function (x) {
+          var it = null; mIts.forEach(function (d) { if (d.mid === x.id) it = d; });
+          return { id: x.id, points: x.trail.length, ribbons: x.lines ? x.lines.children.length : 0, arrow: !!(it && it.arrow), meDot: !!(it && it.el.querySelector('.me-dot.mem-dot')),
+            dotY: it ? Math.round(it.y * 10) / 10 : null, ground: it ? Math.round(groundYE(it.x, it.z) * 10) / 10 : null, water: !!(it && it.water), hh: x.hh,
+            trailH: x.trail.slice(-10).map(function (q) { return q.h == null ? null : Math.round(q.h * 10) / 10; }), prints: mPrints[x.id] ? JSON.parse(mPrints[x.id].state3d()) : null };
+        }),
+        renderers: Object.keys(mPrints).length, card: !!cd, fl: cd && cd.querySelector('.me-fl') ? cd.querySelector('.me-fl').textContent : '', head: cd && cd.querySelector('.mem-h') ? cd.querySelector('.mem-h').textContent : '',
+        rows: cd ? [].map.call(cd.querySelectorAll('.mem-row'), function (b) { return { id: +b.getAttribute('data-id'), name: b.querySelector('.nm').textContent, on: b.classList.contains('on'), wh: b.querySelector('.wh') ? b.querySelector('.wh').textContent : '', title: b.title }; }) : [] });
     },
     // the live layer (test): state, dot (grey? on screen?), trail ribbons, events drawn, the card, Follow me and whether the camera is on you; `click` = 'howto' | 'follow'
     me: function (click) {

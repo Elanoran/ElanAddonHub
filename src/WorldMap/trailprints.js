@@ -12,18 +12,22 @@
 // Drawing: 2D = one canvas in its own pane (above the trail line, below the event marks and your dot), 3D = one InstancedMesh of flat quads lying on the
 // ground (tilted to the slope) at the solved height, with a small canvas atlas of the shapes. Nothing is allocated per frame; at most MAX prints.
 // The shapes are drawn here as plain vector paths (no image files). New prints fade in unless Windows animations are off (prefers-reduced-motion).
+// 2.98: the Lodge members' trails are drawn exactly like yours: window.WmPrints is your own renderer, WmPrints.create() makes one more for a member (its
+// own state, canvas and mesh; a smaller cap), and dispose() takes it away again. The layout, shapes, colours and fades are the same code for everyone.
 (function () {
   'use strict';
   var YU = 1600 / 3 / 4;                 // yards per plane unit (lat / lng): an ADT tile is 533.33 yards and 4 units
   var BASE = 2.5, MAXS = 20, MINPX = 16; // the spacing ladder: 2.5, 5, 10, 20 yards; wider than 20 = zoomed out, the line stays
   var MINPX3 = 24;                       // 3D: a little roomier (the prints are seen at a slant)
   var MAX = 5000;                        // prints at most (newest kept)
+  var MEMBER_CAP = 1500;                 // a Lodge member's renderer (2.98): up to 20 of them
   var LINE_K = 0;                        // the trail line's opacity while prints are shown: none (2.93) - the prints are the trail; zoomed out (no prints) it is the line again
   var BIT = { taxi: 4, indoors: 8, swim: 16, mount: 32, pet: 64, dead: 128 };
   // shape ids (also the atlas cells of the 3D page)
   var SH = { paw: 0, hoof: 1, bone: 2, shoe: 3, dot: 4, feather: 5, ripple: 6, wisp: 7 };
   var FOOT = { paw: SH.paw, hoof: SH.hoof, bone: SH.bone, tiny: SH.paw };
 
+  var MI = { walk: 0, mount: 1, taxi: 2, swim: 3, ghost: 4 }, MODES = ['walk', 'mount', 'taxi', 'swim', 'ghost'];
   function modeOf(bits) {
     bits = bits | 0;
     if (bits & BIT.taxi) return 'taxi';
@@ -46,93 +50,6 @@
     return out;
   }
 
-  // the streams per mode and pet bit, built once per style (layout runs per segment, so nothing is allocated there)
-  var MI = { walk: 0, mount: 1, taxi: 2, swim: 3, ghost: 4 }, SC = { foot: null, hunter: null, petKnown: null, t: [] };
-  function streamsOf(mode, style, bits) {
-    var foot = style.foot || 'paw', hu = !!style.hunter, pk = !!style.petKnown;
-    if (SC.foot !== foot || SC.hunter !== hu || SC.petKnown !== pk) {
-      SC.foot = foot; SC.hunter = hu; SC.petKnown = pk; SC.t = [];
-      var st = { foot: foot, hunter: hu, petKnown: pk };
-      for (var m = 0; m < MODES.length; m++) { SC.t[m * 2] = streams(MODES[m], st, 0); SC.t[m * 2 + 1] = streams(MODES[m], st, BIT.pet); }
-    }
-    return SC.t[MI[mode] * 2 + ((bits & BIT.pet) ? 1 : 0)];
-  }
-  // the step of the ladder for `ppy` pixels per yard (0 = too far out: no prints)
-  function ladder(ppy, minpx) {
-    if (!(ppy > 0) || !isFinite(ppy)) return 0;
-    var s = BASE, mp = minpx || MINPX; while (s * ppy < mp && s <= MAXS) s *= 2;
-    return s > MAXS ? 0 : s;
-  }
-
-  // ---- the layout (pure, shared by both pages). Input arrays (reused): planar yards x right / y down, odometer, move bits, age (s), run break, height (NaN = ground)
-  var IN = { x: [], y: [], od: [], bits: [], age: [], brk: [], h: [], n: 0 };
-  // output arrays (reused): position, angle (0 = facing up / north, clockwise), shape, size (yards), opacity factor, age, odometer, ghost, pet, segment + fraction
-  var OUT = { x: [], y: [], a: [], sh: [], sz: [], al: [], age: [], od: [], gh: [], pet: [], seg: [], f: [], side: [], mode: [], n: 0, lineFrom: -Infinity };
-  var MODES = ['walk', 'mount', 'taxi', 'swim', 'ghost'];
-  function layout(s, style) {
-    var o = OUT, inp = IN, n = 0;
-    o.n = 0; if (!(s > 0) || inp.n < 2) return 0;
-    // newest first, so the cap keeps the newest prints
-    for (var i = inp.n - 1; i >= 1 && n < MAX; i--) {
-      if (inp.brk[i]) continue;                                   // a break: no prints across the gap
-      var oa = inp.od[i - 1], ob = inp.od[i];
-      if (!(ob > oa)) continue;
-      var x0 = inp.x[i - 1], y0 = inp.y[i - 1], dx = inp.x[i] - x0, dy = inp.y[i] - y0, len = Math.sqrt(dx * dx + dy * dy);
-      if (!(len > 1e-6)) continue;
-      var fx = dx / len, fy = dy / len, ang = Math.atan2(fx, -fy), rx = -fy, ry = fx;
-      var bits = inp.bits[i], mode = modeOf(bits), list = streamsOf(mode, style, bits);
-      for (var q = 0; q < list.length && n < MAX; q++) {
-        var st = list[q], step = s * st.m;
-        // the multiples of the step inside (oa, ob], newest first
-        var kHi = Math.floor((ob - st.ph * step) / step), kLo = Math.floor((oa - st.ph * step) / step) + 1;
-        for (var k = kHi; k >= kLo && n < MAX; k--) {
-          var d = (k + st.ph) * step, f = (d - oa) / (ob - oa);
-          if (f < 0 || f > 1) continue;
-          var side = st.alt ? ((k & 1) ? 1 : -1) : 0, off = (st.side || 0) * s + side * st.lat * s;
-          var sh = st.sh, sz = st.sz * s, al = st.al, a = ang;
-          if (st.taxi && k % 10 === 0) { sh = SH.feather; sz = 0.55 * s; al = 0.9; a = ang + ((k / 10) & 1 ? 0.5 : -0.5); }
-          o.x[n] = x0 + dx * f + rx * off; o.y[n] = y0 + dy * f + ry * off; o.a[n] = a; o.sh[n] = sh; o.sz[n] = sz; o.al[n] = al;
-          o.age[n] = inp.age[i - 1] + (inp.age[i] - inp.age[i - 1]) * f; o.od[n] = d; o.gh[n] = st.ghost ? 1 : 0; o.pet[n] = st.pet ? 1 : 0;
-          o.seg[n] = i; o.f[n] = f; o.side[n] = side; o.mode[n] = MI[mode];
-          n++;
-        }
-      }
-    }
-    o.n = n;
-    // capped (a long flight far zoomed in): the older part of the trail has no prints, so the line still draws there (lineFrom)
-    var lo = Infinity; if (n >= MAX) for (var j = 0; j < n; j++) if (o.od[j] < lo) lo = o.od[j];
-    o.lineFrom = n >= MAX ? lo : -Infinity;
-    return n;
-  }
-  // fill the input from the page's trail points ({ll:[lat,lng], age, brk, k, h}) + the app's mv / od, and the stretch from the last point to you
-  function input(me, trail, extra) {
-    var pr = me && me.prints, inp = IN, n = 0;
-    inp.n = 0; if (!pr || !trail) return 0;
-    for (var i = 0; i < trail.length; i++) {
-      var p = trail[i], k = p.k;
-      var od = pr.od && k != null ? pr.od[k] : NaN, bits = pr.mv && k != null ? pr.mv[k] : 0;
-      inp.x[n] = p.ll[1] * YU; inp.y[n] = -p.ll[0] * YU; inp.age[n] = p.age + extra; inp.brk[n] = p.brk || n === 0 ? 1 : 0;
-      inp.bits[n] = typeof bits === 'number' ? bits : 0; inp.h[n] = p.h != null ? p.h : NaN;
-      // no odometer from the app (should not happen): count it here
-      if (typeof od !== 'number' || !isFinite(od)) od = n > 0 ? inp.od[n - 1] + Math.hypot(inp.x[n] - inp.x[n - 1], inp.y[n] - inp.y[n - 1]) : 0;
-      inp.od[n] = od; n++;
-    }
-    if (n > 0 && me.state === 'ok' && me.here) {
-      var hx = me.here[1] * YU, hy = -me.here[0] * YU, step = Math.hypot(hx - inp.x[n - 1], hy - inp.y[n - 1]);
-      if (step > 0.05 && step <= 200) {
-        inp.x[n] = hx; inp.y[n] = hy; inp.age[n] = extra; inp.brk[n] = 0; inp.bits[n] = typeof pr.hmv === 'number' ? pr.hmv : inp.bits[n - 1];
-        inp.h[n] = me.hh != null ? me.hh : NaN; inp.od[n] = inp.od[n - 1] + step; n++;
-      }
-    }
-    inp.n = n;
-    return n;
-  }
-  function take(m) {
-    var p = m && m.prints;
-    if (!p || typeof p !== 'object') return null;
-    var foot = { paw: 1, hoof: 1, bone: 1, tiny: 1 }[p.foot] ? p.foot : 'paw';
-    return { mv: Array.isArray(m.mv) ? m.mv : [], od: Array.isArray(m.od) ? m.od : [], hmv: typeof m.hmv === 'number' ? m.hmv : 0, style: { foot: foot, hunter: p.hunter === true, petKnown: p.petKnown === true } };
-  }
   function lin(v) { return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
   function srgb(v) { return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; }
   function fade(age) { return Math.max(0.12, 0.9 * (1 - Math.min(600, age) / 600)); }
@@ -197,25 +114,136 @@
   var FADE_MS = 420;
   function popK(t) { return t >= 1 ? 1 : t <= 0 ? 0 : 1 - Math.pow(1 - t, 3); }
 
+  function atlas() {
+    var cv = document.createElement('canvas'), C = 128; cv.width = cv.height = C * 4;
+    var g = cv.getContext('2d'), P = paths();
+    for (var id = 0; id < 8; id++) {
+      var cx = (id % 4) * C + C / 2, cy = Math.floor(id / 4) * C + C / 2, k = C * 0.82;
+      g.setTransform(k, 0, 0, k, cx, cy);
+      g.lineJoin = 'round'; g.lineWidth = 7 / k; g.strokeStyle = 'rgba(0,0,0,0.6)'; g.fillStyle = '#ffffff';
+      if (id !== SH.dot && id !== SH.wisp) g.stroke(P[id]);
+      g.fill(P[id], 'evenodd');
+    }
+    return cv;
+  }
+  var VS = 'attribute float aCell; attribute float aAlpha; attribute vec3 aCol; varying vec2 vUv; varying float vA; varying vec3 vCol;\n#include <fog_pars_vertex>\n' +
+    'void main() { float cx = mod(aCell, 4.0); float cy = floor(aCell / 4.0 + 0.01); vUv = vec2((cx + uv.x) / 4.0, (3.0 - cy + uv.y) / 4.0); vA = aAlpha; vCol = aCol;\n' +
+    ' vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}';
+  var FS = 'uniform sampler2D map; varying vec2 vUv; varying float vA; varying vec3 vCol;\n#include <fog_pars_fragment>\n' +
+    'void main() { vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) discard; gl_FragColor = vec4(t.rgb * vCol, a);\n#include <encodings_fragment>\n#include <fog_fragment>\n}';
+  var TEX3 = null;      // the shapes' atlas texture, one for every renderer
+  function atlasTex(THREE) { if (!TEX3) { TEX3 = new THREE.CanvasTexture(atlas()); TEX3.anisotropy = 4; } return TEX3; }
+  // ================================================================ one renderer (yours, or a member's): its own arrays, canvas and mesh
+  // opt: {cap: prints at most, pane: the flat page's pane for its canvas (z order), z: that pane's z-index}
+  function make(opt) {
+  opt = opt || {};
+  var CAP = opt.cap || MAX, PANE = opt.pane || 'mePrints', PANEZ = opt.z || 450;
+  // the streams per mode and pet bit, built once per style (layout runs per segment, so nothing is allocated there)
+  var SC = { foot: null, hunter: null, petKnown: null, t: [] };
+  function streamsOf(mode, style, bits) {
+    var foot = style.foot || 'paw', hu = !!style.hunter, pk = !!style.petKnown;
+    if (SC.foot !== foot || SC.hunter !== hu || SC.petKnown !== pk) {
+      SC.foot = foot; SC.hunter = hu; SC.petKnown = pk; SC.t = [];
+      var st = { foot: foot, hunter: hu, petKnown: pk };
+      for (var m = 0; m < MODES.length; m++) { SC.t[m * 2] = streams(MODES[m], st, 0); SC.t[m * 2 + 1] = streams(MODES[m], st, BIT.pet); }
+    }
+    return SC.t[MI[mode] * 2 + ((bits & BIT.pet) ? 1 : 0)];
+  }
+  // the step of the ladder for `ppy` pixels per yard (0 = too far out: no prints)
+  function ladder(ppy, minpx) {
+    if (!(ppy > 0) || !isFinite(ppy)) return 0;
+    var s = BASE, mp = minpx || MINPX; while (s * ppy < mp && s <= MAXS) s *= 2;
+    return s > MAXS ? 0 : s;
+  }
+
+  // ---- the layout (pure, shared by both pages). Input arrays (reused): planar yards x right / y down, odometer, move bits, age (s), run break, height (NaN = ground)
+  var IN = { x: [], y: [], od: [], bits: [], age: [], brk: [], h: [], n: 0 };
+  // output arrays (reused): position, angle (0 = facing up / north, clockwise), shape, size (yards), opacity factor, age, odometer, ghost, pet, segment + fraction
+  var OUT = { x: [], y: [], a: [], sh: [], sz: [], al: [], age: [], od: [], gh: [], pet: [], seg: [], f: [], side: [], mode: [], n: 0, lineFrom: -Infinity };
+  function layout(s, style) {
+    var o = OUT, inp = IN, n = 0;
+    o.n = 0; if (!(s > 0) || inp.n < 2) return 0;
+    // newest first, so the cap keeps the newest prints
+    for (var i = inp.n - 1; i >= 1 && n < CAP; i--) {
+      if (inp.brk[i]) continue;                                   // a break: no prints across the gap
+      var oa = inp.od[i - 1], ob = inp.od[i];
+      if (!(ob > oa)) continue;
+      var x0 = inp.x[i - 1], y0 = inp.y[i - 1], dx = inp.x[i] - x0, dy = inp.y[i] - y0, len = Math.sqrt(dx * dx + dy * dy);
+      if (!(len > 1e-6)) continue;
+      var fx = dx / len, fy = dy / len, ang = Math.atan2(fx, -fy), rx = -fy, ry = fx;
+      var bits = inp.bits[i], mode = modeOf(bits), list = streamsOf(mode, style, bits);
+      for (var q = 0; q < list.length && n < CAP; q++) {
+        var st = list[q], step = s * st.m;
+        // the multiples of the step inside (oa, ob], newest first
+        var kHi = Math.floor((ob - st.ph * step) / step), kLo = Math.floor((oa - st.ph * step) / step) + 1;
+        for (var k = kHi; k >= kLo && n < CAP; k--) {
+          var d = (k + st.ph) * step, f = (d - oa) / (ob - oa);
+          if (f < 0 || f > 1) continue;
+          var side = st.alt ? ((k & 1) ? 1 : -1) : 0, off = (st.side || 0) * s + side * st.lat * s;
+          var sh = st.sh, sz = st.sz * s, al = st.al, a = ang;
+          if (st.taxi && k % 10 === 0) { sh = SH.feather; sz = 0.55 * s; al = 0.9; a = ang + ((k / 10) & 1 ? 0.5 : -0.5); }
+          o.x[n] = x0 + dx * f + rx * off; o.y[n] = y0 + dy * f + ry * off; o.a[n] = a; o.sh[n] = sh; o.sz[n] = sz; o.al[n] = al;
+          o.age[n] = inp.age[i - 1] + (inp.age[i] - inp.age[i - 1]) * f; o.od[n] = d; o.gh[n] = st.ghost ? 1 : 0; o.pet[n] = st.pet ? 1 : 0;
+          o.seg[n] = i; o.f[n] = f; o.side[n] = side; o.mode[n] = MI[mode];
+          n++;
+        }
+      }
+    }
+    o.n = n;
+    // capped (a long flight far zoomed in): the older part of the trail has no prints, so the line still draws there (lineFrom)
+    var lo = Infinity; if (n >= CAP) for (var j = 0; j < n; j++) if (o.od[j] < lo) lo = o.od[j];
+    o.lineFrom = n >= CAP ? lo : -Infinity;
+    return n;
+  }
+  // fill the input from the page's trail points ({ll:[lat,lng], age, brk, k, h}) + the app's mv / od, and the stretch from the last point to you
+  function input(me, trail, extra) {
+    var pr = me && me.prints, inp = IN, n = 0;
+    inp.n = 0; if (!pr || !trail) return 0;
+    for (var i = 0; i < trail.length; i++) {
+      var p = trail[i], k = p.k;
+      var od = pr.od && k != null ? pr.od[k] : NaN, bits = pr.mv && k != null ? pr.mv[k] : 0;
+      inp.x[n] = p.ll[1] * YU; inp.y[n] = -p.ll[0] * YU; inp.age[n] = p.age + extra; inp.brk[n] = p.brk || n === 0 ? 1 : 0;
+      inp.bits[n] = typeof bits === 'number' ? bits : 0; inp.h[n] = p.h != null ? p.h : NaN;
+      // no odometer from the app (should not happen): count it here
+      if (typeof od !== 'number' || !isFinite(od)) od = n > 0 ? inp.od[n - 1] + Math.hypot(inp.x[n] - inp.x[n - 1], inp.y[n] - inp.y[n - 1]) : 0;
+      inp.od[n] = od; n++;
+    }
+    if (n > 0 && me.state === 'ok' && me.here) {
+      var hx = me.here[1] * YU, hy = -me.here[0] * YU, step = Math.hypot(hx - inp.x[n - 1], hy - inp.y[n - 1]);
+      if (step > 0.05 && step <= 200) {
+        inp.x[n] = hx; inp.y[n] = hy; inp.age[n] = extra; inp.brk[n] = 0; inp.bits[n] = typeof pr.hmv === 'number' ? pr.hmv : inp.bits[n - 1];
+        inp.h[n] = me.hh != null ? me.hh : NaN; inp.od[n] = inp.od[n - 1] + step; n++;
+      }
+    }
+    inp.n = n;
+    return n;
+  }
+  function take(m) {
+    var p = m && m.prints;
+    if (!p || typeof p !== 'object') return null;
+    var foot = { paw: 1, hoof: 1, bone: 1, tiny: 1 }[p.foot] ? p.foot : 'paw';
+    return { mv: Array.isArray(m.mv) ? m.mv : [], od: Array.isArray(m.od) ? m.od : [], hmv: typeof m.hmv === 'number' ? m.hmv : 0, style: { foot: foot, hunter: p.hunter === true, petKnown: p.petKnown === true } };
+  }
   // ================================================================ the flat page (Leaflet)
-  var R2 = { map: null, cv: null, ctx: null, s: 0, on: false, me: null, trail: null, extra: 0, color: '#e8e6e3', ghost: '#ccc', redraw: null,
+  var R2 = { map: null, cv: null, ctx: null, s: 0, on: false, me: null, trail: null, extra: 0, color: '#e8e6e3', ghost: '#ccc', redraw: null, onMove: null,
     lastOd: -1, newFrom: Infinity, t0: 0, raf: 0, frames: 0, painted: 0, w: 0, h: 0, dpr: 1, style: null };
   function ppy2d(map) { return Math.pow(2, map.getZoom()) / YU; }
   function attach2d(map, redraw) {
     R2.redraw = redraw;
     if (R2.map === map && R2.cv) return;
     R2.map = map; R2.lastOd = -1;
-    var pane = map.getPane('mePrints') || map.createPane('mePrints');
-    pane.style.zIndex = 450; pane.style.pointerEvents = 'none';
+    var pane = map.getPane(PANE) || map.createPane(PANE);
+    pane.style.zIndex = PANEZ; pane.style.pointerEvents = 'none';
     var cv = document.createElement('canvas'); cv.className = 'me-prints'; cv.style.position = 'absolute'; cv.style.left = '0'; cv.style.top = '0'; cv.setAttribute('aria-hidden', 'true');
     pane.appendChild(cv); R2.cv = cv; R2.ctx = cv.getContext('2d');
-    map.on('moveend zoomend resize viewreset', function () {
+    R2.onMove = function () {
       if (R2.map !== map) return;
       var s = R2.on ? ladder(ppy2d(map)) : 0;
       if ((s > 0) !== (R2.s > 0) && R2.redraw) { R2.redraw(); return; }      // prints appear / go: the line changes too
       if (s !== R2.s) { var lf = OUT.lineFrom; R2.s = s; relayout2d(); if (OUT.lineFrom !== lf && R2.redraw) { R2.redraw(); return; } }      // capped: the line's part moved
       paint2d();
-    });
+    };
+    map.on('moveend zoomend resize viewreset', R2.onMove);
   }
   function relayout2d() {
     input(R2.me, R2.trail, R2.extra);
@@ -248,17 +276,30 @@
     paint2d();
     if (Date.now() - R2.t0 < FADE_MS && animOn()) R2.raf = requestAnimationFrame(anim2d); else { R2.newFrom = Infinity; paint2d(); }
   }
-  function clear2d() { R2.me = null; R2.trail = null; R2.on = false; R2.s = 0; OUT.n = 0; IN.n = 0; R2.lastOd = -1; if (R2.ctx) { R2.ctx.setTransform(1, 0, 0, 1, 0, 0); R2.ctx.clearRect(0, 0, R2.cv.width, R2.cv.height); } }
+  function clear2d() { R2.me = null; R2.trail = null; R2.on = false; R2.s = 0; OUT.n = 0; IN.n = 0; R2.lastOd = -1; if (R2.cv) { R2.cv.width = 0; R2.cv.height = 0; R2.w = 0; R2.h = 0; } }
+  // a member's renderer goes (they stopped sharing, left the map): its canvas, its listener and its 3D mesh
+  function dispose() {
+    clear2d();
+    if (R2.raf) { cancelAnimationFrame(R2.raf); R2.raf = 0; }
+    if (R2.map && R2.onMove) R2.map.off('moveend zoomend resize viewreset', R2.onMove);
+    if (R2.cv && R2.cv.parentNode) R2.cv.parentNode.removeChild(R2.cv);
+    R2.map = null; R2.cv = null; R2.ctx = null;
+    if (R3.raf) { cancelAnimationFrame(R3.raf); R3.raf = 0; }
+    if (R3.mesh) { if (R3.scene) R3.scene.remove(R3.mesh); R3.mesh.geometry.dispose(); R3.mesh.material.dispose(); }
+    R3.mesh = null; R3.scene = null; R3.ctx = null; R3.n = 0;
+  }
   function paint2d() {
     var map = R2.map, cv = R2.cv, ctx = R2.ctx; if (!map || !cv || !ctx) return;
     var size = map.getSize(), pad = 0.3, w = Math.round(size.x * (1 + 2 * pad)), h = Math.round(size.y * (1 + 2 * pad)), dpr = window.devicePixelRatio || 1;
     var tl = map.containerPointToLayerPoint([-size.x * pad, -size.y * pad]);
     L.DomUtil.setPosition(cv, tl);
+    R2.painted = 0;
+    var P = paths(), z = map.getZoom(), sc = Math.pow(2, z), org = map.getPixelOrigin(), k = sc / YU, ox = -org.x - tl.x, oy = -org.y - tl.y, any = false;
+    // nothing to paint in view (prints off, zoomed out, or all elsewhere): the canvas holds no pixels at all (cheap with many members' renderers)
+    if (R2.on && R2.s > 0 && P) for (var j = 0; j < OUT.n && !any; j++) { var qx = OUT.x[j] * k + ox, qy = OUT.y[j] * k + oy; any = qx >= -24 && qy >= -24 && qx <= w + 24 && qy <= h + 24; }
+    if (!any) { if (cv.width) { cv.width = 0; cv.height = 0; R2.w = 0; R2.h = 0; } return; }
     if (R2.w !== w || R2.h !== h || R2.dpr !== dpr) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.width = w + 'px'; cv.style.height = h + 'px'; R2.w = w; R2.h = h; R2.dpr = dpr; }
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
-    R2.painted = 0;
-    var P = paths(); if (!R2.on || !(R2.s > 0) || !OUT.n || !P) return;
-    var z = map.getZoom(), sc = Math.pow(2, z), org = map.getPixelOrigin(), k = sc / YU, ox = -org.x - tl.x, oy = -org.y - tl.y;
     var now = Date.now(), dt = (now - R2.t0) / FADE_MS, extraNow = (now - R2.t0) / 1000, fill = '';
     ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.55)';
     for (var i = OUT.n - 1; i >= 0; i--) {                       // oldest first: newer prints on top
@@ -281,24 +322,7 @@
   function row(panelRows, live) { var r = panelRows && panelRows.trailprints; if (r) r.row.style.display = live ? '' : 'none'; }
 
   // ================================================================ the 3D page (three.js)
-  var R3 = { mesh: null, scene: null, s: 0, n: 0, on: false, lastOd: -1, newFrom: Infinity, t0: 0, raf: 0, frames: 0, ctx: null, cap: MAX, lift: 0.5, refade: false, relayouts: 0, zoomCalls: 0 };
-  function atlas() {
-    var cv = document.createElement('canvas'), C = 128; cv.width = cv.height = C * 4;
-    var g = cv.getContext('2d'), P = paths();
-    for (var id = 0; id < 8; id++) {
-      var cx = (id % 4) * C + C / 2, cy = Math.floor(id / 4) * C + C / 2, k = C * 0.82;
-      g.setTransform(k, 0, 0, k, cx, cy);
-      g.lineJoin = 'round'; g.lineWidth = 7 / k; g.strokeStyle = 'rgba(0,0,0,0.6)'; g.fillStyle = '#ffffff';
-      if (id !== SH.dot && id !== SH.wisp) g.stroke(P[id]);
-      g.fill(P[id], 'evenodd');
-    }
-    return cv;
-  }
-  var VS = 'attribute float aCell; attribute float aAlpha; attribute vec3 aCol; varying vec2 vUv; varying float vA; varying vec3 vCol;\n#include <fog_pars_vertex>\n' +
-    'void main() { float cx = mod(aCell, 4.0); float cy = floor(aCell / 4.0 + 0.01); vUv = vec2((cx + uv.x) / 4.0, (3.0 - cy + uv.y) / 4.0); vA = aAlpha; vCol = aCol;\n' +
-    ' vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}';
-  var FS = 'uniform sampler2D map; varying vec2 vUv; varying float vA; varying vec3 vCol;\n#include <fog_pars_fragment>\n' +
-    'void main() { vec4 t = texture2D(map, vUv); float a = t.a * vA; if (a < 0.02) discard; gl_FragColor = vec4(t.rgb * vCol, a);\n#include <encodings_fragment>\n#include <fog_fragment>\n}';
+  var R3 = { mesh: null, scene: null, s: 0, n: 0, on: false, lastOd: -1, newFrom: Infinity, t0: 0, raf: 0, frames: 0, ctx: null, cap: CAP, lift: 0.5, refade: false, relayouts: 0, zoomCalls: 0 };
   function ensure3d(THREE, scene) {
     if (R3.mesh && R3.scene === scene) return R3.mesh;
     if (R3.mesh && R3.scene) R3.scene.remove(R3.mesh);
@@ -306,7 +330,7 @@
     geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(R3.cap), 1));
     geo.setAttribute('aAlpha', new THREE.InstancedBufferAttribute(new Float32Array(R3.cap), 1));
     geo.setAttribute('aCol', new THREE.InstancedBufferAttribute(new Float32Array(R3.cap * 3), 3));
-    var tex = new THREE.CanvasTexture(atlas()); tex.anisotropy = 4;
+    var tex = atlasTex(THREE);
     var mat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { map: { value: null } }]), vertexShader: VS, fragmentShader: FS,
       transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
     mat.uniforms.map.value = tex;
@@ -420,8 +444,8 @@
       sz: Math.round(OUT.sz[i] * 100) / 100, od: Math.round(OUT.od[i] * 100) / 100, side: OUT.side[i], pet: !!OUT.pet[i], ghost: !!OUT.gh[i], mode: MODES[OUT.mode[i]], age: Math.round(OUT.age[i] * 10) / 10, al: OUT.al[i] });
     return out;
   }
-  window.WmPrints = {
-    take: take, draw2d: draw2d, clear2d: clear2d, lineK2d: lineK2d, row: row, draw3d: draw3d, hide3d: hide3d, lineK3d: lineK3d, zoom3d: zoom3d, lineFrom: lineFrom, lineHas: lineHas,
+  return {
+    take: take, draw2d: draw2d, clear2d: clear2d, lineK2d: lineK2d, row: row, draw3d: draw3d, hide3d: hide3d, lineK3d: lineK3d, zoom3d: zoom3d, lineFrom: lineFrom, lineHas: lineHas, dispose: dispose,
     // test: the layout of a made-up trail. pts = [{x, y, od, bits, age, brk}] (planar yards), style = {foot, hunter, petKnown}
     layoutForTest: function (pts, s, style) {
       IN.n = 0;
@@ -482,4 +506,9 @@
       return JSON.stringify(r);
     }
   };
+  }      // make()
+
+  window.WmPrints = make();
+  // a member's renderer: the same drawing with its own state; fewer prints at most, and on the flat page a pane just under yours
+  window.WmPrints.create = function () { return make({ cap: MEMBER_CAP, pane: 'memPrints', z: 449 }); };
 })();
