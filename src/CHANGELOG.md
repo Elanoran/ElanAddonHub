@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.98.0
+- **Your Lodge on the world map, just like you.** Members who share their map position with you are now drawn the same way as your own position, on the flat map and in 3D: a dot in their class colour with a heading arrow, a trail of the last 10 minutes that fades out behind them, and the paw prints when you zoom in - hoofprints when they ride, ripples when they swim, and a hunter's pet trotting beside them while it is out. In 3D they stand at the right height on a building's floor, on the water or on a flight, like you do. Their trails are kept in memory only and go the moment they stop sharing, leave or go invisible.
+- **Lodge, live.** The card at the bottom right of the world map now lists everyone who shares their position with you, on any map, under your own name: a class-colour swatch, the name, and their zone when you point at it. Click a name to follow them - if they are on another map (another continent, an island), that map opens first - and click it again to stop. The card always says what is followed ("Following you", "Following Wing"); following one stops the other, and dragging the map stops it as before. The dot's own **Follow this member** stays.
+
 ## 2.97.2
 - **Lodge members in the 3D view too.** The dots of the members who share their map position with you now also stand on the 3D world map (2.97.0 drew them on the flat map only), with their name when you point at one and **Follow this member** when you click it.
 

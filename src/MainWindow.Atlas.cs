@@ -163,6 +163,7 @@ namespace ElansAddonHub
         public void UpdateLive()
         {
             try { LivePos.Update(settings.WorldMapLivePos, Session.Presence.Playing, Session.Presence.Current, DateTime.UtcNow); } catch (Exception e) { Util.Log("live position: " + e.Message); }
+            if (!settings.WorldMapLivePos) Session.ClearMemberTrails();      // 2.98: the members' trails go with your own
             worldMapView?.PushLive(true);
             worldMapView?.PushMembers(true);
         }

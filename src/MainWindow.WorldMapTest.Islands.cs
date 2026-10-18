@@ -177,9 +177,33 @@ namespace ElansAddonHub
                 await WaitFor(() => view.PageReady && view.MapId == 0, 30000);
                 lp.Update(true, true, OnIsle(0.6), t0.AddSeconds(4)); view.PushLive(true); await Task.Delay(800);
                 Check("island page: ... and going back to Northland yourself while you are still on the island stays on Northland (the card offers the island)", view.MapId == 0, "map " + view.MapId);
+
+                // 2.98: following a Lodge member onto another world map from the card's "Lodge, live" list, and the map following them back
+                settings.WorldMapFollow = false; view.PushLive(true);
+                Session.Disconnect();
+                Session.FeedForTest(MemberWelcome("member", false, true));
+                Session.FeedForTest(MemberPos(6, 0.5, 0.5, mapId: 60));
+                view.PushMembers(true);
+                var mr = await WmMembersWait(m => m.List("rows")?.Cast<Dictionary<string, object>>().Any(r => r.Int("id") == 6) == true);
+                var wr = mr?.List("rows")?.Cast<Dictionary<string, object>>().FirstOrDefault(r => r.Int("id") == 6);
+                Check("island members: Wing on Gale Isle while Northland is shown - no dot here, a row in the card that says \"Gale Isle\"", wr != null && wr.Str("wh") == "Gale Isle" && mr.Int("n") == 0, MembersText(mr));
+                int mmaps = view.MemberMapsForTest;
+                await WmMembers("null, null, 6");
+                bool mopened = await WaitFor(() => view.MapId == 7 && view.PageReady, 30000);
+                var mf2 = await WmMembersWait(m => m.Int("following") == 6 && m.Bool("centered"), 8000);
+                Check("island members: clicking the row opens Gale Isle first, then centres on Wing and goes on following them (\"Following Wing\")",
+                    mopened && view.MemberMapsForTest == mmaps + 1 && view.FollowingMember == 6 && mf2 != null && mf2.Str("fl") == "Following Wing" && mf2.List("rows").Cast<Dictionary<string, object>>().Single(r => r.Int("id") == 6).Bool("on"), "map " + view.MapId + " " + MembersText(mf2));
+                if (SelfTestClock.ShotsOn) { await Task.Delay(400); var mpng = await view.CaptureForTest(); if (mpng != null) File.WriteAllBytes(P("worldmap-members-island.png"), mpng); }
+                Session.FeedForTest(MemberPos(6, 0.52, 0.5, mapId: 11));
+                bool mback = await WaitFor(() => view.MapId == 0 && view.PageReady, 30000);
+                var mf3 = await WmMembersWait(m => m.Int("following") == 6 && m.Bool("centered"), 8000);
+                Check("island members: Wing takes the boat back to Northland while followed - the map follows them there", mback && mf3 != null && view.FollowingMember == 6, "map " + view.MapId + " " + MembersText(mf3));
+                await WmEval("window.wm.dragForTest()");
+                Check("island members: dragging stops following", await WaitFor(() => view.FollowingMember == 0, 3000));
             }
             finally
             {
+                try { Session.Disconnect(); view.PushMembers(true); } catch (Exception) { }
                 settings.WorldMapLivePos = savedOn; settings.WorldMapFollow = savedFollow;
                 MapData.SetForTest(lidx, "wow_classic_beta|1.60.1.70338|0123456789abcdef");
                 try { UpdateLive(); } catch (Exception) { }

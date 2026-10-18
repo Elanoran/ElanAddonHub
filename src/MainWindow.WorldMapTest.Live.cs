@@ -475,6 +475,61 @@ namespace ElansAddonHub
                         var g4 = await M3();
                         Check("3D members: a member who leaves the map loses their dot, and following them stops", g4 != null && g4.Int("n") == 1 && g4.Int("following") == 0, T(g4));
                         await WmEval("window.wm3.feed({\"t\":\"members\",\"list\":[]})");
+
+                        // 2.98: drawn like you in 3D - Wing rides along (16 steps), then stands indoors on a floor 6 yards over the ground; Isla is on another map (a row only). The camera is put back afterwards: the height checks below look from where it was
+                        var cam0 = await WmEval("(function(){var s=JSON.parse(window.wm3.state()).cam, ll=window.wm3.xz2ll(s.tx,s.tz); return JSON.stringify([ll[0],ll[1],s.dist,s.az,s.tilt])})()");
+                        var trail = new List<LiveTrail.Point>(); double odo = 0; var t0 = DateTime.UtcNow.AddSeconds(-40); LiveTrail.Point? prevP = null;
+                        for (int i = 0; i < 16; i++)
+                        {
+                            var w = MapData.Index?.MapToWorld(11, 0.44 + i * 0.004, 0.5); if (w == null) break;
+                            var pt = new LiveTrail.Point { At = t0.AddSeconds(i * 2), MapId = w.Value.MapId, X = w.Value.X, Y = w.Value.Y, Move = LiveMove.Mounted | LiveMove.PetOut };
+                            pt.Odo = TrailPrints.NextOdo(prevP, pt); odo = pt.Odo; trail.Add(pt); prevP = pt;
+                        }
+                        if (trail.Count == 16)
+                        {
+                            var hp = trail[15];
+                            WorldMapMath.WorldToLatLng(hp.X, hp.Y, out var hla, out var hln);
+                            var gr = await WmEval(string.Format(CultureInfo.InvariantCulture, "String(window.wm3.ground({0},{1}))", hla, hln));
+                            double g0 = double.TryParse(Json.Parse(gr ?? "null") as string ?? gr, NumberStyles.Float, CultureInfo.InvariantCulture, out var gv) ? gv : 0;
+                            hp.Z = g0 + 6; hp.Src = ElevSrc.Floor; hp.HasZ = true;
+                            var dots = new List<MemberDot>
+                            {
+                                new MemberDot { Id = 6, Name = "Wing", Color = "#ABD473", MapId = hp.MapId, X = hp.X, Y = hp.Y, Here = hp, Trail = trail, At = DateTime.UtcNow, Move = LiveMove.Indoors | LiveMove.PetOut, Foot = "hoof", Hunter = true, Zone = "Greenvale" },
+                                new MemberDot { Id = 9, Name = "Isla", Color = "#69CCF0", MapId = 7, X = 100, Y = 100, Zone = "Windy Shore" },
+                            };
+                            await WmEval("window.wm3.feed(" + WorldMapProtocol.Members(dots, view.MapId, 0, id => id == 7 ? "Gale Isle" : null) + ")");
+                            var h1 = await M3();
+                            var me3 = await Wm3Me(); double ex3 = me3 != null && me3["exag"] is double ex3v ? ex3v : 1;
+                            var hw = h1?.List("walkers")?.Cast<Dictionary<string, object>>().FirstOrDefault(x => x.Int("id") == 6);
+                            double dY = hw != null && hw["dotY"] is double dy ? dy : double.NaN, dG = hw != null && hw["ground"] is double dg ? dg : double.NaN;
+                            Check("3D members: Wing is drawn like you - the dot with its heading arrow, their trail as a ribbon over the ground (" + T(hw) + ")",
+                                hw != null && hw.Bool("meDot") && hw.Bool("arrow") && hw.Int("points") == 16 && hw.Int("ribbons") >= 1, T(hw));
+                            Check("3D members: ... standing indoors, their dot is on the building's floor (6 yards over the ground: drawn at " + F1(dY) + ", ground " + F1(dG) + "), as LiveElevation worked it out",
+                                hw != null && dY - dG > 3 && Math.Abs(dY - (g0 + 6) * ex3) < 0.6, T(hw) + " exag " + F1(ex3));
+                            var rows3 = h1?.List("rows")?.Cast<Dictionary<string, object>>().ToList() ?? new List<Dictionary<string, object>>();
+                            Check("3D card: \"Lodge, live\" lists Isla (on Gale Isle) and Wing, nothing followed yet",
+                                h1 != null && h1.Bool("card") && h1.Str("head") == "Lodge, live" && rows3.Count == 2 && rows3[0].Str("name") == "Isla" && rows3[0].Str("wh") == "Gale Isle" && rows3[1].Str("wh") == "" && h1.Str("fl") == "Not following", T(h1));
+                            await M3("null, 6");
+                            Dictionary<string, object> h2 = null;
+                            for (int i = 0; i < 60 && !(h2 != null && h2.Bool("centered")); i++) { await Task.Delay(100); h2 = await M3(); }
+                            Check("3D card: clicking Wing's row follows them - the camera comes to them, the card says \"Following Wing\"", h2 != null && h2.Int("following") == 6 && h2.Bool("centered") && h2.Str("fl") == "Following Wing", T(h2));
+                            await WmEval(string.Format(CultureInfo.InvariantCulture, "window.wm3.setView({0},{1},{2},{3},{4})", hla, hln, 140, 20, 55));
+                            Dictionary<string, object> h3 = null, p3 = null;
+                            for (int i = 0; i < 40; i++) { await Task.Delay(100); h3 = await M3(); p3 = h3?.List("walkers")?.Cast<Dictionary<string, object>>().FirstOrDefault(x => x.Int("id") == 6)?.Child("prints"); if (p3 != null && p3.Int("n") > 0) break; }
+                            var k3 = p3?.Child("kinds");
+                            Check("3D members: close up, Wing's trail is prints like yours - horseshoes (mounted) with the pet's paws beside them, lying on the ground (" + (p3 == null ? "none" : Json.Write(p3["kinds"]) + " pets " + p3.Int("pets")) + ")",
+                                p3 != null && p3.Int("n") > 0 && p3.Bool("visible") && k3 != null && k3.ContainsKey("shoe") && p3.Int("pets") > 0 && Convert.ToDouble(p3["worstY"]) < 0.05, p3 == null ? "null" : Json.Write(p3));
+                            if (SelfTestClock.ShotsOn) { await Task.Delay(500); var png3 = await view.CaptureForTest(); if (png3 != null) File.WriteAllBytes(P("worldmap-members-3d.png"), png3); }
+                            await M3("null, 6");
+                            var h4 = await M3();
+                            Check("3D card: clicking the row again stops following", h4 != null && h4.Int("following") == 0 && h4.Str("fl") == "Not following", T(h4));
+                            await WmEval("window.wm3.feed({\"t\":\"members\",\"list\":[],\"rows\":[]})");
+                            var h5 = await M3();
+                            Check("3D members: when they stop sharing, dot, ribbon, prints and row go (and the card with them when you are not shown)", h5 != null && h5.Int("n") == 0 && h5.Int("renderers") == 0 && h5.List("rows").Count == 0, T(h5));
+                        }
+                        else Check("3D members: the invented continent has a place for Wing's ride", false, trail.Count + " points");
+                        if (Json.Parse(cam0 ?? "null") is string cs && Json.Parse(cs) is List<object> cv && cv.Count == 5)
+                            await WmEval(string.Format(CultureInfo.InvariantCulture, "window.wm3.setView({0},{1},{2},{3},{4})", cv.Cast<object>().Select(o => (object)Convert.ToDouble(o)).ToArray()));
                     }
                     else Check("3D members: the invented continent has a place for the test map", false, "no world point");
                 }

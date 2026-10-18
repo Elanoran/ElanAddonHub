@@ -274,7 +274,7 @@
     var def = defs[id];
     if (v && def && !def.child && !def.live && !data[id] && !requested[id]) { requested[id] = true; send({ t: 'need', layer: id }); setCount(id, '...'); }
     refresh(); sendLayers();
-    if (def && def.live && me && map && me.state !== 'off' && me.state !== 'none') { meDraw(); meRow(); }
+    if (def && def.live && map) { if (meLive()) { meDraw(); meRow(); } if (mList.length) membersDraw(); }
   }
   var layersTimer = 0;
   function sendLayers() {
@@ -314,6 +314,8 @@
 
   // ---------------------------------------------------------------- the live position layer ("me"): your dot, a fading trail, a notice, Follow me
   // Only drawn while the app sends it (Settings > Show my live position on the world map). Nothing here is stored; the app keeps the trail in memory.
+  // 2.98: the Lodge members who share their position are "walkers" too and go through the same code as you: trailDraw (the fading line and the prints),
+  // dotHtml (the dot in the class colour with its heading arrow), heading.
   var ME_STATES = { off: 1, none: 1, ok: 1, elsewhere: 1, unavailable: 1, notshared: 1, oldhub: 1 };
   var me = null, meGroup = null, meDot = null, meCtrl = null, follow = false, meAt = 0, meTrail = [], meEvMarkers = [];
   // the events on the trail (Elan's Hub 1.16.0+): checked again here, drawn only with the "Events on my trail" row on
@@ -331,68 +333,84 @@
     return (e.at ? e.at + ' · ' : '') + (a < 60 ? 'just now' : mins + ' min ago') + (e.link ? ' · click to open' : '');
   }
   function evOpacity(age) { return Math.max(0.3, 1 - Math.min(600, age) / 600 * 0.7); }
-  // the panel row "Events on my trail" is only there while the live layer is
+  function meLive() { return !!(me && me.state !== 'off' && me.state !== 'none'); }
+  // the panel row "Events on my trail" is only there while the live layer is; "Paw prints" also while a member's trail is drawn
   function meRow() {
-    var r = panelRows.trailevents; if (!r) return;
-    var live = !!(me && me.state !== 'off' && me.state !== 'none');
-    r.row.style.display = live ? '' : 'none';
-    setCount('trailevents', live && me.events ? String(me.events.length) : '');
-    if (window.WmPrints) window.WmPrints.row(panelRows, live);
+    var r = panelRows.trailevents, live = meLive();
+    if (r) { r.row.style.display = live ? '' : 'none'; setCount('trailevents', live && me.events ? String(me.events.length) : ''); }
+    if (window.WmPrints) window.WmPrints.row(panelRows, live || mList.length > 0);
   }
   function fin(v) { return typeof v === 'number' && isFinite(v); }
   function llOk(a) { return a && a.length === 2 && fin(a[0]) && fin(a[1]) && a[0] <= 0 && a[0] >= -256 && a[1] >= 0 && a[1] <= 256; }
+  function colorOk(c) { return /^#[0-9a-fA-F]{6}$/.test(c || '') ? c : '#e8e6e3'; }
+  // the trail of a "me" message or of a member in "members": [lat, lng, age, brk, ...] checked; k = its index into the app's mv / od
+  function trailOf(m) {
+    var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [];
+    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && fin(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, k: i / 4 }); }
+    return pts;
+  }
   function meClear() {
     if (meGroup && map) map.removeLayer(meGroup);
-    meGroup = null; meDot = null; meTrail = [];
-    if (meCtrl && map) map.removeControl(meCtrl);
-    meCtrl = null; meEvMarkers = [];
+    meGroup = null; meDot = null; meTrail = []; meEvMarkers = [];
     if (window.WmPrints) window.WmPrints.clear2d();
+    cardDraw();
   }
   function meMsg(m) {
     var st = ME_STATES[m.state] ? m.state : 'none';
     if (st === 'off' || st === 'none') { me = { state: st }; meClear(); meRow(); return; }
-    var t = Array.isArray(m.trail) ? m.trail.slice(0, 2400) : [], pts = [];
-    for (var i = 0; i + 3 < t.length; i += 4) { var p = [t[i], t[i + 1]]; if (llOk(p) && fin(t[i + 2])) pts.push({ ll: p, age: Math.max(0, Math.min(600, t[i + 2])), brk: t[i + 3] === 1, k: i / 4 }); }
-    me = { state: st, name: String(m.name || '').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(m.color || '') ? m.color : '#e8e6e3', notice: String(m.notice || '').slice(0, 120),
+    me = { state: st, name: String(m.name || '').slice(0, 48), color: colorOk(m.color), notice: String(m.notice || '').slice(0, 120),
       howto: m.howto === true, howtoText: String(m.howtoText || 'How to turn it on').slice(0, 40), here: llOk(m.here) ? m.here : null, last: llOk(m.last) ? m.last : null, events: meEvents(m.events), show: st === 'elsewhere' ? String(m.show || '').slice(0, 72) : '' };
-    meTrail = pts; meAt = Date.now();
+    meTrail = me.trail = trailOf(m); meAt = me.at = Date.now();
     if (window.WmPrints) me.prints = window.WmPrints.take(m);      // 2.88: the paw prints (trailprints.js)
     meDraw(); meRow();
     if (follow && map && me.state === 'ok' && me.here) map.panTo(me.here, { animate: false });
   }
-  function heading() {
-    var n = meTrail.length; if (!me || !me.here || n < 1) return null;
-    var a = meTrail[n - 1].ll, b = me.here;
-    if (n >= 2 && Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) < 1e-9) a = meTrail[n - 2].ll;
+  // the way a walker (you, a member) faces: along the last step to where they are now; null = standing still
+  function heading(w) {
+    w = w || me;
+    var tr = w && w.trail || [], n = tr.length; if (!w || !w.here || n < 1) return null;
+    var a = tr[n - 1].ll, b = w.here;
+    if (n >= 2 && Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) < 1e-9) a = tr[n - 2].ll;
     var dLat = b[0] - a[0], dLng = b[1] - a[1];
     if (Math.abs(dLat) + Math.abs(dLng) < 1e-6) return null;
     return Math.round(Math.atan2(dLng, dLat) * 180 / Math.PI);
+  }
+  // the dot: class colour with a heading arrow (cls adds the member's look), grey with a label where the position is not available
+  function dotHtml(w, grey, cls) {
+    var hd = grey ? null : heading(w);
+    return '<div class="me-dot' + (grey ? ' grey' : '') + (cls ? ' ' + cls : '') + '" style="--c:' + w.color + '">' + (hd === null ? '' : '<i class="me-arrow" style="transform:rotate(' + hd + 'deg)"></i>') + '</div>'
+      + (grey ? '<div class="me-lab">' + esc(w.notice || 'Position unavailable here') + '</div>' : '');
+  }
+  // the trail of a walker into its layer group: the paw prints first (trailprints.js, P = the walker's own renderer), then runs of points (a break starts a
+  // new run) cut into age bands that fade out over the 10 minutes. Where the prints show the trail has no line under them (2.93) - only the older part a
+  // capped layout left without prints keeps it (lineFrom); zoomed out, with no prints, it is the clean line with its casing. Returns the seconds since the
+  // walker's message (the fade goes on between messages).
+  function trailDraw(w, grp, P, redraw) {
+    var extra = (Date.now() - w.at) / 1000, BAND = 60, run = [], band = -1, tr = w.trail || [];
+    if (P) P.draw2d(map, w, tr, extra, on, redraw);
+    var pk = P ? P.lineK2d(map, on, w) : 1, lf = pk === 0 ? P.lineFrom() : Infinity;
+    function flush() {
+      if (run.length < 2) return;
+      var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600));
+      grp.addLayer(L.polyline(run, { color: '#000', weight: 6, opacity: op * 0.45, interactive: false, lineCap: 'round', lineJoin: 'round' }));      // a dark casing: readable on any tile
+      grp.addLayer(L.polyline(run, { color: w.color, weight: 3, opacity: op, interactive: false, lineCap: 'round', lineJoin: 'round', className: 'me-trail' }));
+    }
+    for (var i = 0; i < tr.length; i++) {
+      var p = tr[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
+      if (pk === 0 && !P.lineHas(w, p, lf)) { if (run.length && !p.brk) { run.push(p.ll); flush(); } run = []; break; }      // from here on the way has prints
+      if (p.brk) { flush(); run = []; band = b; }
+      if (b !== band) { flush(); run = run.length ? [run[run.length - 1]] : []; band = b; }
+      run.push(p.ll);
+    }
+    if (pk !== 0 && w.state === 'ok' && w.here && run.length) run.push(w.here);
+    flush();
+    return extra;
   }
   function meDraw() {
     if (!map || !me) return;
     if (!meGroup) { meGroup = L.layerGroup(); meGroup.addTo(map); }
     meGroup.clearLayers(); meDot = null;
-    // the trail: runs of points (a break starts a new run), cut into age bands that fade out over the 10 minutes
-    var extra = (Date.now() - meAt) / 1000, BAND = 60, run = [], band = -1;
-    // the paw prints first (trailprints.js): where they show, the trail has no line under them (2.93) - only the older part a capped layout left without
-    // prints keeps it (lineFrom); zoomed out, with no prints, it is the clean line with its casing
-    if (window.WmPrints) window.WmPrints.draw2d(map, me, meTrail, extra, on, meDraw);
-    var pk = window.WmPrints ? window.WmPrints.lineK2d(map, on, me) : 1, lf = pk === 0 ? window.WmPrints.lineFrom() : Infinity;
-    function flush() {
-      if (run.length < 2) return;
-      var op = Math.max(0.12, 0.9 * (1 - (band * BAND) / 600));
-      meGroup.addLayer(L.polyline(run, { color: '#000', weight: 6, opacity: op * 0.45, interactive: false, lineCap: 'round', lineJoin: 'round' }));      // a dark casing: readable on any tile
-      meGroup.addLayer(L.polyline(run, { color: me.color, weight: 3, opacity: op, interactive: false, lineCap: 'round', lineJoin: 'round', className: 'me-trail' }));
-    }
-    for (var i = 0; i < meTrail.length; i++) {
-      var p = meTrail[i], b = Math.min(9, Math.floor((p.age + extra) / BAND));
-      if (pk === 0 && !window.WmPrints.lineHas(me, p, lf)) { if (run.length && !p.brk) { run.push(p.ll); flush(); } run = []; break; }      // from here on the way has prints
-      if (p.brk) { flush(); run = []; band = b; }
-      if (b !== band) { flush(); run = run.length ? [run[run.length - 1]] : []; band = b; }
-      run.push(p.ll);
-    }
-    if (pk !== 0 && me.state === 'ok' && me.here && run.length) run.push(me.here);
-    flush();
+    var extra = trailDraw(me, meGroup, window.WmPrints, meDraw);
     // the events: small marks on the trail, fading with it; point at one for what and when, click it for its Atlas page
     meEvMarkers = [];
     var fan = on.trailevents && me.events && window.WmIcons ? window.WmIcons.evFan(me.events, me.state === 'ok' ? me.here : null) : [];
@@ -401,43 +419,61 @@
       bindHover(mk, e.name, e.line, evWhen(e, extra), e.link);
       meGroup.addLayer(mk); meEvMarkers.push(mk);
     });
-    // the dot: class colour with a heading arrow; grey with a label where the position is not available
     var at = me.state === 'ok' ? me.here : me.state === 'unavailable' ? me.last : null;
     if (at) {
-      var grey = me.state !== 'ok', hd = grey ? null : heading();
-      var html = '<div class="me-dot' + (grey ? ' grey' : '') + '" style="--c:' + me.color + '">' + (hd === null ? '' : '<i class="me-arrow" style="transform:rotate(' + hd + 'deg)"></i>') + '</div>'
-        + (grey ? '<div class="me-lab">' + esc(me.notice || 'Position unavailable here') + '</div>' : '');
-      meDot = L.marker(at, { icon: L.divIcon({ className: 'me-i', html: html, iconSize: [0, 0] }), keyboard: false, interactive: true, zIndexOffset: 1000 });
+      var grey = me.state !== 'ok';
+      meDot = L.marker(at, { icon: L.divIcon({ className: 'me-i', html: dotHtml(me, grey), iconSize: [0, 0] }), keyboard: false, interactive: true, zIndexOffset: 1000 });
       bindHover(meDot, me.name || 'You', grey ? (me.notice || 'Position unavailable here') : 'You are here', grey ? 'The trail pauses here' : 'Live from Elan\'s Hub (display only)', null);
       meGroup.addLayer(meDot);
     }
-    meCtrlDraw();
+    cardDraw();
   }
-  function meCtrlDraw() {
-    if (!map || !me) return;
+  // the card at the bottom right: your name, notice, Show <map>, How to turn it on, Follow me; what is followed; and (2.98) "Lodge, live": one row per
+  // member who shares their position with you, on any map - click to follow them (another map opens first), click again to stop
+  function cardDraw() {
+    if (!map) return;
+    var live = meLive();
+    if (!live && !mRows.length) { if (meCtrl) map.removeControl(meCtrl); meCtrl = null; return; }
     if (!meCtrl) {
       var C = L.Control.extend({ options: { position: 'bottomright' }, onAdd: function () { var d = el('div', 'wm-me'); L.DomEvent.disableClickPropagation(d); L.DomEvent.disableScrollPropagation(d); this._d = d; return d; } });
       meCtrl = new C(); meCtrl.addTo(map);
     }
-    var d = meCtrl._d; d.innerHTML = '';
-    var head = el('div', 'me-h'); var sw = el('span', 'me-sw'); sw.style.background = me.color; head.appendChild(sw); head.appendChild(el('b', '', esc(me.name || 'You')));
-    d.appendChild(head);
-    var showNotice = me.state !== 'ok';
-    if (showNotice && me.notice) d.appendChild(el('div', 'me-n' + (me.state === 'unavailable' ? '' : ' calm'), esc(me.notice)));
-    if (me.show) {      // 2.91: the map you are on has a world map of its own: open it (the app picks it from your position)
-      var sb = el('button', 'me-show', esc(me.show)); sb.type = 'button';
-      sb.addEventListener('click', function () { send({ t: 'showmap' }); });
-      d.appendChild(sb);
+    var d = meCtrl._d, keep = d.querySelector('.mem-rows'), scroll = keep ? keep.scrollTop : 0; d.innerHTML = '';
+    if (live) {
+      var head = el('div', 'me-h'); var sw = el('span', 'me-sw'); sw.style.background = me.color; head.appendChild(sw); head.appendChild(el('b', '', esc(me.name || 'You')));
+      d.appendChild(head);
+      if (me.state !== 'ok' && me.notice) d.appendChild(el('div', 'me-n' + (me.state === 'unavailable' ? '' : ' calm'), esc(me.notice)));
+      if (me.show) {      // 2.91: the map you are on has a world map of its own: open it (the app picks it from your position)
+        var sb = el('button', 'me-show', esc(me.show)); sb.type = 'button';
+        sb.addEventListener('click', function () { send({ t: 'showmap' }); });
+        d.appendChild(sb);
+      }
+      if (me.howto) {
+        var a = el('button', 'me-link', esc(me.howtoText)); a.type = 'button';
+        a.addEventListener('click', function () { send({ t: 'howto' }); });
+        d.appendChild(a);
+      }
+      if (me.state === 'ok' || me.state === 'unavailable') {
+        var f = el('button', 'me-follow' + (follow ? ' on' : ''), follow ? 'Following you' : 'Follow me'); f.type = 'button'; f.setAttribute('aria-pressed', String(follow));
+        f.addEventListener('click', function () { setFollow(!follow, true); });
+        d.appendChild(f);
+      }
     }
-    if (me.howto) {
-      var a = el('button', 'me-link', esc(me.howtoText)); a.type = 'button';
-      a.addEventListener('click', function () { send({ t: 'howto' }); });
-      d.appendChild(a);
-    }
-    if (me.state === 'ok' || me.state === 'unavailable') {
-      var f = el('button', 'me-follow' + (follow ? ' on' : ''), follow ? 'Following you' : 'Follow me'); f.type = 'button'; f.setAttribute('aria-pressed', String(follow));
-      f.addEventListener('click', function () { setFollow(!follow, true); });
-      d.appendChild(f);
+    var fm = mFollow && rowById(mFollow);
+    d.appendChild(el('div', 'me-fl', esc(follow ? 'Following you' : fm ? 'Following ' + fm.name : 'Not following')));
+    if (mRows.length) {
+      d.appendChild(el('div', 'mem-h', 'Lodge, live'));
+      var box = el('div', 'mem-rows');
+      mRows.forEach(function (r) {
+        var b = el('button', 'mem-row' + (r.id === mFollow ? ' on' : '')); b.type = 'button'; b.setAttribute('aria-pressed', String(r.id === mFollow)); b.setAttribute('data-id', String(r.id));
+        var s2 = el('span', 'me-sw'); s2.style.background = r.color; b.appendChild(s2);
+        b.appendChild(el('span', 'nm', esc(r.name)));
+        if (!r.here) b.appendChild(el('span', 'wh', esc(r.map || 'another map')));
+        b.title = (r.zone || '') + (r.zone && !r.here && r.map ? ' · ' : '') + (!r.here && r.map ? r.map : '') + (r.id === mFollow ? ' · click to stop following' : ' · click to follow');
+        b.addEventListener('click', function () { rowClick(r); });
+        box.appendChild(b);
+      });
+      d.appendChild(box); box.scrollTop = scroll;
     }
   }
   function setFollow(v, tell) {
@@ -445,43 +481,62 @@
     if (follow && mFollow) setMemberFollow(0);      // following yourself stops following a member
     if (tell) send({ t: 'follow', on: follow });
     if (follow && map && me && me.state === 'ok' && me.here) map.panTo(me.here, { animate: false });
-    meCtrlDraw();
+    cardDraw();
   }
-  // the trail keeps fading while nothing new arrives
-  setInterval(function () { if (me && meTrail.length && map) meDraw(); }, 15000);
+  // the trail keeps fading while nothing new arrives (yours and the members')
+  setInterval(function () { if (me && meTrail.length && map) meDraw(); if (mList.length && map) membersDraw(); }, 15000);
 
-  // ---------------------------------------------------------------- the Lodge members' dots ("members", 2.97): who shares their position with you
-  // The app sends only members on this map who chose to share with you (the Lodge decides who may see whom); nothing is kept. Point at a dot for the
-  // name; click it for "Follow this member" (the map keeps them in the middle until you drag it, follow yourself, or they stop sharing).
-  var mGroup = null, mList = [], mMarkers = {}, mFollow = 0;
+  // ---------------------------------------------------------------- the Lodge members ("members", 2.97; drawn like you since 2.98)
+  // The app sends the members on this map who chose to share with you (the Lodge decides who may see whom), each with their trail, and the rows of
+  // everyone who shares (any map) for the card; nothing is kept. Point at a dot for the name; click it for "Follow this member" (the map keeps them in the
+  // middle until you drag it, follow yourself, or they stop sharing). Each member has their own layer group and prints renderer (WmPrints.create).
+  var mGroup = null, mList = [], mMarkers = {}, mFollow = 0, mRows = [], mPrints = {};
   function memberById(id) { for (var i = 0; i < mList.length; i++) if (mList[i].id === id) return mList[i]; return null; }
+  function rowById(id) { for (var i = 0; i < mRows.length; i++) if (mRows[i].id === id) return mRows[i]; return null; }
+  function idOk(v) { return typeof v === 'number' && v > 0 && v % 1 === 0; }
   function membersMsg(m) {
-    var out = [], seen = {};
-    (Array.isArray(m.list) ? m.list.slice(0, 100) : []).forEach(function (x) {
-      if (!x || typeof x.id !== 'number' || !(x.id > 0) || x.id % 1 !== 0 || seen[x.id] || !llOk(x.ll)) return;
+    var out = [], seen = {}, now = Date.now();
+    (Array.isArray(m.list) ? m.list.slice(0, 20) : []).forEach(function (x) {
+      if (!x || !idOk(x.id) || seen[x.id] || !llOk(x.ll)) return;
       seen[x.id] = 1;
-      out.push({ id: x.id, name: String(x.name || 'A member').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(x.color || '') ? x.color : '#e8e6e3', ll: [x.ll[0], x.ll[1]] });
+      var w = { id: x.id, name: String(x.name || 'A member').slice(0, 48), color: colorOk(x.color), ll: [x.ll[0], x.ll[1]], here: [x.ll[0], x.ll[1]], state: 'ok', trail: trailOf(x), at: now };
+      if (window.WmPrints) w.prints = window.WmPrints.take(x);
+      out.push(w);
     });
-    var gone = mFollow && !seen[mFollow] ? (memberById(mFollow) || {}).name : null;
-    mList = out;
-    if (mFollow && !seen[mFollow]) { setMemberFollow(0); toast((gone || 'That member') + ' is no longer on this map', true); }
-    membersDraw();
+    var rows = [], rs = {};
+    (Array.isArray(m.rows) ? m.rows.slice(0, 40) : []).forEach(function (r) {
+      if (!r || !idOk(r.id) || rs[r.id]) return;
+      rs[r.id] = 1;
+      rows.push({ id: r.id, name: String(r.name || 'A member').slice(0, 48), color: colorOk(r.color), zone: String(r.zone || '').slice(0, 60), here: r.here === true && !!seen[r.id], map: String(r.map || '').slice(0, 60) });
+    });
+    var gone = mFollow && !seen[mFollow] ? (memberById(mFollow) || rowById(mFollow) || {}).name : null;
+    // a member who is no longer drawn: their prints renderer goes too
+    Object.keys(mPrints).forEach(function (k) { if (!seen[k]) { mPrints[k].dispose(); delete mPrints[k]; } });
+    mList = out; mRows = rows;
+    if (mFollow && !seen[mFollow]) { setMemberFollow(0); toast((gone || 'That member') + (rs[mFollow] ? ' is no longer on this map' : ' stopped sharing their position'), true); }
+    membersDraw(); meRow(); cardDraw();
     var f = mFollow && memberById(mFollow); if (f && map) map.panTo(f.ll, { animate: false });
+  }
+  function memberDraw(x) {
+    if (!map || !mGroup) return;
+    if (!x.grp) { x.grp = L.layerGroup(); mGroup.addLayer(x.grp); }
+    x.grp.clearLayers();
+    var P = window.WmPrints && window.WmPrints.create ? (mPrints[x.id] || (mPrints[x.id] = window.WmPrints.create())) : null;
+    trailDraw(x, x.grp, P, function () { memberDraw(x); });
+    var mk = L.marker(x.ll, { icon: L.divIcon({ className: 'mem-i', html: dotHtml(x, false, 'mem-dot' + (x.id === mFollow ? ' following' : '')), iconSize: [0, 0] }), keyboard: false, interactive: true, zIndexOffset: 980 });
+    bindHover(mk, x.name, 'Lodge member, live', x.id === mFollow ? 'Following - click to stop' : 'Click to follow', null);
+    function act(e) {
+      L.DomEvent.stopPropagation(e); hideTip(); var oe = e.originalEvent || {};
+      menu(oe.clientX || 0, oe.clientY || 0, x.name, [x.id === mFollow ? { text: 'Stop following', run: function () { setMemberFollow(0); } } : { text: 'Follow this member', run: function () { setMemberFollow(x.id); } }]);
+    }
+    mk.on('click', act); mk.on('contextmenu', act);
+    x.grp.addLayer(mk); mMarkers[x.id] = mk;
   }
   function membersDraw() {
     if (!map) return;
     if (!mGroup) { mGroup = L.layerGroup(); mGroup.addTo(map); }
     mGroup.clearLayers(); mMarkers = {};
-    mList.forEach(function (x) {
-      var mk = L.marker(x.ll, { icon: L.divIcon({ className: 'mem-i', html: '<div class="mem-dot' + (x.id === mFollow ? ' following' : '') + '" style="--c:' + x.color + '"></div>', iconSize: [0, 0] }), keyboard: false, interactive: true, zIndexOffset: 980 });
-      bindHover(mk, x.name, 'Lodge member, live', x.id === mFollow ? 'Following - click to stop' : 'Click to follow', null);
-      function act(e) {
-        L.DomEvent.stopPropagation(e); hideTip(); var oe = e.originalEvent || {};
-        menu(oe.clientX || 0, oe.clientY || 0, x.name, [x.id === mFollow ? { text: 'Stop following', run: function () { setMemberFollow(0); } } : { text: 'Follow this member', run: function () { setMemberFollow(x.id); } }]);
-      }
-      mk.on('click', act); mk.on('contextmenu', act);
-      mGroup.addLayer(mk); mMarkers[x.id] = mk;
-    });
+    mList.forEach(function (x) { x.grp = null; memberDraw(x); });
   }
   function setMemberFollow(id) {
     id = memberById(id) ? id : 0;
@@ -490,7 +545,15 @@
     if (id && follow) setFollow(false, true);      // one thing to follow at a time
     send({ t: 'mfollow', id: id });
     var f = id && memberById(id); if (f && map) map.panTo(f.ll, { animate: false });
-    membersDraw();
+    membersDraw(); cardDraw();
+  }
+  // a row of the card: follow them here, or (on another map) ask the app to open that map and follow them there; again = stop
+  function rowClick(r) {
+    if (r.id === mFollow) { setMemberFollow(0); return; }
+    if (memberById(r.id)) { setMemberFollow(r.id); return; }
+    if (follow) setFollow(false, true);
+    toast('Opening ' + (r.map || 'their map') + '...', true);
+    send({ t: 'mfollow', id: r.id });
   }
 
   // ---------------------------------------------------------------- the messages from the app
@@ -543,7 +606,9 @@
   function init(m) {
     cfg = m.map;
     follow = m.follow === true; meGroup = null; meDot = null; meCtrl = null; me = null; meTrail = [];
-    mGroup = null; mList = []; mMarkers = {}; mFollow = 0;
+    Object.keys(mPrints).forEach(function (k) { mPrints[k].dispose(); }); mPrints = {};
+    mGroup = null; mList = []; mMarkers = {}; mRows = [];
+    mFollow = idOk(m.mfollow) ? m.mfollow : 0;      // 2.98: their row opened this map: following them goes on here
     if (map) { map.remove(); map = null; data = {}; groups = {}; counts = {}; requested = {}; panelRows = {}; defs = {}; on = {}; }
     $('map').innerHTML = '';
     document.documentElement.style.setProperty('--sea', cfg.sea || '#081110');
@@ -646,6 +711,7 @@
     // the routes of a lines layer by kind (test): [{g, shown}] - shown = the route is in the layer's group (its kind row is on and the layer is on the map)
     feed: function (m) { handle(m); return 1; },      // test: the app's message as if it had come from the app
     setOn: function (id, v) { setOn(id, v); return 1; },      // test: a layer row switched
+    dragForTest: function () { if (map) map.fire('dragstart'); return mFollow; },      // test: the person starts dragging the map (2.98)
     // the live layer (test): state, dot (grey?), trail lines and points, notice, how-to link, follow, heading; `click` = 'howto' | 'follow' presses that button
     // the events on the trail (test): how many are drawn, whether the row shows, and `tip` = index -> point at that mark and read the tooltip; `open` = index -> click it
     ev: function (tip, open) {
@@ -657,8 +723,9 @@
     },
     // the members' dots (test): ids, names, colours, whether followed and centred; `follow` = an id -> "Follow this member" through its menu (0 = Stop following);
     // `tip` = an id -> point at that dot and read the tooltip
-    members: function (followId, tip) {
+    members: function (followId, tip, rowId) {
       var r = { n: 0, ids: [], names: [], colors: [], following: mFollow, layer: !!(mGroup && map && map.hasLayer(mGroup)) };
+      if (rowId != null && meCtrl) { var rb = meCtrl._d.querySelector('.mem-row[data-id="' + rowId + '"]'); if (rb) rb.click(); r.clicked = !!rb; }
       if (followId != null) {
         var t = followId ? mMarkers[followId] : mMarkers[mFollow];
         if (t) { t.fire('click', { originalEvent: { clientX: 200, clientY: 200 } }); var b = $('ctx').querySelector('button'); r.menu = b ? b.textContent : ''; if (b) b.click(); }
@@ -668,6 +735,18 @@
       mList.forEach(function (x) { var e = mMarkers[x.id] && mMarkers[x.id].getElement && mMarkers[x.id].getElement(); if (e && e.querySelector('.mem-dot')) { r.n++; r.ids.push(x.id); r.names.push(x.name); r.colors.push(x.color); } });
       var f = memberById(mFollow), c = map ? map.getCenter() : null;
       r.centered = !!(f && c && Math.abs(c.lat - f.ll[0]) < 0.05 && Math.abs(c.lng - f.ll[1]) < 0.05);
+      // 2.98: drawn like you - per member the trail's points and line pieces, the arrow, and their prints renderer's state (trailprints.js)
+      r.walkers = mList.map(function (x) {
+        var lines = 0; if (x.grp) x.grp.eachLayer(function (l) { if (l.getLatLngs) lines++; });
+        var e = mMarkers[x.id] && mMarkers[x.id].getElement && mMarkers[x.id].getElement();
+        return { id: x.id, points: x.trail.length, lines: lines, arrow: !!(e && e.querySelector('.me-arrow')), heading: heading(x), meDot: !!(e && e.querySelector('.me-dot.mem-dot')),
+          prints: mPrints[x.id] ? JSON.parse(mPrints[x.id].state2d()) : null, ages: x.trail.length ? [x.trail[0].age, x.trail[x.trail.length - 1].age] : [] };
+      });
+      r.renderers = Object.keys(mPrints).length;
+      var cd = meCtrl && meCtrl._d;
+      r.card = !!cd; r.fl = cd && cd.querySelector('.me-fl') ? cd.querySelector('.me-fl').textContent : '';
+      r.rows = cd ? [].map.call(cd.querySelectorAll('.mem-row'), function (b) { return { id: +b.getAttribute('data-id'), name: b.querySelector('.nm').textContent, on: b.classList.contains('on'), wh: b.querySelector('.wh') ? b.querySelector('.wh').textContent : '', title: b.title }; }) : [];
+      r.head = cd && cd.querySelector('.mem-h') ? cd.querySelector('.mem-h').textContent : '';
       return JSON.stringify(r);
     },
     me: function (click) {
