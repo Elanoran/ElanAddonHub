@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.95.1
+- **Knows Lodge server 2.29.** A Lodge's Guild Master and officers see the update notice for it. Lodge 2.29 fetches the Cairn's daily data as "what changed" since the copy it already has - a small download instead of the whole file - and checks the result against the Cairn's signature before handing it on.
+
 ## 2.95.0
 - **What creatures do in a fight.** Elan's Toolkit 0.5.12 can switch WoW's own combat log on for you (Settings > Atlas: always, or only in dungeons and raids). The Outpost then reads the log file from your WoW folder, and a creature's page shows a new "Seen using" list: the spells it cast, the auras it put on you and the damage it did, most seen first. With the game's advanced combat logging (the Toolkit turns it on with the log) it also shows the creature's health at the levels you met it at, and where you fought it, as "Fought" in "Seen at" and on the maps.
 - Only numbers are kept from the log: creature and spell ids, counts, map positions. No names, nothing about players. The log files themselves are only read, never changed or deleted, and the Outpost reads on from where it stopped, a little at a time. This stays on your PC for now; sharing it with your Lodge comes later.

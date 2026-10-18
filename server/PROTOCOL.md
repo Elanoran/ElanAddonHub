@@ -456,6 +456,11 @@ Feature `reputations` in the welcome `features`, next to `armory` (absent when t
 
 ## The Cairn (Atlas commons; Lodge features `cairn` and `cairn2`, opt-in; Outpost 2.86, give to get 2.87)
 
+Lodge 2.29: when the Cairn's manifest offers a "what changed" delta from the dataset this Lodge holds (`latest.deltas[]`, matched by
+`fromSha` = the held `contentSha256`), the Lodge downloads that instead of the full file, applies it (CairnDelta.cs), and keeps the result
+only if its SHA-256 equals the new `contentSha256` (the signed one); otherwise it downloads the full file as before. The Lodge packs the
+result itself, so the `sha256` / `bytes` it hands to members describe its own file; `contentSha256` and `sig` are the Cairn's.
+
 The Cairn is a separate service that merges the pooled Atlas numbers of many Lodges into one daily dataset. Lodge servers contribute (opt-in).
 Since Lodge 2.28 a Lodge joins with its own key pair (below, "Joining"); before, each had a revocable bearer key from the Cairn's admin (still
 works). **Give to get**: the dataset is not public - it is for the Lodges that contribute and,

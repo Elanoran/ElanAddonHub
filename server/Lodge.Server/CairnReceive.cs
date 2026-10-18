@@ -25,6 +25,10 @@ public sealed partial class CairnReceiver
     [GeneratedRegex(@"^cairn-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{1,9}\.json\.gz\z", RegexOptions.CultureInvariant)]
     private static partial Regex FileRx();
 
+    // 2.29: a "what changed" delta to the newest dataset from an earlier one (CairnDelta.cs)
+    [GeneratedRegex(@"^cairn-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{1,9}\.from-[0-9]{1,9}\.delta\.gz\z", RegexOptions.CultureInvariant)]
+    private static partial Regex DeltaRx();
+
     readonly LodgeConfig cfg;
     readonly CairnContributor contributor;
     readonly ILogger log;
@@ -58,6 +62,7 @@ public sealed partial class CairnReceiver
     public long? ReceiveUntil { get; private set; }
     public string Problem { get; private set; } = "";             // the last failure in plain words (network, checksum); the copy stays
     public DateTime LastCheck { get; private set; } = DateTime.MinValue;
+    public string LastVia { get; private set; } = "";             // 2.29: how the last new dataset came: "delta" or "full" (status, tests)
     public Held Current { get { lock (gate) return current; } }
     Held current;
     public event Action Changed;                                  // a new dataset, or serving started / stopped
@@ -243,6 +248,9 @@ public sealed partial class CairnReceiver
             return "unchanged";
         }
 
+        // 2.29: "what changed" - a small delta from the copy on hand; anything that does not add up -> the full file below
+        if (have != null && await TryDelta(latest, have, e2, ct) is { } viaDelta) return viaDelta;
+
         using var dr = await Http().SendAsync(Req("/v1/datasets/" + e2.File), HttpCompletionOption.ResponseHeadersRead, ct);
         if (await Refusal(dr, ct) is { } refused) return refused;
         if (!dr.IsSuccessStatusCode) return Fail("the dataset answered " + (int)dr.StatusCode);
@@ -256,6 +264,14 @@ public sealed partial class CairnReceiver
         catch (InvalidDataException) { return Fail("the dataset is damaged"); }
         if (csha != e2.ContentSha256) return Fail("the dataset does not match its checksum");
         e2.Bytes = gz.Length;
+        Keep(e2, gz, "full");
+        log?.LogInformation("Cairn: dataset {Day} #{Seq} received ({Bytes} bytes) - members who share get it from this Lodge", e2.Day, e2.Seq, gz.Length);
+        Changed?.Invoke();
+        return "updated";
+    }
+
+    void Keep(Held e2, byte[] gz, string via)
+    {
         lock (gate)
         {
             Directory.CreateDirectory(dir);
@@ -267,9 +283,46 @@ public sealed partial class CairnReceiver
         }
         Good();
         Problem = "";
-        log?.LogInformation("Cairn: dataset {Day} #{Seq} received ({Bytes} bytes) - members who share get it from this Lodge", e2.Day, e2.Seq, gz.Length);
-        Changed?.Invoke();
-        return "updated";
+        LastVia = via;
+    }
+
+    static string Str(JsonObject o, string k) => o[k] is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
+
+    // 2.29: the manifest's `deltas` (newest dataset only): the one from the copy this Lodge holds (matched by its content checksum).
+    // The result must have the newest dataset's signed content checksum; the Lodge packs it itself, so its own file checksum (sha256, bytes)
+    // is what members get in the Lodge's manifest - the signature (over the content) is the Cairn's, unchanged.
+    // "updated", a refusal, or null = use the full file (said in the log, not as a problem: the full file is the normal way).
+    async Task<string> TryDelta(JsonObject latest, Held have, Held e2, CancellationToken ct)
+    {
+        if (latest?["deltas"] is not JsonArray list) return null;
+        var d = list.OfType<JsonObject>().FirstOrDefault(x => Str(x, "fromSha").ToLowerInvariant() == have.ContentSha256);
+        if (d == null) return null;
+        string file = Str(d, "file"), sha = Str(d, "sha256").ToLowerInvariant();
+        if (!DeltaRx().IsMatch(file) || !Sha(sha)) return null;
+        string Skip(string why) { log?.LogInformation("Cairn: the delta {File} was not used ({Why}) - fetching the full dataset", file, why); return null; }
+        try
+        {
+            using var r = await Http().SendAsync(Req("/v1/datasets/" + file), HttpCompletionOption.ResponseHeadersRead, ct);
+            if (await Refusal(r, ct) is { } refused) return refused;
+            if (!r.IsSuccessStatusCode) return Skip("the Cairn answered " + (int)r.StatusCode);
+            if (r.Content.Headers.ContentLength > MaxGzBytes) return Skip("too large");
+            var dz = await ReadCapped(await r.Content.ReadAsStreamAsync(ct), MaxGzBytes, ct);
+            if (Hex(SHA256.HashData(dz)) != sha) return Skip("it does not match its checksum");
+            byte[] oldGz;
+            lock (gate) { if (current != have || !File.Exists(GzPath)) return Skip("the copy on hand changed"); oldGz = File.ReadAllBytes(GzPath); }
+            var oldJson = CairnDelta.Gunzip(oldGz, MaxJsonBytes);
+            if (Hex(SHA256.HashData(oldJson)) != have.ContentSha256) return Skip("the copy on hand does not match its checksum");
+            var nj = CairnDelta.Apply(oldJson, CairnDelta.Gunzip(dz, MaxJsonBytes), MaxJsonBytes);
+            if (nj == null || Hex(SHA256.HashData(nj)) != e2.ContentSha256) return Skip("it does not give the new dataset");
+            var gz = CairnDelta.Gzip(nj);
+            e2.Sha256 = Hex(SHA256.HashData(gz)); e2.Bytes = gz.Length; e2.ContentBytes = nj.Length;
+            Keep(e2, gz, "delta");
+            log?.LogInformation("Cairn: dataset {Day} #{Seq} received as a delta ({Bytes} bytes instead of the full file) - members who share get it from this Lodge",
+                e2.Day, e2.Seq, dz.Length);
+            Changed?.Invoke();
+            return "updated";
+        }
+        catch (Exception x) when (x is InvalidDataException or IOException or HttpRequestException) { return Skip(x.GetType().Name); }
     }
 
     void Good()

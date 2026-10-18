@@ -32,6 +32,10 @@ public class CairnReceiverTests
         public long Seq;
         public bool CorruptFile;
         public bool NoDataset;
+        // 2.29: deltas offered with the newest dataset (fromSha, file, gz); CorruptDelta damages them in transit; DeltaStatus overrides the answer
+        public readonly List<(string fromSha, string file, byte[] gz)> Deltas = new();
+        public bool CorruptDelta;
+        public HttpStatusCode DeltaStatus = HttpStatusCode.OK;
         public readonly List<string> Paths = new();
         public readonly List<string> IfNoneMatch = new();
         public readonly List<string> Auth = new();
@@ -81,10 +85,21 @@ public class CairnReceiverTests
                     ["format"] = "elans-cairn-manifest", ["v"] = 1, ["license"] = "contributors", ["kid"] = "k1",
                     ["latest"] = new JsonObject { ["day"] = Day, ["seq"] = Seq, ["file"] = File, ["bytes"] = Gz.Length, ["contentBytes"] = 10, ["sha256"] = Sha, ["contentSha256"] = ContentSha, ["sig"] = "c2ln", ["kid"] = "k1", ["built"] = 1 },
                 };
+                if (Deltas.Count > 0)
+                    m["latest"]!["deltas"] = new JsonArray(Deltas.Select(d => (JsonNode)new JsonObject { ["from"] = 1, ["fromSha"] = d.fromSha, ["file"] = d.file, ["bytes"] = d.gz.Length, ["sha256"] = Hex(d.gz) }).ToArray());
                 var r = J(HttpStatusCode.OK, m);
                 r.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue(ETag);
                 return r;
             }
+            foreach (var d in Deltas)
+                if (path.EndsWith("/v1/datasets/" + d.file))
+                {
+                    if (DeltaStatus == HttpStatusCode.Forbidden) { Standing = "lapsed"; return Refusal(); }
+                    if (DeltaStatus != HttpStatusCode.OK) return new HttpResponseMessage(DeltaStatus);
+                    var data = (byte[])d.gz.Clone();
+                    if (CorruptDelta) data[data.Length / 2] ^= 0x55;
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(data) };
+                }
             if (path.EndsWith("/v1/datasets/" + File))
             {
                 var data = (byte[])Gz.Clone();
@@ -93,6 +108,22 @@ public class CairnReceiverTests
             }
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         }
+    }
+
+    static IEnumerable<byte> Var(long v) { var l = new List<byte>(); while (v >= 0x80) { l.Add((byte)(v | 0x80)); v >>= 7; } l.Add((byte)v); return l; }
+
+    static byte[] MakeDelta(byte[] a, byte[] b)
+    {
+        int pre = 0; while (pre < a.Length && pre < b.Length && a[pre] == b[pre]) pre++;
+        int suf = 0; while (suf < a.Length - pre && suf < b.Length - pre && a[a.Length - 1 - suf] == b[b.Length - 1 - suf]) suf++;
+        var o = new List<byte>(CairnDelta.Magic);
+        o.AddRange(Var(a.Length)); o.AddRange(Var(b.Length));
+        if (pre > 0) { o.Add(1); o.AddRange(Var(0)); o.AddRange(Var(pre)); }
+        int mid = b.Length - pre - suf;
+        if (mid > 0) { o.Add(2); o.AddRange(Var(mid)); o.AddRange(b.Skip(pre).Take(mid)); }
+        if (suf > 0) { o.Add(1); o.AddRange(Var(a.Length - suf)); o.AddRange(Var(suf)); }
+        o.Add(0);
+        return o.ToArray();
     }
 
     const string DatasetJson = "{\"format\":\"elans-cairn\",\"v\":1,\"license\":\"contributors\",\"day\":\"2026-10-17\",\"seq\":1,\"lodges\":2,\"drops\":{},\"vendors\":{},\"spawns\":{},\"nodes\":{},\"flights\":{}}";
@@ -133,6 +164,110 @@ public class CairnReceiverTests
     }
 
     // ---------------------------------------------------------------- the Lodge <- Cairn
+
+    // ---------------------------------------------------------------- 2.29: "what changed" deltas
+
+    static string Big(int seq, int bump) => "{\"format\":\"elans-cairn\",\"seq\":" + seq + ",\"drops\":{\"kill\":{" +
+        string.Join(",", Enumerable.Range(1, 400).Select(i => "\"" + i * 7 + "\":{\"n\":" + (i == 200 ? i + bump : i) + "}")) + "}}}";
+
+    [Fact]
+    public void A_delta_from_the_copy_on_hand_is_used_and_gives_the_signed_content()
+    {
+        using var r = new Rig();
+        r.Cairn.Publish(1, Big(1, 0));
+        Assert.Equal("updated", r.Fetch());
+        Assert.Equal("full", r.Rx.LastVia);
+        var v1 = Encoding.UTF8.GetBytes(Big(1, 0));
+        var v2 = Encoding.UTF8.GetBytes(Big(2, 5));
+        r.Cairn.Publish(2, Big(2, 5));
+        var dz = Gz(MakeDelta(v1, v2));
+        r.Cairn.Deltas.Add((Hex(v1), "cairn-2026-10-17-2.from-1.delta.gz", dz));
+        r.Cairn.Deltas.Add((new string('b', 64), "cairn-2026-10-17-2.from-0.delta.gz", dz));   // from a copy this Lodge does not hold: never asked
+        r.Cairn.Paths.Clear();
+        Assert.Equal("updated", r.Fetch());
+        Assert.Equal(new[] { "/cairn/v1/manifest.json", "/cairn/v1/datasets/cairn-2026-10-17-2.from-1.delta.gz" }, r.Cairn.Paths);
+        Assert.Equal("delta", r.Rx.LastVia);
+        Assert.True(dz.Length < r.Cairn.Gz.Length);
+        // the copy is the new dataset; its own file checksum is what members get, the content checksum (signed) is the Cairn's
+        var held = File.ReadAllBytes(r.Rx.GzPath);
+        Assert.Equal(v2, CairnDelta.Gunzip(held, 1 << 30));
+        var h = r.Rx.Current!;
+        Assert.Equal(2, h.Seq);
+        Assert.Equal(r.Cairn.ContentSha, h.ContentSha256);
+        Assert.Equal(Hex(held), h.Sha256);
+        Assert.Equal(held.Length, h.Bytes);
+        var m = r.Rx.ManifestJson(h);
+        Assert.Equal(Hex(held), (string)m["latest"]!["sha256"]!);
+        Assert.Equal("c2ln", (string)m["latest"]!["sig"]!);
+        Assert.Contains(r.Log.Lines, l => l.Contains("received as a delta"));
+        // and it survives a restart
+        Assert.Equal(2, new CairnReceiver(r.Fun.Hub.Cfg, r.Contributor, r.Log, r.Fun.Clock).Current!.Seq);
+    }
+
+    [Fact]
+    public void A_damaged_or_wrong_delta_falls_back_to_the_full_file()
+    {
+        using var r = new Rig();
+        r.Cairn.Publish(1, Big(1, 0));
+        r.Fetch();
+        var v1 = Encoding.UTF8.GetBytes(Big(1, 0));
+
+        // damaged in transit (its checksum)
+        r.Cairn.Publish(2, Big(2, 5));
+        r.Cairn.Deltas.Add((Hex(v1), "cairn-2026-10-17-2.from-1.delta.gz", Gz(MakeDelta(v1, Encoding.UTF8.GetBytes(Big(2, 5))))));
+        r.Cairn.CorruptDelta = true;
+        r.Cairn.Paths.Clear();
+        Assert.Equal("updated", r.Fetch());
+        Assert.Equal("full", r.Rx.LastVia);
+        Assert.Equal(new[] { "/cairn/v1/manifest.json", "/cairn/v1/datasets/cairn-2026-10-17-2.from-1.delta.gz", "/cairn/v1/datasets/" + r.Cairn.File }, r.Cairn.Paths);
+        Assert.Equal(r.Cairn.Gz, File.ReadAllBytes(r.Rx.GzPath));
+        Assert.Contains(r.Log.Lines, l => l.Contains("was not used") && l.Contains("checksum"));
+        Assert.Equal("", r.Rx.Problem);
+
+        // a delta that is intact but gives something else than the signed content
+        var v2 = Encoding.UTF8.GetBytes(Big(2, 5));
+        r.Cairn.Publish(3, Big(3, 9));
+        r.Cairn.Deltas.Clear(); r.Cairn.CorruptDelta = false;
+        r.Cairn.Deltas.Add((Hex(v2), "cairn-2026-10-17-3.from-2.delta.gz", Gz(MakeDelta(v2, Encoding.UTF8.GetBytes(Big(3, 8))))));
+        Assert.Equal("updated", r.Fetch());
+        Assert.Equal("full", r.Rx.LastVia);
+        Assert.Equal(3, r.Rx.Current!.Seq);
+        Assert.Contains(r.Log.Lines, l => l.Contains("does not give the new dataset"));
+
+        // the Cairn answers the delta with an error: the full file
+        var v3 = Encoding.UTF8.GetBytes(Big(3, 9));
+        r.Cairn.Publish(4, Big(4, 1));
+        r.Cairn.Deltas.Clear();
+        r.Cairn.Deltas.Add((Hex(v3), "cairn-2026-10-17-4.from-3.delta.gz", Gz(MakeDelta(v3, Encoding.UTF8.GetBytes(Big(4, 1))))));
+        r.Cairn.DeltaStatus = HttpStatusCode.NotFound;
+        Assert.Equal("updated", r.Fetch());
+        Assert.Equal("full", r.Rx.LastVia);
+
+        // a refusal on the delta is a refusal (give to get), not a fallback
+        r.Cairn.Publish(5, Big(5, 2));
+        var v4 = Encoding.UTF8.GetBytes(Big(4, 1));
+        r.Cairn.Deltas.Clear();
+        r.Cairn.Deltas.Add((Hex(v4), "cairn-2026-10-17-5.from-4.delta.gz", Gz(MakeDelta(v4, Encoding.UTF8.GetBytes(Big(5, 2))))));
+        r.Cairn.DeltaStatus = HttpStatusCode.Forbidden;
+        Assert.StartsWith("refused", r.Fetch());
+        Assert.Null(r.Rx.Current);
+    }
+
+    [Fact]
+    public void Apply_refuses_what_does_not_fit()
+    {
+        var a = Encoding.UTF8.GetBytes(Big(1, 0));
+        var b = Encoding.UTF8.GetBytes(Big(2, 3));
+        var d = MakeDelta(a, b);
+        Assert.Equal(b, CairnDelta.Apply(a, d, 1 << 30));
+        Assert.Null(CairnDelta.Apply(a.Take(a.Length - 1).ToArray(), d, 1 << 30));     // another old file
+        Assert.Null(CairnDelta.Apply(a, d[..^2], 1 << 30));                            // cut short
+        Assert.Null(CairnDelta.Apply(a, d, b.Length - 1));                             // over the cap
+        var bad = (byte[])d.Clone(); bad[2] = (byte)'?';
+        Assert.Null(CairnDelta.Apply(a, bad, 1 << 30));                                // not a delta
+        var outside = CairnDelta.Magic.Concat(Var(a.Length)).Concat(Var(5)).Concat(new byte[] { 1 }).Concat(Var(a.Length - 1)).Concat(Var(5)).Concat(new byte[] { 0 }).ToArray();
+        Assert.Null(CairnDelta.Apply(a, outside, 1 << 30));                            // a copy past the old bytes
+    }
 
     [Fact]
     public void Off_unless_the_Lodge_contributes_and_the_feature_follows()
