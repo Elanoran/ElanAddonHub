@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.97.0
+- **See your Lodge on the world map.** A new switch, Settings > General > **Share my map position with the Lodge**, puts your dot on the world map of the members you choose: **Everyone** or **Officers** only (the same choice as your profile's "Visible to"). It is off until you turn it on, needs your zone shared (Privacy) and Elan's Hub's own "Share my map position" in game, and goes out about once a second only while it is on. Guests never share or see positions, and with **Appear offline** only the Guild Master can see your dot. Turning it off takes your dot away at once. Needs a Lodge server on 2.30 or newer.
+- **Follow a member.** With "Show my live position on the world map" on, members who share with you show as small dots in their class colour on the map you are looking at; point at one for the name, click it for **Follow this member** (the map keeps them in the middle until you drag it or follow yourself). Positions are kept in memory only, never saved.
+- Elan's Hub 1.18.2: the description of its "Share my map position" option no longer says Lodge sharing "does not exist yet" - it is the Outpost's own switch; the addon itself still sends nothing anywhere.
+
 ## 2.96.2
 - **A calmer Elan's Hub settings page** (Elan's Hub 1.18.1): "Share my map position" has one short line under it, with the full explanation in its tooltip, and the long text no longer runs over the note below.
 

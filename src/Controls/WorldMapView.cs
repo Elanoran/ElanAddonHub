@@ -865,6 +865,7 @@ namespace ElansAddonHub
                     PageInited = true;
                     if (mode3d && mapId >= 0) bld.OnInited(mapId);
                     lastMe = null; PushLive(true);
+                    lastMembers = null; PushMembers(true);
                     break;
                 case WorldMapMessageType.HowTo:
                     HowToOpenedForTest++;
@@ -875,6 +876,9 @@ namespace ElansAddonHub
                     break;
                 case WorldMapMessageType.ShowMap:
                     ShowLiveMap(false);
+                    break;
+                case WorldMapMessageType.MemberFollow:
+                    FollowingMember = m.MemberId;      // the page pans to them itself; kept for the test and the log
                     break;
                 case WorldMapMessageType.Ready:
                     if ((Ignore2dReadyForTest && loadedPage == "2d") || (Ignore3dReadyForTest && loadedPage == "3d")) break;
@@ -1012,6 +1016,40 @@ namespace ElansAddonHub
             Post(json);
         }
         public static bool ForceLiveForTest;
+
+        // ---------------------------------------------------------------- the Lodge members' dots (2.97, Lodge feature "liveposition")
+        // MemberDots gives the members who share their position with me (the session already left out anyone I may not see); shown only while
+        // "Show my live position on the world map" is on, pushed like "me": at most once per LiveInterval, only when it changed.
+        public Func<List<MemberDot>> MemberDots;
+        DispatcherTimer membersTimer;
+        DateTime lastMembersPost = DateTime.MinValue;
+        string lastMembers;
+        public string LastMembersForTest => lastMembers;
+        public int MembersPostsForTest { get; private set; }
+        public int FollowingMember { get; private set; }
+
+        public string MembersJson()
+        {
+            List<MemberDot> dots = null;
+            if (LiveOn && MemberDots != null) { try { dots = MemberDots(); } catch (Exception e) { Util.Log("world map members: " + e.Message); } }
+            return WorldMapProtocol.Members(dots, mapId);
+        }
+
+        public void PushMembers(bool force)
+        {
+            if (!PageInited || web == null && !ForceLiveForTest) return;
+            var wait = LiveInterval - (DateTime.UtcNow - lastMembersPost);
+            if (!force && wait > TimeSpan.Zero)
+            {
+                if (membersTimer == null) { membersTimer = new DispatcherTimer(); membersTimer.Tick += (s, e) => { membersTimer.Stop(); PushMembers(false); }; }
+                if (!membersTimer.IsEnabled) { membersTimer.Interval = wait; membersTimer.Start(); }
+                return;
+            }
+            var json = MembersJson();
+            if (json == lastMembers) return;
+            lastMembers = json; lastMembersPost = DateTime.UtcNow; MembersPostsForTest++;
+            Post(json);
+        }
 
         // the layers that are on: the person's saved list (brought up to this catalog once) or the defaults
         List<string> OnLayers()

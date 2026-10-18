@@ -442,12 +442,56 @@
   }
   function setFollow(v, tell) {
     follow = !!v;
+    if (follow && mFollow) setMemberFollow(0);      // following yourself stops following a member
     if (tell) send({ t: 'follow', on: follow });
     if (follow && map && me && me.state === 'ok' && me.here) map.panTo(me.here, { animate: false });
     meCtrlDraw();
   }
   // the trail keeps fading while nothing new arrives
   setInterval(function () { if (me && meTrail.length && map) meDraw(); }, 15000);
+
+  // ---------------------------------------------------------------- the Lodge members' dots ("members", 2.97): who shares their position with you
+  // The app sends only members on this map who chose to share with you (the Lodge decides who may see whom); nothing is kept. Point at a dot for the
+  // name; click it for "Follow this member" (the map keeps them in the middle until you drag it, follow yourself, or they stop sharing).
+  var mGroup = null, mList = [], mMarkers = {}, mFollow = 0;
+  function memberById(id) { for (var i = 0; i < mList.length; i++) if (mList[i].id === id) return mList[i]; return null; }
+  function membersMsg(m) {
+    var out = [], seen = {};
+    (Array.isArray(m.list) ? m.list.slice(0, 100) : []).forEach(function (x) {
+      if (!x || typeof x.id !== 'number' || !(x.id > 0) || x.id % 1 !== 0 || seen[x.id] || !llOk(x.ll)) return;
+      seen[x.id] = 1;
+      out.push({ id: x.id, name: String(x.name || 'A member').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(x.color || '') ? x.color : '#e8e6e3', ll: [x.ll[0], x.ll[1]] });
+    });
+    var gone = mFollow && !seen[mFollow] ? (memberById(mFollow) || {}).name : null;
+    mList = out;
+    if (mFollow && !seen[mFollow]) { setMemberFollow(0); toast((gone || 'That member') + ' is no longer on this map', true); }
+    membersDraw();
+    var f = mFollow && memberById(mFollow); if (f && map) map.panTo(f.ll, { animate: false });
+  }
+  function membersDraw() {
+    if (!map) return;
+    if (!mGroup) { mGroup = L.layerGroup(); mGroup.addTo(map); }
+    mGroup.clearLayers(); mMarkers = {};
+    mList.forEach(function (x) {
+      var mk = L.marker(x.ll, { icon: L.divIcon({ className: 'mem-i', html: '<div class="mem-dot' + (x.id === mFollow ? ' following' : '') + '" style="--c:' + x.color + '"></div>', iconSize: [0, 0] }), keyboard: false, interactive: true, zIndexOffset: 980 });
+      bindHover(mk, x.name, 'Lodge member, live', x.id === mFollow ? 'Following - click to stop' : 'Click to follow', null);
+      function act(e) {
+        L.DomEvent.stopPropagation(e); hideTip(); var oe = e.originalEvent || {};
+        menu(oe.clientX || 0, oe.clientY || 0, x.name, [x.id === mFollow ? { text: 'Stop following', run: function () { setMemberFollow(0); } } : { text: 'Follow this member', run: function () { setMemberFollow(x.id); } }]);
+      }
+      mk.on('click', act); mk.on('contextmenu', act);
+      mGroup.addLayer(mk); mMarkers[x.id] = mk;
+    });
+  }
+  function setMemberFollow(id) {
+    id = memberById(id) ? id : 0;
+    if (id === mFollow) return;
+    mFollow = id;
+    if (id && follow) setFollow(false, true);      // one thing to follow at a time
+    send({ t: 'mfollow', id: id });
+    var f = id && memberById(id); if (f && map) map.panTo(f.ll, { animate: false });
+    membersDraw();
+  }
 
   // ---------------------------------------------------------------- the messages from the app
   // vseq: the last place the app sent the map to; every view report names it, so the app can drop a report that was on its way before that goto
@@ -464,6 +508,7 @@
       case 'toast': toast(m.text, m.ok); break;
       case 'on': (m.on || []).forEach(function (k) { on[k] = true; }); refresh(); break;
       case 'me': meMsg(m); break;
+      case 'members': membersMsg(m); break;
     }
   }
   if (wv) wv.addEventListener('message', function (e) { handle(e.data); });
@@ -498,6 +543,7 @@
   function init(m) {
     cfg = m.map;
     follow = m.follow === true; meGroup = null; meDot = null; meCtrl = null; me = null; meTrail = [];
+    mGroup = null; mList = []; mMarkers = {}; mFollow = 0;
     if (map) { map.remove(); map = null; data = {}; groups = {}; counts = {}; requested = {}; panelRows = {}; defs = {}; on = {}; }
     $('map').innerHTML = '';
     document.documentElement.style.setProperty('--sea', cfg.sea || '#081110');
@@ -558,7 +604,7 @@
       ]);
     });
     map.on('movestart zoomstart', function () { hideMenu(); hideTip(); });
-    map.on('dragstart', function () { if (follow) setFollow(false, true); });      // dragging the map yourself stops following
+    map.on('dragstart', function () { if (follow) setFollow(false, true); if (mFollow) setMemberFollow(0); });      // dragging the map yourself stops following
     map.on('move zoom resize', queueDraw);
     var vt = 0;
     map.on('moveend', function () {
@@ -607,6 +653,21 @@
         count: panelRows.trailevents ? panelRows.trailevents.ct.textContent : '', kinds: meEvMarkers.map(function (mk) { var e = mk.getElement && mk.getElement(); var q = e && e.querySelector('.me-ev'); return q ? q.getAttribute('data-k') : ''; }) };
       if (tip != null && meEvMarkers[tip]) { meEvMarkers[tip].fire('mousemove', { originalEvent: { clientX: 220, clientY: 220 } }); var t = $('tip'); r.tip = t.hidden ? '' : t.textContent; r.tipHtml = t.innerHTML; meEvMarkers[tip].fire('mouseout'); }
       if (open != null && meEvMarkers[open]) meEvMarkers[open].fire('click', { originalEvent: { clientX: 220, clientY: 220 } });
+      return JSON.stringify(r);
+    },
+    // the members' dots (test): ids, names, colours, whether followed and centred; `follow` = an id -> "Follow this member" through its menu (0 = Stop following);
+    // `tip` = an id -> point at that dot and read the tooltip
+    members: function (followId, tip) {
+      var r = { n: 0, ids: [], names: [], colors: [], following: mFollow, layer: !!(mGroup && map && map.hasLayer(mGroup)) };
+      if (followId != null) {
+        var t = followId ? mMarkers[followId] : mMarkers[mFollow];
+        if (t) { t.fire('click', { originalEvent: { clientX: 200, clientY: 200 } }); var b = $('ctx').querySelector('button'); r.menu = b ? b.textContent : ''; if (b) b.click(); }
+        r.following = mFollow;
+      }
+      if (tip != null && mMarkers[tip]) { mMarkers[tip].fire('mousemove', { originalEvent: { clientX: 220, clientY: 220 } }); var tt = $('tip'); r.tip = tt.hidden ? '' : tt.textContent; mMarkers[tip].fire('mouseout'); }
+      mList.forEach(function (x) { var e = mMarkers[x.id] && mMarkers[x.id].getElement && mMarkers[x.id].getElement(); if (e && e.querySelector('.mem-dot')) { r.n++; r.ids.push(x.id); r.names.push(x.name); r.colors.push(x.color); } });
+      var f = memberById(mFollow), c = map ? map.getCenter() : null;
+      r.centered = !!(f && c && Math.abs(c.lat - f.ll[0]) < 0.05 && Math.abs(c.lng - f.ll[1]) < 0.05);
       return JSON.stringify(r);
     },
     me: function (click) {

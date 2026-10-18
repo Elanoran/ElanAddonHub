@@ -138,6 +138,9 @@ namespace ElansAddonHub
             ElansAddonHub.Services.WorldMap.WorldMapLayers.FlightTimes = FlightTimesForMap;
             WireLive();
             v.Live = LivePos;
+            // 2.97: the Lodge members who share their position with me (Lodge feature "liveposition"); the session leaves out whoever I may not see
+            v.MemberDots = () => Session.MemberDots();
+            Session.LivePositionsChanged += () => Dispatcher.BeginInvoke(new Action(() => v.PushMembers(false)));
             // learned flight paths (2.88): a new learned route, the Lodge's, or Clear redraws the Flight routes layer
             ElansAddonHub.Services.WorldMap.LearnedFlights.AnyChanged += () => Dispatcher.BeginInvoke(new Action(() => v.LayerDataChanged("routes")));
             // the Cairn's data (2.92: its nodes, vendors, rares and flight times are on the world map) arrived, was replaced or deleted: those layers again
@@ -161,6 +164,7 @@ namespace ElansAddonHub
         {
             try { LivePos.Update(settings.WorldMapLivePos, Session.Presence.Playing, Session.Presence.Current, DateTime.UtcNow); } catch (Exception e) { Util.Log("live position: " + e.Message); }
             worldMapView?.PushLive(true);
+            worldMapView?.PushMembers(true);
         }
 
         // "Horde|11>22" -> seconds: what the Lodge's members measured, then what this PC's Hunter Helper learned

@@ -458,6 +458,7 @@ namespace ElansAddonHub
                     Check("screenshot: the page was captured", png != null && png.Length > 5000, (png?.Length ?? 0) + "");
                     WorldMapLiveUnitTest(Check);
                     await WorldMapLiveTest(Check, P);
+                    WorldMapMembersUnitTest(Check); await WorldMapMembersTest(Check, P);      // 2.97: the Lodge members' dots (MainWindow.WorldMapTest.Members.cs)
                     WorldMapPrintsUnitTest(Check); await WorldMapPrints2dTest(Check, P);      // 2.88: the paw-print trail (MainWindow.WorldMapTest.Prints.cs)
                     await WorldMapIslandPageTest(Check, P, taxi, lidx);      // 2.89: islands (Zephras Isle) as world maps of their own
 

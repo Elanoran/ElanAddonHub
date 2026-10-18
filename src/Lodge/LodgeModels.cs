@@ -250,6 +250,25 @@ namespace ElansAddonHub.Lodge
             RaiseInGame();
         }
 
+        public string GameClassFile => gameClassFile;
+
+        // ---- live map position (Lodge 2.30 "memberpos"): where they are on the game's map, only while they share it with me. Memory only.
+        public bool LiveValid { get; private set; }
+        public int LiveMapId { get; private set; }               // the game's uiMap id the fractions are on
+        public double LiveFx { get; private set; }               // 0..1 on that map
+        public double LiveFy { get; private set; }
+        public int LiveMove { get; private set; }                // the trail's movement bits (LiveMove)
+        // false = nothing changed
+        public bool SetLivePos(bool valid, int mapId, double fx, double fy, int move)
+        {
+            if (!valid || mapId <= 0 || double.IsNaN(fx + fy) || double.IsInfinity(fx + fy)) { valid = false; mapId = 0; fx = fy = 0; move = 0; }
+            else { fx = Math.Max(0, Math.Min(1, fx)); fy = Math.Max(0, Math.Min(1, fy)); }
+            if (valid == LiveValid && mapId == LiveMapId && fx == LiveFx && fy == LiveFy && move == LiveMove) return false;
+            LiveValid = valid; LiveMapId = mapId; LiveFx = fx; LiveFy = fy; LiveMove = move;
+            return true;
+        }
+        public bool ClearLivePos() => SetLivePos(false, 0, 0, 0, 0);
+
         // a copy of what someone plays now (the profile editor's preview card)
         public void CopyGameFrom(MemberVM o)
         {
