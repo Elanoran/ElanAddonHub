@@ -278,8 +278,8 @@ EHUB.POSITION_DESC = "Shows where you are on the Outpost's world map, with a sho
   .. "The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads "
   .. "it from there, together with whether you are on a flight, on a mount, indoors or swimming and whether your pet is out (so its 3D map shows you "
   .. "at the right height and your trail can show paw and hoof prints). "
-  .. "It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing "
-  .. "with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the "
+  .. "It is only shown on a map \226\128\148 nothing presses keys or plays the game for you, and the addon itself sends nothing anywhere (sharing "
+  .. "with your Lodge is a separate switch in the Outpost, off until you turn it on). Positions are not available in dungeons, raids and battlegrounds, so the "
   .. "trail pauses there."
 
 local function frac(v)

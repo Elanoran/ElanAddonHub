@@ -2,7 +2,7 @@
 ## Title: |cffabd473Elan's|r Hub
 ## Notes: Shares your character, zone and status with Elan's Outpost (and your Lodge, if you join one). Optional: your live map position and trail events for the Outpost's world map — display only, no automation; everything optional is off by default.
 ## Author: Elan
-## Version: 1.18.1
+## Version: 1.18.2
 ## IconTexture: Interface\Icons\Ability_Hunter_BeastTaming
 ## SavedVariables: ElansHubDB, ElansHubData
 ## X-License: MIT

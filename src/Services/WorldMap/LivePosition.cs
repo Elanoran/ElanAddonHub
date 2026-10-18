@@ -23,7 +23,7 @@ namespace ElansAddonHub.Services.WorldMap
         Ok,           // a position
     }
 
-    // The texts of the live layer and of the how-to, in one place (the Lodge will reuse them for members later).
+    // The texts of the live layer and of the how-to, in one place (the Lodge's member dots use them too, 2.97).
     public static class LivePositionText
     {
         public const string SettingLabel = "Show my live position on the world map";
@@ -34,8 +34,13 @@ namespace ElansAddonHub.Services.WorldMap
         public const string HowToLink = "How to turn it on";
         public const string HowToTitle = "Share your map position";
         public const string HubSettingLabel = "Share my map position with Elan's Outpost";
+        // 2.97: sharing with the Lodge (Settings > General, off by default; Lodge 2.30 feature "liveposition")
+        public const string LodgeSettingLabel = "Share my map position with the Lodge";
+        public const string LodgeSettingNote = "Off by default. Everyone or officers only see your dot on their world map; never guests, and Appear offline hides it. Needs your zone shared.";
+        public const string LodgeSettingOldServer = "Your Lodge server is too old for this (it needs 2.30 or newer).";
+        public const string LodgeSettingGuest = "Guests don't share their position.";
         // the in-game setting's description, verbatim (ElansHub.lua EHUB.POSITION_DESC): what it really does
-        public const string HubDescription = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there, together with whether you are on a flight, on a mount, indoors or swimming and whether your pet is out (so its 3D map shows you at the right height and your trail can show paw and hoof prints). It is only shown on a map — nothing presses keys or plays the game for you, and nothing is sent anywhere (sharing with your Lodge does not exist yet; it will be a separate switch). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there.";
+        public const string HubDescription = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads it from there, together with whether you are on a flight, on a mount, indoors or swimming and whether your pet is out (so its 3D map shows you at the right height and your trail can show paw and hoof prints). It is only shown on a map — nothing presses keys or plays the game for you, and the addon itself sends nothing anywhere (sharing with your Lodge is a separate switch in the Outpost, off until you turn it on). Positions are not available in dungeons, raids and battlegrounds, so the trail pauses there.";
         public static readonly string[] HowToSteps =
         {
             "In game: type /ehub position on (or open Elan's Hub settings > Share my map position with Elan's Outpost).",
@@ -56,7 +61,7 @@ namespace ElansAddonHub.Services.WorldMap
         // whether the notice carries the "How to turn it on" link (only when something can be switched on)
         public static bool HasHowTo(LiveState s) => s == LiveState.NotShared || s == LiveState.OldHub;
 
-        // for the Lodge (later): when someone looks at a member who has not switched sharing on. The name is made safe for one line.
+        // for the Lodge: when someone looks at a member who has not switched sharing on. The name is made safe for one line.
         public static string MemberNotShared(string name)
         {
             var n = CleanName(name);
