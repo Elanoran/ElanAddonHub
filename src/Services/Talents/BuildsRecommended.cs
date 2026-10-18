@@ -46,7 +46,7 @@ namespace ElansAddonHub.Services.Talents
         public static string HunterHelperFile(string wowRoot, string flavor)
         {
             if (string.IsNullOrEmpty(wowRoot)) return null;
-            try { return Path.Combine(wowRoot, string.IsNullOrEmpty(flavor) ? "_classic_beta_" : flavor, HunterHelperRelative); } catch { return null; }
+            try { return Path.Combine(wowRoot, WowLocator.Resolve(wowRoot, string.IsNullOrEmpty(flavor) ? "_classic_beta_" : flavor), HunterHelperRelative); } catch { return null; }
         }
 
         // the builds of the file, or an empty list (and `problem`) when it is not there / not readable. The file is only read, shared, and capped at 512 KB.

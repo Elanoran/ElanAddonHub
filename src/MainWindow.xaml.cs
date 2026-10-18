@@ -338,7 +338,7 @@ namespace ElansAddonHub
             result += "\r\n" + TestScope.SelfTest();
             result += "\r\n" + InfraGuard.SelfTest(Environment.GetCommandLineArgs());   // the public repo never names our own hosting
             result += "\r\n" + SelfTestCache.SelfTest(dir);
-            if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
+            if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + WowLocator.SelfTest(dir) + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
             if (Begin("strip")) { result += "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live(); End(); }
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
@@ -1104,7 +1104,7 @@ namespace ElansAddonHub
             var root = WowLocator.RootFrom(dlg.FileName);
             if (root == null)
             {
-                Dialog.Info(this, "WoW folder", "That doesn't look like a World of Warcraft folder. Pick any Wow .exe inside the folder that has _retail_, _classic_beta_ and so on.");
+                Dialog.Info(this, "WoW folder", "That doesn't look like a World of Warcraft folder. Pick any Wow .exe inside the folder that has _retail_, _classic_beta_, _forever_ and so on.");
                 return;
             }
             settings.WowRoot = root;

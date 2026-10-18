@@ -57,7 +57,7 @@ namespace ElansAddonHub
             var e = new List<DbEntry>
             {
                 Hf(SpellTables.SpellName, 133, new HfRow().Str("Fireball").Bytes),                       // the same name: not a change
-                Hf(SpellTables.SpellName, 424242, new HfRow().Str("[DNT] Teleport to Test").Bytes),      // a new spell
+                Hf(SpellTables.SpellName, 424242, new HfRow().Str("Teleport to Elwynn").Bytes),      // a new spell
                 Hf(SpellTables.SpellName, 424243, new HfRow().Str("Gone Again").Bytes),
                 Hf(SpellTables.SpellName, 424243, null, 3),                                              // invalid after a row: that row no longer counts
                 Hf(SpellTables.SpellName, 9000, null, 3),                                                // invalid for a shipped id: the shipped row stands
@@ -108,7 +108,7 @@ namespace ElansAddonHub
             var hi = hs.Hotfixes;
             var nw = hs.Spells.Get(424242);
             Check("hotfix spells: a new spell from the server's rows alone - name, description, icon, cast 1.5 s, duration 9 s, range 35 yd, one effect; marked new",
-                nw != null && nw.Name == "[DNT] Teleport to Test" && nw.Desc == "Teleports you $s1 times." && nw.IconId == 136235 && nw.CastMs == 1500 && nw.DurationMs == 9000 && Math.Abs(nw.RangeMax - 35f) < 0.01 && nw.Effects.Length == 1
+                nw != null && nw.Name == "Teleport to Elwynn" && nw.Desc == "Teleports you $s1 times." && nw.IconId == 136235 && nw.CastMs == 1500 && nw.DurationMs == 9000 && Math.Abs(nw.RangeMax - 35f) < 0.01 && nw.Effects.Length == 1
                 && (hi.Spell(424242) & HotfixParts.New) != 0, nw == null ? "missing" : nw.IconId + " " + nw.CastMs + " " + nw.DurationMs);
             var fb = hs.Spells.Get(133);
             Check("hotfix spells: Fireball's own SpellMisc / SpellEffect rows replace the shipped ones (9 s, 25 damage), the removed periodic effect is gone, the other difficulty's rows are not used; its name is unchanged (not marked)",
@@ -169,7 +169,7 @@ namespace ElansAddonHub
             Check("spell page of an untouched spell: no Source fact, everything Forever", !AtlasQuery.Build("spell:6001").Facts.Any(f => f.Label == "Source" || f.Source == AtlasLabel.Hotfix));
             var tip = AtlasTip.For(page);
             Check("the spell's tooltip carries the source in its footer", tip.Footer.Any(l => l.StartsWith("Source: A spell the server added")), string.Join(" | ", tip.Footer));
-            var hit = AtlasQuery.Search("teleport to test").All.FirstOrDefault(h => h.Id == "spell:424242");
+            var hit = AtlasQuery.Search("teleport to elwynn").All.FirstOrDefault(h => h.Id == "spell:424242");
             Check("search: the new spell is found, labelled Server hotfix", hit != null && hit.Label == AtlasLabel.Hotfix, hit?.ToString());
             var q = AtlasQuery.Build("quest:93000");
             Check("quest page of a quest only a server hotfix names: the game knows it from a server hotfix, said so", q.NotFound && q.Message.Contains("server hotfix"), q.Message);

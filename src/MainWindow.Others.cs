@@ -41,9 +41,9 @@ namespace ElansAddonHub
         string ClientFlavor()
         {
             var f = manifest?.Addons?.Select(a => a.Flavor).FirstOrDefault(x => !string.IsNullOrEmpty(x));
-            if (f != null && WowLocator.HasFlavor(settings.WowRoot, f)) return f;
-            foreach (var c in new[] { "_classic_beta_", "_classic_era_", "_classic_", "_retail_" })
-                if (WowLocator.HasFlavor(settings.WowRoot, c)) return c;
+            if (f != null && WowLocator.HasFlavor(settings.WowRoot, f)) return WowLocator.Resolve(settings.WowRoot, f);
+            foreach (var c in new[] { WowLocator.ForeverFolder, "_classic_beta_", "_classic_era_", "_classic_", "_retail_" })
+                if (WowLocator.HasFlavor(settings.WowRoot, c)) return WowLocator.Resolve(settings.WowRoot, c);
             return null;
         }
 

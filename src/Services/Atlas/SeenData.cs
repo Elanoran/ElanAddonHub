@@ -328,7 +328,7 @@ namespace ElansAddonHub.Services
         {
             try
             {
-                var wdb = Path.Combine(root, flavor, "Cache", "WDB");
+                var wdb = Path.Combine(root, WowLocator.Resolve(root, flavor), "Cache", "WDB");
                 if (!Directory.Exists(wdb)) return null;
                 var en = Path.Combine(wdb, "enUS");
                 if (File.Exists(Path.Combine(en, CreatureFile))) return en;

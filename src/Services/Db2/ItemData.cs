@@ -423,9 +423,9 @@ namespace ElansAddonHub.Services.Db2
                 var cols = lines[0].Split('|').Select(c => c.Split('!')[0]).ToList();
                 int iBuild = cols.IndexOf("Build Key"), iProd = cols.IndexOf("Product"), iVer = cols.IndexOf("Version");
                 if (iBuild < 0 || iProd < 0) return null;
-                var want = CascStorage.ProductFor(flavor);
+                var want = CascStorage.ProductFor(root, flavor);
                 var rows = lines.Skip(1).Select(l => l.Split('|')).Where(r => r.Length > Math.Max(iBuild, iProd)).ToList();
-                var row = rows.FirstOrDefault(r => r[iProd] == want) ?? rows.FirstOrDefault(r => r[iProd].StartsWith("wow", StringComparison.Ordinal));
+                var row = CascStorage.PickRow(rows, iProd, want, flavor);
                 if (row == null) return null;
                 return row[iProd] + "|" + (iVer >= 0 && iVer < row.Length ? row[iVer] : "") + "|" + row[iBuild];
             }
@@ -437,7 +437,7 @@ namespace ElansAddonHub.Services.Db2
         {
             try
             {
-                var adb = Path.Combine(root, flavor, "Cache", "ADB");
+                var adb = Path.Combine(root, WowLocator.Resolve(root, flavor), "Cache", "ADB");
                 if (!Directory.Exists(adb)) return null;
                 var en = Path.Combine(adb, "enUS", "DBCache.bin");
                 if (File.Exists(en)) return en;

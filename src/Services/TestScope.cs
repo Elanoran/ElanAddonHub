@@ -47,7 +47,7 @@ namespace ElansAddonHub.Services
             ["selfupdated"] = "addons that update themselves: the Self source (CurseForge / Wago id but not managed by the CurseForge app), git-describe dev builds (label, comparisons), the addon's own logo as the row icon (IconTexture, heuristic, depth / size / path limits, decode cache, no network)",
             ["viewer"] = "in-app picture viewer",
             ["voice"] = "voice effects",
-            ["update"] = "update channel + installer",
+            ["update"] = "update channel + installer, path safety, the Forever client folder (_classic_beta_ now, _forever_ once released) and its product (WowLocator)",
             ["strip"] = "pixel strip",
             ["lodge"] = "live Lodge session (only with ELANSHUB_TEST_LODGE=url|code|name)",
             ["lodgefeatures"] = "Lodge chat features from synthetic frames",

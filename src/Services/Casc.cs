@@ -32,6 +32,20 @@ namespace ElansAddonHub.Services
 
         static FileStream OpenShared(string path) => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16);
 
+        // 2.94: the client folder's own .flavor.info names its product (so a new folder such as _forever_ needs no list); the list is the fallback
+        internal static string ProductFor(string root, string flavor)
+        {
+            flavor = WowLocator.Resolve(root, flavor);
+            return WowLocator.ProductOf(root, flavor) ?? ProductFor(flavor);
+        }
+
+        // a client folder's product must never fall back to another game's: only an unknown folder takes the first "wow..." product, and never retail's "wow"
+        internal static string[] PickRow(List<string[]> rows, int iProd, string want, string flavor)
+        {
+            if (want != null) return rows.FirstOrDefault(r => r[iProd] == want);
+            return rows.FirstOrDefault(r => r[iProd].StartsWith("wow", StringComparison.Ordinal) && (r[iProd] != "wow" || flavor == "_retail_"));
+        }
+
         internal static string ProductFor(string flavor)
         {
             switch (flavor)
@@ -57,8 +71,8 @@ namespace ElansAddonHub.Services
             int iBuild = cols.IndexOf("Build Key"), iProd = cols.IndexOf("Product"), iVer = cols.IndexOf("Version");
             if (iBuild < 0 || iProd < 0) throw new IOException(".build.info has no Build Key/Product columns");
             var rows = lines.Skip(1).Select(l => l.Split('|')).Where(r => r.Length > Math.Max(iBuild, iProd)).ToList();
-            var want = ProductFor(flavor);
-            var row = rows.FirstOrDefault(r => r[iProd] == want) ?? rows.FirstOrDefault(r => r[iProd].StartsWith("wow"));
+            var want = ProductFor(wowRoot, flavor);
+            var row = PickRow(rows, iProd, want, flavor);
             if (row == null) throw new IOException("no product for " + flavor + " in .build.info");
 
             var s = new CascStorage(data) { Product = row[iProd] };

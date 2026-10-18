@@ -117,7 +117,7 @@ namespace ElansAddonHub.Services
                 Ck("folder at the length cap ok", FolderProblem(new string('a', 64)) == null);
                 foreach (var good in new[] { "ElansHub", "elans-hub_2.1", "RbTestA1b2c3" }) Ck("id ok: " + good, IdProblem(good) == null, IdProblem(good));
                 foreach (var bad in new[] { "", "..", "a/b", "a\\b", ".x", "x.", "a..b", "CON", "id with space", "C:x", new string('a', 65) }) Ck("id refused: " + Show(bad), IdProblem(bad) != null);
-                foreach (var good in new[] { null, "", "_retail_", "_classic_", "_classic_era_", "_classic_beta_", "_classic_ptr_" }) Ck("flavor ok: " + (good ?? "null"), FlavorProblem(good) == null);
+                foreach (var good in new[] { null, "", "_retail_", "_classic_", "_classic_era_", "_classic_beta_", "_classic_ptr_", "_forever_" }) Ck("flavor ok: " + (good ?? "null"), FlavorProblem(good) == null);
                 foreach (var bad in new[] { "retail", "_re/tail_", "..\\x", "_a__b_", "_Retail_", "_" + new string('a', 40) + "_" }) Ck("flavor refused: " + Show(bad), FlavorProblem(bad) != null);
 
                 var root = Path.Combine(Path.GetTempPath(), "wow-root-for-test");

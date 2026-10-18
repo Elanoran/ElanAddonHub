@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.94.0
+- **Ready for WoW Forever's release.** When Forever leaves its beta, the game moves into its own client folder (_forever_). The Outpost now finds it there by itself: add-ons install into it, and the Atlas, maps, talents and items read the released game's files - your beta folder is used until then. Each client folder now says itself which game it holds, so the Outpost can never read another game's files by mistake.
+
 ## 2.93.1
 - **Data sources stays on Atlas Home.** "Got it" now only puts the explanation away: the heading "Where this comes from" and the Data sources button stay on Home.
 
