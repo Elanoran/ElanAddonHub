@@ -71,7 +71,7 @@ namespace ElansAddonHub.Services.Atlas
             switch (key)
             {
                 case Game: return "Items, spells, talents, quests, maps, zones and what your game has met.";
-                case You: return "What your own game noted: drops, vendors, spawn points, nodes and flight times.";
+                case You: return "What your own game noted: drops, vendors, spawn points, nodes and flight times - and, with the combat log on, the spells creatures use.";
                 case Lodge: return "What the members who share have seen: drops, vendors, spawn points, nodes, finds.";
                 case Cairn: return "Many Lodges' numbers pooled into one daily dataset: ids and counts, no names.";
                 case Classic: return "Old Classic drops, vendors and spawn points: the fallback where Forever has no data yet.";

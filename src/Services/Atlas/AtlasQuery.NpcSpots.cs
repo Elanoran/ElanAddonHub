@@ -46,7 +46,20 @@ namespace ElansAddonHub.Services.Atlas
         public static List<NpcSpotView> NpcSpots(int npcId)
         {
             var own = OwnNpcSpots();
-            return MergeSpots(Lodge()?.NpcSpotsOf(npcId), own != null && own.TryGetValue(npcId, out var mine) ? mine : null);
+            return MergeSpots(Lodge()?.NpcSpotsOf(npcId), WithCombat(npcId, own != null && own.TryGetValue(npcId, out var mine) ? mine : null));
+        }
+
+        static CombatLogData.Store CombatLog() { try { return Context.CombatLog?.Invoke(); } catch (Exception) { return null; } }
+
+        // 2.95: this PC's own spots plus where its combat log saw the creature fight ("fought here"), when the Toolkit has no own spot of it within reach
+        static List<AtlasObs.NpcSpot> WithCombat(int npcId, List<AtlasObs.NpcSpot> own)
+        {
+            var cl = CombatLog();
+            if (cl == null || !cl.Npcs.TryGetValue(npcId, out var n) || n.Positions.Count == 0) return own;
+            var res = own != null ? new List<AtlasObs.NpcSpot>(own) : new List<AtlasObs.NpcSpot>();
+            foreach (var p in CombatLogData.Spots(n, MapData.Index))
+                if (!res.Any(r => r.Z == p.Z && (r.X - p.X) * (r.X - p.X) + (r.Y - p.Y) * (r.Y - p.Y) <= AtlasObs.NpcSpotMerge * AtlasObs.NpcSpotMerge * 4)) res.Add(p);
+            return res;
         }
 
         // every npc with spots (the Lodge's and this PC's) at once, for the world map's layers (each source is asked once)
@@ -58,9 +71,11 @@ namespace ElansAddonHub.Services.Atlas
             var ids = new HashSet<int>();
             if (l != null) foreach (var kv in l.AllNpcSpots) ids.Add(kv.Key);
             if (own != null) foreach (var k in own.Keys) ids.Add(k);
+            var cl = CombatLog();
+            if (cl != null) foreach (var kv in cl.Npcs) if (kv.Value.Positions.Count > 0) ids.Add(kv.Key);
             foreach (var id in ids.OrderBy(i => i))
             {
-                var v = MergeSpots(l?.NpcSpotsOf(id), own != null && own.TryGetValue(id, out var mine) ? mine : null);
+                var v = MergeSpots(l?.NpcSpotsOf(id), WithCombat(id, own != null && own.TryGetValue(id, out var mine) ? mine : null));
                 if (v.Count > 0) res[id] = v;
             }
             return res;
@@ -102,14 +117,16 @@ namespace ElansAddonHub.Services.Atlas
             if (spots.Count == 0) return;
             var s = Section(m, "seenat", "Seen at");
             bool lodge = spots.Any(x => x.Lodge);
+            bool fought = spots.Any(x => x.Kind == AtlasObs.NpcSpotCombat);
             s.Note = (lodge ? "Where Lodge members met it, killed it or saw it as a rare, from Elan's Toolkit." : "Where you met it, killed it or saw it as a rare, from Elan's Toolkit.")
+                + (fought ? " \"Fought\" is from your own combat log." : "")
                 + (classicDropped > 0 ? " The Classic baseline's " + (classicDropped == 1 ? "spawn point" : classicDropped + " spawn points") + " in " + (spots.Count(x => x.Fixed) == 1 ? "that zone is" : "those zones are") + " left off the map: Forever's place wins." : "");
             int i = 0;
             foreach (var sp in spots)
                 s.Rows.Add(new AtlasRow
                 {
                     Key = "seenat:" + (i++), Link = AtlasIds.TryParse("zone:" + sp.UiMapId, out _, out _) ? "zone:" + sp.UiMapId : null, Title = ZoneName(sp.UiMapId), Zone = ZoneName(sp.UiMapId),
-                    Detail = NpcSpotPos(sp) + " · " + NpcSpotTip(sp, false), Label = AtlasLabel.Forever, Tier = sp.Lodge ? 0 : 1, Type = sp.Kind == AtlasObs.NpcSpotInteract ? "Met" : sp.Kind == AtlasObs.NpcSpotKill ? "Killed" : "Rare",
+                    Detail = NpcSpotPos(sp) + " · " + NpcSpotTip(sp, false), Label = AtlasLabel.Forever, Tier = sp.Lodge ? 0 : 1, Type = sp.Kind == AtlasObs.NpcSpotInteract ? "Met" : sp.Kind == AtlasObs.NpcSpotKill ? "Killed" : sp.Kind == AtlasObs.NpcSpotCombat ? "Fought" : "Rare",
                     Right = sp.Lodge ? sp.Members.ToString("N0", CultureInfo.InvariantCulture) : "",
                 });
             AddLayer(m, lodge ? "lodge" : "client");

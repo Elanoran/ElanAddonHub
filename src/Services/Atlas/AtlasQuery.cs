@@ -24,6 +24,7 @@ namespace ElansAddonHub.Services.Atlas
         public Func<Dictionary<int, List<AtlasObs.FishSpot>>> OwnFishSpots = () => null;   // fishing spots this PC's Hub observed: uiMapId -> spots
         public Func<Dictionary<int, List<AtlasObs.EntranceSpot>>> OwnEntrances = () => null;   // instance entrances this PC's Toolkit noted: instance map id -> spots
         public Func<Dictionary<int, List<AtlasObs.NpcSpot>>> OwnNpcSpots = () => null;   // where this PC's Toolkit met, killed or saw npcs: npc -> spots
+        public Func<CombatLogData.Store> CombatLog = () => null;             // 2.95: what this PC's combat log showed (spells creatures used, where they were fought)
         public Func<IReadOnlyDictionary<int, AtlasObs.FieldNote>> OwnFieldNotes = () => null;   // Hunter Helper's field notes on this PC: npc -> note
         public Func<Dictionary<int, Dictionary<int, List<AtlasObs.NodePt>>>> OwnNodes = () => null;   // gathering nodes this PC's Hub observed: object -> uiMapId -> nodes
         public Func<bool> WowRunning = () => WowWatch.Shared.Running;         // 2.93: is the game running now (the app's 2 s watch)? A creature it has not named yet is "Not named yet" then

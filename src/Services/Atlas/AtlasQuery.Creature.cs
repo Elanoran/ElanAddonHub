@@ -225,6 +225,7 @@ namespace ElansAddonHub.Services.Atlas
             MapCoverage(m.Map);
             AddFoundIn(m, cn?.Spawns, spots);
             NpcSpotSection(m, seenAt, classicDropped);
+            CombatLogSection(m, id);
 
             LootSection(m, "loot", "Loot", "npc", id, ClassicSourceKind.NpcDrop, "No loot is known for this NPC.");
             // what members got from it beyond the kill (Toolkit 0.5.10: pickpocketing, gathering the corpse), beside the Classic baseline's tables
@@ -254,6 +255,30 @@ namespace ElansAddonHub.Services.Atlas
             if (!SeenData.Ready) m.Notes.Add("What your game has seen (names, ranks) is not read yet.");
             AddCairnShareNote(m);                              // 2.87: also when no loot table was drawn (the line, once)
             return m;
+        }
+
+        // 2.95: what this PC's combat log saw the creature do - the spells it used (most seen first) and its health at the levels it was met at
+        public const string SeenUsingNote = "From your own combat log (Elan's Toolkit can switch it on: Settings > Atlas). Spells it cast, the auras it put on and the damage it did.";
+        static void CombatLogSection(AtlasPageModel m, int id)
+        {
+            var cl = CombatLog();
+            if (cl == null || !cl.Npcs.TryGetValue(id, out var n)) return;
+            foreach (var h in n.Health.OrderByDescending(k => k.Key).Take(2))
+                m.Facts.Add(new AtlasFact(m.Facts.Any(f => f.Label == "Health") ? "Also" : "Health", h.Value.ToString("N0", CultureInfo.InvariantCulture) + " at level " + h.Key.ToString(CultureInfo.InvariantCulture), AtlasLabel.Forever));
+            if (n.Spells.Count == 0) return;
+            var s = Section(m, "seenusing", "Seen using");
+            s.Note = SeenUsingNote;
+            foreach (var kv in n.Spells.OrderByDescending(k => k.Value).ThenBy(k => k.Key))
+            {
+                var sp = SpellData.Spell(kv.Key);
+                s.Rows.Add(new AtlasRow
+                {
+                    Key = AtlasIds.Spell(kv.Key), Link = AtlasIds.Spell(kv.Key), Title = sp?.Name ?? "Spell " + kv.Key.ToString(CultureInfo.InvariantCulture), IconId = sp?.IconId ?? 0,
+                    Detail = kv.Value == 1 ? "seen once" : "seen " + kv.Value.ToString("N0", CultureInfo.InvariantCulture) + " times", Right = kv.Value.ToString("N0", CultureInfo.InvariantCulture),
+                    Label = AtlasLabel.Forever, Source = DataSources.You, Tier = 1, Sort = kv.Value, Type = "Spell",
+                });
+            }
+            AddLayer(m, "client");
         }
 
         // "Quests that ask for it": the quests Forever described (to this PC or a Lodge member) whose goals name this creature (type 0, or one it counts as)

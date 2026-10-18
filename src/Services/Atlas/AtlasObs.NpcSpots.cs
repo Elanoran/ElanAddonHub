@@ -12,6 +12,7 @@ namespace ElansAddonHub.Services
     public static partial class AtlasObs
     {
         public const int NpcSpotInteract = 1, NpcSpotKill = 2, NpcSpotVignette = 3;
+        public const int NpcSpotCombat = 4;   // 2.95: from this PC's combat log (CombatLogData), never in the Toolkit's data or the Lodge's
         public const int MaxNpcSpotsPerNpc = 10, MaxLodgeNpcSpotsPerNpc = 12, MaxNpcSpotNpcs = 3000, MaxLodgeNpcSpotNpcs = 30000, MaxNpcSpotNpcsPerShare = 400, MaxNpcSpotsPerShare = 2000;
         public const double NpcSpotMerge = 0.01;
         public static readonly Version NpcSpotsServerVersion = new Version(2, 26, 0);   // sub-feature "atlas8": npc spots
@@ -63,6 +64,6 @@ namespace ElansAddonHub.Services
             }).ToList();
 
         // "met at its window" / "killed here" / "seen as a rare" (the tooltips and the "Seen at" rows)
-        public static string NpcSpotKindText(int k) => k == NpcSpotInteract ? "met here" : k == NpcSpotKill ? "killed here" : k == NpcSpotVignette ? "seen as a rare here" : "seen here";
+        public static string NpcSpotKindText(int k) => k == NpcSpotInteract ? "met here" : k == NpcSpotKill ? "killed here" : k == NpcSpotVignette ? "seen as a rare here" : k == NpcSpotCombat ? "fought here" : "seen here";
     }
 }

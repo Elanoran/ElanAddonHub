@@ -3,6 +3,10 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.95.0
+- **What creatures do in a fight.** Elan's Toolkit 0.5.12 can switch WoW's own combat log on for you (Settings > Atlas: always, or only in dungeons and raids). The Outpost then reads the log file from your WoW folder, and a creature's page shows a new "Seen using" list: the spells it cast, the auras it put on you and the damage it did, most seen first. With the game's advanced combat logging (the Toolkit turns it on with the log) it also shows the creature's health at the levels you met it at, and where you fought it, as "Fought" in "Seen at" and on the maps.
+- Only numbers are kept from the log: creature and spell ids, counts, map positions. No names, nothing about players. The log files themselves are only read, never changed or deleted, and the Outpost reads on from where it stopped, a little at a time. This stays on your PC for now; sharing it with your Lodge comes later.
+
 ## 2.94.0
 - **Ready for WoW Forever's release.** When Forever leaves its beta, the game moves into its own client folder (_forever_). The Outpost now finds it there by itself: add-ons install into it, and the Atlas, maps, talents and items read the released game's files - your beta folder is used until then. Each client folder now says itself which game it holds, so the Outpost can never read another game's files by mistake.
 

@@ -469,6 +469,7 @@ namespace ElansAddonHub
             if (Begin("atlashidden")) { result += "\r\n" + await AtlasHiddenTest(dir); End(); }
             await RealSec("atlashiddenreal", AtlasHiddenRealTest);
             if (Begin("atlasnameless")) { result += "\r\n" + await AtlasNamelessTest(dir); End(); }
+            if (Begin("combatlog")) { result += "\r\n" + await CombatLogTest(dir); End(); }
             if (Begin("factions")) { result += "\r\n" + await FactionsTest(dir); End(); }
             if (Begin("zonelore")) { result += "\r\n" + await ZoneLoreTest(dir); End(); }
             await RealSec("zonelorereal", ZoneLoreRealTest);

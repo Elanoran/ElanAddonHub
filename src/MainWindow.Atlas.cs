@@ -32,6 +32,9 @@ namespace ElansAddonHub
             AtlasQuery.Context.OwnFishSpots = () => AtlasObs.Read(settings.WowRoot)?.FishSpots;
             AtlasQuery.Context.OwnEntrances = () => AtlasObs.Read(settings.WowRoot)?.Entrances;
             AtlasQuery.Context.OwnNpcSpots = () => AtlasObs.Read(settings.WowRoot)?.NpcSpots;   // where this PC's Toolkit met, killed or saw npcs (Forever)
+            // 2.95: the game's combat log files (Toolkit 0.5.12 switches logging on): read in the background, at most once a minute, when the Atlas asks
+            AtlasQuery.Context.CombatLog = () => { if (CombatLogData.Due && !LinkOpen.SelfTestRun) CombatLogData.RefreshSoon(settings.WowRoot, ClientFlavor()); return CombatLogData.Current; };   // a self-test never reads the real logs
+            CombatLogData.Changed += () => Dispatcher.BeginInvoke(new Action(() => AtlasView.PoolChanged()));
             AtlasQuery.Context.OwnFieldNotes = () => AtlasObs.Read(settings.WowRoot)?.FieldNotes;   // Hunter Helper's field notes on this PC
             AtlasQuery.Context.OwnNodes = () => AtlasObs.Read(settings.WowRoot)?.Nodes;      // the gathering nodes this PC's Hub observed (Forever)
             AtlasView.LodgeState = LodgeAtlasState;
