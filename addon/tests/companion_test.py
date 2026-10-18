@@ -840,7 +840,9 @@ do
   SlashCmdList.ELANSHUB("settings")
   if not _G.ElansHubSettings.__shown then SlashCmdList.ELANSHUB("settings") end
   E.SelectSettingsTab("general")
-  ok("General page shows the description under the check", _G.ElansHubSettings.pages.general.positionNote and _G.ElansHubSettings.pages.general.positionNote.__text == DESC)
+  ok("General page shows the short line under the check (1.18.1), the full description stays the tooltip", _G.ElansHubSettings.pages.general.positionNote and _G.ElansHubSettings.pages.general.positionNote.__text == E.POSITION_SHORT
+     and E.POSITION_SHORT:find("nothing is sent anywhere", 1, true) ~= nil and #E.POSITION_SHORT < 220)
+  ok("General page: the strip note sits below the short line (no overlap)", _G.ElansHubSettings.pages.general.stripNote ~= nil)
   local cb
   for _, f in ipairs(ALLF) do if f.__kind == "Button" and f.text and f.text.__text == E.POSITION_LABEL then cb = f end end
   ok("the check exists and is off", cb ~= nil and not cb.mark.__shown)
@@ -1433,13 +1435,13 @@ check("SharedData.lua is in the toc, after the other files", shared_listed)
 check("SharedData.lua loads and ElansHubShared is a table", shared_ok)
 _gen = open(os.path.join(ADDON, "SharedData.lua"), encoding="utf-8").read()
 check("SharedData.lua says the Outpost overwrites it", "OVERWRITTEN" in _gen and "Outpost" in _gen)
-check("toc version is 1.18.0", "## Version: 1.18.0" in toc and "\n1.18.0 " in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
+check("toc version is 1.18.1", "## Version: 1.18.1" in toc and "\n1.18.1 " in open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read())
 check("toc Notes verbatim (optional live map position, off by default)", "## Notes: Shares your character, zone and status with Elan's Outpost (and your Lodge, if you join one). Optional: your live map position and trail events for the Outpost's world map — display only, no automation; everything optional is off by default.\n" in toc)
 _cl153 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.15.3 ")[1].split("\n1.16.0 ")[0]
 _cl160 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.16.0 ")[-1].split("\n1.16.1 ")[0]
 _cl161 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.16.1 ")[-1].split("\n1.17.0 ")[0]
 _cl170 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.17.0 ")[-1].split("\n1.18.0 ")[0]
-_cl180 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.18.0 ")[-1]
+_cl180 = open(os.path.join(ADDON, "CHANGELOG.txt"), encoding="utf-8").read().split("\n1.18.0 ")[-1].split("\n1.18.1 ")[0]
 check("changelog 1.18.0: kills from your own target and looted corpses, same OFF-by-default option, honest", "Share my map position" in _cl180 and "OFF by default" in _cl180
       and "loot" in _cl180 and "Skinning" in _cl180 and "no combat log" in _cl180 and "nothing sent anywhere" in _cl180 and "/reload" in _cl180)
 check("changelog 1.17.0: the mounted / pet out bits, part of the same OFF-by-default option, honest", "Share my map position" in _cl170 and "OFF by default" in _cl170

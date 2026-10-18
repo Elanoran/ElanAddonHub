@@ -46,12 +46,13 @@ local function buildGeneral(page)
     function() return EHUB.PositionOn() end,
     function(v) EHUB.SetPosition(v) end,
     EHUB.POSITION_DESC), 24)
-  local pd = note(page, EHUB.POSITION_DESC, y, 400)
+  -- 1.18.1: a short line under the check (the full description is its tooltip), so the page stays calm and nothing overlaps
+  local pd = note(page, EHUB.POSITION_SHORT, y, 400)
   pd:ClearAllPoints()
   pd:SetPoint("TOPLEFT", page, "TOPLEFT", 24, y)
   page.positionNote = pd
-  y = y - 118
-  note(page, "The pixel strip only carries who you play and what you are doing (class, level, zone, group, combat flag), and your map position (with marks for kills, notable loot, gathering, level ups, deaths, quests and discoveries along your trail) only if you turn that on. It never reads health, buffs, cooldowns or combat events.", y)
+  y = y - ((pd.GetStringHeight and pd:GetStringHeight() or 30) + 22)
+  page.stripNote = note(page, "The pixel strip only carries who you play and what you are doing, and your map position only if you turn that on. It never reads your health, buffs, cooldowns or combat events.", y)
 end
 
 local function buildWheel(page)

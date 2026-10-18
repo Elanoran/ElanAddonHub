@@ -271,6 +271,8 @@ local POS_TICK = 1     -- positions fire no event: a cheap 1 s timer, only while
 local function positionOn() return ElansHubDB.position == true end
 EHUB.PositionOn = positionOn
 EHUB.POSITION_LABEL = "Share my map position with Elan's Outpost"
+-- 1.18.1: what the settings page shows under the check (the full text is the check's tooltip)
+EHUB.POSITION_SHORT = "Your spot, a short trail and marks for what happened along it on the Outpost's world map. Read by the Outpost on this PC only - nothing is sent anywhere. Point at the check for details."
 EHUB.POSITION_DESC = "Shows where you are on the Outpost's world map, with a short trail of the last few minutes and small marks on it for what happened "
   .. "there (a kill, a notable item looted, a herb, ore or skin gathered, a level up, a death, a quest turned in, a new area or flight path found). "
   .. "The Hub draws your map position and those marks into its small status strip in the corner of your screen, and the Outpost on this PC reads "

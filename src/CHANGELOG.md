@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.96.2
+- **A calmer Elan's Hub settings page** (Elan's Hub 1.18.1): "Share my map position" has one short line under it, with the full explanation in its tooltip, and the long text no longer runs over the note below.
+
 ## 2.96.1
 - **Kills on your live trail.** With Elan's Hub 1.18.0 the world map's trail marks your kills far more often: also creatures that give no XP (grey ones), kills after you switched target, and the corpses you loot (area and pet kills too). Skinning someone else's corpse or picking pockets never counts, and each creature is marked once. Part of "Share my map position" in Elan's Hub, as before.
 
