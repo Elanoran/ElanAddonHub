@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -454,6 +455,29 @@ namespace ElansAddonHub
                     e3 != null && e3.Int("shown") >= 1 && ops != null && ops.Count > 0 && ops.All(o => Convert.ToDouble(o) > 0.95), EvText(e3));
                 await Wm3Me("follow");
                 await WaitFor(() => !settings.WorldMapFollow, 3000);
+
+                // 2.97.1: the Lodge members' dots in 3D (2.97.0 drew them on the flat map only), Follow this member, and a member who leaves the map
+                {
+                    var c0 = LiveChar(fx: 0.45, fy: 0.5);
+                    string mm(int id, string name, double fx) { var w = MapData.Index?.MapToWorld(c0.PosMapId, fx, 0.5); if (w == null) return null; WorldMapMath.WorldToLatLng(w.Value.X, w.Value.Y, out var la, out var ln); return "{\"id\":" + id + ",\"name\":\"" + name + "\",\"color\":\"#69CCF0\",\"ll\":[" + la.ToString(CultureInfo.InvariantCulture) + "," + ln.ToString(CultureInfo.InvariantCulture) + "]}"; }
+                    var a = mm(2, "Tess", 0.47); var b = mm(3, "Wing", 0.5);
+                    async Task<Dictionary<string, object>> M3(string arg = "") { var r = await WmEval("(function(){try{return window.wm3.members(" + arg + ")}catch(e){return JSON.stringify({err:e.message})}})()"); var s = Json.Parse(r ?? "null") as string; return s == null ? null : Json.Obj(s); }
+                    if (a != null && b != null)
+                    {
+                        await WmEval("window.wm3.feed({\"t\":\"members\",\"list\":[" + a + "," + b + "]})");
+                        var g1 = await M3();
+                        Check("3D members: the members who share with you stand on the 3D map as dots with their names (" + T(g1) + ")", g1 != null && g1.Int("n") == 2 && g1.Int("dots") == 2 && g1.List("names").Cast<object>().Select(o => o as string).SequenceEqual(new[] { "Tess", "Wing" }), T(g1));
+                        var g2 = await M3("3");
+                        Dictionary<string, object> g3 = null;
+                        for (int i = 0; i < 60 && !(g3 != null && g3.Bool("centered")); i++) { await Task.Delay(100); g3 = await M3(); }
+                        Check("3D members: Follow this member brings the camera to them (and following yourself is off)", g3 != null && g3.Int("following") == 3 && g3.Bool("centered") && !g3.Bool("follow"), T(g3));
+                        await WmEval("window.wm3.feed({\"t\":\"members\",\"list\":[" + a + "]})");
+                        var g4 = await M3();
+                        Check("3D members: a member who leaves the map loses their dot, and following them stops", g4 != null && g4.Int("n") == 1 && g4.Int("following") == 0, T(g4));
+                        await WmEval("window.wm3.feed({\"t\":\"members\",\"list\":[]})");
+                    }
+                    else Check("3D members: the invented continent has a place for the test map", false, "no world point");
+                }
 
                 // the height (2.82): in the air on a flight, back on the ground after landing, on a building's floor indoors
                 await WorldMapLiveElevation3dTest(Check, P, lp, view);

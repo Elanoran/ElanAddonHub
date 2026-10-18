@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.97.2
+- **Lodge members in the 3D view too.** The dots of the members who share their map position with you now also stand on the 3D world map (2.97.0 drew them on the flat map only), with their name when you point at one and **Follow this member** when you click it.
+
 ## 2.97.1
 - **Settings > General is readable again.** With the 3D buildings of several continents on disk, their Remove buttons stood side by side and squeezed the World map 3D buildings text into a one-letter column. They now stand one under the other.
 - **Map positions in the Lodge: clearer logs.** The Outpost's log now says when it starts or stops sharing your map position with the Lodge, and why not when it can't (the switch, your zone not shared, Elan's Hub not sharing a position, an instance), and whose positions it receives. Lodge server 2.30.1 says the same on its side (no positions are logged). Knows Lodge server 2.30.1.

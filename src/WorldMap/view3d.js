@@ -844,6 +844,7 @@
       if (drag.moved) {
         drag.x = e.clientX; drag.y = e.clientY;
         if (follow) setFollow(false, true);      // dragging (orbit or pan) stops following, like the flat map
+        if (mFollow) setMemberFollow(0);
         if (drag.pan) {
           var k = cam.dist * 0.0017, a = cam.az * Math.PI / 180;
           cam.tx -= (Math.cos(a) * dx + Math.sin(a) * dy) * k;
@@ -915,7 +916,7 @@
       { text: 'Fly here', run: function () { setView(ll[0], ll[1], Math.max(cam.dist * 0.4, 200), null, null, false); sendView(); } }
     ]);
   }
-  function onDbl(e) { var gp = pickGround(e.clientX, e.clientY); if (gp) { if (follow) setFollow(false, true); var ll = xz2ll(gp.x, gp.z); setView(ll[0], ll[1], Math.max(cam.dist * 0.45, 120), null, null, false); sendView(); } }
+  function onDbl(e) { var gp = pickGround(e.clientX, e.clientY); if (gp) { if (follow) setFollow(false, true); if (mFollow) setMemberFollow(0); var ll = xz2ll(gp.x, gp.z); setView(ll[0], ll[1], Math.max(cam.dist * 0.45, 120), null, null, false); sendView(); } }
   function onKey(e) {
     var k = e.key, step = cam.dist * 0.08, a = cam.az * Math.PI / 180, used = true;
     if (k === 'ArrowUp' || k === 'w') { cam.tx -= Math.sin(a) * step; cam.tz -= Math.cos(a) * step; }
@@ -929,6 +930,7 @@
     else if (k === 'Escape') { hideMenu(); used = false; }
     else used = false;
     if (used && follow && !(k === '+' || k === '=' || k === '-' || k === '_')) setFollow(false, true);      // moving or turning the camera yourself stops following
+    if (used && mFollow && !(k === '+' || k === '=' || k === '-' || k === '_')) setMemberFollow(0);
     if (used) { e.preventDefault(); flight = null; cam.tx = clamp(cam.tx, 0, 64 * TY); cam.tz = clamp(cam.tz, 0, 64 * TY); dirty = true; sendView(); }
   }
 
@@ -1479,13 +1481,14 @@
   }
   function setFollow(v, tell) {
     follow = !!v; followTo = null;
+    if (follow && mFollow) setMemberFollow(0);      // following yourself stops following a member
     if (tell) send({ t: 'follow', on: follow });
     if (follow) followAim();
     if (me) meCardDraw();
   }
   // one frame of Follow me: the camera's target eases to you (about a third of a second), the bearing, tilt and distance stay yours
   function stepFollow() {
-    if (!follow || !followTo || drag) return;
+    if ((!follow && !mFollow) || !followTo || drag) return;
     var dx = followTo.x - cam.tx, dz = followTo.z - cam.tz;
     if (Math.abs(dx) + Math.abs(dz) < 0.3) { cam.tx = followTo.x; cam.tz = followTo.z; followTo = null; sendView(); return; }
     var far = Math.hypot(dx, dz) > 3000, k = far ? 1 : 0.14;
@@ -1493,6 +1496,60 @@
   }
   // the trail keeps fading while nothing new arrives
   setInterval(function () { if (me && meLive() && meTrail.length && inited) meDraw(); }, 15000);
+
+  // ---------------------------------------------------------------- the Lodge members' dots in 3D (2.97.1; the flat page has them since 2.97.0)
+  // The same message and rules as worldmap.js "members": only members on this map who share with you, nothing kept. A dot on the ground in the
+  // member's class colour; point at it for the name, click it for "Follow this member" (the camera keeps them in the middle until you drag, follow
+  // yourself, or they leave the map).
+  var mList = [], mFollow = 0, mIts = [];
+  function memberById(id) { for (var i = 0; i < mList.length; i++) if (mList[i].id === id) return mList[i]; return null; }
+  function membersMsg(m) {
+    var out = [], seen = {};
+    (Array.isArray(m.list) ? m.list.slice(0, 100) : []).forEach(function (x) {
+      if (!x || typeof x.id !== 'number' || !(x.id > 0) || x.id % 1 !== 0 || seen[x.id] || !llOk(x.ll)) return;
+      seen[x.id] = 1;
+      out.push({ id: x.id, name: String(x.name || 'A member').slice(0, 48), color: /^#[0-9a-fA-F]{6}$/.test(x.color || '') ? x.color : '#e8e6e3', ll: [x.ll[0], x.ll[1]] });
+    });
+    var gone = mFollow && !seen[mFollow] ? (memberById(mFollow) || {}).name : null;
+    mList = out;
+    if (mFollow && !seen[mFollow]) { setMemberFollow(0); toast((gone || 'That member') + ' is no longer on this map', true); }
+    membersDraw();
+    memberAim();
+  }
+  function membersDraw() {
+    domItems = domItems.filter(function (it) { if (it.layer === '__mem') { if (it.el.parentNode) it.el.parentNode.removeChild(it.el); return false; } return true; });
+    mIts = [];
+    if (!inited) return;
+    mList.forEach(function (x) {
+      var p = ll2xz(x.ll[0], x.ll[1]), d = el('div', 'm3 mem3', '<div class="mem-dot' + (x.id === mFollow ? ' following' : '') + '" style="--c:' + x.color + '"></div>');
+      var tipf = function (ev) { showTip(ev.clientX, ev.clientY, x.name, 'Lodge member, live', x.id === mFollow ? 'Following - click to stop' : 'Click to follow'); };
+      d.addEventListener('mouseenter', tipf); d.addEventListener('mousemove', tipf); d.addEventListener('mouseleave', hideTip);
+      d.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+      function act(ev) {
+        ev.stopPropagation(); ev.preventDefault(); hideTip();
+        menu(ev.clientX, ev.clientY, x.name, [x.id === mFollow ? { text: 'Stop following', run: function () { setMemberFollow(0); } } : { text: 'Follow this member', run: function () { setMemberFollow(x.id); } }]);
+      }
+      d.addEventListener('click', act); d.addEventListener('contextmenu', act);
+      $('ov').appendChild(d);
+      var it = { el: d, x: p[0], z: p[1], y: groundYE(p[0], p[1]), kind: 'marker', layer: '__mem', name: x.name, mid: x.id };
+      domItems.push(it); mIts.push(it);
+    });
+    on.__mem = true; dirty = true;
+  }
+  function memberAim() {
+    var f = mFollow && memberById(mFollow);
+    if (!f) return;
+    var p = ll2xz(f.ll[0], f.ll[1]); followTo = { x: clamp(p[0], 0, 64 * TY), z: clamp(p[1], 0, 64 * TY) }; flight = null; dirty = true;
+  }
+  function setMemberFollow(id) {
+    id = memberById(id) ? id : 0;
+    if (id === mFollow) return;
+    mFollow = id;
+    if (id && follow) { follow = false; followTo = null; send({ t: 'follow', on: false }); if (me) meCardDraw(); }      // one thing to follow at a time
+    send({ t: 'mfollow', id: id });
+    if (id) memberAim(); else followTo = null;
+    membersDraw();
+  }
 
   // ---------------------------------------------------------------- the messages from the app
   // vseq: the last place the app sent the camera to; every view3 report names it (see worldmap.js)
@@ -1510,6 +1567,7 @@
       case 'bstate': bldState(m); break;
       case 'on': (m.on || []).forEach(function (k) { on[k] = true; }); refresh(); break;
       case 'me': if (inited) meMsg(m); break;
+      case 'members': if (inited) membersMsg(m); break;
     }
   }
   if (wv) wv.addEventListener('message', function (e) { handle(e.data); });
@@ -1533,6 +1591,7 @@
     Object.keys(lineLayers).forEach(function (k) { scene.remove(lineLayers[k].group); }); lineLayers = {};
     Object.keys(ringLayers).forEach(function (k) { ringLayers[k].zones.forEach(function (z) { scene.remove(z.obj); z.obj.geometry.dispose(); }); }); ringLayers = {};
     meDropLines(); if (meCard && meCard.parentNode) meCard.parentNode.removeChild(meCard); meCard = null; me = null; meTrail = []; meDotIt = null; meEvIts = []; follow = m.follow === true; followTo = null;
+    mList = []; mFollow = 0; mIts = [];
     $('ov').innerHTML = ''; domItems = []; layers = {}; requested = {}; counts = {}; panelRows = {}; defs = {}; on = {}; hoverZone = null;
     tileList = []; tileMap = {}; heightsLoaded = 0; heightsFailed = 0; heightGen = 0; ready = false; frameN = 0; built = 0;
     var tl = terrain.tiles || [];
@@ -1562,6 +1621,13 @@
     shownPoints: function (id) { var L = pointLayers[id]; if (!L || !L.obj.visible) return 0; var a = L.obj.geometry.attributes.show.array, n = 0; for (var i = 0; i < L.n; i++) if (a[i] > 0) n++; return n; },
     feedForTest: function (m) { layer(m); return 1; },
     feed: function (m) { handle(m); return 1; },
+    // the members' dots in 3D (test, 2.97.1): how many, ids, names, whether followed and centred; `followId` = an id -> Follow this member (0 = stop)
+    members: function (followId) {
+      if (followId != null) setMemberFollow(followId);
+      var f = memberById(mFollow), p = f ? ll2xz(f.ll[0], f.ll[1]) : null;
+      return JSON.stringify({ n: mIts.length, ids: mList.map(function (x) { return x.id; }), names: mList.map(function (x) { return x.name; }), following: mFollow, follow: follow,
+        centered: !!(p && Math.abs(cam.tx - p[0]) + Math.abs(cam.tz - p[1]) < 2), dots: mIts.filter(function (it) { return it.el && it.el.querySelector('.mem-dot'); }).length });
+    },
     // the live layer (test): state, dot (grey? on screen?), trail ribbons, events drawn, the card, Follow me and whether the camera is on you; `click` = 'howto' | 'follow'
     me: function (click) {
       var d = meCard;
