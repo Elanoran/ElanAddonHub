@@ -3,6 +3,9 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 2.99.0
+- **Signed updates.** Every release is now signed, and the Outpost checks that signature with keys built into it before it trusts anything in the update information - the update itself and every add-on. An update that is signed wrongly is refused and nothing is installed from it, so a release someone uploaded with a stolen GitHub login alone can't reach you. Older releases had no signature; for now an unsigned one is still accepted (and noted in the log), a later release will refuse those too.
+
 ## 2.98.2
 - **Safer network parts.** Two Microsoft libraries the Outpost carried along in old versions (System.Net.Http 4.3.0 and System.Text.RegularExpressions 4.3.0, both with known security problems) are now the fixed versions.
 

@@ -57,6 +57,33 @@ namespace ElansAddonHub.Services
             }
         }
 
+        // 2.99: the exact bytes (the release signature is over them), with the same cache skip as GetText
+        public static async Task<byte[]> GetBytes(string url)
+        {
+            if (!Util.IsUrl(url)) return File.ReadAllBytes(url.Replace("file:///", ""));
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+            {
+                var sep = url.Contains("?") ? "&" : "?";
+                var resp = await Http.GetAsync(url + sep + "t=" + DateTime.UtcNow.Ticks, cts.Token);
+                resp.EnsureSuccessStatusCode();
+                return await resp.Content.ReadAsByteArrayAsync();
+            }
+        }
+
+        // the text, or null when it is not there (404, or no such file); other failures throw like GetText
+        public static async Task<string> GetTextOrNull(string url)
+        {
+            if (!Util.IsUrl(url)) { var f = url.Replace("file:///", ""); return File.Exists(f) ? File.ReadAllText(f) : null; }
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+            {
+                var sep = url.Contains("?") ? "&" : "?";
+                var resp = await Http.GetAsync(url + sep + "t=" + DateTime.UtcNow.Ticks, cts.Token);
+                if (resp.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+                resp.EnsureSuccessStatusCode();
+                return await resp.Content.ReadAsStringAsync();
+            }
+        }
+
         public static async Task Download(string url, string toFile, IProgress<double> progress, bool trustedOnly = false)
         {
             if (trustedOnly) { var why = UpdateUrlProblem(url); if (why != null) throw new InvalidOperationException(why); }

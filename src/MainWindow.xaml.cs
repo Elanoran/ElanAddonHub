@@ -339,7 +339,7 @@ namespace ElansAddonHub
             result += "\r\n" + TestScope.SelfTest();
             result += "\r\n" + InfraGuard.SelfTest(Environment.GetCommandLineArgs());   // the public repo never names our own hosting
             result += "\r\n" + SelfTestCache.SelfTest(dir);
-            if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + WowLocator.SelfTest(dir) + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
+            if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + WowLocator.SelfTest(dir) + Environment.NewLine + ReleaseSignature.SelfTest(Environment.GetEnvironmentVariable("ELANSHUB_RELEASE_DIR")) + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
             if (Begin("strip")) { result += "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live(); End(); }
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
@@ -887,13 +887,13 @@ namespace ElansAddonHub
             {
                 var ch = await UpdateChannel.Resolve(settings);
                 Manifest m;
-                try { m = Util.FromJson<Manifest>(await Net.GetText(ch.Url)); }
-                catch when (ch.Pre)
+                try { m = await SignedManifest(ch.Url); }
+                catch (Exception) when (ch.Pre)
                 {
                     // the pre-release's manifest can't be read: stay on stable rather than failing the check
                     Util.Log("test manifest failed, using stable");
                     ch = UpdateChannel.Stable(settings);
-                    m = Util.FromJson<Manifest>(await Net.GetText(ch.Url));
+                    m = await SignedManifest(ch.Url);
                 }
                 manifest = m;
                 manifestPre = ch.Pre;
@@ -905,6 +905,11 @@ namespace ElansAddonHub
                 _ = LoadStats(); // GitHub stats arrive later, never block the check
                 ShowHubBanner();
                 await AfterCheck();
+            }
+            catch (ReleaseSignatureException e)
+            {
+                lastError = "Update refused: " + e.Message;
+                Util.Log("check refused: " + e.Message);
             }
             catch (Exception e)
             {
@@ -918,6 +923,20 @@ namespace ElansAddonHub
                 UpdateStatusText();
                 UpdateCardsSkeleton();
             }
+        }
+
+        // 2.99: the manifest only counts when its signature checks with the release keys built into the Outpost (ReleaseSignature)
+        public sealed class ReleaseSignatureException : Exception { public ReleaseSignatureException(string m) : base(m) { } }
+        string lastSigNote;
+        async Task<Manifest> SignedManifest(string url)
+        {
+            var bytes = await Net.GetBytes(url);
+            var sig = await Net.GetTextOrNull(ReleaseSignature.SigUrl(url));
+            var r = ReleaseSignature.Check(bytes, sig, out var why);
+            if (why != lastSigNote) { lastSigNote = why; Util.Log("update information: " + why); }
+            if (r == ReleaseSignature.Result.Invalid) throw new ReleaseSignatureException(why + " - nothing is installed from it");
+            int bom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
+            return Util.FromJson<Manifest>(System.Text.Encoding.UTF8.GetString(bytes, bom, bytes.Length - bom));
         }
 
         async Task RefreshOthersAndCheck() { await RefreshOthers(); await CheckOthers(); _ = SuggestOthers(); }

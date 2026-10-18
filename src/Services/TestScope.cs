@@ -47,7 +47,7 @@ namespace ElansAddonHub.Services
             ["selfupdated"] = "addons that update themselves: the Self source (CurseForge / Wago id but not managed by the CurseForge app), git-describe dev builds (label, comparisons), the addon's own logo as the row icon (IconTexture, heuristic, depth / size / path limits, decode cache, no network)",
             ["viewer"] = "in-app picture viewer",
             ["voice"] = "voice effects",
-            ["update"] = "update channel + installer, path safety, the Forever client folder (_classic_beta_ now, _forever_ once released) and its product (WowLocator)",
+            ["update"] = "update channel + installer, path safety, the release signature (ReleaseSignature: main + backup key, phase 1), the Forever client folder (_classic_beta_ now, _forever_ once released) and its product (WowLocator)",
             ["strip"] = "pixel strip",
             ["lodge"] = "live Lodge session (only with ELANSHUB_TEST_LODGE=url|code|name)",
             ["lodgefeatures"] = "Lodge chat features from synthetic frames",
@@ -307,7 +307,7 @@ namespace ElansAddonHub.Services
             R(@"^src/MainWindow\.DesignTest\.SelfUpdated\.cs$");   // screenshot-only design run
             R(@"^src/(MainWindow\.Startup(ShiftTest(\.Checks)?)?\.cs|Skeleton\.cs)$", "startup", "addons");
             R(@"^src/Services/(AddonScanner|AddonSuggest|AddonSources|CurseForgeLocal|CurseForgeDirect|GitHubStats)\.cs$", "thirdparty", "addons", "selfupdated");
-            R(@"^src/Services/(Installer|SelfUpdater|PathSafety)\.cs$", "update", "addons");
+            R(@"^src/Services/(Installer|SelfUpdater|PathSafety|ReleaseSignature|Net)\.cs$", "update", "addons");
             R(@"^src/Services/UpdateChannel\.cs$", "update", "round3");
             R(@"^addon/", "addons");
             // ---- health, dialogs, strip
