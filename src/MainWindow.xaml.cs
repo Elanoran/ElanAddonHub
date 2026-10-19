@@ -364,7 +364,7 @@ namespace ElansAddonHub
                 // profile against the real server: set avatar/about, expect the echo, the broadcast and a profile:get answer
                 if (Session.SupportsProfile)
                 {
-                    await Session.SaveProfile(new System.Collections.Generic.Dictionary<string, object> { ["avatarId"] = "av.bow", ["accent"] = "teal", ["about"] = "selftest about", ["playTimes"] = "evenings" });
+                    await Session.SaveProfile(new Elans.Shared.ProfileSetMsg { AvatarId = "av.bow", Accent = "teal", About = "selftest about", PlayTimes = "evenings" });
                     for (int i = 0; i < 25 && Session.Me?.AvatarId != "av.bow"; i++) await Task.Delay(200);
                     ProfileData got = null;
                     Action<ProfileData> h = pd => got = pd;

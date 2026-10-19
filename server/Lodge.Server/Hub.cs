@@ -445,7 +445,7 @@ public partial class LodgeHub
     // avatar/accent changed: everyone who can see the member (and the member) gets a small "profile" update
     public Task BroadcastProfile(Member m)
     {
-        var msg = new JsonObject { ["t"] = LodgeMsg.Profile, ["id"] = m.Id, ["name"] = m.Name, ["avatarId"] = m.Profile?.AvatarId, ["accent"] = m.Profile?.Accent, ["displayName"] = m.Profile?.DisplayName ?? "" };
+        var msg = LodgeFieldsJson.Build(new ProfileMsg { Id = m.Id, Name = m.Name, AvatarId = m.Profile?.AvatarId, Accent = m.Profile?.Accent, DisplayName = m.Profile?.DisplayName ?? "" }.Write);
         return Broadcast(msg, v => CanSee(v, m));
     }
 

@@ -148,6 +148,10 @@ Client -> server:
   `game` (what they play now) is included only for visible online members - the same data their `user` entry already carries.
 - owner only (`Perm.ResetProfiles`): `profile:reset` `{name, clearText?}` - avatar and accent back to the default (optionally the texts too).
   The member gets a `profile:data`, the lodge a `profile` broadcast.
+- Typed (stage 2): `profile:set`, `profile:get`, `profile:reset`, `profile:data` (its `profile`, also `welcome.profile`) and the `profile`
+  broadcast are classes in `shared/Elans.Shared/Lodge/ProfileMessages.cs` (`ProfileSetMsg` ... `ProfileMsg`, `ProfileView`, `ProfileChar`), used by
+  both sides like the LFG ones. `game` inside a profile stays a free-form child object, passed through as the hub sent it. The server still
+  validates `profile:set` from the raw JSON (a wrong-typed field refuses the message; absent and `null` differ).
 
 **Characters** are collected server-side from `game` messages (name, class, classFile, race, raceFile, level, last seen), at most 12 per member (the
 most recent kept), and stored with the profile.

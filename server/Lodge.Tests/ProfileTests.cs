@@ -235,6 +235,33 @@ public class ProfileTests
         Assert.Equal("Secret Cave", (string?)asBob["game"]!["zone"]);
     }
 
+    static string[] Keys(JsonObject o) => o.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+    // the typed ProfileView / ProfileDataMsg / ProfileMsg (Elans.Shared) send the same keys the old JsonObjects did, and "game" as it is held
+    [Fact]
+    public async Task Typed_profile_frames_keep_their_keys_and_pass_the_game_through()
+    {
+        using var l = new Lodge3();
+        var mia = await l.Join(MiaCode); var zed = await l.Join(ZedCode); var bob = await l.Join(T.BobCode);
+        await l.Play(mia, "Alpha");
+        await l.Set(mia, "{\"t\":\"profile:set\",\"avatarId\":\"av.owl\",\"about\":\"hi\",\"main\":\"Alpha\"}");
+        var own = mia.Profile();
+        Assert.Equal(new[] { "about", "accent", "avatarId", "chars", "displayName", "found", "game", "guest", "main", "name", "online", "playTimes", "restricted", "role",
+            "showChars", "visibleTo" }, Keys(own));
+        Assert.Null(own["accent"]);                                                   // no accent: sent as null, as before
+        Assert.Equal(new[] { "class", "classFile", "hidden", "level", "main", "name", "race", "raceFile", "seen" }, Keys((JsonObject)own["chars"]![0]!));
+        var held = l.Hub.Members.Single(x => x.Name == "Mia").Game!;
+        Assert.True(JsonNode.DeepEquals(held, own["game"]), own["game"]!.ToJsonString());
+        Assert.Equal(new[] { "accent", "avatarId", "displayName", "id", "name", "t" }, Keys(bob.Of("profile").Last()));
+
+        var asZed = await l.Get(zed, "Mia");                                         // someone else: no showChars / visibleTo, no hidden flag
+        Assert.Equal(new[] { "about", "accent", "avatarId", "chars", "displayName", "found", "game", "guest", "main", "name", "online", "playTimes", "restricted", "role" }, Keys(asZed));
+        Assert.Equal(new[] { "class", "classFile", "level", "main", "name", "race", "raceFile", "seen" }, Keys((JsonObject)asZed["chars"]![0]!));
+        await l.Set(mia, "{\"t\":\"profile:set\",\"visibleTo\":\"officers\"}");
+        Assert.Equal(new[] { "accent", "avatarId", "displayName", "found", "guest", "name", "online", "restricted", "role" }, Keys(await l.Get(zed, "Mia")));
+        Assert.Equal(new[] { "found", "name" }, Keys(await l.Get(zed, "Nobody")));
+    }
+
     [Fact]
     public async Task Unknown_names_are_not_found_and_offline_members_still_have_a_profile()
     {

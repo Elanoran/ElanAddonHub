@@ -20,6 +20,10 @@ namespace Elans.Shared
         ILodgeFields Child(string key);                 // null when missing or not an object
         IReadOnlyList<ILodgeFields> List(string key);   // the objects in an array (other entries skipped); empty when missing, never null
         IReadOnlyList<long> Longs(string key);          // the entries of an array as whole numbers (0 for one that isn't); empty when missing
+        IReadOnlyList<string> Strs(string key);         // the string entries of an array (other entries skipped); empty when missing
+        // A free-form payload passed through unread (e.g. a member's "game" presence): the object at key in this side's own JSON model
+        // (JsonObject on the server, Dictionary<string, object> in the Outpost); null when missing or not an object.
+        object RawChild(string key);
     }
 
     // write side: a JSON object being built for sending. A null string is written as JSON null (as a dictionary/JsonObject literal did).
@@ -31,12 +35,14 @@ namespace Elans.Shared
         void Set(string key, bool value);
         ILodgeWriter Child(string key);                 // a new object at key
         ILodgeListWriter List(string key);              // a new (empty) array at key
+        void SetRawChild(string key, object value);     // a free-form object in this side's own JSON model (see ILodgeFields.RawChild), as it is
     }
 
     public interface ILodgeListWriter
     {
         ILodgeWriter Add();                             // a new object appended to the array
         void Add(long value);                           // a number appended to the array
+        void Add(string value);                         // a string appended to the array
     }
 
     public static class LodgeWriterExtensions

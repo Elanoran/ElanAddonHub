@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -225,18 +226,18 @@ namespace ElansAddonHub.Lodge
         public Visibility UnsupportedVisibility => Supported ? Visibility.Collapsed : Visibility.Visible;
 
         // the profile:set message
-        public Dictionary<string, object> ToMessage()
+        public ProfileSetMsg ToMessage()
         {
-            var o = new Dictionary<string, object>
+            var o = new ProfileSetMsg
             {
-                ["avatarId"] = avatarId, ["accent"] = accent, ["about"] = about.Trim(), ["playTimes"] = playTimes.Trim(),
-                ["showChars"] = showChars, ["visibleTo"] = visibleTo,
+                AvatarId = avatarId, Accent = accent, About = about.Trim(), PlayTimes = playTimes.Trim(),
+                ShowChars = showChars, VisibleTo = visibleTo,
             };
-            if (SupportsDisplayName && !IsGuest) o["displayName"] = DisplayNames.Clean(displayName);
+            if (SupportsDisplayName && !IsGuest) o.DisplayName = DisplayNames.Clean(displayName);
             if (Chars.Count > 0)
             {
-                o["main"] = main;
-                o["hidden"] = Chars.Where(c => c.Hidden && !c.IsMain).Select(c => c.Name).ToList();
+                o.Main = main;
+                o.Hidden = Chars.Where(c => c.Hidden && !c.IsMain).Select(c => c.Name).ToList();
             }
             return o;
         }

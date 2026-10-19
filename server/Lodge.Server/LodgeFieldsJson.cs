@@ -23,6 +23,9 @@ public sealed class LodgeFieldsJson : ILodgeFields, ILodgeWriter
         Obj[key] is JsonArray a ? a.OfType<JsonObject>().Select(o => (ILodgeFields)new LodgeFieldsJson(o)).ToList() : Array.Empty<ILodgeFields>();
     public IReadOnlyList<long> Longs(string key) =>
         Obj[key] is JsonArray a ? a.Select(x => x is JsonValue v && v.TryGetValue<long>(out var l) ? l : 0).ToList() : Array.Empty<long>();
+    public IReadOnlyList<string> Strs(string key) =>
+        Obj[key] is JsonArray a ? a.Select(x => x is JsonValue v && v.TryGetValue<string>(out var s) ? s : null).Where(s => s != null).ToList() : Array.Empty<string>();
+    public object RawChild(string key) => J.Obj(Obj, key);
 
     // write
     public void Set(string key, string value) => Obj[key] = value;
@@ -31,6 +34,7 @@ public sealed class LodgeFieldsJson : ILodgeFields, ILodgeWriter
     public void Set(string key, bool value) => Obj[key] = value;
     ILodgeWriter ILodgeWriter.Child(string key) { var o = new JsonObject(); Obj[key] = o; return new LodgeFieldsJson(o); }
     ILodgeListWriter ILodgeWriter.List(string key) { var a = new JsonArray(); Obj[key] = a; return new ListWriter(a); }
+    public void SetRawChild(string key, object value) => Obj[key] = (JsonObject)value;
 
     sealed class ListWriter : ILodgeListWriter
     {
@@ -38,6 +42,7 @@ public sealed class LodgeFieldsJson : ILodgeFields, ILodgeWriter
         public ListWriter(JsonArray a) { this.a = a; }
         public ILodgeWriter Add() { var o = new JsonObject(); a.Add(o); return new LodgeFieldsJson(o); }
         public void Add(long value) => a.Add(value);
+        public void Add(string value) => a.Add(value);
     }
 
     // a typed message as the JsonObject the hub sends

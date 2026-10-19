@@ -505,21 +505,23 @@ namespace ElansAddonHub.Lodge
                     break;
                 case LodgeMsg.Profile:
                     // someone's avatar / accent changed (small broadcast)
-                    var pu = Members.FirstOrDefault(x => x.Id == m.Int("id"));
-                    if (pu == null && m.ContainsKey("displayName") && DisplayNames.Remember(m.Str("name"), m.Str("displayName"))) RefreshAuthorNames(); // the name directory stays fresh
+                    var pmsg = ProfileMsg.Read(new LodgeFieldsDict(m));
+                    var pu = Members.FirstOrDefault(x => x.Id == pmsg.Id);
+                    if (pu == null && pmsg.DisplayNameSent && DisplayNames.Remember(pmsg.Name, pmsg.DisplayName)) RefreshAuthorNames(); // the name directory stays fresh
                     if (pu != null)
                     {
-                        pu.SetAvatar(m.Str("avatarId"), m.Str("accent"));
-                        if (m.ContainsKey("displayName")) ApplyDisplayName(pu, m.Str("displayName"));
+                        pu.SetAvatar(pmsg.AvatarId, pmsg.Accent);
+                        if (pmsg.DisplayNameSent) ApplyDisplayName(pu, pmsg.DisplayName);
                         Remember(pu);
                         RefreshAuthorAvatars(pu.Name);
                         if (pu.IsMe && MyProfile != null) { MyProfile.AvatarId = pu.AvatarId; MyProfile.Accent = pu.Accent; MyProfile.DisplayName = pu.DisplayName; MyProfileChanged?.Invoke(); }
                     }
                     break;
                 case LodgeMsg.ProfileData:
-                    var pd = ProfileData.Parse(m.Child("profile"));
+                    var pview = ProfileDataMsg.Read(new LodgeFieldsDict(m)).Profile;
+                    var pd = ProfileData.From(pview);
                     if (pd == null) break;
-                    if (pd.Found && !string.IsNullOrEmpty(pd.Name) && m.Child("profile").ContainsKey("displayName"))
+                    if (pd.Found && !string.IsNullOrEmpty(pd.Name) && pview.DisplayNameSent)
                     {
                         var who = Members.FirstOrDefault(x => string.Equals(x.Name, pd.Name, StringComparison.OrdinalIgnoreCase));
                         if (who != null) ApplyDisplayName(who, pd.DisplayName);
@@ -1616,19 +1618,15 @@ namespace ElansAddonHub.Lodge
 
         public void RequestProfile(string name)
         {
-            if (SupportsProfile && !string.IsNullOrEmpty(name)) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ProfileGet, ["name"] = name });
+            if (SupportsProfile && !string.IsNullOrEmpty(name)) _ = Send(LodgeFieldsDict.Build(new ProfileGetMsg { Name = name }.Write));
         }
 
         // own profile: only the fields given are changed (the server validates everything and answers with profile:data)
-        public Task SaveProfile(Dictionary<string, object> fields)
-        {
-            fields["t"] = LodgeMsg.ProfileSet;
-            return Send(fields);
-        }
+        public Task SaveProfile(ProfileSetMsg fields) => Send(LodgeFieldsDict.Build(fields.Write));
 
         // owner only: back to the default avatar and accent
         public void ResetProfile(string name, bool clearText = false) =>
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ProfileReset, ["name"] = name, ["clearText"] = clearText });
+            _ = Send(LodgeFieldsDict.Build(new ProfileResetMsg { Name = name, ClearText = clearText }.Write));
 
         // ================================================================ officers and the guild master
 

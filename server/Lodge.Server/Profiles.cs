@@ -284,7 +284,8 @@ public sealed class ProfileStore
     }
 }
 
-// profile:set / profile:get / profile:reset
+// profile:set / profile:get / profile:reset (typed in shared/Elans.Shared/Lodge/ProfileMessages.cs; profile:set is still validated from the raw
+// JSON below: a wrong-typed field is refused, and a field left out differs from one sent as null)
 public class ProfileModule : IModule
 {
     readonly LodgeHub hub;
@@ -385,7 +386,7 @@ public class ProfileModule : IModule
         }
         if (err != null) { await hub.Error(me, err); return; }
         if (!saved) await hub.Error(me, "The server couldn't save your profile - it may be gone after a restart");
-        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.ProfileData, ["profile"] = OwnView(me) });
+        await hub.Send(me, Data(OwnViewOf(me)));
         if (publicChanged) await hub.BroadcastProfile(me);
     }
 
@@ -404,19 +405,24 @@ public class ProfileModule : IModule
         return null;
     }
 
+    // profile:data (typed: shared/Elans.Shared/Lodge/ProfileMessages.cs)
+    static JsonObject Data(ProfileView view) => LodgeFieldsJson.Build(new ProfileDataMsg { Profile = view }.Write);
+    static ProfileView NotFound(string name) => new() { Name = name, Found = false };
+
     async Task Get(Member me, JsonObject m)
     {
-        var name = m["name"] is JsonValue v && v.TryGetValue<string>(out var s) ? Names.Normalize(s) : "";
-        var view = name.Length == 0 ? new JsonObject { ["name"] = "", ["found"] = false } : Lookup(me, name);
-        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.ProfileData, ["profile"] = view });
+        var name = ProfileGetMsg.Read(new LodgeFieldsJson(m)).Name is string s ? Names.Normalize(s) : "";
+        var view = name.Length == 0 ? NotFound("") : Lookup(me, name);
+        await hub.Send(me, Data(view));
     }
 
     // owner only: back to the default avatar and accent, no display name (and optionally clear the texts)
     async Task Reset(Member me, JsonObject m)
     {
         if (!Roles.Can(me.Role, Perm.ResetProfiles)) { await hub.Error(me, "Your rank can't do that"); return; }
-        var name = m["name"] is JsonValue v && v.TryGetValue<string>(out var s) ? Names.Normalize(s) : "";
-        bool clearText = m["clearText"] is JsonValue cv && cv.TryGetValue<bool>(out var b) && b;
+        var req = ProfileResetMsg.Read(new LodgeFieldsJson(m));
+        var name = req.Name is string s ? Names.Normalize(s) : "";
+        bool clearText = req.ClearText;
         var online = hub.Members.FirstOrDefault(x => LodgeHub.Same(x.Name, name));
         bool personal = online?.Personal ?? hub.Auth.PersonalNames.Any(x => LodgeHub.Same(x, name));
         Profile p = online?.Profile ?? (personal ? hub.Profiles.For(name) : null);
@@ -430,67 +436,60 @@ public class ProfileModule : IModule
         hub.Log.LogInformation("{By} reset the profile of {Name}", me.Name, name);
         if (online != null)
         {
-            await hub.Send(online, new JsonObject { ["t"] = LodgeMsg.ProfileData, ["profile"] = OwnView(online) });
+            await hub.Send(online, Data(OwnViewOf(online)));
             await hub.BroadcastProfile(online);
         }
-        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.ProfileData, ["profile"] = Lookup(me, name) });
+        await hub.Send(me, Data(Lookup(me, name)));
     }
 
     // what `viewer` gets for `name`. An invisible member looks exactly like an offline one to everyone who may not see
     // them (no online flag, no game); "profile visible to officers" leaves others only the avatar and accent.
-    JsonObject Lookup(Member viewer, string name)
+    ProfileView Lookup(Member viewer, string name)
     {
         var online = hub.Members.FirstOrDefault(x => LodgeHub.Same(x.Name, name));
         if (online != null)
         {
             bool seeOnline = !online.Invisible || online.Id == viewer.Id || Roles.Can(viewer.Role, Perm.SeeInvisible);
             if (seeOnline) return Build(viewer, online.Name, online.Profile, online.Role, online.Personal, online);
-            if (!online.Personal) return new JsonObject { ["name"] = name, ["found"] = false }; // an invisible guest: nobody here
+            if (!online.Personal) return NotFound(name); // an invisible guest: nobody here
             return Build(viewer, online.Name, online.Profile, online.Role, true, null, hideSeen: true); // invisible personal: the stored profile, like offline - but without "seen", which would be "now"
         }
         var list = hub.Auth.ListPersonal();
         int at = list.FindIndex(x => LodgeHub.Same(x.Name, name));
-        if (at < 0) return new JsonObject { ["name"] = name, ["found"] = false };
+        if (at < 0) return NotFound(name);
         var who = list[at];
         return Build(viewer, who.Name, hub.Profiles.Peek(who.Name) ?? new Profile(), who.Role, true, null);
     }
 
-    public JsonObject OwnView(Member me) => Build(me, me.Name, me.Profile, me.Role, me.Personal, me);
+    // welcome.profile
+    public JsonObject OwnView(Member me) => LodgeFieldsJson.Build(OwnViewOf(me).Write);
+    ProfileView OwnViewOf(Member me) => Build(me, me.Name, me.Profile, me.Role, me.Personal, me);
 
-    JsonObject Build(Member viewer, string name, Profile p, string role, bool personal, Member online, bool hideSeen = false)
+    ProfileView Build(Member viewer, string name, Profile p, string role, bool personal, Member online, bool hideSeen = false)
     {
         bool self = (online != null && online.Id == viewer.Id) || (personal && viewer.Personal && LodgeHub.Same(viewer.Name, name));
         bool allowed = self || p.VisibleTo != "officers" || Roles.AtLeast(viewer.Role, "officer");
-        var j = new JsonObject
-        {
-            ["name"] = name, ["found"] = true, ["guest"] = !personal, ["role"] = role,
-            ["online"] = online != null, ["restricted"] = !allowed,
-        };
+        var j = new ProfileView { Name = name, Found = true, Guest = !personal, Role = role, Online = online != null, Restricted = !allowed };
         lock (hub.Profiles.Gate)
         {
-            j["avatarId"] = p.AvatarId; j["accent"] = p.Accent; j["displayName"] = p.DisplayName;
-            if (self) { j["showChars"] = p.ShowChars; j["visibleTo"] = p.VisibleTo; }
+            j.AvatarId = p.AvatarId; j.Accent = p.Accent; j.DisplayName = p.DisplayName;
+            if (self) { j.ShowChars = p.ShowChars; j.VisibleTo = p.VisibleTo; }
             if (!allowed) return j;
-            j["about"] = p.About; j["playTimes"] = p.PlayTimes;
-            if (online?.Game != null) j["game"] = online.Game.DeepClone();
-            var arr = new JsonArray();
+            j.About = p.About; j.PlayTimes = p.PlayTimes;
+            if (online?.Game != null) j.Game = online.Game.DeepClone();          // the presence object goes out as it came in
             foreach (var c in p.Chars.OrderByDescending(c => c.Seen))
             {
                 bool isMain = p.Main != null && ProfileRules.SameChar(c.Name, p.Main);
                 bool hid = p.Hidden.Any(h => ProfileRules.SameChar(h, c.Name));
                 bool shown = self || (p.ShowChars == "all" && !hid) || (p.ShowChars == "main" && isMain) || (p.ShowChars == "all" && isMain);
                 if (!shown) continue;
-                var cj = new JsonObject
+                j.Chars.Add(new ProfileChar
                 {
-                    ["name"] = c.Name, ["class"] = c.Class, ["classFile"] = c.ClassFile, ["race"] = c.Race, ["raceFile"] = c.RaceFile,
-                    ["level"] = c.Level, ["main"] = isMain,
-                };
-                if (!hideSeen) cj["seen"] = c.Seen;
-                if (self) cj["hidden"] = hid;
-                arr.Add(cj);
+                    Name = c.Name, Class = c.Class, ClassFile = c.ClassFile, Race = c.Race, RaceFile = c.RaceFile, Level = c.Level, Main = isMain,
+                    Seen = hideSeen ? null : c.Seen, Hidden = self ? hid : null,
+                });
             }
-            j["chars"] = arr;
-            if (p.Main != null && (self || p.ShowChars != "none")) j["main"] = p.Main;
+            if (p.Main != null && (self || p.ShowChars != "none")) j.Main = p.Main;
         }
         return j;
     }

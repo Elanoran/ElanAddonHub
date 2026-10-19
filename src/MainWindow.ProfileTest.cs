@@ -240,8 +240,8 @@ namespace ElansAddonHub
                 var elanPriest = vm.Chars.First(c => c.Name == "Elanpriest"); elanPriest.Hidden = true; vm.HideChanged(elanPriest);
                 Check("editor: main only -> the preview lists just the main character", vm.Card.Chars.Count == 1 && vm.Card.Chars[0].Name == "Elanmage" && vm.Hint.Contains("officers"));
                 var msg = vm.ToMessage();
-                Check("editor: the message carries whitelisted ids, the choices and the hidden list (never the main)", (string)msg["avatarId"] == "av.owl" && (string)msg["accent"] == "violet" && (string)msg["showChars"] == "main"
-                    && (string)msg["visibleTo"] == "officers" && (string)msg["main"] == "Elanmage" && ((List<string>)msg["hidden"]).SequenceEqual(new[] { "Elanpriest" }) && ((string)msg["about"]).Length <= 140);
+                Check("editor: the message carries whitelisted ids, the choices and the hidden list (never the main)", msg.AvatarId.Value == "av.owl" && msg.Accent.Value == "violet" && msg.ShowChars.Value == "main"
+                    && msg.VisibleTo.Value == "officers" && msg.Main.Value == "Elanmage" && msg.Hidden.SequenceEqual(new[] { "Elanpriest" }) && msg.About.Value.Length <= 140);
                 vm.ShowAll = true; vm.VisEveryone = true; vm.SelectAvatar("av.wolf"); vm.SelectAccent("gold"); vm.MainChoice = "Elan"; elanPriest.Hidden = true; vm.HideChanged(elanPriest);
                 vm.MainChoice = "Elanpriest";
                 Check("editor: hiding the main character is not possible (choosing it as main unhides it)", !elanPriest.Hidden && elanPriest.IsMain);
@@ -255,7 +255,7 @@ namespace ElansAddonHub
                 Check("... odd characters: hint says so, Save is off", vm.DisplayHint.Contains("Only letters") && !vm.CanSave);
                 vm.DisplayName = "Hunter  Elan";
                 Check("... valid: preview card shows the display name with the login name next to it, Save is on", vm.Card.Name == "Hunter Elan" && vm.Card.LoginText == "  ·  @Elan" && vm.CanSave
-                    && (string)vm.ToMessage()["displayName"] == "Hunter Elan");
+                    && vm.ToMessage().DisplayName.Value == "Hunter Elan");
                 vm.BeginSave();
                 vm.ServerError("That display name is taken");
                 Check("... the server says taken: shown under the box, nothing saved", vm.DisplayHint == "That display name is taken" && vm.StatusText == "Not saved." && vm.CanSave);

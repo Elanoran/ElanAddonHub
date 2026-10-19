@@ -4,7 +4,7 @@ Newest first. `Tools/release.py` (addon repo) reads the sections newer than the 
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
 ## 3.1.1
-- **Knows Lodge server 2.31.1.** Internal: the signed Cairn messages and the public-address check now come from one shared definition with the Cairn and the Outpost; the address check now refuses the same special addresses the Cairn refuses; every Lodge message type now comes from one shared list, checked by tests. Two small Lodge server fixes: the Guild Master's switches for badges and for the Cairn always reach the right part of the server, and a Lodge that doesn't take part in the Cairn now answers the Outpost's Cairn questions with a clear "not offered here" instead of staying silent.
+- **Knows Lodge server 2.31.1.** Internal: the signed Cairn messages and the public-address check now come from one shared definition with the Cairn and the Outpost; the address check now refuses the same special addresses the Cairn refuses; every Lodge message type now comes from one shared list, checked by tests; the calendar, Cairn and profile messages are typed on both sides. Two small Lodge server fixes: the Guild Master's switches for badges and for the Cairn always reach the right part of the server, and a Lodge that doesn't take part in the Cairn now answers the Outpost's Cairn questions with a clear "not offered here" instead of staying silent.
 - Internal: the checks of update, Cairn data and Cairn notice signatures now use the same code as the Lodge and the Cairn, with its own tests; nothing changes in what you see.
 
 ## 3.1.0

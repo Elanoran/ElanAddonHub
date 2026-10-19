@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -29,10 +30,10 @@ namespace ElansAddonHub.Lodge
         public string Line => ((Level > 0 ? "Level " + Level + " " : "") + (Race ?? "") + " " + (Class ?? "")).Replace("  ", " ").Trim();
         public Visibility StarVisibility => IsMain ? Visibility.Visible : Visibility.Hidden;
 
-        public static CharVM Parse(Dictionary<string, object> c) => new CharVM
+        public static CharVM From(ProfileChar c) => new CharVM
         {
-            Name = c.Str("name"), Class = c.Str("class"), ClassFile = c.Str("classFile"), Race = c.Str("race"), RaceFile = c.Str("raceFile"),
-            Level = c.Int("level"), Seen = c.Long("seen"), IsMain = c.Bool("main"), hidden = c.Bool("hidden"),
+            Name = c.Name, Class = c.Class, ClassFile = c.ClassFile, Race = c.Race, RaceFile = c.RaceFile,
+            Level = c.Level, Seen = c.Seen ?? 0, IsMain = c.Main, hidden = c.Hidden ?? false,
         };
     }
 
@@ -126,17 +127,20 @@ namespace ElansAddonHub.Lodge
         public List<CharVM> Chars = new List<CharVM>();
         public Dictionary<string, object> Game;
 
-        public static ProfileData Parse(Dictionary<string, object> p)
+        // welcome.profile (a dictionary) or profile:data's ProfileView
+        public static ProfileData Parse(Dictionary<string, object> p) => p == null ? null : From(ProfileView.Read(new LodgeFieldsDict(p)));
+
+        public static ProfileData From(ProfileView p)
         {
             if (p == null) return null;
             var d = new ProfileData
             {
-                Name = p.Str("name"), Found = p.Bool("found"), Guest = p.Bool("guest"), Role = p.Str("role") ?? "member", Online = p.Bool("online"),
-                Restricted = p.Bool("restricted"), DisplayName = p.Str("displayName") ?? "", AvatarId = p.Str("avatarId"), Accent = p.Str("accent"), About = p.Str("about") ?? "",
-                PlayTimes = p.Str("playTimes") ?? "", Main = p.Str("main"), ShowChars = p.Str("showChars") ?? "all", VisibleTo = p.Str("visibleTo") ?? "everyone",
-                Game = p.Child("game"),
+                Name = p.Name, Found = p.Found, Guest = p.Guest, Role = p.Role ?? "member", Online = p.Online,
+                Restricted = p.Restricted, DisplayName = p.DisplayName ?? "", AvatarId = p.AvatarId, Accent = p.Accent, About = p.About ?? "",
+                PlayTimes = p.PlayTimes ?? "", Main = p.Main, ShowChars = p.ShowChars ?? "all", VisibleTo = p.VisibleTo ?? "everyone",
+                Game = p.Game as Dictionary<string, object>,      // the presence object, read as it came
             };
-            foreach (var c in p.List("chars").OfType<Dictionary<string, object>>()) d.Chars.Add(CharVM.Parse(c));
+            foreach (var c in p.Chars) d.Chars.Add(CharVM.From(c));
             return d;
         }
     }
