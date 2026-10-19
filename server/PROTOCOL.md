@@ -51,6 +51,16 @@ additions for the list of classes.
 - `react` `{id, emoji}` - toggles your reaction; `emoji` is one of the welcome's `reactions` ids (`ready, notready, lol, love, fight, loot, wipe, epic`); legacy emoji from 2.14 hubs are mapped (✅ and 👍 -> ready, ❌ -> notready, 😂 -> lol, ❤ -> love, ⚔ -> fight; U+FE0F optional); anything else is ignored. One per person and reaction, at most 30 people per reaction. Control budget.
 - officer+ (`Perm.PinMessages`): `pin` `{id}` · `unpin` `{id, channel?}` - at most 25 pins per channel, kept in `<data>/pins.json` (atomic writes) with their own copy of text/author/time, so they outlive the history window; deleting the message unpins it. Others get an error.
 - `edit` `{id, text}` (own) · `delete` `{id}` (own; officer+: anyone's) · `typing` `{channel}`
+- Typed (stage 2): the chat messages are classes in `shared/Elans.Shared/Lodge/ChatMessages.cs`, used by both sides like the LFG ones:
+  `msg` from the client (`ChatSendMsg`; an LFG request's `lfg` is `LfgRequest`), the stored and broadcast `msg` (`ChatMessage`, with `ChatFile`,
+  `ChatReply`, `ChatReaction`, the `LfgCard` and the event card `CalCard`; one view for the live frame, the welcome's history and `history:page`),
+  `edit` / `edited` (`EditMsg` / `EditedMsg`), `delete` / `deleted` (`DeleteMsg` / `DeletedMsg`), `react` both ways (`ReactMsg` / `ReactionMsg`),
+  `pin` both ways (`PinMsg` / `PinnedMsg` with its `ChatPin`, also `welcome.pins`) and `unpin` both ways (`UnpinMsg` `{id, channel}` /
+  `UnpinnedMsg` `{channel, id}`). Every rule stays in the server: the text cleaning (`Names.MessageText`), the 2000-character cut, the defanged
+  group pings, the reply quote, who may edit / delete / pin, the reaction set and caps; the Outpost cleans what it shows again (`SafeFile.Text`,
+  `SafeFile.Name`). The stored record is the frame: edits, reactions, sign-ups and purges change it in place. The server still validates an LFG
+  request from the raw JSON (`Lfg.Create`). The wire is unchanged, key order included (a server test pins the key sets of `msg` - plain, reply
+  with attachment, LFG and event card, after an edit - `edited`, `deleted`, `react`, `pin` and `unpin`).
 - `voice` `{room}` (`room: null` leaves) · `state` `{muted, deaf}` · `status` `{status, note, visibility?}` · `ping`
 - Typed (stage 2): `voice` `{room, on?}` (`VoiceMsg`; `on` is the 1.x switch, only a JSON bool counts), `state` (`VoiceStateMsg`), `typing` both
   ways (`TypingMsg` `{channel}`, `MemberTypingMsg` `{id, channel}`) are classes in `shared/Elans.Shared/Lodge/VoiceMessages.cs`, used by both
@@ -245,8 +255,8 @@ can't see answers exactly like one that doesn't exist.
   ("That sign-up is closed", "Only the organiser or an officer can do that", a bad role, too many open cards, a bad card) or `lfg-full`.
 - Typed (stage 2 pilot): the five client messages, the `lfg` update and the card are classes in `shared/Elans.Shared/Lodge/LfgMessages.cs`
   (`LfgJoinMsg` ... `LfgUpdateMsg`, `LfgCard`), written and read by both sides through `ILodgeFields` / `ILodgeWriter` (`LodgeFields.cs`;
-  adapters `server/Lodge.Server/LodgeFieldsJson.cs` and `src/Lodge/LodgeFieldsDict.cs`). Not typed yet: the create request (a `msg`) and
-  `Lfg.cs`, which builds and changes the stored card itself.
+  adapters `server/Lodge.Server/LodgeFieldsJson.cs` and `src/Lodge/LodgeFieldsDict.cs`). The create request is a typed `msg` (`ChatSendMsg`
+  with an `LfgRequest`, see the chat note above), but `Lfg.cs` still validates it from the raw JSON and builds and changes the stored card itself.
 
 **Older messages** (scrolling up past the welcome's history):
 

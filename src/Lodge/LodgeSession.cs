@@ -433,8 +433,8 @@ namespace ElansAddonHub.Lodge
                     }
                     SyncRooms();
                     break;
-                case LodgeMsg.Msg:
-                    var vm = AddMessage(m);
+                case ChatMessage.Type:
+                    var vm = AddMessage(ChatMessage.Read(new LodgeFieldsDict(m)));
                     TypingMap(vm.Channel).Remove(vm.FromId);
                     if (vm.Mine && Pending != null && Pending.Channel == vm.Channel) Pending = null;   // the server echoed it: it is out
                     OnNewMessage(vm);
@@ -450,19 +450,21 @@ namespace ElansAddonHub.Lodge
                         LfgChanged?.Invoke(lm);
                     }
                     break;
-                case LodgeMsg.React:
-                    var rm = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
+                case ReactionMsg.Type:
+                    var rx = ReactionMsg.Read(new LodgeFieldsDict(m));
+                    var rm = MessagesOf(rx.Channel).FirstOrDefault(x => x.Id == rx.Id);
                     if (rm != null)
                     {
-                        ApplyReaction(rm, m.Str("reaction") ?? m.Str("emoji"), m.List("users").OfType<string>().ToArray());
-                        var by = m.Str("by");
-                        if (rm.Mine && m.Bool("on") && by != null && !string.Equals(by, Me?.Name, StringComparison.OrdinalIgnoreCase))
-                            ToastFor(ToastKind.Reaction, rm, by, "reacted \"" + ReactionArt.Name(m.Str("reaction") ?? m.Str("emoji")) + "\" to: " + OneLine(rm.Text));
+                        ApplyReaction(rm, rx.Reaction ?? rx.Emoji, rx.Users.ToArray());
+                        var by = rx.By;
+                        if (rm.Mine && rx.On && by != null && !string.Equals(by, Me?.Name, StringComparison.OrdinalIgnoreCase))
+                            ToastFor(ToastKind.Reaction, rm, by, "reacted \"" + ReactionArt.Name(rx.Reaction ?? rx.Emoji) + "\" to: " + OneLine(rm.Text));
                     }
                     break;
-                case LodgeMsg.Pin:
-                    var pc = m.Str("channel");
-                    var pv = ParsePin(m.Child("pin"));
+                case PinnedMsg.Type:
+                    var pin = PinnedMsg.Read(new LodgeFieldsDict(m));
+                    var pc = pin.Channel;
+                    var pv = ParsePin(pin.Pin);
                     if (pc == null || pv == null) break;
                     var plist = PinsOf(pc);
                     var old = plist.FirstOrDefault(x => x.Id == pv.Id);
@@ -474,19 +476,21 @@ namespace ElansAddonHub.Lodge
                     var pm = MessagesOf(pc).FirstOrDefault(x => x.Id == pv.Id);
                     if (pm != null) pm.Pinned = true;
                     break;
-                case LodgeMsg.Unpin:
-                    var uc = m.Str("channel");
+                case UnpinnedMsg.Type:
+                    var unp = UnpinnedMsg.Read(new LodgeFieldsDict(m));
+                    var uc = unp.Channel;
                     var ul = PinsOf(uc);
-                    var uo = ul.FirstOrDefault(x => x.Id == m.Str("id"));
+                    var uo = ul.FirstOrDefault(x => x.Id == unp.Id);
                     if (uo != null) ul.Remove(uo);
-                    var um = MessagesOf(uc).FirstOrDefault(x => x.Id == m.Str("id"));
+                    var um = MessagesOf(uc).FirstOrDefault(x => x.Id == unp.Id);
                     if (um != null) um.Pinned = false;
                     break;
-                case LodgeMsg.Edited:
-                    var e = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
+                case EditedMsg.Type:
+                    var ed = EditedMsg.Read(new LodgeFieldsDict(m));
+                    var e = MessagesOf(ed.Channel).FirstOrDefault(x => x.Id == ed.Id);
                     if (e != null)
                     {
-                        e.Text = SafeFile.Text(m.Str("text")); if (!m.Bool("card")) e.Edited = true;   // an event card follows its event: not "(edited)"
+                        e.Text = SafeFile.Text(ed.Text); if (!ed.Card) e.Edited = true;   // an event card follows its event: not "(edited)"
                         bool was = e.Mentioned;
                         e.Mentioned = !e.Mine && MentionsMe(e.Text, e.From);
                         // an edit that adds a mention to a message I haven't read yet badges the channel; one that removes it takes it back
@@ -498,10 +502,11 @@ namespace ElansAddonHub.Lodge
                         }
                     }
                     break;
-                case LodgeMsg.Deleted:
-                    var list = MessagesOf(m.Str("channel"));
-                    var d = list.FirstOrDefault(x => x.Id == m.Str("id"));
-                    if (d != null) RemoveMessage(list, d, TextChannels.FirstOrDefault(c => c.Id == m.Str("channel")));
+                case DeletedMsg.Type:
+                    var del = DeletedMsg.Read(new LodgeFieldsDict(m));
+                    var list = MessagesOf(del.Channel);
+                    var d = list.FirstOrDefault(x => x.Id == del.Id);
+                    if (d != null) RemoveMessage(list, d, TextChannels.FirstOrDefault(c => c.Id == del.Channel));
                     break;
                 case LodgeMsg.HistoryPage: OnHistoryPage(m); break;
                 case LodgeMsg.SearchResult: OnSearchResult(m); break;
@@ -701,7 +706,7 @@ namespace ElansAddonHub.Lodge
                     var list = PinsOf(kv.Key);
                     foreach (var p in (kv.Value as List<object> ?? new List<object>()).OfType<Dictionary<string, object>>())
                     {
-                        var pv = ParsePin(p);
+                        var pv = ParsePin(ChatPin.Read(new LodgeFieldsDict(p)));
                         if (pv == null) continue;
                         list.Add(pv);
                         var pm = MessagesOf(kv.Key).FirstOrDefault(x => x.Id == pv.Id);
@@ -876,7 +881,7 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ messages
 
-        MessageVM AddMessage(Dictionary<string, object> m)
+        MessageVM AddMessage(ChatMessage m)
         {
             var vm = BuildMessage(m, out var list);
             list.Add(vm);
@@ -885,48 +890,47 @@ namespace ElansAddonHub.Lodge
 
         static bool IsContinuation(MessageVM prev, MessageVM cur) => prev != null && prev.From == cur.From && (cur.At - prev.At).TotalMinutes < 5;
 
-        MessageVM BuildMessage(Dictionary<string, object> m, out ObservableCollection<MessageVM> list)
+        MessageVM BuildMessage(ChatMessage m, out ObservableCollection<MessageVM> list)
         {
-            var channel = m.Str("channel") ?? TextChannels.FirstOrDefault()?.Id ?? "general";
+            var channel = m.Channel ?? TextChannels.FirstOrDefault()?.Id ?? "general";
             list = MessagesOf(channel);
-            var at = DateTimeOffset.FromUnixTimeMilliseconds(m.Long("at")).UtcDateTime;
+            var at = DateTimeOffset.FromUnixTimeMilliseconds(m.At).UtcDateTime;
             var prev = list.LastOrDefault();
-            var from = m.Str("from");
-            var reply = m.Child("replyTo");
+            var from = m.From;
+            var reply = m.ReplyTo;
             var vm = new MessageVM
             {
-                Id = m.Str("id"), Channel = channel, FromId = m.Int("fromId"), From = from, At = at,
-                Text = SafeFile.Text(m.Str("text")), Edited = m.Bool("edited"),
+                Id = m.Id, Channel = channel, FromId = m.FromId ?? 0, From = from, At = at,
+                Text = SafeFile.Text(m.Text), Edited = m.Edited,
                 Mine = Me != null && string.Equals(from, Me.Name, StringComparison.OrdinalIgnoreCase),
                 CanDelete = CanModerate,
-                ReplyFrom = reply?.Str("by") ?? reply?.Str("from"), ReplyText = SafeFile.Text(reply?.Str("snippet") ?? reply?.Str("text")), ReplyId = reply?.Str("id"),
+                ReplyFrom = reply?.By ?? reply?.From, ReplyText = SafeFile.Text(reply?.Snippet ?? reply?.Text), ReplyId = reply?.Id,
                 ReactEnabled = SupportsReact, PinEnabled = CanPin,
             };
             vm.Continuation = prev != null && IsContinuation(prev, vm);
-            if (m.Str("kind") == "lfg" && m.Child("lfg") != null) { vm.Lfg = new LfgVM { Msg = vm }; vm.Lfg.Apply(m.Child("lfg")); }
-            if (m.Str("kind") == "event" && m.Child("event") != null && SupportsCalendar) vm.Event = EventForCard(m.Child("event"));
-            var reacts = m.Child("reactions");
-            if (reacts != null)
-                foreach (var kv in reacts.OrderBy(k => Array.IndexOf(ReactionSet, k.Key)))
-                    ApplyReaction(vm, kv.Key, (kv.Value as List<object> ?? new List<object>()).OfType<string>().ToArray());
+            if (m.Kind == "lfg" && m.Lfg != null) { vm.Lfg = new LfgVM { Msg = vm }; vm.Lfg.Apply(m.Lfg); }
+            if (m.Kind == "event" && m.Event != null && SupportsCalendar) vm.Event = EventForCard(m.Event);
+            foreach (var r in m.Reactions.OrderBy(k => Array.IndexOf(ReactionSet, k.Id)))
+                ApplyReaction(vm, r.Id, r.Users.ToArray());
             vm.Mentioned = !vm.Mine && MentionsMe(vm.Text, from);
-            var f = m.Child("file");
+            var f = m.File;
             if (f != null)
             {
                 // the name is cleaned here, before anything else sees it (older servers send it as uploaded)
-                vm.File = new FileVM { Id = f.Str("id"), Name = SafeFile.Name(f.Str("name")), Size = f.Long("size"), Mime = f.Str("mime") };
+                vm.File = new FileVM { Id = f.Id, Name = SafeFile.Name(f.Name), Size = f.Size, Mime = f.Mime };
                 if (vm.File.IsImage) _ = LoadImage(vm.File);
             }
             return vm;
         }
 
         // the welcome's history for one channel, merged into the messages already shown
-        void MergeHistory(string channel, List<Dictionary<string, object>> items)
+        void MergeHistory(string channel, List<Dictionary<string, object>> raw)
         {
-            foreach (var x in items) if (!x.ContainsKey("channel")) x["channel"] = channel;
+            foreach (var x in raw) if (!x.ContainsKey("channel")) x["channel"] = channel;
+            var items = raw.Select(x => ChatMessage.Read(new LodgeFieldsDict(x))).ToList();
             var list = MessagesOf(channel);
-            long oldest = items.Count > 0 ? items.Min(x => x.Long("at")) : long.MaxValue;
-            var ids = new HashSet<string>(items.Select(x => x.Str("id")));
+            long oldest = items.Count > 0 ? items.Min(x => x.At) : long.MaxValue;
+            var ids = new HashSet<string>(items.Select(x => x.Id));
             // deleted while I was away: inside the time window the server just sent, but not in it
             if (items.Count > 0)
                 foreach (var gone in list.Where(v => v.Id != null && Ms(v.At) >= oldest && !ids.Contains(v.Id)).ToList()) list.Remove(gone);
@@ -934,7 +938,7 @@ namespace ElansAddonHub.Lodge
             foreach (var v in list) if (v.Id != null) byId[v.Id] = v;
             foreach (var x in items)
             {
-                if (x.Str("id") != null && byId.TryGetValue(x.Str("id"), out var have)) { UpdateMessage(have, x); continue; }
+                if (x.Id != null && byId.TryGetValue(x.Id, out var have)) { UpdateMessage(have, x); continue; }
                 var vm = BuildMessage(x, out _);
                 int at = list.Count;
                 while (at > 0 && list[at - 1].At > vm.At) at--;
@@ -943,26 +947,24 @@ namespace ElansAddonHub.Lodge
             for (int i = 0; i < list.Count; i++) list[i].Continuation = i > 0 && IsContinuation(list[i - 1], list[i]);
         }
 
-        void UpdateMessage(MessageVM vm, Dictionary<string, object> x)
+        void UpdateMessage(MessageVM vm, ChatMessage x)
         {
-            var text = SafeFile.Text(x.Str("text"));
+            var text = SafeFile.Text(x.Text);
             if (vm.Text != text) vm.Text = text;
-            if (x.Str("kind") == "event" && x.Child("event") != null && SupportsCalendar) vm.Event = EventForCard(x.Child("event"));
-            if (x.Str("kind") == "lfg" && x.Child("lfg") != null)
+            if (x.Kind == "event" && x.Event != null && SupportsCalendar) vm.Event = EventForCard(x.Event);
+            if (x.Kind == "lfg" && x.Lfg != null)
             {
                 if (vm.Lfg == null) vm.Lfg = new LfgVM { Msg = vm };
-                vm.Lfg.Apply(x.Child("lfg"));
+                vm.Lfg.Apply(x.Lfg);
             }
-            vm.Edited = x.Bool("edited");
+            vm.Edited = x.Edited;
             vm.Mentioned = !vm.Mine && MentionsMe(vm.Text, vm.From);
-            var reacts = x.Child("reactions");
             var keep = new HashSet<string>();
-            if (reacts != null)
-                foreach (var kv in reacts.OrderBy(k => Array.IndexOf(ReactionSet, k.Key)))
-                {
-                    keep.Add(kv.Key);
-                    ApplyReaction(vm, kv.Key, (kv.Value as List<object> ?? new List<object>()).OfType<string>().ToArray());
-                }
+            foreach (var r in x.Reactions.OrderBy(k => Array.IndexOf(ReactionSet, k.Id)))
+            {
+                keep.Add(r.Id);
+                ApplyReaction(vm, r.Id, r.Users.ToArray());
+            }
             foreach (var r in vm.Reactions.Where(r => !keep.Contains(r.Emoji)).ToList()) vm.Reactions.Remove(r);
             vm.RaiseReactions();
         }
@@ -1213,22 +1215,19 @@ namespace ElansAddonHub.Lodge
             msg.RaiseReactions();
         }
 
-        PinVM ParsePin(Dictionary<string, object> p)
+        PinVM ParsePin(ChatPin p)
         {
-            if (p == null || p.Str("id") == null) return null;
-            var f = p.Child("file");
+            if (p == null || p.Id == null) return null;
             return new PinVM
             {
-                Id = p.Str("id"), Text = p.Str("text"), By = p.Str("by"), PinnedBy = p.Str("pinnedBy"),
-                At = DateTimeOffset.FromUnixTimeMilliseconds(p.Long("at")).UtcDateTime, FileName = f?.Str("name"), CanUnpin = CanPin,
+                Id = p.Id, Text = p.Text, By = p.By, PinnedBy = p.PinnedBy,
+                At = DateTimeOffset.FromUnixTimeMilliseconds(p.At).UtcDateTime, FileName = p.File?.Name, CanUnpin = CanPin,
             };
         }
 
-        public Task React(MessageVM msg, string emoji) =>
-            Send(new Dictionary<string, object> { ["t"] = LodgeMsg.React, ["id"] = msg.Id, ["emoji"] = emoji });
-        public Task PinMessage(string id) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Pin, ["id"] = id });
-        public Task UnpinMessage(string id, string channel) =>
-            Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Unpin, ["id"] = id, ["channel"] = channel });
+        public Task React(MessageVM msg, string emoji) => Send(LodgeFieldsDict.Build(new ReactMsg { Id = msg.Id, Emoji = emoji }.Write));
+        public Task PinMessage(string id) => Send(LodgeFieldsDict.Build(new PinMsg { Id = id }.Write));
+        public Task UnpinMessage(string id, string channel) => Send(LodgeFieldsDict.Build(new UnpinMsg { Id = id, Channel = channel }.Write));
 
         Dictionary<int, DateTime> TypingMap(string channel)
         {
@@ -1304,10 +1303,7 @@ namespace ElansAddonHub.Lodge
                 SettingsStore.Save(Settings);
                 Error?.Invoke("Others can see messages you send, even while you appear offline");
             }
-            var obj = new Dictionary<string, object> { ["t"] = LodgeMsg.Msg, ["channel"] = Selected?.Id, ["text"] = text ?? "" };
-            if (replyTo != null) obj["replyTo"] = replyTo;
-            if (fileId != null) obj["file"] = new Dictionary<string, object> { ["id"] = fileId };
-            return Send(obj);
+            return Send(LodgeFieldsDict.Build(new ChatSendMsg { Channel = Selected?.Id, Text = text ?? "", ReplyTo = replyTo, FileId = fileId }.Write));
         }
 
         // ---- sign-up cards ("Looking for group")
@@ -1315,13 +1311,9 @@ namespace ElansAddonHub.Lodge
         // the server decides everything (limits, one place per person, who may close); these only ask
         public Task PostLfg(string title, bool now, DateTime startLocal, int tank, int healer, int dps, string note)
         {
-            var lfg = new Dictionary<string, object>
-            {
-                ["title"] = title ?? "", ["now"] = now, ["note"] = note ?? "",
-                ["slots"] = new Dictionary<string, object> { ["tank"] = (double)tank, ["healer"] = (double)healer, ["dps"] = (double)dps },
-            };
-            if (!now) lfg["start"] = (double)Ms(startLocal.ToUniversalTime());
-            return Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Msg, ["channel"] = Selected?.Id, ["kind"] = "lfg", ["text"] = title ?? "", ["lfg"] = lfg });
+            var lfg = new LfgRequest { Title = title ?? "", Now = now, Note = note ?? "", Tank = tank, Healer = healer, Dps = dps };
+            if (!now) lfg.Start = Ms(startLocal.ToUniversalTime());
+            return Send(LodgeFieldsDict.Build(new ChatSendMsg { Channel = Selected?.Id, Kind = "lfg", Text = title ?? "", Lfg = lfg }.Write));
         }
         public Task LfgJoin(MessageVM m, string role) => Send(LodgeFieldsDict.Build(new LfgJoinMsg { Id = m.Id, Role = role }.Write));
         public Task LfgMaybe(MessageVM m) => Send(LodgeFieldsDict.Build(new LfgMaybeMsg { Id = m.Id }.Write));
@@ -1358,8 +1350,8 @@ namespace ElansAddonHub.Lodge
                 }
         }
 
-        public Task Edit(string id, string text) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Edit, ["id"] = id, ["text"] = text });
-        public Task Delete(string id) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Delete, ["id"] = id });
+        public Task Edit(string id, string text) => Send(LodgeFieldsDict.Build(new EditMsg { Id = id, Text = text }.Write));
+        public Task Delete(string id) => Send(LodgeFieldsDict.Build(new DeleteMsg { Id = id }.Write));
 
         DateTime lastTyping;
         public void Typing()

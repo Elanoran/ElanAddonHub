@@ -117,9 +117,7 @@ namespace ElansAddonHub.Lodge
         public bool IAmAuthor => By != null && string.Equals(By, MyName(), StringComparison.OrdinalIgnoreCase);
         public bool CanEnd => IsOpen && (IAmAuthor || IAmOfficer());
 
-        // the "lfg" object of a card message (welcome, msg, history pages)
-        public void Apply(Dictionary<string, object> d) { if (d != null) Apply(LfgCard.Read(new LodgeFieldsDict(d))); }
-
+        // the "lfg" card of a card message (welcome, msg, history pages: ChatMessage.Lfg) or of an lfg update
         public void Apply(LfgCard c)
         {
             if (c == null) return;

@@ -84,7 +84,8 @@ public class LodgeMsgTests
             for (int i = 0; i < lines.Length; i++)
             {
                 var line = lines[i];
-                uses += Regex.Matches(line, @"\bLodgeMsg\.\w+|\b\w+Msg\.Type\b").Count;      // a type by name, or through its typed class (JoinMsg.Type)
+                // a type by name, or through its typed class (JoinMsg.Type, EditedMsg.Read, new EditMsg)
+                uses += Regex.Matches(line, @"\bLodgeMsg\.\w+|\b(?:\w+Msg|ChatMessage)\.(?:Type|Read)\b|\bnew \w+Msg\b").Count;
                 string Where() => rel + ":" + (i + 1);
                 string Fix(string v) => values.TryGetValue(v, out var n) ? "use LodgeMsg." + n : "not in LodgeMsg - add it there (and to server/PROTOCOL.md)";
                 foreach (Match m in SetT.Matches(line)) problems.Add(Where() + " [\"t\"] = \"" + m.Groups[1].Value + "\": " + Fix(m.Groups[1].Value));

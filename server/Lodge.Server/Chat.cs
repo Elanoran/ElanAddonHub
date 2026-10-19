@@ -187,21 +187,23 @@ public partial class ChatModule : IModule
 
     async Task Message(Member me, JsonObject m)
     {
-        var ch = hub.Channels.Get(J.Str(m, "channel")) ?? hub.Channels.DefaultText; // old hubs send no channel
+        var req = ChatSendMsg.Read(new LodgeFieldsJson(m));
+        var ch = hub.Channels.Get(req.Channel) ?? hub.Channels.DefaultText; // old hubs send no channel
         if (ch.Type != "text" || !ch.VisibleTo(me.Role)) { await hub.Error(me, "You can't write in that channel"); return; }
 
         // 8 messages per 10 s, per person - kept across reconnects (guests: per IP)
         if (!me.Budget.Chat.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
 
-        var text = Names.MessageText(J.Str(m, "text"));
+        var text = Names.MessageText(req.Text);
         if (text.Length > 2000) text = Names.Cut(text, 2000);
         if (!Roles.AtLeast(me.Role, "officer")) text = Names.DefangGroupPings(text); // @everyone / @here are for officers and up
         JsonObject lfg = null;
-        if (J.Str(m, "kind") == Lfg.Kind)
+        if (req.Kind == Lfg.Kind)
         {
-            // a sign-up card: validated whole; the text is replaced by the plain-text fallback
+            // a sign-up card: validated whole from the raw JSON (Lfg.Create's strict counts and start are the check); the text is replaced
+            // by the plain-text fallback
             var nowMs = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds();
-            lfg = Lfg.Create(J.Obj(m, "lfg"), me.Name, nowMs, Roles.AtLeast(me.Role, "officer"), out var why);
+            lfg = Lfg.Create(req.LfgRaw as JsonObject, me.Name, nowMs, Roles.AtLeast(me.Role, "officer"), out var why);
             if (lfg == null) { await hub.Error(me, why, "lfg"); return; }
             var st = Store(ch.Id);
             int open;
@@ -209,25 +211,21 @@ public partial class ChatModule : IModule
             if (open >= Lfg.MaxOpenPerAuthor) { await hub.Error(me, $"You already have {Lfg.MaxOpenPerAuthor} open sign-up cards - close one first", "lfg"); return; }
             text = Lfg.Fallback(lfg);
         }
-        JsonObject file = null;
-        var fileId = J.Str(J.Obj(m, "file"), "id");
-        if (lfg == null && fileId != null && Roles.Can(me.Role, Perm.ShareFiles))
+        ChatFile file = null;
+        if (lfg == null && req.FileId != null && Roles.Can(me.Role, Perm.ShareFiles))
         {
-            var meta = hub.Files.Get(fileId);
-            if (meta != null) file = new JsonObject { ["id"] = meta.Id, ["name"] = Names.FileName(meta.Name), ["size"] = meta.Size, ["mime"] = meta.Mime };
+            var meta = hub.Files.Get(req.FileId);
+            if (meta != null) file = new ChatFile { Id = meta.Id, Name = Names.FileName(meta.Name), Size = meta.Size, Mime = meta.Mime };
         }
         if (text.Length == 0 && file == null) return;
 
-        var msg = new JsonObject
+        var cm = new ChatMessage
         {
-            ["t"] = LodgeMsg.Msg, ["channel"] = ch.Id,
-            ["id"] = Guid.NewGuid().ToString("N")[..12],
-            ["at"] = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
-            ["from"] = me.Name, ["fromId"] = me.Id, ["text"] = text,
+            Channel = ch.Id, Id = Guid.NewGuid().ToString("N")[..12], At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
+            From = me.Name, FromId = me.Id, Text = text, File = file,
         };
-        if (file != null) msg["file"] = file;
-        if (lfg != null) { msg["kind"] = Lfg.Kind; msg["lfg"] = lfg; }
-        var replyId = J.Str(m, "replyTo");
+        if (lfg != null) { cm.Kind = Lfg.Kind; cm.Lfg = LfgCard.Read(new LodgeFieldsJson(lfg)); }
+        var replyId = req.ReplyTo;
         if (!string.IsNullOrEmpty(replyId))
         {
             // the quoted message must exist in THIS channel's history, otherwise the reply is sent without a quote
@@ -240,10 +238,11 @@ public partial class ChatModule : IModule
                 if (snippet.Length == 0 && orig["file"] != null) snippet = Names.Snippet("[" + (string)orig["file"]!["name"] + "]", SnippetMax);
                 var by = (string)orig["from"];
                 // from/text: the 2.x fields; by/snippet: the 2.3 names for the same values
-                msg["replyTo"] = new JsonObject { ["id"] = replyId, ["from"] = by, ["text"] = snippet, ["by"] = by, ["snippet"] = snippet };
+                cm.ReplyTo = new ChatReply { Id = replyId, From = by, Text = snippet, By = by, Snippet = snippet };
             }
         }
 
+        var msg = LodgeFieldsJson.Build(cm.Write);   // the stored record is the broadcast frame
         var s = Store(ch.Id);
         bool saved;
         lock (s) saved = s.Append(msg);
@@ -254,26 +253,27 @@ public partial class ChatModule : IModule
 
     async Task Edit(Member me, JsonObject m)
     {
-        var (ch, s, msg) = FindMessage(J.Str(m, "id"));
+        var req = EditMsg.Read(new LodgeFieldsJson(m));
+        var (ch, s, msg) = FindMessage(req.Id);
         if (msg == null) return;
         if (!ch.VisibleTo(me.Role)) return; // a channel you can't see doesn't exist for you
         if (!IsAuthor(me, msg)) { await hub.Error(me, "You can only edit your own messages"); return; }
         if (Lfg.Is(msg)) { await hub.Error(me, "A sign-up card can't be edited - close it and make a new one", "lfg"); return; }
         if ((string)msg["kind"] == Cal.Kind) { await hub.Error(me, "An event card follows the event - change it in the Calendar", "cal"); return; }
-        var text = Names.MessageText(J.Str(m, "text"));
+        var text = Names.MessageText(req.Text);
         if (text.Length == 0) return;
         if (text.Length > 2000) text = Names.Cut(text, 2000);
         if (!Roles.AtLeast(me.Role, "officer")) text = Names.DefangGroupPings(text);
         lock (s) { msg["text"] = text; msg["edited"] = true; s.MarkDirty(); }
         QueueFlush(s);
-        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Edited, ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["text"] = text }, Viewers(ch));
+        await hub.Broadcast(LodgeFieldsJson.Build(new EditedMsg { Channel = ch.Id, Id = (string)msg["id"], Text = text }.Write), Viewers(ch));
         var pinned = Pins.UpdateText(ch.Id, (string)msg["id"], text);
-        if (pinned != null) await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Pin, ["channel"] = ch.Id, ["pin"] = pinned }, Viewers(ch));
+        if (pinned != null) await hub.Broadcast(LodgeFieldsJson.Build(new PinnedMsg { Channel = ch.Id, Pin = ChatPin.Read(new LodgeFieldsJson(pinned)) }.Write), Viewers(ch));
     }
 
     async Task Delete(Member me, JsonObject m)
     {
-        var (ch, s, msg) = FindMessage(J.Str(m, "id"));
+        var (ch, s, msg) = FindMessage(DeleteMsg.Read(new LodgeFieldsJson(m)).Id);
         if (msg == null) return;
         if (!ch.VisibleTo(me.Role)) return;
         if (!IsAuthor(me, msg) && !Roles.Can(me.Role, Perm.Moderate))
@@ -284,20 +284,21 @@ public partial class ChatModule : IModule
         lock (s) { s.Messages.Remove(msg); s.MarkDirty(); }
         QueueFlush(s);
         hub.Log.LogInformation("{Name} deleted a message from {From} in {Channel}", me.Name, Names.ForLog((string)msg["from"]), ch.Id);
-        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Deleted, ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
+        await hub.Broadcast(LodgeFieldsJson.Build(new DeletedMsg { Channel = ch.Id, Id = (string)msg["id"] }.Write), Viewers(ch));
         if (Pins.Unpin(ch.Id, (string)msg["id"], out _))
-            await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Unpin, ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
+            await hub.Broadcast(LodgeFieldsJson.Build(new UnpinnedMsg { Channel = ch.Id, Id = (string)msg["id"] }.Write), Viewers(ch));
     }
 
     // toggles the sender's reaction; the whole list for that reaction is broadcast (idempotent for clients)
     async Task React(Member me, JsonObject m)
     {
-        var emoji = CanonReaction(J.Str(m, "emoji"));
+        var req = ReactMsg.Read(new LodgeFieldsJson(m));
+        var emoji = CanonReaction(req.Emoji);
         if (emoji == null) return; // not in the fixed set: ignored (already paid for by the control budget)
-        var (ch, s, msg) = FindMessage(J.Str(m, "id"));
+        var (ch, s, msg) = FindMessage(req.Id);
         if (msg == null || !ch.VisibleTo(me.Role)) return;
         bool on, full = false;
-        JsonArray users;
+        List<string> users;
         lock (s)
         {
             var all = msg["reactions"] as JsonObject ?? new JsonObject();
@@ -313,46 +314,48 @@ public partial class ChatModule : IModule
                 if (all.Count > 0) msg["reactions"] = all; else msg.Remove("reactions");
                 s.MarkDirty();
             }
-            users = new JsonArray(list.Select(x => (JsonNode)JsonValue.Create((string)x)).ToArray());
+            users = list.Select(x => (string)x).ToList();
         }
         if (full) { await hub.Error(me, "That reaction is full"); return; }
         QueueFlush(s);
-        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.React, ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["reaction"] = emoji, ["emoji"] = EmojiOf(emoji), ["users"] = users, ["by"] = me.Name, ["on"] = on }, Viewers(ch));
+        await hub.Broadcast(LodgeFieldsJson.Build(new ReactionMsg { Channel = ch.Id, Id = (string)msg["id"], Reaction = emoji, Emoji = EmojiOf(emoji), Users = users, By = me.Name, On = on }.Write), Viewers(ch));
     }
 
     async Task Pin(Member me, JsonObject m, bool pin)
     {
         if (!Roles.Can(me.Role, Perm.PinMessages)) { await hub.Error(me, "Only officers can pin messages"); return; }
-        var id = J.Str(m, "id");
+        var f = new LodgeFieldsJson(m);
+        var unpin = pin ? null : UnpinMsg.Read(f);
+        var id = pin ? PinMsg.Read(f).Id : unpin.Id;
         if (string.IsNullOrEmpty(id)) return;
         var now = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds();
         if (pin)
         {
             var (ch, _, msg) = FindMessage(id);
             if (msg == null || !ch.VisibleTo(me.Role)) return;
-            var rec = new JsonObject
+            var pv = new ChatPin
             {
-                ["id"] = id, ["text"] = PinStore.Clip((string)msg["text"]), ["by"] = (string)msg["from"],
-                ["at"] = (long?)msg["at"] ?? now, ["pinnedBy"] = me.Name, ["pinnedAt"] = now,
+                Id = id, Text = PinStore.Clip((string)msg["text"]), By = (string)msg["from"], At = (long?)msg["at"] ?? now, PinnedBy = me.Name, PinnedAt = now,
+                File = msg["file"] is JsonObject fo ? ChatFile.Read(new LodgeFieldsJson(fo)) : null,
             };
-            if (msg["file"] != null) rec["file"] = msg["file"]!.DeepClone();
+            var rec = LodgeFieldsJson.Build(pv.Write);   // the stored pin (the store keeps it; the broadcast is built from pv)
             switch (Pins.Pin(ch.Id, rec))
             {
                 case PinStore.Result.Full: await hub.Error(me, $"This channel already has {PinStore.MaxPerChannel} pinned messages - unpin one first"); return;
                 case PinStore.Result.Already: return;
                 case PinStore.Result.SaveFailed: await hub.Error(me, "The server couldn't save the pin - it may be gone after a restart"); break;
             }
-            await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Pin, ["channel"] = ch.Id, ["pin"] = rec }, Viewers(ch));
+            await hub.Broadcast(LodgeFieldsJson.Build(new PinnedMsg { Channel = ch.Id, Pin = pv }.Write), Viewers(ch));
         }
         else
         {
             // the pin may outlive its message, so look it up by pin id in the channels this person can see
-            var want = J.Str(m, "channel");
+            var want = unpin.Channel;
             var ch = hub.Channels.All.FirstOrDefault(c => c.Type == "text" && c.VisibleTo(me.Role) && Pins.Has(c.Id, id) && (want == null || c.Id == want));
             if (ch == null) return;
             if (Pins.Unpin(ch.Id, id, out var saved))
             {
-                await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Unpin, ["channel"] = ch.Id, ["id"] = id }, Viewers(ch));
+                await hub.Broadcast(LodgeFieldsJson.Build(new UnpinnedMsg { Channel = ch.Id, Id = id }.Write), Viewers(ch));
                 if (!saved) await hub.Error(me, "The server couldn't save the change");
             }
         }

@@ -8,23 +8,22 @@ namespace Lodge;
 // older clients, search, pins and reply quotes show; it follows the event (fill, cancelled) through a normal "edited" frame.
 public partial class ChatModule
 {
-    public static JsonObject EventSnapshot(JsonObject ev) => LodgeFieldsJson.Build(new CalCard
+    public static JsonObject EventSnapshot(JsonObject ev) => LodgeFieldsJson.Build(EventCard(ev).Write);
+
+    static CalCard EventCard(JsonObject ev) => new CalCard
     {
         Id = J.Str(ev, "id"), Title = J.Str(ev, "title"), Start = Cal.Start(ev), End = Cal.End(ev),
         By = J.Str(ev, "by"), Status = J.Str(ev, "status") ?? "open", Weekly = ev["rep"] is JsonObject,
-    }.Write);
+    };
 
     // returns the message id, or null when it could not be stored
     public async Task<string> PostEventCard(Member me, Channel ch, JsonObject ev)
     {
-        var msg = new JsonObject
+        var msg = LodgeFieldsJson.Build(new ChatMessage
         {
-            ["t"] = LodgeMsg.Msg, ["channel"] = ch.Id,
-            ["id"] = Guid.NewGuid().ToString("N")[..12],
-            ["at"] = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
-            ["from"] = me.Name, ["fromId"] = me.Id, ["text"] = Cal.Fallback(ev),
-            ["kind"] = Cal.Kind, ["event"] = EventSnapshot(ev),
-        };
+            Channel = ch.Id, Id = Guid.NewGuid().ToString("N")[..12], At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
+            From = me.Name, FromId = me.Id, Text = Cal.Fallback(ev), Kind = Cal.Kind, Event = EventCard(ev),
+        }.Write);
         var s = Store(ch.Id);
         lock (s) s.Append(msg);
         await hub.Broadcast(msg, Viewers(ch));
@@ -50,6 +49,6 @@ public partial class ChatModule
             s.MarkDirty();
         }
         QueueFlush(s);
-        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Edited, ["channel"] = ch.Id, ["id"] = id, ["text"] = text, ["card"] = true }, Viewers(ch));
+        await hub.Broadcast(LodgeFieldsJson.Build(new EditedMsg { Channel = ch.Id, Id = id, Text = text, Card = true }.Write), Viewers(ch));
     }
 }

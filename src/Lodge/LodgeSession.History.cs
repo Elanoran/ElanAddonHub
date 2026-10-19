@@ -177,7 +177,7 @@ namespace ElansAddonHub.Lodge
             foreach (var x in items.Where(x => x.Str("id") != null && !have.Contains(x.Str("id"))).OrderBy(x => x.Long("at")))
             {
                 x["channel"] = channel;
-                added.Add(BuildMessage(x, out _));
+                added.Add(BuildMessage(ChatMessage.Read(new LodgeFieldsDict(x)), out _));
             }
             // they are older than everything shown: in front, in time order
             for (int i = 0; i < added.Count; i++) list.Insert(i, added[i]);

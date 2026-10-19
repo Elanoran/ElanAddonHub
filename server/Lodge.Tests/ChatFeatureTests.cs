@@ -282,6 +282,76 @@ public class ChatFeatureTests
         Assert.Equal(PinStore.MaxPerChannel - 1, r.Make().Chat.Pins.For("general").Count);
     }
 
+    // msg, edited, deleted, react, pin, unpin (Elans.Shared ChatMessage, EditedMsg, DeletedMsg, ReactionMsg, PinnedMsg, UnpinnedMsg) keep their
+    // keys and their order: a reply with an attachment, a sign-up card, an event card, a moderator's delete of someone else's pinned message
+    static string[] KeysOf(JsonNode? o) => o!.AsObject().Select(kv => kv.Key).ToArray();
+
+    [Fact]
+    public async Task Typed_chat_frames_keep_their_keys_and_order()
+    {
+        using var r = new Rig();
+        var elan = r.Join("Elan", "owner"); var bob = r.Join("Bob", "officer");
+        var first = await r.Say(bob, "where? 🗺️");
+        var plain = r.Sock("Elan").Of("msg").Last();
+        Assert.Equal(new[] { "t", "channel", "id", "at", "from", "fromId", "text" }, KeysOf(plain));
+
+        var meta = await r.Hub.Files.Save(new T.SlowStream(10), 10, "map.png", "Elan", "p:elan", CancellationToken.None);
+        r.Clock.Advance(TimeSpan.FromSeconds(3));
+        await r.Do(elan, new { t = "msg", channel = "general", text = "here", replyTo = first, file = new { id = meta.Id } });
+        var reply = r.Sock("Bob").Of("msg").Last();
+        Assert.Equal(new[] { "t", "channel", "id", "at", "from", "fromId", "text", "file", "replyTo" }, KeysOf(reply));
+        Assert.Equal(new[] { "id", "name", "size", "mime" }, KeysOf(reply["file"]));
+        Assert.Equal(new[] { "id", "from", "text", "by", "snippet" }, KeysOf(reply["replyTo"]));
+        Assert.Equal(("Bob", "where? 🗺️"), ((string?)reply["replyTo"]!["by"], (string?)reply["replyTo"]!["snippet"]));
+        var replyId = (string)reply["id"]!;
+        Assert.Equal(reply.ToJsonString(), r.Hub.Chat.HistoryFor("general").Last()!.ToJsonString());   // the stored record is the frame
+
+        r.Clock.Advance(TimeSpan.FromSeconds(3));
+        await r.Do(elan, new { t = "msg", channel = "general", kind = "lfg", text = "x", lfg = new { title = "SFK", now = true, slots = new { tank = 1, healer = 1, dps = 3 } } });
+        var card = r.Sock("Bob").Of("msg").Last();
+        Assert.Equal(new[] { "t", "channel", "id", "at", "from", "fromId", "text", "kind", "lfg" }, KeysOf(card));
+        Assert.Equal(new[] { "title", "start", "now", "note", "status", "by", "slots", "signups" }, KeysOf(card["lfg"]));
+        Assert.Equal(new[] { "tank", "healer", "dps" }, KeysOf(card["lfg"]!["slots"]));
+
+        var ev = new JsonObject { ["id"] = "ev1", ["title"] = "Raid", ["start"] = 1760900400000, ["by"] = "Elan", ["channel"] = "general" };
+        var evId = await r.Hub.Chat.PostEventCard(elan, r.Hub.Channels.Get("general")!, ev);
+        var evMsg = r.Sock("Bob").Of("msg").Last();
+        Assert.Equal(new[] { "t", "channel", "id", "at", "from", "fromId", "text", "kind", "event" }, KeysOf(evMsg));
+        Assert.Equal(new[] { "id", "title", "start", "end", "by", "status", "weekly" }, KeysOf(evMsg["event"]));
+        ev["msg"] = evId; ev["status"] = "cancelled";
+        await r.Hub.Chat.RefreshEventCard(ev);
+        Assert.Equal(new[] { "t", "channel", "id", "text", "card" }, KeysOf(r.Sock("Bob").Of("edited").Last()));
+        Assert.True((bool)r.Sock("Bob").Of("edited").Last()["card"]!);
+
+        await r.Do(bob, new { t = "react", id = replyId, emoji = "ready" });
+        var react = r.Sock("Elan").Of("react").Last();
+        Assert.Equal(new[] { "t", "channel", "id", "reaction", "emoji", "users", "by", "on" }, KeysOf(react));
+        Assert.Equal($$"""{"t":"react","channel":"general","id":"{{replyId}}","reaction":"ready","emoji":"✅","users":["Bob"],"by":"Bob","on":true}""",
+            react.ToJsonString(new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+
+        await r.Do(bob, new { t = "pin", id = replyId });
+        var pin = r.Sock("Elan").Of("pin").Last();
+        Assert.Equal(new[] { "t", "channel", "pin" }, KeysOf(pin));
+        Assert.Equal(new[] { "id", "text", "by", "at", "pinnedBy", "pinnedAt", "file" }, KeysOf(pin["pin"]));
+        Assert.Equal(pin["pin"]!.ToJsonString(), r.Hub.Chat.Pins.For("general")[0]!.ToJsonString());   // the broadcast is the stored pin
+
+        await r.Do(elan, new { t = "edit", id = replyId, text = "here, edited" });
+        Assert.Equal(new[] { "t", "channel", "id", "text" }, KeysOf(r.Sock("Bob").Of("edited").Last()));
+        var repin = r.Sock("Bob").Of("pin").Last();
+        Assert.Equal(new[] { "id", "text", "by", "at", "pinnedBy", "pinnedAt", "file" }, KeysOf(repin["pin"]));
+        Assert.Equal("here, edited", (string?)repin["pin"]!["text"]);
+        var stored = r.Hub.Chat.HistoryFor("general").Single(x => (string)x!["id"]! == replyId)!;
+        Assert.Equal(new[] { "t", "channel", "id", "at", "from", "fromId", "text", "file", "replyTo", "reactions", "edited" }, KeysOf(stored));
+
+        // the owner (Perm.Moderate) deletes Bob's pinned message: deleted, then unpin
+        await r.Do(bob, new { t = "pin", id = first });
+        await r.Do(elan, new { t = "delete", id = first });
+        Assert.Equal(new[] { "t", "channel", "id" }, KeysOf(r.Sock("Bob").Of("deleted").Last()));
+        Assert.Equal($$"""{"t":"unpin","channel":"general","id":"{{first}}"}""", r.Sock("Bob").Of("unpin").Last().ToJsonString());
+        await r.Do(bob, new { t = "unpin", id = replyId, channel = "general" });
+        Assert.Equal($$"""{"t":"unpin","channel":"general","id":"{{replyId}}"}""", r.Sock("Elan").Of("unpin").Last().ToJsonString());
+    }
+
     [Fact]
     public async Task Pins_follow_deletes_and_edits_and_stay_in_their_channel()
     {

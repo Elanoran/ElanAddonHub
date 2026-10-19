@@ -70,12 +70,12 @@ namespace ElansAddonHub.Lodge
         public EventVM EventById(string id) => id != null && eventIndex.TryGetValue(id, out var e) ? e : null;
 
         // the live event behind a chat card (a stand-in built from the card's snapshot when the event is outside the loaded window)
-        public EventVM EventForCard(Dictionary<string, object> snap)
+        public EventVM EventForCard(CalCard snap)
         {
-            var id = snap?.Str("id");
+            var id = snap?.Id;
             if (string.IsNullOrEmpty(id)) return null;
             if (!eventIndex.TryGetValue(id, out var vm)) eventIndex[id] = vm = new EventVM();
-            vm.ApplyStub(CalCard.Read(new LodgeFieldsDict(snap)));
+            vm.ApplyStub(snap);
             return vm;
         }
 
