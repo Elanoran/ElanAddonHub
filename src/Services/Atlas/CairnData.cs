@@ -178,6 +178,13 @@ namespace ElansAddonHub.Services.Atlas
                 if (e == null) return Fail("the manifest names no valid file");
                 RefusedWhy = "";
                 if (Current != null && meta?.Str("contentSha256") == e.ContentSha256) { meta["etag"] = m.ETag; SaveChecked(meta); return "unchanged"; }
+                // 3.1.1: never back to an older dataset, even a validly signed one (a Lodge replaying an old file). The same day + seq is no change.
+                if (Current != null && meta?.Str("day") != null)
+                {
+                    int age = CompareVersion(e.Day, e.Seq, meta.Str("day"), meta.Long("seq"));
+                    if (age < 0) return Fail("the Lodge offered an older dataset than the one on hand");
+                    if (age == 0) { meta["etag"] = m.ETag; SaveChecked(meta); return "unchanged"; }
+                }
                 if (!string.IsNullOrEmpty(PinnedKeyX) && !SignatureOk(e, PinnedKeyX, PinnedKeyY)) return Fail("the signature does not match the Cairn's key");
                 var g = await fetch(DatasetPath, null);
                 if (NotEntitled(g.Reason) || g.Status == 401) return Refused(g.Status == 401 ? "auth" : g.Reason);
@@ -203,7 +210,15 @@ namespace ElansAddonHub.Services.Atlas
             finally { gate.Release(); }
         }
 
+        // which dataset is newer: by day (yyyy-mm-dd, compared as text), then by seq. < 0 = a is older than b
+        public static int CompareVersion(string dayA, long seqA, string dayB, long seqB)
+        {
+            int d = string.CompareOrdinal(dayA ?? "", dayB ?? "");
+            return d != 0 ? Math.Sign(d) : seqA.CompareTo(seqB);
+        }
+
         static string Refused(string reason)
+
         {
             DropLocked(reason ?? "");
             return "refused: " + reason;

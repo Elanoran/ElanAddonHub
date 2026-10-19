@@ -231,6 +231,18 @@ namespace ElansAddonHub
                 CairnServe(fake, 4, 500, key);
                 var r5 = await CairnAtlas.Refresh(CairnReachable, force: true);
                 Check("pinned key: the Cairn's own signature is taken", r5 == "updated" && CairnAtlas.Current?.Seq == 4 && CairnAtlas.Current.Loot("kill", 1).N == 500, r5);
+                // 3.1.1 (L10): an older dataset is never taken, even with a valid signature; the same day + seq is no change
+                CairnServe(fake, 3, 999, key);
+                dl = fake.Count("/cairn/dataset");
+                var rOlder = await CairnAtlas.Refresh(CairnReachable, force: true);
+                Check("rollback: an older, validly signed dataset is refused before it is downloaded; the newer one stays",
+                    rOlder.StartsWith("failed", StringComparison.Ordinal) && rOlder.Contains("older") && CairnAtlas.Current?.Seq == 4 && CairnAtlas.Current.Loot("kill", 1).N == 500 && fake.Count("/cairn/dataset") == dl, rOlder);
+                CairnServe(fake, 4, 777, key);
+                var rSame = await CairnAtlas.Refresh(CairnReachable, force: true);
+                Check("rollback: the same day and seq with other content is no change", rSame == "unchanged" && CairnAtlas.Current?.Seq == 4 && CairnAtlas.Current.Loot("kill", 1).N == 500 && fake.Count("/cairn/dataset") == dl, rSame);
+                Check("rollback: newer means a later day, then a higher seq", CairnAtlas.CompareVersion("2026-10-18", 1, "2026-10-17", 9) > 0 && CairnAtlas.CompareVersion("2026-10-17", 9, "2026-10-18", 1) < 0
+                    && CairnAtlas.CompareVersion("2026-10-17", 5, "2026-10-17", 4) > 0 && CairnAtlas.CompareVersion("2026-10-17", 4, "2026-10-17", 4) == 0);
+
                 CairnAtlas.PinnedKeyX = ""; CairnAtlas.PinnedKeyY = "";
 
                 // ---- the Lodge announces a newer dataset: fetched at once
