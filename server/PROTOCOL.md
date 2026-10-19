@@ -648,6 +648,9 @@ Guests never get the data.
   "Share to receive"), `guest`, `lodge` (this Lodge is not receiving: it has to contribute to receive), `disabled` (not handed out), `not-yet`
   (no copy on hand yet - try later). `day` / `seq` of the dataset on hand when entitled. `lodge` only for the owner: `{standing, serving,
   receiveUntil?, checked?, why?, problem?}` - the Lodge's own standing at the Cairn and why it receives nothing.
+- 2.31.1: a Lodge that doesn't contribute (so doesn't hand out the data) still answers both: `atlas.sharing` and `cairn.status` get
+  `cairn.status {entitled: false, sharing, why: "disabled", text}` (no `lodge` block) instead of no answer at all. The sharing switch isn't
+  stored then. A current Outpost doesn't ask such a Lodge (no `cairn2`), but a client that does now hears why.
 - `GET /cairn/manifest` (the usual credential headers, like `/datasets/...`) -> the manifest of the copy on hand `{format:
   "elans-cairn-manifest", v: 1, license: "contributors", kid, latest: {day, seq, file, bytes, contentBytes, sha256, contentSha256, sig, kid,
   built}}` (no history, no Cairn address), `ETag` = `"<first 32 hex of contentSha256>"`, `If-None-Match` -> 304, `private, no-cache`.
@@ -716,3 +719,7 @@ Not Lodge messages (never on this socket): the Atlas world-map page's own messag
 | Hosted datasets | `dataset.info` · `dataset.delete` | `dataset.data` · `dataset.changed` · `dataset.result` | - |
 | Badges and the ladder | `badges.seen` · `badges.hide` · `ladder.get` · `admin.badges` | `badges.state` · `ladder.data` | `badges.mine` · `badges.member` |
 | Realm status | - | `realms.status` · `realms.back` | - |
+
+Routing: every module answers only the types it handles (2.31.1: `AdminModule` no longer claims every `admin.` / `mod.` type - `admin.badges`
+and `admin.cairn` belong to the badges and Cairn modules), so the order of the hub's module list doesn't matter; `server/Lodge.Tests/AdminRoutingTests.cs`
+checks it.

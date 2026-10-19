@@ -645,11 +645,12 @@ public sealed class CairnModule : IModule
                 await NoticesSeen(me, m);
                 return true;
             }
+            // both are answered even when this Lodge doesn't hand out the Cairn's data (2.31.1): cairn.status { entitled: false, why: "disabled" },
+            // which the Outpost already understands - before, they went unanswered. The sharing switch isn't recorded then (nothing to share for).
             case LodgeMsg.AtlasSharing:
             {
-                if (!Enabled) return false;
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
-                if (me.Personal && Roles.Can(me.Role, Perm.AtlasShare))
+                if (Enabled && me.Personal && Roles.Can(me.Role, Perm.AtlasShare))
                 {
                     bool on = m["on"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
                     if (on) Weekly.NoteSharing(Identity(me.Name));
@@ -661,7 +662,6 @@ public sealed class CairnModule : IModule
             }
             case LodgeMsg.CairnStatus:
             {
-                if (!Enabled) return false;
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 await hub.Send(me, StatusFor(me.Name, me.Personal, me.Role));
                 return true;

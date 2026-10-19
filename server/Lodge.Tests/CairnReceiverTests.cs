@@ -403,6 +403,37 @@ public class CairnReceiverTests
 
     // ---------------------------------------------------------------- the Lodge -> its members
 
+    // 2.31.1: a Lodge that doesn't hand out the Cairn's data still answers - cairn.status { entitled: false, why: "disabled" } - instead of silence
+    [Fact]
+    public async Task A_Lodge_without_the_Cairn_answers_disabled_to_status_and_sharing()
+    {
+        using var r = new Rig(contributing: false);
+        Assert.False(r.Mod.Enabled);
+        var mia = r.Fun.Join("Mia", "member");
+        var elan = r.Fun.Join("Elan", "owner");
+
+        Assert.True(await r.Mod.Handle(mia, "cairn.status", new JsonObject { ["t"] = "cairn.status" }));
+        var st = r.LastStatus("Mia");
+        Assert.False((bool)st["entitled"]!);
+        Assert.Equal("disabled", (string)st["why"]!);
+        Assert.Contains("doesn't hand out", (string)st["text"]!);
+        Assert.Null(st["seq"]);
+
+        Assert.True(await r.Mod.Handle(mia, "atlas.sharing", new JsonObject { ["t"] = "atlas.sharing", ["on"] = true }));
+        st = r.LastStatus("Mia");
+        Assert.False((bool)st["entitled"]!);
+        Assert.Equal("disabled", (string)st["why"]!);
+        Assert.False((bool)st["sharing"]!);                                     // nothing recorded: there is nothing to share for
+        Assert.False(new CairnSharing(r.Fun.Hub.Cfg.DataDir, T.Log).IsOn(ProfileRules.Key("Mia")));
+
+        // the owner gets the same plain answer (no Lodge standing block when the Cairn is off)
+        await r.Do(elan, new { t = "cairn.status" });
+        st = r.LastStatus("Elan");
+        Assert.Equal("disabled", (string)st["why"]!);
+        Assert.Null(st["lodge"]);
+        Assert.Null(r.Fun.Sock("Mia").LastError());
+    }
+
     [Fact]
     public async Task Only_members_who_share_receive_guests_never()
     {

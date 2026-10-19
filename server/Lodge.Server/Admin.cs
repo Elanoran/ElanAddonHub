@@ -10,11 +10,20 @@ public class AdminModule : IModule
     readonly LodgeHub hub;
     public AdminModule(LodgeHub hub) { this.hub = hub; }
 
+    // exactly the admin.* / mod.* types answered here. Others with the same prefix (admin.badges, admin.cairn) belong to their own modules,
+    // so this module says "not handled" for them and the order of the hub's module list doesn't matter.
+    public static readonly IReadOnlySet<string> Handles = new HashSet<string>
+    {
+        LodgeMsg.AdminInviteCreate, LodgeMsg.AdminInvites, LodgeMsg.AdminInviteRevoke, LodgeMsg.AdminDevices, LodgeMsg.AdminRetire, LodgeMsg.AdminLodgeSet,
+        LodgeMsg.AdminMembers, LodgeMsg.AdminInvite, LodgeMsg.AdminRole, LodgeMsg.AdminRemove, LodgeMsg.AdminPurge,
+        LodgeMsg.AdminChannelAdd, LodgeMsg.AdminChannelRemove, LodgeMsg.ModKick, LodgeMsg.ModMute,
+    };
+
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
         if (type.StartsWith("device.")) return await HandleDevice(me, type, m);
         if (type == LodgeMsg.MemberLeave) return await Leave(me);
-        if (!type.StartsWith("admin.") && !type.StartsWith("mod.")) return false;
+        if (!Handles.Contains(type)) return false;
         var perm = type switch
         {
             LodgeMsg.AdminInviteCreate or LodgeMsg.AdminInvites or LodgeMsg.AdminInviteRevoke or LodgeMsg.AdminDevices => Perm.Invite,   // officers too (2.10)
