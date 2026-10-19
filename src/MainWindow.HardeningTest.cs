@@ -154,6 +154,8 @@ namespace ElansAddonHub
 
                 // ---- 3.0.1: back into the voice room after an update restart (saved before the restart, one shot)
                 var nowS = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var hadLodgeUrl = s.LodgeUrl;
+                s.LodgeUrl = "https://lodge.test/lodge";
                 s.VoiceResume = new VoiceResume { Room = "dungeon", Muted = true, At = nowS - 20 };
                 Session.FeedForTest(Welcome(h2));
                 Check("update restart: the saved voice room is asked for again after the welcome", Session.PendingRoom == "dungeon" && s.VoiceResume == null);
@@ -172,6 +174,7 @@ namespace ElansAddonHub
                 Session.LeaveVoice(false);
                 Session.ForgetVoiceResume();
                 Check("update restart: a failed update forgets it", s.VoiceResume == null);
+                s.LodgeUrl = hadLodgeUrl;
 
                 // ---- notifications
                 s.NotifyMode = "none";

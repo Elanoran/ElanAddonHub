@@ -22,6 +22,8 @@ namespace ElansAddonHub
         // (Util.DataDir is static readonly; touching Util/SettingsStore/IconStore first locks in the real folder).
         static App()
         {
+            // .NET 10: Windows code pages (1252 for the radio's song titles) need this provider; .NET Framework had them built in
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
             var a = Environment.GetCommandLineArgs();
             var i = Array.IndexOf(a, "--selftest");
             if (i >= 0 && i + 1 < a.Length && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ELANSHUB_DATA")))

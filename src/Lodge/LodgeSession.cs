@@ -308,7 +308,7 @@ namespace ElansAddonHub.Lodge
             var room = MyRoom ?? pendingRoom;
             Settings.VoiceResume = room == null ? null : new VoiceResume
             {
-                Room = room, Url = BaseUrl, Muted = voice?.Muted ?? pendingMuted, Deaf = voice?.Deafened ?? pendingDeaf,
+                Room = room, Url = BaseUrl ?? Settings.LodgeUrl, Muted = voice?.Muted ?? pendingMuted, Deaf = voice?.Deafened ?? pendingDeaf,
                 At = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             };
             SettingsStore.Save(Settings);
@@ -327,7 +327,8 @@ namespace ElansAddonHub.Lodge
             ForgetVoiceResume();
             var age = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - r.At;
             if (string.IsNullOrEmpty(r.Room) || age < 0 || age > VoiceResumeFor.TotalSeconds) return;
-            if (r.Url != null && BaseUrl != null && !string.Equals(NormalizeUrl(r.Url), NormalizeUrl(BaseUrl), StringComparison.OrdinalIgnoreCase)) return;
+            var here = BaseUrl ?? Settings.LodgeUrl;   // the connected lodge (the saved address when the welcome is fed without a socket)
+            if (r.Url != null && here != null && !string.Equals(NormalizeUrl(r.Url), NormalizeUrl(here), StringComparison.OrdinalIgnoreCase)) return;
             rejoinRoom = r.Room; rejoinMuted = r.Muted; rejoinDeaf = r.Deaf;
         }
 

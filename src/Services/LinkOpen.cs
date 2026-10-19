@@ -173,7 +173,7 @@ namespace ElansAddonHub.Services
                         lock (gate)
                         {
                             if (stop.IsCancellationRequested) break;
-                            pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 4096, 4096, Security());
+                            pipe = NamedPipeServerStreamAcl.Create(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 4096, 4096, Security()); // .NET 10: the ACL overload lives here
                             current = pipe;
                         }
                         await Task.Factory.FromAsync(pipe.BeginWaitForConnection, pipe.EndWaitForConnection, null);
