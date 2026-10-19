@@ -822,7 +822,7 @@ namespace ElansAddonHub.Services
                 ["seenNpcs"] = MaxSeenNpcsPerShare, ["seenObjects"] = MaxSeenObjectsPerShare, ["seenQuests"] = MaxSeenQuestsPerShare,
             };
             var b = new Batch();
-            var frame = new Dictionary<string, object> { ["t"] = LodgeMsg.AtlasShare };
+            var frame = new AtlasShareMsg();             // the envelope is typed (shared/Elans.Shared/Lodge/AtlasMessages.cs); the sections stay free-form
             var objs = new Dictionary<string, Dictionary<string, object>>();
             var finds = new List<object>();
             var counts = new Dictionary<string, int>();
@@ -872,12 +872,12 @@ namespace ElansAddonHub.Services
                 b.Sigs[c.SentKey] = c.Sig;
                 b.Entries++;
             }
-            foreach (var kv in objs) frame[kv.Key] = kv.Value;
-            if (finds.Count > 0) frame["finds"] = finds;
+            foreach (var kv in objs) frame.Sections.Add(new KeyValuePair<string, object>(kv.Key, kv.Value));
+            if (finds.Count > 0) frame.Finds = finds;
             b.Counts = counts;
             b.Remaining = cands.Count - b.Entries;
             if (b.Entries == 0) return null;
-            b.Frame = frame;
+            b.Frame = ElansAddonHub.Lodge.LodgeFieldsDict.Build(frame.Write);
             return b;
         }
 

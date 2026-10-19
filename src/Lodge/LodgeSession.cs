@@ -561,8 +561,8 @@ namespace ElansAddonHub.Lodge
                 case LodgeMsg.FlightsData: OnFlightData(m); break;
                 case LodgeMsg.FlightsRoutesShared: OnFlightRoutesShared(m); break;
                 case LodgeMsg.FlightsRoutesData: OnFlightRoutesData(m); break;
-                case LodgeMsg.AtlasShared: OnAtlasShared(m); break;
-                case LodgeMsg.AtlasData: OnAtlasData(m); break;
+                case LodgeMsg.AtlasShared: OnAtlasShared(AtlasSharedMsg.Read(new LodgeFieldsDict(m))); break;
+                case LodgeMsg.AtlasData: OnAtlasData(AtlasDataMsg.Read(new LodgeFieldsDict(m))); break;
                 case LodgeMsg.CairnStatus: OnCairnStatus(m); break;
                 case LodgeMsg.CairnJoin: OnCairnJoin(m); break;
                 case LodgeMsg.CairnNotices: OnCairnNotices(m); break;

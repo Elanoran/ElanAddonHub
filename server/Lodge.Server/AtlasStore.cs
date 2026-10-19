@@ -307,12 +307,9 @@ public sealed partial class AtlasStore
         public int Total => Accepted + Unchanged + Rejected;
     }
 
-    static readonly string[] Sections = { "kills", "objects", "fishing", "vendors", "quests", "finds", "spawns", "items", "seenNpcs", "seenObjects", "seenQuests", "nodes", "fishspots", "fieldnotes", "entrances", "npcspots",
-        "pickpocket", "skinning", "mining", "herbalism", "salvage", "contained" };
-
-    // True when the message carries at least one known, non-empty section
+    // True when the message carries at least one known, non-empty section (the sections: Elans.Shared AtlasSections.All)
     public static bool HasContent(JsonObject m) =>
-        Sections.Any(s => s == "finds" ? m[s] is JsonArray a && a.Count > 0 : m[s] is JsonObject o && o.Count > 0);
+        AtlasSections.All.Any(s => s == AtlasSections.Finds ? m[s] is JsonArray a && a.Count > 0 : m[s] is JsonObject o && o.Count > 0);
 
     // One member's batch. Counters are cumulative totals; per field the stored value only ever grows (see Atlas). Caller holds Gate.
     public ShareResult Share(string identity, string who, JsonObject m)
@@ -713,17 +710,15 @@ public sealed partial class AtlasStore
             bytes += size; taken++; last = c.rev;
         }
         bool more = taken < cand.Count;
-        var res = new JsonObject
+        // the envelope is typed (Elans.Shared AtlasDataMsg); the sections are the free-form objects built above
+        var res = new AtlasDataMsg
         {
-            ["t"] = LodgeMsg.AtlasData, ["epoch"] = Epoch, ["rev"] = more ? last : rev, ["at"] = NowSec,
-            ["kills"] = secs[0], ["objects"] = secs[1], ["fishing"] = secs[2], ["vendors"] = secs[3], ["quests"] = secs[4], ["spawns"] = secs[5], ["items"] = secs[6], ["finds"] = fa,
-            ["seenNpcs"] = secs[8], ["seenObjects"] = secs[9], ["seenQuests"] = secs[10], ["nodes"] = secs[11], ["fishspots"] = secs[12], ["fieldnotes"] = secs[13], ["entrances"] = secs[14], ["npcspots"] = secs[15],
-            ["pickpocket"] = secs[16], ["skinning"] = secs[17], ["mining"] = secs[18], ["herbalism"] = secs[19], ["salvage"] = secs[20], ["contained"] = secs[21],
-            ["seenMembers"] = seenMembers.Count,   // 2.25: how many members' game caches the seen tables come from (a count, never who)
+            Epoch = Epoch, Rev = more ? last : rev, At = NowSec, Finds = fa,
+            SeenMembers = seenMembers.Count,   // 2.25: how many members' game caches the seen tables come from (a count, never who)
+            Full = full, More = more,
         };
-        if (full) res["full"] = true;
-        if (more) res["more"] = true;
-        return res;
+        for (int i = 0; i < 22; i++) if (i != 7) res.Sections[AtlasSections.All[i]] = secs[i];     // secs[i] is section AtlasSections.All[i] (7 = finds, the array)
+        return LodgeFieldsJson.Build(res.Write);
     }
 
     // ---------------------------------------------------------------- saving

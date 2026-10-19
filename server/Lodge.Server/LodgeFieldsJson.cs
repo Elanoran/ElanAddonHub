@@ -26,6 +26,7 @@ public sealed class LodgeFieldsJson : ILodgeFields, ILodgeWriter
     public IReadOnlyList<string> Strs(string key) =>
         Obj[key] is JsonArray a ? a.Select(x => x is JsonValue v && v.TryGetValue<string>(out var s) ? s : null).Where(s => s != null).ToList() : Array.Empty<string>();
     public object RawChild(string key) => J.Obj(Obj, key);
+    public object RawList(string key) => Obj[key] as JsonArray;
     public IReadOnlyList<string> Keys() => Obj.Select(kv => kv.Key).ToList();
     public double? Num(string key) => Number(Obj[key]);
     public IReadOnlyList<double?> Nums(string key)
@@ -51,6 +52,7 @@ public sealed class LodgeFieldsJson : ILodgeFields, ILodgeWriter
     ILodgeWriter ILodgeWriter.Child(string key) { var o = new JsonObject(); Obj[key] = o; return new LodgeFieldsJson(o); }
     ILodgeListWriter ILodgeWriter.List(string key) { var a = new JsonArray(); Obj[key] = a; return new ListWriter(a); }
     public void SetRawChild(string key, object value) => Obj[key] = (JsonObject)value;
+    public void SetRawList(string key, object value) => Obj[key] = (JsonArray)value;
 
     sealed class ListWriter : ILodgeListWriter
     {

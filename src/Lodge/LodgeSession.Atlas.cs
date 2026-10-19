@@ -97,22 +97,27 @@ namespace ElansAddonHub.Lodge
 
         // One `atlas.data` page (or a cache file in the same shape). full = replace everything held first. Returns false when the page was ignored
         // (not an atlas.data frame, bad epoch, or an incremental page of another data set).
-        public bool Apply(Dictionary<string, object> m)
+        // (a frame or a cache file as Services/Json.cs reads it: through the typed envelope, shared/Elans.Shared/Lodge/AtlasMessages.cs)
+        public bool Apply(Dictionary<string, object> m) => m != null && Apply(AtlasDataMsg.Read(new LodgeFieldsDict(m)));
+
+        // the sections are free-form objects (raw, in Services/Json.cs's model) and every entry is checked here (AtlasObs.Parse*)
+        public bool Apply(AtlasDataMsg m)
         {
             if (m == null) return false;
-            var epoch = m.Str("epoch");
+            Dictionary<string, object> Sec(string name) => m.Section(name) as Dictionary<string, object>;
+            var epoch = m.Epoch;
             if (!ValidEpoch(epoch)) return false;
-            bool full = m.Bool("full");
+            bool full = m.Full;
             if (!full && Epoch.Length > 0 && epoch != Epoch) return false;
             if (full) { Clear(); Dropped = 0; }
             Epoch = epoch;
             int dropped = 0;
-            Sources(m.Child("kills"), kills, AtlasObs.MaxKillSources * 2000, true, AtlasObs.MaxId, ref dropped);
-            Sources(m.Child("objects"), objects, AtlasObs.MaxObjectSources * 2000, true, AtlasObs.MaxId, ref dropped);
-            Sources(m.Child("fishing"), fishing, AtlasObs.MaxFishingZones * 2000, false, AtlasObs.MaxMapId, ref dropped);
+            Sources(Sec("kills"), kills, AtlasObs.MaxKillSources * 2000, true, AtlasObs.MaxId, ref dropped);
+            Sources(Sec("objects"), objects, AtlasObs.MaxObjectSources * 2000, true, AtlasObs.MaxId, ref dropped);
+            Sources(Sec("fishing"), fishing, AtlasObs.MaxFishingZones * 2000, false, AtlasObs.MaxMapId, ref dropped);
             foreach (var gs in AtlasObs.GatherSections)
-                Sources(m.Child(gs), gather[gs], (gs == "contained" ? AtlasObs.MaxContainedSources : AtlasObs.MaxGatherSources) * 2000, gs != "contained", gs == "contained" ? AtlasObs.MaxItemId : AtlasObs.MaxId, ref dropped);
-            var vo = m.Child("vendors");
+                Sources(Sec(gs), gather[gs], (gs == "contained" ? AtlasObs.MaxContainedSources : AtlasObs.MaxGatherSources) * 2000, gs != "contained", gs == "contained" ? AtlasObs.MaxItemId : AtlasObs.MaxId, ref dropped);
+            var vo = Sec("vendors");
             if (vo != null)
                 foreach (var kv in vo)
                 {
@@ -120,7 +125,7 @@ namespace ElansAddonHub.Lodge
                     var v = AtlasObs.ParseVendor(kv.Value, ref dropped);
                     if (v != null) vendors[id] = v;
                 }
-            var qo = m.Child("quests");
+            var qo = Sec("quests");
             if (qo != null)
                 foreach (var kv in qo)
                 {
@@ -128,7 +133,7 @@ namespace ElansAddonHub.Lodge
                     var q = AtlasObs.ParseQuest(kv.Value, ref dropped);
                     if (q != null) quests[id] = q;
                 }
-            var so = m.Child("spawns");
+            var so = Sec("spawns");
             if (so != null)
                 foreach (var kv in so)
                 {
@@ -136,7 +141,7 @@ namespace ElansAddonHub.Lodge
                     var pts = AtlasObs.ParseSpots(kv.Value, AtlasObs.MaxSpawnPoints, ref dropped);
                     if (pts.Count > 0) spawns[id] = pts;
                 }
-            var io = m.Child("items");
+            var io = Sec("items");
             if (io != null)
                 foreach (var kv in io)
                 {
@@ -144,7 +149,7 @@ namespace ElansAddonHub.Lodge
                     var r = AtlasObs.ParseRevealed(id, kv.Value, ref dropped);
                     if (r != null) revealed[id] = r;
                 }
-            var sn = m.Child("seenNpcs");
+            var sn = Sec("seenNpcs");
             if (sn != null)
                 foreach (var kv in sn)
                 {
@@ -152,7 +157,7 @@ namespace ElansAddonHub.Lodge
                     var x = AtlasObs.ParseSeenNpc(id, kv.Value, ref dropped);
                     if (x != null) { seenNpcs[id] = x; SeenNpcsChanged++; }
                 }
-            var sg = m.Child("seenObjects");
+            var sg = Sec("seenObjects");
             if (sg != null)
                 foreach (var kv in sg)
                 {
@@ -160,7 +165,7 @@ namespace ElansAddonHub.Lodge
                     var x = AtlasObs.ParseSeenObject(id, kv.Value, ref dropped);
                     if (x != null) seenObjects[id] = x;
                 }
-            var sw = m.Child("seenQuests");
+            var sw = Sec("seenQuests");
             if (sw != null)
                 foreach (var kv in sw)
                 {
@@ -168,7 +173,7 @@ namespace ElansAddonHub.Lodge
                     var x = AtlasObs.ParseSeenQuest(id, kv.Value, ref dropped);
                     if (x != null) seenQuests[id] = x;
                 }
-            var nd = m.Child("nodes");
+            var nd = Sec("nodes");
             if (nd != null)
             {
                 bool any = false;
@@ -180,18 +185,18 @@ namespace ElansAddonHub.Lodge
                 }
                 if (any) NodesChanged++;
             }
-            var fsd = m.Child("fishspots");
+            var fsd = Sec("fishspots");
             if (fsd != null)
             {
                 var maps = AtlasObs.ParseFishSpotMaps(fsd, ref dropped, MaxLodgeNodesPerMap, AtlasObs.MaxFishMaps * 50);
                 foreach (var kv in maps) fishSpots[kv.Key] = kv.Value;
                 if (maps.Count > 0) FishSpotsChanged++;
             }
-            var eno = m.Child("entrances");
+            var eno = Sec("entrances");
             if (eno != null)
                 foreach (var kv in AtlasObs.ParseEntrances(eno, ref dropped, true, AtlasObs.MaxLodgeEntranceInstances))
                     if (entrances.ContainsKey(kv.Key) || entrances.Count < AtlasObs.MaxLodgeEntranceInstances) entrances[kv.Key] = kv.Value;
-            var npo = m.Child("npcspots");
+            var npo = Sec("npcspots");
             if (npo != null)
             {
                 bool any = false;
@@ -199,7 +204,7 @@ namespace ElansAddonHub.Lodge
                     if (npcSpots.ContainsKey(kv.Key) || npcSpots.Count < AtlasObs.MaxLodgeNpcSpotNpcs) { npcSpots[kv.Key] = kv.Value; any = true; }
                 if (any) NpcSpotsChanged++;
             }
-            var fno = m.Child("fieldnotes");
+            var fno = Sec("fieldnotes");
             if (fno != null)
             {
                 bool any = false;
@@ -211,7 +216,7 @@ namespace ElansAddonHub.Lodge
                 }
                 if (any) NotesChanged++;
             }
-            var fl = m.List("finds");
+            var fl = m.Finds as List<object> ?? new List<object>();
             if (fl.Count > 0)
             {
                 var have = new HashSet<long>(finds.Select(f => f.Seq));
@@ -225,10 +230,10 @@ namespace ElansAddonHub.Lodge
                 finds.Sort((a, b) => a.Seq.CompareTo(b.Seq));
                 if (finds.Count > AtlasObs.MaxFinds) finds.RemoveRange(0, finds.Count - AtlasObs.MaxFinds);
             }
-            if (m.ContainsKey("seenMembers")) { var smc = m.Long("seenMembers"); if (smc >= 0 && smc <= 100000) SeenMembers = (int)smc; }
-            var rev = m.Long("rev");
+            if (m.SeenMembers is int smc && smc >= 0 && smc <= 100000) SeenMembers = smc;
+            var rev = m.Rev;
             if (rev >= 0 && rev < long.MaxValue / 4) Rev = rev;
-            var at = m.Long("at"); if (at > 0 && at < 4_000_000_000L) Updated = at;
+            var at = m.At; if (at > 0 && at < 4_000_000_000L) Updated = at;
             Dropped += dropped;
             Invalidate();
             return true;
@@ -598,31 +603,31 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsAtlas || atlasDisabled) return;
             atlasLastGet = Clock();
-            var o = new Dictionary<string, object> { ["t"] = LodgeMsg.AtlasGet };
-            if (AtlasData.Rev > 0 && AtlasData.Epoch.Length > 0) { o["since"] = AtlasData.Rev; o["epoch"] = AtlasData.Epoch; }
+            var o = new AtlasGetMsg();
+            if (AtlasData.Rev > 0 && AtlasData.Epoch.Length > 0) { o.Since = AtlasData.Rev; o.Epoch = AtlasData.Epoch; }
             atlasFetching = true;
             Activity.Hold("atlas.get", "Receiving your Lodge's Atlas", Activity.Kind.Work);
-            _ = Send(o);
+            _ = Send(LodgeFieldsDict.Build(o.Write));
         }
 
-        void OnAtlasShared(Dictionary<string, object> m)
+        void OnAtlasShared(AtlasSharedMsg m)
         {
             if (!SupportsAtlas) return;
             var batch = atlasInflight;
             atlasInflight = null;
             try
             {
-            if (m.Bool("ok") && batch != null)
+            if (m.Ok && batch != null)
             {
                 var sent = AtlasSent();
                 foreach (var kv in batch.Sigs) sent[kv.Key] = kv.Value;                // refused entries are not retried forever either
                 SaveAtlasSent();
                 atlasBacklog = batch.Remaining > 0;
-                Util.Log("atlas: shared " + batch.Entries + " entries (" + batch.Finds + " finds): accepted " + m.Long("accepted") + ", unchanged " + m.Long("unchanged") + ", rejected " + m.Long("rejected") + (batch.Remaining > 0 ? ", " + batch.Remaining + " more waiting" : ""));
+                Util.Log("atlas: shared " + batch.Entries + " entries (" + batch.Finds + " finds): accepted " + m.Accepted + ", unchanged " + m.Unchanged + ", rejected " + m.Rejected + (batch.Remaining > 0 ? ", " + batch.Remaining + " more waiting" : ""));
             }
             else
             {
-                var why = m.Str("why");
+                var why = m.Why;
                 if (why == "guest") atlasGuest = true;
                 else if (why == "disabled") atlasDisabled = true;
                 else if (why == "rate") atlasNextShare = Clock() + AtlasObs.ShareEvery;
@@ -634,12 +639,12 @@ namespace ElansAddonHub.Lodge
             RequestAtlas();
         }
 
-        void OnAtlasData(Dictionary<string, object> m)
+        void OnAtlasData(AtlasDataMsg m)
         {
             if (!SupportsAtlas) return;
             if (!AtlasData.Apply(m)) { atlasFetching = false; Activity.Release("atlas.get"); return; }
             atlasCacheDirty = true;
-            if (m.Bool("more")) RequestAtlas();                                        // the next page
+            if (m.More) RequestAtlas();                                        // the next page
             else { atlasFetching = false; Activity.Release("atlas.get"); SaveAtlasCache(false); try { AtlasResendMissing(); } catch (Exception) { } RefreshFieldNotesFile(); }
             Util.Log("atlas: " + AtlasData.KillSources + " mobs, " + AtlasData.VendorCount + " vendors, " + AtlasData.FindCount + " finds from the lodge (rev " + AtlasData.Rev + ")");
             Changed?.Invoke();

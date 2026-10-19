@@ -9,7 +9,8 @@ namespace Lodge;
 // totals of what changed; members and up; at most 3 in a burst, then one per 2 minutes per identity; frame limit 64 KB) and atlas.get { since, epoch }
 // (everybody, guests included; Page budget). Server to client: atlas.shared { ok, accepted, unchanged, rejected, rev, epoch, why? } and
 // atlas.data (see AtlasStore.Get). Feature off (LODGE_ATLAS_ENABLED=0): not advertised, share answers why "disabled", get answers an error.
-// Nothing the clients send is ever logged - only counts.
+// Nothing the clients send is ever logged - only counts. The envelopes are typed in shared/Elans.Shared/Lodge/AtlasMessages.cs; the sections are
+// free-form and still validated from the raw JSON (AtlasStore.HasContent / Share), and atlas.get's "since" too (only a whole JSON number > 0).
 public sealed class AtlasModule : IModule
 {
     readonly LodgeHub hub;
@@ -27,24 +28,18 @@ public sealed class AtlasModule : IModule
     {
         switch (type)
         {
-            case LodgeMsg.AtlasShare: await Share(me, m); return true;
-            case LodgeMsg.AtlasGet: await Get(me, m); return true;
+            case AtlasShareMsg.Type: await Share(me, m); return true;
+            case AtlasGetMsg.Type: await Get(me, m); return true;
         }
         return false;
     }
 
     static string Identity(Member me) => ProfileRules.Key(me.Name);
 
-    Task Reply(Member me, bool ok, AtlasStore.ShareResult r, string why = null)
+    Task Reply(Member me, bool ok, AtlasStore.ShareResult r, string why = null) => hub.Send(me, LodgeFieldsJson.Build(new AtlasSharedMsg
     {
-        var o = new JsonObject
-        {
-            ["t"] = LodgeMsg.AtlasShared, ["ok"] = ok, ["accepted"] = r?.Accepted ?? 0, ["unchanged"] = r?.Unchanged ?? 0, ["rejected"] = r?.Rejected ?? 0,
-            ["rev"] = Store.Rev, ["epoch"] = Store.Epoch,
-        };
-        if (why != null) o["why"] = why;
-        return hub.Send(me, o);
-    }
+        Ok = ok, Accepted = r?.Accepted ?? 0, Unchanged = r?.Unchanged ?? 0, Rejected = r?.Rejected ?? 0, Rev = Store.Rev, Epoch = Store.Epoch, Why = why,
+    }.Write));
 
     async Task Share(Member me, JsonObject m)
     {
@@ -89,8 +84,8 @@ public sealed class AtlasModule : IModule
         if (!Enabled) { await hub.Error(me, "The Atlas is switched off on this lodge", "disabled"); return; }
         if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
         long since = 0;
-        if (m["since"] is JsonValue sv && sv.TryGetValue<long>(out var s) && s > 0) since = s;
-        var epoch = J.Str(m, "epoch");
+        if (m["since"] is JsonValue sv && sv.TryGetValue<long>(out var s) && s > 0) since = s;     // raw on purpose: a whole JSON number only
+        var epoch = AtlasGetMsg.Read(new LodgeFieldsJson(m)).Epoch;
         string json;
         lock (Store.Gate) json = Store.Get(since, epoch, Shown, guest: !me.Personal).ToJsonString();
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);

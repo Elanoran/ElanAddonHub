@@ -29,6 +29,7 @@ namespace ElansAddonHub.Lodge
             Dict.List(key).Select(x => x is double d && d == Math.Floor(d) && Math.Abs(d) < 9e18 ? (long)d : x is long l ? l : 0L).ToList();
         public IReadOnlyList<string> Strs(string key) => Dict.List(key).OfType<string>().ToList();
         public object RawChild(string key) => Dict.Child(key);
+        public object RawList(string key) => Dict.TryGetValue(key, out var v) ? v as List<object> : null;
         public IReadOnlyList<string> Keys() => Dict.Keys.ToList();
         public double? Num(string key) => Dict.TryGetValue(key, out var v) && v is double d ? d : (double?)null;     // Json.Parse gives every number as double
         public IReadOnlyList<double?> Nums(string key)
@@ -53,6 +54,7 @@ namespace ElansAddonHub.Lodge
         ILodgeWriter ILodgeWriter.Child(string key) { var c = new Dictionary<string, object>(); Dict[key] = c; return new LodgeFieldsDict(c); }
         ILodgeListWriter ILodgeWriter.List(string key) { var l = new List<object>(); Dict[key] = l; return new ListWriter(l); }
         public void SetRawChild(string key, object value) => Dict[key] = (Dictionary<string, object>)value;
+        public void SetRawList(string key, object value) => Dict[key] = (List<object>)value;
 
         sealed class ListWriter : ILodgeListWriter
         {

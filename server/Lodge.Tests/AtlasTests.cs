@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elans.Shared;
 using Xunit;
 
 namespace Lodge.Tests;
@@ -784,5 +785,33 @@ public partial class AtlasTests
         Assert.DoesNotContain("123456", all);
         Assert.DoesNotContain("987654", all);
         Assert.DoesNotContain("424242", all);
+    }
+
+    // ---------------------------------------------------------------- typed (Elans.Shared AtlasMessages.cs)
+
+    static string[] KeysInOrder(JsonObject o) => o.Select(kv => kv.Key).ToArray();
+
+    // atlas.shared and atlas.data keep their keys and order: the envelope typed, every section there (finds between items and seenNpcs)
+    [Fact]
+    public async Task Typed_atlas_frames_keep_their_keys()
+    {
+        using var r = new FunRig();
+        var amy = r.Join("Amy", "member"); var gus = r.Join("Gus", "guest");
+        var ok = await ShareKills(r, amy, "70", Ctr(40));
+        Assert.Equal(new[] { "t", "ok", "accepted", "unchanged", "rejected", "rev", "epoch" }, KeysInOrder(ok));
+        Assert.True((bool)ok["ok"]!);
+        var refused = await ShareKills(r, gus, "70", Ctr(40));
+        Assert.Equal(new[] { "t", "ok", "accepted", "unchanged", "rejected", "rev", "epoch", "why" }, KeysInOrder(refused));
+        Assert.Equal("guest", (string?)refused["why"]);
+
+        var full = await Get(r, amy);
+        var envelope = new[] { "t", "epoch", "rev", "at" }.Concat(AtlasSections.All).Append("seenMembers");
+        Assert.Equal(envelope.Append("full"), KeysInOrder(full));
+        Assert.Equal(40, (int)full["kills"]!["70"]!["n"]!);
+        Assert.IsType<JsonArray>(full["finds"]);
+        foreach (var s in AtlasSections.All.Where(s => s != "finds")) Assert.IsType<JsonObject>(full[s]);
+        var since = await Get(r, amy, (long)full["rev"]!, (string)full["epoch"]!);
+        Assert.Equal(envelope, KeysInOrder(since));                           // nothing new: no full, no more
+        Assert.Empty(since["kills"]!.AsObject());
     }
 }

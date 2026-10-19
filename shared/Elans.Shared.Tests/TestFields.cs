@@ -24,6 +24,7 @@ sealed class TestFields : ILodgeFields, ILodgeWriter
         Get(key) is List<object> l ? l.Select(x => x switch { int i => i, long n => n, double d when d == Math.Floor(d) => (long)d, _ => 0L }).ToList() : new List<long>();
     public IReadOnlyList<string> Strs(string key) => Get(key) is List<object> l ? l.OfType<string>().ToList() : new List<string>();
     public object RawChild(string key) => Get(key) as Dictionary<string, object>;
+    public object RawList(string key) => Get(key) as List<object>;
     public IReadOnlyList<string> Keys() => D.Keys.ToList();
     static double? Number(object x) => x switch { int i => i, long l => l, double d => d, _ => null };
     public double? Num(string key) => Number(Get(key));
@@ -35,6 +36,7 @@ sealed class TestFields : ILodgeFields, ILodgeWriter
         return l;
     }
     public void SetRawChild(string key, object value) => D[key] = (Dictionary<string, object>)value;
+    public void SetRawList(string key, object value) => D[key] = (List<object>)value;
     public void Set(string key, string value) => D[key] = value;
     public void Set(string key, long value) => D[key] = value;
     public void Set(string key, int value) => D[key] = value;
