@@ -121,7 +121,7 @@ public class FuzzHandlerTests
         public readonly Dictionary<string, Person> People = new();
         public readonly List<string> Problems = new();
         public readonly HashSet<string> Secrets = new(StringComparer.Ordinal);
-        public int Frames, LogSeen, CodesRenewed;
+        public int Frames, LogSeen, CodesRenewed, Refused;
 
         public Rig()
         {
@@ -172,6 +172,7 @@ public class FuzzHandlerTests
             if (!Alive(p)) await Connect(p);
             if (!Alive(p)) return;
             Frames++;
+            if (type == WebSocketMessageType.Text && LodgeJson.Parse(data) == null) Refused++;
             await Wait(p, p.Sock.Feed(data, type), what);
             Scan(what);
             CheckLog(what, data, type);
@@ -239,8 +240,6 @@ public class FuzzHandlerTests
 
         // ---------------------------------------------------------------- the log: a handler that threw
 
-        public readonly Dictionary<string, int> KnownDrops = new();
-
         public void CheckLog(string what, byte[] data, WebSocketMessageType type)
         {
             List<string> fresh;
@@ -251,42 +250,11 @@ public class FuzzHandlerTests
                 bool dropped = line.Contains("dropped a malformed", StringComparison.Ordinal);
                 bool adminFailed = line.Contains(" failed System.", StringComparison.Ordinal) && !line.Contains("System.InvalidOperationException", StringComparison.Ordinal);
                 if (!dropped && !adminFailed) continue;
-                var known = type == WebSocketMessageType.Text ? KnownShape(data) : null;
-                if (known != null) { KnownDrops[known] = KnownDrops.GetValueOrDefault(known) + 1; continue; }
                 Problems.Add(what + ": a handler threw - " + Clip(line, 600));
             }
         }
 
         public void Dispose() { Cts.Cancel(); Dir.Dispose(); }
-    }
-
-    // which of the shared adapter's known problems (FuzzGen: three known problems) a frame has, if any: those throw in any handler that
-    // reads the field (the hub drops the frame, as it should), and are reported, not failed, until LodgeJson.cs is fixed
-    static string KnownShape(byte[] data)
-    {
-        string text;
-        try { text = new UTF8Encoding(false, true).GetString(data); } catch (DecoderFallbackException) { text = Encoding.UTF8.GetString(data); }
-        try
-        {
-            using var doc = JsonDocument.Parse(text, new JsonDocumentOptions { AllowDuplicateProperties = false });
-            string found = null;
-            void Walk(JsonElement e)
-            {
-                switch (e.ValueKind)
-                {
-                    case JsonValueKind.Object: foreach (var p in e.EnumerateObject()) { try { _ = p.Name; } catch (InvalidOperationException) { found ??= "lone surrogate"; } Walk(p.Value); } break;
-                    case JsonValueKind.Array: foreach (var x in e.EnumerateArray()) Walk(x); break;
-                    case JsonValueKind.String: try { e.GetString(); } catch (InvalidOperationException) { found ??= "lone surrogate"; } break;
-                    case JsonValueKind.Number: if (!e.TryGetDouble(out var d) || !double.IsFinite(d)) found ??= "huge number"; break;
-                }
-            }
-            Walk(doc.RootElement);
-            if (found != null && !(found == "lone surrogate" ? LoneSurrogatesReadable : HugeNumbersFinite)) return found;
-            return null;
-        }
-        catch (JsonException) { return DuplicateKeysReadable ? null : "a key twice"; }   // it parsed for the hub (no dupe check there), so a dupe it is
-        catch (InvalidOperationException) { return LoneSurrogatesReadable ? null : "lone surrogate"; }   // a lone surrogate in a key (the dupe check reads them)
-        catch (ArgumentException) { return null; }
     }
 
     static string Clip(string s, int n = 240) => s.Length > n ? s[..n] + "... (" + s.Length + " chars)" : s;
@@ -467,8 +435,7 @@ public class FuzzHandlerTests
 
         var growth = (memEnd - memStart) / (1024 * 1024);
         output.WriteLine(r.Frames + " frames (" + skipped + " skipped: sender could not sign in again) in " + sw.Elapsed.TotalSeconds.ToString("0.0") + " s; memory " + memStart / (1024 * 1024) + " -> " + memEnd / (1024 * 1024) + " MB; "
-            + "codes given again: " + r.CodesRenewed + "; watchers kicked and back: " + string.Join(", ", r.People.Values.Where(o => o.Observer).Select(o => o.Name + " " + o.Kicked)) + "; known adapter drops: "
-            + (r.KnownDrops.Count == 0 ? "none" : string.Join(", ", r.KnownDrops.Select(kv => kv.Key + " " + kv.Value))));
+            + "codes given again: " + r.CodesRenewed + "; watchers kicked and back: " + string.Join(", ", r.People.Values.Where(o => o.Observer).Select(o => o.Name + " " + o.Kicked)) + "; frames the parser refused: " + r.Refused);
         output.WriteLine("answers seen: " + string.Join(", ", r.Received.OrderByDescending(kv => kv.Value).Select(kv => kv.Key + " " + kv.Value)));
         Assert.True(r.Problems.Count == 0, r.Problems.Count + " problems:\n" + string.Join("\n", r.Problems.Take(30)));
         Assert.True(growth < (FuzzGen.Deep ? 256 : 96), "memory grew by " + growth + " MB over the run");
@@ -563,10 +530,14 @@ public class FuzzHandlerTests
         await r.Send(mia, Utf8("{\"t\":\"ping\"}"), WebSocketMessageType.Binary, "binary ping");
         Assert.DoesNotContain(r.Kept, x => (string)x.F["t"] == LodgeMsg.Pong);
         Assert.True(await Pong("after binary"));
-        // invalid UTF-8 is replaced (U+FFFD) when decoded: the frame still reads
-        r.Kept.Clear();
-        await r.Send(mia, Utf8("{\"t\":\"ping\",\"x\":\"").Concat(new byte[] { 0xff, 0xc0, 0x80, 0xed, 0xa0, 0x80 }).Concat(Utf8("\"}")).ToArray(), WebSocketMessageType.Text, "invalid UTF-8");
-        Assert.Contains(r.Kept, x => x.P == mia && (string)x.F["t"] == LodgeMsg.Pong);
+        // invalid UTF-8 refuses the frame (LodgeJson.Rules: no U+FFFD in its place) - and costs only that frame
+        foreach (var bad in new[] { new byte[] { 0xff }, new byte[] { 0xc0, 0x80 }, new byte[] { 0xed, 0xa0, 0x80 }, new byte[] { 0xe2, 0x82 } })
+        {
+            r.Kept.Clear();
+            await r.Send(mia, Utf8("{\"t\":\"ping\",\"x\":\"").Concat(bad).Concat(Utf8("\"}")).ToArray(), WebSocketMessageType.Text, "invalid UTF-8");
+            Assert.DoesNotContain(r.Kept, x => (string)x.F["t"] == LodgeMsg.Pong);
+            Assert.True(await Pong("after invalid UTF-8"));
+        }
         await r.Send(mia, new byte[] { 0xff, 0xfe, 0xfd, 0x00, 0x80 }, WebSocketMessageType.Text, "garbage");
         Assert.True(await Pong("after garbage"));
         // nesting: 64 levels parse, deeper is no frame
@@ -582,7 +553,7 @@ public class FuzzHandlerTests
 
     // found by the fuzzer: the frame type was read outside the hub's safety net (ReceiveLoop: J.Str(m, "t")), so a frame whose JSON the
     // shared adapter can't read lazily - a key twice, a lone surrogate escape - threw out of the receive loop: LodgeHub.Run faulted and the
-    // exception reached ASP.NET instead of costing only that frame
+    // exception reached ASP.NET instead of costing only that frame. Since step 7 LodgeJson.Parse refuses such a frame outright.
     [Theory]
     [InlineData("{\"t\":\"ping\",\"t\":\"ping\"}")]
     [InlineData("{\"t\":\"msg\",\"channel\":\"general\",\"text\":\"a\",\"t\":\"msg\"}")]

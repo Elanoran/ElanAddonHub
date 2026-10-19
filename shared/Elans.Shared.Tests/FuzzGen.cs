@@ -120,41 +120,13 @@ internal static class FuzzGen
     // a stable hash (string.GetHashCode is randomized per process), so a seed printed in a failure reproduces
     internal static int Stable(string s) { unchecked { int h = 17; foreach (var c in s) h = h * 31 + c; return h; } }
 
-    // ================================================================ three known problems of the shared adapter (not fixed here)
+    // ================================================================ what the parser refuses (LodgeJson.Rules)
 
-    // All three are valid JSON that System.Text.Json parses (lazily) and that throw only later, when the frame is read or written again:
-    //  (1) a lone UTF-16 surrogate as an escape ("\ud800", JSON allows it): reading the string throws InvalidOperationException ("Cannot
-    //      read incomplete UTF-16 JSON text as string") in LodgeJson.Str / LodgeJsonFields.Strs / Keys, and so does serializing a raw child
-    //      that holds one (ToJsonString) - nothing catches it;
-    //  (2) a key twice in one object ({"t":"msg","t":"ping"}): the first look into the JsonObject builds its dictionary and throws
-    //      ArgumentException ("An item with the same key has already been added") - any Has / Str / Keys, and the server's J.Str(m, "t");
-    //  (3) a number too big for a double (1e309): LodgeJson.Number (ILodgeFields.Num / Nums) gives +-Infinity, which a message keeps
-    //      (PositionMsg.Fx, MemberPosMsg.Fx ...) and which can't be written as JSON again (ArgumentException from the writer).
-    // So a Read throws on (1) and (2), and the Write of what was read throws on (1) and (3). The fix belongs in the shared adapter
-    // (shared/Elans.Shared/Lodge/LodgeJson.cs: reject (1) and (2) in LodgeJson.Parse or read them leniently; Number: a non-finite double is
-    // no number), which belongs to the JSON-engine step and is not changed here. Until then the fuzzers still send all three, count an
-    // exception of exactly these kinds as "known" (reported, not a failure), and stop excusing them by themselves as soon as the probes
-    // below pass. The skipped Regression_ tests in FuzzTests are the ones to switch on with the fix.
+    // Three kinds of valid-looking JSON the fuzzers keep sending, because they once broke the engine: a lone UTF-16 surrogate as an escape
+    // (below), a key twice in one object, and a number too big for a double (1e309). Since step 7 LodgeJson.Parse refuses the first two
+    // (the frame is skipped as a whole), and LodgeJson.Number reads the third as no number - so nothing that parsed may throw when it is
+    // read or written again, and the fuzzers excuse no exception at all.
     internal static readonly string[] LoneSurrogates = { @"\ud800", @"\udfff", @"\udc00\ud800", @"x\ud800y", @"\ud83d" };
-
-    internal static readonly bool LoneSurrogatesReadable = Probe(@"{""a"":""\ud800"",""o"":{""b"":""\ud800""}}", f => { f.Str("a"); f.Keys(); LodgeJson.Serialize(f.Obj); })
-        && Probe(@"{""\ud800"":1}", f => f.Keys());
-    internal static readonly bool DuplicateKeysReadable = Probe(@"{""a"":1,""a"":2}", f => { f.Str("a"); f.Keys(); });
-    internal static readonly bool HugeNumbersFinite = Probe(@"{""a"":1e309}", f => { if (f.Num("a") is double d && !double.IsFinite(d)) throw new ArgumentException("infinity"); });
-
-    static bool Probe(string text, Action<LodgeJsonFields> read)
-    {
-        var o = LodgeJson.Parse(text);
-        if (o == null) return true;                               // rejected at the parser: fine too
-        try { read(new LodgeJsonFields(o)); return true; }
-        catch (InvalidOperationException) { return false; }
-        catch (ArgumentException) { return false; }
-    }
-
-    internal static bool Known(Exception e) =>
-        (e is InvalidOperationException && !LoneSurrogatesReadable && e.Message.Contains("UTF-16", StringComparison.Ordinal))
-        || (e is ArgumentException && !DuplicateKeysReadable && e.Message.Contains("same key", StringComparison.Ordinal))
-        || (e is ArgumentException && !HugeNumbersFinite && e.Message.Contains("infinity", StringComparison.Ordinal));
 
     // ================================================================ random JSON text
 
@@ -181,7 +153,8 @@ internal static class FuzzGen
             "Ｅｌａｎ", "<script>alert(1)</script>", "../../etc/passwd", "%2f..%2f", "https://example.com/x", "i1.AAAA", "t1.BBBB", @"\u0085\u00a0",
         };
 
-        static readonly string[] StringPool = Strings.Concat(LoneSurrogates).ToArray();
+        // a piece of a string: now and then a lone surrogate (the parser refuses the whole frame for it, so not too often)
+        string Piece() => R.Next(40) == 0 ? LoneSurrogates[R.Next(LoneSurrogates.Length)] : Strings[R.Next(Strings.Length)];
 
         public string Num() => R.Next(4) switch
         {
@@ -195,14 +168,14 @@ internal static class FuzzGen
         {
             int k = R.Next(10);
             string body;
-            if (k < 4) body = StringPool[R.Next(StringPool.Length)];
+            if (k < 4) body = Piece();
             else if (k < 7)
             {
                 var sb = new StringBuilder();
                 int n = R.Next(0, 40);
                 for (int i = 0; i < n; i++)
                 {
-                    if (R.Next(3) == 0) { sb.Append(StringPool[R.Next(StringPool.Length)]); continue; }
+                    if (R.Next(3) == 0) { sb.Append(Piece()); continue; }
                     char c = (char)R.Next(0x20, 0x7f);
                     if (c == '\\' || c == '"') sb.Append('\\');
                     sb.Append(c);

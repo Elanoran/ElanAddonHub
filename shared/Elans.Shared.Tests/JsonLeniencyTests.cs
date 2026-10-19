@@ -287,11 +287,23 @@ public class JsonLeniencyTests
         ["UTF-8 encoded lone surrogate"] = "the same (a surrogate encoded as UTF-8 is invalid UTF-8)",
     };
 
+    // Deliberate differences in what a frame that still parses READS as (both old sides read these alike): input -> why. The members named
+    // here (Num, Nums) are compared as null; every other member of the line still reads exactly as before.
+    internal static readonly Dictionary<string, string> NumberChanges = new()
+    {
+        ["a = 1e400 (beyond double)"] = "a number too big for a double is no number for Num (it read as Infinity, which no JSON writer can write "
+            + "back: a message that kept it - PositionMsg.Fx - couldn't be sent again); Int / Long still clamp, IsFalse stays false",
+        ["a = array of huge numbers"] = "the same inside an array: Nums refuses the list as a whole (strict, as for any entry that is no number)",
+    };
+
+    static List<(string Member, string Value)> WithoutNumbers(List<(string Member, string Value)> d) => d.Where(x => x.Member is not ("Num" or "Nums")).ToList();
+
     // Where the old Outpost read differently, the shared engine reads as the old server did (or as ServerChanges says): input -> why that is
     // the Outpost's behaviour now. The rule was to keep the Outpost's own leniency unless the server's is clearly safer - none of the old
     // Outpost's leniencies is kept, for these reasons:
     static readonly Dictionary<string, string> OutpostChanges = new()
     {
+        ["a = 1e400 (beyond double)"] = "as on the server now (NumberChanges): no number for Num",
         ["a = 2^53 + 1"] = "whole numbers beyond 2^53 are read exactly (they were rounded through a double); every id and time is far below that",
         ["a = array of huge numbers"] = "the same, inside an array (Longs)",
         ["a = array of whole fractions"] = "Longs takes whole JSON numbers only (1.0 / 2e0 = 0, as on the server): the Outpost's one Longs reading "
@@ -332,6 +344,12 @@ public class JsonLeniencyTests
         {
             if (ServerChanges.ContainsKey(name)) continue;
             var old = Describe(OldSides[0].Read, frame); var now = Describe(Shared, frame);
+            if (NumberChanges.ContainsKey(name))
+            {
+                if (!WithoutNumbers(old).SequenceEqual(WithoutNumbers(now)) || now.Where(x => x.Member is "Num" or "Nums").Any(x => x.Value != "null"))
+                    bad.Add(name + " (NumberChanges)\n  old:    " + Line(old) + "\n  shared: " + Line(now));
+                continue;
+            }
             if (!old.SequenceEqual(now)) bad.Add(name + "\n  old:    " + Line(old) + "\n  shared: " + Line(now));
         }
         Assert.True(bad.Count == 0, string.Join("\n", bad));

@@ -333,7 +333,8 @@ public partial class LodgeHub
             }
             var m = LodgeJson.Parse(msg.GetBuffer(), 0, (int)msg.Length);       // the shared Lodge JSON engine (Elans.Shared LodgeJson): null when no valid frame
             if (m == null) continue;
-            // the nodes are read lazily: a key twice or a lone surrogate escape throws on the first read - no frame, and never out of this loop
+            // a guard: LodgeJson.Parse refuses what could throw on a read (a key twice, a lone surrogate - LodgeJson.Rules), and should a frame
+            // ever get past it, reading its type must still never end this loop (it once did: FuzzHandlerTests' Regression_ test)
             string type;
             try { type = J.Str(m, "t") ?? ""; }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException) { me.CountDrop(Clock); continue; }

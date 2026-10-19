@@ -35,6 +35,8 @@ public class LodgeJsonTests
             object plain;
             try { plain = LodgeJson.ToPlain(now); } catch (Exception) { continue; }   // unreadable in the shared engine (duplicate keys, lone surrogates)
             if (name.StartsWith("duplicate", StringComparison.Ordinal) || name.Contains("lone")) continue;
+            // a number too big for a double: null now, not Infinity (JsonLeniencyTests.NumberChanges)
+            if (JsonLeniencyTests.NumberChanges.ContainsKey(name)) { Assert.DoesNotContain("Infinity", LodgeJson.WritePlain(plain)); Assert.Contains("null", LodgeJson.WritePlain(plain)); continue; }
             Assert.True(Same(old, plain), name + ": the plain data differs");
             compared++;
         }

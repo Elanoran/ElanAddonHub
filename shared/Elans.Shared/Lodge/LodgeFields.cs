@@ -64,7 +64,7 @@ namespace Elans.Shared
         // the value at key is a JSON false - not missing, null, true, a number, a string, an object or an array (as the server's strict
         // TryGetValue<bool> checks: e.g. "share": only a JSON false stops sharing)
         public static bool IsFalse(this ILodgeFields f, string key) =>
-            f.Has(key) && !f.IsNull(key) && !f.Bool(key) && f.Num(key) == null && f.Str(key) == null && f.Child(key) == null && f.RawList(key) == null;
+            f.Has(key) && !f.IsNull(key) && !f.Bool(key) && f.Num(key) == null && f.Long(key) == 0 && f.Str(key) == null && f.Child(key) == null && f.RawList(key) == null;   // Long: a number too big for a double (Num null) is no false either
         // true / false for a JSON bool, null for anything else (missing included) - the server's J.BoolOrNull
         public static bool? BoolOrNull(this ILodgeFields f, string key) => f.Bool(key) ? true : f.IsFalse(key) ? false : (bool?)null;
     }

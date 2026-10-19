@@ -14,9 +14,9 @@ namespace Elans.Shared.Tests;
 // Deterministic: every suite has a fixed seed, so a failure names the seed / iteration that reproduces it. Normal mode is fast enough for
 // every test run; ELANS_FUZZ=deep runs many more iterations (and the 1 MB inputs more often).
 //
-// The parse limit: LodgeJson.Parse is the boundary. JsonNode.Parse throws (JsonException) on anything that is no JSON, and on nesting
-// deeper than the reader's default MaxDepth of 64; LodgeJson.Parse catches it and returns null, so a frame like that is dropped there and
-// no Read ever sees it. Nothing past Parse may throw.
+// The boundary: LodgeJson.Parse. It refuses (null, never an exception) what LodgeJson.Rules refuse - invalid JSON, more than 64 levels, a
+// key twice, invalid UTF-8, a lone surrogate - so a frame like that is dropped there and no Read ever sees it. Nothing past Parse may throw:
+// no exception is excused anywhere in these suites.
 public class FuzzTests
 {
     readonly ITestOutputHelper output;
@@ -31,36 +31,61 @@ public class FuzzTests
         Assert.True(missing.Count == 0, "no Read(ILodgeFields) / Write(ILodgeWriter): " + string.Join(", ", missing));
     }
 
-    [Fact(Skip = "known: the shared adapter throws InvalidOperationException on a lone surrogate escape - fix in LodgeJson.cs (see FuzzGen: three known problems)")]
-    public void Regression_lone_surrogate_escapes_are_read_without_an_exception()
+    // the three problems the first fuzz run found in the shared engine (FuzzGen: what the parser refuses), fixed in step 7 and after it
+
+    // a lone surrogate escape threw InvalidOperationException on read (any Read, and the hub's J.Str(m, "t")); now the frame is refused
+    [Fact]
+    public void Regression_lone_surrogate_escapes_refuse_the_frame()
     {
         foreach (var lone in LoneSurrogates)
         {
-            var o = LodgeJson.Parse(@"{""t"":""" + lone + @""",""text"":""" + lone + @""",""" + lone + @""":1}");
-            if (o == null) continue;
-            var f = new LodgeJsonFields(o);
-            f.Str("t"); f.Str("text"); f.Keys(); f.Strs("text");
-            ChatSendMsg.Read(f);
+            foreach (var text in new[] { @"{""t"":""" + lone + @"""}", @"{""t"":""msg"",""text"":""" + lone + @"""}", @"{""" + lone + @""":1,""t"":""ping""}",
+                @"{""t"":""msg"",""o"":{""a"":[""" + lone + @"""]}}" })
+            {
+                Assert.Null(LodgeJson.Parse(text));
+                Assert.Null(LodgeJson.Parse(Encoding.UTF8.GetBytes(text)));
+            }
+        }
+        // a pair is fine
+        var ok = LodgeJson.Parse(@"{""t"":""msg"",""text"":""" + (char)92 + "ud83d" + (char)92 + @"ude00""}");
+        Assert.NotNull(ok);
+        Assert.Equal(char.ConvertFromUtf32(0x1F600), ChatSendMsg.Read(new LodgeJsonFields(ok)).Text);
+    }
+
+    // a key twice threw ArgumentException on the first read of the object; now the frame is refused, at any depth
+    [Fact]
+    public void Regression_a_key_twice_refuses_the_frame()
+    {
+        foreach (var text in new[] { @"{""t"":""msg"",""t"":""ping""}", @"{""t"":""msg"",""text"":""a"",""text"":1}", @"{""t"":""msg"",""o"":{""a"":1,""a"":1}}",
+            @"{""t"":""msg"",""l"":[{""a"":1,""a"":2}]}" })
+        {
+            Assert.Null(LodgeJson.Parse(text));
+            Assert.Null(LodgeJson.Parse(Encoding.UTF8.GetBytes(text)));
         }
     }
 
-    [Fact(Skip = "known: a number too big for a double reads as Infinity, which can't be written again - fix LodgeJson.Number (see FuzzGen: three known problems)")]
+    // a number too big for a double read as Infinity, which a message kept (PositionMsg.Fx) and which then couldn't be written: now it is no
+    // number (Num / Nums null), everything else reads as before (Int / Long clamp, IsFalse stays false)
+    [Fact]
     public void Regression_a_huge_number_is_no_number()
     {
-        var o = LodgeJson.Parse(@"{""t"":""position"",""mapId"":1,""fx"":1e309,""fy"":-1e309,""valid"":true}");
-        Assert.Null(new LodgeJsonFields(o).Num("fx"));
-        var p = PositionMsg.Read(new LodgeJsonFields(o));
-        LodgeJson.Serialize(LodgeJson.Build(p.Write));
-    }
-
-    [Fact(Skip = "known: the shared adapter throws ArgumentException on a key twice in one object - fix in LodgeJson.cs (see FuzzGen: three known problems)")]
-    public void Regression_a_key_twice_is_read_without_an_exception()
-    {
-        var o = LodgeJson.Parse(@"{""t"":""msg"",""t"":""ping"",""text"":""a"",""text"":1}");
-        if (o == null) return;
+        var o = LodgeJson.Parse(@"{""t"":""position"",""mapId"":1,""fx"":1e309,""fy"":-1e309,""valid"":true,""l"":[1,1e400],""s"":1e400}");
         var f = new LodgeJsonFields(o);
-        f.Str("t"); f.Has("text"); f.Keys();
-        ChatSendMsg.Read(f);
+        Assert.Null(f.Num("fx"));
+        Assert.Null(f.Num("fy"));
+        Assert.Null(f.Nums("l"));
+        Assert.Equal(long.MaxValue, f.Long("s"));
+        Assert.Equal(int.MinValue, f.Int("fy"));
+        Assert.False(f.IsFalse("s"));
+        Assert.Null(f.BoolOrNull("s"));
+        Assert.Null(LodgeJson.ToPlain(o["s"]));
+        var p = PositionMsg.Read(f);
+        var again = LodgeJson.Parse(LodgeJson.Serialize(LodgeJson.Build(p.Write)));
+        Assert.NotNull(again);
+        Assert.Equal(0, again["fx"]!.GetValue<double>());
+        var mp = MemberPosMsg.Read(new LodgeJsonFields(LodgeJson.Parse(@"{""t"":""memberpos"",""id"":3,""valid"":true,""fx"":1e400,""fy"":0.5}")));
+        Assert.Null(mp.Fx);
+        LodgeJson.Serialize(LodgeJson.Build(mp.Write));
     }
 
     // ================================================================ the harness: parse, read, write, read again
@@ -96,7 +121,7 @@ public class FuzzTests
     internal sealed class Report
     {
         public readonly List<string> Problems = new();
-        public int Frames, Parsed, Rejected, Known, NeedsParts;
+        public int Frames, Parsed, Rejected, NeedsParts;
         public double WorstAllocRatio; public string WorstAlloc = "";
         public void Add(string p) { lock (Problems) if (Problems.Count < 40) Problems.Add(p); }
     }
@@ -130,7 +155,6 @@ public class FuzzTests
         object read;
         long before = GC.GetAllocatedBytesForCurrentThread();
         try { read = msg.Read.Invoke(null, new object[] { new LodgeJsonFields(obj) }); }
-        catch (TargetInvocationException e) when (Known(e.InnerException!)) { rep.Known++; return; }
         catch (TargetInvocationException e) { rep.Add(where + ": " + msg.Class.Name + ".Read threw " + e.InnerException!.GetType().Name + ": " + e.InnerException.Message + "\n  " + Clip(text)); return; }
         long alloc = GC.GetAllocatedBytesForCurrentThread() - before;
         double ratio = (double)alloc / Math.Max(1, inputBytes);
@@ -149,12 +173,10 @@ public class FuzzTests
         }
         catch (TargetInvocationException e) when (e.InnerException is NullReferenceException && NeedsParts.Contains(msg.Class)) { rep.NeedsParts++; return; }
         catch (TargetInvocationException e) { rep.Add(where + ": " + msg.Class.Name + ".Write of the read message threw " + e.InnerException!.GetType().Name + ": " + e.InnerException.Message + "\n  " + Clip(text)); return; }
-        catch (Exception e) when (Known(e)) { rep.Known++; return; }
         catch (Exception e) { rep.Add(where + ": serializing the written " + msg.Class.Name + " threw " + e.GetType().Name + ": " + e.Message + "\n  " + Clip(text)); return; }
         var obj2 = LodgeJson.Parse(again);
         if (obj2 == null) { rep.Add(where + ": the written " + msg.Class.Name + " does not parse again\n  " + Clip(again)); return; }
         try { msg.Read.Invoke(null, new object[] { new LodgeJsonFields(obj2) }); }
-        catch (TargetInvocationException e) when (Known(e.InnerException!)) { rep.Known++; }
         catch (TargetInvocationException e) { rep.Add(where + ": " + msg.Class.Name + ".Read of its own output threw " + e.InnerException!.GetType().Name + ": " + e.InnerException.Message + "\n  " + Clip(again)); }
     }
 
@@ -169,8 +191,8 @@ public class FuzzTests
 
     void Check(Report rep, string what)
     {
-        output.WriteLine(what + ": " + rep.Frames + " frames, " + rep.Parsed + " parsed, " + rep.Rejected + " rejected by the parser, " + rep.Known
-            + " known adapter exceptions, " + rep.NeedsParts + " not writable (a needed part missing); the most allocated per input byte: "
+        output.WriteLine(what + ": " + rep.Frames + " frames, " + rep.Parsed + " parsed, " + rep.Rejected + " rejected by the parser, "
+            + rep.NeedsParts + " not writable (a needed part missing); the most allocated per input byte: "
             + rep.WorstAllocRatio.ToString("0.0") + "x (" + rep.WorstAlloc + ")");
         Assert.True(rep.Problems.Count == 0, what + ": " + rep.Problems.Count + (rep.Problems.Count >= 40 ? "+" : "") + " problems in " + rep.Frames + " frames:\n" + string.Join("\n", rep.Problems));
         Assert.True(rep.Parsed > rep.Frames / 3, what + ": only " + rep.Parsed + " of " + rep.Frames + " frames got past the parser");
@@ -272,30 +294,69 @@ public class FuzzTests
 
     // ================================================================ the parser boundary
 
+    // what LodgeJson.Parse must take, worked out independently: valid UTF-8 (and for text: valid UTF-16), JSON as LodgeJson.Rules says
+    // (strict syntax, MaxDepth 64, no key twice), an object at the top, and no lone surrogate in any string or key
+    static bool Acceptable(byte[] utf8)
+    {
+        if (!System.Text.Unicode.Utf8.IsValid(utf8)) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(utf8, LodgeJson.Rules);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
+            return NoLoneSurrogate(doc.RootElement);
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException) { return false; }   // InvalidOperationException: the dupe check met a lone surrogate key
+    }
+
+    static bool NoLoneSurrogate(JsonElement e)
+    {
+        static bool Ok(string s) { for (int i = 0; i < s.Length; i++) { if (char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1])) { i++; continue; } if (char.IsSurrogate(s[i])) return false; } return true; }
+        try
+        {
+            switch (e.ValueKind)
+            {
+                case JsonValueKind.Object: foreach (var p in e.EnumerateObject()) if (!Ok(p.Name) || !NoLoneSurrogate(p.Value)) return false; return true;
+                case JsonValueKind.Array: foreach (var x in e.EnumerateArray()) if (!NoLoneSurrogate(x)) return false; return true;
+                case JsonValueKind.String: return Ok(e.GetString()!);
+                default: return true;
+            }
+        }
+        catch (InvalidOperationException) { return false; }
+    }
+
+    static bool ValidUtf16(string s) { for (int i = 0; i < s.Length; i++) { if (char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1])) { i++; continue; } if (char.IsSurrogate(s[i])) return false; } return true; }
+
     [Fact]
-    public void Parse_never_throws_and_rejects_exactly_what_JsonNode_cannot_parse()
+    public void Parse_never_throws_and_rejects_exactly_what_the_rules_refuse()
     {
         var g = new Gen(0x9a75e);
         int n = N(3000, 60_000);
+        int accepted = 0, refused = 0;
         for (int i = 0; i < n; i++)
         {
-            string text = (i % 5) switch
+            string text = (i % 6) switch
             {
                 0 => g.Value(),
-                1 => g.Nest(g.R.Next(55, 75)),
+                1 => "{\"a\":" + g.Nest(g.R.Next(55, 75)) + "}",
                 2 => Garble(g.Obj(new[] { ("t", "\"msg\""), ("text", g.Str()) }), g.R),
                 3 => "{\"t\":" + g.Value() + "}",
+                4 => g.Obj(new[] { ("t", "\"msg\""), ("k", g.Value()), (g.R.Next(3) == 0 ? "k" : "j", g.Value()) }),   // sometimes a key twice
                 _ => new string(Enumerable.Range(0, g.R.Next(0, 200)).Select(_ => (char)g.R.Next(0, 0x80)).ToArray()),
             };
-            bool isObject;
-            try { isObject = JsonNode.Parse(text) is JsonObject; } catch (Exception e) when (e is JsonException or ArgumentException) { isObject = false; }   // ArgumentException: a raw lone surrogate in the string
-            Assert.True(isObject == (LodgeJson.Parse(text) != null), "#" + i + ": " + Clip(text));
-            // the same text as bytes, with a random byte flipped (invalid UTF-8 included)
+            bool want = ValidUtf16(text) && Acceptable(Encoding.UTF8.GetBytes(text));
+            bool got = LodgeJson.Parse(text) != null;
+            Assert.True(want == got, "#" + i + " text: rules say " + want + ", Parse " + got + ": " + Clip(text));
+            if (got) accepted++; else refused++;
+            // the same as bytes, sometimes with a byte changed (invalid UTF-8 included)
             var bytes = Encoding.UTF8.GetBytes(text);
             if (bytes.Length > 0 && g.R.Next(2) == 0) bytes[g.R.Next(bytes.Length)] = (byte)g.R.Next(0x80, 0x100);
-            LodgeJson.Parse(bytes);
-            LodgeJson.Parse(bytes, 0, bytes.Length);
+            want = Acceptable(bytes);
+            Assert.True(want == (LodgeJson.Parse(bytes) != null), "#" + i + " bytes: rules say " + want + ": " + Clip(Encoding.UTF8.GetString(bytes)));
+            Assert.Equal(want, LodgeJson.Parse(bytes, 0, bytes.Length) != null);
+            // and what parsed reads and writes without an exception
+            if (LodgeJson.Parse(bytes) is JsonObject o) { foreach (var k in new LodgeJsonFields(o).Keys()) { new LodgeJsonFields(o).Str(k); new LodgeJsonFields(o).Num(k); } LodgeJson.Serialize(o); }
         }
+        Assert.True(accepted > n / 10 && refused > n / 10, accepted + " accepted, " + refused + " refused - the generator should give plenty of both");
         Assert.Null(LodgeJson.Parse((string)null));
         Assert.Null(LodgeJson.Parse((byte[])null));
         Assert.Null(LodgeJson.Parse("[1]"));
@@ -338,7 +399,6 @@ public class FuzzTests
                 LodgeJson.BoolOrNull(o, "v"); LodgeJson.Number(o["v"]);
                 if (f.Child("v") is ILodgeFields c) foreach (var k in c.Keys()) { c.Str(k); c.Long(k); c.Child(k); }
             }
-            catch (Exception e) when (Known(e)) { }
             catch (Exception e) { if (problems.Count < 20) problems.Add("#" + i + " " + e.GetType().Name + ": " + e.Message + "\n  " + Clip(text)); }
         }
         Assert.True(problems.Count == 0, string.Join("\n", problems));

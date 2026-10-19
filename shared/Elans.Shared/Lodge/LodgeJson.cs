@@ -34,7 +34,7 @@ namespace Elans.Shared
         //   - no key twice in one object (rejected, not "last wins": two readers must never see two different frames in the same bytes);
         //   - valid UTF-8 everywhere, keys included (no U+FFFD substitution), and no lone surrogate in a string or key (an escaped \uD800 alone):
         //     every Lodge and Outpost writes clean text, so only a forged frame has them.
-        static readonly JsonDocumentOptions Rules = new JsonDocumentOptions
+        public static readonly JsonDocumentOptions Rules = new JsonDocumentOptions
         {
             MaxDepth = MaxDepth, AllowDuplicateProperties = false, AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow,
         };
@@ -127,7 +127,7 @@ namespace Elans.Shared
                         case JsonValueKind.True: return true;
                         case JsonValueKind.False: return false;
                         case JsonValueKind.Number:
-                            if (v.TryGetValue<double>(out var dn)) return dn;
+                            if (v.TryGetValue<double>(out var dn)) return double.IsFinite(dn) ? dn : (object)null;   // 1e309: no number (as Number)
                             if (v.TryGetValue<long>(out var ln)) return (double)ln;          // a number written by code, not parsed
                             if (v.TryGetValue<int>(out var i)) return (double)i;
                             if (v.TryGetValue<float>(out var f)) return (double)f;
@@ -221,8 +221,10 @@ namespace Elans.Shared
 
         public static JsonObject Obj(JsonObject m, string key) => m != null && m[key] is JsonObject o ? o : null;
 
-        // a JSON number as a double (strict: "3" or true is no number); null for anything else
-        public static double? Number(JsonNode n) => n is JsonValue v && v.GetValueKind() == JsonValueKind.Number && v.TryGetValue<double>(out var d) ? d : null;
+        // a JSON number as a double (strict: "3" or true is no number); null for anything else - and for a number too big for a double
+        // (1e309 reads as Infinity, which no JSON writer can write back: a message that kept it couldn't be sent again)
+        public static double? Number(JsonNode n) =>
+            n is JsonValue v && v.GetValueKind() == JsonValueKind.Number && v.TryGetValue<double>(out var d) && double.IsFinite(d) ? d : null;
     }
 
     // ILodgeFields / ILodgeWriter over a JsonObject (shared/Elans.Shared/Lodge/LodgeFields.cs), read through the lenient LodgeJson readers.
