@@ -84,7 +84,7 @@ public class LodgeMsgTests
             for (int i = 0; i < lines.Length; i++)
             {
                 var line = lines[i];
-                uses += Regex.Matches(line, @"\bLodgeMsg\.\w+").Count;
+                uses += Regex.Matches(line, @"\bLodgeMsg\.\w+|\b\w+Msg\.Type\b").Count;      // a type by name, or through its typed class (JoinMsg.Type)
                 string Where() => rel + ":" + (i + 1);
                 string Fix(string v) => values.TryGetValue(v, out var n) ? "use LodgeMsg." + n : "not in LodgeMsg - add it there (and to server/PROTOCOL.md)";
                 foreach (Match m in SetT.Matches(line)) problems.Add(Where() + " [\"t\"] = \"" + m.Groups[1].Value + "\": " + Fix(m.Groups[1].Value));
@@ -100,7 +100,7 @@ public class LodgeMsgTests
             }
         }
         Assert.True(files > 50, "only " + files + " Lodge source files found under " + root);
-        Assert.True(uses > 200, "only " + uses + " LodgeMsg uses found - is the scan looking at the right files?");
+        Assert.True(uses > 200, "only " + uses + " LodgeMsg / typed-class uses found - is the scan looking at the right files?");
         Assert.True(problems.Count == 0, problems.Count + " raw Lodge message types:\n" + string.Join("\n", problems));
     }
 

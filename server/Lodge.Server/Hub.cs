@@ -92,13 +92,15 @@ public class Member
 
     // masked = only what a voice room needs (an invisible member who joined a room is shown there, nothing else:
     // no status, note or game)
-    public JsonObject ToJson(bool masked = false) => new()
+    // (typed: Elans.Shared LodgeUser, the entry of join / user / welcome.users)
+    public LodgeUser View(bool masked = false) => new()
     {
-        ["id"] = Id, ["name"] = Name, ["guest"] = !Personal, ["role"] = Role,
-        ["room"] = Room, ["voice"] = Room != null, ["muted"] = Muted, ["deaf"] = Deaf, ["serverMuted"] = ServerMuted,
-        ["avatarId"] = Profile?.AvatarId, ["accent"] = Profile?.Accent, ["displayName"] = Profile?.DisplayName ?? "",
-        ["status"] = masked ? "online" : Status, ["note"] = masked ? "" : Note, ["game"] = masked ? null : Game?.DeepClone(),
+        Id = Id, Name = Name, Guest = !Personal, Role = Role,
+        Room = Room, Voice = Room != null, Muted = Muted, Deaf = Deaf, ServerMuted = ServerMuted,
+        AvatarId = Profile?.AvatarId, Accent = Profile?.Accent, DisplayName = Profile?.DisplayName ?? "",
+        Status = masked ? "online" : Status, Note = masked ? "" : Note, Game = masked ? null : Game?.DeepClone(),
     };
+    public JsonObject ToJson(bool masked = false) => LodgeFieldsJson.Build(View(masked).Write);
 }
 
 // A feature area of the lodge. Handle returns true when it took the message.
@@ -389,23 +391,30 @@ public partial class LodgeHub
         return subject.Room != null && Channels.Get(subject.Room)?.VisibleTo(viewer.Role) == true;
     }
 
-    public JsonObject UserFor(Member subject, Member viewer)
+    // the entry `viewer` gets about `subject` (typed: Elans.Shared LodgeUser): full, masked (an invisible member in a voice room), or full with
+    // invisible: true (themselves, Perm.SeeInvisible)
+    public LodgeUser UserViewFor(Member subject, Member viewer)
     {
-        if (!subject.Invisible) return subject.ToJson();
+        if (!subject.Invisible) return subject.View();
         bool full = viewer.Id == subject.Id || Roles.Can(viewer.Role, Perm.SeeInvisible);
-        var j = subject.ToJson(masked: !full);
-        if (full) j["invisible"] = true;
-        return j;
+        var u = subject.View(masked: !full);
+        u.Invisible = full;
+        return u;
     }
+    public JsonObject UserFor(Member subject, Member viewer) => LodgeFieldsJson.Build(UserViewFor(subject, viewer).Write);
+
+    JsonObject JoinFor(Member subject, Member viewer) => LodgeFieldsJson.Build(new JoinMsg { User = UserViewFor(subject, viewer) }.Write);
+    JsonObject UserMsgFor(Member subject, Member viewer) => LodgeFieldsJson.Build(new UserMsg { User = UserViewFor(subject, viewer) }.Write);
+    static JsonObject LeaveOf(Member gone) => LodgeFieldsJson.Build(new LeaveMsg { Id = gone.Id }.Write);
 
     public Task BroadcastJoin(Member me) =>
         Task.WhenAll(members.Values.Where(v => v.Id != me.Id && CanSee(v, me))
-            .Select(v => Send(v, new JsonObject { ["t"] = LodgeMsg.Join, ["user"] = UserFor(me, v) })));
+            .Select(v => Send(v, JoinFor(me, v))));
 
     // `gone` is already out of the member table
     public Task BroadcastLeave(Member gone) =>
         Task.WhenAll(members.Values.Where(v => CanSee(v, gone))
-            .Select(v => Send(v, new JsonObject { ["t"] = LodgeMsg.Leave, ["id"] = gone.Id })));
+            .Select(v => Send(v, LeaveOf(gone))));
 
     // apply a change that may alter who can see `me` (visibility, voice room): viewers who gain sight get a join,
     // who lose it a leave, who keep it an update
@@ -419,10 +428,10 @@ public partial class LodgeHub
         var sends = new List<Task>();
         foreach (var v in members.Values)
         {
-            if (v.Id == me.Id) { sends.Add(Send(v, new JsonObject { ["t"] = LodgeMsg.User, ["user"] = UserFor(me, v) })); continue; }
+            if (v.Id == me.Id) { sends.Add(Send(v, UserMsgFor(me, v))); continue; }
             bool was = before.Contains(v.Id), now = CanSee(v, me);
-            if (now) sends.Add(Send(v, new JsonObject { ["t"] = was ? LodgeMsg.User : LodgeMsg.Join, ["user"] = UserFor(me, v) }));
-            else if (was) sends.Add(Send(v, new JsonObject { ["t"] = LodgeMsg.Leave, ["id"] = me.Id }));
+            if (now) sends.Add(Send(v, was ? UserMsgFor(me, v) : JoinFor(me, v)));
+            else if (was) sends.Add(Send(v, LeaveOf(me)));
         }
         await Task.WhenAll(sends);
     }
@@ -435,7 +444,7 @@ public partial class LodgeHub
     {
         if (!m.Invisible) return BroadcastUser(m);
         return Task.WhenAll(members.Values.Where(v => v.Id == m.Id || Roles.Can(v.Role, Perm.SeeInvisible))
-            .Select(v => Send(v, new JsonObject { ["t"] = LodgeMsg.User, ["user"] = UserFor(m, v) })));
+            .Select(v => Send(v, UserMsgFor(m, v))));
     }
 
     // avatar/accent changed: everyone who can see the member (and the member) gets a small "profile" update

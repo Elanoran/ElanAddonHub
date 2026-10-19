@@ -61,7 +61,7 @@ public class VoiceModule : IModule
     }
 }
 
-// Status + note.
+// Status + note, game presence, live map position (typed: Elans.Shared PresenceMessages.cs).
 public class PresenceModule : IModule
 {
     readonly LodgeHub hub;
@@ -69,22 +69,25 @@ public class PresenceModule : IModule
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
-        if (type == LodgeMsg.Game) { await Game(me, m); return true; }
-        if (type == LodgeMsg.Position) { await Position(me, m); return true; }
-        if (type != LodgeMsg.Status) return false;
-        var st = m["status"] is JsonValue sv && sv.TryGetValue<string>(out var s0) ? s0 : null;
+        // game and position are cleaned from the raw JSON (BuildGame / BuildPosition: their strict checks are the validation); the shapes are
+        // Elans.Shared GameMsg / LodgeGame and PositionMsg / MemberPosMsg (PresenceMessages.cs)
+        if (type == GameMsg.Type) { await Game(me, m); return true; }
+        if (type == PositionMsg.Type) { await Position(me, m); return true; }
+        if (type != StatusMsg.Type) return false;
+        var sm = StatusMsg.Read(new LodgeFieldsJson(m));          // a non-string status / note / visibility is "missing", as before
+        var st = sm.Status;
         me.Status = st is "online" or "away" or "busy" or "dungeon" or "lfg" ? st : "online";
-        var note = new string((m["note"] is JsonValue nv && nv.TryGetValue<string>(out var n0) ? n0 : "").Where(c => !char.IsControl(c)).ToArray()).Trim();
+        var note = new string((sm.Note ?? "").Where(c => !char.IsControl(c)).ToArray()).Trim();
         me.Note = note.Length > 40 ? note[..40] : note;
-        if (!await ApplyVisibility(me, m)) await hub.BroadcastPresence(me);
+        if (!await ApplyVisibility(me, sm.Visibility)) await hub.BroadcastPresence(me);
         return true;
     }
 
     // optional "visibility": "visible" | "invisible" (hub 2.17+). Absent or anything else = unchanged, so old hubs never change it.
     // true when it changed (the change itself already told everyone who needs to know)
-    async Task<bool> ApplyVisibility(Member me, JsonObject m)
+    async Task<bool> ApplyVisibility(Member me, string s)
     {
-        if (m["visibility"] is not JsonValue v || !v.TryGetValue<string>(out var s) || s is not ("visible" or "invisible")) return false;
+        if (s is not ("visible" or "invisible")) return false;
         bool inv = s == "invisible";
         if (inv == me.Invisible) return false;
         hub.Log.LogInformation("{Name} is now {State}", me.Name, inv ? "invisible" : "visible");
@@ -135,16 +138,16 @@ public class PresenceModule : IModule
         if (inInstance) flags |= FInstance; else flags &= ~(FInstance | FRaid | FParty);
         if (groupSize > 0) flags |= FGroup; else flags &= ~FGroup;
         int xp = Int(m, "xpPct", -1, 100, -1);
-        var g = new JsonObject
+        // the cleaned object, stored on the member and passed on as user.game (its shape: Elans.Shared LodgeGame, every key always there)
+        return LodgeFieldsJson.Build(new LodgeGame
         {
-            ["playing"] = Bool(m, "playing"),
-            ["name"] = Clip(m, "name", 24), ["realm"] = Clip(m, "realm", 32), ["class"] = Clip(m, "class", 20),
-            ["classFile"] = Clip(m, "classFile", 20), ["level"] = level, ["zone"] = Clip(m, "zone"), ["guild"] = Clip(m, "guild"),
-            ["race"] = Clip(m, "race", 24), ["raceFile"] = Clip(m, "raceFile", 20), ["sex"] = sex,
-            ["flags"] = flags, ["xpPct"] = xp < 0 ? null : xp, ["rested"] = Bool(m, "rested"), ["groupSize"] = groupSize,
-            ["inInstance"] = inInstance, ["instanceName"] = instanceName.Length == 0 ? null : instanceName,
-        };
-        return g;
+            Playing = Bool(m, "playing"),
+            Name = Clip(m, "name", 24), Realm = Clip(m, "realm", 32), Class = Clip(m, "class", 20),
+            ClassFile = Clip(m, "classFile", 20), Level = level, Zone = Clip(m, "zone"), Guild = Clip(m, "guild"),
+            Race = Clip(m, "race", 24), RaceFile = Clip(m, "raceFile", 20), Sex = sex,
+            Flags = flags, XpPct = xp < 0 ? null : xp, Rested = Bool(m, "rested"), GroupSize = groupSize,
+            InInstance = inInstance, InstanceName = instanceName.Length == 0 ? null : instanceName,
+        }.Write);
     }
 
     // the character that is being played is remembered in the member's profile (bounded, newest 12)
@@ -163,7 +166,7 @@ public class PresenceModule : IModule
         if (m["share"] is JsonValue sv && sv.TryGetValue<bool>(out var share) && !share) me.Game = null;
         else me.Game = BuildGame(m);
         NoteCharacter(me);
-        bool vis = await ApplyVisibility(me, m);
+        bool vis = await ApplyVisibility(me, J.Str(m, "visibility"));
         // a live position is never looser than the zone: no game or no zone shared any more = the position is withdrawn
         if (me.LivePos != null && !LodgeHub.MayShareLivePos(me)) await hub.BroadcastLivePos(me);
         // identical to what everyone already has: nothing to tell them (keeps a chatty addon from costing broadcasts)

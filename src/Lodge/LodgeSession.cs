@@ -375,8 +375,10 @@ namespace ElansAddonHub.Lodge
             switch (m.Str("t"))
             {
                 case LodgeMsg.Welcome: Welcome(m); break;
-                case LodgeMsg.Join:
-                    var j = ParseMember(m.Child("user"));
+                case JoinMsg.Type:
+                    var jv = JoinMsg.Read(new LodgeFieldsDict(m)).User;
+                    if (jv == null) break;                              // no member entry: nothing to add
+                    var j = ParseMember(jv);
                     if (Members.All(x => x.Id != j.Id)) Members.Add(j);
                     RefreshAuthorAvatars(j.Name);
                     RefreshAuthorNames();
@@ -384,8 +386,9 @@ namespace ElansAddonHub.Lodge
                     StatusText = OnlineText;
                     Changed?.Invoke();
                     break;
-                case LodgeMsg.Leave:
-                    var gone = Members.FirstOrDefault(x => x.Id == m.Int("id"));
+                case LeaveMsg.Type:
+                    int goneId = LeaveMsg.Read(new LodgeFieldsDict(m)).Id;
+                    var gone = Members.FirstOrDefault(x => x.Id == goneId);
                     if (gone != null)
                     {
                         DropLivePos(gone);
@@ -393,25 +396,27 @@ namespace ElansAddonHub.Lodge
                         Members.Remove(gone);
                         RefreshAuthorAvatars(gone.Name);
                     }
-                    voice?.RemovePeer(m.Int("id"));
+                    voice?.RemovePeer(goneId);
                     SyncRooms();
                     StatusText = OnlineText;
                     Changed?.Invoke();
                     break;
-                case LodgeMsg.User:
-                    var u = ParseMember(m.Child("user"));
+                case UserMsg.Type:
+                    var uv = UserMsg.Read(new LodgeFieldsDict(m)).User;
+                    if (uv == null) break;
+                    var u = ParseMember(uv);
                     var mem = Members.FirstOrDefault(x => x.Id == u.Id);
                     if (mem == null) break;
                     var oldRoom = mem.Room;
                     var oldBadge = mem.BadgeKey;
-                    mem.SetAvatar(m.Child("user").Str("avatarId"), m.Child("user").Str("accent"));
-                    if (m.Child("user").ContainsKey("displayName")) ApplyDisplayName(mem, m.Child("user").Str("displayName"));
+                    mem.SetAvatar(uv.AvatarId, uv.Accent);
+                    if (uv.HasDisplayName) ApplyDisplayName(mem, uv.DisplayName);
                     mem.Guest = u.Guest;
                     mem.Room = u.Room; mem.Muted = u.Muted; mem.Deaf = u.Deaf; mem.ServerMuted = u.ServerMuted;
                     mem.Status = u.Status; mem.Note = u.Note; mem.Role = u.Role;
                     mem.Invisible = mem.IsMe ? Invisible : u.Invisible;
                     if (mem.Invisible && !mem.IsMe && !CanSeeInvisible) DropLivePos(mem);   // never a dot for someone I can't see
-                    ApplyGame(mem, m.Child("user").Child("game"));
+                    ApplyGame(mem, uv.Game);
                     Remember(mem);
                     if (mem.BadgeKey != oldBadge) RefreshAuthorAvatars(mem.Name);
                     if (!mem.Voice) voice?.RemovePeer(mem.Id);
@@ -625,7 +630,7 @@ namespace ElansAddonHub.Lodge
             var incoming = new List<MemberVM>();
             foreach (var u in m.List("users").OfType<Dictionary<string, object>>())
             {
-                var pm = ParseMember(u);
+                var pm = ParseMember(LodgeUser.Read(new LodgeFieldsDict(u)));
                 pm.IsMe = pm.Id == myId;
                 incoming.Add(pm);
             }
@@ -760,19 +765,20 @@ namespace ElansAddonHub.Lodge
             }
         }
 
-        MemberVM ParseMember(Dictionary<string, object> u)
+        // a member entry of join / user / welcome.users (typed: Elans.Shared LodgeUser)
+        MemberVM ParseMember(LodgeUser u)
         {
-            var room = u.Str("room");
-            if (room == null && u.Bool("voice")) room = "voice"; // 1.x server: one voice channel
+            var room = u.Room;
+            if (room == null && u.Voice) room = "voice"; // 1.x server: one voice channel
             var m = new MemberVM
             {
-                Id = u.Int("id"), Name = u.Str("name"), Guest = u.Bool("guest"), IsMe = Me != null && u.Int("id") == Me.Id,
-                Room = room, Muted = u.Bool("muted"), Deaf = u.Bool("deaf"), ServerMuted = u.Bool("serverMuted"),
-                Status = u.Str("status"), Note = u.Str("note"), Role = u.Str("role"), Invisible = u.Bool("invisible"),
+                Id = u.Id, Name = u.Name, Guest = u.Guest, IsMe = Me != null && u.Id == Me.Id,
+                Room = room, Muted = u.Muted, Deaf = u.Deaf, ServerMuted = u.ServerMuted,
+                Status = u.Status, Note = u.Note, Role = u.Role, Invisible = u.Invisible,
             };
-            m.SetAvatar(u.Str("avatarId"), u.Str("accent"));
-            if (u.ContainsKey("displayName")) { m.SetDisplayName(u.Str("displayName")); DisplayNames.Remember(m.Name, m.DisplayName); }
-            ApplyGame(m, u.Child("game"));
+            m.SetAvatar(u.AvatarId, u.Accent);
+            if (u.HasDisplayName) { m.SetDisplayName(u.DisplayName); DisplayNames.Remember(m.Name, m.DisplayName); }
+            ApplyGame(m, u.Game);
             Remember(m);
             return m;
         }
@@ -807,11 +813,12 @@ namespace ElansAddonHub.Lodge
                     if (string.Equals(vm.From, name, StringComparison.OrdinalIgnoreCase)) vm.RefreshAvatar();
         }
 
-        static void ApplyGame(MemberVM m, Dictionary<string, object> g)
+        // user.game (the raw presence object of a LodgeUser), read through Elans.Shared LodgeGame; null = not shared
+        static void ApplyGame(MemberVM m, object raw)
         {
-            m.SetGame(g != null && g.Bool("playing"), g?.Str("name"), g?.Str("class"), g?.Str("classFile"), g?.Int("level") ?? 0, g?.Str("zone"), g?.Str("guild"), g?.Str("race"), g?.Str("raceFile"), g?.Int("sex") ?? 0);
-            bool xp = g != null && g.TryGetValue("xpPct", out var xv) && xv is double;
-            m.SetPresence(g?.Int("flags") ?? 0, xp ? g.Int("xpPct") : -1, g?.Bool("rested") ?? false, g?.Int("groupSize") ?? 0, g?.Bool("inInstance") ?? false, g?.Str("instanceName"));
+            var g = raw is Dictionary<string, object> d ? LodgeGame.Read(new LodgeFieldsDict(d)) : null;
+            m.SetGame(g != null && g.Playing, g?.Name, g?.Class, g?.ClassFile, g?.Level ?? 0, g?.Zone, g?.Guild, g?.Race, g?.RaceFile, g?.Sex ?? 0);
+            m.SetPresence(g?.Flags ?? 0, g?.XpPct ?? -1, g?.Rested ?? false, g?.GroupSize ?? 0, g?.InInstance ?? false, g?.InstanceName);
         }
 
         // the "game" message: what I play and what I'm doing (older servers ignore the extra fields). Zone/instance and XP/rested are
@@ -819,24 +826,25 @@ namespace ElansAddonHub.Lodge
         public Dictionary<string, object> BuildGameMessage()
         {
             var vis = Invisible ? "invisible" : "visible";
-            if (Settings.ShareGameOff) return new Dictionary<string, object> { ["t"] = LodgeMsg.Game, ["share"] = false, ["visibility"] = vis };
+            if (Settings.ShareGameOff) return LodgeFieldsDict.Build(new GameMsg { Share = false, Visibility = vis }.Write);
             var c = Presence.Current;
-            var obj = new Dictionary<string, object> { ["t"] = LodgeMsg.Game, ["playing"] = Presence.Playing, ["visibility"] = vis };
+            var g = new GameMsg { Playing = Presence.Playing, Visibility = vis };      // typed: Elans.Shared GameMsg (the Has* switches say which parts go)
             if (c != null)
             {
-                obj["name"] = c.Name; obj["realm"] = c.Realm; obj["class"] = c.Class; obj["classFile"] = c.ClassFile;
-                obj["level"] = c.Level; obj["guild"] = c.Guild;
-                obj["race"] = c.Race; obj["raceFile"] = c.RaceFile; obj["sex"] = c.Sex;
-                if (!Settings.ShareZoneOff) obj["zone"] = c.Zone;
+                g.HasCharacter = true;
+                g.Name = c.Name; g.Realm = c.Realm; g.Class = c.Class; g.ClassFile = c.ClassFile;
+                g.Level = c.Level; g.Guild = c.Guild;
+                g.Race = c.Race; g.RaceFile = c.RaceFile; g.Sex = c.Sex;
+                if (!Settings.ShareZoneOff) { g.HasZone = true; g.Zone = c.Zone; }
                 if (c.HasLive)
                 {
-                    int flags = c.CombatKnown ? c.Flags : c.Flags & ~1;
-                    obj["flags"] = flags; obj["groupSize"] = c.GroupSize; obj["inInstance"] = c.InInstance;
-                    if (!Settings.ShareZoneOff && c.InstanceName != null) obj["instanceName"] = c.InstanceName;
-                    if (!Settings.ShareXpOff) { if (c.XpPercent >= 0) obj["xpPct"] = c.XpPercent; obj["rested"] = c.Rested; }
+                    g.HasLive = true;
+                    g.Flags = c.CombatKnown ? c.Flags : c.Flags & ~1; g.GroupSize = c.GroupSize; g.InInstance = c.InInstance;
+                    if (!Settings.ShareZoneOff) g.InstanceName = c.InstanceName;           // sent only when there is one
+                    if (!Settings.ShareXpOff) { g.HasXp = true; g.XpPct = c.XpPercent >= 0 ? c.XpPercent : (int?)null; g.Rested = c.Rested; }
                 }
             }
-            return obj;
+            return LodgeFieldsDict.Build(g.Write);
         }
 
         // sent right away when something I chose changes, and by the 0.8 s timer for live changes; identical messages are skipped
@@ -1588,7 +1596,7 @@ namespace ElansAddonHub.Lodge
         {
             EvaluateAuto();
             Auto.MarkSent(Clock(), Auto.Status, Auto.Note);
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Status, ["status"] = Auto.Status, ["note"] = Auto.Note, ["visibility"] = Invisible ? "invisible" : "visible" });
+            _ = Send(LodgeFieldsDict.Build(new StatusMsg { Status = Auto.Status, Note = Auto.Note, Visibility = Invisible ? "invisible" : "visible" }.Write));
         }
 
         // every 100 ms: send an automatic status change when it really changed (debounced to 2 s)
@@ -1598,7 +1606,7 @@ namespace ElansAddonHub.Lodge
             EvaluateAuto();
             if (Auto.TrySend(Clock(), out var st, out var note))
             {
-                _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Status, ["status"] = st, ["note"] = note, ["visibility"] = Invisible ? "invisible" : "visible" });
+                _ = Send(LodgeFieldsDict.Build(new StatusMsg { Status = st, Note = note, Visibility = Invisible ? "invisible" : "visible" }.Write));
                 Changed?.Invoke();
             }
         }

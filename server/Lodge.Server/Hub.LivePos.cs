@@ -35,11 +35,11 @@ public partial class LodgeHub
         return (string)subject.LivePos["scope"] != "officers" || Roles.AtLeast(viewer.Role, "officer");
     }
 
-    static JsonObject PosMessage(Member m) => new()
+    // memberpos (typed: Elans.Shared MemberPosMsg) from the cleaned position (PresenceModule.BuildPosition always fills mapId, fx, fy, move)
+    static JsonObject PosMessage(Member m) => LodgeFieldsJson.Build(new MemberPosMsg
     {
-        ["t"] = LodgeMsg.MemberPos, ["id"] = m.Id, ["mapId"] = m.LivePos["mapId"]?.DeepClone(), ["fx"] = m.LivePos["fx"]?.DeepClone(),
-        ["fy"] = m.LivePos["fy"]?.DeepClone(), ["move"] = m.LivePos["move"]?.DeepClone(), ["valid"] = true,
-    };
+        Id = m.Id, Valid = true, MapId = (int)m.LivePos["mapId"], Fx = (double)m.LivePos["fx"], Fy = (double)m.LivePos["fy"], Move = (int)m.LivePos["move"],
+    }.Write);
 
     // tell everyone who may see m's position (and only them) where m is now; withdraw it from who no longer may
     public async Task BroadcastLivePos(Member m)
@@ -49,7 +49,7 @@ public partial class LodgeHub
         {
             if (m.LivePos != null && !MayShareLivePos(m)) m.LivePos = null;
             var msg = m.LivePos == null ? null : PosMessage(m);
-            var clear = new JsonObject { ["t"] = LodgeMsg.MemberPos, ["id"] = m.Id, ["valid"] = false };
+            var clear = LodgeFieldsJson.Build(new MemberPosMsg { Id = m.Id, Valid = false }.Write);
             bool same = msg != null && m.LivePosSent != null && JsonNode.DeepEquals(msg, m.LivePosSent);
             var sends = new List<Task>();
             var online = members.Values.ToList();

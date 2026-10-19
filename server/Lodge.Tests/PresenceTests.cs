@@ -264,6 +264,61 @@ public class PresenceTests
         Assert.NotEqual(WebSocketState.Open, mia.State);                     // the owner can
     }
 
+    // join / user / leave (Elans.Shared JoinMsg, UserMsg, LeaveMsg, LodgeUser, LodgeGame) keep their keys and order: the full entry, its
+    // game, an invisible member's own and the owner's entry (invisible: true last), the masked voice-room entry, a leave
+    static readonly string[] UserKeys = { "id", "name", "guest", "role", "room", "voice", "muted", "deaf", "serverMuted", "avatarId", "accent", "displayName", "status", "note", "game" };
+    static string[] KeysOf(JsonNode? o) => o!.AsObject().Select(kv => kv.Key).ToArray();
+
+    [Fact]
+    public async Task Typed_presence_frames_keep_their_keys_and_order()
+    {
+        using var l = new Lodge2();
+        var elan = await l.Join(T.ElanCode);
+        var bob = await l.Join(T.BobCode);
+        var zed = await l.Join(Mem2Code);
+        var join = bob.Of("join").Last();
+        Assert.Equal(new[] { "t", "user" }, KeysOf(join));
+        Assert.Equal(UserKeys, KeysOf(join["user"]));
+        Assert.Null(join["user"]!["game"]);
+
+        bob.Clear();
+        zed.Say("""{"t":"game","playing":true,"name":"Zed","class":"Mage","classFile":"MAGE","level":42,"zone":"Tanaris","xpPct":12,"groupSize":2}""");
+        await Lodge2.Settle();
+        var user = bob.Of("user").Last();
+        Assert.Equal(new[] { "t", "user" }, KeysOf(user));
+        Assert.Equal(UserKeys, KeysOf(user["user"]));
+        Assert.Equal(new[] { "playing", "name", "realm", "class", "classFile", "level", "zone", "guild", "race", "raceFile", "sex", "flags", "xpPct", "rested", "groupSize", "inInstance", "instanceName" },
+            KeysOf(user["user"]!["game"]));
+        Assert.Equal("""{"playing":true,"name":"Zed","realm":null,"class":"Mage","classFile":"MAGE","level":42,"zone":"Tanaris","guild":null,"race":null,"raceFile":null,"sex":0,"flags":128,"xpPct":12,"rested":false,"groupSize":2,"inInstance":false,"instanceName":null}""",
+            user["user"]!["game"]!.ToJsonString());
+
+        bob.Clear();
+        zed.Say("""{"t":"status","status":"away","note":"brb"}""");
+        await Lodge2.Settle();
+        var st = bob.Of("user").Last()["user"]!;
+        Assert.Equal(UserKeys, KeysOf(st));
+        Assert.Equal(("away", "brb"), ((string?)st["status"], (string?)st["note"]));
+
+        // invisible: her own entry and the owner's carry invisible: true (last); a voice room's other viewers the masked entry
+        elan.Clear(); bob.Clear();
+        var mia = await l.Join(MemCode, invisible: true);
+        Assert.Equal(UserKeys.Append("invisible"), KeysOf(elan.Of("join").Last()["user"]));
+        mia.Say("""{"t":"status","status":"busy","note":"secret"}""");
+        await Lodge2.Settle();
+        Assert.Equal(UserKeys.Append("invisible"), KeysOf(mia.Of("user").Last()["user"]));
+        mia.Say($"{{\"t\":\"voice\",\"room\":\"{l.Hub.Channels.DefaultVoice("member")!.Id}\"}}");
+        await Lodge2.Settle();
+        var masked = bob.Of("join").Last()["user"]!;
+        Assert.Equal(UserKeys, KeysOf(masked));
+        Assert.Equal(("online", "", true), ((string?)masked["status"], (string?)masked["note"], masked["game"] == null));
+
+        bob.Clear();
+        zed.Hangup();
+        await Lodge2.Settle();
+        var leave = bob.Of("leave").Last();
+        Assert.Equal(new[] { "t", "id" }, KeysOf(leave));
+    }
+
     [Fact]
     public async Task Health_online_count_leaves_out_invisible_members()
     {

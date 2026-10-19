@@ -93,6 +93,22 @@ public class LivePositionTests
         return (l, elan, bob, mia, zed, guest);
     }
 
+    // memberpos (Elans.Shared MemberPosMsg) keeps its keys, their order and their values: a position, then its withdrawal
+    [Fact]
+    public async Task Typed_memberpos_frames_keep_their_keys_and_order()
+    {
+        var (l, elan, bob, mia, zed, guest) = await Room();
+        using var _ = l;
+        mia.Say(Pos(0.412345, 0.62, mapId: 1429)); await Lodge2.Settle();
+        var p = zed.PosOf(mia.Id).Single();
+        Assert.Equal(new[] { "t", "id", "mapId", "fx", "fy", "move", "valid" }, p.Select(kv => kv.Key));
+        Assert.Equal($$"""{"t":"memberpos","id":{{mia.Id}},"mapId":1429,"fx":0.4123,"fy":0.62,"move":0,"valid":true}""", p.ToJsonString());
+        mia.Say("""{"t":"position","share":false}"""); await Lodge2.Settle();
+        var gone = zed.PosOf(mia.Id).Last();
+        Assert.Equal($$"""{"t":"memberpos","id":{{mia.Id}},"valid":false}""", gone.ToJsonString());
+        Assert.Empty(guest.Of("memberpos"));
+    }
+
     [Fact]
     public void The_feature_is_always_advertised_and_the_version_is_2_30()
     {

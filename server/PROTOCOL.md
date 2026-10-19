@@ -42,6 +42,8 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 `channel` = `{id, name, type: text|voice, minRole, max}` (only the ones your rank may see)
 `user` = `{id, name, guest, role, avatarId?, accent?, room, voice, muted, deaf, serverMuted, status, note, game?}`
 `game` = `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex?, flags?, xpPct?, rested?, groupSize?, inInstance?, instanceName?}` - what they play (null = not shared). `user.invisible: true` appears only in the entry of yourself and for ranks with `SeeInvisible` (see 2.5).
+Typed (stage 2): `join` / `leave` / `user` with the `user` entry (`LodgeUser`), `status`, `game` (and `user.game`, `LodgeGame`) - see the 2.30
+additions for the list of classes.
 
 ### Client → server
 
@@ -572,6 +574,13 @@ type, an older client ignores `memberpos`. `game` is unchanged.
 - An unchanged position is not sent again; a newcomer gets the current positions it may see right after its welcome. A viewer who loses the right
   (the scope narrowed, a rank changed, the sharer opted out or hid their zone) gets `valid:false`; one who loses sight of the member altogether
   (they went invisible, left) gets the usual `leave`, and clients drop the dot on it. Positions are memory only: never stored, never logged.
+- Typed (stage 2): the presence messages are classes in `shared/Elans.Shared/Lodge/PresenceMessages.cs`, used by both sides like the LFG ones:
+  `status` (`StatusMsg`), `game` (`GameMsg`; the Outpost says which parts it leaves out), `position` (`PositionMsg`), `join` / `user`
+  (`JoinMsg` / `UserMsg`, carrying a `LodgeUser`: the member entry, the same shape `welcome.users` uses), `leave` (`LeaveMsg`) and `memberpos`
+  (`MemberPosMsg`). `user.game` is the object `PresenceModule.BuildGame` cleaned, its shape `LodgeGame` (every key always there); it is passed
+  through as it is, and the Outpost reads it through `LodgeGame`. The server still cleans `game` (`BuildGame`) and `position`
+  (`BuildPosition`) from the raw JSON: their strict number / string / JSON-`false` checks are the validation. The wire is unchanged, key
+  order included (a server test pins the key sets of `join`, `user`, `user.game`, the invisible and the masked entry, `leave` and `memberpos`).
 
 ## The Cairn (Atlas commons; Lodge features `cairn` and `cairn2`, opt-in; Outpost 2.86, give to get 2.87)
 

@@ -82,15 +82,16 @@ namespace ElansAddonHub.Lodge
 
         public Dictionary<string, object> BuildPositionMessage()
         {
-            if (!LivePosWanted) return new Dictionary<string, object> { ["t"] = LodgeMsg.Position, ["share"] = false };
+            // typed: Elans.Shared PositionMsg
+            if (!LivePosWanted) return LodgeFieldsDict.Build(new PositionMsg { Share = false }.Write);
             var c = Presence.Current;
             if (!Presence.Playing || c == null || !c.PosEnabled || !c.PosValid || c.PosMapId <= 0 || double.IsNaN(c.PosFx + c.PosFy) || double.IsInfinity(c.PosFx + c.PosFy))
-                return new Dictionary<string, object> { ["t"] = LodgeMsg.Position, ["valid"] = false };      // in a dungeon, or the game shares no position: the dot goes
-            return new Dictionary<string, object>
+                return LodgeFieldsDict.Build(new PositionMsg { Valid = false }.Write);      // in a dungeon, or the game shares no position: the dot goes
+            return LodgeFieldsDict.Build(new PositionMsg
             {
-                ["t"] = LodgeMsg.Position, ["mapId"] = c.PosMapId, ["fx"] = Math.Round(Math.Max(0, Math.Min(1, c.PosFx)), 4), ["fy"] = Math.Round(Math.Max(0, Math.Min(1, c.PosFy)), 4),
-                ["move"] = c.PosMove & 0xFC, ["valid"] = true, ["scope"] = ScopeOf(Settings),
-            };
+                Valid = true, MapId = c.PosMapId, Fx = Math.Round(Math.Max(0, Math.Min(1, c.PosFx)), 4), Fy = Math.Round(Math.Max(0, Math.Min(1, c.PosFy)), 4),
+                Move = c.PosMove & 0xFC, Scope = ScopeOf(Settings),
+            }.Write);
         }
 
         // a new position at most once per PosInterval (the timer brings the newest); turning it off goes out at once. Identical messages are skipped,
@@ -119,11 +120,12 @@ namespace ElansAddonHub.Lodge
 
         void OnMemberPos(Dictionary<string, object> m)
         {
-            var mem = Members.FirstOrDefault(x => x.Id == m.Int("id"));
+            var p = MemberPosMsg.Read(new LodgeFieldsDict(m));      // typed: Elans.Shared MemberPosMsg (fx / fy null when not a number)
+            var mem = Members.FirstOrDefault(x => x.Id == p.Id);
             if (mem == null) return;
             bool was = mem.LiveValid;
-            bool changed = m.Bool("valid") && m.TryGetValue("fx", out var fo) && fo is double fx && m.TryGetValue("fy", out var yo) && yo is double fy
-                ? mem.SetLivePos(true, m.Int("mapId"), fx, fy, m.Int("move")) : mem.ClearLivePos();
+            bool changed = p.Valid && p.Fx is double fx && p.Fy is double fy
+                ? mem.SetLivePos(true, p.MapId, fx, fy, p.Move) : mem.ClearLivePos();
             TrailOf(mem);
             if (!mem.IsMe && was != mem.LiveValid)
                 Util.Log("lodge position: " + (mem.LiveValid ? "receiving " + mem.Display + "'s map position (map " + mem.LiveMapId + ")" : mem.Display + " stopped sharing their map position with me"));
