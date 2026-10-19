@@ -18,14 +18,15 @@ builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 // the real visitor IP comes from the reverse proxy (needed for the wrong-code lockout)
 var rejectedProxies = new List<string>();
 builder.Services.Configure<ForwardedHeadersOptions>(o => TrustedProxies.Configure(o, cfg.TrustedProxies, rejectedProxies));
-// a general per-IP request limit, separate from the wrong-code lockout, so floods can't overwhelm the code checks
+// a general per-address request limit (per IpKey: an IPv4 address, an IPv6 /64), separate from the wrong-code lockout, so floods
+// can't overwhelm the code checks
 LodgeHub lodgeRef = null;   // 2.31: the limiter's refusals go to the security log (the hub exists by the first request)
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
     o.OnRejected = (rc, _) => { lodgeRef?.Security.Note("http-rate", rc.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "?"); return ValueTask.CompletedTask; };
     o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
-        RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "?",
+        RateLimitPartition.GetFixedWindowLimiter(Elans.Shared.IpKey.Of(ctx.Connection.RemoteIpAddress),
             _ => new FixedWindowRateLimiterOptions { PermitLimit = cfg.HttpPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 var app = builder.Build();
@@ -78,23 +79,14 @@ string IpOf(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "?
 
 // null = allowed (identity set); otherwise the error to return. Every credential check goes through here -
 // a device token (X-Lodge-Token, 2.10) and a code (X-Lodge-Code) share one wrong-guess counter per IP.
-IResult Gate(HttpContext ctx, string credential, out Identity who, bool isToken = false)
+IResult Gate(HttpContext ctx, string credential, out Identity who, bool isToken = false) => auth.Admit(IpOf(ctx), credential, isToken, out who) switch
 {
-    who = null;
-    var ip = IpOf(ctx);
-    if (auth.Blocked(ip))
-        return Results.Json(new { error = "Too many wrong invite codes - try again in 15 minutes" }, statusCode: 429);
-    who = auth.CheckCredential(credential, isToken);
-    if (who == null)
-    {
-        auth.Fail(ip);
-        return isToken
-            ? Results.Json(new { error = "This device was signed out - join again with a new invite", reason = "device-revoked" }, statusCode: 401)
-            : Results.Json(new { error = "Wrong invite code" }, statusCode: 401);
-    }
-    auth.Success(ip);
-    return null;
-}
+    Auth.Gate.Ok => null,
+    Auth.Gate.Blocked => Results.Json(new { error = "Too many wrong invite codes - try again in 15 minutes" }, statusCode: 429),
+    _ => isToken
+        ? Results.Json(new { error = "This device was signed out - join again with a new invite", reason = "device-revoked" }, statusCode: 401)
+        : Results.Json(new { error = "Wrong invite code" }, statusCode: 401),
+};
 
 IResult GateReq(HttpContext ctx, out Identity who)
 {

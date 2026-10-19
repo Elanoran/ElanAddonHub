@@ -178,11 +178,11 @@ public partial class LodgeHub
         modules = new IModule[] { Chat, Calendar, Flight, AtlasPool, CairnIn, Armory, SharedFiles, Datasets, Badges, Realms, Voice, new PresenceModule(this), ProfileMod, new AdminModule(this) };
     }
 
-    // personal codes: one budget per person; guests (shared code): one per IP, so several friends on one guest
+    // personal codes: one budget per person; guests (shared code): one per address (IpKey: an IPv6 /64), so several friends on one guest
     // code are separate unless they share an address
     public Budget BudgetFor(Identity who, string ip)
     {
-        var key = who.Personal ? "p:" + Names.Normalize(who.Name).ToLowerInvariant() : "g:" + ip;
+        var key = who.Personal ? "p:" + Names.Normalize(who.Name).ToLowerInvariant() : "g:" + Elans.Shared.IpKey.Of(ip);
         var b = budgets.GetOrAdd(key, _ => new Budget(Clock));
         b.LastUsed = Clock.UtcNow;
         return b;

@@ -61,16 +61,20 @@ public sealed class TokenBucket
     }
 }
 
-// Wrong-code bookkeeping per client IP, bounded.
-//  - MaxFails failures inside Window block the IP for BlockFor; the failure that reaches the limit is still answered
+// Wrong-code bookkeeping per client address, bounded.
+//  - Counted per IpKey (Elans.Shared): an IPv4 address, an IPv6 /64 - rotating through one's own /64 is one address, not millions.
+//  - MaxFails failures inside Window block the address for BlockFor; the failure that reaches the limit is still answered
 //    401, the next request gets 429 (the 1.x contract).
-//  - At most Capacity IPs are tracked. Expired records are swept; active blocks are never evicted to make room.
-//    When the table is full, every untracked IP shares one "overflow" record - so an attacker spreading guesses over
-//    many addresses is limited together instead of growing memory.
-//  - A success clears only that IP's own record (never the shared overflow record).
+//  - At most Capacity addresses are tracked. Expired records are swept; active blocks are never evicted to make room.
+//    When the table is full, every untracked address shares one "overflow" record - so an attacker spreading guesses over
+//    many addresses is limited together instead of growing memory. (A valid device token is still admitted then: Auth.Admit.)
+//  - A success clears only that address's own record (never the shared overflow record).
 public sealed class StrikeTable
 {
     public const string OverflowKey = "*overflow*";
+
+    // whether an address is blocked: not, by its own record, or only by the shared overflow record (it has none of its own)
+    public enum Block { None, Own, Overflow }
 
     sealed class Entry { public int Fails; public DateTime First; public DateTime BlockedUntil; }
 
@@ -92,31 +96,34 @@ public sealed class StrikeTable
     public int Count { get { lock (gate) return map.Count; } }
     public TimeSpan BlockFor => blockFor;
 
-    string Resolve(string ip, bool create)
+    string Resolve(string key, bool create)
     {
-        if (map.ContainsKey(ip)) return ip;
-        if (map.Count < capacity) return create ? ip : null;
+        if (map.ContainsKey(key)) return key;
+        if (map.Count < capacity) return create ? key : null;
         SweepLocked();
-        if (map.Count < capacity) return create ? ip : null;
+        if (map.Count < capacity) return create ? key : null;
         return OverflowKey;
     }
 
-    public bool IsBlocked(string ip)
+    public bool IsBlocked(string ip) => State(ip) != Block.None;
+
+    public Block State(string ip)
     {
         lock (gate)
         {
-            var key = Resolve(ip, create: false);
-            return key != null && map.TryGetValue(key, out var e) && e.BlockedUntil > clock.UtcNow;
+            var key = Resolve(Elans.Shared.IpKey.Of(ip), create: false);
+            if (key == null || !map.TryGetValue(key, out var e) || e.BlockedUntil <= clock.UtcNow) return Block.None;
+            return key == OverflowKey ? Block.Overflow : Block.Own;
         }
     }
 
-    // returns true when this failure blocked the IP
+    // returns true when this failure blocked the address
     public bool Fail(string ip)
     {
         lock (gate)
         {
             var now = clock.UtcNow;
-            var key = Resolve(ip, create: true);
+            var key = Resolve(Elans.Shared.IpKey.Of(ip), create: true);
             if (!map.TryGetValue(key, out var e)) map[key] = e = new Entry { First = now };
             if (e.BlockedUntil > now) return false; // already blocked: don't extend
             if (now - e.First > window) { e.Fails = 0; e.First = now; }
@@ -132,7 +139,8 @@ public sealed class StrikeTable
     {
         lock (gate)
         {
-            if (map.TryGetValue(ip, out var e) && e.BlockedUntil <= clock.UtcNow) map.Remove(ip);
+            var key = Elans.Shared.IpKey.Of(ip);
+            if (map.TryGetValue(key, out var e) && e.BlockedUntil <= clock.UtcNow) map.Remove(key);
         }
     }
 

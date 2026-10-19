@@ -69,6 +69,69 @@ public class AuthTests
         Assert.True(s.IsBlocked("10.8.8.8"));
     }
 
+    // M3: an IPv6 /64 is one address - rotating through it neither escapes the lockout nor fills the table (which would block everyone new)
+    [Fact]
+    public void Rotating_through_one_IPv6_64_counts_as_one_address_and_blocks_nobody_else()
+    {
+        var s = new StrikeTable(new FakeClock(), capacity: 100);
+        var r = new Random(64);
+        for (int i = 0; i < 5000; i++) s.Fail("2001:db8:1:2:" + r.Next(0x10000).ToString("x") + ":" + r.Next(0x10000).ToString("x") + ":" + i.ToString("x") + ":1");
+        Assert.Equal(1, s.Count);                                     // one record: 2001:db8:1:2::/64
+        Assert.True(s.IsBlocked("2001:db8:1:2::abcd"));               // the whole /64 is blocked...
+        Assert.Equal(StrikeTable.Block.Own, s.State("2001:db8:1:2:ffff::1"));
+        Assert.False(s.IsBlocked("2001:db8:1:3::1"));                 // ...the next /64 is not
+        Assert.False(s.IsBlocked("203.0.113.9"));                     // nor anyone new: no overflow
+        Assert.False(s.IsBlocked("::ffff:203.0.113.9"));
+        // an IPv4-mapped address is its IPv4 address
+        for (int i = 0; i < 10; i++) s.Fail("::ffff:198.51.100.7");
+        Assert.True(s.IsBlocked("198.51.100.7"));
+        Assert.False(s.IsBlocked("198.51.100.8"));                    // IPv4 stays per address (/32)
+    }
+
+    // M3: while the shared overflow record is blocked (the table is full of other addresses), a valid device token still gets in; a wrong
+    // token or code is still counted and refused, and an address blocked by its own record stays blocked even with a valid token
+    [Fact]
+    public void A_valid_device_token_is_admitted_during_an_overflow_block_and_failures_still_count()
+    {
+        using var d = new TempDir();
+        var cfg = T.Cfg(d.Path);
+        T.WriteCodes(cfg, $"Elan:{T.ElanCode}:owner", $"Bob:{T.BobCode}:member");
+        var auth = new Auth(cfg, T.Log, new FakeClock());
+        var token = auth.ExchangeCode("192.0.2.1", T.BobCode, "Bob's PC", "bob-device-0001").Token;
+        Assert.NotNull(token);
+        for (int i = 0; i < cfg.MaxTrackedIps; i++) auth.Fail("10." + (i >> 16) + "." + ((i >> 8) & 255) + "." + (i & 255));   // the table is full
+        for (int i = 0; i < 10; i++) auth.Fail("2001:db8:" + i.ToString("x") + "::1");                                          // the overflow record blocks
+        const string Fresh = "2001:db8:ffff::7";
+        Assert.Equal(StrikeTable.Block.Overflow, auth.Strikes.State(Fresh));
+
+        Assert.Equal(Auth.Gate.Ok, auth.Admit(Fresh, token, isToken: true, out var who));                   // a valid token: in
+        Assert.Equal("Bob", who!.Name);
+        Assert.Equal(Auth.Gate.Blocked, auth.Admit(Fresh, T.BobCode, isToken: false, out _));             // a code (guessable): blocked
+        Assert.Equal(Auth.Gate.Blocked, auth.Admit(Fresh, "x" + token, isToken: true, out who));          // a wrong token: blocked...
+        Assert.Null(who);
+        Assert.Equal(StrikeTable.Block.Overflow, auth.Strikes.State(Fresh));
+        Assert.Equal(Auth.Gate.Ok, auth.Admit(Fresh, token, isToken: true, out _));                       // (the right one still works)
+
+        // ...and counted: an address with its own record blocked stays blocked, valid token or not
+        var own = "10.0.0.5";                                                                              // tracked (one failure so far)
+        for (int i = 0; i < 9; i++) Assert.NotEqual(Auth.Gate.Ok, auth.Admit(own, "wrong-" + i, isToken: false, out _));
+        Assert.Equal(StrikeTable.Block.Own, auth.Strikes.State(own));
+        Assert.Equal(Auth.Gate.Blocked, auth.Admit(own, token, isToken: true, out _));
+    }
+
+    [Fact]
+    public void A_wrong_code_counts_and_the_tenth_blocks_the_address()
+    {
+        using var d = new TempDir();
+        var cfg = T.Cfg(d.Path);
+        T.WriteCodes(cfg, $"Elan:{T.ElanCode}:owner");
+        var auth = new Auth(cfg, T.Log, new FakeClock());
+        for (int i = 0; i < 10; i++) Assert.Equal(Auth.Gate.Wrong, auth.Admit("2001:db8::" + (i + 1).ToString("x"), "wrong-" + i, isToken: false, out _));
+        Assert.Equal(Auth.Gate.Blocked, auth.Admit("2001:db8::99", T.ElanCode, isToken: false, out _));   // the /64 is blocked, right code or not
+        Assert.Equal(Auth.Gate.Ok, auth.Admit("2001:db9::1", T.ElanCode, isToken: false, out var who));
+        Assert.Equal("Elan", who!.Name);
+    }
+
     [Fact]
     public void Concurrent_failures_keep_an_exact_count()
     {

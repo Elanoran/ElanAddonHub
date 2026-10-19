@@ -11,7 +11,7 @@ public record Identity(string Name, bool Personal, string Role, string DeviceId 
     // the uploader name stored with a file: only ever the verified name (never a name the client claims in a header)
     public string By => Personal ? Name : "Guest";
     // what an upload / download budget is kept per: the person, or for a guest their address (IpKey: an IPv6 /64)
-    public string RateKey(string ip) => Personal ? "p:" + Name.ToLowerInvariant() : "g:" + ip;
+    public string RateKey(string ip) => Personal ? "p:" + Name.ToLowerInvariant() : "g:" + Elans.Shared.IpKey.Of(ip);
 }
 
 // Invite codes + the wrong-code lockout.
@@ -115,12 +115,29 @@ public partial class Auth
         Security?.Note("wrong-code", ip);
         if (Strikes.Fail(ip))
         {
-            log.LogWarning("Blocked {Ip} for {Minutes} min after too many wrong invite codes", ip, Strikes.BlockFor.TotalMinutes);
+            log.LogWarning("Blocked {Ip} for {Minutes} min after too many wrong invite codes", Elans.Shared.IpKey.Of(ip), Strikes.BlockFor.TotalMinutes);
             Security?.Note("lockout", ip, Strikes.BlockFor.TotalMinutes + " minutes after too many wrong invite codes");
         }
     }
 
     public void Success(string ip) => Strikes.Success(ip);
+
+    public enum Gate { Ok, Blocked, Wrong }
+
+    // Every credential check of an HTTP request / WebSocket goes through here: a device token or a code, one wrong-guess count per
+    // address (StrikeTable). A blocked address is refused before its credential is looked at - except when only the shared overflow
+    // record is blocked (the table is full of other addresses, e.g. someone rotating through IPv6 /64s): then a VALID device token
+    // still gets in (a token can't be guessed, so this answers no guessing), and a wrong one still counts and is refused as blocked.
+    public Gate Admit(string ip, string credential, bool isToken, out Identity who)
+    {
+        who = null;
+        var block = Strikes.State(ip);
+        if (block == StrikeTable.Block.Own || (block == StrikeTable.Block.Overflow && !isToken)) return Gate.Blocked;
+        who = CheckCredential(credential, isToken);
+        if (who == null) { Fail(ip); return block == StrikeTable.Block.None ? Gate.Wrong : Gate.Blocked; }
+        Success(ip);
+        return Gate.Ok;
+    }
 
     // ---- editing the codes file (the hub's Guild Master panel; lodge-admin does the same from a shell)
 
