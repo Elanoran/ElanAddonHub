@@ -84,8 +84,7 @@ public class PresenceModule : IModule
         var sm = StatusMsg.Read(new LodgeJsonFields(m));          // a non-string status / note / visibility is "missing", as before
         var st = sm.Status;
         me.Status = st is "online" or "away" or "busy" or "dungeon" or "lfg" ? st : "online";
-        var note = new string((sm.Note ?? "").Where(c => !char.IsControl(c)).ToArray()).Trim();
-        me.Note = note.Length > 40 ? note[..40] : note;
+        me.Note = Names.Text(sm.Note, 40);                         // the names' cleaning: control, bidi and zero-width characters out
         if (!await ApplyVisibility(me, sm.Visibility)) await hub.BroadcastPresence(me);
         return true;
     }

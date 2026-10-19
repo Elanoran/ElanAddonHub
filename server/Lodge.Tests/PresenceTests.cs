@@ -269,6 +269,26 @@ public class PresenceTests
     static readonly string[] UserKeys = { "id", "name", "guest", "role", "room", "voice", "muted", "deaf", "serverMuted", "avatarId", "accent", "displayName", "status", "note", "game" };
     static string[] KeysOf(JsonNode? o) => o!.AsObject().Select(kv => kv.Key).ToArray();
 
+    // L4: the status note gets the names' cleaning - bidi overrides / isolates, zero-width and control characters never reach anyone's screen
+    [Fact]
+    public async Task The_status_note_is_cleaned_of_bidi_zero_width_and_control_characters()
+    {
+        using var l = new Lodge2();
+        var bob = await l.Join(T.BobCode);
+        var zed = await l.Join(Mem2Code);
+        foreach (var (sent, shown) in new[]
+        {
+            ("raid ‮exe.txt‬", "raid exe.txt"), ("a​b‍c﻿⁦d⁩", "abcd"), ("x\u0000\u001By\n", "xy"),
+            ("  in a raid  ", "in a raid"), ("brb \U0001F600", "brb \U0001F600"), (new string('n', 60), new string('n', 40)),
+        })
+        {
+            bob.Clear();
+            zed.Say(new JsonObject { ["t"] = "status", ["status"] = "away", ["note"] = sent }.ToJsonString());
+            await Lodge2.Settle();
+            Assert.Equal(shown, (string?)bob.Of("user").Last()["user"]!["note"]);
+        }
+    }
+
     [Fact]
     public async Task Typed_presence_frames_keep_their_keys_and_order()
     {
