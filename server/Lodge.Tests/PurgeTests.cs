@@ -300,8 +300,35 @@ public class PurgeTests
     {
         using var d = new TempDir();
         var s = new FileStore(LodgeConfig.ForTests(d.Path), new FakeClock());
-        var meta = await s.Save(new T.SlowStream(10), 10, name, "Elan", "p:elan", CancellationToken.None);
+        var body = name.EndsWith(".zip") ? Zip(("Interface/AddOns/Foo/Foo.lua", "x"), ("Foo.toc", "y")) : null;
+        var meta = body != null ? await s.Save(new MemoryStream(body), body.Length, name, "Elan", "p:elan", CancellationToken.None)
+            : await s.Save(new T.SlowStream(10), 10, name, "Elan", "p:elan", CancellationToken.None);
         Assert.Equal(1, s.FileCount);
         Assert.NotNull(s.Get(meta.Id));
+    }
+
+    static byte[] Zip(params (string name, string text)[] entries)
+    {
+        var ms = new MemoryStream();
+        using (var z = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+            foreach (var (n, t) in entries) { using var w = new StreamWriter(z.CreateEntry(n).Open()); w.Write(t); }
+        return ms.ToArray();
+    }
+
+    // L7: a chat upload's zip is listed like a shared file's - a program inside, an unsafe path or no zip at all is refused, nothing kept
+    [Fact]
+    public async Task Chat_uploads_refuse_a_zip_holding_a_program()
+    {
+        using var d = new TempDir();
+        var s = new FileStore(LodgeConfig.ForTests(d.Path), new FakeClock());
+        foreach (var bad in new[] { Zip(("readme.txt", "x"), ("tools/setup.exe", "MZ")), Zip(("../x.txt", "x")), System.Text.Encoding.UTF8.GetBytes("not a zip") })
+        {
+            var e = await Assert.ThrowsAsync<UploadRefusedException>(() => s.Save(new MemoryStream(bad), bad.Length, "pack.zip", "Elan", "p:elan", CancellationToken.None));
+            Assert.Equal(415, e.Status);
+        }
+        Assert.Equal(0, s.FileCount);
+        Assert.Equal(0, s.UsedBytes);
+        Assert.Equal(0, s.ReservedBytes);
+        Assert.Empty(Directory.GetFiles(Path.Combine(d.Path, "files")));
     }
 }

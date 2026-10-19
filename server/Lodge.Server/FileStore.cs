@@ -184,6 +184,14 @@ public class FileStore
                 }
                 await fs.FlushAsync(ct);
             }
+            // a zip is listed like a shared file's (FileRules.CheckZip): no program or script inside, no unsafe path; nothing is extracted
+            if (FileRules.IsZip(name))
+            {
+                string why;
+                await using (var zs = new FileStream(part, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    why = FileRules.CheckZip(zs);
+                if (why != null) throw new UploadRefusedException(415, why);
+            }
             if (!Types.TryGetContentType(name, out var mime)) mime = "application/octet-stream";
             var meta = new FileMeta { Id = id, Name = name, Size = size, Mime = mime, At = new DateTimeOffset(clock.UtcNow).ToUnixTimeMilliseconds(), By = by };
 
