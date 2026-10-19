@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Elans.Shared;
+using ElansAddonHub.Lodge;
 
 namespace ElansAddonHub.Services
 {
@@ -227,28 +228,28 @@ namespace ElansAddonHub.Services
             var changed = local.Legs.Where(kv => !sent.TryGetValue(kv.Key, out var s) || s != kv.Value.Sig).OrderBy(kv => kv.Key, StringComparer.Ordinal).ToList();
             if (changed.Count == 0) return null;
             var b = new Batch();
-            var legs = new Dictionary<string, object>();
+            var msg = new FlightsShareMsg();
             int bytes = 64;
             foreach (var kv in changed)
             {
                 int cost = kv.Key.Length + 32;
-                if (legs.Count >= MaxLegsPerShare || bytes + cost > MaxShareBytes) break;
-                legs[kv.Key] = new Dictionary<string, object> { ["t"] = kv.Value.T, ["n"] = kv.Value.N };
+                if (msg.Legs.Count >= MaxLegsPerShare || bytes + cost > MaxShareBytes) break;
+                msg.Legs.Add(new KeyValuePair<string, FlightLeg>(kv.Key, new FlightLeg { T = kv.Value.T, N = kv.Value.N }));
                 b.Sigs[kv.Key] = kv.Value.Sig;
                 bytes += cost;
             }
-            b.Remaining = changed.Count - legs.Count;
-            var names = new Dictionary<string, object>();
-            foreach (var id in legs.Keys.SelectMany(IdsOf).Distinct())
+            b.Remaining = changed.Count - msg.Legs.Count;
+            var names = new List<KeyValuePair<string, string>>();
+            foreach (var id in msg.Legs.Select(kv => kv.Key).SelectMany(IdsOf).Distinct())
             {
                 if (names.Count >= MaxNamesPerShare) break;
                 if (!local.Names.TryGetValue(id, out var nm)) continue;
                 int cost = id.Length + nm.Length + 8;
                 if (bytes + cost > MaxShareBytes) break;
-                names[id] = nm; bytes += cost;
+                names.Add(new KeyValuePair<string, string>(id, nm)); bytes += cost;
             }
-            b.Frame = new Dictionary<string, object> { ["t"] = LodgeMsg.FlightsShare, ["legs"] = legs };
-            if (names.Count > 0) b.Frame["names"] = names;
+            if (names.Count > 0) msg.Names = names;                                       // no node names: the key is left out
+            b.Frame = LodgeFieldsDict.Build(msg.Write);
             return b;
         }
 
@@ -262,29 +263,27 @@ namespace ElansAddonHub.Services
             public int Dropped;
         }
 
-        // flights.data: everything is re-validated here, whatever the server says
+        // flights.data (typed: FlightsDataMsg, whose numbers are strict - a leg's t / n must be JSON numbers): everything is re-validated here,
+        // whatever the server says. Also the flights table of SharedData.lua.
         public static Merged ParseServer(Dictionary<string, object> m)
         {
             var r = new Merged();
             if (m == null) return r;
-            r.At = m.Long("at"); if (r.At < 0 || r.At > 4_000_000_000L) r.At = 0;
-            var legs = m.Child("legs");
-            if (legs != null)
-                foreach (var kv in legs)
-                {
-                    if (r.Legs.Count >= MaxLegs) { r.Dropped++; continue; }
-                    var d = kv.Value as Dictionary<string, object>;
-                    if (!ValidKey(kv.Key) || d == null || !(d.TryGetValue("t", out var tv) && tv is double t) || !(d.TryGetValue("n", out var nv) && nv is double n) || !ValidLeg(t, n)) { r.Dropped++; continue; }
-                    r.Legs[kv.Key] = new Leg { T = RoundT(t), N = (int)n };
-                }
-            var names = m.Child("names");
-            if (names != null)
-                foreach (var kv in names)
-                {
-                    if (r.Names.Count >= MaxNames) break;
-                    var nm = kv.Value is string s ? CleanName(s) : "";
-                    if (ValidId(kv.Key) && nm.Length > 0) r.Names[kv.Key] = nm;
-                }
+            var msg = FlightsDataMsg.Read(new LodgeFieldsDict(m));
+            r.At = msg.At; if (r.At < 0 || r.At > 4_000_000_000L) r.At = 0;
+            foreach (var kv in msg.Legs)
+            {
+                if (r.Legs.Count >= MaxLegs) { r.Dropped++; continue; }
+                var d = kv.Value;
+                if (!ValidKey(kv.Key) || d == null || !(d.T is double t) || !(d.N is double n) || !ValidLeg(t, n)) { r.Dropped++; continue; }
+                r.Legs[kv.Key] = new Leg { T = RoundT(t), N = (int)n };
+            }
+            foreach (var kv in msg.Names)
+            {
+                if (r.Names.Count >= MaxNames) break;
+                var nm = kv.Value is string s ? CleanName(s) : "";
+                if (ValidId(kv.Key) && nm.Length > 0) r.Names[kv.Key] = nm;
+            }
             return r;
         }
 

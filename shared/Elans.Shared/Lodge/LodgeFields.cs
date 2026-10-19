@@ -24,6 +24,11 @@ namespace Elans.Shared
         // A free-form payload passed through unread (e.g. a member's "game" presence): the object at key in this side's own JSON model
         // (JsonObject on the server, Dictionary<string, object> in the Outpost); null when missing or not an object.
         object RawChild(string key);
+        IReadOnlyList<string> Keys();                   // this object's keys in the order received (a map keyed by ids, e.g. flights.data's legs)
+        double? Num(string key);                        // the number at key; null when missing or not a number (strict: "3" or true is no number)
+        // the entries of an array of numbers, a JSON null kept as null (e.g. a route's [x, y, z|null, ...]); null when missing, not an array,
+        // or holding anything else - strict, for the readers that refuse a malformed list as a whole
+        IReadOnlyList<double?> Nums(string key);
     }
 
     // write side: a JSON object being built for sending. A null string is written as JSON null (as a dictionary/JsonObject literal did).
@@ -33,6 +38,7 @@ namespace Elans.Shared
         void Set(string key, long value);
         void Set(string key, int value);
         void Set(string key, bool value);
+        void Set(string key, double value);
         ILodgeWriter Child(string key);                 // a new object at key
         ILodgeListWriter List(string key);              // a new (empty) array at key
         void SetRawChild(string key, object value);     // a free-form object in this side's own JSON model (see ILodgeFields.RawChild), as it is
@@ -43,6 +49,8 @@ namespace Elans.Shared
         ILodgeWriter Add();                             // a new object appended to the array
         void Add(long value);                           // a number appended to the array
         void Add(string value);                         // a string appended to the array
+        void Add(double value);                         // a fractional number appended to the array
+        void AddNull();                                 // a JSON null appended to the array
     }
 
     public static class LodgeWriterExtensions

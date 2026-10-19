@@ -26,12 +26,28 @@ public sealed class LodgeFieldsJson : ILodgeFields, ILodgeWriter
     public IReadOnlyList<string> Strs(string key) =>
         Obj[key] is JsonArray a ? a.Select(x => x is JsonValue v && v.TryGetValue<string>(out var s) ? s : null).Where(s => s != null).ToList() : Array.Empty<string>();
     public object RawChild(string key) => J.Obj(Obj, key);
+    public IReadOnlyList<string> Keys() => Obj.Select(kv => kv.Key).ToList();
+    public double? Num(string key) => Number(Obj[key]);
+    public IReadOnlyList<double?> Nums(string key)
+    {
+        if (Obj[key] is not JsonArray a) return null;
+        var l = new List<double?>(a.Count);
+        foreach (var x in a)
+        {
+            if (x == null) { l.Add(null); continue; }
+            if (Number(x) is not double d) return null;
+            l.Add(d);
+        }
+        return l;
+    }
+    static double? Number(JsonNode n) => n is JsonValue v && v.GetValueKind() == System.Text.Json.JsonValueKind.Number && v.TryGetValue<double>(out var d) ? d : null;
 
     // write
     public void Set(string key, string value) => Obj[key] = value;
     public void Set(string key, long value) => Obj[key] = value;
     public void Set(string key, int value) => Obj[key] = value;
     public void Set(string key, bool value) => Obj[key] = value;
+    public void Set(string key, double value) => Obj[key] = value;
     ILodgeWriter ILodgeWriter.Child(string key) { var o = new JsonObject(); Obj[key] = o; return new LodgeFieldsJson(o); }
     ILodgeListWriter ILodgeWriter.List(string key) { var a = new JsonArray(); Obj[key] = a; return new ListWriter(a); }
     public void SetRawChild(string key, object value) => Obj[key] = (JsonObject)value;
@@ -43,6 +59,8 @@ public sealed class LodgeFieldsJson : ILodgeFields, ILodgeWriter
         public ILodgeWriter Add() { var o = new JsonObject(); a.Add(o); return new LodgeFieldsJson(o); }
         public void Add(long value) => a.Add(value);
         public void Add(string value) => a.Add(value);
+        public void Add(double value) => a.Add(value);
+        public void AddNull() => a.Add((JsonNode)null);
     }
 
     // a typed message as the JsonObject the hub sends

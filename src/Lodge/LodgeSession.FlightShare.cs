@@ -115,14 +115,15 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFlights) return;
             flightLastGet = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FlightsGet });
+            _ = Send(LodgeFieldsDict.Build(new FlightsGetMsg().Write));
         }
 
         void OnFlightShared(Dictionary<string, object> m)
         {
             var batch = flightInflight;
             flightInflight = null;
-            if (m.Bool("ok") && batch != null)
+            var answer = FlightsSharedMsg.Read(new LodgeFieldsDict(m));
+            if (answer.Ok && batch != null)
             {
                 var sent = FlightSent();
                 foreach (var kv in batch.Sigs) sent[kv.Key] = kv.Value;                // refused entries are not retried forever either
@@ -131,7 +132,7 @@ namespace ElansAddonHub.Lodge
             }
             else
             {
-                var why = m.Str("why");
+                var why = answer.Why;
                 if (why == "guest") flightGuest = true;
                 else if (why == "rate") flightNextShare = Clock() + FlightShare.ShareEvery;
                 else flightNextShare = Clock() + TimeSpan.FromMinutes(2);

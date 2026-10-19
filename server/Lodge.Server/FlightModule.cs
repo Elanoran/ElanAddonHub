@@ -9,6 +9,8 @@ namespace Lodge;
 // members and up, one per 10 minutes per identity) and flights.get {} (merged table, Page budget).
 // Server to client: flights.shared { ok, accepted, rejected, why? } and flights.data { at, legs, names }.
 // Guests may read but not contribute. Nothing the clients send is ever logged - only counts.
+// The messages are typed in shared/Elans.Shared/Lodge/FlightMessages.cs; flights.share and flights.routes.share are still validated from the
+// raw JSON (Flights.TryLeg / FlightStore.Share, FlightRoutes.Parse): a number must be a JSON number there, a malformed entry is refused.
 public sealed class FlightModule : IModule
 {
     readonly LodgeHub hub;
@@ -39,9 +41,7 @@ public sealed class FlightModule : IModule
 
     Task Reply(Member me, bool ok, int accepted, int rejected, string why = null)
     {
-        var o = new JsonObject { ["t"] = LodgeMsg.FlightsShared, ["ok"] = ok, ["accepted"] = accepted, ["rejected"] = rejected };
-        if (why != null) o["why"] = why;
-        return hub.Send(me, o);
+        return hub.Send(me, LodgeFieldsJson.Build(new FlightsSharedMsg { Ok = ok, Accepted = accepted, Rejected = rejected, Why = why }.Write));
     }
 
     async Task Share(Member me, JsonObject m)
@@ -72,9 +72,7 @@ public sealed class FlightModule : IModule
     // one per 10 minutes per identity) -> flights.routes.shared { ok, accepted, rejected, why? }; flights.routes.get {} -> flights.routes.data (Page budget).
     Task ReplyRoutes(Member me, bool ok, int accepted, int rejected, string why = null)
     {
-        var o = new JsonObject { ["t"] = LodgeMsg.FlightsRoutesShared, ["ok"] = ok, ["accepted"] = accepted, ["rejected"] = rejected };
-        if (why != null) o["why"] = why;
-        return hub.Send(me, o);
+        return hub.Send(me, LodgeFieldsJson.Build(new FlightsRoutesSharedMsg { Ok = ok, Accepted = accepted, Rejected = rejected, Why = why }.Write));
     }
 
     async Task ShareRoutes(Member me, JsonObject m)

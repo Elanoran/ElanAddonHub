@@ -278,26 +278,25 @@ public sealed class FlightStore
         return r;
     }
 
-    // { t:"flights.data", at, legs: { key: {t,n} }, names: { id: name } } - the merged table. Caller holds Gate.
+    // { t:"flights.data", at, legs: { key: {t,n} }, names: { id: name } } - the merged table (typed: FlightsDataMsg). Caller holds Gate.
     public string MergedJson()
     {
         if (cached != null && cachedVersion == version) return cached;
-        var lo = new JsonObject();
+        var msg = new FlightsDataMsg { At = NowMs / 1000 };
         foreach (var (key, d) in legs.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             var a = Flights.Merge(d);
-            if (a != null) lo[key] = new JsonObject { ["t"] = a.T, ["n"] = a.N };
+            if (a != null) msg.Legs.Add(new(key, new FlightLeg { T = a.T, N = a.N }));
         }
-        var used = lo.Select(kv => kv.Key).SelectMany(IdsOf).ToHashSet();
-        var no = new JsonObject();
+        var used = msg.Legs.Select(kv => kv.Key).SelectMany(IdsOf).ToHashSet();
         foreach (var (id, d) in names.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             if (!used.Contains(id)) continue;
             // the name most contributors agree on; ties go to the alphabetically first so the answer is stable
             var pick = d.Values.GroupBy(x => x).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).First().Key;
-            no[id] = pick;
+            msg.Names.Add(new(id, pick));
         }
-        cached = new JsonObject { ["t"] = LodgeMsg.FlightsData, ["at"] = NowMs / 1000, ["legs"] = lo, ["names"] = no }.ToJsonString();
+        cached = LodgeFieldsJson.Build(msg.Write).ToJsonString();
         cachedVersion = version;
         return cached;
     }

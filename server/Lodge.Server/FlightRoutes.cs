@@ -160,6 +160,14 @@ public static partial class FlightRoutes
         return new Published { Map = map, Pts = avg, T = t, N = Math.Min(MaxSamples, bestN), K = best.Count };
     }
 
+    // the same flat list for a typed FlightRoute (FlightsRoutesDataMsg)
+    public static List<double?> FlatNums(P[] pts)
+    {
+        var l = new List<double?>(pts.Length * 3);
+        foreach (var p in pts) { l.Add(p.X); l.Add(p.Y); l.Add(p.HasZ ? p.Z : null); }
+        return l;
+    }
+
     public static JsonArray Flat(P[] pts)
     {
         var a = new JsonArray();
@@ -305,17 +313,17 @@ public sealed class FlightRouteStore
         return r;
     }
 
-    // { t:"flights.routes.data", at, routes: { key: { m, p, t, n, k } } }. Caller holds Gate.
+    // { t:"flights.routes.data", at, routes: { key: { m, p, t, n, k } } } (typed: FlightsRoutesDataMsg). Caller holds Gate.
     public string MergedJson()
     {
         if (cached != null && cachedVersion == version) return cached;
-        var ro = new JsonObject();
+        var msg = new FlightsRoutesDataMsg { At = NowMs / 1000 };
         foreach (var (key, d) in legs.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             var p = FlightRoutes.Merge(d);
-            if (p != null) ro[key] = new JsonObject { ["m"] = p.Map, ["p"] = FlightRoutes.Flat(p.Pts), ["t"] = p.T, ["n"] = p.N, ["k"] = p.K };
+            if (p != null) msg.Routes.Add(new(key, new FlightRoute { M = p.Map, P = FlightRoutes.FlatNums(p.Pts), T = p.T, N = p.N, K = p.K }));
         }
-        cached = new JsonObject { ["t"] = LodgeMsg.FlightsRoutesData, ["at"] = NowMs / 1000, ["routes"] = ro }.ToJsonString();
+        cached = LodgeFieldsJson.Build(msg.Write).ToJsonString();
         cachedVersion = version;
         return cached;
     }

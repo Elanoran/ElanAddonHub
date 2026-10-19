@@ -397,6 +397,19 @@ namespace ElansAddonHub.Services.WorldMap
             return r;
         }
 
+        // the same for a typed route's points (FlightRoute.P from flights.routes.data: already null unless every entry is a number or null)
+        public static List<FlightGeo.P> ReadPts(IReadOnlyList<double?> flat)
+        {
+            var r = new List<FlightGeo.P>();
+            if (flat == null || flat.Count % 3 != 0 || flat.Count > MaxPoints * 3) return null;
+            for (int i = 0; i + 2 < flat.Count; i += 3)
+            {
+                if (!(flat[i] is double x) || !(flat[i + 1] is double y)) return null;
+                r.Add(new FlightGeo.P(x, y, flat[i + 2] ?? double.NaN));
+            }
+            return r;
+        }
+
         public static List<object> WritePts(IEnumerable<FlightGeo.P> pts)
         {
             var r = new List<object>();

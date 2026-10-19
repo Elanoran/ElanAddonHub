@@ -206,4 +206,36 @@ public class FlightRouteTests
         Assert.False(FlightRoutes.Agree(bent, straight));
         Assert.False(FlightRoutes.Agree(straight, bent));
     }
+
+    static string[] Keys(JsonObject o) => o.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+    // the typed FlightsRoutesSharedMsg / FlightsRoutesDataMsg (Elans.Shared) send the same keys, and flights.routes.data the very bytes the old
+    // JsonObject did (z null where it is unknown)
+    [Fact]
+    public async Task Typed_route_frames_keep_their_keys_and_bytes()
+    {
+        using var r = new FunRig();
+        var elan = r.Join("Elan", "member"); var bob = r.Join("Bob", "officer");
+        Assert.Equal(new[] { "accepted", "ok", "rejected", "t" }, Keys(await Share(r, elan, new() { [K] = Route(Line(), t: 70) })));
+        await Share(r, bob, new() { [K] = Route(Line(jitter: 3), t: 72) });
+        Assert.Equal(new[] { "accepted", "ok", "rejected", "t", "why" }, Keys(await Share(r, bob, new() { [K] = Route(Line()) }, advance: false)));
+
+        var data = await Get(r, elan);
+        Assert.Equal(new[] { "at", "routes", "t" }, Keys(data));
+        var route = (JsonObject)data["routes"]![K]!;
+        Assert.Equal(new[] { "k", "m", "n", "p", "t" }, Keys(route));
+        Assert.Contains(((JsonArray)route["p"]!), x => x == null);
+        // the old construction (FlightRouteStore.MergedJson at c712015) from the same values: m, n, k ints, t and the points doubles
+        var ro = new JsonObject();
+        foreach (var (key, v) in (JsonObject)data["routes"]!)
+        {
+            var p = new JsonArray();
+            foreach (var x in (JsonArray)v!["p"]!) p.Add(x == null ? null : JsonValue.Create((double)x));
+            ro[key] = new JsonObject { ["m"] = (int)v["m"]!, ["p"] = p, ["t"] = (double)v["t"]!, ["n"] = (int)v["n"]!, ["k"] = (int)v["k"]! };
+        }
+        var old = new JsonObject { ["t"] = "flights.routes.data", ["at"] = (long)data["at"]!, ["routes"] = ro }.ToJsonString();
+        string now;
+        lock (r.Hub.Flight.Routes.Gate) now = r.Hub.Flight.Routes.MergedJson();
+        Assert.Equal(old, now);
+    }
 }

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using ElansAddonHub.Services.Maps;
 using Elans.Shared;
+using ElansAddonHub.Lodge;
 
 namespace ElansAddonHub.Services.WorldMap
 {
@@ -52,21 +53,21 @@ namespace ElansAddonHub.Services.WorldMap
         // flights.routes.data -> validated routes (whatever the server says); Dropped counts what failed
         public sealed class LodgeData { public Dictionary<string, LearnedRoute> Routes = new Dictionary<string, LearnedRoute>(StringComparer.Ordinal); public int Dropped; public long At; }
 
+        // typed: FlightsRoutesDataMsg, whose numbers are strict (missing or not a JSON number = null) and whose points are null unless a clean list
         public static LodgeData ParseServer(Dictionary<string, object> m)
         {
             var r = new LodgeData();
             if (m == null) return r;
-            r.At = m.Long("at"); if (r.At < 0 || r.At > 4_000_000_000L) r.At = 0;
-            var ro = m.Child("routes");
-            if (ro == null) return r;
-            foreach (var kv in ro)
+            var msg = FlightsRoutesDataMsg.Read(new LodgeFieldsDict(m));
+            r.At = msg.At; if (r.At < 0 || r.At > 4_000_000_000L) r.At = 0;
+            foreach (var kv in msg.Routes)
             {
                 if (r.Routes.Count >= MaxLodgeRoutes) { r.Dropped++; continue; }
-                var d = kv.Value as Dictionary<string, object>;
+                var d = kv.Value;
                 if (!TryKey(kv.Key, out var a, out var b) || d == null) { r.Dropped++; continue; }
-                var pts = d.TryGetValue("p", out var pv) && pv is List<object> pl ? ReadPts(pl) : null;
-                double t = d.TryGetValue("t", out var tv) && tv is double td ? td : -1, n = d.TryGetValue("n", out var nv) && nv is double nd ? nd : -1, k = d.TryGetValue("k", out var kvv) && kvv is double kd ? kd : 0;
-                double map = d.TryGetValue("m", out var mv) && mv is double md ? md : -1;
+                var pts = d.P == null ? null : ReadPts(d.P);
+                double t = d.T ?? -1, n = d.N ?? -1, k = d.K ?? 0;
+                double map = d.M ?? -1;
                 var lr = new LearnedRoute { MapId = (int)map, From = a, To = b, Pts = pts, Seconds = t, Flights = (int)n, Members = (int)k, FromLodge = true };
                 if (pts == null || map < 0 || map > 100000 || map != Math.Floor(map) || n < 2 || n > 50 || n != Math.Floor(n) || k < 0 || k > 50 || !(t == 0 || (t >= 5 && t <= 1800))
                     || !Valid(new ObservedFlight { MapId = lr.MapId, From = a, To = b, Pts = pts, Seconds = Math.Max(0, t) })) { r.Dropped++; continue; }
@@ -96,17 +97,17 @@ namespace ElansAddonHub.Services.WorldMap
 
         // what I would tell the Lodge per leg (key -> entry), with a signature to send only what changed. `sent` = what the Lodge already has from me:
         // a { g: 1 } is only sent for a leg I reported a route for before.
-        public Dictionary<string, Tuple<Dictionary<string, object>, string>> ShareEntries(IDictionary<string, string> sent)
+        public Dictionary<string, Tuple<FlightRoute, string>> ShareEntries(IDictionary<string, string> sent)
         {
-            var res = new Dictionary<string, Tuple<Dictionary<string, object>, string>>(StringComparer.Ordinal);
+            var res = new Dictionary<string, Tuple<FlightRoute, string>>(StringComparer.Ordinal);
             foreach (var st in States().OrderBy(s => s.MapId).ThenBy(s => s.From).ThenBy(s => s.To))
             {
                 var k = KeyOf(st.From, st.To);
                 if (res.ContainsKey(k)) continue;                                       // the same two ids on two continents: one is enough
-                Dictionary<string, object> e = null; string sig = null;
+                FlightRoute e = null; string sig = null;
                 if (st.Learned != null) { e = Entry(st.MapId, st.Learned.Pts, st.Learned.Seconds, st.Learned.Flights); }
                 else if (st.Single != null) { e = Entry(st.MapId, st.Single.Pts, st.Single.Seconds, 1); }
-                else if (st.NewestMatchesGame && sent != null && sent.TryGetValue(k, out var was) && !was.StartsWith("g")) { e = new Dictionary<string, object> { ["m"] = st.MapId, ["g"] = 1 }; sig = "g"; }
+                else if (st.NewestMatchesGame && sent != null && sent.TryGetValue(k, out var was) && !was.StartsWith("g")) { e = new FlightRoute { M = st.MapId, Game = true }; sig = "g"; }
                 if (e == null) continue;
                 sig = sig ?? Sig(e);
                 res[k] = Tuple.Create(e, sig);
@@ -114,15 +115,16 @@ namespace ElansAddonHub.Services.WorldMap
             return res;
         }
 
-        static Dictionary<string, object> Entry(int map, List<FlightGeo.P> pts, double secs, int n) => new Dictionary<string, object>
+        static FlightRoute Entry(int map, List<FlightGeo.P> pts, double secs, int n) => new FlightRoute
         {
-            ["m"] = map, ["p"] = WritePts(pts), ["t"] = secs >= 5 && secs <= 1800 ? Math.Round(secs, 1) : 0.0, ["n"] = Math.Max(1, Math.Min(50, n)),
+            M = map, P = WritePts(pts).Select(o => o is double d ? d : (double?)null).ToList(), T = secs >= 5 && secs <= 1800 ? Math.Round(secs, 1) : 0.0, N = Math.Max(1, Math.Min(50, n)),
         };
 
-        static string Sig(Dictionary<string, object> e)
+        // the signature of what was sent (kept in flightroutes-sent.txt): "r<n>|<t>|<hash of the points>", as it was computed from the old dictionary
+        static string Sig(FlightRoute e)
         {
-            var sb = new StringBuilder("r").Append(e["n"]).Append('|').Append(Convert.ToString(e["t"], CultureInfo.InvariantCulture)).Append('|');
-            long h = 17; foreach (var o in (List<object>)e["p"]) h = unchecked(h * 31 + (o is double d ? (long)Math.Round(d * 10) : -7));
+            var sb = new StringBuilder("r").Append(((int)e.N.Value).ToString(CultureInfo.InvariantCulture)).Append('|').Append(e.T.Value.ToString(CultureInfo.InvariantCulture)).Append('|');
+            long h = 17; foreach (var o in e.P) h = unchecked(h * 31 + (o is double d ? (long)Math.Round(d * 10) : -7));
             return sb.Append(h.ToString("x", CultureInfo.InvariantCulture)).ToString();
         }
 
@@ -133,16 +135,16 @@ namespace ElansAddonHub.Services.WorldMap
             var changed = all.Where(kv => sent == null || !sent.TryGetValue(kv.Key, out var s) || s != kv.Value.Item2).OrderBy(kv => kv.Key, StringComparer.Ordinal).ToList();
             if (changed.Count == 0) return null;
             var b = new ShareBatch();
-            var routes = new Dictionary<string, object>(StringComparer.Ordinal);
+            var msg = new FlightsRoutesShareMsg();
             int bytes = 64;
             foreach (var kv in changed)
             {
-                int cost = Json.Write(kv.Value.Item1).Length + kv.Key.Length + 8;
-                if (routes.Count >= MaxShareRoutes || bytes + cost > MaxShareBytes) break;
-                routes[kv.Key] = kv.Value.Item1; b.Sigs[kv.Key] = kv.Value.Item2; bytes += cost;
+                int cost = Json.Write(LodgeFieldsDict.Build(kv.Value.Item1.Write)).Length + kv.Key.Length + 8;
+                if (msg.Routes.Count >= MaxShareRoutes || bytes + cost > MaxShareBytes) break;
+                msg.Routes.Add(new KeyValuePair<string, FlightRoute>(kv.Key, kv.Value.Item1)); b.Sigs[kv.Key] = kv.Value.Item2; bytes += cost;
             }
-            b.Remaining = changed.Count - routes.Count;
-            b.Frame = new Dictionary<string, object> { ["t"] = LodgeMsg.FlightsRoutesShare, ["routes"] = routes };
+            b.Remaining = changed.Count - msg.Routes.Count;
+            b.Frame = LodgeFieldsDict.Build(msg.Write);
             return b;
         }
     }

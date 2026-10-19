@@ -107,14 +107,15 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFlightRoutes) return;
             routeLastGet = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FlightsRoutesGet });
+            _ = Send(LodgeFieldsDict.Build(new FlightsRoutesGetMsg().Write));
         }
 
         void OnFlightRoutesShared(Dictionary<string, object> m)
         {
             var batch = routeInflight;
             routeInflight = null;
-            if (m.Bool("ok") && batch != null)
+            var answer = FlightsRoutesSharedMsg.Read(new LodgeFieldsDict(m));
+            if (answer.Ok && batch != null)
             {
                 var sent = RouteSent();
                 foreach (var kv in batch.Sigs) sent[kv.Key] = kv.Value;
@@ -123,7 +124,7 @@ namespace ElansAddonHub.Lodge
             }
             else
             {
-                var why = m.Str("why");
+                var why = answer.Why;
                 if (why == "guest") routeGuest = true;
                 else if (why == "rate") routeNextShare = Clock() + FlightShare.ShareEvery;
                 else routeNextShare = Clock() + TimeSpan.FromMinutes(2);

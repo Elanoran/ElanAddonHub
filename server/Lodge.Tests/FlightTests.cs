@@ -357,4 +357,33 @@ public class FlightTests
         // none of those spent the rate-limit token
         Assert.True((bool)(await Share(r, a, new() { [K] = Leg(100, 3) }, advance: false))["ok"]!);
     }
+
+    static string[] Keys(JsonObject o) => o.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+    // the typed FlightsSharedMsg / FlightsDataMsg (Elans.Shared) send the same keys, and flights.data the very bytes the old JsonObject did
+    [Fact]
+    public async Task Typed_flight_frames_keep_their_keys_and_bytes()
+    {
+        using var r = new FunRig();
+        var elan = r.Join("Elan", "member"); var gus = r.Join("Gus", "guest");
+        var ok = await Share(r, elan, new() { [K] = Leg(30.55, 3), ["Horde|22>33"] = Leg(100, 1), ["bad"] = Leg(5, 1) }, new() { ["11"] = "Orgrimmar", ["22"] = "Crossroads" });
+        Assert.Equal(new[] { "accepted", "ok", "rejected", "t" }, Keys(ok));
+        Assert.Equal(new[] { "accepted", "ok", "rejected", "t", "why" }, Keys(await Share(r, gus, new() { [K] = Leg(30, 1) })));
+        Assert.Equal("guest", (string)r.Sock("Gus").Of("flights.shared").Last()["why"]!);
+
+        var data = await Get(r, elan);
+        Assert.Equal(new[] { "at", "legs", "names", "t" }, Keys(data));
+        Assert.Equal(new[] { "n", "t" }, Keys((JsonObject)data["legs"]![K]!));
+        // the old construction (FlightStore.MergedJson at c712015) from the same values: t a double, n an int, at a long
+        var legs = new JsonObject();
+        foreach (var (key, v) in (JsonObject)data["legs"]!) legs[key] = new JsonObject { ["t"] = (double)v!["t"]!, ["n"] = (int)v["n"]! };
+        var names = new JsonObject();
+        foreach (var (id, v) in (JsonObject)data["names"]!) names[id] = (string)v!;
+        var old = new JsonObject { ["t"] = "flights.data", ["at"] = (long)data["at"]!, ["legs"] = legs, ["names"] = names }.ToJsonString();
+        string now;
+        lock (r.Hub.Flight.Store.Gate) now = r.Hub.Flight.Store.MergedJson();
+        Assert.Equal(old, now);
+        Assert.Contains("\"t\":30.6,\"n\":3", now);
+        Assert.Contains("\"t\":100,\"n\":1", now);
+    }
 }

@@ -29,12 +29,27 @@ namespace ElansAddonHub.Lodge
             Dict.List(key).Select(x => x is double d && d == Math.Floor(d) && Math.Abs(d) < 9e18 ? (long)d : x is long l ? l : 0L).ToList();
         public IReadOnlyList<string> Strs(string key) => Dict.List(key).OfType<string>().ToList();
         public object RawChild(string key) => Dict.Child(key);
+        public IReadOnlyList<string> Keys() => Dict.Keys.ToList();
+        public double? Num(string key) => Dict.TryGetValue(key, out var v) && v is double d ? d : (double?)null;     // Json.Parse gives every number as double
+        public IReadOnlyList<double?> Nums(string key)
+        {
+            if (!Dict.TryGetValue(key, out var v) || !(v is List<object> a)) return null;
+            var l = new List<double?>(a.Count);
+            foreach (var x in a)
+            {
+                if (x == null) l.Add(null);
+                else if (x is double d) l.Add(d);
+                else return null;
+            }
+            return l;
+        }
 
         // write
         public void Set(string key, string value) => Dict[key] = value;
         public void Set(string key, long value) => Dict[key] = (double)value;
         public void Set(string key, int value) => Dict[key] = (double)value;
         public void Set(string key, bool value) => Dict[key] = value;
+        public void Set(string key, double value) => Dict[key] = value;
         ILodgeWriter ILodgeWriter.Child(string key) { var c = new Dictionary<string, object>(); Dict[key] = c; return new LodgeFieldsDict(c); }
         ILodgeListWriter ILodgeWriter.List(string key) { var l = new List<object>(); Dict[key] = l; return new ListWriter(l); }
         public void SetRawChild(string key, object value) => Dict[key] = (Dictionary<string, object>)value;
@@ -46,6 +61,8 @@ namespace ElansAddonHub.Lodge
             public ILodgeWriter Add() { var c = new Dictionary<string, object>(); l.Add(c); return new LodgeFieldsDict(c); }
             public void Add(long value) => l.Add(value);       // a long, as the old List<object> { id } literals held it
             public void Add(string value) => l.Add(value);
+            public void Add(double value) => l.Add(value);
+            public void AddNull() => l.Add(null);
         }
 
         // a typed message as the dictionary LodgeClient sends
