@@ -794,6 +794,34 @@ codes, tokens, IPs or message text. `active7d` = members online now or with a de
 `flood`, `too-big`, `admin-refused`, `http-rate`), without addresses. The addresses are only in the server's log (journald), one line per kind
 and address per 10 minutes, then a sum per minute and a summary per day (`security: <kind> from <ip>`).
 
+## Typed messages
+
+Every message is a class in `shared/Elans.Shared/Lodge/<Group>Messages.cs`, used by the Lodge server and the Outpost alike; the
+"Typed (stage 2)" notes in the sections above name them. Neither side builds or reads a frame by field name anywhere else.
+
+### How to add a message
+
+1. Add its type to `LodgeMsg` (`shared/Elans.Shared/Lodge/LodgeMsg.cs`), in its group.
+2. Write its class in `shared/Elans.Shared/Lodge/<Group>Messages.cs`: `public const string Type = LodgeMsg.X`, a `Write` that sets `t`
+   first, and a `Read` that is lenient like its neighbours (a missing or wrong-typed field reads as null / 0 / false, never throws). A
+   message with only an id or nothing at all derives from `LodgeIdMsg` / `LodgeEmptyMsg`. A message both ways has one class each way.
+   Keep limits and validation on the receiving side, as the neighbours do.
+3. Add a golden and a round-trip test in `shared/Elans.Shared.Tests/<Group>MessagesTests.cs`: what `Write` gives, key order included,
+   and that `Read` gets it back (also from an old or malformed frame).
+4. Handle it in the server module through the class, and add a server test in `server/Lodge.Tests` that pins its key set and order.
+5. Send and read it in the Outpost through the class (`LodgeFieldsDict.Build(new XMsg { .. }.Write)`, `XMsg.Read(new LodgeFieldsDict(m))`).
+6. Document it in this file: its fields in its feature's section, and its type in the index below.
+7. A new capability goes behind a flag in `welcome.features` (and `GET /features` when an app must know before signing in): the Outpost
+   sends nothing a Lodge doesn't list, the Lodge ignores what it doesn't know, so old Outposts and old Lodges keep working with new ones.
+
+When a step is missing, `dotnet test shared/Elans.Shared.Tests` fails (`LodgeMsgTests`): a type string not in `LodgeMsg`
+(`No_raw_type_strings_in_the_Lodge_code`), a type without its class or with a class too many (`Every_type_has_its_typed_class_one_per_direction`),
+a class writing another type (`Every_typed_class_writes_its_own_type`), a frame built or read by field name on either side
+(`No_frame_is_built_or_read_by_field_name_outside_the_typed_classes`), a type not described here (`Every_type_is_described_in_PROTOCOL_md`)
+or missing from the index (`Every_type_has_its_typed_class_one_per_direction`), a type the server neither handles nor sends
+(`Every_type_is_used_by_the_server`).
+No test can see a missing golden test (step 3) or features flag (step 7): the review does.
+
 ## Every message type (index)
 
 The one list is `shared/Elans.Shared/Lodge/LodgeMsg.cs`: the Lodge and the Outpost take every `t` from it, and
