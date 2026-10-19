@@ -45,7 +45,7 @@ def main(argv):
                 p = os.path.join(dest, f)
                 if not os.path.exists(p):
                     problems.append(f + ": missing in the Cairn")
-                elif open(p, "rb").read() != data:
+                elif open(p, "rb").read().replace(b"\r\n", b"\n") != data.replace(b"\r\n", b"\n"):   # line ends follow the checkout (LF on the Linux server)
                     problems.append(f + ": differs from shared/Elans.Shared/" + f)
             for f in sorted(have - set(want)):
                 problems.append(f + ": is not in shared/Elans.Shared/")
