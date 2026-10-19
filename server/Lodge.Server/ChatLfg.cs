@@ -9,18 +9,18 @@ namespace Lodge;
 public partial class ChatModule
 {
     // finds the card; null when it doesn't exist or the channel is not visible to `me` (same answer for both)
-    (Channel, HistoryStore, JsonObject) FindCard(Member me, JsonObject m)
+    (Channel, HistoryStore, JsonObject) FindCard(Member me, string id)
     {
-        var (ch, s, msg) = FindMessage(J.Str(m, "id"));
+        var (ch, s, msg) = FindMessage(id);
         if (msg == null || !ch.VisibleTo(me.Role)) return (null, null, null);
         return (ch, s, msg);
     }
 
     // Every read and write of a card's JSON happens under the store lock: JsonObject is not safe to read while another thread sets a property
     // (two people tapping Join at the same moment used to be able to throw "Collection was modified" from Lfg.Is).
-    async Task LfgJoin(Member me, JsonObject m, string role)
+    async Task LfgJoin(Member me, string id, string role)
     {
-        var (ch, s, msg) = FindCard(me, m);
+        var (ch, s, msg) = FindCard(me, id);
         if (msg == null) return;
         Lfg.Result r; bool card;
         lock (s) { card = Lfg.Is(msg); r = card ? Lfg.Join((JsonObject)msg["lfg"], me.Name, role) : Lfg.Result.Unchanged; }
@@ -28,9 +28,9 @@ public partial class ChatModule
         await Finish(me, ch, s, msg, r, "That role is full");
     }
 
-    async Task LfgLeave(Member me, JsonObject m)
+    async Task LfgLeave(Member me, string id)
     {
-        var (ch, s, msg) = FindCard(me, m);
+        var (ch, s, msg) = FindCard(me, id);
         if (msg == null) return;
         Lfg.Result r; bool card;
         lock (s) { card = Lfg.Is(msg); r = card ? Lfg.Leave((JsonObject)msg["lfg"], me.Name) : Lfg.Result.Unchanged; }
@@ -39,9 +39,9 @@ public partial class ChatModule
     }
 
     // the author or an officer may close (the group is set) or cancel (it won't happen) a card
-    async Task LfgEnd(Member me, JsonObject m, string status)
+    async Task LfgEnd(Member me, string id, string status)
     {
-        var (ch, s, msg) = FindCard(me, m);
+        var (ch, s, msg) = FindCard(me, id);
         if (msg == null) return;
         Lfg.Result r = Lfg.Result.Unchanged; bool card, allowed = true;
         lock (s)
@@ -67,17 +67,17 @@ public partial class ChatModule
             case Lfg.Result.Denied: await hub.Error(me, "Pick Tank, Healer, DPS or Maybe", "lfg"); return;
             case Lfg.Result.Unchanged: return;
         }
-        JsonObject lfg; string text, id;
+        var update = new LfgUpdateMsg { Channel = ch.Id };
         lock (s)
         {
             var live = (JsonObject)msg["lfg"];
-            text = Lfg.Fallback(live);
-            msg["text"] = text; // older clients and search see the current state after a reload
-            id = (string)msg["id"];
-            lfg = live.DeepClone().AsObject();
+            update.Text = Lfg.Fallback(live);
+            msg["text"] = update.Text; // older clients and search see the current state after a reload
+            update.Id = (string)msg["id"];
+            update.Card = LfgCard.Read(new LodgeFieldsJson(live)); // a snapshot, taken under the lock
             s.MarkDirty();
         }
         QueueFlush(s);
-        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Lfg, ["channel"] = ch.Id, ["id"] = id, ["lfg"] = lfg, ["text"] = text }, Viewers(ch));
+        await hub.Broadcast(LodgeFieldsJson.Build(update.Write), Viewers(ch));
     }
 }

@@ -43,6 +43,27 @@ public class LfgTests
         Assert.Equal("Deadmines", (string)stored["lfg"]!["title"]!);
     }
 
+    // the typed LfgUpdateMsg (Elans.Shared) sends exactly what the old JsonObject literal did: t, channel, id, text and the stored card as it is
+    [Fact]
+    public async Task The_lfg_update_carries_exactly_the_stored_card()
+    {
+        using var r = new FunRig();
+        var elan = r.Join("Elan", "owner"); var bob = r.Join("Bob", "officer");
+        var id = await Post(r, elan, Card(now: false, start: r.NowMs + 3_600_000));
+        await r.Do(bob, new { t = "lfg:join", id, role = "healer" });
+        await r.Do(elan, new { t = "lfg:maybe", id });
+        var u = r.Sock("Bob").Of("lfg").Last();
+        Assert.Equal(new[] { "channel", "id", "lfg", "t", "text" }, u.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Equal(("general", id), ((string)u["channel"]!, (string)u["id"]!));
+
+        r.Hub.Chat.FlushAll();
+        var stored = new HistoryStore(Path.Combine(r.Dir.Path, "history"), "general", 1 << 20, T.Log).Messages.Single(x => (string)x["id"]! == id);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(stored["lfg"]!.ToJsonString()), JsonNode.Parse(u["lfg"]!.ToJsonString())),
+            "sent " + u["lfg"]!.ToJsonString() + "\nstored " + stored["lfg"]!.ToJsonString());
+        Assert.Equal((string)stored["text"]!, (string)u["text"]!);
+        Assert.Equal(2, ((JsonArray)u["lfg"]!["signups"]!).Count);
+    }
+
     [Fact]
     public async Task Fallback_text_reflects_the_picked_time_signups_and_closing()
     {

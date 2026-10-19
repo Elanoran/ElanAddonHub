@@ -190,5 +190,19 @@ public static class J
         return fallback;
     }
 
+    public static long Long(JsonObject m, string key, long fallback = 0)
+    {
+        try
+        {
+            if (m != null && m[key] is JsonValue v)
+            {
+                if (v.TryGetValue<long>(out var l)) return l;
+                if (v.TryGetValue<double>(out var d) && !double.IsNaN(d)) return (long)Math.Clamp(d, long.MinValue, long.MaxValue);
+            }
+        }
+        catch { }
+        return fallback;
+    }
+
     public static JsonObject Obj(JsonObject m, string key) => m != null && m[key] is JsonObject o ? o : null;
 }

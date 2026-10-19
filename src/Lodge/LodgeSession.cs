@@ -436,11 +436,12 @@ namespace ElansAddonHub.Lodge
                     break;
                 case LodgeMsg.Lfg:
                     // a sign-up card changed: the whole current state arrives (one place per person is the server's rule)
-                    var lm = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
-                    if (lm?.Lfg != null && m.Child("lfg") != null)
+                    var lu = LfgUpdateMsg.Read(new LodgeFieldsDict(m));
+                    var lm = MessagesOf(lu.Channel).FirstOrDefault(x => x.Id == lu.Id);
+                    if (lm?.Lfg != null && lu.Card != null)
                     {
-                        lm.Lfg.Apply(m.Child("lfg"));
-                        if (m.Str("text") != null) lm.Text = SafeFile.Text(m.Str("text"));
+                        lm.Lfg.Apply(lu.Card);
+                        if (lu.Text != null) lm.Text = SafeFile.Text(lu.Text);
                         LfgChanged?.Invoke(lm);
                     }
                     break;
@@ -1303,11 +1304,11 @@ namespace ElansAddonHub.Lodge
             if (!now) lfg["start"] = (double)Ms(startLocal.ToUniversalTime());
             return Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Msg, ["channel"] = Selected?.Id, ["kind"] = "lfg", ["text"] = title ?? "", ["lfg"] = lfg });
         }
-        public Task LfgJoin(MessageVM m, string role) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgJoin, ["id"] = m.Id, ["role"] = role });
-        public Task LfgMaybe(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgMaybe, ["id"] = m.Id });
-        public Task LfgLeave(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgLeave, ["id"] = m.Id });
-        public Task LfgClose(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgClose, ["id"] = m.Id });
-        public Task LfgCancel(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgCancel, ["id"] = m.Id });
+        public Task LfgJoin(MessageVM m, string role) => Send(LodgeFieldsDict.Build(new LfgJoinMsg { Id = m.Id, Role = role }.Write));
+        public Task LfgMaybe(MessageVM m) => Send(LodgeFieldsDict.Build(new LfgMaybeMsg { Id = m.Id }.Write));
+        public Task LfgLeave(MessageVM m) => Send(LodgeFieldsDict.Build(new LfgLeaveMsg { Id = m.Id }.Write));
+        public Task LfgClose(MessageVM m) => Send(LodgeFieldsDict.Build(new LfgCloseMsg { Id = m.Id }.Write));
+        public Task LfgCancel(MessageVM m) => Send(LodgeFieldsDict.Build(new LfgCancelMsg { Id = m.Id }.Write));
 
         readonly HashSet<string> lfgReminded = new HashSet<string>();
         public static readonly TimeSpan LfgRemindBefore = TimeSpan.FromMinutes(10);

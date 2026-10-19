@@ -127,11 +127,11 @@ public partial class ChatModule : IModule
             case LodgeMsg.React: await React(me, m); return true;
             case LodgeMsg.Pin: await Pin(me, m, true); return true;
             case LodgeMsg.Unpin: await Pin(me, m, false); return true;
-            case LodgeMsg.LfgJoin: await LfgJoin(me, m, J.Str(m, "role")); return true;
-            case LodgeMsg.LfgMaybe: await LfgJoin(me, m, "maybe"); return true;
-            case LodgeMsg.LfgLeave: await LfgLeave(me, m); return true;
-            case LodgeMsg.LfgClose: await LfgEnd(me, m, "closed"); return true;
-            case LodgeMsg.LfgCancel: await LfgEnd(me, m, "cancelled"); return true;
+            case LodgeMsg.LfgJoin: { var j = LfgJoinMsg.Read(new LodgeFieldsJson(m)); await LfgJoin(me, j.Id, j.Role); return true; }
+            case LodgeMsg.LfgMaybe: await LfgJoin(me, LfgMaybeMsg.Read(new LodgeFieldsJson(m)).Id, "maybe"); return true;
+            case LodgeMsg.LfgLeave: await LfgLeave(me, LfgLeaveMsg.Read(new LodgeFieldsJson(m)).Id); return true;
+            case LodgeMsg.LfgClose: await LfgEnd(me, LfgCloseMsg.Read(new LodgeFieldsJson(m)).Id, "closed"); return true;
+            case LodgeMsg.LfgCancel: await LfgEnd(me, LfgCancelMsg.Read(new LodgeFieldsJson(m)).Id, "cancelled"); return true;
             case LodgeMsg.HistoryBefore: await HistoryBefore(me, m); return true;
             case LodgeMsg.Search: await Search(me, m); return true;
             case LodgeMsg.Typing:

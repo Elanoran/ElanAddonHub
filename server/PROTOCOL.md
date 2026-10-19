@@ -220,6 +220,10 @@ can't see answers exactly like one that doesn't exist.
   organiser or an officer (`Perm.Moderate`). A closed or cancelled card can't change.
 - Server -> client: `lfg` `{channel, id, lfg, text}` to everyone who sees the channel, after every change. Refusals are `error` with code `lfg`
   ("That sign-up is closed", "Only the organiser or an officer can do that", a bad role, too many open cards, a bad card) or `lfg-full`.
+- Typed (stage 2 pilot): the five client messages, the `lfg` update and the card are classes in `shared/Elans.Shared/Lodge/LfgMessages.cs`
+  (`LfgJoinMsg` ... `LfgUpdateMsg`, `LfgCard`), written and read by both sides through `ILodgeFields` / `ILodgeWriter` (`LodgeFields.cs`;
+  adapters `server/Lodge.Server/LodgeFieldsJson.cs` and `src/Lodge/LodgeFieldsDict.cs`). Not typed yet: the create request (a `msg`) and
+  `Lfg.cs`, which builds and changes the stored card itself.
 
 **Older messages** (scrolling up past the welcome's history):
 

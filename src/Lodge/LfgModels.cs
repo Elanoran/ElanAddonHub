@@ -6,6 +6,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -116,22 +117,24 @@ namespace ElansAddonHub.Lodge
         public bool IAmAuthor => By != null && string.Equals(By, MyName(), StringComparison.OrdinalIgnoreCase);
         public bool CanEnd => IsOpen && (IAmAuthor || IAmOfficer());
 
-        public void Apply(Dictionary<string, object> d)
+        // the "lfg" object of a card message (welcome, msg, history pages)
+        public void Apply(Dictionary<string, object> d) { if (d != null) Apply(LfgCard.Read(new LodgeFieldsDict(d))); }
+
+        public void Apply(LfgCard c)
         {
-            if (d == null) return;
-            Title = SafeFile.Text(d.Str("title") ?? "");
-            Note = SafeFile.Text(d.Str("note") ?? "");
-            Status = d.Str("status") ?? "open";
-            By = d.Str("by");
-            IsNow = d.Bool("now");
-            StartUtc = DateTimeOffset.FromUnixTimeMilliseconds(d.Long("start")).UtcDateTime;
-            var slots = d.Child("slots");
-            var entries = d.List("signups").OfType<Dictionary<string, object>>().Select(x => (name: x.Str("n"), role: x.Str("r"))).Where(x => !string.IsNullOrEmpty(x.name)).ToList();
+            if (c == null) return;
+            Title = SafeFile.Text(c.Title ?? "");
+            Note = SafeFile.Text(c.Note ?? "");
+            Status = c.Status ?? "open";
+            By = c.By;
+            IsNow = c.Now;
+            StartUtc = DateTimeOffset.FromUnixTimeMilliseconds(c.Start).UtcDateTime;
+            var entries = c.Signups.Select(x => (name: x.Name, role: x.Role)).Where(x => !string.IsNullOrEmpty(x.name)).ToList();
             var me = MyName();
             MyRole = entries.Where(x => me != null && string.Equals(x.name, me, StringComparison.OrdinalIgnoreCase)).Select(x => x.role).FirstOrDefault();
             LfgSlotVM Slot(string n) => new LfgSlotVM(n, MemberOf(n) ?? LfgSlotVM.StandIn(n), me != null && string.Equals(n, me, StringComparison.OrdinalIgnoreCase));
             foreach (var r in Roles)
-                r.Set(slots?.Int(r.Id) ?? 0, entries.Where(x => x.role == r.Id).Select(x => Slot(x.name)), IsOpen);
+                r.Set(c.SlotsOf(r.Id), entries.Where(x => x.role == r.Id).Select(x => Slot(x.name)), IsOpen);
             Maybe.Set(entries.Count(x => x.role == "maybe"), entries.Where(x => x.role == "maybe").Select(x => Slot(x.name)), false);
             RaiseAll();
         }
