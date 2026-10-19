@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 using Xunit;
 
 namespace Lodge.Tests;
@@ -38,13 +39,11 @@ public class CairnJoinTests
         {
             if (PublicKey == null || !req.Headers.TryGetValues(CairnSign.HSig, out var sig)) return false;
             string H(string n) => req.Headers.GetValues(n).Single();
-            var spki = Convert.FromBase64String(PublicKey.Replace('-', '+').Replace('_', '/') + new string('=', (4 - PublicKey.Length % 4) % 4));
-            using var k = ECDsa.Create(); k.ImportSubjectPublicKeyInfo(spki, out _);
+            using var k = Es256.FromSpki(PublicKey, out var spki);
+            if (k == null) return false;
             var path = req.RequestUri!.AbsolutePath["/cairn".Length..] + req.RequestUri.Query;
             var msg = CairnSign.RequestMessage(req.Method.Method, path, H(CairnSign.HTime), H(CairnSign.HNonce), CairnSign.Sha256Hex(body));
-            var s = sig.Single().Replace('-', '+').Replace('_', '/');
-            return k.VerifyData(Encoding.UTF8.GetBytes(msg), Convert.FromBase64String(s + new string('=', (4 - s.Length % 4) % 4)), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation)
-                && H(CairnSign.HKey) == Convert.ToHexString(SHA256.HashData(spki)).ToLowerInvariant()[..16];
+            return Es256.Verify(k, msg, B64.FromUrl(sig.Single())) && H(CairnSign.HKey) == Es256.KeyIdOf(spki);
         }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
@@ -169,12 +168,9 @@ public class CairnJoinTests
         var a = r.Link.ChallengeAnswer("nonce0123456789abcdef")!;
         Assert.Equal(LodgeUrl, (string)a["publicUrl"]!);
         Assert.Equal(r.Link.Keys.KeyId, (string)a["keyId"]!);
-        using var pub = ECDsa.Create();
-        var spki = Convert.FromBase64String(r.Link.Keys.PublicKey.Replace('-', '+').Replace('_', '/') + new string('=', (4 - r.Link.Keys.PublicKey.Length % 4) % 4));
-        pub.ImportSubjectPublicKeyInfo(spki, out _);
-        var s = ((string)a["sig"]!).Replace('-', '+').Replace('_', '/');
-        Assert.True(pub.VerifyData(Encoding.UTF8.GetBytes("elans-cairn-challenge/1\nnonce0123456789abcdef\n" + LodgeUrl),
-            Convert.FromBase64String(s + new string('=', (4 - s.Length % 4) % 4)), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation));
+        using var pub = Es256.FromSpki(r.Link.Keys.PublicKey, out _);
+        Assert.NotNull(pub);
+        Assert.True(Es256.Verify(pub, "elans-cairn-challenge/1\nnonce0123456789abcdef\n" + LodgeUrl, B64.FromUrl((string)a["sig"]!)));
         int answered = 1;
         for (int i = 0; i < 40; i++) if (r.Link.ChallengeAnswer("nonce0123456789abcde" + (char)('a' + i % 26)) != null) answered++;
         Assert.Equal(30, answered);                                              // at most 30 a minute
@@ -191,6 +187,26 @@ public class CairnJoinTests
     {
         Assert.False(CairnSign.TryNormalizeUrl(url, out _, out var why));
         Assert.False(string.IsNullOrEmpty(why));
+    }
+
+    // the shared rules (one definition with the Cairn) refuse more than the Lodge used to: special ranges and odd paths the Cairn would never take
+    [Theory]
+    [InlineData("https://203.0.113.7/lodge", "The address must be reachable from the internet (not a private or local IP)")]       // documentation range
+    [InlineData("https://[2002:c000:204::1]/lodge", "The address must be reachable from the internet (not a private or local IP)")] // 6to4
+    [InlineData("https://lodge.example.org/a//b", "The address's path can't hold //, .. or an encoded /")]
+    [InlineData("ftp://lodge.example.org/lodge", "The address must start with https://")]
+    public void Addresses_the_Cairn_refuses_are_refused_in_the_Lodges_words(string url, string expected)
+    {
+        Assert.False(CairnSign.TryNormalizeUrl(url, out var n, out var why));
+        Assert.Null(n);
+        Assert.Equal(expected, why);
+    }
+
+    [Fact]
+    public void Every_address_problem_has_its_own_words()
+    {
+        foreach (var p in Enum.GetValues<PublicUrl.Problem>().Where(p => p != PublicUrl.Problem.None))
+            Assert.NotEqual("The address can't be used", CairnSign.Why(p));
     }
 
     [Fact]

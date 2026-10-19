@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -18,50 +19,44 @@ namespace Lodge;
 //                 Cairn's call back (GET /cairn/challenge on this server), waits / is admitted, and then contributes and receives, signed.
 //    The Cairn's URL: LODGE_CAIRN_URL when set (a self-hosted Cairn), otherwise the default public Cairn.
 //  - CairnJoiner: the join / status polling for the join path (CairnContributor does the env path's one-time key registration).
+// The formats themselves live in Elans.Shared (one definition with the Cairn and the Outpost); this facade keeps the Lodge's names and adds
+// only the Guild Master's wording for the public-address check.
 public static class CairnSign
 {
-    public const string HKey = "X-Cairn-Key", HTime = "X-Cairn-Time", HNonce = "X-Cairn-Nonce", HSig = "X-Cairn-Signature";
+    public const string HKey = CairnFormats.HKey, HTime = CairnFormats.HTime, HNonce = CairnFormats.HNonce, HSig = CairnFormats.HSig;
 
-    public static string B64Url(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-    public static string Sha256Hex(byte[] b) => Convert.ToHexString(SHA256.HashData(b ?? Array.Empty<byte>())).ToLowerInvariant();
+    public static string B64Url(byte[] b) => B64.Url(b);
+    public static string Sha256Hex(byte[] b) => Es256.Sha256Hex(b);
 
     public static string RequestMessage(string method, string pathAndQuery, string time, string nonce, string bodySha) =>
-        "elans-cairn-req/1\n" + method.ToUpperInvariant() + "\n" + pathAndQuery + "\n" + time + "\n" + nonce + "\n" + bodySha;
+        CairnFormats.Request(method, pathAndQuery, time, nonce, bodySha);
 
-    public static string ChallengeMessage(string nonce, string publicUrl) => "elans-cairn-challenge/1\n" + nonce + "\n" + publicUrl;
+    public static string ChallengeMessage(string nonce, string publicUrl) => CairnFormats.Challenge(nonce, publicUrl);
 
-    public static bool ValidNonce(string n) => n != null && n.Length is >= 16 and <= 64 && n.All(ch => ch is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_');
+    public static bool ValidNonce(string n) => CairnFormats.ValidNonce(n);
 
-    // the same canonical form the Cairn checks: https, lowercase host, :port only when not 443, no trailing '/', no user / query / fragment.
-    // Refuses addresses the Cairn could never call (localhost, private IPs, a bare host name) so the Guild Master hears it at once.
+    // the same canonical form and rules the Cairn checks (PublicUrl), so the Guild Master hears at once about an address the Cairn could never
+    // call. Only the wording is the Lodge's.
     public static bool TryNormalizeUrl(string s, out string norm, out string why)
     {
-        norm = null; why = null;
-        s = (s ?? "").Trim();
-        if (s.Length == 0) { why = "Enter the Lodge's public address (the one members connect to)"; return false; }
-        if (s.Length > 200) { why = "The address is too long"; return false; }
-        if (!Uri.TryCreate(s, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps) { why = "The address must start with https://"; return false; }
-        if (!string.IsNullOrEmpty(u.UserInfo) || !string.IsNullOrEmpty(u.Query) || !string.IsNullOrEmpty(u.Fragment) || s.Contains('?') || s.Contains('#'))
-        { why = "The address can't carry a user name, ? or #"; return false; }
-        if (u.Port != 443 && u.Port < 1024) { why = "The address must use port 443 or a port from 1024"; return false; }
-        var host = u.IdnHost.ToLowerInvariant();
-        if (u.HostNameType == UriHostNameType.Dns && (host == "localhost" || host.EndsWith(".localhost") || host.EndsWith(".local") || host.EndsWith(".internal") || !host.Contains('.')))
-        { why = "The address must be reachable from the internet (not localhost or a local name)"; return false; }
-        if (u.HostNameType is UriHostNameType.IPv4 or UriHostNameType.IPv6 && IPAddress.TryParse(u.Host.Trim('[', ']'), out var ip) && !IsPublicIp(ip))
-        { why = "The address must be reachable from the internet (not a private or local IP)"; return false; }
-        var path = u.AbsolutePath.TrimEnd('/');
-        norm = "https://" + (u.HostNameType == UriHostNameType.IPv6 ? "[" + host.Trim('[', ']') + "]" : host) + (u.Port == 443 ? "" : ":" + u.Port.ToString(CultureInfo.InvariantCulture)) + path;
-        return true;
+        var ok = PublicUrl.TryNormalize(s, out norm, out var problem);
+        why = ok ? null : Why(problem);
+        return ok;
     }
 
-    static bool IsPublicIp(IPAddress a)
+    public static string Why(PublicUrl.Problem p) => p switch
     {
-        if (a.IsIPv4MappedToIPv6) a = a.MapToIPv4();
-        if (IPAddress.IsLoopback(a) || a.IsIPv6LinkLocal || a.IsIPv6SiteLocal || a.IsIPv6Multicast) return false;
-        var b = a.GetAddressBytes();
-        if (b.Length == 4) return !(b[0] is 0 or 10 or 127 || b[0] >= 224 || (b[0] == 169 && b[1] == 254) || (b[0] == 172 && b[1] is >= 16 and <= 31) || (b[0] == 192 && b[1] == 168) || (b[0] == 100 && b[1] is >= 64 and <= 127));
-        return !((b[0] & 0xfe) == 0xfc);
-    }
+        PublicUrl.Problem.Empty => "Enter the Lodge's public address (the one members connect to)",
+        PublicUrl.Problem.TooLong => "The address is too long",
+        PublicUrl.Problem.NotUrl or PublicUrl.Problem.NotHttps => "The address must start with https://",
+        PublicUrl.Problem.UserQueryFragment => "The address can't carry a user name, ? or #",
+        PublicUrl.Problem.NoHost => "The address must name a host after https://",
+        PublicUrl.Problem.Port => "The address must use port 443 or a port from 1024",
+        PublicUrl.Problem.LocalName => "The address must be reachable from the internet (not localhost or a local name)",
+        PublicUrl.Problem.PrivateIp => "The address must be reachable from the internet (not a private or local IP)",
+        PublicUrl.Problem.OddPath => "The address's path can't hold //, .. or an encoded /",
+        _ => "The address can't be used",
+    };
 }
 
 public sealed class CairnKeys
@@ -83,7 +78,7 @@ public sealed class CairnKeys
         lock (gate)
         {
             if (key != null) return key;
-            var k = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            var k = Es256.NewKey();
             if (File.Exists(path))
             {
                 k.ImportFromPem(File.ReadAllText(path));
@@ -104,8 +99,8 @@ public sealed class CairnKeys
                 File.Move(tmp, path, false);
             }
             var spki = k.ExportSubjectPublicKeyInfo();
-            PublicKey = CairnSign.B64Url(spki);
-            KeyId = Convert.ToHexString(SHA256.HashData(spki)).ToLowerInvariant()[..16];
+            PublicKey = B64.Url(spki);
+            KeyId = Es256.KeyIdOf(spki);
             key = k;
             return k;
         }
@@ -114,7 +109,7 @@ public sealed class CairnKeys
     public string Sign(string message)
     {
         var k = Get();
-        return CairnSign.B64Url(k.SignData(Encoding.UTF8.GetBytes(message), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation));
+        return B64.Url(Es256.Sign(k, message));
     }
 }
 

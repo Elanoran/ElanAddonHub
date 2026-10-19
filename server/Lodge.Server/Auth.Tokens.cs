@@ -66,7 +66,7 @@ public partial class Auth
     // ---- secrets
 
     public static bool IsRetired(string code) => code != null && code.StartsWith('!');
-    static string B64Url(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    static string B64Url(byte[] b) => Elans.Shared.B64.Url(b);
     public static string NewInviteSecret() => InvitePrefix + B64Url(RandomNumberGenerator.GetBytes(24));   // 192 bits
     public static string NewToken() => TokenPrefix + B64Url(RandomNumberGenerator.GetBytes(32));           // 256 bits
     static string NewId() => Convert.ToHexString(RandomNumberGenerator.GetBytes(5)).ToLowerInvariant();
