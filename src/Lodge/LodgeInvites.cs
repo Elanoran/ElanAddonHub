@@ -349,10 +349,11 @@ namespace ElansAddonHub.Lodge
         public string Detail => (Online ? "Online now" : "Last seen " + AgoText.Ago(LastSeen, Now)) + (string.IsNullOrEmpty(Ip) ? "" : " · " + Ip);
         public string Who => string.IsNullOrEmpty(Owner) ? "Guest" : Owner;
 
-        public static DeviceVM Parse(Dictionary<string, object> d, long now) => new DeviceVM
+        // devices' / admin.devices' rows (typed: shared/Elans.Shared/Lodge/DeviceMessages.cs DeviceView)
+        public static DeviceVM From(DeviceView v, long now) => new DeviceVM
         {
-            Id = d.Str("id"), Owner = d.Str("name"), DeviceName = d.Str("device"), Ip = d.Str("ip"), Role = d.Str("role"),
-            Created = d.Long("created"), LastSeen = d.Long("lastSeen"), Current = d.Bool("current"), Online = d.Bool("online"), Now = now,
+            Id = v.Id, Owner = v.Name, DeviceName = v.Device, Ip = v.Ip, Role = v.Role,
+            Created = v.Created, LastSeen = v.LastSeen, Current = v.Current, Online = v.Online, Now = now,
         };
     }
 }

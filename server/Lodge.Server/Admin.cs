@@ -5,7 +5,7 @@ namespace Lodge;
 
 // Guild Master panel (members, ranks, invites, channels) and officer tools (kick, server-mute).
 // Every request is checked against the sender's rank here - the hub only hides buttons.
-// The messages are typed in shared/Elans.Shared/Lodge/AdminMessages.cs; admin.purge's "atlasOnly" is still read from the raw JSON below
+// The messages are typed in shared/Elans.Shared/Lodge/AdminMessages.cs (devices and leaving: DeviceMessages.cs); admin.purge's "atlasOnly" is still read from the raw JSON below
 // (only a JSON false turns it off).
 public class AdminModule : IModule
 {
@@ -24,7 +24,7 @@ public class AdminModule : IModule
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
         if (type.StartsWith("device.")) return await HandleDevice(me, type, m);
-        if (type == LodgeMsg.MemberLeave) return await Leave(me);
+        if (type == MemberLeaveMsg.Type) return await Leave(me);       // { t } only
         if (!Handles.Contains(type)) return false;
         var perm = type switch
         {
@@ -41,7 +41,7 @@ public class AdminModule : IModule
                 case LodgeMsg.AdminInviteCreate: await CreateInvite(me, m); break;
                 case LodgeMsg.AdminInvites: await SendInvites(me); break;
                 case LodgeMsg.AdminInviteRevoke: await RevokeInvite(me, m); break;
-                case LodgeMsg.AdminDevices: await SendDevices(me, LodgeMsg.AdminDevices, J.Str(m, "name")); break;
+                case LodgeMsg.AdminDevices: await SendDevices(me, LodgeMsg.AdminDevices, AdminDevicesGetMsg.Read(new LodgeFieldsJson(m)).Name); break;
                 case LodgeMsg.AdminRetire: await Retire(me, m); break;
                 case LodgeMsg.AdminLodgeSet: await SetLodgeInfo(me, m); break;
                 case LodgeMsg.AdminMembers: await SendMembers(me); break;
@@ -140,18 +140,26 @@ public class AdminModule : IModule
         await SendInvites(me);
     }
 
-    JsonObject DeviceJson(DeviceInfo d, Member viewer) => new()
+    // a device as the lists show it: by id, never with its token (the store keeps only the token's hash)
+    DeviceView DeviceOf(DeviceInfo d, Member viewer) => new()
     {
-        ["id"] = d.Id, ["name"] = d.Guest ? "" : d.Name, ["role"] = d.Role, ["device"] = d.DeviceName,
-        ["created"] = Ms(d.Created), ["lastSeen"] = Ms(d.LastSeen), ["ip"] = d.LastIp ?? "",
-        ["current"] = viewer.DeviceId == d.Id, ["online"] = hub.Members.Any(x => x.DeviceId == d.Id),
+        Id = d.Id, Name = d.Guest ? "" : d.Name, Role = d.Role, Device = d.DeviceName,
+        Created = Ms(d.Created), LastSeen = Ms(d.LastSeen), Ip = d.LastIp ?? "",
+        Current = viewer.DeviceId == d.Id, Online = hub.Members.Any(x => x.DeviceId == d.Id),
     };
 
-    Task SendDevices(Member me, string type, string name) => hub.Send(me, new JsonObject
+    // devices (your own) or admin.devices (everyone's, or one member's)
+    JsonObject DeviceList(Member me, string type, string name, IEnumerable<DeviceInfo> list)
     {
-        ["t"] = type, ["name"] = name ?? "", ["now"] = Ms(hub.Clock.UtcNow),
-        ["devices"] = new JsonArray(hub.Auth.ListDevices(string.IsNullOrWhiteSpace(name) ? null : name).Select(d => (JsonNode)DeviceJson(d, me)).ToArray()),
-    });
+        var rows = list.Select(d => DeviceOf(d, me)).ToList();
+        long now = Ms(hub.Clock.UtcNow);
+        return type == LodgeMsg.Devices
+            ? LodgeFieldsJson.Build(new DevicesMsg { Name = name ?? "", Now = now, Devices = rows }.Write)
+            : LodgeFieldsJson.Build(new AdminDevicesMsg { Name = name ?? "", Now = now, Devices = rows }.Write);
+    }
+
+    Task SendDevices(Member me, string type, string name) =>
+        hub.Send(me, DeviceList(me, type, name, hub.Auth.ListDevices(string.IsNullOrWhiteSpace(name) ? null : name)));
 
     // device.list: your own devices. device.revoke {id}: sign one out - yours, or (officer+) a lower-ranked member's.
     async Task<bool> HandleDevice(Member me, string type, JsonObject m)
@@ -163,12 +171,11 @@ public class AdminModule : IModule
                 case LodgeMsg.DeviceList:
                     // a guest sees only the device they are on
                     if (me.Personal) await SendDevices(me, LodgeMsg.Devices, me.Name);
-                    else await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.Devices, ["name"] = "", ["now"] = Ms(hub.Clock.UtcNow), ["devices"] = new JsonArray(
-                        hub.Auth.ListDevices().Where(d => d.Id == me.DeviceId).Select(d => (JsonNode)DeviceJson(d, me)).ToArray()) });
+                    else await hub.Send(me, DeviceList(me, LodgeMsg.Devices, "", hub.Auth.ListDevices().Where(d => d.Id == me.DeviceId)));
                     break;
                 case LodgeMsg.DeviceRevoke:
                 {
-                    var d = hub.Auth.FindDevice(J.Str(m, "id")) ?? throw new InvalidOperationException("That device is already signed out");
+                    var d = hub.Auth.FindDevice(DeviceRevokeMsg.Read(new LodgeFieldsJson(m)).Id) ?? throw new InvalidOperationException("That device is already signed out");
                     bool mine = d.Guest ? d.Id == me.DeviceId : me.Personal && Names.Same(d.Name, me.Name);
                     if (!mine)
                     {
@@ -256,14 +263,14 @@ public class AdminModule : IModule
             if (!me.Personal)
             {
                 // a guest has no membership: this only signs the device out
-                if (me.DeviceId != null) { hub.Auth.RevokeDevice(me.DeviceId); await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.MemberLeft }); await hub.DisconnectDevice(me.DeviceId); }
+                if (me.DeviceId != null) { hub.Auth.RevokeDevice(me.DeviceId); await hub.Send(me, LodgeFieldsJson.Build(new MemberLeftMsg().Write)); await hub.DisconnectDevice(me.DeviceId); }
                 else await hub.Error(me, "Nothing to leave");
                 return true;
             }
             var devices = hub.Auth.Leave(me.Name);
             var gone = await hub.PurgeMember(me.Name);      // everything they authored goes (see LodgeHub.PurgeMember)
             hub.Log.LogInformation("{Name} left the lodge ({Count} devices signed out, {Items} stored item(s) forgotten)", Names.ForLog(me.Name), devices.Count, gone.Total);
-            await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.MemberLeft });
+            await hub.Send(me, LodgeFieldsJson.Build(new MemberLeftMsg().Write));
             foreach (var d in devices) await hub.DisconnectDevice(d.Id, "You left the lodge");
             await hub.ApplyCodeChanges();   // sessions on a permanent code, and anything left over
         }

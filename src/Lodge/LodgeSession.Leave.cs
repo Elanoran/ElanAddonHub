@@ -40,14 +40,14 @@ namespace ElansAddonHub.Lodge
             switch (m.Str("t"))
             {
                 case LodgeMsg.LodgeInfo: ApplyLodgeInfo(LodgeInfoMsg.Read(new LodgeFieldsDict(m)).Lodge); Changed?.Invoke(); return true;
-                case LodgeMsg.MemberLeft: Left?.Invoke(); return true;
+                case MemberLeftMsg.Type: Left?.Invoke(); return true;     // { t } only
             }
             return false;
         }
 
         // "Leave the lodge": the server drops my codes entry, all my devices and my pending device links; my messages stay.
         // Answers: member.left (done) or an error with code "last-owner".
-        public void RequestLeave() => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.MemberLeave });
+        public void RequestLeave() => _ = Send(LodgeFieldsDict.Build(new MemberLeaveMsg().Write));
 
         // Transfer = make someone else a Guild Master (owner only); afterwards I may leave or stay.
         public void TransferOwnership(string name) => SetRole(name, "owner");

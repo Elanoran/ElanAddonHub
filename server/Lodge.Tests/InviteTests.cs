@@ -731,4 +731,47 @@ public class InviteTests
         await r.Ask(elan, selan, new JsonObject { ["t"] = "admin.purge", ["name"] = "Mia", ["atlasOnly"] = 0 });   // not a JSON false: still Atlas only
         Assert.True((bool)selan.Of("admin.purged").Last()["atlasOnly"]!);
     }
+
+    // devices / admin.devices / member.left (Elans.Shared DeviceMessages.cs) keep their keys and order, and no token is ever in them
+    [Fact]
+    public async Task Typed_device_frames_keep_their_keys_and_never_carry_a_token()
+    {
+        using var r = new Rig();
+        var (tNova, dNova) = r.Join("Nova", "Desktop", "a");
+        var (tNova2, _) = r.Join("Nova", "Laptop", "a2");
+        var (nova, snova) = r.Connect(tNova, true);
+        var (bob, sbob) = r.Connect(T.BobCode, false);
+        var (_, guestSecret) = r.Auth.CreateInvite("guest", "", "guest", "Bob");
+        var gx = r.Auth.ExchangeInvite(Ip, guestSecret, "Guest-PC", "g");
+        var (guest, sguest) = r.Connect(gx.Token!, true);
+
+        await r.Ask(nova, snova, new { t = "device.list" });
+        var mine = snova.Of("devices").Last();
+        Assert.Equal(new[] { "t", "name", "now", "devices" }, KeysInOrder(mine));
+        Assert.Equal("Nova", (string?)mine["name"]);
+        var row = mine["devices"]!.AsArray().Select(x => x!.AsObject()).Single(x => (string?)x["id"] == dNova.Id);
+        Assert.Equal(new[] { "id", "name", "role", "device", "created", "lastSeen", "ip", "current", "online" }, KeysInOrder(row));
+        Assert.Equal(("Nova", "Desktop", true, true), ((string?)row["name"], (string?)row["device"], (bool)row["current"]!, (bool)row["online"]!));
+
+        await r.Ask(bob, sbob, new { t = "admin.devices" });
+        var all = sbob.Of("admin.devices").Last();
+        Assert.Equal(new[] { "t", "name", "now", "devices" }, KeysInOrder(all));
+        Assert.Equal("", (string?)all["name"]);
+        var grow = all["devices"]!.AsArray().Select(x => x!.AsObject()).Single(x => (string?)x["id"] == gx.Device!.Id);
+        Assert.Equal(("", "guest", false), ((string?)grow["name"], (string?)grow["role"], (bool)grow["current"]!));
+        await r.Ask(bob, sbob, new { t = "admin.devices", name = "Nova" });
+        Assert.Equal(new[] { "Nova", "Nova" }, sbob.Of("admin.devices").Last()["devices"]!.AsArray().Select(x => (string?)x!["name"]));
+
+        await r.Ask(guest, sguest, new { t = "device.list" });                      // a guest: only the device they are on
+        var gl = sguest.Of("devices").Last();
+        Assert.Equal(new[] { "t", "name", "now", "devices" }, KeysInOrder(gl));
+        Assert.Equal(gx.Device!.Id, (string?)gl["devices"]!.AsArray().Single()!["id"]);
+
+        await r.Ask(guest, sguest, new { t = "member.leave" });                     // a guest leaving: this device is signed out
+        Assert.Equal(new[] { "t" }, KeysInOrder(sguest.Of("member.left").Single()));
+
+        foreach (var s in new[] { snova, sbob, sguest })
+            foreach (var token in new[] { tNova, tNova2, gx.Token! })
+                Assert.DoesNotContain(s.Sent, x => x.ToJsonString().Contains(token) || x.ToJsonString().Contains(Auth.HashHex(token)));
+    }
 }

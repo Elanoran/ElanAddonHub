@@ -282,6 +282,11 @@ A secret is never accepted in a URL. Link format: `elanshub://lodge/join#<server
 - `admin.invite.created` `{id, kind, name, role, by, created, expires (unix ms), max, uses, used, expired, revoked, pending, secret}` - the only place the secret appears
 - `admin.invites` `{now, invites:[{...as above, no secret}]}` · `devices` / `admin.devices` `{name, now, devices:[{id, name, role, device, created, lastSeen, ip (coarse), current, online}]}`
 - A revoked device's socket is closed (1008, "This device was signed out"); clients don't reconnect after that.
+- Typed (stage 2): `device.list`, `device.revoke`, `admin.devices` (the ask and the answer), `devices`, and the 2.12 `member.leave` / `member.left`
+  are classes in `shared/Elans.Shared/Lodge/DeviceMessages.cs` (`DeviceListMsg`, `DeviceRevokeMsg`, `AdminDevicesGetMsg`, `DevicesMsg`,
+  `AdminDevicesMsg`, `DeviceView`, `MemberLeaveMsg`, `MemberLeftMsg`), used by both sides like the LFG ones; the invite messages are in
+  `AdminMessages.cs` (see the first list). A device is named by its id; no token (or its hash) is in any of them. `join` / `leave` / `user`
+  (presence, carrying the member's `user` entry) are not part of this group.
 
 
 ## 2.11 additions (raid / event calendar; all optional for clients)
