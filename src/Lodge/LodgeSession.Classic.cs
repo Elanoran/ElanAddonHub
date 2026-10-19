@@ -51,9 +51,10 @@ namespace ElansAddonHub.Lodge
         public void RequestClassicInfo()
         {
             if (!SupportsClassic || IsGuestNow) return;
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.DatasetInfo, ["name"] = "classic" });
+            _ = Send(LodgeFieldsDict.Build(new DatasetInfoMsg { Name = "classic" }.Write));
         }
 
+        // the messages are typed in shared/Elans.Shared/Lodge/DatasetMessages.cs
         void OnDatasetFrame(Dictionary<string, object> m)
         {
             if (!SupportsClassic) return;
@@ -61,24 +62,33 @@ namespace ElansAddonHub.Lodge
             {
                 case LodgeMsg.DatasetData:
                 case LodgeMsg.DatasetChanged:
-                    if (m.Str("name") != "classic") return;
-                    ApplyClassic(m);
+                {
+                    // dataset.changed carries the same view (plus its action) and normally neither canManage nor maxMb: read through
+                    // DatasetDataMsg, either one is applied only when the frame has it, as before
+                    var d = DatasetDataMsg.Read(new LodgeFieldsDict(m));
+                    if (d.Dataset.Name != "classic") return;
+                    ApplyClassic(d.Dataset, d.CanManage, d.MaxMb);
                     break;
+                }
                 case LodgeMsg.DatasetResult:
-                    if (m.Str("name") != "classic" || m.Bool("ok")) return;
-                    ClassicProblem = ClassicWhy(m.Str("why"));
+                {
+                    var r = DatasetResultMsg.Read(new LodgeFieldsDict(m));
+                    if (r.Name != "classic" || r.Ok) return;
+                    ClassicProblem = ClassicWhy(r.Why);
                     ClassicChanged?.Invoke();
                     RequestClassicInfo();
                     break;
+                }
             }
         }
 
-        void ApplyClassic(Dictionary<string, object> m)
+        // canManage: null = not in the frame (keep what was known); maxMb: 0 = not in the frame
+        void ApplyClassic(DatasetView v, bool? canManage, int maxMb)
         {
-            if (m.ContainsKey("canManage")) CanShareClassic = m.Bool("canManage") && !IsGuestNow;
-            if (m.Int("maxMb") > 0) ClassicMaxMb = m.Int("maxMb");
-            ClassicHosted = m.Bool("available") && !string.IsNullOrEmpty(m.Str("version")) && (m.Str("sha256") ?? "").Length == 64
-                ? new ClassicHosted { Version = m.Str("version"), Sha256 = m.Str("sha256").ToLowerInvariant(), Size = m.Long("size"), UploadedBy = DisplayNames.Shown(m.Str("uploadedBy") ?? ""), At = m.Long("at") }
+            if (canManage is bool can) CanShareClassic = can && !IsGuestNow;
+            if (maxMb > 0) ClassicMaxMb = maxMb;
+            ClassicHosted = v.Available && !string.IsNullOrEmpty(v.Version) && (v.Sha256 ?? "").Length == 64
+                ? new ClassicHosted { Version = v.Version, Sha256 = v.Sha256.ToLowerInvariant(), Size = v.Size, UploadedBy = DisplayNames.Shown(v.UploadedBy ?? ""), At = v.At }
                 : null;
             ClassicKnown = true;
             ClassicProblem = null;
@@ -155,7 +165,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsClassic) return "This Lodge's server can't host the Classic data yet";
             if (!CanShareClassic) return ClassicWhy("forbidden");
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.DatasetDelete, ["name"] = "classic" });
+            _ = Send(LodgeFieldsDict.Build(new DatasetDeleteMsg { Name = "classic" }.Write));
             return null;
         }
     }

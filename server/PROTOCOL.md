@@ -436,6 +436,9 @@ The content is a single file (for `classic`: a zip holding the ORIGINAL upstream
 - `dataset.delete` `{name}` (officers and the owner) -> `dataset.result` `{op: "delete", name, ok, why?}`; `why`: `forbidden`, `missing`, `disabled`, `unknown`, `save`.
 - `dataset.changed` `{name, action: new|replace|delete, available, version?, sha256?, size?, uploadedBy?, at?}` goes to every member (not to guests) when it changes.
 - Outposts compare `version` strings (`<commit date>|<dump name>|<commit>` for `classic`) to decide whether to fetch, and check the downloaded bytes against `sha256` before unpacking.
+- Typed (stage 2): the socket messages are classes in `shared/Elans.Shared/Lodge/DatasetMessages.cs` (`DatasetInfoMsg`, `DatasetDeleteMsg`,
+  `DatasetDataMsg`, `DatasetChangedMsg`, `DatasetResultMsg`; the shared fields are a `DatasetView`, also the HTTP upload's answer), used by both
+  sides like the LFG ones. `dataset.data` and `dataset.changed` keep their key order: the view's fields first, then `t` and their own.
 
 ## Realm status (feature `realms`; the server version is set at merge, 2.20.0 here; optional for clients)
 

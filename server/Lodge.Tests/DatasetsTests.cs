@@ -407,4 +407,37 @@ public class DatasetsTests
         r.Clock.Advance(TimeSpan.FromMinutes(11));
         await Up(r, boss, Bundle(), "v10");
     }
+
+    // ---------------------------------------------------------------- typed (Elans.Shared DatasetMessages.cs)
+
+    static string[] KeysInOrder(JsonObject o) => o.Select(kv => kv.Key).ToArray();
+
+    // dataset.data / dataset.changed / dataset.result and the upload's view keep their keys and order (the type after the view's fields, as always)
+    [Fact]
+    public async Task Typed_dataset_frames_keep_their_keys()
+    {
+        using var r = new FunRig();
+        var boss = r.Join("Wing", "officer"); var mem = r.Join("Mia", "member");
+        await r.Send(mem, new { t = "dataset.info", name = "classic" });
+        Assert.Equal(new[] { "name", "available", "t", "canManage", "maxMb" }, KeysInOrder(r.Sock("Mia").Of("dataset.data").Last()));
+
+        var view = await Up(r, boss, Bundle(), "v1");
+        Assert.Equal(new[] { "name", "available", "version", "sha256", "size", "uploadedBy", "at" }, KeysInOrder(view));
+        var a = await Eventually(r.Sock("Mia"), "dataset.changed");
+        Assert.Equal(new[] { "name", "available", "version", "sha256", "size", "uploadedBy", "at", "t", "action" }, KeysInOrder(a));
+
+        r.Clock.Advance(TimeSpan.FromSeconds(3));
+        await r.Send(boss, new { t = "dataset.info", name = "classic" });
+        var d = r.Sock("Wing").Of("dataset.data").Last();
+        Assert.Equal(new[] { "name", "available", "version", "sha256", "size", "uploadedBy", "at", "t", "canManage", "maxMb" }, KeysInOrder(d));
+        Assert.Equal(("classic", true, "v1", "Wing", true), ((string?)d["name"], (bool)d["available"]!, (string?)d["version"], (string?)d["uploadedBy"], (bool)d["canManage"]!));
+        Assert.Equal(64, ((string)d["sha256"]!).Length);
+
+        await r.Send(mem, new { t = "dataset.delete", name = "classic" });
+        Assert.Equal(new[] { "t", "op", "name", "ok", "why" }, KeysInOrder(r.Sock("Mia").Of("dataset.result").Last()));
+        await r.Send(boss, new { t = "dataset.delete", name = "classic" });
+        Assert.Equal(new[] { "t", "op", "name", "ok" }, KeysInOrder(r.Sock("Wing").Of("dataset.result").Last()));
+        var gone = await Eventually(r.Sock("Mia"), "dataset.changed", 2);
+        Assert.Equal(new[] { "name", "available", "t", "action" }, KeysInOrder(gone));
+    }
 }

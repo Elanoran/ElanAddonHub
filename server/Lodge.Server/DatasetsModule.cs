@@ -203,25 +203,21 @@ public sealed class DatasetsModule : IModule
         return string.IsNullOrEmpty(dn) ? (login ?? "") : dn;
     }
 
-    JsonObject View(DatasetKind kind, DatasetMeta m)
-    {
-        var o = new JsonObject { ["name"] = kind.Name, ["available"] = m != null };
-        if (m != null)
-        {
-            o["version"] = m.Version; o["sha256"] = m.Sha256; o["size"] = m.Size; o["uploadedBy"] = Shown(m.UploadedBy); o["at"] = m.At;
-        }
-        return o;
-    }
+    // typed in shared/Elans.Shared/Lodge/DatasetMessages.cs: the view (also the HTTP upload's answer), dataset.data, dataset.changed, dataset.result
+    DatasetView ViewOf(DatasetKind kind, DatasetMeta m) => m == null
+        ? new DatasetView { Name = kind.Name, Available = false }
+        : new DatasetView { Name = kind.Name, Available = true, Version = m.Version, Sha256 = m.Sha256, Size = m.Size, UploadedBy = Shown(m.UploadedBy), At = m.At };
+
+    JsonObject View(DatasetKind kind, DatasetMeta m) => LodgeFieldsJson.Build(ViewOf(kind, m).Write);
 
     public JsonObject Info(DatasetKind kind, Member me)
     {
         DatasetMeta m;
         lock (gate) m = items.FirstOrDefault(i => i.Name == kind.Name);
-        var o = View(kind, m);
-        o["t"] = LodgeMsg.DatasetData;
-        o["canManage"] = me != null && Roles.Can(me.Role, Perm.DatasetManage);
-        o["maxMb"] = (int)(kind.MaxBytes(hub.Cfg) / (1024 * 1024));
-        return o;
+        return LodgeFieldsJson.Build(new DatasetDataMsg
+        {
+            Dataset = ViewOf(kind, m), CanManage = me != null && Roles.Can(me.Role, Perm.DatasetManage), MaxMb = (int)(kind.MaxBytes(hub.Cfg) / (1024 * 1024)),
+        }.Write);
     }
 
     public DatasetMeta Peek(string name) { lock (gate) return items.FirstOrDefault(i => i.Name == name); }
@@ -390,33 +386,27 @@ public sealed class DatasetsModule : IModule
     // ---------------------------------------------------------------- messages
 
     // only people who may read it hear about a change
-    Task Announce(DatasetKind kind, DatasetMeta m, string action)
-    {
-        var o = View(kind, m);
-        o["t"] = LodgeMsg.DatasetChanged; o["action"] = action;
-        return hub.Broadcast(o, who => Roles.Can(who.Role, Perm.DatasetRead) && who.Personal);
-    }
+    Task Announce(DatasetKind kind, DatasetMeta m, string action) =>
+        hub.Broadcast(LodgeFieldsJson.Build(new DatasetChangedMsg { Dataset = ViewOf(kind, m), Action = action }.Write), who => Roles.Can(who.Role, Perm.DatasetRead) && who.Personal);
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
         switch (type)
         {
-            case LodgeMsg.DatasetInfo:
+            case DatasetInfoMsg.Type:
             {
-                var kind = DatasetKinds.Find(J.Str(m, "name"));
+                var kind = DatasetKinds.Find(DatasetInfoMsg.Read(new LodgeFieldsJson(m)).Name);
                 if (kind == null || !Enabled(kind)) { await hub.Error(me, "That isn't available on this lodge", "disabled"); return true; }
                 if (!me.Personal || !Roles.Can(me.Role, Perm.DatasetRead)) { await hub.Error(me, "This is for lodge members", "guest"); return true; }
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 await hub.Send(me, Info(kind, me));
                 return true;
             }
-            case LodgeMsg.DatasetDelete:
+            case DatasetDeleteMsg.Type:
             {
-                var name = J.Str(m, "name") ?? "";
+                var name = DatasetDeleteMsg.Read(new LodgeFieldsJson(m)).Name ?? "";
                 var (ok, why) = Delete(me, name);
-                var r = new JsonObject { ["t"] = LodgeMsg.DatasetResult, ["op"] = "delete", ["name"] = name, ["ok"] = ok };
-                if (why != null) r["why"] = why;
-                await hub.Send(me, r);
+                await hub.Send(me, LodgeFieldsJson.Build(new DatasetResultMsg { Op = "delete", Name = name, Ok = ok, Why = why }.Write));
                 if (ok)
                 {
                     hub.Log.LogInformation("{Name} took the {Dataset} dataset off the lodge", me.Name, name);
