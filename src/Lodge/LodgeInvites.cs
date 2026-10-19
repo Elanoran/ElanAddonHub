@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -330,11 +331,12 @@ namespace ElansAddonHub.Lodge
         public bool CanRevoke => Pending;
         public double RowOpacity => Pending ? 1.0 : 0.6;
 
-        public static InviteVM Parse(Dictionary<string, object> d, long now) => new InviteVM
+        // admin.invites' rows and admin.invite.created (typed: shared/Elans.Shared/Lodge/AdminMessages.cs InviteView)
+        public static InviteVM From(InviteView v, long now) => new InviteVM
         {
-            Id = d.Str("id"), Kind = d.Str("kind"), Name = d.Str("name"), Role = d.Str("role"), By = d.Str("by"),
-            Created = d.Long("created"), Expires = d.Long("expires"), Max = Math.Max(1, d.Int("max")), Uses = d.Int("uses"),
-            Used = d.Bool("used"), Expired = d.Bool("expired"), Revoked = d.Bool("revoked"), Pending = d.Bool("pending"), Now = now,
+            Id = v.Id, Kind = v.Kind, Name = v.Name, Role = v.Role, By = v.By,
+            Created = v.Created, Expires = v.Expires, Max = Math.Max(1, v.Max), Uses = v.Uses,
+            Used = v.Used, Expired = v.Expired, Revoked = v.Revoked, Pending = v.Pending, Now = now,
         };
     }
 

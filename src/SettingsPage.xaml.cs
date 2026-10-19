@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using ElansAddonHub.Lodge;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub
 {
@@ -202,7 +203,7 @@ namespace ElansAddonHub
             session.Changed += () => { NavGm.Visibility = session.CanManage || session.CanInvite ? Visibility.Visible : Visibility.Collapsed; UpdateInviteMode(); UpdateDevicesCard(); UpdateLodgePosRow(); };
             UpdateLodgePosRow();
             session.AdminMembers += FillAdmin;
-            session.AdminPurged += m => GmStatus.Text = m.Int("atlas") > 0 ? $"Took {m.Int("atlas")} Atlas item(s) shared by {m.Str("name")} back out. They stay a member." : $"{m.Str("name")} had nothing in the Atlas.";
+            session.AdminPurged += m => GmStatus.Text = m.Atlas > 0 ? $"Took {m.Atlas} Atlas item(s) shared by {m.Name} back out. They stay a member." : $"{m.Name} had nothing in the Atlas.";
             session.DevicesChanged += FillDevices;
             session.Error += text => { if (SecGm.Visibility == Visibility.Visible) GmStatus.Text = text; };
             InitProfile();
@@ -896,23 +897,23 @@ namespace ElansAddonHub
 
         // ================================================================ guild master
 
-        void FillAdmin(List<Dictionary<string, object>> members, List<Dictionary<string, object>> channels)
+        void FillAdmin(List<AdminMember> members, List<LodgeChannelView> channels)
         {
-            adminPeople = members.Select(m => new KeyValuePair<string, string>(m.Str("name"), m.Str("role"))).ToList();
+            adminPeople = members.Select(m => new KeyValuePair<string, string>(m.Name, m.Role)).ToList();
             FillTransferPick();
             loading = true;
             MemberRows.ItemsSource = members.Select(m => new MemberRow
                 {
-                    Name = m.Str("name"), Role = m.Str("role"), Online = m.Bool("online"),
-                    HasCode = !m.ContainsKey("hasCode") || m.Bool("hasCode"), Devices = m.ContainsKey("devices") ? m.Int("devices") : -1, CanRetire = session.CanRetire, CanPurge = session.CanPurge,
+                    Name = m.Name, Role = m.Role, Online = m.Online,
+                    HasCode = m.HasCode ?? true, Devices = m.Devices ?? -1, CanRetire = session.CanRetire, CanPurge = session.CanPurge,
                 })
                 .OrderByDescending(m => MemberVM.RoleLevel(m.Role)).ThenBy(m => m.Name).ToList();
             ChannelRows.ItemsSource = channels.Select(c =>
             {
-                var type = c.Str("type");
-                var min = c.Str("minRole") ?? "guest";
-                var info = (min == "guest" ? "everyone" : MemberVM.RoleName(min) + "+") + (type == "voice" && c.Int("max") > 0 ? $" · max {c.Int("max")}" : "");
-                return new ChannelRow { Id = c.Str("id"), Name = c.Str("name"), Type = type, Info = info };
+                var type = c.ChannelType;
+                var min = c.MinRole ?? "guest";
+                var info = (min == "guest" ? "everyone" : MemberVM.RoleName(min) + "+") + (type == "voice" && c.Max > 0 ? $" · max {c.Max}" : "");
+                return new ChannelRow { Id = c.Id, Name = c.Name, Type = type, Info = info };
             }).OrderBy(c => c.Type == "voice").ToList();
             loading = false;
         }
@@ -921,10 +922,10 @@ namespace ElansAddonHub
         public void GmDesignForTest()
         {
             NavGm.Visibility = Visibility.Visible;
-            Dictionary<string, object> M(string n, string r, bool on) => new Dictionary<string, object> { ["name"] = n, ["role"] = r, ["online"] = on };
-            Dictionary<string, object> C(string n, string type, string min, int max) => new Dictionary<string, object> { ["id"] = n, ["name"] = n, ["type"] = type, ["minRole"] = min, ["max"] = max };
-            FillAdmin(new List<Dictionary<string, object>> { M("Elan", "owner", true), M("Bob", "officer", true), M("Dax", "member", false) },
-                new List<Dictionary<string, object>> { C("general", "text", "guest", 0), C("officers", "text", "officer", 0), C("Campfire", "voice", "guest", 8) });
+            AdminMember M(string n, string r, bool on) => new AdminMember { Name = n, Role = r, Online = on };
+            LodgeChannelView C(string n, string type, string min, int max) => new LodgeChannelView { Id = n, Name = n, ChannelType = type, MinRole = min, Max = max };
+            FillAdmin(new List<AdminMember> { M("Elan", "owner", true), M("Bob", "officer", true), M("Dax", "member", false) },
+                new List<LodgeChannelView> { C("general", "text", "guest", 0), C("officers", "text", "officer", 0), C("Campfire", "voice", "guest", 8) });
             GmInvite.SetResultForDesign("Invite for Cleo (Member) - copied", "elanshub://lodge/join#nasferatu.dk/lodge|i1.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
                 "https://nasferatu.dk/lodge/#join=nasferatu.dk/lodge|i1.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", "Works once, expires in 7 days. Send it privately (a DM, not a channel). It is shown only now.");
         }
@@ -1091,7 +1092,7 @@ namespace ElansAddonHub
         public void LodgeInfoSaveForTest() => LodgeInfoSave_Click(null, null);
         public string GmStatusForTest => GmStatus.Text;
         public bool LodgeInfoSaveEnabledForTest => LodgeInfoSave.IsEnabled;
-        public void FillAdminForTest(List<Dictionary<string, object>> members, List<Dictionary<string, object>> channels) => FillAdmin(members, channels);
+        public void FillAdminForTest(List<AdminMember> members, List<LodgeChannelView> channels) => FillAdmin(members, channels);
         public void ShowTransferForTest(string text) => ShowTransfer(text);
         public bool LeaveLodgeEnabledForTest => LeaveLodgeButton.IsEnabled;
         public string LodgeAddressTextForTest => LodgeAddress.Text;

@@ -23,13 +23,14 @@ namespace ElansAddonHub.Lodge
         {
             SupportsLeave = features.Contains("leave");
             SupportsLodgeInfo = features.Contains("lodgeinfo");
-            ApplyLodgeInfo(m.Child("lodge"));
+            var c = new LodgeFieldsDict(m).Child("lodge");                      // welcome.lodge: a LodgeInfoView like lodge.info's
+            ApplyLodgeInfo(c == null ? null : LodgeInfoView.Read(c));
         }
 
-        void ApplyLodgeInfo(Dictionary<string, object> lodge)
+        void ApplyLodgeInfo(LodgeInfoView lodge)
         {
-            LodgeName = lodge?.Str("name") ?? "";
-            LodgeWelcome = lodge?.Str("welcome") ?? "";
+            LodgeName = lodge?.Name ?? "";
+            LodgeWelcome = lodge?.Welcome ?? "";
             LodgeInfoChanged?.Invoke();
         }
 
@@ -38,7 +39,7 @@ namespace ElansAddonHub.Lodge
         {
             switch (m.Str("t"))
             {
-                case LodgeMsg.LodgeInfo: ApplyLodgeInfo(m.Child("lodge")); Changed?.Invoke(); return true;
+                case LodgeMsg.LodgeInfo: ApplyLodgeInfo(LodgeInfoMsg.Read(new LodgeFieldsDict(m)).Lodge); Changed?.Invoke(); return true;
                 case LodgeMsg.MemberLeft: Left?.Invoke(); return true;
             }
             return false;
@@ -53,7 +54,7 @@ namespace ElansAddonHub.Lodge
 
         // owner: name (max 40) and a short welcome text (max 280 characters, 4 lines); empty clears
         public void SetLodgeInfo(string name, string welcome) =>
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminLodgeSet, ["name"] = name ?? "", ["welcome"] = welcome ?? "" });
+            _ = Send(LodgeFieldsDict.Build(new AdminLodgeSetMsg { Name = name ?? "", Welcome = welcome ?? "" }.Write));
 
         // the same limits as the server, so a form can say so before asking
         public const int MaxLodgeName = 40, MaxLodgeWelcome = 280, MaxLodgeWelcomeLines = 4;

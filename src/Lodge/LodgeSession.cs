@@ -93,9 +93,9 @@ namespace ElansAddonHub.Lodge
         public event Action<string> Hint;                  // a gentle one-time tip
         public event Action<PendingSend, string> SendFailed; // the text to put back into the box, and why
         public Func<bool> ToastWillShow;                   // a toast would be on screen right now (then no tray balloon for the same message)
-        public event Action<List<Dictionary<string, object>>, List<Dictionary<string, object>>> AdminMembers; // members, channels
+        public event Action<List<AdminMember>, List<LodgeChannelView>> AdminMembers; // members, channels
         public event Action<string, string, string> AdminInvited; // name, role, code
-        public event Action<Dictionary<string, object>> AdminPurged; // the owner's "revert member" answer: name, atlas (items removed)
+        public event Action<AdminPurgedMsg> AdminPurged; // the owner's "revert member" answer: name, atlas (items removed)
         public Func<bool> IsShownToUser;                   // the Lodge tab is visible and the window active
 
         // ---- profiles (server 2.6): my own profile, avatars we have seen (so history keeps its pictures), answers to profile:get
@@ -534,15 +534,20 @@ namespace ElansAddonHub.Lodge
                     OnServerError(m.Str("text"), m.Str("code"), m.Str("room"));
                     break;
                 case LodgeMsg.AdminMembers:
-                    AdminMembers?.Invoke(m.List("members").OfType<Dictionary<string, object>>().ToList(),
-                                         m.List("channels").OfType<Dictionary<string, object>>().ToList());
-                    break;
+                    {
+                        var am = AdminMembersMsg.Read(new LodgeFieldsDict(m));
+                        AdminMembers?.Invoke(am.Members, am.Channels);
+                        break;
+                    }
                 case LodgeMsg.AdminPurged:
-                    AdminPurged?.Invoke(m);
+                    AdminPurged?.Invoke(AdminPurgedMsg.Read(new LodgeFieldsDict(m)));
                     break;
                 case LodgeMsg.AdminInvited:
-                    AdminInvited?.Invoke(m.Str("name"), m.Str("role"), m.Str("code"));
-                    break;
+                    {
+                        var ai = AdminInvitedMsg.Read(new LodgeFieldsDict(m));
+                        AdminInvited?.Invoke(ai.Name, ai.Role, ai.Code);
+                        break;
+                    }
                 case LodgeMsg.CalEvents: case LodgeMsg.CalRange:
                     OnCalendarFrame(m);
                     break;
@@ -1630,17 +1635,18 @@ namespace ElansAddonHub.Lodge
 
         // ================================================================ officers and the guild master
 
-        public void RequestAdmin() => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminMembers });
-        public void Invite(string name, string role) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminInvite, ["name"] = name, ["role"] = role });
-        public void SetRole(string name, string role) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminRole, ["name"] = name, ["role"] = role });
-        public void RemoveMember(string name) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminRemove, ["name"] = name });
+        // (typed: shared/Elans.Shared/Lodge/AdminMessages.cs)
+        public void RequestAdmin() => _ = Send(LodgeFieldsDict.Build(new AdminMembersGetMsg().Write));
+        public void Invite(string name, string role) => _ = Send(LodgeFieldsDict.Build(new AdminInviteMsg { Name = name, Role = role }.Write));
+        public void SetRole(string name, string role) => _ = Send(LodgeFieldsDict.Build(new AdminRoleMsg { Name = name, Role = role }.Write));
+        public void RemoveMember(string name) => _ = Send(LodgeFieldsDict.Build(new AdminRemoveMsg { Name = name }.Write));
         // owner (server 2.22): take everything this member shared with the Atlas back out; they stay a member
-        public void RevertAtlas(string name) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminPurge, ["name"] = name, ["atlasOnly"] = true });
+        public void RevertAtlas(string name) => _ = Send(LodgeFieldsDict.Build(new AdminPurgeMsg { Name = name, AtlasOnly = true }.Write));
         public void AddChannel(string name, string type, string minRole, int max) =>
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminChannelAdd, ["name"] = name, ["type"] = type, ["minRole"] = minRole, ["max"] = max });
-        public void RemoveChannel(string id) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminChannelRemove, ["id"] = id });
-        public void Kick(MemberVM m) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ModKick, ["id"] = m.Id });
-        public void ServerMute(MemberVM m, bool on) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ModMute, ["id"] = m.Id, ["on"] = on });
+            _ = Send(LodgeFieldsDict.Build(new AdminChannelAddMsg { Name = name, ChannelType = type, MinRole = minRole, Max = max }.Write));
+        public void RemoveChannel(string id) => _ = Send(LodgeFieldsDict.Build(new AdminChannelRemoveMsg { Id = id }.Write));
+        public void Kick(MemberVM m) => _ = Send(LodgeFieldsDict.Build(new ModKickMsg { Id = m.Id }.Write));
+        public void ServerMute(MemberVM m, bool on) => _ = Send(LodgeFieldsDict.Build(new ModMuteMsg { Id = m.Id, On = on }.Write));
 
         public bool CanModerateMember(MemberVM m) => CanModerate && m != null && !m.IsMe && MemberVM.RoleLevel(m.Role) < MemberVM.RoleLevel(MyRole);
 

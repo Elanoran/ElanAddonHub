@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -35,7 +36,9 @@ public sealed class LodgeInfoStore
     public string Welcome { get { lock (gate) return welcome; } }
     public string DisplayName { get { lock (gate) return name.Length > 0 ? name : DefaultName; } }
 
-    public JsonObject ToJson() { lock (gate) return new JsonObject { ["name"] = name, ["welcome"] = welcome }; }
+    // lodge.info.lodge and welcome.lodge (typed: shared/Elans.Shared/Lodge/AdminMessages.cs)
+    public LodgeInfoView View() { lock (gate) return new LodgeInfoView { Name = name, Welcome = welcome }; }
+    public JsonObject ToJson() => LodgeFieldsJson.Build(View().Write);
 
     // one line, cleaned like every other name-like text (control, bidi and format characters out); null + error when too long
     public static string Clean(string s, out string error)

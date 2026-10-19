@@ -54,6 +54,13 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 - officer+: `mod.kick` `{id}` · `mod.mute` `{id, on}` - lower ranks only
 - guild master: `admin.members` · `admin.invite` `{name, role}` · `admin.role` `{name, role}` · `admin.remove` `{name}`
   · `admin.channel.add` `{name, type, minRole, max}` · `admin.channel.remove` `{id}`
+- Typed (stage 2): the Guild Master and officer messages - `mod.kick`, `mod.mute`, every `admin.*` above and in the 2.10 / 2.12 / 2.22 additions
+  (`admin.members` both ways, `admin.invite` / `admin.invited`, `admin.role`, `admin.remove`, `admin.purge` / `admin.purged`, `admin.channel.*`,
+  `admin.invite.create` / `admin.invite.created`, `admin.invites` both ways, `admin.invite.revoke`, `admin.retire`, `admin.lodge.set`) and `lodge.info`
+  (its `lodge`, also `welcome.lodge`; a `channel`, also `welcome.channels`) are classes in `shared/Elans.Shared/Lodge/AdminMessages.cs`
+  (`AdminMembersMsg`, `AdminMember`, `LodgeChannelView`, `InviteView`, `AdminPurgedMsg`, `LodgeInfoMsg`, ...), used by both sides like the LFG ones.
+  `admin.invite.created` and `admin.purged` keep `t` after their fields, as before. The server still reads `admin.purge`'s `atlasOnly` from the raw
+  JSON (only a JSON `false` turns it off). Not here: `admin.badges` (badges), `admin.cairn` (the Cairn, not typed yet), `admin.devices` (devices).
 
 ### Limits per person (personal code) or per IP (guests), kept across reconnects
 

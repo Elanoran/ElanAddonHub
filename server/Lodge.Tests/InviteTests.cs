@@ -671,4 +671,64 @@ public class InviteTests
         lock (r.Log.Lines) log = string.Join("\n", r.Log.Lines);
         Assert.DoesNotContain(secret, log);
     }
+
+    // ---------------------------------------------------------------- the typed frames (Elans.Shared AdminMessages.cs)
+
+    static string[] KeysInOrder(JsonObject o) => o.Select(kv => kv.Key).ToArray();
+
+    // what the server sends for the Guild Master / officer tools keeps its keys - and their order (t last in admin.invite.created's
+    // secret pair and in admin.purged, as InviteJson / PurgeSummary.ToJson built them); the secret and the code go to the asker only
+    [Fact]
+    public async Task Typed_admin_frames_keep_their_keys_and_order()
+    {
+        using var r = new Rig();
+        var (elan, selan) = r.Connect(T.ElanCode, false);
+        var (bob, sbob) = r.Connect(T.BobCode, false);
+        var welcome = selan.Of("welcome").Single();
+        Assert.Equal(new[] { "id", "name", "type", "minRole", "max" }, KeysInOrder(welcome["channels"]!.AsArray()[0]!.AsObject()));
+        Assert.Equal(new[] { "name", "welcome" }, KeysInOrder(welcome["lodge"]!.AsObject()));
+
+        await r.Ask(elan, selan, new { t = "admin.members" });
+        var members = selan.Of("admin.members").Last();
+        Assert.Equal(new[] { "t", "members", "channels" }, KeysInOrder(members));
+        Assert.Equal(new[] { "name", "role", "hasCode", "devices", "online" }, KeysInOrder(members["members"]!.AsArray()[0]!.AsObject()));
+        Assert.Equal(new[] { "id", "name", "type", "minRole", "max" }, KeysInOrder(members["channels"]!.AsArray()[0]!.AsObject()));
+        Assert.Equal(r.Hub.Channels.All.Count(), members["channels"]!.AsArray().Count);
+
+        await r.Ask(elan, selan, new { t = "admin.invite", name = "Cleo", role = "member" });
+        var invited = selan.Of("admin.invited").Single();
+        Assert.Equal(new[] { "t", "name", "role", "code" }, KeysInOrder(invited));
+        Assert.Equal(("Cleo", "member"), ((string?)invited["name"], (string?)invited["role"]));
+        Assert.NotNull(r.Auth.Check((string)invited["code"]!));                  // the code that was made, to the one who asked
+
+        await r.Ask(bob, sbob, new { t = "admin.invite.create", kind = "guest", hours = 24, uses = 3 });
+        var made = sbob.Of("admin.invite.created").Single();
+        Assert.Equal(new[] { "id", "kind", "name", "role", "by", "created", "expires", "max", "uses", "used", "expired", "revoked", "pending", "t", "secret" }, KeysInOrder(made));
+        Assert.Equal(("guest", "", 3, "Bob"), ((string?)made["kind"], (string?)made["name"], (int)made["max"]!, (string?)made["by"]));
+        var secret = (string)made["secret"]!;
+        var invites = sbob.Of("admin.invites").Last();
+        Assert.Equal(new[] { "t", "now", "invites" }, KeysInOrder(invites));
+        Assert.Equal(new[] { "id", "kind", "name", "role", "by", "created", "expires", "max", "uses", "used", "expired", "revoked", "pending" },
+            KeysInOrder(invites["invites"]!.AsArray().Single()!.AsObject()));
+        foreach (var s in new[] { selan, sbob })
+            Assert.DoesNotContain(s.Sent, f => (string?)f["t"] != "admin.invite.created" && f.ToJsonString().Contains(secret));   // the secret: only in that one reply
+        Assert.DoesNotContain(selan.Sent, f => f.ToJsonString().Contains(secret));                                               // never to anyone else
+        Assert.DoesNotContain(sbob.Sent, f => f.ToJsonString().Contains((string)invited["code"]!));
+
+        await r.Ask(elan, selan, new { t = "admin.lodge.set", name = "The Silver Lodge", welcome = "Hi" });
+        foreach (var s in new[] { selan, sbob })
+        {
+            var info = s.Of("lodge.info").Single();
+            Assert.Equal(new[] { "t", "lodge" }, KeysInOrder(info));
+            Assert.Equal("{\"name\":\"The Silver Lodge\",\"welcome\":\"Hi\"}", info["lodge"]!.ToJsonString());
+        }
+
+        await r.Ask(elan, selan, new { t = "admin.purge", name = "Mia" });
+        var purged = selan.Of("admin.purged").Single();
+        Assert.Equal(new[] { "name", "atlasOnly", "atlas", "flights", "signups", "organised", "profile", "armory", "badges", "messages", "reactions", "uploads", "total", "t" },
+            KeysInOrder(purged));
+        Assert.True((bool)purged["atlasOnly"]!);
+        await r.Ask(elan, selan, new JsonObject { ["t"] = "admin.purge", ["name"] = "Mia", ["atlasOnly"] = 0 });   // not a JSON false: still Atlas only
+        Assert.True((bool)selan.Of("admin.purged").Last()["atlasOnly"]!);
+    }
 }

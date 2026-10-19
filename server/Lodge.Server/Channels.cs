@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -13,10 +14,9 @@ public class Channel
 
     public bool VisibleTo(string role) => Roles.AtLeast(role, MinRole);
 
-    public JsonObject ToJson() => new()
-    {
-        ["id"] = Id, ["name"] = Name, ["type"] = Type, ["minRole"] = MinRole, ["max"] = Max,
-    };
+    // admin.members.channels and welcome.channels (typed: shared/Elans.Shared/Lodge/AdminMessages.cs)
+    public LodgeChannelView View() => new() { Id = Id, Name = Name, ChannelType = Type, MinRole = MinRole, Max = Max };
+    public JsonObject ToJson() => LodgeFieldsJson.Build(View().Write);
 }
 
 // data/channels.json - edit by hand or from the hub's Guild Master panel.

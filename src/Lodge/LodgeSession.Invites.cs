@@ -54,14 +54,15 @@ namespace ElansAddonHub.Lodge
             {
                 case LodgeMsg.AdminInvites:
                     Invites.Clear();
-                    foreach (var d in m.List("invites").OfType<Dictionary<string, object>>().Select(x => InviteVM.Parse(x, now))
+                    foreach (var d in AdminInvitesMsg.Read(new LodgeFieldsDict(m)).Invites.Select(x => InviteVM.From(x, now))
                         .OrderByDescending(i => i.Pending).ThenByDescending(i => i.Created)) Invites.Add(d);
                     InvitesChanged?.Invoke();
                     break;
                 case LodgeMsg.AdminInviteCreated:
                     {
-                        var inv = InviteVM.Parse(m, NowMs());
-                        LastInviteLink = InviteLinks.Make(LodgeAddress, m.Str("secret"));
+                        var made = AdminInviteCreatedMsg.Read(new LodgeFieldsDict(m));
+                        var inv = InviteVM.From(made.Invite, NowMs());
+                        LastInviteLink = InviteLinks.Make(LodgeAddress, made.Secret);
                         InviteCreated?.Invoke(inv, LastInviteLink);
                         break;
                     }
@@ -78,17 +79,17 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---- requests (the server decides who may: officers and the owner for the invite calls)
-        public void RequestInvites() { if (SupportsTokens) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminInvites }); }
+        public void RequestInvites() { if (SupportsTokens) _ = Send(LodgeFieldsDict.Build(new AdminInvitesGetMsg().Write)); }
         public void RequestMyDevices() { if (SupportsTokens) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.DeviceList }); }
         public void RequestAllDevices() { if (SupportsTokens && CanInvite) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminDevices }); }
 
         // kind: "person" (name + role) or "guest" (uses = how many people may use the link); hours 1..720 (0 = the server's default, 7 days)
         public void CreateInvite(string kind, string name, string role, int hours, int uses = 1) =>
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminInviteCreate, ["kind"] = kind, ["name"] = name ?? "", ["role"] = role ?? "member", ["hours"] = hours, ["uses"] = uses });
+            _ = Send(LodgeFieldsDict.Build(new AdminInviteCreateMsg { Kind = kind, Name = name ?? "", Role = role ?? "member", Hours = hours, Uses = uses }.Write));
 
-        public void RevokeInvite(string id) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminInviteRevoke, ["id"] = id });
+        public void RevokeInvite(string id) => _ = Send(LodgeFieldsDict.Build(new AdminInviteRevokeMsg { Id = id }.Write));
         public void RevokeDevice(string id) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.DeviceRevoke, ["id"] = id });
-        public void RetireCode(string name) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminRetire, ["name"] = name });
+        public void RetireCode(string name) => _ = Send(LodgeFieldsDict.Build(new AdminRetireMsg { Name = name }.Write));
 
         // ---- "Upgrade this device": a quiet offer, once, for someone still on a permanent code on a server that can do tokens
         public bool UpgradeOffered =>

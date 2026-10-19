@@ -580,7 +580,7 @@ namespace ElansAddonHub
             sent.Clear();
             Session.RevertAtlas("Bob");
             check("gm: Revert Atlas sends admin.purge for that member, Atlas only (the member stays)", sent.Count == 1 && sent[0].Str("t") == "admin.purge" && sent[0].Str("name") == "Bob" && sent[0].Bool("atlasOnly"));
-            string purgedFor = null; Session.AdminPurged += pm => purgedFor = pm.Str("name") + ":" + pm.Int("atlas");
+            string purgedFor = null; Session.AdminPurged += pm => purgedFor = pm.Name + ":" + pm.Atlas;
             Session.FeedForTest("{\"t\":\"admin.purged\",\"name\":\"Bob\",\"atlasOnly\":true,\"atlas\":12,\"total\":12}");
             check("gm: the answer to a revert reaches the page and says how many items went", purgedFor == "Bob:12" && SettingsPage.GmStatusForTest.Contains("12") && SettingsPage.GmStatusForTest.Contains("Bob"));
 

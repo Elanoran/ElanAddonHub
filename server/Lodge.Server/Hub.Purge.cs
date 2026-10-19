@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elans.Shared;
 using System.Text.RegularExpressions;
 
 namespace Lodge;
@@ -27,10 +28,11 @@ public partial class LodgeHub
         public string Name; public bool AtlasOnly;
         public int Atlas, Flights, Signups, Organised, Profile, Armory, Badges, Messages, Reactions, Uploads;
         public int Total => Atlas + Flights + Signups + Organised + Profile + Armory + Badges + Messages + Reactions + Uploads;
-        public JsonObject ToJson() => new()
+        // the owner's admin.purged answer (typed: shared/Elans.Shared/Lodge/AdminMessages.cs)
+        public AdminPurgedMsg ToMsg() => new()
         {
-            ["name"] = Name, ["atlasOnly"] = AtlasOnly, ["atlas"] = Atlas, ["flights"] = Flights, ["signups"] = Signups, ["organised"] = Organised,
-            ["profile"] = Profile, ["armory"] = Armory, ["badges"] = Badges, ["messages"] = Messages, ["reactions"] = Reactions, ["uploads"] = Uploads, ["total"] = Total,
+            Name = Name, AtlasOnly = AtlasOnly, Atlas = Atlas, Flights = Flights, Signups = Signups, Organised = Organised,
+            Profile = Profile, Armory = Armory, Badges = Badges, Messages = Messages, Reactions = Reactions, Uploads = Uploads, Total = Total,
         };
     }
 
