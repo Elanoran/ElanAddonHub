@@ -113,7 +113,7 @@ public class LodgeMsgTests
             .Where(p => !Path.GetRelativePath(root, p).Split('/', '\\').Any(s => s is "obj" or "bin")).Select(File.ReadAllText));
         // a typed message class (shared/Elans.Shared/Lodge: "class X { public const string Type = LodgeMsg.Y;") counts as a use of Y when the server uses X
         var typed = Directory.EnumerateFiles(Path.Combine(root, "shared", "Elans.Shared", "Lodge"), "*.cs")
-            .SelectMany(p => Regex.Matches(File.ReadAllText(p), @"class\s+(\w+)\s*\{\s*public const string Type = LodgeMsg\.(\w+);").Cast<Match>())
+            .SelectMany(p => Regex.Matches(File.ReadAllText(p), @"class\s+(\w+)\s*(?::[^{]*)?\{\s*public const string Type = LodgeMsg\.(\w+);").Cast<Match>())
             .Where(m => Regex.IsMatch(server, @"\b" + m.Groups[1].Value + @"\b")).Select(m => m.Groups[2].Value).ToHashSet();
         var unused = All().Where(x => !typed.Contains(x.Name) && !Regex.IsMatch(server, @"\bLodgeMsg\." + x.Name + @"\b")).Select(x => x.Name).ToList();
         Assert.True(unused.Count == 0, "in LodgeMsg but not used by the Lodge server: " + string.Join(", ", unused));

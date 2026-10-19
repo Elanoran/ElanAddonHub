@@ -17,44 +17,16 @@ namespace Elans.Shared
     }
 
     // client -> server: sign up as maybe
-    public sealed class LfgMaybeMsg
-    {
-        public const string Type = LodgeMsg.LfgMaybe;
-        public string Id;
-
-        public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("id", Id); }
-        public static LfgMaybeMsg Read(ILodgeFields f) => new LfgMaybeMsg { Id = f.Str("id") };
-    }
+    public sealed class LfgMaybeMsg : LodgeIdMsg<LfgMaybeMsg> { public const string Type = LodgeMsg.LfgMaybe; protected override string MsgType => Type; }
 
     // client -> server: take your sign-up back
-    public sealed class LfgLeaveMsg
-    {
-        public const string Type = LodgeMsg.LfgLeave;
-        public string Id;
-
-        public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("id", Id); }
-        public static LfgLeaveMsg Read(ILodgeFields f) => new LfgLeaveMsg { Id = f.Str("id") };
-    }
+    public sealed class LfgLeaveMsg : LodgeIdMsg<LfgLeaveMsg> { public const string Type = LodgeMsg.LfgLeave; protected override string MsgType => Type; }
 
     // client -> server: the organiser (or an officer) closes the group - it is set
-    public sealed class LfgCloseMsg
-    {
-        public const string Type = LodgeMsg.LfgClose;
-        public string Id;
-
-        public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("id", Id); }
-        public static LfgCloseMsg Read(ILodgeFields f) => new LfgCloseMsg { Id = f.Str("id") };
-    }
+    public sealed class LfgCloseMsg : LodgeIdMsg<LfgCloseMsg> { public const string Type = LodgeMsg.LfgClose; protected override string MsgType => Type; }
 
     // client -> server: the organiser (or an officer) cancels the group - it won't happen
-    public sealed class LfgCancelMsg
-    {
-        public const string Type = LodgeMsg.LfgCancel;
-        public string Id;
-
-        public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("id", Id); }
-        public static LfgCancelMsg Read(ILodgeFields f) => new LfgCancelMsg { Id = f.Str("id") };
-    }
+    public sealed class LfgCancelMsg : LodgeIdMsg<LfgCancelMsg> { public const string Type = LodgeMsg.LfgCancel; protected override string MsgType => Type; }
 
     // server -> client: a card changed; the whole current card state arrives, plus the new plain-text fallback
     public sealed class LfgUpdateMsg

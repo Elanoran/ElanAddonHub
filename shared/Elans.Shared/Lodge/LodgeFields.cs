@@ -34,4 +34,16 @@ namespace Elans.Shared
     {
         ILodgeWriter Add();                             // a new object appended to the array
     }
+
+    // The boilerplate of a request that carries nothing but the id of the thing it acts on: { t, id }. A message class only names its type:
+    //   public sealed class LfgLeaveMsg : LodgeIdMsg<LfgLeaveMsg> { public const string Type = LodgeMsg.LfgLeave; protected override string MsgType => Type; }
+    // and is written with new LfgLeaveMsg { Id = .. }.Write and read with LfgLeaveMsg.Read(fields), like any other message class.
+    public abstract class LodgeIdMsg<TSelf> where TSelf : LodgeIdMsg<TSelf>, new()
+    {
+        public string Id;
+        protected abstract string MsgType { get; }
+
+        public void Write(ILodgeWriter w) { w.Set("t", MsgType); w.Set("id", Id); }
+        public static TSelf Read(ILodgeFields f) => new TSelf { Id = f.Str("id") };
+    }
 }
