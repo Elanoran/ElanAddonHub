@@ -545,7 +545,7 @@ namespace ElansAddonHub.Lodge
             {
                 if (File.Exists(AtlasCachePath) && new FileInfo(AtlasCachePath).Length < 48L * 1024 * 1024)
                 {
-                    var cached = LodgeJson.Parse(File.ReadAllBytes(AtlasCachePath));          // the shared Lodge JSON engine (an atlas.data page)
+                    var cached = LodgeJson.ParseStored(File.ReadAllBytes(AtlasCachePath));    // the shared Lodge JSON rules without the frame count limits: the cache merges every page
                     if (cached != null) { var msg = AtlasDataMsg.Read(new LodgeJsonFields(cached)); msg.Full = true; AtlasData.Apply(msg); }
                 }
             }
