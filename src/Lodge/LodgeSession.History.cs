@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using ElansAddonHub.Services;
@@ -138,7 +139,7 @@ namespace ElansAddonHub.Lodge
             var tcs = new TaskCompletionSource<PageResult>();
             pagePending[channel] = tcs;
             OlderRequested?.Invoke(channel);
-            _ = Send(LodgeFieldsDict.Build(new HistoryBeforeMsg { Channel = channel, Before = oldest.Id, BeforeAt = Ms(oldest.At) }.Write));
+            _ = Send(LodgeJson.Build(new HistoryBeforeMsg { Channel = channel, Before = oldest.Id, BeforeAt = Ms(oldest.At) }.Write));
             if (!tcs.Task.IsCompleted && await Task.WhenAny(tcs.Task, Task.Delay(RequestTimeout)) != tcs.Task)
             {
                 pagePending.Remove(channel);
@@ -165,9 +166,9 @@ namespace ElansAddonHub.Lodge
             return true;
         }
 
-        void OnHistoryPage(Dictionary<string, object> m)
+        void OnHistoryPage(JsonObject m)
         {
-            var page = HistoryPageMsg.Read(new LodgeFieldsDict(m));
+            var page = HistoryPageMsg.Read(new LodgeJsonFields(m));
             var channel = page.Channel;
             if (channel == null) return;
             var list = MessagesOf(channel);
@@ -207,7 +208,7 @@ namespace ElansAddonHub.Lodge
             searchPending?.TrySetResult(new SearchResults { Query = searchQuery, Failed = true });   // a newer search replaces the one still waiting
             var tcs = searchPending = new TaskCompletionSource<SearchResults>();
             searchQuery = query;
-            _ = Send(LodgeFieldsDict.Build(new SearchMsg { Q = query }.Write));
+            _ = Send(LodgeJson.Build(new SearchMsg { Q = query }.Write));
             if (!tcs.Task.IsCompleted && await Task.WhenAny(tcs.Task, Task.Delay(RequestTimeout)) != tcs.Task)
             {
                 if (searchPending == tcs) searchPending = null;
@@ -216,9 +217,9 @@ namespace ElansAddonHub.Lodge
             return await tcs.Task;
         }
 
-        void OnSearchResult(Dictionary<string, object> m)
+        void OnSearchResult(JsonObject m)
         {
-            var r = SearchResultMsg.Read(new LodgeFieldsDict(m));
+            var r = SearchResultMsg.Read(new LodgeJsonFields(m));
             var q = r.Q ?? searchQuery;
             var res = new SearchResults { Query = q, More = r.More };
             foreach (var h in r.Hits)

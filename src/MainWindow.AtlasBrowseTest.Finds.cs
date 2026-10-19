@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -25,7 +26,7 @@ namespace ElansAddonHub
                 finds.Add("{\"i\":" + item + ",\"c\":" + (seq % 5 == 0 ? 3 : 1) + ",\"at\":" + (AtNow - 600 - (n - k) * 60) + ",\"src\":\"npc:1\",\"z\":11,\"x\":0.3,\"y\":0.3" + (guest ? "" : ",\"by\":\"Tess\"") + ",\"s\":" + seq + "}");
             }
             var l = new LodgeAtlas();
-            if (!l.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":" + rev + ",\"at\":" + (AtNow - 5) + ",\"full\":true,\"finds\":[" + string.Join(",", finds) + "]}"))) throw new InvalidOperationException("finds page refused");
+            if (!l.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":" + rev + ",\"at\":" + (AtNow - 5) + ",\"full\":true,\"finds\":[" + string.Join(",", finds) + "]}"))) throw new InvalidOperationException("finds page refused");
             return l;
         }
 

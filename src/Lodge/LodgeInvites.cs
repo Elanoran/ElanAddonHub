@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
@@ -181,20 +182,19 @@ namespace ElansAddonHub.Lodge
                 {
                     if (!string.IsNullOrEmpty(invite)) req.Headers.Add("X-Lodge-Invite", invite);
                     else req.Headers.Add("X-Lodge-Code", oldCode ?? "");
-                    var body0 = new Dictionary<string, object> { ["device"] = deviceName ?? "", ["deviceId"] = deviceId ?? "" };
+                    // the POST /exchange body and its answer go through the shared Lodge JSON engine (Elans.Shared LodgeJson), like every frame
+                    var body0 = new JsonObject { ["device"] = deviceName ?? "", ["deviceId"] = deviceId ?? "" };
                     if (!string.IsNullOrWhiteSpace(name)) body0["name"] = name.Trim();   // only an owner link uses it: the name the new Guild Master wants
-                    req.Content = new StringContent(Json.Write(body0), Encoding.UTF8, "application/json");
+                    req.Content = new StringContent(LodgeJson.Serialize(body0), Encoding.UTF8, "application/json");
                     using (var resp = await Send(req))
                     {
                         res.Status = (int)resp.StatusCode;
-                        var text = await resp.Content.ReadAsStringAsync();
-                        Dictionary<string, object> body = null;
-                        try { body = Json.Obj(text); } catch { }          // a proxy's 404/502 page is not JSON
-                        res.ServerError = body.Str("error"); res.Reason = body.Str("reason");
+                        var body = await LodgeClient.AnswerOf(resp);       // at most 64 KB; null: a proxy's 404/502 page is not JSON
+                        res.ServerError = LodgeJson.Str(body, "error"); res.Reason = LodgeJson.Str(body, "reason");
                         if (res.Ok && body != null)
                         {
-                            res.Token = body.Str("token"); res.Name = body.Str("name"); res.Role = body.Str("role");
-                            res.DeviceId = body.Str("deviceId"); res.DeviceName = body.Str("device"); res.Guest = body.Bool("guest");
+                            res.Token = LodgeJson.Str(body, "token"); res.Name = LodgeJson.Str(body, "name"); res.Role = LodgeJson.Str(body, "role");
+                            res.DeviceId = LodgeJson.Str(body, "deviceId"); res.DeviceName = LodgeJson.Str(body, "device"); res.Guest = LodgeJson.Bool(body, "guest");
                             if (string.IsNullOrEmpty(res.Token)) { res.Status = 502; }
                         }
                     }

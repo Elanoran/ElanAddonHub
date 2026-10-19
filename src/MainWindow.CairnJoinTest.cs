@@ -19,7 +19,8 @@ namespace ElansAddonHub
         string CairnJoinWelcome(string role, bool join) =>
             FunWelcome(role, FunPeople(false), "", "\"reply\",\"react\",\"profile\",\"displayname\",\"atlas\"" + (join ? ",\"cairnjoin\"" : ""), "2.28.0");
 
-        static string CairnJoinFrame(string extra) => "{\"t\":\"cairn.join\",\"atlas\":true,\"cairnHost\":\"cairn.test\"" + (extra.Length > 0 ? "," + extra : "") + "}";
+        // (atlas: true unless the extra fields say otherwise - a key twice makes the frame invalid, as on the Lodge)
+        static string CairnJoinFrame(string extra) => "{\"t\":\"cairn.join\"," + (extra.Contains("\"atlas\":") ? "" : "\"atlas\":true,") + "\"cairnHost\":\"cairn.test\"" + (extra.Length > 0 ? "," + extra : "") + "}";
 
         async Task<string> CairnJoinTest(string dir)
         {

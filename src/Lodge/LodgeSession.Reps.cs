@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using ElansAddonHub.Services;
 using Elans.Shared;
 
@@ -52,16 +53,16 @@ namespace ElansAddonHub.Lodge
             {
                 if (a == null) standingsAnswers[faction] = a = new StandingsAnswer();
                 a.Asked = now;
-                _ = Send(LodgeFieldsDict.Build(new ArmoryStandingGetMsg { Faction = faction }.Write));
+                _ = Send(LodgeJson.Build(new ArmoryStandingGetMsg { Faction = faction }.Write));
             }
             res.Pending = !fresh && a != null && a.Answered == default(DateTime);
             return res;
         }
 
-        void OnArmoryStanding(Dictionary<string, object> m)
+        void OnArmoryStanding(JsonObject m)
         {
             if (!SupportsReps) return;
-            var msg = ArmoryStandingMsg.Read(new LodgeFieldsDict(m));
+            var msg = ArmoryStandingMsg.Read(new LodgeJsonFields(m));
             int faction = msg.Faction;
             if (!standingsAnswers.TryGetValue(faction, out var a)) return;           // only what was asked for
             var rows = new List<LodgeStanding>();

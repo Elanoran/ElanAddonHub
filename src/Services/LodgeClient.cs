@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
@@ -35,7 +36,7 @@ namespace ElansAddonHub.Services
         public bool Online { get; private set; }
         public bool IsRunning => !stopped;
         public bool SignedOut { get; private set; }                  // stopped because the server no longer knows this device (revoked)
-        public event Action<Dictionary<string, object>> Received;   // UI thread
+        public event Action<JsonObject> Received;                  // UI thread: a parsed frame (the shared Lodge JSON engine, Elans.Shared LodgeJson)
         public event Action<int, byte[], int, int> Voice;            // network thread: sender, data, offset, count
         public event Action<string, bool> Status;                    // UI thread: text, online
 
@@ -172,7 +173,7 @@ namespace ElansAddonHub.Services
         }
 
         // the ping frame (typed: Elans.Shared PingMsg), written once: {"t":"ping"}, the same bytes the hand-written frame was (lodgehardening checks it)
-        internal static readonly byte[] PingFrame = Encoding.UTF8.GetBytes(Json.Write(LodgeFieldsDict.Build(new PingMsg().Write)));
+        internal static readonly byte[] PingFrame = LodgeJson.SerializeUtf8(LodgeJson.Build(new PingMsg().Write));
 
         // an app-level ping every 20 s (the proxy chain can hold a dead connection open for minutes), and when the server is known
         // to answer them, 45 s without any frame means the connection is gone: abort it so the loop reconnects
@@ -211,36 +212,43 @@ namespace ElansAddonHub.Services
         {
             var buf = new byte[16 * 1024];
             var msg = new MemoryStream();
+            var inbox = new LodgeInbox();                                    // what waits for the UI thread, this connection only
             bool first = true;
             while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
             {
-                msg.SetLength(0);
-                WebSocketReceiveResult r;
-                do
-                {
-                    r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), ct);
-                    if (r.MessageType == WebSocketMessageType.Close) return;
-                    msg.Write(buf, 0, r.Count);
-                } while (!r.EndOfMessage);
+                // one whole message, at most LodgeJson.MaxFrameFromLodge (Elans.Shared LodgeFrames): a bigger one is never read to its end
+                var kind = await LodgeFrames.ReadAsync(ws, buf, msg, LodgeJson.MaxFrameFromLodge, ct);
+                if (kind == LodgeFrames.Kind.Close) return;
+                if (kind == LodgeFrames.Kind.TooBig) { Drop("a frame over " + LodgeJson.MaxFrameFromLodge / (1024 * 1024) + " MB"); return; }
 
                 lastRx = DateTime.UtcNow;
                 var data = msg.GetBuffer();
                 var len = (int)msg.Length;
-                if (r.MessageType == WebSocketMessageType.Binary)
+                if (kind == LodgeFrames.Kind.Binary)
                 {
                     if (len > 4) Voice?.Invoke(BitConverter.ToInt32(data, 0), data, 4, len - 4);
                     continue;
                 }
-                Dictionary<string, object> obj;
-                try { obj = Json.Obj(Encoding.UTF8.GetString(data, 0, len)); } catch { continue; }
+                var obj = LodgeJson.Parse(data, 0, len);                        // the shared Lodge JSON engine: null = no valid frame, skipped (as the Lodge does)
                 if (obj == null) continue;
-                if (obj.Str("t") == PongMsg.Type) { pongSeen = true; continue; }     // { t } only
-                if (first && obj.Str("t") == LodgeMsg.Welcome) { first = false; SetStatus("Online", true); }
-                Post(() => Received?.Invoke(obj));
+                var type = LodgeJson.Str(obj, "t");
+                if (type == PongMsg.Type) { pongSeen = true; continue; }     // { t } only
+                if (first && type == LodgeMsg.Welcome) { first = false; SetStatus("Online", true); }
+                // the UI thread handles them in order; a Lodge that sends faster than that for long is dropped, not queued without end
+                if (!inbox.Add(len)) { Drop("more than " + inbox.MaxFrames + " frames (or " + inbox.MaxBytes / (1024 * 1024) + " MB) waiting to be handled"); return; }
+                Post(() => { try { Received?.Invoke(obj); } finally { inbox.Done(len); } });
             }
         }
 
-        public Task Send(Dictionary<string, object> obj) => SendRaw(Encoding.UTF8.GetBytes(Json.Write(obj)), WebSocketMessageType.Text, 5000);
+        // the connection is dropped (and made again by the loop): the Lodge sent more than any Lodge sends
+        void Drop(string why)
+        {
+            Util.Log("lodge: " + why + " - reconnecting");
+            try { ws.Abort(); } catch { }
+        }
+
+        public Task Send(JsonObject obj) => SendUtf8(LodgeJson.SerializeUtf8(obj));
+        public Task SendUtf8(byte[] frame) => SendRaw(frame, WebSocketMessageType.Text, 5000);       // a frame already serialized by LodgeJson
 
         // voice: drop the frame rather than queue up behind a slow send
         public Task SendVoice(byte[] packet, int count)
@@ -258,6 +266,13 @@ namespace ElansAddonHub.Services
             try { await sock.SendAsync(new ArraySegment<byte>(data), type, true, CancellationToken.None); }
             catch (Exception e) { Util.Log("lodge send: " + e.Message); }
             finally { sendLock.Release(); }
+        }
+
+        // a Lodge's JSON answer over HTTP, at most LodgeJson.MaxHttpAnswer bytes (a longer or unreadable one is no answer: null)
+        internal static async Task<JsonObject> AnswerOf(HttpResponseMessage resp)
+        {
+            try { using (var s = await resp.Content.ReadAsStreamAsync()) return await LodgeFrames.ReadAnswerAsync(s, LodgeJson.MaxHttpAnswer); }
+            catch (Exception) { return null; }
         }
 
         // ---- files
@@ -292,7 +307,7 @@ namespace ElansAddonHub.Services
             public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         }
 
-        public async Task<Dictionary<string, object>> Upload(string file, Action<double> progress = null)
+        public async Task<JsonObject> Upload(string file, Action<double> progress = null)
         {
             using (var fs = File.OpenRead(file))
             using (var req = Request(HttpMethod.Post, "/files"))
@@ -302,11 +317,9 @@ namespace ElansAddonHub.Services
                 req.Content = new StreamContent(progress == null ? (Stream)fs : new ProgressStream(fs, progress));
                 using (var resp = await Net.Http.SendAsync(req))
                 {
-                    var text = await resp.Content.ReadAsStringAsync();
-                    Dictionary<string, object> body = null;
-                    try { body = Json.Obj(text); } catch { } // a proxy's 413 page isn't JSON
-                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(UploadError((int)resp.StatusCode, body.Str("error")));
-                    return body ?? new Dictionary<string, object>();
+                    var body = await AnswerOf(resp);                                 // null: a proxy's 413 page isn't JSON
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(UploadError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
+                    return body ?? new JsonObject();
                 }
             }
         }
@@ -328,7 +341,7 @@ namespace ElansAddonHub.Services
 
         // ---- shared files (server 2.14): PUT /slots/new or /slots/{id} (headers X-Slot-Name, X-File-Name, X-Note URL-encoded, X-Sha256, Content-Length),
         // GET /slots/{id}/{v}. The answer to an upload is the slot as JSON; a refusal carries {error, reason}, whose text is already friendly.
-        public async Task<Dictionary<string, object>> UploadSlot(string slotId, string slotName, string file, string note, string sha256, Action<double> progress = null)
+        public async Task<JsonObject> UploadSlot(string slotId, string slotName, string file, string note, string sha256, Action<double> progress = null)
         {
             using (var fs = File.OpenRead(file))
             using (var req = Request(HttpMethod.Put, "/slots/" + (slotId ?? "new")))
@@ -341,11 +354,9 @@ namespace ElansAddonHub.Services
                 req.Content.Headers.ContentLength = fs.Length;
                 using (var resp = await Net.Http.SendAsync(req))
                 {
-                    var text = await resp.Content.ReadAsStringAsync();
-                    Dictionary<string, object> body = null;
-                    try { body = Json.Obj(text); } catch { } // a proxy's error page isn't JSON
-                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(FilesError((int)resp.StatusCode, body?.Str("error")));
-                    return body ?? new Dictionary<string, object>();
+                    var body = await AnswerOf(resp);                                 // null: a proxy's error page isn't JSON
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(FilesError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
+                    return body ?? new JsonObject();
                 }
             }
         }
@@ -371,33 +382,98 @@ namespace ElansAddonHub.Services
                 if (!resp.IsSuccessStatusCode)
                 {
                     string text = null;
-                    try { text = (Json.Obj(await resp.Content.ReadAsStringAsync()))?.Str("error"); } catch { }
+                    text = LodgeJson.Str(await AnswerOf(resp), "error");
                     throw new InvalidOperationException(FilesError((int)resp.StatusCode, text));
                 }
+                long cap = CapFor(expectedSize, HardCeiling);
+                CheckLength(resp, cap);
                 long total = resp.Content.Headers.ContentLength ?? expectedSize;
                 using (var src = await resp.Content.ReadAsStreamAsync())
-                using (var dst = new FileStream(toFile, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var sha = System.Security.Cryptography.SHA256.Create())
                 {
-                    var buf = new byte[81920];
-                    long done = 0;
-                    int n;
-                    while ((n = await src.ReadAsync(buf, 0, buf.Length)) > 0)
-                    {
-                        sha.TransformBlock(buf, 0, n, null, 0);
-                        dst.Write(buf, 0, n);
-                        done += n;
-                        if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total));
-                    }
-                    sha.TransformFinalBlock(new byte[0], 0, 0);
+                    await ToFileCapped(src, toFile, cap, sha, done => { if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total)); }, CancellationToken.None);
                     return LodgeFiles.Hex(sha.Hash);
                 }
             }
         }
 
+        // ---- 3.1.1: every download from a Lodge is capped in size and time, so a hostile or broken Lodge can't fill the disk or hold a download
+        // open forever. The cap is what the Lodge announced (a slot version's or a dataset's size, a chat file's size) and never more than
+        // HardCeiling: 1 GiB, the largest file any Lodge server setting allows (LODGE_MAX_FILE_MB / LODGE_FILES_MAX_MB / LODGE_CLASSIC_MAX_MB
+        // all stop at 1024), so an honest Lodge is never cut short. No byte for IdleTimeout = stalled; the whole download has OverallTimeout(cap).
+        // A stopped download's file is deleted.
+        public const long HardCeiling = 1024L * 1024 * 1024;
+        public static TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+        public static TimeSpan OverallTimeout(long cap) => TimeSpan.FromMinutes(10) + TimeSpan.FromSeconds(cap / (128.0 * 1024));   // + 128 KB/s
+
+        public sealed class DownloadStoppedException : InvalidOperationException
+        {
+            public DownloadStoppedException(string m) : base(m) { }
+        }
+        public const string TooBigText = "The Lodge sent more than it announced - the download was stopped";
+        public const string StalledText = "The download stalled and was stopped";
+        public const string TooLongText = "The download took too long and was stopped";
+
+        // the announced size when there is one, never above the ceiling
+        public static long CapFor(long announced, long ceiling) => announced > 0 ? Math.Min(announced, ceiling) : ceiling;
+
+        static void CheckLength(HttpResponseMessage resp, long cap)
+        {
+            if (resp.Content.Headers.ContentLength is long len && len > cap) throw new DownloadStoppedException(TooBigText);
+        }
+
+        // copies at most `cap` bytes: more is DownloadStoppedException(TooBigText), no byte for `idle` is StalledText, longer than `overall`
+        // is TooLongText. The caller's own cancellation stays an OperationCanceledException. Returns the bytes copied.
+        public static async Task<long> CopyCapped(Stream src, Stream dst, long cap, System.Security.Cryptography.HashAlgorithm sha, Action<long> onBytes,
+            CancellationToken ct, TimeSpan? idle = null, TimeSpan? overall = null)
+        {
+            using (var all = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            using (var step = CancellationTokenSource.CreateLinkedTokenSource(all.Token))
+            {
+                all.CancelAfter(overall ?? OverallTimeout(cap));
+                var idleFor = idle ?? IdleTimeout;
+                var buf = new byte[81920];
+                long done = 0;
+                while (true)
+                {
+                    step.CancelAfter(idleFor);   // restarts the idle clock for this read
+                    int n;
+                    try { n = await src.ReadAsync(buf, 0, buf.Length, step.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        throw new DownloadStoppedException(all.IsCancellationRequested ? TooLongText : StalledText);
+                    }
+                    if (n <= 0) break;
+                    if (done + n > cap) throw new DownloadStoppedException(TooBigText);
+                    sha?.TransformBlock(buf, 0, n, null, 0);
+                    await dst.WriteAsync(buf, 0, n, ct).ConfigureAwait(false);
+                    done += n;
+                    onBytes?.Invoke(done);
+                }
+                sha?.TransformFinalBlock(new byte[0], 0, 0);
+                return done;
+            }
+        }
+
+        // CopyCapped into a new file; the file is deleted when the copy fails or is stopped
+        public static async Task<long> ToFileCapped(Stream src, string toFile, long cap, System.Security.Cryptography.HashAlgorithm sha, Action<long> onBytes,
+            CancellationToken ct, TimeSpan? idle = null, TimeSpan? overall = null)
+        {
+            try
+            {
+                using (var dst = new FileStream(toFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                    return await CopyCapped(src, dst, cap, sha, onBytes, ct, idle, overall).ConfigureAwait(false);
+            }
+            catch
+            {
+                try { if (File.Exists(toFile)) File.Delete(toFile); } catch { }
+                throw;
+            }
+        }
+
         // ---- hosted datasets (server 2.17, feature "classic"): PUT /datasets/{name} (headers X-Version URL-encoded, X-Sha256, Content-Length), GET /datasets/{name}
         // (answers X-Sha256 and X-Version). A refusal carries {error, reason}, whose text is already friendly.
-        public async Task<Dictionary<string, object>> UploadDataset(string dataset, string file, string version, string sha256, Action<double> progress = null)
+        public async Task<JsonObject> UploadDataset(string dataset, string file, string version, string sha256, Action<double> progress = null)
         {
             if (!System.Text.RegularExpressions.Regex.IsMatch(dataset ?? "", "^[a-z]{1,24}$")) throw new InvalidOperationException("That can't be shared");
             using (var fs = File.OpenRead(file))
@@ -409,11 +485,9 @@ namespace ElansAddonHub.Services
                 req.Content.Headers.ContentLength = fs.Length;
                 using (var resp = await Net.Http.SendAsync(req))
                 {
-                    var text = await resp.Content.ReadAsStringAsync();
-                    Dictionary<string, object> body = null;
-                    try { body = Json.Obj(text); } catch { }
-                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(DatasetError((int)resp.StatusCode, body?.Str("error")));
-                    return body ?? new Dictionary<string, object>();
+                    var body = await AnswerOf(resp);
+                    if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(DatasetError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
+                    return body ?? new JsonObject();
                 }
             }
         }
@@ -443,29 +517,20 @@ namespace ElansAddonHub.Services
                 if (!resp.IsSuccessStatusCode)
                 {
                     string text = null;
-                    try { text = Json.Obj(await resp.Content.ReadAsStringAsync())?.Str("error"); } catch { }
+                    text = LodgeJson.Str(await AnswerOf(resp), "error");
                     throw new InvalidOperationException(DatasetError((int)resp.StatusCode, text));
                 }
                 var res = new DatasetDownload();
                 if (resp.Headers.TryGetValues("X-Sha256", out var hs)) res.HeaderSha = hs.FirstOrDefault();
                 if (resp.Headers.TryGetValues("X-Version", out var hv)) { try { res.HeaderVersion = Uri.UnescapeDataString(hv.FirstOrDefault() ?? ""); } catch { } }
+                long cap = CapFor(expectedSize, HardCeiling);
+                CheckLength(resp, cap);
                 long total = resp.Content.Headers.ContentLength ?? expectedSize;
                 using (var src = await resp.Content.ReadAsStreamAsync())
-                using (var dst = new FileStream(toFile, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var sha = System.Security.Cryptography.SHA256.Create())
                 {
-                    var buf = new byte[81920];
-                    long done = 0;
-                    int n;
-                    while ((n = await src.ReadAsync(buf, 0, buf.Length, ct)) > 0)
-                    {
-                        sha.TransformBlock(buf, 0, n, null, 0);
-                        dst.Write(buf, 0, n);
-                        done += n;
-                        if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total));
-                    }
-                    sha.TransformFinalBlock(new byte[0], 0, 0);
-                    res.Sha256 = LodgeFiles.Hex(sha.Hash); res.Size = done;
+                    res.Size = await ToFileCapped(src, toFile, cap, sha, done => { if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total)); }, ct);
+                    res.Sha256 = LodgeFiles.Hex(sha.Hash);
                 }
                 return res;
             }
@@ -489,7 +554,7 @@ namespace ElansAddonHub.Services
                     byte[] body;
                     using (var s = await resp.Content.ReadAsStreamAsync()) body = Atlas.CairnAtlas.ReadCapped(s, r.Status == 200 ? cap : 64 * 1024);
                     if (r.Status == 200) { r.Body = body; return r; }
-                    try { var o = Json.Obj(Encoding.UTF8.GetString(body)); r.Reason = o?.Str("reason"); r.Error = o?.Str("error"); } catch { }
+                    var o = LodgeJson.Parse(body); r.Reason = LodgeJson.Str(o, "reason"); r.Error = LodgeJson.Str(o, "error");
                     return r;
                 }
             }
@@ -501,20 +566,24 @@ namespace ElansAddonHub.Services
             public DownloadException(int status) : base($"Download failed ({status})") { Status = status; }
         }
 
-        public async Task Download(string id, string toFile)
+        // a chat file: at most `cap` bytes (the caller works it out - LodgeSession.ChatFileCap / ImageAutoMax), into toFile + ".part" first;
+        // nothing is left behind when it is stopped
+        public async Task Download(string id, string toFile, long cap, CancellationToken ct = default, TimeSpan? overall = null)
         {
             if (SafeFile.Id(id) == null) throw new InvalidOperationException("That file can't be downloaded");
+            cap = CapFor(cap, HardCeiling);
             using (var req = Request(HttpMethod.Get, "/files/" + id))
-            using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead))
+            using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct))
             {
                 if (!resp.IsSuccessStatusCode) throw new DownloadException((int)resp.StatusCode);
+                CheckLength(resp, cap);
                 var tmp = toFile + ".part";
                 using (var src = await resp.Content.ReadAsStreamAsync())
-                using (var dst = File.Create(tmp))
-                    await src.CopyToAsync(dst);
+                    await ToFileCapped(src, tmp, cap, null, null, ct, null, overall);
                 if (File.Exists(toFile)) File.Delete(toFile);
                 File.Move(tmp, toFile);
             }
         }
+
     }
 }

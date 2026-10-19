@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
 using Elans.Shared;
@@ -59,11 +60,11 @@ namespace ElansAddonHub.Lodge
             return vm;
         }
 
-        void OnCalendarFrame(Dictionary<string, object> m)
+        void OnCalendarFrame(JsonObject m)
         {
             if (!SupportsCalendar) return;
-            var f = new LodgeFieldsDict(m);
-            ApplyEvents(m.Str("t") == LodgeMsg.CalRange ? CalRangeMsg.Read(f).Events : CalEventsMsg.Read(f).Events);
+            var f = new LodgeJsonFields(m);
+            ApplyEvents(LodgeJson.Str(m, "t") == LodgeMsg.CalRange ? CalRangeMsg.Read(f).Events : CalEventsMsg.Read(f).Events);
         }
 
         public EventVM EventById(string id) => id != null && eventIndex.TryGetValue(id, out var e) ? e : null;
@@ -85,7 +86,7 @@ namespace ElansAddonHub.Lodge
             var key = year + "-" + month;
             if (!loadedMonths.Add(key)) return;
             CalendarRules.MonthWindow(year, month, out var from, out var to);
-            _ = Send(LodgeFieldsDict.Build(new CalRangeGetMsg { From = CalendarRules.Ms(from), To = CalendarRules.Ms(to) }.Write));
+            _ = Send(LodgeJson.Build(new CalRangeGetMsg { From = CalendarRules.Ms(from), To = CalendarRules.Ms(to) }.Write));
         }
 
         // events the grid of one month may show
@@ -93,15 +94,15 @@ namespace ElansAddonHub.Lodge
 
         public Task CalendarCreate(CalendarForm f) => Send(f.ToRequest(LodgeMsg.CalCreate));
         public Task CalendarEdit(EventVM e, CalendarForm f) => Send(f.ToRequest(LodgeMsg.CalEdit, e.Id));
-        public Task CalendarCancel(EventVM e, bool following) => Send(LodgeFieldsDict.Build(new CalCancelMsg { Id = e.Id, Scope = following ? "following" : "this" }.Write));
-        public Task CalendarLeave(EventVM e) => Send(LodgeFieldsDict.Build(new CalLeaveMsg { Id = e.Id }.Write));
+        public Task CalendarCancel(EventVM e, bool following) => Send(LodgeJson.Build(new CalCancelMsg { Id = e.Id, Scope = following ? "following" : "this" }.Write));
+        public Task CalendarLeave(EventVM e) => Send(LodgeJson.Build(new CalLeaveMsg { Id = e.Id }.Write));
 
         // Going / Maybe / Can't, with the role picked on the card; the comment I wrote before stays unless a new one is given
         public Task CalendarAnswer(EventVM e, string status, string comment = null)
         {
             var msg = new CalSignupMsg { Id = e.Id, Status = status, Comment = comment ?? e.MyComment ?? "" };
             if (e.Roles && status != "declined") { msg.Role = e.SelectedRole; EventVM.LastRole = e.SelectedRole; }
-            return Send(LodgeFieldsDict.Build(msg.Write));
+            return Send(LodgeJson.Build(msg.Write));
         }
 
         public EventVM NextEvent => SupportsCalendar ? CalendarRules.NextEvent(Events, Clock()) : null;

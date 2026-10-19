@@ -28,6 +28,12 @@ namespace ElansAddonHub.Services
         // self-test knobs: hold the manifest back (a slow network) and offer a newer hub (shows the update banner)
         public static int DelayMs;
         public static string HubVersion;
+        // 3.1.1: the manifest is signed like a real release, with a key made in memory for this run (ReleaseSignature.TrustRunKey, self-test
+        // only). Unsigned / OtherKey prove that a manifest without its signature, or signed by anyone else, is refused.
+        public enum Signing { Signed, Unsigned, OtherKey }
+        public static Signing Sign = Signing.Signed;
+        static System.Security.Cryptography.ECDsa runKey, otherKey;
+        const string RunKeyId = "5e1f7e57c0ffee00";
 
         public static string Start()
         {
@@ -44,6 +50,13 @@ namespace ElansAddonHub.Services
             }
             if (listener == null) return null;
             if (zips.Count == 0) foreach (var id in AddonIds) zips[id] = MakeZip(id);
+            if (runKey == null)
+            {
+                runKey = Elans.Shared.Es256.NewKey();
+                otherKey = Elans.Shared.Es256.NewKey();
+                var q = runKey.ExportParameters(false).Q;
+                ReleaseSignature.TrustRunKey(new ReleaseSignature.Key { Id = RunKeyId, X = Convert.ToBase64String(q.X), Y = Convert.ToBase64String(q.Y) });
+            }
             Active = true;
             var current = listener;
             Task.Run(async () =>
@@ -106,6 +119,12 @@ namespace ElansAddonHub.Services
             var path = c.Request.Url.AbsolutePath.TrimStart('/');
             byte[] body = null; string type = "application/octet-stream";
             if (path == "manifest.json") { if (DelayMs > 0) System.Threading.Thread.Sleep(DelayMs); body = Encoding.UTF8.GetBytes(Manifest()); type = "application/json"; }
+            else if (path == "manifest.json.sig" && Sign != Signing.Unsigned)
+            {
+                // the same bytes manifest.json serves (Manifest() is deterministic for the current knobs)
+                body = Encoding.UTF8.GetBytes(Elans.Shared.ReleaseSig.Make(Sign == Signing.OtherKey ? otherKey : runKey, RunKeyId, Encoding.UTF8.GetBytes(Manifest())));
+                type = "text/plain";
+            }
             else if (path.EndsWith("-1.0.0.zip") && zips.TryGetValue(path.Substring(0, path.Length - "-1.0.0.zip".Length), out var z)) { body = z; type = "application/zip"; }
             if (body == null) { c.Response.StatusCode = 404; c.Response.Close(); return; }
             c.Response.ContentType = type; c.Response.ContentLength64 = body.Length;

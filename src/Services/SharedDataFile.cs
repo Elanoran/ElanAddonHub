@@ -317,7 +317,7 @@ namespace ElansAddonHub.Services
                     if (!File.Exists(f) || new FileInfo(f).Length > 8L * 1024 * 1024) continue;
                     var globals = LuaData.ReadGlobals(SavedVarsFiles.SafeRead(f) ?? "");
                     if (globals != null && globals.TryGetValue("ElansHubShared", out var v) && v is Dictionary<string, object> shared && shared.Child("flights") is Dictionary<string, object> fl)
-                        return FlightShare.ParseServer(fl);
+                        return FlightShare.ParseServer(Elans.Shared.LodgeJson.FromPlain(fl) as System.Text.Json.Nodes.JsonObject);      // the Lua table, read like a flights.data frame
                 }
             }
             catch (Exception e) { Util.Log("shared data: could not read the file that is there (" + e.GetType().Name + ")"); }

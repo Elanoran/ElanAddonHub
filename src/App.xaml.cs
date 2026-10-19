@@ -93,6 +93,7 @@ namespace ElansAddonHub
                 }
             }
             if (Array.IndexOf(e.Args, "--selftest") >= 0) LinkOpen.SelfTestRun = true;   // the real elanshub:// registration is off limits to a self-test
+            if (Array.IndexOf(e.Args, "--selftest") >= 0) ElansAddonHub.Services.ReleaseSignature.SelfTestRun = true;   // the fake update server may sign with its own in-memory key
             if (Array.IndexOf(e.Args, "--selftest") >= 0) ElansAddonHub.Services.Net.AllowDevSources = true;   // local zips and the fake update server stand in for GitHub (the update-source rules have their own checks)
             if (Array.IndexOf(e.Args, "--selftest") >= 0) Sounds.Muted = true;          // and nothing a self-test plays may reach the speakers
             if (Array.IndexOf(e.Args, "--selftest") >= 0) ElansAddonHub.Services.SeenData.AutoStart = false;

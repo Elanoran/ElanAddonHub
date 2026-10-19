@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -401,11 +402,11 @@ namespace ElansAddonHub.Lodge
             return null;
         }
 
-        // cal:create (type LodgeMsg.CalCreate) or cal:edit of event `id` (LodgeMsg.CalEdit), as the dictionary LodgeClient sends
-        public Dictionary<string, object> ToRequest(string type, string id = null)
+        // cal:create (type LodgeMsg.CalCreate) or cal:edit of event `id` (LodgeMsg.CalEdit), as the frame LodgeClient sends
+        public JsonObject ToRequest(string type, string id = null)
         {
-            if (type == LodgeMsg.CalEdit) { var e = new CalEditMsg { Id = id, Scope = Scope }; Fill(e); return LodgeFieldsDict.Build(e.Write); }
-            var c = new CalCreateMsg { RepeatWeeks = RepeatWeeks, Channel = ChannelId }; Fill(c); return LodgeFieldsDict.Build(c.Write);
+            if (type == LodgeMsg.CalEdit) { var e = new CalEditMsg { Id = id, Scope = Scope }; Fill(e); return LodgeJson.Build(e.Write); }
+            var c = new CalCreateMsg { RepeatWeeks = RepeatWeeks, Channel = ChannelId }; Fill(c); return LodgeJson.Build(c.Write);
         }
 
         void Fill(CalEventFields f)

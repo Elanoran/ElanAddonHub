@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -177,7 +178,7 @@ namespace ElansAddonHub
                 + "\"vendors\":{\"201\":{\"at\":" + (AtNow - 3600) + ",\"z\":11,\"x\":0.5,\"y\":0.5,\"items\":{\"101\":{\"p\":12050,\"s\":1,\"l\":-1}}}},"
                 + "\"items\":{\"555\":{\"n\":\"Mystery Ring\",\"q\":4,\"il\":22,\"rl\":15,\"cls\":4,\"sub\":0,\"slot\":11,\"st\":[[3,20],[7,10]]}}}";
             var l = new LodgeAtlas();
-            if (!l.Apply(Json.Obj(json))) throw new InvalidOperationException("the invented atlas.data page was refused");
+            if (!l.Apply(LodgeJson.Parse(json))) throw new InvalidOperationException("the invented atlas.data page was refused");
             return l;
         }
 

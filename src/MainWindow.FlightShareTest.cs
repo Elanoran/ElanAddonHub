@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -233,34 +234,34 @@ namespace ElansAddonHub
             var local = FlightShare.Read(flightRoot);
             var sentMap = new Dictionary<string, string>();
             var b = FlightShare.MakeBatch(local, sentMap);
-            var legs = (Dictionary<string, object>)b.Frame["legs"];
-            var names = (Dictionary<string, object>)b.Frame["names"];
-            check("batch: one flights.share with all 6 changed legs and nothing else in the frame (keys: t, legs, names)", b.Frame.Str("t") == "flights.share" && legs.Count == 6 && b.Remaining == 0 && b.Frame.Keys.All(k => k == "t" || k == "legs" || k == "names"));
+            var legs = (Dictionary<string, object>)Wire(b.Frame)["legs"];
+            var names = (Dictionary<string, object>)Wire(b.Frame)["names"];
+            check("batch: one flights.share with all 6 changed legs and nothing else in the frame (keys: t, legs, names)", Wire(b.Frame).Str("t") == "flights.share" && legs.Count == 6 && b.Remaining == 0 && Wire(b.Frame).Keys.All(k => k == "t" || k == "legs" || k == "names"));
             check("batch: each leg carries only t and n (no 'at', no character, no account)", legs.Values.All(v => ((Dictionary<string, object>)v).Keys.OrderBy(k => k).SequenceEqual(new[] { "n", "t" })));
             check("batch: names only for nodes the legs use", names.Keys.All(k => legs.Keys.SelectMany(FlightShare.IdsOf).Contains(k)) && names.ContainsKey("9") && names.ContainsKey("11"));
-            var json = Json.Write(b.Frame);
+            var json = LodgeJson.Serialize(b.Frame);
             check("batch: nothing from the file other than keys, times, counts and node names is in the frame (no character, no account)", !json.Contains("SECRETCHAR") && !json.Contains("ACC1") && !json.Contains("Realm"));
             foreach (var kv in b.Sigs) sentMap[kv.Key] = kv.Value;
             check("batch: after the lodge has them, nothing is left to send", FlightShare.MakeBatch(local, sentMap) == null);
             var changed = FlightShare.Read(flightRoot);
             changed.Legs["Horde|5>6"] = new FlightShare.Leg { T = 2, N = 4, At = FlightAt + 9 };
             var again = FlightShare.MakeBatch(changed, sentMap);
-            check("batch: only a changed leg goes again (1 leg, its 2 node names)", again != null && ((Dictionary<string, object>)again.Frame["legs"]).Count == 1 && ((Dictionary<string, object>)again.Frame["legs"]).ContainsKey("Horde|5>6"));
+            check("batch: only a changed leg goes again (1 leg, its 2 node names)", again != null && ((Dictionary<string, object>)Wire(again.Frame)["legs"]).Count == 1 && ((Dictionary<string, object>)Wire(again.Frame)["legs"]).ContainsKey("Horde|5>6"));
 
             var big = new FlightShare.Local();
             for (int i = 0; i < 1200; i++) big.Legs["Horde|" + (i + 1) + ">" + (i + 5000)] = new FlightShare.Leg { T = 30 + i % 100, N = 1 + i % 50 };
             for (int i = 0; i < 1200; i++) big.Names[(i + 1).ToString(CultureInfo.InvariantCulture)] = "Node number " + i;
             var bb = FlightShare.MakeBatch(big, new Dictionary<string, string>());
-            var bl = (Dictionary<string, object>)bb.Frame["legs"];
+            var bl = (Dictionary<string, object>)Wire(bb.Frame)["legs"];
             check("batch: 1200 changed legs -> 500 in the first batch, 700 wait for the next slot", bl.Count == 500 && bb.Remaining == 700);
-            check("batch: the frame stays under the server's 64 KB limit (" + Json.Write(bb.Frame).Length + " bytes) with at most 300 names", Encoding.UTF8.GetByteCount(Json.Write(bb.Frame)) < 64 * 1024 && ((Dictionary<string, object>)bb.Frame["names"]).Count <= 300);
+            check("batch: the frame stays under the server's 64 KB limit (" + LodgeJson.Serialize(bb.Frame).Length + " bytes) with at most 300 names", Encoding.UTF8.GetByteCount(LodgeJson.Serialize(bb.Frame)) < 64 * 1024 && ((Dictionary<string, object>)Wire(bb.Frame)["names"]).Count <= 300);
             var sent2 = new Dictionary<string, string>(); foreach (var kv in bb.Sigs) sent2[kv.Key] = kv.Value;
             var next = FlightShare.MakeBatch(big, sent2);
-            check("batch: the second batch holds the next 500 and none of the first", ((Dictionary<string, object>)next.Frame["legs"]).Count == 500 && !((Dictionary<string, object>)next.Frame["legs"]).Keys.Any(k => bl.ContainsKey(k)) && next.Remaining == 200);
+            check("batch: the second batch holds the next 500 and none of the first", ((Dictionary<string, object>)Wire(next.Frame)["legs"]).Count == 500 && !((Dictionary<string, object>)Wire(next.Frame)["legs"]).Keys.Any(k => bl.ContainsKey(k)) && next.Remaining == 200);
             var wide = new FlightShare.Local();
             for (int i = 0; i < 500; i++) wide.Legs["Alliance|" + new string('A', 31) + i.ToString("D1") + ">" + new string('B', 30) + (i % 10)] = new FlightShare.Leg { T = 100, N = 5 };
             var wb = FlightShare.MakeBatch(wide, new Dictionary<string, string>());
-            check("batch: very long node-name keys are limited by size, not just by count (" + Encoding.UTF8.GetByteCount(Json.Write(wb.Frame)) + " bytes)", Encoding.UTF8.GetByteCount(Json.Write(wb.Frame)) < 64 * 1024);
+            check("batch: very long node-name keys are limited by size, not just by count (" + Encoding.UTF8.GetByteCount(LodgeJson.Serialize(wb.Frame)) + " bytes)", Encoding.UTF8.GetByteCount(LodgeJson.Serialize(wb.Frame)) < 64 * 1024);
         }
 
         // ---------------------------------------------------------------- the generated Lua
@@ -316,7 +317,7 @@ namespace ElansAddonHub
             var esc = FlightShare.LuaEscape(nasty);
             check("lua: LuaEscape leaves no unescaped quote and no raw newline / NUL", !Regex.IsMatch(esc, @"(?<!\\)(\\\\)*""") && !esc.Contains("\n") && !esc.Contains("\r") && !esc.Contains("\0"));
             // everything the server could send is re-validated before it reaches the file
-            var srv = Json.Obj("{\"t\":\"flights.data\",\"at\":1790000000,\"legs\":{\"Horde|1>2\":{\"t\":50,\"n\":2},\"Horde|1>3\":{\"t\":99999,\"n\":2},\"Horde|1\\\"x>3\":{\"t\":50,\"n\":2},\"Horde|1>4\":{\"t\":\"50\",\"n\":2},\"Orc|1>5\":{\"t\":50,\"n\":2},\"Horde|1>6\":7},\"names\":{\"1\":\"A\\\"B\",\"2\":123,\"x y!\":\"no\"}}");
+            var srv = LodgeJson.Parse("{\"t\":\"flights.data\",\"at\":1790000000,\"legs\":{\"Horde|1>2\":{\"t\":50,\"n\":2},\"Horde|1>3\":{\"t\":99999,\"n\":2},\"Horde|1\\\"x>3\":{\"t\":50,\"n\":2},\"Horde|1>4\":{\"t\":\"50\",\"n\":2},\"Orc|1>5\":{\"t\":50,\"n\":2},\"Horde|1>6\":7},\"names\":{\"1\":\"A\\\"B\",\"2\":123,\"x y!\":\"no\"}}");
             var parsed = FlightShare.ParseServer(srv);
             check("server data: bad keys / times / types are dropped, names cleaned (1 leg and 1 name survive)", parsed.Legs.Count == 1 && parsed.Legs.ContainsKey("Horde|1>2") && parsed.Dropped == 5 && parsed.Names.Count == 1 && parsed.Names["1"] == "AB");
         }

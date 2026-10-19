@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -321,12 +322,12 @@ namespace ElansAddonHub
                 var fs1 = snap.Finds.FirstOrDefault(f => f.Item == DtHerb); var fs2 = snap.Finds.FirstOrDefault(f => f.Item == DtSword); var fs3 = snap.Finds.FirstOrDefault(f => f.Item == DtCloth);
                 Check("finds: the Toolkit's build is kept with the find; a find without one (or with garbage) is kept without", snap.Finds.Count == 3 && fs1?.Build == 70374 && fs2?.Build == 0 && fs3?.Build == 0);
                 var batch = AtlasObs.MakeBatch(snap, null, new Dictionary<string, string>(), includeExtras: true);
-                var sent = batch.Frame.List("finds").OfType<Dictionary<string, object>>().ToList();
+                var sent = Wire(batch.Frame).List("finds").OfType<Dictionary<string, object>>().ToList();
                 var sentHerb = sent.FirstOrDefault(o => Convert.ToInt32(o["i"]) == DtHerb); var sentSword = sent.FirstOrDefault(o => Convert.ToInt32(o["i"]) == DtSword);
                 Check("finds: shared with the Lodge as \"gb\" only when known; the sent record's signature is unchanged (nothing is sent twice after the update)",
                     sentHerb != null && sentHerb.ContainsKey("gb") && Convert.ToInt32(sentHerb["gb"]) == 70374 && sentSword != null && !sentSword.ContainsKey("gb") && batch.Sigs.Values.All(v => v == "1"));
                 var lodge = new LodgeAtlas();
-                lodge.Apply(new Dictionary<string, object>
+                lodge.Apply(LodgeJson.FromPlain(new Dictionary<string, object>
                 {
                     ["t"] = "atlas.data", ["epoch"] = "dt1", ["rev"] = 3.0, ["full"] = true,
                     ["finds"] = new List<object>
@@ -335,9 +336,9 @@ namespace ElansAddonHub
                         new Dictionary<string, object> { ["s"] = 2.0, ["i"] = (double)DtHerb, ["c"] = 1.0, ["src"] = "obj:1618", ["at"] = (double)(AtNow - 600), ["by"] = "Bob" },
                         new Dictionary<string, object> { ["s"] = 3.0, ["i"] = (double)DtHerb, ["c"] = 3.0, ["src"] = "obj:1618", ["at"] = (double)(AtNow - 300), ["by"] = "Ana", ["gb"] = 70374.0 },
                     },
-                });
+                }) as System.Text.Json.Nodes.JsonObject);
                 var lf = lodge.AllFinds;
-                var round = new LodgeAtlas(); round.Apply(Json.Obj(Json.Write(lodge.ToCache())));
+                var round = new LodgeAtlas(); round.Apply(LodgeJson.Parse(LodgeJson.Serialize(lodge.ToCache())));
                 Check("finds: the Lodge's finds carry their build, a find from an older Lodge has none, and the cache file keeps it",
                     lf.Count == 3 && lf.First(f => f.Seq == 1).Build == 70338 && lf.First(f => f.Seq == 2).Build == 0 && lf.First(f => f.Seq == 3).Build == 70374 && round.AllFinds.First(f => f.Seq == 1).Build == 70338 && round.AllFinds.First(f => f.Seq == 2).Build == 0);
                 Check("finds: the words - this version 'game 1.60.1', an older build 'build 70338 (older game version)', none 'unknown version'",

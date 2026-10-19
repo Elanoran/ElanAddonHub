@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
@@ -44,13 +45,13 @@ namespace ElansAddonHub.Lodge
         void SendCairnSharing()
         {
             if (!SupportsCairnData || IsGuestNow) return;
-            _ = Send(LodgeFieldsDict.Build(new AtlasSharingMsg { On = CairnSharingOn }.Write));
+            _ = Send(LodgeJson.Build(new AtlasSharingMsg { On = CairnSharingOn }.Write));
         }
 
-        void OnCairnStatus(Dictionary<string, object> m)
+        void OnCairnStatus(JsonObject m)
         {
             if (!SupportsCairnData) return;
-            var st = CairnStatusMsg.Read(new LodgeFieldsDict(m));
+            var st = CairnStatusMsg.Read(new LodgeJsonFields(m));
             CairnEntitled = st.Entitled;
             CairnWhy = CairnEntitled ? "" : (st.Why ?? "");
             CairnSeq = CairnEntitled ? st.Seq ?? 0 : 0;

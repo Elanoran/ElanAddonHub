@@ -32,6 +32,9 @@ namespace ElansAddonHub
             public int MaxMb = 1;
             public bool Corrupt;                      // flip a byte on download: the SHA-256 will not match
             public int Requests;                      // PUT / GET requests seen
+            // 3.1.1: a hostile Lodge's downloads (slots, /files, /datasets): "endless" = a body that never ends, "stall" = one byte then nothing,
+            // "longer" = a Content-Length above the announced size
+            public string Hostile;
             public readonly List<SlotRec> Slots = new List<SlotRec>();
             int nextId = 1;
 
@@ -78,18 +81,45 @@ namespace ElansAddonHub
 
             static readonly HashSet<string> Blocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "exe", "dll", "com", "bat", "cmd", "ps1", "js", "msi", "lnk", "reg", "hta" };
 
+            void ServeHostile(HttpListenerContext c, int announced)
+            {
+                c.Response.ContentType = "application/octet-stream";
+                if (Hostile == "longer")
+                {
+                    var data = new byte[announced + 1000];
+                    c.Response.ContentLength64 = data.Length;
+                    try { c.Response.OutputStream.Write(data, 0, data.Length); c.Response.Close(); } catch { }
+                    return;
+                }
+                c.Response.SendChunked = true;
+                var mode = Hostile;
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        var buf = new byte[64 * 1024];
+                        if (mode == "stall") { await c.Response.OutputStream.WriteAsync(buf, 0, 1); await c.Response.OutputStream.FlushAsync(); await Task.Delay(20000); }
+                        else for (long n = 0; n < 512L * 1024 * 1024; n += buf.Length) await c.Response.OutputStream.WriteAsync(buf, 0, buf.Length);   // a test never runs forever
+                    }
+                    catch { }
+                    try { c.Response.Abort(); } catch { }
+                });
+            }
+
             void Serve(HttpListenerContext c)
             {
                 var req = c.Request;
                 if (req.Headers["X-Lodge-Code"] != Code) { Refuse(c, 401, "auth", "Wrong invite code"); return; }
                 System.Threading.Interlocked.Increment(ref Requests);
                 var parts = req.Url.AbsolutePath.Trim('/').Split('/');
+                if (req.HttpMethod == "GET" && parts.Length == 2 && (parts[0] == "files" || parts[0] == "datasets") && Hostile != null) { ServeHostile(c, 1000); return; }
                 if (parts.Length < 2 || parts[0] != "slots") { Refuse(c, 404, "missing", "Not found"); return; }
                 if (req.HttpMethod == "GET" && parts.Length == 3)
                 {
                     var s = Slots.FirstOrDefault(x => x.Id == parts[1]);
                     var v = s?.Versions.FirstOrDefault(x => x.V.ToString() == parts[2]);
                     if (v == null) { Refuse(c, 404, "missing", "That file isn't there any more"); return; }
+                    if (Hostile != null) { ServeHostile(c, v.Bytes.Length); return; }
                     var data = (byte[])v.Bytes.Clone();
                     if (Corrupt) data[data.Length / 2] ^= 0xFF;
                     c.Response.ContentType = "application/octet-stream"; c.Response.ContentLength64 = data.Length;
@@ -142,7 +172,90 @@ namespace ElansAddonHub
             }
         }
 
+        // 3.1.1 (M1): a hostile Lodge's downloads stop - too much, stalled or too long - and leave nothing behind
+        sealed class TrickleStream : Stream
+        {
+            readonly int delayMs; readonly bool never; long sent; readonly long limit;
+            public TrickleStream(int delayMs, bool never = false, long limit = long.MaxValue) { this.delayMs = delayMs; this.never = never; this.limit = limit; }
+            public override bool CanRead => true; public override bool CanSeek => false; public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException(); public override long Position { get => sent; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override int Read(byte[] b, int o, int c) => ReadAsync(b, o, c).GetAwaiter().GetResult();
+            public override async Task<int> ReadAsync(byte[] b, int o, int c, System.Threading.CancellationToken ct)
+            {
+                if (never) { await Task.Delay(System.Threading.Timeout.Infinite, ct); return 0; }
+                if (delayMs > 0) await Task.Delay(delayMs, ct);
+                if (sent >= limit) return 0;
+                int n = (int)Math.Min(c, limit - sent); sent += n; return n;
+            }
+            public override long Seek(long o, SeekOrigin s) => throw new NotSupportedException();
+            public override void SetLength(long v) => throw new NotSupportedException();
+            public override void Write(byte[] b, int o, int c) => throw new NotSupportedException();
+        }
+
+        async Task HostileDownloadChecks(FakeFilesServer fake, string work, SlotVM slot, Action<string, bool> check)
+        {
+            async Task<string> Copy(Stream src, long cap, System.Threading.CancellationToken ct, TimeSpan? idle = null, TimeSpan? overall = null)
+            {
+                try { await LodgeClient.CopyCapped(src, Stream.Null, cap, null, null, ct, idle, overall); return null; }
+                catch (LodgeClient.DownloadStoppedException e) { return e.Message; }
+                catch (OperationCanceledException) { return "cancelled"; }
+            }
+            // the copy itself, with fake streams
+            check("capped copy: an endless body stops right after the cap", await Copy(new TrickleStream(0), 1024 * 1024, default) == LodgeClient.TooBigText);
+            check("capped copy: exactly the announced size is fine", await Copy(new TrickleStream(0, limit: 1024 * 1024), 1024 * 1024, default) == null);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            check("capped copy: no byte for the idle time = stalled", await Copy(new TrickleStream(0, never: true), 1000, default, TimeSpan.FromMilliseconds(300)) == LodgeClient.StalledText && sw.ElapsedMilliseconds < 5000);
+            sw.Restart();
+            check("capped copy: a trickle that never ends stops at the overall time", await Copy(new TrickleStream(20), long.MaxValue, default, TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(400)) == LodgeClient.TooLongText && sw.ElapsedMilliseconds < 5000);
+            using (var cts = new System.Threading.CancellationTokenSource(200))
+                check("capped copy: the caller's own cancel stays a cancel", await Copy(new TrickleStream(0, never: true), 1000, cts.Token, TimeSpan.FromSeconds(5)) == "cancelled");
+            check("cap: the announced size, never above the ceiling; the Lodge's maximum when nothing is announced",
+                LodgeClient.CapFor(1234, LodgeClient.HardCeiling) == 1234 && LodgeClient.CapFor(5L << 30, LodgeClient.HardCeiling) == LodgeClient.HardCeiling
+                && Session.ChatFileCap(0) == Session.MaxFileMb * 1024L * 1024L && Session.ChatFileCap(777) == 777 && Session.ChatFileCap(5L << 30) == LodgeClient.HardCeiling
+                && LodgeClient.CapFor(50L << 20, FileVM.AutoImageMax) == FileVM.AutoImageMax);
+
+            // over real HTTP: a slot version, a chat file and a dataset
+            var savedIdle = LodgeClient.IdleTimeout;
+            try
+            {
+                var dest = Path.Combine(work, "hostile.zip");
+                foreach (var mode in new[] { "endless", "longer" })
+                {
+                    fake.Hostile = mode;
+                    var err = await Session.SaveVersionAsync(slot, slot.Newest, dest);
+                    check("hostile slot (" + mode + "): stopped with plain words (" + err + ")", err == LodgeClient.TooBigText);
+                    check("hostile slot (" + mode + "): no file and no .part left", !File.Exists(dest) && !File.Exists(dest + ".part") && !slot.Busy);
+                }
+                LodgeClient.IdleTimeout = TimeSpan.FromMilliseconds(800);
+                fake.Hostile = "stall";
+                sw.Restart();
+                var err2 = await Session.SaveVersionAsync(slot, slot.Newest, dest);
+                check("hostile slot (stall): stopped after the idle time (" + err2 + ", " + sw.ElapsedMilliseconds + " ms)", err2 == LodgeClient.StalledText && sw.ElapsedMilliseconds < 10000);
+                check("hostile slot (stall): no file and no .part left", !File.Exists(dest) && !File.Exists(dest + ".part"));
+                LodgeClient.IdleTimeout = savedIdle;
+
+                var direct = new LodgeClient(fake.Url, FakeFilesServer.Code, "Elan");
+                var chat = Path.Combine(work, "chat.png");
+                foreach (var mode in new[] { "endless", "longer" })
+                {
+                    fake.Hostile = mode;
+                    string e1 = null;
+                    try { await direct.Download(1.ToString("x32"), chat, 1000); } catch (InvalidOperationException e) { e1 = e.Message; }
+                    check("hostile chat file (" + mode + "): stopped at the announced size (" + e1 + ")", e1 == LodgeClient.TooBigText);
+                    check("hostile chat file (" + mode + "): no file and no .part left", !File.Exists(chat) && !File.Exists(chat + ".part"));
+                }
+                fake.Hostile = "endless";
+                var part = Path.Combine(work, "classic.zip.part");
+                string e2 = null;
+                try { await direct.DownloadDataset("classic", part, 1000, null, default); } catch (InvalidOperationException e) { e2 = e.Message; }
+                check("hostile dataset: stopped at the announced size, no .part left (" + e2 + ")", e2 == LodgeClient.TooBigText && !File.Exists(part));
+            }
+            finally { fake.Hostile = null; LodgeClient.IdleTimeout = savedIdle; }
+        }
+
         string FilesWelcome(string role, bool feature, string server = "2.14.0", int maxMb = 1)
+
         {
             var features = "\"reply\",\"react\",\"react2\",\"pin\",\"profile\",\"displayname\",\"lfg\",\"history2\",\"search\"" + (feature ? ",\"files\"" : "");
             var w = FunWelcome(role, FunPeople(false), "", features, server);
@@ -300,6 +413,7 @@ namespace ElansAddonHub
                 check("damaged download: the progress state is idle again", !dmg.Busy);
                 err = await Session.SaveVersionAsync(dmg, dmg.Newest, dest2);
                 check("and a clean second try saves it", err == null && File.Exists(dest2) && dmg.Badge == "");
+                await HostileDownloadChecks(fake, work, dmg, check);
 
                 // ---- refusals: programs, zips with programs, size, empty
                 var before = fake.Requests;

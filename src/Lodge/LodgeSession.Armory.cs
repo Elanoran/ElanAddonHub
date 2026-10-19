@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Text;
 using ElansAddonHub.Services;
 using Elans.Shared;
@@ -135,7 +136,7 @@ namespace ElansAddonHub.Lodge
                     armoryDeleteAll = false;
                     sent.Clear(); SaveArmorySent();
                     armoryQuiet.Clear(); armoryRefused.Clear();
-                    _ = Send(LodgeFieldsDict.Build(new ArmoryDeleteMsg { All = true }.Write));
+                    _ = Send(LodgeJson.Build(new ArmoryDeleteMsg { All = true }.Write));
                 }
                 return;
             }
@@ -143,7 +144,7 @@ namespace ElansAddonHub.Lodge
             {
                 sent.Remove(k); armoryQuiet.Remove(k); armoryRefused.Remove(k);
                 SaveArmorySent();
-                _ = Send(LodgeFieldsDict.Build(new ArmoryDeleteMsg { Key = k }.Write));
+                _ = Send(LodgeJson.Build(new ArmoryDeleteMsg { Key = k }.Write));
             }
             if (wanted.Count == 0) { armoryBacklog = false; return; }
 
@@ -169,8 +170,10 @@ namespace ElansAddonHub.Lodge
                 }
                 if (clock < armoryNextPut) { backlog = true; continue; }
                 var full = ArmoryShare.Build(c, true, SupportsArmory2, RepsShared);
-                var frame = LodgeFieldsDict.Build(new ArmoryPutMsg { Key = c.Key, Char = full }.Write);
-                if (Json.Write(frame).Length > 60 * 1024) { armoryRefused[c.Key] = sig; ArmoryProblem = c.Name + " has too much to share."; continue; }
+                // the sheet is built as plain dictionaries (ArmoryShare); it goes out as the node the shared Lodge JSON engine makes of it
+                var sheet = LodgeJson.FromPlain(full) as JsonObject;
+                var frame = LodgeJson.Build(new ArmoryPutMsg { Key = c.Key, Char = sheet }.Write);
+                if (sheet == null || LodgeJson.SerializeUtf8(frame).Length > 60 * 1024) { armoryRefused[c.Key] = sig; ArmoryProblem = c.Name + " has too much to share."; continue; }
                 armoryInflight[c.Key] = sig;
                 armoryQuiet.Remove(c.Key);
                 _ = Send(frame);
@@ -184,7 +187,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsArmory || !ArmoryAvailable) return;
             if (!force && Clock() - armoryLastList < TimeSpan.FromSeconds(20)) return;
             armoryLastList = Clock();
-            _ = Send(LodgeFieldsDict.Build(new ArmoryListMsg().Write));
+            _ = Send(LodgeJson.Build(new ArmoryListMsg().Write));
         }
 
         public Dictionary<string, object> ArmoryChar(string id) => id != null && armoryChars.TryGetValue(id, out var c) ? c : null;
@@ -195,16 +198,16 @@ namespace ElansAddonHub.Lodge
             var id = e.Id;
             if (!force && (armoryAsked.Contains(id) || armoryChars.ContainsKey(id))) return;
             armoryAsked.Add(id);
-            _ = Send(LodgeFieldsDict.Build(new ArmoryGetMsg { Owner = e.Owner, Key = e.Key }.Write));
+            _ = Send(LodgeJson.Build(new ArmoryGetMsg { Owner = e.Owner, Key = e.Key }.Write));
         }
 
         // a character that changed since it was opened is fetched again when the list says it is newer
         bool ArmoryNewer(ArmoryEntry e) => armoryChars.TryGetValue(e.Id, out var c) && c.Long("at") != e.At;
 
-        void OnArmorySaved(Dictionary<string, object> m)
+        void OnArmorySaved(JsonObject m)
         {
             if (!SupportsArmory) return;
-            var saved = ArmorySavedMsg.Read(new LodgeFieldsDict(m));
+            var saved = ArmorySavedMsg.Read(new LodgeJsonFields(m));
             var key = saved.Key;
             if (key != null && armoryInflight.TryGetValue(key, out var sig))
             {
@@ -229,20 +232,20 @@ namespace ElansAddonHub.Lodge
             ArmoryChanged?.Invoke(); Changed?.Invoke();
         }
 
-        void OnArmoryDeleted(Dictionary<string, object> m)
+        void OnArmoryDeleted(JsonObject m)
         {
             if (!SupportsArmory) return;
-            var d = ArmoryDeletedMsg.Read(new LodgeFieldsDict(m));
+            var d = ArmoryDeletedMsg.Read(new LodgeJsonFields(m));
             if (d.Ok && (d.Key != null || d.All || d.Removed != null)) RequestArmoryList(true);
             else if (!d.Ok && d.Why == "guest") armoryGuest = true;
             ArmoryChanged?.Invoke();
         }
 
-        void OnArmoryChars(Dictionary<string, object> m)
+        void OnArmoryChars(JsonObject m)
         {
             if (!SupportsArmory) return;
             var list = new List<ArmoryEntry>();
-            foreach (var o in ArmoryCharsMsg.Read(new LodgeFieldsDict(m)).Chars)
+            foreach (var o in ArmoryCharsMsg.Read(new LodgeJsonFields(m)).Chars)
             {
                 if (list.Count >= 2000) break;
                 var e = ArmoryEntry.FromSummary(o);
@@ -257,11 +260,11 @@ namespace ElansAddonHub.Lodge
             ArmoryChanged?.Invoke();
         }
 
-        void OnArmoryChar(Dictionary<string, object> m)
+        void OnArmoryChar(JsonObject m)
         {
             if (!SupportsArmory) return;
-            var msg = ArmoryCharMsg.Read(new LodgeFieldsDict(m));
-            var owner = msg.Owner; var key = msg.Key; var ch = msg.Char as Dictionary<string, object>;      // the sheet, read by the Characters page with its own checks
+            var msg = ArmoryCharMsg.Read(new LodgeJsonFields(m));
+            var owner = msg.Owner; var key = msg.Key; var ch = LodgeJson.ToPlain(msg.Char as JsonObject) as Dictionary<string, object>;      // the sheet, read by the Characters page with its own checks (plain dictionaries)
             if (owner == null || key == null || ch == null) return;
             var id = owner + "|" + key;
             if (!armoryAsked.Contains(id) && !armoryChars.ContainsKey(id)) return;      // only what was asked for
@@ -298,19 +301,20 @@ namespace ElansAddonHub.Lodge
                 if (a == null) craftersAnswers[key] = a = new CraftersAnswer();
                 a.Asked = now;
                 var ids = key.Split(',').Select(s => (long)int.Parse(s, System.Globalization.CultureInfo.InvariantCulture)).ToList();
-                _ = Send(LodgeFieldsDict.Build(new ArmoryCraftersGetMsg { Spells = ids }.Write));
+                _ = Send(LodgeJson.Build(new ArmoryCraftersGetMsg { Spells = ids }.Write));
             }
             res.Pending = !fresh && a != null && a.Answered == default(DateTime);
             return res;
         }
 
-        void OnArmoryCrafters(Dictionary<string, object> m)
+        void OnArmoryCrafters(JsonObject m)
         {
             if (!SupportsArmory2) return;
             // the spells asked are read from the raw frame on purpose: only JSON numbers count, one by one (ArmoryCraftersMsg.Spells is the lenient reading)
             var asked = new List<int>();
-            foreach (var o in m.List("spells")) if (o is double d && d >= 1 && d <= int.MaxValue && asked.Count < 16) asked.Add((int)d);
-            var answer = ArmoryCraftersMsg.Read(new LodgeFieldsDict(m));
+            if (m["spells"] is JsonArray spells)
+                foreach (var o in spells) if (LodgeJson.Number(o) is double d && d >= 1 && d <= int.MaxValue && asked.Count < 16) asked.Add((int)d);
+            var answer = ArmoryCraftersMsg.Read(new LodgeJsonFields(m));
             var key = CraftersKey(asked);
             if (!craftersAnswers.TryGetValue(key, out var a)) return;              // only what was asked for
             var set = new HashSet<int>(asked);

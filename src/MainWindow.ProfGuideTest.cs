@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -181,23 +182,23 @@ namespace ElansAddonHub
             s = AtlasObs.Read(atlasRoot);
             var sent = new Dictionary<string, string>();
             var off = AtlasObs.MakeBatch(s, null, sent, true, false);
-            Check("nodes (B): without atlas3 the batch has no nodes section", off != null && off.Frame.Child("nodes") == null);
+            Check("nodes (B): without atlas3 the batch has no nodes section", off != null && Wire(off.Frame).Child("nodes") == null);
             var on = AtlasObs.MakeBatch(s, null, sent, true, true);
-            var nodes = on?.Frame.Child("nodes");
+            var nodes = Wire(on?.Frame).Child("nodes");
             var pts = nodes?.Child("1731")?.List("1411");
             Check("nodes (B): with atlas3 the batch carries nodes { object: { map: [ { x, y, n } ] } } with the cumulative counts, no times", pts != null && pts.Count == 2 && pts.OfType<Dictionary<string, object>>().Any(p => Math.Abs((double)p["x"] - 0.4123) < 1e-9 && Convert.ToInt64(p["n"]) == 5 && !p.ContainsKey("at")) && nodes.Child("1731").List("1412").Count == 1);
-            Check("nodes (B): what was sent is remembered by signature: a second batch has no nodes; a bigger count sends that object again", AtlasObs.MakeBatch(s, null, on.Sigs.Concat(sent).GroupBy(k => k.Key).ToDictionary(g => g.Key, g => g.First().Value), true, true)?.Frame.Child("nodes") == null);
+            Check("nodes (B): what was sent is remembered by signature: a second batch has no nodes; a bigger count sends that object again", Wire(AtlasObs.MakeBatch(s, null, on.Sigs.Concat(sent).GroupBy(k => k.Key).ToDictionary(g => g.Key, g => g.First().Value), true, true)?.Frame).Child("nodes") == null);
             s.Nodes[1731][1411][0] = new AtlasObs.NodePt { X = s.Nodes[1731][1411][0].X, Y = s.Nodes[1731][1411][0].Y, N = s.Nodes[1731][1411][0].N + 1, At = AtlasAt };
             var again = AtlasObs.MakeBatch(s, null, on.Sigs, true, true);
-            Check("nodes (B): a changed count goes out alone", again != null && again.Frame.Child("nodes") != null && again.Frame.Child("nodes").Count == 1 && again.Sigs.Count == 1 && again.Sigs.ContainsKey("n1731"));
+            Check("nodes (B): a changed count goes out alone", again != null && Wire(again.Frame).Child("nodes") != null && Wire(again.Frame).Child("nodes").Count == 1 && again.Sigs.Count == 1 && again.Sigs.ContainsKey("n1731"));
             var lots = new AtlasObs.Snapshot();
             for (int o = 1; o <= 70; o++) lots.Nodes[o] = new Dictionary<int, List<AtlasObs.NodePt>> { [1] = new List<AtlasObs.NodePt> { new AtlasObs.NodePt { X = 0.5, Y = 0.5, N = 1 } } };
             var b1 = AtlasObs.MakeBatch(lots, null, new Dictionary<string, string>(), false, true);
-            Check("nodes (B): at most 50 objects in one message, the rest waits for the next", b1 != null && b1.Frame.Child("nodes").Count == AtlasObs.MaxNodeObjectsPerShare && b1.Remaining == 20);
+            Check("nodes (B): at most 50 objects in one message, the rest waits for the next", b1 != null && Wire(b1.Frame).Child("nodes").Count == AtlasObs.MaxNodeObjectsPerShare && b1.Remaining == 20);
             var heavy = new AtlasObs.Snapshot();
             for (int o = 1; o <= 12; o++) heavy.Nodes[o] = new Dictionary<int, List<AtlasObs.NodePt>> { [1] = Enumerable.Range(0, 150).Select(i => new AtlasObs.NodePt { X = 0.005 + (i % 30) * 0.03, Y = 0.005 + (i / 30) * 0.03, N = 1 }).ToList() };
             var b2 = AtlasObs.MakeBatch(heavy, null, new Dictionary<string, string>(), false, true);
-            Check("nodes (B): at most 1000 points in one message (6 objects of 150), within the 56 KB", b2 != null && b2.Frame.Child("nodes").Count == 6 && b2.Remaining == 6 && Encoding.UTF8.GetByteCount(Json.Write(b2.Frame)) <= AtlasObs.MaxShareBytes);
+            Check("nodes (B): at most 1000 points in one message (6 objects of 150), within the 56 KB", b2 != null && Wire(b2.Frame).Child("nodes").Count == 6 && b2.Remaining == 6 && Encoding.UTF8.GetByteCount(LodgeJson.Serialize(b2.Frame)) <= AtlasObs.MaxShareBytes);
 
             // the session: only to a server that advertises atlas3
             var sentFrames = new List<Dictionary<string, object>>();
@@ -242,7 +243,7 @@ namespace ElansAddonHub
             Check("nodes (lodge): the Atlas data counts as data with nodes alone", new LodgeAtlas().HasData == false && L.HasData);
             Session.AtlasSaveCacheForTest();
             var again2 = new LodgeAtlas();
-            var cachePage = Json.Obj(File.ReadAllText(cacheFile)); cachePage["full"] = true;
+            var cachePage = LodgeJson.Parse(File.ReadAllBytes(cacheFile)); cachePage["full"] = true;
             Check("nodes (lodge): the cache file holds the nodes and reads back the same", again2.Apply(cachePage) && again2.Nodes(1731, 1411).Count == 2 && again2.Nodes(1731, 1411).Any(p => p.N == 7 && Math.Abs(p.X - 0.4125) < 1e-9) && again2.Nodes(1732, 1411).Count == 1);
             Session.FeedForTest(AtlasPage("pg1", 71, "\"nodes\":{\"1731\":{\"1411\":[{\"x\":0.4125,\"y\":0.5533,\"n\":9}]}}"));
             Check("nodes (lodge): an incremental page replaces that object's nodes as a whole and leaves the others", L.Nodes(1731, 1411).Count == 1 && L.Nodes(1731, 1411)[0].N == 9 && L.Nodes(1732, 1411).Count == 1);
@@ -550,10 +551,10 @@ namespace ElansAddonHub
             page.FollowRebuildNowForTest(); await page.FollowTaskForTest;                       // takes the current nodes as the starting point
             builds0 = page.FollowBuildsForTest;
             Check("rebuild: nothing changed -> the watch does not schedule a rebuild", !CheckSig(page));
-            lodgeNow.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"pgf\",\"rev\":1,\"at\":" + AtlasAt + ",\"full\":true,\"nodes\":{\"1618\":{\"1429\":[{\"x\":0.5,\"y\":0.5,\"n\":2}]}}}"));
+            lodgeNow.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"pgf\",\"rev\":1,\"at\":" + AtlasAt + ",\"full\":true,\"nodes\":{\"1618\":{\"1429\":[{\"x\":0.5,\"y\":0.5,\"n\":2}]}}}"));
             page.FollowSignatureCheckForTest();
             Check("rebuild: new Lodge nodes schedule a (debounced) rebuild - several changes in a row make one", page.FollowDebounceRunningForTest);
-            lodgeNow.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"pgf\",\"rev\":2,\"at\":" + AtlasAt + ",\"nodes\":{\"1618\":{\"1429\":[{\"x\":0.5,\"y\":0.5,\"n\":3}]}}}"));
+            lodgeNow.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"pgf\",\"rev\":2,\"at\":" + AtlasAt + ",\"nodes\":{\"1618\":{\"1429\":[{\"x\":0.5,\"y\":0.5,\"n\":3}]}}}"));
             page.FollowSignatureCheckForTest();
             await WaitFor(() => page.FollowBuildsForTest > builds0, 5000);
             await page.FollowTaskForTest;
@@ -601,7 +602,7 @@ namespace ElansAddonHub
             ClassicAtlas.Use(classic);
             AtlasBrowse.ForgetForTest();
             var lodge = new LodgeAtlas();
-            lodge.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"pga\",\"rev\":1,\"at\":" + AtlasAt + ",\"full\":true,\"nodes\":{"
+            lodge.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"pga\",\"rev\":1,\"at\":" + AtlasAt + ",\"full\":true,\"nodes\":{"
                 + "\"50\":{\"11\":[{\"x\":0.20,\"y\":0.30,\"n\":6},{\"x\":0.40,\"y\":0.35,\"n\":2},{\"x\":0.60,\"y\":0.30,\"n\":1}],\"13\":[{\"x\":0.5,\"y\":0.5,\"n\":3}]},"
                 + "\"51\":{\"11\":[{\"x\":0.25,\"y\":0.60,\"n\":4},{\"x\":0.55,\"y\":0.65,\"n\":2},{\"x\":0.80,\"y\":0.70,\"n\":9}]}}}"));
             var own = new Dictionary<int, Dictionary<int, List<AtlasObs.NodePt>>>

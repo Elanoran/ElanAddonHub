@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -195,7 +196,7 @@ namespace ElansAddonHub
                 // a new Forever creature: the game has met it (the cache row has no name yet), the Lodge looted it
                 SeenSnapshot Seen(string name) => new SeenSnapshot(new[] { new WdbCreature { Id = 70, Name = name, Type = 1 }, new WdbCreature { Id = 1, Name = "Gnarlfang", Type = 1 } }, new WdbObject[0], new WdbQuest[0]);
                 var lodge = new LodgeAtlas();
-                lodge.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":1,\"at\":" + (AtNow - 600) + ",\"full\":true,\"kills\":{\"70\":{\"n\":40,\"m\":2,\"items\":{\"100\":{\"n\":4,\"c\":4}},\"z\":{\"11\":40}}}}"));
+                lodge.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"e1\",\"rev\":1,\"at\":" + (AtNow - 600) + ",\"full\":true,\"kills\":{\"70\":{\"n\":40,\"m\":2,\"items\":{\"100\":{\"n\":4,\"c\":4}},\"z\":{\"11\":40}}}}"));
                 AtlasQuery.Context.Lodge = () => lodge;
                 SeenData.SetForTest(Seen(""));
                 bool wow = true;

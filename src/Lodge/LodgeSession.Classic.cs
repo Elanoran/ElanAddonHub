@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -51,28 +52,28 @@ namespace ElansAddonHub.Lodge
         public void RequestClassicInfo()
         {
             if (!SupportsClassic || IsGuestNow) return;
-            _ = Send(LodgeFieldsDict.Build(new DatasetInfoMsg { Name = "classic" }.Write));
+            _ = Send(LodgeJson.Build(new DatasetInfoMsg { Name = "classic" }.Write));
         }
 
         // the messages are typed in shared/Elans.Shared/Lodge/DatasetMessages.cs
-        void OnDatasetFrame(Dictionary<string, object> m)
+        void OnDatasetFrame(JsonObject m)
         {
             if (!SupportsClassic) return;
-            switch (m.Str("t"))
+            switch (LodgeJson.Str(m, "t"))
             {
                 case LodgeMsg.DatasetData:
                 case LodgeMsg.DatasetChanged:
                 {
                     // dataset.changed carries the same view (plus its action) and normally neither canManage nor maxMb: read through
                     // DatasetDataMsg, either one is applied only when the frame has it, as before
-                    var d = DatasetDataMsg.Read(new LodgeFieldsDict(m));
+                    var d = DatasetDataMsg.Read(new LodgeJsonFields(m));
                     if (d.Dataset.Name != "classic") return;
                     ApplyClassic(d.Dataset, d.CanManage, d.MaxMb);
                     break;
                 }
                 case LodgeMsg.DatasetResult:
                 {
-                    var r = DatasetResultMsg.Read(new LodgeFieldsDict(m));
+                    var r = DatasetResultMsg.Read(new LodgeJsonFields(m));
                     if (r.Name != "classic" || r.Ok) return;
                     ClassicProblem = ClassicWhy(r.Why);
                     ClassicChanged?.Invoke();
@@ -165,7 +166,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsClassic) return "This Lodge's server can't host the Classic data yet";
             if (!CanShareClassic) return ClassicWhy("forbidden");
-            _ = Send(LodgeFieldsDict.Build(new DatasetDeleteMsg { Name = "classic" }.Write));
+            _ = Send(LodgeJson.Build(new DatasetDeleteMsg { Name = "classic" }.Write));
             return null;
         }
     }

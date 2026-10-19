@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -61,10 +62,10 @@ namespace ElansAddonHub
                 && !snap.UnknownSections.Contains("npcspots") && !snap.IsEmpty && snap.Stats["npcspots"][1] == 1);
             var b0 = AtlasObs.MakeBatch(snap, null, new Dictionary<string, string>(), includeEntrances: true);
             var b1 = AtlasObs.MakeBatch(snap, null, new Dictionary<string, string>(), includeNpcSpots: true);
-            var frame = b1?.Frame != null && b1.Frame.TryGetValue("npcspots", out var fo) ? fo as Dictionary<string, object> : null;
+            var frame = Wire(b1?.Frame) != null && Wire(b1.Frame).TryGetValue("npcspots", out var fo) ? fo as Dictionary<string, object> : null;
             var wire = frame != null && frame.TryGetValue("466", out var w466) ? w466 as List<object> : null;
             Check("npc spots: shared only with a lodge that takes them (atlas8), as { z, x, y, k, n }; a resend of what the lodge has sends nothing",
-                (b0 == null || !b0.Frame.ContainsKey("npcspots")) && wire != null && wire.Count == 2 && ((Dictionary<string, object>)wire[0]).Keys.OrderBy(k => k).SequenceEqual(new[] { "k", "n", "x", "y", "z" })
+                (b0 == null || !Wire(b0.Frame).ContainsKey("npcspots")) && wire != null && wire.Count == 2 && ((Dictionary<string, object>)wire[0]).Keys.OrderBy(k => k).SequenceEqual(new[] { "k", "n", "x", "y", "z" })
                 && AtlasObs.MakeBatch(snap, null, b1.Sigs, includeNpcSpots: true) == null);
 
             // ---- the session: npc spots only to a 2.26 server that names atlas8; the merge comes back in atlas.data
@@ -85,7 +86,7 @@ namespace ElansAddonHub
 
             // ---- the lodge's merge
             var lodge = new Lodge.LodgeAtlas();
-            bool applied = lodge.Apply(new Dictionary<string, object>
+            bool applied = lodge.Apply(LodgeJson.FromPlain(new Dictionary<string, object>
             {
                 ["t"] = "atlas.data", ["epoch"] = "npc123", ["rev"] = 9.0, ["full"] = true,
                 ["npcspots"] = new Dictionary<string, object>
@@ -95,11 +96,11 @@ namespace ElansAddonHub
                     ["299"] = new List<object> { NsPt(1429, 0.3, 0.3, 2, 5, 2) },
                     ["7"] = new List<object> { NsPt(1429, 0.3, 0.3, 9, 5, 2) },
                 },
-            });
+            }) as System.Text.Json.Nodes.JsonObject);
             var back = new Lodge.LodgeAtlas();
             Check("npc spots: the lodge's merge is read with its member counts (a bad kind is dropped) and survives the cache file",
                 applied && lodge.NpcSpotsOf(466).Count == 2 && lodge.NpcSpotsOf(466)[0].M == 3 && lodge.NpcSpotsOf(7).Count == 0 && lodge.NpcSpotNpcCount == 3
-                && back.Apply(Json.Obj(Json.Write(lodge.ToCache()))) && back.NpcSpotsOf(466).Count == 2 && back.NpcSpotsOf(466).Any(p => p.M == 3 && p.K == 1) && back.NpcSpotsOf(61).Count == 1);
+                && back.Apply(LodgeJson.Parse(LodgeJson.Serialize(lodge.ToCache()))) && back.NpcSpotsOf(466).Count == 2 && back.NpcSpotsOf(466).Any(p => p.M == 3 && p.K == 1) && back.NpcSpotsOf(61).Count == 1);
 
             var hadLodge = AtlasQuery.Context.Lodge; var hadOwn = AtlasQuery.Context.OwnNpcSpots; var hadClassic = ClassicAtlas.Current;
             try

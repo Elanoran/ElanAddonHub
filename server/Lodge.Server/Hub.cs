@@ -114,7 +114,6 @@ public partial class LodgeHub
 {
     public const string Version = "2.31.1";
     public const int FloodDropsPerMinute = 200; // refused control/chat messages before the connection is closed
-    const int MaxFrame = 64 * 1024;
 
     public readonly LodgeConfig Cfg;
     public readonly Auth Auth;
@@ -321,7 +320,7 @@ public partial class LodgeHub
                 r = await me.Ws.ReceiveAsync(buf, ct);
                 if (r.MessageType == WebSocketMessageType.Close) return;
                 msg.Write(buf, 0, r.Count);
-                if (msg.Length > MaxFrame) return; // nobody needs frames that big
+                if (msg.Length > LodgeJson.MaxFrameToLodge) return; // nobody needs frames that big (the limit is shared: Elans.Shared LodgeJson)
             } while (!r.EndOfMessage);
 
             me.LastSeen = Clock.UtcNow;

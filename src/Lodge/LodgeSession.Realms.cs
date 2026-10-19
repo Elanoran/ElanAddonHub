@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using ElansAddonHub.Services;
 using Elans.Shared;
 
@@ -48,23 +49,23 @@ namespace ElansAddonHub.Lodge
         }
 
         // the messages are typed in shared/Elans.Shared/Lodge/RealmMessages.cs; what is shown is cleaned and capped here
-        void OnRealmsFrame(Dictionary<string, object> frame)
+        void OnRealmsFrame(JsonObject m)
         {
             if (!SupportsRealms) return;           // a server that doesn't list the feature has nothing to say about it
-            if (frame.Str("t") == LodgeMsg.RealmsBack)
+            if (LodgeJson.Str(m, "t") == LodgeMsg.RealmsBack)
             {
-                var names = RealmsBackMsg.Read(new LodgeFieldsDict(frame)).Realms.Where(n => n.Length > 0).Take(8).ToList();
+                var names = RealmsBackMsg.Read(new LodgeJsonFields(m)).Realms.Where(n => n.Length > 0).Take(8).ToList();
                 if (names.Count > 0) OnRealmsBack(names);
                 return;
             }
-            var m = RealmsStatusMsg.Read(new LodgeFieldsDict(frame));
-            RealmsAvailable = m.Available;
-            RealmsWhy = RealmsAvailable ? "" : (m.Why ?? "");
-            RealmsRegion = (m.Region ?? "").ToUpperInvariant();
-            var at = m.CheckedAt;
+            var rs = RealmsStatusMsg.Read(new LodgeJsonFields(m));
+            RealmsAvailable = rs.Available;
+            RealmsWhy = RealmsAvailable ? "" : (rs.Why ?? "");
+            RealmsRegion = (rs.Region ?? "").ToUpperInvariant();
+            var at = rs.CheckedAt;
             RealmsCheckedAt = at > 0 ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(Math.Min(at, 4102444800L)) : Clock();
             var list = new List<RealmVM>();
-            foreach (var r in m.Realms.Take(16))
+            foreach (var r in rs.Realms.Take(16))
             {
                 var name = CleanRealmText(r.Name, 40);
                 if (name.Length == 0) continue;

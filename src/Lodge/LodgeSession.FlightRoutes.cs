@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Text;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.WorldMap;
@@ -107,14 +108,14 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFlightRoutes) return;
             routeLastGet = Clock();
-            _ = Send(LodgeFieldsDict.Build(new FlightsRoutesGetMsg().Write));
+            _ = Send(LodgeJson.Build(new FlightsRoutesGetMsg().Write));
         }
 
-        void OnFlightRoutesShared(Dictionary<string, object> m)
+        void OnFlightRoutesShared(JsonObject m)
         {
             var batch = routeInflight;
             routeInflight = null;
-            var answer = FlightsRoutesSharedMsg.Read(new LodgeFieldsDict(m));
+            var answer = FlightsRoutesSharedMsg.Read(new LodgeJsonFields(m));
             if (answer.Ok && batch != null)
             {
                 var sent = RouteSent();
@@ -132,7 +133,7 @@ namespace ElansAddonHub.Lodge
             RequestFlightRoutes();
         }
 
-        void OnFlightRoutesData(Dictionary<string, object> m)
+        void OnFlightRoutesData(JsonObject m)
         {
             if (!SupportsFlightRoutes) return;
             var data = LearnedFlights.ParseServer(m);

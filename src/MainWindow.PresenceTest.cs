@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -86,11 +87,11 @@ namespace ElansAddonHub
                     CombatKnown = true, Flags = 1 + 16 + 64 + 128, XpPercent = 41, Rested = true, GroupSize = 5, InInstance = true, InstanceName = "Wailing Caverns" };
                 Session.Presence.SetForTest(c, true);
                 var g = Session.BuildGameMessage();
-                // typed (Elans.Shared GameMsg): the same bytes the old dictionary wrote (numbers were ints there, doubles now - Json.Write prints both alike)
-                Check("game message: the typed message writes the old bytes", Json.Write(g) == "{\"t\":\"game\",\"playing\":true,\"visibility\":\"visible\",\"name\":\"Elan\",\"realm\":\"Realm\",\"class\":\"Hunter\",\"classFile\":\"HUNTER\",\"level\":60,"
+                // typed (Elans.Shared GameMsg), written by the shared Lodge JSON engine: the same bytes the old dictionary wrote
+                Check("game message: the typed message writes the old bytes", LodgeJson.Serialize(g) == "{\"t\":\"game\",\"playing\":true,\"visibility\":\"visible\",\"name\":\"Elan\",\"realm\":\"Realm\",\"class\":\"Hunter\",\"classFile\":\"HUNTER\",\"level\":60,"
                     + "\"guild\":\"G\",\"race\":\"Orc\",\"raceFile\":\"Orc\",\"sex\":2,\"zone\":\"Wailing Caverns\",\"flags\":209,\"groupSize\":5,\"inInstance\":true,\"instanceName\":\"Wailing Caverns\",\"xpPct\":41,\"rested\":true}");
-                Check("game message: zone, instance, flags, xp, rested, group, visibility", (string)g["zone"] == "Wailing Caverns" && (string)g["instanceName"] == "Wailing Caverns" && g.Int("flags") == 1 + 16 + 64 + 128
-                    && g.Int("xpPct") == 41 && (bool)g["rested"] && g.Int("groupSize") == 5 && (bool)g["inInstance"] && (string)g["visibility"] == "visible");
+                Check("game message: zone, instance, flags, xp, rested, group, visibility", (string)g["zone"] == "Wailing Caverns" && (string)g["instanceName"] == "Wailing Caverns" && Wire(g).Int("flags") == 1 + 16 + 64 + 128
+                    && Wire(g).Int("xpPct") == 41 && (bool)g["rested"] && Wire(g).Int("groupSize") == 5 && (bool)g["inInstance"] && (string)g["visibility"] == "visible");
                 s.ShareZoneOff = true;
                 g = Session.BuildGameMessage();
                 Check("Share my zone off: no zone and no instance name sent (flags still are)", !g.ContainsKey("zone") && !g.ContainsKey("instanceName") && g.ContainsKey("flags") && g.ContainsKey("xpPct"));
@@ -100,7 +101,7 @@ namespace ElansAddonHub
                 s.ShareZoneOff = false; s.ShareXpOff = false;
                 c.CombatKnown = false;
                 g = Session.BuildGameMessage();
-                Check("combat flag unknown (secret): the combat bit is not sent", (g.Int("flags") & 1) == 0);
+                Check("combat flag unknown (secret): the combat bit is not sent", (Wire(g).Int("flags") & 1) == 0);
                 c.CombatKnown = true;
                 s.ShareGameOff = true;
                 g = Session.BuildGameMessage();

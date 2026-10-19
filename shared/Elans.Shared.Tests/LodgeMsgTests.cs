@@ -198,13 +198,13 @@ public class LodgeMsgTests
     //      Dictionary<string, object> m in the Outpost) - m["x"], m?["x"], J.Str(m, "x"), m.Str("x"), m.Child("x"), m.ContainsKey("x") ...
     //      Reading "t" to route the frame is the one exception (the dispatch);
     //   N  the frame handed to a method under another name (Foo(m) into Foo(JsonObject req)) - it has to stay m, so F sees what is done to it;
-    //   A  a field read or written through an adapter (new LodgeJsonFields(m).Str("x"), f.Child("x") on a LodgeFieldsDict) - that is the
-    //      typed classes' job, the adapters only carry them;
+    //   A  a field read or written through the adapter (new LodgeJsonFields(m).Str("x"), f.Child("x") on a LodgeJsonFields) - that is the
+    //      typed classes' job, the adapter only carries them;
     //   T  a frame's type set by hand (["t"] = LodgeMsg.X, Set("t", ...)) - a new frame is built by its typed class;
     //   B  a frame built by a typed class and then changed by field name (var o = LodgeJson.Build(..); o["x"] = ..).
-    // Not scanned: the adapters themselves (shared/Elans.Shared/Lodge/LodgeJson.cs, LodgeFieldsDict.cs), stored records and free-form children (an Atlas
+    // Not scanned: the one adapter itself (shared/Elans.Shared/Lodge/LodgeJson.cs, outside the scanned folders), stored records and free-form children (an Atlas
     // section, a character sheet, a stored chat message) - those are not frames, and the typed classes carry them raw on purpose.
-    static readonly string[] Adapters = { "src/Lodge/LodgeFieldsDict.cs" };      // the shared one (LodgeJsonFields) is in shared/, which isn't scanned
+    static readonly string[] Adapters = Array.Empty<string>();      // the one adapter (LodgeJsonFields) is in shared/, which isn't scanned
 
     // Where a strict type check of the raw JSON IS the validation, the typed class only carries the envelope and these read the frame raw on
     // purpose (file, method, the keys it may read - or "(frame)" for a method that receives the frame under its own name, rule N - and why).
@@ -243,12 +243,12 @@ public class LodgeMsgTests
     static readonly Regex FrameHelper = new(@"\b(\w+)\(\s*m\s*,\s*""([^""]*)""");                       // J.Str(m, "x"), Read(m, "x")
     static readonly Regex FrameCall = new(@"\bm\s*\??\.\s*(" + FrameGetters + @")\(\s*""([^""]*)""");
     static readonly Regex FrameCallDyn = new(@"\bm\s*\??\.\s*(?:" + FrameGetters + @")\(\s*[A-Za-z_]\w*\s*[,)]");
-    static readonly Regex AdapterInline = new(@"\bnew\s+(?:LodgeJsonFields|LodgeFieldsDict)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*\.\s*(" + AdapterCalls + @")\s*\(");
-    static readonly Regex AdapterVar = new(@"\b(?:var|ILodgeFields|ILodgeWriter|LodgeJsonFields|LodgeFieldsDict)\s+(\w+)\s*=\s*new\s+(?:LodgeJsonFields|LodgeFieldsDict)\b");
-    static readonly Regex AdapterParam = new(@"\b(?:ILodgeFields|ILodgeWriter|LodgeJsonFields|LodgeFieldsDict)\s+(\w+)\s*[,)=]");
+    static readonly Regex AdapterInline = new(@"\bnew\s+LodgeJsonFields\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*\.\s*(" + AdapterCalls + @")\s*\(");
+    static readonly Regex AdapterVar = new(@"\b(?:var|ILodgeFields|ILodgeWriter|LodgeJsonFields)\s+(\w+)\s*=\s*new\s+LodgeJsonFields\b");
+    static readonly Regex AdapterParam = new(@"\b(?:ILodgeFields|ILodgeWriter|LodgeJsonFields)\s+(\w+)\s*[,)=]");
     static readonly Regex SetType = new(@"\[\s*""t""\s*\]\s*=(?!=)\s*(?:LodgeMsg\.|""|\w+Msg\.Type\b)|\bSet\(\s*""t""\s*,");
-    static readonly Regex BuiltVar = new(@"\b(\w+)\s*=\s*(?:LodgeJson|LodgeFieldsDict)\.Build\(");
-    static readonly Regex BuiltInline = new(@"(?:LodgeJson|LodgeFieldsDict)\.Build\((?:[^()]|\([^()]*\))*\)\s*\[\s*""");
+    static readonly Regex BuiltVar = new(@"\b(\w+)\s*=\s*(?:LodgeJson|LodgeFieldsJson)\.Build\(");
+    static readonly Regex BuiltInline = new(@"(?:LodgeJson|LodgeFieldsJson)\.Build\((?:[^()]|\([^()]*\))*\)\s*\[\s*""");
     static readonly Regex TypeDecl = new(@"\b(?:class|struct|record|interface)\s+(\w+)");
     // a method declaration: [modifiers] type Name(params) or [modifiers] Name(params) (a constructor), followed by {, =>, : base(..) or
     // the end of the line; the first word is no statement keyword
@@ -403,6 +403,8 @@ public class LodgeMsgTests
 
         // the helpers that read a field of the frame m for their caller: Foo(JsonObject m, string key, ..) - J.Str(m, "x"), Read(m, "x")
         var helpers = frameParams.Where(p => p.Index == 0 && p.Param == "m" && Regex.IsMatch(p.Next, @"^string\s+\w+")).Select(p => p.Method).ToHashSet();
+        // ... and the shared lenient readers both sides use (LodgeJson.Str(m, "x") ..., in shared/, which isn't scanned)
+        helpers.UnionWith(new[] { "Str", "Bool", "BoolOrNull", "Int", "Long", "Obj" });
 
         foreach (var (rel, lines) in walked)
             foreach (var l in lines)
@@ -451,7 +453,7 @@ public class LodgeMsgTests
             .SelectMany(p => Regex.Matches(File.ReadAllText(p), @"\bHandle\(\s*Member\s+\w+\s*,\s*string\s+\w+\s*,\s*JsonObject\s+(\w+)\s*\)").Select(m => (File: Path.GetFileName(p), Name: m.Groups[1].Value))).ToList();
         Assert.True(handles.Count >= 10, "only " + handles.Count + " module Handle(Member, string, JsonObject) methods found");
         Assert.True(handles.All(h => h.Name == "m"), "a module names the frame otherwise: " + string.Join(", ", handles.Where(h => h.Name != "m")));
-        Assert.Contains("void OnReceived(Dictionary<string, object> m)", File.ReadAllText(Path.Combine(root, "src", "Lodge", "LodgeSession.cs")));
+        Assert.Contains("void OnReceived(JsonObject m)", File.ReadAllText(Path.Combine(root, "src", "Lodge", "LodgeSession.cs")));
         Assert.Matches(@"\bm = LodgeJson\.Parse\(", File.ReadAllText(Path.Combine(root, "server", "Lodge.Server", "Hub.cs")));
 
         var hits = ScanFrames(root);
@@ -504,11 +506,12 @@ public class LodgeMsgTests
                 {
                     public partial class LodgeSession
                     {
-                        void OnFrame(Dictionary<string, object> m)
+                        void OnFrame(JsonObject m)
                         {
-                            switch (m.Str("t")) { case LodgeMsg.Msg: break; }
+                            switch (LodgeJson.Str(m, "t")) { case LodgeMsg.Msg: break; }
                             if (m.ContainsKey("canPin")) { }
-                            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Msg, ["text"] = "hi" });
+                            _ = Send(new JsonObject { ["t"] = LodgeMsg.Msg, ["text"] = "hi" });
+                            var n = LodgeJson.Int(m, "n");
                         }
                     }
                 }
@@ -517,7 +520,7 @@ public class LodgeMsgTests
             Assert.Equal(new[]
             {
                 "F Fake.cs:6 text", "F Fake.cs:7 channel", "N Fake.cs:17 (frame)", "A Fake.cs:10 f.Str", "A Fake.cs:11 Int", "B Fake.cs:13 o", "T Fake.cs:14 t",
-                "F Fake.cs:8 canPin", "T Fake.cs:9 t",
+                "F Fake.cs:8 canPin", "T Fake.cs:9 t", "F Fake.cs:10 n",
             }.OrderBy(x => x), hits.OrderBy(x => x));
         }
         finally { try { Directory.Delete(dir, true); } catch { } }

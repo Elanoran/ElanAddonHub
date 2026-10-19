@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -63,16 +64,16 @@ namespace ElansAddonHub
                 var none = AtlasObs.MakeBatch(s, null, new Dictionary<string, string>());
                 var b = AtlasObs.MakeBatch(s, null, new Dictionary<string, string>(), false, false, false, true);
                 check("share: field notes go out only to a server that takes them", none == null && b != null && b.Counts["fieldnotes"] == 3);
-                var f3100 = b.Frame.Child("fieldnotes").Child("3100");
+                var f3100 = Wire(b.Frame).Child("fieldnotes").Child("3100");
                 check("share: a note is { n, name, min, max, last, class, fam, taught[], pts{map:[{x,y}]} }", f3100.NLong("n") == 7 && f3100.Str("name") == "Spot" && f3100.NLong("min") == 35 && f3100.NLong("max") == 35 && f3100.NLong("last") == nowU - 600
                     && f3100.Str("class") == "rare" && f3100.Str("fam") == "Wolf" && f3100.List("taught").Count == 2 && f3100.Child("pts").List("1445").Count == 2);
-                var wire = Json.Write(b.Frame);
+                var wire = LodgeJson.Serialize(b.Frame);
                 check("share: nothing of the module's own bookkeeping and no names of characters leave (first, hist, dead, map, x, y, dmin, dclass, SECRETCHAR)",
                     new[] { "first", "hist", "dead", "dmin", "dmax", "dclass", "dfam", "SECRET", "ElansHunterHelper" }.All(k => !wire.Contains(k)) && !f3100.ContainsKey("map") && !f3100.ContainsKey("x"));
                 check("share: the same notes are not sent twice", AtlasObs.MakeBatch(s, null, b.Sigs, false, false, false, true) == null);
                 WriteAtlasHub("ACC1", NotesLua(data.Replace("n = 7,", "n = 8,")));
                 var d = AtlasObs.MakeBatch(AtlasObs.Read(atlasRoot), null, b.Sigs, false, false, false, true);
-                check("share: a note that grew is the only entry", d != null && d.Entries == 1 && d.Frame.Child("fieldnotes").Child("3100").NLong("n") == 8);
+                check("share: a note that grew is the only entry", d != null && d.Entries == 1 && Wire(d.Frame).Child("fieldnotes").Child("3100").NLong("n") == 8);
                 var big = new AtlasObs.Snapshot();
                 for (int i = 1; i <= 100; i++) big.FieldNotes[i] = new AtlasObs.FieldNote { Id = i, N = i };
                 var bb = AtlasObs.MakeBatch(big, null, new Dictionary<string, string>(), false, false, false, true);
@@ -85,11 +86,11 @@ namespace ElansAddonHub
                     pts.FieldNotes[i] = fn;
                 }
                 var pb = AtlasObs.MakeBatch(pts, null, new Dictionary<string, string>(), false, false, false, true);
-                check("share: at most 600 spots per message (25 notes of 24), the frame stays under 56 KB", pb.Counts["fieldnotes"] == 25 && Json.Write(pb.Frame).Length < 56 * 1024 && pb.Remaining == 15);
+                check("share: at most 600 spots per message (25 notes of 24), the frame stays under 56 KB", pb.Counts["fieldnotes"] == 25 && LodgeJson.Serialize(pb.Frame).Length < 56 * 1024 && pb.Remaining == 15);
 
                 // ---- the Lodge's merge
                 var lodge = new LodgeAtlas();
-                lodge.Apply(Json.Obj("{\"t\":\"atlas.data\",\"epoch\":\"nn1\",\"rev\":5,\"at\":" + (AtlasAt + 9) + ",\"full\":true,\"fieldnotes\":{\"3100\":{\"name\":\"Spot\",\"min\":35,\"max\":35,\"n\":21,\"m\":3,\"last\":" + (nowU - 7200)
+                lodge.Apply(LodgeJson.Parse("{\"t\":\"atlas.data\",\"epoch\":\"nn1\",\"rev\":5,\"at\":" + (AtlasAt + 9) + ",\"full\":true,\"fieldnotes\":{\"3100\":{\"name\":\"Spot\",\"min\":35,\"max\":35,\"n\":21,\"m\":3,\"last\":" + (nowU - 7200)
                     + ",\"class\":\"rare\",\"fam\":\"Wolf\",\"taught\":{\"bite4\":3,\"claw3\":1,\"Bad Token\":1},\"pts\":{\"1445\":[{\"x\":0.68,\"y\":0.468,\"m\":2},{\"x\":9,\"y\":0.1}]},\"by\":[\"Amy the Bold\",\"Bob\"]},"
                     + "\"3101\":{\"n\":\"x\"},\"0\":{\"n\":1},\"3105\":{\"n\":0},\"3106\":{\"n\":4,\"class\":\"mythic\",\"min\":99}}}"));
                 var ln = lodge.Note(3100);
@@ -99,7 +100,7 @@ namespace ElansAddonHub
                 check("pool: what does not hold together is left out and counted (bad token, spot x = 9, n = \"x\", id 0, an empty note); an odd class / level only loses that field",
                     !ln.Taught.ContainsKey("Bad Token") && lodge.Note(3101) == null && lodge.Note(3105) == null && lodge.Note(0) == null && lodge.Note(3106) != null && lodge.Note(3106).Class == "" && lodge.Note(3106).Min == 0 && lodge.Dropped >= 4);
                 var round = new LodgeAtlas();
-                round.Apply(Json.Obj(Json.Write(lodge.ToCache())));
+                round.Apply(LodgeJson.Parse(LodgeJson.Serialize(lodge.ToCache())));
                 var rn = round.Note(3100);
                 check("pool: the cache round trip keeps the note", rn != null && rn.N == 21 && rn.Members == 3 && rn.Taught["bite4"] == 3 && rn.Pts[1445][0].M == 2 && rn.By.Count == 2 && round.FieldNoteCount == 2);
                 check("pool: the words - level, last seen, members", AtlasObs.NoteLine(ln, now) == "Seen by Lodge hunters: level 35, last seen 2 h ago, 3 members");

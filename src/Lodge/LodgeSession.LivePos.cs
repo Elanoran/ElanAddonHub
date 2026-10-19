@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Windows.Threading;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Maps;
@@ -80,14 +81,14 @@ namespace ElansAddonHub.Lodge
         string posNote = "";
         void NotePos(string note) { if (note == posNote) return; posNote = note; Util.Log("lodge position: " + note); }
 
-        public Dictionary<string, object> BuildPositionMessage()
+        public JsonObject BuildPositionMessage()
         {
             // typed: Elans.Shared PositionMsg
-            if (!LivePosWanted) return LodgeFieldsDict.Build(new PositionMsg { Share = false }.Write);
+            if (!LivePosWanted) return LodgeJson.Build(new PositionMsg { Share = false }.Write);
             var c = Presence.Current;
             if (!Presence.Playing || c == null || !c.PosEnabled || !c.PosValid || c.PosMapId <= 0 || double.IsNaN(c.PosFx + c.PosFy) || double.IsInfinity(c.PosFx + c.PosFy))
-                return LodgeFieldsDict.Build(new PositionMsg { Valid = false }.Write);      // in a dungeon, or the game shares no position: the dot goes
-            return LodgeFieldsDict.Build(new PositionMsg
+                return LodgeJson.Build(new PositionMsg { Valid = false }.Write);      // in a dungeon, or the game shares no position: the dot goes
+            return LodgeJson.Build(new PositionMsg
             {
                 Valid = true, MapId = c.PosMapId, Fx = Math.Round(Math.Max(0, Math.Min(1, c.PosFx)), 4), Fy = Math.Round(Math.Max(0, Math.Min(1, c.PosFy)), 4),
                 Move = c.PosMove & 0xFC, Scope = ScopeOf(Settings),
@@ -103,7 +104,7 @@ namespace ElansAddonHub.Lodge
             bool valid = obj.ContainsKey("mapId");
             NotePos(valid ? "sharing my map position with the Lodge (" + ScopeOf(Settings) + ")" : Settings.ShareLivePosWithLodge ? "not sharing: " + LivePosWhy() : "not sharing (switched off)");
             if (!valid && lastPosJson == null) return;                  // never shared on this connection: nothing to take back
-            var json = Json.Write(obj);
+            var json = LodgeJson.Serialize(obj);
             if (json == lastPosJson) return;
             var wait = PosInterval - (Clock() - lastPosSent);
             if (valid && lastPosJson != null && lastPosJson.Contains("\"mapId\"") && wait > TimeSpan.Zero)
@@ -118,9 +119,9 @@ namespace ElansAddonHub.Lodge
             _ = Send(obj);
         }
 
-        void OnMemberPos(Dictionary<string, object> m)
+        void OnMemberPos(JsonObject m)
         {
-            var p = MemberPosMsg.Read(new LodgeFieldsDict(m));      // typed: Elans.Shared MemberPosMsg (fx / fy null when not a number)
+            var p = MemberPosMsg.Read(new LodgeJsonFields(m));      // typed: Elans.Shared MemberPosMsg (fx / fy null when not a number)
             var mem = Members.FirstOrDefault(x => x.Id == p.Id);
             if (mem == null) return;
             bool was = mem.LiveValid;

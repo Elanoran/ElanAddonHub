@@ -75,7 +75,7 @@ namespace ElansAddonHub
                     Check("a forged text, another key, an expired notice and a bad level are all dropped", Session.CairnNotices.Count == 1 && LodgePage.CairnNoticeTextForTest == "Maintenance tonight at 22:00",
                         string.Join(",", Session.CairnNotices.Select(n => n.Id)));
                     Check("the Lodge can't change a word: the text is checked, not just the signature's shape",
-                        LodgeSession.ParseCairnNotice(Json.Obj(Notice(9, "info", "Update to 9.9 from evil.example", signedText: "Update to 9.9"))) == null);
+                        LodgeSession.ParseCairnNotice(LodgeJson.Parse(Notice(9, "info", "Update to 9.9 from evil.example", signedText: "Update to 9.9"))) == null);
 
                     Session.FeedForTest(Frame(Notice(1, "info", "Maintenance tonight at 22:00"), Notice(6, "critical", "Security fix - update your Lodge now: sudo lodge-update")));
                     await Task.Delay(80);

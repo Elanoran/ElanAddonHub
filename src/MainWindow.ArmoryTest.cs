@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -115,9 +116,9 @@ namespace ElansAddonHub
                 Check("round trip: nothing of bags or gold exists on the other side", back != null && HubModules.BagsOf(back.Hub) == null && HubModules.BankOf(back.Hub) == null && back.Money == 0 && back.Bags.Count == 0 && back.Core.Xp == 0 && string.IsNullOrEmpty(back.Core.Zone));
 
                 // the list rows from the server: every field checked again
-                var junkRow = ArmoryEntry.From(Json.Obj("{\"owner\":\"mia\",\"key\":\"Forever-X\",\"name\":\"" + new string('N', 80) + "\",\"class\":\"MAGE\",\"level\":9999,\"ilvl\":-5,\"professions\":[5,{\"name\":\"\"},{\"name\":\"Mining\",\"skill\":-4,\"max\":\"x\"}]}"));
+                var junkRow = ArmoryEntry.From(LodgeJson.Parse("{\"owner\":\"mia\",\"key\":\"Forever-X\",\"name\":\"" + new string('N', 80) + "\",\"class\":\"MAGE\",\"level\":9999,\"ilvl\":-5,\"professions\":[5,{\"name\":\"\"},{\"name\":\"Mining\",\"skill\":-4,\"max\":\"x\"}]}"));
                 Check("list row: a long name is cut at 24, level is capped at 100, a negative item level is dropped, junk professions are skipped", junkRow != null && junkRow.Name.Length == 24 && junkRow.Level == 100 && junkRow.Ilvl == 0 && junkRow.Professions.Count == 1 && junkRow.Professions[0].Skill == 0 && junkRow.By == "mia");
-                Check("list row: no owner / key / name / class = no row", ArmoryEntry.From(Json.Obj("{\"key\":\"A-B\",\"name\":\"A\",\"class\":\"MAGE\"}")) == null && ArmoryEntry.From(Json.Obj("{\"owner\":\"a\",\"key\":\"A-B\",\"class\":\"MAGE\"}")) == null && ArmoryEntry.From(null) == null);
+                Check("list row: no owner / key / name / class = no row", ArmoryEntry.From(LodgeJson.Parse("{\"key\":\"A-B\",\"name\":\"A\",\"class\":\"MAGE\"}")) == null && ArmoryEntry.From(LodgeJson.Parse("{\"owner\":\"a\",\"key\":\"A-B\",\"class\":\"MAGE\"}")) == null && ArmoryEntry.From(null) == null);
 
                 // ================================================================ the session: upload, delete, answers
                 sent.Clear();

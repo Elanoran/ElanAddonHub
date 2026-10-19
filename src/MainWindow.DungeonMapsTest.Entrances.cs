@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Linq;
 using ElansAddonHub.Services;
@@ -73,13 +74,13 @@ namespace ElansAddonHub
                 snap.Entrances.Count + " " + snap.Dropped);
             var b0 = AtlasObs.MakeBatch(snap, null, new Dictionary<string, string>());
             var b1 = AtlasObs.MakeBatch(snap, null, new Dictionary<string, string>(), includeEntrances: true);
-            var sentFrame = b1?.Frame != null && b1.Frame.TryGetValue("entrances", out var eo) ? eo as Dictionary<string, object> : null;
+            var sentFrame = Wire(b1?.Frame) != null && Wire(b1.Frame).TryGetValue("entrances", out var eo) ? eo as Dictionary<string, object> : null;
             Check("sharing: entrances go to a lodge that takes them (atlas6) and only there; a resend of what the lodge has sends nothing",
-                (b0 == null || !b0.Frame.ContainsKey("entrances")) && sentFrame != null && sentFrame.Count == 2 && AtlasObs.MakeBatch(snap, null, b1.Sigs, includeEntrances: true) == null);
+                (b0 == null || !Wire(b0.Frame).ContainsKey("entrances")) && sentFrame != null && sentFrame.Count == 2 && AtlasObs.MakeBatch(snap, null, b1.Sigs, includeEntrances: true) == null);
 
             // ---- the lodge's merge and the spot shown
             var lodge = new Lodge.LodgeAtlas();
-            bool applied = lodge.Apply(new Dictionary<string, object>
+            bool applied = lodge.Apply(LodgeJson.FromPlain(new Dictionary<string, object>
             {
                 ["t"] = "atlas.data", ["epoch"] = "abc123", ["rev"] = 5.0, ["full"] = true,
                 ["entrances"] = new Dictionary<string, object>
@@ -90,7 +91,7 @@ namespace ElansAddonHub
                         new Dictionary<string, object> { ["z"] = 1440.0, ["x"] = 0.9, ["y"] = 0.1, ["n"] = 20.0, ["m"] = 1.0 },
                     },
                 },
-            });
+            }) as System.Text.Json.Nodes.JsonObject);
             var hadLodge = AtlasQuery.Context.Lodge; var hadOwn = AtlasQuery.Context.OwnEntrances;
             try
             {
@@ -124,7 +125,7 @@ namespace ElansAddonHub
             finally { AtlasQuery.Context.Lodge = hadLodge; AtlasQuery.Context.OwnEntrances = hadOwn; }
             var cache = lodge.ToCache();
             var back = new Lodge.LodgeAtlas();
-            Check("lodge cache: the merged entrances survive the cache file", back.Apply(Json.Obj(Json.Write(cache))) && back.EntrancesOf(3065).Count == 2 && back.EntrancesOf(3065).Any(p => p.M == 4));
+            Check("lodge cache: the merged entrances survive the cache file", back.Apply(LodgeJson.Parse(LodgeJson.Serialize(cache))) && back.EntrancesOf(3065).Count == 2 && back.EntrancesOf(3065).Any(p => p.M == 4));
         }
     }
 }

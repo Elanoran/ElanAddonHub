@@ -6,9 +6,10 @@ One definition of what the Outpost (`src/`), the Lodge server (`server/`) and th
   signature (`Es256.cs`, `B64.cs`, `CairnFormats.cs`, `ReleaseSig.cs`);
 - the public-address rules a Lodge or Cairn address must follow (`PublicUrl.cs`);
 - the Lodge protocol (`Lodge/`): `LodgeMsg.cs`, every message type, and one typed class per message (`Lodge/<Group>Messages.cs`), read
-  and written through the small `ILodgeFields` / `ILodgeWriter` interfaces of `Lodge/LodgeFields.cs`. Each side wraps its own JSON model
-  in an adapter (`server/Lodge.Server/LodgeFieldsJson.cs`, `src/Lodge/LodgeFieldsDict.cs`). How to add a message: `server/PROTOCOL.md`,
-  "How to add a message".
+  and written through the small `ILodgeFields` / `ILodgeWriter` interfaces of `Lodge/LodgeFields.cs`;
+- the one JSON engine of the Lodge link (`Lodge/LodgeJson.cs`, System.Text.Json): the frame parser with its rules (size, depth, duplicate
+  keys, UTF-8), the serializer, and `LodgeJsonFields`, the one adapter both sides read and write the typed classes through. How to add a
+  message: `server/PROTOCOL.md`, "How to add a message"; the engine and its rules: `server/PROTOCOL.md`, "Typed messages".
 
 ## What may go in
 
@@ -32,4 +33,6 @@ sync, and commit both sides.
     dotnet test shared/Elans.Shared.Tests
 
 They cover the signature vectors (including one made by the release tool), the address rules, golden and round-trip tests of every Lodge
-message against the wire as it was, and the rules that keep the protocol in one place (`LodgeMsgTests.cs`).
+message against the wire as it was, the rules that keep the protocol in one place (`LodgeMsgTests.cs`), and the JSON engine: how tricky
+input reads, pinned against frozen copies of both old readers (`JsonLeniencyTests.cs`, `JsonLeniency.golden.txt`, `Frozen/`), its parser
+rules and converters (`LodgeJsonTests.cs`).

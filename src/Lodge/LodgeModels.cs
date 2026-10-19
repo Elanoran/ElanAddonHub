@@ -473,7 +473,8 @@ namespace ElansAddonHub.Lodge
         public Brush ExtBrush => IsRisky ? Avatar.Res("Brush.Warn") : Avatar.Res("Brush.Text.Secondary");
         public string ExtTip => IsRisky ? "A program or script: only open it if you trust the sender" : "";
         // the extension must be a picture type too: the MIME type comes from the server and proves nothing
-        public bool IsImage => Mime != null && Mime.StartsWith("image/") && Size <= 8 * 1024 * 1024 && LodgeFiles.IsImageName(Name);
+        public bool IsImage => Mime != null && Mime.StartsWith("image/") && Size <= AutoImageMax && LodgeFiles.IsImageName(Name);
+        public const long AutoImageMax = 8L * 1024 * 1024;   // a picture shown in the chat is downloaded on its own: never more than this (3.1.1: also when the Lodge sends more)
         public string SizeText => Size < 1024 ? $"{Size} B" : Size < 1024 * 1024 ? $"{Size / 1024.0:0} KB" : $"{Size / 1048576.0:0.0} MB";
 
         ImageSource image;

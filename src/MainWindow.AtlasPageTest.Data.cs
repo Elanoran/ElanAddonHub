@@ -1,4 +1,5 @@
 using System;
+using Elans.Shared;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -89,7 +90,7 @@ namespace ElansAddonHub
                 + "{\"i\":105,\"c\":1,\"at\":" + (AtNow - 600) + ",\"src\":\"obj:50\",\"z\":11,\"x\":0.5,\"y\":0.5,\"by\":\"Tess\",\"s\":4},"
                 + "{\"i\":101,\"c\":2,\"at\":" + (AtNow - 90000) + ",\"src\":\"fish\",\"z\":11,\"x\":0.8,\"y\":0.2,\"by\":\"Bob\",\"s\":2}]}";
             var l = new LodgeAtlas();
-            if (!l.Apply(Json.Obj(json))) throw new InvalidOperationException("the invented atlas.data page was refused");
+            if (!l.Apply(LodgeJson.Parse(json))) throw new InvalidOperationException("the invented atlas.data page was refused");
             return l;
         }
 
