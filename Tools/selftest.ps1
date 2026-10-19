@@ -36,16 +36,17 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$exe = Join-Path $root 'src\bin\Release\ElansAddonHub.exe'
+# 3.1 (.NET 10): the test runs the PUBLISHED single-file exe - the same file release.py ships (embedded resources, ProcessPath)
+$exe = Join-Path $root 'src\bin\publish\ElansAddonHub.exe'
 
 # FAIL lines that are expected today (environment, not regressions). Anything else FAIL-ish is "new".
 $known = @()   # none: a clean run has zero FAIL lines, so any FAIL is real
 
 if (-not $NoBuild) {
-    Write-Host 'Building Release...'
+    Write-Host 'Publishing Release (single-file)...'
     Push-Location (Join-Path $root 'src')
     try {
-        $out = & dotnet build -c Release 2>&1
+        $out = & dotnet publish ElansAddonHub.csproj -c Release -o (Join-Path $root 'src\bin\publish') 2>&1
         if ($LASTEXITCODE -ne 0) { $out | Select-Object -Last 30 | Write-Host; Write-Host 'BUILD FAILED'; exit 2 }
     } finally { Pop-Location }
 }
