@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Elans.Shared;
 
 namespace ElansAddonHub.Services
 {
@@ -246,7 +247,7 @@ namespace ElansAddonHub.Services
                 if (bytes + cost > MaxShareBytes) break;
                 names[id] = nm; bytes += cost;
             }
-            b.Frame = new Dictionary<string, object> { ["t"] = "flights.share", ["legs"] = legs };
+            b.Frame = new Dictionary<string, object> { ["t"] = LodgeMsg.FlightsShare, ["legs"] = legs };
             if (names.Count > 0) b.Frame["names"] = names;
             return b;
         }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -37,22 +38,22 @@ namespace ElansAddonHub.Lodge
         {
             switch (m.Str("t"))
             {
-                case "lodge.info": ApplyLodgeInfo(m.Child("lodge")); Changed?.Invoke(); return true;
-                case "member.left": Left?.Invoke(); return true;
+                case LodgeMsg.LodgeInfo: ApplyLodgeInfo(m.Child("lodge")); Changed?.Invoke(); return true;
+                case LodgeMsg.MemberLeft: Left?.Invoke(); return true;
             }
             return false;
         }
 
         // "Leave the lodge": the server drops my codes entry, all my devices and my pending device links; my messages stay.
         // Answers: member.left (done) or an error with code "last-owner".
-        public void RequestLeave() => _ = Send(new Dictionary<string, object> { ["t"] = "member.leave" });
+        public void RequestLeave() => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.MemberLeave });
 
         // Transfer = make someone else a Guild Master (owner only); afterwards I may leave or stay.
         public void TransferOwnership(string name) => SetRole(name, "owner");
 
         // owner: name (max 40) and a short welcome text (max 280 characters, 4 lines); empty clears
         public void SetLodgeInfo(string name, string welcome) =>
-            _ = Send(new Dictionary<string, object> { ["t"] = "admin.lodge.set", ["name"] = name ?? "", ["welcome"] = welcome ?? "" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminLodgeSet, ["name"] = name ?? "", ["welcome"] = welcome ?? "" });
 
         // the same limits as the server, so a form can say so before asking
         public const int MaxLodgeName = 40, MaxLodgeWelcome = 280, MaxLodgeWelcomeLines = 4;

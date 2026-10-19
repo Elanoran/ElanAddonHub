@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -291,7 +292,7 @@ namespace ElansAddonHub.Lodge
             }).ToList();
             return new Dictionary<string, object>
             {
-                ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = Rev, ["at"] = Updated, ["full"] = true, ["seenMembers"] = SeenMembers,
+                ["t"] = LodgeMsg.AtlasData, ["epoch"] = Epoch, ["rev"] = Rev, ["at"] = Updated, ["full"] = true, ["seenMembers"] = SeenMembers,
                 ["kills"] = Counters(kills), ["objects"] = Counters(objects), ["fishing"] = Counters(fishing), ["vendors"] = vo, ["quests"] = qo, ["spawns"] = so, ["items"] = io, ["finds"] = fl,
                 ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso, ["fieldnotes"] = fnc, ["entrances"] = eco, ["npcspots"] = npc,
                 ["pickpocket"] = Counters(gather["pickpocket"]), ["skinning"] = Counters(gather["skinning"]), ["mining"] = Counters(gather["mining"]),
@@ -597,7 +598,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsAtlas || atlasDisabled) return;
             atlasLastGet = Clock();
-            var o = new Dictionary<string, object> { ["t"] = "atlas.get" };
+            var o = new Dictionary<string, object> { ["t"] = LodgeMsg.AtlasGet };
             if (AtlasData.Rev > 0 && AtlasData.Epoch.Length > 0) { o["since"] = AtlasData.Rev; o["epoch"] = AtlasData.Epoch; }
             atlasFetching = true;
             Activity.Hold("atlas.get", "Receiving your Lodge's Atlas", Activity.Kind.Work);

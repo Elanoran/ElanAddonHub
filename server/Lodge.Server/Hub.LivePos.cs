@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -36,7 +37,7 @@ public partial class LodgeHub
 
     static JsonObject PosMessage(Member m) => new()
     {
-        ["t"] = "memberpos", ["id"] = m.Id, ["mapId"] = m.LivePos["mapId"]?.DeepClone(), ["fx"] = m.LivePos["fx"]?.DeepClone(),
+        ["t"] = LodgeMsg.MemberPos, ["id"] = m.Id, ["mapId"] = m.LivePos["mapId"]?.DeepClone(), ["fx"] = m.LivePos["fx"]?.DeepClone(),
         ["fy"] = m.LivePos["fy"]?.DeepClone(), ["move"] = m.LivePos["move"]?.DeepClone(), ["valid"] = true,
     };
 
@@ -48,7 +49,7 @@ public partial class LodgeHub
         {
             if (m.LivePos != null && !MayShareLivePos(m)) m.LivePos = null;
             var msg = m.LivePos == null ? null : PosMessage(m);
-            var clear = new JsonObject { ["t"] = "memberpos", ["id"] = m.Id, ["valid"] = false };
+            var clear = new JsonObject { ["t"] = LodgeMsg.MemberPos, ["id"] = m.Id, ["valid"] = false };
             bool same = msg != null && m.LivePosSent != null && JsonNode.DeepEquals(msg, m.LivePosSent);
             var sends = new List<Task>();
             var online = members.Values.ToList();

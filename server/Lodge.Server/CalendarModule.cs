@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -40,12 +41,12 @@ public sealed class CalendarModule : IModule
     {
         switch (type)
         {
-            case "cal:create": await Create(me, m); return true;
-            case "cal:edit": await Edit(me, m); return true;
-            case "cal:cancel": await Cancel(me, m); return true;
-            case "cal:signup": await SignUp(me, m, J.Str(m, "status")); return true;
-            case "cal:leave": await Leave(me, m); return true;
-            case "cal:range": await Range(me, m); return true;
+            case LodgeMsg.CalCreate: await Create(me, m); return true;
+            case LodgeMsg.CalEdit: await Edit(me, m); return true;
+            case LodgeMsg.CalCancel: await Cancel(me, m); return true;
+            case LodgeMsg.CalSignup: await SignUp(me, m, J.Str(m, "status")); return true;
+            case LodgeMsg.CalLeave: await Leave(me, m); return true;
+            case LodgeMsg.CalRange: await Range(me, m); return true;
         }
         return false;
     }
@@ -54,7 +55,7 @@ public sealed class CalendarModule : IModule
     static bool CanManage(Member me, JsonObject ev) => IsOrganiser(me, ev) || Roles.Can(me.Role, Perm.CalendarManage);
 
     Task Broadcast(IEnumerable<JsonObject> evs) =>
-        hub.Broadcast(new JsonObject { ["t"] = "cal:events", ["events"] = new JsonArray(evs.Select(e => (JsonNode)e.DeepClone()).ToArray()) });
+        hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.CalEvents, ["events"] = new JsonArray(evs.Select(e => (JsonNode)e.DeepClone()).ToArray()) });
 
     async Task Create(Member me, JsonObject m)
     {
@@ -235,7 +236,7 @@ public sealed class CalendarModule : IModule
         if (from <= 0 || to <= from || to - from > Cal.MaxRangeDays * 86_400_000L) { await hub.Error(me, "Ask for at most two months at a time", "cal"); return; }
         await hub.Send(me, new JsonObject
         {
-            ["t"] = "cal:range", ["from"] = from, ["to"] = to,
+            ["t"] = LodgeMsg.CalRange, ["from"] = from, ["to"] = to,
             ["events"] = Store.Snapshot(e => Cal.Start(e) >= from && Cal.Start(e) < to),
         });
     }

@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -15,7 +16,7 @@ public class VoiceModule : IModule
     {
         switch (type)
         {
-            case "voice":
+            case LodgeMsg.Voice:
                 string room = J.Str(m, "room");
                 var on = J.BoolOrNull(m, "on");
                 if (on != null) room = on == true ? room ?? hub.Channels.DefaultVoice(me.Role)?.Id : null; // 1.x hubs
@@ -39,7 +40,7 @@ public class VoiceModule : IModule
                 });
                 if (full) await hub.Error(me, $"{ch.Name} is full ({ch.Max})", "room-full", room);
                 return true;
-            case "state":
+            case LodgeMsg.State:
                 me.Muted = J.Bool(m, "muted");
                 me.Deaf = J.Bool(m, "deaf");
                 await hub.BroadcastUser(me);
@@ -68,9 +69,9 @@ public class PresenceModule : IModule
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
-        if (type == "game") { await Game(me, m); return true; }
-        if (type == "position") { await Position(me, m); return true; }
-        if (type != "status") return false;
+        if (type == LodgeMsg.Game) { await Game(me, m); return true; }
+        if (type == LodgeMsg.Position) { await Position(me, m); return true; }
+        if (type != LodgeMsg.Status) return false;
         var st = m["status"] is JsonValue sv && sv.TryGetValue<string>(out var s0) ? s0 : null;
         me.Status = st is "online" or "away" or "busy" or "dungeon" or "lfg" ? st : "online";
         var note = new string((m["note"] is JsonValue nv && nv.TryGetValue<string>(out var n0) ? n0 : "").Where(c => !char.IsControl(c)).ToArray()).Trim();

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -76,7 +77,7 @@ namespace ElansAddonHub.Lodge
                     return "Admitted." + Standing(s, nowUtc);
                 case "refused": return "The Cairn's operator didn't admit this Lodge.";
                 case "revoked": return "The Cairn revoked this Lodge. It no longer shares or receives.";
-                case "error": return s.Error.Length > 0 ? s.Error + "." : "Something went wrong asking the Cairn. Your Lodge tries again later.";
+                case "error": /* not-a-lodge-type: a joining state */ return s.Error.Length > 0 ? s.Error + "." : "Something went wrong asking the Cairn. Your Lodge tries again later.";
             }
             return "Asking the Cairn" + (s.CairnHost.Length > 0 ? " (" + s.CairnHost + ")" : "") + "...";
         }
@@ -107,7 +108,7 @@ namespace ElansAddonHub.Lodge
         {
             SupportsCairnJoin = features.Contains("cairnjoin");
             CairnJoin = null;
-            if (CanSeeCairnJoin) _ = Send(new Dictionary<string, object> { ["t"] = "cairn.join.get" });
+            if (CanSeeCairnJoin) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CairnJoinGet });
             CairnJoinChanged?.Invoke();
         }
 
@@ -120,13 +121,13 @@ namespace ElansAddonHub.Lodge
             CairnJoinChanged?.Invoke();
         }
 
-        public void RequestCairnJoin() { if (CanSeeCairnJoin) _ = Send(new Dictionary<string, object> { ["t"] = "cairn.join.get" }); }
+        public void RequestCairnJoin() { if (CanSeeCairnJoin) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CairnJoinGet }); }
 
         // the Guild Master's switch; publicUrl / code only when given (the Lodge keeps what it has otherwise). The code goes to the Lodge once.
         public void SetCairnJoin(bool on, string publicUrl = null, string code = null)
         {
             if (!CanSwitchCairn) return;
-            var o = new Dictionary<string, object> { ["t"] = "admin.cairn", ["on"] = on };
+            var o = new Dictionary<string, object> { ["t"] = LodgeMsg.AdminCairn, ["on"] = on };
             if (!string.IsNullOrWhiteSpace(publicUrl)) o["publicUrl"] = publicUrl.Trim();
             if (!string.IsNullOrWhiteSpace(code)) o["code"] = code.Trim();
             _ = Send(o);

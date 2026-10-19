@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -137,7 +138,7 @@ namespace ElansAddonHub.Lodge
             var tcs = new TaskCompletionSource<PageResult>();
             pagePending[channel] = tcs;
             OlderRequested?.Invoke(channel);
-            var req = new Dictionary<string, object> { ["t"] = "history:before", ["channel"] = channel, ["before"] = oldest.Id, ["beforeAt"] = (double)Ms(oldest.At) };
+            var req = new Dictionary<string, object> { ["t"] = LodgeMsg.HistoryBefore, ["channel"] = channel, ["before"] = oldest.Id, ["beforeAt"] = (double)Ms(oldest.At) };
             _ = Send(req);
             if (!tcs.Task.IsCompleted && await Task.WhenAny(tcs.Task, Task.Delay(RequestTimeout)) != tcs.Task)
             {
@@ -207,7 +208,7 @@ namespace ElansAddonHub.Lodge
             searchPending?.TrySetResult(new SearchResults { Query = searchQuery, Failed = true });   // a newer search replaces the one still waiting
             var tcs = searchPending = new TaskCompletionSource<SearchResults>();
             searchQuery = query;
-            _ = Send(new Dictionary<string, object> { ["t"] = "search", ["q"] = query });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Search, ["q"] = query });
             if (!tcs.Task.IsCompleted && await Task.WhenAny(tcs.Task, Task.Delay(RequestTimeout)) != tcs.Task)
             {
                 if (searchPending == tcs) searchPending = null;

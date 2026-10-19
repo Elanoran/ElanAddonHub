@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -714,7 +715,7 @@ public sealed partial class AtlasStore
         bool more = taken < cand.Count;
         var res = new JsonObject
         {
-            ["t"] = "atlas.data", ["epoch"] = Epoch, ["rev"] = more ? last : rev, ["at"] = NowSec,
+            ["t"] = LodgeMsg.AtlasData, ["epoch"] = Epoch, ["rev"] = more ? last : rev, ["at"] = NowSec,
             ["kills"] = secs[0], ["objects"] = secs[1], ["fishing"] = secs[2], ["vendors"] = secs[3], ["quests"] = secs[4], ["spawns"] = secs[5], ["items"] = secs[6], ["finds"] = fa,
             ["seenNpcs"] = secs[8], ["seenObjects"] = secs[9], ["seenQuests"] = secs[10], ["nodes"] = secs[11], ["fishspots"] = secs[12], ["fieldnotes"] = secs[13], ["entrances"] = secs[14], ["npcspots"] = secs[15],
             ["pickpocket"] = secs[16], ["skinning"] = secs[17], ["mining"] = secs[18], ["herbalism"] = secs[19], ["salvage"] = secs[20], ["contained"] = secs[21],

@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -26,8 +27,8 @@ public sealed class AtlasModule : IModule
     {
         switch (type)
         {
-            case "atlas.share": await Share(me, m); return true;
-            case "atlas.get": await Get(me, m); return true;
+            case LodgeMsg.AtlasShare: await Share(me, m); return true;
+            case LodgeMsg.AtlasGet: await Get(me, m); return true;
         }
         return false;
     }
@@ -38,7 +39,7 @@ public sealed class AtlasModule : IModule
     {
         var o = new JsonObject
         {
-            ["t"] = "atlas.shared", ["ok"] = ok, ["accepted"] = r?.Accepted ?? 0, ["unchanged"] = r?.Unchanged ?? 0, ["rejected"] = r?.Rejected ?? 0,
+            ["t"] = LodgeMsg.AtlasShared, ["ok"] = ok, ["accepted"] = r?.Accepted ?? 0, ["unchanged"] = r?.Unchanged ?? 0, ["rejected"] = r?.Rejected ?? 0,
             ["rev"] = Store.Rev, ["epoch"] = Store.Epoch,
         };
         if (why != null) o["why"] = why;

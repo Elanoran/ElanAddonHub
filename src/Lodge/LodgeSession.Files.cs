@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -51,7 +52,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFiles) return;
             filesLastRequest = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = "files.list" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FilesList });
         }
 
         void OnFilesFrame(Dictionary<string, object> m)
@@ -59,9 +60,9 @@ namespace ElansAddonHub.Lodge
             if (!SupportsFiles) return;
             switch (m.Str("t"))
             {
-                case "files.data": ApplyFilesData(m); break;
-                case "files.changed": OnFilesChanged(m); break;
-                case "files.result": OnFilesResult(m); break;
+                case LodgeMsg.FilesData: ApplyFilesData(m); break;
+                case LodgeMsg.FilesChanged: OnFilesChanged(m); break;
+                case LodgeMsg.FilesResult: OnFilesResult(m); break;
             }
         }
 
@@ -203,7 +204,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFiles || slot == null) return "That file isn't there any more";
             if (!CanManageFiles) return FilesWhy("forbidden");
-            _ = Send(new Dictionary<string, object> { ["t"] = "files.delete", ["slot"] = slot.Id });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FilesDelete, ["slot"] = slot.Id });
             return null;
         }
 
@@ -211,7 +212,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFiles || slot == null) return "That file isn't there any more";
             if (!CanManageFiles) return FilesWhy("forbidden");
-            _ = Send(new Dictionary<string, object> { ["t"] = "files.rollback", ["slot"] = slot.Id, ["v"] = version });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FilesRollback, ["slot"] = slot.Id, ["v"] = version });
             return null;
         }
 

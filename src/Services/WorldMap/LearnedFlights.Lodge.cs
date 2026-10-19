@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using ElansAddonHub.Services.Maps;
+using Elans.Shared;
 
 namespace ElansAddonHub.Services.WorldMap
 {
@@ -141,7 +142,7 @@ namespace ElansAddonHub.Services.WorldMap
                 routes[kv.Key] = kv.Value.Item1; b.Sigs[kv.Key] = kv.Value.Item2; bytes += cost;
             }
             b.Remaining = changed.Count - routes.Count;
-            b.Frame = new Dictionary<string, object> { ["t"] = "flights.routes.share", ["routes"] = routes };
+            b.Frame = new Dictionary<string, object> { ["t"] = LodgeMsg.FlightsRoutesShare, ["routes"] = routes };
             return b;
         }
     }

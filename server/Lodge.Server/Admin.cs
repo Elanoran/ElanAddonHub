@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -12,13 +13,13 @@ public class AdminModule : IModule
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
         if (type.StartsWith("device.")) return await HandleDevice(me, type, m);
-        if (type == "member.leave") return await Leave(me);
+        if (type == LodgeMsg.MemberLeave) return await Leave(me);
         if (!type.StartsWith("admin.") && !type.StartsWith("mod.")) return false;
         var perm = type switch
         {
-            "admin.invite.create" or "admin.invites" or "admin.invite.revoke" or "admin.devices" => Perm.Invite,   // officers too (2.10)
-            "admin.retire" => Perm.RetireCodes,
-            "admin.lodge.set" => Perm.ManageMembers,
+            LodgeMsg.AdminInviteCreate or LodgeMsg.AdminInvites or LodgeMsg.AdminInviteRevoke or LodgeMsg.AdminDevices => Perm.Invite,   // officers too (2.10)
+            LodgeMsg.AdminRetire => Perm.RetireCodes,
+            LodgeMsg.AdminLodgeSet => Perm.ManageMembers,
             _ => type.StartsWith("mod.") ? Perm.Moderate : type.StartsWith("admin.channel") ? Perm.ManageChannels : Perm.ManageMembers,
         };
         if (!Roles.Can(me.Role, perm)) { await hub.Error(me, "Your rank can't do that"); return true; }
@@ -26,21 +27,21 @@ public class AdminModule : IModule
         {
             switch (type)
             {
-                case "admin.invite.create": await CreateInvite(me, m); break;
-                case "admin.invites": await SendInvites(me); break;
-                case "admin.invite.revoke": await RevokeInvite(me, m); break;
-                case "admin.devices": await SendDevices(me, "admin.devices", J.Str(m, "name")); break;
-                case "admin.retire": await Retire(me, m); break;
-                case "admin.lodge.set": await SetLodgeInfo(me, m); break;
-                case "admin.members": await SendMembers(me); break;
-                case "admin.invite": await Invite(me, m); break;
-                case "admin.role": await SetRole(me, m); break;
-                case "admin.remove": await Remove(me, m); break;
-                case "admin.purge": await Purge(me, m); break;
-                case "admin.channel.add": await AddChannel(me, m); break;
-                case "admin.channel.remove": await RemoveChannel(me, m); break;
-                case "mod.kick": await Kick(me, m); break;
-                case "mod.mute": await ServerMute(me, m); break;
+                case LodgeMsg.AdminInviteCreate: await CreateInvite(me, m); break;
+                case LodgeMsg.AdminInvites: await SendInvites(me); break;
+                case LodgeMsg.AdminInviteRevoke: await RevokeInvite(me, m); break;
+                case LodgeMsg.AdminDevices: await SendDevices(me, LodgeMsg.AdminDevices, J.Str(m, "name")); break;
+                case LodgeMsg.AdminRetire: await Retire(me, m); break;
+                case LodgeMsg.AdminLodgeSet: await SetLodgeInfo(me, m); break;
+                case LodgeMsg.AdminMembers: await SendMembers(me); break;
+                case LodgeMsg.AdminInvite: await Invite(me, m); break;
+                case LodgeMsg.AdminRole: await SetRole(me, m); break;
+                case LodgeMsg.AdminRemove: await Remove(me, m); break;
+                case LodgeMsg.AdminPurge: await Purge(me, m); break;
+                case LodgeMsg.AdminChannelAdd: await AddChannel(me, m); break;
+                case LodgeMsg.AdminChannelRemove: await RemoveChannel(me, m); break;
+                case LodgeMsg.ModKick: await Kick(me, m); break;
+                case LodgeMsg.ModMute: await ServerMute(me, m); break;
             }
         }
         catch (UnauthorizedAccessException)
@@ -57,7 +58,7 @@ public class AdminModule : IModule
 
     Task SendMembers(Member me) => hub.Send(me, new JsonObject
     {
-        ["t"] = "admin.members",
+        ["t"] = LodgeMsg.AdminMembers,
         ["members"] = new JsonArray(hub.Auth.ListPersonal().Select(p => (JsonNode)new JsonObject
         {
             ["name"] = p.Name, ["role"] = p.Role, ["hasCode"] = hub.Auth.HasPermanentCode(p.Name), ["devices"] = hub.Auth.ListDevices(p.Name).Count,
@@ -72,7 +73,7 @@ public class AdminModule : IModule
         var role = Roles.Normalize(J.Str(m, "role"));
         var code = hub.Auth.Add(name, role); // throws with a readable message when the name is bad or taken
         hub.Log.LogInformation("{By} invited {Name} as {Role}", me.Name, name, role);
-        await hub.Send(me, new JsonObject { ["t"] = "admin.invited", ["name"] = name, ["role"] = role, ["code"] = code });
+        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.AdminInvited, ["name"] = name, ["role"] = role, ["code"] = code });
         await SendMembers(me);
     }
 
@@ -93,7 +94,7 @@ public class AdminModule : IModule
 
     async Task SendInvites(Member me) => await hub.Send(me, new JsonObject
     {
-        ["t"] = "admin.invites", ["now"] = Ms(hub.Clock.UtcNow),
+        ["t"] = LodgeMsg.AdminInvites, ["now"] = Ms(hub.Clock.UtcNow),
         ["invites"] = new JsonArray(hub.Auth.ListInvites().Where(i => i.Kind != Auth.ClaimKind).Select(i => (JsonNode)InviteJson(i)).ToArray()),
     });
 
@@ -117,7 +118,7 @@ public class AdminModule : IModule
         var (info, secret) = hub.Auth.CreateInvite(guest ? "guest" : "person", name, role, me.Name, hours > 0 ? hours : null, J.Int(m, "uses", 1));
         hub.Log.LogInformation("{By} created invite {Id} ({Kind}, {Role}) expiring {Expires:u}", me.Name, info.Id, info.Kind, info.Role, info.Expires);
         var o = InviteJson(info);
-        o["t"] = "admin.invite.created";
+        o["t"] = LodgeMsg.AdminInviteCreated;
         o["secret"] = secret;
         await hub.Send(me, o);
         await SendInvites(me);
@@ -150,13 +151,13 @@ public class AdminModule : IModule
         {
             switch (type)
             {
-                case "device.list":
+                case LodgeMsg.DeviceList:
                     // a guest sees only the device they are on
-                    if (me.Personal) await SendDevices(me, "devices", me.Name);
-                    else await hub.Send(me, new JsonObject { ["t"] = "devices", ["name"] = "", ["now"] = Ms(hub.Clock.UtcNow), ["devices"] = new JsonArray(
+                    if (me.Personal) await SendDevices(me, LodgeMsg.Devices, me.Name);
+                    else await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.Devices, ["name"] = "", ["now"] = Ms(hub.Clock.UtcNow), ["devices"] = new JsonArray(
                         hub.Auth.ListDevices().Where(d => d.Id == me.DeviceId).Select(d => (JsonNode)DeviceJson(d, me)).ToArray()) });
                     break;
-                case "device.revoke":
+                case LodgeMsg.DeviceRevoke:
                 {
                     var d = hub.Auth.FindDevice(J.Str(m, "id")) ?? throw new InvalidOperationException("That device is already signed out");
                     bool mine = d.Guest ? d.Id == me.DeviceId : me.Personal && Names.Same(d.Name, me.Name);
@@ -170,7 +171,7 @@ public class AdminModule : IModule
                     hub.Auth.RevokeDevice(d.Id);
                     hub.Log.LogInformation("{By} signed out device {Id} of {Name}", me.Name, d.Id, d.Guest ? "a guest" : Names.ForLog(d.Name));
                     await hub.DisconnectDevice(d.Id);   // the socket closes now, not at the next 15 s check
-                    if (hub.Find(me.Id) != null) await SendDevices(me, mine ? "devices" : "admin.devices", mine ? me.Name : null);
+                    if (hub.Find(me.Id) != null) await SendDevices(me, mine ? LodgeMsg.Devices : LodgeMsg.AdminDevices, mine ? me.Name : null);
                     break;
                 }
                 default: return false;
@@ -224,7 +225,7 @@ public class AdminModule : IModule
         var r = await hub.PurgeMember(name, atlasOnly);
         hub.Log.LogInformation("{By} {What} {Name}: {Count} item(s)", me.Name, atlasOnly ? "reverted the Atlas contributions of" : "purged the stored data of", Names.ForLog(name), r.Total);
         var o = r.ToJson();
-        o["t"] = "admin.purged";
+        o["t"] = LodgeMsg.AdminPurged;
         await hub.Send(me, o);
     }
 
@@ -233,7 +234,7 @@ public class AdminModule : IModule
     {
         hub.Info.Set(J.Str(m, "name"), J.Str(m, "welcome"));
         hub.Log.LogInformation("{By} changed the lodge name / welcome text", me.Name);
-        await hub.Broadcast(new JsonObject { ["t"] = "lodge.info", ["lodge"] = hub.Info.ToJson() });
+        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.LodgeInfo, ["lodge"] = hub.Info.ToJson() });
     }
 
     // "Leave the lodge": the person's membership goes (codes entry, all devices, pending device links); their messages stay.
@@ -245,14 +246,14 @@ public class AdminModule : IModule
             if (!me.Personal)
             {
                 // a guest has no membership: this only signs the device out
-                if (me.DeviceId != null) { hub.Auth.RevokeDevice(me.DeviceId); await hub.Send(me, new JsonObject { ["t"] = "member.left" }); await hub.DisconnectDevice(me.DeviceId); }
+                if (me.DeviceId != null) { hub.Auth.RevokeDevice(me.DeviceId); await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.MemberLeft }); await hub.DisconnectDevice(me.DeviceId); }
                 else await hub.Error(me, "Nothing to leave");
                 return true;
             }
             var devices = hub.Auth.Leave(me.Name);
             var gone = await hub.PurgeMember(me.Name);      // everything they authored goes (see LodgeHub.PurgeMember)
             hub.Log.LogInformation("{Name} left the lodge ({Count} devices signed out, {Items} stored item(s) forgotten)", Names.ForLog(me.Name), devices.Count, gone.Total);
-            await hub.Send(me, new JsonObject { ["t"] = "member.left" });
+            await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.MemberLeft });
             foreach (var d in devices) await hub.DisconnectDevice(d.Id, "You left the lodge");
             await hub.ApplyCodeChanges();   // sessions on a permanent code, and anything left over
         }

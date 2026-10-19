@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ElansAddonHub.Lodge;
+using Elans.Shared;
 
 namespace ElansAddonHub.Services
 {
@@ -186,7 +187,7 @@ namespace ElansAddonHub.Services
                         try { sock.Abort(); } catch { }
                         return;
                     }
-                    await SendRaw(Encoding.UTF8.GetBytes("{\"t\":\"ping\"}"), WebSocketMessageType.Text, 1000);
+                    await SendRaw(Encoding.UTF8.GetBytes("{\"t\":\"" + LodgeMsg.Ping + "\"}"), WebSocketMessageType.Text, 1000);
                 }
             }
             catch (OperationCanceledException) { }
@@ -230,8 +231,8 @@ namespace ElansAddonHub.Services
                 Dictionary<string, object> obj;
                 try { obj = Json.Obj(Encoding.UTF8.GetString(data, 0, len)); } catch { continue; }
                 if (obj == null) continue;
-                if (obj.Str("t") == "pong") { pongSeen = true; continue; }
-                if (first && obj.Str("t") == "welcome") { first = false; SetStatus("Online", true); }
+                if (obj.Str("t") == LodgeMsg.Pong) { pongSeen = true; continue; }
+                if (first && obj.Str("t") == LodgeMsg.Welcome) { first = false; SetStatus("Online", true); }
                 Post(() => Received?.Invoke(obj));
             }
         }

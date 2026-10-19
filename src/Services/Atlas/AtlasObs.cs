@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using Elans.Shared;
 
 namespace ElansAddonHub.Services
 {
@@ -821,7 +822,7 @@ namespace ElansAddonHub.Services
                 ["seenNpcs"] = MaxSeenNpcsPerShare, ["seenObjects"] = MaxSeenObjectsPerShare, ["seenQuests"] = MaxSeenQuestsPerShare,
             };
             var b = new Batch();
-            var frame = new Dictionary<string, object> { ["t"] = "atlas.share" };
+            var frame = new Dictionary<string, object> { ["t"] = LodgeMsg.AtlasShare };
             var objs = new Dictionary<string, Dictionary<string, object>>();
             var finds = new List<object>();
             var counts = new Dictionary<string, int>();

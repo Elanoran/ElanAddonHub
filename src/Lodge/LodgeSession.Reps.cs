@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -51,7 +52,7 @@ namespace ElansAddonHub.Lodge
             {
                 if (a == null) standingsAnswers[faction] = a = new StandingsAnswer();
                 a.Asked = now;
-                _ = Send(new Dictionary<string, object> { ["t"] = "armory.standing", ["faction"] = faction });
+                _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryStanding, ["faction"] = faction });
             }
             res.Pending = !fresh && a != null && a.Answered == default(DateTime);
             return res;

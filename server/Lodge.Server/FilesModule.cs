@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -222,7 +223,7 @@ public sealed class FilesModule : IModule
         lock (gate)
             return new JsonObject
             {
-                ["t"] = "files.data", ["maxMb"] = hub.Cfg.FilesMaxMb, ["totalMb"] = hub.Cfg.FilesTotalMb, ["usedBytes"] = slots.Sum(s => s.Versions.Sum(v => v.Size)),
+                ["t"] = LodgeMsg.FilesData, ["maxMb"] = hub.Cfg.FilesMaxMb, ["totalMb"] = hub.Cfg.FilesTotalMb, ["usedBytes"] = slots.Sum(s => s.Versions.Sum(v => v.Size)),
                 ["keep"] = KeptVersions, ["canManage"] = Roles.Can(me.Role, Perm.FilesManage),
                 ["slots"] = new JsonArray(slots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(s => (JsonNode)SlotJson(s)).ToArray()),
             };
@@ -475,7 +476,7 @@ public sealed class FilesModule : IModule
     {
         var o = new JsonObject
         {
-            ["t"] = "files.changed", ["action"] = action, ["slot"] = id, ["name"] = name, ["by"] = by,
+            ["t"] = LodgeMsg.FilesChanged, ["action"] = action, ["slot"] = id, ["name"] = name, ["by"] = by,
             ["at"] = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
         };
         if (v != null) o["v"] = v;
@@ -484,7 +485,7 @@ public sealed class FilesModule : IModule
 
     Task Result(Member me, string op, bool ok, string why, string slot)
     {
-        var o = new JsonObject { ["t"] = "files.result", ["op"] = op, ["ok"] = ok, ["slot"] = slot };
+        var o = new JsonObject { ["t"] = LodgeMsg.FilesResult, ["op"] = op, ["ok"] = ok, ["slot"] = slot };
         if (why != null) o["why"] = why;
         return hub.Send(me, o);
     }
@@ -493,12 +494,12 @@ public sealed class FilesModule : IModule
     {
         switch (type)
         {
-            case "files.list":
+            case LodgeMsg.FilesList:
                 if (!Enabled) { await Result(me, "list", false, "disabled", null); return true; }
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 await hub.Send(me, ListJson(me));
                 return true;
-            case "files.delete":
+            case LodgeMsg.FilesDelete:
             {
                 var id = J.Str(m, "slot") ?? "";
                 var (ok, why) = Delete(me, id, out var name);
@@ -506,7 +507,7 @@ public sealed class FilesModule : IModule
                 if (ok) { hub.Log.LogInformation("{Name} deleted a shared file slot", me.Name); await Announce("delete", id, name, null, me.Name); }
                 return true;
             }
-            case "files.rollback":
+            case LodgeMsg.FilesRollback:
             {
                 var id = J.Str(m, "slot") ?? "";
                 var v = J.Int(m, "v", 0);

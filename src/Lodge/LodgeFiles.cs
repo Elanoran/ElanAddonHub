@@ -130,7 +130,7 @@ namespace ElansAddonHub.Lodge
                 case "new": return by + " added " + name + " (v" + v + ")";
                 case "version": return by + " updated " + name + " (v" + v + ")";
                 case "rollback": return by + " rolled " + name + " back to v" + v;
-                case "delete": return by + " removed " + name;
+                case "delete": /* not-a-lodge-type: a files.changed action */ return by + " removed " + name;
                 default: return null;
             }
         }

@@ -41,7 +41,7 @@ namespace ElansAddonHub.Lodge
         {
             SupportsCairnNotices = features.Contains("cairnnotices");
             CairnNotices = new List<CairnNotice>();
-            if (SupportsCairnNotices && !IsGuestNow) _ = Send(new Dictionary<string, object> { ["t"] = "cairn.notices.get" });
+            if (SupportsCairnNotices && !IsGuestNow) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CairnNoticesGet });
         }
 
         void ResetCairnNotices() { SupportsCairnNotices = false; CairnNotices = new List<CairnNotice>(); }
@@ -85,7 +85,7 @@ namespace ElansAddonHub.Lodge
             if (Settings.CairnNoticesDismissed == null) Settings.CairnNoticesDismissed = new List<long>();
             Settings.CairnNoticesDismissed.Add(n.Id);
             SettingsStore.Save(Settings);
-            if (CanModerate) _ = Send(new Dictionary<string, object> { ["t"] = "cairn.notice.seen", ["ids"] = new List<object> { n.Id } });
+            if (CanModerate) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CairnNoticeSeen, ["ids"] = new List<object> { n.Id } });
             Changed?.Invoke();
         }
 

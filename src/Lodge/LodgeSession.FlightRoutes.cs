@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.WorldMap;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -106,7 +107,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFlightRoutes) return;
             routeLastGet = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = "flights.routes.get" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FlightsRoutesGet });
         }
 
         void OnFlightRoutesShared(Dictionary<string, object> m)

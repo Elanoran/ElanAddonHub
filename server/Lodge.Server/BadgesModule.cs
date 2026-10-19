@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -34,17 +35,17 @@ public sealed class BadgesModule : IModule
     {
         switch (type)
         {
-            case "badges.mine": await Mine(me); return true;
-            case "badges.seen": await Seen(me); return true;
-            case "badges.hide": await Hide(me, m); return true;
-            case "badges.member": await MemberView(me, m); return true;
-            case "ladder.get": await LadderGet(me, m); return true;
-            case "admin.badges": await Switch(me, m); return true;
+            case LodgeMsg.BadgesMine: await Mine(me); return true;
+            case LodgeMsg.BadgesSeen: await Seen(me); return true;
+            case LodgeMsg.BadgesHide: await Hide(me, m); return true;
+            case LodgeMsg.BadgesMember: await MemberView(me, m); return true;
+            case LodgeMsg.LadderGet: await LadderGet(me, m); return true;
+            case LodgeMsg.AdminBadges: await Switch(me, m); return true;
         }
         return false;
     }
 
-    public JsonObject StateJson() => new() { ["t"] = "badges.state", ["enabled"] = Enabled, ["locked"] = Locked };
+    public JsonObject StateJson() => new() { ["t"] = LodgeMsg.BadgesState, ["enabled"] = Enabled, ["locked"] = Locked };
 
     // ---------------------------------------------------------------- the requests
 
@@ -99,7 +100,7 @@ public sealed class BadgesModule : IModule
         if (!await Gate(me, false)) return;
         var name = J.Str(m, "name") ?? "";
         EnsureFresh();
-        var o = new JsonObject { ["t"] = "badges.member", ["ok"] = true, ["name"] = Names.Cut(name, Names.Max) };
+        var o = new JsonObject { ["t"] = LodgeMsg.BadgesMember, ["ok"] = true, ["name"] = Names.Cut(name, Names.Max) };
         lock (Store.Gate)
         {
             var r = name.Length > 0 ? Store.Get(Key(name)) : null;
@@ -167,7 +168,7 @@ public sealed class BadgesModule : IModule
         long seenMs = r?.SeenMs ?? 0;
         return new JsonObject
         {
-            ["t"] = "badges.mine", ["ok"] = true, ["you"] = me.Name, ["hide"] = r?.Hide ?? false,
+            ["t"] = LodgeMsg.BadgesMine, ["ok"] = true, ["you"] = me.Name, ["hide"] = r?.Hide ?? false,
             ["new"] = r == null ? 0 : r.Earned.Count(kv => kv.Value * 1000 > seenMs),
             ["points"] = allPts, ["rank"] = allRank, ["season"] = Store.Season, ["seasonPoints"] = seasonPts, ["seasonRank"] = seasonRank,
             ["earned"] = r?.Earned.Count ?? 0, ["total"] = Badges.Table.Length,
@@ -239,7 +240,7 @@ public sealed class BadgesModule : IModule
         var mine = rows.FirstOrDefault(x => x.Key == viewer);
         return new JsonObject
         {
-            ["t"] = "ladder.data", ["ok"] = true, ["season"] = season, ["current"] = Store.Season, ["seasons"] = seasons, ["rows"] = arr,
+            ["t"] = LodgeMsg.LadderData, ["ok"] = true, ["season"] = season, ["current"] = Store.Season, ["seasons"] = seasons, ["rows"] = arr,
             ["you"] = mine == null ? null : new JsonObject { ["rank"] = mine.Rank, ["points"] = mine.Points, ["hidden"] = mine.Hidden },
         };
     }

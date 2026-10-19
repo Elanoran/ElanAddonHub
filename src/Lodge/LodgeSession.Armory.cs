@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -134,7 +135,7 @@ namespace ElansAddonHub.Lodge
                     armoryDeleteAll = false;
                     sent.Clear(); SaveArmorySent();
                     armoryQuiet.Clear(); armoryRefused.Clear();
-                    _ = Send(new Dictionary<string, object> { ["t"] = "armory.delete", ["all"] = true });
+                    _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryDelete, ["all"] = true });
                 }
                 return;
             }
@@ -142,7 +143,7 @@ namespace ElansAddonHub.Lodge
             {
                 sent.Remove(k); armoryQuiet.Remove(k); armoryRefused.Remove(k);
                 SaveArmorySent();
-                _ = Send(new Dictionary<string, object> { ["t"] = "armory.delete", ["key"] = k });
+                _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryDelete, ["key"] = k });
             }
             if (wanted.Count == 0) { armoryBacklog = false; return; }
 
@@ -168,7 +169,7 @@ namespace ElansAddonHub.Lodge
                 }
                 if (clock < armoryNextPut) { backlog = true; continue; }
                 var full = ArmoryShare.Build(c, true, SupportsArmory2, RepsShared);
-                var frame = new Dictionary<string, object> { ["t"] = "armory.put", ["key"] = c.Key, ["char"] = full };
+                var frame = new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryPut, ["key"] = c.Key, ["char"] = full };
                 if (Json.Write(frame).Length > 60 * 1024) { armoryRefused[c.Key] = sig; ArmoryProblem = c.Name + " has too much to share."; continue; }
                 armoryInflight[c.Key] = sig;
                 armoryQuiet.Remove(c.Key);
@@ -183,7 +184,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsArmory || !ArmoryAvailable) return;
             if (!force && Clock() - armoryLastList < TimeSpan.FromSeconds(20)) return;
             armoryLastList = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = "armory.list" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryList });
         }
 
         public Dictionary<string, object> ArmoryChar(string id) => id != null && armoryChars.TryGetValue(id, out var c) ? c : null;
@@ -194,7 +195,7 @@ namespace ElansAddonHub.Lodge
             var id = e.Id;
             if (!force && (armoryAsked.Contains(id) || armoryChars.ContainsKey(id))) return;
             armoryAsked.Add(id);
-            _ = Send(new Dictionary<string, object> { ["t"] = "armory.get", ["owner"] = e.Owner, ["key"] = e.Key });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryGet, ["owner"] = e.Owner, ["key"] = e.Key });
         }
 
         // a character that changed since it was opened is fetched again when the list says it is newer
@@ -294,7 +295,7 @@ namespace ElansAddonHub.Lodge
                 if (a == null) craftersAnswers[key] = a = new CraftersAnswer();
                 a.Asked = now;
                 var ids = key.Split(',').Select(s => (object)int.Parse(s, System.Globalization.CultureInfo.InvariantCulture)).ToList();
-                _ = Send(new Dictionary<string, object> { ["t"] = "armory.crafters", ["spells"] = ids });
+                _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryCrafters, ["spells"] = ids });
             }
             res.Pending = !fresh && a != null && a.Answered == default(DateTime);
             return res;

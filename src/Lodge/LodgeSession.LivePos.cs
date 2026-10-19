@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Maps;
 using ElansAddonHub.Services.WorldMap;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -81,13 +82,13 @@ namespace ElansAddonHub.Lodge
 
         public Dictionary<string, object> BuildPositionMessage()
         {
-            if (!LivePosWanted) return new Dictionary<string, object> { ["t"] = "position", ["share"] = false };
+            if (!LivePosWanted) return new Dictionary<string, object> { ["t"] = LodgeMsg.Position, ["share"] = false };
             var c = Presence.Current;
             if (!Presence.Playing || c == null || !c.PosEnabled || !c.PosValid || c.PosMapId <= 0 || double.IsNaN(c.PosFx + c.PosFy) || double.IsInfinity(c.PosFx + c.PosFy))
-                return new Dictionary<string, object> { ["t"] = "position", ["valid"] = false };      // in a dungeon, or the game shares no position: the dot goes
+                return new Dictionary<string, object> { ["t"] = LodgeMsg.Position, ["valid"] = false };      // in a dungeon, or the game shares no position: the dot goes
             return new Dictionary<string, object>
             {
-                ["t"] = "position", ["mapId"] = c.PosMapId, ["fx"] = Math.Round(Math.Max(0, Math.Min(1, c.PosFx)), 4), ["fy"] = Math.Round(Math.Max(0, Math.Min(1, c.PosFy)), 4),
+                ["t"] = LodgeMsg.Position, ["mapId"] = c.PosMapId, ["fx"] = Math.Round(Math.Max(0, Math.Min(1, c.PosFx)), 4), ["fy"] = Math.Round(Math.Max(0, Math.Min(1, c.PosFy)), 4),
                 ["move"] = c.PosMove & 0xFC, ["valid"] = true, ["scope"] = ScopeOf(Settings),
             };
         }

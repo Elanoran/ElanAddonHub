@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -50,7 +51,7 @@ namespace ElansAddonHub.Lodge
         public void RequestClassicInfo()
         {
             if (!SupportsClassic || IsGuestNow) return;
-            _ = Send(new Dictionary<string, object> { ["t"] = "dataset.info", ["name"] = "classic" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.DatasetInfo, ["name"] = "classic" });
         }
 
         void OnDatasetFrame(Dictionary<string, object> m)
@@ -58,12 +59,12 @@ namespace ElansAddonHub.Lodge
             if (!SupportsClassic) return;
             switch (m.Str("t"))
             {
-                case "dataset.data":
-                case "dataset.changed":
+                case LodgeMsg.DatasetData:
+                case LodgeMsg.DatasetChanged:
                     if (m.Str("name") != "classic") return;
                     ApplyClassic(m);
                     break;
-                case "dataset.result":
+                case LodgeMsg.DatasetResult:
                     if (m.Str("name") != "classic" || m.Bool("ok")) return;
                     ClassicProblem = ClassicWhy(m.Str("why"));
                     ClassicChanged?.Invoke();
@@ -154,7 +155,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsClassic) return "This Lodge's server can't host the Classic data yet";
             if (!CanShareClassic) return ClassicWhy("forbidden");
-            _ = Send(new Dictionary<string, object> { ["t"] = "dataset.delete", ["name"] = "classic" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.DatasetDelete, ["name"] = "classic" });
             return null;
         }
     }

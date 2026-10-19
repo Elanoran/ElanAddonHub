@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -49,7 +50,7 @@ namespace ElansAddonHub.Lodge
         void OnRealmsFrame(Dictionary<string, object> m)
         {
             if (!SupportsRealms) return;           // a server that doesn't list the feature has nothing to say about it
-            if (m.Str("t") == "realms.back")
+            if (m.Str("t") == LodgeMsg.RealmsBack)
             {
                 var names = m.List("realms").OfType<string>().Where(n => n.Length > 0).Take(8).ToList();
                 if (names.Count > 0) OnRealmsBack(names);

@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -83,21 +84,21 @@ namespace ElansAddonHub.Lodge
             var key = year + "-" + month;
             if (!loadedMonths.Add(key)) return;
             CalendarRules.MonthWindow(year, month, out var from, out var to);
-            _ = Send(new Dictionary<string, object> { ["t"] = "cal:range", ["from"] = (double)CalendarRules.Ms(from), ["to"] = (double)CalendarRules.Ms(to) });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CalRange, ["from"] = (double)CalendarRules.Ms(from), ["to"] = (double)CalendarRules.Ms(to) });
         }
 
         // events the grid of one month may show
         public IEnumerable<EventVM> EventsBetween(DateTime fromUtc, DateTime toUtc) => Events.Where(e => e.StartUtc >= fromUtc && e.StartUtc < toUtc);
 
-        public Task CalendarCreate(CalendarForm f) => Send(f.ToRequest("cal:create"));
-        public Task CalendarEdit(EventVM e, CalendarForm f) => Send(f.ToRequest("cal:edit", e.Id));
-        public Task CalendarCancel(EventVM e, bool following) => Send(new Dictionary<string, object> { ["t"] = "cal:cancel", ["id"] = e.Id, ["scope"] = following ? "following" : "this" });
-        public Task CalendarLeave(EventVM e) => Send(new Dictionary<string, object> { ["t"] = "cal:leave", ["id"] = e.Id });
+        public Task CalendarCreate(CalendarForm f) => Send(f.ToRequest(LodgeMsg.CalCreate));
+        public Task CalendarEdit(EventVM e, CalendarForm f) => Send(f.ToRequest(LodgeMsg.CalEdit, e.Id));
+        public Task CalendarCancel(EventVM e, bool following) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CalCancel, ["id"] = e.Id, ["scope"] = following ? "following" : "this" });
+        public Task CalendarLeave(EventVM e) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CalLeave, ["id"] = e.Id });
 
         // Going / Maybe / Can't, with the role picked on the card; the comment I wrote before stays unless a new one is given
         public Task CalendarAnswer(EventVM e, string status, string comment = null)
         {
-            var d = new Dictionary<string, object> { ["t"] = "cal:signup", ["id"] = e.Id, ["status"] = status, ["comment"] = comment ?? e.MyComment ?? "" };
+            var d = new Dictionary<string, object> { ["t"] = LodgeMsg.CalSignup, ["id"] = e.Id, ["status"] = status, ["comment"] = comment ?? e.MyComment ?? "" };
             if (e.Roles && status != "declined") { d["role"] = e.SelectedRole; EventVM.LastRole = e.SelectedRole; }
             return Send(d);
         }

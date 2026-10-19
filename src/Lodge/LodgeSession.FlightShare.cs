@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -114,7 +115,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFlights) return;
             flightLastGet = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = "flights.get" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FlightsGet });
         }
 
         void OnFlightShared(Dictionary<string, object> m)

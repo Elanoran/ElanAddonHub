@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -70,7 +71,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsBadges || (Me != null && Me.Guest)) return;
             badgesLastAsk = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = "badges.mine" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.BadgesMine });
         }
 
         // I looked at my badges: the dot goes (locally at once, and on the server so it stays gone)
@@ -79,7 +80,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsBadges || NewBadges == 0) return;
             NewBadges = 0;
             BadgesChanged?.Invoke();
-            _ = Send(new Dictionary<string, object> { ["t"] = "badges.seen" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.BadgesSeen });
         }
 
         public void SetHideFromLadder(bool hide)
@@ -87,7 +88,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsBadges) return;
             HideFromLadder = hide;
             badgesLastAsk = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = "badges.hide", ["hide"] = hide });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.BadgesHide, ["hide"] = hide });
             BadgesChanged?.Invoke();
         }
 
@@ -95,7 +96,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsBadges) return;
             badgesLastAsk = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = "ladder.get", ["season"] = string.IsNullOrEmpty(season) ? "all" : season });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LadderGet, ["season"] = string.IsNullOrEmpty(season) ? "all" : season });
         }
 
         // someone's earned badges (a profile card); asked again at most once a minute
@@ -105,7 +106,7 @@ namespace ElansAddonHub.Lodge
             if (memberBadgesAsked.TryGetValue(login, out var at) && Clock() - at < TimeSpan.FromMinutes(1)) return;
             memberBadgesAsked[login] = Clock();
             badgesLastAsk = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = "badges.member", ["name"] = login });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.BadgesMember, ["name"] = login });
         }
 
         public List<BadgeVM> BadgesOf(string login) =>
@@ -116,7 +117,7 @@ namespace ElansAddonHub.Lodge
         public void SetBadgesForLodge(bool on)
         {
             if (!CanSwitchBadges) return;
-            _ = Send(new Dictionary<string, object> { ["t"] = "admin.badges", ["on"] = on });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminBadges, ["on"] = on });
         }
 
         // the badges shown beside a name: highest tier first, then the newest
@@ -139,13 +140,13 @@ namespace ElansAddonHub.Lodge
         {
             switch (m.Str("t"))
             {
-                case "badges.state":
+                case LodgeMsg.BadgesState:
                     BadgesStateKnown = true; BadgesOwnerOn = m.Bool("enabled"); BadgesLocked = m.Bool("locked");
                     SupportsBadges = BadgesOwnerOn && !BadgesLocked;
                     if (SupportsBadges) AfterWelcomeBadges(); else { var keep = BadgesStateKnown; var l = BadgesLocked; var o = BadgesOwnerOn; ResetBadges(); BadgesStateKnown = keep; BadgesLocked = l; BadgesOwnerOn = o; }
                     BadgesChanged?.Invoke(); LadderChanged?.Invoke();
                     return true;
-                case "badges.mine":
+                case LodgeMsg.BadgesMine:
                     if (!SupportsBadges || !m.Bool("ok")) return true;
                     HideFromLadder = m.Bool("hide"); NewBadges = m.Int("new");
                     MyPoints = m.Long("points"); MyRank = m.Int("rank"); MySeasonPoints = m.Long("seasonPoints"); MySeasonRank = m.Int("seasonRank");
@@ -154,14 +155,14 @@ namespace ElansAddonHub.Lodge
                     MyBadgesLoaded = true;
                     BadgesChanged?.Invoke();
                     return true;
-                case "badges.member":
+                case LodgeMsg.BadgesMember:
                     if (!SupportsBadges || !m.Bool("ok")) return true;
                     var who = m.Str("name");
                     if (string.IsNullOrEmpty(who)) return true;
                     memberBadges[who] = (m.List("badges") ?? new List<object>()).OfType<Dictionary<string, object>>().Select(BadgeVM.Parse).Where(b => b.Id != null).ToList();
                     MemberBadgesLoaded?.Invoke(who);
                     return true;
-                case "ladder.data":
+                case LodgeMsg.LadderData:
                     if (!SupportsBadges || !m.Bool("ok")) return true;
                     LadderSeason = m.Str("season") ?? "all"; LadderCurrent = m.Str("current") ?? "";
                     LadderSeasons = (m.List("seasons") ?? new List<object>()).OfType<string>().ToList();

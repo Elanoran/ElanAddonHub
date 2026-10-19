@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -25,10 +26,10 @@ public sealed class FlightModule : IModule
     {
         switch (type)
         {
-            case "flights.share": await Share(me, m); return true;
-            case "flights.get": await Get(me); return true;
-            case "flights.routes.share": await ShareRoutes(me, m); return true;
-            case "flights.routes.get": await GetRoutes(me); return true;
+            case LodgeMsg.FlightsShare: await Share(me, m); return true;
+            case LodgeMsg.FlightsGet: await Get(me); return true;
+            case LodgeMsg.FlightsRoutesShare: await ShareRoutes(me, m); return true;
+            case LodgeMsg.FlightsRoutesGet: await GetRoutes(me); return true;
         }
         return false;
     }
@@ -38,7 +39,7 @@ public sealed class FlightModule : IModule
 
     Task Reply(Member me, bool ok, int accepted, int rejected, string why = null)
     {
-        var o = new JsonObject { ["t"] = "flights.shared", ["ok"] = ok, ["accepted"] = accepted, ["rejected"] = rejected };
+        var o = new JsonObject { ["t"] = LodgeMsg.FlightsShared, ["ok"] = ok, ["accepted"] = accepted, ["rejected"] = rejected };
         if (why != null) o["why"] = why;
         return hub.Send(me, o);
     }
@@ -71,7 +72,7 @@ public sealed class FlightModule : IModule
     // one per 10 minutes per identity) -> flights.routes.shared { ok, accepted, rejected, why? }; flights.routes.get {} -> flights.routes.data (Page budget).
     Task ReplyRoutes(Member me, bool ok, int accepted, int rejected, string why = null)
     {
-        var o = new JsonObject { ["t"] = "flights.routes.shared", ["ok"] = ok, ["accepted"] = accepted, ["rejected"] = rejected };
+        var o = new JsonObject { ["t"] = LodgeMsg.FlightsRoutesShared, ["ok"] = ok, ["accepted"] = accepted, ["rejected"] = rejected };
         if (why != null) o["why"] = why;
         return hub.Send(me, o);
     }

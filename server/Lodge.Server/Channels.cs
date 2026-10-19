@@ -70,7 +70,7 @@ public class Channels
             for (int i = 2; list.Any(c => c.Id == id); i++) id = $"{slug}-{i}";
             var ch = new Channel
             {
-                Id = id, Name = name, Type = type == "voice" ? "voice" : "text",
+                Id = id, Name = name, Type = type == "voice" ? "voice" : "text",   // not-a-lodge-type: the channel type
                 MinRole = Roles.Normalize(minRole), Max = Math.Clamp(max, 0, 99),
             };
             list.Add(ch);

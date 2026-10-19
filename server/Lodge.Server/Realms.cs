@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -205,7 +206,7 @@ public sealed class RealmsModule : IModule
         {
             var o = new JsonObject
             {
-                ["t"] = "realms.status", ["available"] = available, ["region"] = Region,
+                ["t"] = LodgeMsg.RealmsStatus, ["available"] = available, ["region"] = Region,
                 ["realms"] = new JsonArray(available ? realms.Select(r => (JsonNode)r.ToJson()).ToArray() : Array.Empty<JsonNode>()),
                 ["checkedAt"] = checkedAt,
             };
@@ -412,7 +413,7 @@ public sealed class RealmsModule : IModule
         if (back != null)
         {
             long at; lock (gate) at = checkedAt;
-            await hub.Broadcast(new JsonObject { ["t"] = "realms.back", ["realms"] = new JsonArray(back.Select(n => (JsonNode)JsonValue.Create(n)).ToArray()), ["checkedAt"] = at });
+            await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.RealmsBack, ["realms"] = new JsonArray(back.Select(n => (JsonNode)JsonValue.Create(n)).ToArray()), ["checkedAt"] = at });
         }
     }
 

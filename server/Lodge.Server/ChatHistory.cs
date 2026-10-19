@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -43,7 +44,7 @@ public partial class ChatModule
                 }
             }
         }
-        await hub.Send(me, new JsonObject { ["t"] = "history:page", ["channel"] = ch?.Id ?? J.Str(m, "channel") ?? "", ["before"] = before ?? "", ["messages"] = page, ["hasMore"] = more });
+        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.HistoryPage, ["channel"] = ch?.Id ?? J.Str(m, "channel") ?? "", ["before"] = before ?? "", ["messages"] = page, ["hasMore"] = more });
     }
 
     // "search": { q, channel? } - case-insensitive substring over the text (and attachment names) of the channels I may see, newest first
@@ -86,7 +87,7 @@ public partial class ChatModule
         }
         var ordered = hits.OrderByDescending(h => h.at).ToList();
         if (ordered.Count > SearchMax) { ordered = ordered.Take(SearchMax).ToList(); more = true; }
-        await hub.Send(me, new JsonObject { ["t"] = "search:result", ["q"] = q, ["hits"] = new JsonArray(ordered.Select(h => (JsonNode)h.hit).ToArray()), ["more"] = more });
+        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.SearchResult, ["q"] = q, ["hits"] = new JsonArray(ordered.Select(h => (JsonNode)h.hit).ToArray()), ["more"] = more });
     }
 
     static readonly System.Text.RegularExpressions.Regex Spaces = new(@"\s+", System.Text.RegularExpressions.RegexOptions.Compiled);

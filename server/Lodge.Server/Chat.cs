@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -120,27 +121,27 @@ public partial class ChatModule : IModule
     {
         switch (type)
         {
-            case "msg": await Message(me, m); return true;
-            case "edit": await Edit(me, m); return true;
-            case "delete": await Delete(me, m); return true;
-            case "react": await React(me, m); return true;
-            case "pin": await Pin(me, m, true); return true;
-            case "unpin": await Pin(me, m, false); return true;
-            case "lfg:join": await LfgJoin(me, m, J.Str(m, "role")); return true;
-            case "lfg:maybe": await LfgJoin(me, m, "maybe"); return true;
-            case "lfg:leave": await LfgLeave(me, m); return true;
-            case "lfg:close": await LfgEnd(me, m, "closed"); return true;
-            case "lfg:cancel": await LfgEnd(me, m, "cancelled"); return true;
-            case "history:before": await HistoryBefore(me, m); return true;
-            case "search": await Search(me, m); return true;
-            case "typing":
+            case LodgeMsg.Msg: await Message(me, m); return true;
+            case LodgeMsg.Edit: await Edit(me, m); return true;
+            case LodgeMsg.Delete: await Delete(me, m); return true;
+            case LodgeMsg.React: await React(me, m); return true;
+            case LodgeMsg.Pin: await Pin(me, m, true); return true;
+            case LodgeMsg.Unpin: await Pin(me, m, false); return true;
+            case LodgeMsg.LfgJoin: await LfgJoin(me, m, J.Str(m, "role")); return true;
+            case LodgeMsg.LfgMaybe: await LfgJoin(me, m, "maybe"); return true;
+            case LodgeMsg.LfgLeave: await LfgLeave(me, m); return true;
+            case LodgeMsg.LfgClose: await LfgEnd(me, m, "closed"); return true;
+            case LodgeMsg.LfgCancel: await LfgEnd(me, m, "cancelled"); return true;
+            case LodgeMsg.HistoryBefore: await HistoryBefore(me, m); return true;
+            case LodgeMsg.Search: await Search(me, m); return true;
+            case LodgeMsg.Typing:
                 var ch = hub.Channels.Get(J.Str(m, "channel")) ?? hub.Channels.DefaultText;
                 if (!ch.VisibleTo(me.Role) || me.Invisible) return true; // invisible members never show as typing
                 // coalesced: at most one "typing" per person and channel every 2 s
                 var now = hub.Clock.UtcNow;
                 if (me.LastTyping.TryGetValue(ch.Id, out var last) && now - last < TypingEvery) return true;
                 me.LastTyping[ch.Id] = now;
-                await hub.Broadcast(new JsonObject { ["t"] = "typing", ["id"] = me.Id, ["channel"] = ch.Id },
+                await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Typing, ["id"] = me.Id, ["channel"] = ch.Id },
                     x => x.Id != me.Id && ch.VisibleTo(x.Role));
                 return true;
         }
@@ -219,7 +220,7 @@ public partial class ChatModule : IModule
 
         var msg = new JsonObject
         {
-            ["t"] = "msg", ["channel"] = ch.Id,
+            ["t"] = LodgeMsg.Msg, ["channel"] = ch.Id,
             ["id"] = Guid.NewGuid().ToString("N")[..12],
             ["at"] = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
             ["from"] = me.Name, ["fromId"] = me.Id, ["text"] = text,
@@ -265,9 +266,9 @@ public partial class ChatModule : IModule
         if (!Roles.AtLeast(me.Role, "officer")) text = Names.DefangGroupPings(text);
         lock (s) { msg["text"] = text; msg["edited"] = true; s.MarkDirty(); }
         QueueFlush(s);
-        await hub.Broadcast(new JsonObject { ["t"] = "edited", ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["text"] = text }, Viewers(ch));
+        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Edited, ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["text"] = text }, Viewers(ch));
         var pinned = Pins.UpdateText(ch.Id, (string)msg["id"], text);
-        if (pinned != null) await hub.Broadcast(new JsonObject { ["t"] = "pin", ["channel"] = ch.Id, ["pin"] = pinned }, Viewers(ch));
+        if (pinned != null) await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Pin, ["channel"] = ch.Id, ["pin"] = pinned }, Viewers(ch));
     }
 
     async Task Delete(Member me, JsonObject m)
@@ -283,9 +284,9 @@ public partial class ChatModule : IModule
         lock (s) { s.Messages.Remove(msg); s.MarkDirty(); }
         QueueFlush(s);
         hub.Log.LogInformation("{Name} deleted a message from {From} in {Channel}", me.Name, Names.ForLog((string)msg["from"]), ch.Id);
-        await hub.Broadcast(new JsonObject { ["t"] = "deleted", ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
+        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Deleted, ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
         if (Pins.Unpin(ch.Id, (string)msg["id"], out _))
-            await hub.Broadcast(new JsonObject { ["t"] = "unpin", ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
+            await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Unpin, ["channel"] = ch.Id, ["id"] = (string)msg["id"] }, Viewers(ch));
     }
 
     // toggles the sender's reaction; the whole list for that reaction is broadcast (idempotent for clients)
@@ -316,7 +317,7 @@ public partial class ChatModule : IModule
         }
         if (full) { await hub.Error(me, "That reaction is full"); return; }
         QueueFlush(s);
-        await hub.Broadcast(new JsonObject { ["t"] = "react", ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["reaction"] = emoji, ["emoji"] = EmojiOf(emoji), ["users"] = users, ["by"] = me.Name, ["on"] = on }, Viewers(ch));
+        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.React, ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["reaction"] = emoji, ["emoji"] = EmojiOf(emoji), ["users"] = users, ["by"] = me.Name, ["on"] = on }, Viewers(ch));
     }
 
     async Task Pin(Member me, JsonObject m, bool pin)
@@ -341,7 +342,7 @@ public partial class ChatModule : IModule
                 case PinStore.Result.Already: return;
                 case PinStore.Result.SaveFailed: await hub.Error(me, "The server couldn't save the pin - it may be gone after a restart"); break;
             }
-            await hub.Broadcast(new JsonObject { ["t"] = "pin", ["channel"] = ch.Id, ["pin"] = rec }, Viewers(ch));
+            await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Pin, ["channel"] = ch.Id, ["pin"] = rec }, Viewers(ch));
         }
         else
         {
@@ -351,7 +352,7 @@ public partial class ChatModule : IModule
             if (ch == null) return;
             if (Pins.Unpin(ch.Id, id, out var saved))
             {
-                await hub.Broadcast(new JsonObject { ["t"] = "unpin", ["channel"] = ch.Id, ["id"] = id }, Viewers(ch));
+                await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Unpin, ["channel"] = ch.Id, ["id"] = id }, Viewers(ch));
                 if (!saved) await hub.Error(me, "The server couldn't save the change");
             }
         }

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -296,7 +297,7 @@ public sealed class FlightStore
             var pick = d.Values.GroupBy(x => x).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).First().Key;
             no[id] = pick;
         }
-        cached = new JsonObject { ["t"] = "flights.data", ["at"] = NowMs / 1000, ["legs"] = lo, ["names"] = no }.ToJsonString();
+        cached = new JsonObject { ["t"] = LodgeMsg.FlightsData, ["at"] = NowMs / 1000, ["legs"] = lo, ["names"] = no }.ToJsonString();
         cachedVersion = version;
         return cached;
     }

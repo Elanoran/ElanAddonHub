@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -217,7 +218,7 @@ public sealed class DatasetsModule : IModule
         DatasetMeta m;
         lock (gate) m = items.FirstOrDefault(i => i.Name == kind.Name);
         var o = View(kind, m);
-        o["t"] = "dataset.data";
+        o["t"] = LodgeMsg.DatasetData;
         o["canManage"] = me != null && Roles.Can(me.Role, Perm.DatasetManage);
         o["maxMb"] = (int)(kind.MaxBytes(hub.Cfg) / (1024 * 1024));
         return o;
@@ -392,7 +393,7 @@ public sealed class DatasetsModule : IModule
     Task Announce(DatasetKind kind, DatasetMeta m, string action)
     {
         var o = View(kind, m);
-        o["t"] = "dataset.changed"; o["action"] = action;
+        o["t"] = LodgeMsg.DatasetChanged; o["action"] = action;
         return hub.Broadcast(o, who => Roles.Can(who.Role, Perm.DatasetRead) && who.Personal);
     }
 
@@ -400,7 +401,7 @@ public sealed class DatasetsModule : IModule
     {
         switch (type)
         {
-            case "dataset.info":
+            case LodgeMsg.DatasetInfo:
             {
                 var kind = DatasetKinds.Find(J.Str(m, "name"));
                 if (kind == null || !Enabled(kind)) { await hub.Error(me, "That isn't available on this lodge", "disabled"); return true; }
@@ -409,11 +410,11 @@ public sealed class DatasetsModule : IModule
                 await hub.Send(me, Info(kind, me));
                 return true;
             }
-            case "dataset.delete":
+            case LodgeMsg.DatasetDelete:
             {
                 var name = J.Str(m, "name") ?? "";
                 var (ok, why) = Delete(me, name);
-                var r = new JsonObject { ["t"] = "dataset.result", ["op"] = "delete", ["name"] = name, ["ok"] = ok };
+                var r = new JsonObject { ["t"] = LodgeMsg.DatasetResult, ["op"] = "delete", ["name"] = name, ["ok"] = ok };
                 if (why != null) r["why"] = why;
                 await hub.Send(me, r);
                 if (ok)

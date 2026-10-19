@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -314,7 +315,7 @@ public sealed class FlightRouteStore
             var p = FlightRoutes.Merge(d);
             if (p != null) ro[key] = new JsonObject { ["m"] = p.Map, ["p"] = FlightRoutes.Flat(p.Pts), ["t"] = p.T, ["n"] = p.N, ["k"] = p.K };
         }
-        cached = new JsonObject { ["t"] = "flights.routes.data", ["at"] = NowMs / 1000, ["routes"] = ro }.ToJsonString();
+        cached = new JsonObject { ["t"] = LodgeMsg.FlightsRoutesData, ["at"] = NowMs / 1000, ["routes"] = ro }.ToJsonString();
         cachedVersion = version;
         return cached;
     }

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -373,8 +374,8 @@ namespace ElansAddonHub.Lodge
         {
             switch (m.Str("t"))
             {
-                case "welcome": Welcome(m); break;
-                case "join":
+                case LodgeMsg.Welcome: Welcome(m); break;
+                case LodgeMsg.Join:
                     var j = ParseMember(m.Child("user"));
                     if (Members.All(x => x.Id != j.Id)) Members.Add(j);
                     RefreshAuthorAvatars(j.Name);
@@ -383,7 +384,7 @@ namespace ElansAddonHub.Lodge
                     StatusText = OnlineText;
                     Changed?.Invoke();
                     break;
-                case "leave":
+                case LodgeMsg.Leave:
                     var gone = Members.FirstOrDefault(x => x.Id == m.Int("id"));
                     if (gone != null)
                     {
@@ -397,7 +398,7 @@ namespace ElansAddonHub.Lodge
                     StatusText = OnlineText;
                     Changed?.Invoke();
                     break;
-                case "user":
+                case LodgeMsg.User:
                     var u = ParseMember(m.Child("user"));
                     var mem = Members.FirstOrDefault(x => x.Id == u.Id);
                     if (mem == null) break;
@@ -427,13 +428,13 @@ namespace ElansAddonHub.Lodge
                     }
                     SyncRooms();
                     break;
-                case "msg":
+                case LodgeMsg.Msg:
                     var vm = AddMessage(m);
                     TypingMap(vm.Channel).Remove(vm.FromId);
                     if (vm.Mine && Pending != null && Pending.Channel == vm.Channel) Pending = null;   // the server echoed it: it is out
                     OnNewMessage(vm);
                     break;
-                case "lfg":
+                case LodgeMsg.Lfg:
                     // a sign-up card changed: the whole current state arrives (one place per person is the server's rule)
                     var lm = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
                     if (lm?.Lfg != null && m.Child("lfg") != null)
@@ -443,7 +444,7 @@ namespace ElansAddonHub.Lodge
                         LfgChanged?.Invoke(lm);
                     }
                     break;
-                case "react":
+                case LodgeMsg.React:
                     var rm = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
                     if (rm != null)
                     {
@@ -453,7 +454,7 @@ namespace ElansAddonHub.Lodge
                             ToastFor(ToastKind.Reaction, rm, by, "reacted \"" + ReactionArt.Name(m.Str("reaction") ?? m.Str("emoji")) + "\" to: " + OneLine(rm.Text));
                     }
                     break;
-                case "pin":
+                case LodgeMsg.Pin:
                     var pc = m.Str("channel");
                     var pv = ParsePin(m.Child("pin"));
                     if (pc == null || pv == null) break;
@@ -467,7 +468,7 @@ namespace ElansAddonHub.Lodge
                     var pm = MessagesOf(pc).FirstOrDefault(x => x.Id == pv.Id);
                     if (pm != null) pm.Pinned = true;
                     break;
-                case "unpin":
+                case LodgeMsg.Unpin:
                     var uc = m.Str("channel");
                     var ul = PinsOf(uc);
                     var uo = ul.FirstOrDefault(x => x.Id == m.Str("id"));
@@ -475,7 +476,7 @@ namespace ElansAddonHub.Lodge
                     var um = MessagesOf(uc).FirstOrDefault(x => x.Id == m.Str("id"));
                     if (um != null) um.Pinned = false;
                     break;
-                case "edited":
+                case LodgeMsg.Edited:
                     var e = MessagesOf(m.Str("channel")).FirstOrDefault(x => x.Id == m.Str("id"));
                     if (e != null)
                     {
@@ -491,17 +492,17 @@ namespace ElansAddonHub.Lodge
                         }
                     }
                     break;
-                case "deleted":
+                case LodgeMsg.Deleted:
                     var list = MessagesOf(m.Str("channel"));
                     var d = list.FirstOrDefault(x => x.Id == m.Str("id"));
                     if (d != null) RemoveMessage(list, d, TextChannels.FirstOrDefault(c => c.Id == m.Str("channel")));
                     break;
-                case "history:page": OnHistoryPage(m); break;
-                case "search:result": OnSearchResult(m); break;
-                case "typing":
+                case LodgeMsg.HistoryPage: OnHistoryPage(m); break;
+                case LodgeMsg.SearchResult: OnSearchResult(m); break;
+                case LodgeMsg.Typing:
                     TypingMap(m.Str("channel") ?? TextChannels.FirstOrDefault()?.Id)[m.Int("id")] = DateTime.UtcNow.AddSeconds(4);
                     break;
-                case "profile":
+                case LodgeMsg.Profile:
                     // someone's avatar / accent changed (small broadcast)
                     var pu = Members.FirstOrDefault(x => x.Id == m.Int("id"));
                     if (pu == null && m.ContainsKey("displayName") && DisplayNames.Remember(m.Str("name"), m.Str("displayName"))) RefreshAuthorNames(); // the name directory stays fresh
@@ -514,7 +515,7 @@ namespace ElansAddonHub.Lodge
                         if (pu.IsMe && MyProfile != null) { MyProfile.AvatarId = pu.AvatarId; MyProfile.Accent = pu.Accent; MyProfile.DisplayName = pu.DisplayName; MyProfileChanged?.Invoke(); }
                     }
                     break;
-                case "profile:data":
+                case LodgeMsg.ProfileData:
                     var pd = ProfileData.Parse(m.Child("profile"));
                     if (pd == null) break;
                     if (pd.Found && !string.IsNullOrEmpty(pd.Name) && m.Child("profile").ContainsKey("displayName"))
@@ -526,48 +527,48 @@ namespace ElansAddonHub.Lodge
                     if (Me != null && string.Equals(pd.Name, Me.Name, StringComparison.OrdinalIgnoreCase) && pd.Found) { MyProfile = pd; MyProfileChanged?.Invoke(); }
                     ProfileReceived?.Invoke(pd);
                     break;
-                case "error":
+                case LodgeMsg.Error:
                     OnServerError(m.Str("text"), m.Str("code"), m.Str("room"));
                     break;
-                case "admin.members":
+                case LodgeMsg.AdminMembers:
                     AdminMembers?.Invoke(m.List("members").OfType<Dictionary<string, object>>().ToList(),
                                          m.List("channels").OfType<Dictionary<string, object>>().ToList());
                     break;
-                case "admin.purged":
+                case LodgeMsg.AdminPurged:
                     AdminPurged?.Invoke(m);
                     break;
-                case "admin.invited":
+                case LodgeMsg.AdminInvited:
                     AdminInvited?.Invoke(m.Str("name"), m.Str("role"), m.Str("code"));
                     break;
-                case "cal:events": case "cal:range":
+                case LodgeMsg.CalEvents: case LodgeMsg.CalRange:
                     OnCalendarFrame(m);
                     break;
-                case "admin.invites": case "admin.invite.created": case "devices": case "admin.devices":
+                case LodgeMsg.AdminInvites: case LodgeMsg.AdminInviteCreated: case LodgeMsg.Devices: case LodgeMsg.AdminDevices:
                     OnInviteFrame(m);
                     break;
-                case "lodge.info": case "member.left":
+                case LodgeMsg.LodgeInfo: case LodgeMsg.MemberLeft:
                     OnLeaveFrame(m);
                     break;
-                case "flights.shared": OnFlightShared(m); break;
-                case "flights.data": OnFlightData(m); break;
-                case "flights.routes.shared": OnFlightRoutesShared(m); break;
-                case "flights.routes.data": OnFlightRoutesData(m); break;
-                case "atlas.shared": OnAtlasShared(m); break;
-                case "atlas.data": OnAtlasData(m); break;
-                case "cairn.status": OnCairnStatus(m); break;
-                case "cairn.join": OnCairnJoin(m); break;
-                case "cairn.notices": OnCairnNotices(m); break;
-                case "armory.saved": OnArmorySaved(m); break;
-                case "armory.deleted": OnArmoryDeleted(m); break;
-                case "armory.chars": OnArmoryChars(m); break;
-                case "armory.char": OnArmoryChar(m); break;
-                case "armory.crafters": OnArmoryCrafters(m); break;
-                case "armory.standing": OnArmoryStanding(m); break;
-                case "files.data": case "files.changed": case "files.result": OnFilesFrame(m); break;
-                case "badges.mine": case "badges.member": case "badges.state": case "ladder.data": OnBadgesFrame(m); break;
-                case "realms.status": case "realms.back": OnRealmsFrame(m); break;
-                case "memberpos": OnMemberPos(m); break;
-                case "dataset.data": case "dataset.changed": case "dataset.result": OnDatasetFrame(m); break;
+                case LodgeMsg.FlightsShared: OnFlightShared(m); break;
+                case LodgeMsg.FlightsData: OnFlightData(m); break;
+                case LodgeMsg.FlightsRoutesShared: OnFlightRoutesShared(m); break;
+                case LodgeMsg.FlightsRoutesData: OnFlightRoutesData(m); break;
+                case LodgeMsg.AtlasShared: OnAtlasShared(m); break;
+                case LodgeMsg.AtlasData: OnAtlasData(m); break;
+                case LodgeMsg.CairnStatus: OnCairnStatus(m); break;
+                case LodgeMsg.CairnJoin: OnCairnJoin(m); break;
+                case LodgeMsg.CairnNotices: OnCairnNotices(m); break;
+                case LodgeMsg.ArmorySaved: OnArmorySaved(m); break;
+                case LodgeMsg.ArmoryDeleted: OnArmoryDeleted(m); break;
+                case LodgeMsg.ArmoryChars: OnArmoryChars(m); break;
+                case LodgeMsg.ArmoryChar: OnArmoryChar(m); break;
+                case LodgeMsg.ArmoryCrafters: OnArmoryCrafters(m); break;
+                case LodgeMsg.ArmoryStanding: OnArmoryStanding(m); break;
+                case LodgeMsg.FilesData: case LodgeMsg.FilesChanged: case LodgeMsg.FilesResult: OnFilesFrame(m); break;
+                case LodgeMsg.BadgesMine: case LodgeMsg.BadgesMember: case LodgeMsg.BadgesState: case LodgeMsg.LadderData: OnBadgesFrame(m); break;
+                case LodgeMsg.RealmsStatus: case LodgeMsg.RealmsBack: OnRealmsFrame(m); break;
+                case LodgeMsg.MemberPos: OnMemberPos(m); break;
+                case LodgeMsg.DatasetData: case LodgeMsg.DatasetChanged: case LodgeMsg.DatasetResult: OnDatasetFrame(m); break;
             }
         }
 
@@ -807,9 +808,9 @@ namespace ElansAddonHub.Lodge
         public Dictionary<string, object> BuildGameMessage()
         {
             var vis = Invisible ? "invisible" : "visible";
-            if (Settings.ShareGameOff) return new Dictionary<string, object> { ["t"] = "game", ["share"] = false, ["visibility"] = vis };
+            if (Settings.ShareGameOff) return new Dictionary<string, object> { ["t"] = LodgeMsg.Game, ["share"] = false, ["visibility"] = vis };
             var c = Presence.Current;
-            var obj = new Dictionary<string, object> { ["t"] = "game", ["playing"] = Presence.Playing, ["visibility"] = vis };
+            var obj = new Dictionary<string, object> { ["t"] = LodgeMsg.Game, ["playing"] = Presence.Playing, ["visibility"] = vis };
             if (c != null)
             {
                 obj["name"] = c.Name; obj["realm"] = c.Realm; obj["class"] = c.Class; obj["classFile"] = c.ClassFile;
@@ -1204,10 +1205,10 @@ namespace ElansAddonHub.Lodge
         }
 
         public Task React(MessageVM msg, string emoji) =>
-            Send(new Dictionary<string, object> { ["t"] = "react", ["id"] = msg.Id, ["emoji"] = emoji });
-        public Task PinMessage(string id) => Send(new Dictionary<string, object> { ["t"] = "pin", ["id"] = id });
+            Send(new Dictionary<string, object> { ["t"] = LodgeMsg.React, ["id"] = msg.Id, ["emoji"] = emoji });
+        public Task PinMessage(string id) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Pin, ["id"] = id });
         public Task UnpinMessage(string id, string channel) =>
-            Send(new Dictionary<string, object> { ["t"] = "unpin", ["id"] = id, ["channel"] = channel });
+            Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Unpin, ["id"] = id, ["channel"] = channel });
 
         Dictionary<int, DateTime> TypingMap(string channel)
         {
@@ -1283,7 +1284,7 @@ namespace ElansAddonHub.Lodge
                 SettingsStore.Save(Settings);
                 Error?.Invoke("Others can see messages you send, even while you appear offline");
             }
-            var obj = new Dictionary<string, object> { ["t"] = "msg", ["channel"] = Selected?.Id, ["text"] = text ?? "" };
+            var obj = new Dictionary<string, object> { ["t"] = LodgeMsg.Msg, ["channel"] = Selected?.Id, ["text"] = text ?? "" };
             if (replyTo != null) obj["replyTo"] = replyTo;
             if (fileId != null) obj["file"] = new Dictionary<string, object> { ["id"] = fileId };
             return Send(obj);
@@ -1300,13 +1301,13 @@ namespace ElansAddonHub.Lodge
                 ["slots"] = new Dictionary<string, object> { ["tank"] = (double)tank, ["healer"] = (double)healer, ["dps"] = (double)dps },
             };
             if (!now) lfg["start"] = (double)Ms(startLocal.ToUniversalTime());
-            return Send(new Dictionary<string, object> { ["t"] = "msg", ["channel"] = Selected?.Id, ["kind"] = "lfg", ["text"] = title ?? "", ["lfg"] = lfg });
+            return Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Msg, ["channel"] = Selected?.Id, ["kind"] = "lfg", ["text"] = title ?? "", ["lfg"] = lfg });
         }
-        public Task LfgJoin(MessageVM m, string role) => Send(new Dictionary<string, object> { ["t"] = "lfg:join", ["id"] = m.Id, ["role"] = role });
-        public Task LfgMaybe(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = "lfg:maybe", ["id"] = m.Id });
-        public Task LfgLeave(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = "lfg:leave", ["id"] = m.Id });
-        public Task LfgClose(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = "lfg:close", ["id"] = m.Id });
-        public Task LfgCancel(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = "lfg:cancel", ["id"] = m.Id });
+        public Task LfgJoin(MessageVM m, string role) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgJoin, ["id"] = m.Id, ["role"] = role });
+        public Task LfgMaybe(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgMaybe, ["id"] = m.Id });
+        public Task LfgLeave(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgLeave, ["id"] = m.Id });
+        public Task LfgClose(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgClose, ["id"] = m.Id });
+        public Task LfgCancel(MessageVM m) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.LfgCancel, ["id"] = m.Id });
 
         readonly HashSet<string> lfgReminded = new HashSet<string>();
         public static readonly TimeSpan LfgRemindBefore = TimeSpan.FromMinutes(10);
@@ -1337,15 +1338,15 @@ namespace ElansAddonHub.Lodge
                 }
         }
 
-        public Task Edit(string id, string text) => Send(new Dictionary<string, object> { ["t"] = "edit", ["id"] = id, ["text"] = text });
-        public Task Delete(string id) => Send(new Dictionary<string, object> { ["t"] = "delete", ["id"] = id });
+        public Task Edit(string id, string text) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Edit, ["id"] = id, ["text"] = text });
+        public Task Delete(string id) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Delete, ["id"] = id });
 
         DateTime lastTyping;
         public void Typing()
         {
             if (!Online || (DateTime.UtcNow - lastTyping).TotalSeconds < 3) return;
             lastTyping = DateTime.UtcNow;
-            _ = Send(new Dictionary<string, object> { ["t"] = "typing", ["channel"] = Selected?.Id });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Typing, ["channel"] = Selected?.Id });
         }
 
         // ================================================================ files
@@ -1446,14 +1447,14 @@ namespace ElansAddonHub.Lodge
             }
             pendingMuted = pendingDeaf = false;
             MyRoom = room;
-            _ = Send(new Dictionary<string, object> { ["t"] = "state", ["muted"] = voice.Muted, ["deaf"] = voice.Deafened });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.State, ["muted"] = voice.Muted, ["deaf"] = voice.Deafened });
             if (!pendingQuiet) Sounds.Join();
             SyncRooms();
             Changed?.Invoke();
         }
 
         void SendVoice(string room) =>
-            _ = Send(new Dictionary<string, object> { ["t"] = "voice", ["room"] = room, ["on"] = true }); // "on" for 1.x servers
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Voice, ["room"] = room, ["on"] = true }); // "on" for 1.x servers
 
         public void LeaveVoice(bool tellServer = true)
         {
@@ -1462,7 +1463,7 @@ namespace ElansAddonHub.Lodge
             MyRoom = null;
             voice?.Dispose();
             voice = null;
-            if (tellServer && client != null) _ = Send(new Dictionary<string, object> { ["t"] = "voice", ["room"] = null, ["on"] = false });
+            if (tellServer && client != null) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Voice, ["room"] = null, ["on"] = false });
             if (tellServer) Sounds.Leave();
             foreach (var x in Members) x.Speaking = false;
             SyncRooms();
@@ -1475,7 +1476,7 @@ namespace ElansAddonHub.Lodge
             voice.Muted = muted || deaf; // deafened people can't talk either
             voice.Deafened = deaf;
             voice.Volume = deaf ? 0 : (float)(Settings.VoiceVolume ?? 1);
-            _ = Send(new Dictionary<string, object> { ["t"] = "state", ["muted"] = voice.Muted, ["deaf"] = deaf });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.State, ["muted"] = voice.Muted, ["deaf"] = deaf });
             Changed?.Invoke();
         }
 
@@ -1576,7 +1577,7 @@ namespace ElansAddonHub.Lodge
         {
             EvaluateAuto();
             Auto.MarkSent(Clock(), Auto.Status, Auto.Note);
-            _ = Send(new Dictionary<string, object> { ["t"] = "status", ["status"] = Auto.Status, ["note"] = Auto.Note, ["visibility"] = Invisible ? "invisible" : "visible" });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Status, ["status"] = Auto.Status, ["note"] = Auto.Note, ["visibility"] = Invisible ? "invisible" : "visible" });
         }
 
         // every 100 ms: send an automatic status change when it really changed (debounced to 2 s)
@@ -1586,7 +1587,7 @@ namespace ElansAddonHub.Lodge
             EvaluateAuto();
             if (Auto.TrySend(Clock(), out var st, out var note))
             {
-                _ = Send(new Dictionary<string, object> { ["t"] = "status", ["status"] = st, ["note"] = note, ["visibility"] = Invisible ? "invisible" : "visible" });
+                _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Status, ["status"] = st, ["note"] = note, ["visibility"] = Invisible ? "invisible" : "visible" });
                 Changed?.Invoke();
             }
         }
@@ -1614,33 +1615,33 @@ namespace ElansAddonHub.Lodge
 
         public void RequestProfile(string name)
         {
-            if (SupportsProfile && !string.IsNullOrEmpty(name)) _ = Send(new Dictionary<string, object> { ["t"] = "profile:get", ["name"] = name });
+            if (SupportsProfile && !string.IsNullOrEmpty(name)) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ProfileGet, ["name"] = name });
         }
 
         // own profile: only the fields given are changed (the server validates everything and answers with profile:data)
         public Task SaveProfile(Dictionary<string, object> fields)
         {
-            fields["t"] = "profile:set";
+            fields["t"] = LodgeMsg.ProfileSet;
             return Send(fields);
         }
 
         // owner only: back to the default avatar and accent
         public void ResetProfile(string name, bool clearText = false) =>
-            _ = Send(new Dictionary<string, object> { ["t"] = "profile:reset", ["name"] = name, ["clearText"] = clearText });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ProfileReset, ["name"] = name, ["clearText"] = clearText });
 
         // ================================================================ officers and the guild master
 
-        public void RequestAdmin() => _ = Send(new Dictionary<string, object> { ["t"] = "admin.members" });
-        public void Invite(string name, string role) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.invite", ["name"] = name, ["role"] = role });
-        public void SetRole(string name, string role) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.role", ["name"] = name, ["role"] = role });
-        public void RemoveMember(string name) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.remove", ["name"] = name });
+        public void RequestAdmin() => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminMembers });
+        public void Invite(string name, string role) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminInvite, ["name"] = name, ["role"] = role });
+        public void SetRole(string name, string role) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminRole, ["name"] = name, ["role"] = role });
+        public void RemoveMember(string name) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminRemove, ["name"] = name });
         // owner (server 2.22): take everything this member shared with the Atlas back out; they stay a member
-        public void RevertAtlas(string name) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.purge", ["name"] = name, ["atlasOnly"] = true });
+        public void RevertAtlas(string name) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminPurge, ["name"] = name, ["atlasOnly"] = true });
         public void AddChannel(string name, string type, string minRole, int max) =>
-            _ = Send(new Dictionary<string, object> { ["t"] = "admin.channel.add", ["name"] = name, ["type"] = type, ["minRole"] = minRole, ["max"] = max });
-        public void RemoveChannel(string id) => _ = Send(new Dictionary<string, object> { ["t"] = "admin.channel.remove", ["id"] = id });
-        public void Kick(MemberVM m) => _ = Send(new Dictionary<string, object> { ["t"] = "mod.kick", ["id"] = m.Id });
-        public void ServerMute(MemberVM m, bool on) => _ = Send(new Dictionary<string, object> { ["t"] = "mod.mute", ["id"] = m.Id, ["on"] = on });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminChannelAdd, ["name"] = name, ["type"] = type, ["minRole"] = minRole, ["max"] = max });
+        public void RemoveChannel(string id) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AdminChannelRemove, ["id"] = id });
+        public void Kick(MemberVM m) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ModKick, ["id"] = m.Id });
+        public void ServerMute(MemberVM m, bool on) => _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ModMute, ["id"] = m.Id, ["on"] = on });
 
         public bool CanModerateMember(MemberVM m) => CanModerate && m != null && !m.IsMe && MemberVM.RoleLevel(m.Role) < MemberVM.RoleLevel(MyRole);
 

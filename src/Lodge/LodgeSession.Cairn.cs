@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Atlas;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -43,7 +44,7 @@ namespace ElansAddonHub.Lodge
         void SendCairnSharing()
         {
             if (!SupportsCairnData || IsGuestNow) return;
-            _ = Send(new Dictionary<string, object> { ["t"] = "atlas.sharing", ["on"] = CairnSharingOn });
+            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AtlasSharing, ["on"] = CairnSharingOn });
         }
 
         void OnCairnStatus(Dictionary<string, object> m)

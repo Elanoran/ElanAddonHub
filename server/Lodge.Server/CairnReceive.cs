@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -473,7 +474,7 @@ public sealed class CairnModule : IModule
         var j = link.Join;
         var o = new JsonObject
         {
-            ["t"] = "cairn.join", ["env"] = link.EnvPath, ["atlas"] = hub.Cfg.AtlasEnabled, ["cairnHost"] = link.Host, ["contributing"] = hub.Cairn.Enabled,
+            ["t"] = LodgeMsg.CairnJoin, ["env"] = link.EnvPath, ["atlas"] = hub.Cfg.AtlasEnabled, ["cairnHost"] = link.Host, ["contributing"] = hub.Cairn.Enabled,
             ["suggestedUrl"] = CairnSign.TryNormalizeUrl(hub.Cfg.PublicUrl, out var su, out _) ? su : "",
             ["standing"] = Receiver.Standing.Length > 0 ? Receiver.Standing : (hub.Cairn.Enabled ? "unknown" : "off"),
             ["receiveUntil"] = Receiver.ReceiveUntil, ["serving"] = Receiver.Serving,
@@ -541,7 +542,7 @@ public sealed class CairnModule : IModule
         return Leader(m) ? all : all.Where(n => (string)n["level"] == "critical").ToList();
     }
 
-    JsonObject NoticesJson(Member m) => new() { ["t"] = "cairn.notices", ["list"] = new JsonArray(NoticesFor(m).Select(n => (JsonNode)n).ToArray()) };
+    JsonObject NoticesJson(Member m) => new() { ["t"] = LodgeMsg.CairnNotices, ["list"] = new JsonArray(NoticesFor(m).Select(n => (JsonNode)n).ToArray()) };
 
     public Task TellNotices() => Task.WhenAll(hub.Members.Where(m => m.Personal).ToList().Select(m => hub.Send(m, NoticesJson(m))));
 
@@ -597,7 +598,7 @@ public sealed class CairnModule : IModule
     public JsonObject StatusFor(string login, bool personal, string role)
     {
         var deny = Check(login, personal, role);
-        var o = new JsonObject { ["t"] = "cairn.status", ["entitled"] = deny == null, ["sharing"] = personal && Sharing.IsOn(Identity(login)) };
+        var o = new JsonObject { ["t"] = LodgeMsg.CairnStatus, ["entitled"] = deny == null, ["sharing"] = personal && Sharing.IsOn(Identity(login)) };
         if (deny is { } d) { o["why"] = d.reason; o["text"] = d.error; }
         var h = Receiver.Current;
         if (deny == null && h != null) { o["day"] = h.Day; o["seq"] = h.Seq; }
@@ -619,32 +620,32 @@ public sealed class CairnModule : IModule
     {
         switch (type)
         {
-            case "cairn.join.get":
+            case LodgeMsg.CairnJoinGet:
             {
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 if (!Leader(me)) { await hub.Error(me, "Your rank can't see that"); return true; }
                 await hub.Send(me, JoinJson());
                 return true;
             }
-            case "admin.cairn":
+            case LodgeMsg.AdminCairn:
             {
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 await SetJoin(me, m);
                 return true;
             }
-            case "cairn.notices.get":
+            case LodgeMsg.CairnNoticesGet:
             {
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 await hub.Send(me, NoticesJson(me));
                 return true;
             }
-            case "cairn.notice.seen":
+            case LodgeMsg.CairnNoticeSeen:
             {
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); return true; }
                 await NoticesSeen(me, m);
                 return true;
             }
-            case "atlas.sharing":
+            case LodgeMsg.AtlasSharing:
             {
                 if (!Enabled) return false;
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
@@ -658,7 +659,7 @@ public sealed class CairnModule : IModule
                 await hub.Send(me, StatusFor(me.Name, me.Personal, me.Role));
                 return true;
             }
-            case "cairn.status":
+            case LodgeMsg.CairnStatus:
             {
                 if (!Enabled) return false;
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }

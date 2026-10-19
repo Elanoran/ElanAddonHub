@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -18,7 +19,7 @@ public partial class ChatModule
     {
         var msg = new JsonObject
         {
-            ["t"] = "msg", ["channel"] = ch.Id,
+            ["t"] = LodgeMsg.Msg, ["channel"] = ch.Id,
             ["id"] = Guid.NewGuid().ToString("N")[..12],
             ["at"] = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
             ["from"] = me.Name, ["fromId"] = me.Id, ["text"] = Cal.Fallback(ev),
@@ -49,6 +50,6 @@ public partial class ChatModule
             s.MarkDirty();
         }
         QueueFlush(s);
-        await hub.Broadcast(new JsonObject { ["t"] = "edited", ["channel"] = ch.Id, ["id"] = id, ["text"] = text, ["card"] = true }, Viewers(ch));
+        await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Edited, ["channel"] = ch.Id, ["id"] = id, ["text"] = text, ["card"] = true }, Viewers(ch));
     }
 }

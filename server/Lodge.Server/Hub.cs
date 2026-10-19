@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -272,7 +273,7 @@ public partial class LodgeHub
         foreach (var ch in visible.Where(c => c.Type == "text")) { history[ch.Id] = Chat.HistoryFor(ch.Id); pins[ch.Id] = Chat.Pins.For(ch.Id); }
         return new JsonObject
         {
-            ["t"] = "welcome", ["you"] = me.Id, ["name"] = me.Name, ["role"] = me.Role, ["server"] = Version,
+            ["t"] = LodgeMsg.Welcome, ["you"] = me.Id, ["name"] = me.Name, ["role"] = me.Role, ["server"] = Version,
             ["maxFileMb"] = Cfg.MaxFileMb,
             ["canShareFiles"] = Roles.Can(me.Role, Perm.ShareFiles),
             ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
@@ -327,12 +328,12 @@ public partial class LodgeHub
             try { m = JsonNode.Parse(Encoding.UTF8.GetString(msg.GetBuffer(), 0, (int)msg.Length))?.AsObject(); } catch { continue; }
             if (m == null) continue;
             var type = J.Str(m, "t") ?? "";
-            if (type != "msg" && !me.Budget.Control.TryTake())
+            if (type != LodgeMsg.Msg && !me.Budget.Control.TryTake())
             {
                 if (me.CountDrop(Clock) > FloodDropsPerMinute) { await Disconnect(me, "Too many messages - slow down"); return; }
                 continue;
             }
-            if (type == "ping") { me.Pings = true; await Send(me, new JsonObject { ["t"] = "pong" }); continue; }
+            if (type == LodgeMsg.Ping) { me.Pings = true; await Send(me, new JsonObject { ["t"] = LodgeMsg.Pong }); continue; }
             // a message of the wrong shape must cost that message only, never the connection
             try
             {
@@ -355,7 +356,7 @@ public partial class LodgeHub
     // code (2.8, optional): a machine-readable reason next to the text - "rate", "room-full" (with the room id)
     public Task Error(Member to, string text, string code = null, string room = null)
     {
-        var o = new JsonObject { ["t"] = "error", ["text"] = text };
+        var o = new JsonObject { ["t"] = LodgeMsg.Error, ["text"] = text };
         if (code != null) o["code"] = code;
         if (room != null) o["room"] = room;
         return Send(to, o);
@@ -403,12 +404,12 @@ public partial class LodgeHub
 
     public Task BroadcastJoin(Member me) =>
         Task.WhenAll(members.Values.Where(v => v.Id != me.Id && CanSee(v, me))
-            .Select(v => Send(v, new JsonObject { ["t"] = "join", ["user"] = UserFor(me, v) })));
+            .Select(v => Send(v, new JsonObject { ["t"] = LodgeMsg.Join, ["user"] = UserFor(me, v) })));
 
     // `gone` is already out of the member table
     public Task BroadcastLeave(Member gone) =>
         Task.WhenAll(members.Values.Where(v => CanSee(v, gone))
-            .Select(v => Send(v, new JsonObject { ["t"] = "leave", ["id"] = gone.Id })));
+            .Select(v => Send(v, new JsonObject { ["t"] = LodgeMsg.Leave, ["id"] = gone.Id })));
 
     // apply a change that may alter who can see `me` (visibility, voice room): viewers who gain sight get a join,
     // who lose it a leave, who keep it an update
@@ -422,10 +423,10 @@ public partial class LodgeHub
         var sends = new List<Task>();
         foreach (var v in members.Values)
         {
-            if (v.Id == me.Id) { sends.Add(Send(v, new JsonObject { ["t"] = "user", ["user"] = UserFor(me, v) })); continue; }
+            if (v.Id == me.Id) { sends.Add(Send(v, new JsonObject { ["t"] = LodgeMsg.User, ["user"] = UserFor(me, v) })); continue; }
             bool was = before.Contains(v.Id), now = CanSee(v, me);
-            if (now) sends.Add(Send(v, new JsonObject { ["t"] = was ? "user" : "join", ["user"] = UserFor(me, v) }));
-            else if (was) sends.Add(Send(v, new JsonObject { ["t"] = "leave", ["id"] = me.Id }));
+            if (now) sends.Add(Send(v, new JsonObject { ["t"] = was ? LodgeMsg.User : LodgeMsg.Join, ["user"] = UserFor(me, v) }));
+            else if (was) sends.Add(Send(v, new JsonObject { ["t"] = LodgeMsg.Leave, ["id"] = me.Id }));
         }
         await Task.WhenAll(sends);
     }
@@ -438,13 +439,13 @@ public partial class LodgeHub
     {
         if (!m.Invisible) return BroadcastUser(m);
         return Task.WhenAll(members.Values.Where(v => v.Id == m.Id || Roles.Can(v.Role, Perm.SeeInvisible))
-            .Select(v => Send(v, new JsonObject { ["t"] = "user", ["user"] = UserFor(m, v) })));
+            .Select(v => Send(v, new JsonObject { ["t"] = LodgeMsg.User, ["user"] = UserFor(m, v) })));
     }
 
     // avatar/accent changed: everyone who can see the member (and the member) gets a small "profile" update
     public Task BroadcastProfile(Member m)
     {
-        var msg = new JsonObject { ["t"] = "profile", ["id"] = m.Id, ["name"] = m.Name, ["avatarId"] = m.Profile?.AvatarId, ["accent"] = m.Profile?.Accent, ["displayName"] = m.Profile?.DisplayName ?? "" };
+        var msg = new JsonObject { ["t"] = LodgeMsg.Profile, ["id"] = m.Id, ["name"] = m.Name, ["avatarId"] = m.Profile?.AvatarId, ["accent"] = m.Profile?.Accent, ["displayName"] = m.Profile?.DisplayName ?? "" };
         return Broadcast(msg, v => CanSee(v, m));
     }
 

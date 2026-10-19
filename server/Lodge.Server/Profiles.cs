@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -293,9 +294,9 @@ public class ProfileModule : IModule
     {
         switch (type)
         {
-            case "profile:set": await Set(me, m); return true;
-            case "profile:get": await Get(me, m); return true;
-            case "profile:reset": await Reset(me, m); return true;
+            case LodgeMsg.ProfileSet: await Set(me, m); return true;
+            case LodgeMsg.ProfileGet: await Get(me, m); return true;
+            case LodgeMsg.ProfileReset: await Reset(me, m); return true;
         }
         return false;
     }
@@ -384,7 +385,7 @@ public class ProfileModule : IModule
         }
         if (err != null) { await hub.Error(me, err); return; }
         if (!saved) await hub.Error(me, "The server couldn't save your profile - it may be gone after a restart");
-        await hub.Send(me, new JsonObject { ["t"] = "profile:data", ["profile"] = OwnView(me) });
+        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.ProfileData, ["profile"] = OwnView(me) });
         if (publicChanged) await hub.BroadcastProfile(me);
     }
 
@@ -407,7 +408,7 @@ public class ProfileModule : IModule
     {
         var name = m["name"] is JsonValue v && v.TryGetValue<string>(out var s) ? Names.Normalize(s) : "";
         var view = name.Length == 0 ? new JsonObject { ["name"] = "", ["found"] = false } : Lookup(me, name);
-        await hub.Send(me, new JsonObject { ["t"] = "profile:data", ["profile"] = view });
+        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.ProfileData, ["profile"] = view });
     }
 
     // owner only: back to the default avatar and accent, no display name (and optionally clear the texts)
@@ -429,10 +430,10 @@ public class ProfileModule : IModule
         hub.Log.LogInformation("{By} reset the profile of {Name}", me.Name, name);
         if (online != null)
         {
-            await hub.Send(online, new JsonObject { ["t"] = "profile:data", ["profile"] = OwnView(online) });
+            await hub.Send(online, new JsonObject { ["t"] = LodgeMsg.ProfileData, ["profile"] = OwnView(online) });
             await hub.BroadcastProfile(online);
         }
-        await hub.Send(me, new JsonObject { ["t"] = "profile:data", ["profile"] = Lookup(me, name) });
+        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.ProfileData, ["profile"] = Lookup(me, name) });
     }
 
     // what `viewer` gets for `name`. An invisible member looks exactly like an offline one to everyone who may not see
