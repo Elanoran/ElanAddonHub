@@ -1,5 +1,16 @@
 # Lodge security notes
 
+**What we protect against.** A Lodge is a small private server that friends join with an invite; an invite can point an Outpost at
+anyone's server. So we guard against three things: a hostile member or guest on a Lodge (floods, oversized or malformed messages,
+pretending to be someone else, files that run something), a hostile or hacked Lodge server talking to your Outpost (it must not be able to
+crash it, fill its memory or disk, fake who said something, or reach anything on your PC), and a forged Cairn or update (Cairn data,
+Cairn notices and Outpost releases are signed, and only a valid signature is accepted). The sections below describe the protections,
+newest at the bottom; "Current protections" sums them up.
+
+**Reporting a problem.** Please don't put the details of a security problem in a public issue. Open an
+[issue](https://github.com/Elanoran/ElanAddonHub/issues) that only says you have a security problem to report, and we'll arrange a private
+way to send the details. We fix what we can confirm and credit you in the changelog if you like.
+
 ## 2.2.0 hardening (from the security review of 1.4.0)
 
 | # | Finding | Fix |
@@ -334,28 +345,61 @@ The Outpost side (same release train): manifest folders, ids and game versions m
 - Text: the status note gets the names' cleaning (bidi, zero-width and control characters out). A failed admin request shows only the server's
   own messages (anything else is a plain text; the detail stays in the log); uploads record only the verified name.
 
+## The Outpost's side (Outpost 3.1.1)
+
+The Outpost treats every Lodge as possibly hostile:
+
+- Frames: the same `LodgeJson` rules as the server (depth, counts, duplicate keys, UTF-8). A frame from a Lodge is read to at most 8 MB, a
+  bigger one drops the connection as soon as it passes the cap; more than 2000 frames (or 64 MB) waiting for the window also drops it (a
+  reconnect starts over with a fresh welcome). A Lodge's HTTP answers (`/exchange`, uploads, errors) are read to at most 64 KB.
+- Downloads from a Lodge (chat files, chat images, shared files, the Classic data) stop at the size the Lodge announced (never more than
+  1 GB), after 30 seconds without data, and at an overall time limit that grows with the size.
+- Voice plays only members of your own voice room (at most 64 at once); a frame from anyone else is dropped.
+- Text: names, status notes, pinned text, file names, reply and reaction names are cleaned of control, bidi and zero-width characters
+  before they are shown, as messages are.
+- Files: the shared list of dangerous types (`Elans.Shared.DangerousFiles`) is warned about before a chat file is downloaded or a shared
+  file is saved, and refused on upload.
+- Invite links: a link with user info before the host (`name@host`) is refused, so a link can't show one address and lead to another;
+  nothing is requested before you press Join. A saved sign-in is sent only to the same scheme, host and port it was made for.
+- Signatures: an update is installed only with a valid release signature (an unsigned manifest is refused); Cairn data and Cairn notices
+  must carry the Cairn's signature, and a Cairn dataset older than the one already stored is refused.
+
+## Current protections (summary)
+
+- Access: invite links that work once and turn into a per-device token; codes and tokens only in a header, stored hashed, compared in
+  constant time; a wrong-code lockout per address (IPv4, or IPv6 /64); a request rate limit per address; ranks checked by the server on
+  every message.
+- Abuse: per-person budgets for chat, control messages, voice, uploads, downloads, search and every shared-data feature (guests per address);
+  sustained floods close the connection; storage, file count and history are bounded.
+- Input: one JSON engine with fixed limits on both sides; every field validated by the side that receives it; names and text cleaned; file
+  names cleaned, dangerous types and zips containing them refused.
+- Privacy: invisible members, position and profile visibility decided only by the server; nothing secret logged; the admin endpoint only on
+  loopback.
+- The host: a locked-down systemd service, private file modes, atomic writes, backups that hold the codes kept `0600`.
+
+## What the operator takes care of
+
+- The reverse proxy must pass the visitor's real address (`X-Forwarded-For`) and must not let a visitor set it. The server takes
+  `X-Forwarded-For` / `-Proto` only from loopback and the `LODGE_TRUSTED_PROXIES` networks (`TrustedProxies`, tested with the real ASP.NET
+  middleware in `TrustedProxyTests`); see `deploy/reverse-proxy.md`.
+- Budgets and the lockout are kept in memory: a restart starts them over.
+- The shared guest code, if enabled, is only as private as the people who have it; prefer personal invites.
+- Permanent codes that were never retired stay valid (that is the compatibility promise). Retire them (`lodge-admin retire-code <name>`)
+  once a person's PCs have their own keys.
+- Backups contain the invite codes and the Lodge's Cairn key: keep them as private as the server.
+
 ## Tests
 
 ```bash
-cd server                                                       # server/global.json: the .NET 10 SDK (the repo root pins 8 for the Outpost)
-dotnet test Lodge.Tests                                          # 705 unit tests (fake clock, temp folders)
+dotnet test shared/Elans.Shared.Tests                            # the shared protocol, JSON engine and signed formats, fuzz tests included
+cd server                                                        # server/global.json: the .NET 10 SDK
+dotnet test Lodge.Tests                                          # the server's unit tests (fake clock, temp folders)
 dotnet build -c Release Lodge.Server
 cd ..
-python server/tests/security_integration.py                     # 150 checks against local servers (python -X utf8 on Windows)
-sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root: 70 checks
-sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, SDK check, 49 checks
+python server/tests/security_integration.py                     # checks against local servers (python -X utf8 on Windows)
+sudo bash server/tests/lodge_admin_test.sh                      # Linux/WSL, as root
+sudo bash server/tests/lodge_ops_test.sh                        # Linux/WSL, as root: backup/restore/update/rollback, SDK check
 ```
 
-All use synthetic codes and temp folders; none talks to a real lodge.
-
-## Remaining risks
-
-- Homoglyphs from other scripts (e.g. Cyrillic "а" for Latin "a") are not folded by NFKC; guests still carry the
-  Initiate frame and "guest" flag, so they can't take a rank, only a similar-looking name.
-- The wrong-code lockout and rate limits trust the client IP from the reverse proxy; if the proxy allows spoofed
-  `X-Forwarded-For`, per-IP limits weaken. Proxy/NPM settings are host-side and outside this repo. The server itself takes
-  `X-Forwarded-For`/`-Proto` only from loopback and the `LODGE_TRUSTED_PROXIES` networks (`TrustedProxies`, tested with the real
-  ASP.NET middleware in `TrustedProxyTests`: a neighbour of the proxy, an outsider and a spoofed chain keep their own address).
-- Budgets are in memory: a restart resets them (and the strike table).
-- The shared guest code, if enabled, is only as private as the people who have it; prefer personal codes or guest invites.
-- Permanent codes that were never retired stay valid (that is the compatibility promise). Retire them (`lodge-admin retire-code <name>`) once a person's PCs have their own keys.
+All use synthetic codes and temp folders; none talks to a real lodge. The Outpost's side is covered by its self-test
+(`Tools/selftest.ps1`, sections such as `lodgehardening` and `lodgefiles`).

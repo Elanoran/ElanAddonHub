@@ -44,6 +44,7 @@ The addons that come with it:
 | **Elan's Toolkit** | For every class: a movable HUD with cast bar, threat bar and flight timer, trainer pins for your professions, gathering pins and a waypoint arrow. |
 | **Elan's Hunter Helper** | Where it all started: pet abilities and where to tame them, Beast Finder, Auto Shot timer, range and dead zone, feeding, stable and more. |
 | **Elan's Paladin Helper** | Seal, aura and blessing reminders, a Seal and Judgement bar, party blessing timers. |
+| **Elan's Priest Helper** | Heal frames with click-casting, Renew and shield timers, a buff manager, the five-second rule and a healer coach. |
 | **Elan's Bags** | One tidy bag window with search, categories and a junk seller. |
 
 ### The Atlas
@@ -148,7 +149,7 @@ Every change since is in the [changelog](src/CHANGELOG.md), also readable inside
 ## Install
 
 1. **Download** `ElansAddonHub.exe` from the [latest release](https://github.com/Elanoran/ElanAddonHub/releases/latest)
-   and put it wherever you like (for example a folder in your user folder). It is one file of about 20 MB.
+   and put it wherever you like (for example a folder in your user folder). It is one file of about 24 MB.
 2. **Start it.** The app is not code-signed, so Windows SmartScreen may say *"Windows protected your PC"*.
    Click **More info**, then **Run anyway**. You only have to do this once.
 3. **First start.** A short guide finds your World of Warcraft folder by itself (or press **Change** and pick any
@@ -156,7 +157,9 @@ Every change since is in the [changelog](src/CHANGELOG.md), also readable inside
 4. **In game**, type `/reload` (or restart WoW if it was running when a new addon was installed).
 5. **Join a Lodge** (optional): click the invite link a friend sent you. Each link works once and signs in only this PC.
 
-**Requirements:** Windows 10 or 11. The app runs on .NET Framework 4.8, which comes with Windows. The browser,
+**Requirements:** Windows 10 or 11 (64-bit) and Microsoft's free **.NET Desktop Runtime 10**, installed once per PC. If it is
+missing, Windows says so with a download link when the Outpost starts: install it, then start the Outpost again
+(or install it beforehand with `winget install Microsoft.DotNet.DesktopRuntime.10`). The browser,
 the world map and video previews use Microsoft Edge WebView2, which is part of Windows 11 and of an up-to-date
 Windows 10; without it the Atlas falls back to its flat maps.
 
@@ -169,7 +172,7 @@ your addons automatically. It can sit in the tray and start with Windows if you 
 2. Quit the Outpost from its tray icon and delete `ElansAddonHub.exe`.
 3. Delete its data folder: `%LOCALAPPDATA%\ElansAddonHub` (settings, caches, the world map pictures and the log).
 4. To remove the addons too, delete their folders in your WoW Forever `Interface\AddOns` folder
-   (`ElansHub`, `ElansToolkit`, `ElansHunterHelper`, `ElansPaladinHelper`, `ElansBags`).
+   (`ElansHub`, `ElansToolkit`, `ElansHunterHelper`, `ElansPaladinHelper`, `ElansPriestHelper`, `ElansBags`).
 
 ## Privacy and safety
 
@@ -190,11 +193,16 @@ your addons automatically. It can sit in the tray and start with Windows if you 
   the Cairn, the Lodge sends its pooled totals (ids and counts, nothing per member), its name and its public address, and
   gets the Cairn's numbers back, which it hands only to members who share. Every request is signed with the Lodge's own
   key; the data is signed by the Cairn and checked by the Outpost before it is used.
-- **Your live position stays on your PC.** The map position Elan's Hub draws into its pixel strip (only when you turn
-  it on, in the game and in the Outpost) is read by the Outpost on your PC and not sent anywhere.
+- **Your live position is yours to share.** The map position Elan's Hub draws into its pixel strip (only when you turn
+  it on, in the game and in the Outpost) is read by the Outpost on your PC. It goes to your Lodge only if you also turn
+  on **Share my map position with the Lodge**, and then only to the members you chose; it is never saved.
 - **Your Lodge key** is stored encrypted for your Windows user and only sent in a request header to your own Lodge.
-- **Unsigned.** The exe is not code-signed (signing costs money every year). Every release is built from this
-  repository, and the app checks the checksum of every update it downloads.
+- **Signed updates, unsigned exe.** The exe is not code-signed (that costs money every year). Every release is built
+  from this repository and signed with the project's release key: the Outpost checks that signature and the checksum
+  of every download before it installs anything, and refuses an update without a valid signature.
+- **A Lodge is not trusted blindly.** The Outpost caps what a Lodge may send (message size, depth and counts, download
+  size and time), cleans names and text before showing them, warns before you open a file type that can run
+  something, plays voice only from members of your room, and never sends a saved sign-in to a different Lodge.
 
 Everything the Outpost may contact, and the switches for it, is listed in Settings > Privacy.
 
@@ -265,7 +273,6 @@ The Outpost and its addons stand on the work of others. Thank you!
 - **[Leaflet](https://leafletjs.com)** 1.9.4 (BSD-2-Clause) and **[three.js](https://threejs.org)** r149 (MIT): the 2D
   and 3D world map engines, built into the app (licence texts in `src/WorldMap/`); the map never loads anything from
   the internet.
-- **[Costura](https://github.com/Fody/Costura)** (MIT): packs everything into one exe.
 - **[Octicons](https://github.com/primer/octicons)** (MIT): the GitHub mark on addon cards.
 - **Paintings and splash art**: original, made by the author for this project with ComfyUI.
 - Item icons, maps and game data are read at runtime from your own WoW install; none of them are in this repository.
@@ -290,12 +297,28 @@ If you are one of these authors and want something credited differently or remov
 <details>
 <summary><b>For developers</b></summary>
 
-Built with WPF on .NET Framework 4.8 (ships with Windows, so there is no runtime to install). How the addons, Elan's
-Hub, the Outpost and the Lodge fit together is in [ARCHITECTURE.md](ARCHITECTURE.md); the look and feel rules are in
-[DESIGN.md](DESIGN.md).
+Built with WPF on .NET 10 (`net10.0-windows`, 64-bit), as one framework-dependent single-file exe; the .NET 10 SDK is
+pinned in `global.json`. How the addons, Elan's Hub, the Outpost and the Lodge fit together is in
+[ARCHITECTURE.md](ARCHITECTURE.md); the look and feel rules are in [DESIGN.md](DESIGN.md).
 
-    cd src
-    dotnet build -c Release            -> src/bin/Release/ElansAddonHub.exe
+    dotnet publish src/ElansAddonHub.csproj -c Release -o src/bin/publish     -> src/bin/publish/ElansAddonHub.exe
+
+The repository:
+
+| Folder | What is in it |
+|---|---|
+| `src/` | the Outpost (WPF app) and its changelog |
+| `addon/` | Elan's Hub, the companion addon, and its tests |
+| `server/` | the Lodge server (`Lodge.Server`), its tests (`Lodge.Tests`, `tests/`), deploy files, [PROTOCOL.md](server/PROTOCOL.md) and [SECURITY.md](server/SECURITY.md) |
+| `shared/` | `Elans.Shared`, the code the Outpost, the Lodge server and the Cairn share: signed formats, address rules and the typed Lodge protocol ([shared/README.md](shared/README.md)) |
+| `Tools/` | the self-test and update-test wrappers and design helpers |
+
+Tests:
+
+    dotnet test shared/Elans.Shared.Tests      the shared library: signatures, address rules, every Lodge message, the JSON engine, fuzz tests
+    cd server && dotnet test Lodge.Tests       the Lodge server
+    Tools\selftest.ps1                         the Outpost's built-in self-test (below)
+    Tools\updatetest.ps1                       the Outpost updating itself end to end, against a local update server (see its header)
 
 Releases are made from the addon repo with `Tools/release.py`:
 
@@ -309,7 +332,7 @@ links, SHA-256 checksums and the changelog.
 ### Running the self-test
 
 `ElansAddonHub.exe --selftest <dir>` runs the built-in checks and writes `result.txt`. Use the wrapper, not the bare
-exe: it builds Release, uses a fresh scratch folder under `%TEMP%` (never the real `%LOCALAPPDATA%\ElansAddonHub`),
+exe: it publishes Release to `src/bin/publish`, uses a fresh scratch folder under `%TEMP%` (never the real `%LOCALAPPDATA%\ElansAddonHub`),
 prints the FAIL lines and the per-section timing, and exits non-zero on new failures:
 
     Tools\selftest.ps1                          what this branch changed vs origin/main (the default)

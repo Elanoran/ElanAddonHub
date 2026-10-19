@@ -1,4 +1,6 @@
-# Lodge protocol (v2.11)
+# Lodge protocol
+
+This describes the Lodge server as of 2.31.1; the sections below say which server version added what.
 
 Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in a browser shows a short
 "you're invited" page. All access needs an invite code: a personal one (tied to a name and a rank,
@@ -6,10 +8,11 @@ Base URL: `https://<site>/lodge` (or a subdomain root). Opening the base URL in 
 shared `LODGE_CODE` (rank: guest). Send codes in the `X-Lodge-Code` header, never in a URL (query strings end
 up in proxy logs); the header wins when both are present. `?code=` is refused by default
 (2.8; `LODGE_ALLOW_QUERY_CODE=true` accepts it for 1.x hubs) - a request carrying `?code=` gets 401 "use the header" (not a strike).
-Every credential check - `/health` with a code, `/ws`, `/files` - shares one wrong-code counter per client IP:
-the 10th wrong code within 15 minutes is still 401, then the IP gets 429 for 15 minutes even with a valid code.
-At most `LODGE_MAX_TRACKED_IPS` addresses are tracked; beyond that unknown addresses share one counter.
-All HTTP requests are also limited to `LODGE_HTTP_PER_MINUTE` per IP (429). New codes are 128-bit (32 hex);
+Every credential check - `/health` with a code, `/ws`, `/files` - shares one wrong-code counter per client address
+(an IPv4 address, or an IPv6 /64: 2.31.1): the 10th wrong code within 15 minutes is still 401, then the address gets 429
+for 15 minutes even with a valid code. At most `LODGE_MAX_TRACKED_IPS` addresses are tracked; beyond that unknown addresses
+share one counter, and while only that shared counter is blocked a valid device token still gets in.
+All HTTP requests are also limited to `LODGE_HTTP_PER_MINUTE` per address (429). New codes are 128-bit (32 hex);
 older shorter codes keep working. Invite links look like `https://<site>/lodge#invite=<code>` - the part after
 `#` never reaches a server.
 
@@ -83,9 +86,9 @@ additions for the list of classes.
   (its `lodge`, also `welcome.lodge`; a `channel`, also `welcome.channels`) are classes in `shared/Elans.Shared/Lodge/AdminMessages.cs`
   (`AdminMembersMsg`, `AdminMember`, `LodgeChannelView`, `InviteView`, `AdminPurgedMsg`, `LodgeInfoMsg`, ...), used by both sides like the LFG ones.
   `admin.invite.created` and `admin.purged` keep `t` after their fields, as before. The server still reads `admin.purge`'s `atlasOnly` from the raw
-  JSON (only a JSON `false` turns it off). Not here: `admin.badges` (badges), `admin.cairn` (the Cairn, not typed yet), `admin.devices` (devices).
+  JSON (only a JSON `false` turns it off). Not here: `admin.badges` (badges), `admin.cairn` (the Cairn), `admin.devices` (devices).
 
-### Limits per person (personal code) or per IP (guests), kept across reconnects
+### Limits per person (personal code) or per address (guests; an IPv6 /64 is one address), kept across reconnects
 
 chat 8 per 10 s ("Slow down" error) · other text messages burst 30 then 5/s (dropped) · voice 60 packets/s burst
 150 and 24 KB/s (dropped quietly; a 20 ms Opus stream uses 50 packets and ~4 KB/s) · "typing" is passed on at most
@@ -484,7 +487,7 @@ The content is a single file (for `classic`: a zip holding the ORIGINAL upstream
 
 The Lodge asks the Blizzard Game Data API (client credentials from its own environment, never sent to a client) and pushes the status of the WoW Forever realms. Feature `realms` is in the welcome `features` only while `LODGE_BNET_CLIENT_ID` and `LODGE_BNET_CLIENT_SECRET` are set. Nothing is asked of the server: the client sends no message for this. Everybody connected (members and guests: it is public information) receives:
 
-- `realms.status { available, region, realms: [ { id, name, slug, ruleset, status, population?, hasQueue?, namespace } ], checkedAt, why? }` right after the welcome (once the first poll has finished), whenever something changes, and as a heartbeat every 5 minutes so "checked N min ago" stays honest. `status` is `UP`, `DOWN` or `UNKNOWN`; `ruleset` is `Normal`, `PvP`, `RP`, `RP-PvP`, `Hardcore` or `""` (from the realm's type, with hints in its name or category winning); `id` is the connected realm id; `checkedAt` is unix seconds of the last poll that reached the API. `available: false` means the Forever realms were not found (`why: "Forever realms not found in the Blizzard API"`) or the API could not be reached for three polls in a row (`why` says so); `realms` is then empty. After three failed polls known realms are sent as `UNKNOWN`.
+- `realms.status { available, region, realms: [ { id, name, slug, ruleset, status, namespace, population?, hasQueue? } ], checkedAt, why? }` right after the welcome (once the first poll has finished), whenever something changes, and as a heartbeat every 5 minutes so "checked N min ago" stays honest. `status` is `UP`, `DOWN` or `UNKNOWN`; `ruleset` is `Normal`, `PvP`, `RP`, `RP-PvP`, `Hardcore` or `""` (from the realm's type, with hints in its name or category winning); `id` is the connected realm id; `checkedAt` is unix seconds of the last poll that reached the API. `available: false` means the Forever realms were not found (`why: "Forever realms not found in the Blizzard API"`) or the API could not be reached for three polls in a row (`why` says so); `realms` is then empty. After three failed polls known realms are sent as `UNKNOWN`.
 - `realms.back { realms: [names], checkedAt }`, once, when every realm that was down is up again. The client decides whether to say anything (the Outpost: only if the member turned that on).
 - Typed (stage 2): both are classes in `shared/Elans.Shared/Lodge/RealmMessages.cs` (`RealmsStatusMsg` with its `RealmView` rows, `RealmsBackMsg`),
   used by both sides like the LFG ones (a row is written `id, name, slug, ruleset, status, namespace, population?, hasQueue?`). The Outpost still
@@ -804,7 +807,10 @@ a received frame into its `JsonObject`, `LodgeJson.Serialize` / `SerializeUtf8` 
 one from its class, and `LodgeJsonFields` is the `ILodgeFields` / `ILodgeWriter` the classes read and write through (lenient: a missing or
 wrong-typed field is null / 0 / false). The rules are the same on both sides and live there too: a frame is skipped as a whole unless it
 is strict JSON with an object at the top, at most 64 levels deep (`MaxDepth`, the frame included), with no key twice in one object, valid
-UTF-8 and no lone surrogate in any string or key - all checked while parsing, so a frame that parses never throws when a field is read. Frames are at most 64 KB to the Lodge (`MaxFrameToLodge`, a bigger one closes the connection) and 8 MB from it
+UTF-8 and no lone surrogate in any string or key, at most 20,000 items in any one array or keys in any one object (`MaxItems`),
+1,000,000 values (`MaxValues`) and 100,000 objects and arrays (`MaxContainers`) in all - all checked while parsing (the counts before
+anything is built), so a frame that parses never throws when a field is read.
+Frames are at most 64 KB to the Lodge (`MaxFrameToLodge`, a bigger one closes the connection) and 8 MB from it
 (`MaxFrameFromLodge`: the worst `flights.routes.data` is about 4.5 MB, `atlas.data` comes in pages of about 200 KB); the Outpost stops
 reading a bigger one at the cap and reconnects (`LodgeFrames.ReadAsync`), and reconnects too when more than 2000 frames (or 64 MB) wait for
 its UI (`LodgeInbox`). A Lodge's HTTP JSON answers (`/exchange`, uploads, errors) are read to at most 64 KB (`MaxHttpAnswer`). Where a free-form part feeds a validator written for plain dictionaries (an

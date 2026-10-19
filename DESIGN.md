@@ -22,7 +22,7 @@ Window 14 (`Radius.Window`), card 12 (`Radius.Card`), large control / art thumbn
 chip / pill = half its 24 px height (`Radius.Chip` 12), avatar = circle (`Ellipse`). Nested shapes: inner radius = outer radius - padding.
 
 ## 3. Typography
-Segoe UI (Segoe UI Variable is not used: WPF on .NET Framework maps its weights badly). Mono (`Font.Mono`) for code, paths, ids only.
+Segoe UI (Segoe UI Variable is not used: WPF maps its weights badly). Mono (`Font.Mono`) for code, paths, ids only.
 
 | Style | Size / line | Weight | Colour | Use |
 |---|---|---|---|---|

@@ -60,6 +60,13 @@ check with `ip addr show docker0`), restart lodge, point the proxy at `172.17.0.
 for that route, add `LODGE_TRUSTED_PROXIES=172.16.0.0/12` (so the wrong-code lockout sees real visitor IPs),
 and make sure port 5280 is NOT opened in the host firewall to the internet.
 
+## Visitor addresses
+
+The wrong-code lockout, the request rate limit and the guests' budgets count per visitor address: an IPv4 address, or a whole IPv6 /64
+as one address (one home or server gets a /64, so its addresses are one visitor). That only works when the Lodge sees the visitor's real
+address: the proxy must send `X-Forwarded-For` (the snippets above do), and a proxy that is not on the same machine must be listed in
+`LODGE_TRUSTED_PROXIES`. Without it every visitor looks like the proxy and shares one limit.
+
 ## Check
 
 Send invite codes in the `X-Lodge-Code` header, never in the URL: query strings end up in access logs.

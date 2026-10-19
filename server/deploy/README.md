@@ -120,8 +120,12 @@ files `0640` (`codes.lock` `0660`), starts the service and checks `/health`.
 ## Shared files (2.14): the Files page
 
 Officers and the owner keep named files for the whole lodge (a UI pack, a guide, a build): `data/slots/`, each slot with its newest 3 versions. Everybody
-can see and save them (guests too); only officers and the owner upload, replace (= a new version), roll back or delete. Programs and scripts
-(`.exe .dll .bat .cmd .ps1 .js .msi .lnk ...`) and zips that contain them are refused. An old server simply doesn't show the page.
+can see and save them (guests too); only officers and the owner upload, replace (= a new version), roll back or delete. File types that can
+run something on Windows (programs, scripts, shortcuts, installers, disk images, help files and the like: one list shared with the Outpost)
+and zips that contain them are refused, here and in chat. An old server simply doesn't show the page.
+
+Downloads of chat files and shared files have one budget per person and hour (guests per address): `LODGE_DOWNLOADS_PER_HOUR` (600) and
+`LODGE_DOWNLOAD_MB_PER_HOUR` (2048). Past it the server answers 429 for a while; normal use never gets near it.
 
 After `sudo lodge-update` (the new version arrives with it; nothing else needs to be done) the settings below can go into `/etc/lodge/lodge.env`
 (then `sudo systemctl restart lodge`); defaults in brackets, see `lodge.env.example`:
