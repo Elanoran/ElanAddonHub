@@ -385,24 +385,89 @@ namespace ElansAddonHub.Services
                     text = LodgeJson.Str(await AnswerOf(resp), "error");
                     throw new InvalidOperationException(FilesError((int)resp.StatusCode, text));
                 }
+                long cap = CapFor(expectedSize, HardCeiling);
+                CheckLength(resp, cap);
                 long total = resp.Content.Headers.ContentLength ?? expectedSize;
                 using (var src = await resp.Content.ReadAsStreamAsync())
-                using (var dst = new FileStream(toFile, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var sha = System.Security.Cryptography.SHA256.Create())
                 {
-                    var buf = new byte[81920];
-                    long done = 0;
-                    int n;
-                    while ((n = await src.ReadAsync(buf, 0, buf.Length)) > 0)
-                    {
-                        sha.TransformBlock(buf, 0, n, null, 0);
-                        dst.Write(buf, 0, n);
-                        done += n;
-                        if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total));
-                    }
-                    sha.TransformFinalBlock(new byte[0], 0, 0);
+                    await ToFileCapped(src, toFile, cap, sha, done => { if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total)); }, CancellationToken.None);
                     return LodgeFiles.Hex(sha.Hash);
                 }
+            }
+        }
+
+        // ---- 3.1.1: every download from a Lodge is capped in size and time, so a hostile or broken Lodge can't fill the disk or hold a download
+        // open forever. The cap is what the Lodge announced (a slot version's or a dataset's size, a chat file's size) and never more than
+        // HardCeiling: 1 GiB, the largest file any Lodge server setting allows (LODGE_MAX_FILE_MB / LODGE_FILES_MAX_MB / LODGE_CLASSIC_MAX_MB
+        // all stop at 1024), so an honest Lodge is never cut short. No byte for IdleTimeout = stalled; the whole download has OverallTimeout(cap).
+        // A stopped download's file is deleted.
+        public const long HardCeiling = 1024L * 1024 * 1024;
+        public static TimeSpan IdleTimeout = TimeSpan.FromSeconds(30);
+        public static TimeSpan OverallTimeout(long cap) => TimeSpan.FromMinutes(10) + TimeSpan.FromSeconds(cap / (128.0 * 1024));   // + 128 KB/s
+
+        public sealed class DownloadStoppedException : InvalidOperationException
+        {
+            public DownloadStoppedException(string m) : base(m) { }
+        }
+        public const string TooBigText = "The Lodge sent more than it announced - the download was stopped";
+        public const string StalledText = "The download stalled and was stopped";
+        public const string TooLongText = "The download took too long and was stopped";
+
+        // the announced size when there is one, never above the ceiling
+        public static long CapFor(long announced, long ceiling) => announced > 0 ? Math.Min(announced, ceiling) : ceiling;
+
+        static void CheckLength(HttpResponseMessage resp, long cap)
+        {
+            if (resp.Content.Headers.ContentLength is long len && len > cap) throw new DownloadStoppedException(TooBigText);
+        }
+
+        // copies at most `cap` bytes: more is DownloadStoppedException(TooBigText), no byte for `idle` is StalledText, longer than `overall`
+        // is TooLongText. The caller's own cancellation stays an OperationCanceledException. Returns the bytes copied.
+        public static async Task<long> CopyCapped(Stream src, Stream dst, long cap, System.Security.Cryptography.HashAlgorithm sha, Action<long> onBytes,
+            CancellationToken ct, TimeSpan? idle = null, TimeSpan? overall = null)
+        {
+            using (var all = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            using (var step = CancellationTokenSource.CreateLinkedTokenSource(all.Token))
+            {
+                all.CancelAfter(overall ?? OverallTimeout(cap));
+                var idleFor = idle ?? IdleTimeout;
+                var buf = new byte[81920];
+                long done = 0;
+                while (true)
+                {
+                    step.CancelAfter(idleFor);   // restarts the idle clock for this read
+                    int n;
+                    try { n = await src.ReadAsync(buf, 0, buf.Length, step.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        throw new DownloadStoppedException(all.IsCancellationRequested ? TooLongText : StalledText);
+                    }
+                    if (n <= 0) break;
+                    if (done + n > cap) throw new DownloadStoppedException(TooBigText);
+                    sha?.TransformBlock(buf, 0, n, null, 0);
+                    await dst.WriteAsync(buf, 0, n, ct).ConfigureAwait(false);
+                    done += n;
+                    onBytes?.Invoke(done);
+                }
+                sha?.TransformFinalBlock(new byte[0], 0, 0);
+                return done;
+            }
+        }
+
+        // CopyCapped into a new file; the file is deleted when the copy fails or is stopped
+        public static async Task<long> ToFileCapped(Stream src, string toFile, long cap, System.Security.Cryptography.HashAlgorithm sha, Action<long> onBytes,
+            CancellationToken ct, TimeSpan? idle = null, TimeSpan? overall = null)
+        {
+            try
+            {
+                using (var dst = new FileStream(toFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                    return await CopyCapped(src, dst, cap, sha, onBytes, ct, idle, overall).ConfigureAwait(false);
+            }
+            catch
+            {
+                try { if (File.Exists(toFile)) File.Delete(toFile); } catch { }
+                throw;
             }
         }
 
@@ -458,23 +523,14 @@ namespace ElansAddonHub.Services
                 var res = new DatasetDownload();
                 if (resp.Headers.TryGetValues("X-Sha256", out var hs)) res.HeaderSha = hs.FirstOrDefault();
                 if (resp.Headers.TryGetValues("X-Version", out var hv)) { try { res.HeaderVersion = Uri.UnescapeDataString(hv.FirstOrDefault() ?? ""); } catch { } }
+                long cap = CapFor(expectedSize, HardCeiling);
+                CheckLength(resp, cap);
                 long total = resp.Content.Headers.ContentLength ?? expectedSize;
                 using (var src = await resp.Content.ReadAsStreamAsync())
-                using (var dst = new FileStream(toFile, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var sha = System.Security.Cryptography.SHA256.Create())
                 {
-                    var buf = new byte[81920];
-                    long done = 0;
-                    int n;
-                    while ((n = await src.ReadAsync(buf, 0, buf.Length, ct)) > 0)
-                    {
-                        sha.TransformBlock(buf, 0, n, null, 0);
-                        dst.Write(buf, 0, n);
-                        done += n;
-                        if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total));
-                    }
-                    sha.TransformFinalBlock(new byte[0], 0, 0);
-                    res.Sha256 = LodgeFiles.Hex(sha.Hash); res.Size = done;
+                    res.Size = await ToFileCapped(src, toFile, cap, sha, done => { if (total > 0) progress?.Invoke(Math.Min(1.0, (double)done / total)); }, ct);
+                    res.Sha256 = LodgeFiles.Hex(sha.Hash);
                 }
                 return res;
             }
@@ -510,20 +566,24 @@ namespace ElansAddonHub.Services
             public DownloadException(int status) : base($"Download failed ({status})") { Status = status; }
         }
 
-        public async Task Download(string id, string toFile)
+        // a chat file: at most `cap` bytes (the caller works it out - LodgeSession.ChatFileCap / ImageAutoMax), into toFile + ".part" first;
+        // nothing is left behind when it is stopped
+        public async Task Download(string id, string toFile, long cap, CancellationToken ct = default, TimeSpan? overall = null)
         {
             if (SafeFile.Id(id) == null) throw new InvalidOperationException("That file can't be downloaded");
+            cap = CapFor(cap, HardCeiling);
             using (var req = Request(HttpMethod.Get, "/files/" + id))
-            using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead))
+            using (var resp = await Net.Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct))
             {
                 if (!resp.IsSuccessStatusCode) throw new DownloadException((int)resp.StatusCode);
+                CheckLength(resp, cap);
                 var tmp = toFile + ".part";
                 using (var src = await resp.Content.ReadAsStreamAsync())
-                using (var dst = File.Create(tmp))
-                    await src.CopyToAsync(dst);
+                    await ToFileCapped(src, tmp, cap, null, null, ct, null, overall);
                 if (File.Exists(toFile)) File.Delete(toFile);
                 File.Move(tmp, toFile);
             }
         }
+
     }
 }

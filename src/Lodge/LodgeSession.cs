@@ -1397,7 +1397,7 @@ namespace ElansAddonHub.Lodge
             if (path == null) return;
             try
             {
-                if (!File.Exists(path)) { if (client == null) return; await client.Download(id, path); }
+                if (!File.Exists(path)) { if (client == null) return; await client.Download(id, path, LodgeClient.CapFor(f.Size, FileVM.AutoImageMax), default, ImageTimeout); }
                 var bmp = new BitmapImage();
                 bmp.BeginInit();
                 bmp.CacheOption = BitmapCacheOption.OnLoad; // don't keep the file locked
@@ -1410,7 +1410,7 @@ namespace ElansAddonHub.Lodge
             }
             catch (Exception e)
             {
-                if (e is LodgeClient.DownloadException de && de.Status == 404) failedImages.Add(id);
+                if ((e is LodgeClient.DownloadException de && de.Status == 404) || e is LodgeClient.DownloadStoppedException) failedImages.Add(id);   // 3.1.1: a stopped one is not tried again either
                 Util.Log("image: " + e.Message);
             }
         }
@@ -1418,7 +1418,13 @@ namespace ElansAddonHub.Lodge
         // where a download goes: always inside `dir`, with the cleaned name; null = refused
         public static string DownloadTarget(string dir, FileVM f) => SafeFile.FreePath(dir, f?.Name);
 
-        public Task Download(FileVM f, string target) => client.Download(f.Id, target);
+        public Task Download(FileVM f, string target) => client.Download(f.Id, target, ChatFileCap(f?.Size ?? 0));
+
+        // 3.1.1: how much a chat file download may bring: the size the Lodge announced for it, else the Lodge's MaxFileMb - never more than
+        // LodgeClient.HardCeiling. A picture that is downloaded on its own (LoadImage) stops at FileVM.AutoImageMax and after ImageTimeout.
+        public long ChatFileCap(long announced) => announced > 0 ? LodgeClient.CapFor(announced, LodgeClient.HardCeiling) : Math.Min(MaxFileMb * 1024L * 1024L, LodgeClient.HardCeiling);
+        public static TimeSpan ImageTimeout = TimeSpan.FromMinutes(2);
+
 
         // ================================================================ voice
 
