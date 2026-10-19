@@ -78,7 +78,17 @@ namespace ElansAddonHub.Lodge
         public async Task<string> SaveAsync(SlotVM slot, SlotVersionInfo ver, string dest, TextBlock errorSink)
         {
             if (slot == null || ver == null) return null;
+            // 3.1.1: a type that can run something when opened is warned about first, like a chat file before its download
+            if (Elans.Shared.DangerousFiles.IsDangerous(ver.FileName))
+            {
+                var shown = SafeFile.Name(ver.FileName);
+                var ext = SafeFile.Ext(shown);
+                if (!Dialog.Confirm(Window.GetWindow(this), $"Save a {ext.TrimStart('.').ToUpperInvariant()} file?",
+                        $"\"{shown}\" is a {ext} file. Files like this can run programs on your PC when opened. Only save it if you know who shared it and expected it.", "Save anyway", danger: true))
+                    return null;
+            }
             if (dest == null)
+
             {
                 var name = SafeFile.Name(ver.FileName);
                 var start = LodgeFiles.DownloadsFolder();

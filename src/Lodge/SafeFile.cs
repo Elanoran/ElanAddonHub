@@ -91,13 +91,10 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---- files that can run something when opened. The warning names the real extension (after the cleaning above).
-        static readonly HashSet<string> Risky = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".exe", ".scr", ".bat", ".cmd", ".com", ".msi", ".ps1", ".vbs", ".js", ".jar", ".lnk", ".reg", ".hta", ".dll",
-        };
-
+        // 3.1.1: one list with the upload block (Elans.Shared.DangerousFiles), so whatever can't be shared is also warned about
         public static string Ext(string name) => Path.GetExtension(name ?? "") ?? "";
-        public static bool IsRisky(string name) => Risky.Contains(Ext(name));
+        public static bool IsRisky(string name) => Elans.Shared.DangerousFiles.IsDangerous(name);
+
 
         // ---- 3.1.1: a person's name as the Lodge sends it in a reply, a pin, a search hit, a reaction: the server's own name cleaning
         // (NFKC, whitespace runs -> one space, control / format - bidi, zero-width - / private / unassigned characters out, emoji kept),

@@ -17,11 +17,8 @@ namespace ElansAddonHub.Lodge
     {
         public static readonly Version Server = new Version(2, 14, 0);
 
-        public static readonly HashSet<string> Blocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "exe", "dll", "com", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh", "msi", "msp", "scr", "cpl",
-            "jar", "lnk", "reg", "hta", "sys", "drv", "pif", "application", "appref-ms",
-        };
+        // 3.1.1: the one list (Elans.Shared.DangerousFiles) - the same types are refused for an upload and warned about before a download / save
+        public static IReadOnlyCollection<string> Blocked => Elans.Shared.DangerousFiles.Extensions;
 
         public const int MaxNameChars = 60, MaxNoteChars = 200, KeptVersions = 3;
 
@@ -34,7 +31,8 @@ namespace ElansAddonHub.Lodge
             return dot > slash && dot >= 0 ? name.Substring(dot + 1).Trim().ToLowerInvariant() : "";
         }
 
-        public static bool IsBlockedName(string name) => Blocked.Contains(Extension(name));
+        public static bool IsBlockedName(string name) => Elans.Shared.DangerousFiles.IsDangerous(name);
+
 
         // ---- opening a file the lodge sent: by its REAL extension, never by the MIME type the server claims (a hostile server can call a program "image/png").
         // Only pictures, text and PDF open from the chat; a zip, a program, a script, a shortcut or anything unknown is never handed to the shell.
