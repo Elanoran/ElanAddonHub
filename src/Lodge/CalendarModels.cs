@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -400,25 +401,19 @@ namespace ElansAddonHub.Lodge
             return null;
         }
 
+        // cal:create (type LodgeMsg.CalCreate) or cal:edit of event `id` (LodgeMsg.CalEdit), as the dictionary LodgeClient sends
         public Dictionary<string, object> ToRequest(string type, string id = null)
         {
-            var start = StartUtc.Value;
+            if (type == LodgeMsg.CalEdit) { var e = new CalEditMsg { Id = id, Scope = Scope }; Fill(e); return LodgeFieldsDict.Build(e.Write); }
+            var c = new CalCreateMsg { RepeatWeeks = RepeatWeeks, Channel = ChannelId }; Fill(c); return LodgeFieldsDict.Build(c.Write);
+        }
+
+        void Fill(CalEventFields f)
+        {
             var zone = CalendarRules.Zone();
-            var d = new Dictionary<string, object>
-            {
-                ["t"] = type, ["title"] = Title.Trim(), ["note"] = (Note ?? "").Trim(), ["start"] = (double)CalendarRules.Ms(start),
-                ["roles"] = Roles, ["tz"] = zone.Id, ["off"] = (double)(int)zone.GetUtcOffset(StartLocal.Value).TotalMinutes,
-            };
-            if (Roles) d["slots"] = new Dictionary<string, object> { ["tank"] = (double)Tank, ["healer"] = (double)Healer, ["dps"] = (double)Dps };
-            if (DurationMin > 0) d["durationMin"] = (double)DurationMin;
-            if (id != null) { d["id"] = id; d["scope"] = Scope; }
-            else
-            {
-                if (RepeatWeeks == -1) d["repeat"] = new Dictionary<string, object> { ["open"] = true };
-                else if (RepeatWeeks >= 2) d["repeat"] = new Dictionary<string, object> { ["weeks"] = (double)RepeatWeeks };
-                if (ChannelId == null) d["post"] = false; else d["channel"] = ChannelId;
-            }
-            return d;
+            f.Title = Title.Trim(); f.Note = (Note ?? "").Trim(); f.Start = CalendarRules.Ms(StartUtc.Value);
+            f.Roles = Roles; f.Tz = zone.Id; f.Off = (int)zone.GetUtcOffset(StartLocal.Value).TotalMinutes;
+            f.Tank = Tank; f.Healer = Healer; f.Dps = Dps; f.DurationMin = DurationMin;
         }
     }
 
@@ -565,39 +560,40 @@ namespace ElansAddonHub.Lodge
         public int Going(string role) => Signups.Count(s => s.Status == "going" && s.Role == role);
         public int Count(string status) => Signups.Count(s => s.Status == status);
 
-        public void ApplyStub(Dictionary<string, object> snap)
+        // the snapshot in an event's chat card (CalCard)
+        public void ApplyStub(CalCard snap)
         {
             if (snap == null) return;
-            if (Id == null) { Id = snap.Str("id"); Stub = true; }
+            if (Id == null) { Id = snap.Id; Stub = true; }
             if (!Stub) return;                                   // real data wins over a snapshot
-            Title = SafeFile.Text(snap.Str("title") ?? "");
-            By = snap.Str("by"); Status = snap.Str("status") ?? "open"; Weekly = snap.Bool("weekly");
-            StartUtc = CalendarRules.FromMs(snap.Long("start"));
-            EndUtc = snap.Long("end") > 0 ? CalendarRules.FromMs(snap.Long("end")) : DateTime.MinValue;
+            Title = SafeFile.Text(snap.Title ?? "");
+            By = snap.By; Status = snap.Status ?? "open"; Weekly = snap.Weekly;
+            StartUtc = CalendarRules.FromMs(snap.Start);
+            EndUtc = snap.End > 0 ? CalendarRules.FromMs(snap.End) : DateTime.MinValue;
             RaiseAll();
         }
 
-        public void Apply(Dictionary<string, object> d)
+        // an event of welcome.calendar, cal:events or cal:range
+        public void Apply(CalEvent d)
         {
             if (d == null) return;
-            Id = d.Str("id") ?? Id; Stub = false;
-            Title = SafeFile.Text(d.Str("title") ?? ""); Note = SafeFile.Text(d.Str("note") ?? "");
-            By = d.Str("by"); Status = d.Str("status") ?? "open"; Series = d.Str("series"); Weekly = d.Child("rep") != null;
-            Roles = !d.ContainsKey("roles") || d.Bool("roles");
-            Channel = d.Str("channel");
-            StartUtc = CalendarRules.FromMs(d.Long("start"));
-            EndUtc = d.Long("end") > 0 ? CalendarRules.FromMs(d.Long("end")) : DateTime.MinValue;
-            var slots = d.Child("slots");
-            Tank = slots?.Int("tank") ?? 0; Healer = slots?.Int("healer") ?? 0; Dps = slots?.Int("dps") ?? 0;
+            Id = d.Id ?? Id; Stub = false;
+            Title = SafeFile.Text(d.Title ?? ""); Note = SafeFile.Text(d.Note ?? "");
+            By = d.By; Status = d.Status ?? "open"; Series = d.Series; Weekly = d.Rep != null;
+            Roles = d.Roles ?? true;
+            Channel = d.Channel;
+            StartUtc = CalendarRules.FromMs(d.Start);
+            EndUtc = d.End > 0 ? CalendarRules.FromMs(d.End) : DateTime.MinValue;
+            Tank = d.Tank; Healer = d.Healer; Dps = d.Dps;
             var me = LfgVM.MyName();
             var list = new List<SignupVM>();
-            foreach (var x in d.List("signups").OfType<Dictionary<string, object>>())
+            foreach (var x in d.Signups)
             {
-                var n = x.Str("n");
+                var n = x.Name;
                 if (string.IsNullOrEmpty(n)) continue;
-                var st = x.Str("s"); if (st != "going" && st != "maybe" && st != "declined") continue;
+                var st = x.Status; if (st != "going" && st != "maybe" && st != "declined") continue;
                 var isMe = me != null && string.Equals(n, me, StringComparison.OrdinalIgnoreCase);
-                list.Add(new SignupVM(n, st, x.Str("r") ?? "", SafeFile.Text(x.Str("c") ?? ""), LfgVM.MemberOf(n) ?? LfgSlotVM.StandIn(n), isMe));
+                list.Add(new SignupVM(n, st, x.Role ?? "", SafeFile.Text(x.Comment ?? ""), LfgVM.MemberOf(n) ?? LfgSlotVM.StandIn(n), isMe));
             }
             Signups = list;
             var mine = list.FirstOrDefault(s => s.IsMe);

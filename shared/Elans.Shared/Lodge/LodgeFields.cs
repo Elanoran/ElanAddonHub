@@ -11,6 +11,7 @@ namespace Elans.Shared
     // read side: a received JSON object
     public interface ILodgeFields
     {
+        bool Has(string key);                           // the key is there (whatever its value, null included)
         string Str(string key);                         // null when missing or not a string
         int Int(string key);                            // 0 when missing or not a number
         long Long(string key);                          // 0 when missing or not a number

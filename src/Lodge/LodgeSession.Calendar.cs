@@ -33,21 +33,22 @@ namespace ElansAddonHub.Lodge
         void LoadWelcomeCalendar(Dictionary<string, object> m)
         {
             if (!SupportsCalendar) return;
-            ApplyEvents(m.Child("calendar")?.List("events"));
+            var cal = m.Child("calendar");
+            if (cal != null) ApplyEvents(CalWelcome.Read(new LodgeFieldsDict(cal)).Events);
             ReloadWowEvents(true);                                    // WoW's own calendar from the companion addon (local, read-only)
             Changed?.Invoke();
         }
 
-        void ApplyEvents(List<object> list)
+        void ApplyEvents(List<CalEvent> list)
         {
             if (list == null) return;
-            foreach (var d in list.OfType<Dictionary<string, object>>()) Upsert(d);
+            foreach (var e in list) Upsert(e);
             CalendarChanged?.Invoke();
         }
 
-        EventVM Upsert(Dictionary<string, object> d)
+        EventVM Upsert(CalEvent d)
         {
-            var id = d.Str("id");
+            var id = d.Id;
             if (string.IsNullOrEmpty(id)) return null;
             if (!eventIndex.TryGetValue(id, out var vm)) eventIndex[id] = vm = new EventVM();
             var listed = Events.Contains(vm);
@@ -62,7 +63,8 @@ namespace ElansAddonHub.Lodge
         void OnCalendarFrame(Dictionary<string, object> m)
         {
             if (!SupportsCalendar) return;
-            ApplyEvents(m.List("events"));
+            var f = new LodgeFieldsDict(m);
+            ApplyEvents(m.Str("t") == LodgeMsg.CalRange ? CalRangeMsg.Read(f).Events : CalEventsMsg.Read(f).Events);
         }
 
         public EventVM EventById(string id) => id != null && eventIndex.TryGetValue(id, out var e) ? e : null;
@@ -73,7 +75,7 @@ namespace ElansAddonHub.Lodge
             var id = snap?.Str("id");
             if (string.IsNullOrEmpty(id)) return null;
             if (!eventIndex.TryGetValue(id, out var vm)) eventIndex[id] = vm = new EventVM();
-            vm.ApplyStub(snap);
+            vm.ApplyStub(CalCard.Read(new LodgeFieldsDict(snap)));
             return vm;
         }
 
@@ -84,7 +86,7 @@ namespace ElansAddonHub.Lodge
             var key = year + "-" + month;
             if (!loadedMonths.Add(key)) return;
             CalendarRules.MonthWindow(year, month, out var from, out var to);
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CalRange, ["from"] = (double)CalendarRules.Ms(from), ["to"] = (double)CalendarRules.Ms(to) });
+            _ = Send(LodgeFieldsDict.Build(new CalRangeGetMsg { From = CalendarRules.Ms(from), To = CalendarRules.Ms(to) }.Write));
         }
 
         // events the grid of one month may show
@@ -92,15 +94,15 @@ namespace ElansAddonHub.Lodge
 
         public Task CalendarCreate(CalendarForm f) => Send(f.ToRequest(LodgeMsg.CalCreate));
         public Task CalendarEdit(EventVM e, CalendarForm f) => Send(f.ToRequest(LodgeMsg.CalEdit, e.Id));
-        public Task CalendarCancel(EventVM e, bool following) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CalCancel, ["id"] = e.Id, ["scope"] = following ? "following" : "this" });
-        public Task CalendarLeave(EventVM e) => Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CalLeave, ["id"] = e.Id });
+        public Task CalendarCancel(EventVM e, bool following) => Send(LodgeFieldsDict.Build(new CalCancelMsg { Id = e.Id, Scope = following ? "following" : "this" }.Write));
+        public Task CalendarLeave(EventVM e) => Send(LodgeFieldsDict.Build(new CalLeaveMsg { Id = e.Id }.Write));
 
         // Going / Maybe / Can't, with the role picked on the card; the comment I wrote before stays unless a new one is given
         public Task CalendarAnswer(EventVM e, string status, string comment = null)
         {
-            var d = new Dictionary<string, object> { ["t"] = LodgeMsg.CalSignup, ["id"] = e.Id, ["status"] = status, ["comment"] = comment ?? e.MyComment ?? "" };
-            if (e.Roles && status != "declined") { d["role"] = e.SelectedRole; EventVM.LastRole = e.SelectedRole; }
-            return Send(d);
+            var msg = new CalSignupMsg { Id = e.Id, Status = status, Comment = comment ?? e.MyComment ?? "" };
+            if (e.Roles && status != "declined") { msg.Role = e.SelectedRole; EventVM.LastRole = e.SelectedRole; }
+            return Send(LodgeFieldsDict.Build(msg.Write));
         }
 
         public EventVM NextEvent => SupportsCalendar ? CalendarRules.NextEvent(Events, Clock()) : null;

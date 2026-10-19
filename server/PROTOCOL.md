@@ -297,6 +297,10 @@ Client to server (errors are `error` with `code: "cal"`, `"cal-full"` or `"rate"
 - `cal:signup` `{id, status: going|maybe|declined, role?, comment?}` - everyone, guests included. `going` needs a role (when the event has roles) with a free place; `maybe` may name a role without taking a place; one entry per person (answering again moves it; a refused move keeps the old answer). Closed once the event is over (its end, or start + 3 h) or cancelled.
 - `cal:leave` `{id}` - remove your entry.
 - `cal:range` `{from, to}` (ms, at most 62 days) -> `cal:range`. Costs the Page budget (burst 10, 1 per s).
+- Typed (stage 2): every `cal:*` message, `welcome.calendar`, the event and the card snapshot are classes in
+  `shared/Elans.Shared/Lodge/CalendarMessages.cs` (`CalCreateMsg` ... `CalEventsMsg`, `CalRangeMsg`, `CalWelcome`, `CalEvent`, `CalCard`), used by
+  both sides like the LFG ones. The server still validates the event fields of `cal:create` / `cal:edit` (`Cal.Parse`) and the bounds of a
+  `cal:range` request from the raw JSON: a wrong-typed count or bound is refused there, not read as 0. Events go out exactly as they are stored.
 
 **Time zones.** Instants are UTC. A weekly series is expanded on the server in the creator's zone: date i = first local date + 7 i days at the same local wall-clock time, converted back to UTC, so a 20:00 raid stays 20:00 across a DST change (the UTC instant moves by an hour). A time that does not exist (spring gap) moves forward an hour, an ambiguous one takes its first occurrence. An unknown `tz` falls back to the fixed `off`, and without it UTC. Viewers always see their own local time; the stored zone is only used for expansion.
 

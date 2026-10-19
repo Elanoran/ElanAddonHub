@@ -16,6 +16,7 @@ namespace ElansAddonHub.Lodge
         public LodgeFieldsDict() : this(new Dictionary<string, object>()) { }
 
         // read
+        public bool Has(string key) => Dict.ContainsKey(key);
         public string Str(string key) => Dict.Str(key);
         public int Int(string key) => Dict.Int(key);
         public long Long(string key) => Dict.Long(key);

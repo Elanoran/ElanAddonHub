@@ -12,6 +12,7 @@ public sealed class LodgeFieldsJson : ILodgeFields, ILodgeWriter
     public LodgeFieldsJson() : this(new JsonObject()) { }
 
     // read
+    public bool Has(string key) => Obj.ContainsKey(key);
     public string Str(string key) => J.Str(Obj, key);
     public int Int(string key) => J.Int(Obj, key);
     public long Long(string key) => J.Long(Obj, key);

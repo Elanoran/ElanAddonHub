@@ -8,11 +8,11 @@ namespace Lodge;
 // older clients, search, pins and reply quotes show; it follows the event (fill, cancelled) through a normal "edited" frame.
 public partial class ChatModule
 {
-    public static JsonObject EventSnapshot(JsonObject ev) => new()
+    public static JsonObject EventSnapshot(JsonObject ev) => LodgeFieldsJson.Build(new CalCard
     {
-        ["id"] = J.Str(ev, "id"), ["title"] = J.Str(ev, "title"), ["start"] = Cal.Start(ev), ["end"] = Cal.End(ev),
-        ["by"] = J.Str(ev, "by"), ["status"] = J.Str(ev, "status") ?? "open", ["weekly"] = ev["rep"] is JsonObject,
-    };
+        Id = J.Str(ev, "id"), Title = J.Str(ev, "title"), Start = Cal.Start(ev), End = Cal.End(ev),
+        By = J.Str(ev, "by"), Status = J.Str(ev, "status") ?? "open", Weekly = ev["rep"] is JsonObject,
+    }.Write);
 
     // returns the message id, or null when it could not be stored
     public async Task<string> PostEventCard(Member me, Channel ch, JsonObject ev)

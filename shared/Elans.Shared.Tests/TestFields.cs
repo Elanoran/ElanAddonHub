@@ -11,6 +11,7 @@ sealed class TestFields : ILodgeFields, ILodgeWriter
     public readonly Dictionary<string, object> D;
     public TestFields(Dictionary<string, object> d = null) { D = d ?? new(); }
     object Get(string k) => D.TryGetValue(k, out var v) ? v : null;
+    public bool Has(string key) => D.ContainsKey(key);
     public string Str(string key) => Get(key) as string;
     public int Int(string key) => Get(key) switch { int i => i, long l => (int)l, double d => (int)d, _ => 0 };
     public long Long(string key) => Get(key) switch { int i => i, long l => l, double d => (long)d, _ => 0 };
@@ -30,6 +31,20 @@ sealed class TestFields : ILodgeFields, ILodgeWriter
         public ListW(List<object> l) { this.l = l; }
         public ILodgeWriter Add() { var c = new Dictionary<string, object>(); l.Add(c); return new TestFields(c); }
     }
+
+    // a JsonObject (e.g. a golden literal) as fields to read: integers as long, other numbers as double
+    public static TestFields From(JsonObject o) => new TestFields((Dictionary<string, object>)Plain(o));
+    static object Plain(JsonNode n) => n switch
+    {
+        JsonObject o => o.ToDictionary(kv => kv.Key, kv => Plain(kv.Value)),
+        JsonArray a => a.Select(Plain).ToList(),
+        JsonValue v when v.TryGetValue<bool>(out var b) => b,
+        JsonValue v when v.TryGetValue<string>(out var s) => s,
+        JsonValue v when v.TryGetValue<long>(out var l) => l,
+        JsonValue v when v.TryGetValue<int>(out var i) => (long)i,
+        JsonValue v when v.TryGetValue<double>(out var d) => d,
+        _ => null,
+    };
 
     public static TestFields Written(Action<ILodgeWriter> write) { var w = new TestFields(); write(w); return w; }
 

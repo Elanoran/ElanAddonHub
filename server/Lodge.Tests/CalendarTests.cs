@@ -639,4 +639,57 @@ public class CalendarTests
         Assert.Contains("created calendar event", all);
         foreach (var s in new[] { "SECRET", T.ElanCode, T.BobCode }) Assert.DoesNotContain(s, all);
     }
+
+    // ---------------------------------------------------------------- typed messages (Elans.Shared CalendarMessages.cs)
+
+    static void SameAsStored(FunRig r, JsonObject frame)
+    {
+        foreach (var e in Events(frame))
+        {
+            var stored = Stored(r, (string)e["id"]!);
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(stored.ToJsonString()), JsonNode.Parse(e.ToJsonString())), "sent " + e.ToJsonString() + "\nstored " + stored.ToJsonString());
+        }
+    }
+
+    // cal:events, cal:range and welcome.calendar go out through the typed CalEvent: each event is still exactly what is stored
+    [Fact]
+    public async Task The_typed_frames_carry_exactly_the_stored_events()
+    {
+        using var r = new FunRig();
+        var elan = r.Join("Elan", "owner"); var pat = r.Join("Pat", "member");
+        var frame = await Create(r, elan, Ev(Oct17_18Z, repeat: new { weeks = 3 }));
+        Assert.Equal(3, Events(frame).Count);
+        SameAsStored(r, frame!);
+        var first = Events(frame).OrderBy(e => (long)e["start"]!).First();
+        var id = (string)first["id"]!;
+        Assert.NotNull(Stored(r, id)["msg"]);                       // the card was posted: channel + msg are on the stored event
+
+        r.Sock("Pat").Clear();
+        await r.Send(pat, new { t = "cal:signup", id, status = "going", role = "dps", comment = "hi" });
+        SameAsStored(r, r.Sock("Pat").Of("cal:events").Last());
+
+        r.Clock.Advance(TimeSpan.FromSeconds(3)); r.Sock("Elan").Clear();
+        await r.Send(elan, new { t = "cal:edit", id, scope = "following", title = "MC II", start = Oct17_18Z + 3_600_000, slots = new { tank = 2, healer = 3, dps = 5 }, tz = "Europe/Berlin", off = 120 });
+        var edited = r.Sock("Elan").Of("cal:events").Last();
+        Assert.Equal(3, Events(edited).Count);
+        SameAsStored(r, edited);
+
+        r.Clock.Advance(TimeSpan.FromSeconds(3)); r.Sock("Elan").Clear();
+        await r.Send(elan, new { t = "cal:cancel", id, scope = "this" });
+        var cancelled = r.Sock("Elan").Of("cal:events").Last();
+        Assert.Equal("cancelled", (string)Events(cancelled).Single()["status"]!);
+        SameAsStored(r, cancelled);
+
+        r.Clock.Advance(TimeSpan.FromSeconds(3)); r.Sock("Pat").Clear();
+        await r.Send(pat, new { t = "cal:range", from = Oct17_18Z - 86_400_000, to = Oct17_18Z + 30L * 86_400_000 });
+        var range = r.Sock("Pat").Of("cal:range").Single();
+        Assert.Equal(new[] { "events", "from", "t", "to" }, range.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Equal(3, Events(range).Count);
+        SameAsStored(r, range);
+
+        var welcome = r.Hub.Calendar.WelcomeView();
+        Assert.Equal(new[] { "events", "now" }, welcome.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Equal(2, Events(welcome).Count);                        // the third date is past the 30-day window
+        SameAsStored(r, welcome);
+    }
 }
