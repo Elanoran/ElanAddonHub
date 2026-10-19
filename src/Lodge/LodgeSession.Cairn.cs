@@ -44,15 +44,16 @@ namespace ElansAddonHub.Lodge
         void SendCairnSharing()
         {
             if (!SupportsCairnData || IsGuestNow) return;
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.AtlasSharing, ["on"] = CairnSharingOn });
+            _ = Send(LodgeFieldsDict.Build(new AtlasSharingMsg { On = CairnSharingOn }.Write));
         }
 
         void OnCairnStatus(Dictionary<string, object> m)
         {
             if (!SupportsCairnData) return;
-            CairnEntitled = m.Bool("entitled");
-            CairnWhy = CairnEntitled ? "" : (m.Str("why") ?? "");
-            CairnSeq = CairnEntitled ? m.Long("seq") : 0;
+            var st = CairnStatusMsg.Read(new LodgeFieldsDict(m));
+            CairnEntitled = st.Entitled;
+            CairnWhy = CairnEntitled ? "" : (st.Why ?? "");
+            CairnSeq = CairnEntitled ? st.Seq ?? 0 : 0;
             CairnStatusChanged?.Invoke();
         }
 

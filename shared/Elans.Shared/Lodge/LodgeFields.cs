@@ -12,12 +12,14 @@ namespace Elans.Shared
     public interface ILodgeFields
     {
         bool Has(string key);                           // the key is there (whatever its value, null included)
+        bool IsNull(string key);                        // the key is missing, or its value is JSON null
         string Str(string key);                         // null when missing or not a string
         int Int(string key);                            // 0 when missing or not a number
         long Long(string key);                          // 0 when missing or not a number
         bool Bool(string key);                          // false when missing or not true
         ILodgeFields Child(string key);                 // null when missing or not an object
         IReadOnlyList<ILodgeFields> List(string key);   // the objects in an array (other entries skipped); empty when missing, never null
+        IReadOnlyList<long> Longs(string key);          // the entries of an array as whole numbers (0 for one that isn't); empty when missing
     }
 
     // write side: a JSON object being built for sending. A null string is written as JSON null (as a dictionary/JsonObject literal did).
@@ -34,6 +36,25 @@ namespace Elans.Shared
     public interface ILodgeListWriter
     {
         ILodgeWriter Add();                             // a new object appended to the array
+        void Add(long value);                           // a number appended to the array
+    }
+
+    public static class LodgeWriterExtensions
+    {
+        // a number, or JSON null when there is none (as a JsonObject / dictionary literal wrote a null long?)
+        public static void SetOrNull(this ILodgeWriter w, string key, long? value) { if (value is long v) w.Set(key, v); else w.Set(key, (string)null); }
+        public static long? LongOrNull(this ILodgeFields f, string key) => f.IsNull(key) ? (long?)null : f.Long(key);
+        public static int? IntOrNull(this ILodgeFields f, string key) => f.IsNull(key) ? (int?)null : f.Int(key);
+    }
+
+    // A request that carries nothing but its type: { t }.
+    //   public sealed class CairnJoinGetMsg : LodgeEmptyMsg<CairnJoinGetMsg> { public const string Type = LodgeMsg.CairnJoinGet; protected override string MsgType => Type; }
+    public abstract class LodgeEmptyMsg<TSelf> where TSelf : LodgeEmptyMsg<TSelf>, new()
+    {
+        protected abstract string MsgType { get; }
+
+        public void Write(ILodgeWriter w) => w.Set("t", MsgType);
+        public static TSelf Read(ILodgeFields f) => new TSelf();
     }
 
     // The boilerplate of a request that carries nothing but the id of the thing it acts on: { t, id }. A message class only names its type:

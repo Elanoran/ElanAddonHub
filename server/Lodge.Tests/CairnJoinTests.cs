@@ -252,6 +252,21 @@ public class CairnJoinTests
         Assert.Empty(r.Fun.Sock("Bo").Of("cairn.join"));
     }
 
+    // the typed CairnJoinMsg (Elans.Shared) sends every field the old JsonObject did, an unknown number as JSON null
+    [Fact]
+    public async Task Cairn_join_carries_every_field_and_nulls_for_unknown_numbers()
+    {
+        using var r = new Rig();
+        var gm = r.Fun.Join("Elan", "owner");
+        await r.Do(gm, new { t = "cairn.join.get" });
+        var st = r.Last("Elan");
+        Assert.Equal(new[] { "admitted", "atlas", "betaOpenSlots", "cairnHost", "checked", "contributing", "env", "error", "estDay", "hasCode", "lastPost", "mode",
+            "of", "on", "place", "probationUntil", "publicUrl", "reason", "receiveUntil", "serving", "settled", "signed", "standing", "state", "suggestedUrl", "t" },
+            st.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal));
+        foreach (var k in new[] { "admitted", "betaOpenSlots", "checked", "lastPost", "probationUntil", "receiveUntil" }) Assert.Null(st[k]);
+        Assert.Equal(("", "off", 0), ((string)st["state"]!, (string)st["standing"]!, (int)st["place"]!));
+    }
+
     [Fact]
     public async Task The_switch_is_off_by_default_and_locked_when_the_env_path_is_used()
     {

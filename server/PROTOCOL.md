@@ -683,6 +683,12 @@ Lodge's id. `sig` is ES256 (base64, r||s) with the Cairn's dataset key over
 The Outpost checks every notice against the Cairn key it pins (`CairnAtlas.PinnedKeyX/Y`) and drops unsigned, wrongly signed, expired or odd
 ones; it shows the most urgent one not closed on this PC.
 
+Typed (stage 2): `atlas.sharing`, `cairn.status` (the ask and the answer with its `lodge` block), `cairn.join.get`, `cairn.join`,
+`cairn.notices.get`, `cairn.notices` and `cairn.notice.seen` are classes in `shared/Elans.Shared/Lodge/CairnMessages.cs` (`AtlasSharingMsg`,
+`CairnStatusMsg`, `CairnJoinMsg`, `CairnNoticesMsg` / `CairnNoticeEntry`, `CairnNoticeSeenMsg`, ...), used by both sides like the LFG ones. They
+only map fields: the notices' signatures are still checked by the Outpost (`CairnFormats.Notice` + `Es256`), and who gets what stays in
+`CairnReceive.cs`. Not typed yet: the Guild Master's `admin.cairn`.
+
 ## Operator stats (read-only; `GET /admin/stats`, `sudo lodge-admin stats`)
 
 Off unless `LODGE_ADMIN_TOKEN` (>= 24 characters) is set. Answers only a connection whose own address is loopback (checked before the

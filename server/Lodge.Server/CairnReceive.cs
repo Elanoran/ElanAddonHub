@@ -472,21 +472,21 @@ public sealed class CairnModule : IModule
     {
         var link = hub.Cairn.Link;
         var j = link.Join;
-        var o = new JsonObject
+        var o = new CairnJoinMsg
         {
-            ["t"] = LodgeMsg.CairnJoin, ["env"] = link.EnvPath, ["atlas"] = hub.Cfg.AtlasEnabled, ["cairnHost"] = link.Host, ["contributing"] = hub.Cairn.Enabled,
-            ["suggestedUrl"] = CairnSign.TryNormalizeUrl(hub.Cfg.PublicUrl, out var su, out _) ? su : "",
-            ["standing"] = Receiver.Standing.Length > 0 ? Receiver.Standing : (hub.Cairn.Enabled ? "unknown" : "off"),
-            ["receiveUntil"] = Receiver.ReceiveUntil, ["serving"] = Receiver.Serving,
+            Env = link.EnvPath, Atlas = hub.Cfg.AtlasEnabled, CairnHost = link.Host, Contributing = hub.Cairn.Enabled,
+            SuggestedUrl = CairnSign.TryNormalizeUrl(hub.Cfg.PublicUrl, out var su, out _) ? su : "",
+            Standing = Receiver.Standing.Length > 0 ? Receiver.Standing : (hub.Cairn.Enabled ? "unknown" : "off"),
+            ReceiveUntil = Receiver.ReceiveUntil, Serving = Receiver.Serving,
         };
         lock (j.Gate)
         {
-            o["on"] = link.EnvPath || j.On; o["publicUrl"] = j.PublicUrl; o["state"] = link.EnvPath ? "admitted" : j.State; o["reason"] = j.Reason; o["error"] = j.Error;
-            o["mode"] = j.Mode; o["place"] = j.Place; o["of"] = j.Of; o["estDay"] = j.EstDay; o["betaOpenSlots"] = j.BetaOpenSlots; o["hasCode"] = j.Code.Length > 0;
-            o["admitted"] = j.Admitted; o["probationUntil"] = j.ProbationUntil; o["settled"] = link.EnvPath || j.Settled; o["lastPost"] = j.LastPost; o["checked"] = j.Checked;
-            o["signed"] = link.Signs;
+            o.On = link.EnvPath || j.On; o.PublicUrl = j.PublicUrl; o.State = link.EnvPath ? "admitted" : j.State; o.Reason = j.Reason; o.Error = j.Error;
+            o.Mode = j.Mode; o.Place = j.Place; o.Of = j.Of; o.EstDay = j.EstDay; o.BetaOpenSlots = j.BetaOpenSlots; o.HasCode = j.Code.Length > 0;
+            o.Admitted = j.Admitted; o.ProbationUntil = j.ProbationUntil; o.Settled = link.EnvPath || j.Settled; o.LastPost = j.LastPost; o.Checked = j.Checked;
+            o.Signed = link.Signs;
         }
-        return o;
+        return LodgeFieldsJson.Build(o.Write);
     }
 
     // an invite code as typed: letters, digits, '-' and spaces only, at most 32 characters (the Cairn checks it; this only keeps junk out)
@@ -542,14 +542,15 @@ public sealed class CairnModule : IModule
         return Leader(m) ? all : all.Where(n => (string)n["level"] == "critical").ToList();
     }
 
-    JsonObject NoticesJson(Member m) => new() { ["t"] = LodgeMsg.CairnNotices, ["list"] = new JsonArray(NoticesFor(m).Select(n => (JsonNode)n).ToArray()) };
+    JsonObject NoticesJson(Member m) =>
+        LodgeFieldsJson.Build(new CairnNoticesMsg { List = NoticesFor(m).Select(n => CairnNoticeEntry.Read(new LodgeFieldsJson(n))).ToList() }.Write);
 
     public Task TellNotices() => Task.WhenAll(hub.Members.Where(m => m.Personal).ToList().Select(m => hub.Send(m, NoticesJson(m))));
 
-    async Task NoticesSeen(Member me, JsonObject m)
+    async Task NoticesSeen(Member me, CairnNoticeSeenMsg m)
     {
         if (!Leader(me)) return;                                         // only an officer's look counts as "seen"
-        var ids = (m["ids"] as JsonArray)?.Select(x => x is JsonValue v && v.TryGetValue<long>(out var id) ? id : 0).Where(id => id > 0).ToList() ?? new List<long>();
+        var ids = m.Ids.Where(id => id > 0).ToList();
         var todo = Notices.ToReport(ids);
         if (todo.Count == 0) return;
         try
@@ -598,22 +599,21 @@ public sealed class CairnModule : IModule
     public JsonObject StatusFor(string login, bool personal, string role)
     {
         var deny = Check(login, personal, role);
-        var o = new JsonObject { ["t"] = LodgeMsg.CairnStatus, ["entitled"] = deny == null, ["sharing"] = personal && Sharing.IsOn(Identity(login)) };
-        if (deny is { } d) { o["why"] = d.reason; o["text"] = d.error; }
+        var o = new CairnStatusMsg { Entitled = deny == null, Sharing = personal && Sharing.IsOn(Identity(login)) };
+        if (deny is { } d) { o.Why = d.reason; o.Text = d.error; }
         var h = Receiver.Current;
-        if (deny == null && h != null) { o["day"] = h.Day; o["seq"] = h.Seq; }
+        if (deny == null && h != null) { o.Day = h.Day; o.Seq = h.Seq; }
         // the owner also sees the Lodge's own standing at the Cairn (why it receives nothing)
         if (role == "owner" && Enabled)
         {
-            var l = new JsonObject { ["standing"] = Receiver.Standing.Length > 0 ? Receiver.Standing : "unknown", ["serving"] = Receiver.Serving };
-            if (Receiver.ReceiveUntil is long u) l["receiveUntil"] = u;
-            if (Receiver.LastCheck > DateTime.MinValue) l["checked"] = new DateTimeOffset(Receiver.LastCheck).ToUnixTimeSeconds();
+            var l = new CairnLodgeStanding { Standing = Receiver.Standing.Length > 0 ? Receiver.Standing : "unknown", Serving = Receiver.Serving, ReceiveUntil = Receiver.ReceiveUntil };
+            if (Receiver.LastCheck > DateTime.MinValue) l.Checked = new DateTimeOffset(Receiver.LastCheck).ToUnixTimeSeconds();
             var why = Receiver.Why(Receiver.Standing);
-            if (why.Length > 0) l["why"] = why;
-            if (Receiver.Problem.Length > 0) l["problem"] = Receiver.Problem;
-            o["lodge"] = l;
+            if (why.Length > 0) l.Why = why;
+            if (Receiver.Problem.Length > 0) l.Problem = Receiver.Problem;
+            o.Lodge = l;
         }
-        return o;
+        return LodgeFieldsJson.Build(o.Write);
     }
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
@@ -642,7 +642,7 @@ public sealed class CairnModule : IModule
             case LodgeMsg.CairnNoticeSeen:
             {
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); return true; }
-                await NoticesSeen(me, m);
+                await NoticesSeen(me, CairnNoticeSeenMsg.Read(new LodgeFieldsJson(m)));
                 return true;
             }
             // both are answered even when this Lodge doesn't hand out the Cairn's data (2.31.1): cairn.status { entitled: false, why: "disabled" },
@@ -652,7 +652,7 @@ public sealed class CairnModule : IModule
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 if (Enabled && me.Personal && Roles.Can(me.Role, Perm.AtlasShare))
                 {
-                    bool on = m["on"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+                    bool on = AtlasSharingMsg.Read(new LodgeFieldsJson(m)).On;
                     if (on) Weekly.NoteSharing(Identity(me.Name));
                     if (Sharing.Set(Identity(me.Name), on, new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeSeconds()))
                         hub.Log.LogInformation("{Name} switched Atlas sharing {State} (Cairn data {Access})", me.Name, on ? "on" : "off", on ? "on" : "off");

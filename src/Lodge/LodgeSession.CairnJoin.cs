@@ -17,16 +17,16 @@ namespace ElansAddonHub.Lodge
         public int Place, Of; public int? BetaOpenSlots;
         public long? ProbationUntil, ReceiveUntil, LastPost, Admitted;
 
-        static long? L(Dictionary<string, object> m, string k) => m.ContainsKey(k) && m[k] != null ? m.Long(k) : (long?)null;
+        public static CairnJoinStatus Parse(Dictionary<string, object> m) => From(CairnJoinMsg.Read(new LodgeFieldsDict(m)));
 
-        public static CairnJoinStatus Parse(Dictionary<string, object> m) => new CairnJoinStatus
+        public static CairnJoinStatus From(CairnJoinMsg m) => new CairnJoinStatus
         {
-            On = m.Bool("on"), Env = m.Bool("env"), Atlas = !m.ContainsKey("atlas") || m.Bool("atlas"), HasCode = m.Bool("hasCode"), Settled = m.Bool("settled"),
-            Contributing = m.Bool("contributing"), Signed = m.Bool("signed"), Serving = m.Bool("serving"),
-            State = m.Str("state") ?? "", Reason = m.Str("reason") ?? "", Error = m.Str("error") ?? "", Mode = m.Str("mode") ?? "", EstDay = m.Str("estDay") ?? "",
-            PublicUrl = m.Str("publicUrl") ?? "", SuggestedUrl = m.Str("suggestedUrl") ?? "", CairnHost = m.Str("cairnHost") ?? "", Standing = m.Str("standing") ?? "",
-            Place = m.Int("place"), Of = m.Int("of"), BetaOpenSlots = m.ContainsKey("betaOpenSlots") && m["betaOpenSlots"] != null ? m.Int("betaOpenSlots") : (int?)null,
-            ProbationUntil = L(m, "probationUntil"), ReceiveUntil = L(m, "receiveUntil"), LastPost = L(m, "lastPost"), Admitted = L(m, "admitted"),
+            On = m.On, Env = m.Env, Atlas = m.Atlas, HasCode = m.HasCode, Settled = m.Settled,
+            Contributing = m.Contributing, Signed = m.Signed, Serving = m.Serving,
+            State = m.State ?? "", Reason = m.Reason ?? "", Error = m.Error ?? "", Mode = m.Mode ?? "", EstDay = m.EstDay ?? "",
+            PublicUrl = m.PublicUrl ?? "", SuggestedUrl = m.SuggestedUrl ?? "", CairnHost = m.CairnHost ?? "", Standing = m.Standing ?? "",
+            Place = m.Place, Of = m.Of, BetaOpenSlots = m.BetaOpenSlots,
+            ProbationUntil = m.ProbationUntil, ReceiveUntil = m.ReceiveUntil, LastPost = m.LastPost, Admitted = m.Admitted,
         };
 
         // the invite code field: in the beta, or when the Cairn just said something about a code
@@ -108,7 +108,7 @@ namespace ElansAddonHub.Lodge
         {
             SupportsCairnJoin = features.Contains("cairnjoin");
             CairnJoin = null;
-            if (CanSeeCairnJoin) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CairnJoinGet });
+            if (CanSeeCairnJoin) _ = Send(LodgeFieldsDict.Build(new CairnJoinGetMsg().Write));
             CairnJoinChanged?.Invoke();
         }
 
@@ -121,7 +121,7 @@ namespace ElansAddonHub.Lodge
             CairnJoinChanged?.Invoke();
         }
 
-        public void RequestCairnJoin() { if (CanSeeCairnJoin) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CairnJoinGet }); }
+        public void RequestCairnJoin() { if (CanSeeCairnJoin) _ = Send(LodgeFieldsDict.Build(new CairnJoinGetMsg().Write)); }
 
         // the Guild Master's switch; publicUrl / code only when given (the Lodge keeps what it has otherwise). The code goes to the Lodge once.
         public void SetCairnJoin(bool on, string publicUrl = null, string code = null)

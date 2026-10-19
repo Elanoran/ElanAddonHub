@@ -41,7 +41,7 @@ namespace ElansAddonHub.Lodge
         {
             SupportsCairnNotices = features.Contains("cairnnotices");
             CairnNotices = new List<CairnNotice>();
-            if (SupportsCairnNotices && !IsGuestNow) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CairnNoticesGet });
+            if (SupportsCairnNotices && !IsGuestNow) _ = Send(LodgeFieldsDict.Build(new CairnNoticesGetMsg().Write));
         }
 
         void ResetCairnNotices() { SupportsCairnNotices = false; CairnNotices = new List<CairnNotice>(); }
@@ -49,7 +49,7 @@ namespace ElansAddonHub.Lodge
         void OnCairnNotices(Dictionary<string, object> m)
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            CairnNotices = m.List("list").OfType<Dictionary<string, object>>().Select(ParseCairnNotice)
+            CairnNotices = CairnNoticesMsg.Read(new LodgeFieldsDict(m)).List.Select(ParseCairnNotice)
                 .Where(n => n != null && n.Expires > now).Take(20).ToList();
             // ids the Cairn no longer sends are forgotten, so the setting doesn't grow
             if (Settings?.CairnNoticesDismissed is List<long> gone && gone.RemoveAll(id => CairnNotices.All(n => n.Id != id)) > 0)
@@ -58,12 +58,14 @@ namespace ElansAddonHub.Lodge
         }
 
         // null unless every field is sane and the signature matches the pinned Cairn key
-        public static CairnNotice ParseCairnNotice(Dictionary<string, object> o)
+        public static CairnNotice ParseCairnNotice(Dictionary<string, object> o) => ParseCairnNotice(CairnNoticeEntry.Read(new LodgeFieldsDict(o)));
+
+        public static CairnNotice ParseCairnNotice(CairnNoticeEntry o)
         {
-            var n = new CairnNotice { Id = o.Long("id"), Created = o.Long("created"), Expires = o.Long("expires"), Level = o.Str("level"), To = o.Str("to") ?? "*", Text = o.Str("text") };
+            var n = new CairnNotice { Id = o.Id, Created = o.Created, Expires = o.Expires, Level = o.Level, To = o.To ?? "*", Text = o.Text };
             if (n.Id <= 0 || n.Created <= 0 || n.Expires <= n.Created || LevelRank(n.Level) == 0 && n.Level != "info"
                 || string.IsNullOrEmpty(n.Text) || n.Text.Length > 500) return null;
-            return NoticeSignatureOk(n, o.Str("sig"), CairnAtlas.PinnedKeyX, CairnAtlas.PinnedKeyY) ? n : null;
+            return NoticeSignatureOk(n, o.Sig, CairnAtlas.PinnedKeyX, CairnAtlas.PinnedKeyY) ? n : null;
         }
 
         // the signed text and the ES256 check are Elans.Shared (CairnFormats.Notice, Es256): the same code the Lodge and the Cairn use.
@@ -85,7 +87,7 @@ namespace ElansAddonHub.Lodge
             if (Settings.CairnNoticesDismissed == null) Settings.CairnNoticesDismissed = new List<long>();
             Settings.CairnNoticesDismissed.Add(n.Id);
             SettingsStore.Save(Settings);
-            if (CanModerate) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.CairnNoticeSeen, ["ids"] = new List<object> { n.Id } });
+            if (CanModerate) _ = Send(LodgeFieldsDict.Build(new CairnNoticeSeenMsg { Ids = { n.Id } }.Write));
             Changed?.Invoke();
         }
 

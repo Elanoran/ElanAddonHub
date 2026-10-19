@@ -12,6 +12,7 @@ sealed class TestFields : ILodgeFields, ILodgeWriter
     public TestFields(Dictionary<string, object> d = null) { D = d ?? new(); }
     object Get(string k) => D.TryGetValue(k, out var v) ? v : null;
     public bool Has(string key) => D.ContainsKey(key);
+    public bool IsNull(string key) => Get(key) == null;
     public string Str(string key) => Get(key) as string;
     public int Int(string key) => Get(key) switch { int i => i, long l => (int)l, double d => (int)d, _ => 0 };
     public long Long(string key) => Get(key) switch { int i => i, long l => l, double d => (long)d, _ => 0 };
@@ -19,6 +20,8 @@ sealed class TestFields : ILodgeFields, ILodgeWriter
     public ILodgeFields Child(string key) => Get(key) is Dictionary<string, object> c ? new TestFields(c) : null;
     public IReadOnlyList<ILodgeFields> List(string key) =>
         Get(key) is List<object> l ? l.OfType<Dictionary<string, object>>().Select(x => (ILodgeFields)new TestFields(x)).ToList() : new List<ILodgeFields>();
+    public IReadOnlyList<long> Longs(string key) =>
+        Get(key) is List<object> l ? l.Select(x => x switch { int i => i, long n => n, double d when d == Math.Floor(d) => (long)d, _ => 0L }).ToList() : new List<long>();
     public void Set(string key, string value) => D[key] = value;
     public void Set(string key, long value) => D[key] = value;
     public void Set(string key, int value) => D[key] = value;
@@ -30,6 +33,7 @@ sealed class TestFields : ILodgeFields, ILodgeWriter
         readonly List<object> l;
         public ListW(List<object> l) { this.l = l; }
         public ILodgeWriter Add() { var c = new Dictionary<string, object>(); l.Add(c); return new TestFields(c); }
+        public void Add(long value) => l.Add(value);
     }
 
     // a JsonObject (e.g. a golden literal) as fields to read: integers as long, other numbers as double

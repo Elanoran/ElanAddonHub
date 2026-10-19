@@ -17,6 +17,7 @@ namespace ElansAddonHub.Lodge
 
         // read
         public bool Has(string key) => Dict.ContainsKey(key);
+        public bool IsNull(string key) => !Dict.TryGetValue(key, out var v) || v == null;
         public string Str(string key) => Dict.Str(key);
         public int Int(string key) => Dict.Int(key);
         public long Long(string key) => Dict.Long(key);
@@ -24,6 +25,8 @@ namespace ElansAddonHub.Lodge
         public ILodgeFields Child(string key) => Dict.Child(key) is Dictionary<string, object> c ? new LodgeFieldsDict(c) : null;
         public IReadOnlyList<ILodgeFields> List(string key) =>
             Dict.List(key).OfType<Dictionary<string, object>>().Select(x => (ILodgeFields)new LodgeFieldsDict(x)).ToList();
+        public IReadOnlyList<long> Longs(string key) =>
+            Dict.List(key).Select(x => x is double d && d == Math.Floor(d) && Math.Abs(d) < 9e18 ? (long)d : x is long l ? l : 0L).ToList();
 
         // write
         public void Set(string key, string value) => Dict[key] = value;
@@ -38,6 +41,7 @@ namespace ElansAddonHub.Lodge
             readonly List<object> l;
             public ListWriter(List<object> l) { this.l = l; }
             public ILodgeWriter Add() { var c = new Dictionary<string, object>(); l.Add(c); return new LodgeFieldsDict(c); }
+            public void Add(long value) => l.Add(value);       // a long, as the old List<object> { id } literals held it
         }
 
         // a typed message as the dictionary LodgeClient sends
