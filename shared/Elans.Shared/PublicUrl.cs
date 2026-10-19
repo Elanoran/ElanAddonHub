@@ -18,20 +18,35 @@ namespace Elans.Shared
 
         public static bool TryNormalize(string s, out string norm, out Problem why)
         {
+            if (!Normalize(s, out norm, out why)) return false;
+            // what comes out must pass again as itself (IDNA can turn an odd name into a host the rules refuse, e.g. a zero-width space before
+            // "_x.com"): both sides re-check the canonical form, so an address that isn't stable is no address
+            if (Normalize(norm, out var again, out _) && again == norm) return true;
+            norm = null; why = Problem.NoHost;
+            return false;
+        }
+
+        static bool Normalize(string s, out string norm, out Problem why)
+        {
             norm = null; why = Problem.None;
             s = (s ?? "").Trim();
             if (s.Length == 0) { why = Problem.Empty; return false; }
             if (s.Length > MaxLength) { why = Problem.TooLong; return false; }
-            if (!Uri.TryCreate(s, UriKind.Absolute, out var u)) { why = Problem.NotUrl; return false; }
+            if (!TryUri(s, out var u)) { why = Problem.NotUrl; return false; }
             if (u.Scheme != Uri.UriSchemeHttps) { why = Problem.NotHttps; return false; }
             if (!string.IsNullOrEmpty(u.UserInfo) || !string.IsNullOrEmpty(u.Query) || !string.IsNullOrEmpty(u.Fragment) || s.Contains('?') || s.Contains('#'))
             { why = Problem.UserQueryFragment; return false; }
             if (!(u.HostNameType == UriHostNameType.Dns || u.HostNameType == UriHostNameType.IPv4 || u.HostNameType == UriHostNameType.IPv6)) { why = Problem.NoHost; return false; }
             if (u.Port != 443 && u.Port < 1024) { why = Problem.Port; return false; }
-            var host = u.IdnHost.ToLowerInvariant();
+            // IdnHost throws on a host IDNA refuses (e.g. a zero-width space as the host): that is no host
+            string host;
+            try { host = u.IdnHost.ToLowerInvariant(); } catch (UriFormatException) { why = Problem.NoHost; return false; }
             if (u.HostNameType == UriHostNameType.Dns && (host == "localhost" || host.EndsWith(".localhost") || host.EndsWith(".local") || host.EndsWith(".internal") || !host.Contains('.')))
             { why = Problem.LocalName; return false; }
             if (u.HostNameType != UriHostNameType.Dns && (!IPAddress.TryParse(u.Host.Trim('[', ']'), out var ip) || !IsPublic(ip)))
+            { why = Problem.PrivateIp; return false; }
+            // a "name" that IDNA turns into an IP address (a zero-width space or full-width digits around 127.0.0.1): the IP rules apply
+            if (u.HostNameType == UriHostNameType.Dns && IPAddress.TryParse(host, out var mapped) && !IsPublic(mapped))
             { why = Problem.PrivateIp; return false; }
             var path = u.AbsolutePath.TrimEnd('/');
             if (path.Contains("//") || path.Contains("/../") || path.EndsWith("/..") || path.IndexOf("%2f", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -41,7 +56,18 @@ namespace Elans.Shared
             return true;
         }
 
-        public static string HostOf(string norm) => Uri.TryCreate(norm, UriKind.Absolute, out var u) ? u.IdnHost.ToLowerInvariant() : "";
+        // Uri.TryCreate itself can throw on odd input (IndexOutOfRangeException in Uri.CreateUriInfo for "//", a bidi control, "//" and a punycode host): no URL then
+        static bool TryUri(string s, out Uri u)
+        {
+            try { return Uri.TryCreate(s, UriKind.Absolute, out u); }
+            catch (Exception e) when (e is IndexOutOfRangeException || e is UriFormatException || e is ArgumentException) { u = null; return false; }
+        }
+
+        public static string HostOf(string norm)
+        {
+            if (!TryUri(norm, out var u)) return "";
+            try { return u.IdnHost.ToLowerInvariant(); } catch (UriFormatException) { return ""; }
+        }
 
         static bool In(byte[] a, byte[] net, int bits)
         {

@@ -28,4 +28,9 @@
     <ProjectReference Include="..\Lodge.Server\Lodge.Server.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- the fuzzers' generator, shared with shared/Elans.Shared.Tests (FuzzHandlerTests uses it) -->
+    <Compile Include="..\..\shared\Elans.Shared.Tests\FuzzGen.cs" Link="FuzzGen.cs" />
+  </ItemGroup>
+
 </Project>

@@ -334,7 +334,10 @@ public partial class LodgeHub
             }
             var m = LodgeJson.Parse(msg.GetBuffer(), 0, (int)msg.Length);       // the shared Lodge JSON engine (Elans.Shared LodgeJson): null when no valid frame
             if (m == null) continue;
-            var type = J.Str(m, "t") ?? "";
+            // the nodes are read lazily: a key twice or a lone surrogate escape throws on the first read - no frame, and never out of this loop
+            string type;
+            try { type = J.Str(m, "t") ?? ""; }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException) { me.CountDrop(Clock); continue; }
             if (type != LodgeMsg.Msg && !me.Budget.Control.TryTake())
             {
                 if (me.CountDrop(Clock) > FloodDropsPerMinute) { await Disconnect(me, "Too many messages - slow down"); return; }
