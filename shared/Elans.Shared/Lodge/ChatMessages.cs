@@ -164,9 +164,12 @@ namespace Elans.Shared
             };
             var reacts = f.Child("reactions");
             if (reacts != null)
-                foreach (var id in reacts.Keys()) m.Reactions.Add(new ChatReaction { Id = id, Users = new List<string>(reacts.Strs(id)) });
+                foreach (var id in reacts.Keys()) m.Reactions.Add(new ChatReaction { Id = id, Users = Copy(reacts.Strs(id)) });
             return m;
         }
+
+        // the list an adapter returned (already a fresh List<string> on every side), or a copy of it
+        internal static List<string> Copy(IReadOnlyList<string> l) => l as List<string> ?? new List<string>(l);
     }
 
     // an attachment: { id, name, size, mime } (the server cleans the name with Names.FileName; the Outpost again with SafeFile.Name)
@@ -236,7 +239,7 @@ namespace Elans.Shared
 
         public static ReactionMsg Read(ILodgeFields f) => new ReactionMsg
         {
-            Channel = f.Str("channel"), Id = f.Str("id"), Reaction = f.Str("reaction"), Emoji = f.Str("emoji"), Users = new List<string>(f.Strs("users")),
+            Channel = f.Str("channel"), Id = f.Str("id"), Reaction = f.Str("reaction"), Emoji = f.Str("emoji"), Users = ChatMessage.Copy(f.Strs("users")),
             By = f.Str("by"), On = f.Bool("on"),
         };
     }
@@ -285,5 +288,105 @@ namespace Elans.Shared
 
         public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("channel", Channel); w.Set("id", Id); }
         public static UnpinnedMsg Read(ILodgeFields f) => new UnpinnedMsg { Channel = f.Str("channel"), Id = f.Str("id") };
+    }
+
+    // ---------------------------------------------------------------- older messages and search (2.9; ChatHistory.cs)
+    // Only channels the asker's rank may see are ever looked at (an invisible channel answers like a missing one), the Page and Search
+    // budgets, the page size (1-100), the search query's cleaning (Names.Text, 64 characters, at least 2) and its 50 hits stay in the
+    // server. The server still reads history:before's beforeAt from the raw JSON: only a whole JSON number counts there (TryGetValue<long>).
+
+    // client -> server: the messages just older than `before` (a message id); beforeAt (its unix ms) is used when that message is gone;
+    // limit null = not sent (the server's 100)
+    public sealed class HistoryBeforeMsg
+    {
+        public const string Type = LodgeMsg.HistoryBefore;
+        public string Channel, Before;
+        public long BeforeAt;
+        public int? Limit;
+
+        public void Write(ILodgeWriter w)
+        {
+            w.Set("t", Type); w.Set("channel", Channel); w.Set("before", Before); w.Set("beforeAt", BeforeAt);
+            if (Limit is int l) w.Set("limit", l);
+        }
+
+        // limit: a number (cut to a whole one, as the server's J.Int read it), null when missing or not a number
+        public static HistoryBeforeMsg Read(ILodgeFields f) => new HistoryBeforeMsg
+        {
+            Channel = f.Str("channel"), Before = f.Str("before"), BeforeAt = f.Long("beforeAt"),
+            Limit = f.Num("limit") is double d ? (int)System.Math.Clamp(d, int.MinValue, int.MaxValue) : (int?)null,
+        };
+    }
+
+    // server -> client: the answer, oldest first: { channel, before, messages: [msg], hasMore }
+    public sealed class HistoryPageMsg
+    {
+        public const string Type = LodgeMsg.HistoryPage;
+        public string Channel, Before;
+        public bool HasMore;
+        // the stored messages as they are (JsonArray on the server, List<object> in the Outpost - see ILodgeFields.RawList): the server
+        // passes its records through unchanged. Null: Items is written instead.
+        public object Messages;
+        public List<ChatMessage> Items = new List<ChatMessage>();   // read side: the typed view of every object in messages
+
+        public void Write(ILodgeWriter w)
+        {
+            w.Set("t", Type); w.Set("channel", Channel); w.Set("before", Before);
+            if (Messages != null) w.SetRawList("messages", Messages);
+            else { var l = w.List("messages"); foreach (var m in Items) m.Write(l.Add()); }
+            w.Set("hasMore", HasMore);
+        }
+
+        public static HistoryPageMsg Read(ILodgeFields f)
+        {
+            var p = new HistoryPageMsg { Channel = f.Str("channel"), Before = f.Str("before"), HasMore = f.Bool("hasMore"), Messages = f.RawList("messages") };
+            foreach (var m in f.List("messages")) p.Items.Add(ChatMessage.Read(m));
+            return p;
+        }
+    }
+
+    // client -> server: search the text channels I may see (channel null = all of them, not sent)
+    public sealed class SearchMsg
+    {
+        public const string Type = LodgeMsg.Search;
+        public string Q, Channel;
+
+        public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("q", Q); if (Channel != null) w.Set("channel", Channel); }
+        public static SearchMsg Read(ILodgeFields f) => new SearchMsg { Q = f.Str("q"), Channel = f.Str("channel") };
+    }
+
+    // server -> client: { q (as the server cleaned it), hits: [hit] newest first, more (there were more than were sent) }
+    public sealed class SearchResultMsg
+    {
+        public const string Type = LodgeMsg.SearchResult;
+        public string Q;
+        public List<SearchHit> Hits = new List<SearchHit>();
+        public bool More;
+
+        public void Write(ILodgeWriter w)
+        {
+            w.Set("t", Type); w.Set("q", Q);
+            var l = w.List("hits");
+            foreach (var h in Hits) h.Write(l.Add());
+            w.Set("more", More);
+        }
+
+        public static SearchResultMsg Read(ILodgeFields f)
+        {
+            var r = new SearchResultMsg { Q = f.Str("q"), More = f.Bool("more") };
+            foreach (var h in f.List("hits")) r.Hits.Add(SearchHit.Read(h));
+            return r;
+        }
+    }
+
+    // one hit: { channel, id, from, at, snippet } - snippet: about 120 characters around the match, whitespace collapsed, "…" where cut
+    public sealed class SearchHit
+    {
+        public string Channel, Id, From, Snippet;
+        public long At;
+
+        public void Write(ILodgeWriter w) { w.Set("channel", Channel); w.Set("id", Id); w.Set("from", From); w.Set("at", At); w.Set("snippet", Snippet); }
+        public static SearchHit Read(ILodgeFields f) =>
+            new SearchHit { Channel = f.Str("channel"), Id = f.Str("id"), From = f.Str("from"), At = f.Long("at"), Snippet = f.Str("snippet") };
     }
 }

@@ -138,8 +138,7 @@ namespace ElansAddonHub.Lodge
             var tcs = new TaskCompletionSource<PageResult>();
             pagePending[channel] = tcs;
             OlderRequested?.Invoke(channel);
-            var req = new Dictionary<string, object> { ["t"] = LodgeMsg.HistoryBefore, ["channel"] = channel, ["before"] = oldest.Id, ["beforeAt"] = (double)Ms(oldest.At) };
-            _ = Send(req);
+            _ = Send(LodgeFieldsDict.Build(new HistoryBeforeMsg { Channel = channel, Before = oldest.Id, BeforeAt = Ms(oldest.At) }.Write));
             if (!tcs.Task.IsCompleted && await Task.WhenAny(tcs.Task, Task.Delay(RequestTimeout)) != tcs.Task)
             {
                 pagePending.Remove(channel);
@@ -168,16 +167,16 @@ namespace ElansAddonHub.Lodge
 
         void OnHistoryPage(Dictionary<string, object> m)
         {
-            var channel = m.Str("channel");
+            var page = HistoryPageMsg.Read(new LodgeFieldsDict(m));
+            var channel = page.Channel;
             if (channel == null) return;
-            var items = m.List("messages").OfType<Dictionary<string, object>>().ToList();
             var list = MessagesOf(channel);
             var have = new HashSet<string>(list.Select(x => x.Id));
             var added = new List<MessageVM>();
-            foreach (var x in items.Where(x => x.Str("id") != null && !have.Contains(x.Str("id"))).OrderBy(x => x.Long("at")))
+            foreach (var x in page.Items.Where(x => x.Id != null && !have.Contains(x.Id)).OrderBy(x => x.At))
             {
-                x["channel"] = channel;
-                added.Add(BuildMessage(ChatMessage.Read(new LodgeFieldsDict(x)), out _));
+                x.Channel = channel;                       // the page's channel, whatever the entry says
+                added.Add(BuildMessage(x, out _));
             }
             // they are older than everything shown: in front, in time order
             for (int i = 0; i < added.Count; i++) list.Insert(i, added[i]);
@@ -187,7 +186,7 @@ namespace ElansAddonHub.Lodge
                 foreach (var a in added) { a.Pinned = pinned.Contains(a.Id); a.Unread = false; }
                 for (int i = 0; i <= added.Count && i < list.Count; i++) list[i].Continuation = i > 0 && IsContinuation(list[i - 1], list[i]);   // incl. the old first message
             }
-            bool more = m.Bool("hasMore");
+            bool more = page.HasMore;
             hasMoreOlder[channel] = more;
             RefreshItemsOf(added);
             if (pagePending.TryGetValue(channel, out var tcs))
@@ -208,7 +207,7 @@ namespace ElansAddonHub.Lodge
             searchPending?.TrySetResult(new SearchResults { Query = searchQuery, Failed = true });   // a newer search replaces the one still waiting
             var tcs = searchPending = new TaskCompletionSource<SearchResults>();
             searchQuery = query;
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Search, ["q"] = query });
+            _ = Send(LodgeFieldsDict.Build(new SearchMsg { Q = query }.Write));
             if (!tcs.Task.IsCompleted && await Task.WhenAny(tcs.Task, Task.Delay(RequestTimeout)) != tcs.Task)
             {
                 if (searchPending == tcs) searchPending = null;
@@ -219,16 +218,17 @@ namespace ElansAddonHub.Lodge
 
         void OnSearchResult(Dictionary<string, object> m)
         {
-            var q = m.Str("q") ?? searchQuery;
-            var res = new SearchResults { Query = q, More = m.Bool("more") };
-            foreach (var h in m.List("hits").OfType<Dictionary<string, object>>())
+            var r = SearchResultMsg.Read(new LodgeFieldsDict(m));
+            var q = r.Q ?? searchQuery;
+            var res = new SearchResults { Query = q, More = r.More };
+            foreach (var h in r.Hits)
             {
-                var ch = h.Str("channel");
-                if (h.Str("id") == null || ch == null) continue;
+                var ch = h.Channel;
+                if (h.Id == null || ch == null) continue;
                 res.Hits.Add(new SearchHitVM
                 {
-                    ChannelId = ch, ChannelName = TextChannels.FirstOrDefault(c => c.Id == ch)?.Name, Id = h.Str("id"), From = h.Str("from"), AtMs = h.Long("at"),
-                    Snippet = SafeFile.Text(h.Str("snippet")), Query = q,
+                    ChannelId = ch, ChannelName = TextChannels.FirstOrDefault(c => c.Id == ch)?.Name, Id = h.Id, From = h.From, AtMs = h.At,
+                    Snippet = SafeFile.Text(h.Snippet), Query = q,
                 });
             }
             var tcs = searchPending;

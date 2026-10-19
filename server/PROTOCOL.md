@@ -272,6 +272,11 @@ can't see answers exactly like one that doesn't exist.
   characters finds nothing. Search budget: 6 per minute (error code `rate`).
 - `search:result` `{q, hits: [{channel, id, from, at, snippet}], more}` (server -> client): at most 50 hits; `snippet` is about 120 characters
   around the match (whitespace collapsed, `…` where it was cut); `more` = there were more hits than were sent.
+- Typed (stage 2): `history:before` (`HistoryBeforeMsg`), `history:page` (`HistoryPageMsg`: its `messages` are the stored records passed
+  through as they are, read by the Outpost as `ChatMessage`s), `search` (`SearchMsg`) and `search:result` (`SearchResultMsg` with its `SearchHit`s)
+  are classes in `shared/Elans.Shared/Lodge/ChatMessages.cs`, used by both sides like the LFG ones. The server still reads `beforeAt` from the raw
+  JSON (only a whole JSON number counts). The budgets, the visibility rule, the page size and the query cleaning stay in `ChatHistory.cs`. The wire
+  is unchanged, key order included (a server test pins the key sets of `history:page`, its entries, `search:result` and its hits).
 
 ## 2.10 additions (one-time invites, device tokens; all optional for clients)
 

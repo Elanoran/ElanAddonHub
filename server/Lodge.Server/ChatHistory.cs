@@ -12,19 +12,20 @@ public partial class ChatModule
     public const int SearchQueryMax = 64; // characters; longer queries are cut
     public const int SearchQueryMin = 2;
 
-    // "history:before": { channel, before: <message id>, beforeAt?: <ms, used when that message is gone>, limit? (1-100) }
-    // answer:           { t: "history:page", channel, before, messages: [oldest ... newest], hasMore }
+    // "history:before": { channel, before: <message id>, beforeAt?: <ms, used when that message is gone>, limit? (1-100) } (HistoryBeforeMsg)
+    // answer:           { t: "history:page", channel, before, messages: [oldest ... newest], hasMore } (HistoryPageMsg)
     async Task HistoryBefore(Member me, JsonObject m)
     {
-        var ch = hub.Channels.Get(J.Str(m, "channel"));
-        var before = J.Str(m, "before");
+        var req = HistoryBeforeMsg.Read(new LodgeFieldsJson(m));
+        var ch = hub.Channels.Get(req.Channel);
+        var before = req.Before;
         if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "You are loading history too fast - try again in a moment", "rate"); return; }
         var page = new JsonArray();
         bool more = false;
         if (ch != null && ch.Type == "text" && ch.VisibleTo(me.Role))
         {
-            int limit = Math.Clamp(J.Int(m, "limit", PageMax), 1, PageMax);
-            long beforeAt = m["beforeAt"] is JsonValue bv && bv.TryGetValue<long>(out var l) ? l : 0;
+            int limit = Math.Clamp(req.Limit ?? PageMax, 1, PageMax);
+            long beforeAt = m["beforeAt"] is JsonValue bv && bv.TryGetValue<long>(out var l) ? l : 0;   // raw on purpose: only a whole JSON number
             var s = Store(ch.Id);
             lock (s)
             {
@@ -44,20 +45,22 @@ public partial class ChatModule
                 }
             }
         }
-        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.HistoryPage, ["channel"] = ch?.Id ?? J.Str(m, "channel") ?? "", ["before"] = before ?? "", ["messages"] = page, ["hasMore"] = more });
+        // the stored records go out as they are (deep copies), in the stored msg shape (ChatMessage)
+        await hub.Send(me, LodgeFieldsJson.Build(new HistoryPageMsg { Channel = ch?.Id ?? req.Channel ?? "", Before = before ?? "", Messages = page, HasMore = more }.Write));
     }
 
     // "search": { q, channel? } - case-insensitive substring over the text (and attachment names) of the channels I may see, newest first
-    // answer: { t: "search:result", q, hits: [ { channel, id, from, at, snippet } ] (at most 50), more }
+    // answer: { t: "search:result", q, hits: [ { channel, id, from, at, snippet } ] (at most 50), more } (SearchMsg, SearchResultMsg)
     async Task Search(Member me, JsonObject m)
     {
         if (!me.Budget.Search.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "You can search a few times a minute - try again in a moment", "rate"); return; }
-        var q = Names.Text(J.Str(m, "q") ?? "", SearchQueryMax);
-        var hits = new List<(long at, JsonObject hit)>();
+        var req = SearchMsg.Read(new LodgeFieldsJson(m));
+        var q = Names.Text(req.Q ?? "", SearchQueryMax);
+        var hits = new List<(long at, SearchHit hit)>();
         bool more = false;
         if (q.Length >= SearchQueryMin)
         {
-            var only = J.Str(m, "channel");
+            var only = req.Channel;
             foreach (var ch in hub.Channels.All.Where(c => c.Type == "text" && c.VisibleTo(me.Role) && (only == null || c.Id == only)))
             {
                 var s = Store(ch.Id);
@@ -76,10 +79,9 @@ public partial class ChatModule
                         }
                         if (at < 0) continue;
                         if (++found > SearchMax) { more = true; break; }
-                        hits.Add(((long?)msg["at"] ?? 0, new JsonObject
+                        hits.Add(((long?)msg["at"] ?? 0, new SearchHit
                         {
-                            ["channel"] = ch.Id, ["id"] = (string)msg["id"], ["from"] = (string)msg["from"], ["at"] = (long?)msg["at"] ?? 0,
-                            ["snippet"] = SnippetAround(flat, at),
+                            Channel = ch.Id, Id = (string)msg["id"], From = (string)msg["from"], At = (long?)msg["at"] ?? 0, Snippet = SnippetAround(flat, at),
                         }));
                     }
                 }
@@ -87,7 +89,7 @@ public partial class ChatModule
         }
         var ordered = hits.OrderByDescending(h => h.at).ToList();
         if (ordered.Count > SearchMax) { ordered = ordered.Take(SearchMax).ToList(); more = true; }
-        await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.SearchResult, ["q"] = q, ["hits"] = new JsonArray(ordered.Select(h => (JsonNode)h.hit).ToArray()), ["more"] = more });
+        await hub.Send(me, LodgeFieldsJson.Build(new SearchResultMsg { Q = q, Hits = ordered.Select(h => h.hit).ToList(), More = more }.Write));
     }
 
     static readonly System.Text.RegularExpressions.Regex Spaces = new(@"\s+", System.Text.RegularExpressions.RegexOptions.Compiled);

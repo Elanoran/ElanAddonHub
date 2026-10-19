@@ -76,6 +76,33 @@ public class HistorySearchTests
         Assert.Equal(ids[50], (string)reloaded.Messages[0]["id"]!);
     }
 
+    // history:page and search:result (Elans.Shared HistoryPageMsg, SearchResultMsg, SearchHit) keep their keys and order; a page carries the
+    // stored records exactly as they are stored; an invisible channel answers an empty page
+    static string[] KeysOf(JsonNode? o) => o!.AsObject().Select(kv => kv.Key).ToArray();
+
+    [Fact]
+    public async Task Typed_history_and_search_frames_keep_their_keys_and_order()
+    {
+        using var r = new FunRig();
+        var elan = r.Join("Elan", "owner"); var gus = r.Join("Gus", "guest");
+        var ids = await Fill(r, elan, 3, prefix: "Deadmines run ");
+        await r.Say(elan, "officers only Deadmines", "officers");
+        var page = Page(r, elan, "general", ids[2]);
+        Assert.Equal(new[] { "t", "channel", "before", "messages", "hasMore" }, KeysOf(page));
+        Assert.Equal(new[] { "t", "channel", "id", "at", "from", "fromId", "text" }, KeysOf(page["messages"]![0]));
+        var stored = r.Hub.Chat.HistoryFor("general");
+        Assert.Equal(stored[0]!.ToJsonString(), page["messages"]![0]!.ToJsonString());
+        Assert.Equal("""{"t":"history:page","channel":"officers","before":"x","messages":[],"hasMore":false}""", Page(r, gus, "officers", "x").ToJsonString());
+        Assert.Equal("""{"t":"history:page","channel":"","before":"","messages":[],"hasMore":false}""", Page(r, gus, null!, null).ToJsonString());
+
+        var res = Find(r, elan, "deadmines");
+        Assert.Equal(new[] { "t", "q", "hits", "more" }, KeysOf(res));
+        Assert.Equal(4, res["hits"]!.AsArray().Count);
+        Assert.Equal(new[] { "channel", "id", "from", "at", "snippet" }, KeysOf(res["hits"]![0]));
+        Assert.Equal(("officers", "officers only Deadmines"), ((string?)res["hits"]![0]!["channel"], (string?)res["hits"]![0]!["snippet"]));
+        Assert.Equal("""{"t":"search:result","q":"de","hits":[],"more":false}""", Find(r, gus, "de", "officers").ToJsonString());
+    }
+
     [Fact]
     public async Task Paging_back_returns_contiguous_pages_oldest_first_and_says_when_there_is_no_more()
     {

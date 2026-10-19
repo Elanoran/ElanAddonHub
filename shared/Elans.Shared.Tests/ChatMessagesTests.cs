@@ -277,4 +277,77 @@ public class ChatMessagesTests
         SameJson(new JsonObject { ["t"] = "unpin", ["channel"] = "general", ["id"] = "m1" }, Written(new UnpinnedMsg { Channel = "general", Id = "m1" }.Write).D);
         Assert.Equal(new[] { "t", "channel", "id" }, Written(new UnpinnedMsg().Write).D.Keys);
     }
+
+    // ---- older messages and search (2.9)
+
+    [Fact]
+    public void History_and_search_round_trip()
+    {
+        var b = HistoryBeforeMsg.Read(Written(new HistoryBeforeMsg { Channel = "general", Before = "m9", BeforeAt = 1760900000123, Limit = 50 }.Write));
+        Assert.Equal(("general", "m9", 1760900000123L, (int?)50), (b.Channel, b.Before, b.BeforeAt, b.Limit));
+        Assert.Null(HistoryBeforeMsg.Read(Written(new HistoryBeforeMsg { Channel = "general" }.Write)).Limit);
+
+        var page = HistoryPageMsg.Read(Written(new HistoryPageMsg { Channel = "general", Before = "m9", HasMore = true, Items = { Full(), new ChatMessage { Id = "g1", Text = "", From = "(former member)" } } }.Write));
+        Assert.Equal(("general", "m9", true, 2), (page.Channel, page.Before, page.HasMore, page.Items.Count));
+        Assert.Equal(("a1b2c3d4e5f6", "Deadmines at 8? 🗡️ @Mira", true, "map.png", 2), (page.Items[0].Id, page.Items[0].Text, page.Items[0].Edited, page.Items[0].File.Name, page.Items[0].Reactions.Count));
+        Assert.Equal(("g1", (int?)null), (page.Items[1].Id, page.Items[1].FromId));
+        Assert.NotNull(page.Messages);                                        // the raw array, as the server passes its records through
+
+        var q = SearchMsg.Read(Written(new SearchMsg { Q = "dead", Channel = "lfg" }.Write));
+        Assert.Equal(("dead", "lfg"), (q.Q, q.Channel));
+        var res = SearchResultMsg.Read(Written(new SearchResultMsg { Q = "dead", More = true, Hits = { new SearchHit { Channel = "general", Id = "m1", From = "Elan", At = 7, Snippet = "…the Deadmines at 8…" } } }.Write));
+        Assert.Equal(("dead", true, 1), (res.Q, res.More, res.Hits.Count));
+        Assert.Equal(("general", "m1", "Elan", 7L, "…the Deadmines at 8…"), (res.Hits[0].Channel, res.Hits[0].Id, res.Hits[0].From, res.Hits[0].At, res.Hits[0].Snippet));
+
+        Assert.Equal("history:before", Written(new HistoryBeforeMsg().Write).Str("t"));
+        Assert.Equal("history:page", Written(new HistoryPageMsg().Write).Str("t"));
+        Assert.Equal("search", Written(new SearchMsg().Write).Str("t"));
+        Assert.Equal("search:result", Written(new SearchResultMsg().Write).Str("t"));
+    }
+
+    [Fact]
+    public void History_and_search_read_leniently_like_before()
+    {
+        // limit: a number is cut to a whole one (the server's J.Int), anything else is "not sent" (the server's 100)
+        Assert.Equal((int?)7, HistoryBeforeMsg.Read(new TestFields(new Dictionary<string, object> { ["limit"] = 7.9 })).Limit);
+        Assert.Null(HistoryBeforeMsg.Read(new TestFields(new Dictionary<string, object> { ["limit"] = "7" })).Limit);
+        Assert.Equal(int.MaxValue, HistoryBeforeMsg.Read(new TestFields(new Dictionary<string, object> { ["limit"] = 1e12 })).Limit);
+        // a page entry that is no object is skipped; a missing array is an empty page; a hit that is no object is skipped
+        var page = HistoryPageMsg.Read(new TestFields(new Dictionary<string, object> { ["messages"] = new List<object> { "x", 3, new Dictionary<string, object> { ["id"] = "m1" } }, ["hasMore"] = "yes" }));
+        Assert.Equal((1, "m1", false), (page.Items.Count, page.Items[0].Id, page.HasMore));
+        Assert.Empty(HistoryPageMsg.Read(new TestFields()).Items);
+        var res = SearchResultMsg.Read(new TestFields(new Dictionary<string, object> { ["hits"] = new List<object> { null, new Dictionary<string, object> { ["at"] = "x" } }, ["q"] = 5 }));
+        Assert.Equal(((string)null, 1, 0L, false), (res.Q, res.Hits.Count, res.Hits[0].At, res.More));
+    }
+
+    [Fact]
+    public void Golden_history_and_search_match_the_old_literals()
+    {
+        // LodgeSession.History.cs: LoadOlder, SearchAsync
+        var before = new Dictionary<string, object> { ["t"] = "history:before", ["channel"] = "general", ["before"] = "m9", ["beforeAt"] = 1760900000123.0 };
+        var bw = Written(new HistoryBeforeMsg { Channel = "general", Before = "m9", BeforeAt = 1760900000123 }.Write);
+        SameJson(before, bw.D);
+        Assert.Equal(before.Keys, bw.D.Keys);
+        SameJson(new Dictionary<string, object> { ["t"] = "search", ["q"] = "dead" }, Written(new SearchMsg { Q = "dead" }.Write).D);
+
+        // ChatHistory.cs: the page passes the stored records through; the search hits
+        var stored = new List<object> { new Dictionary<string, object> { ["t"] = "msg", ["channel"] = "general", ["id"] = "m1", ["at"] = 1L, ["from"] = "Elan", ["fromId"] = 7L, ["text"] = "hi", ["legacy"] = "kept" } };
+        var page = new JsonObject { ["t"] = "history:page", ["channel"] = "general", ["before"] = "m9", ["messages"] = new JsonArray(new JsonObject { ["t"] = "msg", ["channel"] = "general", ["id"] = "m1", ["at"] = 1, ["from"] = "Elan", ["fromId"] = 7, ["text"] = "hi", ["legacy"] = "kept" }), ["hasMore"] = true };
+        var pw = Written(new HistoryPageMsg { Channel = "general", Before = "m9", Messages = stored, HasMore = true }.Write);
+        SameJson(page, pw.D);
+        Assert.Equal(page.Select(kv => kv.Key), pw.D.Keys);
+        SameJson(new JsonObject { ["t"] = "history:page", ["channel"] = "", ["before"] = "", ["messages"] = new JsonArray(), ["hasMore"] = false },
+            Written(new HistoryPageMsg { Channel = "", Before = "", Messages = new List<object>() }.Write).D);
+
+        var result = new JsonObject
+        {
+            ["t"] = "search:result", ["q"] = "dead",
+            ["hits"] = new JsonArray(new JsonObject { ["channel"] = "general", ["id"] = "m1", ["from"] = "Elan", ["at"] = 7, ["snippet"] = "…the Deadmines at 8…" }), ["more"] = false,
+        };
+        var rw = Written(new SearchResultMsg { Q = "dead", Hits = { new SearchHit { Channel = "general", Id = "m1", From = "Elan", At = 7, Snippet = "…the Deadmines at 8…" } } }.Write);
+        SameJson(result, rw.D);
+        Assert.Equal(result.Select(kv => kv.Key), rw.D.Keys);
+        Assert.Equal(new[] { "channel", "id", "from", "at", "snippet" }, ((Dictionary<string, object>)((List<object>)rw.D["hits"])[0]).Keys);
+        SameJson(new JsonObject { ["t"] = "search:result", ["q"] = "", ["hits"] = new JsonArray(), ["more"] = false }, Written(new SearchResultMsg { Q = "" }.Write).D);
+    }
 }
