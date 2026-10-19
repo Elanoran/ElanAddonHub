@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Code shared by the Outpost (src/), the Lodge server (server/) and the Cairn (its own repo, a synced copy - see shared/sync_cairn.py).
+       Plain net10.0: no WPF, no WinForms, no registry, no ASP.NET, no packages. Every file here must also compile inside the Cairn. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>Elans.Shared</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>
