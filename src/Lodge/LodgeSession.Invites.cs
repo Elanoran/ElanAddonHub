@@ -21,16 +21,16 @@ namespace ElansAddonHub.Lodge
         public string DeviceId { get; private set; }               // the device I am on (tokens only)
         public string DeviceName { get; private set; }
 
-        void ReadInviteFeatures(Dictionary<string, object> m, List<string> features)
+        void ReadInviteFeatures(WelcomeMsg w, List<string> features)
         {
             var v = ParseVersion(ServerVersion);
             SupportsTokens = features.Contains("tokens") && (v == null || v >= new Version(2, 10, 0));
-            CanInvite = SupportsTokens && m.Bool("canInvite");
-            CanRetire = SupportsTokens && m.Bool("canRetire");
-            CanPurge = SupportsTokens && m.Bool("canPurge") && (v == null || v >= new Version(2, 22, 0));
-            DeviceId = m.Child("device")?.Str("id");
-            DeviceName = m.Child("device")?.Str("name");
-            ReadLodgeInfo(m, features);
+            CanInvite = SupportsTokens && w.CanInvite;
+            CanRetire = SupportsTokens && w.CanRetire;
+            CanPurge = SupportsTokens && w.CanPurge && (v == null || v >= new Version(2, 22, 0));
+            DeviceId = w.Device?.Id;
+            DeviceName = w.Device?.Name;
+            ReadLodgeInfo(w, features);
             Changed?.Invoke();
         }
 

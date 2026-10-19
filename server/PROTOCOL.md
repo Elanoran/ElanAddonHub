@@ -31,6 +31,13 @@ shows: kicked, code removed, signed in elsewhere, lodge full - clients don't rec
 
 - `welcome` `{you, name, role, server, maxFileMb, canShareFiles, canModerate, canManage, canPin, features:["reply","react","react2","pin","profile"], reactions:[id], pins:{channelId:[pin]}, channels:[channel], users:[user], history:{channelId:[msg]}}`
   - sent on connect and again whenever the channels or your rank change (treat as a full refresh)
+  - Typed (stage 2): `WelcomeMsg` in `shared/Elans.Shared/Lodge/WelcomeMessages.cs`, composed of the classes the other messages use -
+    `users` (`LodgeUser`), `channels` (`LodgeChannelView`), `history` (`WelcomeHistory`: the stored records passed through as they are, read by
+    the Outpost as `ChatMessage`s), `pins` (`WelcomePins`: the stored pins, read as `ChatPin`s), `calendar` (`CalWelcome`), `profile`
+    (`ProfileView`), `badges` (`BadgesStateMsg`), `lodge` (`LodgeInfoView`) - plus `device` (`WelcomeDevice`, JSON null without a device token)
+    and `names`. Every part may be missing from an older server and is then read as before (a 1.x server's one-list history included). Which
+    channels, members, history and permission flags a rank gets stays in `Hub.cs`. The wire is unchanged, key order included (a server test
+    pins the key set and order for the owner, a member on a device token and a guest).
 - `join` `{user}` · `leave` `{id}` · `user` `{user}`
 - `msg` `{channel, id, at (unix ms), from, fromId, text, file?:{id,name,size,mime}, replyTo?:{id,from,text,by,snippet}, reactions?:{reactionId:[name]}, edited?}`
 - `edited` `{channel, id, text}` · `deleted` `{channel, id}`

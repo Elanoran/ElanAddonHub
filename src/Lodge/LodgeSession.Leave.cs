@@ -19,12 +19,11 @@ namespace ElansAddonHub.Lodge
         public event Action Left;                                       // the server removed my membership (the view forgets the sign-in)
         public event Action<string> LeaveRefused;                       // "Transfer ownership first": I am the last Guild Master
 
-        void ReadLodgeInfo(Dictionary<string, object> m, List<string> features)
+        void ReadLodgeInfo(WelcomeMsg w, List<string> features)
         {
             SupportsLeave = features.Contains("leave");
             SupportsLodgeInfo = features.Contains("lodgeinfo");
-            var c = new LodgeFieldsDict(m).Child("lodge");                      // welcome.lodge: a LodgeInfoView like lodge.info's
-            ApplyLodgeInfo(c == null ? null : LodgeInfoView.Read(c));
+            ApplyLodgeInfo(w.Lodge);                                            // welcome.lodge: a LodgeInfoView like lodge.info's
         }
 
         void ApplyLodgeInfo(LodgeInfoView lodge)

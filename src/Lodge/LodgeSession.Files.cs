@@ -31,12 +31,12 @@ namespace ElansAddonHub.Lodge
 
         SavedFiles Saved() => savedFiles ?? (savedFiles = new SavedFiles(Settings?.LodgeUrl));
 
-        void ReadFilesFeatures(Dictionary<string, object> m, List<string> features)
+        void ReadFilesFeatures(WelcomeMsg w, List<string> features)
         {
             var v = ParseVersion(ServerVersion);
             SupportsFiles = features.Contains("files") && (v == null || v >= LodgeFiles.Server);
-            CanManageFiles = SupportsFiles && m.Bool("canManageFiles");
-            if (m.Int("filesMaxMb") > 0) FilesMaxMb = m.Int("filesMaxMb");
+            CanManageFiles = SupportsFiles && w.CanManageFiles;
+            if (w.FilesMaxMb > 0) FilesMaxMb = w.FilesMaxMb;
             savedFiles = null;
             if (!SupportsFiles) { Slots.Clear(); FilesLoaded = false; }
         }

@@ -266,40 +266,46 @@ public partial class LodgeHub
         return f.ToArray();
     }
 
-    // everything a client needs: who it is, the channels it may see with their history, who's here
-    public JsonObject Welcome(Member me)
+    // everything a client needs: who it is, the channels it may see with their history, who's here (typed: shared/Elans.Shared/Lodge/WelcomeMessages.cs)
+    public JsonObject Welcome(Member me) => LodgeFieldsJson.Build(WelcomeFor(me).Write);
+
+    public WelcomeMsg WelcomeFor(Member me)
     {
         var visible = Channels.VisibleTo(me.Role).ToList();
-        var history = new JsonObject();
-        var pins = new JsonObject();
-        foreach (var ch in visible.Where(c => c.Type == "text")) { history[ch.Id] = Chat.HistoryFor(ch.Id); pins[ch.Id] = Chat.Pins.For(ch.Id); }
-        return new JsonObject
+        var w = new WelcomeMsg
         {
-            ["t"] = LodgeMsg.Welcome, ["you"] = me.Id, ["name"] = me.Name, ["role"] = me.Role, ["server"] = Version,
-            ["maxFileMb"] = Cfg.MaxFileMb,
-            ["canShareFiles"] = Roles.Can(me.Role, Perm.ShareFiles),
-            ["canModerate"] = Roles.Can(me.Role, Perm.Moderate),
-            ["canManage"] = Roles.Can(me.Role, Perm.ManageMembers),
-            ["canPin"] = Roles.Can(me.Role, Perm.PinMessages),
-            ["features"] = new JsonArray(FeatureList().Select(f => (JsonNode)JsonValue.Create(f)).ToArray()),
-            ["canManageFiles"] = Cfg.FilesEnabled && Roles.Can(me.Role, Perm.FilesManage),
-            ["filesMaxMb"] = Cfg.FilesMaxMb,
-            ["canShareClassic"] = Cfg.ClassicEnabled && Roles.Can(me.Role, Perm.DatasetManage),
-            ["badges"] = Badges.WelcomeView(),
-            ["lodge"] = Info.ToJson(),
-            ["calendar"] = Calendar.WelcomeView(),
-            ["canInvite"] = Roles.Can(me.Role, Perm.Invite),
-            ["canRetire"] = Roles.Can(me.Role, Perm.RetireCodes),
-            ["canPurge"] = Roles.Can(me.Role, Perm.ManageMembers),   // 2.22: the owner can revert a member's Atlas contributions
-            ["device"] = DeviceView(me),
-            ["reactions"] = new JsonArray(ChatModule.ReactionSet.Select(e => (JsonNode)JsonValue.Create(e)).ToArray()), // canonical ids (2.4)
-            ["pins"] = pins,
-            ["channels"] = new JsonArray(visible.Select(c => (JsonNode)c.ToJson()).ToArray()),
-            ["users"] = new JsonArray(members.Values.Where(m => CanSee(me, m)).Select(m => (JsonNode)UserFor(m, me)).ToArray()),
-            ["profile"] = ProfileMod.OwnView(me),
-            ["names"] = NameDirectory(), // 2.8: { login: display name } so offline authors show their display name too
-            ["history"] = history,
+            You = me.Id, Name = me.Name, Role = me.Role, Server = Version,
+            MaxFileMb = Cfg.MaxFileMb,
+            CanShareFiles = Roles.Can(me.Role, Perm.ShareFiles),
+            CanModerate = Roles.Can(me.Role, Perm.Moderate),
+            CanManage = Roles.Can(me.Role, Perm.ManageMembers),
+            CanPin = Roles.Can(me.Role, Perm.PinMessages),
+            Features = FeatureList().ToList(),
+            CanManageFiles = Cfg.FilesEnabled && Roles.Can(me.Role, Perm.FilesManage),
+            FilesMaxMb = Cfg.FilesMaxMb,
+            CanShareClassic = Cfg.ClassicEnabled && Roles.Can(me.Role, Perm.DatasetManage),
+            Badges = Badges.WelcomeState(),
+            Lodge = Info.View(),
+            Calendar = Calendar.WelcomeCalendar(),
+            CanInvite = Roles.Can(me.Role, Perm.Invite),
+            CanRetire = Roles.Can(me.Role, Perm.RetireCodes),
+            CanPurge = Roles.Can(me.Role, Perm.ManageMembers),   // 2.22: the owner can revert a member's Atlas contributions
+            Device = DeviceView(me),
+            Reactions = ChatModule.ReactionSet.ToList(),         // canonical ids (2.4)
+            Pins = new List<WelcomePins>(),
+            Channels = visible.Select(c => c.View()).ToList(),
+            Users = members.Values.Where(m => CanSee(me, m)).Select(m => UserViewFor(m, me)).ToList(),
+            Profile = ProfileMod.OwnViewOf(me),
+            Names = NameDirectory(), // 2.8: { login: display name } so offline authors show their display name too
+            History = new List<WelcomeHistory>(),
         };
+        // the stored records, passed through as they are
+        foreach (var ch in visible.Where(c => c.Type == "text"))
+        {
+            w.History.Add(new WelcomeHistory { Channel = ch.Id, Messages = Chat.HistoryFor(ch.Id) });
+            w.Pins.Add(new WelcomePins { Channel = ch.Id, Pins = Chat.Pins.For(ch.Id) });
+        }
+        return w;
     }
 
     async Task ReceiveLoop(Member me, CancellationToken ct)
@@ -478,11 +484,11 @@ public partial class LodgeHub
     }
 
     // the device behind a connection (tokens only), for the welcome
-    public JsonNode DeviceView(Member me)
+    public WelcomeDevice DeviceView(Member me)
     {
         if (me.DeviceId == null) return null;
         var d = Auth.FindDevice(me.DeviceId);
-        return d == null ? null : new JsonObject { ["id"] = d.Id, ["name"] = d.DeviceName };
+        return d == null ? null : new WelcomeDevice { Id = d.Id, Name = d.DeviceName };
     }
 
     // a device was revoked: its sockets close right now (the client shows the reason and does not reconnect)
@@ -577,13 +583,13 @@ public partial class LodgeHub
     }
 
     // { login: display name } for every personal member who set one (the welcome carries it; profile updates keep it fresh)
-    public JsonObject NameDirectory()
+    public List<KeyValuePair<string, string>> NameDirectory()
     {
-        var o = new JsonObject();
+        var o = new List<KeyValuePair<string, string>>();
         foreach (var (name, _) in Auth.ListPersonal())
         {
             var dn = Profiles.Peek(name)?.DisplayName;
-            if (!string.IsNullOrEmpty(dn)) o[name] = dn;
+            if (!string.IsNullOrEmpty(dn)) o.Add(new KeyValuePair<string, string>(name, dn));
         }
         return o;
     }

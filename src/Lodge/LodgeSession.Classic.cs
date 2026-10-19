@@ -33,11 +33,11 @@ namespace ElansAddonHub.Lodge
 
         public bool IsGuestNow => MyRole == "guest" || (Me != null && Me.Guest);
 
-        void ReadClassicFeatures(Dictionary<string, object> m, List<string> features)
+        void ReadClassicFeatures(WelcomeMsg w, List<string> features)
         {
             var v = ParseVersion(ServerVersion);
             SupportsClassic = features.Contains("classic") && (v == null || v >= ClassicServer);
-            CanShareClassic = SupportsClassic && m.Bool("canShareClassic") && MyRole != "guest";
+            CanShareClassic = SupportsClassic && w.CanShareClassic && MyRole != "guest";
             ClassicKnown = false; ClassicHosted = null; ClassicProblem = null;
             if (SupportsClassic && MyRole != "guest") RequestClassicInfo();
         }

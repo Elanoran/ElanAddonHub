@@ -597,46 +597,47 @@ namespace ElansAddonHub.Lodge
         void Welcome(Dictionary<string, object> m)
         {
             CommitPending();
-            int myId = m.Int("you");
-            ServerVersion = m.Str("server");
-            MyRole = m.Str("role") ?? "member";
-            MaxFileMb = m.Int("maxFileMb") > 0 ? m.Int("maxFileMb") : 25;
-            CanShareFiles = !m.ContainsKey("canShareFiles") || m.Bool("canShareFiles");
-            CanModerate = m.Bool("canModerate");
-            CanManage = m.Bool("canManage");
-            var features = m.List("features").OfType<string>().ToList();
+            var w = WelcomeMsg.Read(new LodgeFieldsDict(m));                   // shared/Elans.Shared/Lodge/WelcomeMessages.cs
+            int myId = w.You;
+            ServerVersion = w.Server;
+            MyRole = w.Role ?? "member";
+            MaxFileMb = w.MaxFileMb > 0 ? w.MaxFileMb : 25;
+            CanShareFiles = w.CanShareFiles;
+            CanModerate = w.CanModerate;
+            CanManage = w.CanManage;
+            var features = w.Features;
             SupportsReact = features.Contains("react");
             SupportsPin = features.Contains("pin");
-            CanPin = SupportsPin && m.Bool("canPin");
+            CanPin = SupportsPin && w.CanPin;
             SupportsProfile = features.Contains("profile");
             SupportsDisplayName = features.Contains("displayname");
             SupportsLfg = features.Contains("lfg");
             ReadHistoryFeatures(features);
-            ReadInviteFeatures(m, features);
-            ReadCalendarFeatures(m, features);
+            ReadInviteFeatures(w, features);
+            ReadCalendarFeatures(features);
             ReadFlightFeatures(features);
             ReadAtlasFeatures(features);
             ReadArmoryFeatures(features);
-            ReadFilesFeatures(m, features);
-            ReadBadgesFeatures(m, features);
+            ReadFilesFeatures(w, features);
+            ReadBadgesFeatures(w, features);
             ReadRealmsFeatures(features);
-            ReadClassicFeatures(m, features);
+            ReadClassicFeatures(w, features);
             ReadLivePosFeatures(features);
-            var rs = m.List("reactions").OfType<string>().ToArray();
+            var rs = w.Reactions.ToArray();
             ReactionSet = rs.Length > 0 ? rs : DefaultReactions;
 
             // the name directory (server 2.8): { login: display name } for people who may be offline - authoritative when present
-            if (m.Child("names") != null)
+            if (w.Names != null)
             {
                 DisplayNames.Forget();
-                foreach (var kv in m.Child("names")) DisplayNames.Remember(kv.Key, kv.Value as string);
+                foreach (var kv in w.Names) DisplayNames.Remember(kv.Key, kv.Value);
             }
 
             // people: the same objects stay (a resync must not flicker the lists), newcomers are added, who left is removed
             var incoming = new List<MemberVM>();
-            foreach (var u in m.List("users").OfType<Dictionary<string, object>>())
+            foreach (var u in w.Users)
             {
-                var pm = ParseMember(LodgeUser.Read(new LodgeFieldsDict(u)));
+                var pm = ParseMember(u);
                 pm.IsMe = pm.Id == myId;
                 incoming.Add(pm);
             }
@@ -655,26 +656,26 @@ namespace ElansAddonHub.Lodge
             Me = Members.FirstOrDefault(x => x.IsMe);
             AfterWelcomeBadges();
             if (Me != null) Me.Invisible = Invisible;
-            LoadWelcomeCalendar(m);
-            if (m.Child("profile") != null) { MyProfile = ProfileData.Parse(m.Child("profile")); MyProfileChanged?.Invoke(); }
+            LoadWelcomeCalendar(w);
+            if (w.Profile != null) { MyProfile = ProfileData.From(w.Profile); MyProfileChanged?.Invoke(); }
             RefreshAuthorNames();
 
             // channels: a 1.x server has none - pretend it has one text channel and one room
-            var chans = m.List("channels").OfType<Dictionary<string, object>>().ToList();
+            var chans = w.Channels;
             if (chans.Count == 0)
-                chans = new List<Dictionary<string, object>>
+                chans = new List<LodgeChannelView>
                 {
-                    new Dictionary<string, object> { ["id"] = "general", ["name"] = "General", ["type"] = "text" },
-                    new Dictionary<string, object> { ["id"] = "voice", ["name"] = "Voice", ["type"] = "voice" },
+                    new LodgeChannelView { Id = "general", Name = "General", ChannelType = "text" },
+                    new LodgeChannelView { Id = "voice", Name = "Voice", ChannelType = "voice" },
                 };
             var keepSelected = Selected?.Id ?? Settings.LastChannel;
             var wantChannels = new List<ChannelVM>();
             foreach (var c in chans)
             {
-                var id = c.Str("id");
+                var id = c.Id;
                 if (id == null) continue;
                 if (!channelCache.TryGetValue(id, out var ch)) channelCache[id] = ch = new ChannelVM { Id = id };
-                ch.Name = c.Str("name"); ch.Type = c.Str("type") ?? "text"; ch.MinRole = c.Str("minRole"); ch.Max = c.Int("max");
+                ch.Name = c.Name; ch.Type = c.ChannelType ?? "text"; ch.MinRole = c.MinRole; ch.Max = c.Max;
                 wantChannels.Add(ch);
             }
             foreach (var id in channelCache.Keys.Where(k => wantChannels.All(w => w.Id != k)).ToList()) channelCache.Remove(id);
@@ -683,33 +684,35 @@ namespace ElansAddonHub.Lodge
 
             // history: per channel (2.x) or one list (1.x). Merged into what is already shown: same message objects (scroll position,
             // decoded pictures, an edit in progress survive), new ones inserted by time, deleted ones removed.
-            if (m.TryGetValue("history", out var h) && h is Dictionary<string, object> perChannel)
+            if (w.History != null)
             {
-                foreach (var kv in perChannel)
+                foreach (var h in w.History)
                 {
-                    var got = (kv.Value as List<object> ?? new List<object>()).OfType<Dictionary<string, object>>().ToList();
-                    MergeHistory(kv.Key, got);
-                    NoteWelcomeHistory(kv.Key, got.Count);
+                    MergeHistory(h.Channel, h.Items);
+                    NoteWelcomeHistory(h.Channel, h.Items.Count);
                 }
             }
             else
-                foreach (var grp in m.List("history").OfType<Dictionary<string, object>>().GroupBy(x => x.Str("channel") ?? TextChannels.FirstOrDefault()?.Id ?? "general"))
+                foreach (var grp in w.OldHistory.GroupBy(x => x.Channel ?? TextChannels.FirstOrDefault()?.Id ?? "general"))
+                {
+                    foreach (var x in grp) x.Channel = grp.Key;
                     MergeHistory(grp.Key, grp.ToList());
+                }
 
             // pins (the server keeps its own copy of each), then flag the ones still in the loaded history
-            if (m.Child("pins") != null)
+            if (w.Pins != null)
             {
                 foreach (var l in pins.Values) l.Clear();
                 foreach (var l in messages.Values) foreach (var x in l) x.Pinned = false;
-                foreach (var kv in m.Child("pins"))
+                foreach (var cp in w.Pins)
                 {
-                    var list = PinsOf(kv.Key);
-                    foreach (var p in (kv.Value as List<object> ?? new List<object>()).OfType<Dictionary<string, object>>())
+                    var list = PinsOf(cp.Channel);
+                    foreach (var p in cp.Items)
                     {
-                        var pv = ParsePin(ChatPin.Read(new LodgeFieldsDict(p)));
+                        var pv = ParsePin(p);
                         if (pv == null) continue;
                         list.Add(pv);
-                        var pm = MessagesOf(kv.Key).FirstOrDefault(x => x.Id == pv.Id);
+                        var pm = MessagesOf(cp.Channel).FirstOrDefault(x => x.Id == pv.Id);
                         if (pm != null) pm.Pinned = true;
                     }
                 }
@@ -924,10 +927,8 @@ namespace ElansAddonHub.Lodge
         }
 
         // the welcome's history for one channel, merged into the messages already shown
-        void MergeHistory(string channel, List<Dictionary<string, object>> raw)
+        void MergeHistory(string channel, List<ChatMessage> items)
         {
-            foreach (var x in raw) if (!x.ContainsKey("channel")) x["channel"] = channel;
-            var items = raw.Select(x => ChatMessage.Read(new LodgeFieldsDict(x))).ToList();
             var list = MessagesOf(channel);
             long oldest = items.Count > 0 ? items.Min(x => x.At) : long.MaxValue;
             var ids = new HashSet<string>(items.Select(x => x.Id));

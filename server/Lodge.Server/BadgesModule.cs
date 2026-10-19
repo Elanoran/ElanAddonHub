@@ -49,7 +49,7 @@ public sealed class BadgesModule : IModule
 
     BadgesStateMsg State() => new() { Enabled = Enabled, Locked = Locked };
     public JsonObject StateJson() => LodgeFieldsJson.Build(State().Write);
-    public JsonObject WelcomeView() => LodgeFieldsJson.Build(State().WriteState);      // welcome.badges
+    public BadgesStateMsg WelcomeState() => State();                                      // welcome.badges (written with WriteState)
 
     // ---------------------------------------------------------------- the requests
 

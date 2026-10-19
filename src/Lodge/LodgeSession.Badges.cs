@@ -44,12 +44,12 @@ namespace ElansAddonHub.Lodge
 
         public bool CanSwitchBadges => MyRole == "owner" && !BadgesLocked;
 
-        void ReadBadgesFeatures(Dictionary<string, object> m, List<string> features)
+        void ReadBadgesFeatures(WelcomeMsg w, List<string> features)
         {
             ResetBadges();
             SupportsBadges = features.Contains("badges");
-            var st = m.Child("badges");
-            if (st != null) { var bs = BadgesStateMsg.Read(new LodgeFieldsDict(st)); BadgesStateKnown = true; BadgesOwnerOn = bs.Enabled; BadgesLocked = bs.Locked; }
+            var bs = w.Badges;
+            if (bs != null) { BadgesStateKnown = true; BadgesOwnerOn = bs.Enabled; BadgesLocked = bs.Locked; }
         }
 
         void ResetBadges()

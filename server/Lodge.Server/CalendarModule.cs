@@ -27,12 +27,13 @@ public sealed class CalendarModule : IModule
     static string NewId() => Guid.NewGuid().ToString("N")[..10];
 
     // the welcome: events that are still running or start within 30 days
-    public JsonObject WelcomeView()
+    public CalWelcome WelcomeCalendar()
     {
         var now = Now;
         var until = now + Cal.WelcomeDays * 86_400_000L;
-        return LodgeFieldsJson.Build(new CalWelcome { Now = now, Events = Typed(Store.Snapshot(e => Cal.Over(e) >= now && Cal.Start(e) <= until)) }.Write);
+        return new CalWelcome { Now = now, Events = Typed(Store.Snapshot(e => Cal.Over(e) >= now && Cal.Start(e) <= until)) };
     }
+    public JsonObject WelcomeView() => LodgeFieldsJson.Build(WelcomeCalendar().Write);
 
     // stored events (copies) as the typed events the messages carry (shared/Elans.Shared/Lodge/CalendarMessages.cs)
     static List<CalEvent> Typed(IEnumerable<JsonNode> evs) => evs.OfType<JsonObject>().Select(e => CalEvent.Read(new LodgeFieldsJson(e))).ToList();

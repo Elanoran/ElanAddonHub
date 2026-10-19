@@ -463,7 +463,7 @@ public class ProfileModule : IModule
 
     // welcome.profile
     public JsonObject OwnView(Member me) => LodgeFieldsJson.Build(OwnViewOf(me).Write);
-    ProfileView OwnViewOf(Member me) => Build(me, me.Name, me.Profile, me.Role, me.Personal, me);
+    public ProfileView OwnViewOf(Member me) => Build(me, me.Name, me.Profile, me.Role, me.Personal, me);
 
     ProfileView Build(Member viewer, string name, Profile p, string role, bool personal, Member online, bool hideSeen = false)
     {

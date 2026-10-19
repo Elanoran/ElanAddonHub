@@ -630,6 +630,62 @@ public class InviteTests
         Assert.Null(r.Hub.Welcome(elan)["device"]);
     }
 
+    // the welcome (Elans.Shared WelcomeMsg) keeps its keys and order for the owner, a member on a device token and a guest; what a rank
+    // may see differs only in the values (channels, history, pins, permission flags), never in the keys
+    static string[] KeysOf(JsonNode? o) => o!.AsObject().Select(kv => kv.Key).ToArray();
+    static readonly string[] WelcomeKeys =
+    {
+        "t", "you", "name", "role", "server", "maxFileMb", "canShareFiles", "canModerate", "canManage", "canPin", "features", "canManageFiles",
+        "filesMaxMb", "canShareClassic", "badges", "lodge", "calendar", "canInvite", "canRetire", "canPurge", "device", "reactions", "pins",
+        "channels", "users", "profile", "names", "history",
+    };
+
+    [Fact]
+    public async Task The_welcome_keeps_its_keys_and_order_for_owner_member_and_guest()
+    {
+        using var r = new Rig();
+        var (token, dev) = r.Join("Nova", "Nova's PC");
+        var (nova, _) = r.Connect(token, true);
+        var (elan, _) = r.Connect(T.ElanCode, false);
+        var gus = new Member { Id = r.Hub.NextId(), Name = "Wanderer", Role = "guest", Ws = new ClosableSock(), Personal = false, Budget = new Budget(r.Clock), Ip = "9.9.8.1" };
+        Assert.True(r.Hub.TryAdmit(gus));
+        await r.Hub.Chat.Handle(elan, "msg", JsonNode.Parse("""{"t":"msg","channel":"general","text":"Raid Thursday"}""")!.AsObject());
+        await r.Hub.Chat.Handle(elan, "msg", JsonNode.Parse("""{"t":"msg","channel":"officers","text":"loot rules"}""")!.AsObject());
+        var id = (string)r.Hub.Chat.HistoryFor("general")[0]!["id"]!;
+        await r.Hub.Chat.Handle(elan, "pin", JsonNode.Parse("{\"t\":\"pin\",\"id\":\"" + id + "\"}")!.AsObject());
+
+        foreach (var (who, role) in new[] { (elan, "owner"), (nova, "member"), (gus, "guest") })
+        {
+            var w = r.Hub.Welcome(who);
+            Assert.Equal(WelcomeKeys, KeysOf(w));
+            Assert.Equal(("welcome", role), ((string?)w["t"], (string?)w["role"]));
+            Assert.Equal(new[] { "enabled", "locked" }, KeysOf(w["badges"]));
+            Assert.Equal(new[] { "name", "welcome" }, KeysOf(w["lodge"]));
+            Assert.Equal(new[] { "now", "events" }, KeysOf(w["calendar"]));
+            Assert.Equal(new[] { "id", "name", "type", "minRole", "max" }, KeysOf(w["channels"]![0]));
+            Assert.Equal(new[] { "id", "name", "guest", "role", "room", "voice", "muted", "deaf", "serverMuted", "avatarId", "accent", "displayName", "status", "note", "game" }, KeysOf(w["users"]![0]));
+            // the history and the pins: the stored records, exactly as stored, for the text channels this rank may see
+            var text = r.Hub.Channels.VisibleTo(who.Role).Where(c => c.Type == "text").Select(c => c.Id).ToArray();
+            Assert.Equal(text, KeysOf(w["history"]));
+            Assert.Equal(text, KeysOf(w["pins"]));
+            Assert.Equal(r.Hub.Chat.HistoryFor("general").ToJsonString(), w["history"]!["general"]!.ToJsonString());
+            Assert.Equal(new[] { "id", "text", "by", "at", "pinnedBy", "pinnedAt" }, KeysOf(w["pins"]!["general"]![0]));
+            Assert.Equal(r.Hub.Chat.Pins.For("general").ToJsonString(), w["pins"]!["general"]!.ToJsonString());
+        }
+        var we = r.Hub.Welcome(elan); var wn = r.Hub.Welcome(nova); var wg = r.Hub.Welcome(gus);
+        Assert.Contains("officers", KeysOf(we["history"]));
+        Assert.DoesNotContain("officers", KeysOf(wg["history"]));
+        Assert.Null(we["device"]);                                        // a permanent code: JSON null, the key is still there
+        Assert.True(we.ContainsKey("device") && wg.ContainsKey("device"));
+        Assert.Equal(new[] { "id", "name" }, KeysOf(wn["device"]));
+        Assert.Equal(dev.Id, (string?)wn["device"]!["id"]);
+        Assert.Equal((true, true, true), ((bool)we["canPurge"]!, (bool)we["canRetire"]!, (bool)we["canManage"]!));
+        Assert.Equal((false, false, false), ((bool)wg["canPin"]!, (bool)wg["canShareFiles"]!, (bool)wg["canInvite"]!));
+        Assert.Equal(new[] { "name", "found", "guest", "role", "online", "restricted", "avatarId", "accent", "displayName", "showChars", "visibleTo", "about", "playTimes", "chars" }, KeysOf(we["profile"]));
+        // the typed view gives the same frame as the JsonObject the hub sends
+        Assert.Equal(we.ToJsonString(), LodgeFieldsJson.Build(r.Hub.WelcomeFor(elan).Write).ToJsonString());
+    }
+
     [Fact]
     public async Task Logs_never_contain_invites_tokens_codes_or_their_hashes()
     {

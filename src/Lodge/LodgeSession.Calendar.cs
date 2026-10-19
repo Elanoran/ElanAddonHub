@@ -20,7 +20,7 @@ namespace ElansAddonHub.Lodge
         readonly HashSet<string> eventReminded = new HashSet<string>();
         public static readonly Version CalendarServer = new Version(2, 11, 0);
 
-        void ReadCalendarFeatures(Dictionary<string, object> m, List<string> features)
+        void ReadCalendarFeatures(List<string> features)
         {
             var v = ParseVersion(ServerVersion);
             SupportsCalendar = features.Contains("calendar") && (v == null || v >= CalendarServer);
@@ -30,11 +30,10 @@ namespace ElansAddonHub.Lodge
         }
 
         // after Me is known (an event stores who signed up; "my" answer is found by name)
-        void LoadWelcomeCalendar(Dictionary<string, object> m)
+        void LoadWelcomeCalendar(WelcomeMsg w)
         {
             if (!SupportsCalendar) return;
-            var cal = m.Child("calendar");
-            if (cal != null) ApplyEvents(CalWelcome.Read(new LodgeFieldsDict(cal)).Events);
+            if (w.Calendar != null) ApplyEvents(w.Calendar.Events);
             ReloadWowEvents(true);                                    // WoW's own calendar from the companion addon (local, read-only)
             Changed?.Invoke();
         }
