@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -119,53 +120,46 @@ public sealed class ArmoryStore
     }
 
     // the list: one summary per character (the caller holds Gate); `shown` turns a login into the name the Lodge sees (display name, else the login), `me` marks the caller's own
-    public JsonArray List(Func<string, string, string> shown, string me)
+    public List<ArmorySummary> List(Func<string, string, string> shown, string me)
     {
-        var arr = new JsonArray();
+        var list = new List<ArmorySummary>();
         foreach (var (id, ow) in owners.OrderBy(k => k.Key, StringComparer.Ordinal))
             foreach (var (key, e) in ow.Chars.OrderBy(k => k.Key, StringComparer.Ordinal))
             {
                 var s = Armory.Summary(e.C);
-                s["owner"] = id; s["by"] = shown(id, ow.Name); s["key"] = key; s["up"] = e.Up;
-                if (id == me) s["mine"] = true;
-                arr.Add(s);
+                s.Owner = id; s.By = shown(id, ow.Name); s.Key = key; s.Up = e.Up; s.Mine = id == me;
+                list.Add(s);
             }
-        return arr;
+        return list;
     }
 
     // "who can craft this" (the caller holds Gate): rows of every shared character that learned any of `spells`, best skill first, capped
-    public JsonArray Crafters(IReadOnlySet<int> spells, Func<string, string, string> shown, string me)
+    public List<ArmoryCrafter> Crafters(IReadOnlySet<int> spells, Func<string, string, string> shown, string me)
     {
-        var rows = new List<(int skill, string name, JsonObject row)>();
+        var rows = new List<ArmoryCrafter>();
         foreach (var (id, ow) in owners.OrderBy(k => k.Key, StringComparer.Ordinal))
             foreach (var (key, e) in ow.Chars.OrderBy(k => k.Key, StringComparer.Ordinal))
                 foreach (var r in Armory.CraftersOf(e.C, spells))
                 {
-                    r["owner"] = id; r["by"] = shown(id, ow.Name); r["key"] = key;
-                    if (id == me) r["mine"] = true;
-                    rows.Add(((int)r["skill"]!, (string)r["name"]!, r));
+                    r.Owner = id; r.By = shown(id, ow.Name); r.Key = key; r.Mine = id == me;
+                    rows.Add(r);
                 }
-        var arr = new JsonArray();
-        foreach (var x in rows.OrderByDescending(x => x.skill).ThenBy(x => x.name, StringComparer.Ordinal).Take(Armory.MaxCrafterRows)) arr.Add(x.row);
-        return arr;
+        return rows.OrderByDescending(x => x.Skill).ThenBy(x => x.Name, StringComparer.Ordinal).Take(Armory.MaxCrafterRows).ToList();
     }
 
     // "standing with a faction" (the caller holds Gate): one row per shared character that has a reputation with it, best standing first, capped
-    public JsonArray Standings(int faction, Func<string, string, string> shown, string me)
+    public List<ArmoryStanding> Standings(int faction, Func<string, string, string> shown, string me)
     {
-        var rows = new List<(int s, int v, string name, JsonObject row)>();
+        var rows = new List<ArmoryStanding>();
         foreach (var (id, ow) in owners.OrderBy(k => k.Key, StringComparer.Ordinal))
             foreach (var (key, e) in ow.Chars.OrderBy(k => k.Key, StringComparer.Ordinal))
             {
                 var r = Armory.StandingOf(e.C, faction);
                 if (r == null) continue;
-                r["owner"] = id; r["by"] = shown(id, ow.Name); r["key"] = key;
-                if (id == me) r["mine"] = true;
-                rows.Add(((int)r["s"]!, (int)r["v"]!, (string)r["name"]!, r));
+                r.Owner = id; r.By = shown(id, ow.Name); r.Key = key; r.Mine = id == me;
+                rows.Add(r);
             }
-        var arr = new JsonArray();
-        foreach (var x in rows.OrderByDescending(x => x.s).ThenByDescending(x => x.v).ThenBy(x => x.name, StringComparer.Ordinal).Take(Armory.MaxStandingRows)) arr.Add(x.row);
-        return arr;
+        return rows.OrderByDescending(x => x.S).ThenByDescending(x => x.V).ThenBy(x => x.Name, StringComparer.Ordinal).Take(Armory.MaxStandingRows).ToList();
     }
 
     public bool Save()

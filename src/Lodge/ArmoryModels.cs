@@ -7,6 +7,7 @@ using System.Text;
 using ElansAddonHub.Services;
 using ElansAddonHub.Services.Db2;
 using ElansAddonHub.Services.Talents;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -25,22 +26,25 @@ namespace ElansAddonHub.Lodge
         public bool Has(string profession) => Professions.Any(p => string.Equals(p.Name, profession, StringComparison.OrdinalIgnoreCase));
 
         // every field is checked again here, whatever the server sent
-        public static ArmoryEntry From(Dictionary<string, object> d)
+        public static ArmoryEntry From(Dictionary<string, object> d) => d == null ? null : FromSummary(ArmorySummary.Read(new LodgeFieldsDict(d)));
+
+        // an armory.chars line (typed: ArmorySummary)
+        public static ArmoryEntry FromSummary(ArmorySummary d)
         {
             if (d == null) return null;
-            string S(string k, int max) { var s = d.Str(k); return string.IsNullOrWhiteSpace(s) ? null : (s.Length > max ? s.Substring(0, max) : s.Trim()); }
+            string S(string s, int max) => string.IsNullOrWhiteSpace(s) ? null : (s.Length > max ? s.Substring(0, max) : s.Trim());
             var e = new ArmoryEntry
             {
-                Owner = S("owner", 64), By = S("by", 64), Key = S("key", 80), Name = S("name", 24), Realm = S("realm", 40), Class = S("class", 20), ClassText = S("classText", 24),
-                Race = S("race", 24), RaceFile = S("raceFile", 20), Faction = S("faction", 16), Guild = S("guild", 40), Sex = d.Int("sex"), Level = Math.Max(0, Math.Min(100, d.Int("level"))),
-                At = d.Long("at"), Up = d.Long("up"), Mine = d.Bool("mine"),
+                Owner = S(d.Owner, 64), By = S(d.By, 64), Key = S(d.Key, 80), Name = S(d.Name, 24), Realm = S(d.Realm, 40), Class = S(d.Class, 20), ClassText = S(d.ClassText, 24),
+                Race = S(d.Race, 24), RaceFile = S(d.RaceFile, 20), Faction = S(d.Faction, 16), Guild = S(d.Guild, 40), Sex = d.Sex ?? 0, Level = Math.Max(0, Math.Min(100, d.Level ?? 0)),
+                At = d.At ?? 0, Up = d.Up, Mine = d.Mine,
             };
-            if (d.TryGetValue("ilvl", out var iv) && iv is double idv && !double.IsNaN(idv) && !double.IsInfinity(idv)) e.Ilvl = Math.Max(0, Math.Min(2000, idv));
+            if (d.Ilvl is double idv && !double.IsNaN(idv) && !double.IsInfinity(idv)) e.Ilvl = Math.Max(0, Math.Min(2000, idv));
             if (e.Owner == null || e.Key == null || e.Name == null || e.Class == null) return null;
             if (e.By == null) e.By = e.Owner;
-            foreach (var o in d.List("professions"))
-                if (o is Dictionary<string, object> p && e.Professions.Count < 12 && !string.IsNullOrWhiteSpace(p.Str("name")))
-                    e.Professions.Add(new ArmoryProf { Name = p.Str("name").Trim(), Skill = Math.Max(0, p.Int("skill")), Max = Math.Max(0, p.Int("max")) });
+            foreach (var p in d.Professions)
+                if (e.Professions.Count < 12 && !string.IsNullOrWhiteSpace(p.Name))
+                    e.Professions.Add(new ArmoryProf { Name = p.Name.Trim(), Skill = Math.Max(0, p.Skill), Max = Math.Max(0, p.Max) });
             return e;
         }
     }
@@ -58,16 +62,16 @@ namespace ElansAddonHub.Lodge
         public string Owner, By, Key, Name, Class, Profession;
         public bool Partial, Mine;
 
-        // every field is checked again here, whatever the server sent
-        public static LodgeCrafter From(Dictionary<string, object> d)
+        // every field is checked again here, whatever the server sent (an armory.crafters row, typed: ArmoryCrafter)
+        public static LodgeCrafter From(ArmoryCrafter d)
         {
             if (d == null) return null;
-            string S(string k, int max) { var s = d.Str(k); return string.IsNullOrWhiteSpace(s) ? null : (s.Length > max ? s.Substring(0, max) : s.Trim()); }
+            string S(string s, int max) => string.IsNullOrWhiteSpace(s) ? null : (s.Length > max ? s.Substring(0, max) : s.Trim());
             var c = new LodgeCrafter
             {
-                Spell = d.Int("spell"), Owner = S("owner", 64), By = S("by", 64), Key = S("key", 80), Name = S("name", 24), Class = S("class", 20), Profession = S("profession", 32),
-                Level = Math.Max(0, Math.Min(100, d.Int("level"))), Skill = Math.Max(0, Math.Min(100000, d.Int("skill"))), Max = Math.Max(0, Math.Min(100000, d.Int("max"))),
-                Partial = d.Bool("partial"), Mine = d.Bool("mine"),
+                Spell = d.Spell, Owner = S(d.Owner, 64), By = S(d.By, 64), Key = S(d.Key, 80), Name = S(d.Name, 24), Class = S(d.Class, 20), Profession = S(d.Profession, 32),
+                Level = Math.Max(0, Math.Min(100, d.Level)), Skill = Math.Max(0, Math.Min(100000, d.Skill)), Max = Math.Max(0, Math.Min(100000, d.Max)),
+                Partial = d.Partial, Mine = d.Mine,
             };
             if (c.Spell < 1 || c.Owner == null || c.Key == null || c.Name == null || c.Profession == null) return null;
             if (c.By == null) c.By = c.Owner;
@@ -86,16 +90,16 @@ namespace ElansAddonHub.Lodge
         public string Owner, By, Key, Name, Class;
         public bool Mine;
 
-        // every field is checked again here, whatever the server sent
-        public static LodgeStanding From(Dictionary<string, object> d)
+        // every field is checked again here, whatever the server sent (an armory.standing row, typed: ArmoryStanding)
+        public static LodgeStanding From(ArmoryStanding d)
         {
             if (d == null) return null;
-            string S(string k, int max) { var s = d.Str(k); return string.IsNullOrWhiteSpace(s) ? null : (s.Length > max ? s.Substring(0, max) : s.Trim()); }
-            int N(string k) => (int)Math.Max(-100000000, Math.Min(100000000, d.Long(k)));
+            string S(string s, int max) => string.IsNullOrWhiteSpace(s) ? null : (s.Length > max ? s.Substring(0, max) : s.Trim());
+            int N(long v) => (int)Math.Max(-100000000, Math.Min(100000000, v));
             var r = new LodgeStanding
             {
-                Faction = d.Int("faction"), Standing = d.Int("s"), Value = N("v"), Min = N("min"), Max = N("max"), Level = Math.Max(0, Math.Min(100, d.Int("level"))), At = Math.Max(0, d.Long("at")),
-                Owner = S("owner", 64), By = S("by", 64), Key = S("key", 80), Name = S("name", 24), Class = S("class", 20), Mine = d.Bool("mine"),
+                Faction = d.Faction, Standing = d.S, Value = N(d.V), Min = N(d.Min ?? 0), Max = N(d.Max ?? 0), Level = Math.Max(0, Math.Min(100, d.Level)), At = Math.Max(0, d.At),
+                Owner = S(d.Owner, 64), By = S(d.By, 64), Key = S(d.Key, 80), Name = S(d.Name, 24), Class = S(d.Class, 20), Mine = d.Mine,
             };
             if (r.Faction < 1 || r.Standing < 1 || r.Standing > 8 || r.Owner == null || r.Key == null || r.Name == null) return null;
             if (r.By == null) r.By = r.Owner;

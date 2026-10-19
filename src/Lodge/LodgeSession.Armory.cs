@@ -135,7 +135,7 @@ namespace ElansAddonHub.Lodge
                     armoryDeleteAll = false;
                     sent.Clear(); SaveArmorySent();
                     armoryQuiet.Clear(); armoryRefused.Clear();
-                    _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryDelete, ["all"] = true });
+                    _ = Send(LodgeFieldsDict.Build(new ArmoryDeleteMsg { All = true }.Write));
                 }
                 return;
             }
@@ -143,7 +143,7 @@ namespace ElansAddonHub.Lodge
             {
                 sent.Remove(k); armoryQuiet.Remove(k); armoryRefused.Remove(k);
                 SaveArmorySent();
-                _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryDelete, ["key"] = k });
+                _ = Send(LodgeFieldsDict.Build(new ArmoryDeleteMsg { Key = k }.Write));
             }
             if (wanted.Count == 0) { armoryBacklog = false; return; }
 
@@ -169,7 +169,7 @@ namespace ElansAddonHub.Lodge
                 }
                 if (clock < armoryNextPut) { backlog = true; continue; }
                 var full = ArmoryShare.Build(c, true, SupportsArmory2, RepsShared);
-                var frame = new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryPut, ["key"] = c.Key, ["char"] = full };
+                var frame = LodgeFieldsDict.Build(new ArmoryPutMsg { Key = c.Key, Char = full }.Write);
                 if (Json.Write(frame).Length > 60 * 1024) { armoryRefused[c.Key] = sig; ArmoryProblem = c.Name + " has too much to share."; continue; }
                 armoryInflight[c.Key] = sig;
                 armoryQuiet.Remove(c.Key);
@@ -184,7 +184,7 @@ namespace ElansAddonHub.Lodge
             if (!SupportsArmory || !ArmoryAvailable) return;
             if (!force && Clock() - armoryLastList < TimeSpan.FromSeconds(20)) return;
             armoryLastList = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryList });
+            _ = Send(LodgeFieldsDict.Build(new ArmoryListMsg().Write));
         }
 
         public Dictionary<string, object> ArmoryChar(string id) => id != null && armoryChars.TryGetValue(id, out var c) ? c : null;
@@ -195,7 +195,7 @@ namespace ElansAddonHub.Lodge
             var id = e.Id;
             if (!force && (armoryAsked.Contains(id) || armoryChars.ContainsKey(id))) return;
             armoryAsked.Add(id);
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryGet, ["owner"] = e.Owner, ["key"] = e.Key });
+            _ = Send(LodgeFieldsDict.Build(new ArmoryGetMsg { Owner = e.Owner, Key = e.Key }.Write));
         }
 
         // a character that changed since it was opened is fetched again when the list says it is newer
@@ -204,14 +204,15 @@ namespace ElansAddonHub.Lodge
         void OnArmorySaved(Dictionary<string, object> m)
         {
             if (!SupportsArmory) return;
-            var key = m.Str("key");
+            var saved = ArmorySavedMsg.Read(new LodgeFieldsDict(m));
+            var key = saved.Key;
             if (key != null && armoryInflight.TryGetValue(key, out var sig))
             {
                 armoryInflight.Remove(key);
-                if (m.Bool("ok")) { ArmorySent()[key] = sig; SaveArmorySent(); ArmoryProblem = null; }
+                if (saved.Ok) { ArmorySent()[key] = sig; SaveArmorySent(); ArmoryProblem = null; }
                 else
                 {
-                    var why = m.Str("why");
+                    var why = saved.Why;
                     if (why == "rate") armoryNextPut = Clock() + TimeSpan.FromSeconds(30);
                     else if (why == "full") { armoryRefused[key] = sig; ArmoryProblem = "The Lodge keeps at most " + ArmoryShare.MaxChars + " of your characters. Untick one to share another."; }
                     else if (why == "guest") armoryGuest = true;
@@ -219,9 +220,9 @@ namespace ElansAddonHub.Lodge
                     else { armoryRefused[key] = sig; ArmoryProblem = "The Lodge did not take one of your characters (" + (why ?? "refused") + ")."; }
                 }
             }
-            else if (!m.Bool("ok"))
+            else if (!saved.Ok)
             {
-                var why = m.Str("why");
+                var why = saved.Why;
                 if (why == "guest") armoryGuest = true; else if (why == "disabled") ArmoryDisabledByServer = true; else if (why == "rate") armoryNextPut = Clock() + TimeSpan.FromSeconds(30);
             }
             if (armoryInflight.Count == 0) RequestArmoryList(true);          // the list shows what I just shared
@@ -231,8 +232,9 @@ namespace ElansAddonHub.Lodge
         void OnArmoryDeleted(Dictionary<string, object> m)
         {
             if (!SupportsArmory) return;
-            if (m.Bool("ok") && (m.ContainsKey("key") || m.Bool("all") || m.ContainsKey("removed"))) RequestArmoryList(true);
-            else if (!m.Bool("ok") && m.Str("why") == "guest") armoryGuest = true;
+            var d = ArmoryDeletedMsg.Read(new LodgeFieldsDict(m));
+            if (d.Ok && (d.Key != null || d.All || d.Removed != null)) RequestArmoryList(true);
+            else if (!d.Ok && d.Why == "guest") armoryGuest = true;
             ArmoryChanged?.Invoke();
         }
 
@@ -240,10 +242,10 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsArmory) return;
             var list = new List<ArmoryEntry>();
-            foreach (var o in m.List("chars"))
+            foreach (var o in ArmoryCharsMsg.Read(new LodgeFieldsDict(m)).Chars)
             {
                 if (list.Count >= 2000) break;
-                var e = ArmoryEntry.From(o as Dictionary<string, object>);
+                var e = ArmoryEntry.FromSummary(o);
                 if (e != null) list.Add(e);
             }
             ArmoryEntries = list;
@@ -258,7 +260,8 @@ namespace ElansAddonHub.Lodge
         void OnArmoryChar(Dictionary<string, object> m)
         {
             if (!SupportsArmory) return;
-            var owner = m.Str("owner"); var key = m.Str("key"); var ch = m.Child("char");
+            var msg = ArmoryCharMsg.Read(new LodgeFieldsDict(m));
+            var owner = msg.Owner; var key = msg.Key; var ch = msg.Char as Dictionary<string, object>;      // the sheet, read by the Characters page with its own checks
             if (owner == null || key == null || ch == null) return;
             var id = owner + "|" + key;
             if (!armoryAsked.Contains(id) && !armoryChars.ContainsKey(id)) return;      // only what was asked for
@@ -294,8 +297,8 @@ namespace ElansAddonHub.Lodge
             {
                 if (a == null) craftersAnswers[key] = a = new CraftersAnswer();
                 a.Asked = now;
-                var ids = key.Split(',').Select(s => (object)int.Parse(s, System.Globalization.CultureInfo.InvariantCulture)).ToList();
-                _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryCrafters, ["spells"] = ids });
+                var ids = key.Split(',').Select(s => (long)int.Parse(s, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+                _ = Send(LodgeFieldsDict.Build(new ArmoryCraftersGetMsg { Spells = ids }.Write));
             }
             res.Pending = !fresh && a != null && a.Answered == default(DateTime);
             return res;
@@ -304,16 +307,18 @@ namespace ElansAddonHub.Lodge
         void OnArmoryCrafters(Dictionary<string, object> m)
         {
             if (!SupportsArmory2) return;
+            // the spells asked are read from the raw frame on purpose: only JSON numbers count, one by one (ArmoryCraftersMsg.Spells is the lenient reading)
             var asked = new List<int>();
             foreach (var o in m.List("spells")) if (o is double d && d >= 1 && d <= int.MaxValue && asked.Count < 16) asked.Add((int)d);
+            var answer = ArmoryCraftersMsg.Read(new LodgeFieldsDict(m));
             var key = CraftersKey(asked);
             if (!craftersAnswers.TryGetValue(key, out var a)) return;              // only what was asked for
             var set = new HashSet<int>(asked);
             var rows = new List<LodgeCrafter>();
-            foreach (var o in m.List("who"))
+            foreach (var o in answer.Who)
             {
                 if (rows.Count >= 80) break;
-                var c = LodgeCrafter.From(o as Dictionary<string, object>);
+                var c = LodgeCrafter.From(o);
                 if (c != null && set.Contains(c.Spell)) rows.Add(c);
             }
             a.Rows = rows; a.Answered = Clock();

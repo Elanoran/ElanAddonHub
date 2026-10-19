@@ -10,6 +10,8 @@ namespace Lodge;
 // armory.saved { ok, key, stored?, why? }, armory.deleted { ok, removed, key? }, armory.chars { chars: [summary...] } and armory.char { owner, by, key, char }.
 // Members and up share and read; guests (the shared code) do neither. Feature off (LODGE_ARMORY_ENABLED=0): not advertised, put answers why "disabled",
 // the rest answer an error. A member who leaves or is removed takes their characters with them. Nothing the clients send is ever logged - only counts.
+// The messages are typed in shared/Elans.Shared/Lodge/ArmoryMessages.cs. The character sheet stays a free-form object that Armory.Clean rebuilds
+// from the raw JSON; armory.crafters' spells and armory.standing's faction are still validated from the raw JSON (whole JSON numbers only).
 public sealed class ArmoryModule : IModule
 {
     readonly LodgeHub hub;
@@ -42,20 +44,18 @@ public sealed class ArmoryModule : IModule
 
     Task Saved(Member me, bool ok, string key, string why = null, bool stored = false)
     {
-        var o = new JsonObject { ["t"] = LodgeMsg.ArmorySaved, ["ok"] = ok, ["stored"] = stored };
-        if (key != null) o["key"] = key;
-        if (why != null) o["why"] = why;
-        return hub.Send(me, o);
+        return hub.Send(me, LodgeFieldsJson.Build(new ArmorySavedMsg { Ok = ok, Stored = stored, Key = key, Why = why }.Write));
     }
 
     async Task Put(Member me, JsonObject m)
     {
-        var key = J.Str(m, "key");
+        var put = ArmoryPutMsg.Read(new LodgeFieldsJson(m));
+        var key = put.Key;
         if (!Enabled) { await Saved(me, false, null, "disabled"); return; }
         if (!me.Personal || !Roles.Can(me.Role, Perm.ArmoryShare)) { await Saved(me, false, null, "guest"); return; }
         if (!Armory.ValidKey(key)) { await Saved(me, false, null, "invalid"); return; }
         if (!me.Budget.ArmoryPut.TryTake()) { me.CountDrop(hub.Clock); await Saved(me, false, key, "rate"); return; }
-        var clean = Armory.Clean(J.Obj(m, "char"), out var why, RepsEnabled);
+        var clean = Armory.Clean((JsonObject)put.Char, out var why, RepsEnabled);
         if (clean == null) { await Saved(me, false, key, why ?? "invalid"); return; }
         ArmoryStore.PutResult r; bool saved = true;
         lock (Store.Gate)
@@ -72,17 +72,17 @@ public sealed class ArmoryModule : IModule
 
     async Task Delete(Member me, JsonObject m)
     {
-        if (!me.Personal || !Roles.Can(me.Role, Perm.ArmoryShare)) { await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.ArmoryDeleted, ["ok"] = false, ["why"] = "guest" }); return; }
-        bool all = J.Bool(m, "all");
-        var key = J.Str(m, "key");
-        if (!all && !Armory.ValidKey(key)) { await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.ArmoryDeleted, ["ok"] = false, ["why"] = "invalid" }); return; }
-        if (!me.Budget.Control.TryTake()) { me.CountDrop(hub.Clock); await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.ArmoryDeleted, ["ok"] = false, ["why"] = "rate" }); return; }
+        Task Refused(string why) => hub.Send(me, LodgeFieldsJson.Build(new ArmoryDeletedMsg { Ok = false, Why = why }.Write));
+        if (!me.Personal || !Roles.Can(me.Role, Perm.ArmoryShare)) { await Refused("guest"); return; }
+        var req = ArmoryDeleteMsg.Read(new LodgeFieldsJson(m));
+        bool all = req.All;
+        var key = req.Key;
+        if (!all && !Armory.ValidKey(key)) { await Refused("invalid"); return; }
+        if (!me.Budget.Control.TryTake()) { me.CountDrop(hub.Clock); await Refused("rate"); return; }
         int n;
         lock (Store.Gate) n = Store.Delete(Identity(me), all ? null : key);   // always your own: the identity comes from the connection, never from the frame
         if (n > 0) hub.Log.LogInformation("{Name} took {Count} character(s) out of the armory", me.Name, n);
-        var o = new JsonObject { ["t"] = LodgeMsg.ArmoryDeleted, ["ok"] = true, ["removed"] = n };
-        if (!all) o["key"] = key;
-        await hub.Send(me, o);
+        await hub.Send(me, LodgeFieldsJson.Build(new ArmoryDeletedMsg { Ok = true, Removed = n, Key = all ? null : key }.Write));
     }
 
     // a login shows as the member's display name (never anything from the game); a member without one shows the login name
@@ -100,7 +100,7 @@ public sealed class ArmoryModule : IModule
         if (!Allowed(me)) { await hub.Error(me, "The Armory is for lodge members", "guest"); return; }
         if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
         string json;
-        lock (Store.Gate) json = new JsonObject { ["t"] = LodgeMsg.ArmoryChars, ["chars"] = Store.List(Shown, Identity(me)) }.ToJsonString();
+        lock (Store.Gate) json = LodgeFieldsJson.Build(new ArmoryCharsMsg { Chars = Store.List(Shown, Identity(me)) }.Write).ToJsonString();
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
     }
 
@@ -109,13 +109,14 @@ public sealed class ArmoryModule : IModule
         if (!Enabled) { await hub.Error(me, "The Armory is switched off on this lodge", "disabled"); return; }
         if (!Allowed(me)) { await hub.Error(me, "The Armory is for lodge members", "guest"); return; }
         if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
-        var owner = J.Str(m, "owner"); var key = J.Str(m, "key");
+        var req = ArmoryGetMsg.Read(new LodgeFieldsJson(m));
+        var owner = req.Owner; var key = req.Key;
         if (owner == null || owner.Length > 64 || !Armory.ValidKey(key)) { await hub.Error(me, "No such character", "notfound"); return; }
         string json = null;
         lock (Store.Gate)
         {
             var c = Store.Get(owner, key);
-            if (c != null) json = new JsonObject { ["t"] = LodgeMsg.ArmoryChar, ["owner"] = owner, ["by"] = Shown(owner, Store.NameOf(owner)), ["key"] = key, ["char"] = (RepsEnabled ? c : Armory.WithoutReps(c)).DeepClone() }.ToJsonString();
+            if (c != null) json = LodgeFieldsJson.Build(new ArmoryCharMsg { Owner = owner, By = Shown(owner, Store.NameOf(owner)), Key = key, Char = (RepsEnabled ? c : Armory.WithoutReps(c)).DeepClone() }.Write).ToJsonString();
         }
         if (json == null) { await hub.Error(me, "That character is not in the armory (any more)", "notfound"); return; }
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
@@ -127,13 +128,13 @@ public sealed class ArmoryModule : IModule
         if (!Enabled) { await hub.Error(me, "The Armory is switched off on this lodge", "disabled"); return; }
         if (!Allowed(me)) { await hub.Error(me, "The Armory is for lodge members", "guest"); return; }
         if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
-        var spells = new SortedSet<int>();
+        var spells = new SortedSet<int>();          // raw on purpose: only whole JSON numbers count (ArmoryCraftersGetMsg.Read is the lenient reading)
         void Add(JsonNode n) { if (spells.Count < Armory.MaxCrafterSpells && n is JsonValue v && v.TryGetValue<double>(out var d) && d >= 1 && d <= int.MaxValue && d == Math.Floor(d)) spells.Add((int)d); }
         if (m["spells"] is JsonArray sa) foreach (var n in sa) Add(n);
         Add(m["spell"]);
         if (spells.Count == 0) { await hub.Error(me, "No such recipe", "invalid"); return; }
         string json;
-        lock (Store.Gate) json = new JsonObject { ["t"] = LodgeMsg.ArmoryCrafters, ["spells"] = new JsonArray(spells.Select(s => (JsonNode)JsonValue.Create(s)).ToArray()), ["who"] = Store.Crafters(spells, Shown, Identity(me)) }.ToJsonString();
+        lock (Store.Gate) json = LodgeFieldsJson.Build(new ArmoryCraftersMsg { Spells = spells.Select(s => (long)s).ToList(), Who = Store.Crafters(spells, Shown, Identity(me)) }.Write).ToJsonString();
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
     }
 
@@ -145,10 +146,11 @@ public sealed class ArmoryModule : IModule
         if (!RepsEnabled) { await hub.Error(me, "Reputations are switched off on this lodge", "noreps"); return; }
         if (!Allowed(me)) { await hub.Error(me, "The Armory is for lodge members", "guest"); return; }
         if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
+        // raw on purpose: only a whole JSON number counts (ArmoryStandingGetMsg.Read is the lenient reading)
         int faction = m["faction"] is JsonValue fv && fv.TryGetValue<double>(out var d) && d >= 1 && d <= Armory.MaxFactionId && d == Math.Floor(d) ? (int)d : 0;
         if (faction == 0) { await hub.Error(me, "No such faction", "invalid"); return; }
         string json;
-        lock (Store.Gate) json = new JsonObject { ["t"] = LodgeMsg.ArmoryStanding, ["faction"] = faction, ["who"] = Store.Standings(faction, Shown, Identity(me)) }.ToJsonString();
+        lock (Store.Gate) json = LodgeFieldsJson.Build(new ArmoryStandingMsg { Faction = faction, Who = Store.Standings(faction, Shown, Identity(me)) }.Write).ToJsonString();
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);
     }
 

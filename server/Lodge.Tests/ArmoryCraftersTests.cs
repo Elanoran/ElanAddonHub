@@ -256,10 +256,10 @@ public class ArmoryCraftersTests
             Assert.NotNull(clean);
             lock (store.Gate) { store.Put("mia", "Mia", "Forever-Aria", clean!); Assert.True(store.Save()); }
             var again = new ArmoryStore(dir, null!, new SystemClockForTests());
-            JsonArray who;
+            List<Elans.Shared.ArmoryCrafter> who;
             lock (again.Gate) who = again.Crafters(new HashSet<int> { 100 }, (id, login) => login, "mia");
             Assert.Single(who);
-            Assert.Equal("Mia", (string)who[0]!["by"]!);
+            Assert.Equal("Mia", who[0].By);
             await Task.CompletedTask;
         }
         finally { try { Directory.Delete(dir, true); } catch { } }

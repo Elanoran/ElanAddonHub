@@ -466,4 +466,134 @@ public class ArmoryTests
         Assert.DoesNotContain("SecretGuild", all);
         Assert.DoesNotContain("Linen", all);
     }
+
+    // ---------------------------------------------------------------- the typed frames (Elans.Shared ArmoryMessages.cs)
+
+    static string[] Keys(JsonObject o) => o.Select(kv => kv.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+    // the old construction of a list line, a crafter row and a standing row (ArmoryStore / Armory at c712015), from the stored snapshot
+    static JsonObject OldSummary(JsonObject c)
+    {
+        var o = new JsonObject();
+        foreach (var k in new[] { "name", "realm", "class", "classText", "race", "raceFile", "sex", "faction", "guild", "level", "ilvl", "at" })
+            if (c[k] != null) o[k] = c[k]!.DeepClone();
+        if (o["ilvl"] == null && c["gear"] is JsonObject g && g["ilvl"] != null) o["ilvl"] = g["ilvl"]!.DeepClone();
+        var profs = new JsonArray();
+        if (c["professions"] is JsonObject p && p["list"] is JsonArray l)
+            foreach (var n in l.OfType<JsonObject>())
+                profs.Add(new JsonObject { ["name"] = n["name"]!.DeepClone(), ["skill"] = n["skill"]!.DeepClone(), ["max"] = n["max"]!.DeepClone() });
+        o["professions"] = profs;
+        return o;
+    }
+
+    static JsonObject OldStanding(JsonObject c, int faction)
+    {
+        var r = (JsonObject)c["reps"]!;
+        var e = ((JsonArray)r["list"]!).OfType<JsonObject>().First(x => (int)x["id"]! == faction);
+        var row = new JsonObject
+        {
+            ["faction"] = faction, ["s"] = e["s"]!.DeepClone(), ["v"] = e["v"]!.DeepClone(),
+            ["name"] = c["name"]!.DeepClone(), ["class"] = c["class"]!.DeepClone(), ["level"] = c["level"]!.DeepClone(), ["at"] = r["at"]?.DeepClone() ?? 0,
+        };
+        if (e["min"] != null) row["min"] = e["min"]!.DeepClone();
+        if (e["max"] != null) row["max"] = e["max"]!.DeepClone();
+        return row;
+    }
+
+    static JsonObject OldCrafter(JsonObject c, int spell)
+    {
+        var p = (JsonObject)c["professions"]!;
+        var list = (p["list"] as JsonArray)?.OfType<JsonObject>().ToList() ?? new List<JsonObject>();
+        foreach (var (key, v) in (JsonObject)p["known"]!)
+        {
+            var e = (JsonObject)v!;
+            if (!((JsonArray)e["ids"]!).Any(x => (int)x! == spell)) continue;
+            var line = int.Parse(key);
+            var prof = list.FirstOrDefault(x => x["line"] is JsonValue lv && lv.TryGetValue<int>(out var li) && li == line);
+            string name = prof != null ? (string)prof["name"]! : (e["n"] as JsonValue)?.GetValue<string>()!;
+            return new JsonObject
+            {
+                ["spell"] = spell, ["profession"] = name, ["skill"] = prof != null ? prof["skill"]!.DeepClone() : 0, ["max"] = prof != null ? prof["max"]!.DeepClone() : 0,
+                ["name"] = c["name"]!.DeepClone(), ["class"] = c["class"]!.DeepClone(), ["level"] = c["level"]!.DeepClone(),
+                ["partial"] = e["partial"]?.DeepClone() ?? true,
+            };
+        }
+        throw new InvalidOperationException("no such recipe");
+    }
+
+    // the server's frames keep their keys, and each list line / crafter row / standing row is byte for byte what the old JsonObjects made
+    // (the FunSock parses what was sent; a parsed JsonObject serializes back to the same text)
+    [Fact]
+    public async Task Typed_armory_frames_keep_their_keys_and_bytes()
+    {
+        using var r = new FunRig();
+        var mia = r.Join("Mia", "member"); var bob = r.Join("Bob", "officer"); var gus = r.Join("Gus", "guest");
+        var aria = Snap("Aria");
+        var pro = (Dictionary<string, object>)aria["professions"];
+        pro["list"] = new object[] { new { name = "Alchemy", skill = 150, max = 300, ic = 5, kind = "primary", line = 171 }, new { name = "Cooking", skill = 80, max = 300, kind = "secondary", line = 185 } };
+        pro["known"] = new Dictionary<string, object> { ["171"] = new { at = 1_790_000_100, partial = false, n = "Alchemy", ids = new[] { 100, 101 } }, ["999"] = new { at = 1_790_000_100, n = "Mining", ids = new[] { 100 } } };
+        aria["reps"] = new { at = 1_790_000_200, list = new object[] { new { id = 72, s = 6, v = 12500, min = 9000, max = 21000 }, new { id = 47, s = 5, v = -400 } } };
+        var saved = await Put(r, mia, "Forever-Aria", aria);
+        Assert.Equal(new[] { "key", "ok", "stored", "t" }, Keys(saved));
+        Assert.Equal(new[] { "ok", "stored", "t", "why" }, Keys(await Put(r, gus, "Forever-Gus", Snap("Gus"))));
+        var bo = Snap("Bo", "MAGE", 42); bo.Remove("sex"); bo.Remove("guild"); bo.Remove("professions");
+        await Put(r, bob, "Forever-Bo", bo);
+
+        var list = await List(r, mia);
+        Assert.Equal(new[] { "chars", "t" }, Keys(list));
+        var lines = list["chars"]!.AsArray().Select(x => x!.AsObject()).ToList();
+        Assert.Equal(new[] { "at", "by", "class", "classText", "faction", "guild", "ilvl", "key", "level", "mine", "name", "owner", "professions", "race", "raceFile", "realm", "sex", "up" },
+            Keys(lines.Single(x => (string)x["name"]! == "Aria")));
+        Assert.Equal(new[] { "at", "by", "class", "classText", "faction", "ilvl", "key", "level", "name", "owner", "professions", "race", "raceFile", "realm", "up" },
+            Keys(lines.Single(x => (string)x["name"]! == "Bo")));
+        foreach (var line in lines)
+        {
+            var owner = (string)line["owner"]!; var key = (string)line["key"]!;
+            JsonObject c; lock (r.Hub.Armory.Store.Gate) c = r.Hub.Armory.Store.Get(owner, key)!;
+            var old = OldSummary(c);
+            old["owner"] = owner; old["by"] = line["by"]!.DeepClone(); old["key"] = key; old["up"] = (long)line["up"]!;
+            if (owner == "mia") old["mine"] = true;
+            Assert.Equal(old.ToJsonString(), line.ToJsonString());
+        }
+
+        var ch = await Get(r, bob, "mia", "Forever-Aria");
+        Assert.Equal(new[] { "by", "char", "key", "owner", "t" }, Keys(ch!));
+        JsonObject stored; lock (r.Hub.Armory.Store.Gate) stored = r.Hub.Armory.Store.Get("mia", "Forever-Aria")!;
+        Assert.Equal(stored.ToJsonString(), ch!["char"]!.ToJsonString());          // the sheet goes out as it is stored
+
+        r.Clock.Advance(TimeSpan.FromSeconds(2));
+        r.Sock("Bob").Clear();
+        await r.Send(bob, new { t = "armory.crafters", spells = new[] { 101, 100 } });
+        var cr = r.Sock("Bob").Of("armory.crafters").Last();
+        Assert.Equal(new[] { "spells", "t", "who" }, Keys(cr));
+        Assert.Equal("[100,101]", cr["spells"]!.ToJsonString());
+        var rows = cr["who"]!.AsArray().Select(x => x!.AsObject()).ToList();
+        Assert.Equal(3, rows.Count);
+        foreach (var row in rows)
+        {
+            var old = OldCrafter(stored, (int)row["spell"]!);
+            if ((string)row["profession"]! != (string)old["profession"]!) old = new JsonObject { ["spell"] = row["spell"]!.DeepClone(), ["profession"] = "Mining", ["skill"] = 0, ["max"] = 0, ["name"] = "Aria", ["class"] = "HUNTER", ["level"] = 60, ["partial"] = true };
+            old["owner"] = "mia"; old["by"] = row["by"]!.DeepClone(); old["key"] = "Forever-Aria";
+            Assert.Equal(old.ToJsonString(), row.ToJsonString());
+        }
+
+        r.Clock.Advance(TimeSpan.FromSeconds(2));
+        r.Sock("Mia").Clear();
+        await r.Send(mia, new { t = "armory.standing", faction = 72 });
+        var st = r.Sock("Mia").Of("armory.standing").Last();
+        Assert.Equal(new[] { "faction", "t", "who" }, Keys(st));
+        var srow = st["who"]!.AsArray().Single()!.AsObject();
+        var olds = OldStanding(stored, 72); olds["owner"] = "mia"; olds["by"] = srow["by"]!.DeepClone(); olds["key"] = "Forever-Aria"; olds["mine"] = true;
+        Assert.Equal(olds.ToJsonString(), srow.ToJsonString());
+        r.Clock.Advance(TimeSpan.FromSeconds(2));
+        await r.Send(mia, new { t = "armory.standing", faction = 47 });
+        var srow2 = r.Sock("Mia").Of("armory.standing").Last()["who"]!.AsArray().Single()!.AsObject();
+        var olds2 = OldStanding(stored, 47); olds2["owner"] = "mia"; olds2["by"] = srow2["by"]!.DeepClone(); olds2["key"] = "Forever-Aria"; olds2["mine"] = true;
+        Assert.Equal(olds2.ToJsonString(), srow2.ToJsonString());               // no min / max
+
+        var del = await Delete(r, mia, new { t = "armory.delete", key = "Forever-Aria" });
+        Assert.Equal(new[] { "key", "ok", "removed", "t" }, Keys(del));
+        Assert.Equal(new[] { "ok", "removed", "t" }, Keys(await Delete(r, mia, new { t = "armory.delete", all = true })));
+        Assert.Equal(new[] { "ok", "t", "why" }, Keys(await Delete(r, gus, new { t = "armory.delete", all = true })));
+    }
 }

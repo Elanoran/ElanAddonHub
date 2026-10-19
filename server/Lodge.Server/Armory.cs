@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -287,20 +288,18 @@ public static partial class Armory
     }
 
     // "standing with a faction": the row of one shared character, or null when it has no reputation with it
-    public static JsonObject StandingOf(JsonObject c, int faction)
+    // (typed: ArmoryStanding; owner, by, key and mine are filled in by the store. The snapshot is a cleaned one, so every value has its type.)
+    public static ArmoryStanding StandingOf(JsonObject c, int faction)
     {
         if (c["reps"] is not JsonObject r || r["list"] is not JsonArray list) return null;
         foreach (var n in list)
         {
             if (n is not JsonObject e || e["id"] is not JsonValue iv || !iv.TryGetValue<int>(out var id) || id != faction) continue;
-            var row = new JsonObject
+            return new ArmoryStanding
             {
-                ["faction"] = faction, ["s"] = e["s"]!.DeepClone(), ["v"] = e["v"]!.DeepClone(),
-                ["name"] = c["name"]!.DeepClone(), ["class"] = c["class"]!.DeepClone(), ["level"] = c["level"]!.DeepClone(), ["at"] = r["at"]?.DeepClone() ?? 0,
+                Faction = faction, S = J.Int(e, "s"), V = J.Int(e, "v"), Name = J.Str(c, "name"), Class = J.Str(c, "class"), Level = J.Int(c, "level"), At = J.Long(r, "at"),
+                Min = e["min"] != null ? J.Int(e, "min") : null, Max = e["max"] != null ? J.Int(e, "max") : null,
             };
-            if (e["min"] != null) row["min"] = e["min"]!.DeepClone();
-            if (e["max"] != null) row["max"] = e["max"]!.DeepClone();
-            return row;
         }
         return null;
     }
@@ -315,7 +314,8 @@ public static partial class Armory
     }
 
     // ---- "who can craft this": the shared characters of one member that have learned any of the spells. One row per (character, spell).
-    public static IEnumerable<JsonObject> CraftersOf(JsonObject c, IReadOnlySet<int> spells)
+    // (typed: ArmoryCrafter; owner, by, key and mine are filled in by the store)
+    public static IEnumerable<ArmoryCrafter> CraftersOf(JsonObject c, IReadOnlySet<int> spells)
     {
         if (c["professions"] is not JsonObject p || p["known"] is not JsonObject known) yield break;
         var list = (p["list"] as JsonArray)?.OfType<JsonObject>().ToList() ?? new List<JsonObject>();
@@ -329,11 +329,11 @@ public static partial class Armory
             {
                 int id = (int)idn!;
                 if (!spells.Contains(id)) continue;
-                yield return new JsonObject
+                yield return new ArmoryCrafter
                 {
-                    ["spell"] = id, ["profession"] = name, ["skill"] = prof != null ? prof["skill"]!.DeepClone() : 0, ["max"] = prof != null ? prof["max"]!.DeepClone() : 0,
-                    ["name"] = c["name"]!.DeepClone(), ["class"] = c["class"]!.DeepClone(), ["level"] = c["level"]!.DeepClone(),
-                    ["partial"] = e["partial"]?.DeepClone() ?? true,
+                    Spell = id, Profession = name, Skill = prof != null ? J.Int(prof, "skill") : 0, Max = prof != null ? J.Int(prof, "max") : 0,
+                    Name = J.Str(c, "name"), Class = J.Str(c, "class"), Level = J.Int(c, "level"),
+                    Partial = J.Bool(e, "partial", true),
                 };
             }
         }
@@ -390,18 +390,21 @@ public static partial class Armory
         return o;
     }
 
-    // ---- the one-line view of a character the list shows (the full snapshot is fetched when it is opened)
-    public static JsonObject Summary(JsonObject c)
+    // ---- the one-line view of a character the list shows (the full snapshot is fetched when it is opened). Typed: ArmorySummary; owner, by, key,
+    // up and mine are filled in by the store. The snapshot is a cleaned one (Clean), so every value has its type.
+    public static ArmorySummary Summary(JsonObject c)
     {
-        var o = new JsonObject();
-        foreach (var k in new[] { "name", "realm", "class", "classText", "race", "raceFile", "sex", "faction", "guild", "level", "ilvl", "at" })
-            if (c[k] != null) o[k] = c[k]!.DeepClone();
-        if (o["ilvl"] == null && c["gear"] is JsonObject g && g["ilvl"] != null) o["ilvl"] = g["ilvl"]!.DeepClone();
-        var profs = new JsonArray();
+        string S(string k) => c[k] != null ? J.Str(c, k) : null;
+        var o = new ArmorySummary
+        {
+            Name = S("name"), Realm = S("realm"), Class = S("class"), ClassText = S("classText"), Race = S("race"), RaceFile = S("raceFile"),
+            Sex = c["sex"] != null ? J.Int(c, "sex") : null, Faction = S("faction"), Guild = S("guild"), Level = c["level"] != null ? J.Int(c, "level") : null,
+            Ilvl = c["ilvl"] is JsonValue iv && iv.TryGetValue<double>(out var il) ? il : null, At = c["at"] != null ? J.Long(c, "at") : null,
+        };
+        if (o.Ilvl == null && c["gear"] is JsonObject g && g["ilvl"] is JsonValue gv && gv.TryGetValue<double>(out var gil)) o.Ilvl = gil;
         if (c["professions"] is JsonObject p && p["list"] is JsonArray l)
             foreach (var n in l.OfType<JsonObject>())
-                profs.Add(new JsonObject { ["name"] = n["name"]!.DeepClone(), ["skill"] = n["skill"]!.DeepClone(), ["max"] = n["max"]!.DeepClone() });
-        o["professions"] = profs;
+                o.Professions.Add(new ArmoryProfession { Name = J.Str(n, "name"), Skill = J.Int(n, "skill"), Max = J.Int(n, "max") });
         return o;
     }
 }

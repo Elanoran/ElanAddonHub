@@ -52,7 +52,7 @@ namespace ElansAddonHub.Lodge
             {
                 if (a == null) standingsAnswers[faction] = a = new StandingsAnswer();
                 a.Asked = now;
-                _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.ArmoryStanding, ["faction"] = faction });
+                _ = Send(LodgeFieldsDict.Build(new ArmoryStandingGetMsg { Faction = faction }.Write));
             }
             res.Pending = !fresh && a != null && a.Answered == default(DateTime);
             return res;
@@ -61,13 +61,14 @@ namespace ElansAddonHub.Lodge
         void OnArmoryStanding(Dictionary<string, object> m)
         {
             if (!SupportsReps) return;
-            int faction = m.Int("faction");
+            var msg = ArmoryStandingMsg.Read(new LodgeFieldsDict(m));
+            int faction = msg.Faction;
             if (!standingsAnswers.TryGetValue(faction, out var a)) return;           // only what was asked for
             var rows = new List<LodgeStanding>();
-            foreach (var o in m.List("who"))
+            foreach (var o in msg.Who)
             {
                 if (rows.Count >= 80) break;
-                var r = LodgeStanding.From(o as Dictionary<string, object>);
+                var r = LodgeStanding.From(o);
                 if (r != null && r.Faction == faction) rows.Add(r);
             }
             a.Rows = rows; a.Answered = Clock();
