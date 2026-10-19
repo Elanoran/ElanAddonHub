@@ -3,6 +3,11 @@
 Newest first. `Tools/release.py` (addon repo) reads the sections newer than the previous release for the GitHub release notes.
 Keep one `## x.y.z` section per hub version. This file is also shown in the Outpost (Settings > About > What's new): public text only - no paths, names, addresses or keys.
 
+## 3.1.0
+- **The Outpost now runs on .NET 10** (it ran on .NET Framework 4.8 until now). Loading the game data is about a quarter faster on the first start, and the Outpost now uses the same up-to-date foundation as the Lodge and Cairn servers, with current security fixes. It looks and works the same.
+- **One-time setup:** .NET 10 needs Microsoft's free ".NET Desktop Runtime 10" on your PC. If it is missing, Windows shows a message with a download link when the Outpost starts - install it once and start the Outpost again.
+- The radio now uses the modern way of streaming: switching channel or quality closes the old stream before the new one starts.
+
 ## 3.0.1
 - **Back in your voice room after an update.** When the Outpost restarts for an update while you are in a voice room, the new version goes straight back into the same room, muted or deafened as you were. It only does this right after the update (within 10 minutes) and only on the same Lodge, so a normal start later never joins voice by itself.
 - **Elan's Priest Helper.** The new priest add-on is listed with the others: heal frames with click-casting, your Renew and shield timers, a buff manager, the five-second rule and a healer coach. Addon health knows it too (/epr diag).
