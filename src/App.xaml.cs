@@ -20,6 +20,14 @@ namespace ElansAddonHub
 
         // Self-test isolation: the data folder must be set before ANY static that reads Util.DataDir can run
         // (Util.DataDir is static readonly; touching Util/SettingsStore/IconStore first locks in the real folder).
+        // 3.1 (.NET 10): string.GetHashCode() differs in every process there, so a name two processes must agree on uses this (FNV-1a)
+        static uint StableHash(string s)
+        {
+            uint h = 2166136261;
+            foreach (var c in s) { h ^= c; h *= 16777619; }
+            return h;
+        }
+
         static App()
         {
             // .NET 10: Windows code pages (1252 for the radio's song titles) need this provider; .NET Framework had them built in
@@ -116,7 +124,7 @@ namespace ElansAddonHub
                 // After a self-update the old hub may still be closing (it finishes its saves first, at most 15 s): wait for it instead of giving up.
                 // a test run with its own data folder gets its own "one hub" lock, so it never meets the real hub
                 var testData = Environment.GetEnvironmentVariable("ELANSHUB_DATA");
-                var lockName = "ElansAddonHub.Single" + (string.IsNullOrEmpty(testData) ? "" : "." + testData.GetHashCode().ToString("x"));
+                var lockName = "ElansAddonHub.Single" + (string.IsNullOrEmpty(testData) ? "" : "." + StableHash(testData).ToString("x"));
                 single = new Mutex(false, lockName);
                 bool first;
                 try { first = single.WaitOne(e.Args.Contains("--updated") ? 30000 : 0); }
