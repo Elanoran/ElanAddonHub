@@ -319,6 +319,21 @@ The Outpost side (same release train): manifest folders, ids and game versions m
   stats` passes it to curl through a pipe (`-H @-`), so it is not in `ps`. The answer is counts only.
 - Connected outposts: two numbers per week leave the Lodge (members who share, members who received); the per-week member hashes use a random
   salt that is discarded with the week, so neither the Cairn nor a later reader of `cairn-week.json` can tie a count to a person.
+## 2.31.1 (security review of the shared Lodge protocol)
+
+- Frames: `LodgeJson.Parse` (Elans.Shared, both sides) refuses a frame with more than 20k items in one array / keys in one object, 1M values
+  or 100k objects / arrays in all, before anything is built - an 8 MB frame of empty objects used to cost about 1.1 GB to read. The biggest
+  real frames (flight routes and flight times at their caps, Atlas pages of the smallest records) are checked against the counts (`FrameLimitsTests`).
+- Addresses: the wrong-code lockout, the HTTP rate limit and the guest budgets count by `IpKey` (Elans.Shared): an IPv4 address, an IPv6 /64.
+  Rotating through one's own /64 no longer fills the strike table, whose shared overflow record would block everyone new; and while only that
+  record is blocked, a valid device token is still admitted (a wrong one still counts).
+- Downloads: `GET /files/{id}` and `GET /slots/{id}/{v}` share a budget per person and hour (guests per address): `LODGE_DOWNLOADS_PER_HOUR`,
+  `LODGE_DOWNLOAD_MB_PER_HOUR`.
+- Files: the blocked types are the one shared list (`Elans.Shared.DangerousFiles`, also .iso .img .vhd(x) .url .scf .chm .msix .appx
+  .appinstaller .library-ms .search-ms .settingcontent-ms .xll .inf .ws .wsc); a zip uploaded in chat is checked like a shared file's.
+- Text: the status note gets the names' cleaning (bidi, zero-width and control characters out). A failed admin request shows only the server's
+  own messages (anything else is a plain text; the detail stays in the log); uploads record only the verified name.
+
 ## Tests
 
 ```bash
