@@ -50,6 +50,9 @@ public class FilesTests
     [InlineData("setup.exe.", true)] [InlineData("setup.exe ", true)] [InlineData("a.txt.exe", true)]
     [InlineData("a.txt", false)] [InlineData("a.zip", false)] [InlineData("exe", false)] [InlineData("a.exe.txt", false)] [InlineData("a.json", false)]
     [InlineData("UI pack.7z", false)] [InlineData("x.lua", false)]
+    [InlineData("x.url", true)] [InlineData("x.scf", true)] [InlineData("disk.ISO", true)] [InlineData("x.img", true)] [InlineData("x.vhd", true)] [InlineData("x.vhdx", true)]
+    [InlineData("x.chm", true)] [InlineData("x.msix", true)] [InlineData("x.appx", true)] [InlineData("x.appinstaller", true)] [InlineData("x.library-ms", true)]
+    [InlineData("x.search-ms", true)] [InlineData("x.settingcontent-ms", true)] [InlineData("x.xll", true)] [InlineData("x.inf", true)] [InlineData("x.ws", true)] [InlineData("x.wsc", true)]
     public void Blocked_types_are_recognised(string name, bool blocked) => Assert.Equal(blocked, FileRules.IsBlockedName(name));
 
     [Theory]
@@ -198,6 +201,7 @@ public class FilesTests
 
     [Theory]
     [InlineData("tool.exe")] [InlineData("run.ps1")] [InlineData("x.dll")] [InlineData("a.js")] [InlineData("a.exe.")]
+    [InlineData("disk.iso")] [InlineData("x.settingcontent-ms")] [InlineData("x.url")] [InlineData("x.vhdx")] [InlineData("help.chm")] [InlineData("a.appinstaller")]
     public async Task Programs_and_scripts_are_refused(string name)
     {
         using var r = new FunRig();

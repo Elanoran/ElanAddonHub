@@ -40,24 +40,15 @@ public sealed class Slot
 // What a file may be, independent of storage: the extension block and the zip listing.
 public static class FileRules
 {
-    public static readonly HashSet<string> Blocked = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "exe", "dll", "com", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh", "msi", "msp", "scr", "cpl",
-        "jar", "lnk", "reg", "hta", "sys", "drv", "pif", "application", "appref-ms",
-    };
+    // the blocked types: the one shared list (Elans.Shared.DangerousFiles) that the Outpost warns about and refuses too
+    public static IReadOnlyCollection<string> Blocked => Elans.Shared.DangerousFiles.Extensions;
 
     public const int MaxZipEntries = 20000;
 
     // the last extension, ignoring trailing dots/spaces ("setup.exe. " is still setup.exe on Windows); "" when none
-    public static string Extension(string name)
-    {
-        name = (name ?? "").Trim(' ', '.', '\t');
-        var dot = name.LastIndexOf('.');
-        var slash = name.LastIndexOfAny(new[] { '/', '\\' });
-        return dot > slash && dot >= 0 ? name[(dot + 1)..].Trim().ToLowerInvariant() : "";
-    }
+    public static string Extension(string name) => Elans.Shared.DangerousFiles.Extension(name);
 
-    public static bool IsBlockedName(string name) => Blocked.Contains(Extension(name));
+    public static bool IsBlockedName(string name) => Elans.Shared.DangerousFiles.IsDangerous(name);
 
     public static bool IsZip(string name) => Extension(name) == "zip";
 
