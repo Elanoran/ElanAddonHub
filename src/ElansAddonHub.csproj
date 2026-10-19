@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- 3.1.0: .NET 10 (was .NET Framework 4.8, last one tagged outpost-net48-last). One framework-dependent single-file exe:
-       it needs the .NET 10 Desktop Runtime once per PC (winget install Microsoft.DotNet.DesktopRuntime.10). See docs/net10-plan.md. -->
+       it needs the .NET 10 Desktop Runtime once per PC (winget install Microsoft.DotNet.DesktopRuntime.10). -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
