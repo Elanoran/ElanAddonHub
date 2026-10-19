@@ -324,7 +324,7 @@ namespace Elans.Shared
         public const string Type = LodgeMsg.HistoryPage;
         public string Channel, Before;
         public bool HasMore;
-        // the stored messages as they are (JsonArray on the server, List<object> in the Outpost - see ILodgeFields.RawList): the server
+        // the stored messages as they are (a raw JsonArray - see ILodgeFields.RawList): the server
         // passes its records through unchanged. Null: Items is written instead.
         public object Messages;
         public List<ChatMessage> Items = new List<ChatMessage>();   // read side: the typed view of every object in messages

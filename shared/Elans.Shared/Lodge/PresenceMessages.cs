@@ -20,7 +20,7 @@ namespace Elans.Shared
         public bool Guest, Voice, Muted, Deaf, ServerMuted;
         public bool Invisible;          // written only when true
         public bool HasDisplayName;     // read side: the key was there (a 2.7+ server); absent from an older one
-        // what they play: the presence object passed through as it is (JsonObject on the server, Dictionary in the Outpost - see
+        // what they play: the presence object passed through as it is (a raw JsonObject - see
         // ILodgeFields.RawChild); null = not shared (written as JSON null). LodgeGame.Read gives the typed view of it.
         public object Game;
 

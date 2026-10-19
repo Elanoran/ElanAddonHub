@@ -104,7 +104,7 @@ namespace Elans.Shared
     public sealed class WelcomeHistory
     {
         public string Channel;
-        // the stored records as they are (JsonArray on the server, List<object> in the Outpost - see ILodgeFields.RawList), passed through
+        // the stored records as they are (a raw JsonArray - see ILodgeFields.RawList), passed through
         // unchanged. Null: Items is written instead.
         public object Messages;
         // read side: the typed view of every object in the list; an entry without a channel key gets this channel (as the Outpost did)

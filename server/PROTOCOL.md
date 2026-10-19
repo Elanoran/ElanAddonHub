@@ -804,8 +804,7 @@ a received frame into its `JsonObject`, `LodgeJson.Serialize` / `SerializeUtf8` 
 one from its class, and `LodgeJsonFields` is the `ILodgeFields` / `ILodgeWriter` the classes read and write through (lenient: a missing or
 wrong-typed field is null / 0 / false). The rules are the same on both sides and live there too: a frame is skipped as a whole unless it
 is strict JSON with an object at the top, at most 64 levels deep (`MaxDepth`, the frame included), with no key twice in one object, valid
-UTF-8 and no lone surrogate in any string or key; every key and string is read once while parsing, so a frame that parses never throws
-when a field is read. Frames are at most 64 KB to the Lodge (`MaxFrameToLodge`, a bigger one closes the connection) and 8 MB from it
+UTF-8 and no lone surrogate in any string or key - all checked while parsing, so a frame that parses never throws when a field is read. Frames are at most 64 KB to the Lodge (`MaxFrameToLodge`, a bigger one closes the connection) and 8 MB from it
 (`MaxFrameFromLodge`: the worst `flights.routes.data` is about 4.5 MB, `atlas.data` comes in pages of about 200 KB); the Outpost stops
 reading a bigger one at the cap and reconnects (`LodgeFrames.ReadAsync`), and reconnects too when more than 2000 frames (or 64 MB) wait for
 its UI (`LodgeInbox`). A Lodge's HTTP JSON answers (`/exchange`, uploads, errors) are read to at most 64 KB (`MaxHttpAnswer`). Where a free-form part feeds a validator written for plain dictionaries (an

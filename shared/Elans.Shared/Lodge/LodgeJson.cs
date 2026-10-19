@@ -45,7 +45,9 @@ namespace Elans.Shared
         public static JsonObject Parse(byte[] utf8, int offset, int count)
         {
             if (utf8 == null) return null;
-            try { return Checked(JsonNode.Parse(new ReadOnlySpan<byte>(utf8, offset, count), null, Rules)); } catch { return null; }
+            var span = new ReadOnlySpan<byte>(utf8, offset, count);
+            if (!System.Text.Unicode.Utf8.IsValid(span)) return null;              // invalid UTF-8 anywhere (keys, strings, overlong, encoded surrogates)
+            try { return Checked(JsonNode.Parse(span, null, Rules), MayHaveSurrogateEscape(span)); } catch { return null; }
         }
 
         public static JsonObject Parse(byte[] utf8) => utf8 == null ? null : Parse(utf8, 0, utf8.Length);
@@ -54,12 +56,16 @@ namespace Elans.Shared
         public static JsonObject Parse(string text)
         {
             if (text == null) return null;
-            try { return Checked(JsonNode.Parse(text, null, Rules)); } catch { return null; }
+            try { return Checked(JsonNode.Parse(text, null, Rules), text.IndexOf("\\uD", StringComparison.OrdinalIgnoreCase) >= 0); } catch { return null; }
         }
 
-        // System.Text.Json reads a node's keys and strings only when they are first asked for: every one is read here, once, so a frame that
-        // parses can be read field by field without an exception (invalid UTF-8 and lone surrogates surface now, not in a handler)
-        static JsonObject Checked(JsonNode node) => node is JsonObject o && Clean(o) ? o : null;
+        // What the parse itself doesn't check: System.Text.Json takes a duplicate key, the depth and the syntax at parse time (Rules), and
+        // valid UTF-8 can't hold a surrogate - so the only thing left is an escaped one (\uD800 alone). Only a frame that has such an escape
+        // at all (emoji are escaped pairs) is walked: every key and string read once, a lone surrogate refuses the frame. After this nothing
+        // in a frame that parsed can throw when a field is read.
+        static JsonObject Checked(JsonNode node, bool walk) => node is JsonObject o && (!walk || Clean(o)) ? o : null;
+
+        static bool MayHaveSurrogateEscape(ReadOnlySpan<byte> s) => s.IndexOf("\\ud"u8) >= 0 || s.IndexOf("\\uD"u8) >= 0;
 
         static bool Clean(JsonNode n)
         {
