@@ -333,7 +333,7 @@ public partial class LodgeHub
                 if (me.CountDrop(Clock) > FloodDropsPerMinute) { await Disconnect(me, "Too many messages - slow down"); return; }
                 continue;
             }
-            if (type == LodgeMsg.Ping) { me.Pings = true; await Send(me, new JsonObject { ["t"] = LodgeMsg.Pong }); continue; }
+            if (type == PingMsg.Type) { me.Pings = true; await Send(me, LodgeFieldsJson.Build(new PongMsg().Write)); continue; }     // { t } only (Elans.Shared ConnectionMessages.cs)
             // a message of the wrong shape must cost that message only, never the connection
             try
             {

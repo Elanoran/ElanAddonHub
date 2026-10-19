@@ -55,6 +55,8 @@ namespace ElansAddonHub
                 // ---- the exact WoW executables
                 Check("overlay: Wow.exe and friends are WoW, WowUp is not", OverlayWindow.IsWowProcess("Wow") && OverlayWindow.IsWowProcess("WowClassic") && OverlayWindow.IsWowProcess("WowT")
                     && OverlayWindow.IsWowProcess("WowB") && !OverlayWindow.IsWowProcess("WowUp") && !OverlayWindow.IsWowProcess("WowError"));
+                Check("ping: the typed ping frame (Elans.Shared PingMsg) is byte for byte the old hand-written {\"t\":\"ping\"}",
+                    System.Text.Encoding.UTF8.GetString(LodgeClient.PingFrame) == "{\"t\":\"ping\"}");
                 Check("status codes: 401/429 come from the response, not from message text", LodgeClient.StatusOf(new Exception("x", new System.Net.WebSockets.WebSocketException("The server returned status code '401' when status code '101' was expected."))) == 401
                     && LodgeClient.StatusOf(new Exception("nothing here")) == 0 && LodgeClient.IsFullClose("The lodge is full") && !LodgeClient.IsFullClose("Kicked by Elan"));
 

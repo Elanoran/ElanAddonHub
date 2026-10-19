@@ -455,7 +455,7 @@ public class HardeningTests
         var modern = await r.Join(T.ElanCode); var old = await r.Join(T.BobCode);
         modern.Say("{\"t\":\"ping\"}");
         await Rig.Settle();
-        Assert.Single(modern.Of("pong"));
+        Assert.Equal("{\"t\":\"pong\"}", Assert.Single(modern.Of("pong")).ToJsonString());   // typed (Elans.Shared PongMsg): { t } only, as before
         r.Clock.Advance(TimeSpan.FromSeconds(60));
         Assert.Equal(0, await r.Hub.SweepIdle());                           // 60 s of silence: still fine
         modern.Say("{\"t\":\"ping\"}");                                       // a ping resets the clock

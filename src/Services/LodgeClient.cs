@@ -171,6 +171,9 @@ namespace ElansAddonHub.Services
             }
         }
 
+        // the ping frame (typed: Elans.Shared PingMsg), written once: {"t":"ping"}, the same bytes the hand-written frame was (lodgehardening checks it)
+        internal static readonly byte[] PingFrame = Encoding.UTF8.GetBytes(Json.Write(LodgeFieldsDict.Build(new PingMsg().Write)));
+
         // an app-level ping every 20 s (the proxy chain can hold a dead connection open for minutes), and when the server is known
         // to answer them, 45 s without any frame means the connection is gone: abort it so the loop reconnects
         async Task Keepalive(ClientWebSocket sock, CancellationToken ct)
@@ -187,7 +190,7 @@ namespace ElansAddonHub.Services
                         try { sock.Abort(); } catch { }
                         return;
                     }
-                    await SendRaw(Encoding.UTF8.GetBytes("{\"t\":\"" + LodgeMsg.Ping + "\"}"), WebSocketMessageType.Text, 1000);
+                    await SendRaw(PingFrame, WebSocketMessageType.Text, 1000);
                 }
             }
             catch (OperationCanceledException) { }
@@ -231,7 +234,7 @@ namespace ElansAddonHub.Services
                 Dictionary<string, object> obj;
                 try { obj = Json.Obj(Encoding.UTF8.GetString(data, 0, len)); } catch { continue; }
                 if (obj == null) continue;
-                if (obj.Str("t") == LodgeMsg.Pong) { pongSeen = true; continue; }
+                if (obj.Str("t") == PongMsg.Type) { pongSeen = true; continue; }     // { t } only
                 if (first && obj.Str("t") == LodgeMsg.Welcome) { first = false; SetStatus("Online", true); }
                 Post(() => Received?.Invoke(obj));
             }

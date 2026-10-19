@@ -213,6 +213,8 @@ officer+, members and channels owner. Status is one of online | away | busy | du
   `cal-full`, `lfg`, `lfg-full`, `room-full` (with `room`), `last-owner`, `address`, `atlas`. Many errors carry no code (the text only).
 - `ping` every 20 s from the client; the server answers `pong` and closes a pinging connection that was silent for 75 s
   with close code 1001. Clients that never ping are not closed for silence.
+- Typed (stage 2): `ping` and `pong` (`{t}` only) are `PingMsg` / `PongMsg` in `shared/Elans.Shared/Lodge/ConnectionMessages.cs`. The Outpost
+  writes its ping frame once and sends the same bytes, `{"t":"ping"}`, every time (the self-test checks them); the wire is unchanged.
 - Guest names always end in " (guest)". `@everyone`/`@here` from below officer arrive with a zero-width space after the `@`.
 - `profile:data` leaves out a character's `seen` when the member is invisible to the viewer.
 
