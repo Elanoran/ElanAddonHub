@@ -201,6 +201,41 @@ officer+, members and channels owner. Status is one of online | away | busy | du
 - Guest names always end in " (guest)". `@everyone`/`@here` from below officer arrive with a zero-width space after the `@`.
 - `profile:data` leaves out a character's `seen` when the member is invisible to the viewer.
 
+## 2.9 additions (sign-up cards, older messages, search; features `lfg`, `history2`, `search`; optional for clients)
+
+`server/Lodge.Server/Lfg.cs`, `ChatLfg.cs`, `ChatHistory.cs`. Only channels the asker's rank may see are ever looked at: a channel they
+can't see answers exactly like one that doesn't exist.
+
+**Looking for group.** A card is an ordinary chat message with `kind: "lfg"`, a structured `lfg` payload and a plain-text `text` fallback
+(what older clients, history, search, pins and reply quotes show; the server rewrites it on every change).
+
+- Client -> server, to make one: `msg` `{channel, kind: "lfg", text, lfg: {title (max 60), now?, start? (unix ms, up to 10 minutes past and
+  30 days ahead; absent or `now: true` = now), note? (max 200), slots: {tank, healer, dps} (0-40 each, at least one)}}`. Anyone who may write
+  in the channel; at most 3 open cards per author; `@everyone` / `@here` below officer are defanged. Chat budget. The stored and broadcast
+  card is `lfg = {title, start, now, note, status: open|closed|cancelled, by, slots: {tank, healer, dps}, signups: [{n: name, r: tank|healer|dps|maybe}]}`.
+  A card can't be `edit`ed (error code `lfg`).
+- Client -> server, on a card (`id` = the message id; Control budget; a card that doesn't exist or isn't visible is ignored):
+  `lfg:join` `{id, role: tank|healer|dps|maybe}` (one entry per person: signing up again moves you) · `lfg:maybe` `{id}` (= join as maybe,
+  at most 40) · `lfg:leave` `{id}` · `lfg:close` `{id}` (the group is set) · `lfg:cancel` `{id}` (it won't happen). Close and cancel: the
+  organiser or an officer (`Perm.Moderate`). A closed or cancelled card can't change.
+- Server -> client: `lfg` `{channel, id, lfg, text}` to everyone who sees the channel, after every change. Refusals are `error` with code `lfg`
+  ("That sign-up is closed", "Only the organiser or an officer can do that", a bad role, too many open cards, a bad card) or `lfg-full`.
+
+**Older messages** (scrolling up past the welcome's history):
+
+- `history:before` `{channel, before: <message id>, beforeAt?: <unix ms of that message, used when it is gone>, limit? (1-100, default 100)}`
+  (client -> server; text channels; Page budget, burst 10 then 1 per s, error code `rate`).
+- `history:page` `{channel, before, messages: [oldest ... newest], hasMore}` (server -> client): the messages just older than `before`, in the
+  stored `msg` shape. An unknown or invisible channel answers an empty page.
+
+**Search:**
+
+- `search` `{q, channel?}` (client -> server; any rank, guests too): a case-insensitive substring search over the text and attachment names of
+  the text channels the asker may see (`channel` narrows it to one), newest first. `q` is normalized and cut to 64 characters; fewer than 2
+  characters finds nothing. Search budget: 6 per minute (error code `rate`).
+- `search:result` `{q, hits: [{channel, id, from, at, snippet}], more}` (server -> client): at most 50 hits; `snippet` is about 120 characters
+  around the match (whitespace collapsed, `…` where it was cut); `more` = there were more hits than were sent.
+
 ## 2.10 additions (one-time invites, device tokens; all optional for clients)
 
 Detect: the welcome's `features` has `"tokens"`, `"invites"`, `"devices"` and `server` is >= 2.10.0; or `GET /features` (public, no
@@ -651,3 +686,29 @@ codes, tokens, IPs or message text. `active7d` = members online now or with a de
 2.31 adds `security: {day, counts: {kind: n}, recent: [{at, kind, detail?}]}` - today's security events (`wrong-code`, `lockout`, `blocked`,
 `flood`, `too-big`, `admin-refused`, `http-rate`), without addresses. The addresses are only in the server's log (journald), one line per kind
 and address per 10 minutes, then a sum per minute and a summary per day (`security: <kind> from <ip>`).
+
+## Every message type (index)
+
+The one list is `shared/Elans.Shared/Lodge/LodgeMsg.cs`: the Lodge and the Outpost take every `t` from it, and
+`shared/Elans.Shared.Tests/LodgeMsgTests.cs` fails when a type is missing here or a raw type string is used in either side's Lodge code.
+"both" = the client asks with that type and the server answers (or broadcasts) with the same one. The sections above describe the fields.
+Not Lodge messages (never on this socket): the Atlas world-map page's own messages inside the Outpost (`goto`, `layer`, `init`, `toast`, ...).
+
+| Feature | client -> server | server -> client | both |
+|---|---|---|---|
+| Connection | `ping` | `pong` · `welcome` · `error` | - |
+| Members and presence | `status` · `game` · `position` | `join` · `leave` · `user` · `memberpos` | - |
+| Voice | `voice` · `state` | - | - |
+| Chat | `edit` · `delete` · `history:before` · `search` | `edited` · `deleted` · `history:page` · `search:result` | `msg` · `react` · `pin` · `unpin` · `typing` |
+| Looking for group | `lfg:join` · `lfg:maybe` · `lfg:leave` · `lfg:close` · `lfg:cancel` | `lfg` | - |
+| Profiles | `profile:get` · `profile:set` · `profile:reset` | `profile` · `profile:data` | - |
+| Guild Master and officer tools, devices, leaving | `admin.invite` · `admin.role` · `admin.remove` · `admin.purge` · `admin.channel.add` · `admin.channel.remove` · `admin.invite.create` · `admin.invite.revoke` · `admin.retire` · `admin.lodge.set` · `mod.kick` · `mod.mute` · `device.list` · `device.revoke` · `member.leave` | `admin.invited` · `admin.purged` · `admin.invite.created` · `lodge.info` · `devices` · `member.left` | `admin.members` · `admin.invites` · `admin.devices` |
+| Calendar | `cal:create` · `cal:edit` · `cal:cancel` · `cal:signup` · `cal:leave` | `cal:events` | `cal:range` |
+| Shared flight times and learned flight paths | `flights.share` · `flights.get` · `flights.routes.share` · `flights.routes.get` | `flights.shared` · `flights.data` · `flights.routes.shared` · `flights.routes.data` | - |
+| The Atlas pool | `atlas.share` · `atlas.get` | `atlas.shared` · `atlas.data` | - |
+| The Cairn | `atlas.sharing` · `cairn.join.get` · `admin.cairn` · `cairn.notices.get` · `cairn.notice.seen` | `cairn.join` · `cairn.notices` | `cairn.status` |
+| The Armory | `armory.put` · `armory.delete` · `armory.list` · `armory.get` | `armory.saved` · `armory.deleted` · `armory.chars` · `armory.char` | `armory.crafters` · `armory.standing` |
+| Shared files | `files.list` · `files.delete` · `files.rollback` | `files.data` · `files.changed` · `files.result` | - |
+| Hosted datasets | `dataset.info` · `dataset.delete` | `dataset.data` · `dataset.changed` · `dataset.result` | - |
+| Badges and the ladder | `badges.seen` · `badges.hide` · `ladder.get` · `admin.badges` | `badges.state` · `ladder.data` | `badges.mine` · `badges.member` |
+| Realm status | - | `realms.status` · `realms.back` | - |

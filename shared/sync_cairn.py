@@ -5,6 +5,7 @@
 
 The source of truth is shared/Elans.Shared/ in the Outpost repo. NEVER edit the copy inside the Cairn. The Outpost and the Lodge server
 reference the project directly; only the Cairn needs a copy (its repo is built on its own server by cairn-update).
+Only the top-level .cs files are copied: subfolders (e.g. Lodge/, the Lodge message types) are not, the Cairn doesn't need them.
 <ops> = the Cairn's repo: --ops PATH or $ELANS_OPS_REPO (no default: it is another, private repo).
 """
 import os, sys
