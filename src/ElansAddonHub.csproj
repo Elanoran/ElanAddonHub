@@ -31,6 +31,12 @@
     <AllowedReferenceRelatedFileExtensions>.none</AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
 
+  <!-- 3.1.1: Tools/updatetest.ps1 only (dotnet publish -p:ElansUpdateTest=true): the build also trusts the key that script makes for its run
+       (ReleaseSignature). release.py never sets it, so a shipped Outpost trusts only the two release keys. -->
+  <PropertyGroup Condition="'$(ElansUpdateTest)' == 'true'">
+    <DefineConstants>$(DefineConstants);ELANS_UPDATETEST</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <Resource Include="Assets\hub.ico" />
     <Resource Include="Assets\hub.png" />

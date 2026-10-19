@@ -339,7 +339,7 @@ namespace ElansAddonHub
             result += "\r\n" + TestScope.SelfTest();
             result += "\r\n" + InfraGuard.SelfTest(Environment.GetCommandLineArgs());   // the public repo never names our own hosting
             result += "\r\n" + SelfTestCache.SelfTest(dir);
-            if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + WowLocator.SelfTest(dir) + Environment.NewLine + ReleaseSignature.SelfTest(Environment.GetEnvironmentVariable("ELANSHUB_RELEASE_DIR")) + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
+            if (Begin("update")) { result += "\r\n" + UpdateChannel.SelfTest() + Environment.NewLine + await Installer.SelfTest(dir) + Environment.NewLine + PathSafety.SelfTest() + Environment.NewLine + WowLocator.SelfTest(dir) + Environment.NewLine + ReleaseSignature.SelfTest(Environment.GetEnvironmentVariable("ELANSHUB_RELEASE_DIR")) + Environment.NewLine + await SignedCheckSelfTest() + Environment.NewLine + await Installer.SafetySelfTest(dir); End(); }
             if (Begin("strip")) { result += "\r\n" + StripSelfTest.Run(dir) + Environment.NewLine + await StripSelfTest.Live(); End(); }
 
             // Lodge: ELANSHUB_TEST_LODGE="url|code|name" joins, chats, shares a picture and talks (a test tone, not the mic)
@@ -940,6 +940,31 @@ namespace ElansAddonHub
             if (r == ReleaseSignature.Result.Invalid) throw new ReleaseSignatureException(why + " - nothing is installed from it");
             int bom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
             return Util.FromJson<Manifest>(System.Text.Encoding.UTF8.GetString(bytes, bom, bytes.Length - bom));
+        }
+
+        // self-test ("update"): the real update check against the fake update server - signed is fine, unsigned or another key's signature is
+        // refused and the status line says why
+        async Task<string> SignedCheckSelfTest()
+        {
+            var sb = new System.Text.StringBuilder();
+            void Ck(string what, bool ok, string info = null) => sb.AppendLine($"signed check {what}: {(ok ? "ok" : "FAIL")}{(info == null ? "" : " (" + info + ")")}");
+            try
+            {
+                if (FakeUpdateServer.Start() == null) { Ck("fake update server", false, "could not start"); return sb.ToString().TrimEnd(); }
+                await CheckNow();
+                Ck("the fake server's signed manifest is accepted", lastError == null && manifest != null, lastError);
+                FakeUpdateServer.Sign = FakeUpdateServer.Signing.Unsigned;
+                await CheckNow();
+                Ck("a manifest without a signature is refused, and the status says so", lastError != null && lastError.StartsWith("Update refused") && lastError.Contains("not signed") && statusText == lastError, statusText);
+                FakeUpdateServer.Sign = FakeUpdateServer.Signing.OtherKey;
+                await CheckNow();
+                Ck("a manifest signed by another key is refused", lastError != null && lastError.StartsWith("Update refused") && lastError.Contains("does not match"), lastError);
+            }
+            catch (Exception e) { Ck("run", false, e.Message); }
+            finally { FakeUpdateServer.Sign = FakeUpdateServer.Signing.Signed; }
+            await CheckNow();
+            Ck("signed again: accepted", lastError == null, lastError);
+            return sb.ToString().TrimEnd();
         }
 
         async Task RefreshOthersAndCheck() { await RefreshOthers(); await CheckOthers(); _ = SuggestOthers(); }
