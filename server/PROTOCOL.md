@@ -375,6 +375,10 @@ A slot is `{id, name (1-60), createdBy, versions: [{v, fileName, size, sha256, u
 - Every change is announced to everyone: `files.changed` `{action: new|version|rollback|delete, slot, name, by, at, v?}`; clients refresh with `files.list`.
 - Upload (HTTP, same credential headers as `/files`, officer and up): `PUT /slots/new` (header `X-Slot-Name`) or `PUT /slots/{id}` (a new version) with headers `X-File-Name`, `X-Note` (URL-encoded), `X-Sha256` (hex of the whole body), a `Content-Length`, the raw body. Answer 200 with the slot JSON, or `{error, reason}` with 400 (`sha-mismatch`, `length`, `bad-sha`, `bad-name`, `empty`), 403 (`forbidden`, `disabled`), 404 (`missing`), 409 (`name-taken`), 411, 413 (`too-big`), 415 (`blocked-type`, `blocked-zip`), 429 (`rate`, `busy`), 507 (`full`, `too-many`).
 - Download: `GET /slots/{id}/{v}` (everybody, guests included) - the raw bytes as an attachment; the client checks size and SHA-256 against the list.
+- Typed (stage 2): the socket messages are classes in `shared/Elans.Shared/Lodge/FileMessages.cs` (`FilesListMsg`, `FilesDeleteMsg`,
+  `FilesRollbackMsg`, `FilesDataMsg`, `FilesChangedMsg`, `FilesResultMsg`; a slot is a `FileSlot`, a version a `FileVersion` - the upload's
+  HTTP answer is the same `FileSlot`), used by both sides like the LFG ones. The bytes stay on HTTP; the rules (who may, the limits) stay in
+  `FilesModule`.
 
 ## 2.15 additions (the Atlas pool; optional for clients)
 

@@ -372,4 +372,52 @@ public class FilesTests
         File.Delete(Directory.GetFiles(dir, "*.bin").Single());
         Assert.Equal(0, new FilesModule(r.Hub).SlotCount);
     }
+
+    // ---------------------------------------------------------------- typed (Elans.Shared FileMessages.cs)
+
+    static string[] KeysInOrder(JsonObject o) => o.Select(kv => kv.Key).ToArray();
+
+    // files.data / files.changed / files.result and the upload's slot keep their keys and order
+    [Fact]
+    public async Task Typed_file_frames_keep_their_keys()
+    {
+        using var r = new FunRig();
+        var o = r.Join("Wing", "officer"); var mem = r.Join("Mia", "member");
+        var s = await Up(r, o, null, "Raid UI pack", "p.txt", Bytes(10), "first");
+        var id = (string)s["id"]!;
+        Assert.Equal(new[] { "id", "name", "createdBy", "versions" }, KeysInOrder(s));
+        Assert.Equal(new[] { "v", "fileName", "size", "sha256", "uploadedBy", "at", "note" }, KeysInOrder(s["versions"]![0]!.AsObject()));
+        await Up(r, o, id, null, "p.txt", Bytes(11));
+
+        await r.Send(o, new { t = "files.list" });
+        var d = r.Sock("Wing").Of("files.data").Last();
+        Assert.Equal(new[] { "t", "maxMb", "totalMb", "usedBytes", "keep", "canManage", "slots" }, KeysInOrder(d));
+        Assert.Equal((50, 500, 21L, 3, true), ((int)d["maxMb"]!, (int)d["totalMb"]!, (long)d["usedBytes"]!, (int)d["keep"]!, (bool)d["canManage"]!));
+        var slot = d["slots"]!.AsArray().Single()!.AsObject();
+        Assert.Equal(new[] { 1, 2 }, slot["versions"]!.AsArray().Select(v => (int)v!["v"]!));
+        Assert.Equal(("first", ""), ((string?)slot["versions"]![0]!["note"], (string?)slot["versions"]![1]!["note"]));
+        Assert.Equal(r.Hub.SharedFiles.SlotView(id)!.ToJsonString(), slot.ToJsonString());
+
+        var changed = await Eventually(r.Sock("Mia"), "files.changed", 2);
+        Assert.Equal(new[] { "t", "action", "slot", "name", "by", "at", "v" }, KeysInOrder(changed));
+
+        await r.Send(mem, new { t = "files.delete", slot = id });
+        var refused = r.Sock("Mia").Of("files.result").Last();
+        Assert.Equal(new[] { "t", "op", "ok", "slot", "why" }, KeysInOrder(refused));
+        Assert.Equal(("delete", false, id, "forbidden"), ((string?)refused["op"], (bool)refused["ok"]!, (string?)refused["slot"], (string?)refused["why"]));
+
+        await r.Send(o, new { t = "files.delete", slot = id });
+        var done = r.Sock("Wing").Of("files.result").Last();
+        Assert.Equal(new[] { "t", "op", "ok", "slot" }, KeysInOrder(done));
+        var gone = await Eventually(r.Sock("Mia"), "files.changed", 3);
+        Assert.Equal(new[] { "t", "action", "slot", "name", "by", "at" }, KeysInOrder(gone));
+        Assert.Equal("delete", (string?)gone["action"]);
+
+        using var off = new FunRig(c => c.FilesEnabled = false);
+        var w = off.Join("Wing", "owner");
+        await off.Send(w, new { t = "files.list" });
+        var l = off.Sock("Wing").Of("files.result").Last();
+        Assert.Equal(new[] { "t", "op", "ok", "slot", "why" }, KeysInOrder(l));
+        Assert.Null(l["slot"]);
+    }
 }

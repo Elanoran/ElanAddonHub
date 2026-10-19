@@ -102,7 +102,8 @@ public static class FileRules
 //  Transport: the bytes travel over authenticated HTTP (same device token / code headers as /files), streamed to a .part file
 //  and never held in memory: PUT /slots/new or PUT /slots/{id} (headers X-Slot-Name, X-File-Name, X-Sha256, X-Note, all URL-encoded
 //  text; Content-Length required), GET /slots/{id}/{v}. Listing, delete and roll back are WebSocket messages
-//  (files.list / files.delete / files.rollback); every change is announced to everybody with files.changed.
+//  (files.list / files.delete / files.rollback); every change is announced to everybody with files.changed. The socket messages are
+//  typed in shared/Elans.Shared/Lodge/FileMessages.cs.
 public sealed class FilesModule : IModule
 {
     public const int KeptVersions = 3;
@@ -207,26 +208,28 @@ public sealed class FilesModule : IModule
 
     // ---------------------------------------------------------------- views
 
-    static JsonObject VersionJson(SlotVersion v) => new()
+    // the views are typed in shared/Elans.Shared/Lodge/FileMessages.cs (FileVersion, FileSlot, FilesDataMsg); the HTTP upload answers a FileSlot too
+    static FileVersion VersionOf(SlotVersion v) => new()
     {
-        ["v"] = v.V, ["fileName"] = v.FileName, ["size"] = v.Size, ["sha256"] = v.Sha256, ["uploadedBy"] = v.UploadedBy, ["at"] = v.At, ["note"] = v.Note ?? "",
+        V = v.V, FileName = v.FileName, Size = v.Size, Sha256 = v.Sha256, UploadedBy = v.UploadedBy, At = v.At, Note = v.Note ?? "",
     };
 
-    static JsonObject SlotJson(Slot s) => new()
+    static FileSlot SlotOf(Slot s) => new()
     {
-        ["id"] = s.Id, ["name"] = s.Name, ["createdBy"] = s.CreatedBy,
-        ["versions"] = new JsonArray(s.Versions.OrderBy(v => v.V).Select(v => (JsonNode)VersionJson(v)).ToArray()),
+        Id = s.Id, Name = s.Name, CreatedBy = s.CreatedBy, Versions = s.Versions.OrderBy(v => v.V).Select(VersionOf).ToList(),
     };
+
+    static JsonObject SlotJson(Slot s) => LodgeFieldsJson.Build(SlotOf(s).Write);
 
     public JsonObject ListJson(Member me)
     {
         lock (gate)
-            return new JsonObject
+            return LodgeFieldsJson.Build(new FilesDataMsg
             {
-                ["t"] = LodgeMsg.FilesData, ["maxMb"] = hub.Cfg.FilesMaxMb, ["totalMb"] = hub.Cfg.FilesTotalMb, ["usedBytes"] = slots.Sum(s => s.Versions.Sum(v => v.Size)),
-                ["keep"] = KeptVersions, ["canManage"] = Roles.Can(me.Role, Perm.FilesManage),
-                ["slots"] = new JsonArray(slots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(s => (JsonNode)SlotJson(s)).ToArray()),
-            };
+                MaxMb = hub.Cfg.FilesMaxMb, TotalMb = hub.Cfg.FilesTotalMb, UsedBytes = slots.Sum(s => s.Versions.Sum(v => v.Size)),
+                Keep = KeptVersions, CanManage = Roles.Can(me.Role, Perm.FilesManage),
+                Slots = slots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).Select(SlotOf).ToList(),
+            }.Write);
     }
 
     public JsonObject SlotView(string id)
@@ -472,45 +475,36 @@ public sealed class FilesModule : IModule
 
     // ---------------------------------------------------------------- messages
 
-    Task Announce(string action, string id, string name, int? v, string by)
+    Task Announce(string action, string id, string name, int? v, string by) => hub.Broadcast(LodgeFieldsJson.Build(new FilesChangedMsg
     {
-        var o = new JsonObject
-        {
-            ["t"] = LodgeMsg.FilesChanged, ["action"] = action, ["slot"] = id, ["name"] = name, ["by"] = by,
-            ["at"] = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
-        };
-        if (v != null) o["v"] = v;
-        return hub.Broadcast(o);
-    }
+        Action = action, Slot = id, Name = name, By = by, At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(), V = v,
+    }.Write));
 
-    Task Result(Member me, string op, bool ok, string why, string slot)
-    {
-        var o = new JsonObject { ["t"] = LodgeMsg.FilesResult, ["op"] = op, ["ok"] = ok, ["slot"] = slot };
-        if (why != null) o["why"] = why;
-        return hub.Send(me, o);
-    }
+    Task Result(Member me, string op, bool ok, string why, string slot) =>
+        hub.Send(me, LodgeFieldsJson.Build(new FilesResultMsg { Op = op, Ok = ok, Why = why, Slot = slot }.Write));
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
         switch (type)
         {
-            case LodgeMsg.FilesList:
+            case FilesListMsg.Type:                     // { t } only
                 if (!Enabled) { await Result(me, "list", false, "disabled", null); return true; }
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 await hub.Send(me, ListJson(me));
                 return true;
-            case LodgeMsg.FilesDelete:
+            case FilesDeleteMsg.Type:
             {
-                var id = J.Str(m, "slot") ?? "";
+                var id = FilesDeleteMsg.Read(new LodgeFieldsJson(m)).Slot ?? "";
                 var (ok, why) = Delete(me, id, out var name);
                 await Result(me, "delete", ok, why, id);
                 if (ok) { hub.Log.LogInformation("{Name} deleted a shared file slot", me.Name); await Announce("delete", id, name, null, me.Name); }
                 return true;
             }
-            case LodgeMsg.FilesRollback:
+            case FilesRollbackMsg.Type:
             {
-                var id = J.Str(m, "slot") ?? "";
-                var v = J.Int(m, "v", 0);
+                var req = FilesRollbackMsg.Read(new LodgeFieldsJson(m));
+                var id = req.Slot ?? "";
+                var v = req.V;
                 var (ok, why) = Rollback(me, id, v, out var name, out var cur);
                 await Result(me, "rollback", ok, why, id);
                 if (ok) { hub.Log.LogInformation("{Name} rolled a shared file back", me.Name); await Announce("rollback", id, name, cur, me.Name); }

@@ -52,7 +52,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFiles) return;
             filesLastRequest = Clock();
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FilesList });
+            _ = Send(LodgeFieldsDict.Build(new FilesListMsg().Write));
         }
 
         void OnFilesFrame(Dictionary<string, object> m)
@@ -60,39 +60,40 @@ namespace ElansAddonHub.Lodge
             if (!SupportsFiles) return;
             switch (m.Str("t"))
             {
-                case LodgeMsg.FilesData: ApplyFilesData(m); break;
-                case LodgeMsg.FilesChanged: OnFilesChanged(m); break;
-                case LodgeMsg.FilesResult: OnFilesResult(m); break;
+                case LodgeMsg.FilesData: ApplyFilesData(FilesDataMsg.Read(new LodgeFieldsDict(m))); break;
+                case LodgeMsg.FilesChanged: OnFilesChanged(FilesChangedMsg.Read(new LodgeFieldsDict(m))); break;
+                case LodgeMsg.FilesResult: OnFilesResult(FilesResultMsg.Read(new LodgeFieldsDict(m))); break;
             }
         }
 
-        void ApplyFilesData(Dictionary<string, object> m)
+        // the messages are typed in shared/Elans.Shared/Lodge/FileMessages.cs
+        void ApplyFilesData(FilesDataMsg m)
         {
-            CanManageFiles = m.Bool("canManage");
-            if (m.Int("maxMb") > 0) FilesMaxMb = m.Int("maxMb");
-            if (m.Int("totalMb") > 0) FilesTotalMb = m.Int("totalMb");
-            FilesUsedBytes = m.Long("usedBytes");
-            var incoming = (m.List("slots") ?? new List<object>()).OfType<Dictionary<string, object>>().Where(d => SafeFile.Id(d.Str("id")) != null).ToList();
+            CanManageFiles = m.CanManage;
+            if (m.MaxMb > 0) FilesMaxMb = m.MaxMb;
+            if (m.TotalMb > 0) FilesTotalMb = m.TotalMb;
+            FilesUsedBytes = m.UsedBytes;
+            var incoming = m.Slots.Where(d => SafeFile.Id(d.Id) != null).ToList();
             // the same objects stay (a progress bar must survive a refresh), newcomers are added, deleted slots go
-            foreach (var gone in Slots.Where(s => incoming.All(d => d.Str("id") != s.Id)).ToList()) Slots.Remove(gone);
+            foreach (var gone in Slots.Where(s => incoming.All(d => d.Id != s.Id)).ToList()) Slots.Remove(gone);
             for (int i = 0; i < incoming.Count; i++)
             {
                 var d = incoming[i];
-                var have = Slots.FirstOrDefault(s => s.Id == d.Str("id"));
+                var have = Slots.FirstOrDefault(s => s.Id == d.Id);
                 if (have == null) { have = new SlotVM(); Slots.Insert(Math.Min(i, Slots.Count), have); }
-                have.Update(d, CanManageFiles, Saved().Get(d.Str("id")));
+                have.Update(d, CanManageFiles, Saved().Get(d.Id));
             }
             FilesLoaded = true;
             FilesChanged?.Invoke();
         }
 
-        void OnFilesChanged(Dictionary<string, object> m)
+        void OnFilesChanged(FilesChangedMsg m)
         {
-            var by = m.Str("by") ?? "";
-            var text = LodgeFiles.NoticeText(m.Str("action"), DisplayNames.Shown(by), Names(m.Str("name")), m.Int("v"));
+            var by = m.By ?? "";
+            var text = LodgeFiles.NoticeText(m.Action, DisplayNames.Shown(by), Names(m.Name), m.V ?? 0);
             if (text != null && !string.Equals(by, Me?.Name, StringComparison.OrdinalIgnoreCase))
             {
-                FilesNoticeText = text; FilesNoticeFor = m.Str("slot");
+                FilesNoticeText = text; FilesNoticeFor = m.Slot;
                 FilesNotice?.Invoke(text);
             }
             // refresh the list, unless one was just asked for (my own upload asks right after it)
@@ -101,11 +102,11 @@ namespace ElansAddonHub.Lodge
 
         static string Names(string s) => string.IsNullOrWhiteSpace(s) ? "a file" : s.Trim();
 
-        void OnFilesResult(Dictionary<string, object> m)
+        void OnFilesResult(FilesResultMsg m)
         {
-            if (m.Bool("ok")) return;
-            var slot = Slots.FirstOrDefault(s => s.Id == m.Str("slot"));
-            var text = FilesWhy(m.Str("why"));
+            if (m.Ok) return;
+            var slot = Slots.FirstOrDefault(s => s.Id == m.Slot);
+            var text = FilesWhy(m.Why);
             if (slot != null) slot.Error = text;
             Error?.Invoke(text);
             RequestFiles();
@@ -204,7 +205,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFiles || slot == null) return "That file isn't there any more";
             if (!CanManageFiles) return FilesWhy("forbidden");
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FilesDelete, ["slot"] = slot.Id });
+            _ = Send(LodgeFieldsDict.Build(new FilesDeleteMsg { Slot = slot.Id }.Write));
             return null;
         }
 
@@ -212,7 +213,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!SupportsFiles || slot == null) return "That file isn't there any more";
             if (!CanManageFiles) return FilesWhy("forbidden");
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.FilesRollback, ["slot"] = slot.Id, ["v"] = version });
+            _ = Send(LodgeFieldsDict.Build(new FilesRollbackMsg { Slot = slot.Id, V = version }.Write));
             return null;
         }
 

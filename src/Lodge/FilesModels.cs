@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using ElansAddonHub.Services;
+using Elans.Shared;
 
 namespace ElansAddonHub.Lodge
 {
@@ -14,10 +15,11 @@ namespace ElansAddonHub.Lodge
         public string FileName, Sha256, UploadedBy, Note;
         public long Size, At;
 
-        public static SlotVersionInfo Parse(Dictionary<string, object> d) => d == null ? null : new SlotVersionInfo
+        // a files.data slot's version (typed: shared/Elans.Shared/Lodge/FileMessages.cs FileVersion)
+        public static SlotVersionInfo From(FileVersion d) => d == null ? null : new SlotVersionInfo
         {
-            V = d.Int("v"), FileName = SafeFile.Name(d.Str("fileName")), Size = d.Long("size"), Sha256 = (d.Str("sha256") ?? "").ToLowerInvariant(),
-            UploadedBy = d.Str("uploadedBy") ?? "", At = d.Long("at"), Note = d.Str("note") ?? "",
+            V = d.V, FileName = SafeFile.Name(d.FileName), Size = d.Size, Sha256 = (d.Sha256 ?? "").ToLowerInvariant(),
+            UploadedBy = d.UploadedBy ?? "", At = d.At, Note = d.Note ?? "",
         };
     }
 
@@ -49,10 +51,10 @@ namespace ElansAddonHub.Lodge
 
         public SlotVersionInfo Newest => Versions.OrderBy(v => v.V).LastOrDefault();
 
-        public void Update(Dictionary<string, object> d, bool canManage, SavedRecord saved)
+        public void Update(FileSlot d, bool canManage, SavedRecord saved)
         {
-            Id = d.Str("id"); Name = d.Str("name") ?? ""; CreatedBy = d.Str("createdBy") ?? "";
-            Versions = (d.List("versions") ?? new List<object>()).OfType<Dictionary<string, object>>().Select(SlotVersionInfo.Parse).Where(v => v != null).OrderBy(v => v.V).ToList();
+            Id = d.Id; Name = d.Name ?? ""; CreatedBy = d.CreatedBy ?? "";
+            Versions = d.Versions.Select(SlotVersionInfo.From).Where(v => v != null).OrderBy(v => v.V).ToList();
             CanManage = canManage;
             Badge = LodgeFiles.Badge(Newest, saved);
             RaiseAll();
