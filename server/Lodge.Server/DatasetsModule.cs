@@ -208,13 +208,13 @@ public sealed class DatasetsModule : IModule
         ? new DatasetView { Name = kind.Name, Available = false }
         : new DatasetView { Name = kind.Name, Available = true, Version = m.Version, Sha256 = m.Sha256, Size = m.Size, UploadedBy = Shown(m.UploadedBy), At = m.At };
 
-    JsonObject View(DatasetKind kind, DatasetMeta m) => LodgeFieldsJson.Build(ViewOf(kind, m).Write);
+    JsonObject View(DatasetKind kind, DatasetMeta m) => LodgeJson.Build(ViewOf(kind, m).Write);
 
     public JsonObject Info(DatasetKind kind, Member me)
     {
         DatasetMeta m;
         lock (gate) m = items.FirstOrDefault(i => i.Name == kind.Name);
-        return LodgeFieldsJson.Build(new DatasetDataMsg
+        return LodgeJson.Build(new DatasetDataMsg
         {
             Dataset = ViewOf(kind, m), CanManage = me != null && Roles.Can(me.Role, Perm.DatasetManage), MaxMb = (int)(kind.MaxBytes(hub.Cfg) / (1024 * 1024)),
         }.Write);
@@ -387,7 +387,7 @@ public sealed class DatasetsModule : IModule
 
     // only people who may read it hear about a change
     Task Announce(DatasetKind kind, DatasetMeta m, string action) =>
-        hub.Broadcast(LodgeFieldsJson.Build(new DatasetChangedMsg { Dataset = ViewOf(kind, m), Action = action }.Write), who => Roles.Can(who.Role, Perm.DatasetRead) && who.Personal);
+        hub.Broadcast(LodgeJson.Build(new DatasetChangedMsg { Dataset = ViewOf(kind, m), Action = action }.Write), who => Roles.Can(who.Role, Perm.DatasetRead) && who.Personal);
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
@@ -395,7 +395,7 @@ public sealed class DatasetsModule : IModule
         {
             case DatasetInfoMsg.Type:
             {
-                var kind = DatasetKinds.Find(DatasetInfoMsg.Read(new LodgeFieldsJson(m)).Name);
+                var kind = DatasetKinds.Find(DatasetInfoMsg.Read(new LodgeJsonFields(m)).Name);
                 if (kind == null || !Enabled(kind)) { await hub.Error(me, "That isn't available on this lodge", "disabled"); return true; }
                 if (!me.Personal || !Roles.Can(me.Role, Perm.DatasetRead)) { await hub.Error(me, "This is for lodge members", "guest"); return true; }
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
@@ -404,9 +404,9 @@ public sealed class DatasetsModule : IModule
             }
             case DatasetDeleteMsg.Type:
             {
-                var name = DatasetDeleteMsg.Read(new LodgeFieldsJson(m)).Name ?? "";
+                var name = DatasetDeleteMsg.Read(new LodgeJsonFields(m)).Name ?? "";
                 var (ok, why) = Delete(me, name);
-                await hub.Send(me, LodgeFieldsJson.Build(new DatasetResultMsg { Op = "delete", Name = name, Ok = ok, Why = why }.Write));
+                await hub.Send(me, LodgeJson.Build(new DatasetResultMsg { Op = "delete", Name = name, Ok = ok, Why = why }.Write));
                 if (ok)
                 {
                     hub.Log.LogInformation("{Name} took the {Dataset} dataset off the lodge", me.Name, name);

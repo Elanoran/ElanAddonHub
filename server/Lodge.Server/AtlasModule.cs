@@ -36,7 +36,7 @@ public sealed class AtlasModule : IModule
 
     static string Identity(Member me) => ProfileRules.Key(me.Name);
 
-    Task Reply(Member me, bool ok, AtlasStore.ShareResult r, string why = null) => hub.Send(me, LodgeFieldsJson.Build(new AtlasSharedMsg
+    Task Reply(Member me, bool ok, AtlasStore.ShareResult r, string why = null) => hub.Send(me, LodgeJson.Build(new AtlasSharedMsg
     {
         Ok = ok, Accepted = r?.Accepted ?? 0, Unchanged = r?.Unchanged ?? 0, Rejected = r?.Rejected ?? 0, Rev = Store.Rev, Epoch = Store.Epoch, Why = why,
     }.Write));
@@ -85,7 +85,7 @@ public sealed class AtlasModule : IModule
         if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return; }
         long since = 0;
         if (m["since"] is JsonValue sv && sv.TryGetValue<long>(out var s) && s > 0) since = s;     // raw on purpose: a whole JSON number only
-        var epoch = AtlasGetMsg.Read(new LodgeFieldsJson(m)).Epoch;
+        var epoch = AtlasGetMsg.Read(new LodgeJsonFields(m)).Epoch;
         string json;
         lock (Store.Gate) json = Store.Get(since, epoch, Shown, guest: !me.Personal).ToJsonString();
         await hub.SendRaw(me, Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text);

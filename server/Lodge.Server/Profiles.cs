@@ -406,12 +406,12 @@ public class ProfileModule : IModule
     }
 
     // profile:data (typed: shared/Elans.Shared/Lodge/ProfileMessages.cs)
-    static JsonObject Data(ProfileView view) => LodgeFieldsJson.Build(new ProfileDataMsg { Profile = view }.Write);
+    static JsonObject Data(ProfileView view) => LodgeJson.Build(new ProfileDataMsg { Profile = view }.Write);
     static ProfileView NotFound(string name) => new() { Name = name, Found = false };
 
     async Task Get(Member me, JsonObject m)
     {
-        var name = ProfileGetMsg.Read(new LodgeFieldsJson(m)).Name is string s ? Names.Normalize(s) : "";
+        var name = ProfileGetMsg.Read(new LodgeJsonFields(m)).Name is string s ? Names.Normalize(s) : "";
         var view = name.Length == 0 ? NotFound("") : Lookup(me, name);
         await hub.Send(me, Data(view));
     }
@@ -420,7 +420,7 @@ public class ProfileModule : IModule
     async Task Reset(Member me, JsonObject m)
     {
         if (!Roles.Can(me.Role, Perm.ResetProfiles)) { await hub.Error(me, "Your rank can't do that"); return; }
-        var req = ProfileResetMsg.Read(new LodgeFieldsJson(m));
+        var req = ProfileResetMsg.Read(new LodgeJsonFields(m));
         var name = req.Name is string s ? Names.Normalize(s) : "";
         bool clearText = req.ClearText;
         var online = hub.Members.FirstOrDefault(x => LodgeHub.Same(x.Name, name));
@@ -462,7 +462,7 @@ public class ProfileModule : IModule
     }
 
     // welcome.profile
-    public JsonObject OwnView(Member me) => LodgeFieldsJson.Build(OwnViewOf(me).Write);
+    public JsonObject OwnView(Member me) => LodgeJson.Build(OwnViewOf(me).Write);
     public ProfileView OwnViewOf(Member me) => Build(me, me.Name, me.Profile, me.Role, me.Personal, me);
 
     ProfileView Build(Member viewer, string name, Profile p, string role, bool personal, Member online, bool hideSeen = false)

@@ -8,7 +8,7 @@ namespace Lodge;
 // older clients, search, pins and reply quotes show; it follows the event (fill, cancelled) through a normal "edited" frame.
 public partial class ChatModule
 {
-    public static JsonObject EventSnapshot(JsonObject ev) => LodgeFieldsJson.Build(EventCard(ev).Write);
+    public static JsonObject EventSnapshot(JsonObject ev) => LodgeJson.Build(EventCard(ev).Write);
 
     static CalCard EventCard(JsonObject ev) => new CalCard
     {
@@ -24,7 +24,7 @@ public partial class ChatModule
             Channel = ch.Id, Id = Guid.NewGuid().ToString("N")[..12], At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
             From = me.Name, FromId = me.Id, Text = Cal.Fallback(ev), Kind = Cal.Kind, Event = EventCard(ev),
         };
-        var msg = LodgeFieldsJson.Build(card.Write);
+        var msg = LodgeJson.Build(card.Write);
         var s = Store(ch.Id);
         lock (s) s.Append(msg);
         await hub.Broadcast(msg, Viewers(ch));
@@ -50,6 +50,6 @@ public partial class ChatModule
             s.MarkDirty();
         }
         QueueFlush(s);
-        await hub.Broadcast(LodgeFieldsJson.Build(new EditedMsg { Channel = ch.Id, Id = id, Text = text, Card = true }.Write), Viewers(ch));
+        await hub.Broadcast(LodgeJson.Build(new EditedMsg { Channel = ch.Id, Id = id, Text = text, Card = true }.Write), Viewers(ch));
     }
 }

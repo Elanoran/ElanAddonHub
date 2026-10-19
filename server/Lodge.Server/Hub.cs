@@ -100,7 +100,7 @@ public class Member
         AvatarId = Profile?.AvatarId, Accent = Profile?.Accent, DisplayName = Profile?.DisplayName ?? "",
         Status = masked ? "online" : Status, Note = masked ? "" : Note, Game = masked ? null : Game?.DeepClone(),
     };
-    public JsonObject ToJson(bool masked = false) => LodgeFieldsJson.Build(View(masked).Write);
+    public JsonObject ToJson(bool masked = false) => LodgeJson.Build(View(masked).Write);
 }
 
 // A feature area of the lodge. Handle returns true when it took the message.
@@ -267,7 +267,7 @@ public partial class LodgeHub
     }
 
     // everything a client needs: who it is, the channels it may see with their history, who's here (typed: shared/Elans.Shared/Lodge/WelcomeMessages.cs)
-    public JsonObject Welcome(Member me) => LodgeFieldsJson.Build(WelcomeFor(me).Write);
+    public JsonObject Welcome(Member me) => LodgeJson.Build(WelcomeFor(me).Write);
 
     public WelcomeMsg WelcomeFor(Member me)
     {
@@ -332,8 +332,7 @@ public partial class LodgeHub
                     await Voice.Relay(me, msg.ToArray());
                 continue;
             }
-            JsonObject m;
-            try { m = JsonNode.Parse(Encoding.UTF8.GetString(msg.GetBuffer(), 0, (int)msg.Length))?.AsObject(); } catch { continue; }
+            var m = LodgeJson.Parse(msg.GetBuffer(), 0, (int)msg.Length);       // the shared Lodge JSON engine (Elans.Shared LodgeJson): null when no valid frame
             if (m == null) continue;
             var type = J.Str(m, "t") ?? "";
             if (type != LodgeMsg.Msg && !me.Budget.Control.TryTake())
@@ -341,7 +340,7 @@ public partial class LodgeHub
                 if (me.CountDrop(Clock) > FloodDropsPerMinute) { await Disconnect(me, "Too many messages - slow down"); return; }
                 continue;
             }
-            if (type == PingMsg.Type) { me.Pings = true; await Send(me, LodgeFieldsJson.Build(new PongMsg().Write)); continue; }     // { t } only (Elans.Shared ConnectionMessages.cs)
+            if (type == PingMsg.Type) { me.Pings = true; await Send(me, LodgeJson.Build(new PongMsg().Write)); continue; }     // { t } only (Elans.Shared ConnectionMessages.cs)
             // a message of the wrong shape must cost that message only, never the connection
             try
             {
@@ -364,7 +363,7 @@ public partial class LodgeHub
     // code (2.8, optional): a machine-readable reason next to the text - "rate", "room-full" (with the room id)
     // The one error frame (typed: Elans.Shared LodgeErrorMsg, which also lists every code)
     public Task Error(Member to, string text, string code = null, string room = null) =>
-        Send(to, LodgeFieldsJson.Build(new LodgeErrorMsg { Text = text, Code = code, Room = room }.Write));
+        Send(to, LodgeJson.Build(new LodgeErrorMsg { Text = text, Code = code, Room = room }.Write));
 
     public async Task SendRaw(Member to, byte[] data, WebSocketMessageType type)
     {
@@ -407,11 +406,11 @@ public partial class LodgeHub
         u.Invisible = full;
         return u;
     }
-    public JsonObject UserFor(Member subject, Member viewer) => LodgeFieldsJson.Build(UserViewFor(subject, viewer).Write);
+    public JsonObject UserFor(Member subject, Member viewer) => LodgeJson.Build(UserViewFor(subject, viewer).Write);
 
-    JsonObject JoinFor(Member subject, Member viewer) => LodgeFieldsJson.Build(new JoinMsg { User = UserViewFor(subject, viewer) }.Write);
-    JsonObject UserMsgFor(Member subject, Member viewer) => LodgeFieldsJson.Build(new UserMsg { User = UserViewFor(subject, viewer) }.Write);
-    static JsonObject LeaveOf(Member gone) => LodgeFieldsJson.Build(new LeaveMsg { Id = gone.Id }.Write);
+    JsonObject JoinFor(Member subject, Member viewer) => LodgeJson.Build(new JoinMsg { User = UserViewFor(subject, viewer) }.Write);
+    JsonObject UserMsgFor(Member subject, Member viewer) => LodgeJson.Build(new UserMsg { User = UserViewFor(subject, viewer) }.Write);
+    static JsonObject LeaveOf(Member gone) => LodgeJson.Build(new LeaveMsg { Id = gone.Id }.Write);
 
     public Task BroadcastJoin(Member me) =>
         Task.WhenAll(members.Values.Where(v => v.Id != me.Id && CanSee(v, me))
@@ -456,7 +455,7 @@ public partial class LodgeHub
     // avatar/accent changed: everyone who can see the member (and the member) gets a small "profile" update
     public Task BroadcastProfile(Member m)
     {
-        var msg = LodgeFieldsJson.Build(new ProfileMsg { Id = m.Id, Name = m.Name, AvatarId = m.Profile?.AvatarId, Accent = m.Profile?.Accent, DisplayName = m.Profile?.DisplayName ?? "" }.Write);
+        var msg = LodgeJson.Build(new ProfileMsg { Id = m.Id, Name = m.Name, AvatarId = m.Profile?.AvatarId, Accent = m.Profile?.Accent, DisplayName = m.Profile?.DisplayName ?? "" }.Write);
         return Broadcast(msg, v => CanSee(v, m));
     }
 

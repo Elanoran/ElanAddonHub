@@ -486,7 +486,7 @@ public sealed class CairnModule : IModule
             o.Admitted = j.Admitted; o.ProbationUntil = j.ProbationUntil; o.Settled = link.EnvPath || j.Settled; o.LastPost = j.LastPost; o.Checked = j.Checked;
             o.Signed = link.Signs;
         }
-        return LodgeFieldsJson.Build(o.Write);
+        return LodgeJson.Build(o.Write);
     }
 
     // an invite code as typed: letters, digits, '-' and spaces only, at most 32 characters (the Cairn checks it; this only keeps junk out)
@@ -503,7 +503,7 @@ public sealed class CairnModule : IModule
         var j = link.Join;
         if (link.EnvPath) { await hub.Error(me, "The Cairn is switched on in the server's own settings (lodge.env), so it can't be changed here", "locked"); return; }
         if (!hub.Cfg.AtlasEnabled) { await hub.Error(me, "The Atlas is switched off on this server, so there is nothing to share with the Cairn", "atlas"); return; }
-        var req = AdminCairnMsg.Read(new LodgeFieldsJson(m));
+        var req = AdminCairnMsg.Read(new LodgeJsonFields(m));
         bool on = req.On;
         if (on)
         {
@@ -544,7 +544,7 @@ public sealed class CairnModule : IModule
     }
 
     JsonObject NoticesJson(Member m) =>
-        LodgeFieldsJson.Build(new CairnNoticesMsg { List = NoticesFor(m).Select(n => CairnNoticeEntry.Read(new LodgeFieldsJson(n))).ToList() }.Write);
+        LodgeJson.Build(new CairnNoticesMsg { List = NoticesFor(m).Select(n => CairnNoticeEntry.Read(new LodgeJsonFields(n))).ToList() }.Write);
 
     public Task TellNotices() => Task.WhenAll(hub.Members.Where(m => m.Personal).ToList().Select(m => hub.Send(m, NoticesJson(m))));
 
@@ -614,7 +614,7 @@ public sealed class CairnModule : IModule
             if (Receiver.Problem.Length > 0) l.Problem = Receiver.Problem;
             o.Lodge = l;
         }
-        return LodgeFieldsJson.Build(o.Write);
+        return LodgeJson.Build(o.Write);
     }
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
@@ -643,7 +643,7 @@ public sealed class CairnModule : IModule
             case LodgeMsg.CairnNoticeSeen:
             {
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); return true; }
-                await NoticesSeen(me, CairnNoticeSeenMsg.Read(new LodgeFieldsJson(m)));
+                await NoticesSeen(me, CairnNoticeSeenMsg.Read(new LodgeJsonFields(m)));
                 return true;
             }
             // both are answered even when this Lodge doesn't hand out the Cairn's data (2.31.1): cairn.status { entitled: false, why: "disabled" },
@@ -653,7 +653,7 @@ public sealed class CairnModule : IModule
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 if (Enabled && me.Personal && Roles.Can(me.Role, Perm.AtlasShare))
                 {
-                    bool on = AtlasSharingMsg.Read(new LodgeFieldsJson(m)).On;
+                    bool on = AtlasSharingMsg.Read(new LodgeJsonFields(m)).On;
                     if (on) Weekly.NoteSharing(Identity(me.Name));
                     if (Sharing.Set(Identity(me.Name), on, new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeSeconds()))
                         hub.Log.LogInformation("{Name} switched Atlas sharing {State} (Cairn data {Access})", me.Name, on ? "on" : "off", on ? "on" : "off");

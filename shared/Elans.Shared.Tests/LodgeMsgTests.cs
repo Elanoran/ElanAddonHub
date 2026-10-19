@@ -198,21 +198,19 @@ public class LodgeMsgTests
     //      Dictionary<string, object> m in the Outpost) - m["x"], m?["x"], J.Str(m, "x"), m.Str("x"), m.Child("x"), m.ContainsKey("x") ...
     //      Reading "t" to route the frame is the one exception (the dispatch);
     //   N  the frame handed to a method under another name (Foo(m) into Foo(JsonObject req)) - it has to stay m, so F sees what is done to it;
-    //   A  a field read or written through an adapter (new LodgeFieldsJson(m).Str("x"), f.Child("x") on a LodgeFieldsDict) - that is the
+    //   A  a field read or written through an adapter (new LodgeJsonFields(m).Str("x"), f.Child("x") on a LodgeFieldsDict) - that is the
     //      typed classes' job, the adapters only carry them;
     //   T  a frame's type set by hand (["t"] = LodgeMsg.X, Set("t", ...)) - a new frame is built by its typed class;
-    //   B  a frame built by a typed class and then changed by field name (var o = LodgeFieldsJson.Build(..); o["x"] = ..).
-    // Not scanned: the adapters themselves (LodgeFieldsJson.cs, LodgeFieldsDict.cs), stored records and free-form children (an Atlas
+    //   B  a frame built by a typed class and then changed by field name (var o = LodgeJson.Build(..); o["x"] = ..).
+    // Not scanned: the adapters themselves (shared/Elans.Shared/Lodge/LodgeJson.cs, LodgeFieldsDict.cs), stored records and free-form children (an Atlas
     // section, a character sheet, a stored chat message) - those are not frames, and the typed classes carry them raw on purpose.
-    static readonly string[] Adapters = { "server/Lodge.Server/LodgeFieldsJson.cs", "src/Lodge/LodgeFieldsDict.cs" };
+    static readonly string[] Adapters = { "src/Lodge/LodgeFieldsDict.cs" };      // the shared one (LodgeJsonFields) is in shared/, which isn't scanned
 
     // Where a strict type check of the raw JSON IS the validation, the typed class only carries the envelope and these read the frame raw on
     // purpose (file, method, the keys it may read - or "(frame)" for a method that receives the frame under its own name, rule N - and why).
     // Exactly these: anything else fails.
     static readonly (string File, string Method, string Keys, string Why)[] RawOnPurpose =
     {
-        // the server's lenient JSON readers (J), which LodgeFieldsJson is built on: a key passed in, read for the caller (who is scanned)
-        ("server/Lodge.Server/Text.cs", "Str,Bool,BoolOrNull,Int,Long,Obj", Dynamic, "J: the lenient readers under the adapter"),
         ("server/Lodge.Server/Admin.cs", "Purge", "atlasOnly", "admin.purge: only a JSON false turns atlasOnly off (missing / wrong type = true)"),
         ("server/Lodge.Server/ArmoryModule.cs", "Crafters", "spells,spell", "armory.crafters: the spell ids, strict whole JSON numbers one by one"),
         ("server/Lodge.Server/ArmoryModule.cs", "Standing", "faction", "armory.standing: the faction id, a whole JSON number in range"),
@@ -245,12 +243,12 @@ public class LodgeMsgTests
     static readonly Regex FrameHelper = new(@"\b(\w+)\(\s*m\s*,\s*""([^""]*)""");                       // J.Str(m, "x"), Read(m, "x")
     static readonly Regex FrameCall = new(@"\bm\s*\??\.\s*(" + FrameGetters + @")\(\s*""([^""]*)""");
     static readonly Regex FrameCallDyn = new(@"\bm\s*\??\.\s*(?:" + FrameGetters + @")\(\s*[A-Za-z_]\w*\s*[,)]");
-    static readonly Regex AdapterInline = new(@"\bnew\s+LodgeFields(?:Json|Dict)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*\.\s*(" + AdapterCalls + @")\s*\(");
-    static readonly Regex AdapterVar = new(@"\b(?:var|ILodgeFields|ILodgeWriter|LodgeFieldsJson|LodgeFieldsDict)\s+(\w+)\s*=\s*new\s+LodgeFields(?:Json|Dict)\b");
-    static readonly Regex AdapterParam = new(@"\b(?:ILodgeFields|ILodgeWriter|LodgeFieldsJson|LodgeFieldsDict)\s+(\w+)\s*[,)=]");
+    static readonly Regex AdapterInline = new(@"\bnew\s+(?:LodgeJsonFields|LodgeFieldsDict)\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*\.\s*(" + AdapterCalls + @")\s*\(");
+    static readonly Regex AdapterVar = new(@"\b(?:var|ILodgeFields|ILodgeWriter|LodgeJsonFields|LodgeFieldsDict)\s+(\w+)\s*=\s*new\s+(?:LodgeJsonFields|LodgeFieldsDict)\b");
+    static readonly Regex AdapterParam = new(@"\b(?:ILodgeFields|ILodgeWriter|LodgeJsonFields|LodgeFieldsDict)\s+(\w+)\s*[,)=]");
     static readonly Regex SetType = new(@"\[\s*""t""\s*\]\s*=(?!=)\s*(?:LodgeMsg\.|""|\w+Msg\.Type\b)|\bSet\(\s*""t""\s*,");
-    static readonly Regex BuiltVar = new(@"\b(\w+)\s*=\s*LodgeFields(?:Json|Dict)\.Build\(");
-    static readonly Regex BuiltInline = new(@"LodgeFields(?:Json|Dict)\.Build\((?:[^()]|\([^()]*\))*\)\s*\[\s*""");
+    static readonly Regex BuiltVar = new(@"\b(\w+)\s*=\s*(?:LodgeJson|LodgeFieldsDict)\.Build\(");
+    static readonly Regex BuiltInline = new(@"(?:LodgeJson|LodgeFieldsDict)\.Build\((?:[^()]|\([^()]*\))*\)\s*\[\s*""");
     static readonly Regex TypeDecl = new(@"\b(?:class|struct|record|interface)\s+(\w+)");
     // a method declaration: [modifiers] type Name(params) or [modifiers] Name(params) (a constructor), followed by {, =>, : base(..) or
     // the end of the line; the first word is no statement keyword
@@ -454,7 +452,7 @@ public class LodgeMsgTests
         Assert.True(handles.Count >= 10, "only " + handles.Count + " module Handle(Member, string, JsonObject) methods found");
         Assert.True(handles.All(h => h.Name == "m"), "a module names the frame otherwise: " + string.Join(", ", handles.Where(h => h.Name != "m")));
         Assert.Contains("void OnReceived(Dictionary<string, object> m)", File.ReadAllText(Path.Combine(root, "src", "Lodge", "LodgeSession.cs")));
-        Assert.Matches(@"\bm = JsonNode\.Parse\(", File.ReadAllText(Path.Combine(root, "server", "Lodge.Server", "Hub.cs")));
+        Assert.Matches(@"\bm = LodgeJson\.Parse\(", File.ReadAllText(Path.Combine(root, "server", "Lodge.Server", "Hub.cs")));
 
         var hits = ScanFrames(root);
         Assert.True(hits.Count(Allowed) > 60, "only " + hits.Count(Allowed) + " raw reads on purpose found - is the scan looking at the right files?");
@@ -486,10 +484,10 @@ public class LodgeMsgTests
                         var x = J.Str(m, "text");
                         var y = (string)m["channel"];
                         Parse(me, m);
-                        var f = new LodgeFieldsJson(m);
+                        var f = new LodgeJsonFields(m);
                         var z = f.Str("id");
-                        var q = new LodgeFieldsJson(m).Int("n");
-                        var o = LodgeFieldsJson.Build(new PingMsg().Write);
+                        var q = new LodgeJsonFields(m).Int("n");
+                        var o = LodgeJson.Build(new PingMsg().Write);
                         o["extra"] = 1;
                         await hub.Send(me, new JsonObject { ["t"] = LodgeMsg.Msg, ["text"] = x });
                         return true;

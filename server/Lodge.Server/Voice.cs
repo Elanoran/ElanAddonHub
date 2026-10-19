@@ -19,7 +19,7 @@ public class VoiceModule : IModule
         {
             case VoiceMsg.Type:
             {
-                var vm = VoiceMsg.Read(new LodgeFieldsJson(m));        // a non-string room is "leave", a non-bool on is "not sent", as before
+                var vm = VoiceMsg.Read(new LodgeJsonFields(m));        // a non-string room is "leave", a non-bool on is "not sent", as before
                 string room = vm.Room;
                 var on = vm.On;
                 if (on != null) room = on == true ? room ?? hub.Channels.DefaultVoice(me.Role)?.Id : null; // 1.x hubs
@@ -46,7 +46,7 @@ public class VoiceModule : IModule
             }
             case VoiceStateMsg.Type:
             {
-                var st = VoiceStateMsg.Read(new LodgeFieldsJson(m));
+                var st = VoiceStateMsg.Read(new LodgeJsonFields(m));
                 me.Muted = st.Muted;
                 me.Deaf = st.Deaf;
                 await hub.BroadcastUser(me);
@@ -81,7 +81,7 @@ public class PresenceModule : IModule
         if (type == GameMsg.Type) { await Game(me, m); return true; }
         if (type == PositionMsg.Type) { await Position(me, m); return true; }
         if (type != StatusMsg.Type) return false;
-        var sm = StatusMsg.Read(new LodgeFieldsJson(m));          // a non-string status / note / visibility is "missing", as before
+        var sm = StatusMsg.Read(new LodgeJsonFields(m));          // a non-string status / note / visibility is "missing", as before
         var st = sm.Status;
         me.Status = st is "online" or "away" or "busy" or "dungeon" or "lfg" ? st : "online";
         var note = new string((sm.Note ?? "").Where(c => !char.IsControl(c)).ToArray()).Trim();
@@ -146,7 +146,7 @@ public class PresenceModule : IModule
         if (groupSize > 0) flags |= FGroup; else flags &= ~FGroup;
         int xp = Int(m, "xpPct", -1, 100, -1);
         // the cleaned object, stored on the member and passed on as user.game (its shape: Elans.Shared LodgeGame, every key always there)
-        return LodgeFieldsJson.Build(new LodgeGame
+        return LodgeJson.Build(new LodgeGame
         {
             Playing = Bool(m, "playing"),
             Name = Clip(m, "name", 24), Realm = Clip(m, "realm", 32), Class = Clip(m, "class", 20),
@@ -173,7 +173,7 @@ public class PresenceModule : IModule
         if (m["share"] is JsonValue sv && sv.TryGetValue<bool>(out var share) && !share) me.Game = null;
         else me.Game = BuildGame(m);
         NoteCharacter(me);
-        bool vis = await ApplyVisibility(me, GameMsg.Read(new LodgeFieldsJson(m)).Visibility);
+        bool vis = await ApplyVisibility(me, GameMsg.Read(new LodgeJsonFields(m)).Visibility);
         // a live position is never looser than the zone: no game or no zone shared any more = the position is withdrawn
         if (me.LivePos != null && !LodgeHub.MayShareLivePos(me)) await hub.BroadcastLivePos(me);
         // identical to what everyone already has: nothing to tell them (keeps a chatty addon from costing broadcasts)

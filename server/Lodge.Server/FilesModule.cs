@@ -219,12 +219,12 @@ public sealed class FilesModule : IModule
         Id = s.Id, Name = s.Name, CreatedBy = s.CreatedBy, Versions = s.Versions.OrderBy(v => v.V).Select(VersionOf).ToList(),
     };
 
-    static JsonObject SlotJson(Slot s) => LodgeFieldsJson.Build(SlotOf(s).Write);
+    static JsonObject SlotJson(Slot s) => LodgeJson.Build(SlotOf(s).Write);
 
     public JsonObject ListJson(Member me)
     {
         lock (gate)
-            return LodgeFieldsJson.Build(new FilesDataMsg
+            return LodgeJson.Build(new FilesDataMsg
             {
                 MaxMb = hub.Cfg.FilesMaxMb, TotalMb = hub.Cfg.FilesTotalMb, UsedBytes = slots.Sum(s => s.Versions.Sum(v => v.Size)),
                 Keep = KeptVersions, CanManage = Roles.Can(me.Role, Perm.FilesManage),
@@ -475,13 +475,13 @@ public sealed class FilesModule : IModule
 
     // ---------------------------------------------------------------- messages
 
-    Task Announce(string action, string id, string name, int? v, string by) => hub.Broadcast(LodgeFieldsJson.Build(new FilesChangedMsg
+    Task Announce(string action, string id, string name, int? v, string by) => hub.Broadcast(LodgeJson.Build(new FilesChangedMsg
     {
         Action = action, Slot = id, Name = name, By = by, At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(), V = v,
     }.Write));
 
     Task Result(Member me, string op, bool ok, string why, string slot) =>
-        hub.Send(me, LodgeFieldsJson.Build(new FilesResultMsg { Op = op, Ok = ok, Why = why, Slot = slot }.Write));
+        hub.Send(me, LodgeJson.Build(new FilesResultMsg { Op = op, Ok = ok, Why = why, Slot = slot }.Write));
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
@@ -494,7 +494,7 @@ public sealed class FilesModule : IModule
                 return true;
             case FilesDeleteMsg.Type:
             {
-                var id = FilesDeleteMsg.Read(new LodgeFieldsJson(m)).Slot ?? "";
+                var id = FilesDeleteMsg.Read(new LodgeJsonFields(m)).Slot ?? "";
                 var (ok, why) = Delete(me, id, out var name);
                 await Result(me, "delete", ok, why, id);
                 if (ok) { hub.Log.LogInformation("{Name} deleted a shared file slot", me.Name); await Announce("delete", id, name, null, me.Name); }
@@ -502,7 +502,7 @@ public sealed class FilesModule : IModule
             }
             case FilesRollbackMsg.Type:
             {
-                var req = FilesRollbackMsg.Read(new LodgeFieldsJson(m));
+                var req = FilesRollbackMsg.Read(new LodgeJsonFields(m));
                 var id = req.Slot ?? "";
                 var v = req.V;
                 var (ok, why) = Rollback(me, id, v, out var name, out var cur);

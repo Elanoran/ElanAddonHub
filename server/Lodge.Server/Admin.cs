@@ -41,7 +41,7 @@ public class AdminModule : IModule
                 case LodgeMsg.AdminInviteCreate: await CreateInvite(me, m); break;
                 case LodgeMsg.AdminInvites: await SendInvites(me); break;
                 case LodgeMsg.AdminInviteRevoke: await RevokeInvite(me, m); break;
-                case LodgeMsg.AdminDevices: await SendDevices(me, LodgeMsg.AdminDevices, AdminDevicesGetMsg.Read(new LodgeFieldsJson(m)).Name); break;
+                case LodgeMsg.AdminDevices: await SendDevices(me, LodgeMsg.AdminDevices, AdminDevicesGetMsg.Read(new LodgeJsonFields(m)).Name); break;
                 case LodgeMsg.AdminRetire: await Retire(me, m); break;
                 case LodgeMsg.AdminLodgeSet: await SetLodgeInfo(me, m); break;
                 case LodgeMsg.AdminMembers: await SendMembers(me); break;
@@ -67,7 +67,7 @@ public class AdminModule : IModule
         return true;
     }
 
-    Task SendMembers(Member me) => hub.Send(me, LodgeFieldsJson.Build(new AdminMembersMsg
+    Task SendMembers(Member me) => hub.Send(me, LodgeJson.Build(new AdminMembersMsg
     {
         Members = hub.Auth.ListPersonal().Select(p => new AdminMember
         {
@@ -79,12 +79,12 @@ public class AdminModule : IModule
 
     async Task Invite(Member me, JsonObject m)
     {
-        var req = AdminInviteMsg.Read(new LodgeFieldsJson(m));
+        var req = AdminInviteMsg.Read(new LodgeJsonFields(m));
         var name = (req.Name ?? "").Trim();
         var role = Roles.Normalize(req.Role);
         var code = hub.Auth.Add(name, role); // throws with a readable message when the name is bad or taken
         hub.Log.LogInformation("{By} invited {Name} as {Role}", me.Name, name, role);
-        await hub.Send(me, LodgeFieldsJson.Build(new AdminInvitedMsg { Name = name, Role = role, Code = code }.Write));   // the code: only to whoever asked, never logged
+        await hub.Send(me, LodgeJson.Build(new AdminInvitedMsg { Name = name, Role = role, Code = code }.Write));   // the code: only to whoever asked, never logged
         await SendMembers(me);
     }
 
@@ -103,7 +103,7 @@ public class AdminModule : IModule
         };
     }
 
-    async Task SendInvites(Member me) => await hub.Send(me, LodgeFieldsJson.Build(new AdminInvitesMsg
+    async Task SendInvites(Member me) => await hub.Send(me, LodgeJson.Build(new AdminInvitesMsg
     {
         Now = Ms(hub.Clock.UtcNow),
         Invites = hub.Auth.ListInvites().Where(i => i.Kind != Auth.ClaimKind).Select(InviteOf).ToList(),   // never a secret (the store keeps only its hash)
@@ -113,7 +113,7 @@ public class AdminModule : IModule
     // The secret is in this one reply and nowhere else; it is never logged.
     async Task CreateInvite(Member me, JsonObject m)
     {
-        var req = AdminInviteCreateMsg.Read(new LodgeFieldsJson(m));
+        var req = AdminInviteCreateMsg.Read(new LodgeJsonFields(m));
         bool guest = req.Kind == "guest";
         string name = guest ? "" : (req.Name ?? "").Trim();
         var role = Roles.Normalize(req.Role);
@@ -129,13 +129,13 @@ public class AdminModule : IModule
         if (hours <= 0 && req.Days > 0) hours = req.Days * 24;
         var (info, secret) = hub.Auth.CreateInvite(guest ? "guest" : "person", name, role, me.Name, hours > 0 ? hours : null, req.Uses);
         hub.Log.LogInformation("{By} created invite {Id} ({Kind}, {Role}) expiring {Expires:u}", me.Name, info.Id, info.Kind, info.Role, info.Expires);
-        await hub.Send(me, LodgeFieldsJson.Build(new AdminInviteCreatedMsg { Invite = InviteOf(info), Secret = secret }.Write));
+        await hub.Send(me, LodgeJson.Build(new AdminInviteCreatedMsg { Invite = InviteOf(info), Secret = secret }.Write));
         await SendInvites(me);
     }
 
     async Task RevokeInvite(Member me, JsonObject m)
     {
-        var info = hub.Auth.RevokeInvite(AdminInviteRevokeMsg.Read(new LodgeFieldsJson(m)).Id);
+        var info = hub.Auth.RevokeInvite(AdminInviteRevokeMsg.Read(new LodgeJsonFields(m)).Id);
         hub.Log.LogInformation("{By} revoked invite {Id}", me.Name, info.Id);
         await SendInvites(me);
     }
@@ -154,8 +154,8 @@ public class AdminModule : IModule
         var rows = list.Select(d => DeviceOf(d, me)).ToList();
         long now = Ms(hub.Clock.UtcNow);
         return type == LodgeMsg.Devices
-            ? LodgeFieldsJson.Build(new DevicesMsg { Name = name ?? "", Now = now, Devices = rows }.Write)
-            : LodgeFieldsJson.Build(new AdminDevicesMsg { Name = name ?? "", Now = now, Devices = rows }.Write);
+            ? LodgeJson.Build(new DevicesMsg { Name = name ?? "", Now = now, Devices = rows }.Write)
+            : LodgeJson.Build(new AdminDevicesMsg { Name = name ?? "", Now = now, Devices = rows }.Write);
     }
 
     Task SendDevices(Member me, string type, string name) =>
@@ -175,7 +175,7 @@ public class AdminModule : IModule
                     break;
                 case LodgeMsg.DeviceRevoke:
                 {
-                    var d = hub.Auth.FindDevice(DeviceRevokeMsg.Read(new LodgeFieldsJson(m)).Id) ?? throw new InvalidOperationException("That device is already signed out");
+                    var d = hub.Auth.FindDevice(DeviceRevokeMsg.Read(new LodgeJsonFields(m)).Id) ?? throw new InvalidOperationException("That device is already signed out");
                     bool mine = d.Guest ? d.Id == me.DeviceId : me.Personal && Names.Same(d.Name, me.Name);
                     if (!mine)
                     {
@@ -201,7 +201,7 @@ public class AdminModule : IModule
     // owner: the person's old permanent code stops working (they must already have a device on a token)
     async Task Retire(Member me, JsonObject m)
     {
-        var req = AdminRetireMsg.Read(new LodgeFieldsJson(m));
+        var req = AdminRetireMsg.Read(new LodgeJsonFields(m));
         var name = req.Name;
         hub.Auth.RetireCode(name, req.Force);
         hub.Log.LogInformation("{By} retired the permanent code of {Name}", me.Name, Names.ForLog(name));
@@ -211,7 +211,7 @@ public class AdminModule : IModule
 
     async Task SetRole(Member me, JsonObject m)
     {
-        var req = AdminRoleMsg.Read(new LodgeFieldsJson(m));
+        var req = AdminRoleMsg.Read(new LodgeJsonFields(m));
         var name = req.Name;
         var role = Roles.Normalize(req.Role);
         hub.Auth.SetRole(name, role);   // refuses to demote the last Guild Master
@@ -222,7 +222,7 @@ public class AdminModule : IModule
 
     async Task Remove(Member me, JsonObject m)
     {
-        var name = AdminRemoveMsg.Read(new LodgeFieldsJson(m)).Name;
+        var name = AdminRemoveMsg.Read(new LodgeJsonFields(m)).Name;
         if (LodgeHub.Same(name, me.Name)) throw new InvalidOperationException("You can't remove yourself");
         hub.Auth.Remove(name);
         var gone = await hub.PurgeMember(name);         // everything they authored goes with them (see LodgeHub.PurgeMember)
@@ -235,23 +235,23 @@ public class AdminModule : IModule
     // poisoned data. atlasOnly = false forgets everything stored about a person who is NO LONGER a member (leftovers from before 2.22, or a console removal).
     async Task Purge(Member me, JsonObject m)
     {
-        var name = (AdminPurgeMsg.Read(new LodgeFieldsJson(m)).Name ?? "").Trim();
+        var name = (AdminPurgeMsg.Read(new LodgeJsonFields(m)).Name ?? "").Trim();
         if (name.Length == 0) throw new InvalidOperationException("Pick a member");
         bool atlasOnly = !(m["atlasOnly"] is JsonValue v && v.TryGetValue<bool>(out var b) && !b);     // raw on purpose: only a JSON false turns it off
         if (!atlasOnly && hub.Auth.ListPersonal().Any(p => Names.Same(p.Name, name)))
             throw new InvalidOperationException("They are still a member - revert their Atlas contributions, or remove them first");
         var r = await hub.PurgeMember(name, atlasOnly);
         hub.Log.LogInformation("{By} {What} {Name}: {Count} item(s)", me.Name, atlasOnly ? "reverted the Atlas contributions of" : "purged the stored data of", Names.ForLog(name), r.Total);
-        await hub.Send(me, LodgeFieldsJson.Build(r.ToMsg().Write));
+        await hub.Send(me, LodgeJson.Build(r.ToMsg().Write));
     }
 
     // owner: the lodge's display name and welcome text (validated and length-capped by LodgeInfoStore)
     async Task SetLodgeInfo(Member me, JsonObject m)
     {
-        var req = AdminLodgeSetMsg.Read(new LodgeFieldsJson(m));
+        var req = AdminLodgeSetMsg.Read(new LodgeJsonFields(m));
         hub.Info.Set(req.Name, req.Welcome);
         hub.Log.LogInformation("{By} changed the lodge name / welcome text", me.Name);
-        await hub.Broadcast(LodgeFieldsJson.Build(new LodgeInfoMsg { Lodge = hub.Info.View() }.Write));
+        await hub.Broadcast(LodgeJson.Build(new LodgeInfoMsg { Lodge = hub.Info.View() }.Write));
     }
 
     // "Leave the lodge": the person's membership goes (codes entry, all devices, pending device links); their messages stay.
@@ -263,14 +263,14 @@ public class AdminModule : IModule
             if (!me.Personal)
             {
                 // a guest has no membership: this only signs the device out
-                if (me.DeviceId != null) { hub.Auth.RevokeDevice(me.DeviceId); await hub.Send(me, LodgeFieldsJson.Build(new MemberLeftMsg().Write)); await hub.DisconnectDevice(me.DeviceId); }
+                if (me.DeviceId != null) { hub.Auth.RevokeDevice(me.DeviceId); await hub.Send(me, LodgeJson.Build(new MemberLeftMsg().Write)); await hub.DisconnectDevice(me.DeviceId); }
                 else await hub.Error(me, "Nothing to leave");
                 return true;
             }
             var devices = hub.Auth.Leave(me.Name);
             var gone = await hub.PurgeMember(me.Name);      // everything they authored goes (see LodgeHub.PurgeMember)
             hub.Log.LogInformation("{Name} left the lodge ({Count} devices signed out, {Items} stored item(s) forgotten)", Names.ForLog(me.Name), devices.Count, gone.Total);
-            await hub.Send(me, LodgeFieldsJson.Build(new MemberLeftMsg().Write));
+            await hub.Send(me, LodgeJson.Build(new MemberLeftMsg().Write));
             foreach (var d in devices) await hub.DisconnectDevice(d.Id, "You left the lodge");
             await hub.ApplyCodeChanges();   // sessions on a permanent code, and anything left over
         }
@@ -285,7 +285,7 @@ public class AdminModule : IModule
 
     async Task AddChannel(Member me, JsonObject m)
     {
-        var req = AdminChannelAddMsg.Read(new LodgeFieldsJson(m));
+        var req = AdminChannelAddMsg.Read(new LodgeJsonFields(m));
         var name = (req.Name ?? "").Trim();
         if (name.Length is < 1 or > 24) throw new InvalidOperationException("Channel names are 1-24 characters");
         var ch = hub.Channels.Add(name, req.ChannelType, req.MinRole, req.Max);
@@ -296,7 +296,7 @@ public class AdminModule : IModule
 
     async Task RemoveChannel(Member me, JsonObject m)
     {
-        var id = AdminChannelRemoveMsg.Read(new LodgeFieldsJson(m)).Id;
+        var id = AdminChannelRemoveMsg.Read(new LodgeJsonFields(m)).Id;
         if (!hub.Channels.Remove(id)) throw new InvalidOperationException("That channel can't be removed (the last text channel stays)");
         hub.Chat.DropChannel(id);
         foreach (var x in hub.Members.Where(x => x.Room == id)) x.Room = null;
@@ -316,14 +316,14 @@ public class AdminModule : IModule
 
     async Task Kick(Member me, JsonObject m)
     {
-        var t = Target(me, ModKickMsg.Read(new LodgeFieldsJson(m)).Id);
+        var t = Target(me, ModKickMsg.Read(new LodgeJsonFields(m)).Id);
         hub.Log.LogInformation("{By} kicked {Name}", me.Name, t.Name);
         await hub.Disconnect(t, $"Kicked by {me.Name}");
     }
 
     async Task ServerMute(Member me, JsonObject m)
     {
-        var req = ModMuteMsg.Read(new LodgeFieldsJson(m));
+        var req = ModMuteMsg.Read(new LodgeJsonFields(m));
         var t = Target(me, req.Id);
         bool on = req.On;
         hub.SetServerMuted(t, on); // by identity: a reconnect keeps it

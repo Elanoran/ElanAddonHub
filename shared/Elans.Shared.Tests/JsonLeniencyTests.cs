@@ -266,4 +266,23 @@ public class JsonLeniencyTests
     {
         Golden("JsonLeniency.golden.txt", Table(OldSides));
     }
+
+    // the shared engine (LodgeJson.Parse + LodgeJsonFields), as the Lodge server uses it
+    public static ILodgeFields SharedServer(byte[] b) => LodgeJson.Parse(b) is JsonObject o ? new LodgeJsonFields(o) : null;
+
+    // Deliberate differences of the shared engine from the old server: input -> why. Everything else must read exactly as before.
+    static readonly Dictionary<string, string> ServerChanges = new();
+
+    [Fact]
+    public void The_shared_engine_reads_every_tricky_input_as_the_server_did()
+    {
+        var bad = new List<string>();
+        foreach (var (name, frame) in Cases())
+        {
+            if (ServerChanges.ContainsKey(name)) continue;
+            var old = Describe(OldSides[0].Read, frame); var now = Describe(SharedServer, frame);
+            if (!old.SequenceEqual(now)) bad.Add(name + "\n  old:    " + string.Join("  ", old.Select(x => x.Member + "=" + x.Value)) + "\n  shared: " + string.Join("  ", now.Select(x => x.Member + "=" + x.Value)));
+        }
+        Assert.True(bad.Count == 0, string.Join("\n", bad));
+    }
 }

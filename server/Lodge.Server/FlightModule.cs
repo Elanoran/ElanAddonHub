@@ -41,7 +41,7 @@ public sealed class FlightModule : IModule
 
     Task Reply(Member me, bool ok, int accepted, int rejected, string why = null)
     {
-        return hub.Send(me, LodgeFieldsJson.Build(new FlightsSharedMsg { Ok = ok, Accepted = accepted, Rejected = rejected, Why = why }.Write));
+        return hub.Send(me, LodgeJson.Build(new FlightsSharedMsg { Ok = ok, Accepted = accepted, Rejected = rejected, Why = why }.Write));
     }
 
     async Task Share(Member me, JsonObject m)
@@ -72,7 +72,7 @@ public sealed class FlightModule : IModule
     // one per 10 minutes per identity) -> flights.routes.shared { ok, accepted, rejected, why? }; flights.routes.get {} -> flights.routes.data (Page budget).
     Task ReplyRoutes(Member me, bool ok, int accepted, int rejected, string why = null)
     {
-        return hub.Send(me, LodgeFieldsJson.Build(new FlightsRoutesSharedMsg { Ok = ok, Accepted = accepted, Rejected = rejected, Why = why }.Write));
+        return hub.Send(me, LodgeJson.Build(new FlightsRoutesSharedMsg { Ok = ok, Accepted = accepted, Rejected = rejected, Why = why }.Write));
     }
 
     async Task ShareRoutes(Member me, JsonObject m)

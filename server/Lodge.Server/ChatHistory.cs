@@ -16,7 +16,7 @@ public partial class ChatModule
     // answer:           { t: "history:page", channel, before, messages: [oldest ... newest], hasMore } (HistoryPageMsg)
     async Task HistoryBefore(Member me, JsonObject m)
     {
-        var req = HistoryBeforeMsg.Read(new LodgeFieldsJson(m));
+        var req = HistoryBeforeMsg.Read(new LodgeJsonFields(m));
         var ch = hub.Channels.Get(req.Channel);
         var before = req.Before;
         if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "You are loading history too fast - try again in a moment", "rate"); return; }
@@ -46,7 +46,7 @@ public partial class ChatModule
             }
         }
         // the stored records go out as they are (deep copies), in the stored msg shape (ChatMessage)
-        await hub.Send(me, LodgeFieldsJson.Build(new HistoryPageMsg { Channel = ch?.Id ?? req.Channel ?? "", Before = before ?? "", Messages = page, HasMore = more }.Write));
+        await hub.Send(me, LodgeJson.Build(new HistoryPageMsg { Channel = ch?.Id ?? req.Channel ?? "", Before = before ?? "", Messages = page, HasMore = more }.Write));
     }
 
     // "search": { q, channel? } - case-insensitive substring over the text (and attachment names) of the channels I may see, newest first
@@ -54,7 +54,7 @@ public partial class ChatModule
     async Task Search(Member me, JsonObject m)
     {
         if (!me.Budget.Search.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "You can search a few times a minute - try again in a moment", "rate"); return; }
-        var req = SearchMsg.Read(new LodgeFieldsJson(m));
+        var req = SearchMsg.Read(new LodgeJsonFields(m));
         var q = Names.Text(req.Q ?? "", SearchQueryMax);
         var hits = new List<(long at, SearchHit hit)>();
         bool more = false;
@@ -89,7 +89,7 @@ public partial class ChatModule
         }
         var ordered = hits.OrderByDescending(h => h.at).ToList();
         if (ordered.Count > SearchMax) { ordered = ordered.Take(SearchMax).ToList(); more = true; }
-        await hub.Send(me, LodgeFieldsJson.Build(new SearchResultMsg { Q = q, Hits = ordered.Select(h => h.hit).ToList(), More = more }.Write));
+        await hub.Send(me, LodgeJson.Build(new SearchResultMsg { Q = q, Hits = ordered.Select(h => h.hit).ToList(), More = more }.Write));
     }
 
     static readonly System.Text.RegularExpressions.Regex Spaces = new(@"\s+", System.Text.RegularExpressions.RegexOptions.Compiled);

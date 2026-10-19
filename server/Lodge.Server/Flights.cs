@@ -296,7 +296,7 @@ public sealed class FlightStore
             var pick = d.Values.GroupBy(x => x).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).First().Key;
             msg.Names.Add(new(id, pick));
         }
-        cached = LodgeFieldsJson.Build(msg.Write).ToJsonString();
+        cached = LodgeJson.Build(msg.Write).ToJsonString();
         cachedVersion = version;
         return cached;
     }

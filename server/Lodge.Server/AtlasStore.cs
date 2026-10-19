@@ -718,7 +718,7 @@ public sealed partial class AtlasStore
             Full = full, More = more,
         };
         for (int i = 0; i < 22; i++) if (i != 7) res.Sections[AtlasSections.All[i]] = secs[i];     // secs[i] is section AtlasSections.All[i] (7 = finds, the array)
-        return LodgeFieldsJson.Build(res.Write);
+        return LodgeJson.Build(res.Write);
     }
 
     // ---------------------------------------------------------------- saving

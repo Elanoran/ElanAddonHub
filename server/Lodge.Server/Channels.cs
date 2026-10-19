@@ -16,7 +16,7 @@ public class Channel
 
     // admin.members.channels and welcome.channels (typed: shared/Elans.Shared/Lodge/AdminMessages.cs)
     public LodgeChannelView View() => new() { Id = Id, Name = Name, ChannelType = Type, MinRole = MinRole, Max = Max };
-    public JsonObject ToJson() => LodgeFieldsJson.Build(View().Write);
+    public JsonObject ToJson() => LodgeJson.Build(View().Write);
 }
 
 // data/channels.json - edit by hand or from the hub's Guild Master panel.

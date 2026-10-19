@@ -48,7 +48,7 @@ public sealed class BadgesModule : IModule
     }
 
     BadgesStateMsg State() => new() { Enabled = Enabled, Locked = Locked };
-    public JsonObject StateJson() => LodgeFieldsJson.Build(State().Write);
+    public JsonObject StateJson() => LodgeJson.Build(State().Write);
     public BadgesStateMsg WelcomeState() => State();                                      // welcome.badges (written with WriteState)
 
     // ---------------------------------------------------------------- the requests
@@ -67,7 +67,7 @@ public sealed class BadgesModule : IModule
         EnsureFresh();
         BadgesMineMsg o;
         lock (Store.Gate) o = MineView(me);
-        await hub.Send(me, LodgeFieldsJson.Build(o.Write));
+        await hub.Send(me, LodgeJson.Build(o.Write));
     }
 
     async Task Seen(Member me)
@@ -87,7 +87,7 @@ public sealed class BadgesModule : IModule
     {
         if (!await Gate(me, true)) return;
         EnsureFresh();
-        var hide = BadgesHideMsg.Read(new LodgeFieldsJson(m)).Hide;
+        var hide = BadgesHideMsg.Read(new LodgeJsonFields(m)).Hide;
         BadgesMineMsg o;
         lock (Store.Gate)
         {
@@ -97,13 +97,13 @@ public sealed class BadgesModule : IModule
         }
         if (o == null) { await hub.Error(me, "Nothing to change yet - try again in a moment"); return; }
         hub.Log.LogInformation("{Name} {Action} the ladder", me.Name, o.Hide ? "left" : "joined");
-        await hub.Send(me, LodgeFieldsJson.Build(o.Write));
+        await hub.Send(me, LodgeJson.Build(o.Write));
     }
 
     async Task MemberView(Member me, JsonObject m)
     {
         if (!await Gate(me, false)) return;
-        var name = BadgesMemberGetMsg.Read(new LodgeFieldsJson(m)).Name ?? "";
+        var name = BadgesMemberGetMsg.Read(new LodgeJsonFields(m)).Name ?? "";
         EnsureFresh();
         var o = new BadgesMemberMsg { Name = Names.Cut(name, Names.Max) };
         lock (Store.Gate)
@@ -111,17 +111,17 @@ public sealed class BadgesModule : IModule
             var r = name.Length > 0 ? Store.Get(Key(name)) : null;
             if (r != null) foreach (var id in Badges.TopIds(r.Earned, int.MaxValue)) o.Badges.Add(EarnedView(Badges.Find(id), r.Earned[id]));
         }
-        await hub.Send(me, LodgeFieldsJson.Build(o.Write));
+        await hub.Send(me, LodgeJson.Build(o.Write));
     }
 
     async Task LadderGet(Member me, JsonObject m)
     {
         if (!await Gate(me, false)) return;
         EnsureFresh();
-        var season = LadderGetMsg.Read(new LodgeFieldsJson(m)).Season;
+        var season = LadderGetMsg.Read(new LodgeJsonFields(m)).Season;
         LadderDataMsg o;
         lock (Store.Gate) o = LadderView(me, Badges.ValidSeason(season) ? season : Store.Season);
-        await hub.Send(me, LodgeFieldsJson.Build(o.Write));
+        await hub.Send(me, LodgeJson.Build(o.Write));
     }
 
     async Task Switch(Member me, JsonObject m)

@@ -33,10 +33,10 @@ public sealed class CalendarModule : IModule
         var until = now + Cal.WelcomeDays * 86_400_000L;
         return new CalWelcome { Now = now, Events = Typed(Store.Snapshot(e => Cal.Over(e) >= now && Cal.Start(e) <= until)) };
     }
-    public JsonObject WelcomeView() => LodgeFieldsJson.Build(WelcomeCalendar().Write);
+    public JsonObject WelcomeView() => LodgeJson.Build(WelcomeCalendar().Write);
 
     // stored events (copies) as the typed events the messages carry (shared/Elans.Shared/Lodge/CalendarMessages.cs)
-    static List<CalEvent> Typed(IEnumerable<JsonNode> evs) => evs.OfType<JsonObject>().Select(e => CalEvent.Read(new LodgeFieldsJson(e))).ToList();
+    static List<CalEvent> Typed(IEnumerable<JsonNode> evs) => evs.OfType<JsonObject>().Select(e => CalEvent.Read(new LodgeJsonFields(e))).ToList();
 
     public async Task<bool> Handle(Member me, string type, JsonObject m)
     {
@@ -44,9 +44,9 @@ public sealed class CalendarModule : IModule
         {
             case LodgeMsg.CalCreate: await Create(me, m); return true;
             case LodgeMsg.CalEdit: await Edit(me, m); return true;
-            case LodgeMsg.CalCancel: await Cancel(me, CalCancelMsg.Read(new LodgeFieldsJson(m))); return true;
-            case LodgeMsg.CalSignup: await SignUp(me, CalSignupMsg.Read(new LodgeFieldsJson(m))); return true;
-            case LodgeMsg.CalLeave: await Leave(me, CalLeaveMsg.Read(new LodgeFieldsJson(m)).Id); return true;
+            case LodgeMsg.CalCancel: await Cancel(me, CalCancelMsg.Read(new LodgeJsonFields(m))); return true;
+            case LodgeMsg.CalSignup: await SignUp(me, CalSignupMsg.Read(new LodgeJsonFields(m))); return true;
+            case LodgeMsg.CalLeave: await Leave(me, CalLeaveMsg.Read(new LodgeJsonFields(m)).Id); return true;
             case LodgeMsg.CalRange: await Range(me, m); return true;
         }
         return false;
@@ -55,7 +55,7 @@ public sealed class CalendarModule : IModule
     static bool IsOrganiser(Member me, JsonObject ev) => me.Personal && Names.Same(J.Str(ev, "by"), me.Name);
     static bool CanManage(Member me, JsonObject ev) => IsOrganiser(me, ev) || Roles.Can(me.Role, Perm.CalendarManage);
 
-    Task Broadcast(IEnumerable<JsonObject> evs) => hub.Broadcast(LodgeFieldsJson.Build(new CalEventsMsg { Events = Typed(evs) }.Write));
+    Task Broadcast(IEnumerable<JsonObject> evs) => hub.Broadcast(LodgeJson.Build(new CalEventsMsg { Events = Typed(evs) }.Write));
 
     async Task Create(Member me, JsonObject m)
     {
@@ -105,7 +105,7 @@ public sealed class CalendarModule : IModule
         var now = Now;
         var spec = Cal.Parse(m, now, Roles.AtLeast(me.Role, "officer"), edit: true, out var why);   // the event fields: Cal.Parse validates the raw request
         if (spec == null) { await hub.Error(me, why, "cal"); return; }
-        var req = CalEditMsg.Read(new LodgeFieldsJson(m));
+        var req = CalEditMsg.Read(new LodgeJsonFields(m));
         bool following = req.Scope == "following";
         List<JsonObject> changed = new();
         lock (Store.Gate)
@@ -237,7 +237,7 @@ public sealed class CalendarModule : IModule
         long from = m["from"] is JsonValue fv && fv.TryGetValue<long>(out var f) ? f : 0;
         long to = m["to"] is JsonValue tv && tv.TryGetValue<long>(out var t) ? t : 0;
         if (from <= 0 || to <= from || to - from > Cal.MaxRangeDays * 86_400_000L) { await hub.Error(me, "Ask for at most two months at a time", "cal"); return; }
-        await hub.Send(me, LodgeFieldsJson.Build(new CalRangeMsg { From = from, To = to, Events = Typed(Store.Snapshot(e => Cal.Start(e) >= from && Cal.Start(e) < to)) }.Write));
+        await hub.Send(me, LodgeJson.Build(new CalRangeMsg { From = from, To = to, Events = Typed(Store.Snapshot(e => Cal.Start(e) >= from && Cal.Start(e) < to)) }.Write));
     }
 
     // 2.22: a member left / was removed. Their sign-ups come off every event (the events stay: they belong to the lodge's calendar) and the events

@@ -74,10 +74,10 @@ public partial class ChatModule
             update.Text = Lfg.Fallback(live);
             msg["text"] = update.Text; // older clients and search see the current state after a reload
             update.Id = (string)msg["id"];
-            update.Card = LfgCard.Read(new LodgeFieldsJson(live)); // a snapshot, taken under the lock
+            update.Card = LfgCard.Read(new LodgeJsonFields(live)); // a snapshot, taken under the lock
             s.MarkDirty();
         }
         QueueFlush(s);
-        await hub.Broadcast(LodgeFieldsJson.Build(update.Write), Viewers(ch));
+        await hub.Broadcast(LodgeJson.Build(update.Write), Viewers(ch));
     }
 }

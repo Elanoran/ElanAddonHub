@@ -36,7 +36,7 @@ public partial class LodgeHub
     }
 
     // memberpos (typed: Elans.Shared MemberPosMsg) from the cleaned position (PresenceModule.BuildPosition always fills mapId, fx, fy, move)
-    static JsonObject PosMessage(Member m) => LodgeFieldsJson.Build(new MemberPosMsg
+    static JsonObject PosMessage(Member m) => LodgeJson.Build(new MemberPosMsg
     {
         Id = m.Id, Valid = true, MapId = (int)m.LivePos["mapId"], Fx = (double)m.LivePos["fx"], Fy = (double)m.LivePos["fy"], Move = (int)m.LivePos["move"],
     }.Write);
@@ -49,7 +49,7 @@ public partial class LodgeHub
         {
             if (m.LivePos != null && !MayShareLivePos(m)) m.LivePos = null;
             var msg = m.LivePos == null ? null : PosMessage(m);
-            var clear = LodgeFieldsJson.Build(new MemberPosMsg { Id = m.Id, Valid = false }.Write);
+            var clear = LodgeJson.Build(new MemberPosMsg { Id = m.Id, Valid = false }.Write);
             bool same = msg != null && m.LivePosSent != null && JsonNode.DeepEquals(msg, m.LivePosSent);
             var sends = new List<Task>();
             var online = members.Values.ToList();

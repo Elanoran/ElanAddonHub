@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Elans.Shared;
 
 namespace Lodge;
 
@@ -165,44 +166,21 @@ public static partial class Names
     }
 }
 
-// Safe readers for client JSON: a field of the wrong type is "missing", never an exception.
+// Safe readers for client JSON: a field of the wrong type is "missing", never an exception. Defined once, in the shared Lodge JSON engine
+// (shared/Elans.Shared/Lodge/LodgeJson.cs); J is the server's short name for them.
 public static class J
 {
-    public static string Str(JsonObject m, string key) => m != null && m[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
-
-    public static bool Bool(JsonObject m, string key, bool fallback = false) =>
-        m != null && m[key] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : fallback;
-
+    public static string Str(JsonObject m, string key) => LodgeJson.Str(m, key);
+    public static bool Bool(JsonObject m, string key, bool fallback = false) => LodgeJson.Bool(m, key, fallback);
     // null when absent / not a bool
-    public static bool? BoolOrNull(JsonObject m, string key) => m != null && m[key] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+    public static bool? BoolOrNull(JsonObject m, string key) => LodgeJson.BoolOrNull(m, key);
+    public static int Int(JsonObject m, string key, int fallback = 0) => LodgeJson.Int(m, key, fallback);
+    public static long Long(JsonObject m, string key, long fallback = 0) => LodgeJson.Long(m, key, fallback);
+    public static JsonObject Obj(JsonObject m, string key) => LodgeJson.Obj(m, key);
+}
 
-    public static int Int(JsonObject m, string key, int fallback = 0)
-    {
-        try
-        {
-            if (m != null && m[key] is JsonValue v)
-            {
-                if (v.TryGetValue<int>(out var i)) return i;
-                if (v.TryGetValue<double>(out var d) && !double.IsNaN(d)) return (int)Math.Clamp(d, int.MinValue, int.MaxValue);
-            }
-        }
-        catch { }
-        return fallback;
-    }
-
-    public static long Long(JsonObject m, string key, long fallback = 0)
-    {
-        try
-        {
-            if (m != null && m[key] is JsonValue v)
-            {
-                if (v.TryGetValue<long>(out var l)) return l;
-                if (v.TryGetValue<double>(out var d) && !double.IsNaN(d)) return (long)Math.Clamp(d, long.MinValue, long.MaxValue);
-            }
-        }
-        catch { }
-        return fallback;
-    }
-
-    public static JsonObject Obj(JsonObject m, string key) => m != null && m[key] is JsonObject o ? o : null;
+// The old name of the server's adapter, kept for the tests that build a frame with it: LodgeJsonFields (shared) is the adapter now.
+public static class LodgeFieldsJson
+{
+    public static JsonObject Build(Action<ILodgeWriter> write) => LodgeJson.Build(write);
 }

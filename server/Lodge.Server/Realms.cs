@@ -36,7 +36,7 @@ public sealed class RealmEntry
     // as the clients see it (typed: Elans.Shared RealmView)
     public RealmView View() => new() { Id = Id, Name = Name, Slug = Slug, Ruleset = Ruleset, Status = Status, Namespace = Namespace, Population = Population, HasQueue = HasQueue };
 
-    public JsonObject ToJson() => LodgeFieldsJson.Build(View().Write);
+    public JsonObject ToJson() => LodgeJson.Build(View().Write);
 
     public string Signature => $"{Id}|{Name}|{Ruleset}|{Status}|{Population}|{HasQueue}";
 }
@@ -202,7 +202,7 @@ public sealed class RealmsModule : IModule
         lock (gate)
         {
             // typed: Elans.Shared RealmsStatusMsg (RealmMessages.cs)
-            return LodgeFieldsJson.Build(new RealmsStatusMsg
+            return LodgeJson.Build(new RealmsStatusMsg
             {
                 Available = available, Region = Region, Realms = available ? realms.Select(r => r.View()).ToList() : new List<RealmView>(), CheckedAt = checkedAt,
                 Why = !available ? why : null,
@@ -408,7 +408,7 @@ public sealed class RealmsModule : IModule
         if (back != null)
         {
             long at; lock (gate) at = checkedAt;
-            await hub.Broadcast(LodgeFieldsJson.Build(new RealmsBackMsg { Realms = back, CheckedAt = at }.Write));
+            await hub.Broadcast(LodgeJson.Build(new RealmsBackMsg { Realms = back, CheckedAt = at }.Write));
         }
     }
 

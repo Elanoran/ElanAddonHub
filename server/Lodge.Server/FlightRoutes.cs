@@ -323,7 +323,7 @@ public sealed class FlightRouteStore
             var p = FlightRoutes.Merge(d);
             if (p != null) msg.Routes.Add(new(key, new FlightRoute { M = p.Map, P = FlightRoutes.FlatNums(p.Pts), T = p.T, N = p.N, K = p.K }));
         }
-        cached = LodgeFieldsJson.Build(msg.Write).ToJsonString();
+        cached = LodgeJson.Build(msg.Write).ToJsonString();
         cachedVersion = version;
         return cached;
     }
