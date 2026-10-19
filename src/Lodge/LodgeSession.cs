@@ -881,7 +881,13 @@ namespace ElansAddonHub.Lodge
                 r.RefreshCount();
             }
             foreach (var x in Members) { x.InMyRoom = MyRoom != null && x.Room == MyRoom; x.RoomName = x.Room == null ? null : VoiceRooms.FirstOrDefault(r => r.Id == x.Room)?.Name; }
+            voice?.SetRoomMembers(VoiceRosterFor(MyRoom));   // 3.1.1: only these are played (VoiceEngine.Incoming)
         }
+
+        // who the roster puts in `room`, me excepted: the only senders whose voice frames are played
+        public List<int> VoiceRosterFor(string room) =>
+            room == null ? new List<int>() : Members.Where(x => !x.IsMe && x.Room == room).Select(x => x.Id).Distinct().ToList();
+
 
         // ================================================================ messages
 

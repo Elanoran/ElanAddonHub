@@ -222,16 +222,38 @@ namespace ElansAddonHub.Services
             }
         }
 
+        // 3.1.1: only the people the Lodge's roster puts in MY voice room are played. Each new sender costs a decoder and a mixer input, so a
+        // frame from anyone else is dropped, there are never more than MaxPeers, and SetRoomMembers removes the ones who left.
+        // The set is replaced whole (UI thread) and only read here (network thread).
+        public const int MaxPeers = 64;
+        volatile HashSet<int> roomMembers = new HashSet<int>();
+        public void SetRoomMembers(IEnumerable<int> ids)
+        {
+            var set = new HashSet<int>(ids ?? Array.Empty<int>());
+            roomMembers = set;
+            foreach (var id in new List<int>(peers.Keys)) if (!set.Contains(id)) RemovePeer(id);
+        }
+        public int PeerCount => peers.Count;
+        public int MixerInputCount => mixer == null ? 0 : System.Linq.Enumerable.Count(mixer.MixerInputs);
+        // self-test only: a mixer with no speakers behind it, so Incoming can be fed without any audio device
+        public void UseSilentMixerForTest() => mixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(Rate, 1)) { ReadFully = true };
+
         // network thread
         public void Incoming(int sender, byte[] data, int offset, int count)
         {
             if (Deafened || mixer == null || count <= 0) return;
-            var p = peers.GetOrAdd(sender, _ =>
+            if (!roomMembers.Contains(sender)) return;
+            if (!peers.TryGetValue(sender, out var p))
             {
-                var peer = new Peer { Id = sender, Volume = PeerVolume?.Invoke(sender) ?? 1f };
-                mixer.AddMixerInput(peer);
-                return peer;
-            });
+                if (peers.Count >= MaxPeers) return;
+                p = peers.GetOrAdd(sender, _ =>
+                {
+                    var peer = new Peer { Id = sender, Volume = PeerVolume?.Invoke(sender) ?? 1f };
+                    mixer.AddMixerInput(peer);
+                    return peer;
+                });
+            }
+
             var copy = new byte[count];
             Buffer.BlockCopy(data, offset, copy, 0, count);
             p.Jb.Enqueue(copy, NowMs());

@@ -153,6 +153,16 @@ namespace ElansAddonHub
                 Session.JoinRoom("dungeon");
                 Session.FeedForTest("{\"t\":\"error\",\"text\":\"Dungeon group is full (5)\"}");   // a 2.7 server has no code
                 Check("voice: same with the 2.7 wording", Session.MyRoom == null && Session.PendingRoom == null);
+                // 3.1.1: the voice frames played are only those of the people the roster puts in my room (VoiceEngine.SetRoomMembers)
+                string U(int id, string name, string role, string room) => "{\"t\":\"user\",\"user\":{\"id\":" + id + ",\"name\":" + Q(name) + ",\"role\":" + Q(role) + (room == null ? "" : ",\"room\":" + Q(room)) + "}}";
+                Session.FeedForTest(U(2, "Bob", "officer", "dungeon")); Session.FeedForTest(U(3, "Tess", "member", "dungeon")); Session.FeedForTest(U(1, "Elan", "owner", "dungeon"));
+                var r1 = Session.VoiceRosterFor("dungeon");
+                Check("voice roster: the others in the room, never me (" + string.Join(",", r1) + ")", r1.OrderBy(x => x).SequenceEqual(new[] { 2, 3 }));
+                Session.FeedForTest(U(3, "Tess", "member", null));
+                var r2 = Session.VoiceRosterFor("dungeon");
+                Check("voice roster: someone who leaves the room is out (" + string.Join(",", r2) + ")", r2.SequenceEqual(new[] { 2 }) && Session.VoiceRosterFor(null).Count == 0 && Session.VoiceRosterFor("nowhere").Count == 0);
+                Session.FeedForTest(U(2, "Bob", "officer", null)); Session.FeedForTest(U(1, "Elan", "owner", null));
+
 
                 // ---- 3.0.1: back into the voice room after an update restart (saved before the restart, one shot)
                 var nowS = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
