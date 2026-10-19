@@ -49,12 +49,13 @@ namespace ElansAddonHub.Lodge
 
         void OnInviteFrame(Dictionary<string, object> m)
         {
-            var now = m.Long("now") > 0 ? m.Long("now") : NowMs();
+            long Now(long sent) => sent > 0 ? sent : NowMs();                  // the server's clock when it sent one
             switch (m.Str("t"))
             {
                 case LodgeMsg.AdminInvites:
                     Invites.Clear();
-                    foreach (var d in AdminInvitesMsg.Read(new LodgeFieldsDict(m)).Invites.Select(x => InviteVM.From(x, now))
+                    var invites = AdminInvitesMsg.Read(new LodgeFieldsDict(m));
+                    foreach (var d in invites.Invites.Select(x => InviteVM.From(x, Now(invites.Now)))
                         .OrderByDescending(i => i.Pending).ThenByDescending(i => i.Created)) Invites.Add(d);
                     InvitesChanged?.Invoke();
                     break;
@@ -71,9 +72,11 @@ namespace ElansAddonHub.Lodge
                     {
                         bool mine = m.Str("t") == LodgeMsg.Devices;
                         var target = mine ? MyDevices : AllDevices;
-                        var rows = mine ? DevicesMsg.Read(new LodgeFieldsDict(m)).Devices : AdminDevicesMsg.Read(new LodgeFieldsDict(m)).Devices;
+                        List<DeviceView> rows; long sent;
+                        if (mine) { var x = DevicesMsg.Read(new LodgeFieldsDict(m)); rows = x.Devices; sent = x.Now; }
+                        else { var x = AdminDevicesMsg.Read(new LodgeFieldsDict(m)); rows = x.Devices; sent = x.Now; }
                         target.Clear();
-                        foreach (var d in rows.Select(x => DeviceVM.From(x, now))) target.Add(d);
+                        foreach (var d in rows.Select(x => DeviceVM.From(x, Now(sent)))) target.Add(d);
                         DevicesChanged?.Invoke();
                         break;
                     }

@@ -295,14 +295,18 @@ namespace ElansAddonHub.Lodge
                 if (f.Build > 0) o["gb"] = f.Build;
                 return (object)o;
             }).ToList();
-            return new Dictionary<string, object>
+            // a full atlas.data answer, written by its typed class (the sections are raw, as on the wire)
+            return LodgeFieldsDict.Build(new AtlasDataMsg
             {
-                ["t"] = LodgeMsg.AtlasData, ["epoch"] = Epoch, ["rev"] = Rev, ["at"] = Updated, ["full"] = true, ["seenMembers"] = SeenMembers,
-                ["kills"] = Counters(kills), ["objects"] = Counters(objects), ["fishing"] = Counters(fishing), ["vendors"] = vo, ["quests"] = qo, ["spawns"] = so, ["items"] = io, ["finds"] = fl,
-                ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso, ["fieldnotes"] = fnc, ["entrances"] = eco, ["npcspots"] = npc,
-                ["pickpocket"] = Counters(gather["pickpocket"]), ["skinning"] = Counters(gather["skinning"]), ["mining"] = Counters(gather["mining"]),
-                ["herbalism"] = Counters(gather["herbalism"]), ["salvage"] = Counters(gather["salvage"]), ["contained"] = Counters(gather["contained"]),
-            };
+                Epoch = Epoch, Rev = Rev, At = Updated, Full = true, SeenMembers = SeenMembers, Finds = fl,
+                Sections = new Dictionary<string, object>
+                {
+                    ["kills"] = Counters(kills), ["objects"] = Counters(objects), ["fishing"] = Counters(fishing), ["vendors"] = vo, ["quests"] = qo, ["spawns"] = so, ["items"] = io,
+                    ["seenNpcs"] = sno, ["seenObjects"] = sgo, ["seenQuests"] = swo, ["nodes"] = nco, ["fishspots"] = fso, ["fieldnotes"] = fnc, ["entrances"] = eco, ["npcspots"] = npc,
+                    ["pickpocket"] = Counters(gather["pickpocket"]), ["skinning"] = Counters(gather["skinning"]), ["mining"] = Counters(gather["mining"]),
+                    ["herbalism"] = Counters(gather["herbalism"]), ["salvage"] = Counters(gather["salvage"]), ["contained"] = Counters(gather["contained"]),
+                },
+            }.Write);
         }
 
         // ---------------------------------------------------------------- the read API (for the Atlas page)
@@ -539,8 +543,8 @@ namespace ElansAddonHub.Lodge
             {
                 if (File.Exists(AtlasCachePath) && new FileInfo(AtlasCachePath).Length < 48L * 1024 * 1024)
                 {
-                    var m = Json.Obj(File.ReadAllText(AtlasCachePath, Encoding.UTF8));
-                    if (m != null) { m["full"] = true; AtlasData.Apply(m); }
+                    var cached = Json.Obj(File.ReadAllText(AtlasCachePath, Encoding.UTF8));
+                    if (cached != null) { var msg = AtlasDataMsg.Read(new LodgeFieldsDict(cached)); msg.Full = true; AtlasData.Apply(msg); }
                 }
             }
             catch (Exception e) { Util.Log("atlas: could not read the cache (" + e.GetType().Name + ")"); AtlasData.Clear(); }

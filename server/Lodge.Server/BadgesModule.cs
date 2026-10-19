@@ -339,14 +339,14 @@ public sealed class BadgesModule : IModule
     // the numbers badges are earned from, as of now (the caller holds Store.Gate)
     Dictionary<string, long> Gather(BadgesStore.Rec rec, AtlasStore.MemberContribution c, int flights, int chars, long nowSec)
     {
-        var m = new Dictionary<string, long>(StringComparer.Ordinal);
+        var n = new Dictionary<string, long>(StringComparer.Ordinal);
         c ??= new AtlasStore.MemberContribution();
-        m["kills"] = c.Kills; m["objects"] = c.Objects; m["fishing"] = c.Fishing; m["vendors"] = c.Vendors; m["revealed"] = c.Revealed;
-        m["finds"] = c.Finds; m["zones"] = c.Zones.Count; m["rare"] = c.Rare;
-        m["flights"] = flights; m["chars"] = chars;
-        foreach (var k in BadgesStore.TallyKeys) m[k] = rec.Of(k);
-        m["days"] = Math.Max(0, (nowSec - rec.First) / 86_400);
-        return m;
+        n["kills"] = c.Kills; n["objects"] = c.Objects; n["fishing"] = c.Fishing; n["vendors"] = c.Vendors; n["revealed"] = c.Revealed;
+        n["finds"] = c.Finds; n["zones"] = c.Zones.Count; n["rare"] = c.Rare;
+        n["flights"] = flights; n["chars"] = chars;
+        foreach (var k in BadgesStore.TallyKeys) n[k] = rec.Of(k);
+        n["days"] = Math.Max(0, (nowSec - rec.First) / 86_400);
+        return n;
     }
 
     // ---------------------------------------------------------------- tallies (called by the other modules; all quiet, all cheap)

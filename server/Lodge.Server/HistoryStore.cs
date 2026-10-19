@@ -73,10 +73,10 @@ public sealed class HistoryStore
             for (int i = first; i < lines.Length; i++)
             {
                 if (lines[i].Length == 0) continue;
-                try { var m = JsonNode.Parse(lines[i])?.AsObject(); if (m != null) { m["channel"] = channel; parsed.Add(m); } } catch { }
+                try { var rec = JsonNode.Parse(lines[i])?.AsObject(); if (rec != null) { rec["channel"] = channel; parsed.Add(rec); } } catch { }
             }
             bool migrated = false;
-            foreach (var m in parsed) migrated |= ChatModule.MigrateReactions(m); // 2.4: stored emoji reactions become ids
+            foreach (var rec in parsed) migrated |= ChatModule.MigrateReactions(rec); // 2.4: stored emoji reactions become ids
             recordsOnDisk = parsed.Count + (start > 0 || migrated ? Keep * 2 : 0); // a cut or migrated file: compact on the next write
             Messages.AddRange(parsed.Count > Keep ? parsed.GetRange(parsed.Count - Keep, Keep) : parsed);
         }

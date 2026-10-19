@@ -173,7 +173,7 @@ public class PresenceModule : IModule
         if (m["share"] is JsonValue sv && sv.TryGetValue<bool>(out var share) && !share) me.Game = null;
         else me.Game = BuildGame(m);
         NoteCharacter(me);
-        bool vis = await ApplyVisibility(me, J.Str(m, "visibility"));
+        bool vis = await ApplyVisibility(me, GameMsg.Read(new LodgeFieldsJson(m)).Visibility);
         // a live position is never looser than the zone: no game or no zone shared any more = the position is withdrawn
         if (me.LivePos != null && !LodgeHub.MayShareLivePos(me)) await hub.BroadcastLivePos(me);
         // identical to what everyone already has: nothing to tell them (keeps a chatty addon from costing broadcasts)

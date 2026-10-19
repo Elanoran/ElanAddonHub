@@ -19,15 +19,16 @@ public partial class ChatModule
     // returns the message id, or null when it could not be stored
     public async Task<string> PostEventCard(Member me, Channel ch, JsonObject ev)
     {
-        var msg = LodgeFieldsJson.Build(new ChatMessage
+        var card = new ChatMessage
         {
             Channel = ch.Id, Id = Guid.NewGuid().ToString("N")[..12], At = new DateTimeOffset(hub.Clock.UtcNow).ToUnixTimeMilliseconds(),
             From = me.Name, FromId = me.Id, Text = Cal.Fallback(ev), Kind = Cal.Kind, Event = EventCard(ev),
-        }.Write);
+        };
+        var msg = LodgeFieldsJson.Build(card.Write);
         var s = Store(ch.Id);
         lock (s) s.Append(msg);
         await hub.Broadcast(msg, Viewers(ch));
-        return (string)msg["id"];
+        return card.Id;
     }
 
     // the event changed: keep its card's snapshot and fallback text in step

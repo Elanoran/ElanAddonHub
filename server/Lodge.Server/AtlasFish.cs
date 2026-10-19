@@ -93,8 +93,8 @@ public static partial class Atlas
             d[who] = d.TryGetValue(who, out var old) ? Math.Max(old, p.N) : p.N;
             foreach (var (id, c) in p.Items)
             {
-                if (!perItem[idx].TryGetValue(id, out var m)) perItem[idx][id] = m = new(StringComparer.Ordinal);
-                m[who] = m.TryGetValue(who, out var o2) ? Math.Max(o2, c) : c;
+                if (!perItem[idx].TryGetValue(id, out var byWho)) perItem[idx][id] = byWho = new(StringComparer.Ordinal);
+                byWho[who] = byWho.TryGetValue(who, out var o2) ? Math.Max(o2, c) : c;
             }
         }
         for (int i = 0; i < seeds.Count; i++)
