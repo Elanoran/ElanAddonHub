@@ -9,7 +9,7 @@ namespace ElansAddonHub.Services
     // (Windows allows renaming a running exe), move the new one in and restart.
     public static class SelfUpdater
     {
-        public static string ExePath => Process.GetCurrentProcess().MainModule.FileName;
+        public static string ExePath => Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule.FileName; // the single-file exe itself
 
         public static void CleanupOld()
         {

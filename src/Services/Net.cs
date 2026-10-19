@@ -13,7 +13,7 @@ namespace ElansAddonHub.Services
 
         static Net()
         {
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; // GitHub needs TLS 1.2
+            // 3.1 (.NET 10): TLS 1.2 / 1.3 are negotiated by the system by default (the old ServicePointManager switch is obsolete)
             Http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true }) { Timeout = TimeSpan.FromMinutes(5) };
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("ElansAddonHub/" + App.Version);
         }

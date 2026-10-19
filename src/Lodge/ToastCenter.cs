@@ -86,6 +86,7 @@ namespace ElansAddonHub.Lodge
         public readonly ObservableCollection<ToastVM> Visible = new ObservableCollection<ToastVM>();
         readonly List<ToastItem> held = new List<ToastItem>();
         public int HeldCount => held.Count;
+        public void ClearForTest() { held.Clear(); Visible.Clear(); }   // a section starts without the toasts an earlier one left
         public int Shown { get; private set; }                     // toasts created so far (tests)
 
         public ToastCenter(Settings s) { settings = s; }

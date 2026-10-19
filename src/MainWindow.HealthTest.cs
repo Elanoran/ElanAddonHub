@@ -143,6 +143,7 @@ namespace ElansAddonHub
 
                 // ---- the app: monitor + chip + rail badge + panel
                 s.ToastsOff = false; s.ToastHealthOff = false; s.HealthSeen = null; s.HealthToasted = null;
+                Session.Toasts.ClearForTest();   // the Lodge sections before this one may leave their own toasts open
                 health.Root = () => root;
                 var changes = 0; health.Changed += () => changes++;
                 ShowTab("addons");
