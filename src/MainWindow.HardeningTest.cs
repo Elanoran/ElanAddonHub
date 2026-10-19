@@ -12,8 +12,46 @@ namespace ElansAddonHub
     // --selftest "lodgehardening": the client side of the Lodge 2.8 hardening, from synthetic frames (no server)
     public partial class MainWindow
     {
+        // 3.1.1 (L4): what a hostile Lodge puts in a pin, a reply's author, a search hit's author or a reaction is cleaned like a message:
+        // no bidi override / isolate (reverses what follows) and, in names, no zero-width or other invisible character
+        async Task HardeningNames(Action<string, bool> check)
+        {
+            const string Rlo = "\u202E", Zw = "\u200B", Lri = "\u2066";
+            bool Clean(string x) => x != null && x.IndexOf(Rlo, StringComparison.Ordinal) < 0 && x.IndexOf(Zw, StringComparison.Ordinal) < 0 && x.IndexOf(Lri, StringComparison.Ordinal) < 0;
+            check("names: the cleaning keeps an honest name (emoji, accents, spaces) as it is", SafeFile.Who("Elan") == "Elan" && SafeFile.Who("Zoë the 🐉") == "Zoë the 🐉" && SafeFile.Who(null) == null
+                && SafeFile.Who("Bo" + Zw + "b" + Rlo) == "Bob" && SafeFile.Who("Te" + Lri + "ss\u0007") == "Tess" && SafeFile.Who(new string('x', 500)).Length == 64);
+            Session.Disconnect();
+            LodgePage.ShowChatForTest();
+            Session.FeedForTest(FunWelcome("owner", "{\"id\":1,\"name\":\"Elan\",\"role\":\"owner\"},{\"id\":2,\"name\":\"Bob\",\"role\":\"officer\"},{\"id\":3,\"name\":\"Tess\",\"role\":\"member\"}"));
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            // a reply whose quoted author carries a bidi override and a zero-width space
+            Session.FeedForTest("{\"t\":\"msg\",\"channel\":\"general\",\"id\":\"n1\",\"at\":" + now + ",\"from\":\"Tess\",\"fromId\":3,\"text\":\"hi\","
+                + "\"replyTo\":{\"id\":\"x\",\"by\":\"Bo\\u200Bb\\u202E\",\"snippet\":\"old \\u202Etxt.exe\"}}");
+            var n1 = Session.MessagesOf("general").FirstOrDefault(m => m.Id == "n1");
+            check("reply: the quoted author and text are cleaned (" + n1?.ReplyFrom + ")", n1 != null && n1.ReplyFrom == "Bob" && Clean(n1.ReplyText));
+            // a pin with a reversed text, a hidden author and a file name that pretends to be a picture
+            Session.FeedForTest("{\"t\":\"pin\",\"channel\":\"general\",\"pin\":{\"id\":\"n1\",\"text\":\"look \\u202Egnp.exe\",\"by\":\"Te\\u200Bss\",\"pinnedBy\":\"Bo\\u2066b\",\"at\":" + now
+                + ",\"pinnedAt\":" + now + "}}");
+            var pin = Session.PinsOf("general").FirstOrDefault(p => p.Id == "n1");
+            check("pin: text, author and who pinned it are cleaned (the toast shows the same text)", pin != null && Clean(pin.Text) && pin.Text == "look gnp.exe" && pin.By == "Tess" && pin.PinnedBy == "Bob" && Clean(pin.Shown));
+            Session.FeedForTest("{\"t\":\"pin\",\"channel\":\"general\",\"pin\":{\"id\":\"n2\",\"text\":\"\",\"by\":\"Tess\",\"pinnedBy\":\"Bob\",\"at\":" + now
+                + ",\"file\":{\"id\":\"" + new string('a', 32) + "\",\"name\":\"evil\\u202Egnp.exe\",\"size\":10,\"mime\":\"image/png\"}}}");
+            var pin2 = Session.PinsOf("general").FirstOrDefault(p => p.Id == "n2");
+            check("pin: a file name is cleaned like a shared file's (" + pin2?.FileName + ")", pin2 != null && pin2.FileName == "evilgnp.exe" && pin2.Shown == "[evilgnp.exe]");
+            // a reaction from an invisible-character name
+            Session.FeedForTest("{\"t\":\"react\",\"channel\":\"general\",\"id\":\"n1\",\"reaction\":\"lol\",\"users\":[\"Bo\\u200Bb\",\"\\u202E\"],\"by\":\"Bo\\u200Bb\",\"on\":true}");
+            var rx = n1?.Reactions.FirstOrDefault(r => r.Emoji == "lol");
+            check("reaction: the people who reacted are cleaned, an empty one is dropped (" + (rx == null ? "none" : string.Join("|", rx.Users)) + ")", rx != null && rx.Users.SequenceEqual(new[] { "Bob" }) && Clean(rx.Tip));
+            // a search hit's author
+            var search = Session.SearchAsync("hi");
+            Session.FeedForTest("{\"t\":\"search:result\",\"q\":\"hi\",\"hits\":[{\"channel\":\"general\",\"id\":\"n1\",\"from\":\"Te\\u202Ess\\u200B\",\"at\":" + now + ",\"snippet\":\"hi\"}],\"more\":false}");
+            var res = await search;
+            check("search: the author of a hit is cleaned (" + res.Hits.FirstOrDefault()?.From + ")", res.Hits.Count == 1 && res.Hits[0].From == "Tess");
+        }
+
         async Task<string> HardeningTest(string dir)
         {
+
             var notes = new List<string>();
             bool ok = true;
             void Check(string what, bool cond) { SelfTestClock.Mark(what); notes.Add((cond ? "ok   " : "FAIL ") + what); ok &= cond; }
@@ -204,6 +242,7 @@ namespace ElansAddonHub
                 Check("foo@Elan does not ping, (@Elan) does", !ml.First(m => m.Id == "p3").Mentioned && ml.First(m => m.Id == "p4").Mentioned);
 
                 Check("online list: one number (the status line)", Session.StatusText.Contains("online"));
+                await HardeningNames(Check);
             }
             catch (Exception e) { ok = false; notes.Add("crashed: " + e); }
             finally

@@ -457,7 +457,7 @@ namespace ElansAddonHub.Lodge
                     if (rm != null)
                     {
                         ApplyReaction(rm, rx.Reaction ?? rx.Emoji, rx.Users.ToArray());
-                        var by = rx.By;
+                        var by = SafeFile.Who(rx.By);
                         if (rm.Mine && rx.On && by != null && !string.Equals(by, Me?.Name, StringComparison.OrdinalIgnoreCase))
                             ToastFor(ToastKind.Reaction, rm, by, "reacted \"" + ReactionArt.Name(rx.Reaction ?? rx.Emoji) + "\" to: " + OneLine(rm.Text));
                     }
@@ -914,7 +914,7 @@ namespace ElansAddonHub.Lodge
                 Text = SafeFile.Text(m.Text), Edited = m.Edited,
                 Mine = Me != null && string.Equals(from, Me.Name, StringComparison.OrdinalIgnoreCase),
                 CanDelete = CanModerate,
-                ReplyFrom = reply?.By ?? reply?.From, ReplyText = SafeFile.Text(reply?.Snippet ?? reply?.Text), ReplyId = reply?.Id,
+                ReplyFrom = SafeFile.Who(reply?.By ?? reply?.From), ReplyText = SafeFile.Text(reply?.Snippet ?? reply?.Text), ReplyId = reply?.Id,
                 ReactEnabled = SupportsReact, PinEnabled = CanPin,
             };
             vm.Continuation = prev != null && IsContinuation(prev, vm);
@@ -1207,6 +1207,7 @@ namespace ElansAddonHub.Lodge
         void ApplyReaction(MessageVM msg, string emoji, string[] users)
         {
             if (string.IsNullOrEmpty(emoji)) return;
+            users = users.Select(u => SafeFile.Who(u)).Where(u => !string.IsNullOrEmpty(u)).ToArray();   // 3.1.1: cleaned like every name
             var r = msg.Reactions.FirstOrDefault(x => x.Emoji == emoji);
             if (users.Length == 0) { if (r != null) msg.Reactions.Remove(r); }
             else
@@ -1228,8 +1229,10 @@ namespace ElansAddonHub.Lodge
             if (p == null || p.Id == null) return null;
             return new PinVM
             {
-                Id = p.Id, Text = p.Text, By = p.By, PinnedBy = p.PinnedBy,
-                At = DateTimeOffset.FromUnixTimeMilliseconds(p.At).UtcDateTime, FileName = p.File?.Name, CanUnpin = CanPin,
+                // 3.1.1: the pin's text, names and file name are cleaned like a message's (the "pinned:" toast shows the same)
+                Id = p.Id, Text = SafeFile.Text(p.Text), By = SafeFile.Who(p.By), PinnedBy = SafeFile.Who(p.PinnedBy),
+                At = DateTimeOffset.FromUnixTimeMilliseconds(p.At).UtcDateTime, FileName = p.File?.Name == null ? null : SafeFile.Name(p.File.Name), CanUnpin = CanPin,
+
             };
         }
 

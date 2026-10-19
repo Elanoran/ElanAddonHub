@@ -228,7 +228,7 @@ namespace ElansAddonHub.Lodge
                 if (h.Id == null || ch == null) continue;
                 res.Hits.Add(new SearchHitVM
                 {
-                    ChannelId = ch, ChannelName = TextChannels.FirstOrDefault(c => c.Id == ch)?.Name, Id = h.Id, From = h.From, AtMs = h.At,
+                    ChannelId = ch, ChannelName = TextChannels.FirstOrDefault(c => c.Id == ch)?.Name, Id = h.Id, From = SafeFile.Who(h.From), AtMs = h.At,
                     Snippet = SafeFile.Text(h.Snippet), Query = q,
                 });
             }

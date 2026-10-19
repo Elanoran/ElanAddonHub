@@ -90,7 +90,7 @@ namespace ElansAddonHub.Lodge
 
         void OnFilesChanged(FilesChangedMsg m)
         {
-            var by = m.By ?? "";
+            var by = SafeFile.Who(m.By) ?? "";
             var text = LodgeFiles.NoticeText(m.Action, DisplayNames.Shown(by), Names(m.Name), m.V ?? 0);
             if (text != null && !string.Equals(by, Me?.Name, StringComparison.OrdinalIgnoreCase))
             {
