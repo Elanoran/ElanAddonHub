@@ -78,6 +78,95 @@ public class LodgeJsonTests
         Assert.Equal("\"7\"", LodgeJson.WritePlain(7m));
     }
 
+    // ---------------------------------------------------------------- the parser's rules (LodgeJson.Rules)
+
+    static byte[] U(string s) => Encoding.UTF8.GetBytes(s);
+    static byte[] Cat(params byte[][] parts) => parts.SelectMany(p => p).ToArray();
+    static bool Reads(byte[] b) => LodgeJson.Parse(b) != null;
+    static bool Reads(string s) => LodgeJson.Parse(s) != null;
+
+    [Fact]
+    public void Depth_is_limited_to_MaxDepth_levels_the_frame_included()
+    {
+        Assert.Equal(64, LodgeJson.MaxDepth);
+        string Frame(int levels) => "{\"a\":" + new string('[', levels - 1) + "1" + new string(']', levels - 1) + "}";     // the object + levels - 1 arrays
+        Assert.True(Reads(U(Frame(64))));
+        Assert.False(Reads(U(Frame(65))));
+        Assert.False(Reads(Frame(65)));
+        Assert.False(Reads(U("{\"a\":" + new string('[', 200_000) + new string(']', 200_000) + "}")));    // no stack overflow, just skipped
+        // the same for objects
+        var deepObj = new StringBuilder(); for (int i = 0; i < 70; i++) deepObj.Append("{\"a\":"); deepObj.Append('1').Append('}', 70);
+        Assert.False(Reads(deepObj.ToString()));
+    }
+
+    [Fact]
+    public void A_key_twice_skips_the_frame_at_any_level()
+    {
+        Assert.True(Reads("{\"a\":1,\"b\":2}"));
+        Assert.False(Reads("{\"a\":1,\"a\":1}"));                              // even with the same value
+        Assert.False(Reads("{\"a\":{\"b\":1,\"b\":2}}"));
+        Assert.False(Reads("{\"a\":[0,[{\"b\":1,\"c\":{\"d\":1,\"d\":1}}]]}"));
+        Assert.False(Reads("{\"a\":1,\"\\u0061\":2}"));                       // the same key, once escaped
+        Assert.True(Reads("{\"a\":1,\"A\":2,\"a \":3}"));                      // keys are compared exactly
+    }
+
+    [Fact]
+    public void Invalid_UTF8_and_lone_surrogates_skip_the_frame()
+    {
+        Assert.True(Reads(U("{\"a\":\"\u00e9\U0001F600\",\"\u00e9\":1}")));                       // real UTF-8, a pair
+        Assert.True(Reads("{\"a\":\"\\ud83d\\ude00\",\"\\ud83d\\ude00\":1}"));                     // an escaped pair, in a value and a key
+        foreach (var bad in new[]
+        {
+            Cat(U("{\"a\":\"x"), new byte[] { 0xFF }, U("\"}")),                 // not UTF-8 at all
+            Cat(U("{\"a\":\"x"), new byte[] { 0xC3 }, U("\"}")),                 // a sequence cut short
+            Cat(U("{\"a\":\""), new byte[] { 0xC0, 0xAF }, U("\"}")),            // overlong
+            Cat(U("{\"a\":\""), new byte[] { 0xED, 0xA0, 0x80 }, U("\"}")),      // a surrogate encoded as UTF-8
+            Cat(U("{\"a"), new byte[] { 0xFF }, U("\":1}")),                     // in a key
+            Cat(U("{\"a\":[\"ok\",{\"b\":\""), new byte[] { 0xFE }, U("\"}]}")), // deep inside
+        })
+            Assert.False(Reads(bad), BitConverter.ToString(bad));
+        foreach (var bad in new[] { "{\"a\":\"\\ud800\"}", "{\"a\":\"x\\udc00\"}", "{\"a\":\"\\ude00\\ud83d\"}", "{\"a\":\"\\ud83d\"}", "{\"\\ud800\":1}", "{\"a\":[{\"b\":\"\\udfff\"}]}" })
+            Assert.False(Reads(bad), bad);
+        Assert.False(Reads("{\"a\":\"x\ud800\"}"));                            // a lone surrogate in the text itself
+    }
+
+    [Fact]
+    public void Only_strict_JSON_with_an_object_at_the_top_is_read()
+    {
+        Assert.True(Reads(" \r\n\t{\"a\":1} \n"));
+        foreach (var bad in new[] { "{\"a\":1,}", "{\"a\":[1,]}", "{\"a\":1/*c*/}", "// c\n{\"a\":1}", "{\"a\":1} x", "{\"a\":1}{}", "[{\"a\":1}]", "\"a\"", "null", "", "{\"a\":NaN}", "{'a':1}", "{\"a\":01}" })
+            Assert.False(Reads(bad), bad);
+        Assert.False(Reads(Cat(new byte[] { 0xEF, 0xBB, 0xBF }, U("{\"a\":1}"))));                      // a BOM
+        Assert.Null(LodgeJson.Parse((byte[])null)); Assert.Null(LodgeJson.Parse((string)null));
+    }
+
+    [Fact]
+    public void A_frame_that_parses_reads_every_field_without_an_exception()
+    {
+        // every input of the leniency table: either skipped, or each member of the adapter answers (no "throws")
+        foreach (var (name, frame) in JsonLeniencyTests.Cases())
+        {
+            var got = JsonLeniencyTests.Describe(JsonLeniencyTests.Shared, frame);
+            Assert.True(got.All(x => !x.Value.StartsWith("throws", StringComparison.Ordinal)), name + ": " + string.Join("  ", got.Select(x => x.Member + "=" + x.Value)));
+        }
+    }
+
+    [Fact]
+    public void Both_sides_take_the_frame_limits_from_here()
+    {
+        Assert.Equal(64 * 1024, LodgeJson.MaxFrameToLodge);
+        Assert.Equal(64 * 1024 * 1024, LodgeJson.MaxFrameFromLodge);
+        var root = AppContext.BaseDirectory;
+        while (!Directory.Exists(Path.Combine(root, "server"))) root = Path.GetDirectoryName(root);
+        var hub = File.ReadAllText(Path.Combine(root, "server", "Lodge.Server", "Hub.cs"));
+        var client = File.ReadAllText(Path.Combine(root, "src", "Services", "LodgeClient.cs"));
+        Assert.Contains("msg.Length > LodgeJson.MaxFrameToLodge", hub);
+        Assert.Contains("msg.Length > LodgeJson.MaxFrameFromLodge", client);
+        Assert.Contains("LodgeJson.Parse(msg.GetBuffer()", hub);
+        Assert.Contains("LodgeJson.Parse(data, 0, len)", client);
+        Assert.DoesNotContain("JsonNode.Parse", client);
+    }
+
     [Fact]
     public void FromPlain_gives_nodes_that_read_like_a_received_frame()
     {

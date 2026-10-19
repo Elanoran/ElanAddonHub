@@ -15,28 +15,76 @@ namespace Elans.Shared
     //   LodgeJson.Str/Int/..   the lenient readers under it (the server's J): a field of the wrong type is "missing", never an exception
     public static class LodgeJson
     {
-        // ---------------------------------------------------------------- limits
+        // ---------------------------------------------------------------- limits and rules (one place, both sides)
 
         // the biggest frame the Lodge takes from an Outpost (a bigger one closes the connection: server/Lodge.Server/Hub.cs ReceiveLoop)
         public const int MaxFrameToLodge = 64 * 1024;
         // the biggest frame an Outpost takes from a Lodge: the full Atlas pool is the biggest one there is, and the Lodge keeps that store under
         // 64 MB on disk (AtlasStore); a bigger frame drops the connection (src/Services/LodgeClient.cs ReceiveFrames)
         public const int MaxFrameFromLodge = 64 * 1024 * 1024;
+        // nesting levels, the frame itself included (System.Text.Json's default, which the server always had; the deepest real frame has ~8)
+        public const int MaxDepth = 64;
+
+        // What a frame must be, or it is skipped as a whole (null from Parse) - never half read, and never an exception later when a field is read:
+        //   - valid JSON (RFC 8259): no comments, no trailing commas, nothing after the object, no BOM - and an object at the top;
+        //   - at most MaxDepth levels;
+        //   - no key twice in one object (rejected, not "last wins": two readers must never see two different frames in the same bytes);
+        //   - valid UTF-8 everywhere, keys included (no U+FFFD substitution), and no lone surrogate in a string or key (an escaped \uD800 alone):
+        //     every Lodge and Outpost writes clean text, so only a forged frame has them.
+        static readonly JsonDocumentOptions Rules = new JsonDocumentOptions
+        {
+            MaxDepth = MaxDepth, AllowDuplicateProperties = false, AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow,
+        };
 
         // ---------------------------------------------------------------- parse / serialize
 
-        // a frame as the Lodge server read it: the UTF-8 text decoded, parsed, an object or nothing
+        // a received frame (its UTF-8 bytes) -> its object, or null when it breaks any of the rules above
         public static JsonObject Parse(byte[] utf8, int offset, int count)
         {
-            try { return JsonNode.Parse(Encoding.UTF8.GetString(utf8, offset, count))?.AsObject(); } catch { return null; }
+            if (utf8 == null) return null;
+            try { return Checked(JsonNode.Parse(new ReadOnlySpan<byte>(utf8, offset, count), null, Rules)); } catch { return null; }
         }
 
         public static JsonObject Parse(byte[] utf8) => utf8 == null ? null : Parse(utf8, 0, utf8.Length);
 
+        // the same for text (an HTTP answer, a cache file, a self-test frame); a lone surrogate in the text itself is refused too
         public static JsonObject Parse(string text)
         {
             if (text == null) return null;
-            try { return JsonNode.Parse(text)?.AsObject(); } catch { return null; }
+            try { return Checked(JsonNode.Parse(text, null, Rules)); } catch { return null; }
+        }
+
+        // System.Text.Json reads a node's keys and strings only when they are first asked for: every one is read here, once, so a frame that
+        // parses can be read field by field without an exception (invalid UTF-8 and lone surrogates surface now, not in a handler)
+        static JsonObject Checked(JsonNode node) => node is JsonObject o && Clean(o) ? o : null;
+
+        static bool Clean(JsonNode n)
+        {
+            switch (n)
+            {
+                case null: return true;
+                case JsonObject o:
+                    foreach (var kv in o) if (!CleanText(kv.Key) || !Clean(kv.Value)) return false;
+                    return true;
+                case JsonArray a:
+                    foreach (var x in a) if (!Clean(x)) return false;
+                    return true;
+                case JsonValue v:
+                    return v.GetValueKind() != JsonValueKind.String || (v.TryGetValue<string>(out var s) && CleanText(s));
+                default: return false;
+            }
+        }
+
+        // no lone surrogate: a high one is followed by a low one, a low one follows a high one
+        static bool CleanText(string s)
+        {
+            for (int i = 0; i < s.Length; i++)
+            {
+                var c = s[i];
+                if (char.IsHighSurrogate(c)) { if (i + 1 >= s.Length || !char.IsLowSurrogate(s[i + 1])) return false; i++; }
+                else if (char.IsLowSurrogate(c)) return false;
+            }
+            return true;
         }
 
         public static string Serialize(JsonNode node) => node?.ToJsonString() ?? "null";
@@ -121,7 +169,7 @@ namespace Elans.Shared
         public static JsonNode FromPlain(object value)
         {
             if (value == null) return null;
-            try { return JsonNode.Parse(WritePlain(value)); } catch { return null; }
+            try { var node = JsonNode.Parse(WritePlain(value), null, Rules); return Clean(node) ? node : null; } catch { return null; }
         }
 
         // ---------------------------------------------------------------- the lenient readers

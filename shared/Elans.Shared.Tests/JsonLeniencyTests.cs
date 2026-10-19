@@ -271,7 +271,21 @@ public class JsonLeniencyTests
     public static ILodgeFields Shared(byte[] b) => LodgeJson.Parse(b) is JsonObject o ? new LodgeJsonFields(o) : null;
 
     // Deliberate differences of the shared engine from the old SERVER: input -> why. Everything else reads exactly as before.
-    static readonly Dictionary<string, string> ServerChanges = new();
+    // (the parser's rules, LodgeJson.Rules: these frames are now skipped as a whole, on both sides)
+    static readonly Dictionary<string, string> ServerChanges = new()
+    {
+        ["duplicate key"] = "a key twice: the frame is skipped (it threw when read - for \"t\" in the hub's dispatch, outside the per-message catch)",
+        ["duplicate key, different types"] = "the same",
+        ["duplicate key nested"] = "the same, at any level (a handler threw when it reached that object)",
+        ["duplicate key in an array entry"] = "the same",
+        ["a = escaped lone high"] = "a lone surrogate in a string: skipped (reading that string threw in the handler)",
+        ["a = escaped lone low"] = "the same",
+        ["escaped lone surrogate in a key"] = "the same, in a key (any read of the object threw)",
+        ["invalid UTF-8 in a string"] = "invalid UTF-8: skipped (it was decoded with U+FFFD in its place and read)",
+        ["invalid UTF-8 in a key"] = "the same, in a key",
+        ["overlong UTF-8"] = "the same (an overlong form is invalid UTF-8)",
+        ["UTF-8 encoded lone surrogate"] = "the same (a surrogate encoded as UTF-8 is invalid UTF-8)",
+    };
 
     // Where the old Outpost read differently, the shared engine reads as the old server did (or as ServerChanges says): input -> why that is
     // the Outpost's behaviour now. The rule was to keep the Outpost's own leniency unless the server's is clearly safer - none of the old
@@ -282,13 +296,13 @@ public class JsonLeniencyTests
         ["a = array of huge numbers"] = "the same, inside an array (Longs)",
         ["a = array of whole fractions"] = "Longs takes whole JSON numbers only (1.0 / 2e0 = 0, as on the server): the Outpost's one Longs reading "
             + "(armory.crafters spells) is not used - OnArmoryCrafters reads those numbers itself, strictly",
-        ["a = escaped lone high"] = "a lone surrogate is no text: the server's reading (see the parser's own rules)",
+        ["a = escaped lone high"] = "a lone surrogate is no text: the frame is skipped (one rule for both sides, LodgeJson.Rules) instead of kept",
         ["a = escaped lone low"] = "the same",
         ["escaped lone surrogate in a key"] = "the same, in a key",
         ["a = deep 64"] = "at most 64 levels, as on the server: the old reader took any depth and a very deep frame ended the process",
         ["a = deep 1000"] = "the same",
         ["very deep (100000)"] = "the same: skipped instead of a stack overflow",
-        ["duplicate key"] = "duplicate keys: one rule for both sides (see the parser's own rules) instead of the Outpost's last-wins",
+        ["duplicate key"] = "a key twice skips the frame (one rule for both sides, LodgeJson.Rules) instead of the Outpost's last-wins",
         ["duplicate key, different types"] = "the same",
         ["duplicate key nested"] = "the same",
         ["duplicate key in an array entry"] = "the same",
@@ -302,6 +316,10 @@ public class JsonLeniencyTests
         ["raw control character in a string"] = "the same",
         ["raw newline in a string"] = "the same",
         ["unknown escape"] = "the same",
+        ["invalid UTF-8 in a string"] = "invalid UTF-8 skips the frame (one rule for both sides, LodgeJson.Rules) instead of U+FFFD in its place",
+        ["invalid UTF-8 in a key"] = "the same",
+        ["overlong UTF-8"] = "the same",
+        ["UTF-8 encoded lone surrogate"] = "the same",
     };
 
     static string Line(List<(string Member, string Value)> d) => string.Join("  ", d.Select(x => x.Member + "=" + x.Value));
@@ -318,6 +336,9 @@ public class JsonLeniencyTests
         }
         Assert.True(bad.Count == 0, string.Join("\n", bad));
         Assert.True(ServerChanges.Keys.All(k => Cases().Any(c => c.Name == k)), "ServerChanges names an input that isn't in the table");
+        // and each of those is skipped as a whole now
+        foreach (var (name, frame) in Cases().Where(c => ServerChanges.ContainsKey(c.Name)))
+            Assert.True(Describe(Shared, frame).SequenceEqual(new[] { ("frame", "skipped") }), name + " is not skipped: " + Line(Describe(Shared, frame)));
     }
 
     [Fact]
