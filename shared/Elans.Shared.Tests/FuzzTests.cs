@@ -126,12 +126,31 @@ public class FuzzTests
         public void Add(string p) { lock (Problems) if (Problems.Count < 40) Problems.Add(p); }
     }
 
-    // a Read may allocate this much: linear in the input, plus a fixed amount. Measured: text costs about 2-6x its UTF-8 size (UTF-16
-    // strings, the nodes); the worst case is an array of empty objects ([{},{},..], 3 bytes each), where every entry becomes a typed object
-    // with its own lists - about 110x (BadgesMemberMsg, 16 MB for a 150 KB frame). Linear, so bounded by the frame cap (the server takes 64 KB
-    // frames: at most ~7 MB), but a large factor: see the report. The bound catches anything worse (quadratic, unbounded).
+    // a Read may allocate this much: a fixed amount plus so much per object / array, per value and per byte of the frame - so with
+    // LodgeJson's counts (MaxContainers, MaxValues) never more than AllocCeiling, whatever frame Parse took. Measured: the worst case is an
+    // array of empty objects ([{},{},..], 3 bytes each), where every entry becomes a typed object with its own lists - about 450 bytes per
+    // object (ArmoryCharsMsg: 8.5 MB for 20k of them; before the counts an 8 MB frame of them cost ~1.1 GB); a number about 90 bytes, a
+    // key of a string map about 270; text a few times its UTF-8 size. The bound catches anything worse (quadratic, unbounded, a new per-item
+    // cost). Keys count as values here (every key has one, so there are at most MaxValues of them).
     internal const long AllocFixed = 256 * 1024;
-    internal const int AllocPerByte = 160;
+    internal const int AllocPerContainer = 640, AllocPerValue = 128, AllocPerByte = 8;
+    // ~380 MB in theory; measured at the caps: ~36 MB (100k empty objects), ~95 MB (1M numbers) - FrameLimitsTests
+    internal const long AllocCeiling = AllocFixed + AllocPerContainer * (long)LodgeJson.MaxContainers + 2 * AllocPerValue * (long)LodgeJson.MaxValues
+        + AllocPerByte * (long)LodgeJson.MaxFrameFromLodge;
+
+    internal static long AllocBound(byte[] utf8)
+    {
+        var r = new Utf8JsonReader(utf8);
+        long containers = 0, values = 0;
+        while (r.Read())
+            switch (r.TokenType)
+            {
+                case JsonTokenType.StartObject: case JsonTokenType.StartArray: containers++; values++; break;
+                case JsonTokenType.String: case JsonTokenType.Number: case JsonTokenType.True: case JsonTokenType.False: case JsonTokenType.Null: values++; break;
+                case JsonTokenType.PropertyName: values++; break;                   // a key costs about what a value does (a map's string)
+            }
+        return AllocFixed + AllocPerContainer * containers + AllocPerValue * values + AllocPerByte * (long)utf8.Length;
+    }
 
     // the classes whose Write needs a part that a frame may leave out (JoinMsg.User): as LodgeMsgTests.Every_typed_class_writes_its_own_type
     // says, such a class is written only with its parts set (the server builds it from its own state, it never writes back what it read)
@@ -159,8 +178,8 @@ public class FuzzTests
         long alloc = GC.GetAllocatedBytesForCurrentThread() - before;
         double ratio = (double)alloc / Math.Max(1, inputBytes);
         if (alloc > 64 * 1024 && ratio > rep.WorstAllocRatio) { rep.WorstAllocRatio = ratio; rep.WorstAlloc = msg.Class.Name + " " + alloc + " bytes for " + inputBytes; }
-        if (alloc > AllocFixed + AllocPerByte * inputBytes)
-            rep.Add(where + ": " + msg.Class.Name + ".Read allocated " + alloc + " bytes for a " + inputBytes + "-byte frame\n  " + Clip(text));
+        if (alloc > AllocFixed && alloc > AllocBound(Encoding.UTF8.GetBytes(text)))
+            rep.Add(where + ": " + msg.Class.Name + ".Read allocated " + alloc + " bytes for a " + inputBytes + "-byte frame (over the bound)\n  " + Clip(text));
         if (read == null) { rep.Add(where + ": " + msg.Class.Name + ".Read returned null"); return; }
 
         // write it, serialize, parse and read it again
@@ -303,9 +322,23 @@ public class FuzzTests
         {
             using var doc = JsonDocument.Parse(utf8, LodgeJson.Rules);
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
+            long values = 0, containers = 0;
+            if (!WithinCounts(doc.RootElement, ref values, ref containers)) return false;
             return NoLoneSurrogate(doc.RootElement);
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException) { return false; }   // InvalidOperationException: the dupe check met a lone surrogate key
+    }
+
+    static bool WithinCounts(JsonElement e, ref long values, ref long containers)
+    {
+        if (++values > LodgeJson.MaxValues) return false;
+        if (e.ValueKind != JsonValueKind.Object && e.ValueKind != JsonValueKind.Array) return true;
+        if (++containers > LodgeJson.MaxContainers) return false;
+        int n = e.ValueKind == JsonValueKind.Object ? e.EnumerateObject().Count() : e.GetArrayLength();
+        if (n > LodgeJson.MaxItems) return false;
+        if (e.ValueKind == JsonValueKind.Object) { foreach (var p in e.EnumerateObject()) if (!WithinCounts(p.Value, ref values, ref containers)) return false; }
+        else foreach (var x in e.EnumerateArray()) if (!WithinCounts(x, ref values, ref containers)) return false;
+        return true;
     }
 
     static bool NoLoneSurrogate(JsonElement e)

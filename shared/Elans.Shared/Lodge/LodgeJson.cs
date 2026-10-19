@@ -28,9 +28,26 @@ namespace Elans.Shared
         // nesting levels, the frame itself included (System.Text.Json's default, which the server always had; the deepest real frame has ~8)
         public const int MaxDepth = 64;
 
+        // How much one frame may hold (checked by Parse before anything is built). A frame's size alone doesn't bound what reading it costs:
+        // an 8 MB frame of empty objects ({"history":{"c1":[{},{},..],..}}) read into typed messages took about 1.1 GB (~450 bytes per empty
+        // object, ~100 per number). The biggest real frames, measured in FrameLimitsTests (Elans.Shared.Tests and Lodge.Tests):
+        //   - flights.routes.data at its worst (FlightRoutes.MaxLegs 3000 routes of MaxPoints 64 points, 4.6 MB): 3000 keys in one object,
+        //     594k values, 6k objects / arrays;
+        //   - flights.data at its worst (Flights.MaxLegs 5000 legs, MaxNames 3000 names): 5000 keys in one object, 18k values;
+        //   - an atlas.data page (Atlas.PageBytes 200 KB) of the smallest records (one-kill counters): 8743 keys in one section, 26k values;
+        //   - a welcome with history (100 messages per channel), an armory list (Armory.MaxCharsTotal 1500), the device list (5000): a few
+        //     thousand at most.
+        // So: 20k items per array / keys per object (2.3x the densest atlas page), 1M values in all (1.7x the routes at their caps) and 100k
+        // objects / arrays in all (15x the routes). That bounds what reading any frame can cost to about 100 MB (measured at the caps: 36 MB
+        // for 100k empty objects, 95 MB for 1M numbers), where it was about 1.1 GB; a frame over them is refused at once, nothing built.
+        public const int MaxItems = 20_000;
+        public const int MaxValues = 1_000_000;
+        public const int MaxContainers = 100_000;
+
         // What a frame must be, or it is skipped as a whole (null from Parse) - never half read, and never an exception later when a field is read:
         //   - valid JSON (RFC 8259): no comments, no trailing commas, nothing after the object, no BOM - and an object at the top;
         //   - at most MaxDepth levels;
+        //   - at most MaxItems items in any array / keys in any object, MaxValues values and MaxContainers objects / arrays in all;
         //   - no key twice in one object (rejected, not "last wins": two readers must never see two different frames in the same bytes);
         //   - valid UTF-8 everywhere, keys included (no U+FFFD substitution), and no lone surrogate in a string or key (an escaped \uD800 alone):
         //     every Lodge and Outpost writes clean text, so only a forged frame has them.
@@ -47,16 +64,60 @@ namespace Elans.Shared
             if (utf8 == null) return null;
             var span = new ReadOnlySpan<byte>(utf8, offset, count);
             if (!System.Text.Unicode.Utf8.IsValid(span)) return null;              // invalid UTF-8 anywhere (keys, strings, overlong, encoded surrogates)
+            if (!Within(span)) return null;                                          // too many items: refused before a node is built
             try { return Checked(JsonNode.Parse(span, null, Rules), MayHaveSurrogateEscape(span)); } catch { return null; }
         }
 
         public static JsonObject Parse(byte[] utf8) => utf8 == null ? null : Parse(utf8, 0, utf8.Length);
 
-        // the same for text (an HTTP answer, a cache file, a self-test frame); a lone surrogate in the text itself is refused too
+        // the same for text (an HTTP answer, a self-test frame); a lone surrogate in the text itself is refused too
         public static JsonObject Parse(string text)
         {
             if (text == null) return null;
-            try { return Checked(JsonNode.Parse(text, null, Rules), text.IndexOf("\\uD", StringComparison.OrdinalIgnoreCase) >= 0); } catch { return null; }
+            try
+            {
+                if (!Within(Encoding.UTF8.GetBytes(text))) return null;
+                return Checked(JsonNode.Parse(text, null, Rules), text.IndexOf("\\uD", StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+            catch { return null; }
+        }
+
+        // A file this program wrote itself (a cache of many merged pages, e.g. the Outpost's Atlas cache): every rule of Parse except the
+        // counts - it is no frame from the other side, and the merge of all pages may well hold more than one frame may.
+        public static JsonObject ParseStored(byte[] utf8)
+        {
+            if (utf8 == null || !System.Text.Unicode.Utf8.IsValid(utf8)) return null;
+            try { return Checked(JsonNode.Parse(utf8, null, Rules), MayHaveSurrogateEscape(utf8)); } catch { return null; }
+        }
+
+        // The counts (MaxItems / MaxValues / MaxContainers), read with a plain reader: nothing is allocated, and a frame over a limit stops
+        // the reading where it passes it. Invalid JSON is false here too (the parse would refuse it anyway).
+        static bool Within(ReadOnlySpan<byte> utf8)
+        {
+            var r = new Utf8JsonReader(utf8, new JsonReaderOptions { MaxDepth = MaxDepth, AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow });
+            Span<int> items = stackalloc int[MaxDepth + 1];            // the items so far in each open array / object
+            int depth = 0, values = 0, containers = 0;
+            try
+            {
+                while (r.Read())
+                {
+                    switch (r.TokenType)
+                    {
+                        case JsonTokenType.PropertyName: continue;
+                        case JsonTokenType.EndObject: case JsonTokenType.EndArray: depth--; continue;
+                    }
+                    // a value: one more item of the array / object it is in
+                    if (++values > MaxValues) return false;
+                    if (depth > 0 && ++items[depth - 1] > MaxItems) return false;
+                    if (r.TokenType == JsonTokenType.StartObject || r.TokenType == JsonTokenType.StartArray)
+                    {
+                        if (++containers > MaxContainers || depth >= MaxDepth) return false;
+                        items[depth++] = 0;
+                    }
+                }
+                return true;
+            }
+            catch (JsonException) { return false; }
         }
 
         // What the parse itself doesn't check: System.Text.Json takes a duplicate key, the depth and the syntax at parse time (Rules), and
