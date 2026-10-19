@@ -5,8 +5,8 @@ namespace Elans.Shared
     // The Cairn messages between a Lodge and its Outposts (server/PROTOCOL.md, "The Cairn"): give to get (atlas.sharing, cairn.status), the
     // Guild Master's "Join the Cairn" status (cairn.join.get, cairn.join) and the Cairn operator's notices (cairn.notices.get, cairn.notices,
     // cairn.notice.seen). The classes only map fields: who may see what, the sharing store and the notices' signatures stay where they are (the
-    // Lodge server's CairnReceive.cs / CairnNotices.cs; the Outpost checks each notice with CairnFormats.Notice + Es256). The Guild Master's
-    // admin.cairn switch is not typed here.
+    // Lodge server's CairnReceive.cs / CairnNotices.cs; the Outpost checks each notice with CairnFormats.Notice + Es256), and the Guild Master's
+    // admin.cairn switch (the address and code rules stay in CairnReceive.SetJoin / CairnSign.TryNormalizeUrl).
 
     // client -> server: the member's Atlas sharing switch (answered with cairn.status)
     public sealed class AtlasSharingMsg
@@ -110,6 +110,25 @@ namespace Elans.Shared
             LastPost = f.LongOrNull("lastPost"), Checked = f.LongOrNull("checked"),
             Place = f.Int("place"), Of = f.Int("of"), BetaOpenSlots = f.IntOrNull("betaOpenSlots"),
         };
+    }
+
+    // client -> server: (Perm.ManageMembers) the Guild Master's "Join the Cairn" switch { on, publicUrl?, code? } (answered with cairn.join to the
+    // leaders, or an error with code locked / atlas / address). publicUrl / code only when given: the Lodge keeps what it has otherwise. The
+    // invite code goes to the Lodge once and is never sent back (cairn.join only says hasCode).
+    public sealed class AdminCairnMsg
+    {
+        public const string Type = LodgeMsg.AdminCairn;
+        public bool On;
+        public string PublicUrl, Code;  // null = not sent
+
+        public void Write(ILodgeWriter w)
+        {
+            w.Set("t", Type); w.Set("on", On);
+            if (PublicUrl != null) w.Set("publicUrl", PublicUrl);
+            if (Code != null) w.Set("code", Code);
+        }
+
+        public static AdminCairnMsg Read(ILodgeFields f) => new AdminCairnMsg { On = f.Bool("on"), PublicUrl = f.Str("publicUrl"), Code = f.Str("code") };
     }
 
     // client -> server: ask for the Cairn's notices

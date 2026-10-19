@@ -503,10 +503,11 @@ public sealed class CairnModule : IModule
         var j = link.Join;
         if (link.EnvPath) { await hub.Error(me, "The Cairn is switched on in the server's own settings (lodge.env), so it can't be changed here", "locked"); return; }
         if (!hub.Cfg.AtlasEnabled) { await hub.Error(me, "The Atlas is switched off on this server, so there is nothing to share with the Cairn", "atlas"); return; }
-        bool on = J.Bool(m, "on");
+        var req = AdminCairnMsg.Read(new LodgeFieldsJson(m));
+        bool on = req.On;
         if (on)
         {
-            var given = J.Str(m, "publicUrl");
+            var given = req.PublicUrl;
             string url = j.PublicUrl;
             if (given != null || url.Length == 0)
             {
@@ -514,7 +515,7 @@ public sealed class CairnModule : IModule
             }
             if (j.State is "waiting" or "admitted" && j.PublicUrl.Length > 0 && !string.Equals(url, j.PublicUrl, StringComparison.OrdinalIgnoreCase))
             { await hub.Error(me, "This Lodge already asked the Cairn with " + j.PublicUrl + " - a new address needs the Cairn's operator", "address"); return; }
-            var code = CleanCode(J.Str(m, "code"));
+            var code = CleanCode(req.Code);
             lock (j.Gate)
             {
                 j.On = true; j.PublicUrl = url;
@@ -627,7 +628,7 @@ public sealed class CairnModule : IModule
                 await hub.Send(me, JoinJson());
                 return true;
             }
-            case LodgeMsg.AdminCairn:
+            case AdminCairnMsg.Type:
             {
                 if (!me.Budget.Page.TryTake()) { me.CountDrop(hub.Clock); await hub.Error(me, "Slow down a little", "rate"); return true; }
                 await SetJoin(me, m);

@@ -354,13 +354,9 @@ public partial class LodgeHub
     public Task Send(Member to, JsonObject obj) => SendRaw(to, Encoding.UTF8.GetBytes(obj.ToJsonString()), WebSocketMessageType.Text);
 
     // code (2.8, optional): a machine-readable reason next to the text - "rate", "room-full" (with the room id)
-    public Task Error(Member to, string text, string code = null, string room = null)
-    {
-        var o = new JsonObject { ["t"] = LodgeMsg.Error, ["text"] = text };
-        if (code != null) o["code"] = code;
-        if (room != null) o["room"] = room;
-        return Send(to, o);
-    }
+    // The one error frame (typed: Elans.Shared LodgeErrorMsg, which also lists every code)
+    public Task Error(Member to, string text, string code = null, string room = null) =>
+        Send(to, LodgeFieldsJson.Build(new LodgeErrorMsg { Text = text, Code = code, Room = room }.Write));
 
     public async Task SendRaw(Member to, byte[] data, WebSocketMessageType type)
     {

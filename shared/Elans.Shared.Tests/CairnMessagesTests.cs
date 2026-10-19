@@ -51,6 +51,11 @@ public class CairnMessagesTests
         var n = CairnNoticesMsg.Read(Written(new CairnNoticesMsg { List = { Notice() } }.Write)).List.Single();
         Assert.Equal((7L, 1_790_000_000L, 1_790_600_000L, "warning", "*", "Maintenance on Sunday", "c2lnbmF0dXJl", "k1"), (n.Id, n.Created, n.Expires, n.Level, n.To, n.Text, n.Sig, n.Kid));
         Assert.Equal(new long[] { 7, 9 }, CairnNoticeSeenMsg.Read(Written(new CairnNoticeSeenMsg { Ids = { 7, 9 } }.Write)).Ids);
+
+        var a = AdminCairnMsg.Read(Written(new AdminCairnMsg { On = true, PublicUrl = "https://lodge.example.test", Code = "ABCD-1234" }.Write));
+        Assert.Equal((true, "https://lodge.example.test", "ABCD-1234"), (a.On, a.PublicUrl, a.Code));
+        var off = AdminCairnMsg.Read(Written(new AdminCairnMsg { On = false }.Write));
+        Assert.Equal((false, (string)null, (string)null), (off.On, off.PublicUrl, off.Code));
     }
 
     [Fact]
@@ -64,6 +69,7 @@ public class CairnMessagesTests
         Assert.Equal("cairn.notices.get", Written(new CairnNoticesGetMsg().Write).Str("t"));
         Assert.Equal("cairn.notices", Written(new CairnNoticesMsg().Write).Str("t"));
         Assert.Equal("cairn.notice.seen", Written(new CairnNoticeSeenMsg().Write).Str("t"));
+        Assert.Equal("admin.cairn", Written(new AdminCairnMsg().Write).Str("t"));
     }
 
     [Fact]
@@ -84,6 +90,9 @@ public class CairnMessagesTests
         var list = CairnNoticesMsg.Read(new TestFields(new Dictionary<string, object> { ["list"] = new List<object> { "junk", new Dictionary<string, object> { ["id"] = "7", ["text"] = 5 } } })).List;
         Assert.Equal((0L, (string)null, (string)null), (list.Single().Id, list.Single().Text, list.Single().To));
         Assert.False(AtlasSharingMsg.Read(new TestFields(new Dictionary<string, object> { ["on"] = "true" })).On);
+        // admin.cairn: a publicUrl that isn't a string is "not given" (the server then keeps / suggests its own), on must be a JSON true
+        var a = AdminCairnMsg.Read(new TestFields(new Dictionary<string, object> { ["on"] = 1, ["publicUrl"] = 5, ["code"] = "" }));
+        Assert.Equal((false, (string)null, ""), (a.On, a.PublicUrl, a.Code));
     }
 
     // ---- golden: what the old code sent
@@ -97,6 +106,11 @@ public class CairnMessagesTests
         SameJson(new Dictionary<string, object> { ["t"] = "cairn.notice.seen", ["ids"] = new List<object> { 7L } }, Written(new CairnNoticeSeenMsg { Ids = { 7 } }.Write).D);
         // the ask the server answers (tests and other clients send it; the Outpost waits for the answer to atlas.sharing)
         SameJson(new Dictionary<string, object> { ["t"] = "cairn.status" }, Written(new CairnStatusGetMsg().Write).D);
+        // LodgeSession.SetCairnJoin: publicUrl / code only when given
+        SameJson(new Dictionary<string, object> { ["t"] = "admin.cairn", ["on"] = false }, Written(new AdminCairnMsg { On = false }.Write).D);
+        SameJson(new Dictionary<string, object> { ["t"] = "admin.cairn", ["on"] = true, ["publicUrl"] = "https://lodge.example.test", ["code"] = "ABCD-1234" },
+            Written(new AdminCairnMsg { On = true, PublicUrl = "https://lodge.example.test", Code = "ABCD-1234" }.Write).D);
+        SameJson(new Dictionary<string, object> { ["t"] = "admin.cairn", ["on"] = true, ["code"] = "ABCD-1234" }, Written(new AdminCairnMsg { On = true, Code = "ABCD-1234" }.Write).D);
     }
 
     [Fact]

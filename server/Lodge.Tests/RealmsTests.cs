@@ -453,4 +453,36 @@ public sealed class RealmsTests
         Assert.Empty(t.Net.Requests);
         Assert.Empty(mia.Of("realms.status"));
     }
+
+    // ---------------------------------------------------------------- typed (Elans.Shared RealmMessages.cs)
+
+    static string[] KeysInOrder(JsonObject o) => o.Select(kv => kv.Key).ToArray();
+
+    // realms.status (available or not) and realms.back keep their keys and order; a realm row carries population / hasQueue only when known
+    [Fact]
+    public async Task Typed_realm_frames_keep_their_keys()
+    {
+        using var t = new Rig();
+        t.Forever(status: "DOWN");
+        t.Net.Namespaces["dynamic-classic1x-eu"][2003] = FakeBlizzard.Connected(2003, "UP", "Forever RP", "RP", "RP", "Forever", "LOW", queue: null);
+        var (_, mia) = await t.Join("Mia");
+        await t.Poll();
+        var st = Status(mia);
+        Assert.Equal(new[] { "t", "available", "region", "realms", "checkedAt" }, KeysInOrder(st));
+        var rows = ((JsonArray)st["realms"]!).Select(r => r!.AsObject()).ToList();
+        Assert.Equal(new[] { "id", "name", "slug", "ruleset", "status", "namespace", "population", "hasQueue" }, KeysInOrder(rows[0]));
+        Assert.Equal(new[] { "id", "name", "slug", "ruleset", "status", "namespace", "population" }, KeysInOrder(rows.Single(r => (string?)r["name"] == "Forever RP")));
+        Assert.Equal(rows.Select(r => r.ToJsonString()), t.M.Current.Select(r => r.ToJson().ToJsonString()));
+
+        t.Net.Namespaces["dynamic-classic1x-eu"][2001] = FakeBlizzard.Connected(2001, "UP", "WoW Forever", "NORMAL", "Normal", "Forever");
+        t.R.Clock.Advance(TimeSpan.FromMinutes(3));
+        await t.Poll();
+        Assert.Equal(new[] { "t", "realms", "checkedAt" }, KeysInOrder(mia.Of("realms.back").Single()));
+
+        using var none = new Rig();
+        none.Net.Namespaces["dynamic-eu"] = new() { [100] = FakeBlizzard.Connected(100, "UP", "Tarren Mill") };
+        var (_, bob) = await none.Join("Bob");
+        await none.Poll();
+        Assert.Equal(new[] { "t", "available", "region", "realms", "checkedAt", "why" }, KeysInOrder(Status(bob)));
+    }
 }

@@ -127,10 +127,10 @@ namespace ElansAddonHub.Lodge
         public void SetCairnJoin(bool on, string publicUrl = null, string code = null)
         {
             if (!CanSwitchCairn) return;
-            var o = new Dictionary<string, object> { ["t"] = LodgeMsg.AdminCairn, ["on"] = on };
-            if (!string.IsNullOrWhiteSpace(publicUrl)) o["publicUrl"] = publicUrl.Trim();
-            if (!string.IsNullOrWhiteSpace(code)) o["code"] = code.Trim();
-            _ = Send(o);
+            _ = Send(LodgeFieldsDict.Build(new AdminCairnMsg
+            {
+                On = on, PublicUrl = string.IsNullOrWhiteSpace(publicUrl) ? null : publicUrl.Trim(), Code = string.IsNullOrWhiteSpace(code) ? null : code.Trim(),
+            }.Write));
         }
 
         // the address to suggest: the Lodge's own setting (LODGE_PUBLIC_URL), else the one this Outpost is connected to (https only)

@@ -376,6 +376,32 @@ public class HardeningTests
         Assert.Single(g1b.Of("error"));
     }
 
+    // ---------------------------------------------------------------- the error frame (typed: Elans.Shared LodgeErrorMsg)
+
+    // { t, text }, { t, text, code } and { t, text, code, room } keep their keys and order; every error goes through LodgeHub.Error
+    [Fact]
+    public async Task Error_frames_keep_their_keys()
+    {
+        static string[] Keys(JsonObject o) => o.Select(kv => kv.Key).ToArray();
+        using var f = new FunRig();
+        var mia = f.Join("Mia", "member"); var gus = f.Join("Gus", "guest");
+        await f.Hub.Error(mia, "Nothing to leave");
+        Assert.Equal(new[] { "t", "text" }, Keys(f.Sock("Mia").LastError()!));
+        await f.Send(gus, new { t = "dataset.info", name = "classic" });
+        var guest = f.Sock("Gus").LastError()!;
+        Assert.Equal(new[] { "t", "text", "code" }, Keys(guest));
+        Assert.Equal(("This is for lodge members", "guest"), ((string?)guest["text"], (string?)guest["code"]));
+
+        using var r = new Rig();
+        var socks = new List<Sock>();
+        for (int i = 0; i < 6; i++) socks.Add(await r.Join(GuestCode, "G" + i));
+        foreach (var s in socks) s.Say("{\"t\":\"voice\",\"room\":\"dungeon\"}");
+        await Task.Delay(400);
+        var full = socks.SelectMany(s => s.Of("error")).Single(e => (string?)e["code"] == "room-full");
+        Assert.Equal(new[] { "t", "text", "code", "room" }, Keys(full));
+        Assert.Equal("dungeon", (string?)full["room"]);
+    }
+
     // ---------------------------------------------------------------- voice
 
     [Fact]

@@ -47,32 +47,34 @@ namespace ElansAddonHub.Lodge
             if (had) RealmsChanged?.Invoke();
         }
 
-        void OnRealmsFrame(Dictionary<string, object> m)
+        // the messages are typed in shared/Elans.Shared/Lodge/RealmMessages.cs; what is shown is cleaned and capped here
+        void OnRealmsFrame(Dictionary<string, object> frame)
         {
             if (!SupportsRealms) return;           // a server that doesn't list the feature has nothing to say about it
-            if (m.Str("t") == LodgeMsg.RealmsBack)
+            if (frame.Str("t") == LodgeMsg.RealmsBack)
             {
-                var names = m.List("realms").OfType<string>().Where(n => n.Length > 0).Take(8).ToList();
+                var names = RealmsBackMsg.Read(new LodgeFieldsDict(frame)).Realms.Where(n => n.Length > 0).Take(8).ToList();
                 if (names.Count > 0) OnRealmsBack(names);
                 return;
             }
-            RealmsAvailable = m.Bool("available");
-            RealmsWhy = RealmsAvailable ? "" : (m.Str("why") ?? "");
-            RealmsRegion = (m.Str("region") ?? "").ToUpperInvariant();
-            var at = m.Long("checkedAt");
+            var m = RealmsStatusMsg.Read(new LodgeFieldsDict(frame));
+            RealmsAvailable = m.Available;
+            RealmsWhy = RealmsAvailable ? "" : (m.Why ?? "");
+            RealmsRegion = (m.Region ?? "").ToUpperInvariant();
+            var at = m.CheckedAt;
             RealmsCheckedAt = at > 0 ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(Math.Min(at, 4102444800L)) : Clock();
             var list = new List<RealmVM>();
-            foreach (var r in m.List("realms").OfType<Dictionary<string, object>>().Take(16))
+            foreach (var r in m.Realms.Take(16))
             {
-                var name = CleanRealmText(r.Str("name"), 40);
+                var name = CleanRealmText(r.Name, 40);
                 if (name.Length == 0) continue;
-                var st = (r.Str("status") ?? "").ToUpperInvariant();
+                var st = (r.Status ?? "").ToUpperInvariant();
                 list.Add(new RealmVM
                 {
-                    Id = r.Int("id"), Name = name, Slug = CleanRealmText(r.Str("slug"), 40), Ruleset = CleanRealmText(r.Str("ruleset"), 12),
+                    Id = r.Id, Name = name, Slug = CleanRealmText(r.Slug, 40), Ruleset = CleanRealmText(r.Ruleset, 12),
                     Status = st == "UP" || st == "DOWN" ? st : "UNKNOWN",
-                    Population = string.IsNullOrWhiteSpace(r.Str("population")) ? null : CleanRealmText(r.Str("population"), 16),
-                    HasQueue = r.ContainsKey("hasQueue") ? (bool?)r.Bool("hasQueue") : null,
+                    Population = string.IsNullOrWhiteSpace(r.Population) ? null : CleanRealmText(r.Population, 16),
+                    HasQueue = r.HasQueue,
                 });
             }
             foreach (var r in list)

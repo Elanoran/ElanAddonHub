@@ -207,6 +207,10 @@ officer+, members and channels owner. Status is one of online | away | busy | du
   (`profile`) keep carrying `name` + `displayName`.
 - `error` may carry `code` (`rate`, `room-full`) and `room`. A full voice room answers `error` with `code: "room-full"`
   and the room id; the join is confirmed by the `user` message with your own `room`.
+- Typed (stage 2): `error` `{text, code?, room?}` is one class, `LodgeErrorMsg` in `shared/Elans.Shared/Lodge/ErrorMessages.cs`: every error
+  the server sends goes through `LodgeHub.Error`, the Outpost reads it in one place. `LodgeErrorMsg.Codes` lists every code the server sends
+  (a shared test checks the server's calls against it): `rate`, `disabled`, `guest`, `locked`, `invalid`, `notfound`, `noreps`, `cal`,
+  `cal-full`, `lfg`, `lfg-full`, `room-full` (with `room`), `last-owner`, `address`, `atlas`. Many errors carry no code (the text only).
 - `ping` every 20 s from the client; the server answers `pong` and closes a pinging connection that was silent for 75 s
   with close code 1001. Clients that never ping are not closed for silence.
 - Guest names always end in " (guest)". `@everyone`/`@here` from below officer arrive with a zero-width space after the `@`.
@@ -452,6 +456,9 @@ The Lodge asks the Blizzard Game Data API (client credentials from its own envir
 
 - `realms.status { available, region, realms: [ { id, name, slug, ruleset, status, population?, hasQueue?, namespace } ], checkedAt, why? }` right after the welcome (once the first poll has finished), whenever something changes, and as a heartbeat every 5 minutes so "checked N min ago" stays honest. `status` is `UP`, `DOWN` or `UNKNOWN`; `ruleset` is `Normal`, `PvP`, `RP`, `RP-PvP`, `Hardcore` or `""` (from the realm's type, with hints in its name or category winning); `id` is the connected realm id; `checkedAt` is unix seconds of the last poll that reached the API. `available: false` means the Forever realms were not found (`why: "Forever realms not found in the Blizzard API"`) or the API could not be reached for three polls in a row (`why` says so); `realms` is then empty. After three failed polls known realms are sent as `UNKNOWN`.
 - `realms.back { realms: [names], checkedAt }`, once, when every realm that was down is up again. The client decides whether to say anything (the Outpost: only if the member turned that on).
+- Typed (stage 2): both are classes in `shared/Elans.Shared/Lodge/RealmMessages.cs` (`RealmsStatusMsg` with its `RealmView` rows, `RealmsBackMsg`),
+  used by both sides like the LFG ones (a row is written `id, name, slug, ruleset, status, namespace, population?, hasQueue?`). The Outpost still
+  cleans and caps what it shows (16 realms, 8 names, short texts).
 
 How the realms are found: the server probes `dynamic-{region}`, `dynamic-classic-{region}`, `dynamic-classic1x-{region}` (or `LODGE_REALMS_NAMESPACES`) on `https://{region}.api.blizzard.com` (connected-realm index, then each connected realm), keeps the realms whose name, slug or category says "Forever", and from then on only fetches those. Polls: `LODGE_REALMS_POLL_SECONDS` (60-900, default 120), one per interval for the whole lodge; 15 minutes while nothing is found; backoff on errors and `Retry-After` on HTTP 429 (at most 15 minutes).
 ## Badges and the ladder (feature `badges`; the server version is set at merge; optional for clients)
@@ -732,7 +739,8 @@ Typed (stage 2): `atlas.sharing`, `cairn.status` (the ask and the answer with it
 `cairn.notices.get`, `cairn.notices` and `cairn.notice.seen` are classes in `shared/Elans.Shared/Lodge/CairnMessages.cs` (`AtlasSharingMsg`,
 `CairnStatusMsg`, `CairnJoinMsg`, `CairnNoticesMsg` / `CairnNoticeEntry`, `CairnNoticeSeenMsg`, ...), used by both sides like the LFG ones. They
 only map fields: the notices' signatures are still checked by the Outpost (`CairnFormats.Notice` + `Es256`), and who gets what stays in
-`CairnReceive.cs`. Not typed yet: the Guild Master's `admin.cairn`.
+`CairnReceive.cs`. The Guild Master's `admin.cairn` `{on, publicUrl?, code?}` is `AdminCairnMsg` there too; the address and code rules stay in
+`CairnReceive.SetJoin` (`CairnSign.TryNormalizeUrl`), and the code never comes back (`cairn.join` only says `hasCode`).
 
 ## Operator stats (read-only; `GET /admin/stats`, `sudo lodge-admin stats`)
 

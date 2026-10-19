@@ -530,9 +530,12 @@ namespace ElansAddonHub.Lodge
                     if (Me != null && string.Equals(pd.Name, Me.Name, StringComparison.OrdinalIgnoreCase) && pd.Found) { MyProfile = pd; MyProfileChanged?.Invoke(); }
                     ProfileReceived?.Invoke(pd);
                     break;
-                case LodgeMsg.Error:
-                    OnServerError(m.Str("text"), m.Str("code"), m.Str("room"));
-                    break;
+                case LodgeErrorMsg.Type:
+                    {
+                        var err = LodgeErrorMsg.Read(new LodgeFieldsDict(m));      // the one error frame (shared/Elans.Shared/Lodge/ErrorMessages.cs)
+                        OnServerError(err.Text, err.Code, err.Room);
+                        break;
+                    }
                 case LodgeMsg.AdminMembers:
                     {
                         var am = AdminMembersMsg.Read(new LodgeFieldsDict(m));
