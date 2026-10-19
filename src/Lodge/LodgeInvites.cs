@@ -189,8 +189,7 @@ namespace ElansAddonHub.Lodge
                     using (var resp = await Send(req))
                     {
                         res.Status = (int)resp.StatusCode;
-                        var text = await resp.Content.ReadAsStringAsync();
-                        var body = LodgeJson.Parse(text);                  // null: a proxy's 404/502 page is not JSON
+                        var body = await LodgeClient.AnswerOf(resp);       // at most 64 KB; null: a proxy's 404/502 page is not JSON
                         res.ServerError = LodgeJson.Str(body, "error"); res.Reason = LodgeJson.Str(body, "reason");
                         if (res.Ok && body != null)
                         {

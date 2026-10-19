@@ -171,7 +171,8 @@ namespace ElansAddonHub.Services.Atlas
                 if (m.Status == 304) { SaveChecked(meta); RefusedWhy = ""; return "unchanged"; }
                 if (NotEntitled(m.Reason) || m.Status == 401) return Refused(m.Status == 401 ? "auth" : m.Reason);
                 if (m.Status != 200 || m.Body == null) return Fail("the Lodge answered " + m.Status + (string.IsNullOrEmpty(m.Reason) ? "" : " (" + m.Reason + ")"));
-                var mo = Json.Obj(Encoding.UTF8.GetString(m.Body));
+                // read before its signature is checked: through the shared Lodge JSON engine's rules (depth, duplicate keys, UTF-8), then as plain data
+                var mo = Elans.Shared.LodgeJson.ToPlain(Elans.Shared.LodgeJson.Parse(m.Body)) as Dictionary<string, object>;
                 if (mo?.Str("format") != "elans-cairn-manifest") return Fail("not a Cairn manifest");
                 var e = Entry.From(mo.Child("latest"));
                 if (e == null) return Fail("the manifest names no valid file");

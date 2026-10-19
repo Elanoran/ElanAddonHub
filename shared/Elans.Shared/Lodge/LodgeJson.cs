@@ -19,9 +19,12 @@ namespace Elans.Shared
 
         // the biggest frame the Lodge takes from an Outpost (a bigger one closes the connection: server/Lodge.Server/Hub.cs ReceiveLoop)
         public const int MaxFrameToLodge = 64 * 1024;
-        // the biggest frame an Outpost takes from a Lodge: the full Atlas pool is the biggest one there is, and the Lodge keeps that store under
-        // 64 MB on disk (AtlasStore); a bigger frame drops the connection (src/Services/LodgeClient.cs ReceiveFrames)
-        public const int MaxFrameFromLodge = 64 * 1024 * 1024;
+        // the biggest frame an Outpost takes from a Lodge; a bigger one drops the connection (src/Services/LodgeClient.cs, LodgeFrames.ReadAsync).
+        // The biggest real ones: flights.routes.data at its worst (3000 routes of 64 points, about 4.5 MB), a big welcome (3 channels of 100
+        // messages, 20 members ...: well under 1 MB, measured in LodgeJsonPerfTests); atlas.data comes in pages of about 200 KB.
+        public const int MaxFrameFromLodge = 8 * 1024 * 1024;
+        // the biggest HTTP answer body the Outpost reads as JSON from a Lodge (POST /exchange, an upload's answer, an error's {error, reason})
+        public const int MaxHttpAnswer = 64 * 1024;
         // nesting levels, the frame itself included (System.Text.Json's default, which the server always had; the deepest real frame has ~8)
         public const int MaxDepth = 64;
 

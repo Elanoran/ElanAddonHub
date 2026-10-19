@@ -155,13 +155,12 @@ public class LodgeJsonTests
     public void Both_sides_take_the_frame_limits_from_here()
     {
         Assert.Equal(64 * 1024, LodgeJson.MaxFrameToLodge);
-        Assert.Equal(64 * 1024 * 1024, LodgeJson.MaxFrameFromLodge);
+        Assert.Equal(8 * 1024 * 1024, LodgeJson.MaxFrameFromLodge);
         var root = AppContext.BaseDirectory;
         while (!Directory.Exists(Path.Combine(root, "server"))) root = Path.GetDirectoryName(root);
         var hub = File.ReadAllText(Path.Combine(root, "server", "Lodge.Server", "Hub.cs"));
         var client = File.ReadAllText(Path.Combine(root, "src", "Services", "LodgeClient.cs"));
         Assert.Contains("msg.Length > LodgeJson.MaxFrameToLodge", hub);
-        Assert.Contains("msg.Length > LodgeJson.MaxFrameFromLodge", client);
         Assert.Contains("LodgeJson.Parse(msg.GetBuffer()", hub);
         Assert.Contains("LodgeJson.Parse(data, 0, len)", client);
         Assert.DoesNotContain("JsonNode.Parse", client);

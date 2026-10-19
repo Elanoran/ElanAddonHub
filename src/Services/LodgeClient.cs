@@ -212,24 +212,19 @@ namespace ElansAddonHub.Services
         {
             var buf = new byte[16 * 1024];
             var msg = new MemoryStream();
+            var inbox = new LodgeInbox();                                    // what waits for the UI thread, this connection only
             bool first = true;
             while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
             {
-                msg.SetLength(0);
-                WebSocketReceiveResult r;
-                do
-                {
-                    r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), ct);
-                    if (r.MessageType == WebSocketMessageType.Close) return;
-                    msg.Write(buf, 0, r.Count);
-                    // a frame bigger than any Lodge sends (the full Atlas pool is the biggest): the connection is dropped and made again
-                    if (msg.Length > LodgeJson.MaxFrameFromLodge) { Util.Log("lodge: a frame over " + LodgeJson.MaxFrameFromLodge / (1024 * 1024) + " MB - reconnecting"); try { ws.Abort(); } catch { } return; }
-                } while (!r.EndOfMessage);
+                // one whole message, at most LodgeJson.MaxFrameFromLodge (Elans.Shared LodgeFrames): a bigger one is never read to its end
+                var kind = await LodgeFrames.ReadAsync(ws, buf, msg, LodgeJson.MaxFrameFromLodge, ct);
+                if (kind == LodgeFrames.Kind.Close) return;
+                if (kind == LodgeFrames.Kind.TooBig) { Drop("a frame over " + LodgeJson.MaxFrameFromLodge / (1024 * 1024) + " MB"); return; }
 
                 lastRx = DateTime.UtcNow;
                 var data = msg.GetBuffer();
                 var len = (int)msg.Length;
-                if (r.MessageType == WebSocketMessageType.Binary)
+                if (kind == LodgeFrames.Kind.Binary)
                 {
                     if (len > 4) Voice?.Invoke(BitConverter.ToInt32(data, 0), data, 4, len - 4);
                     continue;
@@ -239,8 +234,17 @@ namespace ElansAddonHub.Services
                 var type = LodgeJson.Str(obj, "t");
                 if (type == PongMsg.Type) { pongSeen = true; continue; }     // { t } only
                 if (first && type == LodgeMsg.Welcome) { first = false; SetStatus("Online", true); }
-                Post(() => Received?.Invoke(obj));
+                // the UI thread handles them in order; a Lodge that sends faster than that for long is dropped, not queued without end
+                if (!inbox.Add(len)) { Drop("more than " + inbox.MaxFrames + " frames (or " + inbox.MaxBytes / (1024 * 1024) + " MB) waiting to be handled"); return; }
+                Post(() => { try { Received?.Invoke(obj); } finally { inbox.Done(len); } });
             }
+        }
+
+        // the connection is dropped (and made again by the loop): the Lodge sent more than any Lodge sends
+        void Drop(string why)
+        {
+            Util.Log("lodge: " + why + " - reconnecting");
+            try { ws.Abort(); } catch { }
         }
 
         public Task Send(JsonObject obj) => SendUtf8(LodgeJson.SerializeUtf8(obj));
@@ -262,6 +266,13 @@ namespace ElansAddonHub.Services
             try { await sock.SendAsync(new ArraySegment<byte>(data), type, true, CancellationToken.None); }
             catch (Exception e) { Util.Log("lodge send: " + e.Message); }
             finally { sendLock.Release(); }
+        }
+
+        // a Lodge's JSON answer over HTTP, at most LodgeJson.MaxHttpAnswer bytes (a longer or unreadable one is no answer: null)
+        internal static async Task<JsonObject> AnswerOf(HttpResponseMessage resp)
+        {
+            try { using (var s = await resp.Content.ReadAsStreamAsync()) return await LodgeFrames.ReadAnswerAsync(s, LodgeJson.MaxHttpAnswer); }
+            catch (Exception) { return null; }
         }
 
         // ---- files
@@ -306,8 +317,7 @@ namespace ElansAddonHub.Services
                 req.Content = new StreamContent(progress == null ? (Stream)fs : new ProgressStream(fs, progress));
                 using (var resp = await Net.Http.SendAsync(req))
                 {
-                    var text = await resp.Content.ReadAsStringAsync();
-                    var body = LodgeJson.Parse(text);                                // null: a proxy's 413 page isn't JSON
+                    var body = await AnswerOf(resp);                                 // null: a proxy's 413 page isn't JSON
                     if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(UploadError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
                     return body ?? new JsonObject();
                 }
@@ -344,8 +354,7 @@ namespace ElansAddonHub.Services
                 req.Content.Headers.ContentLength = fs.Length;
                 using (var resp = await Net.Http.SendAsync(req))
                 {
-                    var text = await resp.Content.ReadAsStringAsync();
-                    var body = LodgeJson.Parse(text);                                // null: a proxy's error page isn't JSON
+                    var body = await AnswerOf(resp);                                 // null: a proxy's error page isn't JSON
                     if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(FilesError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
                     return body ?? new JsonObject();
                 }
@@ -373,7 +382,7 @@ namespace ElansAddonHub.Services
                 if (!resp.IsSuccessStatusCode)
                 {
                     string text = null;
-                    try { text = LodgeJson.Str(LodgeJson.Parse(await resp.Content.ReadAsStringAsync()), "error"); } catch { }
+                    text = LodgeJson.Str(await AnswerOf(resp), "error");
                     throw new InvalidOperationException(FilesError((int)resp.StatusCode, text));
                 }
                 long total = resp.Content.Headers.ContentLength ?? expectedSize;
@@ -411,8 +420,7 @@ namespace ElansAddonHub.Services
                 req.Content.Headers.ContentLength = fs.Length;
                 using (var resp = await Net.Http.SendAsync(req))
                 {
-                    var text = await resp.Content.ReadAsStringAsync();
-                    var body = LodgeJson.Parse(text);
+                    var body = await AnswerOf(resp);
                     if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(DatasetError((int)resp.StatusCode, LodgeJson.Str(body, "error")));
                     return body ?? new JsonObject();
                 }
@@ -444,7 +452,7 @@ namespace ElansAddonHub.Services
                 if (!resp.IsSuccessStatusCode)
                 {
                     string text = null;
-                    try { text = LodgeJson.Str(LodgeJson.Parse(await resp.Content.ReadAsStringAsync()), "error"); } catch { }
+                    text = LodgeJson.Str(await AnswerOf(resp), "error");
                     throw new InvalidOperationException(DatasetError((int)resp.StatusCode, text));
                 }
                 var res = new DatasetDownload();
