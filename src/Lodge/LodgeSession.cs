@@ -505,8 +505,9 @@ namespace ElansAddonHub.Lodge
                     break;
                 case LodgeMsg.HistoryPage: OnHistoryPage(m); break;
                 case LodgeMsg.SearchResult: OnSearchResult(m); break;
-                case LodgeMsg.Typing:
-                    TypingMap(m.Str("channel") ?? TextChannels.FirstOrDefault()?.Id)[m.Int("id")] = DateTime.UtcNow.AddSeconds(4);
+                case MemberTypingMsg.Type:
+                    var tm = MemberTypingMsg.Read(new LodgeFieldsDict(m));
+                    TypingMap(tm.Channel ?? TextChannels.FirstOrDefault()?.Id)[tm.Id] = DateTime.UtcNow.AddSeconds(4);
                     break;
                 case LodgeMsg.Profile:
                     // someone's avatar / accent changed (small broadcast)
@@ -1365,7 +1366,7 @@ namespace ElansAddonHub.Lodge
         {
             if (!Online || (DateTime.UtcNow - lastTyping).TotalSeconds < 3) return;
             lastTyping = DateTime.UtcNow;
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Typing, ["channel"] = Selected?.Id });
+            _ = Send(LodgeFieldsDict.Build(new TypingMsg { Channel = Selected?.Id }.Write));
         }
 
         // ================================================================ files
@@ -1466,14 +1467,14 @@ namespace ElansAddonHub.Lodge
             }
             pendingMuted = pendingDeaf = false;
             MyRoom = room;
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.State, ["muted"] = voice.Muted, ["deaf"] = voice.Deafened });
+            _ = Send(LodgeFieldsDict.Build(new VoiceStateMsg { Muted = voice.Muted, Deaf = voice.Deafened }.Write));
             if (!pendingQuiet) Sounds.Join();
             SyncRooms();
             Changed?.Invoke();
         }
 
         void SendVoice(string room) =>
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Voice, ["room"] = room, ["on"] = true }); // "on" for 1.x servers
+            _ = Send(LodgeFieldsDict.Build(new VoiceMsg { Room = room, On = true }.Write)); // "on" for 1.x servers
 
         public void LeaveVoice(bool tellServer = true)
         {
@@ -1482,7 +1483,7 @@ namespace ElansAddonHub.Lodge
             MyRoom = null;
             voice?.Dispose();
             voice = null;
-            if (tellServer && client != null) _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.Voice, ["room"] = null, ["on"] = false });
+            if (tellServer && client != null) _ = Send(LodgeFieldsDict.Build(new VoiceMsg { Room = null, On = false }.Write));
             if (tellServer) Sounds.Leave();
             foreach (var x in Members) x.Speaking = false;
             SyncRooms();
@@ -1495,7 +1496,7 @@ namespace ElansAddonHub.Lodge
             voice.Muted = muted || deaf; // deafened people can't talk either
             voice.Deafened = deaf;
             voice.Volume = deaf ? 0 : (float)(Settings.VoiceVolume ?? 1);
-            _ = Send(new Dictionary<string, object> { ["t"] = LodgeMsg.State, ["muted"] = voice.Muted, ["deaf"] = deaf });
+            _ = Send(LodgeFieldsDict.Build(new VoiceStateMsg { Muted = voice.Muted, Deaf = deaf }.Write));
             Changed?.Invoke();
         }
 

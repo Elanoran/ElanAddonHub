@@ -128,7 +128,7 @@ namespace Elans.Shared
         // the typed view (the server cleans the raw message itself, PresenceModule.BuildGame); share: only a JSON false stops sharing
         public static GameMsg Read(ILodgeFields f)
         {
-            var g = new GameMsg { Share = !PresenceFields.IsFalse(f, "share"), Visibility = f.Str("visibility") };
+            var g = new GameMsg { Share = !f.IsFalse("share"), Visibility = f.Str("visibility") };
             if (!g.Share) return g;
             g.Playing = f.Bool("playing");
             g.HasCharacter = f.Has("name");
@@ -163,16 +163,9 @@ namespace Elans.Shared
         // the typed view (the server cleans the raw message itself, PresenceModule.BuildPosition)
         public static PositionMsg Read(ILodgeFields f) => new PositionMsg
         {
-            Share = !PresenceFields.IsFalse(f, "share"),
+            Share = !f.IsFalse("share"),
             Valid = f.Bool("valid"), MapId = f.Int("mapId"), Fx = f.Num("fx") ?? 0, Fy = f.Num("fy") ?? 0, Move = f.Int("move"), Scope = f.Str("scope"),
         };
-    }
-
-    static class PresenceFields
-    {
-        // the value at key is a JSON false - not missing, null, true, a number, a string, an object or an array (as the server's raw check)
-        public static bool IsFalse(ILodgeFields f, string key) =>
-            f.Has(key) && !f.IsNull(key) && !f.Bool(key) && f.Num(key) == null && f.Str(key) == null && f.Child(key) == null && f.RawList(key) == null;
     }
 
     // ---------------------------------------------------------------- server -> client

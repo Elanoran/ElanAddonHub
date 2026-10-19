@@ -4,7 +4,8 @@ using Elans.Shared;
 
 namespace Lodge;
 
-// Voice rooms: join/leave, mute/deafen, and the Opus relay to everyone in the same room.
+// Voice rooms: join/leave, mute/deafen, and the Opus relay to everyone in the same room. The JSON control messages are typed in
+// shared/Elans.Shared/Lodge/VoiceMessages.cs (VoiceMsg, VoiceStateMsg); the audio is binary frames (Relay) and never goes through them.
 public class VoiceModule : IModule
 {
     const int MaxVoicePacket = 4000;
@@ -16,9 +17,11 @@ public class VoiceModule : IModule
     {
         switch (type)
         {
-            case LodgeMsg.Voice:
-                string room = J.Str(m, "room");
-                var on = J.BoolOrNull(m, "on");
+            case VoiceMsg.Type:
+            {
+                var vm = VoiceMsg.Read(new LodgeFieldsJson(m));        // a non-string room is "leave", a non-bool on is "not sent", as before
+                string room = vm.Room;
+                var on = vm.On;
                 if (on != null) room = on == true ? room ?? hub.Channels.DefaultVoice(me.Role)?.Id : null; // 1.x hubs
                 Channel ch = null;
                 if (room != null)
@@ -40,11 +43,15 @@ public class VoiceModule : IModule
                 });
                 if (full) await hub.Error(me, $"{ch.Name} is full ({ch.Max})", "room-full", room);
                 return true;
-            case LodgeMsg.State:
-                me.Muted = J.Bool(m, "muted");
-                me.Deaf = J.Bool(m, "deaf");
+            }
+            case VoiceStateMsg.Type:
+            {
+                var st = VoiceStateMsg.Read(new LodgeFieldsJson(m));
+                me.Muted = st.Muted;
+                me.Deaf = st.Deaf;
                 await hub.BroadcastUser(me);
                 return true;
+            }
         }
         return false;
     }

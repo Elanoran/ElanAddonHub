@@ -319,6 +319,47 @@ public class PresenceTests
         Assert.Equal(new[] { "t", "id" }, KeysOf(leave));
     }
 
+    // voice / state / typing (Elans.Shared VoiceMsg, VoiceStateMsg, TypingMsg, MemberTypingMsg): the typing broadcast keeps its keys and order,
+    // the voice state comes back in the user entry, and the 1.x "on" still works (only a JSON bool counts)
+    [Fact]
+    public async Task Typed_voice_and_typing_frames_keep_their_keys_and_the_old_rules()
+    {
+        using var l = new Lodge2();
+        var bob = await l.Join(T.BobCode);
+        var zed = await l.Join(Mem2Code);
+        int zedId = (int)zed.Of("welcome")[0]["you"]!;
+        var text = l.Hub.Channels.DefaultText.Id;
+        var room = l.Hub.Channels.DefaultVoice("member")!.Id;
+        bob.Clear();
+
+        zed.Say($"{{\"t\":\"typing\",\"channel\":\"{text}\"}}");
+        await Lodge2.Settle();
+        var typing = Assert.Single(bob.Of("typing"));
+        Assert.Equal($$"""{"t":"typing","id":{{zedId}},"channel":"{{text}}"}""", typing.ToJsonString());
+
+        zed.Say($"{{\"t\":\"voice\",\"room\":\"{room}\",\"on\":true}}");
+        await Lodge2.Settle();
+        var joined = bob.Of("user").Last()["user"]!;
+        Assert.Equal(UserKeys, KeysOf(joined));
+        Assert.Equal((room, true), ((string?)joined["room"], (bool)joined["voice"]!));
+
+        bob.Clear();
+        zed.Say("""{"t":"state","muted":true,"deaf":"yes"}""");               // a non-bool deaf is false, as before
+        await Lodge2.Settle();
+        var st = bob.Of("user").Last()["user"]!;
+        Assert.Equal((true, false), ((bool)st["muted"]!, (bool)st["deaf"]!));
+
+        zed.Say("""{"t":"voice","room":null,"on":"no"}""");                    // "on" that is not a JSON bool is not sent: room null leaves
+        await Lodge2.Settle();
+        Assert.Null(l.Hub.Members.Single(x => x.Id == zedId).Room);
+        zed.Say("""{"t":"voice","on":true}""");                                // 1.x: on:true joins the default room
+        await Lodge2.Settle();
+        Assert.Equal(room, l.Hub.Members.Single(x => x.Id == zedId).Room);
+        zed.Say($"{{\"t\":\"voice\",\"room\":\"{room}\",\"on\":false}}");      // 1.x: on:false leaves whatever the room says
+        await Lodge2.Settle();
+        Assert.Null(l.Hub.Members.Single(x => x.Id == zedId).Room);
+    }
+
     [Fact]
     public async Task Health_online_count_leaves_out_invisible_members()
     {

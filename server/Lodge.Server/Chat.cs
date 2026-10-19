@@ -134,14 +134,14 @@ public partial class ChatModule : IModule
             case LodgeMsg.LfgCancel: await LfgEnd(me, LfgCancelMsg.Read(new LodgeFieldsJson(m)).Id, "cancelled"); return true;
             case LodgeMsg.HistoryBefore: await HistoryBefore(me, m); return true;
             case LodgeMsg.Search: await Search(me, m); return true;
-            case LodgeMsg.Typing:
-                var ch = hub.Channels.Get(J.Str(m, "channel")) ?? hub.Channels.DefaultText;
+            case TypingMsg.Type:
+                var ch = hub.Channels.Get(TypingMsg.Read(new LodgeFieldsJson(m)).Channel) ?? hub.Channels.DefaultText;
                 if (!ch.VisibleTo(me.Role) || me.Invisible) return true; // invisible members never show as typing
                 // coalesced: at most one "typing" per person and channel every 2 s
                 var now = hub.Clock.UtcNow;
                 if (me.LastTyping.TryGetValue(ch.Id, out var last) && now - last < TypingEvery) return true;
                 me.LastTyping[ch.Id] = now;
-                await hub.Broadcast(new JsonObject { ["t"] = LodgeMsg.Typing, ["id"] = me.Id, ["channel"] = ch.Id },
+                await hub.Broadcast(LodgeFieldsJson.Build(new MemberTypingMsg { Id = me.Id, Channel = ch.Id }.Write),
                     x => x.Id != me.Id && ch.VisibleTo(x.Role));
                 return true;
         }

@@ -62,6 +62,12 @@ namespace Elans.Shared
         public static void SetOrNull(this ILodgeWriter w, string key, long? value) { if (value is long v) w.Set(key, v); else w.Set(key, (string)null); }
         public static long? LongOrNull(this ILodgeFields f, string key) => f.IsNull(key) ? (long?)null : f.Long(key);
         public static int? IntOrNull(this ILodgeFields f, string key) => f.IsNull(key) ? (int?)null : f.Int(key);
+        // the value at key is a JSON false - not missing, null, true, a number, a string, an object or an array (as the server's strict
+        // TryGetValue<bool> checks: e.g. "share": only a JSON false stops sharing)
+        public static bool IsFalse(this ILodgeFields f, string key) =>
+            f.Has(key) && !f.IsNull(key) && !f.Bool(key) && f.Num(key) == null && f.Str(key) == null && f.Child(key) == null && f.RawList(key) == null;
+        // true / false for a JSON bool, null for anything else (missing included) - the server's J.BoolOrNull
+        public static bool? BoolOrNull(this ILodgeFields f, string key) => f.Bool(key) ? true : f.IsFalse(key) ? false : (bool?)null;
     }
 
     // A request that carries nothing but its type: { t }.

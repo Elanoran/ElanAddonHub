@@ -52,6 +52,10 @@ additions for the list of classes.
 - officer+ (`Perm.PinMessages`): `pin` `{id}` · `unpin` `{id, channel?}` - at most 25 pins per channel, kept in `<data>/pins.json` (atomic writes) with their own copy of text/author/time, so they outlive the history window; deleting the message unpins it. Others get an error.
 - `edit` `{id, text}` (own) · `delete` `{id}` (own; officer+: anyone's) · `typing` `{channel}`
 - `voice` `{room}` (`room: null` leaves) · `state` `{muted, deaf}` · `status` `{status, note, visibility?}` · `ping`
+- Typed (stage 2): `voice` `{room, on?}` (`VoiceMsg`; `on` is the 1.x switch, only a JSON bool counts), `state` (`VoiceStateMsg`), `typing` both
+  ways (`TypingMsg` `{channel}`, `MemberTypingMsg` `{id, channel}`) are classes in `shared/Elans.Shared/Lodge/VoiceMessages.cs`, used by both
+  sides like the LFG ones; your voice state comes back in `user` (presence, see the 2.30 additions). Only the JSON control messages: the voice
+  audio stays binary frames. The wire is unchanged, key order included.
 - `game` `{playing, name, realm, class, classFile, level, zone, guild, race?, raceFile?, sex? (2 male, 3 female), flags?, xpPct?, rested?, groupSize?, inInstance?, instanceName?, visibility?}` or `{share: false}` - rich presence (2.5 fields below)
 - officer+: `mod.kick` `{id}` · `mod.mute` `{id, on}` - lower ranks only
 - guild master: `admin.members` · `admin.invite` `{name, role}` · `admin.role` `{name, role}` · `admin.remove` `{name}`
