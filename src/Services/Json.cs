@@ -6,7 +6,8 @@ using System.Text;
 
 namespace ElansAddonHub.Services
 {
-    // Small JSON reader/writer for the Lodge protocol: objects become Dictionary<string, object>,
+    // Small JSON reader/writer for the Outpost's own files (settings, caches, manifests ...) - not for the Lodge link, which uses the shared
+    // engine (shared/Elans.Shared/Lodge/LodgeJson.cs). Objects become Dictionary<string, object>,
     // arrays List<object>, numbers double, plus string/bool/null.
     public static class Json
     {

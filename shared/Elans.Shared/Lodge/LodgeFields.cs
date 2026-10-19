@@ -2,11 +2,10 @@ using System.Collections.Generic;
 
 namespace Elans.Shared
 {
-    // The two sides of the Lodge socket keep their own JSON models (the Lodge server: System.Text.Json.Nodes.JsonObject; the Outpost:
-    // Dictionary<string, object> from src/Services/Json.cs). A typed message class (LfgMessages.cs) reads and writes through these two
-    // small interfaces, and each side wraps its own lenient getters in an adapter (server/Lodge.Server/LodgeFieldsJson.cs,
-    // src/Lodge/LodgeFieldsDict.cs), so reading behaves exactly as it did before: a missing field or a field of the wrong type is
-    // null / 0 / false, never an exception.
+    // Both sides of the Lodge socket use one JSON engine: System.Text.Json nodes, parsed and written by LodgeJson (LodgeJson.cs). A typed
+    // message class (LfgMessages.cs) reads and writes through these two small interfaces, implemented once by LodgeJsonFields over a
+    // JsonObject with lenient getters: a missing field or a field of the wrong type is null / 0 / false, never an exception. (The shared
+    // tests use a dictionary-backed double, TestFields.)
 
     // read side: a received JSON object
     public interface ILodgeFields
@@ -21,10 +20,10 @@ namespace Elans.Shared
         IReadOnlyList<ILodgeFields> List(string key);   // the objects in an array (other entries skipped); empty when missing, never null
         IReadOnlyList<long> Longs(string key);          // the entries of an array as whole numbers (0 for one that isn't); empty when missing
         IReadOnlyList<string> Strs(string key);         // the string entries of an array (other entries skipped); empty when missing
-        // A free-form payload passed through unread (e.g. a member's "game" presence): the object at key in this side's own JSON model
-        // (JsonObject on the server, Dictionary<string, object> in the Outpost); null when missing or not an object.
+        // A free-form payload passed through unread (e.g. a member's "game" presence): the JsonObject at key (LodgeJsonFields; a test double
+        // gives its own model); null when missing or not an object. Where a validator wants plain dictionaries: LodgeJson.ToPlain.
         object RawChild(string key);
-        // the same for a free-form array (e.g. atlas.data's finds): JsonArray on the server, List<object> in the Outpost; null when missing or not an array
+        // the same for a free-form array (e.g. atlas.data's finds): the JsonArray at key; null when missing or not an array
         object RawList(string key);
         IReadOnlyList<string> Keys();                   // this object's keys in the order received (a map keyed by ids, e.g. flights.data's legs)
         double? Num(string key);                        // the number at key; null when missing or not a number (strict: "3" or true is no number)
@@ -43,8 +42,8 @@ namespace Elans.Shared
         void Set(string key, double value);
         ILodgeWriter Child(string key);                 // a new object at key
         ILodgeListWriter List(string key);              // a new (empty) array at key
-        void SetRawChild(string key, object value);     // a free-form object in this side's own JSON model (see ILodgeFields.RawChild), as it is
-        void SetRawList(string key, object value);      // a free-form array in this side's own JSON model (see ILodgeFields.RawList), as it is
+        void SetRawChild(string key, object value);     // a free-form JsonObject (see ILodgeFields.RawChild), as it is (from plain data: LodgeJson.FromPlain)
+        void SetRawList(string key, object value);      // a free-form JsonArray (see ILodgeFields.RawList), as it is
     }
 
     public interface ILodgeListWriter

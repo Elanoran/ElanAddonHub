@@ -14,7 +14,7 @@ namespace Elans.Shared
     {
         public const string Type = LodgeMsg.ArmoryPut;
         public string Key;             // "<realm>-<name>"
-        public object Char;            // the character sheet in this side's own JSON model (see above)
+        public object Char;            // the character sheet as a raw JsonObject (see above)
 
         public void Write(ILodgeWriter w) { w.Set("t", Type); w.Set("key", Key); if (Char != null) w.SetRawChild("char", Char); }
         public static ArmoryPutMsg Read(ILodgeFields f) => new ArmoryPutMsg { Key = f.Str("key"), Char = f.RawChild("char") };

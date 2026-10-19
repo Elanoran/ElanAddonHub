@@ -5,7 +5,7 @@ namespace Elans.Shared
     // The Atlas pool (server/PROTOCOL.md, 2.15 and the atlas2..atlas9 additions): the envelopes of atlas.share / atlas.shared / atlas.get /
     // atlas.data live only here. The classes only map fields; every rule stays where it was.
     // The sections themselves (kills, objects, ... - objects keyed by id, and finds - an array) are genuinely free-form: each has its own
-    // shape and its own strict validator on both ends, so they travel as raw children in each side's own JSON model (ILodgeFields.RawChild /
+    // shape and its own strict validator on both ends, so they travel as raw children, JsonObject / JsonArray (ILodgeFields.RawChild /
     // RawList): the Outpost builds them (AtlasObs.MakeBatch) and re-checks every entry it receives (LodgeAtlas.Apply, AtlasObs.Parse*),
     // the server validates atlas.share from the raw JSON (AtlasStore.HasContent / Share) and builds atlas.data's sections (AtlasStore.Get).
     // atlas.get's "since" is also still read by the server from the raw JSON: only a whole JSON number above 0 counts.
@@ -27,7 +27,7 @@ namespace Elans.Shared
     public sealed class AtlasShareMsg
     {
         public const string Type = LodgeMsg.AtlasShare;
-        // the object sections to send, in this order (raw objects in this side's own JSON model); a section not listed is not sent
+        // the object sections to send, in this order (raw JsonObjects); a section not listed is not sent
         public List<KeyValuePair<string, object>> Sections = new List<KeyValuePair<string, object>>();
         public object Finds;           // the finds (a raw array); null = not sent
 
@@ -96,7 +96,7 @@ namespace Elans.Shared
         public const string Type = LodgeMsg.AtlasData;
         public string Epoch;
         public long Rev, At;
-        // the object sections (raw objects in this side's own JSON model), keyed by section name; written in AtlasSections order, a missing one is not written
+        // the object sections (raw JsonObjects), keyed by section name; written in AtlasSections order, a missing one is not written
         public Dictionary<string, object> Sections = new Dictionary<string, object>();
         public object Finds;           // the finds (a raw array); null = not sent
         public int? SeenMembers;       // how many members' game caches the seen tables come from; null = not sent (reading: clamped to an int)

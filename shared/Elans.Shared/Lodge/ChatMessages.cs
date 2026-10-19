@@ -26,7 +26,7 @@ namespace Elans.Shared
         public string ReplyTo;         // the quoted message's id; null = not sent
         public string FileId;          // an uploaded shared file to attach; null = not sent
         public LfgRequest Lfg;         // written when set; read: the lenient view
-        public object LfgRaw;          // read side: the lfg object as received, in this side's own JSON model (Lfg.Create validates it)
+        public object LfgRaw;          // read side: the lfg object as received, a raw JsonObject (Lfg.Create validates it)
 
         public void Write(ILodgeWriter w)
         {

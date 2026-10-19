@@ -262,7 +262,7 @@ can't see answers exactly like one that doesn't exist.
   ("That sign-up is closed", "Only the organiser or an officer can do that", a bad role, too many open cards, a bad card) or `lfg-full`.
 - Typed (stage 2 pilot): the five client messages, the `lfg` update and the card are classes in `shared/Elans.Shared/Lodge/LfgMessages.cs`
   (`LfgJoinMsg` ... `LfgUpdateMsg`, `LfgCard`), written and read by both sides through `ILodgeFields` / `ILodgeWriter` (`LodgeFields.cs`;
-  adapters `server/Lodge.Server/LodgeFieldsJson.cs` and `src/Lodge/LodgeFieldsDict.cs`). The create request is a typed `msg` (`ChatSendMsg`
+  one adapter for both, `LodgeJsonFields` in `shared/Elans.Shared/Lodge/LodgeJson.cs`). The create request is a typed `msg` (`ChatSendMsg`
   with an `LfgRequest`, see the chat note above), but `Lfg.cs` still validates it from the raw JSON and builds and changes the stored card itself.
 
 **Older messages** (scrolling up past the welcome's history):
@@ -799,6 +799,19 @@ and address per 10 minutes, then a sum per minute and a summary per day (`securi
 Every message is a class in `shared/Elans.Shared/Lodge/<Group>Messages.cs`, used by the Lodge server and the Outpost alike; the
 "Typed (stage 2)" notes in the sections above name them. Neither side builds or reads a frame by field name anywhere else.
 
+One JSON engine and one adapter for both sides (`shared/Elans.Shared/Lodge/LodgeJson.cs`): System.Text.Json nodes. `LodgeJson.Parse` turns
+a received frame into its `JsonObject`, `LodgeJson.Serialize` / `SerializeUtf8` writes one, `LodgeJson.Build(new XMsg { .. }.Write)` builds
+one from its class, and `LodgeJsonFields` is the `ILodgeFields` / `ILodgeWriter` the classes read and write through (lenient: a missing or
+wrong-typed field is null / 0 / false). The rules are the same on both sides and live there too: a frame is skipped as a whole unless it
+is strict JSON with an object at the top, at most 64 levels deep (`MaxDepth`, the frame included), with no key twice in one object, valid
+UTF-8 and no lone surrogate in any string or key; every key and string is read once while parsing, so a frame that parses never throws
+when a field is read. Frames are at most 64 KB to the Lodge (`MaxFrameToLodge`, a bigger one closes the connection) and 8 MB from it
+(`MaxFrameFromLodge`: the worst `flights.routes.data` is about 4.5 MB, `atlas.data` comes in pages of about 200 KB); the Outpost stops
+reading a bigger one at the cap and reconnects (`LodgeFrames.ReadAsync`), and reconnects too when more than 2000 frames (or 64 MB) wait for
+its UI (`LodgeInbox`). A Lodge's HTTP JSON answers (`/exchange`, uploads, errors) are read to at most 64 KB (`MaxHttpAnswer`). Where a free-form part feeds a validator written for plain dictionaries (an
+Atlas section, a character sheet), `LodgeJson.ToPlain` / `FromPlain` convert it at that one place.
+`shared/Elans.Shared.Tests/JsonLeniencyTests.cs` pins how tricky input reads, against frozen copies of the two old readers.
+
 ### How to add a message
 
 1. Add its type to `LodgeMsg` (`shared/Elans.Shared/Lodge/LodgeMsg.cs`), in its group.
@@ -809,7 +822,8 @@ Every message is a class in `shared/Elans.Shared/Lodge/<Group>Messages.cs`, used
 3. Add a golden and a round-trip test in `shared/Elans.Shared.Tests/<Group>MessagesTests.cs`: what `Write` gives, key order included,
    and that `Read` gets it back (also from an old or malformed frame).
 4. Handle it in the server module through the class, and add a server test in `server/Lodge.Tests` that pins its key set and order.
-5. Send and read it in the Outpost through the class (`LodgeFieldsDict.Build(new XMsg { .. }.Write)`, `XMsg.Read(new LodgeFieldsDict(m))`).
+5. Send and read it in the Outpost through the class (`LodgeJson.Build(new XMsg { .. }.Write)`, `XMsg.Read(new LodgeJsonFields(m))`) - the same
+   calls as on the server.
 6. Document it in this file: its fields in its feature's section, and its type in the index below.
 7. A new capability goes behind a flag in `welcome.features` (and `GET /features` when an app must know before signing in): the Outpost
    sends nothing a Lodge doesn't list, the Lodge ignores what it doesn't know, so old Outposts and old Lodges keep working with new ones.
