@@ -62,10 +62,18 @@ public class AdminModule : IModule
         catch (Exception e)
         {
             hub.Log.LogWarning(e, "{Type} failed", type);
-            await hub.Error(me, e.Message);
+            await hub.Error(me, ErrorText(e));
         }
         return true;
     }
+
+    public const string FailedText = "That didn't work - the server's log says why";
+
+    // What the client is told when a request fails: the messages this server writes for people (an InvalidOperationException thrown by
+    // its own code: "You can only do that to lower ranks"), never the text of anything else (a file path, a framework's internals) - that
+    // goes only to the server log.
+    public static string ErrorText(Exception e) =>
+        e is InvalidOperationException && e.TargetSite?.DeclaringType?.Assembly == typeof(AdminModule).Assembly ? e.Message : FailedText;
 
     Task SendMembers(Member me) => hub.Send(me, LodgeJson.Build(new AdminMembersMsg
     {
@@ -194,7 +202,7 @@ public class AdminModule : IModule
             }
         }
         catch (UnauthorizedAccessException) { await hub.Error(me, "The server can't write its device list - run the server update (install.sh)"); }
-        catch (InvalidOperationException e) { await hub.Error(me, e.Message); }
+        catch (InvalidOperationException e) { await hub.Error(me, ErrorText(e)); }
         return true;
     }
 
@@ -278,7 +286,7 @@ public class AdminModule : IModule
         {
             await hub.Error(me, "Transfer ownership first", "last-owner");
         }
-        catch (InvalidOperationException e) { await hub.Error(me, e.Message); }
+        catch (InvalidOperationException e) { await hub.Error(me, ErrorText(e)); }
         catch (UnauthorizedAccessException) { await hub.Error(me, "The server can't write its codes file - run the server update (install.sh)"); }
         return true;
     }

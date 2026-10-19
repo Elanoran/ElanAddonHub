@@ -199,12 +199,12 @@ app.MapPost("/files", async (HttpContext ctx) =>
 {
     var deny = GateReq(ctx, out var who);
     if (deny != null) return deny;
-    if (!Roles.Can(who.Role, Perm.ShareFiles))
+    if (!Roles.Can(who.Rank, Perm.ShareFiles))
         return Results.Json(new { error = "Initiates can't share files - ask the lodge owner for a personal invite" }, statusCode: 403);
     string name;
     try { name = Uri.UnescapeDataString(ctx.Request.Headers["X-File-Name"].ToString()); } catch { name = "file"; }
-    var by = who.Name ?? Names.ForLog(ctx.Request.Headers["X-Lodge-Name"].ToString(), 24);
-    var rateKey = who.Personal ? "p:" + who.Name.ToLowerInvariant() : "g:" + IpOf(ctx);
+    var by = who.By;
+    var rateKey = who.RateKey(IpOf(ctx));
     try { return Results.Json(await files.Save(ctx.Request.Body, ctx.Request.ContentLength, name, by, rateKey, ctx.RequestAborted)); }
     catch (FileTooBigException) { return Results.Json(new { error = $"File is larger than {cfg.MaxFileMb} MB" }, statusCode: 413); }
     catch (UploadRefusedException e) { return Results.Json(new { error = e.Message }, statusCode: e.Status); }
@@ -243,11 +243,11 @@ async Task<IResult> PutSlot(HttpContext ctx, string slotId)
     var deny = GateReq(ctx, out var who);
     if (deny != null) return deny;
     var shared = lodge.SharedFiles;
-    var by = who.Name ?? Names.ForLog(ctx.Request.Headers["X-Lodge-Name"].ToString(), 24);
-    var rateKey = who.Personal ? "p:" + who.Name.ToLowerInvariant() : "g:" + IpOf(ctx);
+    var by = who.By;
+    var rateKey = who.RateKey(IpOf(ctx));
     try
     {
-        var view = await shared.Upload(by, who.Role, rateKey, slotId, Unesc(ctx, "X-Slot-Name"), Unesc(ctx, "X-File-Name"), Unesc(ctx, "X-Note"),
+        var view = await shared.Upload(by, who.Rank, rateKey, slotId, Unesc(ctx, "X-Slot-Name"), Unesc(ctx, "X-File-Name"), Unesc(ctx, "X-Note"),
             ctx.Request.Headers["X-Sha256"].ToString(), ctx.Request.ContentLength, ctx.Request.Body, ctx.RequestAborted);
         return Results.Json(view);
     }
@@ -268,7 +268,7 @@ app.MapGet("/slots/{id}/{v:int}", (HttpContext ctx, string id, int v) =>
 {
     var deny = GateReq(ctx, out var who);
     if (deny != null) return deny;
-    if (!Roles.Can(who.Role, Perm.FilesRead)) return Results.Json(new { error = "Not allowed", reason = "forbidden" }, statusCode: 403);
+    if (!Roles.Can(who.Rank, Perm.FilesRead)) return Results.Json(new { error = "Not allowed", reason = "forbidden" }, statusCode: 403);
     try
     {
         var fs = lodge.SharedFiles.OpenVersion(id, v, out var ver);
@@ -289,11 +289,11 @@ app.MapPut("/datasets/{name}", async (HttpContext ctx, string name) =>
 {
     var deny = GateReq(ctx, out var who);
     if (deny != null) return deny;
-    var by = who.Name ?? Names.ForLog(ctx.Request.Headers["X-Lodge-Name"].ToString(), 24);
-    var rateKey = who.Personal ? "p:" + who.Name.ToLowerInvariant() : "g:" + IpOf(ctx);
+    var by = who.By;
+    var rateKey = who.RateKey(IpOf(ctx));
     try
     {
-        var view = await lodge.Datasets.Upload(by, who.Personal ? who.Role : "guest", rateKey, name, Unesc(ctx, "X-Version"), ctx.Request.Headers["X-Sha256"].ToString(),
+        var view = await lodge.Datasets.Upload(by, who.Rank, rateKey, name, Unesc(ctx, "X-Version"), ctx.Request.Headers["X-Sha256"].ToString(),
             ctx.Request.ContentLength, ctx.Request.Body, ctx.RequestAborted);
         return Results.Json(view);
     }
@@ -311,10 +311,10 @@ app.MapGet("/datasets/{name}", (HttpContext ctx, string name) =>
 {
     var deny = GateReq(ctx, out var who);
     if (deny != null) return deny;
-    var rateKey = who.Personal ? "p:" + who.Name.ToLowerInvariant() : "g:" + IpOf(ctx);
+    var rateKey = who.RateKey(IpOf(ctx));
     try
     {
-        var fs = lodge.Datasets.OpenForDownload(name, who.Personal ? who.Role : "guest", rateKey, out var meta);
+        var fs = lodge.Datasets.OpenForDownload(name, who.Rank, rateKey, out var meta);
         ctx.Response.Headers["Cache-Control"] = "private, no-store";
         ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
         ctx.Response.Headers["X-Sha256"] = meta.Sha256;

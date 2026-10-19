@@ -4,7 +4,15 @@ using System.Text;
 namespace Lodge;
 
 // Who a code belongs to. Personal codes carry the friend's name; the shared LODGE_CODE has none.
-public record Identity(string Name, bool Personal, string Role, string DeviceId = null);
+public record Identity(string Name, bool Personal, string Role, string DeviceId = null)
+{
+    // the rank an HTTP route checks: a non-personal credential (the shared code, a guest device) is always a guest
+    public string Rank => Personal ? Role : "guest";
+    // the uploader name stored with a file: only ever the verified name (never a name the client claims in a header)
+    public string By => Personal ? Name : "Guest";
+    // what an upload / download budget is kept per: the person, or for a guest their address (IpKey: an IPv6 /64)
+    public string RateKey(string ip) => Personal ? "p:" + Name.ToLowerInvariant() : "g:" + ip;
+}
 
 // Invite codes + the wrong-code lockout.
 //   <data>/codes   one "Name:code:role" per line (hub Guild Master panel or `sudo lodge-admin`), re-read when it changes
