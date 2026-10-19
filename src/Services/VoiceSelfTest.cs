@@ -16,7 +16,7 @@ namespace ElansAddonHub.Services
         public static string Run()
         {
             var lines = new List<string>();
-            foreach (var t in new Func<string>[] { Jitter, JitterCalm, JitterDrift, Plc, PeerPlayout, Noise, Gain, Gate, PreRollTest, EncoderSettings, Codec, Cpu })
+            foreach (var t in new Func<string>[] { Jitter, JitterCalm, JitterDrift, Plc, PeerPlayout, RoomOnly, Noise, Gain, Gate, PreRollTest, EncoderSettings, Codec, Cpu })
             {
                 try { lines.Add(t()); }
                 catch (Exception e) { lines.Add("FAIL voice test " + t.Method.Name + " threw " + e.GetType().Name + ": " + e.Message); }
@@ -199,7 +199,35 @@ namespace ElansAddonHub.Services
                 $"voice receive path: {outp.Count / Frame} frames out, largest step {maxStep / natural:0.0}x natural, speaking flips {flips} (want 2), concealed {peer.Jb.Concealed}, level in speech {Db(rms * 32768):0} dBFS");
         }
 
+        // 3.1.1: a hostile Lodge can't make the Outpost build a decoder and a mixer input per invented sender id: only the roster of my room
+        // is played, never more than MaxPeers, and the ones who leave are removed
+        static string RoomOnly()
+        {
+            using (var e = new VoiceEngine())
+            {
+                e.UseSilentMixerForTest();
+                var pkt = new byte[] { 0xF8, 0xFF, 0xFE };   // any bytes: Incoming only queues them
+                e.SetRoomMembers(new[] { 1, 2 });
+                for (int id = 3; id < 2000; id++) e.Incoming(id, pkt, 0, pkt.Length);
+                bool strangers = e.PeerCount == 0 && e.MixerInputCount == 0;
+                e.Incoming(1, pkt, 0, pkt.Length); e.Incoming(2, pkt, 0, pkt.Length); e.Incoming(1, pkt, 0, pkt.Length);
+                bool members = e.PeerCount == 2 && e.MixerInputCount == 2;
+                e.SetRoomMembers(new[] { 2 });
+                bool left = e.PeerCount == 1 && e.MixerInputCount == 1 && !e.IsSpeaking(1);
+                e.Incoming(1, pkt, 0, pkt.Length);
+                bool leftStaysOut = e.PeerCount == 1;
+                e.SetRoomMembers(Enumerable.Range(1, 500));
+                for (int id = 1; id <= 500; id++) e.Incoming(id, pkt, 0, pkt.Length);
+                bool capped = e.PeerCount == VoiceEngine.MaxPeers && e.MixerInputCount == VoiceEngine.MaxPeers;
+                e.SetRoomMembers(null);
+                bool empty = e.PeerCount == 0 && e.MixerInputCount == 0;
+                return L(strangers && members && left && leftStaysOut && capped && empty,
+                    $"voice: only my room's roster is played (strangers {strangers}, members {members}, a leaver removed {left} and stays out {leftStaysOut}, capped at {VoiceEngine.MaxPeers} {capped}, empty room {empty})");
+            }
+        }
+
         // ---- noise suppression
+
 
         static string Noise()
         {

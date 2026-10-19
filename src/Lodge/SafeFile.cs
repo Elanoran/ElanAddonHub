@@ -91,15 +91,46 @@ namespace ElansAddonHub.Lodge
         }
 
         // ---- files that can run something when opened. The warning names the real extension (after the cleaning above).
-        static readonly HashSet<string> Risky = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".exe", ".scr", ".bat", ".cmd", ".com", ".msi", ".ps1", ".vbs", ".js", ".jar", ".lnk", ".reg", ".hta", ".dll",
-        };
-
+        // 3.1.1: one list with the upload block (Elans.Shared.DangerousFiles), so whatever can't be shared is also warned about
         public static string Ext(string name) => Path.GetExtension(name ?? "") ?? "";
-        public static bool IsRisky(string name) => Risky.Contains(Ext(name));
+        public static bool IsRisky(string name) => Elans.Shared.DangerousFiles.IsDangerous(name);
+
+
+        // ---- 3.1.1: a person's name as the Lodge sends it in a reply, a pin, a search hit, a reaction: the server's own name cleaning
+        // (NFKC, whitespace runs -> one space, control / format - bidi, zero-width - / private / unassigned characters out, emoji kept),
+        // so an honest Lodge's names come through unchanged and a hostile one can't hide or reverse anything. Null stays null.
+        public static string Who(string name, int max = 64)
+        {
+            if (name == null) return null;
+            if (name.Length == 0) return name;
+            string s;
+            try { s = name.Normalize(NormalizationForm.FormKC); } catch (ArgumentException) { s = name; }
+            var sb = new StringBuilder(s.Length);
+            bool space = false;
+            for (int i = 0; i < s.Length && sb.Length < max; i++)
+            {
+                var c = s[i];
+                var cat = char.GetUnicodeCategory(c);
+                if (char.IsWhiteSpace(c) || cat == UnicodeCategory.SpaceSeparator) { space = sb.Length > 0; continue; }
+                if (cat == UnicodeCategory.Surrogate)
+                {
+                    if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+                    {
+                        if (space) { sb.Append(' '); space = false; }
+                        sb.Append(c).Append(s[i + 1]); i++;
+                    }
+                    continue;
+                }
+                if (cat == UnicodeCategory.Control || cat == UnicodeCategory.Format || cat == UnicodeCategory.PrivateUse || cat == UnicodeCategory.OtherNotAssigned
+                    || cat == UnicodeCategory.LineSeparator || cat == UnicodeCategory.ParagraphSeparator) continue;
+                if (space) { sb.Append(' '); space = false; }
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
 
         // ---- chat text: bidi overrides and isolates reverse the text that follows (a fake "gnp.exe"), so they never reach the screen
+
         static bool IsBidi(char c) => (c >= '‪' && c <= '‮') || (c >= '⁦' && c <= '⁩');
         static readonly Regex BlankRun = new Regex(@"\n(?:[ \t]*\n){4,}", RegexOptions.Compiled);
 

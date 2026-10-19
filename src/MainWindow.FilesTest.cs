@@ -193,8 +193,49 @@ namespace ElansAddonHub
             public override void Write(byte[] b, int o, int c) => throw new NotSupportedException();
         }
 
+        // 3.1.1 (L6): one list of dangerous types for the upload block, the chat download warning and the shared-file save warning
+        async Task OneDangerList(FakeFilesServer fake, string work, SlotVM honest, Action<string, bool> check)
+        {
+            var added = new[] { "x.url", "x.scf", "x.iso", "x.img", "x.vhd", "x.vhdx", "x.chm", "x.msix", "x.appx", "x.appinstaller", "x.library-ms", "x.search-ms", "x.settingcontent-ms", "x.xll", "x.inf", "x.ws", "x.wsc" };
+            check("one list: every blocked type is warned about, the new ones are both", LodgeFiles.Blocked.All(e => SafeFile.IsRisky("x." + e))
+                && added.All(n => SafeFile.IsRisky(n) && LodgeFiles.IsBlockedName(n)) && new FileVM { Name = "a.url" }.IsRisky && !SafeFile.IsRisky("pack.zip") && !LodgeFiles.IsBlockedName("pack.zip"));
+            var iso = Path.Combine(work, "disk.iso"); File.WriteAllText(iso, "fake");
+            var before = fake.Requests;
+            var e1 = await Session.UploadSlotAsync(null, "Disk", iso, "");
+            check("block: a disk image is refused before anything is sent (" + e1 + ")", e1 != null && e1.Contains(".iso") && fake.Requests == before);
+            // a Lodge offers one anyway (an older or hostile server): saving it asks first
+            var bytes = Encoding.UTF8.GetBytes("not really a disk");
+            var rec = new FakeFilesServer.SlotRec { Id = 77.ToString("x32"), Name = "Disk image", CreatedBy = "Bob" };
+            rec.Versions.Add(new FakeFilesServer.Ver { V = 1, FileName = "disk.iso", Sha = LodgeFiles.Hex(SHA256.HashData(bytes)), By = "Bob", Note = "", Bytes = bytes, At = 1_790_000_000_000L });
+            fake.Slots.Add(rec);
+            var hook = Dialog.TestHook;
+            try
+            {
+                Session.FeedForTest(fake.DataJson());
+                var slot = Session.Slots.First(x => x.Name == "Disk image");
+                var asks = new List<DialogCall>(); bool yes = false;
+                Dialog.TestHook = c => { asks.Add(c); return yes; };
+                var dest = Path.Combine(work, "saved.iso");
+                var r = await LodgePage.FilesForTest.SaveAsync(slot, slot.Newest, dest, null);
+                check("save: a dangerous type asks first, 'no' saves nothing (" + (asks.FirstOrDefault()?.Title) + ")", asks.Count == 1 && asks[0].Kind == "danger" && asks[0].Title == "Save a ISO file?" && r == null && !File.Exists(dest) && !File.Exists(dest + ".part"));
+                yes = true;
+                r = await LodgePage.FilesForTest.SaveAsync(slot, slot.Newest, dest, null);
+                check("save: 'Save anyway' saves it", r == null && File.Exists(dest) && asks.Count == 2);
+                var plain = Path.Combine(work, "plain.zip");
+                r = await LodgePage.FilesForTest.SaveAsync(honest, honest.Newest, plain, null);
+                check("save: a zip is saved without a question", r == null && File.Exists(plain) && asks.Count == 2);
+            }
+            finally
+            {
+                Dialog.TestHook = hook;
+                fake.Slots.Remove(rec);
+                Session.FeedForTest(fake.DataJson());
+            }
+        }
+
         async Task HostileDownloadChecks(FakeFilesServer fake, string work, SlotVM slot, Action<string, bool> check)
         {
+
             async Task<string> Copy(Stream src, long cap, System.Threading.CancellationToken ct, TimeSpan? idle = null, TimeSpan? overall = null)
             {
                 try { await LodgeClient.CopyCapped(src, Stream.Null, cap, null, null, ct, idle, overall); return null; }
@@ -414,6 +455,7 @@ namespace ElansAddonHub
                 err = await Session.SaveVersionAsync(dmg, dmg.Newest, dest2);
                 check("and a clean second try saves it", err == null && File.Exists(dest2) && dmg.Badge == "");
                 await HostileDownloadChecks(fake, work, dmg, check);
+                await OneDangerList(fake, work, dmg, check);
 
                 // ---- refusals: programs, zips with programs, size, empty
                 var before = fake.Requests;
