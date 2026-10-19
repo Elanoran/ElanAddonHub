@@ -1,0 +1,207 @@
+## a = null
+  both: frame=read  Has=true  IsNull=true  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=null  LongOrNull=null  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = string
+  both: frame=read  Has=true  IsNull=false  Str="x"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = empty string
+  both: frame=read  Has=true  IsNull=false  Str=""  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = number as string
+  both: frame=read  Has=true  IsNull=false  Str="123"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = bool string
+  both: frame=read  Has=true  IsNull=false  Str="true"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = true
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=true  BoolOrNull=true  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = false
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=false  IsFalse=true  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = zero
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=0  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = minus zero
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=-0  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = minus zero fraction
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=-0  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = int
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=3  Long=3  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=3  LongOrNull=3  Num=3  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = whole fraction
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=3  Long=3  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=3  LongOrNull=3  Num=3  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = fraction
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=3  Long=3  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=3  LongOrNull=3  Num=3.7  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = negative fraction
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=-3  Long=-3  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=-3  LongOrNull=-3  Num=-3.7  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = exponent
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=100  Long=100  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=100  LongOrNull=100  Num=100  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = exponent fraction
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=25  Long=25  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=25  LongOrNull=25  Num=25  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = int max + 1
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=2147483647  Long=2147483648  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=2147483647  LongOrNull=2147483648  Num=2147483648  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = int min - 1
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=-2147483648  Long=-2147483649  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=-2147483648  LongOrNull=-2147483649  Num=-2147483649  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = 2^53 + 1
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=2147483647  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=2147483647  Num=9007199254740992  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+  server: Long=9007199254740993  LongOrNull=9007199254740993
+  outpost: Long=9007199254740992  LongOrNull=9007199254740992
+## a = long max
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=2147483647  Long=9223372036854775807  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=2147483647  LongOrNull=9223372036854775807  Num=9.223372036854776E+18  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = long max + 1
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=2147483647  Long=9223372036854775807  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=2147483647  LongOrNull=9223372036854775807  Num=9.223372036854776E+18  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = 30 digits
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=2147483647  Long=9223372036854775807  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=2147483647  LongOrNull=9223372036854775807  Num=1.2345678901234568E+29  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = 1e300
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=2147483647  Long=9223372036854775807  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=2147483647  LongOrNull=9223372036854775807  Num=1E+300  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = -1e300
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=-2147483648  Long=-9223372036854775808  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=-2147483648  LongOrNull=-9223372036854775808  Num=-1E+300  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = 1e400 (beyond double)
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=2147483647  Long=9223372036854775807  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=2147483647  LongOrNull=9223372036854775807  Num=Infinity  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = 1e-400 (underflow)
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=0  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = empty object
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child={}  List=[]  RawChild={}  RawList=null  Keys=["a","z"]
+## a = object
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child={b,c}  List=[]  RawChild={"b":1,"c":"x"}  RawList=null  Keys=["a","z"]
+## a = empty array
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=[]  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[]  Keys=["a","z"]
+## a = array of ints
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=[1,2,3]  Longs=[1,2,3]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[1,2,3]  Keys=["a","z"]
+## a = array of whole fractions
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=[1,2,-3]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[1,2,-3]  Keys=["a","z"]
+  server: Longs=[0,0,0]
+  outpost: Longs=[1,2,-3]
+## a = array mixed
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[1,0,0,0,0,0,0]  Strs=["3"]  Child=null  List=[{}]  RawChild=null  RawList=[1,2.5,"3",null,true,{},[]]  Keys=["a","z"]
+## a = array with null
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=[null,1.5]  Longs=[0,0]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[null,1.5]  Keys=["a","z"]
+## a = array of strings
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[0,0,1]  Strs=["x","y"]  Child=null  List=[]  RawChild=null  RawList=["x","y",1]  Keys=["a","z"]
+## a = array of objects
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[0,2,0,0]  Strs=[]  Child=null  List=[{b},{c}]  RawChild=null  RawList=[{"b":1},2,{"c":2},null]  Keys=["a","z"]
+## a = array of huge numbers
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=[1E+300,9007199254740992,Infinity]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[1E+300,9007199254740992,Infinity]  Keys=["a","z"]
+  server: Longs=[0,9007199254740993,0]
+  outpost: Longs=[0,9007199254740992,0]
+## a = escaped e-acute
+  both: frame=read  Has=true  IsNull=false  Str="\u00e9"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = escaped pair
+  both: frame=read  Has=true  IsNull=false  Str="\ud83d\ude00"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = raw emoji
+  both: frame=read  Has=true  IsNull=false  Str="\ud83d\ude00"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = escaped lone high
+  both: frame=read  Has=true  IsNull=false  Int=0  Long=0  Bool=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+  server: Str=throws InvalidOperationException  BoolOrNull=throws InvalidOperationException  IsFalse=throws InvalidOperationException
+  outpost: Str="x\ud800y"  BoolOrNull=null  IsFalse=false
+## a = escaped lone low
+  both: frame=read  Has=true  IsNull=false  Int=0  Long=0  Bool=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+  server: Str=throws InvalidOperationException  BoolOrNull=throws InvalidOperationException  IsFalse=throws InvalidOperationException
+  outpost: Str="\udc00"  BoolOrNull=null  IsFalse=false
+## a = escaped NUL
+  both: frame=read  Has=true  IsNull=false  Str="a\u0000b"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = escapes
+  both: frame=read  Has=true  IsNull=false  Str="\"\\/\u0008\u000c\u000a\u000d\u0009"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = long string
+  both: frame=read  Has=true  IsNull=false  Str="xxxxxxxxxxxxxxxxxxxx"..(100000 chars)  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a","z"]
+## a = deep 10
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[0]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[[[[[[[[[[1]]]]]]]]]]  Keys=["a","z"]
+## a = deep 62
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[0]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]..  Keys=["a","z"]
+## a = deep 63
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[0]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]..  Keys=["a","z"]
+## a = deep 64
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[0]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]..  Keys=["a","z"]
+## a = deep 1000
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[0]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[..  Keys=["a","z"]
+## missing key
+  both: frame=read  Has=false  IsNull=true  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=null  LongOrNull=null  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["z"]
+## duplicate key
+  both: frame=read
+  server: Has=throws ArgumentException  IsNull=throws ArgumentException  Str=throws ArgumentException  Int=0  Long=0  Bool=throws ArgumentException  BoolOrNull=throws ArgumentException  IsFalse=throws ArgumentException  IntOrNull=throws ArgumentException  LongOrNull=throws ArgumentException  Num=throws ArgumentException  Nums=throws ArgumentException  Longs=throws ArgumentException  Strs=throws ArgumentException  Child=throws ArgumentException  List=throws ArgumentException  RawChild=throws ArgumentException  RawList=throws ArgumentException  Keys=throws ArgumentException
+  outpost: Has=true  IsNull=false  Str=null  Int=2  Long=2  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=2  LongOrNull=2  Num=2  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## duplicate key, different types
+  both: frame=read  Int=0  Long=0
+  server: Has=throws ArgumentException  IsNull=throws ArgumentException  Str=throws ArgumentException  Bool=throws ArgumentException  BoolOrNull=throws ArgumentException  IsFalse=throws ArgumentException  IntOrNull=throws ArgumentException  LongOrNull=throws ArgumentException  Num=throws ArgumentException  Nums=throws ArgumentException  Longs=throws ArgumentException  Strs=throws ArgumentException  Child=throws ArgumentException  List=throws ArgumentException  RawChild=throws ArgumentException  RawList=throws ArgumentException  Keys=throws ArgumentException
+  outpost: Has=true  IsNull=false  Str=null  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child={b}  List=[]  RawChild={"b":1}  RawList=null  Keys=["a"]
+## duplicate key nested
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  List=[]  RawList=null  Keys=["a"]
+  server: Child=throws ArgumentException  RawChild=throws ArgumentException
+  outpost: Child={b}  RawChild={"b":2}
+## duplicate key in an array entry
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[0]  Strs=[]  Child=null  RawChild=null  Keys=["a"]
+  server: List=throws ArgumentException  RawList=throws ArgumentException
+  outpost: List=[{b}]  RawList=[{"b":2}]
+## BOM
+  both: frame=skipped
+## whitespace around
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=1  Long=1  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=1  LongOrNull=1  Num=1  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## non-JSON whitespace (NBSP)
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str=null  Int=1  Long=1  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=1  LongOrNull=1  Num=1  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## trailing comma in object
+  both: frame=skipped
+## trailing comma in array
+  both: frame=skipped
+## block comment
+  both: frame=skipped
+## line comment
+  both: frame=skipped
+## trailing garbage
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str=null  Int=1  Long=1  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=1  LongOrNull=1  Num=1  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## two objects
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str=null  Int=1  Long=1  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=1  LongOrNull=1  Num=1  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## truncated
+  both: frame=skipped
+## empty frame
+  both: frame=skipped
+## array root
+  both: frame=skipped
+## string root
+  both: frame=skipped
+## null root
+  both: frame=skipped
+## plus sign
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str=null  Int=1  Long=1  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=1  LongOrNull=1  Num=1  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## leading zero
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str=null  Int=1  Long=1  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=1  LongOrNull=1  Num=1  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## leading dot
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=0.5  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## trailing dot
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str=null  Int=1  Long=1  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=1  LongOrNull=1  Num=1  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## NaN
+  both: frame=skipped
+## Infinity
+  both: frame=skipped
+## single quotes
+  both: frame=skipped
+## unquoted key
+  both: frame=skipped
+## raw control character in a string
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str="x\u0001y"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## raw newline in a string
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str="x\u000ay"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## unknown escape
+  server: frame=skipped  Has=-  IsNull=-  Str=-  Int=-  Long=-  Bool=-  BoolOrNull=-  IsFalse=-  IntOrNull=-  LongOrNull=-  Num=-  Nums=-  Longs=-  Strs=-  Child=-  List=-  RawChild=-  RawList=-  Keys=-
+  outpost: frame=read  Has=true  IsNull=false  Str="x"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## short unicode escape
+  both: frame=skipped
+## invalid UTF-8 in a string
+  both: frame=read  Has=true  IsNull=false  Str="x\ufffdy"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## invalid UTF-8 in a key
+  both: frame=read  Has=false  IsNull=true  Str=null  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=null  LongOrNull=null  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a\ufffd"]
+## overlong UTF-8
+  both: frame=read  Has=true  IsNull=false  Str="\ufffd\ufffd"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## UTF-8 encoded lone surrogate
+  both: frame=read  Has=true  IsNull=false  Str="\ufffd\ufffd\ufffd"  Int=0  Long=0  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=0  LongOrNull=0  Num=null  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a"]
+## escaped lone surrogate in a key
+  both: frame=read
+  server: Has=throws InvalidOperationException  IsNull=throws InvalidOperationException  Str=throws InvalidOperationException  Int=0  Long=0  Bool=throws InvalidOperationException  BoolOrNull=throws InvalidOperationException  IsFalse=throws InvalidOperationException  IntOrNull=throws InvalidOperationException  LongOrNull=throws InvalidOperationException  Num=throws InvalidOperationException  Nums=throws InvalidOperationException  Longs=throws InvalidOperationException  Strs=throws InvalidOperationException  Child=throws InvalidOperationException  List=throws InvalidOperationException  RawChild=throws InvalidOperationException  RawList=throws InvalidOperationException  Keys=throws InvalidOperationException
+  outpost: Has=true  IsNull=false  Str=null  Int=1  Long=1  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=1  LongOrNull=1  Num=1  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["\ud800","a"]
+## key with an escaped quote
+  both: frame=read  Has=true  IsNull=false  Str=null  Int=2  Long=2  Bool=false  BoolOrNull=null  IsFalse=false  IntOrNull=2  LongOrNull=2  Num=2  Nums=null  Longs=[]  Strs=[]  Child=null  List=[]  RawChild=null  RawList=null  Keys=["a\"","a"]
+## very deep (100000)
+  server: frame=skipped
+  outpost: frame=crashes the process (stack overflow)
